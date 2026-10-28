@@ -1,0 +1,22 @@
+# Android / Gradle
+.gradle/
+build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+
+# Rust
+target/
+
+# OS and editor files
+.DS_Store
+*.swp
