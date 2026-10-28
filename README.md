@@ -31,6 +31,8 @@ means "protector of the law". In English it also reads as "data protector".
 Datapavan is planned to be maintained by the **Visadahyu Foundation**. *Visadahyu* means "of all nations",
 from Xerxes' inscription on the *Gate of All Nations* at Persepolis.
 
+The history and meaning of both names are in [docs/NAMES.md](docs/NAMES.md).
+
 ## Building
 
 Requirements (all versions are pinned in the repository):
