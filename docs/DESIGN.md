@@ -84,7 +84,7 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 - A weekly plain-language report, exportable as PDF or JSON.
 - **GDPR helper:** for each company whose trackers were observed, draft a GDPR Article 15 data-access request that the user can send. Each observation is a concrete, defensible reason to ask "what do you hold about me?"
 
-### Later (stage 2 preview)
+### Later (stage 2 preview; full plan in [ROADMAP.md](../ROADMAP.md))
 
 - **Enterprise flavour in Device Owner mode:** disable system apps, enforce always-on VPN, and apply policies at fleet scale.
 - **Work-profile isolation helper:** put Meta and other high-tracking apps in a separate profile without a factory reset.
@@ -216,13 +216,19 @@ holds in every language.
 
 ```
 datapavan/
-  README.md
+  README.md, ROADMAP.md, CHANGELOG.md, SECURITY.md, PRIVACY.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md
   docs/
     DESIGN.md          this document
-    decisions/         one short record per decision (ADR)
-  android/             Android app (Kotlin)
-  core/                Rust engine (libdatapavan)
-  data/                bundled dataset snapshots + their LICENSE files
+    VPN.md             local VPN design (v0.2, v0.3)
+    RESTRICTED-REGIONS.md
+    FOUNDATION.md      foundation charter principles
+    NAMES.md           history and meaning of the names
+    decisions/         architecture decision records (ADRs)
+  android/             Android app (Kotlin); Gradle project root
+  core/                Rust workspace: engine/ (no unsafe) and jni/ (bridge)
+  brand/               logo SVGs and brand guide
+  scripts/check.sh     all quality gates; CI calls it
+  data/                (from M3) bundled dataset snapshots + their LICENSE files
 ```
 
 ## 13. Milestones for v0.1 "Audit"
@@ -236,6 +242,9 @@ datapavan/
 | M5 | Plain-language UI and first release | v0.1 published in English, French, German and Persian; manifest has **no INTERNET permission**; build is reproducible |
 
 ## 14. Decisions
+
+Each decision is recorded in full, with context and consequences, as an ADR in
+[decisions/](decisions/README.md). This table is the summary.
 
 | # | Decision | Status | Choice / recommendation |
 |---|---|---|---|

@@ -34,6 +34,20 @@ from Xerxes' inscription on the *Gate of All Nations* at Persepolis.
 The history and meaning of both names are in [docs/NAMES.md](docs/NAMES.md); logos and colours are in
 [brand/](brand/README.md).
 
+## Documentation
+
+| Document | Content |
+|---|---|
+| [ROADMAP.md](ROADMAP.md) | The three stages, releases and milestones, and their status |
+| [docs/DESIGN.md](docs/DESIGN.md) | Stage 1 design: scope, architecture, threat model, internationalisation |
+| [docs/VPN.md](docs/VPN.md) | Design of the local VPN (v0.2 and v0.3) |
+| [docs/RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md) | Working under censorship and surveillance |
+| [docs/FOUNDATION.md](docs/FOUNDATION.md) | Charter principles of the Visadahyu Foundation |
+| [docs/decisions/](docs/decisions/README.md) | Architecture decision records |
+| [docs/NAMES.md](docs/NAMES.md), [brand/](brand/README.md) | Names, logos and colours |
+| [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md) | Privacy policy, vulnerability reporting |
+| [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [CHANGELOG.md](CHANGELOG.md) | Working on the project |
+
 ## Building
 
 Requirements (all versions are pinned in the repository):
