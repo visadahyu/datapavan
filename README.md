@@ -31,6 +31,25 @@ means "protector of the law". In English it also reads as "data protector".
 Datapavan is planned to be maintained by the **Visadahyu Foundation**. *Visadahyu* means "of all nations",
 from Xerxes' inscription on the *Gate of All Nations* at Persepolis.
 
+## Building
+
+Requirements (all versions are pinned in the repository):
+
+- JDK 21. The Gradle daemon is pinned to it and never downloads a JDK by itself.
+- Android SDK with `platforms/android-37.0`, `build-tools/37.0.0` and `ndk/30.0.16248370`. Set `ANDROID_HOME`, or `sdk.dir` in `android/local.properties`.
+- Rust through `rustup`. The exact toolchain and Android targets come from `rust-toolchain.toml`.
+- `cargo install cargo-ndk --version 4.1.2 --locked` and `cargo install cargo-deny --version 0.20.2 --locked`.
+
+```sh
+scripts/check.sh                          # every quality gate CI runs
+cd android && ./gradlew assembleDebug     # debug APK, including the Rust library
+```
+
+Every Gradle dependency is checked against `android/gradle/verification-metadata.xml` (SHA-256).
+After a deliberate dependency change, regenerate it with
+`./gradlew --write-verification-metadata sha256 lintDebug lintRelease testDebugUnitTest assembleDebug assembleRelease`
+and review the diff. For now the file covers Linux build hosts only.
+
 ## Licence
 
 Apache License 2.0. See [LICENSE](LICENSE).

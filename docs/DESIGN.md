@@ -99,7 +99,7 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 |  Audit module            : PackageManager, DEX scanner, NetworkStatsManager           |
 |  VPN host (VpnService)   : tunnel lifecycle, socket protect(), owner-UID lookup       |
 |  Local store             : SQLite, encrypted; key held in Android Keystore            |
-|-----------------------------------  UniFFI / JNI  ------------------------------------|
+|------------------------------  JNI (jni crate, no JNA)  ------------------------------|
 |  Rust core  (libdatapavan)                                                            |
 |   packet parser · flow table · DNS & TLS-SNI extraction · rule engine · statistics    |
 |   userspace TCP/UDP forwarder (netstack)                                              |
@@ -172,11 +172,15 @@ The enterprise flavour will be commercial, so every dataset must allow commercia
 
 ## 10. Tech stack
 
-- **Android:** Kotlin, Jetpack Compose, minSdk 29, targetSdk set to the latest stable, Gradle version catalog, no Google Play Services.
-- **Core:** stable Rust, `cargo-ndk`, UniFFI bindings. Netstack candidates to evaluate in the spike: `smoltcp`, `ipstack`.
+- **Android:** Kotlin, Jetpack Compose (the only UI dependency), minSdk 29, compileSdk and targetSdk 37, Gradle version catalog, no Google Play Services. Application ID `org.visadahyu.datapavan` (permanent). ABIs: `arm64-v8a` (phones) and `x86_64` (emulator).
+- **Core:** Rust pinned in `rust-toolchain.toml`, built with `cargo-ndk` and NDK r30. Libraries are 16 KB page-aligned, as Android 15+ requires. Two crates: `datapavan-engine` (all logic; `unsafe` forbidden by the compiler) and `datapavan-jni` (the only place `unsafe` is allowed; one small function per export).
+- **Bridge:** direct JNI through the `jni` crate. We chose it over UniFFI because UniFFI's Kotlin bindings depend on JNA (about 1.5 MB, and reflection-based), while our JNI surface stays tiny: a version call today, and start/stop/query for the engine later. Netstack candidates to evaluate in the spike: `smoltcp`, `ipstack`.
+- **Supply chain:** each Gradle repository may serve only its expected artifact groups; Gradle dependency verification (SHA-256 of every artifact); the Gradle wrapper is pinned by checksum; `Cargo.lock` is committed and every build uses `--locked`; `cargo deny` checks licences, sources and advisories.
+- **Quality gates:** `scripts/check.sh` runs everything that CI runs. That covers rustfmt, Clippy (pedantic, warnings as errors), Rust tests, cargo-deny, Android Lint (warnings as errors), unit tests, debug and release builds, and the forbidden-permission guard.
+- **CI:** GitHub Actions on the mirror for now (actions pinned by commit SHA). Codeberg's Woodpecker CI will run the same script once access to ci.codeberg.org is granted.
 - **Quality:** Kotlin and Rust unit tests, parser fuzzing, instrumented tests on the emulator, and a manual test matrix on the A40 and A56.
 - **Release:** reproducible builds, F-Droid metadata, signed APKs.
-- **JDK:** use the JDK bundled with Android Studio, or JDK 17/21, for Gradle. The system JDK 25 may be too new for the Android Gradle Plugin (TBV).
+- **JDK:** Gradle runs on JDK 21, pinned through Gradle's daemon JVM criteria.
 
 ## 11. Internationalisation
 
@@ -191,7 +195,7 @@ native reviewers are found.
 - All user-visible text lives in string resources. Hard-coded UI text fails the lint build.
 - Plurals and variables use ICU/Android plurals, never string concatenation. Arabic, for example, has six plural forms.
 - Layout uses start/end, never left/right. Directional icons are auto-mirrored. Logos and brand marks are not.
-- **Bidi isolation for technical tokens.** Datapavan constantly shows domains, IP addresses, package names and byte counts inside translated sentences. Every such left-to-right token is wrapped in Unicode isolates (FSI … PDI, via `BidiFormatter`) so that it cannot scramble an RTL sentence.
+- **Bidi isolation for technical tokens.** Datapavan constantly shows domains, IP addresses, package names and byte counts inside translated sentences. Every such left-to-right token is wrapped in a Unicode left-to-right isolate (LRI … PDI, via `isolateLtr()`) so that it cannot scramble an RTL sentence.
 - IP addresses, domains and package names are tokens, not numbers. They are never localised, and keep Latin digits in every locale.
 - Numbers, dates and byte sizes use the locale's formatters.
 - Layouts must survive about 30–40 % text growth (German is typically the longest).

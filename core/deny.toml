@@ -1,0 +1,23 @@
+# cargo-deny policy: which licences, sources and advisories the Rust dependency tree may have.
+# The enterprise flavour will be commercial, so only permissive, commercial-friendly licences pass.
+
+[graph]
+targets = ["aarch64-linux-android", "x86_64-linux-android", "x86_64-unknown-linux-gnu"]
+
+[advisories]
+yanked = "deny"
+
+[licenses]
+# Keep this list to licences actually present. Adding one is a deliberate, reviewed decision.
+allow = ["Apache-2.0", "MIT", "Unicode-3.0"]
+confidence-threshold = 0.93
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Path dependencies between our own unpublished workspace crates carry no version.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

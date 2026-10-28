@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder mark: a shield inside the adaptive-icon safe zone (66dp circle in a 108dp canvas). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,31 L73,38.5 L73,53 C73,65.5 65,74.5 54,78.5 C43,74.5 35,65.5 35,53 L35,38.5 Z" />
+</vector>
