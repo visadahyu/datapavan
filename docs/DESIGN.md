@@ -229,7 +229,7 @@ datapavan/
 
 | # | Milestone | Done when |
 |---|---|---|
-| M1 | Skeleton | Android app and Rust core build together; CI green; app opens on the emulator, A40 and A56; string resources, RTL support and pseudo-locales are in place from the start |
+| M1 | Skeleton | Android app and Rust core build together; CI green; app opens on the emulator and the A40 (A56 testing deferred until later milestones); string resources, RTL support and pseudo-locales are in place from the start |
 | M2 | App inventory and permission audit | Matches what system Settings shows, checked on A40 and A56 |
 | M3 | Tracker SDK scanner | Results for 20 popular apps agree with published εxodus reports |
 | M4 | Network usage per app | Byte counts within 5 % of the Settings data-usage screen |
