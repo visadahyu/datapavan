@@ -10,6 +10,9 @@ both names is in [docs/NAMES.md](../docs/NAMES.md).
 | `datapavan-mark.svg` | Product mark and app icon | Old Persian **DA** (U+103AD) |
 | `datapavan-shield.svg` | Product mark in a shield (security contexts, documents) | Old Persian **DA** |
 | `visadahyu-mark.svg` | Foundation mark | Old Persian logogram **DAHYĀUŠ** (U+103CC) |
+| `avatars/visadahyu-avatar.png` | Avatar of the `visadahyu` organisation on Codeberg and GitHub (1024×1024, safe for circular crops) | DAHYĀUŠ |
+| `avatars/datapavan-avatar.png` | Avatar of the `datapavan` repository on Codeberg (1024×1024) | DA |
+| `avatars/datapavan-social.png` | GitHub social preview of the repository (1280×640) | DA + name |
 
 - **DA** is the first sign of *dāta* "law" and of *dahyu* "land", so it links both names. Its three wedges (a horizontal one over two vertical ones) read as a gateway, echoing the Gate of All Nations. That reading is ours: Old Persian signs are phonetic, not pictures.
 - **DAHYĀUŠ** is one of the very few Old Persian logograms, signs that stand for a whole word. It means "land, country, people", the root of *Visadahyu* ("of all nations").
