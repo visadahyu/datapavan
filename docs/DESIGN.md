@@ -32,6 +32,16 @@ An app on a stock phone has hard limits. We state them openly, because overclaim
 | Flag apps that hold high-risk permissions or special access | Guarantee that every system component goes through the VPN |
 | Flag VPN apps that could control the phone, and modified copies of known circumvention tools | Clean a phone that is already compromised |
 
+Each limit is a reason for the next stage. Where each one is addressed:
+
+| Limit in stage 1 | Stage 1 | Stage 2 (Device Owner) | Stage 3 (own OS) |
+|---|---|---|---|
+| A phone that is already compromised | Finds the risk and guides removal: revoke device-admin or accessibility access first, and use Android's safe mode for apps that resist. A hardware-attested check of the bootloader and verified-boot state; stronger when made from a second phone, because a compromised system can tamper with a check on itself | Provisioning starts from a factory reset; policies then allow only approved accessibility services and keyboards, and forbid unknown sources, debugging and user-installed certificate authorities | Verified boot with our own keys on trusted hardware |
+| Content of encrypted traffic | **Never decrypted, by design.** Intercepting TLS would make Datapavan the threat it warns about. Instead: apps that bypass our resolver (their own encrypted DNS, hard-coded IPs) are flagged, client libraries are recognised by their TLS fingerprint, and volume and timing are used. Encrypted Client Hello will hide more server names over time, which shifts the weight to DNS and the IP-to-organisation data | Same | Same |
+| A circumvention tool running in VPN mode | Per-tool guides, in every UI language, for switching to proxy mode. The VPN-free checks still apply: genuine signature, risky access, hidden SDKs | Proxy mode enforced by policy | Per-app routing in the system |
+| System traffic that bypasses the VPN | Onboarding recommends *Always-on VPN* with *Block connections without VPN* | Lockdown enforced | Full control of the network stack |
+| Firmware, modem and bootloader | Not possible | Not possible | Partner hardware with a bootloader relockable with our keys |
+
 ## 3. Principles (non-negotiable)
 
 1. **Local-first.** All analysis happens on the device. No Datapavan server ever receives user data.
@@ -65,6 +75,7 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 - **App inventory:** all installed apps (user and system), installer source, and first-install and last-update dates.
 - **Permission audit:** granted dangerous permissions, plus special access: accessibility, device admin, notification listener, usage access, VPN, overlay, install unknown apps, and battery-optimisation exemptions.
 - **Risk checks for VPN users:** VPN apps that also hold remote-control access (accessibility, overlay, device admin, notification listener), user-installed certificate authorities, and enabled USB or wireless debugging (see [RESTRICTED-REGIONS.md](RESTRICTED-REGIONS.md)).
+- **Device integrity:** bootloader lock and verified-boot state from hardware key attestation, with guided removal of risky apps (including Android's safe mode).
 - **Tracker SDK detection:** scan each app's DEX class names on the device against a bundled tracker-signature database, including known proxy and remote-access SDKs. Installed circumvention tools are also checked against their official signing certificates, to catch modified copies.
 - **Network usage per app:** bytes up and down, split by foreground/background and Wi-Fi/mobile, read from `NetworkStatsManager` (needs the *Usage access* special permission).
 - **Plain-language card per app:** what it can access, what trackers it carries, how much it sends, and what the user can do about it.
@@ -74,6 +85,7 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 - Connection log per app: destination domain, IP, organisation (from an offline IP-to-ASN database), bytes, time, and foreground/background state.
 - A timeline answering "who did this app talk to?", with tracker destinations flagged.
 - Chained mode closes inbound access from the VPN provider's network and flags proxy-like behaviour, including the circumvention tool's own connections (see [VPN.md](VPN.md)).
+- Apps that bypass Datapavan's resolver (their own encrypted DNS, hard-coded IPs) are flagged; TLS fingerprints identify the client library behind a connection.
 - Nothing is blocked yet. This lets us check accuracy and battery cost before we take control.
 
 ### v0.3 "Guard": blocking
@@ -180,6 +192,7 @@ The enterprise flavour will be commercial, so every dataset must allow commercia
 | IP → ASN / organisation | iptoasn.com, DB-IP Lite | Licences TBV |
 | Official signing certificates of circumvention tools | Each project's official channels (website, F-Droid, signed releases) | Shipped as a signed list; each entry records its source and date |
 | Proxy and remote-access SDK signatures | Published security research | Licences TBV |
+| TLS client fingerprints | Public fingerprint methods and databases | Licences TBV; some methods restrict commercial use |
 
 ## 10. Tech stack
 
@@ -247,7 +260,7 @@ datapavan/
 | # | Milestone | Done when |
 |---|---|---|
 | M1 | Skeleton | Android app and Rust core build together; CI green; app opens on the emulator and the A40 (A56 testing deferred, ADR 0011); string resources, RTL support and pseudo-locales in place from the start; brand marks and app icon |
-| M2 | App inventory and permission audit | Matches what system Settings shows, checked on the A40 and the emulator; the VPN risk checks fire for a test app that holds remote-control access, a user-installed certificate authority, and enabled debugging |
+| M2 | App inventory and permission audit | Matches what system Settings shows, checked on the A40 and the emulator; the VPN risk checks fire for a test app that holds remote-control access, a user-installed certificate authority, and enabled debugging; the integrity check reports the A40's locked bootloader and verified boot |
 | M3 | Tracker SDK scanner | Results for 20 popular apps agree with published εxodus reports; a re-signed copy of a known circumvention tool is reported as not genuine |
 | M4 | Network usage per app | Byte counts within 5 % of the Settings data-usage screen |
 | M5 | Plain-language UI and first release | v0.1 published on GitHub in English, French, German and Persian, and submitted to F-Droid; manifest has **no INTERNET permission**; build is reproducible |

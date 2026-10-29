@@ -46,6 +46,7 @@ Datapavan uses Android's `VpnService` only to see and filter traffic on the devi
 | Private DNS | If Android Private DNS is in strict mode, hostnames are hidden from us. Onboarding detects this and explains the trade-off. |
 | Network changes | Wi-Fi ↔ mobile switches re-bind upstream sockets without dropping the tunnel. |
 | IPv6 | First-class. Never leak IPv6 around the tunnel. |
+| Encrypted content | Never decrypted: Datapavan installs no certificate authority and does not intercept TLS. Apps that bypass our resolver (their own encrypted DNS, hard-coded IPs) are flagged, and the TLS ClientHello fingerprint identifies the client library behind a connection. |
 
 ## Coexistence with other VPNs
 
@@ -61,6 +62,7 @@ Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED
 - **The tool's own traffic is visible.** In proxy mode the tool is an ordinary app inside Datapavan's tunnel. Its own connections, to its servers and anywhere else, are attributed to it like any other app's. They are forwarded directly, never back into the proxy, which also prevents loops.
 - **Proxy-like behaviour is flagged** (v0.2) and can be blocked (v0.3): many distinct destinations in a short time, sustained upload, or activity while the screen is off. Thresholds come from measurements, and a flag says what was seen instead of accusing the app. Detection counts destinations in memory, so it does not need the destination log that is off by default for chained flows.
 - **Per-app choice.** The user decides which apps go through the tool. Everything else goes directly or is blocked.
+- **Proxy mode, step by step.** Onboarding has a guide per popular tool, in every UI language, for running it in proxy mode instead of VPN mode.
 
 ## Engineering constraints
 

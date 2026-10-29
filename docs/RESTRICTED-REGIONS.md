@@ -48,10 +48,17 @@ Datapavan stays the device's VPN, decides which apps may use the pipe, and sees 
 
 **Limits:**
 
-- If the tool runs in VPN mode instead of proxy mode, only the VPN-free checks apply.
-- Datapavan cannot clean a phone that is already compromised. It finds the risk and guides its removal.
+- If the tool runs in VPN mode instead of proxy mode, only the VPN-free checks apply. Per-tool guides show how to switch to proxy mode, which most popular tools offer.
+- Datapavan cannot clean a phone that is already compromised. It finds the risk, checks device integrity through hardware attestation, and guides removal, including through Android's safe mode. Stage 2 starts from a factory reset and prevents reinfection.
 - It sees metadata, never the content of encrypted traffic.
 - For organisations, stage 2 enforces the same protection: only approved, signature-verified tools; no user-installed certificate authorities; no debugging; always-on VPN with Datapavan in front of the tool.
+
+How each limit is covered in later stages is in [DESIGN.md](DESIGN.md), section 2.
+
+**Open question,** to be decided in a separate ADR after legal advice: embedding an open-source tunnelling
+core (for example Xray-core, MPL-2.0) so that users can bring their own server configuration. It would
+remove the one-VPN-at-a-time limit, but it contradicts the rule that we do not build circumvention,
+carries legal and sanctions risk, and starts a cat-and-mouse game with censors.
 
 ## Principles
 
