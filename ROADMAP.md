@@ -42,7 +42,7 @@ starts, a two-week spike picks the packet engine (Rust netstack or Go gVisor). D
 - Apps that keep their own always-on connection instead of the system push service are flagged.
 - An optional advanced mode, granted once over USB, reads Android's own history of microphone and camera use and names the app exactly.
 - Cross-checks report contradictions: our sensor log against Android's record, and Android's per-app data accounting against what the VPN saw.
-- Unusual behaviour: each app's normal traffic shape is learned on the device, and deviations are reported, for example a steady audio-like upload or large uploads while the user only scrolled.
+- Unusual behaviour: each app's normal traffic shape is learned on the device, and deviations are reported, for example a steady audio-like upload or large uploads while the user only scrolled. Because a learned baseline only detects change, uploads are also split by destination (content, analytics, advertising) and compared with lab reference measurements.
 
 ### v0.3 "Guard": blocking
 
@@ -55,6 +55,7 @@ starts, a two-week spike picks the packet engine (Rust netstack or Go gVisor). D
 
 - A weekly plain-language report, exportable as PDF or JSON.
 - A GDPR Article 15 helper: for each company whose trackers were observed, a ready-to-send data-access request.
+- Declared against observed: each app's data-safety label on Google Play compared with what Datapavan saw.
 
 ---
 
@@ -88,3 +89,4 @@ starts, a two-week spike picks the packet engine (Rust netstack or Go gVisor). D
 | Hosting: GitHub as the only home (ADR 0013); a self-hosted EU forge reconsidered once the domain exists | ✅ |
 | Make the repository public | ⏳ before v0.1 is released |
 | F-Droid submission | ⏳ with v0.1 |
+| Measurement lab: reference measurements on the project's own phones, public reports, and evidence for data-protection authorities and civil-society organisations (legal advice first) | ⏳ from v0.2 |
