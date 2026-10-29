@@ -41,6 +41,15 @@ trap cleanup EXIT
 
 fail() {
     echo "VERIFY FAILED: $*" >&2
+    # What was on screen, in the log and as files that CI keeps with the screenshots.
+    local out="$ROOT/build/screenshots"
+    mkdir -p "$out"
+    adb exec-out screencap -p >"$out/verify-failure.png" 2>/dev/null || true
+    if adb shell uiautomator dump "$DUMP" >&2; then
+        adb shell cat "$DUMP" >"$out/verify-failure.xml"
+        echo "On screen:" >&2
+        grep -o 'text="[^"]\+"' "$out/verify-failure.xml" | head -40 >&2 || true
+    fi
     exit 1
 }
 
