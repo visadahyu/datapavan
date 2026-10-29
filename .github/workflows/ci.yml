@@ -17,7 +17,7 @@ concurrency:
 jobs:
   checks:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
       CARGO_NDK_VERSION: "4.1.2"
       CARGO_DENY_VERSION: "0.20.2"
@@ -64,3 +64,21 @@ jobs:
 
       - name: Quality gates
         run: scripts/check.sh all
+
+      # Smoke test of the debug APK on a real Android system: the audit overview must appear, the
+      # app must hold no INTERNET permission, and it must not crash (scripts/smoke.sh).
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Emulator smoke test
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          script: scripts/smoke.sh
