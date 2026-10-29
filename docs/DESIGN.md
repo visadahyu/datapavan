@@ -47,7 +47,7 @@ Each limit is a reason for the next stage. Where each one is addressed:
 ## 3. Principles (non-negotiable)
 
 1. **Local-first.** All analysis happens on the device. No Datapavan server ever receives user data.
-2. **Zero telemetry.** No analytics or crash-reporting SDKs. Crash reports stay local and are shared only by explicit user action.
+2. **Zero telemetry.** No data leaves the phone unless the user sends it ([ADR 0016](decisions/0016-no-user-data.md)). No analytics or crash-reporting SDKs. Crash reports stay local and are shared only by explicit user action.
 3. **No Google Play Services dependency.** The app must work on de-Googled devices.
 4. **Least privilege.** Each feature asks only for the permission it needs, and explains why before asking.
 5. **Plain language.** Every finding has a short, non-technical explanation.
@@ -65,6 +65,7 @@ Each limit is a reason for the next stage. Where each one is addressed:
 | Emulator (KVM, x86_64) | Daily development loop; Play images for real-world apps | 11 (API 30), and 17 (API 37) with 16 KB pages |
 | Samsung Galaxy A40 | Lab device: old, low-end, resettable. **Keep the bootloader locked** (unlocking permanently trips Knox, and stage 2 tests need Knox) | 11 |
 | Samsung Galaxy A56 | Real-world validation on a maintainer's personal phone, from later milestones (ADR 0011). Stable builds only; never unlocked | 15/16 |
+| More vendors (needed) | Datapavan targets every Android vendor, and both phones above are Samsung. The lab needs at least a Pixel (Android's reference behaviour), a Xiaomi or Redmi phone and a low-cost Tecno or Infinix phone; the remediation evidence is kept per vendor, model and build | Various |
 
 ## 5. Roadmap for stage 1
 
@@ -84,6 +85,7 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 - **Tracker SDK detection:** scan each app's DEX class names on the device, in the base APK and every split, against a bundled tracker-signature database, including known proxy and remote-access SDKs. Trackers whose code the app contains are shown apart from those it only refers to. The first scan reads every app's code (about two minutes for 436 apps on the A40); results are cached per app version and signature data, and DEX files over 48 MB are reported as unreadable rather than read into memory. Installed circumvention tools are also checked against their official signing certificates, to catch modified copies. Datasets ship as signed data packs (Ed25519, never rolled back); a newer pack can be imported as a file, without network access. Every entry that names a company records its evidence and can be disputed publicly (ADR 0015).
 - **Network usage per app:** bytes up and down, split by foreground/background and Wi-Fi/mobile, read from `NetworkStatsManager` (needs the *Usage access* special permission).
 - **Plain-language card per app:** what it can access, what trackers it carries, how much it sends, and what the user can do about it.
+- **Remediation plan:** findings become a short queue of actions ordered by how much risk each removes, at a light, medium or strict level, each previewed and confirmed in one tap, recorded in a journal and reversible. A safety floor protects the phone's core functions at every level. In v0.1 an action opens the right system screen; the Device Owner edition applies the same plan by itself. Design: [REMEDIATION.md](REMEDIATION.md).
 
 ### v0.2 "Watch": local VPN, observe only
 
@@ -261,6 +263,7 @@ datapavan/
   docs/
     DESIGN.md          this document
     VPN.md             local VPN design (v0.2, v0.3)
+    REMEDIATION.md     the remediation plan: levels, actions, safety floor, evidence
     RESTRICTED-REGIONS.md
     FOUNDATION.md      foundation charter principles
     NAMES.md           history and meaning of the names
@@ -311,6 +314,7 @@ Each decision is recorded in full, with context and consequences, as an ADR in
 | [0013](decisions/0013-github-as-home.md) | GitHub as the only home; Codeberg dropped | Accepted |
 | [0014](decisions/0014-v0.1-permissions.md) | Permissions for v0.1 "Audit" | Accepted |
 | [0015](decisions/0015-dataset-licences.md) | Licences of bundled datasets | Accepted |
+| [0016](decisions/0016-no-user-data.md) | No data from users; learning happens in the lab | Accepted |
 
 ## 15. Names
 

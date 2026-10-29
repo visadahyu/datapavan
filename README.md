@@ -75,6 +75,11 @@ yet.
 - **Blocking** (v0.3): network access per app, tracker domains, and "notifications yes, hidden uploads
   no", which allows an app the network only while it is on screen. *Why:* notifications arrive through
   the system's push service, so most apps need no connection of their own in the background.
+- **Remediation plan** (v0.1, M5). Findings become a short list of actions, ordered by how much risk
+  each removes, at a light, medium or strict level; each is previewed, confirmed in one tap, recorded
+  and reversible, and a safety floor protects the phone's core functions. *Why:* a phone in daily use
+  can have hundreds of apps and dozens of findings, and nobody works through that by hand. See
+  [docs/REMEDIATION.md](docs/REMEDIATION.md).
 - **Reports** (v0.4): a weekly report, a GDPR Article 15 data-access request for each company whose
   trackers were seen, and each app's declared data practices compared with what was observed. *Why:*
   every observation is a concrete reason to ask a company what it holds.
@@ -98,7 +103,8 @@ stage that addresses it, is listed in [docs/DESIGN.md](docs/DESIGN.md#2-what-we-
 - **No internet permission in v0.1.** The app cannot open a network connection, and the build fails if
   anything adds the permission.
 - **Local-first.** All analysis happens on the device. Datapavan has no servers that receive user data.
-- **Zero telemetry.** Datapavan collects nothing about its users and contains no analytics SDKs.
+- **Zero telemetry.** Datapavan collects nothing about its users and contains no analytics SDKs. It learns
+  from its own lab, never from its users' phones ([ADR 0016](docs/decisions/0016-no-user-data.md)).
 - **No Google Play Services.** It works on phones without Google's services.
 - **Open source.** You can check every claim yourself. Builds will be reproducible and releases signed.
 - **Plain language.** Every finding is explained so that anyone can understand it.
@@ -123,6 +129,7 @@ The history and meaning of both names are in [docs/NAMES.md](docs/NAMES.md); log
 | [ROADMAP.md](ROADMAP.md) | The three stages, releases and milestones, and their status |
 | [docs/DESIGN.md](docs/DESIGN.md) | Stage 1 design: scope, architecture, threat model, internationalisation |
 | [docs/VPN.md](docs/VPN.md) | Design of the local VPN (v0.2 and v0.3) |
+| [docs/REMEDIATION.md](docs/REMEDIATION.md) | The remediation plan: levels, actions, safety floor, evidence |
 | [docs/RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md) | Working under censorship and surveillance |
 | [docs/FOUNDATION.md](docs/FOUNDATION.md) | Charter principles of the Visadahyu Foundation |
 | [docs/decisions/](docs/decisions/README.md) | Architecture decision records, including the licences of every dataset (ADR 0015) |

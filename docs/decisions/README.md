@@ -23,6 +23,7 @@ in the Git history.
 | [0013](0013-github-as-home.md) | GitHub as the only home; Codeberg dropped | Accepted |
 | [0014](0014-v0.1-permissions.md) | Permissions for v0.1 "Audit" | Accepted |
 | [0015](0015-dataset-licences.md) | Licences of bundled datasets | Accepted |
+| [0016](0016-no-user-data.md) | No data from users; learning happens in the lab | Accepted |
 
 ## Template
 
