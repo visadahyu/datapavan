@@ -1,7 +1,6 @@
 # Contributing
 
-Thank you for helping. Datapavan's home is **Codeberg**: issues and pull requests go to
-<https://codeberg.org/visadahyu/datapavan>. The GitHub repository is a read-only mirror.
+Thank you for helping. Issues and pull requests go to <https://github.com/visadahyu/datapavan>.
 
 ## Before you start
 

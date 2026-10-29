@@ -25,7 +25,7 @@ The app cannot open a network connection. That is the strongest trust signal we 
 | M2 | App inventory and permission audit, including special access (accessibility, notification listener, device admin, overlay, usage access, VPN, install unknown apps, battery-optimisation exemptions) | ⏳ |
 | M3 | Tracker SDK scanner: a DEX parser in the Rust engine, matched against a tracker-signature database | ⏳ |
 | M4 | Network usage per app, from `NetworkStatsManager` | ⏳ |
-| M5 | Plain-language UI, brand theme, first release on Codeberg, submission to F-Droid | ⏳ |
+| M5 | Plain-language UI, brand theme, first release on GitHub, submission to F-Droid | ⏳ |
 
 ### v0.2 "Watch": local VPN, observe only
 
@@ -72,6 +72,6 @@ starts, a two-week spike picks the packet engine (Rust netstack or Go gVisor). D
 | Foundation charter (see [docs/FOUNDATION.md](docs/FOUNDATION.md)) | 🔄 principles written; legal entity planned |
 | Domains and EU trademark registration | ⏳ |
 | Security contact with an OpenPGP key | ⏳ blocks going public |
-| CI on Codeberg (Woodpecker); for now CI runs on the GitHub mirror | ⏳ |
+| Hosting: GitHub as the only home (ADR 0013); a self-hosted EU forge reconsidered once the domain exists | ✅ |
 | Make the repository public | ⏳ before v0.1 is released |
 | F-Droid submission | ⏳ with v0.1 |

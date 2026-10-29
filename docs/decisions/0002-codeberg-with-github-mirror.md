@@ -1,6 +1,6 @@
 # 0002. Codeberg as home, GitHub as read-only mirror
 
-- Status: Accepted
+- Status: Superseded by [0013](0013-github-as-home.md)
 - Date: 2026-10-28
 
 ## Context

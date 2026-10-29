@@ -1,4 +1,4 @@
-# CI on the GitHub mirror. Codeberg (Woodpecker) will run the same script once access is granted.
+# CI for the repository. Runs the same quality gates as a local build.
 # All logic lives in scripts/check.sh; this file only prepares the toolchain.
 # Actions are pinned by full commit SHA, because tags can be moved.
 name: CI

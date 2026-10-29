@@ -22,4 +22,4 @@ Report concerns to the maintainers privately (see [SECURITY.md](SECURITY.md) for
 dedicated address exists). Reports are handled confidentially. Consequences range from a warning to a
 permanent ban, depending on severity.
 
-This code applies in all project spaces: Codeberg, the GitHub mirror, chats, and events.
+This code applies in all project spaces: the GitHub repository, chats, and events.

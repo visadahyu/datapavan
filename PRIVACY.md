@@ -43,5 +43,5 @@ manually. Once mirrors exist, this policy will name each operator, and say what 
 
 ## Contact
 
-Questions about this policy: open an issue on Codeberg. For anything sensitive, use the security
+Questions about this policy: open an issue on GitHub. For anything sensitive, use the security
 contact in [SECURITY.md](SECURITY.md).

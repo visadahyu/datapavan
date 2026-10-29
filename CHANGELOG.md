@@ -20,7 +20,7 @@ All notable changes to this project are documented here. The format follows
   - exclusive repository content (Google's groups only from Google, everything else only from Maven Central);
   - a cargo-deny policy;
   - native libraries built without paths from the build machine.
-- Quality gates in `scripts/check.sh`, run by CI on the GitHub mirror, including a check that every APK carries the Rust library and its JNI export.
+- Quality gates in `scripts/check.sh`, run by CI on GitHub, including a check that every APK carries the Rust library and its JNI export.
 - Brand: the Old Persian sign DA as the product mark and app icon, the DAHYĀUŠ logogram for the foundation, a palette with measured contrast ratios, and avatars.
 - Documentation: design, roadmap, names, brand, VPN design, restricted regions, foundation charter, security policy, contributing guide (with the AI-assistance rules), privacy policy, code of conduct, and architecture decision records.
 
@@ -29,4 +29,4 @@ All notable changes to this project are documented here. The format follows
 - EmojiCompat's start-up lookup of a downloadable font through Google Play services is disabled.
 - Release builds of the Rust engine keep integer-overflow checks.
 
-[Unreleased]: https://codeberg.org/visadahyu/datapavan/commits/branch/main
+[Unreleased]: https://github.com/visadahyu/datapavan/commits/main

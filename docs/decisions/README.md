@@ -9,7 +9,7 @@ in the Git history.
 | # | Decision | Status |
 |---|---|---|
 | [0001](0001-apache-2-licence.md) | Apache-2.0 licence | Accepted |
-| [0002](0002-codeberg-with-github-mirror.md) | Codeberg as home, GitHub as read-only mirror | Accepted |
+| [0002](0002-codeberg-with-github-mirror.md) | Codeberg as home, GitHub as read-only mirror | Superseded by 0013 |
 | [0003](0003-minimum-android-10.md) | Minimum Android version 10 (API 29) | Accepted |
 | [0004](0004-ui-languages-and-rtl.md) | UI languages at launch, RTL from the first commit | Accepted |
 | [0005](0005-english-documentation.md) | Documentation in English only | Accepted |
@@ -20,6 +20,7 @@ in the Git history.
 | [0010](0010-cuneiform-brand-marks.md) | Old Persian cuneiform signs as brand marks | Accepted |
 | [0011](0011-m1-test-devices.md) | M1 tested on emulators and the Galaxy A40 only | Accepted |
 | [0012](0012-packet-engine.md) | Packet engine for the local VPN | Proposed (spike pending) |
+| [0013](0013-github-as-home.md) | GitHub as the only home; Codeberg dropped | Accepted |
 
 ## Template
 
