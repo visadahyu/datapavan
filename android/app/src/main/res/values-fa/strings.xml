@@ -69,4 +69,32 @@
     <string name="finding_software_only_body">این گوشی فقط به‌صورت نرم‌افزاری گواهی می‌دهد، پس سخت‌افزار نمی‌تواند وضعیت سیستم را تأیید کند. این در شبیه‌سازها عادی است.</string>
     <string name="finding_vpn_active_title">یک وی‌پی‌ان فعال است</string>
     <string name="finding_vpn_active_body">همه ترافیک اکنون از یک برنامه وی‌پی‌ان می‌گذرد. مطمئن شوید که به آن اعتماد دارید.</string>
+
+    <!-- M2 strict sensor review and disable guide -->
+    <string name="strict_title">میکروفون، دوربین و مکان</string>
+    <string name="strict_entry_body">برنامه‌هایی که می‌توانند از آن‌ها استفاده کنند: %1$d. هر کدام را بررسی کنید و فقط آنچه لازم دارد را اجازه دهید.</string>
+    <string name="strict_start">شروع بررسی</string>
+    <string name="strict_intro">اندروید اجازه نمی‌دهد یک برنامه مجوزهای برنامه دیگر را تغییر دهد، پس این بررسی شما را قدم به قدم راهنمایی می‌کند. برای هر برنامه، صفحه مجوزهایش را باز کنید و گزینه «هر بار سؤال شود» را انتخاب کنید یا دسترسی را رد کنید. برنامه‌های بررسی‌شده علامت می‌خورند؛ اگر یکی دوباره دسترسی بگیرد، به اینجا برمی‌گردد.</string>
+    <string name="strict_dashboard">باز کردن داشبورد حریم خصوصی</string>
+    <string name="strict_progress">بررسی‌شده: %1$d / %2$d</string>
+    <string name="strict_show_system">نمایش برنامه‌های سیستمی</string>
+    <string name="strict_hide_system">پنهان کردن برنامه‌های سیستمی</string>
+    <string name="strict_status_not_reviewed">هنوز بررسی نشده</string>
+    <string name="strict_status_reviewed">بررسی شده</string>
+    <string name="strict_status_changed">دسترسی پس از بررسی شما تغییر کرده است</string>
+    <string name="strict_open_permissions">باز کردن مجوزها</string>
+    <string name="strict_mark_reviewed">علامت زدن به‌عنوان بررسی‌شده</string>
+    <string name="strict_undo">لغو</string>
+    <string name="sensor_microphone">میکروفون</string>
+    <string name="sensor_camera">دوربین</string>
+    <string name="sensor_location">مکان</string>
+    <string name="wake_title">کلمه بیدارباش: %1$s</string>
+    <string name="wake_body">این دستیار صوتی می‌تواند میکروفون را باز نگه دارد تا منتظر کلمه بیدارباش بماند. روی یک گوشی آزمایشی، برنامه گوگل تا وقتی «هی گوگل» خاموش نشده بود، شبانه‌روز همین کار را می‌کرد. اگر از آن استفاده نمی‌کنید، خاموشش کنید.</string>
+    <string name="wake_open">باز کردن تنظیم کلمه بیدارباش</string>
+    <string name="detail_state_enabled">فعال</string>
+    <string name="detail_state_disabled">غیرفعال</string>
+    <string name="guide_title">چطور خاموشش کنیم</string>
+    <string name="guide_steps">۱. برنامه را در تنظیمات سیستم باز کنید.\n۲. گزینه غیرفعال کردن را بزنید.\n۳. اگر دکمه خاکستری است، سازنده گوشی جلوی آن را گرفته است. در این صورت با یک رایانه و اشکال‌زدایی USB می‌توانید برنامه را برای کاربر خودتان حذف کنید؛ این کار برگشت‌پذیر است.</string>
+    <string name="guide_remove">حذف برای کاربر شما:</string>
+    <string name="guide_restore">برگرداندن:</string>
 </resources>

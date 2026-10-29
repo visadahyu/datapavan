@@ -69,4 +69,32 @@
     <string name="finding_software_only_body">Dieses Telefon bestätigt nur per Software, die Hardware kann den Systemzustand also nicht bestätigen. Auf Emulatoren ist das normal.</string>
     <string name="finding_vpn_active_title">Ein VPN ist aktiv</string>
     <string name="finding_vpn_active_body">Der gesamte Datenverkehr läuft gerade durch eine VPN-App. Vergewissern Sie sich, dass Sie ihr vertrauen.</string>
+
+    <!-- M2 strict sensor review and disable guide -->
+    <string name="strict_title">Mikrofon, Kamera und Standort</string>
+    <string name="strict_entry_body">Apps, die sie nutzen können: %1$d. Prüfen Sie jede und erlauben Sie nur, was sie braucht.</string>
+    <string name="strict_start">Prüfung starten</string>
+    <string name="strict_intro">Android lässt keine App die Berechtigungen einer anderen ändern, deshalb führt Sie diese Prüfung hindurch. Öffnen Sie für jede App ihre Berechtigungen und wählen Sie „Jedes Mal fragen“ oder verweigern Sie den Zugriff. Geprüfte Apps sind abgehakt; erhält eine wieder Zugriff, erscheint sie erneut hier.</string>
+    <string name="strict_dashboard">Datenschutzübersicht öffnen</string>
+    <string name="strict_progress">Geprüft: %1$d / %2$d</string>
+    <string name="strict_show_system">System-Apps einbeziehen</string>
+    <string name="strict_hide_system">System-Apps ausblenden</string>
+    <string name="strict_status_not_reviewed">Noch nicht geprüft</string>
+    <string name="strict_status_reviewed">Geprüft</string>
+    <string name="strict_status_changed">Zugriff seit Ihrer Prüfung geändert</string>
+    <string name="strict_open_permissions">Berechtigungen öffnen</string>
+    <string name="strict_mark_reviewed">Als geprüft markieren</string>
+    <string name="strict_undo">Rückgängig</string>
+    <string name="sensor_microphone">Mikrofon</string>
+    <string name="sensor_camera">Kamera</string>
+    <string name="sensor_location">Standort</string>
+    <string name="wake_title">Aktivierungswort: %1$s</string>
+    <string name="wake_body">Dieser Sprachassistent kann das Mikrofon offen halten, um auf sein Aktivierungswort zu warten. Auf einem Testtelefon tat die Google-App das rund um die Uhr, bis „Hey Google“ ausgeschaltet wurde. Schalten Sie es aus, wenn Sie es nicht nutzen.</string>
+    <string name="wake_open">Einstellung für das Aktivierungswort öffnen</string>
+    <string name="detail_state_enabled">Aktiviert</string>
+    <string name="detail_state_disabled">Deaktiviert</string>
+    <string name="guide_title">So schalten Sie sie aus</string>
+    <string name="guide_steps">1. Öffnen Sie die App in den Systemeinstellungen.\n2. Tippen Sie auf Deaktivieren.\n3. Ist die Schaltfläche ausgegraut, verhindert das der Hersteller. Von einem Computer mit USB-Debugging aus können Sie die App stattdessen für Ihren Nutzer entfernen; das lässt sich rückgängig machen.</string>
+    <string name="guide_remove">Für Ihren Nutzer entfernen:</string>
+    <string name="guide_restore">Wiederherstellen:</string>
 </resources>

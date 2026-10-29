@@ -109,4 +109,14 @@ class RulesTest {
         val vpn = app(packageName = "c.vpn") to listOf(FindingKind.VPN_WITH_REMOTE_CONTROL)
         assertEquals(listOf(vpn, camera, quiet), listOf(quiet, camera, vpn).sortedWith(Rules.byUrgency))
     }
+
+    @Test
+    fun `review status follows sensor access since the review`() {
+        val mic = setOf(Sensor.MICROPHONE)
+        assertEquals(ReviewStatus.NOT_REVIEWED, Rules.reviewStatus(mic, reviewed = null))
+        assertEquals(ReviewStatus.REVIEWED, Rules.reviewStatus(mic, reviewed = mic))
+        assertEquals(ReviewStatus.REVIEWED, Rules.reviewStatus(emptySet(), reviewed = mic))
+        assertEquals(ReviewStatus.CHANGED, Rules.reviewStatus(mic + Sensor.CAMERA, reviewed = mic))
+        assertEquals(ReviewStatus.CHANGED, Rules.reviewStatus(mic, reviewed = emptySet()))
+    }
 }

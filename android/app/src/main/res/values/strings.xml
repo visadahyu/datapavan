@@ -77,4 +77,35 @@
     <string name="finding_software_only_body">This phone attests only in software, so hardware cannot confirm the system state. This is normal for emulators.</string>
     <string name="finding_vpn_active_title">A VPN is active</string>
     <string name="finding_vpn_active_body">All traffic currently passes through a VPN app. Make sure it is one you trust.</string>
+
+    <!-- M2 strict sensor review and disable guide -->
+    <string name="strict_title">Microphone, camera and location</string>
+    <!-- %1$d is a count of apps. -->
+    <string name="strict_entry_body">Apps that can use them: %1$d. Review each one and allow only what it needs.</string>
+    <string name="strict_start">Start review</string>
+    <string name="strict_intro">Android does not let one app change another app\'s permissions, so this review guides you through them. For each app, open its permissions and choose to be asked every time, or deny the access. Reviewed apps are ticked; if one gains access again, it comes back here.</string>
+    <string name="strict_dashboard">Open the privacy dashboard</string>
+    <!-- Reviewed apps / all apps in the list. -->
+    <string name="strict_progress">Reviewed: %1$d / %2$d</string>
+    <string name="strict_show_system">Include system apps</string>
+    <string name="strict_hide_system">Hide system apps</string>
+    <string name="strict_status_not_reviewed">Not reviewed yet</string>
+    <string name="strict_status_reviewed">Reviewed</string>
+    <string name="strict_status_changed">Access changed since your review</string>
+    <string name="strict_open_permissions">Open permissions</string>
+    <string name="strict_mark_reviewed">Mark as reviewed</string>
+    <string name="strict_undo">Undo</string>
+    <string name="sensor_microphone">Microphone</string>
+    <string name="sensor_camera">Camera</string>
+    <string name="sensor_location">Location</string>
+    <!-- %1$s is an app name, e.g. Google. -->
+    <string name="wake_title">Wake word: %1$s</string>
+    <string name="wake_body">This voice assistant can keep the microphone open to listen for its wake word. On a test phone, the Google app did so around the clock until “Hey Google” was turned off. Turn it off unless you use it.</string>
+    <string name="wake_open">Open wake-word setting</string>
+    <string name="detail_state_enabled">Enabled</string>
+    <string name="detail_state_disabled">Disabled</string>
+    <string name="guide_title">How to turn it off</string>
+    <string name="guide_steps">1. Open the app in system settings.\n2. Tap Disable or Turn off.\n3. If the button is greyed out, the phone maker blocks it. From a computer with USB debugging, you can remove the app for your user instead; this can be undone.</string>
+    <string name="guide_remove">Remove for your user:</string>
+    <string name="guide_restore">Bring it back:</string>
 </resources>

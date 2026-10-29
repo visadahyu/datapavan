@@ -61,8 +61,30 @@ private val REMOTE_CONTROL = setOf(
     SpecialAccess.DEVICE_ADMIN,
 )
 
+/** Where an app stands in the strict sensor review. */
+enum class ReviewStatus { NOT_REVIEWED, REVIEWED, CHANGED }
+
+/** Voice assistants that can listen for a wake word, with the settings screen that turns it off. */
+object WakeWordAssistants {
+    /** Package name to an intent action that opens its wake-word setting, or null for the app's own page. */
+    val known = mapOf(
+        "com.google.android.googlequicksearchbox" to "com.google.android.googlequicksearchbox.action.HOTWORD_DETECTION_SETTINGS",
+        "com.samsung.android.bixby.agent" to null,
+    )
+}
+
 /** The audit's rules: pure functions from facts to findings, ordered by severity. */
 object Rules {
+    /**
+     * An app the user has reviewed counts as reviewed while its sensor access stays within what it
+     * had at the review. Gaining access again, or new access, puts it back on the list.
+     */
+    fun reviewStatus(current: Set<Sensor>, reviewed: Set<Sensor>?): ReviewStatus = when {
+        reviewed == null -> ReviewStatus.NOT_REVIEWED
+        reviewed.containsAll(current) -> ReviewStatus.REVIEWED
+        else -> ReviewStatus.CHANGED
+    }
+
     fun forApp(app: AppFacts): List<FindingKind> = buildList {
         val control = app.special intersect REMOTE_CONTROL
         if (app.isVpnApp && control.isNotEmpty()) add(FindingKind.VPN_WITH_REMOTE_CONTROL)

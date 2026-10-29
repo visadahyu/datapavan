@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -98,6 +100,7 @@ internal fun DatapavanApp(engineVersion: String) {
         value = withContext(Dispatchers.Default) { first.withAllLabels(context) }
     }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
+    var reviewing by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(modifier = Modifier.fillMaxSize()) { insets ->
         val audit = result
@@ -108,7 +111,11 @@ internal fun DatapavanApp(engineVersion: String) {
                 BackHandler { selected = null }
                 AppDetail(entry, insets, onBack = { selected = null })
             }
-            else -> Overview(audit, engineVersion, insets, onOpen = { selected = it })
+            reviewing -> {
+                BackHandler { reviewing = false }
+                StrictReview(audit.apps.map { it.first }, insets, onBack = { reviewing = false })
+            }
+            else -> Overview(audit, engineVersion, insets, onOpen = { selected = it }, onReview = { reviewing = true })
         }
     }
 }
@@ -127,7 +134,7 @@ private fun Loading(insets: PaddingValues) {
 }
 
 @Composable
-private fun Overview(audit: AuditResult, engineVersion: String, insets: PaddingValues, onOpen: (String) -> Unit) {
+private fun Overview(audit: AuditResult, engineVersion: String, insets: PaddingValues, onOpen: (String) -> Unit, onReview: () -> Unit) {
     var showAll by rememberSaveable { mutableStateOf(false) }
     val flagged = audit.apps.filter { (_, findings) -> findings.any { it.severity != Severity.INFO } }
     val shown = if (showAll) audit.apps else flagged
@@ -151,6 +158,7 @@ private fun Overview(audit: AuditResult, engineVersion: String, insets: PaddingV
             FindingCard(kind, company = null, action = deviceAction(kind)?.let { (label, intent) -> label to { context.startActivity(intent) } })
         }
         item { IntegrityLine(audit.device) }
+        item { StrictReviewEntry(audit.apps.map { it.first }, onStart = onReview) }
         item {
             Spacer(Modifier.height(16.dp))
             SectionTitle(R.string.section_apps)
@@ -234,6 +242,7 @@ private fun AppDetail(entry: AppEntry, insets: PaddingValues, onBack: () -> Unit
             Text(isolateLtr(app.packageName), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             Text(stringResource(if (app.isSystem) R.string.detail_system_app else R.string.detail_user_app), style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(if (app.enabled) R.string.detail_state_enabled else R.string.detail_state_disabled), style = MaterialTheme.typography.bodyMedium)
             Text(
                 app.installer?.let { stringResource(R.string.detail_installer, isolateLtr(it)) } ?: stringResource(R.string.detail_installer_unknown),
                 style = MaterialTheme.typography.bodyMedium,
@@ -247,6 +256,7 @@ private fun AppDetail(entry: AppEntry, insets: PaddingValues, onBack: () -> Unit
             if (findings.isEmpty()) Text(stringResource(R.string.detail_no_findings), style = MaterialTheme.typography.bodyMedium)
         }
         items(findings) { kind -> FindingCard(kind, company = KnownCollectors.companyOf(app.packageName), action = null) }
+        if (FindingKind.PREINSTALLED_COLLECTOR in findings) item { DisableGuide(app.packageName) }
         item {
             SectionTitle(R.string.detail_special)
             Text(
@@ -279,6 +289,32 @@ private fun FindingCard(kind: FindingKind, company: String?, action: Pair<Int, (
             Spacer(Modifier.height(4.dp))
             Text(stringResource(body(kind), company.orEmpty()), style = MaterialTheme.typography.bodyMedium)
             action?.let { (label, onClick) -> TextButton(onClick = onClick) { Text(stringResource(label)) } }
+        }
+    }
+}
+
+/**
+ * How to turn off a preinstalled data collector. Disabling is enough when the maker allows it;
+ * otherwise a computer can remove the app for the current user, which a factory reset or the
+ * restore command undoes.
+ */
+@Composable
+private fun DisableGuide(packageName: String) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp)) {
+            Text(stringResource(R.string.guide_title), style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(4.dp))
+            Text(stringResource(R.string.guide_steps), style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(8.dp))
+            SelectionContainer {
+                Column {
+                    Text(stringResource(R.string.guide_remove), style = MaterialTheme.typography.labelMedium)
+                    Text(isolateLtr("adb shell pm uninstall -k --user 0 $packageName"), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(4.dp))
+                    Text(stringResource(R.string.guide_restore), style = MaterialTheme.typography.labelMedium)
+                    Text(isolateLtr("adb shell cmd package install-existing $packageName"), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
     }
 }

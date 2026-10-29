@@ -69,4 +69,32 @@
     <string name="finding_software_only_body">Ce téléphone ne fournit qu\'une attestation logicielle : le matériel ne peut pas confirmer l\'état du système. C\'est normal sur un émulateur.</string>
     <string name="finding_vpn_active_title">Un VPN est actif</string>
     <string name="finding_vpn_active_body">Tout le trafic passe actuellement par une appli VPN. Assurez-vous qu\'elle est digne de confiance.</string>
+
+    <!-- M2 strict sensor review and disable guide -->
+    <string name="strict_title">Micro, caméra et position</string>
+    <string name="strict_entry_body">Applis pouvant les utiliser : %1$d. Examinez chacune et n\'autorisez que ce dont elle a besoin.</string>
+    <string name="strict_start">Commencer l\'examen</string>
+    <string name="strict_intro">Android ne permet pas à une appli de modifier les autorisations d\'une autre ; cet examen vous guide donc. Pour chaque appli, ouvrez ses autorisations et choisissez de toujours demander, ou refusez l\'accès. Les applis examinées sont cochées ; si l\'une retrouve un accès, elle revient ici.</string>
+    <string name="strict_dashboard">Ouvrir le tableau de bord de confidentialité</string>
+    <string name="strict_progress">Examinées : %1$d / %2$d</string>
+    <string name="strict_show_system">Inclure les applis système</string>
+    <string name="strict_hide_system">Masquer les applis système</string>
+    <string name="strict_status_not_reviewed">Pas encore examinée</string>
+    <string name="strict_status_reviewed">Examinée</string>
+    <string name="strict_status_changed">Accès modifié depuis votre examen</string>
+    <string name="strict_open_permissions">Ouvrir les autorisations</string>
+    <string name="strict_mark_reviewed">Marquer comme examinée</string>
+    <string name="strict_undo">Annuler</string>
+    <string name="sensor_microphone">Micro</string>
+    <string name="sensor_camera">Caméra</string>
+    <string name="sensor_location">Position</string>
+    <string name="wake_title">Mot d\'activation : %1$s</string>
+    <string name="wake_body">Cet assistant vocal peut garder le micro ouvert pour attendre son mot d\'activation. Sur un téléphone de test, l\'appli Google l\'a fait en permanence jusqu\'à ce que « Hey Google » soit désactivé. Désactivez-le si vous ne l\'utilisez pas.</string>
+    <string name="wake_open">Ouvrir le réglage du mot d\'activation</string>
+    <string name="detail_state_enabled">Activée</string>
+    <string name="detail_state_disabled">Désactivée</string>
+    <string name="guide_title">Comment la désactiver</string>
+    <string name="guide_steps">1. Ouvrez l\'appli dans les paramètres système.\n2. Touchez Désactiver.\n3. Si le bouton est grisé, le fabricant l\'empêche. Depuis un ordinateur avec le débogage USB, vous pouvez à la place supprimer l\'appli pour votre utilisateur ; c\'est réversible.</string>
+    <string name="guide_remove">Supprimer pour votre utilisateur :</string>
+    <string name="guide_restore">La rétablir :</string>
 </resources>
