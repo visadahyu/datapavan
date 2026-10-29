@@ -70,6 +70,7 @@ Requirements (versions are pinned in the repository; CI installs exactly these):
 ```sh
 scripts/check.sh                          # every quality gate CI runs
 scripts/smoke.sh                          # smoke test on a connected emulator or phone
+scripts/verify-audit.sh                   # end-to-end check of the audit's findings (emulator only)
 cd android && ./gradlew assembleDebug     # debug APK, including the Rust library
 ```
 

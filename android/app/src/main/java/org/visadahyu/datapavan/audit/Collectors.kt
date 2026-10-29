@@ -156,15 +156,23 @@ class AppCollector(private val context: Context) {
         else -> false
     }
 
+    /**
+     * Services the system has bound, plus the user's setting. The setting matters because Android
+     * hides bound services from other apps while a UI automation session runs (as in our own
+     * end-to-end checks), and it is what the user actually switched on.
+     */
     private fun enabledAccessibilityPackages(): Set<String> =
         context.getSystemService(AccessibilityManager::class.java)
             .getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
             .map { it.resolveInfo.serviceInfo.packageName }
-            .toSet()
+            .toSet() + componentPackages(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
 
-    private fun enabledNotificationListenerPackages(): Set<String> {
+    private fun enabledNotificationListenerPackages(): Set<String> = componentPackages(SETTING_NOTIFICATION_LISTENERS)
+
+    /** Packages in a secure setting that lists components as `package/class:package/class`. */
+    private fun componentPackages(key: String): Set<String> {
         val setting = try {
-            Settings.Secure.getString(context.contentResolver, SETTING_NOTIFICATION_LISTENERS)
+            Settings.Secure.getString(context.contentResolver, key)
         } catch (_: SecurityException) {
             null
         }

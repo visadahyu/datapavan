@@ -65,8 +65,9 @@ jobs:
       - name: Quality gates
         run: scripts/check.sh all
 
-      # Smoke test of the debug APK on a real Android system: the audit overview must appear, the
-      # app must hold no INTERNET permission, and it must not crash (scripts/smoke.sh).
+      # On a real Android system: the smoke test (overview shown, no INTERNET permission, no crash),
+      # then the audit verification, which gives a test fixture app risky access and checks that the
+      # audit reports it (scripts/smoke.sh, scripts/verify-audit.sh).
       # The emulator needs 7.4 GB for its data partition; after the build only 5.8 GB are left. The
       # Rust build directory is no longer needed (the APK already holds the library), nor are large
       # preinstalled toolchains this project never uses.
@@ -91,4 +92,6 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
-          script: scripts/smoke.sh
+          script: |
+            scripts/smoke.sh
+            scripts/verify-audit.sh

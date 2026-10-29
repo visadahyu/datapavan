@@ -10,7 +10,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/app/build/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan
-DUMP=/sdcard/datapavan-smoke.xml
+# shellcheck source=scripts/adb-ui.sh
+. "$ROOT/scripts/adb-ui.sh"
 
 fail() {
     echo "SMOKE FAILED: $*" >&2
@@ -18,42 +19,11 @@ fail() {
     exit 1
 }
 
-screen_has() {
-    adb shell uiautomator dump "$DUMP" >/dev/null 2>&1 || return 1
-    adb shell cat "$DUMP" 2>/dev/null | grep -q "text=\"$1"
-}
-
-# Lists only compose what is on screen, so scroll down (up to five times) until the text shows.
-scroll_to() {
-    local size width height
-    size=$(adb shell wm size | tr -d '\r' | sed -n 's/.*: \([0-9]*\)x\([0-9]*\)$/\1 \2/p' | tail -1)
-    width=${size% *}
-    height=${size#* }
-    for _ in 1 2 3 4 5 6; do
-        screen_has "$1" && return 0
-        adb shell input swipe $((width / 2)) $((height * 3 / 4)) $((width / 2)) $((height / 4)) 300
-        sleep 1
-    done
-    screen_has "$1"
-}
-
 echo "== Smoke test on $(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
 adb wait-for-device
-# Emulators start without a secure lock screen; a phone must already be unlocked.
-adb shell input keyevent KEYCODE_WAKEUP
-adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
 adb install -r "$APK" >/dev/null
-# English UI for the text checks; app-specific locales exist from Android 13.
-adb shell cmd locale set-app-locales "$PKG" --locales en >/dev/null 2>&1 || true
 adb logcat -c
-adb shell am force-stop "$PKG"
-adb shell am start -n "$PKG/.MainActivity" >/dev/null
-
-for _ in $(seq 1 60); do
-    screen_has "This phone" && break
-    sleep 1
-done
-screen_has "This phone" || fail "the audit overview did not appear within 60 seconds"
+start_audit || fail "the audit overview did not appear within 60 seconds"
 scroll_to "Apps checked:" || fail "the app summary is missing"
 echo "ok: audit overview shown"
 

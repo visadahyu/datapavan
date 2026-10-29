@@ -215,7 +215,7 @@ The enterprise flavour will be commercial, so every dataset must allow commercia
 - **Bridge:** direct JNI through the `jni` crate. We chose it over UniFFI because UniFFI's Kotlin bindings depend on JNA (about 1.5 MB, and reflection-based), while our JNI surface stays tiny: a version call today, and start/stop/query for the engine later. Netstack candidates to evaluate in the spike: `smoltcp`, `ipstack`.
 - **Supply chain:** Google's artifact groups may come only from Google's repository and everything else only from Maven Central (`exclusiveContent`); Gradle dependency verification (SHA-256 of every artifact, generated from an empty Gradle home); the Gradle distribution is pinned by checksum and the wrapper jar is validated in CI; native libraries are built with remapped paths and a controlled cargo environment; `Cargo.lock` is committed and every build uses `--locked`; `cargo deny` checks licences, sources and advisories.
 - **Quality gates:** `scripts/check.sh` runs everything that CI runs. That covers rustfmt; Clippy (pedantic, warnings as errors) for the host and both Android targets; Rust tests; cargo-deny; Android Lint for debug and release (warnings as errors); unit tests; APK and bundle builds; the forbidden-permission guard, wired into the manifest pipeline so no build path can skip it; and a check that every APK carries the Rust library with its JNI export.
-- **CI:** GitHub Actions (actions pinned by commit SHA), calling the same `scripts/check.sh` as local builds, then `scripts/smoke.sh` on an Android 15 emulator: the audit overview must appear, the app must hold no INTERNET permission, and it must not crash. The smoke test needs only adb, so it adds no test dependencies, and it runs the same way against a phone.
+- **CI:** GitHub Actions (actions pinned by commit SHA), calling the same `scripts/check.sh` as local builds, then, on an Android 15 emulator, `scripts/smoke.sh` (the audit overview appears, the app holds no INTERNET permission, and it does not crash) and `scripts/verify-audit.sh`, which installs a test fixture app built from `scripts/fixture-app` with the SDK's tools only, gives it and the device risky access over adb (an enabled accessibility service on a VPN app, the right to install apps, sensors, a user-installed certificate authority) and checks that the audit reports each one. Both need only adb, so they add no test dependencies; the smoke test also runs against a phone.
 - **Quality:** Kotlin and Rust unit tests, parser fuzzing, the emulator smoke test, and a manual test matrix on the A40 and A56.
 - **Release:** reproducible builds, F-Droid metadata, signed APKs.
 - **JDK:** Gradle runs on JDK 21, pinned through Gradle's daemon JVM criteria.
@@ -268,6 +268,8 @@ datapavan/
   brand/               logo SVGs and brand guide
   scripts/check.sh     all quality gates; CI calls it
   scripts/smoke.sh     smoke test on an emulator or phone over adb; CI calls it
+  scripts/verify-audit.sh   end-to-end check of the audit's findings on an emulator; CI calls it
+  scripts/fixture-app/ test app with risky access, built without Gradle, for verify-audit.sh
   data/                (from M3) bundled dataset snapshots + their LICENSE files
 ```
 

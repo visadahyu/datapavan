@@ -22,7 +22,7 @@ All notable changes to this project are documented here. The format follows
   - exclusive repository content (Google's groups only from Google, everything else only from Maven Central);
   - a cargo-deny policy;
   - native libraries built without paths from the build machine.
-- Quality gates in `scripts/check.sh`, run by CI on GitHub, including a check that every APK carries the Rust library and its JNI export, and an emulator smoke test (`scripts/smoke.sh`).
+- Quality gates in `scripts/check.sh`, run by CI on GitHub, including a check that every APK carries the Rust library and its JNI export, an emulator smoke test (`scripts/smoke.sh`), and an end-to-end check of the audit's findings with a test fixture app (`scripts/verify-audit.sh`).
 - Brand: the Old Persian sign DA as the product mark and app icon, the DAHYĀUŠ logogram for the foundation, a palette with measured contrast ratios, and avatars.
 - Documentation: design, roadmap, names, brand, VPN design, restricted regions, foundation charter, security policy, contributing guide (with the AI-assistance rules), privacy policy, code of conduct, and architecture decision records.
 
