@@ -60,6 +60,26 @@ expect() {
     echo "ok: $1"
 }
 
+# Enables the fixture's accessibility service. While Android is still processing the fresh install,
+# it can write its own list of enabled services back over the setting and drop the fixture (seen on
+# CI's slower emulator). So the setting is written until Android reports the service as enabled in
+# two checks two seconds apart.
+enable_fixture_accessibility() {
+    local streak=0
+    for _ in $(seq 1 20); do
+        if adb shell dumpsys accessibility | grep -q "Enabled services:{.*$FIXTURE/"; then
+            streak=$((streak + 1))
+            [ "$streak" -ge 2 ] && return 0
+        else
+            streak=0
+            adb shell settings put secure enabled_accessibility_services "$FIXTURE/$FIXTURE.FixtureAccessibilityService"
+            adb shell settings put secure accessibility_enabled 1
+        fi
+        sleep 2
+    done
+    return 1
+}
+
 echo "== Audit verification on Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
 
 # The fixture: a VPN app with an enabled accessibility service, microphone, camera and location,
@@ -69,8 +89,6 @@ fixture_apk=$("$ROOT/scripts/fixture-app/build.sh" | tail -1)
 adb uninstall "$FIXTURE" >/dev/null 2>&1 || true
 adb install -r -g "$fixture_apk" >/dev/null
 adb shell appops set "$FIXTURE" REQUEST_INSTALL_PACKAGES allow
-adb shell settings put secure enabled_accessibility_services "$FIXTURE/$FIXTURE.FixtureAccessibilityService"
-adb shell settings put secure accessibility_enabled 1
 
 # A user-installed certificate authority needs root to place; Google APIs emulator images allow it.
 adb root >/dev/null 2>&1 || true
@@ -90,14 +108,7 @@ else
     echo "skip: adb cannot become root here, so no certificate authority is installed"
 fi
 
-# Android binds the fixture's accessibility service on its own schedule; wait until it reports the
-# service as enabled, so that a slow emulator does not turn a timing problem into a missing finding.
-for _ in $(seq 1 30); do
-    adb shell dumpsys accessibility 2>/dev/null | grep -q "$FIXTURE/" && break
-    sleep 1
-done
-adb shell settings get secure enabled_accessibility_services | grep -q "$FIXTURE/" ||
-    fail "Android turned the fixture's accessibility service off again"
+enable_fixture_accessibility || fail "Android does not keep the fixture's accessibility service enabled"
 
 start_audit || fail "the audit overview did not appear"
 expect "USB debugging is on"
