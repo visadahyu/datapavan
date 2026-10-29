@@ -3,8 +3,8 @@
 **Datapavan will show you what each app on your Android phone sends, and to whom, and let you stop it.**
 Everything runs on the device. It needs no root and no cloud service.
 
-> Status: **pre-alpha.** Milestone M1 (the build skeleton) is complete; the app has no user-facing
-> features yet. See the [roadmap](ROADMAP.md).
+> Status: **pre-alpha.** Milestones M1 (the build skeleton) and M2 (the app and permission audit) are
+> complete; nothing has been released yet. See the [roadmap](ROADMAP.md).
 
 ## Why
 
