@@ -22,7 +22,7 @@ The app cannot open a network connection. That is the strongest trust signal we 
 | Milestone | Content | Status |
 |---|---|---|
 | M1 | Skeleton: Android app, Rust core, JNI bridge, i18n and RTL, quality gates, CI, brand | ✅ |
-| M2 | App inventory and permission audit, including special access (accessibility, notification listener, device admin, overlay, usage access, VPN, install unknown apps, battery-optimisation exemptions), plus risk checks for VPN users: VPN apps with remote-control access, user-installed certificate authorities, enabled debugging; device integrity from hardware key attestation | ⏳ |
+| M2 | App inventory and permission audit, including special access (accessibility, notification listener, device admin, overlay, usage access, VPN, install unknown apps, battery-optimisation exemptions), plus risk checks for VPN users: VPN apps with remote-control access, user-installed certificate authorities, enabled debugging; device integrity from hardware key attestation. Preinstalled system apps from data-collecting companies (for example Meta's services that device makers ship), with their state and a guide to disable or remove them reversibly. Apps that hold microphone, camera or location access, with a link to the system's privacy dashboard | ⏳ |
 | M3 | Tracker SDK scanner: a DEX parser in the Rust engine, matched against a tracker-signature database that includes known proxy and remote-access SDKs; installed circumvention tools checked against their official signing certificates | ⏳ |
 | M4 | Network usage per app, from `NetworkStatsManager` | ⏳ |
 | M5 | Plain-language UI, brand theme, first release on GitHub, submission to F-Droid | ⏳ |
@@ -38,11 +38,14 @@ starts, a two-week spike picks the packet engine (Rust netstack or Go gVisor). D
   the phone's network: no inbound access from the VPN provider's network, and proxy-like behaviour,
   including the tool's own, is flagged. Per-tool guides for proxy mode.
 - Apps that bypass Datapavan's resolver are flagged; TLS fingerprints identify the client library.
+- A sensor activity log: when the microphone recorded or the camera was on, and whether the screen was off, with an alert for use while the screen is off. Android hides which app records, so the app is inferred from what was on screen and which services ran. A feasibility spike comes first.
+- Apps that keep their own always-on connection instead of the system push service are flagged.
 
 ### v0.3 "Guard": blocking
 
 - Network access per app (Wi-Fi, mobile, background), and tracker-domain blocking with per-app exceptions.
 - Blocking of proxy-like behaviour flagged in v0.2.
+- "Notifications yes, hidden uploads no": per app, network access only while the app is on screen. Push notifications still arrive through the system's push service. Some messengers then fetch the message text themselves, so their notifications may arrive without text or late; the choice is per app.
 - Safe defaults, one-tap undo, and a "this app broke" path.
 
 ### v0.4 "Report"
@@ -56,7 +59,8 @@ starts, a two-week spike picks the packet engine (Rust netstack or Go gVisor). D
 
 - **Device Owner flavour.** Disables system apps, enforces always-on VPN in lockdown mode, controls installs and permissions on stock devices, with no root and no bootloader unlocking.
 - **Circumvention policy** for organisations in filtered networks: only approved, signature-verified tools; no user-installed certificate authorities; no debugging; Datapavan always in front of the tool.
-- **Work-profile isolation.** Puts high-tracking apps (for example Meta's) in a separate profile that cannot see the rest of the phone. Possible without a factory reset.
+- **Work-profile isolation.** Puts high-tracking apps (for example Meta's) in a separate profile that cannot see the rest of the phone, and pauses the whole profile when those apps are not in use. Possible without a factory reset.
+- **Enforced permissions.** Microphone, camera and location stay denied for chosen apps, so they cannot be granted by mistake.
 - **AI-data guard.** Watches apps and system AI services that can read the screen, notifications or keyboard input.
 - **Compliance reporting** for the GDPR and comparable laws (for example the UK GDPR, Switzerland's FADP, Brazil's LGPD and Turkey's KVKK).
 

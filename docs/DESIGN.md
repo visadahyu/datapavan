@@ -31,6 +31,7 @@ An app on a stock phone has hard limits. We state them openly, because overclaim
 | Cut network access per app (Wi-Fi / mobile / background) | Control firmware, the modem or the bootloader (stage 3) |
 | Flag apps that hold high-risk permissions or special access | Guarantee that every system component goes through the VPN |
 | Flag VPN apps that could control the phone, and modified copies of known circumvention tools | Clean a phone that is already compromised |
+| Show when the microphone or camera was used, including with the screen off | Name the recording app with certainty: Android hides it from other apps, so we infer it |
 
 Each limit is a reason for the next stage. Where each one is addressed:
 
@@ -76,6 +77,8 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 - **Permission audit:** granted dangerous permissions, plus special access: accessibility, device admin, notification listener, usage access, VPN, overlay, install unknown apps, and battery-optimisation exemptions.
 - **Risk checks for VPN users:** VPN apps that also hold remote-control access (accessibility, overlay, device admin, notification listener), user-installed certificate authorities, and enabled USB or wireless debugging (see [RESTRICTED-REGIONS.md](RESTRICTED-REGIONS.md)).
 - **Device integrity:** bootloader lock and verified-boot state from hardware key attestation, with guided removal of risky apps (including Android's safe mode).
+- **Preinstalled data collectors:** system apps from data-collecting companies that the device maker ships (for example Meta's app manager and services on Samsung phones), with their state, their traffic (from M4) and a guide to disable them or remove them reversibly for the user.
+- **Sensor access:** apps that hold microphone, camera or location access, especially where the app's purpose does not need it; a link to the system's privacy dashboard (Android 12+), which shows when each app used them; and advice to prefer one-time grants.
 - **Tracker SDK detection:** scan each app's DEX class names on the device against a bundled tracker-signature database, including known proxy and remote-access SDKs. Installed circumvention tools are also checked against their official signing certificates, to catch modified copies.
 - **Network usage per app:** bytes up and down, split by foreground/background and Wi-Fi/mobile, read from `NetworkStatsManager` (needs the *Usage access* special permission).
 - **Plain-language card per app:** what it can access, what trackers it carries, how much it sends, and what the user can do about it.
@@ -86,6 +89,8 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 - A timeline answering "who did this app talk to?", with tracker destinations flagged.
 - Chained mode closes inbound access from the VPN provider's network and flags proxy-like behaviour, including the circumvention tool's own connections (see [VPN.md](VPN.md)).
 - Apps that bypass Datapavan's resolver (their own encrypted DNS, hard-coded IPs) are flagged; TLS fingerprints identify the client library behind a connection.
+- **Sensor activity log:** recording sessions of the microphone (`AudioManager` recording callbacks) and camera availability changes, with time and screen state, and an alert when either is used while the screen is off. Android redacts the recording app's identity for other apps, so it is inferred from the foreground app and running services, and the UI says so. A feasibility spike comes first.
+- Apps that keep their own always-on connection instead of the system push service are flagged.
 - Nothing is blocked yet. This lets us check accuracy and battery cost before we take control.
 
 ### v0.3 "Guard": blocking
@@ -93,6 +98,7 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 - Network access per app on or off, separately for Wi-Fi, mobile and background.
 - Tracker-domain blocking: global, with per-app exceptions.
 - Safe defaults, one-tap undo, and a "this app broke" path that guides the user to the rule responsible.
+- **"Notifications yes, hidden uploads no":** per app, network access only while the app is on screen. Push notifications arrive through the system's push service, which holds one connection for all apps and wakes an app briefly; in that window the app cannot use the microphone or camera, and with this rule it cannot upload either. Messengers that fetch the message text themselves may show notifications without text, or late, so the rule is chosen per app.
 
 ### v0.4 "Report"
 
@@ -102,7 +108,8 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 ### Later (stage 2 preview; full plan in [ROADMAP.md](../ROADMAP.md))
 
 - **Enterprise flavour in Device Owner mode:** disable system apps, enforce always-on VPN, and apply policies at fleet scale.
-- **Work-profile isolation helper:** put Meta and other high-tracking apps in a separate profile without a factory reset.
+- **Work-profile isolation helper:** put Meta and other high-tracking apps in a separate profile without a factory reset, and pause the profile when they are not in use.
+- **Enforced permissions:** microphone, camera and location stay denied for chosen apps.
 - **AI-data guard:** watch apps and system AI services that can read the screen, notifications or keyboard input.
 
 ## 6. Architecture
@@ -261,7 +268,7 @@ datapavan/
 | # | Milestone | Done when |
 |---|---|---|
 | M1 | Skeleton | Android app and Rust core build together; CI green; app opens on the emulator and the A40 (A56 testing deferred, ADR 0011); string resources, RTL support and pseudo-locales in place from the start; brand marks and app icon |
-| M2 | App inventory and permission audit | Matches what system Settings shows, checked on the A40 and the emulator; the VPN risk checks fire for a test app that holds remote-control access, a user-installed certificate authority, and enabled debugging; the integrity check reports the A40's locked bootloader and verified boot |
+| M2 | App inventory and permission audit | Matches what system Settings shows, checked on the A40 and the emulator; the VPN risk checks fire for a test app that holds remote-control access, a user-installed certificate authority, and enabled debugging; the integrity check reports the A40's locked bootloader and verified boot; the preinstalled Meta system apps on the A40 are listed with their state |
 | M3 | Tracker SDK scanner | Results for 20 popular apps agree with published εxodus reports; a re-signed copy of a known circumvention tool is reported as not genuine |
 | M4 | Network usage per app | Byte counts within 5 % of the Settings data-usage screen |
 | M5 | Plain-language UI and first release | v0.1 published on GitHub in English, French, German and Persian, and submitted to F-Droid; manifest has **no INTERNET permission**; build is reproducible |
