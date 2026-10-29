@@ -21,6 +21,7 @@ in the Git history.
 | [0011](0011-m1-test-devices.md) | M1 tested on emulators and the Galaxy A40 only | Accepted |
 | [0012](0012-packet-engine.md) | Packet engine for the local VPN | Proposed (spike pending) |
 | [0013](0013-github-as-home.md) | GitHub as the only home; Codeberg dropped | Accepted |
+| [0014](0014-v0.1-permissions.md) | Permissions for v0.1 "Audit" | Accepted |
 
 ## Template
 

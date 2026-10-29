@@ -248,6 +248,7 @@ datapavan/
     FOUNDATION.md      foundation charter principles
     NAMES.md           history and meaning of the names
     decisions/         architecture decision records (ADRs)
+    spikes/            feasibility spikes and their findings
   android/             Android app (Kotlin); Gradle project root
   core/                Rust workspace: engine/ (no unsafe) and jni/ (bridge)
   brand/               logo SVGs and brand guide
@@ -285,6 +286,7 @@ Each decision is recorded in full, with context and consequences, as an ADR in
 | [0011](decisions/0011-m1-test-devices.md) | M1 tested on emulators and the Galaxy A40 | Accepted |
 | [0012](decisions/0012-packet-engine.md) | Packet engine for the local VPN | Proposed (spike pending) |
 | [0013](decisions/0013-github-as-home.md) | GitHub as the only home; Codeberg dropped | Accepted |
+| [0014](decisions/0014-v0.1-permissions.md) | Permissions for v0.1 "Audit" | Accepted |
 
 ## 15. Names
 

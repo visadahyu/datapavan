@@ -27,6 +27,7 @@ or share a report.
 |---|---|---|
 | See installed apps | Listing apps and their permissions | v0.1 |
 | Usage access (granted by you in Settings) | Showing how much data each app has sent | v0.1 |
+| Network state | Telling whether a VPN is active. It does not allow any connection | v0.1 |
 | VPN (granted by you) | The **local** firewall. Traffic is filtered on the phone and never sent to us | v0.2 |
 | Internet | Forwarding the traffic of other apps through the local firewall, and optional list updates | v0.2 |
 
