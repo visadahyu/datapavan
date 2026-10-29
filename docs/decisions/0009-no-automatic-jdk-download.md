@@ -5,7 +5,7 @@
 
 ## Context
 Builds must be reproducible, and the Android Gradle Plugin is tested against JDK 21, while developer
-machines may have newer JDKs (25 on the founder's machine). Gradle's `updateDaemonJvm` task requires a
+machines may have newer JDKs installed. Gradle's `updateDaemonJvm` task requires a
 toolchain download repository, which would let a build fetch a JDK from the internet on its own.
 
 ## Decision

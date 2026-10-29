@@ -11,9 +11,9 @@ The same engine must also serve stage 2 (Device Owner) and stage 3 (a system ser
 ## Decision
 - All logic lives in `datapavan-engine`. The workspace lint `unsafe_code = "forbid"` makes the compiler reject any `unsafe`.
 - `datapavan-jni` is a thin bridge, and the only crate allowed `unsafe`. Every unsafe block needs a `// SAFETY:` comment (Clippy `undocumented_unsafe_blocks = deny`).
-- Release builds are size-optimised (`opt-level = "s"`, fat LTO, one codegen unit, `panic = "abort"`, stripped).
+- Release builds are size-optimised (`opt-level = "s"`, fat LTO, one codegen unit, stripped), use `panic = "abort"`, and keep integer-overflow checks.
 
 ## Consequences
-- Memory-safety bugs in parsers are ruled out by construction; the remaining risk is logic bugs, which fuzzing targets.
+- Our own parsers cannot contain memory-safety bugs. Unsafe code is confined to dependencies and the JNI crate, which stay small and reviewed. The remaining risk in the engine is logic bugs, which fuzzing targets.
 - The engine is portable across all three stages.
-- `panic = "abort"`: a panic crashes the app instead of continuing in an unknown state. The VPN lockdown mode then fails closed (see [VPN.md](../VPN.md)).
+- `panic = "abort"` with overflow checks: a panic or an integer overflow crashes the app instead of continuing in an unknown state. Under Android's *Always-on VPN* with *Block connections without VPN*, traffic then stops instead of bypassing the firewall (fail-closed, see [VPN.md](../VPN.md)).

@@ -7,12 +7,26 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+
 - Project skeleton (milestone M1):
   - Android app: Kotlin and Jetpack Compose, minSdk 29, target SDK 37.
   - Rust engine (`datapavan-engine`, `unsafe` forbidden) and JNI bridge (`datapavan-jni`).
-- No permissions at all; the build fails if INTERNET is added. Backup and device-to-device transfer are disabled.
+- No Android platform permissions. AndroidX adds only an app-internal signature permission. The build fails if INTERNET is added through any build path (APK, bundle or install). Cloud backup and device-to-device transfer are disabled.
 - UI in English, French, German and Persian, with right-to-left support, pseudo-locales in debug builds, and LTR token isolation.
-- Supply-chain protection: pinned toolchains, the Gradle wrapper checked by SHA-256, verification metadata for every Gradle artifact, repository content filters, and a cargo-deny policy.
-- Quality gates in `scripts/check.sh`, run by CI on the GitHub mirror.
-- Brand: the Old Persian sign DA as the product mark and app icon, the DAHYĀUŠ logogram for the foundation, and a palette with measured contrast ratios.
-- Documentation: design, roadmap, names, brand, VPN design, restricted regions, foundation charter, security policy, contributing guide, privacy policy, code of conduct, and architecture decision records.
+- Supply-chain protection:
+  - pinned toolchains;
+  - the Gradle distribution pinned by checksum, and the wrapper jar validated in CI;
+  - SHA-256 verification for every Gradle artifact;
+  - exclusive repository content (Google's groups only from Google, everything else only from Maven Central);
+  - a cargo-deny policy;
+  - native libraries built without paths from the build machine.
+- Quality gates in `scripts/check.sh`, run by CI on the GitHub mirror, including a check that every APK carries the Rust library and its JNI export.
+- Brand: the Old Persian sign DA as the product mark and app icon, the DAHYĀUŠ logogram for the foundation, a palette with measured contrast ratios, and avatars.
+- Documentation: design, roadmap, names, brand, VPN design, restricted regions, foundation charter, security policy, contributing guide (with the AI-assistance rules), privacy policy, code of conduct, and architecture decision records.
+
+### Security
+
+- EmojiCompat's start-up lookup of a downloadable font through Google Play services is disabled.
+- Release builds of the Rust engine keep integer-overflow checks.
+
+[Unreleased]: https://codeberg.org/visadahyu/datapavan/commits/branch/main

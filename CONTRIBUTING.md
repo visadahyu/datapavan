@@ -17,8 +17,9 @@ The build setup is described in the [README](README.md#building). Every change m
 scripts/check.sh
 ```
 
-This runs rustfmt, Clippy (pedantic, warnings as errors), the Rust tests, cargo-deny, Android Lint
-(warnings as errors), the unit tests, debug and release builds, and the forbidden-permission guard.
+This runs rustfmt, Clippy (pedantic, warnings as errors, for the host and both Android targets), the
+Rust tests, cargo-deny, Android Lint for debug and release (warnings as errors), the unit tests, APK and
+bundle builds, the forbidden-permission guard, and a check that every APK carries the Rust library.
 CI runs the same script.
 
 ## Rules for code
@@ -32,23 +33,24 @@ CI runs the same script.
 ## Commits
 
 - Write the subject line in the imperative ("Add …", "Fix …"), and explain *why* in the body.
-- Sign off every commit (`git commit -s`). This certifies the [Developer Certificate of Origin](https://developercertificate.org/): you wrote the change, or have the right to submit it under the project's licence.
+- Sign off every commit (`git commit -s`). This certifies the [Developer Certificate of Origin](https://developercertificate.org/): you wrote the change, or have the right to submit it under the project's licence. A consistent pseudonym is accepted, because contributors in restricted regions may not be able to use their legal name safely.
 - Contributions are licensed under Apache-2.0, the same as the project.
 
 ## AI-assisted contributions
 
-AI tools may be used, under these conditions:
+AI tools may be used, under the same conditions for contributors and maintainers:
 
-- **Say so** in the pull request: which tool you used and for what.
+- **Say so.** Add an `Assisted-by:` trailer to each commit that was drafted with AI help (for example `Assisted-by: Claude (Anthropic)`), and mention it in the pull request.
 - **You are the author.** You have read, understood and tested every line, and you can explain and defend it in review.
-- **Keep the design human.** Architecture decisions and ADRs are made and written by people.
-- Some funders do not accept AI-generated code in the work they pay for. Work for such grants is marked as such and done without AI code generation.
+- **People decide.** Architecture decisions and ADRs are made and approved by a named maintainer. Drafting them may be AI-assisted, and that is disclosed.
+- Work funded by a grant follows that funder's rules on AI use.
 
 ## Translations
 
 The UI ships in English, French, German and Persian. Translations will move to Weblate. Until then,
-open a pull request against `android/app/src/main/res/values-<lang>/strings.xml`. Follow the glossary,
-and keep the plain-language tone.
+open a pull request against `android/app/src/main/res/values-<lang>/strings.xml`. Keep key terms consistent
+with the existing translations (a per-language glossary will come with the Weblate setup), and keep the
+plain-language tone.
 
 ## Conduct
 

@@ -1,7 +1,10 @@
 # Architecture decision records
 
-Each file records one lasting decision: its context, the decision, and its consequences. Records are
-never rewritten. A changed decision gets a new record that supersedes the old one.
+Each file records one lasting decision: its context, the decision, and its consequences. Decisions are
+made and approved by the maintainer; drafting is AI-assisted, which is disclosed (see
+[CONTRIBUTING.md](../../CONTRIBUTING.md)). A changed decision gets a new record that supersedes the old
+one. Until the first release, records may still be corrected for accuracy; every correction is visible
+in the Git history.
 
 | # | Decision | Status |
 |---|---|---|
@@ -25,6 +28,7 @@ never rewritten. A changed decision gets a new record that supersedes the old on
 
 - Status: Proposed | Accepted | Superseded by NNNN
 - Date: YYYY-MM-DD
+- Decided by: name or pseudonym
 
 ## Context
 Why a decision is needed; the forces and constraints.

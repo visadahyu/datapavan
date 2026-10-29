@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version | 0.1 (draft for founder review) |
+| Version | 0.2 (draft, revised 2026-10-29) |
 | Date | 2026-10-28 |
 | Scope | Stage 1: the layer app for stock Android, with no root |
 | Maintainer (planned) | Visadahyu Foundation |
@@ -49,9 +49,9 @@ An app on a stock phone has hard limits. We state them openly, because overclaim
 
 | Device | Role | Android |
 |---|---|---|
-| Emulator (KVM, x86_64) | Daily development loop; many API levels; Play images for real-world apps | 11 (API 30) and 15/16 |
+| Emulator (KVM, x86_64) | Daily development loop; Play images for real-world apps | 11 (API 30), and 17 (API 37) with 16 KB pages |
 | Samsung Galaxy A40 | Lab device: old, low-end, resettable. **Keep the bootloader locked** (unlocking permanently trips Knox, and stage 2 tests need Knox) | 11 |
-| Samsung Galaxy A56 | Real-world validation on the founder's daily phone. Stable builds only; never unlock | 15/16 |
+| Samsung Galaxy A56 | Real-world validation on a maintainer's personal phone, from later milestones (ADR 0011). Stable builds only; never unlocked | 15/16 |
 
 ## 5. Roadmap for stage 1
 
@@ -59,7 +59,7 @@ Each release can ship on its own and is useful by itself.
 
 ### v0.1 "Audit": no VPN, **no INTERNET permission**
 
-Shipping without network permission at all is a strong trust signal: the app *cannot* send anything.
+Shipping without network permission at all is a strong trust signal: the app *cannot* open a network connection.
 
 - **App inventory:** all installed apps (user and system), installer source, and first-install and last-update dates.
 - **Permission audit:** granted dangerous permissions, plus special access: accessibility, device admin, notification listener, usage access, VPN, overlay, install unknown apps, and battery-optimisation exemptions.
@@ -110,11 +110,11 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 
 - **Memory safety where it matters most.** The core parses untrusted bytes from every app and every server. A parser bug in C or C++ here becomes a security hole on the user's phone.
 - **One engine for all three stages.** The same library runs inside the VpnService app (stage 1), the Device Owner flavour (stage 2), and later as a system daemon in our own hardened OS (stage 3). Platform code stays thin.
-- **Plan B:** the Go gVisor netstack approach used by existing open-source Android firewalls. We decide after a two-week spike (see D3).
+- **Plan B:** the Go gVisor netstack approach used by existing open-source Android firewalls. We decide after a two-week spike (ADR 0012).
 
 ### 6.2 Attributing traffic to apps
 
-- **Which app?** On Android 10+, the active VPN app may call `ConnectivityManager.getConnectionOwnerUid()` for each new TCP/UDP flow. The returned UID maps to a package.
+- **Which app?** On Android 10+, the active VPN app may call `ConnectivityManager.getConnectionOwnerUid()` for each new TCP/UDP flow. This is a Java API, so the Rust engine makes one JNI upcall per new flow and caches the answer for the flow's lifetime. The returned UID maps to a package.
 - **Which destination?**
   1. DNS answers seen inside the tunnel fill an IP → hostname cache.
   2. The TLS ClientHello SNI of each new connection gives the hostname directly.
@@ -143,10 +143,10 @@ detect it and explain the trade-off.
 | Private DNS, in-app DoH, ECH | Hostnames hidden | IP → ASN fallback; honest "unknown" in the UI |
 | Some system traffic may bypass the VPN | Incomplete view | Say so in the UI; stage 2/3 close the gap |
 | Samsung battery management kills background services | VPN stops silently | Onboarding: exempt from battery optimisation, enable Always-on VPN, show a health check |
-| Battery and CPU overhead | Users uninstall | Target ≤ 3 % extra battery per day (measure on A40 and A56); keep the hot path in Rust |
+| Battery and CPU overhead | Users uninstall | Target ≤ 3 % extra battery per day (measure on the A40); keep the hot path in Rust |
 | Google Play policy: VPN apps may not manipulate ads; `QUERY_ALL_PACKAGES` is restricted | Play rejection | Ship via F-Droid, our own site and Obtainium first; consider an "Audit-only" Play flavour later |
-| Google developer verification (enforced from 2026-09-30 in four countries, global in 2027) | Unverified apps blocked from install on certified devices | Register the developer identity early |
-| Copyright status of AI-generated code is uncertain | Weaker licence enforcement and ownership proof | Human-written design docs and decisions; review and edit all agent output; keep agent session logs |
+| Google developer verification (in force since 2026-09-30 in four countries; global in 2027) | Apps from unverified developers cannot be installed on certified devices; registering requires sharing the developer's identity with Google | Register the maintainer's identity before v0.1; transfer to the foundation later |
+| Copyright status of AI-assisted code is uncertain | Weaker licence enforcement and ownership proof | Decisions made and approved by the maintainer; all agent output reviewed before commit; AI assistance disclosed (`Assisted-by:` trailers, README); agent session logs kept privately, never committed |
 
 ## 8. Threat model (initial)
 
@@ -154,10 +154,12 @@ detect it and explain the trade-off.
 
 | Adversary | Example | Mitigation |
 |---|---|---|
-| Tracking app on the same device | Tries to read Datapavan's logs | No exported components except the launcher; encrypted app-private storage |
+| Tracking app on the same device | Tries to read Datapavan's logs | No exported components except the launcher (plus AndroidX's ProfileInstallReceiver, guarded by the system-only DUMP permission); encrypted app-private storage |
 | Malicious app abusing Datapavan | Sends intents to change rules | Rules change only through our own UI; all IPC is internal |
 | Network attacker | Tampers with blocklist updates | Updates are optional and signed (Ed25519/minisign); pinned public key in the app |
-| Supply-chain attacker | Compromises a dependency or our build | Pinned dependencies, `cargo audit` and dependency checks in CI, reproducible builds, signed releases |
+| Supply-chain attacker | Compromises a dependency or our build | Pinned dependencies with SHA-256 verification, exclusive repository content, cargo-deny advisories in CI, reproducible builds, signed releases |
+| Device seizure or inspection | A phone check at a border or checkpoint; the connection log becomes evidence | No destination logging for flows chained through a circumvention proxy (default); selectable retention, including none; one-tap wipe |
+| State network observer | Sees that a device runs Datapavan (for example through list-update requests) | List updates are optional and can be imported as files; no other network traffic of our own |
 | Malformed or hostile packets | Crash or exploit the parser | Rust; fuzzing of all parsers (`cargo fuzz`); the forwarder fails closed |
 
 ## 9. Data sources (licences TBV)
@@ -173,10 +175,10 @@ The enterprise flavour will be commercial, so every dataset must allow commercia
 ## 10. Tech stack
 
 - **Android:** Kotlin, Jetpack Compose (the only UI dependency), minSdk 29, compileSdk and targetSdk 37, Gradle version catalog, no Google Play Services. Application ID `org.visadahyu.datapavan` (permanent). ABIs: `arm64-v8a` (phones) and `x86_64` (emulator).
-- **Core:** Rust pinned in `rust-toolchain.toml`, built with `cargo-ndk` and NDK r30. Libraries are 16 KB page-aligned, as Android 15+ requires. Two crates: `datapavan-engine` (all logic; `unsafe` forbidden by the compiler) and `datapavan-jni` (the only place `unsafe` is allowed; one small function per export).
+- **Core:** Rust pinned in `rust-toolchain.toml`, built with `cargo-ndk` and NDK r30. Libraries are 16 KB page-aligned, which devices with 16 KB memory pages (supported since Android 15) need and Google Play requires. Two crates: `datapavan-engine` (all logic; `unsafe` forbidden by the compiler) and `datapavan-jni` (the only place `unsafe` is allowed; one small function per export).
 - **Bridge:** direct JNI through the `jni` crate. We chose it over UniFFI because UniFFI's Kotlin bindings depend on JNA (about 1.5 MB, and reflection-based), while our JNI surface stays tiny: a version call today, and start/stop/query for the engine later. Netstack candidates to evaluate in the spike: `smoltcp`, `ipstack`.
-- **Supply chain:** each Gradle repository may serve only its expected artifact groups; Gradle dependency verification (SHA-256 of every artifact); the Gradle wrapper is pinned by checksum; `Cargo.lock` is committed and every build uses `--locked`; `cargo deny` checks licences, sources and advisories.
-- **Quality gates:** `scripts/check.sh` runs everything that CI runs. That covers rustfmt, Clippy (pedantic, warnings as errors), Rust tests, cargo-deny, Android Lint (warnings as errors), unit tests, debug and release builds, and the forbidden-permission guard.
+- **Supply chain:** Google's artifact groups may come only from Google's repository and everything else only from Maven Central (`exclusiveContent`); Gradle dependency verification (SHA-256 of every artifact, generated from an empty Gradle home); the Gradle distribution is pinned by checksum and the wrapper jar is validated in CI; native libraries are built with remapped paths and a controlled cargo environment; `Cargo.lock` is committed and every build uses `--locked`; `cargo deny` checks licences, sources and advisories.
+- **Quality gates:** `scripts/check.sh` runs everything that CI runs. That covers rustfmt; Clippy (pedantic, warnings as errors) for the host and both Android targets; Rust tests; cargo-deny; Android Lint for debug and release (warnings as errors); unit tests; APK and bundle builds; the forbidden-permission guard, wired into the manifest pipeline so no build path can skip it; and a check that every APK carries the Rust library with its JNI export.
 - **CI:** GitHub Actions on the mirror for now (actions pinned by commit SHA). Codeberg's Woodpecker CI will run the same script once access to ci.codeberg.org is granted.
 - **Quality:** Kotlin and Rust unit tests, parser fuzzing, instrumented tests on the emulator, and a manual test matrix on the A40 and A56.
 - **Release:** reproducible builds, F-Droid metadata, signed APKs.
@@ -188,11 +190,11 @@ Adding a language must be a mechanical step: add translations, with no code chan
 support is built in from the first commit, because retrofitting it later touches every screen.
 
 **Launch languages:** English (source), French, German and Persian. Persian is the RTL reference
-language, and the founder can review it natively. Arabic comes in the first wave after launch, once
+language, reviewed by a native speaker. Arabic comes in the first wave after launch, once
 native reviewers are found.
 
 **Rules for code**
-- All user-visible text lives in string resources. Hard-coded UI text fails the lint build.
+- All user-visible text lives in string resources. Lint fails on hard-coded text in XML; Compose text literals are caught in review (a custom Lint rule may follow).
 - Plurals and variables use ICU/Android plurals, never string concatenation. Arabic, for example, has six plural forms.
 - Layout uses start/end, never left/right. Directional icons are auto-mirrored. Logos and brand marks are not.
 - **Bidi isolation for technical tokens.** Datapavan constantly shows domains, IP addresses, package names and byte counts inside translated sentences. Every such left-to-right token is wrapped in a Unicode left-to-right isolate (LRI … PDI, via `isolateLtr()`) so that it cannot scramble an RTL sentence.
@@ -235,27 +237,33 @@ datapavan/
 
 | # | Milestone | Done when |
 |---|---|---|
-| M1 | Skeleton | Android app and Rust core build together; CI green; app opens on the emulator and the A40 (A56 testing deferred until later milestones); string resources, RTL support and pseudo-locales are in place from the start |
-| M2 | App inventory and permission audit | Matches what system Settings shows, checked on A40 and A56 |
+| M1 | Skeleton | Android app and Rust core build together; CI green; app opens on the emulator and the A40 (A56 testing deferred, ADR 0011); string resources, RTL support and pseudo-locales in place from the start; brand marks and app icon |
+| M2 | App inventory and permission audit | Matches what system Settings shows, checked on the A40 and the emulator |
 | M3 | Tracker SDK scanner | Results for 20 popular apps agree with published εxodus reports |
 | M4 | Network usage per app | Byte counts within 5 % of the Settings data-usage screen |
-| M5 | Plain-language UI and first release | v0.1 published in English, French, German and Persian; manifest has **no INTERNET permission**; build is reproducible |
+| M5 | Plain-language UI and first release | v0.1 published on Codeberg in English, French, German and Persian, and submitted to F-Droid; manifest has **no INTERNET permission**; build is reproducible |
 
 ## 14. Decisions
 
 Each decision is recorded in full, with context and consequences, as an ADR in
 [decisions/](decisions/README.md). This table is the summary.
 
-| # | Decision | Status | Choice / recommendation |
-|---|---|---|---|
-| D1 | Licence | **Decided** 2026-10-28 | **Apache-2.0**. Easier for OEM partners (stage 3, certification revenue); the trademark is the main lever. See `LICENSE` |
-| D2 | Code hosting | **Decided** 2026-10-28 | **Codeberg** (EU non-profit) is the primary home, with a read-only **GitHub mirror** for reach. Issues and pull requests go to Codeberg |
-| D3 | Packet engine | Open | Recommend **Rust**, confirmed by a two-week spike against Go gVisor |
-| D4 | Documentation language | **Decided** 2026-10-28 | **English only** |
-| D5 | Minimum Android | **Decided** 2026-10-28 | **Android 10 (API 29)**: needed for owner-UID lookup, and covers most devices |
-| D6 | UI languages at launch | **Decided** 2026-10-28 | **English, French, German**, plus **Persian** as the RTL reference language; Arabic in the first wave after launch. More languages are added mechanically (see §11) |
+| ADR | Decision | Status |
+|---|---|---|
+| [0001](decisions/0001-apache-2-licence.md) | Apache-2.0 licence | Accepted |
+| [0002](decisions/0002-codeberg-with-github-mirror.md) | Codeberg as home, GitHub as read-only mirror | Accepted |
+| [0003](decisions/0003-minimum-android-10.md) | Minimum Android 10 (API 29) | Accepted |
+| [0004](decisions/0004-ui-languages-and-rtl.md) | English, French, German and Persian at launch; RTL from the first commit | Accepted |
+| [0005](decisions/0005-english-documentation.md) | Documentation in English only | Accepted |
+| [0006](decisions/0006-rust-engine-unsafe-forbidden.md) | Rust engine with `unsafe` forbidden; separate JNI crate | Accepted |
+| [0007](decisions/0007-direct-jni-over-uniffi.md) | Direct JNI instead of UniFFI | Accepted |
+| [0008](decisions/0008-gradle-dependency-verification.md) | Gradle dependency verification from an empty Gradle home | Accepted |
+| [0009](decisions/0009-no-automatic-jdk-download.md) | Gradle daemon pinned to JDK 21, no automatic JDK download | Accepted |
+| [0010](decisions/0010-cuneiform-brand-marks.md) | Old Persian cuneiform signs as brand marks | Accepted |
+| [0011](decisions/0011-m1-test-devices.md) | M1 tested on emulators and the Galaxy A40 | Accepted |
+| [0012](decisions/0012-packet-engine.md) | Packet engine for the local VPN | Proposed (spike pending) |
 
 ## 15. Names
 
-- **Datapavan:** Old Persian *dāta* "law" + *pāvan* "protector" (as in *xšaçapāvan*, "protector of the realm", the source of *satrap*). The compound is coined from two attested elements: "protector of the law" in Old Persian, and "data protector" when read in English.
+- **Datapavan:** Old Persian *dāta* "law" + *pāvan* "protector" (as in *xšaçapāvan*, "protector of the realm"; the Median form of that title, *\*xšaθrapāvan-*, gave Greek *satrápēs* and English *satrap*). The compound is coined from two attested elements: "protector of the law" in Old Persian, and "data protector" when read in English.
 - **Visadahyu:** "of all nations", from Xerxes' inscription on the Gate of All Nations at Persepolis (XPa: *duvarθim visadahyum*).

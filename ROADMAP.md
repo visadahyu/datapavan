@@ -17,15 +17,15 @@ Status legend: ✅ done · 🔄 in progress · ⏳ planned.
 
 ### v0.1 "Audit": no VPN, no INTERNET permission
 
-The app cannot send anything anywhere. That is the strongest trust signal we can give.
+The app cannot open a network connection. That is the strongest trust signal we can give.
 
 | Milestone | Content | Status |
 |---|---|---|
 | M1 | Skeleton: Android app, Rust core, JNI bridge, i18n and RTL, quality gates, CI, brand | ✅ |
-| M2 | App inventory and permission audit, including special access (accessibility, notification listener, device admin, overlay, usage access) | ⏳ |
+| M2 | App inventory and permission audit, including special access (accessibility, notification listener, device admin, overlay, usage access, VPN, install unknown apps, battery-optimisation exemptions) | ⏳ |
 | M3 | Tracker SDK scanner: a DEX parser in the Rust engine, matched against a tracker-signature database | ⏳ |
 | M4 | Network usage per app, from `NetworkStatsManager` | ⏳ |
-| M5 | Plain-language UI, brand theme, first release on Codeberg and F-Droid | ⏳ |
+| M5 | Plain-language UI, brand theme, first release on Codeberg, submission to F-Droid | ⏳ |
 
 ### v0.2 "Watch": local VPN, observe only
 
@@ -53,7 +53,7 @@ starts, a two-week spike picks the packet engine (Rust netstack or Go gVisor). D
 - **Device Owner flavour.** Disables system apps, enforces always-on VPN in lockdown mode, controls installs and permissions on stock devices, with no root and no bootloader unlocking.
 - **Work-profile isolation.** Puts high-tracking apps (for example Meta's) in a separate profile that cannot see the rest of the phone. Possible without a factory reset.
 - **AI-data guard.** Watches apps and system AI services that can read the screen, notifications or keyboard input.
-- **Compliance reporting** for GDPR, and for comparable laws such as Turkey's KVKK.
+- **Compliance reporting** for the GDPR and comparable laws (for example the UK GDPR, Switzerland's FADP, Brazil's LGPD and Turkey's KVKK).
 
 ## Stage 3: our own OS
 
@@ -71,6 +71,7 @@ starts, a two-week spike picks the packet engine (Rust netstack or Go gVisor). D
 | Name and brand (see [docs/NAMES.md](docs/NAMES.md), [brand/](brand/README.md)) | ✅ |
 | Foundation charter (see [docs/FOUNDATION.md](docs/FOUNDATION.md)) | 🔄 principles written; legal entity planned |
 | Domains and EU trademark registration | ⏳ |
+| Security contact with an OpenPGP key | ⏳ blocks going public |
 | CI on Codeberg (Woodpecker); for now CI runs on the GitHub mirror | ⏳ |
 | Make the repository public | ⏳ before v0.1 is released |
 | F-Droid submission | ⏳ with v0.1 |

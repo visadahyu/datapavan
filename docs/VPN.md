@@ -1,6 +1,6 @@
 # Local VPN design (v0.2 "Watch", v0.3 "Guard")
 
-> Status: **design draft.** The packet engine is chosen after a two-week spike (decision D3).
+> Status: **design draft.** The packet engine is chosen after a two-week spike ([ADR 0012](decisions/0012-packet-engine.md)).
 
 ## What "VPN" means here
 
@@ -25,7 +25,7 @@ Datapavan uses Android's `VpnService` only to see and filter traffic on the devi
 
 1. **Tunnel.** `VpnService.Builder` creates a TUN interface. Routes cover all of IPv4 and IPv6, DNS points to a virtual address inside the tunnel, and Datapavan itself is excluded from the tunnel.
 2. **Hand-off.** The TUN file descriptor is passed to the Rust engine over JNI. From then on Kotlin only controls the lifecycle; all packet handling is in Rust.
-3. **Which app?** For every new TCP or UDP flow, the engine asks `ConnectivityManager.getConnectionOwnerUid()` (Android 10+, available only to the active VPN app). The answer is cached for the lifetime of the flow.
+3. **Which app?** For every new TCP or UDP flow, the engine asks `ConnectivityManager.getConnectionOwnerUid()` (Android 10+, available only to the active VPN app). That is a Java API, so the engine makes one JNI upcall per new flow; the answer is cached for the lifetime of the flow.
 4. **Which destination?** In order of preference:
    1. the DNS answers we served (IP → hostname cache);
    2. the TLS ClientHello SNI of the connection;
@@ -34,15 +34,15 @@ Datapavan uses Android's `VpnService` only to see and filter traffic on the devi
    When none applies, the UI says "unknown" plainly.
 5. **Decision.** The rule engine returns allow, block or log-only.
 6. **Forwarding.** A userspace TCP/IP stack terminates each connection locally and opens a real, `protect()`-ed socket to the destination, then relays bytes. UDP flows go through a NAT table with idle timeouts.
-7. **Recording.** Per-flow statistics go to app-private, encrypted SQLite (key in the Android Keystore), with 30-day default retention.
+7. **Recording.** Per-flow statistics go to app-private, encrypted SQLite (key in the Android Keystore). Retention is the user's choice: none, 1 day, 7 days or 30 days, with a one-tap wipe. Flows chained through a circumvention proxy are counted but their destinations are **not** recorded by default, because a log of them is evidence in a phone search.
 
 ## Policies
 
 | Topic | Policy |
 |---|---|
-| DNS | Our resolver answers inside the tunnel and resolves upstream through a protected socket: the network's resolver by default, or a DoH/DoT resolver the user chooses. Blocked tracker domains get an empty answer. If the chosen upstream fails, we fall back to the network's resolver: **Datapavan must never break the user's connectivity**. |
+| DNS | Our resolver answers inside the tunnel and resolves upstream through a protected socket: the network's resolver by default, or a DoH/DoT resolver the user chooses. Blocked tracker domains get an empty answer. If the chosen upstream fails, the default is to fall back to the network's resolver and show a visible warning. In censored networks that fallback would hand every query to the censor, so a **strict DNS** setting never falls back (recommended in restricted regions). |
 | QUIC | Optional "block QUIC" setting (UDP 443). Apps then fall back to TCP + TLS, where the SNI is visible. Off by default in v0.2, so we observe without interfering. |
-| Fail mode | Onboarding recommends Android's *Always-on VPN* with *Block connections without VPN*. If the engine dies, traffic stops instead of silently bypassing. |
+| Connectivity and fail mode | Datapavan never breaks connectivity through its own policy decisions. The one deliberate exception is an engine crash under Android's *Always-on VPN* with *Block connections without VPN*: traffic then stops until Android restarts the service, instead of silently bypassing the firewall (fail-closed, see [ADR 0006](decisions/0006-rust-engine-unsafe-forbidden.md)). Onboarding recommends this mode. |
 | Private DNS | If Android Private DNS is in strict mode, hostnames are hidden from us. Onboarding detects this and explains the trade-off. |
 | Network changes | Wi-Fi ↔ mobile switches re-bind upstream sockets without dropping the tunnel. |
 | IPv6 | First-class. Never leak IPv6 around the tunnel. |
@@ -58,8 +58,8 @@ itself. Later, an optional upstream WireGuard connection can serve users of comm
 ## Engineering constraints
 
 - **Battery:** one engine thread, event-driven, no busy loops, batched reads. Target: ≤ 3 % extra battery per day, measured on the Galaxy A40.
-- **Memory safety:** every parser (IP, TCP, UDP, DNS, TLS, QUIC) lives in `datapavan-engine`, where `unsafe` is forbidden, and is fuzzed with `cargo fuzz`.
-- **Size:** the engine adds well under 1 MB per ABI.
+- **Memory safety:** if the Rust stack is chosen (ADR 0012), every parser (IP, TCP, UDP, DNS, TLS, QUIC) lives in `datapavan-engine`, where `unsafe` is forbidden, and is fuzzed with `cargo fuzz`. With gVisor, the Go stack handles IP and TCP, and the higher-level parsers (DNS, TLS, QUIC) stay in Rust.
+- **Size:** target: the engine adds less than 1 MB per ABI. To be measured in the spike; the M1 bridge alone is about 340 KB on arm64, mostly the Rust standard library.
 - **Samsung and other OEM battery managers:** a health check in the app, plus per-vendor onboarding guides.
 
 ## Spike plan (two weeks)
