@@ -18,7 +18,8 @@ enum class Sensor { MICROPHONE, CAMERA, LOCATION }
 /** What the audit learned about one installed app. Plain data, so the rules can be unit-tested. */
 data class AppFacts(
     val packageName: String,
-    val label: String,
+    /** User-visible name; null until loaded, because loading every label is the slowest step. */
+    val label: String?,
     val isSystem: Boolean,
     val enabled: Boolean,
     /** Package that installed the app, or null when Android does not know (preinstalled, adb). */

@@ -17,11 +17,16 @@ import android.provider.Settings
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.view.accessibility.AccessibilityManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import org.visadahyu.datapavan.core.NativeCore
 import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Reads what an unprivileged app can learn about the installed apps. Every API used here was
@@ -32,40 +37,64 @@ class AppCollector(private val context: Context) {
     private val pm = context.packageManager
     private val appOps = context.getSystemService(AppOpsManager::class.java)
     private val power = context.getSystemService(PowerManager::class.java)
-    private val dangerous = HashMap<String, Boolean>()
+    private val dangerous = ConcurrentHashMap<String, Boolean>()
 
-    fun collect(): List<AppFacts> {
+    /**
+     * Collects all apps in parallel, without labels. Nearly all the time goes into blocking calls to
+     * system services, so the work is split into one chunk per core on the IO dispatcher. Labels are
+     * the slowest part (5.7 of 8.4 seconds on the A40, sequentially), so [withLabels] loads them
+     * separately: first for the apps on screen, then for the rest.
+     */
+    suspend fun collect(): List<AppFacts> = coroutineScope {
         val accessibility = enabledAccessibilityPackages()
         val listeners = enabledNotificationListenerPackages()
         val admins = context.getSystemService(DevicePolicyManager::class.java)
             .activeAdmins.orEmpty().map { it.packageName }.toSet()
-        return installedPackages().mapNotNull { info ->
-            val app = info.applicationInfo ?: return@mapNotNull null
-            val granted = grantedDangerous(info)
-            val special = buildSet {
-                if (info.packageName in accessibility) add(SpecialAccess.ACCESSIBILITY)
-                if (info.packageName in listeners) add(SpecialAccess.NOTIFICATION_LISTENER)
-                if (info.packageName in admins) add(SpecialAccess.DEVICE_ADMIN)
-                for ((permission, op, access) in APP_OP_ACCESS) {
-                    if (info.requestedPermissions?.contains(permission) == true && opAllowed(op, permission, app.uid, info.packageName)) add(access)
-                }
-                if (power.isIgnoringBatteryOptimizations(info.packageName)) add(SpecialAccess.BATTERY_EXEMPT)
-            }
-            AppFacts(
-                packageName = info.packageName,
-                label = app.loadLabel(pm).toString(),
-                isSystem = app.flags and ApplicationInfo.FLAG_SYSTEM != 0,
-                enabled = app.enabled,
-                installer = installer(info.packageName),
-                firstInstall = info.firstInstallTime,
-                lastUpdate = info.lastUpdateTime,
-                grantedDangerous = granted,
-                sensors = SENSOR_PERMISSIONS.filterKeys { it in granted }.values.toSet(),
-                special = special,
-                isVpnApp = info.services.orEmpty().any { it.permission == Manifest.permission.BIND_VPN_SERVICE },
-                vpnAuthorised = opMode(OP_ACTIVATE_VPN, app.uid, info.packageName) == AppOpsManager.MODE_ALLOWED,
-            )
+        val packages = installedPackages()
+        packages.inParallel { facts(it, accessibility, listeners, admins) }
+    }
+
+    /** Fills in the labels of [apps], in parallel. */
+    suspend fun withLabels(apps: List<AppFacts>): List<AppFacts> = apps.inParallel { app ->
+        val label = try {
+            pm.getApplicationInfo(app.packageName, 0).loadLabel(pm).toString()
+        } catch (_: PackageManager.NameNotFoundException) {
+            null // Uninstalled since the audit ran.
         }
+        app.copy(label = label)
+    }
+
+    private suspend fun <T, R : Any> List<T>.inParallel(transform: (T) -> R?): List<R> = coroutineScope {
+        val chunk = size / Runtime.getRuntime().availableProcessors() + 1
+        chunked(chunk).map { part -> async(Dispatchers.IO) { part.mapNotNull(transform) } }.awaitAll().flatten()
+    }
+
+    private fun facts(info: PackageInfo, accessibility: Set<String>, listeners: Set<String>, admins: Set<String>): AppFacts? {
+        val app = info.applicationInfo ?: return null
+        val granted = grantedDangerous(info)
+        val special = buildSet {
+            if (info.packageName in accessibility) add(SpecialAccess.ACCESSIBILITY)
+            if (info.packageName in listeners) add(SpecialAccess.NOTIFICATION_LISTENER)
+            if (info.packageName in admins) add(SpecialAccess.DEVICE_ADMIN)
+            for ((permission, op, access) in APP_OP_ACCESS) {
+                if (info.requestedPermissions?.contains(permission) == true && opAllowed(op, permission, app.uid, info.packageName)) add(access)
+            }
+            if (power.isIgnoringBatteryOptimizations(info.packageName)) add(SpecialAccess.BATTERY_EXEMPT)
+        }
+        return AppFacts(
+            packageName = info.packageName,
+            label = null,
+            isSystem = app.flags and ApplicationInfo.FLAG_SYSTEM != 0,
+            enabled = app.enabled,
+            installer = installer(info.packageName),
+            firstInstall = info.firstInstallTime,
+            lastUpdate = info.lastUpdateTime,
+            grantedDangerous = granted,
+            sensors = SENSOR_PERMISSIONS.filterKeys { it in granted }.values.toSet(),
+            special = special,
+            isVpnApp = info.services.orEmpty().any { it.permission == Manifest.permission.BIND_VPN_SERVICE },
+            vpnAuthorised = opMode(OP_ACTIVATE_VPN, app.uid, info.packageName) == AppOpsManager.MODE_ALLOWED,
+        )
     }
 
     /** System label of a permission in the user's language, e.g. "Microphone" for `RECORD_AUDIO`. */

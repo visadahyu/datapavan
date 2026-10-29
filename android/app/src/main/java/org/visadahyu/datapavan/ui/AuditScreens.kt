@@ -66,12 +66,26 @@ private typealias AppEntry = Pair<AppFacts, List<FindingKind>>
 /** One complete audit of the phone. */
 private class AuditResult(val device: DeviceFacts, val deviceFindings: List<FindingKind>, val apps: List<AppEntry>)
 
-/** Device and app checks run in parallel; the hardware key attestation alone can take seconds. */
+/**
+ * Device and app checks run in parallel; the hardware key attestation alone can take a moment.
+ * Only the apps with findings get their labels here, so the overview appears quickly.
+ */
 private suspend fun runAudit(context: Context): AuditResult = coroutineScope {
-    val device = async { DeviceCollector(context).collect() }
-    val apps = AppCollector(context).collect().map { it to Rules.forApp(it) }.sortedWith(Rules.byUrgency)
+    val device = async(Dispatchers.IO) { DeviceCollector(context).collect() }
+    val collector = AppCollector(context)
+    val judged = collector.collect().map { it to Rules.forApp(it) }
+    val labelled = collector.withLabels(judged.filter { (_, f) -> f.isNotEmpty() }.map { it.first }).associateBy { it.packageName }
+    val apps = judged.map { (app, findings) -> (labelled[app.packageName] ?: app) to findings }.sortedWith(Rules.byUrgency)
     val now = Calendar.getInstance().let { it.get(Calendar.YEAR) * 100 + it.get(Calendar.MONTH) + 1 }
     AuditResult(device.await(), Rules.forDevice(device.await(), now), apps)
+}
+
+/** Second pass: the labels of all remaining apps, for the full list. */
+private suspend fun AuditResult.withAllLabels(context: Context): AuditResult {
+    val missing = apps.filter { it.first.label == null }.map { it.first }
+    val labelled = AppCollector(context).withLabels(missing).associateBy { it.packageName }
+    val all = apps.map { (app, findings) -> (labelled[app.packageName] ?: app) to findings }.sortedWith(Rules.byUrgency)
+    return AuditResult(device, deviceFindings, all)
 }
 
 /** Root of the v0.1 audit UI: an overview of the phone and its apps, and a detail page per app. */
@@ -79,7 +93,9 @@ private suspend fun runAudit(context: Context): AuditResult = coroutineScope {
 internal fun DatapavanApp(engineVersion: String) {
     val context = LocalContext.current.applicationContext
     val result by produceState<AuditResult?>(initialValue = null) {
-        value = withContext(Dispatchers.Default) { runAudit(context) }
+        val first = withContext(Dispatchers.Default) { runAudit(context) }
+        value = first
+        value = withContext(Dispatchers.Default) { first.withAllLabels(context) }
     }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -182,7 +198,7 @@ private fun IntegrityLine(device: DeviceFacts) {
 private fun AppRow(app: AppFacts, findings: List<FindingKind>, onClick: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column(Modifier.padding(12.dp)) {
-            Text(app.label, style = MaterialTheme.typography.titleMedium)
+            Text(app.label ?: app.packageName, style = MaterialTheme.typography.titleMedium)
             Text(isolateLtr(app.packageName), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             findings.firstOrNull()?.let { first ->
                 Spacer(Modifier.height(6.dp))
@@ -214,7 +230,7 @@ private fun AppDetail(entry: AppEntry, insets: PaddingValues, onBack: () -> Unit
     ) {
         item {
             TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
-            Text(app.label, style = MaterialTheme.typography.headlineSmall)
+            Text(app.label ?: app.packageName, style = MaterialTheme.typography.headlineSmall)
             Text(isolateLtr(app.packageName), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             Text(stringResource(if (app.isSystem) R.string.detail_system_app else R.string.detail_user_app), style = MaterialTheme.typography.bodyMedium)

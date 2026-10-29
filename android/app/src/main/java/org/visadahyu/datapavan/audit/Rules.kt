@@ -96,7 +96,7 @@ object Rules {
     val byUrgency: Comparator<Pair<AppFacts, List<FindingKind>>> =
         compareBy<Pair<AppFacts, List<FindingKind>>> { (_, f) -> f.firstOrNull()?.severity?.ordinal ?: Int.MAX_VALUE }
             .thenByDescending { (_, f) -> f.size }
-            .thenBy { (app, _) -> app.label.lowercase() }
+            .thenBy { (app, _) -> (app.label ?: app.packageName).lowercase() }
 
     private fun months(yearMonth: Int) = yearMonth / 100 * 12 + yearMonth % 100
 }
