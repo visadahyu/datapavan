@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    M2 feasibility spike only (branch spike/m2-access-probe, never merged). Adds a probe that logs
+    what a normal, unprivileged app can read about other apps and the device, plus dummy components
+    that adb can enable as test fixtures (accessibility, notification listener, device admin, VPN).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+    <!-- Normal permission; needed to see whether a VPN network is active. No network access. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Usage access (granted by the user in Settings, or by adb here) for per-app byte counts (M4). -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+
+    <application>
+        <activity
+            android:name=".probe.ProbeActivity"
+            android:exported="true"
+            android:label="Probe" />
+
+        <service
+            android:name=".probe.ProbeAccessibilityService"
+            android:exported="false"
+            android:label="Probe accessibility"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/probe_accessibility" />
+        </service>
+
+        <service
+            android:name=".probe.ProbeNotificationListener"
+            android:exported="false"
+            android:label="Probe notification listener"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".probe.ProbeVpnService"
+            android:exported="false"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".probe.ProbeAdminReceiver"
+            android:exported="true"
+            android:label="Probe device admin"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/probe_device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>
