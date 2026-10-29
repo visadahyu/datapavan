@@ -23,6 +23,20 @@ screen_has() {
     adb shell cat "$DUMP" 2>/dev/null | grep -q "text=\"$1"
 }
 
+# Lists only compose what is on screen, so scroll down (up to five times) until the text shows.
+scroll_to() {
+    local size width height
+    size=$(adb shell wm size | tr -d '\r' | sed -n 's/.*: \([0-9]*\)x\([0-9]*\)$/\1 \2/p' | tail -1)
+    width=${size% *}
+    height=${size#* }
+    for _ in 1 2 3 4 5 6; do
+        screen_has "$1" && return 0
+        adb shell input swipe $((width / 2)) $((height * 3 / 4)) $((width / 2)) $((height / 4)) 300
+        sleep 1
+    done
+    screen_has "$1"
+}
+
 echo "== Smoke test on $(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
 adb wait-for-device
 # Emulators start without a secure lock screen; a phone must already be unlocked.
@@ -40,7 +54,7 @@ for _ in $(seq 1 60); do
     sleep 1
 done
 screen_has "This phone" || fail "the audit overview did not appear within 60 seconds"
-screen_has "Apps checked:" || fail "the app summary is missing"
+scroll_to "Apps checked:" || fail "the app summary is missing"
 echo "ok: audit overview shown"
 
 if adb shell dumpsys package "$PKG" | grep -q "android.permission.INTERNET"; then
