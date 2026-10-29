@@ -45,6 +45,8 @@ fail() {
     local out="$ROOT/build/screenshots"
     mkdir -p "$out"
     adb exec-out screencap -p >"$out/verify-failure.png" 2>/dev/null || true
+    echo "Accessibility setting: $(adb shell settings get secure enabled_accessibility_services | tr -d '\r')" >&2
+    adb shell dumpsys accessibility 2>/dev/null | grep -i -E 'fixture|enabled services|bound services|crashed' | head -10 >&2 || true
     if adb shell uiautomator dump "$DUMP" >&2; then
         adb shell cat "$DUMP" >"$out/verify-failure.xml"
         echo "On screen:" >&2
@@ -87,6 +89,15 @@ if [ "$(adb shell id -u | tr -d '\r')" = "0" ]; then
 else
     echo "skip: adb cannot become root here, so no certificate authority is installed"
 fi
+
+# Android binds the fixture's accessibility service on its own schedule; wait until it reports the
+# service as enabled, so that a slow emulator does not turn a timing problem into a missing finding.
+for _ in $(seq 1 30); do
+    adb shell dumpsys accessibility 2>/dev/null | grep -q "$FIXTURE/" && break
+    sleep 1
+done
+adb shell settings get secure enabled_accessibility_services | grep -q "$FIXTURE/" ||
+    fail "Android turned the fixture's accessibility service off again"
 
 start_audit || fail "the audit overview did not appear"
 expect "USB debugging is on"
