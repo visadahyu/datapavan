@@ -5,6 +5,8 @@
 //! parsed here, so this crate must never contain `unsafe` code. The workspace lint
 //! configuration enforces that at compile time.
 
+pub mod attestation;
+
 /// Version of the engine, taken from the crate manifest at build time.
 #[must_use]
 pub const fn version() -> &'static str {

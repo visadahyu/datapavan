@@ -14,4 +14,12 @@ internal object NativeCore {
     /** Version of the Rust engine, e.g. `0.1.0`. */
     @JvmStatic
     external fun version(): String
+
+    /**
+     * Decodes the `KeyDescription` extension of a key-attestation certificate (untrusted input,
+     * parsed in Rust). Returns `[attestationVersion, securityLevel, deviceLocked, verifiedBoot,
+     * osPatchLevel]` with -1 for an absent value, and throws a `RuntimeException` on malformed input.
+     */
+    @JvmStatic
+    external fun parseAttestation(extension: ByteArray): LongArray
 }
