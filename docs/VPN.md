@@ -55,6 +55,13 @@ proxy offered by another app (for example v2rayNG, NekoBox, Orbot or Psiphon in 
 keeps both their circumvention tool and Datapavan. Datapavan does **not** implement circumvention
 itself. Later, an optional upstream WireGuard connection can serve users of commercial VPN providers.
 
+Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED-REGIONS.md)):
+
+- **No inbound path.** SOCKS5 `CONNECT` only carries connections the phone opens, so the phone gets no address in the VPN provider's network. The engine accepts packets only for flows a local app started, UDP replies included, and drops everything else. SOCKS5 `BIND` is never used.
+- **The tool's own traffic is visible.** In proxy mode the tool is an ordinary app inside Datapavan's tunnel. Its own connections, to its servers and anywhere else, are attributed to it like any other app's. They are forwarded directly, never back into the proxy, which also prevents loops.
+- **Proxy-like behaviour is flagged** (v0.2) and can be blocked (v0.3): many distinct destinations in a short time, sustained upload, or activity while the screen is off. Thresholds come from measurements, and a flag says what was seen instead of accusing the app. Detection counts destinations in memory, so it does not need the destination log that is off by default for chained flows.
+- **Per-app choice.** The user decides which apps go through the tool. Everything else goes directly or is blocked.
+
 ## Engineering constraints
 
 - **Battery:** one engine thread, event-driven, no busy loops, batched reads. Target: ≤ 3 % extra battery per day, measured on the Galaxy A40.

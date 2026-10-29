@@ -30,6 +30,7 @@ An app on a stock phone has hard limits. We state them openly, because overclaim
 | Block tracker domains for every app | Remove or modify the maker's system apps (that needs ADB or stage 2) |
 | Cut network access per app (Wi-Fi / mobile / background) | Control firmware, the modem or the bootloader (stage 3) |
 | Flag apps that hold high-risk permissions or special access | Guarantee that every system component goes through the VPN |
+| Flag VPN apps that could control the phone, and modified copies of known circumvention tools | Clean a phone that is already compromised |
 
 ## 3. Principles (non-negotiable)
 
@@ -63,7 +64,8 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 
 - **App inventory:** all installed apps (user and system), installer source, and first-install and last-update dates.
 - **Permission audit:** granted dangerous permissions, plus special access: accessibility, device admin, notification listener, usage access, VPN, overlay, install unknown apps, and battery-optimisation exemptions.
-- **Tracker SDK detection:** scan each app's DEX class names on the device against a bundled tracker-signature database.
+- **Risk checks for VPN users:** VPN apps that also hold remote-control access (accessibility, overlay, device admin, notification listener), user-installed certificate authorities, and enabled USB or wireless debugging (see [RESTRICTED-REGIONS.md](RESTRICTED-REGIONS.md)).
+- **Tracker SDK detection:** scan each app's DEX class names on the device against a bundled tracker-signature database, including known proxy and remote-access SDKs. Installed circumvention tools are also checked against their official signing certificates, to catch modified copies.
 - **Network usage per app:** bytes up and down, split by foreground/background and Wi-Fi/mobile, read from `NetworkStatsManager` (needs the *Usage access* special permission).
 - **Plain-language card per app:** what it can access, what trackers it carries, how much it sends, and what the user can do about it.
 
@@ -71,6 +73,7 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 
 - Connection log per app: destination domain, IP, organisation (from an offline IP-to-ASN database), bytes, time, and foreground/background state.
 - A timeline answering "who did this app talk to?", with tracker destinations flagged.
+- Chained mode closes inbound access from the VPN provider's network and flags proxy-like behaviour, including the circumvention tool's own connections (see [VPN.md](VPN.md)).
 - Nothing is blocked yet. This lets us check accuracy and battery cost before we take control.
 
 ### v0.3 "Guard": blocking
@@ -162,6 +165,10 @@ detect it and explain the trade-off.
 | State network observer | Sees that a device runs Datapavan (for example through list-update requests) | List updates are optional and can be imported as files; no other network traffic of our own |
 | Malformed or hostile packets | Crash or exploit the parser | Rust; fuzzing of all parsers (`cargo fuzz`); the forwarder fails closed |
 
+Beyond its own assets, Datapavan protects the user from untrusted VPN apps: remote control, modified
+copies of known tools, hidden proxy SDKs, inbound access from the VPN network, and interception through
+user-installed certificate authorities. See [RESTRICTED-REGIONS.md](RESTRICTED-REGIONS.md).
+
 ## 9. Data sources (licences TBV)
 
 The enterprise flavour will be commercial, so every dataset must allow commercial use.
@@ -171,6 +178,8 @@ The enterprise flavour will be commercial, so every dataset must allow commercia
 | Tracker SDK signatures | εxodus Privacy tracker database | Licence TBV |
 | Tracker domains | EasyPrivacy, HaGeZi, Disconnect | Licences TBV. **Avoid non-commercial licences**, e.g. DuckDuckGo Tracker Radar (CC BY-NC-SA, TBV) |
 | IP → ASN / organisation | iptoasn.com, DB-IP Lite | Licences TBV |
+| Official signing certificates of circumvention tools | Each project's official channels (website, F-Droid, signed releases) | Shipped as a signed list; each entry records its source and date |
+| Proxy and remote-access SDK signatures | Published security research | Licences TBV |
 
 ## 10. Tech stack
 
@@ -238,8 +247,8 @@ datapavan/
 | # | Milestone | Done when |
 |---|---|---|
 | M1 | Skeleton | Android app and Rust core build together; CI green; app opens on the emulator and the A40 (A56 testing deferred, ADR 0011); string resources, RTL support and pseudo-locales in place from the start; brand marks and app icon |
-| M2 | App inventory and permission audit | Matches what system Settings shows, checked on the A40 and the emulator |
-| M3 | Tracker SDK scanner | Results for 20 popular apps agree with published εxodus reports |
+| M2 | App inventory and permission audit | Matches what system Settings shows, checked on the A40 and the emulator; the VPN risk checks fire for a test app that holds remote-control access, a user-installed certificate authority, and enabled debugging |
+| M3 | Tracker SDK scanner | Results for 20 popular apps agree with published εxodus reports; a re-signed copy of a known circumvention tool is reported as not genuine |
 | M4 | Network usage per app | Byte counts within 5 % of the Settings data-usage screen |
 | M5 | Plain-language UI and first release | v0.1 published on GitHub in English, French, German and Persian, and submitted to F-Droid; manifest has **no INTERNET permission**; build is reproducible |
 
