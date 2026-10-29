@@ -14,14 +14,21 @@ rust_gates() {
     cd "$ROOT/core"
     cargo fmt --all --check
     cargo clippy --workspace --all-targets --locked -- -D warnings
+    for target in aarch64-linux-android x86_64-linux-android; do
+        cargo clippy --workspace --all-targets --locked --target "$target" -- -D warnings
+    done
     cargo test --workspace --locked
+    # Needs network access to fetch the RustSec advisory database.
     cargo deny --locked check
 }
 
 android_gates() {
-    echo "== Android: lint, unit tests, debug and release builds (includes the permission guard)"
+    echo "== Android: lint, unit tests, APK and bundle builds, permission guard, native-library check"
     cd "$ROOT/android"
-    ./gradlew --no-daemon --stacktrace lintDebug testDebugUnitTest assembleDebug assembleRelease
+    ./gradlew --no-daemon --stacktrace \
+        lintDebug lintRelease testDebugUnitTest \
+        assembleDebug assembleRelease bundleRelease \
+        verifyApkDebug verifyApkRelease
 }
 
 case "$WHAT" in

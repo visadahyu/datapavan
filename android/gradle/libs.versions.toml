@@ -6,11 +6,14 @@ activityCompose = "1.13.0"
 # Pinned above what activity-compose pulls in transitively: older lifecycle lint checks
 # use APIs the current Lint no longer has, so they would silently be skipped.
 lifecycle = "2.11.0"
+# Already in the graph through Compose; declared because the manifest references its provider.
+startup = "1.1.1"
 junit = "4.13.2"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 androidx-lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime", version.ref = "lifecycle" }
+androidx-startup-runtime = { module = "androidx.startup:startup-runtime", version.ref = "startup" }
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
 androidx-compose-ui = { module = "androidx.compose.ui:ui" }

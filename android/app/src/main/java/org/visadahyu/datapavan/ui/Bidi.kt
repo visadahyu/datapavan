@@ -1,7 +1,7 @@
 package org.visadahyu.datapavan.ui
 
-private const val LEFT_TO_RIGHT_ISOLATE = '⁦'
-private const val POP_DIRECTIONAL_ISOLATE = '⁩'
+private const val LEFT_TO_RIGHT_ISOLATE = '\u2066'
+private const val POP_DIRECTIONAL_ISOLATE = '\u2069'
 
 /**
  * Wraps a technical token that is always left-to-right (domain, IP address, package name,

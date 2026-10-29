@@ -7,7 +7,7 @@ import org.junit.Test
 class BidiTest {
     @Test
     fun wrapsTokenInLeftToRightIsolate() {
-        assertEquals("⁦example.com⁩", isolateLtr("example.com"))
+        assertEquals("\u2066example.com\u2069", isolateLtr("example.com"))
     }
 
     @Test
@@ -15,6 +15,6 @@ class BidiTest {
         val token = "192.168.1.26"
         val wrapped = isolateLtr(token)
         assertEquals(token, wrapped.substring(1, wrapped.length - 1))
-        assertTrue(wrapped.first() == '⁦' && wrapped.last() == '⁩')
+        assertTrue(wrapped.first() == '\u2066' && wrapped.last() == '\u2069')
     }
 }

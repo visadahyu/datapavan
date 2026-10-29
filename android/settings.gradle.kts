@@ -1,26 +1,30 @@
+// Dependency-confusion guard: groups published by Google may come ONLY from Google's repository
+// (exclusiveContent), and every other group comes from Maven Central. No other repository is used.
 pluginManagement {
     repositories {
-        // Each repository may only serve the groups we expect from it (dependency-confusion guard).
-        google {
-            content {
-                includeGroupByRegex("com\\.android.*")
-                includeGroupByRegex("com\\.google.*")
-                includeGroupByRegex("androidx.*")
+        exclusiveContent {
+            forRepository { google() }
+            filter {
+                includeGroupByRegex("androidx(\\..+)?")
+                includeGroupByRegex("com\\.android(\\..+)?")
+                includeGroupByRegex("com\\.google\\.android(\\..+)?")
+                includeGroupByRegex("com\\.google\\.testing\\.platform")
             }
         }
         mavenCentral()
-        gradlePluginPortal()
     }
 }
 
 dependencyResolutionManagement {
     repositoriesMode = RepositoriesMode.FAIL_ON_PROJECT_REPOS
     repositories {
-        google {
-            content {
-                includeGroupByRegex("com\\.android.*")
-                includeGroupByRegex("com\\.google.*")
-                includeGroupByRegex("androidx.*")
+        exclusiveContent {
+            forRepository { google() }
+            filter {
+                includeGroupByRegex("androidx(\\..+)?")
+                includeGroupByRegex("com\\.android(\\..+)?")
+                includeGroupByRegex("com\\.google\\.android(\\..+)?")
+                includeGroupByRegex("com\\.google\\.testing\\.platform")
             }
         }
         mavenCentral()

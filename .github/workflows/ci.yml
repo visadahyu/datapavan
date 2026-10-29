@@ -19,13 +19,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
-      NDK_VERSION: "30.0.16248370"
       CARGO_NDK_VERSION: "4.1.2"
       CARGO_DENY_VERSION: "0.20.2"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Validate the Gradle wrapper jar against the official checksum
+        run: |
+          version=$(sed -n 's/.*gradle-\([0-9.]*\)-bin\.zip.*/\1/p' android/gradle/wrapper/gradle-wrapper.properties)
+          expected=$(curl -fsSL "https://services.gradle.org/distributions/gradle-${version}-wrapper.jar.sha256")
+          echo "${expected}  android/gradle/wrapper/gradle-wrapper.jar" | sha256sum -c -
 
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
@@ -34,8 +39,11 @@ jobs:
 
       - name: Android SDK packages
         run: |
+          # The NDK version has a single source of truth: android/app/build.gradle.kts.
+          ndk=$(sed -n 's/^ *ndkVersion = "\(.*\)"/\1/p' android/app/build.gradle.kts)
+          test -n "$ndk"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
-            "platforms;android-37.0" "build-tools;37.0.0" "ndk;$NDK_VERSION"
+            "platforms;android-37.0" "build-tools;37.0.0" "ndk;$ndk"
 
       - name: Cache cargo tools and registry
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -48,6 +56,8 @@ jobs:
 
       - name: Rust toolchain and cargo tools
         run: |
+          # Installs the toolchain, components and targets pinned in rust-toolchain.toml.
+          rustup toolchain install
           rustup show active-toolchain
           command -v cargo-ndk || cargo install cargo-ndk --version "$CARGO_NDK_VERSION" --locked
           command -v cargo-deny || cargo install cargo-deny --version "$CARGO_DENY_VERSION" --locked

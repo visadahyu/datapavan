@@ -4,8 +4,9 @@
 //! small: convert the arguments, call the engine, convert the result. All logic belongs in the
 //! engine crate, which contains no unsafe code.
 //!
-//! `EnvUnowned::with_env` catches panics so they never unwind into the JVM, and errors are
-//! turned into a Java `RuntimeException` by the chosen error policy.
+//! Errors are turned into a Java `RuntimeException` by the chosen error policy. In debug builds,
+//! `EnvUnowned::with_env` catches panics so they never unwind into the JVM; release builds use
+//! `panic = "abort"`, which ends the process first.
 
 use jni::EnvUnowned;
 use jni::errors::{Error, ThrowRuntimeExAndDefault};

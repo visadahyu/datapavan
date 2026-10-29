@@ -24,6 +24,10 @@ panic = "deny"
 opt-level = "s"
 lto = "fat"
 codegen-units = 1
+# A panic ends the process instead of continuing in an unknown state. For the VPN this means
+# fail-closed under Android's lockdown mode; see docs/decisions/0006.
 panic = "abort"
+# Integer overflow in a packet or DEX parser must be a crash, never a silent wrap-around.
+overflow-checks = true
 strip = "symbols"
 debug = false

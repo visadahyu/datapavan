@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-        No permissions at all in v0.1: the app cannot send anything anywhere.
+        No Android platform permissions in v0.1: the app cannot open network connections.
+        (AndroidX adds one app-internal signature permission for non-exported receivers.)
         allowBackup=false disables cloud backup. Device-to-device transfer must be excluded
-        separately: data_extraction_rules covers Android 12+, backup_rules covers Android 10-11.
+        separately on Android 12+, which data_extraction_rules does; backup_rules is required by
+        Lint for Android 10-11 and excludes everything as well.
     -->
     <application
         android:allowBackup="false"
@@ -13,7 +16,22 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.NoActionBar">
+        android:theme="@style/Theme.Datapavan">
+
+        <!--
+            EmojiCompat would look up a downloadable emoji font through the Google Play services
+            font provider on every start. Datapavan never talks to Google, so it is disabled.
+            The provider comes from androidx.startup, which build.gradle.kts declares directly.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+                tools:node="remove" />
+        </provider>
 
         <activity
             android:name=".MainActivity"
