@@ -127,6 +127,8 @@ jobs:
           api-level: 35
           target: google_apis
           arch: x86_64
+          # A phone-sized screen; without a profile the emulator is 320 x 640, smaller than any phone.
+          profile: pixel_7
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: |

@@ -16,6 +16,13 @@ PKG=org.visadahyu.datapavan
 fail() {
     echo "SMOKE FAILED: $*" >&2
     adb logcat -d -b crash 2>/dev/null | tail -40 >&2 || true
+    # What was on screen, in the log and as a file that CI keeps with the screenshots.
+    mkdir -p "$ROOT/build/screenshots"
+    adb exec-out screencap -p >"$ROOT/build/screenshots/smoke-failure.png" 2>/dev/null || true
+    if adb shell uiautomator dump "$DUMP" >/dev/null 2>&1; then
+        echo "On screen:" >&2
+        adb shell cat "$DUMP" | grep -o 'text="[^"]\+"' | head -40 >&2 || true
+    fi
     exit 1
 }
 
