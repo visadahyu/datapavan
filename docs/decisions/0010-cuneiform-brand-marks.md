@@ -12,7 +12,7 @@ symbols, because the foundation is meant for all nations.
 - Product: the sign **DA** (U+103AD), the first sign of *dāta* "law" and of *dahyu* "land". Its three wedges read as a gateway.
 - Foundation: the logogram **DAHYĀUŠ** (U+103CC), "land, country, people".
 - The outlines are taken unchanged from Noto Sans Old Persian (OFL). A hand-redrawn variant was tried and rejected, because it lost the character of the original signs.
-- Palette: lapis, stone and gold, with measured contrast rules. See [brand/README.md](../../brand/README.md).
+- Palette: lapis, clay and gold, with measured contrast rules. See [brand/README.md](../../brand/README.md).
 
 ## Consequences
 - A unique, meaningful mark that shares one visual language with the foundation's mark.

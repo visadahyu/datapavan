@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Brand palette. Lapis: Achaemenid glazed brick of Susa. Stone: Persepolis limestone. -->
+    <!-- Brand palette. Lapis: lapis lazuli. Clay: the Persepolis tablets. -->
     <color name="brand_lapis">#1F4E8C</color>
-    <color name="brand_stone">#F3EBDC</color>
+    <color name="brand_clay">#F3EBDC</color>
     <color name="ic_launcher_background">@color/brand_lapis</color>
 </resources>

@@ -26,8 +26,8 @@ under every launcher mask.
 
 | Name | Hex | Use |
 |---|---|---|
-| Lapis | `#1F4E8C` | Primary colour, app icon, emphasis text. After the glazed bricks of Susa |
-| Stone | `#F3EBDC` | Background, mark colour on lapis. After the limestone of Persepolis |
+| Lapis | `#1F4E8C` | Primary colour, app icon, emphasis text. After lapis lazuli, which Darius's foundation charter at Susa (DSf) lists as brought from Sogdiana |
+| Clay | `#F3EBDC` | Background, mark colour on lapis. After the clay tablets of the Persepolis archives |
 | Gold | `#B07D2B` | Decoration and graphics only, never body text. After Achaemenid goldwork |
 | Dark gold | `#8A5F17` | Gold-coloured text on light backgrounds |
 | Light lapis | `#8DB0E6` | Primary colour in dark mode |
@@ -38,10 +38,10 @@ Measured WCAG contrast ratios:
 
 | Pair | Ratio | Allowed for |
 |---|---|---|
-| Lapis on stone, stone on lapis | 7.02 | Any text (AAA) |
+| Lapis on clay, clay on lapis | 7.02 | Any text (AAA) |
 | Lapis on white | 8.31 | Any text (AAA) |
-| Dark gold on stone | 4.75 | Normal text (AA) |
-| Gold on stone | 3.05 | Large text and graphics only |
+| Dark gold on clay | 4.75 | Normal text (AA) |
+| Gold on clay | 3.05 | Large text and graphics only |
 | Light lapis on night | 8.17 | Any text (AAA) |
 | Light gold on night | 8.12 | Any text (AAA) |
 | Gold on lapis | 2.30 | **Never** |
@@ -51,7 +51,7 @@ Blue and gold stay distinct for the most common colour-vision deficiencies (red-
 
 ## Rules
 
-- The foundation leans on stone (calm, institutional); the product leans on lapis.
+- The foundation leans on clay (calm, institutional); the product leans on lapis.
 - Do not stretch, rotate, outline or recolour the marks outside this palette.
 - Keep clear space around a mark of at least the height of DA's horizontal wedge.
 - Do not combine the marks with national, political or religious symbols (flags, maps, the faravahar,
