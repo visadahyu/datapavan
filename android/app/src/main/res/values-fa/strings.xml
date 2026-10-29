@@ -8,7 +8,7 @@
     <string name="section_device">این گوشی</string>
     <string name="section_apps">برنامه‌ها</string>
     <string name="device_all_clear">خطری در سطح کل گوشی پیدا نشد.</string>
-    <string name="device_integrity_ok">بررسی سخت‌افزاری: بوت‌لودر قفل است و سیستم تأیید شده است.</string>
+    <string name="device_integrity_ok">بررسی سخت‌افزاری، امضاشده با کلید گواهی گوگل: بوت‌لودر قفل است و سیستم تأیید شده است.</string>
     <string name="device_integrity_unavailable">بررسی سخت‌افزاری روی این گوشی در دسترس نیست.</string>
     <string name="device_patch">وصله امنیتی: %1$s</string>
     <string name="apps_summary">برنامه‌های بررسی‌شده: %1$d. نیازمند توجه: %2$d.</string>
@@ -67,6 +67,10 @@
     <string name="finding_old_patch_body">آخرین وصله امنیتی این گوشی بیش از یک سال پیش است، پس آسیب‌پذیری‌های شناخته‌شده رفع نشده‌اند.</string>
     <string name="finding_software_only_title">بررسی سخت‌افزاری در دسترس نیست</string>
     <string name="finding_software_only_body">این گوشی فقط به‌صورت نرم‌افزاری گواهی می‌دهد، پس سخت‌افزار نمی‌تواند وضعیت سیستم را تأیید کند. این در شبیه‌سازها عادی است.</string>
+    <string name="finding_attestation_revoked_title">کلید بررسی سخت‌افزاری باطل شده است</string>
+    <string name="finding_attestation_revoked_body">گوگل یکی از کلیدهای بررسی سخت‌افزاری این گوشی را باطل کرده است، مثلاً چون فاش شده بود. وضعیتی که این بررسی برای بوت‌لودر و سیستم گزارش می‌دهد ممکن است جعلی باشد.</string>
+    <string name="finding_attestation_unconfirmed_title">بررسی سخت‌افزاری تأیید نشد</string>
+    <string name="finding_attestation_unconfirmed_body">بررسی سخت‌افزاری این گوشی با کلید گواهی گوگل امضا نشده است، پس وضعیت بوت‌لودر و سیستم که این بررسی گزارش می‌دهد قابل تأیید نیست. برخی سازندگان بیرون از برنامه گوگل کلید خودشان را دارند؛ یک سیستم دستکاری‌شده هم می‌تواند علت آن باشد.</string>
     <string name="finding_vpn_active_title">یک وی‌پی‌ان فعال است</string>
     <string name="finding_vpn_active_body">همه ترافیک اکنون از یک برنامه وی‌پی‌ان می‌گذرد. مطمئن شوید که به آن اعتماد دارید.</string>
 

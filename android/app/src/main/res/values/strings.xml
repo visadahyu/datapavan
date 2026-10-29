@@ -10,7 +10,7 @@
     <string name="section_device">This phone</string>
     <string name="section_apps">Apps</string>
     <string name="device_all_clear">No phone-wide risks found.</string>
-    <string name="device_integrity_ok">Hardware check: the bootloader is locked and the system is verified.</string>
+    <string name="device_integrity_ok">Hardware check, signed with Google\'s attestation key: the bootloader is locked and the system is verified.</string>
     <string name="device_integrity_unavailable">The hardware check is not available on this phone.</string>
     <!-- %1$s is a date such as 2023-03, passed in already bidi-isolated. -->
     <string name="device_patch">Security patch: %1$s</string>
@@ -75,6 +75,10 @@
     <string name="finding_old_patch_body">The last security patch on this phone is more than a year old, so known vulnerabilities are not fixed.</string>
     <string name="finding_software_only_title">No hardware check available</string>
     <string name="finding_software_only_body">This phone attests only in software, so hardware cannot confirm the system state. This is normal for emulators.</string>
+    <string name="finding_attestation_revoked_title">Hardware check key revoked</string>
+    <string name="finding_attestation_revoked_body">Google has revoked a key in this phone\'s hardware check, for example because it leaked. The bootloader and system state that the check reports may be forged.</string>
+    <string name="finding_attestation_unconfirmed_title">Hardware check not confirmed</string>
+    <string name="finding_attestation_unconfirmed_body">This phone\'s hardware check is not signed with Google\'s attestation key, so the bootloader and system state that it reports cannot be confirmed. Some makers outside Google\'s programme use their own key; a modified system can also cause this.</string>
     <string name="finding_vpn_active_title">A VPN is active</string>
     <string name="finding_vpn_active_body">All traffic currently passes through a VPN app. Make sure it is one you trust.</string>
 

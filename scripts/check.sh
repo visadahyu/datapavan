@@ -4,10 +4,33 @@
 #   scripts/check.sh          all gates
 #   scripts/check.sh rust     Rust gates only
 #   scripts/check.sh android  Android gates only (builds the Rust library as part of it)
+#   scripts/check.sh data     bundled datasets only
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WHAT="${1:-all}"
+
+data_gates() {
+    echo "== Data: licence and source of every bundled dataset (ADR 0015)"
+    local failed=0 dir file
+    for dir in "$ROOT"/data/*/; do
+        for file in LICENSE SOURCE; do
+            if ! grep -q 'SPDX-License-Identifier:' "$dir$file" 2>/dev/null; then
+                echo "${dir#"$ROOT/"}$file is missing or has no SPDX-License-Identifier" >&2
+                failed=1
+            fi
+        done
+        # Every other file names its licence in its first lines or in a REUSE sidecar file.
+        for file in "$dir"*; do
+            case "$file" in */LICENSE | */SOURCE | *.license) continue ;; esac
+            if ! head -n 5 "$file" | grep -q 'SPDX-License-Identifier:' && [ ! -f "$file.license" ]; then
+                echo "${file#"$ROOT/"} names no licence" >&2
+                failed=1
+            fi
+        done
+    done
+    [ "$failed" -eq 0 ]
+}
 
 rust_gates() {
     echo "== Rust: format, lint, test, dependency policy"
@@ -34,8 +57,9 @@ android_gates() {
 case "$WHAT" in
     rust) rust_gates ;;
     android) android_gates ;;
-    all) rust_gates; android_gates ;;
-    *) echo "usage: $0 [all|rust|android]" >&2; exit 2 ;;
+    data) data_gates ;;
+    all) data_gates; rust_gates; android_gates ;;
+    *) echo "usage: $0 [all|rust|android|data]" >&2; exit 2 ;;
 esac
 
 echo "== all requested gates passed"

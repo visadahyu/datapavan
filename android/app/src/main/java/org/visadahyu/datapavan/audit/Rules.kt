@@ -18,6 +18,8 @@ enum class FindingKind(val severity: Severity) {
     WIRELESS_DEBUGGING(Severity.HIGH),
     BOOTLOADER_UNLOCKED(Severity.HIGH),
     BOOT_NOT_VERIFIED(Severity.HIGH),
+    ATTESTATION_REVOKED(Severity.HIGH),
+    ATTESTATION_UNCONFIRMED(Severity.MEDIUM),
     USB_DEBUGGING(Severity.MEDIUM),
     OLD_SECURITY_PATCH(Severity.MEDIUM),
     INTEGRITY_SOFTWARE_ONLY(Severity.LOW),
@@ -105,6 +107,11 @@ object Rules {
             if (integrity.securityLevel == 0) {
                 add(FindingKind.INTEGRITY_SOFTWARE_ONLY)
             } else {
+                when (integrity.trust) {
+                    AttestationTrust.GOOGLE_ROOT -> Unit
+                    AttestationTrust.REVOKED -> add(FindingKind.ATTESTATION_REVOKED)
+                    AttestationTrust.OTHER_ROOT, AttestationTrust.BROKEN_CHAIN -> add(FindingKind.ATTESTATION_UNCONFIRMED)
+                }
                 if (integrity.deviceLocked == false) add(FindingKind.BOOTLOADER_UNLOCKED)
                 if (integrity.deviceLocked == true && integrity.verifiedBoot in setOf(2, 3)) add(FindingKind.BOOT_NOT_VERIFIED)
             }

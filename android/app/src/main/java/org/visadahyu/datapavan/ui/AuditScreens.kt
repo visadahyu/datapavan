@@ -51,6 +51,7 @@ import kotlinx.coroutines.withContext
 import org.visadahyu.datapavan.R
 import org.visadahyu.datapavan.audit.AppCollector
 import org.visadahyu.datapavan.audit.AppFacts
+import org.visadahyu.datapavan.audit.AttestationTrust
 import org.visadahyu.datapavan.audit.DeviceCollector
 import org.visadahyu.datapavan.audit.DeviceFacts
 import org.visadahyu.datapavan.audit.FindingKind
@@ -192,7 +193,8 @@ private fun IntegrityLine(device: DeviceFacts) {
     val integrity = device.integrity
     val text = when {
         integrity == null -> stringResource(R.string.device_integrity_unavailable)
-        integrity.deviceLocked == true && integrity.verifiedBoot == 0 && integrity.securityLevel > 0 -> stringResource(R.string.device_integrity_ok)
+        integrity.deviceLocked == true && integrity.verifiedBoot == 0 && integrity.securityLevel > 0 &&
+            integrity.trust == AttestationTrust.GOOGLE_ROOT -> stringResource(R.string.device_integrity_ok)
         else -> null
     }
     val patch = integrity?.osPatchLevel?.let { String.format(Locale.ROOT, "%04d-%02d", it / 100, it % 100) }
@@ -376,6 +378,8 @@ private fun title(kind: FindingKind) = when (kind) {
     FindingKind.USB_DEBUGGING -> R.string.finding_usb_debugging_title
     FindingKind.OLD_SECURITY_PATCH -> R.string.finding_old_patch_title
     FindingKind.INTEGRITY_SOFTWARE_ONLY -> R.string.finding_software_only_title
+    FindingKind.ATTESTATION_REVOKED -> R.string.finding_attestation_revoked_title
+    FindingKind.ATTESTATION_UNCONFIRMED -> R.string.finding_attestation_unconfirmed_title
     FindingKind.VPN_ACTIVE -> R.string.finding_vpn_active_title
 }
 
@@ -394,5 +398,7 @@ private fun body(kind: FindingKind) = when (kind) {
     FindingKind.USB_DEBUGGING -> R.string.finding_usb_debugging_body
     FindingKind.OLD_SECURITY_PATCH -> R.string.finding_old_patch_body
     FindingKind.INTEGRITY_SOFTWARE_ONLY -> R.string.finding_software_only_body
+    FindingKind.ATTESTATION_REVOKED -> R.string.finding_attestation_revoked_body
+    FindingKind.ATTESTATION_UNCONFIRMED -> R.string.finding_attestation_unconfirmed_body
     FindingKind.VPN_ACTIVE -> R.string.finding_vpn_active_body
 }

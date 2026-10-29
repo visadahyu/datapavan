@@ -55,7 +55,7 @@ Datapavan uses Android's `VpnService` only to see and filter traffic on the devi
 - **A learned baseline only detects change.** If an app leaks with every request from the first day, the leak becomes its "normal". Three more layers cover that case:
   1. **Destination split.** Upload bytes are split by destination category (content, analytics, advertising) using our resolver, the server names and the tracker lists. This needs no baseline. It fails only when an app sends everything over one channel.
   2. **Lab reference.** The project measures apps on its own lab phones, where decrypting its own test traffic is legitimate research, and compares each action with a privacy-respecting equivalent (for example the web version of the same service in a privacy browser). The results ship as a signed reference list, like the tracker lists, and as public reports. Legal advice comes first.
-  3. **Declared against observed.** Google Play shows a data-safety label that each developer fills in and nobody checks. Datapavan compares the label with what it observes; every contradiction is a documented finding. The labels reach the app through the signed lists, because v0.1 has no network access.
+  3. **Declared against observed.** Google Play shows a data-safety label that each developer fills in and nobody checks. Datapavan compares the label with what it observes; every contradiction is a documented finding. Google's terms do not allow collecting or redistributing the labels automatically (ADR 0015). So for now the app links to each listing, and the lab cites the labels of the apps it measures by hand. In-app comparison waits for researcher access under DSA Article 40(12) or for Google's permission.
 
 ## Coexistence with other VPNs
 

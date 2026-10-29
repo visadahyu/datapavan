@@ -1,0 +1,25 @@
+# Fuzz targets for the engine's parsers (cargo fuzz, nightly only). Run them with scripts/fuzz.sh.
+# Not a member of the core workspace: it needs a nightly toolchain and never ships.
+[package]
+name = "datapavan-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "=0.4.13"
+datapavan-engine = { path = "../engine" }
+
+[[bin]]
+name = "attestation"
+path = "fuzz_targets/attestation.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

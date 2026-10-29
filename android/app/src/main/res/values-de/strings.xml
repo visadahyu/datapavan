@@ -8,7 +8,7 @@
     <string name="section_device">Dieses Telefon</string>
     <string name="section_apps">Apps</string>
     <string name="device_all_clear">Keine geräteweiten Risiken gefunden.</string>
-    <string name="device_integrity_ok">Hardware-Prüfung: Der Bootloader ist gesperrt und das System ist verifiziert.</string>
+    <string name="device_integrity_ok">Hardware-Prüfung, signiert mit Googles Attestierungsschlüssel: Der Bootloader ist gesperrt und das System ist verifiziert.</string>
     <string name="device_integrity_unavailable">Die Hardware-Prüfung ist auf diesem Telefon nicht verfügbar.</string>
     <string name="device_patch">Sicherheitspatch: %1$s</string>
     <string name="apps_summary">Geprüfte Apps: %1$d. Prüfenswert: %2$d.</string>
@@ -67,6 +67,10 @@
     <string name="finding_old_patch_body">Der letzte Sicherheitspatch dieses Telefons ist über ein Jahr alt; bekannte Schwachstellen sind nicht behoben.</string>
     <string name="finding_software_only_title">Keine Hardware-Prüfung verfügbar</string>
     <string name="finding_software_only_body">Dieses Telefon bestätigt nur per Software, die Hardware kann den Systemzustand also nicht bestätigen. Auf Emulatoren ist das normal.</string>
+    <string name="finding_attestation_revoked_title">Schlüssel der Hardware-Prüfung widerrufen</string>
+    <string name="finding_attestation_revoked_body">Google hat einen Schlüssel der Hardware-Prüfung dieses Telefons widerrufen, zum Beispiel weil er öffentlich geworden ist. Der gemeldete Zustand von Bootloader und System kann gefälscht sein.</string>
+    <string name="finding_attestation_unconfirmed_title">Hardware-Prüfung nicht bestätigt</string>
+    <string name="finding_attestation_unconfirmed_body">Die Hardware-Prüfung dieses Telefons ist nicht mit Googles Attestierungsschlüssel signiert, daher lässt sich der gemeldete Zustand von Bootloader und System nicht bestätigen. Manche Hersteller außerhalb von Googles Programm nutzen einen eigenen Schlüssel; auch ein verändertes System kann die Ursache sein.</string>
     <string name="finding_vpn_active_title">Ein VPN ist aktiv</string>
     <string name="finding_vpn_active_body">Der gesamte Datenverkehr läuft gerade durch eine VPN-App. Vergewissern Sie sich, dass Sie ihr vertrauen.</string>
 

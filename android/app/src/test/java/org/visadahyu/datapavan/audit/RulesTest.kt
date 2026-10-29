@@ -32,7 +32,7 @@ class RulesTest {
         usb: Boolean = false,
         wireless: Boolean = false,
         cas: List<String> = emptyList(),
-        integrity: Integrity? = Integrity(securityLevel = 1, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_609),
+        integrity: Integrity? = Integrity(securityLevel = 1, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_609, trust = AttestationTrust.GOOGLE_ROOT),
     ) = DeviceFacts(usb, wireless, cas, vpnActive = false, integrity = integrity)
 
     @Test
@@ -79,7 +79,7 @@ class RulesTest {
     @Test
     fun `device risks are reported, most severe first`() {
         val findings = Rules.forDevice(
-            device(usb = true, cas = listOf("CN=Test"), integrity = Integrity(1, deviceLocked = false, verifiedBoot = 2, osPatchLevel = 202_303)),
+            device(usb = true, cas = listOf("CN=Test"), integrity = Integrity(1, deviceLocked = false, verifiedBoot = 2, osPatchLevel = 202_303, trust = AttestationTrust.GOOGLE_ROOT)),
             nowYearMonth = 202_610,
         )
         assertEquals(
@@ -90,14 +90,14 @@ class RulesTest {
 
     @Test
     fun `a patch exactly twelve months old is still accepted`() {
-        val integrity = Integrity(1, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_510)
+        val integrity = Integrity(1, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_510, trust = AttestationTrust.GOOGLE_ROOT)
         assertTrue(FindingKind.OLD_SECURITY_PATCH !in Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610))
         assertTrue(FindingKind.OLD_SECURITY_PATCH in Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_611))
     }
 
     @Test
     fun `emulators attest in software only`() {
-        val integrity = Integrity(0, deviceLocked = false, verifiedBoot = 2, osPatchLevel = 202_608)
+        val integrity = Integrity(0, deviceLocked = false, verifiedBoot = 2, osPatchLevel = 202_608, trust = AttestationTrust.GOOGLE_ROOT)
         val findings = Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610)
         assertEquals(listOf(FindingKind.INTEGRITY_SOFTWARE_ONLY), findings)
     }
@@ -118,5 +118,26 @@ class RulesTest {
         assertEquals(ReviewStatus.REVIEWED, Rules.reviewStatus(emptySet(), reviewed = mic))
         assertEquals(ReviewStatus.CHANGED, Rules.reviewStatus(mic + Sensor.CAMERA, reviewed = mic))
         assertEquals(ReviewStatus.CHANGED, Rules.reviewStatus(mic, reviewed = emptySet()))
+    }
+
+    @Test
+    fun `a revoked attestation key is reported first, with the state it reports`() {
+        val integrity = Integrity(1, deviceLocked = false, verifiedBoot = 2, osPatchLevel = 202_608, trust = AttestationTrust.REVOKED)
+        val findings = Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610)
+        assertEquals(listOf(FindingKind.ATTESTATION_REVOKED, FindingKind.BOOTLOADER_UNLOCKED), findings)
+    }
+
+    @Test
+    fun `hardware attestation that Google does not vouch for is unconfirmed`() {
+        for (trust in listOf(AttestationTrust.OTHER_ROOT, AttestationTrust.BROKEN_CHAIN)) {
+            val integrity = Integrity(1, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_608, trust = trust)
+            assertEquals(listOf(FindingKind.ATTESTATION_UNCONFIRMED), Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610))
+        }
+    }
+
+    @Test
+    fun `software attestation is reported only as such, whatever its chain`() {
+        val integrity = Integrity(0, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_608, trust = AttestationTrust.OTHER_ROOT)
+        assertEquals(listOf(FindingKind.INTEGRITY_SOFTWARE_ONLY), Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610))
     }
 }

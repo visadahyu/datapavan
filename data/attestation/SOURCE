@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: CC0-1.0
+retrieved: 2026-10-29T15:10:29Z
+page: https://developer.android.com/privacy-and-security/security-key-attestation?hl=en
+page-sha256: 8740861143150c3c6ad542164c714d587011bd6368e28993ab85fda48cac6e5a
+page-licence-statement: Content and code samples on this page are subject to the licenses described in the Content License
+status-list: https://android.googleapis.com/attestation/status
+status-list-sha256: e1d9d5eafeea416f5c8d9607e4b8a00317b8e03c09ecf1ef4624f2bce3269499
+root-keys: 2
+revoked-serials: 1769

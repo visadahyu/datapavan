@@ -8,7 +8,7 @@
     <string name="section_device">Ce téléphone</string>
     <string name="section_apps">Applis</string>
     <string name="device_all_clear">Aucun risque trouvé au niveau du téléphone.</string>
-    <string name="device_integrity_ok">Contrôle matériel : le bootloader est verrouillé et le système est vérifié.</string>
+    <string name="device_integrity_ok">Contrôle matériel, signé avec la clé d\'attestation de Google : le bootloader est verrouillé et le système est vérifié.</string>
     <string name="device_integrity_unavailable">Le contrôle matériel n\'est pas disponible sur ce téléphone.</string>
     <string name="device_patch">Correctif de sécurité : %1$s</string>
     <string name="apps_summary">Applis vérifiées : %1$d. À examiner : %2$d.</string>
@@ -67,6 +67,10 @@
     <string name="finding_old_patch_body">Le dernier correctif de sécurité de ce téléphone date de plus d\'un an : des failles connues ne sont pas corrigées.</string>
     <string name="finding_software_only_title">Aucun contrôle matériel disponible</string>
     <string name="finding_software_only_body">Ce téléphone ne fournit qu\'une attestation logicielle : le matériel ne peut pas confirmer l\'état du système. C\'est normal sur un émulateur.</string>
+    <string name="finding_attestation_revoked_title">Clé du contrôle matériel révoquée</string>
+    <string name="finding_attestation_revoked_body">Google a révoqué une clé du contrôle matériel de ce téléphone, par exemple parce qu\'elle a fuité. L\'état du bootloader et du système que ce contrôle indique peut être falsifié.</string>
+    <string name="finding_attestation_unconfirmed_title">Contrôle matériel non confirmé</string>
+    <string name="finding_attestation_unconfirmed_body">Le contrôle matériel de ce téléphone n\'est pas signé avec la clé d\'attestation de Google : l\'état du bootloader et du système qu\'il indique ne peut donc pas être confirmé. Certains fabricants hors du programme de Google utilisent leur propre clé ; un système modifié peut aussi en être la cause.</string>
     <string name="finding_vpn_active_title">Un VPN est actif</string>
     <string name="finding_vpn_active_body">Tout le trafic passe actuellement par une appli VPN. Assurez-vous qu\'elle est digne de confiance.</string>
 

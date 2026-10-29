@@ -45,7 +45,24 @@ data class Integrity(
     val verifiedBoot: Int?,
     /** Security patch level as `YYYYMM`. */
     val osPatchLevel: Int?,
+    /** Whether the attestation's certificate chain leads to Google's attestation root. */
+    val trust: AttestationTrust,
 )
+
+/** Result of checking an attestation certificate chain; see [AttestationChain]. */
+enum class AttestationTrust {
+    /** Signed up to one of Google's attestation root keys, and nothing in the chain is revoked. */
+    GOOGLE_ROOT,
+
+    /** A valid chain to a root key that Google does not vouch for, such as the emulator's software key. */
+    OTHER_ROOT,
+
+    /** A certificate is not signed by the next one, so the chain proves nothing. */
+    BROKEN_CHAIN,
+
+    /** A certificate in the chain is on Google's revocation list, for example because its key leaked. */
+    REVOKED,
+}
 
 /** Device-wide facts. */
 data class DeviceFacts(

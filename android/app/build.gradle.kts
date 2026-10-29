@@ -158,6 +158,29 @@ abstract class CargoNdkTask : DefaultTask() {
  * Verifies the merged manifest and passes it on unchanged. Wired as a transform of
  * MERGED_MANIFEST, so every consumer (APK, bundle, install) depends on it and cannot bypass it.
  */
+/**
+ * Copies the bundled datasets (ADR 0015) into the APK's assets as `data/<name>/...`: the data with its
+ * LICENSE, SOURCE and REUSE sidecar files, but not the scripts that produce it.
+ */
+abstract class BundledDataTask : DefaultTask() {
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val dataDir: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val source = dataDir.get().asFile
+        val target = outputDir.get().asFile.resolve("data")
+        outputDir.get().asFile.deleteRecursively()
+        source.walkTopDown()
+            .filter { it.isFile && it.extension !in setOf("py", "sh") && !it.name.startsWith(".") }
+            .forEach { it.copyTo(target.resolve(it.relativeTo(source)), overwrite = true) }
+    }
+}
+
 abstract class ForbiddenPermissionsCheck : DefaultTask() {
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
@@ -254,7 +277,7 @@ androidComponents {
         val suffix = variant.name.replaceFirstChar(Char::uppercase)
 
         val cargoTask = tasks.register<CargoNdkTask>("cargoNdk$suffix") {
-            sources.from(fileTree(rustWorkspace) { exclude("target/**") })
+            sources.from(fileTree(rustWorkspace) { exclude("target/**", "fuzz/**") })
             sources.from(rootProject.layout.projectDirectory.file("../rust-toolchain.toml"))
             workspaceDir.set(rustWorkspace)
             abis.set(shippedAbis)
@@ -266,6 +289,11 @@ androidComponents {
             rustFlags.set(remappedRustFlags)
         }
         variant.sources.jniLibs?.addGeneratedSourceDirectory(cargoTask, CargoNdkTask::outputDir)
+
+        val dataTask = tasks.register<BundledDataTask>("bundledData$suffix") {
+            dataDir.set(repositoryRoot.dir("data"))
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(dataTask, BundledDataTask::outputDir)
 
         val permissionCheck = tasks.register<ForbiddenPermissionsCheck>("checkPermissions$suffix") {
             forbidden.set(forbiddenPermissions)

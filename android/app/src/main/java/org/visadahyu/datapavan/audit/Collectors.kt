@@ -235,8 +235,10 @@ class DeviceCollector(private val context: Context) {
 
     /**
      * Creates a throwaway key with an attestation challenge, reads the `KeyDescription` extension of
-     * its certificate and deletes the key again. A compromised system can tamper with this check on
-     * itself, so the result is reported as what the keystore states, never as proof.
+     * its certificate, checks the certificate chain against Google's attestation roots and revocation
+     * list, and deletes the key again. A compromised system can still tamper with this check on itself
+     * (with a leaked key that is not yet revoked), so the result is reported as what the keystore
+     * states, never as proof.
      */
     private fun integrity(): Integrity? {
         val store = try {
@@ -253,16 +255,20 @@ class DeviceCollector(private val context: Context) {
                     .build(),
             )
             generator.generateKeyPair()
-            val leaf = store.getCertificateChain(ATTESTATION_ALIAS)?.firstOrNull() as? X509Certificate
-            val extension = leaf?.getExtensionValue(KEY_DESCRIPTION_OID) ?: return null
+            val chain = store.getCertificateChain(ATTESTATION_ALIAS)?.filterIsInstance<X509Certificate>().orEmpty()
+            val extension = chain.firstOrNull()?.getExtensionValue(KEY_DESCRIPTION_OID) ?: return null
             val fields = NativeCore.parseAttestation(extension)
             Integrity(
                 securityLevel = fields[1].toInt(),
                 deviceLocked = fields[2].takeIf { it >= 0 }?.let { it == 1L },
                 verifiedBoot = fields[3].takeIf { it >= 0 }?.toInt(),
                 osPatchLevel = fields[4].takeIf { it >= 0 }?.toInt(),
+                trust = attestationChain().trust(chain),
             )
         } catch (_: java.security.GeneralSecurityException) {
+            null
+        } catch (_: java.io.IOException) {
+            // The bundled roots or revocation list could not be read; the smoke test catches this.
             null
         } catch (_: RuntimeException) {
             // Malformed extension (thrown by the Rust parser) or a keystore without attestation.
@@ -275,6 +281,11 @@ class DeviceCollector(private val context: Context) {
             }
         }
     }
+
+    private fun attestationChain(): AttestationChain =
+        context.assets.open(AttestationChain.ROOTS_ASSET).use { roots ->
+            context.assets.open(AttestationChain.REVOKED_ASSET).use { revoked -> AttestationChain.load(roots, revoked) }
+        }
 
     private companion object {
         const val SETTING_ADB_WIFI = "adb_wifi_enabled"

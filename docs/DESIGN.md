@@ -37,7 +37,7 @@ Each limit is a reason for the next stage. Where each one is addressed:
 
 | Limit in stage 1 | Stage 1 | Stage 2 (Device Owner) | Stage 3 (own OS) |
 |---|---|---|---|
-| A phone that is already compromised | Finds the risk and guides removal: revoke device-admin or accessibility access first, and use Android's safe mode for apps that resist. A hardware-attested check of the bootloader and verified-boot state; stronger when made from a second phone, because a compromised system can tamper with a check on itself | Provisioning starts from a factory reset; policies then allow only approved accessibility services and keyboards, and forbid unknown sources, debugging and user-installed certificate authorities | Verified boot with our own keys on trusted hardware |
+| A phone that is already compromised | Finds the risk and guides removal: revoke device-admin or accessibility access first, and use Android's safe mode for apps that resist. A hardware-attested check of the bootloader and verified-boot state, verified against Google's attestation roots and revocation list; stronger when made from a second phone, because a compromised system can tamper with a check on itself | Provisioning starts from a factory reset; policies then allow only approved accessibility services and keyboards, and forbid unknown sources, debugging and user-installed certificate authorities | Verified boot with our own keys on trusted hardware |
 | Content of encrypted traffic | **Never decrypted, by design.** Intercepting TLS would make Datapavan the threat it warns about. Instead: apps that bypass our resolver (their own encrypted DNS, hard-coded IPs) are flagged, client libraries are recognised by their TLS fingerprint, and volume and timing are used. Encrypted Client Hello will hide more server names over time, which shifts the weight to DNS and the IP-to-organisation data | Same | Same |
 | A circumvention tool running in VPN mode | Per-tool guides, in every UI language, for switching to proxy mode. The VPN-free checks still apply: genuine signature, risky access, hidden SDKs | Proxy mode enforced by policy | Per-app routing in the system |
 | System traffic that bypasses the VPN | Onboarding recommends *Always-on VPN* with *Block connections without VPN* | Lockdown enforced | Full control of the network stack |
@@ -77,11 +77,11 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 - **App inventory:** all installed apps (user and system), installer source, and first-install and last-update dates.
 - **Permission audit:** granted dangerous permissions, plus special access: accessibility, device admin, notification listener, usage access, VPN, overlay, install unknown apps, and battery-optimisation exemptions.
 - **Risk checks for VPN users:** VPN apps that also hold remote-control access (accessibility, overlay, device admin, notification listener), user-installed certificate authorities, and enabled USB or wireless debugging (see [RESTRICTED-REGIONS.md](RESTRICTED-REGIONS.md)).
-- **Device integrity:** bootloader lock and verified-boot state from hardware key attestation, with guided removal of risky apps (including Android's safe mode).
+- **Device integrity:** bootloader lock and verified-boot state from hardware key attestation, with the certificate chain checked against Google's attestation root keys and revocation list (a chain to another root, a broken chain or a revoked key is reported), with guided removal of risky apps (including Android's safe mode).
 - **Preinstalled data collectors:** system apps from data-collecting companies that the device maker ships (for example Meta's app manager and services on Samsung phones), with their state, their traffic (from M4) and a guide to disable them or remove them reversibly for the user.
 - **Sensor access:** apps that hold microphone, camera or location access, especially where the app's purpose does not need it; a link to the system's privacy dashboard (Android 12+), which shows when each app used them; and advice to prefer one-time grants.
 - **Strict sensor mode (guided):** Android does not let one app change another app's permissions, so stage 1 walks the user through every app with microphone, camera or location access, opens each app's permission page, recommends *Ask every time* or *Don't allow*, and warns when an app gains the access again. Voice assistants' wake-word listening ("Hey Google", Bixby) is named, with the setting that turns it off. Stage 2 enforces the same policy without the user's clicks.
-- **Tracker SDK detection:** scan each app's DEX class names on the device against a bundled tracker-signature database, including known proxy and remote-access SDKs. Installed circumvention tools are also checked against their official signing certificates, to catch modified copies.
+- **Tracker SDK detection:** scan each app's DEX class names on the device against a bundled tracker-signature database, including known proxy and remote-access SDKs. Installed circumvention tools are also checked against their official signing certificates, to catch modified copies. Datasets ship as signed data packs (Ed25519, never rolled back); a newer pack can be imported as a file, without network access. Every entry that names a company records its evidence and can be disputed publicly (ADR 0015).
 - **Network usage per app:** bytes up and down, split by foreground/background and Wi-Fi/mobile, read from `NetworkStatsManager` (needs the *Usage access* special permission).
 - **Plain-language card per app:** what it can access, what trackers it carries, how much it sends, and what the user can do about it.
 
@@ -183,30 +183,33 @@ detect it and explain the trade-off.
 |---|---|---|
 | Tracking app on the same device | Tries to read Datapavan's logs | No exported components except the launcher (plus AndroidX's ProfileInstallReceiver, guarded by the system-only DUMP permission); encrypted app-private storage |
 | Malicious app abusing Datapavan | Sends intents to change rules | Rules change only through our own UI; all IPC is internal |
-| Network attacker | Tampers with blocklist updates | Updates are optional and signed (Ed25519/minisign); pinned public key in the app |
+| Network attacker | Tampers with blocklist updates or data packs | Updates are optional and signed (Ed25519/minisign); pinned public key in the app; the signature is checked before parsing, and older packs are refused |
 | Supply-chain attacker | Compromises a dependency or our build | Pinned dependencies with SHA-256 verification, exclusive repository content, cargo-deny advisories in CI, reproducible builds, signed releases |
 | Device seizure or inspection | A phone check at a border or checkpoint; the connection log becomes evidence | No destination logging for flows chained through a circumvention proxy (default); selectable retention, including none; one-tap wipe |
 | State network observer | Sees that a device runs Datapavan (for example through list-update requests) | List updates are optional and can be imported as files; no other network traffic of our own |
-| Malformed or hostile packets | Crash or exploit the parser | Rust; fuzzing of all parsers (`cargo fuzz`); the forwarder fails closed |
+| Malformed or hostile input | Packets, DEX files of other apps, attestation certificates or data packs crash or exploit a parser | Rust; fuzzing of all parsers (`cargo fuzz`, also in CI); the forwarder fails closed |
 
 Beyond its own assets, Datapavan protects the user from untrusted VPN apps: remote control, modified
 copies of known tools, hidden proxy SDKs, inbound access from the VPN network, and interception through
 user-installed certificate authorities. See [RESTRICTED-REGIONS.md](RESTRICTED-REGIONS.md).
 
-## 9. Data sources (licences TBV)
+## 9. Data sources
 
-The enterprise flavour will be commercial, so every dataset must allow commercial use.
+The enterprise flavour will be commercial, so every dataset must allow commercial use. Licences were
+checked against each source on 2026-10-29; the details and obligations are in
+[ADR 0015](decisions/0015-dataset-licences.md).
 
-| Need | Candidates | Note |
+| Need | Source | Licence and use |
 |---|---|---|
-| Tracker SDK signatures | εxodus Privacy tracker database | Licence TBV |
-| Tracker domains | EasyPrivacy, HaGeZi, Disconnect | Licences TBV. **Avoid non-commercial licences**, e.g. DuckDuckGo Tracker Radar (CC BY-NC-SA, TBV) |
-| IP → ASN / organisation | iptoasn.com, DB-IP Lite | Licences TBV |
-| Official signing certificates of circumvention tools | Each project's official channels (website, F-Droid, signed releases) | Shipped as a signed list; each entry records its source and date |
-| Proxy and remote-access SDK signatures | Published security research | Licences TBV |
+| Attestation trust anchors and revoked keys | Google's root certificates (Android Developers documentation) and attestation revocation list | Roots: Apache-2.0, as the documentation states. Revocation list: no licence stated; facts published for verifiers; bundled since M2's hardening, released only if the legal review agrees |
+| Tracker SDK signatures | εxodus tracker database | ODbL 1.0; bundled from M3 as a derivative database, with the ODbL notice in the app |
+| Tracker domains | EasyPrivacy; εxodus network signatures | EasyPrivacy under CC BY-SA 3.0 or later (v0.2). HaGeZi (GPL-3.0) only after its upstream sources are checked. **Excluded as non-commercial:** Disconnect and DuckDuckGo Tracker Radar (both CC BY-NC-SA 4.0) |
+| IP → ASN / organisation | IPtoASN; DB-IP Lite as fallback | PDDL 1.0; CC BY 4.0 with attribution (v0.2) |
+| Official signing certificates of circumvention tools | Each project's official channels (website, F-Droid, signed releases) | Our list, CC0 1.0, signed; each entry records its source and date |
+| Proxy and remote-access SDK signatures | Published security research (εxodus has none) | Our list, CC0 1.0; facts only, each entry with its source and date |
 | Reference traffic measurements | The project's own lab phones | Our data; published with the reports |
-| Declared data-safety labels | Google Play listings | Terms of use TBV |
-| TLS client fingerprints | Public fingerprint methods and databases | Licences TBV; some methods restrict commercial use |
+| Declared data-safety labels | Google Play listings | Not collected automatically (Play terms and robots.txt). The app links to the listing; the lab cites labels by hand; at scale, DSA Article 40(12) or Google's permission |
+| TLS client fingerprints | JA3 and JA4, computed by our own code | BSD-3-Clause (v0.2). **Excluded:** JA4+ (FoxIO License, no commercial use without an OEM licence) |
 
 ## 10. Tech stack
 
@@ -215,7 +218,7 @@ The enterprise flavour will be commercial, so every dataset must allow commercia
 - **Bridge:** direct JNI through the `jni` crate. We chose it over UniFFI because UniFFI's Kotlin bindings depend on JNA (about 1.5 MB, and reflection-based), while our JNI surface stays tiny: a version call today, and start/stop/query for the engine later. Netstack candidates to evaluate in the spike: `smoltcp`, `ipstack`.
 - **Supply chain:** Google's artifact groups may come only from Google's repository and everything else only from Maven Central (`exclusiveContent`); Gradle dependency verification (SHA-256 of every artifact, generated from an empty Gradle home); the Gradle distribution is pinned by checksum and the wrapper jar is validated in CI; native libraries are built with remapped paths and a controlled cargo environment; `Cargo.lock` is committed and every build uses `--locked`; `cargo deny` checks licences, sources and advisories.
 - **Quality gates:** `scripts/check.sh` runs everything that CI runs. That covers rustfmt; Clippy (pedantic, warnings as errors) for the host and both Android targets; Rust tests; cargo-deny; Android Lint for debug and release (warnings as errors); unit tests; APK and bundle builds; the forbidden-permission guard, wired into the manifest pipeline so no build path can skip it; and a check that every APK carries the Rust library with its JNI export.
-- **CI:** GitHub Actions (actions pinned by commit SHA), calling the same `scripts/check.sh` as local builds, then, on an Android 15 emulator, `scripts/smoke.sh` (the audit overview appears, the app holds no INTERNET permission, and it does not crash) and `scripts/verify-audit.sh`, which installs a test fixture app built from `scripts/fixture-app` with the SDK's tools only, gives it and the device risky access over adb (an enabled accessibility service on a VPN app, the right to install apps, sensors, a user-installed certificate authority) and checks that the audit reports each one. Both need only adb, so they add no test dependencies; the smoke test also runs against a phone.
+- **CI:** GitHub Actions (actions pinned by commit SHA), calling the same `scripts/check.sh` as local builds, then, on an Android 15 emulator, `scripts/smoke.sh` (the audit overview appears, the app holds no INTERNET permission, and it does not crash) and `scripts/verify-audit.sh`, which installs a test fixture app built from `scripts/fixture-app` with the SDK's tools only, gives it and the device risky access over adb (an enabled accessibility service on a VPN app, the right to install apps, sensors, a user-installed certificate authority) and checks that the audit reports each one. Both need only adb, so they add no test dependencies; the smoke test also runs against a phone. Then `scripts/screenshots.sh` takes screenshots of the overview in every UI language and both pseudo-locales, kept as a build artifact, and checks each screen's accessibility (every tappable element has a label for screen readers and is at least 48 dp). A second job fuzzes every Rust parser for two minutes (`scripts/fuzz.sh`, cargo fuzz on a pinned nightly).
 - **Quality:** Kotlin and Rust unit tests, parser fuzzing, the emulator smoke test, and a manual test matrix on the A40 and A56.
 - **Release:** reproducible builds, F-Droid metadata, signed APKs.
 - **JDK:** Gradle runs on JDK 21, pinned through Gradle's daemon JVM criteria.
@@ -240,7 +243,7 @@ native reviewers are found.
 
 **Testing**
 - Debug builds enable the Android pseudo-locales `en-XA` (accented, longer text) and `ar-XB` (RTL). This tests layout before any translation exists.
-- CI takes screenshots of key screens in English, `en-XA`, `ar-XB` and Persian.
+- CI takes screenshots of the audit overview in English, French, German, Persian, `en-XA` and `ar-XB`, with an accessibility check of each screen (`scripts/screenshots.sh`; app-specific languages need Android 13, so it runs on the Android 15 emulator).
 
 **Language selection:** per-app language through the system setting on Android 13+, generated by
 `locales_config`, plus an in-app picker on older versions.
@@ -264,13 +267,15 @@ datapavan/
     decisions/         architecture decision records (ADRs)
     spikes/            feasibility spikes and their findings
   android/             Android app (Kotlin); Gradle project root
-  core/                Rust workspace: engine/ (no unsafe) and jni/ (bridge)
+  core/                Rust workspace: engine/ (no unsafe) and jni/ (bridge); fuzz/ (cargo fuzz targets, nightly, not in the workspace)
   brand/               logo SVGs and brand guide
   scripts/check.sh     all quality gates; CI calls it
   scripts/smoke.sh     smoke test on an emulator or phone over adb; CI calls it
   scripts/verify-audit.sh   end-to-end check of the audit's findings on an emulator; CI calls it
   scripts/fixture-app/ test app with risky access, built without Gradle, for verify-audit.sh
-  data/                (from M3) bundled dataset snapshots + their LICENSE files
+  scripts/screenshots.sh    screenshots in every language with an accessibility check (a11y-check.py); CI calls it
+  scripts/fuzz.sh      runs every fuzz target; CI calls it
+  data/                bundled dataset snapshots, each with LICENSE, SOURCE and its converter (ADR 0015); attestation/ holds Google's attestation roots and revocation list
 ```
 
 ## 13. Milestones for v0.1 "Audit"
@@ -304,6 +309,7 @@ Each decision is recorded in full, with context and consequences, as an ADR in
 | [0012](decisions/0012-packet-engine.md) | Packet engine for the local VPN | Proposed (spike pending) |
 | [0013](decisions/0013-github-as-home.md) | GitHub as the only home; Codeberg dropped | Accepted |
 | [0014](decisions/0014-v0.1-permissions.md) | Permissions for v0.1 "Audit" | Accepted |
+| [0015](decisions/0015-dataset-licences.md) | Licences of bundled datasets | Accepted |
 
 ## 15. Names
 

@@ -23,7 +23,7 @@ The app cannot open a network connection. That is the strongest trust signal we 
 |---|---|---|
 | M1 | Skeleton: Android app, Rust core, JNI bridge, i18n and RTL, quality gates, CI, brand | ✅ |
 | M2 | App inventory and permission audit, including special access (accessibility, notification listener, device admin, overlay, usage access, VPN, install unknown apps, battery-optimisation exemptions), plus risk checks for VPN users: VPN apps with remote-control access, user-installed certificate authorities, enabled debugging; device integrity from hardware key attestation. Preinstalled system apps from data-collecting companies (for example Meta's services that device makers ship), with their state and a guide to disable or remove them reversibly. Apps that hold microphone, camera or location access, with a link to the system's privacy dashboard | ✅ |
-| M3 | Tracker SDK scanner: a DEX parser in the Rust engine, matched against a tracker-signature database that includes known proxy and remote-access SDKs; installed circumvention tools checked against their official signing certificates | ⏳ |
+| M3 | Tracker SDK scanner: a DEX parser in the Rust engine, matched against a tracker-signature database that includes known proxy and remote-access SDKs; installed circumvention tools checked against their official signing certificates. Datasets ship as signed data packs that the user can also import as files, without network access; each entry that names a company records its evidence, with a public way to dispute it (ADR 0015) | ⏳ |
 | M4 | Network usage per app, from `NetworkStatsManager` | ⏳ |
 | M5 | Plain-language UI, brand theme, first release on GitHub, submission to F-Droid | ⏳ |
 
@@ -55,7 +55,7 @@ starts, a two-week spike picks the packet engine (Rust netstack or Go gVisor). D
 
 - A weekly plain-language report, exportable as PDF or JSON.
 - A GDPR Article 15 helper: for each company whose trackers were observed, a ready-to-send data-access request.
-- Declared against observed: each app's data-safety label on Google Play compared with what Datapavan saw.
+- Declared against observed: each app's data-safety label on Google Play compared with what Datapavan saw. The labels come from the lab, cited by hand, until researcher access under DSA Article 40(12) or Google's permission allows more (ADR 0015).
 
 ---
 

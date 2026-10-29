@@ -9,16 +9,21 @@ screen_has() {
     adb shell cat "$DUMP" 2>/dev/null | grep -q "text=\"$1"
 }
 
-# Lists only compose what is on screen, so scroll down (up to six times) until the text shows.
-scroll_to() {
+# Scrolls the list down by about half a screen.
+swipe_up() {
     local size width height
     size=$(adb shell wm size | tr -d '\r' | sed -n 's/.*: \([0-9]*\)x\([0-9]*\)$/\1 \2/p' | tail -1)
     width=${size% *}
     height=${size#* }
+    adb shell input swipe $((width / 2)) $((height * 3 / 4)) $((width / 2)) $((height / 4)) 300
+    sleep 1
+}
+
+# Lists only compose what is on screen, so scroll down (up to six times) until the text shows.
+scroll_to() {
     for _ in 1 2 3 4 5 6; do
         screen_has "$1" && return 0
-        adb shell input swipe $((width / 2)) $((height * 3 / 4)) $((width / 2)) $((height / 4)) 300
-        sleep 1
+        swipe_up
     done
     screen_has "$1"
 }
@@ -55,6 +60,18 @@ start_audit() {
     adb shell am start -n "$pkg/.MainActivity" >/dev/null
     for _ in $(seq 1 60); do
         screen_has "This phone" && return 0
+        sleep 1
+    done
+    return 1
+}
+
+# Waits until the audit overview shows, in any language: the loading screen has nothing to tap.
+wait_for_overview() {
+    for _ in $(seq 1 60); do
+        if adb shell uiautomator dump "$DUMP" >/dev/null 2>&1 &&
+            adb shell cat "$DUMP" | grep -q 'clickable="true"'; then
+            return 0
+        fi
         sleep 1
     done
     return 1
