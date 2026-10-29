@@ -11,6 +11,7 @@ enum class FindingKind(val severity: Severity) {
     PREINSTALLED_COLLECTOR(Severity.MEDIUM),
     INSTALLS_APPS(Severity.MEDIUM),
     SENSORS(Severity.LOW),
+    TRACKERS(Severity.LOW),
     UNKNOWN_SOURCE(Severity.INFO),
 
     // Device
@@ -87,13 +88,15 @@ object Rules {
         else -> ReviewStatus.CHANGED
     }
 
-    fun forApp(app: AppFacts): List<FindingKind> = buildList {
+    /** [trackers] is the tracker scan of the app, or null while it is still running. */
+    fun forApp(app: AppFacts, trackers: AppTrackers? = null): List<FindingKind> = buildList {
         val control = app.special intersect REMOTE_CONTROL
         if (app.isVpnApp && control.isNotEmpty()) add(FindingKind.VPN_WITH_REMOTE_CONTROL)
         if (!app.isVpnApp && !app.isSystem && control.isNotEmpty()) add(FindingKind.REMOTE_CONTROL)
         if (app.isSystem && app.enabled && KnownCollectors.companyOf(app.packageName) != null) add(FindingKind.PREINSTALLED_COLLECTOR)
         if (!app.isSystem && SpecialAccess.INSTALL_UNKNOWN_APPS in app.special) add(FindingKind.INSTALLS_APPS)
         if (!app.isSystem && app.sensors.isNotEmpty()) add(FindingKind.SENSORS)
+        if (trackers != null && trackers.embedded.isNotEmpty()) add(FindingKind.TRACKERS)
         if (!app.isSystem && app.installer !in KNOWN_STORES) add(FindingKind.UNKNOWN_SOURCE)
     }.sortedBy { it.severity }
 

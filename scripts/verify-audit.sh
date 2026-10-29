@@ -83,7 +83,8 @@ enable_fixture_accessibility() {
 echo "== Audit verification on Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
 
 # The fixture: a VPN app with an enabled accessibility service, microphone, camera and location,
-# allowed to install apps, and installed over adb rather than from a store.
+# allowed to install apps, installed over adb rather than from a store, and with a class that
+# matches a tracker signature (Sentry).
 fixture_apk=$("$ROOT/scripts/fixture-app/build.sh" | tail -1)
 # Each build signs with a new throwaway key, so a fixture left behind would block the install.
 adb uninstall "$FIXTURE" >/dev/null 2>&1 || true
@@ -114,6 +115,7 @@ start_audit || fail "the audit overview did not appear"
 expect "USB debugging is on"
 [ -z "$CA_FILE" ] || expect "Extra certificate authority installed"
 expect "No hardware check available"
+wait_for_tracker_scan || fail "the tracker scan did not finish"
 
 tap_text "Datapavan test fixture" || fail "the fixture app is not listed"
 sleep 1
@@ -124,5 +126,7 @@ expect "VPN app that can control the phone"
 expect "Can install other apps"
 expect "Microphone, camera or location"
 expect "Not from a known app store"
+expect "Contains trackers"
+expect "Sentry (crash reporting)"
 
 echo "== audit verification passed"

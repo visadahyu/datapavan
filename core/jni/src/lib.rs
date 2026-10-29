@@ -9,9 +9,15 @@
 //! `panic = "abort"`, which ends the process first.
 
 use datapavan_engine::attestation::{self, SecurityLevel, VerifiedBootState};
+use datapavan_engine::trackers::Signatures;
 use jni::EnvUnowned;
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
-use jni::objects::{JByteArray, JClass, JLongArray, JString};
+use jni::objects::{JByteArray, JClass, JIntArray, JLongArray, JString};
+use jni::sys::jint;
+use std::sync::{Arc, RwLock};
+
+/// The tracker signatures that `loadTrackers` read, shared by every `scanDex` call.
+static TRACKERS: RwLock<Option<Arc<Signatures>>> = RwLock::new(None);
 
 /// `org.visadahyu.datapavan.core.NativeCore.version()`: the engine version string.
 // SAFETY: `no_mangle` exports this function under the JNI-mangled name the JVM resolves for
@@ -77,4 +83,66 @@ fn encode(description: &attestation::KeyDescription) -> [i64; 5] {
         boot,
         patch,
     ]
+}
+
+/// `org.visadahyu.datapavan.core.NativeCore.loadTrackers(String)`: reads the tracker signatures
+/// (`data/exodus/trackers.tsv`) and keeps them for `scanDex`, replacing any loaded before. Returns
+/// the number of trackers; malformed data throws a `RuntimeException`.
+// SAFETY: `no_mangle` exports this function under the JNI-mangled name the JVM resolves for
+// `NativeCore.loadTrackers`. The name is unique within this library, and the signature matches the
+// static Kotlin declaration `external fun loadTrackers(tsv: String): Int`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_core_NativeCore_loadTrackers<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    tsv: JString<'caller>,
+) -> jint {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let signatures = Signatures::parse(&tsv.try_to_string(env)?)
+                .map_err(|e| Error::ParseFailed(e.to_string()))?;
+            let count = jint::try_from(signatures.trackers().len()).unwrap_or(jint::MAX);
+            let mut slot = TRACKERS
+                .write()
+                .map_err(|_| Error::ParseFailed("tracker signatures are unavailable".to_owned()))?;
+            *slot = Some(Arc::new(signatures));
+            Ok(count)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `org.visadahyu.datapavan.core.NativeCore.scanDex(byte[])`: finds the loaded trackers in one DEX
+/// file. The result is `[n, e1..en, r1..rm]`: the number of embedded trackers, their εxodus ids,
+/// then the ids of the referenced ones, which include the embedded. A malformed file, or no loaded
+/// signatures, throws a `RuntimeException`.
+// SAFETY: `no_mangle` exports this function under the JNI-mangled name the JVM resolves for
+// `NativeCore.scanDex`. The name is unique within this library, and the signature matches the
+// static Kotlin declaration `external fun scanDex(dex: ByteArray): IntArray`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_core_NativeCore_scanDex<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    dex: JByteArray<'caller>,
+) -> JIntArray<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let signatures = TRACKERS
+                .read()
+                .ok()
+                .and_then(|slot| slot.clone())
+                .ok_or_else(|| Error::ParseFailed("no tracker signatures loaded".to_owned()))?;
+            let bytes = env.convert_byte_array(&dex)?;
+            let scan = signatures
+                .scan_dex(&bytes)
+                .map_err(|e| Error::ParseFailed(e.to_string()))?;
+            let to_jint = |id: &u32| jint::try_from(*id).unwrap_or(jint::MAX);
+            let mut result = Vec::with_capacity(1 + scan.embedded.len() + scan.referenced.len());
+            result.push(jint::try_from(scan.embedded.len()).unwrap_or(jint::MAX));
+            result.extend(scan.embedded.iter().map(to_jint));
+            result.extend(scan.referenced.iter().map(to_jint));
+            let array = JIntArray::new(env, result.len())?;
+            array.set_region(env, 0, &result)?;
+            Ok(array)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
 }

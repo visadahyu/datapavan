@@ -89,3 +89,17 @@ wait_for_overview() {
     done
     return 1
 }
+
+# Waits (up to $1 seconds, default 300) until the tracker scan has finished: its result line,
+# "Apps with trackers", appears under the app summary. The first scan of a phone reads every app's
+# code; later ones reuse the results of unchanged apps.
+wait_for_tracker_scan() {
+    local deadline=$((SECONDS + ${1:-300}))
+    while [ "$SECONDS" -lt "$deadline" ]; do
+        if scroll_to "Apps checked:" && adb shell cat "$DUMP" | grep -q 'text="Apps with trackers: '; then
+            return 0
+        fi
+        sleep 3
+    done
+    return 1
+}

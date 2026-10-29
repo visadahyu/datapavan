@@ -58,6 +58,15 @@ struct Pattern {
     key_end: usize,
 }
 
+/// The trackers found in one DEX file, by εxodus id.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct DexScan {
+    /// Trackers whose classes the file defines: their code is in the app.
+    pub embedded: Vec<u32>,
+    /// Trackers whose classes the file refers to; includes the embedded ones.
+    pub referenced: Vec<u32>,
+}
+
 /// The tracker database, ready for matching.
 pub struct Signatures {
     trackers: Vec<Tracker>,
@@ -147,6 +156,29 @@ impl Signatures {
             .enumerate()
             .filter_map(|(index, &hit)| hit.then_some(index))
             .collect()
+    }
+}
+
+impl Signatures {
+    /// Scans one DEX file. An app's result is the union over all its DEX files, in every APK it is
+    /// installed from; a tracker that is referenced but embedded in none of them is referenced only.
+    ///
+    /// # Errors
+    ///
+    /// Returns the parser's error when the file is not a well-formed DEX file.
+    pub fn scan_dex(&self, dex: &[u8]) -> Result<DexScan, crate::dex::Error> {
+        let defined = crate::dex::defined_classes(dex)?;
+        let referenced = crate::dex::referenced_classes(dex)?;
+        let ids = |found: Vec<usize>| -> Vec<u32> {
+            found
+                .into_iter()
+                .filter_map(|index| self.trackers.get(index).map(|t| t.id))
+                .collect()
+        };
+        Ok(DexScan {
+            embedded: ids(self.find(defined.iter().map(String::as_str))),
+            referenced: ids(self.find(referenced.iter().map(String::as_str))),
+        })
     }
 }
 
@@ -283,7 +315,7 @@ fn usize_of(state: u32) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{Error, Signatures};
+    use super::{DexScan, Error, Signatures};
     use std::fmt::Write as _;
 
     fn tsv(signatures: &[&str]) -> String {
@@ -434,6 +466,24 @@ mod tests {
                 "{signature}"
             );
         }
+    }
+
+    #[test]
+    fn scans_a_real_dex_file() {
+        let fixture = include_bytes!("../testdata/fixture.dex");
+        let tsv = "7\tOwn\t\t\torg.visadahyu.datapavan.fixture.Fixture\t\n\
+                   8\tPlatform\t\t\tandroid.net.VpnService\t\n\
+                   9\tAbsent\t\t\tcom.example.absent\t\n";
+        let scan = Signatures::parse(tsv).map(|s| s.scan_dex(fixture));
+        assert_eq!(
+            scan,
+            Ok(Ok(DexScan {
+                embedded: vec![7],
+                referenced: vec![7, 8]
+            }))
+        );
+        let broken = Signatures::parse(tsv).map(|s| s.scan_dex(&fixture[..100]).is_err());
+        assert_eq!(broken, Ok(true));
     }
 
     #[test]

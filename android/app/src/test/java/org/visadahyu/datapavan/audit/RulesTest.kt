@@ -140,4 +140,13 @@ class RulesTest {
         val integrity = Integrity(0, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_608, trust = AttestationTrust.OTHER_ROOT)
         assertEquals(listOf(FindingKind.INTEGRITY_SOFTWARE_ONLY), Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610))
     }
+
+    @Test
+    fun `embedded trackers are a finding, referenced ones are not`() {
+        val app = app()
+        assertTrue(FindingKind.TRACKERS !in Rules.forApp(app))
+        assertTrue(FindingKind.TRACKERS !in Rules.forApp(app, AppTrackers(emptyList(), listOf(52))))
+        assertTrue(FindingKind.TRACKERS in Rules.forApp(app, AppTrackers(listOf(447), emptyList())))
+        assertTrue(FindingKind.TRACKERS !in Rules.forApp(app, AppTrackers(emptyList(), emptyList(), unreadable = true)))
+    }
 }

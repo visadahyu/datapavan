@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Smoke test on a connected device or emulator: installs the debug APK, starts the app, and checks
-# that the audit overview appears, that the app holds no INTERNET permission, and that it did not
-# crash. It needs nothing but adb, so it adds no test dependencies. CI runs it on an emulator; run
+# that the audit overview appears, that the tracker scan of every app finishes, that the app holds
+# no INTERNET permission, and that it did not crash. It needs nothing but adb, so it adds no test dependencies. CI runs it on an emulator; run
 # it locally against a phone with USB debugging (set ANDROID_SERIAL if several are connected).
 #
 #   scripts/smoke.sh [path/to/app-debug.apk]
@@ -26,6 +26,8 @@ adb logcat -c
 start_audit || fail "the audit overview did not appear within 60 seconds"
 scroll_to "Apps checked:" || fail "the app summary is missing"
 echo "ok: audit overview shown"
+wait_for_tracker_scan || fail "the tracker scan did not finish within 5 minutes"
+echo "ok: tracker scan finished"
 
 if adb shell dumpsys package "$PKG" | grep -q "android.permission.INTERNET"; then
     fail "the installed app holds the INTERNET permission"

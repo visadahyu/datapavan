@@ -22,4 +22,20 @@ internal object NativeCore {
      */
     @JvmStatic
     external fun parseAttestation(extension: ByteArray): LongArray
+
+    /**
+     * Reads the tracker signatures (`data/exodus/trackers.tsv`) into the engine for [scanDex],
+     * replacing any loaded before, and returns the number of trackers. Throws a `RuntimeException`
+     * on malformed data.
+     */
+    @JvmStatic
+    external fun loadTrackers(tsv: String): Int
+
+    /**
+     * Finds the loaded trackers in one DEX file of another app (untrusted input, parsed in Rust).
+     * Returns `[n, e1..en, r1..rm]`: n embedded εxodus ids, then the referenced ids, which include
+     * the embedded ones. Throws a `RuntimeException` on a malformed file.
+     */
+    @JvmStatic
+    external fun scanDex(dex: ByteArray): IntArray
 }
