@@ -38,16 +38,29 @@ for locale in en fr de fa en-XA ar-XB; do
         exit 1
     fi
     # The top of the overview, then one screen further down, where the app list starts.
+    passed=1
     for part in 1 2; do
         if [ "$part" = 2 ]; then
             swipe_up
-            adb shell uiautomator dump "$DUMP" >/dev/null
+            dumped=""
+            # uiautomator gives up while the screen is still moving, so it gets three tries.
+            for _ in 1 2 3; do
+                if adb shell uiautomator dump "$DUMP" >/dev/null 2>&1; then
+                    dumped=1
+                    break
+                fi
+                sleep 1
+            done
+            if [ -z "$dumped" ]; then
+                echo "SCREENSHOTS FAILED: no UI dump of the second screen in $locale" >&2
+                exit 1
+            fi
         fi
         adb exec-out screencap -p >"$OUT/overview-$locale-$part.png"
         adb shell cat "$DUMP" >"$OUT/overview-$locale-$part.xml"
-        python3 -I "$ROOT/scripts/a11y-check.py" "$OUT/overview-$locale-$part.xml" "$min_px" || failed=1
+        python3 -I "$ROOT/scripts/a11y-check.py" "$OUT/overview-$locale-$part.xml" "$min_px" || passed=""
     done
-    echo "ok: $locale"
+    if [ -n "$passed" ]; then echo "ok: $locale"; else echo "problems: $locale"; failed=1; fi
 done
 
 [ "$failed" -eq 0 ] || { echo "SCREENSHOTS FAILED: accessibility problems above" >&2; exit 1; }

@@ -3,8 +3,8 @@
 
 Every clickable element must have a label that a screen reader can announce (its own text or content
 description, or one of its children's), and must be at least the minimum touch size in both
-directions. Elements cut off by the edge of a scrolling list are not size-checked, because only their
-visible part is measured.
+directions. Elements cut off by the edge of a scrolling list are skipped: the dump measures only their
+visible part and leaves out the children that are off screen, label included.
 
     python3 -I scripts/a11y-check.py DUMP.xml MIN_SIZE_PX
 """
@@ -28,9 +28,6 @@ def main() -> int:
         if node.get("clickable") != "true" or node.get("package") != PACKAGE:
             continue
         box = bounds(node)
-        label = next((n.get("text") or n.get("content-desc") for n in node.iter() if n.get("text") or n.get("content-desc")), "")
-        if not label:
-            problems.append(f"clickable element without a label at {node.get('bounds')}")
         clipped = False
         ancestor = parents.get(node)
         while ancestor is not None:
@@ -39,7 +36,12 @@ def main() -> int:
                 clipped = box[1] <= outer[1] or box[3] >= outer[3]
                 break
             ancestor = parents.get(ancestor)
-        if not clipped and (box[2] - box[0] < min_px or box[3] - box[1] < min_px):
+        if clipped:
+            continue
+        label = next((n.get("text") or n.get("content-desc") for n in node.iter() if n.get("text") or n.get("content-desc")), "")
+        if not label:
+            problems.append(f"clickable element without a label at {node.get('bounds')}")
+        if box[2] - box[0] < min_px or box[3] - box[1] < min_px:
             problems.append(f"touch target smaller than 48 dp at {node.get('bounds')}: {label[:40]!r}")
     for problem in problems:
         print(f"{path}: {problem}", file=sys.stderr)
