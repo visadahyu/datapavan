@@ -86,6 +86,8 @@ expect "No hardware check available"
 
 tap_text "Datapavan test fixture" || fail "the fixture app is not listed"
 sleep 1
+# The fixture's own page, not another app's: its name above the findings heading.
+screen_has "What we found" && screen_has "Datapavan test fixture" || fail "the fixture's page did not open"
 scroll_to_top
 expect "VPN app that can control the phone"
 expect "Can install other apps"

@@ -39,12 +39,25 @@ scroll_to_top() {
     done
 }
 
-# Taps the centre of the first element whose text is exactly $1, scrolling to it first.
+# Bounds of the first element whose text is exactly $1 in the last dump, as "left top right bottom".
+text_bounds() {
+    adb shell cat "$DUMP" | grep -o "text=\"$1\"[^>]*bounds=\"[^\"]*\"" | head -1 | grep -o 'bounds="[^"]*"' | grep -o '[0-9]\+' | tr '\n' ' '
+}
+
+# Taps the centre of the first element whose text is exactly $1, scrolling to it first. A list can
+# still be moving after a swipe, and a tap would then hit another row, so it taps only once the
+# element is in the same place in two dumps a second apart.
 tap_text() {
     scroll_to "$1" || return 1
-    local bounds
-    bounds=$(adb shell cat "$DUMP" | grep -o "text=\"$1\"[^>]*bounds=\"[^\"]*\"" | head -1 | grep -o 'bounds="[^"]*"' | grep -o '[0-9]\+' | tr '\n' ' ')
-    [ -n "$bounds" ] || return 1
+    local bounds previous=""
+    for _ in 1 2 3 4 5; do
+        bounds=$(text_bounds "$1")
+        [ -n "$bounds" ] && [ "$bounds" = "$previous" ] && break
+        previous=$bounds
+        sleep 1
+        adb shell uiautomator dump "$DUMP" >/dev/null 2>&1 || true
+    done
+    [ -n "$bounds" ] && [ "$bounds" = "$previous" ] || return 1
     set -- $bounds
     adb shell input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 ))
 }
