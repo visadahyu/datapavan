@@ -1,11 +1,21 @@
 # CI for the repository. Runs the same quality gates as a local build.
 # All logic lives in scripts/check.sh; this file only prepares the toolchain.
 # Actions are pinned by full commit SHA, because tags can be moved.
+# Fuzzing has its own workflow (fuzz.yml).
 name: CI
 
+# A push that changes only documentation or brand files has nothing for CI to check.
 on:
   push:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "brand/**"
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "brand/**"
 
 permissions:
   contents: read
@@ -15,7 +25,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # main moves only by fast-forward to a commit that already passed CI on its working branch. The
+  # same commit would then be checked twice; this job finds the earlier run, and the checks are
+  # skipped. A commit pushed to main directly, or a pull request, is always checked.
+  already-passed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      passed: ${{ steps.lookup.outputs.passed }}
+    steps:
+      - id: lookup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          passed=false
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]; then
+            earlier=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&status=success" \
+              --jq '[.workflow_runs[] | select(.head_branch != "main")] | length')
+            if [ "$earlier" -gt 0 ]; then passed=true; fi
+          fi
+          echo "passed=$passed" >>"$GITHUB_OUTPUT"
+          echo "This commit already passed CI on a working branch: $passed"
+
   checks:
+    needs: already-passed
+    if: needs.already-passed.outputs.passed != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     env:
@@ -104,40 +140,4 @@ jobs:
         with:
           name: screenshots
           path: build/screenshots/
-          if-no-files-found: ignore
-
-  # Every parser in the Rust engine, fuzzed with cargo fuzz on a pinned nightly (scripts/fuzz.sh).
-  fuzz:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    env:
-      CARGO_FUZZ_VERSION: "0.13.2"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Cache cargo-fuzz
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cargo/bin/cargo-fuzz
-          key: cargo-fuzz-${{ runner.os }}-${{ env.CARGO_FUZZ_VERSION }}
-
-      - name: Nightly toolchain and cargo-fuzz
-        run: |
-          # The nightly date has a single source of truth: scripts/fuzz.sh.
-          nightly=$(sed -n 's/^NIGHTLY=//p' scripts/fuzz.sh)
-          test -n "$nightly"
-          rustup toolchain install "$nightly" --profile minimal
-          command -v cargo-fuzz || cargo +"$nightly" install cargo-fuzz --version "$CARGO_FUZZ_VERSION" --locked
-
-      - name: Fuzz
-        run: scripts/fuzz.sh 120
-
-      - name: Keep the inputs that found a bug
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: fuzz-artifacts
-          path: core/fuzz/artifacts/
           if-no-files-found: ignore

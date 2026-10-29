@@ -1,0 +1,73 @@
+# Fuzzing of every parser in the Rust engine with cargo fuzz on a pinned nightly (scripts/fuzz.sh):
+# a short run when a working branch or a pull request changes the engine, a long run every week on
+# main, which finds what short runs miss, and a long run by hand from the Actions tab.
+# Actions are pinned by full commit SHA, because tags can be moved.
+name: Fuzz
+
+on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - "core/**"
+      - "scripts/fuzz.sh"
+      - ".github/workflows/fuzz.yml"
+  pull_request:
+    paths:
+      - "core/**"
+      - "scripts/fuzz.sh"
+      - ".github/workflows/fuzz.yml"
+  schedule:
+    - cron: "17 3 * * 1" # Mondays, 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CARGO_FUZZ_VERSION: "0.13.2"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Cache cargo-fuzz
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin/cargo-fuzz
+          key: cargo-fuzz-${{ runner.os }}-${{ env.CARGO_FUZZ_VERSION }}
+
+      - name: Nightly toolchain and cargo-fuzz
+        run: |
+          # The nightly date has a single source of truth: scripts/fuzz.sh.
+          nightly=$(sed -n 's/^NIGHTLY=//p' scripts/fuzz.sh)
+          test -n "$nightly"
+          rustup toolchain install "$nightly" --profile minimal
+          command -v cargo-fuzz || cargo +"$nightly" install cargo-fuzz --version "$CARGO_FUZZ_VERSION" --locked
+
+      # The corpus grows with every run, so later runs start where earlier ones stopped.
+      - name: Corpus from earlier runs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: core/fuzz/corpus
+          key: fuzz-corpus-${{ github.run_id }}
+          restore-keys: fuzz-corpus-
+
+      - name: Fuzz
+        # Two minutes per target on a push or pull request, twenty in the weekly and manual runs.
+        run: scripts/fuzz.sh ${{ (github.event_name == 'push' || github.event_name == 'pull_request') && 120 || 1200 }}
+
+      - name: Keep the inputs that found a bug
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-artifacts
+          path: core/fuzz/artifacts/
+          if-no-files-found: ignore
