@@ -31,7 +31,7 @@ An app on a stock phone has hard limits. We state them openly, because overclaim
 | Cut network access per app (Wi-Fi / mobile / background) | Control firmware, the modem or the bootloader (stage 3) |
 | Flag apps that hold high-risk permissions or special access | Guarantee that every system component goes through the VPN |
 | Flag VPN apps that could control the phone, and modified copies of known circumvention tools | Clean a phone that is already compromised |
-| Show when the microphone or camera was used, including with the screen off | Name the recording app with certainty: Android hides it from other apps, so we infer it |
+| Show when the microphone or camera was used, including with the screen off, and which app used it: exactly with an optional one-time grant over USB, otherwise inferred | Watch every app's sensor use live: Android hides other apps' activity from apps, which protects users from spying apps; stage 3 does it natively |
 
 Each limit is a reason for the next stage. Where each one is addressed:
 
@@ -41,6 +41,7 @@ Each limit is a reason for the next stage. Where each one is addressed:
 | Content of encrypted traffic | **Never decrypted, by design.** Intercepting TLS would make Datapavan the threat it warns about. Instead: apps that bypass our resolver (their own encrypted DNS, hard-coded IPs) are flagged, client libraries are recognised by their TLS fingerprint, and volume and timing are used. Encrypted Client Hello will hide more server names over time, which shifts the weight to DNS and the IP-to-organisation data | Same | Same |
 | A circumvention tool running in VPN mode | Per-tool guides, in every UI language, for switching to proxy mode. The VPN-free checks still apply: genuine signature, risky access, hidden SDKs | Proxy mode enforced by policy | Per-app routing in the system |
 | System traffic that bypasses the VPN | Onboarding recommends *Always-on VPN* with *Block connections without VPN* | Lockdown enforced | Full control of the network stack |
+| Which app is using the microphone or camera | Inferred from the foreground app; exact history with an optional one-time grant over USB | Same | Live, per-use consent in the system; partner hardware with sensor kill switches or an indicator light wired to the sensor's power |
 | Firmware, modem and bootloader | Not possible | Not possible | Partner hardware with a bootloader relockable with our keys |
 
 ## 3. Principles (non-negotiable)
@@ -90,6 +91,9 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 - Chained mode closes inbound access from the VPN provider's network and flags proxy-like behaviour, including the circumvention tool's own connections (see [VPN.md](VPN.md)).
 - Apps that bypass Datapavan's resolver (their own encrypted DNS, hard-coded IPs) are flagged; TLS fingerprints identify the client library behind a connection.
 - **Sensor activity log:** recording sessions of the microphone (`AudioManager` recording callbacks) and camera availability changes, with time and screen state, and an alert when either is used while the screen is off. Android redacts the recording app's identity for other apps, so it is inferred from the foreground app and running services, and the UI says so. A feasibility spike comes first.
+- **Advanced mode (optional):** `GET_APP_OPS_STATS` is a development permission, so the user can grant it once over USB (`adb shell pm grant`). Datapavan then reads Android's own per-app history of microphone and camera use, the record behind the privacy indicator and dashboard, and names the app exactly. A guide turns USB debugging on for the grant and off again, and the app checks that it is off. This needs its own ADR before it ships.
+- **Cross-checks:** Datapavan reports contradictions between two independent records. Sensors: its own log against Android's app-op history (advanced mode). Network: Android's per-app accounting (`NetworkStatsManager`) against the bytes the VPN saw; a surplus on Android's side is traffic that went around the VPN. Both records come from the same operating system, so a compromised system can falsify both; only hardware can be fully independent (stage 3).
+- **Unusual behaviour:** during the observation period, the engine learns each app's normal traffic shape on this device: upload-to-download ratio and upload rates, on screen and in the background. Deviations are reported as observations, never as accusations. Encrypted traffic still has a shape: compressed audio is a steady, low-rate upstream of small packets at regular intervals; photo and video uploads are large upstream bursts; media-upload servers often have recognisable names. A deviation that coincides with microphone use in the sensor log is reported with higher priority. A spike on the A40 with labelled activities (a voice message, a photo post, plain scrolling) measures how reliable this is before it ships.
 - Apps that keep their own always-on connection instead of the system push service are flagged.
 - Nothing is blocked yet. This lets us check accuracy and battery cost before we take control.
 

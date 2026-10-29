@@ -48,6 +48,11 @@ Datapavan uses Android's `VpnService` only to see and filter traffic on the devi
 | IPv6 | First-class. Never leak IPv6 around the tunnel. |
 | Encrypted content | Never decrypted: Datapavan installs no certificate authority and does not intercept TLS. Apps that bypass our resolver (their own encrypted DNS, hard-coded IPs) are flagged, and the TLS ClientHello fingerprint identifies the client library behind a connection. |
 
+## Behaviour analysis
+
+- **Accounting cross-check.** Android counts each app's traffic itself (`NetworkStatsManager`). The engine compares that with the bytes it saw for the same app; a surplus on Android's side is traffic that bypassed the tunnel, and the UI says so.
+- **Traffic shape.** Content stays encrypted, but shape does not: a steady, low-rate upstream of small packets at regular intervals looks like compressed audio, and large upstream bursts look like photo or video uploads. The engine learns each app's normal shape on the device during v0.2 (upload-to-download ratio, upload rates, on screen and in the background) and reports deviations as observations. A deviation that coincides with microphone use in the sensor log gets a higher priority. All of this stays on the device.
+
 ## Coexistence with other VPNs
 
 Android allows **one active VPN at a time**. This matters most where people depend on circumvention

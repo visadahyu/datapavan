@@ -40,6 +40,9 @@ starts, a two-week spike picks the packet engine (Rust netstack or Go gVisor). D
 - Apps that bypass Datapavan's resolver are flagged; TLS fingerprints identify the client library.
 - A sensor activity log: when the microphone recorded or the camera was on, and whether the screen was off, with an alert for use while the screen is off. Android hides which app records, so the app is inferred from what was on screen and which services ran. A feasibility spike comes first.
 - Apps that keep their own always-on connection instead of the system push service are flagged.
+- An optional advanced mode, granted once over USB, reads Android's own history of microphone and camera use and names the app exactly.
+- Cross-checks report contradictions: our sensor log against Android's record, and Android's per-app data accounting against what the VPN saw.
+- Unusual behaviour: each app's normal traffic shape is learned on the device, and deviations are reported, for example a steady audio-like upload or large uploads while the user only scrolled.
 
 ### v0.3 "Guard": blocking
 
@@ -67,7 +70,8 @@ starts, a two-week spike picks the packet engine (Rust netstack or Go gVisor). D
 ## Stage 3: our own OS
 
 - A hardened, Android-based OS on partner hardware, where the stage 1 and 2 layers become part of the system.
-- The same Rust engine runs as a system service.
+- The same Rust engine runs as a system service. It sees which app uses which sensor, live, and can ask the user before each use.
+- Partner hardware should offer sensor kill switches, or an indicator light wired to the sensor's power, so that software cannot hide sensor use.
 - Requires hardware that lets the bootloader be relocked with our own keys, so this stage depends on partnerships with device makers.
 - A certification programme lets device makers have their devices reviewed and carry the "compatible and secure" label.
 
