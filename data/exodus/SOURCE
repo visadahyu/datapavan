@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: CC0-1.0
+retrieved: 2026-10-29T19:05:15Z
+api: https://reports.exodus-privacy.eu.org/api/trackers
+api-sha256: bf6922f7c95ceb130fcfabf96c32c615e60d62ca507a4b82dcd74b41061c5121
+licence-statement: https://raw.githubusercontent.com/Exodus-Privacy/exodus/v1/README.md
+licence-statement-sha256: cd79bfcb71810940113aff73e22be63bca29e190769803eee600a84107a429c9
+trackers: 432
+with-code-signature: 428

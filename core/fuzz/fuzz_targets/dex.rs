@@ -6,4 +6,5 @@ use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
     let _ = datapavan_engine::dex::defined_classes(data);
+    let _ = datapavan_engine::dex::referenced_classes(data);
 });

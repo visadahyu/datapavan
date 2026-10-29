@@ -60,11 +60,30 @@ impl std::error::Error for Error {}
 ///
 /// Returns an [`Error`] when the input is not a well-formed DEX file of version 035 to 041.
 pub fn defined_classes(dex: &[u8]) -> Result<Vec<String>, Error> {
+    each_file(dex, Header::read_classes)
+}
+
+/// Lists every class type that a DEX file refers to, as Java names, in the order of its `type_ids`:
+/// the classes it defines and the classes its code uses, such as library classes it calls. Primitive
+/// and array types are left out. A version-041 container yields the types of all its logical files.
+///
+/// # Errors
+///
+/// Returns an [`Error`] when the input is not a well-formed DEX file of version 035 to 041.
+pub fn referenced_classes(dex: &[u8]) -> Result<Vec<String>, Error> {
+    each_file(dex, Header::read_types)
+}
+
+/// Collects `read` over every logical file: one, or several in a version-041 container.
+fn each_file(
+    dex: &[u8],
+    read: impl Fn(&Header, &[u8], &mut Vec<String>) -> Result<(), Error>,
+) -> Result<Vec<String>, Error> {
     let mut classes = Vec::new();
     let mut start = 0;
     for _ in 0..MAX_LOGICAL_FILES {
         let header = Header::read(dex, start)?;
-        header.read_classes(dex, &mut classes)?;
+        read(&header, dex, &mut classes)?;
         match header.next {
             Some(next) if next < dex.len() => start = next,
             _ => return Ok(classes),
@@ -179,13 +198,29 @@ impl Header {
                 return Err(Error::InvalidValue);
             }
             let descriptor_idx = read_u32(dex, item(&self.type_ids, class_idx, 4)?)?;
-            if descriptor_idx >= self.string_ids.size {
-                return Err(Error::InvalidValue);
-            }
-            let data = index(read_u32(dex, item(&self.string_ids, descriptor_idx, 4)?)?)?;
-            classes.push(class_name(&read_string(dex, data)?)?);
+            classes.push(class_name(&self.descriptor(dex, descriptor_idx)?)?);
         }
         Ok(())
+    }
+
+    fn read_types(&self, dex: &[u8], classes: &mut Vec<String>) -> Result<(), Error> {
+        classes.reserve(index(self.type_ids.size)?);
+        for type_idx in 0..self.type_ids.size {
+            let descriptor_idx = read_u32(dex, item(&self.type_ids, type_idx, 4)?)?;
+            let descriptor = self.descriptor(dex, descriptor_idx)?;
+            if descriptor.starts_with('L') {
+                classes.push(class_name(&descriptor)?);
+            }
+        }
+        Ok(())
+    }
+
+    fn descriptor(&self, dex: &[u8], descriptor_idx: u32) -> Result<String, Error> {
+        if descriptor_idx >= self.string_ids.size {
+            return Err(Error::InvalidValue);
+        }
+        let data = index(read_u32(dex, item(&self.string_ids, descriptor_idx, 4)?)?)?;
+        read_string(dex, data)
     }
 }
 
@@ -283,7 +318,7 @@ fn class_name(descriptor: &str) -> Result<String, Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Error, defined_classes};
+    use super::{Error, defined_classes, referenced_classes};
 
     /// A real DEX file: the test fixture app of `scripts/verify-audit.sh`, compiled by d8.
     const FIXTURE: &[u8] = include_bytes!("../testdata/fixture.dex");
@@ -402,6 +437,27 @@ mod tests {
                 "org.visadahyu.datapavan.fixture.FixtureAccessibilityService".to_owned(),
                 "org.visadahyu.datapavan.fixture.FixtureVpnService".to_owned(),
             ])
+        );
+    }
+
+    #[test]
+    fn reads_the_classes_a_real_dex_file_refers_to() {
+        let referenced = referenced_classes(FIXTURE).unwrap_or_default();
+        for class in [
+            "org.visadahyu.datapavan.fixture.FixtureAccessibilityService",
+            "android.accessibilityservice.AccessibilityService",
+            "android.net.VpnService",
+            "android.view.accessibility.AccessibilityEvent",
+        ] {
+            assert!(
+                referenced.iter().any(|c| c == class),
+                "{class} in {referenced:?}"
+            );
+        }
+        assert!(
+            referenced
+                .iter()
+                .all(|c| !c.starts_with('[') && !c.is_empty())
         );
     }
 

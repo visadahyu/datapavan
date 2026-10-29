@@ -81,7 +81,7 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 - **Preinstalled data collectors:** system apps from data-collecting companies that the device maker ships (for example Meta's app manager and services on Samsung phones), with their state, their traffic (from M4) and a guide to disable them or remove them reversibly for the user.
 - **Sensor access:** apps that hold microphone, camera or location access, especially where the app's purpose does not need it; a link to the system's privacy dashboard (Android 12+), which shows when each app used them; and advice to prefer one-time grants.
 - **Strict sensor mode (guided):** Android does not let one app change another app's permissions, so stage 1 walks the user through every app with microphone, camera or location access, opens each app's permission page, recommends *Ask every time* or *Don't allow*, and warns when an app gains the access again. Voice assistants' wake-word listening ("Hey Google", Bixby) is named, with the setting that turns it off. Stage 2 enforces the same policy without the user's clicks.
-- **Tracker SDK detection:** scan each app's DEX class names on the device against a bundled tracker-signature database, including known proxy and remote-access SDKs. Installed circumvention tools are also checked against their official signing certificates, to catch modified copies. Datasets ship as signed data packs (Ed25519, never rolled back); a newer pack can be imported as a file, without network access. Every entry that names a company records its evidence and can be disputed publicly (ADR 0015).
+- **Tracker SDK detection:** scan each app's DEX class names on the device, in the base APK and every split, against a bundled tracker-signature database, including known proxy and remote-access SDKs. Trackers whose code the app contains are shown apart from those it only refers to. Installed circumvention tools are also checked against their official signing certificates, to catch modified copies. Datasets ship as signed data packs (Ed25519, never rolled back); a newer pack can be imported as a file, without network access. Every entry that names a company records its evidence and can be disputed publicly (ADR 0015).
 - **Network usage per app:** bytes up and down, split by foreground/background and Wi-Fi/mobile, read from `NetworkStatsManager` (needs the *Usage access* special permission).
 - **Plain-language card per app:** what it can access, what trackers it carries, how much it sends, and what the user can do about it.
 
@@ -202,7 +202,7 @@ checked against each source on 2026-10-29; the details and obligations are in
 | Need | Source | Licence and use |
 |---|---|---|
 | Attestation trust anchors and revoked keys | Google's root certificates (Android Developers documentation) and attestation revocation list | Roots: Apache-2.0, as the documentation states. Revocation list: no licence stated; facts published for verifiers; bundled since M2's hardening, released only if the legal review agrees |
-| Tracker SDK signatures | εxodus tracker database | ODbL 1.0; bundled from M3 as a derivative database, with the ODbL notice in the app |
+| Tracker SDK signatures | εxodus tracker database | ODbL 1.0; bundled in `data/exodus` as a derivative database, with the ODbL notice in the app |
 | Tracker domains | EasyPrivacy; εxodus network signatures | EasyPrivacy under CC BY-SA 3.0 or later (v0.2). HaGeZi (GPL-3.0) only after its upstream sources are checked. **Excluded as non-commercial:** Disconnect and DuckDuckGo Tracker Radar (both CC BY-NC-SA 4.0) |
 | IP → ASN / organisation | IPtoASN; DB-IP Lite as fallback | PDDL 1.0; CC BY 4.0 with attribution (v0.2) |
 | Official signing certificates of circumvention tools | Each project's official channels (website, F-Droid, signed releases) | Our list, CC0 1.0, signed; each entry records its source and date |
@@ -276,7 +276,7 @@ datapavan/
   scripts/screenshots.sh    screenshots in every language with an accessibility check (a11y-check.py); CI calls it
   scripts/fuzz.sh      runs every fuzz target; CI calls it
   scripts/compare-dex.sh    compares the DEX parser with the SDK's dexdump on real APKs
-  data/                bundled dataset snapshots, each with LICENSE, SOURCE and its converter (ADR 0015); attestation/ holds Google's attestation roots and revocation list
+  data/                bundled dataset snapshots, each with LICENSE, SOURCE and its converter (ADR 0015): attestation/ (Google's attestation roots and revocation list), exodus/ (tracker signatures)
 ```
 
 ## 13. Milestones for v0.1 "Audit"
@@ -285,7 +285,7 @@ datapavan/
 |---|---|---|
 | M1 | Skeleton | Android app and Rust core build together; CI green; app opens on the emulator and the A40 (A56 testing deferred, ADR 0011); string resources, RTL support and pseudo-locales in place from the start; brand marks and app icon |
 | M2 | App inventory and permission audit | Matches what system Settings shows, checked on the A40 and the emulator; the VPN risk checks fire for a test app that holds remote-control access, a user-installed certificate authority, and enabled debugging; the integrity check reports the A40's locked bootloader and verified boot; the preinstalled Meta system apps on the A40 are listed with their state |
-| M3 | Tracker SDK scanner | Results for 20 popular apps agree with published εxodus reports; a re-signed copy of a known circumvention tool is reported as not genuine |
+| M3 | Tracker SDK scanner | For 20 popular apps whose installed version has a published εxodus report, every tracker in the report is found (embedded or referenced), and every other difference is explained (APK splits, see the [comparison spike](spikes/2026-10-m3-exodus-comparison.md)); a re-signed copy of a known circumvention tool is reported as not genuine |
 | M4 | Network usage per app | Byte counts within 5 % of the Settings data-usage screen |
 | M5 | Plain-language UI and first release | v0.1 published on GitHub in English, French, German and Persian, and submitted to F-Droid; manifest has **no INTERNET permission**; build is reproducible |
 

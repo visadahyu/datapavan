@@ -1,0 +1,436 @@
+# SPDX-License-Identifier: ODbL-1.0
+# Contains information from the εxodus tracker database (https://reports.exodus-privacy.eu.org),
+# which is made available here under the Open Database License (ODbL). Converted by update.py.
+# id	name	categories	website	code_signature	network_signature
+1	Teemo	Analytics	https://www.teemo.co	com.databerries.|com.geolocstation.	databerries\.com
+2	FidZup	Analytics	https://www.fidzup.com	com.fidzup.	fidzup
+3	Audience Studio (Krux)	Analytics,Profiling	https://www.salesforce.com/products/marketing-cloud/data-management/?mc=DMP	com.krux.androidsdk	krxd\.net
+4	Ad4Screen	Advertisement	http://www.ad4screen.com	com.ad4screen.sdk	a4\.tl|accengage\.com|ad4push\.com|ad4screen\.com
+5	Google DoubleClick		https://www.doubleclickbygoogle.com/		2mdn\.net|dmtry\.com|doubleclick\.com|doubleclick\.net|mng-ads\.com
+6	Weborama	Analytics	https://www.weborama.com	com.weborama.	weborama\.fr|weborama\.net
+7	Smart		http://smartadserver.com/	com.smartadserver.	adsrvr\.org|akamai\.smartadserver\.com|cdn1\.smartadserver\.com|diff2\.smartadserver\.com|diff3\.smartadserver\.com|diff\.smartadserver\.com|eqx\.smartadserver\.com|gallery\.smartadserver\.com|im2\.smartadserver\.com|insight\.adsrvr\.org|itx5-publicidad\.smartadserver\.com|itx5\.smartadserver\.com|js\.adsrvr\.org|match\.adsrvr\.org|preview\.smartadserver\.com|rtb-csync\.smartadserver\.com|saspreview\.com|smartadserver\.com|smartadserver\.ru|tmk\.smartadserver\.com|usw\-lax\.adsrvr\.org
+8	JW Player		https://jwplayer.com	com.longtailvideo.jwplayer.	g\.jwpsrv\.com|jwpltx\.com|p\.jwpcdn\.com
+9	Loggly	Analytics	http://loggly.com/	com.github.tony19.timber.loggly|com.github.tony19.loggly|com.visiware.sync2ad.logger.loggly.	loggly\.com
+10	Xiti		http://Xiti.com		
+11	OutBrain		http://www.outbrain.com/	com.outbrain.	outbrain\.com
+12	AppsFlyer	Analytics	http://AppsFlyer.com	com.appsflyer.	appsflyer\.com
+13	Ligatus		http://ligatus.com	.LigatusManager|.LigatusViewClient|com.ligatus.android.adframework	ligatus\.com
+14	Widespace		http://widespace.com	com.widespace.	widespace\.com
+15	AppNexus		https://www.appnexus.com/	com.appnexus.opensdk.	247realmedia\.com|adnxs\.com|appnexus\.com|appnexus\.net
+16	Localytics	Analytics,Profiling	http://localytics.com	com.localytics.android.|com.localytics.androidx|com.localytics.react.	analytics\.localytics\.com|manifest\.localytics\.com|profile\.localytics\.com|sdk-assets\.localytics\.com
+17	Braze (formerly Appboy)	Advertisement,Analytics,Location	https://www.braze.com	com.appboy	appboy\.com
+18	mParticle	Analytics	http://mparticle.com	com.mparticle	mparticle\.com
+20	S4M	Analytics	http://www.s4m.io/	com.sam4mobile.|.S4MAnalytic	s4m\.io|sam4m\.com
+22	Sizmek	Analytics	https://www.sizmek.com	.sizmek.	serving-sys\.com
+23	Batch	Analytics,Profiling	https://batch.com	com.batch.android.	batch\.com
+24	Sync2Ad	Analytics	https://www.sync2ad.com/	com.visiware.sync2ad.dmp.	sync2ad\.com
+25	Flurry	Advertisement,Analytics	http://www.flurry.com	com.flurry.	flurry\.com
+26	HockeyApp	Crash reporting	http://hockeyapp.net	net.hockeyapp.	hockeyapp\.net
+27	Google CrashLytics	Crash reporting	http://crashlytics.com	io.fabric.|com.crashlytics.|com.google.firebase.crashlytics|com.google.firebase.crash.|io.invertase.firebase.crashlytics.	crashlytics\.com
+28	LeanPlum	Analytics,Location,Profiling	https://www.leanplum.com/	com.leanplum.	leanplum\.com
+29	Tinder Analytics	Analytics	http://tinder.com	com.tinder.analytics|com.tinder.ads	etl\.tindersparks\.com
+30	Schibsted		http://www.schibsted.com/en/ir/	.schibsted.	schibsted\.com|schibsted\.io
+31	ATInternet	Analytics	https://www.atinternet.com/en/	com.atinternet.	ati-host\.net
+32	Tealium	Analytics	https://tealium.com/	.tealium.	tealiumiq\.com|tiqcdn\.com
+33	Nexage		http://nexage.com/	com.nexage.android.|org.nexage.	nexage\.com
+34	Ogury Presage		http://www.presage.io/	io.presage.	presage\.io
+35	Twitter MoPub	Advertisement,Analytics	https://www.mopub.com/	com.mopub.	mopub\.com
+36	Add Apt Tr		https://www.addapptr.com	com.intentsoftware.addapptr.	aatkit\.com
+37	Vectaury	Analytics,Location,Profiling	http://vectaury.io/	io.vectaury.	vectaury\.io
+38	Tune	Analytics	https://www.tune.com	com.tune|com.mobileapptracker	mobileapptracking\.com
+39	Pushwoosh		https://www.pushwoosh.com/	com.pushwoosh	pushwoosh\.com
+40	Demdex	Analytics	https://www.adobe.com/data-analytics-cloud/audience-manager.html	com.adobe.mobile.Analytics|com.adobe.mobile.Config.	demdex\.net
+41	AdsWizz		http://www.adswizz.com/	.adswizz.	adswizz\.com|cdn\.adswizz.com\.edgesuite\.net
+42	ExactTarget	Analytics	http://help.exacttarget.com/en/technical_library/API_Overview/	com.exacttarget.	\.exacttarget\.
+43	Omniture	Analytics,Profiling	https://www.adobe.com/analytics/adobe-analytics-features.html	com.omniture.|com.adobe.adms.measurement.	omniture\.com|omtrdc\.net
+44	OpenLocate	Location	https://www.safegraph.com/	com.safegraph.|com.openlocate	api\.safegraph\.com
+45	TagCommander (Commanders Act.)	Analytics	https://www.commandersact.com/	com.tagcommander.	\.commander1\.com|\.tagcommander.com
+46	CrowdTangle		https://www.crowdtangle.com/		api\.crowdtangle\.com
+47	Facebook Audience	Analytics	https://developers.facebook.com/docs/android/	com.facebook.audiencenetwork	\.facebook\.com
+48	Google Analytics	Analytics	http://www.google.com/analytics/	com.google.android.apps.analytics.|com.google.android.gms.analytics.|com.google.analytics.	google-analytics\.com
+49	Google Firebase Analytics	Analytics	https://firebase.google.com/	com.google.firebase.analytics.FirebaseAnalytics|com.google.android.gms.measurement.|com.google.firebase.firebase_analytics	firebase\.com|firebaselogging-pa\.googleapis\.com
+51	Eulerian	Analytics	https://www.eulerian.com/en/	com.eulerian.android.sdk	eulerian\.com
+52	Adjust	Analytics	https://www.adjust.com/	com.adjust.sdk.|com.adjust.android.sdk.	adj\.st|adjust\.com|go\.link
+53	ChartBoost		https://answers.chartboost.com/en-us/	com.chartboost.sdk.	\.chartboost\.com
+54	Backelite	Analytics	https://www.backelite.com/	com.backelite.android.|com.backelite.bkdroid.	backelite\.com
+55	Areametrics	Analytics	https://areametrics.com/	com.areametrics.areametricssdk|com.areametrics.nosdkandroid	areametrics\.com
+56	ComScore	Advertisement,Analytics	https://comscore.com/	com.comscore.	comscore\.com
+57	Cuebiq	Analytics,Location	http://www.cuebiq.com/	com.cuebiq.cuebiqsdk.model.Collector|com.cuebiq.cuebiqsdk.receiver.CoverageReceiver	cuebiq\.com
+58	HelpShift		https://www.helpshift.com	com.helpshift	helpshift\.com
+59	Kontakt	Analytics	https://kontakt.io/	com.kontakt.sdk.android.	kontakt\.io
+60	Locuslabs		http://locuslabs.com	com.locuslabs.sdk	locuslabs\.com
+61	Moat	Advertisement,Analytics	https://moat.com/analytics	com.moat.analytics.mobile.	apx\.moatads\.com|geo\.moatads\.com|js\.moatads\.com|mb\.moatads\.com|moat\.com|pixel\.moatads\.com|px\.moatads\.com|sejs\.moatads\.com|yt\.moatads\.com|yts\.moatads\.com|z\.moatads\.com
+62	Segment	Analytics,Profiling	https://segment.com/	com.segment.analytics.	api\.segment\.io|segment\.com
+63	Mobile Engagement	Analytics	https://docs.microsoft.com/en-us/azure/mobile-engagement/mobile-engagement-android-sdk-overview	com.ubikod.capptain.|com.microsoft.azure.engagement.	login\.microsoftonline\.com|management\.azure\.com
+64	Colocator	Analytics	https://developers.colocator.net	net.crowdconnected.androidcolocator	colocator\.net
+65	Facebook Ads	Advertisement	https://developers.facebook.com/docs/android	com.facebook.ads	\.facebook\.com
+66	Facebook Analytics	Analytics	https://developers.facebook.com/docs/android	com.facebook.appevents|com.facebook.marketing.|com.facebook.CampaignTrackingReceiver	\.facebook\.com
+67	Facebook Login	Identification	https://developers.facebook.com/docs/android	com.facebook.login	\.facebook\.com
+68	Facebook Notifications		https://developers.facebook.com/docs/android	com.facebook.notifications	\.facebook\.com
+69	Facebook Places		https://developers.facebook.com/docs/android	com.facebook.places	\.facebook\.com
+70	Facebook Share		https://developers.facebook.com/docs/android	com.facebook.share	\.facebook\.com
+71	Google Ads		https://developers.google.com/admob/android		\.google\.com
+72	AppLovin (MAX and SparkLabs)	Advertisement,Analytics,Identification,Profiling	https://www.applovin.com/	com.applovin	applovin\.com|applvn\.com
+73	Glispa Connect (Formerly Avocarrot)		https://www.glispa.com	com.avocarrot.sdk	\.avocarrot\.com|ads\.glispa\.com|exp\.glispa\.com|rtb\.platform\.glispa\.com|templates\.glispaconnect\.com|trk\.glispa\.com
+74	NativeX		http://www.nativex.com/	com.nativex	nativex\.com
+75	Baidu Maps		https://map.baidu.com	com.baidu.BaiduMap	map\.baidu\.com
+76	WeChat Location		https://wechat.com	com.tencent.map.geolocation|com.tencent.mm.plugin.location.|com.tencent.mm.plugin.location_soso.|com.tencent.mm.plugin.location_google	map\.qq\.com
+77	HyperTrack	Location	http://hypertrack.com	com.hypertrack|com.hypertracklive.|io.hypertrack	api\.hypertrack\.com|hypertrack\.amazonaws\.com|trck\.at
+78	Uber Analytics	Analytics	https://uber.com	com.ubercab.analytics.|com.ubercab.library.metrics.analytics.|com.ubercab.client.core.analytics.	events\.uber\.com
+79	Lisnr	Analytics	http://lisnr.com	com.lisnr.	lisnr\.com
+80	SilverPush	Analytics	http://silverpush.co	com.silverpush.	54\.243\.73\.253:8080/SilverPush/|silverpush\.co|silverpush\.com
+81	Shopkick	Analytics	https://shopkick.com	com.shopkick.sdk.api.|com.shopkick.fetchers.	sdk\.shopkick\.com|shopkick\.com|shopkick\.de
+82	Alphonso	Analytics	http://alphonso.tv	tv.alphonso.service	api\.alphonso\.tv|prov\.alphonso\.tv
+83	Smaato		https://smaato.com	com.smaato.	smaato\.net|soma\.smaato\.net
+84	Scandit	Analytics	https://scandit.com	com.scandit.	scandit\.com
+85	Inrix		http://inrix.com/	com.inrix.sdk	inrix\.com|inrix\.io
+86	Signal360	Analytics	http://www.signal360.com	com.signal360.sdk.core.|com.sonicnotify.sdk.core.|com.rnsignal360	signal360\.com|sonicnotify\.com
+87	TeleQuid		http://www.telequid.com/	com.telequid.	mars\.telequid\.com
+88	Retency	Analytics	http://retency.com	com.retency.sdk.android	
+89	MAdvertise		http://madvertise.com	com.mngads.sdk|com.mngads.views|com.mngads.	dispatcher\.mng\-ads\.com|mobile\.mng\-ads\.com
+90	AdColony	Advertisement	http://adcolony.com/	com.adcolony.|com.jirbo.adcolony.	adc3-launch\.adcolony\.com|adcolony\.com|ads30\.adcolony\.com|androidads20\.adcolony\.com|androidads21\.adcolony\.com|androidads23\.adcolony\.com|events3alt\.adcolony\.com|wd\.adcolony\.com
+91	AccountKit	Identification	https://www.accountkit.com/	com.facebook.accountkit	graph\.accountkit\.com
+92	Amazon Advertisement		https://developer.amazon.com/public/apis/earn/mobile-ads/docs/quick-start	com.amazon.device.ads	
+93	Amazon Mobile Associates		https://developer.amazon.com/mobile-associates	com.amazon.device.associates	
+94	Radius Networks	Analytics	https://www.radiusnetworks.com/	com.radiusnetworks	proximitykit\.radiusnetworks\.com
+95	Amazon Analytics (Amazon insights)	Analytics	https://developer.amazon.com/docs/apps-and-games/sdk-downloads.html	com.amazon.insights|com.amazonaws.mobileconnectors.pinpoint.analytics.|com.amazonaws.mobileconnectors.amazonmobileanalytics	mobileanalytics\.us-east-1\.amazonaws\.com
+96	Baidu APPX		https://app.baidu.com/	com.baidu.appx	
+97	Baidu Location		https://developer.baidu.com/	com.baidu.location	
+99	Baidu Map		http://lbsyun.baidu.com/	com.baidu.mapapi	
+100	Baidu Mobile Ads		https://developer.baidu.com/	com.baidu.mobads	
+101	Baidu Mobile Stat	Analytics	https://developer.baidu.com/	com.baidu.mobstat	
+102	Estimote	Analytics,Location	https://estimote.com/	com.estimote.	.*\.estimote\.com
+103	Baidu Navigation		http://lbsyun.baidu.com/index.php?title=android-navsdk	com.baidu.navi	
+104	Fyber	Advertisement	https://www.fyber.com/	com.fyber.	adproxy\.fyber\.com|appengage-video\.fyber\.com|banner\.fyber\.com|engine\.fyber\.com|interstitial\.fyber\.com|mbe-cdn\.fyber\.com|offer\.fyber\.com|service\.fyber\.com|tracker\.fyber\.com|video-interstitial-assets-cdn\.fyber\.com|video\.fyber\.com
+105	Google Tag Manager	Analytics	https://www.google.com/analytics/tag-manager/	com.google.tagmanager|com.google.android.gms.tagmanager	www\.googletagmanager\.com|www\.googletagservices\.com|www-googletagmanager\.l\.google\.com
+106	Inmobi		http://inmobi.com	com.inmobi|in.inmobi.	c\.w\.inmobi\.com|china\.inmobi\.com|config-ltvp\.inmobi\.com|config\.inmobi\.com|et\.w\.inmobi\.com|i\.l\.inmobicdn\.net|i\.w\.inmobi\.com|inmobi\.cn|inmobi\.com|inmobi\.info|inmobi\.net|inmobi\.us|inmobicdn\.com|inmobicdn\.net|inmobisdk\-a\.akamaihd\.net|japan\.inmobi\.com|r\.w\.inmobi\.com|sdkm\.w\.inmobi\.com|sdktm\.w\.inmobi\.com|w\.inmobi\.com
+107	Millennial Media		https://www.millennialmedia.com/	com.millennialmedia.	adtech\.de|contextual\.media\.net|media\.net|millennialmedia\.com
+108	Snowplow	Analytics	https://snowplowanalytics.com/	com.snowplowanalytics.	
+109	Fyber SponsorPay		http://www.sponsorpay.com	com.sponsorpay	appengage-video\.sponsorpay\.com|cdn1\.sponsorpay\.com|cdn2\.sponsorpay\.com|cdn3\.sponsorpay\.com|cdn4\.sponsorpay\.com|engine\.sponsorpay\.com
+110	Supersonic Ads		https://www.supersonic.com/	com.supersonic.adapters.supersonicads|com.supersonicads.sdk	click-haproxy\.supersonicads\.com|cx\.ssacdn\.com|init\.supersonicads\.com|logs\.supersonic\.com|outcome\.supersonicads\.com|ow-gateway\.supersonicads\.com|pixel-tracking\.sonic-us\.supersonicads\.com|rv-gateway\.supersonicads\.com|static\.ssacdn\.com|supersonic\.com|supersonicads-a\.akamaihd\.net|tag\-mediation.supersonic.com|ua\.supersonicads\.com|v\.ssacdn\.com|www\.supersonicads\.com
+111	Carnival	Analytics	http://carnival.io/	com.carnival.sdk|com.carnivalmobile	devices\.carnivalmobile\.com
+112	Tencent Map LBS		https://lbs.qq.com/	com.tencent.lbs	
+113	Tencent MobWin		https://www.tencent.com/en-us/	com.tencent.mobwin	
+114	Tencent MTA	Analytics	https://mta.qq.com/	com.tencent.mta	
+115	Apptentive	Analytics	https://www.apptentive.com/	com.apptentive.	api\.apptentive\.com
+116	Tencent Stats	Analytics	http://stat.qq.com/	com.tencent.stat|com.tencent.wxop.stat	
+117	Tencent Weiyun		https://www.weiyun.com	com.tencent.weiyun	
+118	MixPanel	Analytics	https://mixpanel.com/	com.mixpanel.	api\.mixpanel\.com|decide\.mixpanel\.com|mixpanel\.com|switchboard\.mixpanel\.com
+119	Umeng Analytics		https://www.umeng.com/analytics	com.umeng.analytics	alog\.umeng\.com|alogs\.umeng\.com|ar\.umeng\.com|oc\.umeng\.com|umeng\.com|uop\.umeng\.com
+120	Umeng Feedback		http://dev.umeng.com/feedback	com.umeng.fb	alog\.umeng\.com|alogs\.umeng\.com|ar\.umeng\.com|oc\.umeng\.com|umeng\.com|uop\.umeng\.com
+121	Unity3d Ads	Advertisement	https://unity3d.com/	com.unity3d.services|com.unity3d.ads	adserver\.unityads\.unity3d\.com|analytics\.social\.unity\.com|api\.uca\.cloud\.unity3d\.com|auction\.unityads\.unity3d\.com|cdn-highwinds\.unityads\.unity3d\.com|cdn\.unityads\.unity3d\.com|config\.uca\.cloud\.unity3d\.com|config\.unityads\.unity3d\.com|stats\.unity3d\.com|webview\.unityads\.unity3d\.com
+122	Countly	Analytics,Profiling	https://count.ly/	ly.count.android.	
+123	Urbanairship		https://www.urbanairship.com/	com.urbanairship	device-api\.urbanairship\.com|urbanairship\.com|device-api\.asnapieu\.com
+124	Yandex Ad	Advertisement	https://www.yandex.com/	com.yandex.mobile.ads	analytics\.mobile\.yandex\.net|appmetrica\.yandex\.com|banners-slb\.mobile\.yandex\.net|banners\.mobile\.yandex\.net|mc\.yandex\.ru|report\.appmetrica\.yandex\.net|startup\.mobile\.yandex\.net
+125	Amplitude	Analytics,Profiling	http://www.amplitude.com	com.amplitude.	amplitude\.com|api\.amplitude\.com
+126	AppSee	Analytics,Identification,Profiling	https://www.appsee.com/	com.appsee.	api\.appsee\.com
+127	Kochava	Advertisement,Analytics,Profiling	https://www.kochava.com/	com.kochava.base.|com.kochava.android.tracker.|.kochavaccpa.	control\.kochava\.com|kvinit\-prod\.api\.kochava\.com
+129	Webtrends	Analytics	https://www.webtrends.com/	com.webtrends.mobile.analytics.|com.webtrends.mobile.android	dc\.webtrends\.com|webtrends\.com
+130	New Relic	Analytics	http://www.newrelic.com	com.newrelic.agent.|com.newrelic.mobile.	js-agent\.newrelic\.com|mobile-collector\.newrelic\.com|newrelic\.com|nr-data\.net
+131	AppAnalytics	Analytics	http://appanalytics.io/	io.appanalytics.sdk	
+132	Applause	Analytics,Crash reporting	http://www.applause.com	com.applause.android.	
+133	Quantcast	Analytics,Profiling	http://www.quantcast.com	com.quantcast.measurement.service.	quantcast\.com|quantcast\.net
+135	Apptimize	Analytics	http://www.apptimize.com	com.apptimize.	brahe\.apptimize\.com|md-a-c\.apptimize\.com|md-a-s\.apptimize\.com
+136	AppBrain		https://www.appbrain.com/info/help/sdk/index.html	com.appbrain.	sdk\.appbrain\.com
+137	Dynatrace	Analytics	https://www.dynatrace.com	com.dynatrace.android.app|com.dynatrace.agent|com.dynatrace.tools	\.dynatrace\.com
+138	Matomo (Piwik)	Analytics	https://matomo.org/mobile	org.piwik|org.piwik.mobile|org.matomo	matomo\.org
+140	AppMetrica		https://tech.yandex.com/metrica-mobile-sdk/	com.yandex.metrica.	analytics\.mobile\.yandex\.net|appmetrica\.yandex\.com|banners-slb\.mobile\.yandex\.net|banners\.mobile\.yandex\.net|mc\.yandex\.ru|report\.appmetrica\.yandex\.net|startup\.mobile\.yandex\.net
+142	Singlespot	Analytics	https://www.singlespot.com/	com.sptproximitykit.	singlespot\.com
+143	Sensoro		https://www.sensoro.com/	com.sensoro.beacon.kit.|com.sensoro.cloud	
+144	Sense360	Analytics,Location	https://sense360.com/	com.sense360.android.	android-quinoa-config-prod\.sense360eng\.com|incoming-data-sense360\.s3\.amazonaws\.com|quinoa-personal-identify-prod\.sense360eng\.com
+145	Rubicon Project	Analytics	https://rubiconproject.com	com.rfm.sdk	ads\.rubiconproject\.com|fastlane\.rubiconproject\.com|optimized-by\.rubiconproject\.com|pixel\.rubiconproject\.com|stats\.aws\.rubiconproject\.com|tap2-cdn\.rubiconproject\.com|video-ads\.rubiconproject\.com
+146	ironSource	Analytics	https://www.ironsrc.com	com.ironsource.	
+147	Heyzap (bought by Fyber)		https://www.heyzap.com	com.heyzap.sdk.ads.|com.heyzap.mediation.	ads\.heyzap\.com|fyc\.heyzap\.com|img-cloudflare-2\.haizap\.com|img-cloudflare\.haizap\.com|med\.heyzap\.com|x\.heyzap\.com
+148	SAP CDC (Gigya)	Analytics	https://www.sap.com/products/crm/customer-data-management.html	com.gigya.	cdn1\.gigya\.com|cdn2\.gigya\.com|cdn3\.gigya\.com|cdn\.gigya\.com|cdns\.us1\.gigya\.com|david\.gigya-cs\.com
+149	Foresee	Analytics	https://www.foresee.com	com.foresee.sdk.ForeSee	4seeresults\.com|analytics\.foresee\.com|foresee\.com|foreseeresults\.com|i\.4see\.mobi|rec\.replay\.answerscloud\.com
+150	Fiksu		https://fiksu.com	com.fiksu.asotracking	a\.fiksu\.com|sdk\.fiksu\.com
+151	Ensighten	Analytics	https://www.ensighten.com	com.ensighten.	nexus\.ensighten\.com
+152	Dynamic Yield	Analytics	https://www.dynamicyield.com	com.dynamicyield.	adm\.dynamicyield\.com|api\.dynamicyield\.com|cdn\.dynamicyield\.com|px\.dynamicyield\.com|st\.dynamicyield\.com
+153	BlueKai (acquired by Oracle)	Analytics	http://bluekai.com/registry/	com.bluekai.sdk.	stags\.bluekai\.com|tags\.bluekai\.com
+154	BlueConic	Analytics	https://www.blueconic.com	com.blueconic	
+155	Apteligent by VMWare (formerly Crittercism)		http://www.apteligent.com	com.crittercism.app.Crittercism	api\.crittercism\.com|appload\.ingest\.crittercism\.com|txn\.ingest\.crittercism\.com
+156	AdFit (Daum)		https://www.daum.net	com.kakao.adfit.	analytics\.ad\.daum\.net|statistics\.videofarm\.daum\.net
+157	Adform		https://site.adform.com	com.adform.sdk.	adform\.com|adformdsp\.net|adx\.adform\.net|files\.adform\.net|track\.adform\.net
+158	Adfurikun	Advertisement	https://adfurikun.jp/adfurikun/	jp.tjkapp.adfurikunsdk.|com.glossomads.sdk.	adfurikun\.jp|ginf\.adfurikun\.jp
+159	Mobvista	Analytics,Profiling	https://www.mobvista.com/	com.mobvista.	mobvista\.com
+160	Placed		http://placed.com/	com.placed.client	
+161	Adot		https://we-are-adot.com/	com.adotmob	sdk\.adotmob\.com|sync\.adotmob\.com|tracker\.adotmob\.com
+162	Appodeal		https://www.appodeal.com	com.appodeal.ads.|com.appodealx.	appodeal\.com|appodealx\.com
+163	AppMonet		http://appmonet.com	com.monet.	
+164	Soomla		https://soomla.com/	com.soomla.	soom\.la
+165	Adincube		https://www.adincube.com/	com.adincube.sdk.	sdk\.adincube\.com
+166	Persona.ly		http://persona.ly/	ly.persona.sdk	dev-api\.persona\.ly|dev\.dsp\.persona\.ly|dev\.persona\.ly|dsp\.persona\.ly|persona\.ly|rtb\.persona\.ly|sdk\.persona\.ly
+167	Branch	Analytics	https://branch.io/	io.branch.	api\.branch\.io
+168	Cheetah Ads		https://www.cmcm.com/	com.cmcm.	cmcm\.com
+169	Vungle	Advertisement	https://vungle.com	com.vungle.publisher.|com.vungle.warren.	ads\.api\.vungle\.com|akamai\.vungle\-cdn\.vungle\.com|api\.vungle\.akadns\.net|api\.vungle\.com|bd\.vungle\.com|billboard\.vungle\.com|cdn\-lb\.vungle\.com|ci\.vungle\.com|data\.vungle\.com|ingest\.vungle\.com|jaeger\.vungle\.com|ltv\-data\-api\.kube\-prod\.vungle\.com|monitoring\.vungle\.com|ssl\.vungle\.com|v\.vungle\.com
+170	Criteo		https://www.criteo.com/	com.criteo.	criteo\.com
+171	Mapbox		https://www.mapbox.com/	com.mapbox.mapboxsdk.module.telemetry|com.mapbox.mapboxsdk.maps.TelemetryDefinition|com.mapbox.android.telemetry.	a\.tiles\.mapbox\.com|api\.tiles\.mapbox\.com
+172	Optimizely	Analytics	https://www.optimizely.com/	com.optimizely.	optimizely\.com|optimizelyapis\.com
+173	Taboola		https://www.taboola.com/	com.taboola.	taboola\.com
+174	CleverTap	Analytics,Location,Profiling	https://clevertap.com/	com.clevertap.	wzrkt\.com
+175	myTracker		https://tracker.my.com/	com.my.tracker.	tracker-api\.my\.com
+176	Cloudmobi		http://www.cloudmobi.net/	com.cloudtech.	api\.cloudmobi\.net|cloudmobi\.net|logger\.cloudmobi\.net|vast\.cloudmobi\.net
+177	ADLIB		https://adlibr.com	com.mocoplex.adlib.	adlibr\.com
+178	Brightcove		https://www.brightcove.com	com.brightcove	metrics\.brightcove\.com
+179	DOV-E	Advertisement	https://www.dov-e.com/	com.dv.DVSDK	\.dov-e\.com
+180	InMarket		https://inmarket.com/	com.inmarket	m2m-api\.inmarket\.com
+181	Pilgrim by Foursquare	Location	https://enterprise.foursquare.com/products/pilgrim	com.foursquare.pilgrim|com.foursquare.pilgrimsdk.android	sdk\.foursquare\.com
+182	OtherLevels		https://www.otherlevels.com/	com.otherlevels.	api\.otherlevels\.com|geodata\.otherlevels\.com|mdn\.otherlevels\.com|rich\.otherlevels\.com|tags\.otherlevels\.com|ws\.otherlevels\.com
+183	PubNative	Advertisement	https://pubnative.net/	net.pubnative	pubnative\.net
+184	Appnext		https://www.appnext.com/	com.appnext.sdk	appnext.com
+185	MobFox	Advertisement,Analytics,Profiling	https://www.mobfox.com/	com.mobfox.|com.adsdk.sdk.	
+186	ShallWeAD		http://www.shallwead.com	com.jm.co.shallwead.sdk.|com.co.shallwead.sdk.	
+187	deltaDNA	Analytics	https://deltadna.com/	com.deltadna	deltadna\.net
+188	Display		https://www.display.io/en/	io.display.	display.io
+189	HyprMX	Advertisement	https://www.hyprmx.com	com.hyprmx.android.sdk.	hyprmx\.com
+190	Bugly		https://bugly.qq.com/v2/	com.tencent.bugly.	bugly\.qq\.com
+191	Duapps		http://ad.duapps.com/	com.duapps.	duapps\.com
+192	Swrve	Analytics,Location,Profiling	https://www.swrve.com/	com.swrve.sdk	api\.swrve\.com|content\.swrve\.com
+193	OneSignal		https://onesignal.com/	com.onesignal.	onesignal\.com
+194	Appdynamics	Analytics,Profiling	https://www.appdynamics.com/	com.appdynamics.	eum-appdynamics\.com|appdynamics\.com
+195	Startapp	Advertisement,Analytics	https://www.startapp.com	com.startapp.	c2i\.startappnetwork\.com|c2s\.startappnetwork\.com|click\.startappservice\.com|dts\.startappservice\.com|events\.startappservice\.com|images\.startappservice\.com|imp\.startappservice\.com|info\.static\.startappservice\.com|init\.startappservice\.com|req\.startappservice\.com|soda\.startappservice\.com|startappservice\.com|va\.origin\.startappservice\.com
+196	AerServ	Advertisement	https://www.aerserv.com/	com.aerserv.sdk.	ads\.aerserv\.com|debug\.aerserv\.com
+197	INFOnline		https://www.infonline.de	de.infonline.	de\.ioam\.de
+198	myTarget	Advertisement	https://target.my.com/	com.my.target.	.target\.my\.com
+199	Tapjoy		https://www.tapjoy.com/	com.tapjoy.	tapjoy\.com|tapjoyads\.com|www\.5rocks\.io
+200	Mintegral	Advertisement,Analytics	https://www.mintegral.com/en/	com.mintegral.|com.mbridge.msdk.	analytics\.rayjump\.com|cdn-adn\.rayjump\.com|de01\.rayjump\.com|de\.rayjump\.com|detect\.rayjump\.com|fk-mtrack\.rayjump\.com|hybird\.rayjump\.com|jssdk\.rayjump\.com|net\.rayjump\.com|online\.rayjump\.com|rayjump\.com|setting\.rayjump\.com|sg-mtrack\.rayjump\.com|sg01\.rayjump\.com|sg\.rayjump\.com|tknet\.rayjump\.com|us01\.rayjump\.com
+201	Gimbal		https://gimbal.com/	com.gimbal.android	analytics-server\.gimbal\.com|api\.gimbal\.com|registration\.gimbal\.com|sdk-info\.gimbal\.com
+202	Conviva		https://www.conviva.com/	com.conviva.	cws\.conviva\.com
+203	Auditude		https://www.adobe.com/privacy/policies/auditude.html	com.auditude.ads	auditude\.com
+204	Instreamatic (Adman)	Advertisement,Analytics	http://instreamatic.com/	com.instreamatic	instreamatic\.com
+205	GameAnalytics	Analytics,Profiling	https://gameanalytics.com/features	com.gameanalytics.sdk	
+206	Instabug	Crash reporting	https://instabug.com/crash-reporting	com.instabug.	
+207	Bugsnag	Crash reporting	https://www.bugsnag.com/	com.bugsnag.	
+208	Moodmedia	Advertisement,Location	https://us.moodmedia.com/	com.moodmedia	moodpresence\.com
+209	Houndify	Identification,Location	https://www.houndify.com/	com.hound	houndify\.com
+210	OpenX	Advertisement,Analytics,Location	https://www.openx.com/	com.openx.view.plugplay|com.openx.android_sdk_openx	openx\.com|openx\.net|openx\.org|us-ads\.openx\.net
+211	Taplytics	Advertisement,Analytics	https://taplytics.com	com.taplytics.sdk	api\.taplytics\.com|ping\.tapylitics\.com
+212	Yinzcam Sobek	Advertisement,Analytics,Location	http://www.yinzcam.com/	com.yinzcam.sobek	analytics\.yinzcam\.com
+213	Ooyala	Advertisement	https://www.ooyala.com/	com.ooyala	ooyala\.com
+214	Kiip	Advertisement	https://www.ninthdecimal.com/	me.kiip.sdk	kiip\.me
+215	MobPower	Advertisement	https://home.mobpowertech.com/	com.mobpower.	api\.mobpowertech\.com|log\.mobpowertech\.com|mobpowertech\.com|scheme\.mobpowertech\.com
+216	AdBuddiz	Advertisement	http://www.adbuddiz.com/abuse?hl=fr	com.purplebrain.adbuddiz.sdk.	sdk\.adbuddiz\.com
+218	Integral Ad Science		https://integralads.com	com.integralads.avid.library	adsafeprotected\.com|iasds01\.com|integralads\.com
+219	AltBeacon		https://altbeacon.org	org.altbeacon.beacon.|com.altbeacon.beacon.|org.altbeacon.bluetooth.	data.\altbeacon\.org
+220	Salesforce Marketing Cloud		https://www.salesforce.com/products/marketing-cloud/	com.salesforce.marketingcloud	
+221	Mozilla Telemetry		https://wiki.mozilla.org/Telemetry	org.mozilla.telemetry|org.mozilla.gecko.telemetry|mozilla.telemetry.glean.|org.mozilla.fenix.GleanMetrics|org.mozilla.fenix.components.metrics	
+222	nend	Advertisement	https://nend.net/en/	net.nend.android|net.nend.unity.	
+223	Pusher		https://pusher.com/	com.pusher.client.	
+224	FreeWheel	Advertisement	http://freewheel.tv/	tv.freewheel.ad.	fwmrm\.net
+225	TNK Factory	Advertisement	http://www.tnkfactory.com	com.tnkfactory.ad	
+226	Axonix		http://axonix.com/	com.axonix.android.sdk|com.mobclix.android.sdk	ads\.mobclix\.com|axonix\.com|data\.mobclix\.com|mobclix\.com|s\.mobclix\.com
+227	Gemius HeatMap		https://heatmap.gemius.com	com.gemius.sdk	gemius\.pl
+228	YouAppi		https://www.youappi.com	com.youappi.sdk.	
+229	Adobe Experience Cloud		https://www.adobe.com/experience-cloud.html	com.adobe.marketing.mobile	
+230	Teads	Advertisement	https://www.teads.tv	tv.teads.|teads.tv.	teads\.tv
+231	In Loco		https://inloco.com.br	com.inlocomedia.android	inlocomedia\.com
+232	IQzone	Advertisement	https://iqzone.com	com.iqzone	
+233	Bugfender	Analytics,Crash reporting	https://bugfender.com/	com.bugfender.sdk.	
+234	Wootric	Analytics	http://wootric.com	com.wootric.androidsdk.	.wootric\.com\.herokudns\.com|wootric\.com
+235	KIDOZ	Advertisement	https://kidoz.net/kidoz-sdk/	com.kidoz.sdk	
+236	PubMatic	Advertisement	https://pubmatic.com/	com.pubmatic.sdk	ads\.pubmatic\.com|aktrack\.pubmatic\.com|gads\.pubmatic\.com|image2\.pubmatic\.com|simage2\.pubmatic\.com
+237	Kissmetrics	Analytics	https://www.kissmetricshq.com/	com.kissmetrics	
+238	Microsoft Visual Studio App Center Crashes	Crash reporting	https://appcenter.ms/	com.microsoft.appcenter.crashes	
+239	Webtrekk	Analytics	https://www.webtrekk.com/	com.webtrekk.webtrekksdk	
+240	Google Analytics Plugin (Cordova)	Analytics	https://analytics.withgoogle.com/	com.danielcwilson.plugins.analytics	
+241	Bugsee	Crash reporting	https://www.bugsee.com/	com.bugsee.library.Bugsee	
+242	Splunk MINT	Analytics	https://mint.splunk.com/	com.splunk.mint	
+243	Microsoft Visual Studio App Center Analytics	Analytics	https://appcenter.ms/	com.microsoft.appcenter.analytics|com.microsoft.azure.mobile.analytics	
+244	Nielsen	Analytics	https://www.nielsen.com	com.nielsen.app	
+245	Reveal Mobile	Analytics,Location	https://revealmobile.com/	com.stepleaderdigital.reveal	
+246	Metrics	Analytics	https://metrics.dropwizard.io	com.codahale.metrics	
+247	Repro	Analytics	https://repro.io/	io.repro.android.	
+248	Sensors Analytics	Analytics	https://www.sensorsdata.cn	com.sensorsdata.analytics.android.sdk	
+249	Tenjin	Analytics	https://www.tenjin.com/	com.tenjin.android.	
+250	Tapstream	Analytics	https://www.tapstream.com/	com.tapstream.sdk	
+251	Singular	Analytics	https://singular.net/	com.singular.sdk	
+252	CallDorado	Advertisement	http://calldorado.com	com.calldorado.android	
+253	UXCam	Analytics,Profiling	https://uxcam.com/	com.uxcam.	verify.uxcam.com
+254	Upsight	Advertisement,Analytics,Profiling	https://www.upsight.com/	com.upsight.android	
+255	Appcelerator Analytics	Analytics	https://www.appcelerator.com	com.appcelerator.aps.|org.appcelerator.titanium.analytics	appcelerator\.com|appcelerator\.net
+256	Adbrix	Analytics,Profiling	http://ad-brix.com/	com.igaworks.adbrix	ad-brix\.com
+257	Cauly	Advertisement	https://www.cauly.net	com.fsn.cauly|com.trid.tridad|com.cauly.android.ad.	ad\.cauly\.co\.kr
+258	Tapdaq	Advertisement	https://www.tapdaq.com/	com.tapdaq.sdk.|com.tapdaq.adapters.	ads\.tapdaq\.com
+259	Verve	Advertisement	https://www.verve.com	com.vervewireless.advert.	
+260	Apsalar	Advertisement,Analytics,Profiling	https://singular.net	com.apsalar.sdk.	e-ssl\.apsalar\.com|e\.apsalar\.com
+261	PingStart	Advertisement	http://pingstart.com	com.pingstart.adsdk.	api\.pingstart\.com
+262	Keen	Analytics	https://keen.io	io.keen.client.	api\.keen\.io
+263	Revmob	Advertisement	https://www.crunchbase.com/organization/revmob	com.revmob.ads.	
+264	Emarsys Predict		https://help.emarsys.com/hc/categories/115000670425-Predict	com.emarsys.predict	recommender\.scarabresearch\.com
+265	Lotame		https://www.lotame.com/	com.lotame.android	ad\.crwdcntrl\.net
+266	FollowAnalytics		https://www.followanalytics.com	com.followanalytics.	sdk\.follow-apps\.com
+267	Chartbeat	Analytics	https://chartbeat.com/	com.chartbeat.androidsdk	.chartbeat\.com|.chartbeat\.net
+268	MoEngage	Analytics	https://www.moengage.com/	com.moengage.	apiv2\.moengage\.com
+269	Altamob	Advertisement	https://www.altamob.com/en/index.html	com.altamob.sdk	api\.altamob\.com
+270	Tealeaf	Analytics	https://acoustic.co/products/experience-analytics/	com.tl.uic.Tealeaf	
+271	AMoAd		https://www.amoad.com	com.amoad.	
+272	AdAdapted	Advertisement,Analytics	https://www.adadapted.com	com.adadapted.android.sdk.	ads\.adadapted\.com
+273	AdMuing	Advertisement	https://github.com/admuing	com.admuing.danmaku.	
+274	Adcash	Advertisement	https://adcash.com	com.adcash.mobileads.	
+275	Admixer	Advertisement	http://admixer.co.kr/	com.admixer|net.admixer.sdk	admixer\.co\.kr|admixer\.net
+276	Admost	Advertisement	https://admost.com/	admost.sdk.|admost.adserver.	cdn\-api\.admost\.com|go\.admost\.com|med\-api\.admost\.com
+277	Alohalytics	Analytics	https://github.com/biodranik/Alohalytics	org.alohalytics.	
+278	Amobee		https://amobee.com	com.amobee.	amobee\.com
+279	Anagog	Analytics,Location	https://anagog.com	com.anagog.jedai	
+280	Bazaarvoice	Analytics,Location	https://www.bazaarvoice.com/	com.bazaarvoice.bvandroidsdk	
+281	BeaconsInSpace (Fysical)	Location	https://beaconsinspace.com	com.beaconsinspace.android.beacon.detector.	
+282	Conversant		https://www.conversantmedia.com	com.conversantmedia|com.greystripe.android.	conversantmedia\.com
+283	Glympse	Location	https://glympse.com	com.glympse.android.	\.glympse\.com
+284	Herow	Analytics,Location,Profiling	https://herow.io/	com.connecthings.herow	
+285	Placer	Analytics,Location,Profiling	https://placer.io/	com.placer.client.Placer	
+286	PushSpring		http://www.pushspring.com/	com.pushspring.sdk.PushSpring	api\.pushspring\.com
+287	Pyze	Analytics	https://pyze.com/	com.pyze.	pyze\.com
+288	Radar		https://radar.io/	io.radar.sdk.Radar	
+289	Roximity	Location	http://roximity.com/	com.roximity.sdk.	app\.roximity\.com
+290	Sentiance		https://www.sentiance.com/	com.sentiance.sdk.	api\.sentiance\.com
+291	SmartLook	Location,Profiling	https://www.smartlook.com/	com.smartlook.sdk.smartlook.	smartlook\.com
+292	Square Metrics		https://www.squaremetrics.com	com.beaconinside.proximitysdk.ProximityService	api\.beaconinside\.com
+293	TalkingData	Advertisement,Analytics	https://www.talkingdata.com/	com.talkingdata.sdk.|com.tendcloud.tenddata.|com.talkingdata.appanalytics.|com.talkingdata.adtracking.|com.tendcloud.appcpa.|com.apptalkingdata.push.|com.gametalkingdata.push.	account\.talkingdata\.com|av1\.xdrig\.com|cloud\.xdrig\.com|m\.talkingdata\.com|push\.xdrig\.com
+294	flymob		https://flymob.com/	com.flymob.sdk.	
+295	AdFalcon	Advertisement	http://adfalcon.com	com.noqoush.adfalcon.android.sdk	
+296	Bitly		https://bitly.com/	com.bitly.Bitly	
+297	Enhance		https://enhance.co	co.enhance.Enhance	app-config\.enhance\.co|data-location\.enhance\.co
+298	Esri ArcGIS	Location	https://www.arcgis.com/	com.esri.arcgisruntime.	
+299	GIPHY Analytics	Analytics	https://giphy.com/	com.giphy.sdk.analytics|com.giphy.sdk.tracking	api\.giphy\.com|pingback\.giphy\.com
+300	Heap	Analytics	https://heap.io/	com.heapanalytics	heapanalytics.com
+301	Inneractive	Advertisement	https://www.crunchbase.com/organization/inneractive	com.inneractive.api.ads	
+302	MDOTM	Advertisement	http://mdotm.com/	com.mdotm.android	ads\.mdotm\.com
+303	Metaps	Advertisement	http://www.metaps.com	com.metaps	
+304	Parse.ly	Analytics	https://www.parse.ly/	com.parsely.parselyandroid	
+305	Pollfish	Profiling	https://www.pollfish.com	com.pollfish	
+306	Qualtrics		http://www.qualtrics.com/	com.qualtrics.digital.	qualtrics\.com
+307	Tamoco	Analytics,Location	https://www.tamoco.com/	com.tamoco.sdk	evt\.tamoco\.com
+308	Vpon	Advertisement,Analytics,Profiling	https://www.vpon.com/	com.vpon.ads|com.vpadn.analytics|com.vpadn.ads.|com.vpadn.widget.	
+309	YuMe	Advertisement	https://www.appbrain.com/stats/libraries/details/yume/yume	com.yume.android	
+310	Zapr	Advertisement,Analytics,Location	https://www.zapr.in/	com.redbricklane.zapr	.zapr\.in
+311	mediba	Advertisement	https://www.mediba.jp	com.mediba.jp|mediba.ad.sdk.android.openx	
+312	Google AdMob	Advertisement	https://admob.google.com	com.google.ads.|com.google.android.gms.ads.AdView|com.google.android.gms.ads.AdActivity|com.google.android.gms.ads.AdRequest|com.google.android.gms.ads.mediation|com.google.android.gms.ads.doubleclick|com.google.android.ads.|com.google.unity.ads.|com.google.android.gms.admob|com.google.firebase.firebase_ads.	2mdn\.net|dmtry\.com|doubleclick\.com|doubleclick\.net|mng-ads\.com|mobileads\.google\.com|ads\.google\.com|googlesyndication\.com|googleadservices\.com|googleads\.g\.doubleclick\.net|adservice\.google\..*|adservice\.g\.cn
+313	Unacast Pure	Location	https://www.unacast.com/	com.pure.internal.|com.pure.sdk.	
+314	Factual		https://www.factual.com	com.factual.engine|com.factual.Factual	api.factual.com
+315	Footmarks	Location	https://www.footmarks.com	com.footmarks.footmarkssdkm2	
+316	OzTAM	Analytics	https://oztam.com.au/	au.com.oztam.	deliver.oztam.com.au
+317	Receptiv (formerly Mediabrix)	Advertisement	https://www.receptiv.com/	com.mediabrix.android	
+318	Tutela		https://www.tutela.com/	com.tutelatechnologies.sdk	
+319	Twine Data		https://www.truedata.co/	com.twine.sdk	
+320	Verizon Ads	Advertisement,Analytics,Identification,Location,Profiling	https://www.verizonmedia.com/	com.verizon.ads|com.verizondigitalmedia.mobile.|com.oath.mobile.	
+321	adPOPcorn	Advertisement	https://adpopcorn.com/	com.igaworks.adpopcorn|com.igaworks.ssp.	
+322	maio by i-mobile		https://adpf-info.i-mobile.co.jp/en/	jp.maio.sdk.	
+323	360Dialog	Advertisement,Analytics,Identification,Location,Profiling	https://www.360dialog.com	com.threesixtydialog.sdk.	
+324	ABTasty	Analytics	https://www.abtasty.com	com.abtasty	abtasty\.com
+325	ACRCloud	Analytics	https://acrcloud.com/	com.acrcloud	acrcloud.com|hb-minify-juc1ugur1qwqqqo4.stackpathdns.com
+326	Aarki	Advertisement,Analytics,Identification,Profiling	https://www.aarki.com	com.aarki	
+327	Actv8me	Advertisement,Identification,Location,Profiling	https://www.actv8me.com/	me.actv8	actv8technologies\.com
+328	IAB Open Measurement	Advertisement,Identification	https://iabtechlab.com/	com.iab.omid.library|com.prime31.util.IabHelperImpl|com.prime31.IAB.	
+333	Huawei Mobile Services (HMS) Core	Advertisement,Analytics,Location	https://developer.huawei.com/consumer/en/hms	com.huawei.hms.analytics|com.huawei.hms.location|com.huawei.hms.plugin.analytics|com.huawei.hms.plugin.ads|com.huawei.updatesdk.|com.huawei.agconnect.|com.huawei.hms.support.api.push.|com.huawei.hms.flutter.analytics.	hicloud\.com|dbankcloud\.ru|dbankcloud\.cn|dbankcloud\.com
+334	Akamai MAP	Analytics	https://www.akamai.com/	com.akamai.android.sdk.AkaMap	
+336	Mail.ru		http://mail.ru	ru.mail.mrgservice.advertising|ru.mail.mrgservice.analytics	
+337	Airpush	Advertisement	https://airpush.com/	com.airpush.	api\.airpush\.com|apidm\.airpush\.com|apistaging\.airpush\.com|apportal\.airpush\.com|appwall\.api\.airpush\.com|beta\.airpush\.com|cdnap\.airpush\.com|m\.airpush\.com
+338	Alimama (formerly AdsMogo)	Advertisement	https://www.alimama.com/	com.adsmogo.|com.alimama.	\.alimama\.|\.adsmogo\.
+339	AnySDK	Advertisement,Analytics	http://www.anysdk.com/	com.anysdk.framework.AnalyticsWrapper|com.anysdk.framework.AdsWrapper	
+340	Button	Analytics,Identification,Profiling	https://www.usebutton.com	com.usebutton.sdk.	\.usebutton.com
+341	Carto (formerly Nutiteq)	Advertisement,Location	https://carto.com	com.nutiteq|com.carto	
+342	Didomi	Analytics	https://www.didomi.io/	io.didomi.sdk.	
+343	JiGuang Aurora Mobile JPush	Analytics	https://ir.jiguang.cn/corporate-profile	cn.jpush.android	.*\.jiguang\.cn
+344	Jumio	Identification	https://www.jumio.com/	com.jumio.MobileSDK	mobile-sdk-resources.jumio.com|nv-sdk.jumio.com
+345	Lenddo	Analytics,Identification,Location	https://www.lenddo.com/	com.lenddo.mobile	\.partner-service\.link
+346	POKKT	Advertisement	https://www.pokkt.com	com.pokkt.sdk.	
+347	Prebid Mobile	Advertisement	https://prebid.org	org.prebid.mobile	.prebid.org
+348	SK planet Tad	Advertisement	https://www.skplanet.com/eng	com.skplanet.tad	
+349	Split	Analytics	https://www.split.io/	io.split.android.	event.split.io|sdk.split.io
+350	Exponea	Analytics	https://exponea.com	com.infinario.android.infinariosdk.|com.exponea.sdk|com.sygic.aura.	api.infinario.com|sygic-api.infinario.com
+351	IPQualityScore	Location,Profiling	https://www.ipqualityscore.com	com.ipqualityscore.	ipqualityscore\.com
+352	Opensignal	Analytics,Location	https://www.opensignal.com	com.opensignal.datacollection.	
+353	SignalFrame	Location	https://signalframe.com/	com.wirelessregistry.observersdk.	
+354	X-Mode	Analytics,Location	https://xmode.io/	io.xmode.BcnConfig|io.xmode.locationsdk|io.mysdk.	api\.myendpoint\.io|bin5y4muil\.execute-api\.us-east-1\.amazonaws\.com|api\.smartechmetrics\.com
+355	OneAudience	Analytics,Profiling	http://www.oneaudience.com/	com.oneaudience.sdk.	
+356	OpenBack		https://www.openback.com	com.openback	
+357	PredicIO	Advertisement,Analytics,Identification,Location	https://www.predic.io/	com.telescope.android|io.predic.tracker	sdk\.predic\.io
+358	AdLocus	Advertisement,Identification,Location,Profiling	https://adlocus.com	com.adlocus.	
+359	Adcenix	Advertisement	http://adcenix.com	com.adcenix.	
+360	Admitad	Advertisement	https://www.admitad.com	ru.tachos.admitadstatisticsdk	.*\.admitad.com
+361	AutoNavi / Amap	Location	https://mobile.amap.com/	com.amap.api	grid\.amap\.com|tm\.amap\.com|mst[0-9]*\.is\.autonavi\.com|mt[0-9]*\.google\.cn|abroad\.apilocate\.amap\.com|apilocate\.amap\.com|restapi\.amap\.com|yuntuapi\.amap\.com|m5\.amap\.com|wb\.amap\.com|wb\.amap\.com|wb\.amap\.com|wb\.amap\.com|apiinit\.amap\.com|restapi\.amap\.com|logs\.amap\.com|cgicol\.amap\.com|lbs\.amap\.com|wap\.amap\.com
+362	IBM Digital Analytics	Analytics	https://www.ibm.com/customer-engagement/coremetrics-software	com.digitalanalytics.	data\.de\.coremetrics\.com
+363	Pangle	Advertisement	https://www.pangleglobal.com	com.bytedance|com.pgl|com.pangle.global	
+364	YOC VIS.X	Advertisement	https://yoc.com	com.yoc.visx	yoc-performance\.com|yoc\.com
+365	Ad Generation	Advertisement	https://supership.jp/business/adgeneration/	com.socdm.d.adgeneration.	
+366	Adjoe	Advertisement	https://adjoe.io/	io.adjoe.sdk.|io.adjoe.protection.	
+367	AppVador	Advertisement	http://www.appvador.com/	com.appvador.ads.	
+368	Appodeal Stack	Advertisement,Analytics	https://appodealstack.com/about/	com.explorestack.	
+369	AppsGeyser	Advertisement	https://appsgeyser.com/	com.appsgeyser.sdk|com.appsgeyser.multiTabApp.VideoPlayerActivity	
+370	BidMachine	Advertisement	https://bidmachine.io/	io.bidmachine.	
+371	BugSense	Crash reporting	http://www.bugsense.com/	com.bugsense.trace.	
+372	BuzzAd Benefit	Advertisement	https://buzzvil.atlassian.net/wiki/spaces/BDG/pages/486834313/BuzzAd-Benefit+Android+SDK	com.buzzvil.	
+373	GOM Factory AdPie	Advertisement	http://www.gomfactory.com	com.gomfactory.adpie.	
+374	JumpTap	Advertisement	http://www.millennialmedia.com	com.jumptap.adtag.	
+375	LoopMe	Advertisement	https://loopme.com/	com.loopme.	
+376	Raygun	Analytics,Crash reporting	https://raygun.com	com.mindscapehq.android.raygun4android	
+377	RjFun	Advertisement	https://rjfun.github.io/	com.rjfun.cordova.ad|com.rjfun.cordova.admob	
+378	SuperAwesome	Advertisement	https://www.superawesome.com/	tv.superawesome.sdk|tv.superawesome.lib.	
+379	TapResearch	Analytics,Profiling	https://www.tapresearch.com/	com.tapr.sdk.|com.tapr.internal.|com.tapr.helpers.	
+380	Tappx	Advertisement	https://www.tappx.com/	com.tappx.sdk.android	
+381	ThinkingData Analytics	Analytics,Identification	http://www.thinkingdata.cn/	cn.thinkingdata.	
+382	VKontakte SDK	Identification	https://vksdk.github.io/vk-sdk-android/	com.vk.sdk.|com.vk.api.sdk.	
+383	Virgo Mobile	Advertisement	http://virgomobile.com/	com.virgo.ads.	
+384	Zoho Analytics	Analytics	http://analytics.zoho.com/	com.zoho.zanalytics.	
+385	fineboost	Advertisement,Analytics	http://www.yifants.cn/	com.fineboost.	
+386	Acuant	Profiling	https://www.acuantcorp.com	com.acuant.acuantcamera	frm\.acuant\.net|medicscan\.acuant\.net|services\.assureid\.net
+387	Anvato (A Google Company)	Advertisement,Analytics,Identification,Location,Profiling	https://cloud.google.com/solutions/media-entertainment/?a=2	com.anvato.androidsdk.	.*\.anvato\.net
+388	Blesh	Location	https://www.blesh.com/	com.blesh.sdk.	
+389	Bluecats	Location	https://www.bluecats.com/	com.bluecats.sdk	
+390	CoolaData	Analytics,Profiling	https://www.cooladata.com/	com.cooladata.android.	
+391	FLUZO	Analytics	https://www.fluzo.com/	com.fluzo.sdk.	
+392	Facebook Flipper	Analytics	https://fbflipper.com	com.facebook.flipper	
+393	GPShopper	Analytics	https://www.crunchbase.com/organization/gpshopper	com.gpshopper	sdk\.gpshopper\.com|sypi\.gpshopper\.com
+394	IndoorAtlas	Analytics,Location	http://www.indooratlas.com/	com.indooratlas.android.sdk	ipsws\.indooratlas\.com
+395	Janrain	Identification	https://en.wikipedia.org/wiki/Janrain	com.janrain.android|com.janrain.android.engage|com.janrain.android.capture	
+396	MOCA	Analytics,Location,Profiling	https://www.mocaplatform.com/	com.innoquant.moca	api-device\.mocaplatform\.com
+397	Point Inside	Analytics,Location	https://www.pointinside.com/	com.pointinside	
+398	Proximi.io	Analytics,Location	https://proximi.io/	io.proximi.proximiiolibrary	api\.proximi\.fi
+399	ScoreLoop		https://www.scoreloop.com	com.scoreloop.client.android	
+400	Alooma	Analytics	https://www.alooma.com	com.github.aloomaio.androidsdk	inputs\.alooma\.com
+401	Analytics by NPAW (Youbora Suite)	Analytics,Location,Profiling	https://nicepeopleatwork.com/	com.npaw.youbora.	
+402	Beintoo	Advertisement,Analytics,Location,Profiling	https://beintoo.com/	com.beintoo.nucleon	
+403	Bolts	Analytics	https://github.com/BoltsFramework/Bolts-Android	com.parse.bolts	
+404	Cedexis Radar	Location	https://www.cedexis.com/	com.cedexis	cedexis\-radar\.net|cedexis\.com|radar\.cedexis\.com
+405	Cifrasoft	Advertisement,Identification,Location	http://cifrasoft.com	com.cifrasoft.	\.tele\.fm
+406	Flowsense	Analytics,Location,Profiling	https://flowsense.com.br/	com.flowsense.flowsensesdk.	
+407	Geniee	Advertisement	https://geniee.co.jp/	jp.co.geniee.gnadsdk.	
+408	Huq Sourcekit	Analytics,Location	https://huq.io/	io.huq.sourcekit.	
+409	Insider	Analytics	https://useinsider.com/	com.useinsider.insider	
+410	Mopinion	Analytics,Profiling	https://mopinion.com	com.mopinion.mopinionsdk	
+411	OfferToro	Advertisement	http://www.offertoro.com/	com.offertoro.sdk.	
+412	OpenTelemetry (OpenCensus, OpenTracing)	Analytics	https://opentelemetry.io/	io.opencensus|io.opentelemetry	
+413	Snapchat Login Kit	Identification	https://kit.snapchat.com/docs/login-kit	com.snapchat.kit.sdk.SnapLogin	
+414	Zendrive	Analytics,Location,Profiling	https://www.zendrive.com/	com.zendrive.sdk.	
+415	fullstory	Analytics	https://www.fullstory.com/	com.fullstory.instrumentation.|com.fullstory.util.|com.fullstory.jni.|com.fullstory.FS|com.fullstory.rust.|com.fullstory.FSSessionData	
+416	Pendo	Analytics	https://www.pendo.io	sdk.insert.io.|sdk.pendo.io.	
+417	Plexure	Analytics	https://www.plexure.com/	co.vmob.sdk	
+418	Swirl		http://swirl.com/	com.swirl	cdn-api\.swirl\.com
+419	Treasure Data	Analytics,Profiling	https://www.treasuredata.com/product/	com.treasuredata	
+420	IBM Mobile Marketing (Acoustic)	Advertisement,Analytics	https://acoustic.co/	com.ibm.mce.sdk.|co.acoustic.mobile.push.sdk.|com.xtify.mce.sdk.|com.xtify.android.sdk.	sdk6\.ibm\.xtify\.com
+422	Solar2D (Corona)	Advertisement,Analytics	https://solar2d.com/	com.ansca.corona	
+423	Amazon Mobile Analytics (Amplify)	Analytics	https://aws.amazon.com/amplify/	com.amplifyframework.analytics.	
+424	AD(X)	Advertisement	https://adxcorp.kr/	com.adxcorp.ads|com.adxcorp.nativead	
+425	AdGateMedia	Advertisement	https://adgatemedia.com/	com.adgatemedia.	
+426	AdMarvel	Advertisement	https://www.crunchbase.com/organization/admarvel	com.admarvel.	
+427	AdTiming	Advertisement	https://www.adtiming.com/	com.aiming.mdt.|com.adtiming.	
+428	Adjust Unbotify	Analytics	https://www.adjust.com/product/unbotify/	com.unbotify.mobile.sdk.	
+429	LotaData	Analytics,Location,Profiling	http://lotadata.com	com.lotadata.moments.	
+430	Marketo (an Adobe Company)	Analytics	https://marketo.com	com.marketo.	marketo\.com|marketo\.net|mktoedge\.com|mktossl\.com|\.mktorest\.com
+431	PlaytestCloud Event Tracking	Analytics	https://www.playtestcloud.com	com.playtestcloud.Analytics	
+432	Rollbar	Crash reporting	https://rollbar.com	com.rollbar.android.	
+433	Snap Ad Kit	Advertisement	https://kit.snapchat.com/docs/ad-kit	com.snap.adkit|com.snap.appadskit	
+434	Synerise	Advertisement,Identification,Profiling	https://synerise.com	com.synerise.sdk	synerise\.com
+435	UserExperior	Analytics,Crash reporting,Location,Profiling	https://www.userexperior.com/	com.userexperior	
+436	Vdopia	Advertisement	https://chocolateplatform.com/	com.vdopia.client.android.|com.vdopia.ads.	
+437	AdGem	Advertisement	https://adgem.com/	com.adgem.android.	
+438	AdTrial	Advertisement	https://adtrial.com/	com.adtrial.sdk.	
+439	Pincrux	Advertisement	https://www.pincrux.com/	com.pincrux.	
+440	Tutucloud		https://tutucloud.com	org.lasque.tusdk.core|org.lasque.tusdkpulse.core	tusdk\.com
+441	Veloxity	Advertisement	http://www.veloxity.net/	net.veloxity.	
+442	Yoadx	Advertisement	https://yoadx.com/	com.yoadx.yoadx.	
+443	Coulus Coelib	Advertisement	https://measurementsys.com/index.php#appdev	coelib.c.couluslibrary	
+444	ACRA	Crash reporting	https://www.acra.ch/	org.acra.|ch.acra.	
+445	Backtrace	Crash reporting	https://backtrace.io	com.github.backtrace-labs.|backtraceio.library.	backtrace\.io
+447	Sentry	Crash reporting	https://sentry.io/	io.sentry.|com.joshdholtz.sentry	
+448	Yueying Crash SDK	Analytics,Crash reporting	https://yueying-docs.effirst.com/	com.uc.crashsdk|com.uc2.crashsdk	

@@ -1,0 +1,20 @@
+SPDX-License-Identifier: ODbL-1.0 AND DbCL-1.0
+
+Tracker signatures from the εxodus tracker database, maintained by Exodus Privacy
+(https://exodus-privacy.eu.org) on its tracker investigation platform, ETIP. Recorded in ADR 0015.
+
+trackers.tsv
+    Contains information from the εxodus tracker database
+    (https://reports.exodus-privacy.eu.org), which is made available here under the Open Database
+    License (ODbL) 1.0 (https://opendatacommons.org/licenses/odbl/1-0/). Any rights in individual
+    contents of the database are licensed under the Database Contents License (DbCL) 1.0
+    (https://opendatacommons.org/licenses/dbcl/1-0/).
+
+    trackers.tsv is a derivative database: a selection of the fields of each tracker (id, name,
+    categories, website, code signature, network signature), converted by update.py from the API at
+    https://reports.exodus-privacy.eu.org/api/trackers. It is offered under the ODbL 1.0, also as
+    part of the Datapavan app and its enterprise edition. Corrections to the data belong in the
+    εxodus database itself; see https://github.com/Exodus-Privacy/exodus.
+
+update.py
+    The converter: Apache-2.0, like the rest of this repository. No εxodus code is used.

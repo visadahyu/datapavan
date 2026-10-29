@@ -7,6 +7,7 @@
 
 pub mod attestation;
 pub mod dex;
+pub mod trackers;
 
 /// Version of the engine, taken from the crate manifest at build time.
 #[must_use]
