@@ -145,6 +145,12 @@ Development is **AI-assisted**. Design decisions are made and approved by the ma
 reviewed by the maintainer before it is committed. Commits made this way carry an `Assisted-by:` trailer.
 The rules for contributors are in [CONTRIBUTING.md](CONTRIBUTING.md#ai-assisted-contributions).
 
+**What is public and what is not.** Strategy, funding, legal questions under review and the research
+behind them are kept in a private repository of the Visadahyu Foundation. Every decision that changes what
+the software does, or how it treats its users, is published here with its reasons, as an
+[architecture decision record](docs/decisions/README.md), together with the spikes that measure the
+software's behaviour.
+
 ## Building
 
 Requirements (versions are pinned in the repository; CI installs exactly these):
