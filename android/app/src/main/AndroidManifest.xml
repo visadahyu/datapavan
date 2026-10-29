@@ -3,12 +3,20 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-        No Android platform permissions in v0.1: the app cannot open network connections.
-        (AndroidX adds one app-internal signature permission for non-exported receivers.)
+        v0.1 permissions (ADR 0014). None of them allows a network connection; INTERNET stays
+        forbidden by the build. (AndroidX adds one app-internal signature permission for
+        non-exported receivers.)
         allowBackup=false disables cloud backup. Device-to-device transfer must be excluded
         separately on Android 12+, which data_extraction_rules does; backup_rules is required by
         Lint for Android 10-11 and excludes everything as well.
     -->
+    <!-- See every installed app; an audit with a filtered list would be incomplete by design. -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+    <!-- Tell whether a VPN is active. A normal permission that allows no connection. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"

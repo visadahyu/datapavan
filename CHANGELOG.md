@@ -11,7 +11,8 @@ All notable changes to this project are documented here. The format follows
 - Project skeleton (milestone M1):
   - Android app: Kotlin and Jetpack Compose, minSdk 29, target SDK 37.
   - Rust engine (`datapavan-engine`, `unsafe` forbidden) and JNI bridge (`datapavan-jni`).
-- No Android platform permissions. AndroidX adds only an app-internal signature permission. The build fails if INTERNET is added through any build path (APK, bundle or install). Cloud backup and device-to-device transfer are disabled.
+- App audit (milestone M2, first part): every installed app with its install source, dates, dangerous permissions and special access; risk checks for VPN apps that could control the phone, preinstalled data collectors, apps that can install other apps, and sensor access; phone-wide checks for USB and wireless debugging, user-installed certificate authorities, an active VPN, an old security patch, and the bootloader and verified-boot state from hardware key attestation, decoded by a Rust parser.
+- Permissions (ADR 0014): see all installed apps, and network state to tell whether a VPN is active. The build fails if INTERNET is added through any build path (APK, bundle or install). Cloud backup and device-to-device transfer are disabled.
 - UI in English, French, German and Persian, with right-to-left support, pseudo-locales in debug builds, and LTR token isolation.
 - Supply-chain protection:
   - pinned toolchains;

@@ -4,4 +4,77 @@
     <string name="tagline">See what your apps send, and to whom. Then stop it.</string>
     <!-- %1$s is a version number such as 0.1.0. It is passed in already bidi-isolated. -->
     <string name="engine_version">Core engine %1$s</string>
+
+    <!-- M2 audit -->
+    <string name="audit_loading">Checking your phone…</string>
+    <string name="section_device">This phone</string>
+    <string name="section_apps">Apps</string>
+    <string name="device_all_clear">No phone-wide risks found.</string>
+    <string name="device_integrity_ok">Hardware check: the bootloader is locked and the system is verified.</string>
+    <string name="device_integrity_unavailable">The hardware check is not available on this phone.</string>
+    <!-- %1$s is a date such as 2023-03, passed in already bidi-isolated. -->
+    <string name="device_patch">Security patch: %1$s</string>
+    <!-- Both values are counts. -->
+    <string name="apps_summary">Apps checked: %1$d. Need attention: %2$d.</string>
+    <string name="show_all_apps">Show all apps</string>
+    <string name="show_flagged_apps">Show only apps that need attention</string>
+    <!-- %1$s is a finding title; %2$d is the number of further findings, shown as "+2". -->
+    <string name="finding_and_more">%1$s (+%2$d)</string>
+    <string name="back">Back</string>
+    <string name="open_app_settings">Open in system settings</string>
+    <string name="detail_system_app">Preinstalled system app</string>
+    <string name="detail_user_app">Installed by the user</string>
+    <!-- %1$s is a package name, passed in already bidi-isolated. -->
+    <string name="detail_installer">Installed by %1$s</string>
+    <string name="detail_installer_unknown">Install source unknown</string>
+    <!-- %1$s and %2$s are localised dates. -->
+    <string name="detail_dates">Installed %1$s · last updated %2$s</string>
+    <string name="detail_findings">What we found</string>
+    <string name="detail_no_findings">Nothing to report.</string>
+    <string name="detail_special">Special access</string>
+    <string name="detail_permissions">Sensitive permissions</string>
+    <string name="detail_none">None</string>
+    <string name="severity_high">High</string>
+    <string name="severity_medium">Medium</string>
+    <string name="severity_low">Low</string>
+    <string name="severity_info">Note</string>
+    <string name="special_accessibility">Accessibility service</string>
+    <string name="special_notification_listener">Reads notifications</string>
+    <string name="special_device_admin">Device admin</string>
+    <string name="special_overlay">Display over other apps</string>
+    <string name="special_usage_access">Usage access</string>
+    <string name="special_install_unknown_apps">Install unknown apps</string>
+    <string name="special_all_files">Access to all files</string>
+    <string name="special_battery_exempt">Unrestricted battery use</string>
+    <string name="action_developer_settings">Open developer options</string>
+    <string name="action_security_settings">Open security settings</string>
+    <string name="finding_vpn_remote_control_title">VPN app that can control the phone</string>
+    <string name="finding_vpn_remote_control_body">This VPN app also holds access that lets it read the screen or notifications, or control the phone, and your traffic already passes through it. Unless you know why it needs this, revoke the access or uninstall the app.</string>
+    <string name="finding_remote_control_title">Can read the screen or control the phone</string>
+    <string name="finding_remote_control_body">This app can read what is on the screen or in your notifications, or manage the device. Keep this only for apps you fully trust.</string>
+    <string name="finding_preinstalled_collector_title">Preinstalled data collector</string>
+    <!-- %1$s is a company name, e.g. Meta. -->
+    <string name="finding_preinstalled_collector_body">The phone maker preinstalled this app from %1$s, a company whose business is collecting data. It runs even if you never use it. You can disable it in system settings.</string>
+    <string name="finding_installs_apps_title">Can install other apps</string>
+    <string name="finding_installs_apps_body">This app may install other apps. Malware spreads this way. Allow it only for app stores you trust.</string>
+    <string name="finding_sensors_title">Microphone, camera or location</string>
+    <string name="finding_sensors_body">This app may use the microphone, the camera or your location while you use it. Check whether it really needs this.</string>
+    <string name="finding_unknown_source_title">Not from a known app store</string>
+    <string name="finding_unknown_source_body">This app was not installed from a known app store. That is fine if you installed it yourself from its official website; a modified copy can carry spyware.</string>
+    <string name="finding_user_ca_title">Extra certificate authority installed</string>
+    <string name="finding_user_ca_body">A certificate authority was added to this phone. Whoever controls it can read encrypted traffic, for example a VPN provider or an employer. Remove it unless you know exactly why it is there.</string>
+    <string name="finding_wireless_debugging_title">Wireless debugging is on</string>
+    <string name="finding_wireless_debugging_body">Devices on the same network can try to connect to this phone and control it. Turn it off when you are not developing apps.</string>
+    <string name="finding_bootloader_unlocked_title">Bootloader unlocked</string>
+    <string name="finding_bootloader_unlocked_body">The bootloader is unlocked, so the system can be replaced without your knowledge. If you did not unlock it yourself, treat this as a serious warning.</string>
+    <string name="finding_boot_not_verified_title">System not verified</string>
+    <string name="finding_boot_not_verified_body">The bootloader reports that the operating system could not be verified with the maker\'s key.</string>
+    <string name="finding_usb_debugging_title">USB debugging is on</string>
+    <string name="finding_usb_debugging_body">A computer connected by cable can install apps and read data once you accept its key. Turn it off when you do not need it.</string>
+    <string name="finding_old_patch_title">Security updates are old</string>
+    <string name="finding_old_patch_body">The last security patch on this phone is more than a year old, so known vulnerabilities are not fixed.</string>
+    <string name="finding_software_only_title">No hardware check available</string>
+    <string name="finding_software_only_body">This phone attests only in software, so hardware cannot confirm the system state. This is normal for emulators.</string>
+    <string name="finding_vpn_active_title">A VPN is active</string>
+    <string name="finding_vpn_active_body">All traffic currently passes through a VPN app. Make sure it is one you trust.</string>
 </resources>
