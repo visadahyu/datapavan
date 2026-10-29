@@ -275,6 +275,7 @@ datapavan/
   scripts/fixture-app/ test app with risky access, built without Gradle, for verify-audit.sh
   scripts/screenshots.sh    screenshots in every language with an accessibility check (a11y-check.py); CI calls it
   scripts/fuzz.sh      runs every fuzz target; CI calls it
+  scripts/compare-dex.sh    compares the DEX parser with the SDK's dexdump on real APKs
   data/                bundled dataset snapshots, each with LICENSE, SOURCE and its converter (ADR 0015); attestation/ holds Google's attestation roots and revocation list
 ```
 

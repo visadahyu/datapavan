@@ -6,6 +6,7 @@
 //! configuration enforces that at compile time.
 
 pub mod attestation;
+pub mod dex;
 
 /// Version of the engine, taken from the crate manifest at build time.
 #[must_use]
