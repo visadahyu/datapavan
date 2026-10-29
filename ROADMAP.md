@@ -64,7 +64,7 @@ starts, a two-week spike picks the packet engine (Rust netstack or Go gVisor). D
 - **Device Owner flavour.** Disables system apps, enforces always-on VPN in lockdown mode, controls installs and permissions on stock devices, with no root and no bootloader unlocking.
 - **Circumvention policy** for organisations in filtered networks: only approved, signature-verified tools; no user-installed certificate authorities; no debugging; Datapavan always in front of the tool.
 - **Work-profile isolation.** Puts high-tracking apps (for example Meta's) in a separate profile that cannot see the rest of the phone, and pauses the whole profile when those apps are not in use. Possible without a factory reset.
-- **Enforced permissions.** Microphone, camera and location stay denied for chosen apps, so they cannot be granted by mistake.
+- **Enforced permissions.** Microphone, camera and location stay denied for every app outside an allow-list, and new requests are denied automatically: the strict sensor mode that stage 1 can only guide.
 - **AI-data guard.** Watches apps and system AI services that can read the screen, notifications or keyboard input.
 - **Compliance reporting** for the GDPR and comparable laws (for example the UK GDPR, Switzerland's FADP, Brazil's LGPD and Turkey's KVKK).
 
