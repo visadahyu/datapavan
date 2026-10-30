@@ -64,3 +64,45 @@ app defines and the types in their declarations.
   results of unchanged apps and finish within seconds. A first scan that is cut short resumes where
   it stopped (160 apps were saved after 30 seconds). 58 apps contain trackers, 10 more only refer to
   some; no app was unreadable.
+
+## Definition of done (2026-10-30)
+
+`scripts/compare-exodus.sh` repeated the comparison on the `dp-api37-16k` emulator (Android 17),
+signed in to Google Play with a test account. It was given 40 popular apps from many categories and
+regions. For each app it read the latest εxodus report, installed the app from Play, and scanned
+every installed APK only when the version code matched. 16 apps matched. 19 had another version:
+Play served a newer build than the latest report, or a build for x86_64 with its own version code.
+5 were not offered to the test account.
+
+| App | Version | In the report | Found embedded | Found referenced only | Missed | Found besides (all referenced only, except Opera Mini) |
+|---|---|---|---|---|---|---|
+| Reddit | 2026.43.1 | 3 | 3 | 0 | 0 | |
+| Adobe Acrobat Reader | 26.10.0.51147 | 9 | 9 | 0 | 0 | |
+| DuckDuckGo | 5.300.0 | 0 | 0 | 0 | 0 | |
+| WhatsApp | 2.26.42.74 | 0 | 0 | 0 | 0 | |
+| Duolingo | 6.103.6 | 31 | 13 | 18 | 0 | AppMonet |
+| Shazam | 16.65.0 | 2 | 2 | 0 | 0 | Facebook Login |
+| MyFitnessPal | 26.43.0 | 14 | 14 | 0 | 0 | |
+| Candy Crush Saga | 1.339.0.2 | 13 | 10 | 3 | 0 | 16 ad networks |
+| Waze | 5.26.0.0 | 1 | 1 | 0 | 0 | |
+| Viber | 29.2.0.0 | 21 | 6 | 15 | 0 | Add Apt Tr, Admost, Appodeal Stack |
+| AliExpress | 8.180.1 | 7 | 7 | 0 | 0 | |
+| Telegram | 13.1.1 | 0 | 0 | 0 | 0 | |
+| Airbnb | 26.43 | 7 | 7 | 0 | 0 | |
+| Amazon Shopping | 32.19.0.100 | 3 | 3 | 0 | 0 | |
+| Opera Mini | 99.7.2254.2684 | 7 | 7 | 0 | 0 | IAB Open Measurement and Pangle embedded, in a split; 6 more referenced |
+| Subway Surfers | 3.70.2 | 23 | 20 | 3 | 0 | 9 ad networks |
+| **16 apps** | | **141** | **102** | **39** | **0** | |
+
+- **Every tracker in the 16 reports was found.** With the six same-version apps of 2026-10-29, the
+  scan agrees with εxodus on 22 apps, which meets M3's definition of done. Three of the 16 reports
+  list no tracker (DuckDuckGo, WhatsApp, Telegram), and the scan found none either.
+- **What the scan finds besides is explained.**
+  - Almost all of it is referenced only. Ad mediation SDKs (in games, Viber and Duolingo) name the ad
+    networks they can work with, and those networks' classes are not in the app. The scan reads
+    every type an app's code refers to, which is more than the declarations that εxodus reads, so
+    it shows more of them. The app lists these apart, as "referred to, not included".
+  - Opera Mini's two embedded extras are in an APK split, as in the first run with Opera.
+- **εxodus counts references as trackers too.** 39 of the 141 trackers in these reports are only
+  referred to in the app's code. In Duolingo that is 18 of 31, and in Viber 15 of 21. Datapavan
+  keeps telling the user which trackers an app contains and which it only names.
