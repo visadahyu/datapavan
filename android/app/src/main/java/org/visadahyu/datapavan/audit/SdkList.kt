@@ -24,10 +24,24 @@ data class Sdk(
  * Traffic-sharing, remote-support and screen-recording SDKs (`data/sdks`, ADR 0019). Their shipped
  * identifiers join the tracker scanner's signatures, so one pass over an app's code finds both.
  */
-class SdkList private constructor(val sdks: List<Sdk>, private val identifiers: Map<Int, List<String>>) {
+class SdkList private constructor(
+    val sdks: List<Sdk>,
+    private val identifiers: Map<Int, List<String>>,
+    /** Shipped native-library names, such as `libpawns_ndk.so`, to the id of their SDK. */
+    val nativeLibraries: Map<String, Int>,
+) {
     private val byId = sdks.associateBy { it.id }
 
     fun byId(id: Int): Sdk? = byId[id]
+
+    /**
+     * The SDKs whose native libraries are among an APK's entries (`lib/<abi>/<name>.so`). Some SDKs
+     * keep their engine in native code, which class names alone would miss.
+     */
+    fun nativeMatches(entries: Sequence<String>): Set<Int> = entries
+        .mapNotNull { name -> NATIVE_ENTRY.matchEntire(name)?.groupValues?.get(1) }
+        .mapNotNull { nativeLibraries[it] }
+        .toSet()
 
     /**
      * The identifiers that may reach the phone, in the scanner's format (that of
@@ -45,15 +59,17 @@ class SdkList private constructor(val sdks: List<Sdk>, private val identifiers: 
         /** Grades 1 to 3 ship; 4 and 5 are the work queue. */
         private const val MAX_SHIPPED_GRADE = 3
 
-        /** Kinds of identifier the class-name scanner can match. Native libraries come later. */
+        /** Kinds of identifier the class-name scanner matches; native libraries are matched by name. */
         private val CLASS_MATCHES = setOf("class", "class-prefix", "manifest-component")
+        private val NATIVE_ENTRY = Regex("lib/[^/]+/([^/]+\\.so)")
 
         /** Reads `sdks.tsv` and `signatures.tsv` as `data/sdks/update.py` writes them. Malformed lines are skipped. */
         fun parse(sdks: String, signatures: String): SdkList {
-            val shipped = rows(signatures).filter { columns ->
-                columns.size >= 10 && columns[1] in CLASS_MATCHES && columns[3] == "high" &&
-                    (columns[4].toIntOrNull() ?: Int.MAX_VALUE) <= MAX_SHIPPED_GRADE
+            val usable = rows(signatures).filter { columns ->
+                columns.size >= 10 && columns[3] == "high" && (columns[4].toIntOrNull() ?: Int.MAX_VALUE) <= MAX_SHIPPED_GRADE
             }
+            val shipped = usable.filter { it[1] in CLASS_MATCHES }
+            val native = usable.filter { it[1] == "native-lib" }
             val checked = shipped.groupBy({ it[0] }, { it[9] }).mapValues { (_, dates) -> dates.max() }
             val values = shipped.groupBy({ it[0] }, { it[2] })
             val list = rows(sdks).mapIndexedNotNull { index, columns ->
@@ -72,7 +88,12 @@ class SdkList private constructor(val sdks: List<Sdk>, private val identifiers: 
                     columns.getOrNull(5)?.takeIf { it.isNotBlank() }, checked[columns[0]].orEmpty(),
                 )
             }
-            return SdkList(list.map { it.second }, list.associate { (key, sdk) -> sdk.id to values[key].orEmpty() })
+            val ids = list.toMap()
+            return SdkList(
+                list.map { it.second },
+                list.associate { (key, sdk) -> sdk.id to values[key].orEmpty() },
+                native.mapNotNull { columns -> ids[columns[0]]?.let { columns[2] to it.id } }.toMap(),
+            )
         }
 
         private fun rows(tsv: String) = tsv.lineSequence()

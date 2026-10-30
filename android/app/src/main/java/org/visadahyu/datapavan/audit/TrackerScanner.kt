@@ -82,7 +82,8 @@ class TrackerScanner(private val context: Context) {
                 false
             }
         } ?: return@coroutineScope emptyMap()
-        val dataVersion = sha256(signatures)
+        // Native-library names are part of the data a cached result was made with.
+        val dataVersion = sha256(signatures + sdkList.nativeLibraries.toSortedMap())
         val cached = ScanCache.read(cacheFile, dataVersion)
         val done = AtomicInteger()
         // Saved every few apps as well, so that a first scan cut short (the user leaves, Android
@@ -123,6 +124,7 @@ class TrackerScanner(private val context: Context) {
         return try {
             for (apk in apks) {
                 ZipFile(apk).use { zip ->
+                    embedded += sdkList.nativeMatches(zip.entries().asSequence().map { it.name })
                     for (entry in zip.entries()) {
                         if (!DEX_ENTRY.matches(entry.name)) continue
                         // The size comes from the APK's directory. A file far larger than any real

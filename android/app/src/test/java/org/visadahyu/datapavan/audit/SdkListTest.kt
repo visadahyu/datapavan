@@ -59,6 +59,14 @@ class SdkListTest {
     }
 
     @Test
+    fun `native libraries match by name in any ABI folder`() {
+        val share = list.sdks.first { it.name == "Share SDK" }
+        assertEquals(mapOf("libshare.so" to share.id), list.nativeLibraries)
+        assertEquals(setOf(share.id), list.nativeMatches(sequenceOf("classes.dex", "lib/arm64-v8a/libshare.so", "lib/x86_64/libshare.so")))
+        assertEquals(emptySet<Int>(), list.nativeMatches(sequenceOf("assets/libshare.so", "lib/arm64-v8a/libother.so", "libshare.so")))
+    }
+
+    @Test
     fun `scanner lines parse like εxodus lines`() {
         val parsed = TrackerData.parse(list.signatureTsv())
         assertEquals(setOf("Share SDK", "Support SDK", "Record SDK"), parsed.values.map { it.name }.toSet())
@@ -71,6 +79,7 @@ class SdkListTest {
         val pawns = bundled.sdks.first { it.name == "Pawns SDK" }
         assertEquals(SdkCategory.TRAFFIC_SHARING, pawns.category)
         assertTrue(bundled.signatureTsv().lines().any { it.contains("com.pawns.sdk.") })
+        assertEquals(pawns.id, bundled.nativeLibraries["libpawns_ndk.so"])
         // Bright SDK waits until an artefact is read.
         assertTrue(bundled.signatureTsv().lines().none { it.contains("Bright SDK") })
     }

@@ -93,8 +93,9 @@ The research behind this record is kept in the foundation's private repository.
   app or artefact is read, because their artefacts are not public.
 - The SDKs with the most documented consent problems need samples. Getting them from a sample
   repository may need an account, which the maintainer opens.
-- Native-library names and identifiers in the network are recorded for the queue. Native libraries are
-  matched in a later release, and network identifiers by the v0.2 VPN.
+- Native-library names are matched as well: the scanner already reads every APK's file list, so a
+  shipped library name (such as Pawns' `libpawns_ndk.so`) costs nothing to find. Identifiers in the
+  network are recorded for the v0.2 VPN.
 - Entries are re-checked at least every six months, the same staleness limit the *Data sources* screen
   shows, and can be disputed through `data/CORRECTIONS.md`. A vendor overturns an entry by showing that
   the identifier is not its own, or that a named version does not contain it.
