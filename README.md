@@ -4,9 +4,9 @@
 helps you stop it.** Everything runs on the device. It needs no root and no cloud service, and version
 0.1 does not even have permission to use the internet.
 
-> Status: **pre-alpha.** Milestones M1 (the build skeleton) and M2 (the app and permission audit) are
-> complete, and most of M3 (the code scanner and its data) is built. Nothing has been released yet. See
-> the [roadmap](ROADMAP.md).
+> Status: **pre-alpha.** Milestones M1 (the build skeleton), M2 (the app and permission audit) and M3
+> (the code scanner and its data) are complete. Nothing has been released yet. See the
+> [roadmap](ROADMAP.md).
 
 ## Why
 
