@@ -27,6 +27,8 @@ in the Git history.
 | [0017](0017-data-pack-format.md) | Data packs in signify's format, checked with ed25519-compact | Accepted |
 | [0018](0018-app-signing-certificates.md) | Official signing certificates of VPN, proxy and circumvention apps | Accepted |
 | [0019](0019-traffic-sharing-remote-support-sdks.md) | Traffic-sharing, remote-support and screen-recording SDKs | Accepted |
+| [0020](0020-same-company-trackers.md) | Trackers from the app's own company group | Accepted |
+| [0021](0021-service-dependent-capabilities.md) | Tracker capabilities that need a service the phone lacks | Accepted |
 
 ## Template
 
