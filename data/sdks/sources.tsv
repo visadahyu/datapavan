@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: CC0-1.0
+# Where update.py reads each SDK identifier (ADR 0019). One row per identifier.
+# Columns: sdk, artefact (a URL, maven:<repository>|<group>:<artifact> for the newest release, or - when no
+# artefact is public yet), match type (class, class-prefix, manifest-component, native-lib), identifier,
+# specificity (high, or low for names that must not decide alone), who attributes it (vendor, platform,
+# court, research, academic), and where.
+pawns	maven:https://jitpack.io|app.pawns.android-pawns-sdk:internet-sharing	class	com.pawns.sdk.internal.service.PeerServiceBackground	high	vendor	https://github.com/pawns-app/android-pawns-sdk-demo/blob/93ddfe15fe91069109bbd392f73a129bedd3877c/README.md
+pawns	maven:https://jitpack.io|app.pawns.android-pawns-sdk:internet-sharing	class	com.pawns.sdk.internal.service.PeerServiceForeground	high	vendor	https://github.com/pawns-app/android-pawns-sdk-demo/blob/93ddfe15fe91069109bbd392f73a129bedd3877c/README.md
+pawns	maven:https://jitpack.io|app.pawns.android-pawns-sdk:internet-sharing	class-prefix	com.pawns.sdk.	high	vendor	https://github.com/pawns-app/android-pawns-sdk
+bright	-	class	com.android.eapx.BrightApi	high	vendor	https://github.com/BrightSDK/documentation/blob/d8da437e9f49cb29d38a12d14c6a5921c2385c65/integration-guides/android-sdk.mdx
+bright	-	class-prefix	brdat.sdk.	high	vendor	https://github.com/BrightSDK/documentation/blob/d8da437e9f49cb29d38a12d14c6a5921c2385c65/integration-guides/android-sdk.mdx
+massive	-	class-prefix	com.joinmassive.sdk.	high	vendor	https://docs.joinmassive.com/monetization-sdk/mobile-android.md
+honeygain	-	class-prefix	com.honeygain.hgsdk.	high	vendor	https://developers.honeygain.com/docs/integration-guides/android
+repocket	-	class-prefix	com.repocket.androidsdk.	high	vendor	https://github.com/geonode-dev/android-sdk-demo/blob/5f23bc7cdfae516367dae2c16dbe8b91f67e754c/README.md
+logmein-rescue	https://raw.githubusercontent.com/logmeinrescue/Android-SDK/master/maven/repository/com/logmein/rescuesdk/core/3.10.8/core-3.10.8.aar	class-prefix	com.logmein.rescuesdk.	high	vendor	https://github.com/logmeinrescue/Android-SDK
+logmein-rescue	https://raw.githubusercontent.com/logmeinrescue/Android-SDK/master/maven/repository/com/logmein/rescuesdk/core/3.10.8/core-3.10.8.aar	manifest-component	com.logmein.rescuesdk.internal.app.PackageNameRetrieverService	high	vendor	https://github.com/logmeinrescue/Android-SDK
+cobrowse	maven:https://repo1.maven.org/maven2|io.cobrowse:cobrowse-sdk-android	manifest-component	io.cobrowse.CobrowseService	high	vendor	https://docs.cobrowse.io/sdk-installation/android
+cobrowse	maven:https://repo1.maven.org/maven2|io.cobrowse:cobrowse-sdk-android	manifest-component	io.cobrowse.CobrowseAccessibilityService	high	vendor	https://docs.cobrowse.io/sdk-installation/android
+cobrowse	maven:https://repo1.maven.org/maven2|io.cobrowse:cobrowse-sdk-android	manifest-component	io.cobrowse.CobrowseInitProvider	high	vendor	https://docs.cobrowse.io/sdk-installation/android
+glance	https://gitlab.com/glance-sdk-public/glance-sdk-android-releases/-/raw/main/glance-sdk-android-release.aar	class-prefix	net.glance.android.	high	vendor	https://gitlab.com/glance-sdk-public/glance-sdk-android-releases
+zoho-assist	https://maven.zohodl.com/com/zoho/assist/customer/1.8.3/customer-1.8.3.aar	manifest-component	com.zoho.assist.customer.service.FloatingHeadService	high	vendor	https://maven.zohodl.com/com/zoho/assist/customer/
+zoho-assist	https://maven.zohodl.com/com/zoho/assist/customer/1.8.3/customer-1.8.3.aar	class-prefix	com.zoho.assist.customer.	high	vendor	https://maven.zohodl.com/com/zoho/assist/customer/
+upscope	maven:https://repo1.maven.org/maven2|io.github.upscopeio:upscope-android-sdk	class-prefix	io.upscope.sdk.	high	vendor	https://userview.com/docs/sdk/android/installation
+screenmeet	maven:https://nexus.screenmeet.com/repository/maven-releases|com.screenmeet:sdk	class-prefix	com.screenmeet.sdk.	high	vendor	https://nexus.screenmeet.com/repository/maven-releases/com/screenmeet/sdk/
+teamviewer	-	class-prefix	com.teamviewer.sdk.screensharing.	high	vendor	https://pkgs.dev.azure.com/TeamViewerMobileSDK/android/_packaging/android%40Release/maven/v1
+unblu	-	class-prefix	com.unblu.sdk.module.mobilecobrowsing.	high	vendor	https://docs.unblu.com/latest/reference/mobile-sdk-android/allpackages-index.html
+clarity	maven:https://repo1.maven.org/maven2|com.microsoft.clarity:clarity	class-prefix	com.microsoft.clarity.	high	vendor	https://learn.microsoft.com/en-us/clarity/mobile-sdk/android-sdk
+datadog-replay	maven:https://repo1.maven.org/maven2|com.datadoghq:dd-sdk-android-session-replay	class-prefix	com.datadog.android.sessionreplay.	high	vendor	https://github.com/DataDog/dd-sdk-android/tree/develop/features/dd-sdk-android-session-replay
+sentry-replay	maven:https://repo1.maven.org/maven2|io.sentry:sentry-android-replay	class-prefix	io.sentry.android.replay.	high	vendor	https://github.com/getsentry/sentry-java/tree/main/sentry-android-replay
+posthog-replay	maven:https://repo1.maven.org/maven2|com.posthog:posthog-android	class-prefix	com.posthog.android.replay.	high	vendor	https://github.com/PostHog/posthog-android
+logrocket	maven:https://storage.googleapis.com/logrocket-maven|com.logrocket:logrocket	class-prefix	com.logrocket.core.	high	vendor	https://storage.googleapis.com/logrocket-maven/com/logrocket/logrocket/
+contentsquare	maven:https://repo1.maven.org/maven2|com.contentsquare.android:library	class-prefix	com.contentsquare.android.	high	vendor	https://github.com/ContentSquare/android-sample-app
+pawns	maven:https://jitpack.io|app.pawns.android-pawns-sdk:pawns-ndk	native-lib	libpawns_ndk.so	high	vendor	https://github.com/pawns-app/android-pawns-sdk

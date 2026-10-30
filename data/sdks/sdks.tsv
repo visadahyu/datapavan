@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: CC0-1.0
+# SDKs that can share the phone's connection, give remote support or record the screen (ADR 0019).
+# Columns: sdk, name, vendor as published, category (traffic-sharing, remote-support, screen-recording),
+# capabilities (app-screen, whole-screen, app-control, device-control, files, live), the label of the
+# opt-out switch where the vendor prescribes one, and the vendor's own description.
+pawns	Pawns SDK	IPRoyal	traffic-sharing			https://github.com/pawns-app/android-pawns-sdk-demo/blob/93ddfe15fe91069109bbd392f73a129bedd3877c/README.md
+bright	Bright SDK	Bright Data	traffic-sharing		Web Indexing	https://github.com/BrightSDK/documentation/blob/d8da437e9f49cb29d38a12d14c6a5921c2385c65/integration-guides/android-sdk.mdx
+massive	Massive SDK	Massive	traffic-sharing			https://docs.joinmassive.com/monetization-sdk/mobile-android.md
+honeygain	Honeygain SDK	Honeygain	traffic-sharing			https://developers.honeygain.com/docs/integration-guides/android
+repocket	Repocket SDK	Repocket	traffic-sharing			https://github.com/geonode-dev/android-sdk-demo/blob/5f23bc7cdfae516367dae2c16dbe8b91f67e754c/README.md
+logmein-rescue	LogMeIn Rescue SDK	GoTo	remote-support	app-screen,whole-screen		https://github.com/logmeinrescue/Android-SDK
+cobrowse	Cobrowse.io SDK	Cobrowse.io	remote-support	app-screen,whole-screen,app-control,device-control		https://docs.cobrowse.io/sdk-installation/android
+glance	Glance SDK	Glance Networks	remote-support	app-screen,whole-screen,app-control		https://gitlab.com/glance-sdk-public/glance-sdk-android-releases
+zoho-assist	Zoho Assist SDK	Zoho	remote-support	app-screen,whole-screen,files		https://maven.zohodl.com/com/zoho/assist/customer/
+upscope	Upscope SDK	Upscope	remote-support	app-screen,whole-screen,app-control		https://userview.com/docs/sdk/android/installation
+screenmeet	ScreenMeet SDK	ScreenMeet	remote-support	app-screen,app-control		https://nexus.screenmeet.com/repository/maven-releases/com/screenmeet/sdk/
+teamviewer	TeamViewer Screen Sharing SDK	TeamViewer	remote-support	app-screen,app-control,files		https://pkgs.dev.azure.com/TeamViewerMobileSDK/android/_packaging/android%40Release/maven/v1
+unblu	Unblu mobile co-browsing	Unblu	remote-support	app-screen,whole-screen		https://docs.unblu.com/latest/reference/mobile-sdk-android/allpackages-index.html
+clarity	Microsoft Clarity	Microsoft	screen-recording	live		https://learn.microsoft.com/en-us/clarity/mobile-sdk/android-sdk
+datadog-replay	Datadog Session Replay	Datadog	screen-recording			https://github.com/DataDog/dd-sdk-android/tree/develop/features/dd-sdk-android-session-replay
+sentry-replay	Sentry Session Replay	Sentry	screen-recording			https://github.com/getsentry/sentry-java/tree/main/sentry-android-replay
+posthog-replay	PostHog Session Replay	PostHog	screen-recording			https://github.com/PostHog/posthog-android
+logrocket	LogRocket	LogRocket	screen-recording			https://storage.googleapis.com/logrocket-maven/com/logrocket/logrocket/
+contentsquare	Contentsquare	Contentsquare	screen-recording			https://github.com/ContentSquare/android-sample-app

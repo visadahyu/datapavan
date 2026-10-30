@@ -1,0 +1,17 @@
+SPDX-License-Identifier: CC0-1.0
+
+SDKs that can share a phone's internet connection, give remote support or record the screen, collected
+by the Datapavan project and dedicated to the public domain under CC0 1.0
+(https://creativecommons.org/publicdomain/zero/1.0/). Recorded in ADR 0015 and ADR 0019.
+
+sdks.tsv, sources.tsv
+    Written by the project. Vendor names are given as each vendor publishes them.
+
+signatures.tsv
+    Written by update.py, which reads each identifier in the artefact it names (an SDK the vendor
+    publishes) and records the artefact's SHA-256. Identifiers are names of code, which are facts about
+    published files; the legal review before the first public release covers this list and its
+    wording (ADR 0015, decision 12).
+
+update.py
+    The collector: Apache-2.0, like the rest of this repository.
