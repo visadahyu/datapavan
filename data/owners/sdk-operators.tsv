@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: CC0-1.0
+# Which company runs the service that each SDK sends data to (ADR 0020), reviewed by hand. One row per SDK.
+# Columns: sdk, name, the class prefix that shows it, entity, since, until (empty while it holds),
+# the service's end where it has shut down (YYYY-MM-DD, else empty), grade (1: the operator's own
+# documentation presents the SDK as its own), source, checked.
+firebase-analytics	Google Analytics for Firebase	com.google.firebase.analytics.	google				1	https://firebase.google.com/docs/analytics	2026-10-30
+app-measurement	Google Analytics for Firebase	com.google.android.gms.measurement.	google				1	https://firebase.google.com/docs/analytics	2026-10-30
+crashlytics	Firebase Crashlytics	com.google.firebase.crashlytics.	google				1	https://firebase.google.com/docs/crashlytics	2026-10-30
+google-mobile-ads	Google Mobile Ads (AdMob)	com.google.android.gms.ads.	google				1	https://developers.google.com/admob/android/quick-start	2026-10-30
+google-tag-manager	Google Tag Manager	com.google.android.gms.tagmanager.	google				1	https://developers.google.com/tag-platform/tag-manager/android/v5	2026-10-30
+google-analytics	Google Analytics (Universal Analytics)	com.google.android.gms.analytics.	google			2023-07-01	1	https://support.google.com/analytics/answer/11583528	2026-10-30
+facebook-app-events	Facebook App Events	com.facebook.appevents.	meta				1	https://developers.facebook.com/docs/app-events/getting-started-app-events-android	2026-10-30
+audience-network	Meta Audience Network	com.facebook.ads.	meta				1	https://developers.facebook.com/docs/audience-network/setting-up/platform-setup/android/add-sdk	2026-10-30
+facebook-login	Facebook Login	com.facebook.login.	meta				1	https://developers.facebook.com/docs/facebook-login/android	2026-10-30
+facebook-share	Facebook Share	com.facebook.share.	meta				1	https://developers.facebook.com/docs/sharing/android	2026-10-30
+app-center	Visual Studio App Center	com.microsoft.appcenter.	microsoft			2025-03-31	1	https://learn.microsoft.com/en-us/appcenter/retirement	2026-10-30
+amazon-mobile-ads	Amazon Mobile Ads	com.amazon.device.ads.	amazon				1	https://developer.amazon.com/docs/mobile-ads/mb-overview.html	2026-10-30
+hms-analytics	HUAWEI Analytics Kit	com.huawei.hms.analytics.	huawei				1	https://developer.huawei.com/consumer/en/doc/HMSCore-Guides/introduction-0000001050745149	2026-10-30
+petal-ads	Petal Ads (HUAWEI Ads Kit)	com.huawei.hms.ads.	huawei				1	https://developer.huawei.com/consumer/en/doc/HMSCore-Guides/publisher-service-introduction-0000001070671805	2026-10-30

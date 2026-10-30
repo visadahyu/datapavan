@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: CC0-1.0
+# Where update.py reads which company publishes which app (ADR 0020). Columns: entity, method, location.
+# Methods:
+#   asset-links  the company's own Digital Asset Links file: every Android app it names, with the SHA-256
+#                of its signing certificate, is the company's (grade 1). A file may name a partner's app
+#                that shares the company's sign-in; such an entry can be disputed (data/CORRECTIONS.md);
+#   sdk-needs    the certificates of a service's genuine packages in data/sdk-needs, read from the
+#                company's own client library (grade 1); location: the service.
+google	asset-links	https://www.google.com/.well-known/assetlinks.json
+youtube	asset-links	https://www.youtube.com/.well-known/assetlinks.json
+meta	asset-links	https://www.facebook.com/.well-known/assetlinks.json
+instagram	asset-links	https://www.instagram.com/.well-known/assetlinks.json
+whatsapp	asset-links	https://www.whatsapp.com/.well-known/assetlinks.json
+microsoft	asset-links	https://login.microsoftonline.com/.well-known/assetlinks.json
+linkedin	asset-links	https://www.linkedin.com/.well-known/assetlinks.json
+amazon	asset-links	https://www.amazon.com/.well-known/assetlinks.json
+google	sdk-needs	google-play-services
+google	sdk-needs	google-play-store
+huawei	sdk-needs	hms-core

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: CC0-1.0
+retrieved: 2026-10-30
+entities: 10
+sdk-operators: 14
+publisher-certificates: 235
+method: data/owners/update.py, from publisher-sources.tsv; entities.tsv and sdk-operators.tsv by hand

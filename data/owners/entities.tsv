@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: CC0-1.0
+# Companies and who controls them (ADR 0020), reviewed by hand. One row per company. Columns: entity, name,
+# Wikidata item, parent entity (- for none), control by the parent (whole or majority: same group;
+# joint or minority: linked, never the same group), since, until (empty while it holds), source, checked.
+alphabet	Alphabet Inc.	Q20800404	-				https://abc.xyz/	2026-10-30
+google	Google LLC	Q95	alphabet	whole	2015-10-02		https://abc.xyz/	2026-10-30
+youtube	YouTube, LLC	Q112247183	google	whole	2006-11-13		https://googlepress.blogspot.com/2006/10/google-to-acquire-youtube-for-165_09.html	2026-10-30
+meta	Meta Platforms, Inc.	Q380	-				https://about.fb.com/	2026-10-30
+instagram	Instagram, LLC	Q209330	meta	whole	2012-09-06		https://about.fb.com/news/2012/04/facebook-to-acquire-instagram/	2026-10-30
+whatsapp	WhatsApp LLC	Q52410688	meta	whole	2014-10-06		https://about.fb.com/news/2014/02/facebook-to-acquire-whatsapp/	2026-10-30
+microsoft	Microsoft Corporation	Q2283	-				https://www.microsoft.com/	2026-10-30
+linkedin	LinkedIn Corporation	Q213660	microsoft	whole	2016-12-08		https://news.microsoft.com/2016/06/13/microsoft-to-acquire-linkedin/	2026-10-30
+amazon	Amazon.com, Inc.	Q3884	-				https://www.aboutamazon.com/	2026-10-30
+huawei	Huawei Technologies Co., Ltd.	Q160120	-				https://www.huawei.com/en/corporate-information	2026-10-30
