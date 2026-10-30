@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: CC0-1.0
 retrieved: 2026-10-30
 capabilities: 7
-shipped-capabilities: 1
-certificates: 10 for 2 services
+shipped-capabilities: 7
+certificates: 13 for 3 services
 method: data/sdk-needs/update.py, from the artefacts in sources.tsv and signer-sources.tsv

@@ -38,9 +38,9 @@ The data behind M3 keeps growing next to the later milestones:
   (ADR 0019).
 - Trackers from the app's own company group ([ADR 0020](docs/decisions/0020-same-company-trackers.md)).
 - Tracker capabilities that need a service the phone lacks
-  ([ADR 0021](docs/decisions/0021-service-dependent-capabilities.md)): the service check and the first
-  capability are done; the others wait until their vendors' artefacts are read. The scan's lower
-  memory and parallelism by memory are done.
+  ([ADR 0021](docs/decisions/0021-service-dependent-capabilities.md)): the service check and seven
+  capabilities are done; more follow as their vendors' artefacts are read, and the check still needs
+  a device matrix. The scan's lower memory and parallelism by memory are done.
 
 ### v0.2 "Watch": local VPN, observe only
 

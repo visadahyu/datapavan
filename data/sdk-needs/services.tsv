@@ -3,4 +3,4 @@
 # Columns: service, name, packages that provide it (any one is enough).
 google-play-services	Google Play services	com.google.android.gms
 google-play-store	Google Play Store	com.android.vending
-hms-core	HMS Core	com.huawei.hwid,com.huawei.hwid.tv,com.huawei.hwid.car
+hms-core	HMS Core	com.huawei.hwid,com.huawei.hwid.tv,com.huawei.hwid.car,com.huawei.hms

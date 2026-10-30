@@ -9,8 +9,9 @@ Each artefact is an AAR or JAR from the vendor's own repository. It is only read
 SHA-256 is recorded. A capability gets
   grade 1  when its class is read in the vendor's artefact;
   grade 4  when the artefact is not read yet (--cache-only and not in the cache).
-Only grades 1 to 3 reach the phone. A certificate is read from the X.509 certificates that the vendor's
-own client library embeds to check the service; certificates with AOSP's test-key subject are left out.
+Only grades 1 to 3 reach the phone. A certificate is read from what the vendor's own client library embeds
+to check the service: X.509 certificates, without those with AOSP's test-key subject, or SHA-256
+fingerprints.
 A class or certificate that its artefact does not contain is a problem a person has to look at, and
 makes the script fail.
 """
@@ -143,6 +144,17 @@ def embedded_certificates(path):
     return found
 
 
+def embedded_fingerprints(path):
+    """SHA-256 fingerprints, as 64 hex digits, that a library embeds as string constants."""
+    found = set()
+    for _, data in class_files(path):
+        for units in utf8_constants(data):
+            text = "".join(map(chr, units))
+            if re.fullmatch(r"[0-9A-Fa-f]{64}", text):
+                found.add(text.lower())
+    return found
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--cache", type=pathlib.Path, default=pathlib.Path.home() / ".cache/datapavan/sdk-needs")
@@ -152,7 +164,9 @@ def main():
 
     services = {row[0] for row in rows("services.tsv")}
     today = datetime.date.today().isoformat()
-    problems, capabilities, signers, artefacts = [], [], [], {}
+    problems, capabilities, artefacts = [], [], {}
+    # (service, certificate) -> the artefacts it was read in, as (URL, SHA-256)
+    signers = {}
 
     def read(artefact):
         if artefact not in artefacts:
@@ -177,7 +191,8 @@ def main():
         print(f"{capability}: {identifier}: grade {grade}{' from ' + url if path else ' (artefact not read yet)'}")
 
     for service, artefact, method in rows("signer-sources.tsv"):
-        if service not in services or method != "embedded-certificates":
+        readers = {"embedded-certificates": embedded_certificates, "embedded-fingerprints": embedded_fingerprints}
+        if service not in services or method not in readers:
             problems.append(f"{service}: unknown service or method {method}")
             continue
         try:
@@ -185,14 +200,14 @@ def main():
             if path is None:
                 print(f"{service}: artefact not read yet")
                 continue
-            certificates = embedded_certificates(path)
+            certificates = readers[method](path)
             if not certificates:
                 raise Problem(f"{url} embeds no certificate")
         except (Problem, OSError, ValueError, zipfile.BadZipFile, ElementTree.ParseError) as error:
             problems.append(f"{service}: {error}")
             continue
-        for certificate in sorted(certificates):
-            signers.append([service, certificate, "1", url, digest, today])
+        for certificate in certificates:
+            signers.setdefault((service, certificate), set()).add((url, digest))
         print(f"{service}: {len(certificates)} certificates from {url}")
 
     (HERE / "capabilities.tsv").write_text("\n".join([
@@ -204,16 +219,17 @@ def main():
     (HERE / "signers.tsv").write_text("\n".join([
         "# SPDX-License-Identifier: CC0-1.0",
         "# Certificates of the genuine packages of each service (ADR 0021), written by update.py from the",
-        "# vendor's own client library. Columns: service, certificate SHA-256, grade, artefact read, its",
-        "# SHA-256, checked.",
-    ] + ["\t".join(row) for row in signers]) + "\n")
+        "# vendor's own client library. Columns: service, certificate SHA-256, grade, artefacts read and",
+        "# their SHA-256 (separated by spaces, in the same order), checked.",
+    ] + ["\t".join([service, certificate, "1", " ".join(u for u, _ in sorted(read)), " ".join(d for _, d in sorted(read)), today])
+         for (service, certificate), read in sorted(signers.items())]) + "\n")
     shipped = [row for row in capabilities if int(row[4]) <= 3]
     (HERE / "SOURCE").write_text("\n".join([
         "# SPDX-License-Identifier: CC0-1.0",
         f"retrieved: {today}",
         f"capabilities: {len(capabilities)}",
         f"shipped-capabilities: {len(shipped)}",
-        f"certificates: {len(signers)} for {len({row[0] for row in signers})} services",
+        f"certificates: {len(signers)} for {len({service for service, _ in signers})} services",
         "method: data/sdk-needs/update.py, from the artefacts in sources.tsv and signer-sources.tsv",
     ]) + "\n")
     print(f"wrote {len(capabilities)} capabilities ({len(shipped)} ship) and {len(signers)} certificates")
