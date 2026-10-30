@@ -40,7 +40,28 @@ the history. Datapavan's collector reads both A and B from the APK.
 - **Matching any entry in the history is right.** On Android 13 and later, an app keeps its old key in
   its history. Datapavan's rule (ADR 0018) accepts a match on any entry, and says when only an older
   key matched.
-- **Not tested: hybrid signing (APK Signature Scheme v3.2).** Google Play's 2026 "quantum-ready"
+- **Not seen yet: hybrid signing (APK Signature Scheme v3.2).** Google Play's 2026 "quantum-ready"
   hybrid signing adds an ML-DSA key for Android 17. `apksigner` 37.0.0 cannot produce such a
-  signature, so testing it needs an APK that Play signed this way, installed from Play on a lab
-  device. That check belongs with the work on Play copies' keys.
+  signature, but it reports whether one verifies. None of the 23 Play copies read on Android 17 on
+  2026-10-30 carries one (below). The collector records the schemes that verify for each Play copy
+  in `data/app-signers/play.tsv`, so the first one will show there.
+
+## A real rotation in a Play copy (2026-10-30)
+
+`data/app-signers/from-play.sh` installed the listed apps from Google Play on the `dp-api37-16k`
+emulator (Android 17) and copied their APKs. Hiddify's Play copy carries two signers:
+
+| Signer | For API levels | Certificate |
+|---|---|---|
+| v3.0 | 24 to 32 | `74a3e9f9…`, a key Google generated for Play App Signing (`CN=Android, O=Google Inc.`) |
+| v3.1 | 33 and later | `454bf1f6…`, the developer's own key, the one on its GitHub releases |
+
+The lineage runs from Google's key to the developer's. The developer moved its Play copy to its own key,
+targeted at Android 13 and later. On the emulator, Android 17 reports the developer's key as current
+and both keys in its history, and Datapavan calls the copy genuine and signed by its developer. A phone
+with Android 12 or older sees only Google's key, which the list now also holds, so the copy is
+genuine there too. This is the case the spike above predicted, in a real app: a list holding only
+the developer's key would have called the copy on older phones "key not known yet".
+
+Signal's Play copy carries its two published keys the same way (v3.0 and v3.1). The other 21 copies
+have one signer, with APK Signature Scheme v3 (19) or v2 (Briar, Orbot).

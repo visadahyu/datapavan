@@ -2,15 +2,15 @@
 # The apps whose official signing certificates Datapavan knows (ADR 0018), reviewed by hand.
 # Columns: package, name, closed (yes: every official channel's key is recorded, so another key means
 # a modified copy), note.
-com.psiphon3	Psiphon	no	Website key published; the Play and Pro keys are not known yet
-org.torproject.torbrowser	Tor Browser	no	Play key not known yet
+com.psiphon3	Psiphon	no	The Google Play copy carries the published website key; Psiphon Pro's key is not known yet
+org.torproject.torbrowser	Tor Browser	no	One key in the Guardian Project's repository and on Google Play
 org.torproject.torbrowser_alpha	Tor Browser (alpha)	no	
-org.torproject.android	Orbot	no	One key everywhere according to AppVerifier (2025); not confirmed
+org.torproject.android	Orbot	no	One key on GitHub, in the Guardian Project's repository and on Google Play
 org.torproject.vpn	Tor VPN	no	
 ch.protonvpn.android	Proton VPN	yes	The developer key signs every build except F-Droid's, whose key is recorded
 ch.protonvpn.android.reproducible	Proton VPN (F-Droid)	yes	
 org.thoughtcrime.securesms	Signal	yes	Current key and the original key in its lineage
-org.briarproject.briar.android	Briar	no	One key on every channel according to AppVerifier; not confirmed
+org.briarproject.briar.android	Briar	no	One key on F-Droid and Google Play; Briar's own repository not read yet
 io.nekohasekai.sfa	sing-box	no	
 com.github.dyhkwong.sagernet	Exclave	yes	One key on GitHub and F-Droid; not on Google Play
 com.follow.clash	FlClash	no	
@@ -37,4 +37,5 @@ org.outline.android.client	Outline	no
 com.windscribe.vpn	Windscribe	no	
 pan.alexander.tordnscrypt	InviZible Pro (beta)	no	
 pan.alexander.tordnscrypt.stable	InviZible Pro	no	
-com.wireguard.android	WireGuard	no	The website build; the Play key is not known yet
+pan.alexander.tordnscrypt.gp	InviZible Pro (Google Play)	no	The Google Play build
+com.wireguard.android	WireGuard	no	One key for the website build and the Google Play copy

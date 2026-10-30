@@ -11,6 +11,9 @@
 #                  expression for the asset or file. An optional seventh column checks a detached OpenPGP
 #                  signature first (grade 3): the signature's suffix, the key's URL, the key's fingerprint
 #                  as the developer publishes it, and where it is published.
+# Google Play copies are not listed here: from-play.sh installs them on a test device, and update.py reads
+# play.tsv as the Play channel (grade 4 when another channel or a device with another Android level
+# agrees, else 5).
 com.psiphon3	website	developer	published	https://psiphon.ca/en/trust-center.html#verify	76:DB:EF:15:F6:77:26:D4:51:A1:23:59:B8:57:9C:0D:7A:9F:63:5D:52:6A:A3:74:24:DF:13:16:32:F1:78:10
 com.psiphon3	website	developer	apk	https://psiphon.ca/PsiphonAndroid.apk	
 org.torproject.torbrowser	guardian	developer	index	https://guardianproject.info/fdroid/repo	guardian

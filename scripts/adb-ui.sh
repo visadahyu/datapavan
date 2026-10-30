@@ -1,4 +1,4 @@
-# Shared helpers for the adb-driven checks (smoke.sh, verify-audit.sh). Sourced, not executed.
+# Shared helpers for the adb-driven checks and the Google Play readers. Sourced, not executed.
 # They read the screen through uiautomator, so they need no test framework in the app.
 
 DUMP=/sdcard/datapavan-ui.xml
@@ -110,6 +110,47 @@ wait_for_tracker_scan() {
         scroll_to_top
         scroll_to "Apps with trackers: " && return 0
         sleep 3
+    done
+    return 1
+}
+
+# Google Play on a test device or emulator on which someone has signed in by hand
+# (data/app-signers/from-play.sh, compare-exodus.sh).
+
+# True when package $1 is installed.
+installed() {
+    adb shell pm path "$1" 2>/dev/null | grep -q '^package:'
+}
+
+# Taps the element whose text is exactly $1 on the current screen, without scrolling.
+tap_now() {
+    adb shell uiautomator dump "$DUMP" >/dev/null 2>&1 || return 1
+    local bounds
+    bounds=$(text_bounds "$1")
+    [ -n "$bounds" ] || return 1
+    set -- $bounds
+    adb shell input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 ))
+}
+
+# Opens the Play listing of $1, taps Install and waits up to seven minutes for the app. Fails when
+# the listing offers no Install button: the app is not listed, not in the account's country, or not
+# for this device. Offers Play shows on the way, such as payment set-up, are declined; the app is
+# never opened.
+install_from_play() {
+    adb shell am start -a android.intent.action.VIEW -d "market://details?id=$1" com.android.vending >/dev/null
+    local tapped=no
+    for _ in $(seq 1 10); do
+        sleep 2
+        tap_now Install && { tapped=yes; break; }
+    done
+    if [ $tapped = no ]; then
+        adb shell input keyevent KEYCODE_BACK
+        return 1
+    fi
+    for _ in $(seq 1 200); do
+        installed "$1" && return 0
+        tap_now Skip || tap_now "Not now" || true
+        sleep 2
     done
     return 1
 }

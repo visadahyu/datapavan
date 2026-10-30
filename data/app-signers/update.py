@@ -3,6 +3,8 @@
 """Collects the official signing certificates of the apps in sources.tsv and writes signers.tsv (ADR 0018).
 
     data/app-signers/update.py [--cache DIR]
+    data/app-signers/update.py --read-play DIR --api LEVEL
+
 
 Needs network access, apksigner and aapt2 from the Android SDK's build-tools, and a JDK's jarsigner and
 keytool. Downloaded APKs and indexes are untrusted: they are only read, by apksigner, aapt2 and the JDK,
@@ -17,7 +19,10 @@ Evidence, from strongest (ADR 0018):
   4  APKs of official channels that agree across two channels;
   5  a single reading.
 Every APK is read with apksigner across Android 10 to 17, so that every signer some phone sees is
-recorded, with its lineage. A conflict, such as a published fingerprint that no APK carries, is printed
+recorded, with its lineage. Google Play copies cannot be downloaded: from-play.sh installs them on a
+test device and copies their APKs, and --read-play records what they carry in play.tsv, which every
+run then reads as the Play channel. Copies read on devices with two Android levels count as two
+fetches. A conflict, such as a published fingerprint that no APK carries, is printed
 and makes the script fail, so that a person looks at it before the data is committed.
 """
 import argparse
@@ -150,6 +155,7 @@ def apk_certificates(path):
         if digest:
             certificates[digest.group(1)] = "CN=Android Debug" in block
     from_play = "Source Stamp Signer: certificate DN:" in output and "O=Google Inc." in output
+    schemes = re.findall(r"^Verified using (v[\d.]+) scheme \([^)]*\): true", output, flags=re.M)
     # Earlier keys from a rotation lineage identify genuine copies too.
     code, lineage = run(tool("apksigner"), "lineage", "--in", str(path), "--print-certs")
     if code == 0:
@@ -157,7 +163,50 @@ def apk_certificates(path):
             certificates.setdefault(digest, False)
     if not certificates:
         fail(f"{path.name}: no signer found")
-    return package, certificates, from_play
+    return package, certificates, from_play, schemes
+
+
+def version_code(path):
+    code, badging = run(tool("aapt2"), "dump", "badging", str(path))
+    found = re.search(r"versionCode='(\d+)'", badging)
+    if code != 0 or not found:
+        fail(f"{path.name}: aapt2 cannot read its version")
+    return found.group(1)
+
+
+PLAY_HEADER = [
+    "# SPDX-License-Identifier: CC0-1.0",
+    "# Signing certificates of Google Play copies (ADR 0018), read by update.py --read-play from APKs that",
+    "# from-play.sh installed from Play on a test device. Columns: package, Android API level of the device,",
+    "# version code, SHA-256 of the base APK, certificates (SHA-256, \":debug\" for a debug certificate),",
+    "# Play's source stamp (yes/no), signature schemes that verify, checked.",
+]
+
+
+def read_play(folder, api):
+    """Records the certificates of the Play APKs in folder, read on a device with API level api, in play.tsv."""
+    apps = {line.split("\t")[0] for line in (HERE / "apps.tsv").read_text().splitlines()
+            if line and not line.startswith("#")}
+    path = HERE / "play.tsv"
+    rows = {}
+    if path.exists():
+        for line in path.read_text().splitlines():
+            if line and not line.startswith("#"):
+                columns = line.split("\t")
+                rows[(columns[0], columns[1])] = columns
+    today = datetime.date.today().isoformat()
+    for apk in sorted(folder.glob("*.apk")):
+        package, certificates, from_play, schemes = apk_certificates(apk)
+        if package not in apps:
+            fail(f"{apk.name}: {package} is not in apps.tsv")
+        rows[(package, str(api))] = [
+            package, str(api), version_code(apk), hashlib.sha256(apk.read_bytes()).hexdigest(),
+            ",".join(d + (":debug" if debug else "") for d, debug in certificates.items()),
+            "yes" if from_play else "no", ",".join(schemes), today,
+        ]
+        print(f"{package} on API {api}: {', '.join(certificates)} ({', '.join(schemes)})")
+    path.write_text("\n".join(PLAY_HEADER + ["\t".join(r) for _, r in sorted(rows.items())]) + "\n")
+    print(f"play.tsv: {len(rows)} readings")
 
 
 def repository_index(repo, cache):
@@ -190,7 +239,17 @@ def allowed_keys(url, cache):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--cache", type=pathlib.Path, default=pathlib.Path.home() / ".cache/datapavan/app-signers")
+    parser.add_argument("--read-play", type=pathlib.Path, metavar="DIR", help="record the Play APKs in DIR in play.tsv")
+    parser.add_argument("--api", type=int, help="the API level of the device the Play APKs come from")
     args = parser.parse_args()
+    if args.read_play:
+        if not args.api:
+            parser.error("--read-play needs --api")
+        try:
+            read_play(args.read_play, args.api)
+        except Problem as error:
+            sys.exit(f"Problem: {error}")
+        return
     args.cache.mkdir(parents=True, exist_ok=True)
 
     sources = [line.split("\t") for line in (HERE / "sources.tsv").read_text().splitlines()
@@ -202,7 +261,7 @@ def main():
     found = {}
     problems = []
 
-    def record(package, digest, grade, channel, controller, source, reading=False, debug=False):
+    def record(package, digest, grade, channel, controller, source, reading=None, debug=False):
         entry = found.setdefault((package, digest), {
             "grades": set(), "channels": set(), "controllers": set(), "sources": set(), "readings": set(), "debug": False})
         entry["grades"].add(grade)
@@ -211,7 +270,7 @@ def main():
         entry["sources"].add(source)
         entry["debug"] |= debug
         if reading:
-            entry["readings"].add(channel)
+            entry["readings"].add(reading)
 
     def collect(package, channel, controller, method, location, value, openpgp):
         if method == "published":
@@ -238,12 +297,12 @@ def main():
             if openpgp:
                 verify_openpgp(url, path, openpgp, args.cache)
                 grade = 3
-            actual, certificates, from_play = apk_certificates(path)
+            actual, certificates, from_play, _ = apk_certificates(path)
             if actual != package:
                 fail(f"{url}: the APK is {actual}")
             for digest, debug in certificates.items():
                 # An APK exported from Google Play carries Play's stamp and, usually, a key Google holds.
-                record(package, digest, grade, channel, "google" if from_play else controller, url, reading=True, debug=debug)
+                record(package, digest, grade, channel, "google" if from_play else controller, url, reading=channel, debug=debug)
                 if openpgp:
                     found[(package, digest)]["sources"].add(openpgp.split()[3])
                 if from_play:
@@ -261,7 +320,22 @@ def main():
         except (Problem, OSError, ValueError, KeyError) as error:
             problems.append(f"{package} ({method} {location}): {error}")
 
-    # Grade 4: the same certificate read from APKs of two channels.
+    # Google Play copies, read on test devices. Play's source stamp marks Play App Signing, so Google holds
+    # the key; without it the developer signed the APK it uploaded.
+    play = HERE / "play.tsv"
+    play_rows = [line for line in (play.read_text().splitlines() if play.exists() else [])
+                 if line and not line.startswith("#")]
+    for line in play_rows:
+        package, api, _, _, certificates, stamp = line.split("\t")[:6]
+        if package not in apps:
+            problems.append(f"{package} is in play.tsv but not in apps.tsv")
+            continue
+        for certificate in certificates.split(","):
+            digest, _, debug = certificate.partition(":")
+            record(package, digest, 5, "play", "google" if stamp == "yes" else "developer",
+                   f"https://play.google.com/store/apps/details?id={package}", reading=f"play@{api}", debug=debug == "debug")
+
+    # Grade 4: the same certificate read from APKs of two channels, or of Play on two Android levels.
     for entry in found.values():
         if len(entry["readings"]) >= 2:
             entry["grades"].add(4)
@@ -294,8 +368,9 @@ def main():
         f"apps: {len(apps)}",
         f"packages-with-certificates: {len({p for p, _ in found})}",
         f"certificates: {len(found)}",
+        f"play-readings: {len(play_rows)}",
         "by-grade: " + ", ".join(f"{g}: {grades.count(g)}" for g in range(1, 6)),
-        "method: data/app-signers/update.py, from the sources in sources.tsv",
+        "method: data/app-signers/update.py, from the sources in sources.tsv and the Play readings in play.tsv",
     ]) + "\n")
     print(f"wrote {len(found)} certificates for {len({p for p, _ in found})} packages")
     if problems:
