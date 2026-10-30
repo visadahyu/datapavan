@@ -74,22 +74,55 @@ pub fn referenced_classes(dex: &[u8]) -> Result<Vec<String>, Error> {
     each_file(dex, Header::read_types)
 }
 
+/// Calls `visit` with the Java name of every class type that a DEX file refers to, in the order of
+/// its `type_ids`, and whether the file also defines that class: the names of
+/// [`referenced_classes`], marked with those of [`defined_classes`]. Each name is decoded into one
+/// reused buffer, so no list of names is built, however large the file.
+///
+/// # Errors
+///
+/// Returns an [`Error`] when the input is not a well-formed DEX file of version 035 to 041.
+pub fn visit_classes(dex: &[u8], mut visit: impl FnMut(&str, bool)) -> Result<(), Error> {
+    let mut decoder = Decoder::default();
+    let mut defined = Vec::new();
+    each_header(dex, |header| {
+        header.visit_types(dex, &mut decoder, &mut defined, &mut visit)
+    })
+}
+
 /// Collects `read` over every logical file: one, or several in a version-041 container.
 fn each_file(
     dex: &[u8],
     read: impl Fn(&Header, &[u8], &mut Vec<String>) -> Result<(), Error>,
 ) -> Result<Vec<String>, Error> {
     let mut classes = Vec::new();
+    each_header(dex, |header| read(header, dex, &mut classes))?;
+    Ok(classes)
+}
+
+/// Calls `read` with the header of every logical file: one, or several in a version-041 container.
+fn each_header(
+    dex: &[u8],
+    mut read: impl FnMut(&Header) -> Result<(), Error>,
+) -> Result<(), Error> {
     let mut start = 0;
     for _ in 0..MAX_LOGICAL_FILES {
         let header = Header::read(dex, start)?;
-        read(&header, dex, &mut classes)?;
+        read(&header)?;
         match header.next {
             Some(next) if next < dex.len() => start = next,
-            _ => return Ok(classes),
+            _ => return Ok(()),
         }
     }
     Err(Error::InvalidValue)
+}
+
+/// Buffers that [`visit_classes`] decodes each name into, reused from one name to the next.
+#[derive(Default)]
+struct Decoder {
+    units: Vec<u16>,
+    descriptor: String,
+    name: String,
 }
 
 /// The fields of one `header_item` that the class list needs. Offsets are from the start of the
@@ -215,12 +248,49 @@ impl Header {
         Ok(())
     }
 
+    /// What [`visit_classes`] does for one logical file. A class definition must name a class
+    /// type that `type_ids` lists, as in [`Self::read_classes`].
+    fn visit_types(
+        &self,
+        dex: &[u8],
+        decoder: &mut Decoder,
+        defined: &mut Vec<bool>,
+        visit: &mut impl FnMut(&str, bool),
+    ) -> Result<(), Error> {
+        defined.clear();
+        defined.resize(index(self.type_ids.size)?, false);
+        for class in 0..self.class_defs.size {
+            let class_idx = read_u32(dex, item(&self.class_defs, class, CLASS_DEF_SIZE)?)?;
+            *defined
+                .get_mut(index(class_idx)?)
+                .ok_or(Error::InvalidValue)? = true;
+        }
+        for (type_idx, &is_defined) in (0..self.type_ids.size).zip(defined.iter()) {
+            let descriptor_idx = read_u32(dex, item(&self.type_ids, type_idx, 4)?)?;
+            let data = self.string_data(dex, descriptor_idx)?;
+            read_string_into(dex, data, &mut decoder.units, &mut decoder.descriptor)?;
+            if decoder.descriptor.starts_with('L') {
+                visit(
+                    class_name_into(&decoder.descriptor, &mut decoder.name)?,
+                    is_defined,
+                );
+            } else if is_defined {
+                return Err(Error::InvalidValue);
+            }
+        }
+        Ok(())
+    }
+
     fn descriptor(&self, dex: &[u8], descriptor_idx: u32) -> Result<String, Error> {
+        read_string(dex, self.string_data(dex, descriptor_idx)?)
+    }
+
+    /// Offset of the `string_data_item` of string `descriptor_idx`.
+    fn string_data(&self, dex: &[u8], descriptor_idx: u32) -> Result<usize, Error> {
         if descriptor_idx >= self.string_ids.size {
             return Err(Error::InvalidValue);
         }
-        let data = index(read_u32(dex, item(&self.string_ids, descriptor_idx, 4)?)?)?;
-        read_string(dex, data)
+        index(read_u32(dex, item(&self.string_ids, descriptor_idx, 4)?)?)
     }
 }
 
@@ -249,8 +319,20 @@ fn read_u32(dex: &[u8], offset: usize) -> Result<u32, Error> {
 /// ending in a zero byte. Modified UTF-8 writes U+0000 as two bytes and each half of a surrogate
 /// pair as three bytes, so it decodes to UTF-16 code units first.
 fn read_string(dex: &[u8], offset: usize) -> Result<String, Error> {
+    let mut text = String::new();
+    read_string_into(dex, offset, &mut Vec::new(), &mut text)?;
+    Ok(text)
+}
+
+/// [`read_string`] into `text`, with `units` for the UTF-16 code units; both are cleared first.
+fn read_string_into(
+    dex: &[u8],
+    offset: usize,
+    units: &mut Vec<u16>,
+    text: &mut String,
+) -> Result<(), Error> {
     let (declared, mut position) = read_uleb128(dex, offset)?;
-    let mut units: Vec<u16> = Vec::new();
+    units.clear();
     let byte = |position: &mut usize| -> Result<u8, Error> {
         let value = *dex.get(*position).ok_or(Error::OutOfBounds)?;
         *position += 1;
@@ -284,7 +366,11 @@ fn read_string(dex: &[u8], offset: usize) -> Result<String, Error> {
     if units.len() != index(declared)? {
         return Err(Error::InvalidString);
     }
-    Ok(String::from_utf16_lossy(&units))
+    text.clear();
+    text.extend(
+        char::decode_utf16(units.iter().copied()).map(|c| c.unwrap_or(char::REPLACEMENT_CHARACTER)),
+    );
+    Ok(())
 }
 
 /// Reads an unsigned LEB128 value of at most five bytes that fits in 32 bits; returns it and the
@@ -308,17 +394,26 @@ fn read_uleb128(dex: &[u8], offset: usize) -> Result<(u32, usize), Error> {
 /// `Lcom/example/Foo;` becomes `com.example.Foo`. A class definition always names a class type, so
 /// anything else (a primitive, an array) makes the file invalid.
 fn class_name(descriptor: &str) -> Result<String, Error> {
-    descriptor
+    let mut name = String::new();
+    class_name_into(descriptor, &mut name)?;
+    Ok(name)
+}
+
+/// [`class_name`] into `out`, which is cleared first.
+fn class_name_into<'a>(descriptor: &str, out: &'a mut String) -> Result<&'a str, Error> {
+    let name = descriptor
         .strip_prefix('L')
         .and_then(|rest| rest.strip_suffix(';'))
         .filter(|name| !name.is_empty())
-        .map(|name| name.replace('/', "."))
-        .ok_or(Error::InvalidValue)
+        .ok_or(Error::InvalidValue)?;
+    out.clear();
+    out.extend(name.chars().map(|c| if c == '/' { '.' } else { c }));
+    Ok(out)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Error, defined_classes, referenced_classes};
+    use super::{Error, defined_classes, referenced_classes, visit_classes};
 
     /// A real DEX file: the test fixture app of `scripts/verify-audit.sh`, compiled by d8.
     const FIXTURE: &[u8] = include_bytes!("../testdata/fixture.dex");
@@ -428,6 +523,49 @@ mod tests {
         "Lcom/example/App;",
         "Lcom/google/firebase/analytics/FirebaseAnalytics;",
     ];
+
+    /// What [`visit_classes`] reports: the defined classes, sorted, and the referenced ones.
+    fn visited(file: &[u8]) -> Option<(Vec<String>, Vec<String>)> {
+        let (mut defined, mut referenced) = (Vec::new(), Vec::new());
+        visit_classes(file, |name, is_defined| {
+            if is_defined {
+                defined.push(name.to_owned());
+            }
+            referenced.push(name.to_owned());
+        })
+        .ok()?;
+        defined.sort();
+        defined.dedup();
+        Some((defined, referenced))
+    }
+
+    /// What the two lists report, in the same form.
+    fn listed(file: &[u8]) -> Option<(Vec<String>, Vec<String>)> {
+        let mut defined = defined_classes(file).ok()?;
+        defined.sort();
+        defined.dedup();
+        Some((defined, referenced_classes(file).ok()?))
+    }
+
+    #[test]
+    fn visits_the_classes_that_the_lists_hold() {
+        let mut files = vec![FIXTURE.to_vec(), dex("035", APP), dex("041", APP)];
+        for file in [FIXTURE.to_vec(), dex("041", APP)] {
+            files.extend((0..file.len()).map(|length| file[..length].to_vec()));
+            files.extend((0..file.len()).map(|at| {
+                let mut changed = file.clone();
+                changed[at] ^= 0x41;
+                changed
+            }));
+        }
+        for file in &files {
+            assert_eq!(visited(file), listed(file));
+        }
+        assert!(
+            visited(FIXTURE)
+                .is_some_and(|(defined, referenced)| defined.len() == 2 && referenced.len() > 2)
+        );
+    }
 
     #[test]
     fn reads_the_classes_a_real_dex_file_defines() {

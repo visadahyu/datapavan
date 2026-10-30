@@ -136,27 +136,43 @@ impl Signatures {
     pub fn find<'a>(&self, names: impl IntoIterator<Item = &'a str>) -> Vec<usize> {
         let mut found = vec![false; self.trackers.len()];
         for name in names {
-            let text = name.as_bytes();
-            self.automaton.scan(text, |pattern_index, key_end_in_text| {
-                let Some(pattern) = self.patterns.get(pattern_index) else {
-                    return;
-                };
-                if found.get(pattern.tracker) == Some(&true) {
-                    return;
-                }
-                if pattern.matches_at(text, key_end_in_text)
-                    && let Some(slot) = found.get_mut(pattern.tracker)
-                {
+            self.mark(name, false, &mut found, &mut []);
+        }
+        indices(&found)
+    }
+
+    /// Marks in `referenced` the trackers whose signature matches `name`, and in `embedded` too
+    /// when the name is that of a class the app defines. A tracker already marked where it would be
+    /// is not checked again.
+    fn mark(&self, name: &str, defined: bool, referenced: &mut [bool], embedded: &mut [bool]) {
+        let text = name.as_bytes();
+        self.automaton.scan(text, |pattern_index, key_end_in_text| {
+            let Some(pattern) = self.patterns.get(pattern_index) else {
+                return;
+            };
+            let marked = |found: &[bool]| found.get(pattern.tracker) == Some(&true);
+            if marked(referenced) && (!defined || marked(embedded)) {
+                return;
+            }
+            if pattern.matches_at(text, key_end_in_text) {
+                if let Some(slot) = referenced.get_mut(pattern.tracker) {
                     *slot = true;
                 }
-            });
-        }
-        found
-            .iter()
-            .enumerate()
-            .filter_map(|(index, &hit)| hit.then_some(index))
-            .collect()
+                if defined && let Some(slot) = embedded.get_mut(pattern.tracker) {
+                    *slot = true;
+                }
+            }
+        });
     }
+}
+
+/// The indices whose flag is set, in ascending order.
+fn indices(found: &[bool]) -> Vec<usize> {
+    found
+        .iter()
+        .enumerate()
+        .filter_map(|(index, &hit)| hit.then_some(index))
+        .collect()
 }
 
 impl Signatures {
@@ -167,17 +183,22 @@ impl Signatures {
     ///
     /// Returns the parser's error when the file is not a well-formed DEX file.
     pub fn scan_dex(&self, dex: &[u8]) -> Result<DexScan, crate::dex::Error> {
-        let defined = crate::dex::defined_classes(dex)?;
-        let referenced = crate::dex::referenced_classes(dex)?;
-        let ids = |found: Vec<usize>| -> Vec<u32> {
-            found
+        // One pass over the names, each matched once, and no list of names: a large app's DEX
+        // files name tens of thousands of classes each.
+        let mut embedded = vec![false; self.trackers.len()];
+        let mut referenced = vec![false; self.trackers.len()];
+        crate::dex::visit_classes(dex, |name, defined| {
+            self.mark(name, defined, &mut referenced, &mut embedded);
+        })?;
+        let ids = |found: &[bool]| -> Vec<u32> {
+            indices(found)
                 .into_iter()
                 .filter_map(|index| self.trackers.get(index).map(|t| t.id))
                 .collect()
         };
         Ok(DexScan {
-            embedded: ids(self.find(defined.iter().map(String::as_str))),
-            referenced: ids(self.find(referenced.iter().map(String::as_str))),
+            embedded: ids(&embedded),
+            referenced: ids(&referenced),
         })
     }
 }
@@ -471,15 +492,18 @@ mod tests {
     #[test]
     fn scans_a_real_dex_file() {
         let fixture = include_bytes!("../testdata/fixture.dex");
+        // Tracker 10 matches a referenced platform class before a class the app defines, in the
+        // order the file lists them; it is still embedded.
         let tsv = "7\tOwn\t\t\torg.visadahyu.datapavan.fixture.Fixture\t\n\
                    8\tPlatform\t\t\tandroid.net.VpnService\t\n\
-                   9\tAbsent\t\t\tcom.example.absent\t\n";
+                   9\tAbsent\t\t\tcom.example.absent\t\n\
+                   10\tBoth\t\t\tandroid.net.VpnService|fixture.FixtureVpnService\t\n";
         let scan = Signatures::parse(tsv).map(|s| s.scan_dex(fixture));
         assert_eq!(
             scan,
             Ok(Ok(DexScan {
-                embedded: vec![7],
-                referenced: vec![7, 8]
+                embedded: vec![7, 10],
+                referenced: vec![7, 8, 10]
             }))
         );
         let broken = Signatures::parse(tsv).map(|s| s.scan_dex(&fixture[..100]).is_err());
