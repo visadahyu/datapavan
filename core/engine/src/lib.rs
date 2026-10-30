@@ -6,6 +6,7 @@
 //! configuration enforces that at compile time.
 
 pub mod attestation;
+pub mod datapack;
 pub mod dex;
 pub mod trackers;
 

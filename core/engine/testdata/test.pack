@@ -1,0 +1,12 @@
+untrusted comment: verify with datapack-test.pub
+RWSaKiYnaFJUiXmnLJxTebUYXxhrpLboOAb9haqCTHF8afIDvkT00q+m2bIesJul5wlDiVT2/BGHYLBvnd39jCotIHt9qL6W0gE=
+datapavan-data-pack 1
+sequence 2
+date 2026-10-30
+key RWSaKiYnaFJUifZRfEPxHyXNGoBK8ZRt44B2pqafPP6DCPmmnxA7fyPR
+file example/LICENSE 33
+file example/list.txt 8
+end
+SPDX-License-Identifier: CC0-1.0
+one
+two

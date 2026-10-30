@@ -37,3 +37,10 @@ path = "fuzz_targets/trackers.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "datapack"
+path = "fuzz_targets/datapack.rs"
+test = false
+doc = false
+bench = false

@@ -24,6 +24,7 @@ in the Git history.
 | [0014](0014-v0.1-permissions.md) | Permissions for v0.1 "Audit" | Accepted |
 | [0015](0015-dataset-licences.md) | Licences of bundled datasets | Accepted |
 | [0016](0016-no-user-data.md) | No data from users; learning happens in the lab | Accepted |
+| [0017](0017-data-pack-format.md) | Data packs in signify's format, checked with ed25519-compact | Accepted |
 
 ## Template
 

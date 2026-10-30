@@ -29,6 +29,9 @@ checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
 [[package]]
 name = "datapavan-engine"
 version = "0.1.0"
+dependencies = [
+ "ed25519-compact",
+]
 
 [[package]]
 name = "datapavan-fuzz"
@@ -37,6 +40,12 @@ dependencies = [
  "datapavan-engine",
  "libfuzzer-sys",
 ]
+
+[[package]]
+name = "ed25519-compact"
+version = "2.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1454db4f2edb7f0e8fe0c5b375b0c978fc63244cc9f010d160e417eb10139aa8"
 
 [[package]]
 name = "find-msvc-tools"

@@ -9,6 +9,7 @@
 //! `panic = "abort"`, which ends the process first.
 
 use datapavan_engine::attestation::{self, SecurityLevel, VerifiedBootState};
+use datapavan_engine::datapack::{self, Payload, PublicKey};
 use datapavan_engine::trackers::Signatures;
 use jni::EnvUnowned;
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
@@ -145,4 +146,102 @@ pub extern "system" fn Java_org_visadahyu_datapavan_core_NativeCore_scanDex<'cal
             Ok(array)
         })
         .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `org.visadahyu.datapavan.core.NativeCore.readDataPack(byte[], String)`: checks the signature of
+/// a data pack against the trusted keys (`signify` public key lines separated by `\n`) and only
+/// then reads its header. The result is described on [`pack_layout`].
+// SAFETY: `no_mangle` exports this function under the JNI-mangled name the JVM resolves for
+// `NativeCore.readDataPack`. The name is unique within this library, and the signature matches the
+// static Kotlin declaration `external fun readDataPack(pack: ByteArray, keys: String): IntArray`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_core_NativeCore_readDataPack<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    pack: JByteArray<'caller>,
+    keys: JString<'caller>,
+) -> JIntArray<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let bytes = env.convert_byte_array(&pack)?;
+            let keys = keys.try_to_string(env)?;
+            let result = keys
+                .lines()
+                .map(|line| PublicKey::parse(line.as_bytes()))
+                .collect::<Result<Vec<_>, _>>()
+                .and_then(|trusted| datapack::verify(&bytes, &trusted))
+                .and_then(|verified| {
+                    let payload = bytes.get(verified.payload_start..).unwrap_or_default();
+                    Payload::parse(payload).map(|header| (verified, header))
+                });
+            let fields = match result {
+                Ok((verified, header)) => {
+                    pack_layout(&header, Some(verified.signer), verified.payload_start)
+                }
+                Err(error) => vec![error.code()],
+            };
+            int_array(env, &fields)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `org.visadahyu.datapavan.core.NativeCore.readDataPayload(byte[])`: reads the header of a bare
+/// payload, the app's own copy from the APK. The result is described on [`pack_layout`].
+// SAFETY: `no_mangle` exports this function under the JNI-mangled name the JVM resolves for
+// `NativeCore.readDataPayload`. The name is unique within this library, and the signature matches
+// the static Kotlin declaration `external fun readDataPayload(payload: ByteArray): IntArray`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_core_NativeCore_readDataPayload<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    payload: JByteArray<'caller>,
+) -> JIntArray<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let bytes = env.convert_byte_array(&payload)?;
+            let fields = match Payload::parse(&bytes) {
+                Ok(header) => pack_layout(&header, None, 0),
+                Err(error) => vec![error.code()],
+            };
+            int_array(env, &fields)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// Flattens a pack header for the app. On success: `[0, signer, payloadStart, sequence,
+/// dateStart, dateLength, k, k × (start, length), r, r × (start, length), f, f × (pathStart,
+/// pathLength, dataStart, dataLength)]`, for the keys, revoked keys and files, where `signer` is
+/// the index of the trusted key that signed the pack, or -1 for a bare payload. Every start counts
+/// from the beginning of the array the app passed in. On failure, the array holds only the error's
+/// code ([`datapack::Error::code`]).
+fn pack_layout(header: &Payload, signer: Option<usize>, offset: usize) -> Vec<jint> {
+    // Packs are at most 32 MiB, so every number fits.
+    let int = |value: usize| jint::try_from(value).unwrap_or(jint::MAX);
+    let range = |r: &std::ops::Range<usize>| [int(offset + r.start), int(r.len())];
+    let mut out = vec![
+        0,
+        signer.map_or(-1, int),
+        int(offset),
+        jint::try_from(header.sequence).unwrap_or(jint::MAX),
+    ];
+    out.extend(range(&header.date));
+    for list in [&header.keys, &header.revoked] {
+        out.push(int(list.len()));
+        out.extend(list.iter().flat_map(range));
+    }
+    out.push(int(header.files.len()));
+    for file in &header.files {
+        out.extend(range(&file.path));
+        out.extend(range(&file.data));
+    }
+    out
+}
+
+fn int_array<'local>(
+    env: &mut jni::Env<'local>,
+    values: &[jint],
+) -> Result<JIntArray<'local>, Error> {
+    let array = JIntArray::new(env, values.len())?;
+    array.set_region(env, 0, values)?;
+    Ok(array)
 }

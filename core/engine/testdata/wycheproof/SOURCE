@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: CC0-1.0
+retrieved: 2026-10-30
+url: https://raw.githubusercontent.com/C2SP/wycheproof/main/testvectors_v1/ed25519_test.json
+sha256: ea80ffebac085e21cb9d3e903e7fa2b448d96702da5b31f061d0b83b430b74b3
+source: google-wycheproof 0.9rc5
+licence: Apache-2.0 (https://github.com/C2SP/wycheproof/blob/main/LICENSE)
+tests: 210 (117 valid, 64 invalid, 29 acceptable)

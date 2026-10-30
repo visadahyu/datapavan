@@ -8,5 +8,9 @@ repository.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[dependencies]
+# Ed25519 for signed data packs (ADR 0017): no dependencies of its own.
+ed25519-compact = { version = "2.6.0", default-features = false }
+
 [lints]
 workspace = true
