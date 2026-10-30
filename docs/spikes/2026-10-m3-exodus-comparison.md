@@ -60,7 +60,8 @@ app defines and the types in their declarations.
 - Signatures with a literal `-` (one, Backtrace) can never match a Java class name; εxodus has the
   same limitation. To be reported upstream.
 - Speed on the A40, measured once the scanner was wired into the app (2026-10-29): the first scan of
-  all 436 apps, base APKs and splits, takes 116 seconds, two apps at a time; later runs reuse the
+  all 436 apps, base APKs and splits, takes 116 seconds, two apps at a time (86 seconds since the scan
+  maps stored DEX files, 2026-10-30); later runs reuse the
   results of unchanged apps and finish within seconds. A first scan that is cut short resumes where
   it stopped (160 apps were saved after 30 seconds). 58 apps contain trackers, 10 more only refer to
   some; no app was unreadable.

@@ -14,7 +14,7 @@ use datapavan_engine::trackers::Signatures;
 use jni::EnvUnowned;
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
 use jni::objects::{JByteArray, JClass, JIntArray, JLongArray, JString};
-use jni::sys::jint;
+use jni::sys::{jint, jlong};
 use std::sync::{Arc, RwLock};
 
 /// The tracker signatures that `loadTrackers` read, shared by every `scanDex` call.
@@ -113,9 +113,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_core_NativeCore_loadTrackers
 }
 
 /// `org.visadahyu.datapavan.core.NativeCore.scanDex(byte[])`: finds the loaded trackers in one DEX
-/// file. The result is `[n, e1..en, r1..rm]`: the number of embedded trackers, their εxodus ids,
-/// then the ids of the referenced ones, which include the embedded. A malformed file, or no loaded
-/// signatures, throws a `RuntimeException`.
+/// file. The result is described on [`scan_result`].
 // SAFETY: `no_mangle` exports this function under the JNI-mangled name the JVM resolves for
 // `NativeCore.scanDex`. The name is unique within this library, and the signature matches the
 // static Kotlin declaration `external fun scanDex(dex: ByteArray): IntArray`.
@@ -127,25 +125,66 @@ pub extern "system" fn Java_org_visadahyu_datapavan_core_NativeCore_scanDex<'cal
 ) -> JIntArray<'caller> {
     unowned_env
         .with_env(|env| -> Result<_, Error> {
-            let signatures = TRACKERS
-                .read()
-                .ok()
-                .and_then(|slot| slot.clone())
-                .ok_or_else(|| Error::ParseFailed("no tracker signatures loaded".to_owned()))?;
             let bytes = env.convert_byte_array(&dex)?;
-            let scan = signatures
-                .scan_dex(&bytes)
-                .map_err(|e| Error::ParseFailed(e.to_string()))?;
-            let to_jint = |id: &u32| jint::try_from(*id).unwrap_or(jint::MAX);
-            let mut result = Vec::with_capacity(1 + scan.embedded.len() + scan.referenced.len());
-            result.push(jint::try_from(scan.embedded.len()).unwrap_or(jint::MAX));
-            result.extend(scan.embedded.iter().map(to_jint));
-            result.extend(scan.referenced.iter().map(to_jint));
-            let array = JIntArray::new(env, result.len())?;
-            array.set_region(env, 0, &result)?;
-            Ok(array)
+            scan_result(env, &bytes)
         })
         .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `org.visadahyu.datapavan.core.NativeCore.scanMappedDex(long, int)`: finds the loaded trackers in
+/// one DEX file that the caller mapped read-only from an APK, `length` bytes at `address`. Only the
+/// pages the parser touches are read from storage. The result is described on [`scan_result`].
+// SAFETY: `no_mangle` exports this function under the JNI-mangled name the JVM resolves for
+// `NativeCore.scanMappedDex`. The name is unique within this library, and the signature matches the
+// static Kotlin declaration `external fun scanMappedDex(address: Long, length: Int): IntArray`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_core_NativeCore_scanMappedDex<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    address: jlong,
+    length: jint,
+) -> JIntArray<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let (Ok(address), Ok(length)) = (usize::try_from(address), usize::try_from(length))
+            else {
+                return Err(Error::ParseFailed("invalid DEX mapping".to_owned()));
+            };
+            if address == 0 {
+                return Err(Error::ParseFailed("invalid DEX mapping".to_owned()));
+            }
+            // SAFETY: the Kotlin caller maps `length` bytes at `address` with `Os.mmap` (read-only,
+            // private) and unmaps them only after this call returns, so the memory stays valid and
+            // nothing writes to it while the slice exists. It maps only a range that it checked lies
+            // within the file, an installed APK, which Android replaces by a new file rather than
+            // truncating, so every page stays readable. Bytes need no alignment.
+            let bytes = unsafe { std::slice::from_raw_parts(address as *const u8, length) };
+            scan_result(env, bytes)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// Scans one DEX file with the loaded signatures. The result is `[n, e1..en, r1..rm]`: the number
+/// of embedded trackers, their εxodus ids, then the ids of the referenced ones, which include the
+/// embedded. A malformed file, or no loaded signatures, is an error that becomes a
+/// `RuntimeException`.
+fn scan_result<'local>(env: &mut jni::Env<'local>, dex: &[u8]) -> Result<JIntArray<'local>, Error> {
+    let signatures = TRACKERS
+        .read()
+        .ok()
+        .and_then(|slot| slot.clone())
+        .ok_or_else(|| Error::ParseFailed("no tracker signatures loaded".to_owned()))?;
+    let scan = signatures
+        .scan_dex(dex)
+        .map_err(|e| Error::ParseFailed(e.to_string()))?;
+    let to_jint = |id: &u32| jint::try_from(*id).unwrap_or(jint::MAX);
+    let mut result = Vec::with_capacity(1 + scan.embedded.len() + scan.referenced.len());
+    result.push(jint::try_from(scan.embedded.len()).unwrap_or(jint::MAX));
+    result.extend(scan.embedded.iter().map(to_jint));
+    result.extend(scan.referenced.iter().map(to_jint));
+    let array = JIntArray::new(env, result.len())?;
+    array.set_region(env, 0, &result)?;
+    Ok(array)
 }
 
 /// `org.visadahyu.datapavan.core.NativeCore.readDataPack(byte[], String)`: checks the signature of

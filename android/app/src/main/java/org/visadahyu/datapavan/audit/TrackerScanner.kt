@@ -1,7 +1,11 @@
 package org.visadahyu.datapavan.audit
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.pm.PackageManager
+import android.system.ErrnoException
+import android.system.Os
+import android.system.OsConstants
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -14,11 +18,14 @@ import org.visadahyu.datapavan.core.NativeCore
 import org.visadahyu.datapavan.datapack.DataPackStore
 import java.io.DataInputStream
 import java.io.File
+import java.io.FileDescriptor
 import java.io.IOException
+import java.io.RandomAccessFile
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 
 /** One tracker from the εxodus database (`data/exodus/trackers.tsv`, ADR 0015). */
@@ -93,8 +100,7 @@ class TrackerScanner(private val context: Context) {
         suspend fun saveCache(entries: Map<String, Pair<Long, AppTrackers>>) = save.withLock {
             ScanCache.write(cacheFile, dataVersion, entries.map { (name, entry) -> Triple(name, entry.first, entry.second) })
         }
-        // Two at a time: each holds a whole DEX file in memory, and low-end phones have little.
-        val permits = Semaphore(PARALLEL_SCANS)
+        val permits = Semaphore(parallelScans())
         apps.map { app ->
             async(Dispatchers.IO) {
                 val result = cached[app.packageName]?.takeIf { it.first == app.lastUpdate }?.second
@@ -112,6 +118,24 @@ class TrackerScanner(private val context: Context) {
 
     private val cacheFile: File get() = File(context.noBackupFilesDir, "tracker-scan.tsv")
 
+    /**
+     * How many apps to scan at once. A scan maps most DEX files, but holds a compressed one in
+     * memory, up to tens of megabytes: one at a time on phones that Android counts as low on memory
+     * and on 2 GB phones, two on 3 and 4 GB phones, four from 6 GB, and never more than the
+     * processor has cores.
+     */
+    private fun parallelScans(): Int {
+        val activity = context.getSystemService(ActivityManager::class.java) ?: return 1
+        if (activity.isLowRamDevice) return 1
+        val memory = ActivityManager.MemoryInfo().also { activity.getMemoryInfo(it) }.totalMem
+        val byMemory = when {
+            memory < 2_500L * MIB -> 1
+            memory < 5_000L * MIB -> 2
+            else -> 4
+        }
+        return byMemory.coerceAtMost(Runtime.getRuntime().availableProcessors()).coerceAtLeast(1)
+    }
+
     private fun scanApp(packageName: String): AppTrackers {
         val info = try {
             context.packageManager.getApplicationInfo(packageName, 0)
@@ -123,19 +147,23 @@ class TrackerScanner(private val context: Context) {
         val apks = listOfNotNull(info.sourceDir) + info.splitSourceDirs.orEmpty()
         return try {
             for (apk in apks) {
-                ZipFile(apk).use { zip ->
-                    embedded += sdkList.nativeMatches(zip.entries().asSequence().map { it.name })
-                    for (entry in zip.entries()) {
-                        if (!DEX_ENTRY.matches(entry.name)) continue
-                        // The size comes from the APK's directory. A file far larger than any real
-                        // one could exhaust memory, so it makes the app unreadable instead.
-                        if (entry.size !in 0..MAX_DEX_BYTES) throw IOException("${entry.name}: ${entry.size} bytes")
-                        val dex = ByteArray(entry.size.toInt())
-                        zip.getInputStream(entry).use { DataInputStream(it).readFully(dex) }
-                        val found = NativeCore.scanDex(dex)
-                        val count = found.firstOrNull() ?: 0
-                        embedded += found.drop(1).take(count)
-                        referenced += found.drop(1 + count)
+                RandomAccessFile(apk, "r").use { file ->
+                    val stored = StoredDex.locate(file)
+                    ZipFile(apk).use { zip ->
+                        embedded += sdkList.nativeMatches(zip.entries().asSequence().map { it.name })
+                        for (entry in zip.entries()) {
+                            if (!DEX_ENTRY.matches(entry.name)) continue
+                            // The size comes from the APK's directory. A file far larger than any
+                            // real one could exhaust memory, so it makes the app unreadable instead.
+                            if (entry.size !in 0..MAX_DEX_BYTES) throw IOException("${entry.name}: ${entry.size} bytes")
+                            // Mapped only where ZipFile agrees that the entry is stored, with that size.
+                            val location = stored[entry.name]
+                                ?.takeIf { entry.method == ZipEntry.STORED && it.size.toLong() == entry.size }
+                            val found = location?.let { scanMapped(file.fd, it) } ?: scanRead(zip, entry)
+                            val count = found.firstOrNull() ?: 0
+                            embedded += found.drop(1).take(count)
+                            referenced += found.drop(1 + count)
+                        }
                     }
                 }
             }
@@ -150,13 +178,45 @@ class TrackerScanner(private val context: Context) {
         }
     }
 
+    /**
+     * Scans a stored DEX file through a read-only mapping of its bytes in the APK, so that only the
+     * pages the parser needs are read. Null when the mapping fails; the file is then read instead.
+     */
+    private fun scanMapped(fd: FileDescriptor, location: StoredDex.Location): IntArray? {
+        val start = location.offset - location.offset % pageSize
+        val length = location.offset - start + location.size
+        val address = try {
+            Os.mmap(0, length, OsConstants.PROT_READ, OsConstants.MAP_PRIVATE, fd, start)
+        } catch (_: ErrnoException) {
+            return null
+        }
+        try {
+            return NativeCore.scanMappedDex(address + (location.offset - start), location.size)
+        } finally {
+            try {
+                Os.munmap(address, length)
+            } catch (_: ErrnoException) {
+                // Nothing to undo: the mapping is gone with the process at the latest.
+            }
+        }
+    }
+
+    /** Scans a compressed DEX file, which has to be inflated into memory first. */
+    private fun scanRead(zip: ZipFile, entry: ZipEntry): IntArray {
+        val dex = ByteArray(entry.size.toInt())
+        zip.getInputStream(entry).use { DataInputStream(it).readFully(dex) }
+        return NativeCore.scanDex(dex)
+    }
+
+    private val pageSize: Long by lazy { Os.sysconf(OsConstants._SC_PAGESIZE) }
+
     private fun sha256(text: String): String =
         MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(Locale.ROOT, it) }
 
     private companion object {
-        const val PARALLEL_SCANS = 2
         const val SAVE_EVERY = 20
-        const val MAX_DEX_BYTES = 48L * 1024 * 1024
+        const val MIB = 1024L * 1024
+        const val MAX_DEX_BYTES = 48L * MIB
         val DEX_ENTRY = Regex("classes\\d*\\.dex")
     }
 }

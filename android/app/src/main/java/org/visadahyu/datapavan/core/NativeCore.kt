@@ -40,6 +40,13 @@ internal object NativeCore {
     external fun scanDex(dex: ByteArray): IntArray
 
     /**
+     * Like [scanDex], for a DEX file that the caller mapped read-only from an APK: [length] bytes at
+     * [address]. The mapping must stay in place until the call returns.
+     */
+    @JvmStatic
+    external fun scanMappedDex(address: Long, length: Int): IntArray
+
+    /**
      * Checks the signature of a data pack (untrusted input, read in Rust) against [keys], signify
      * public key lines separated by `\n`, and only then reads its header. Returns the layout that
      * [org.visadahyu.datapavan.datapack.PackReader] decodes, or `[code]` for a refused pack.
