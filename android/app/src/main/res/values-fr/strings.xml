@@ -119,4 +119,28 @@
     <string name="guide_steps">1. Ouvrez l\'appli dans les paramètres système.\n2. Touchez Désactiver.\n3. Si le bouton est grisé, le fabricant l\'empêche. Depuis un ordinateur avec le débogage USB, vous pouvez à la place supprimer l\'appli pour votre utilisateur ; c\'est réversible.</string>
     <string name="guide_remove">Supprimer pour votre utilisateur :</string>
     <string name="guide_restore">La rétablir :</string>
+
+    <!-- M3 data sources and signed data packs -->
+    <string name="data_sources_title">Sources de données</string>
+    <string name="data_sources_intro">Datapavan compare vos applis et votre téléphone à ces bases de données. Toutes se trouvent sur le téléphone ; rien n\'est consulté en ligne.</string>
+    <string name="data_pack_bundled">Paquet de données %1$d du %2$s, fourni avec l\'appli.</string>
+    <string name="data_pack_imported">Paquet de données %1$d du %2$s, importé.</string>
+    <string name="dataset_attestation">Racines et liste de révocation de l\'attestation de clés Google</string>
+    <string name="dataset_exodus">Signatures de traqueurs εxodus</string>
+    <string name="dataset_retrieved">Récupéré le %1$s</string>
+    <string name="data_import_title">Données plus récentes</string>
+    <string name="data_import_body">Datapavan ne se connecte jamais à Internet. Un paquet de données plus récent peut venir de la page des versions du projet, d\'un miroir ou d\'un autre téléphone. Il doit être signé par le projet : Datapavan vérifie la signature avant de lire quoi que ce soit, et refuse un paquet qui n\'est pas plus récent que celui utilisé.</string>
+    <string name="data_import_button">Importer un paquet de données</string>
+    <string name="data_import_unavailable">Cette version ne fait encore confiance à aucune clé de signature des données ; elle ne peut donc pas importer de paquets.</string>
+    <string name="data_import_done">Le paquet de données %1$d est maintenant utilisé.</string>
+    <string name="data_refused_not_signed">Ce fichier n\'est pas un paquet de données Datapavan signé.</string>
+    <string name="data_refused_unknown_key">Ce paquet est signé par une clé à laquelle Datapavan ne fait pas confiance.</string>
+    <string name="data_refused_bad_signature">La signature ne correspond pas : le fichier a été modifié ou endommagé.</string>
+    <string name="data_refused_unsupported">Ce paquet nécessite une version plus récente de Datapavan.</string>
+    <string name="data_refused_invalid">Ce paquet est endommagé.</string>
+    <string name="data_refused_too_large">Ce fichier est trop volumineux pour être un paquet de données.</string>
+    <string name="data_refused_not_newer">Ce paquet n\'est pas plus récent que celui utilisé.</string>
+    <string name="data_refused_unreadable">Le fichier n\'a pas pu être lu.</string>
+    <string name="data_fingerprint">Empreinte (SHA-256), à comparer avec celle publiée avec le paquet :</string>
+    <string name="data_stale">Ces données datent du %1$s, il y a plus de six mois. Les listes de traqueurs et les données de sécurité changent ; importez un paquet de données plus récent.</string>
 </resources>

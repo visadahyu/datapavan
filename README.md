@@ -101,7 +101,8 @@ stage that addresses it, is listed in [docs/DESIGN.md](docs/DESIGN.md#2-what-we-
 ## Principles
 
 - **No internet permission in v0.1.** The app cannot open a network connection, and the build fails if
-  anything adds the permission.
+  anything adds the permission. Newer data arrives as signed packs that the user imports as files
+  ([DATA-PACKS.md](docs/DATA-PACKS.md)), so no server learns who uses Datapavan.
 - **Local-first.** All analysis happens on the device. Datapavan has no servers that receive user data.
 - **Zero telemetry.** Datapavan collects nothing about its users and contains no analytics SDKs. It learns
   from its own lab, never from its users' phones ([ADR 0016](docs/decisions/0016-no-user-data.md)).
@@ -130,6 +131,7 @@ The history and meaning of both names are in [docs/NAMES.md](docs/NAMES.md); log
 | [docs/DESIGN.md](docs/DESIGN.md) | Stage 1 design: scope, architecture, threat model, internationalisation |
 | [docs/VPN.md](docs/VPN.md) | Design of the local VPN (v0.2 and v0.3) |
 | [docs/REMEDIATION.md](docs/REMEDIATION.md) | The remediation plan: levels, actions, safety floor, evidence |
+| [docs/DATA-PACKS.md](docs/DATA-PACKS.md) | Signed data packs: how data reaches a phone without network access |
 | [docs/RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md) | Working under censorship and surveillance |
 | [docs/FOUNDATION.md](docs/FOUNDATION.md) | Charter principles of the Visadahyu Foundation |
 | [docs/decisions/](docs/decisions/README.md) | Architecture decision records, including the licences of every dataset (ADR 0015) |

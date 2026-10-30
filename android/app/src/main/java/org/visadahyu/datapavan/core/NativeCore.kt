@@ -38,4 +38,16 @@ internal object NativeCore {
      */
     @JvmStatic
     external fun scanDex(dex: ByteArray): IntArray
+
+    /**
+     * Checks the signature of a data pack (untrusted input, read in Rust) against [keys], signify
+     * public key lines separated by `\n`, and only then reads its header. Returns the layout that
+     * [org.visadahyu.datapavan.datapack.PackReader] decodes, or `[code]` for a refused pack.
+     */
+    @JvmStatic
+    external fun readDataPack(pack: ByteArray, keys: String): IntArray
+
+    /** Reads the header of a bare payload, the app's own data from the APK; as [readDataPack]. */
+    @JvmStatic
+    external fun readDataPayload(payload: ByteArray): IntArray
 }

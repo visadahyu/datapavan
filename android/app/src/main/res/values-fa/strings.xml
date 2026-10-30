@@ -119,4 +119,28 @@
     <string name="guide_steps">۱. برنامه را در تنظیمات سیستم باز کنید.\n۲. گزینه غیرفعال کردن را بزنید.\n۳. اگر دکمه خاکستری است، سازنده گوشی جلوی آن را گرفته است. در این صورت با یک رایانه و اشکال‌زدایی USB می‌توانید برنامه را برای کاربر خودتان حذف کنید؛ این کار برگشت‌پذیر است.</string>
     <string name="guide_remove">حذف برای کاربر شما:</string>
     <string name="guide_restore">برگرداندن:</string>
+
+    <!-- M3 data sources and signed data packs -->
+    <string name="data_sources_title">منابع داده</string>
+    <string name="data_sources_intro">این برنامه برنامه‌ها و گوشی شما را با این پایگاه‌های داده مقایسه می‌کند. همه آن‌ها روی خود گوشی است و هیچ چیزی در اینترنت جست‌وجو نمی‌شود.</string>
+    <string name="data_pack_bundled">بسته داده شماره %1$d، تاریخ %2$s، همراه برنامه.</string>
+    <string name="data_pack_imported">بسته داده شماره %1$d، تاریخ %2$s، واردشده.</string>
+    <string name="dataset_attestation">ریشه‌ها و فهرست ابطال گواهی کلید گوگل</string>
+    <string name="dataset_exodus">امضاهای ردیاب εxodus</string>
+    <string name="dataset_retrieved">دریافت‌شده در %1$s</string>
+    <string name="data_import_title">داده تازه‌تر</string>
+    <string name="data_import_body">این برنامه هرگز به اینترنت وصل نمی‌شود. بسته داده تازه‌تر را می‌توان از صفحه انتشار پروژه، از یک آینه یا از گوشی دیگری گرفت. بسته باید امضای پروژه را داشته باشد: برنامه پیش از خواندن هر چیزی امضا را بررسی می‌کند و بسته‌ای را که از بسته فعلی تازه‌تر نباشد نمی‌پذیرد.</string>
+    <string name="data_import_button">وارد کردن بسته داده</string>
+    <string name="data_import_unavailable">این نسخه هنوز به هیچ کلید امضای داده‌ای اعتماد ندارد، پس نمی‌تواند بسته وارد کند.</string>
+    <string name="data_import_done">بسته داده شماره %1$d اکنون به کار می‌رود.</string>
+    <string name="data_refused_not_signed">این فایل بسته داده امضاشده این برنامه نیست.</string>
+    <string name="data_refused_unknown_key">این بسته با کلیدی امضا شده که برنامه به آن اعتماد ندارد.</string>
+    <string name="data_refused_bad_signature">امضا مطابقت ندارد: فایل تغییر کرده یا خراب شده است.</string>
+    <string name="data_refused_unsupported">این بسته به نسخه تازه‌تری از برنامه نیاز دارد.</string>
+    <string name="data_refused_invalid">این بسته خراب است.</string>
+    <string name="data_refused_too_large">این فایل برای یک بسته داده بیش از حد بزرگ است.</string>
+    <string name="data_refused_not_newer">این بسته از بسته فعلی تازه‌تر نیست.</string>
+    <string name="data_refused_unreadable">فایل خوانده نشد.</string>
+    <string name="data_fingerprint">اثر انگشت (SHA-256)، برای مقایسه با اثر انگشتی که همراه بسته منتشر شده است:</string>
+    <string name="data_stale">این داده مربوط به %1$s است، یعنی بیش از شش ماه پیش. فهرست ردیاب‌ها و داده‌های امنیتی تغییر می‌کنند؛ یک بسته داده تازه‌تر وارد کنید.</string>
 </resources>

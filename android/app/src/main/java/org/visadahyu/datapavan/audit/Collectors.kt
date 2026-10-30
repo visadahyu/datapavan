@@ -22,6 +22,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import org.visadahyu.datapavan.core.NativeCore
+import org.visadahyu.datapavan.datapack.DataPackStore
+import java.io.IOException
 import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.SecureRandom
@@ -223,7 +225,7 @@ class DeviceCollector(private val context: Context) {
         }
     } catch (_: java.security.GeneralSecurityException) {
         emptyList()
-    } catch (_: java.io.IOException) {
+    } catch (_: IOException) {
         emptyList()
     }
 
@@ -267,8 +269,8 @@ class DeviceCollector(private val context: Context) {
             )
         } catch (_: java.security.GeneralSecurityException) {
             null
-        } catch (_: java.io.IOException) {
-            // The bundled roots or revocation list could not be read; the smoke test catches this.
+        } catch (_: IOException) {
+            // The data pack lacks the roots or the revocation list; the smoke test catches this.
             null
         } catch (_: RuntimeException) {
             // Malformed extension (thrown by the Rust parser) or a keystore without attestation.
@@ -282,10 +284,12 @@ class DeviceCollector(private val context: Context) {
         }
     }
 
-    private fun attestationChain(): AttestationChain =
-        context.assets.open(AttestationChain.ROOTS_ASSET).use { roots ->
-            context.assets.open(AttestationChain.REVOKED_ASSET).use { revoked -> AttestationChain.load(roots, revoked) }
-        }
+    private fun attestationChain(): AttestationChain {
+        val data = DataPackStore.get(context)
+        val roots = data.file(AttestationChain.ROOTS_PATH) ?: throw IOException(AttestationChain.ROOTS_PATH)
+        val revoked = data.file(AttestationChain.REVOKED_PATH) ?: throw IOException(AttestationChain.REVOKED_PATH)
+        return AttestationChain.load(roots.inputStream(), revoked.inputStream())
+    }
 
     private companion object {
         const val SETTING_ADB_WIFI = "adb_wifi_enabled"

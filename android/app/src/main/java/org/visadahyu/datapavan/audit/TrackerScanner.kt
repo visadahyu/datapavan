@@ -11,6 +11,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import org.visadahyu.datapavan.core.NativeCore
+import org.visadahyu.datapavan.datapack.DataPackStore
 import java.io.DataInputStream
 import java.io.File
 import java.io.IOException
@@ -33,9 +34,9 @@ data class AppTrackers(
     val unreadable: Boolean = false,
 )
 
-/** The tracker signatures bundled with the app. */
+/** The tracker signatures, from the data pack. */
 object TrackerData {
-    const val ASSET = "data/exodus/trackers.tsv"
+    const val PATH = "exodus/trackers.tsv"
 
     /** Reads id, name, categories and website from each line; comments start with `#`. */
     fun parse(tsv: String): Map<Int, TrackerInfo> = tsv.lineSequence()
@@ -56,9 +57,10 @@ object TrackerData {
  * of a phone reads several gigabytes.
  */
 class TrackerScanner(private val context: Context) {
-    private val tsv: String by lazy { context.assets.open(TrackerData.ASSET).bufferedReader().use { it.readText() } }
+    // Missing only from a broken pack; then nothing is found rather than the app failing.
+    private val tsv: String by lazy { DataPackStore.get(context).text(TrackerData.PATH).orEmpty() }
 
-    /** The bundled trackers, by εxodus id. */
+    /** The trackers of the data pack in use, by εxodus id. */
     val trackers: Map<Int, TrackerInfo> by lazy { TrackerData.parse(tsv) }
 
     /** Scans [apps], calling [onProgress] with the number done after each one. */

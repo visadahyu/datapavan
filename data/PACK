@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: CC0-1.0
+# The header of Datapavan's data pack (docs/DATA-PACKS.md, ADR 0017). Raise the sequence by one and
+# set the date whenever a pack is published. "key" lines name the data-signing public keys the app
+# trusts (the second line of a signify public key file); "revoked" lines name keys it must not.
+sequence 1
+date 2026-10-30

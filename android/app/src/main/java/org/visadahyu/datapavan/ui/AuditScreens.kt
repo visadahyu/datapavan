@@ -33,6 +33,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -64,7 +65,10 @@ import org.visadahyu.datapavan.audit.Severity
 import org.visadahyu.datapavan.audit.SpecialAccess
 import org.visadahyu.datapavan.audit.TrackerInfo
 import org.visadahyu.datapavan.audit.TrackerScanner
+import org.visadahyu.datapavan.datapack.DataPackRules
+import org.visadahyu.datapavan.datapack.DataPackStore
 import java.text.DateFormat
+import java.time.LocalDate
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -76,13 +80,15 @@ private class AuditResult(
     val device: DeviceFacts,
     val deviceFindings: List<FindingKind>,
     val apps: List<AppEntry>,
+    /** The date of the data pack in use. */
+    val dataDate: String,
     val trackers: Map<String, AppTrackers>? = null,
     val trackerInfo: Map<Int, TrackerInfo> = emptyMap(),
 ) {
     /** The same audit with the tracker scan's findings added. */
     fun withTrackers(found: Map<String, AppTrackers>, info: Map<Int, TrackerInfo>): AuditResult {
         val judged = apps.map { (app, _) -> app to Rules.forApp(app, found[app.packageName]) }.sortedWith(Rules.byUrgency)
-        return AuditResult(device, deviceFindings, judged, found, info)
+        return AuditResult(device, deviceFindings, judged, dataDate, found, info)
     }
 }
 
@@ -97,7 +103,7 @@ private suspend fun runAudit(context: Context): AuditResult = coroutineScope {
     val labelled = collector.withLabels(judged.filter { (_, f) -> f.isNotEmpty() }.map { it.first }).associateBy { it.packageName }
     val apps = judged.map { (app, findings) -> (labelled[app.packageName] ?: app) to findings }.sortedWith(Rules.byUrgency)
     val now = Calendar.getInstance().let { it.get(Calendar.YEAR) * 100 + it.get(Calendar.MONTH) + 1 }
-    AuditResult(device.await(), Rules.forDevice(device.await(), now), apps)
+    AuditResult(device.await(), Rules.forDevice(device.await(), now), apps, DataPackStore.get(context).active.date)
 }
 
 /** Second pass: the labels of all remaining apps, for the full list. */
@@ -105,7 +111,7 @@ private suspend fun AuditResult.withAllLabels(context: Context): AuditResult {
     val missing = apps.filter { it.first.label == null }.map { it.first }
     val labelled = AppCollector(context).withLabels(missing).associateBy { it.packageName }
     val all = apps.map { (app, findings) -> (labelled[app.packageName] ?: app) to findings }.sortedWith(Rules.byUrgency)
-    return AuditResult(device, deviceFindings, all, trackers, trackerInfo)
+    return AuditResult(device, deviceFindings, all, dataDate, trackers, trackerInfo)
 }
 
 /** Root of the v0.1 audit UI: an overview of the phone and its apps, and a detail page per app. */
@@ -115,7 +121,9 @@ internal fun DatapavanApp(engineVersion: String) {
     // The scan reports progress from background threads; a StateFlow carries it safely to the UI.
     val scanProgressFlow = remember { MutableStateFlow<Pair<Int, Int>?>(null) }
     val scanProgress by scanProgressFlow.collectAsState()
-    val result by produceState<AuditResult?>(initialValue = null) {
+    // Raised after a data pack is imported, which runs the audit again with the new data.
+    var dataVersion by remember { mutableIntStateOf(0) }
+    val result by produceState<AuditResult?>(initialValue = null, dataVersion) {
         val first = withContext(Dispatchers.Default) { runAudit(context) }
         value = first
         val labelled = withContext(Dispatchers.Default) { first.withAllLabels(context) }
@@ -130,6 +138,7 @@ internal fun DatapavanApp(engineVersion: String) {
     }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var reviewing by rememberSaveable { mutableStateOf(false) }
+    var showingData by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(modifier = Modifier.fillMaxSize()) { insets ->
         val audit = result
@@ -144,7 +153,14 @@ internal fun DatapavanApp(engineVersion: String) {
                 BackHandler { reviewing = false }
                 StrictReview(audit.apps.map { it.first }, insets, onBack = { reviewing = false })
             }
-            else -> Overview(audit, engineVersion, scanProgress, insets, onOpen = { selected = it }, onReview = { reviewing = true })
+            showingData -> {
+                BackHandler { showingData = false }
+                DataSources(insets, onBack = { showingData = false }, onImported = { dataVersion++ })
+            }
+            else -> Overview(
+                audit, engineVersion, scanProgress, insets,
+                onOpen = { selected = it }, onReview = { reviewing = true }, onData = { showingData = true },
+            )
         }
     }
 }
@@ -163,8 +179,8 @@ private fun Loading(insets: PaddingValues) {
 }
 
 @Composable
-private fun Overview(audit: AuditResult, engineVersion: String,
-    scanProgress: Pair<Int, Int>?, insets: PaddingValues, onOpen: (String) -> Unit, onReview: () -> Unit) {
+private fun Overview(audit: AuditResult, engineVersion: String, scanProgress: Pair<Int, Int>?, insets: PaddingValues,
+    onOpen: (String) -> Unit, onReview: () -> Unit, onData: () -> Unit) {
     var showAll by rememberSaveable { mutableStateOf(false) }
     val flagged = audit.apps.filter { (_, findings) -> findings.any { it.severity != Severity.INFO } }
     val shown = if (showAll) audit.apps else flagged
@@ -178,6 +194,10 @@ private fun Overview(audit: AuditResult, engineVersion: String,
         item {
             Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
             Text(stringResource(R.string.tagline), style = MaterialTheme.typography.bodyLarge)
+            if (DataPackRules.isStale(audit.dataDate, LocalDate.now())) {
+                Spacer(Modifier.height(8.dp))
+                StaleDataCard(audit.dataDate, onData)
+            }
             Spacer(Modifier.height(16.dp))
             SectionTitle(R.string.section_device)
         }
@@ -204,6 +224,7 @@ private fun Overview(audit: AuditResult, engineVersion: String,
         items(shown, key = { it.first.packageName }) { (app, findings) -> AppRow(app, findings) { onOpen(app.packageName) } }
         item {
             Spacer(Modifier.height(24.dp))
+            TextButton(onClick = onData) { Text(stringResource(R.string.data_sources_title)) }
             Text(
                 stringResource(R.string.engine_version, isolateLtr(engineVersion)),
                 style = MaterialTheme.typography.bodySmall,

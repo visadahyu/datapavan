@@ -29,6 +29,12 @@ data_gates() {
             fi
         done
     done
+    # The data pack's header (docs/DATA-PACKS.md); the Gradle build checks its values.
+    if ! grep -q 'SPDX-License-Identifier:' "$ROOT/data/PACK" 2>/dev/null ||
+        ! grep -qE '^sequence [1-9][0-9]*$' "$ROOT/data/PACK" || ! grep -qE '^date [0-9]{4}-[0-9]{2}-[0-9]{2}$' "$ROOT/data/PACK"; then
+        echo "data/PACK is missing, or lacks its licence, sequence or date" >&2
+        failed=1
+    fi
     [ "$failed" -eq 0 ]
 }
 

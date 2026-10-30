@@ -62,6 +62,16 @@ tap_text() {
     adb shell input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 ))
 }
 
+# Taps the centre of the first element whose content description is exactly $1: icons have no text.
+tap_desc() {
+    adb shell uiautomator dump "$DUMP" >/dev/null 2>&1 || return 1
+    local bounds
+    bounds=$(adb shell cat "$DUMP" | grep -o "content-desc=\"$1\"[^>]*bounds=\"[^\"]*\"" | head -1 | grep -o 'bounds="[^"]*"' | grep -o '[0-9]\+' | tr '\n' ' ')
+    [ -n "$bounds" ] || return 1
+    set -- $bounds
+    adb shell input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 ))
+}
+
 # Wakes the screen, starts Datapavan in English and waits for the audit overview.
 start_audit() {
     local pkg=org.visadahyu.datapavan

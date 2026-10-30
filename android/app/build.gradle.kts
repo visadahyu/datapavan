@@ -155,32 +155,75 @@ abstract class CargoNdkTask : DefaultTask() {
 }
 
 /**
- * Verifies the merged manifest and passes it on unchanged. Wired as a transform of
- * MERGED_MANIFEST, so every consumer (APK, bundle, install) depends on it and cannot bypass it.
- */
-/**
- * Copies the bundled datasets (ADR 0015) into the APK's assets as `data/<name>/...`: the data with its
- * LICENSE, SOURCE and REUSE sidecar files, but not the scripts that produce it.
+ * Builds the payload of the data pack (ADR 0015 and 0017, docs/DATA-PACKS.md) from `data/`: a header
+ * with the sequence, date and keys from `data/PACK` and one line per file, then the files. Every
+ * dataset goes in with its LICENSE, SOURCE and REUSE sidecar files, but not the scripts that produce
+ * it. The APK carries the payload as `assets/data/bundled.payload`, and a published pack is the same
+ * payload, signed. Files are sorted by path, so the same data always gives the same bytes.
  */
 abstract class BundledDataTask : DefaultTask() {
     @get:InputDirectory
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val dataDir: DirectoryProperty
 
+    /** Keys trusted in addition to those in `data/PACK`: the test key, in debug builds only. */
+    @get:Input
+    abstract val extraKeys: ListProperty<String>
+
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
 
     @TaskAction
-    fun copy() {
+    fun build() {
         val source = dataDir.get().asFile
-        val target = outputDir.get().asFile.resolve("data")
+        val fields = source.resolve("PACK").readLines()
+            .map(String::trim)
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+            .map { it.substringBefore(' ') to it.substringAfter(' ', "") }
+        fun all(name: String) = fields.filter { it.first == name }.map { it.second }
+        fun single(name: String, format: Regex) = all(name).singleOrNull()?.takeIf(format::matches)
+            ?: throw GradleException("data/PACK needs one '$name' line matching $format")
+        val unknown = fields.map { it.first }.toSet() - setOf("sequence", "date", "key", "revoked")
+        if (unknown.isNotEmpty()) throw GradleException("data/PACK has unknown lines: $unknown")
+        val key = Regex("RW[A-Za-z0-9+/]{54}")
+        val keys = (all("key") + extraKeys.get()).distinct()
+        val revoked = all("revoked")
+        (keys + revoked).firstOrNull { !key.matches(it) }?.let { throw GradleException("data/PACK: not a signify public key: $it") }
+
+        // The same rules as the Rust reader (core/engine/src/datapack.rs), checked here so that a
+        // bad name fails the build rather than the app.
+        val path = Regex("[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*")
+        val files = source.walkTopDown()
+            .filter { it.isFile && it.parentFile != source && it.extension !in setOf("py", "sh") && !it.name.startsWith(".") }
+            .map { it.relativeTo(source).invariantSeparatorsPath to it }
+            .sortedBy { it.first }
+            .toList()
+        files.firstOrNull { (name, _) -> !path.matches(name) || name.length > 128 }
+            ?.let { throw GradleException("data/${it.first}: the name cannot go into a data pack") }
+
+        val header = buildString {
+            append("datapavan-data-pack 1\n")
+            append("sequence ${single("sequence", Regex("[1-9][0-9]{0,8}"))}\n")
+            append("date ${single("date", Regex("[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])"))}\n")
+            keys.forEach { append("key $it\n") }
+            revoked.forEach { append("revoked $it\n") }
+            files.forEach { (name, file) -> append("file $name ${file.length()}\n") }
+            append("end\n")
+        }
         outputDir.get().asFile.deleteRecursively()
-        source.walkTopDown()
-            .filter { it.isFile && it.extension !in setOf("py", "sh") && !it.name.startsWith(".") }
-            .forEach { it.copyTo(target.resolve(it.relativeTo(source)), overwrite = true) }
+        val target = outputDir.get().asFile.resolve("data/bundled.payload")
+        target.parentFile.mkdirs()
+        target.outputStream().use { out ->
+            out.write(header.toByteArray(Charsets.US_ASCII))
+            files.forEach { (_, file) -> file.inputStream().use { it.copyTo(out) } }
+        }
     }
 }
 
+/**
+ * Verifies the merged manifest and passes it on unchanged. Wired as a transform of
+ * MERGED_MANIFEST, so every consumer (APK, bundle, install) depends on it and cannot bypass it.
+ */
 abstract class ForbiddenPermissionsCheck : DefaultTask() {
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
@@ -261,6 +304,18 @@ val remappedRustFlags = cargoHome.map { home ->
     )
 }
 
+// The data-signing test key (scripts/testdata), whose secret half is public: debug builds trust it so
+// that imports can be tested, and release builds never do.
+val testDataKey = providers.fileContents(repositoryRoot.file("scripts/testdata/datapack-test.pub"))
+    .asText.map { it.lines()[1] }
+
+// The payload of a pack to publish, without the test key; it is signed offline (docs/DATA-PACKS.md).
+tasks.register<BundledDataTask>("dataPayload") {
+    dataDir.set(repositoryRoot.dir("data"))
+    extraKeys.set(emptyList())
+    outputDir.set(layout.buildDirectory.dir("datapack"))
+}
+
 var shippedAbis: List<String> = emptyList()
 
 androidComponents {
@@ -292,6 +347,7 @@ androidComponents {
 
         val dataTask = tasks.register<BundledDataTask>("bundledData$suffix") {
             dataDir.set(repositoryRoot.dir("data"))
+            extraKeys.set(if (variant.buildType == "debug") testDataKey.map(::listOf) else provider { emptyList() })
         }
         variant.sources.assets?.addGeneratedSourceDirectory(dataTask, BundledDataTask::outputDir)
 

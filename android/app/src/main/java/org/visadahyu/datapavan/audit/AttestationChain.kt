@@ -15,7 +15,7 @@ import java.util.Locale
  * Google's revocation list. Validity dates are not checked, because Google compares root keys, not root
  * certificates, and older devices keep chains under root certificates that have since expired.
  *
- * The roots and the revocation list ship in `data/attestation` (ADR 0015).
+ * The roots and the revocation list come from `data/attestation`, in the data pack (ADR 0015).
  */
 class AttestationChain(
     /** SHA-256 of each trusted root's SubjectPublicKeyInfo, in lowercase hex. */
@@ -42,15 +42,15 @@ class AttestationChain(
     }
 
     companion object {
-        const val ROOTS_ASSET = "data/attestation/google-roots.pem"
-        const val REVOKED_ASSET = "data/attestation/revoked-serials.txt"
+        const val ROOTS_PATH = "attestation/google-roots.pem"
+        const val REVOKED_PATH = "attestation/revoked-serials.txt"
 
         fun keyFingerprint(key: PublicKey): String =
             MessageDigest.getInstance("SHA-256").digest(key.encoded).joinToString("") { "%02x".format(Locale.ROOT, it) }
 
         private fun serial(number: BigInteger): String = number.toString(16)
 
-        /** Reads the bundled files: PEM certificates, and one serial per line with `#` comments. */
+        /** Reads the data pack's files: PEM certificates, and one serial per line with `#` comments. */
         fun load(roots: InputStream, revoked: InputStream): AttestationChain {
             val certificates = CertificateFactory.getInstance("X.509").generateCertificates(roots)
             val keys = certificates.map { keyFingerprint(it.publicKey) }.toSet()

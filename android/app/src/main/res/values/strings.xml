@@ -130,4 +130,32 @@
     <string name="guide_steps">1. Open the app in system settings.\n2. Tap Disable or Turn off.\n3. If the button is greyed out, the phone maker blocks it. From a computer with USB debugging, you can remove the app for your user instead; this can be undone.</string>
     <string name="guide_remove">Remove for your user:</string>
     <string name="guide_restore">Bring it back:</string>
+
+    <!-- M3 data sources and signed data packs -->
+    <string name="data_sources_title">Data sources</string>
+    <string name="data_sources_intro">Datapavan compares your apps and your phone with these databases. All of them are on the phone; nothing is looked up online.</string>
+    <!-- %1$d is the pack's sequence number, %2$s its date (YYYY-MM-DD). -->
+    <string name="data_pack_bundled">Data pack %1$d of %2$s, included with the app.</string>
+    <string name="data_pack_imported">Data pack %1$d of %2$s, imported.</string>
+    <string name="dataset_attestation">Google key attestation roots and revocation list</string>
+    <string name="dataset_exodus">εxodus tracker signatures</string>
+    <!-- %1$s is a date (YYYY-MM-DD). -->
+    <string name="dataset_retrieved">Retrieved %1$s</string>
+    <string name="data_import_title">Newer data</string>
+    <string name="data_import_body">Datapavan never goes online. A newer data pack can come from the project\'s release page, from a mirror or from another phone. It must be signed by the project: Datapavan checks the signature before it reads anything, and refuses a pack that is not newer than the one in use.</string>
+    <string name="data_import_button">Import a data pack</string>
+    <string name="data_import_unavailable">This build trusts no data-signing key yet, so it cannot import packs.</string>
+    <!-- %1$d is the pack's sequence number. -->
+    <string name="data_import_done">Data pack %1$d is now in use.</string>
+    <string name="data_refused_not_signed">This file is not a signed Datapavan data pack.</string>
+    <string name="data_refused_unknown_key">This pack is signed by a key that Datapavan does not trust.</string>
+    <string name="data_refused_bad_signature">The signature does not match: the file was changed or damaged.</string>
+    <string name="data_refused_unsupported">This pack needs a newer version of Datapavan.</string>
+    <string name="data_refused_invalid">This pack is damaged.</string>
+    <string name="data_refused_too_large">This file is too large to be a data pack.</string>
+    <string name="data_refused_not_newer">This pack is not newer than the one in use.</string>
+    <string name="data_refused_unreadable">The file could not be read.</string>
+    <string name="data_fingerprint">Fingerprint (SHA-256), to compare with the one published with the pack:</string>
+    <!-- %1$s is a date (YYYY-MM-DD). -->
+    <string name="data_stale">This data is from %1$s, more than six months ago. Tracker lists and security data change; import a newer data pack.</string>
 </resources>
