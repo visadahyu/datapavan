@@ -62,6 +62,8 @@ import org.visadahyu.datapavan.audit.DeviceCollector
 import org.visadahyu.datapavan.audit.DeviceFacts
 import org.visadahyu.datapavan.audit.FindingKind
 import org.visadahyu.datapavan.audit.KnownCollectors
+import org.visadahyu.datapavan.audit.OwnerNotes
+import org.visadahyu.datapavan.audit.Owners
 import org.visadahyu.datapavan.audit.Rules
 import org.visadahyu.datapavan.audit.Sdk
 import org.visadahyu.datapavan.audit.SdkList
@@ -99,12 +101,16 @@ private class AuditResult(
     val unavailable: Map<String, List<Capability>> = emptyMap(),
     /** The services those capabilities need, read when the scan finished, and when. */
     val services: ServiceStates? = null,
+    /** Who runs the services of each app's SDKs, by package, where there is something to say (ADR 0020). */
+    val owners: Map<String, OwnerNotes> = emptyMap(),
 ) {
     /**
      * The same audit with the scan's findings added. The scan matched εxodus trackers and the SDKs of
      * [sdkList] in one pass; they are told apart by id, and only SDK code the app contains counts.
      */
-    fun withTrackers(found: Map<String, AppTrackers>, info: Map<Int, TrackerInfo>, sdkList: SdkList, needs: ServiceNeeds, services: ServiceStates): AuditResult {
+    fun withTrackers(
+        found: Map<String, AppTrackers>, info: Map<Int, TrackerInfo>, sdkList: SdkList, needs: ServiceNeeds, services: ServiceStates, owners: Owners,
+    ): AuditResult {
         val exodus = found.mapValues { (_, t) ->
             t.copy(embedded = t.embedded.filter { it < SdkList.FIRST_ID }, referencedOnly = t.referencedOnly.filter { it < SdkList.FIRST_ID })
         }
@@ -112,11 +118,16 @@ private class AuditResult(
         val unavailable = found.mapValues { (_, t) ->
             t.embedded.mapNotNull(needs::byId).filter { needs.unavailable(it, services.states) }
         }.filterValues { it.isNotEmpty() }
+        val notes = apps.mapNotNull { (app, _) ->
+            val operators = found[app.packageName]?.embedded.orEmpty().mapNotNull(owners::byId)
+            owners.notes(owners.publisher(app.packageName, app.signing), operators, dataDate)
+                .takeIf { it.sameGroup.isNotEmpty() || it.shutDown.isNotEmpty() }?.let { app.packageName to it }
+        }.toMap()
         val judged = apps.map { (app, _) ->
             val categories = sdks[app.packageName].orEmpty().map { it.category }.toSet()
             app to Rules.forApp(app, exodus[app.packageName], signatures[app.packageName], categories)
         }.sortedWith(Rules.byUrgency)
-        return AuditResult(device, deviceFindings, judged, dataDate, signatures, exodus, info, sdks, unavailable, services)
+        return AuditResult(device, deviceFindings, judged, dataDate, signatures, exodus, info, sdks, unavailable, services, notes)
     }
 }
 
@@ -147,7 +158,7 @@ private suspend fun AuditResult.withAllLabels(context: Context): AuditResult {
     val missing = apps.filter { it.first.label == null }.map { it.first }
     val labelled = AppCollector(context).withLabels(missing).associateBy { it.packageName }
     val all = apps.map { (app, findings) -> (labelled[app.packageName] ?: app) to findings }.sortedWith(Rules.byUrgency)
-    return AuditResult(device, deviceFindings, all, dataDate, signatures, trackers, trackerInfo, sdks, unavailable, services)
+    return AuditResult(device, deviceFindings, all, dataDate, signatures, trackers, trackerInfo, sdks, unavailable, services, owners)
 }
 
 /** Root of the v0.1 audit UI: an overview of the phone and its apps, and a detail page per app. */
@@ -173,7 +184,7 @@ internal fun DatapavanApp(engineVersion: String) {
         val states = withContext(Dispatchers.Default) {
             ServiceStates(scanner.needs.read(context), scanner.needs.services.mapValues { it.value.name }, System.currentTimeMillis())
         }
-        value = labelled.withTrackers(found, scanner.trackers, scanner.sdkList, scanner.needs, states)
+        value = labelled.withTrackers(found, scanner.trackers, scanner.sdkList, scanner.needs, states, scanner.owners)
         scanProgressFlow.value = null
     }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
@@ -190,7 +201,7 @@ internal fun DatapavanApp(engineVersion: String) {
                 AppDetail(
                     entry, audit.trackers?.get(entry.first.packageName), audit.trackerInfo, audit.signatures[entry.first.packageName],
                     audit.sdks[entry.first.packageName].orEmpty(), audit.unavailable[entry.first.packageName].orEmpty(),
-                    audit.services, insets, onBack = { selected = null },
+                    audit.services, audit.owners[entry.first.packageName], insets, onBack = { selected = null },
                 )
             }
             reviewing -> {
@@ -323,7 +334,7 @@ private fun AppRow(app: AppFacts, findings: List<FindingKind>, onClick: () -> Un
 
 @Composable
 private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<Int, TrackerInfo>, signature: SignatureVerdict?,
-    sdks: List<Sdk>, unavailable: List<Capability>, services: ServiceStates?, insets: PaddingValues, onBack: () -> Unit) {
+    sdks: List<Sdk>, unavailable: List<Capability>, services: ServiceStates?, owners: OwnerNotes?, insets: PaddingValues, onBack: () -> Unit) {
     val (app, findings) = entry
     val context = LocalContext.current
     val collector = remember { AppCollector(context) }
@@ -358,6 +369,7 @@ private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<
         if (signature != null) item { SignatureSection(signature) }
         if (sdks.isNotEmpty()) item { SdkSection(sdks, accessibilityOn = SpecialAccess.ACCESSIBILITY in app.special) }
         item { TrackerSection(trackers, trackerInfo) }
+        if (owners != null) item { OwnerSection(owners) }
         if (unavailable.isNotEmpty() && services != null) {
             item { ServiceNeedsSection(unavailable, services.states, services.names, services.checkedAt) }
         }

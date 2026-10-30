@@ -81,20 +81,27 @@ class TrackerScanner(private val context: Context) {
     // Missing only from a broken pack; then nothing is found rather than the app failing. Every line
     // keeps its trailing tabs: an empty last column is still a column.
     private val exodus: String by lazy { data.text(TrackerData.PATH).orEmpty().let { if (it.isEmpty() || it.endsWith("\n")) it else it + "\n" } }
+    /** Which company runs each SDK's service, found in the same pass (ADR 0020). */
+    val owners: Owners by lazy {
+        Owners.parse(data.text(Owners.ENTITIES_PATH).orEmpty(), data.text(Owners.OPERATORS_PATH).orEmpty(), data.text(Owners.PUBLISHERS_PATH).orEmpty())
+    }
+
     private val withSdks: String by lazy { exodus + sdkList.signatureTsv() }
-    private val tsv: String by lazy { listOf(sdkList.signatureTsv(), needs.signatureTsv()).filter { it.isNotEmpty() }.joinToString("\n", prefix = exodus) }
+    private val tsv: String by lazy {
+        listOf(sdkList.signatureTsv(), needs.signatureTsv(), owners.signatureTsv()).filter { it.isNotEmpty() }.joinToString("\n", prefix = exodus)
+    }
 
     /**
-     * The trackers of the data pack in use, by εxodus id, and the SDKs of [sdkList] and capabilities
-     * of [needs] by their ids.
+     * The trackers of the data pack in use, by εxodus id, and the SDKs of [sdkList], capabilities of
+     * [needs] and SDK operators of [owners] by their ids.
      */
     val trackers: Map<Int, TrackerInfo> by lazy { TrackerData.parse(tsv) }
 
     /** Scans [apps], calling [onProgress] with the number done after each one. */
     suspend fun scan(apps: List<AppFacts>, onProgress: (done: Int, total: Int) -> Unit): Map<String, AppTrackers> = coroutineScope {
-        // Signature data the engine cannot read must not stop the audit: without the capabilities,
-        // then without the SDK list, and then without any signatures, the scan finds less instead of
-        // the app failing.
+        // Signature data the engine cannot read must not stop the audit: without the capabilities and
+        // owners, then without the SDK list, and then without any signatures, the scan finds less
+        // instead of the app failing.
         val signatures = listOf(tsv, withSdks, exodus).firstOrNull { candidate ->
             try {
                 NativeCore.loadTrackers(candidate)

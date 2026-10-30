@@ -83,6 +83,10 @@
     <string name="service_google_play_services">Google Play services</string>
     <string name="service_google_play_store">the Google Play Store</string>
     <string name="service_hms_core">Huawei\'s HMS Core</string>
+    <!-- Who runs the services of an app's SDKs (ADR 0020). -->
+    <string name="owners_heading">Who runs these services</string>
+    <string name="owner_same_group">Made by the same company group as this app (%1$s): %2$s. The group can combine this data with what its other apps and services collect.</string>
+    <string name="owner_shut_down">The service behind %1$s shut down on %2$s.</string>
     <string name="tracker_with_categories">%1$s (%2$s)</string>
     <string name="tracker_category_advertisement">advertising</string>
     <string name="tracker_category_analytics">analytics</string>
@@ -220,4 +224,5 @@
     <string name="sdk_evidence">Identified on %1$s in the SDK that %2$s publishes.</string>
     <string name="dataset_sdks">SDKs that share the connection, give remote support or record the screen</string>
     <string name="dataset_sdk_needs">SDK features that need a system service, and the certificates of those services</string>
+    <string name="dataset_owners">Who runs the services of SDKs, and who publishes which app</string>
 </resources>

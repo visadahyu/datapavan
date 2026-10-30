@@ -75,6 +75,10 @@
     <string name="service_google_play_services">سرویس‌های گوگل پلی</string>
     <string name="service_google_play_store">فروشگاه گوگل پلی</string>
     <string name="service_hms_core">HMS Core هواوی</string>
+    <!-- Who runs the services of an app's SDKs (ADR 0020). -->
+    <string name="owners_heading">چه کسی این سرویس‌ها را اداره می‌کند</string>
+    <string name="owner_same_group">ساخت همان گروه شرکتی این برنامه (%1$s): %2$s. این گروه می‌تواند این داده را با داده‌ای که برنامه‌ها و سرویس‌های دیگرش جمع می‌کنند ترکیب کند.</string>
+    <string name="owner_shut_down">سرویس پشت %1$s در %2$s تعطیل شده است.</string>
     <string name="tracker_with_categories">%1$s (%2$s)</string>
     <string name="tracker_category_advertisement">تبلیغات</string>
     <string name="tracker_category_analytics">آمار</string>
@@ -202,4 +206,5 @@
     <string name="sdk_evidence">در تاریخ %1$s در کیتی که %2$s منتشر می‌کند شناسایی شد.</string>
     <string name="dataset_sdks">کیت‌هایی که اینترنت را به اشتراک می‌گذارند، پشتیبانی از راه دور می‌دهند یا صفحه را ضبط می‌کنند</string>
     <string name="dataset_sdk_needs">قابلیت‌هایی از کیت‌ها که به یک سرویس سیستمی نیاز دارند، و گواهی‌های آن سرویس‌ها</string>
+    <string name="dataset_owners">چه کسی سرویس‌های کیت‌ها را اداره می‌کند و چه کسی کدام برنامه را منتشر می‌کند</string>
 </resources>

@@ -36,7 +36,9 @@ The data behind M3 keeps growing next to the later milestones:
 - An informational note for apps that use the name or icon of a listed app (ADR 0018, decision 8).
 - Apps named in reports on networks that relay traffic, matched by package and certificate
   (ADR 0019).
-- Trackers from the app's own company group ([ADR 0020](docs/decisions/0020-same-company-trackers.md)).
+- Trackers from the app's own company group ([ADR 0020](docs/decisions/0020-same-company-trackers.md)):
+  the rule and the first owners are done; more owners and publishers follow, and the phone maker's
+  own software by its platform key.
 - Tracker capabilities that need a service the phone lacks
   ([ADR 0021](docs/decisions/0021-service-dependent-capabilities.md)): the service check and seven
   capabilities are done; more follow as their vendors' artefacts are read, and the check still needs

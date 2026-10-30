@@ -283,7 +283,7 @@ datapavan/
   scripts/fuzz.sh      runs every fuzz target; CI calls it
   scripts/compare-dex.sh    compares the DEX parser with the SDK's dexdump on real APKs
   scripts/compare-exodus.sh compares the tracker scan with εxodus reports for the same app versions
-  data/                bundled dataset snapshots, each with LICENSE, SOURCE and its converter (ADR 0015): attestation/ (Google's attestation roots and revocation list), exodus/ (tracker signatures), app-signers/ (official signing certificates of VPN, proxy and circumvention apps), sdks/ (traffic-sharing, remote-support and screen-recording SDKs), sdk-needs/ (SDK capabilities that need a system service, and the certificates of those services); CORRECTIONS.md says how to dispute an entry; PACK holds the data pack's sequence, date and keys
+  data/                bundled dataset snapshots, each with LICENSE, SOURCE and its converter (ADR 0015): attestation/ (Google's attestation roots and revocation list), exodus/ (tracker signatures), app-signers/ (official signing certificates of VPN, proxy and circumvention apps), sdks/ (traffic-sharing, remote-support and screen-recording SDKs), sdk-needs/ (SDK capabilities that need a system service, and the certificates of those services), owners/ (who runs SDK services, who controls which company, who publishes which app); CORRECTIONS.md says how to dispute an entry; PACK holds the data pack's sequence, date and keys
 ```
 
 ## 13. Milestones for v0.1 "Audit"
