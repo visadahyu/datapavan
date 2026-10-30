@@ -36,10 +36,11 @@ The data behind M3 keeps growing next to the later milestones:
 - An informational note for apps that use the name or icon of a listed app (ADR 0018, decision 8).
 - Apps named in reports on networks that relay traffic, matched by package and certificate
   (ADR 0019).
-- Trackers from the app's own company group ([ADR 0020](docs/decisions/0020-same-company-trackers.md))
-  and tracker capabilities that need a service the phone lacks
-  ([ADR 0021](docs/decisions/0021-service-dependent-capabilities.md)). The scan's lower memory and
-  parallelism by memory are done.
+- Trackers from the app's own company group ([ADR 0020](docs/decisions/0020-same-company-trackers.md)).
+- Tracker capabilities that need a service the phone lacks
+  ([ADR 0021](docs/decisions/0021-service-dependent-capabilities.md)): the service check and the first
+  capability are done; the others wait until their vendors' artefacts are read. The scan's lower
+  memory and parallelism by memory are done.
 
 ### v0.2 "Watch": local VPN, observe only
 

@@ -70,6 +70,19 @@
     <string name="trackers_referenced_heading">Referred to, not included</string>
     <string name="trackers_referenced_note">The app\'s code refers to these trackers but does not contain their code.</string>
     <string name="trackers_source">Tracker signatures: εxodus tracker database, available under the Open Database License (ODbL).</string>
+    <!-- SDK capabilities that need a system service the phone lacks (ADR 0021). -->
+    <string name="needs_heading">Needs a service this phone lacks</string>
+    <string name="needs_line">%1$s needs %2$s, which is not installed or is turned off in this profile right now (checked %3$s). Once it is installed or turned on, this works again. The rest of this app\'s code, and its trackers, can still run.</string>
+    <string name="need_google_ad_id">Reading Google\'s advertising ID</string>
+    <string name="need_fcm_push">Receiving push messages through Firebase Cloud Messaging</string>
+    <string name="need_play_install_referrer">Google Play\'s install referrer</string>
+    <string name="need_play_integrity_app_check">Firebase App Check with Play Integrity</string>
+    <string name="need_hms_push">Receiving push messages through Huawei Push Kit</string>
+    <string name="need_hms_account">Signing in with a Huawei account</string>
+    <string name="need_hms_oaid">Reading Huawei\'s advertising ID (OAID)</string>
+    <string name="service_google_play_services">Google Play services</string>
+    <string name="service_google_play_store">the Google Play Store</string>
+    <string name="service_hms_core">Huawei\'s HMS Core</string>
     <string name="tracker_with_categories">%1$s (%2$s)</string>
     <string name="tracker_category_advertisement">advertising</string>
     <string name="tracker_category_analytics">analytics</string>
@@ -206,4 +219,5 @@
     <!-- %1$s is a date (YYYY-MM-DD), %2$s a vendor. -->
     <string name="sdk_evidence">Identified on %1$s in the SDK that %2$s publishes.</string>
     <string name="dataset_sdks">SDKs that share the connection, give remote support or record the screen</string>
+    <string name="dataset_sdk_needs">SDK features that need a system service, and the certificates of those services</string>
 </resources>

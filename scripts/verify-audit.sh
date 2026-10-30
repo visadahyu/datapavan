@@ -4,7 +4,9 @@
 # the device gets a user-installed certificate authority. Datapavan must then report each of them,
 # and the USB debugging that every emulator has on. Last, the fixture is installed again under the
 # package name of Exclave, whose official keys data/app-signers records completely (ADR 0018), and it
-# must be reported as a modified copy. Everything is undone afterwards.
+# must be reported as a modified copy. Where the emulator has Google Play services, it is turned off
+# for a moment, and the fixture's class that reads Google's advertising ID must then be marked as
+# needing it (ADR 0021). Everything is undone afterwards.
 #
 # Wireless debugging cannot be checked here: Android switches it straight back off without a Wi-Fi
 # network that allows it. The unit tests cover that rule.
@@ -28,7 +30,10 @@ fi
 
 CA_FILE=""
 ROOTED=""
+GMS=com.google.android.gms
+GMS_TURNED_OFF=""
 cleanup() {
+    [ -z "$GMS_TURNED_OFF" ] || adb shell pm enable "$GMS" >/dev/null 2>&1 || true
     adb shell settings delete secure enabled_accessibility_services >/dev/null 2>&1 || true
     adb uninstall "$FIXTURE" >/dev/null 2>&1 || true
     adb uninstall "$IMPOSTOR" >/dev/null 2>&1 || true
@@ -138,6 +143,24 @@ expect "Sentry (crash reporting)"
 scroll_to_top
 expect "Can share your internet connection"
 expect "Pawns SDK by IPRoyal"
+
+# Google Play services on: no capability is marked. Turned off: the advertising-ID class is.
+if adb shell pm list packages -e "$GMS" | tr -d '\r' | grep -q "^package:$GMS\$"; then
+    if scroll_to "Needs a service this phone lacks"; then
+        fail "a capability is marked although Google Play services is on"
+    fi
+    adb shell pm disable-user "$GMS" >/dev/null && GMS_TURNED_OFF=1
+    start_audit || fail "the audit overview did not appear with Google Play services off"
+    wait_for_tracker_scan || fail "the tracker scan did not finish with Google Play services off"
+    tap_text "Datapavan test fixture" || fail "the fixture app is not listed with Google Play services off"
+    sleep 1
+    scroll_to_top
+    expect "Needs a service this phone lacks"
+    expect "Reading Google"
+    adb shell pm enable "$GMS" >/dev/null && GMS_TURNED_OFF=""
+else
+    echo "skip: no Google Play services here, so the capability check has nothing to turn off"
+fi
 
 # A known app signed by someone else.
 impostor_apk=$("$ROOT/scripts/fixture-app/build.sh" "$IMPOSTOR" | tail -1)

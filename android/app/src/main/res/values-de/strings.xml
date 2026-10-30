@@ -62,6 +62,19 @@
     <string name="trackers_referenced_heading">Erwähnt, nicht enthalten</string>
     <string name="trackers_referenced_note">Der Code der App verweist auf diese Tracker, enthält ihren Code aber nicht.</string>
     <string name="trackers_source">Tracker-Signaturen: Tracker-Datenbank von εxodus, verfügbar unter der Open Database License (ODbL).</string>
+    <!-- SDK capabilities that need a system service the phone lacks (ADR 0021). -->
+    <string name="needs_heading">Braucht einen Dienst, der diesem Telefon fehlt</string>
+    <string name="needs_line">%1$s braucht %2$s. Das ist in diesem Profil gerade nicht installiert oder ausgeschaltet (geprüft %3$s). Sobald es installiert oder eingeschaltet ist, funktioniert dies wieder. Der übrige Code dieser App und ihre Tracker können weiterhin laufen.</string>
+    <string name="need_google_ad_id">Das Lesen der Werbe-ID von Google</string>
+    <string name="need_fcm_push">Der Empfang von Push-Nachrichten über Firebase Cloud Messaging</string>
+    <string name="need_play_install_referrer">Der Installations-Referrer von Google Play</string>
+    <string name="need_play_integrity_app_check">Firebase App Check mit Play Integrity</string>
+    <string name="need_hms_push">Der Empfang von Push-Nachrichten über Huawei Push Kit</string>
+    <string name="need_hms_account">Die Anmeldung mit einem Huawei-Konto</string>
+    <string name="need_hms_oaid">Das Lesen der Werbe-ID von Huawei (OAID)</string>
+    <string name="service_google_play_services">die Google Play-Dienste</string>
+    <string name="service_google_play_store">den Google Play Store</string>
+    <string name="service_hms_core">HMS Core von Huawei</string>
     <string name="tracker_with_categories">%1$s (%2$s)</string>
     <string name="tracker_category_advertisement">Werbung</string>
     <string name="tracker_category_analytics">Statistik</string>
@@ -188,4 +201,5 @@
     <string name="sdk_screen_recording_not_checked">Datapavan kann nicht feststellen, ob die Aufzeichnung aktiv ist.</string>
     <string name="sdk_evidence">Am %1$s im SDK erkannt, das %2$s veröffentlicht.</string>
     <string name="dataset_sdks">SDKs, die die Verbindung teilen, Fernwartung ermöglichen oder den Bildschirm aufzeichnen</string>
+    <string name="dataset_sdk_needs">SDK-Funktionen, die einen Systemdienst brauchen, und die Zertifikate dieser Dienste</string>
 </resources>

@@ -176,6 +176,7 @@ private fun datasetName(dataset: String): Int? = when (dataset) {
     "exodus" -> R.string.dataset_exodus
     "app-signers" -> R.string.dataset_app_signers
     "sdks" -> R.string.dataset_sdks
+    "sdk-needs" -> R.string.dataset_sdk_needs
     else -> null
 }
 

@@ -62,6 +62,19 @@
     <string name="trackers_referenced_heading">اشاره‌شده، ولی نه در برنامه</string>
     <string name="trackers_referenced_note">کد برنامه به این ردیاب‌ها اشاره می‌کند اما کد خود آن‌ها را ندارد.</string>
     <string name="trackers_source">امضای ردیاب‌ها: پایگاه داده ردیاب‌های εxodus، در دسترس با مجوز Open Database License (ODbL).</string>
+    <!-- SDK capabilities that need a system service the phone lacks (ADR 0021). -->
+    <string name="needs_heading">به سرویسی نیاز دارد که این گوشی ندارد</string>
+    <string name="needs_line">%1$s به %2$s نیاز دارد، که الان در این پروفایل نصب نیست یا خاموش است (بررسی‌شده در %3$s). اگر نصب یا روشن شود، این قابلیت دوباره کار می‌کند. بقیه کد این برنامه و ردیاب‌هایش همچنان می‌توانند کار کنند.</string>
+    <string name="need_google_ad_id">خواندن شناسه تبلیغاتی گوگل</string>
+    <string name="need_fcm_push">دریافت پیام‌های پوش از طریق Firebase Cloud Messaging</string>
+    <string name="need_play_install_referrer">ارجاع‌دهنده نصب گوگل پلی</string>
+    <string name="need_play_integrity_app_check">Firebase App Check با Play Integrity</string>
+    <string name="need_hms_push">دریافت پیام‌های پوش از طریق Huawei Push Kit</string>
+    <string name="need_hms_account">ورود با حساب هواوی</string>
+    <string name="need_hms_oaid">خواندن شناسه تبلیغاتی هواوی (OAID)</string>
+    <string name="service_google_play_services">سرویس‌های گوگل پلی</string>
+    <string name="service_google_play_store">فروشگاه گوگل پلی</string>
+    <string name="service_hms_core">HMS Core هواوی</string>
     <string name="tracker_with_categories">%1$s (%2$s)</string>
     <string name="tracker_category_advertisement">تبلیغات</string>
     <string name="tracker_category_analytics">آمار</string>
@@ -188,4 +201,5 @@
     <string name="sdk_screen_recording_not_checked">نمی‌توان فهمید ضبط روشن است یا نه.</string>
     <string name="sdk_evidence">در تاریخ %1$s در کیتی که %2$s منتشر می‌کند شناسایی شد.</string>
     <string name="dataset_sdks">کیت‌هایی که اینترنت را به اشتراک می‌گذارند، پشتیبانی از راه دور می‌دهند یا صفحه را ضبط می‌کنند</string>
+    <string name="dataset_sdk_needs">قابلیت‌هایی از کیت‌ها که به یک سرویس سیستمی نیاز دارند، و گواهی‌های آن سرویس‌ها</string>
 </resources>

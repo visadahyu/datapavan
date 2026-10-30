@@ -57,6 +57,7 @@ import org.visadahyu.datapavan.audit.AppFacts
 import org.visadahyu.datapavan.audit.AppSigners
 import org.visadahyu.datapavan.audit.AppTrackers
 import org.visadahyu.datapavan.audit.AttestationTrust
+import org.visadahyu.datapavan.audit.Capability
 import org.visadahyu.datapavan.audit.DeviceCollector
 import org.visadahyu.datapavan.audit.DeviceFacts
 import org.visadahyu.datapavan.audit.FindingKind
@@ -64,6 +65,8 @@ import org.visadahyu.datapavan.audit.KnownCollectors
 import org.visadahyu.datapavan.audit.Rules
 import org.visadahyu.datapavan.audit.Sdk
 import org.visadahyu.datapavan.audit.SdkList
+import org.visadahyu.datapavan.audit.ServiceNeeds
+import org.visadahyu.datapavan.audit.ServiceState
 import org.visadahyu.datapavan.audit.Severity
 import org.visadahyu.datapavan.audit.SignatureVerdict
 import org.visadahyu.datapavan.audit.SpecialAccess
@@ -92,23 +95,33 @@ private class AuditResult(
     val trackerInfo: Map<Int, TrackerInfo> = emptyMap(),
     /** SDKs from `data/sdks` whose code each app contains (ADR 0019), by package. */
     val sdks: Map<String, List<Sdk>> = emptyMap(),
+    /** Capabilities from `data/sdk-needs` that cannot work now, by package (ADR 0021). */
+    val unavailable: Map<String, List<Capability>> = emptyMap(),
+    /** The services those capabilities need, read when the scan finished, and when. */
+    val services: ServiceStates? = null,
 ) {
     /**
      * The same audit with the scan's findings added. The scan matched εxodus trackers and the SDKs of
      * [sdkList] in one pass; they are told apart by id, and only SDK code the app contains counts.
      */
-    fun withTrackers(found: Map<String, AppTrackers>, info: Map<Int, TrackerInfo>, sdkList: SdkList): AuditResult {
+    fun withTrackers(found: Map<String, AppTrackers>, info: Map<Int, TrackerInfo>, sdkList: SdkList, needs: ServiceNeeds, services: ServiceStates): AuditResult {
         val exodus = found.mapValues { (_, t) ->
             t.copy(embedded = t.embedded.filter { it < SdkList.FIRST_ID }, referencedOnly = t.referencedOnly.filter { it < SdkList.FIRST_ID })
         }
         val sdks = found.mapValues { (_, t) -> t.embedded.mapNotNull(sdkList::byId) }.filterValues { it.isNotEmpty() }
+        val unavailable = found.mapValues { (_, t) ->
+            t.embedded.mapNotNull(needs::byId).filter { needs.unavailable(it, services.states) }
+        }.filterValues { it.isNotEmpty() }
         val judged = apps.map { (app, _) ->
             val categories = sdks[app.packageName].orEmpty().map { it.category }.toSet()
             app to Rules.forApp(app, exodus[app.packageName], signatures[app.packageName], categories)
         }.sortedWith(Rules.byUrgency)
-        return AuditResult(device, deviceFindings, judged, dataDate, signatures, exodus, info, sdks)
+        return AuditResult(device, deviceFindings, judged, dataDate, signatures, exodus, info, sdks, unavailable, services)
     }
 }
+
+/** The state of each system service (ADR 0021), as read at [checkedAt], with the services' names. */
+private class ServiceStates(val states: Map<String, ServiceState>, val names: Map<String, String>, val checkedAt: Long)
 
 /**
  * Device and app checks run in parallel; the hardware key attestation alone can take a moment.
@@ -134,7 +147,7 @@ private suspend fun AuditResult.withAllLabels(context: Context): AuditResult {
     val missing = apps.filter { it.first.label == null }.map { it.first }
     val labelled = AppCollector(context).withLabels(missing).associateBy { it.packageName }
     val all = apps.map { (app, findings) -> (labelled[app.packageName] ?: app) to findings }.sortedWith(Rules.byUrgency)
-    return AuditResult(device, deviceFindings, all, dataDate, signatures, trackers, trackerInfo, sdks)
+    return AuditResult(device, deviceFindings, all, dataDate, signatures, trackers, trackerInfo, sdks, unavailable, services)
 }
 
 /** Root of the v0.1 audit UI: an overview of the phone and its apps, and a detail page per app. */
@@ -156,7 +169,11 @@ internal fun DatapavanApp(engineVersion: String) {
         val found = withContext(Dispatchers.Default) {
             scanner.scan(labelled.apps.map { it.first }) { done, total -> scanProgressFlow.value = done to total }
         }
-        value = labelled.withTrackers(found, scanner.trackers, scanner.sdkList)
+        // Read right after the scan, so that each label says when its service was checked.
+        val states = withContext(Dispatchers.Default) {
+            ServiceStates(scanner.needs.read(context), scanner.needs.services.mapValues { it.value.name }, System.currentTimeMillis())
+        }
+        value = labelled.withTrackers(found, scanner.trackers, scanner.sdkList, scanner.needs, states)
         scanProgressFlow.value = null
     }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
@@ -172,7 +189,8 @@ internal fun DatapavanApp(engineVersion: String) {
                 BackHandler { selected = null }
                 AppDetail(
                     entry, audit.trackers?.get(entry.first.packageName), audit.trackerInfo, audit.signatures[entry.first.packageName],
-                    audit.sdks[entry.first.packageName].orEmpty(), insets, onBack = { selected = null },
+                    audit.sdks[entry.first.packageName].orEmpty(), audit.unavailable[entry.first.packageName].orEmpty(),
+                    audit.services, insets, onBack = { selected = null },
                 )
             }
             reviewing -> {
@@ -305,7 +323,7 @@ private fun AppRow(app: AppFacts, findings: List<FindingKind>, onClick: () -> Un
 
 @Composable
 private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<Int, TrackerInfo>, signature: SignatureVerdict?,
-    sdks: List<Sdk>, insets: PaddingValues, onBack: () -> Unit) {
+    sdks: List<Sdk>, unavailable: List<Capability>, services: ServiceStates?, insets: PaddingValues, onBack: () -> Unit) {
     val (app, findings) = entry
     val context = LocalContext.current
     val collector = remember { AppCollector(context) }
@@ -340,6 +358,9 @@ private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<
         if (signature != null) item { SignatureSection(signature) }
         if (sdks.isNotEmpty()) item { SdkSection(sdks, accessibilityOn = SpecialAccess.ACCESSIBILITY in app.special) }
         item { TrackerSection(trackers, trackerInfo) }
+        if (unavailable.isNotEmpty() && services != null) {
+            item { ServiceNeedsSection(unavailable, services.states, services.names, services.checkedAt) }
+        }
         item {
             SectionTitle(R.string.detail_special)
             Text(
