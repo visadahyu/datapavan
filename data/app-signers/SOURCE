@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: CC0-1.0
+retrieved: 2026-10-30
+apps: 35
+packages-with-certificates: 34
+certificates: 39
+by-grade: 1: 7, 2: 16, 3: 2, 4: 0, 5: 14
+method: data/app-signers/update.py, from the sources in sources.tsv

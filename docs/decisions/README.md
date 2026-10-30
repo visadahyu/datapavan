@@ -25,6 +25,7 @@ in the Git history.
 | [0015](0015-dataset-licences.md) | Licences of bundled datasets | Accepted |
 | [0016](0016-no-user-data.md) | No data from users; learning happens in the lab | Accepted |
 | [0017](0017-data-pack-format.md) | Data packs in signify's format, checked with ed25519-compact | Accepted |
+| [0018](0018-app-signing-certificates.md) | Official signing certificates of VPN, proxy and circumvention apps | Accepted |
 
 ## Template
 

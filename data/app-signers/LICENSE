@@ -1,0 +1,17 @@
+SPDX-License-Identifier: CC0-1.0
+
+Official signing certificates of VPN, proxy and circumvention apps, collected by the Datapavan project
+and dedicated to the public domain under CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/).
+Recorded in ADR 0015 and ADR 0018.
+
+apps.tsv, sources.tsv
+    Written by the project.
+
+signers.tsv
+    Written by update.py from the sources each row names: fingerprints that developers publish,
+    F-Droid's metadata, the indexes of F-Droid, IzzyOnDroid, the Guardian Project and FlClash, and APKs
+    from official channels. Only certificate fingerprints are taken, which are facts about published
+    files; the legal review before the first public release covers this (ADR 0015, decision 12).
+
+update.py
+    The collector: Apache-2.0, like the rest of this repository.

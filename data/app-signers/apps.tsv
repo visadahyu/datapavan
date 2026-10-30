@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: CC0-1.0
+# The apps whose official signing certificates Datapavan knows (ADR 0018), reviewed by hand.
+# Columns: package, name, closed (yes: every official channel's key is recorded, so another key means
+# a modified copy), note.
+com.psiphon3	Psiphon	no	Website key published; the Play and Pro keys are not known yet
+org.torproject.torbrowser	Tor Browser	no	Play key not known yet
+org.torproject.torbrowser_alpha	Tor Browser (alpha)	no	
+org.torproject.android	Orbot	no	One key everywhere according to AppVerifier (2025); not confirmed
+org.torproject.vpn	Tor VPN	no	
+ch.protonvpn.android	Proton VPN	yes	The developer key signs every build except F-Droid's, whose key is recorded
+ch.protonvpn.android.reproducible	Proton VPN (F-Droid)	yes	
+org.thoughtcrime.securesms	Signal	yes	Current key and the original key in its lineage
+org.briarproject.briar.android	Briar	no	One key on every channel according to AppVerifier; not confirmed
+io.nekohasekai.sfa	sing-box	no	
+com.github.dyhkwong.sagernet	Exclave	yes	One key on GitHub and F-Droid; not on Google Play
+com.follow.clash	FlClash	no	
+io.github.romanvht.byedpi	ByeByeDPI	no	
+com.zaneschepke.wireguardautotunnel	WG Tunnel	no	
+moe.nb4a	NekoBox	no	The Google Play listing was controlled by a third party from May 2024
+com.v2ray.ang	v2rayNG	no	Not on Google Play; uploads in other stores come from third parties
+com.v2ray.ang.fdroid	v2rayNG (F-Droid flavour)	no	
+org.getlantern.lantern	Lantern	no	Disguised builds use other package names
+app.hiddify.com	Hiddify	no	
+org.amnezia.vpn	Amnezia VPN	no	
+org.amnezia.awg	AmneziaWG	no	
+com.github.metacubex.clash.meta	Clash Meta for Android	no	
+com.github.shadowsocks	Shadowsocks	no	
+com.nebula.karing	Karing	no	
+com.happproxy	Happ	no	The Google Play build; the GitHub build is su.happ.proxyutility
+su.happ.proxyutility	Happ (GitHub build)	no	
+org.bepass.oblivion	Oblivion	no	
+de.unboundtech.defyxvpn	Defyx VPN	no	
+com.MahsaNet.MahsaNG	MahsaNG	no	Official builds may be signed with a debug key
+de.blinkt.openvpn	OpenVPN for Android	no	Two developer keys, one per flavour
+net.mullvad.mullvadvpn	Mullvad VPN	no	Separate keys for the website, Google Play and F-Droid
+org.outline.android.client	Outline	no	
+com.windscribe.vpn	Windscribe	no	
+pan.alexander.tordnscrypt	InviZible Pro (beta)	no	
+pan.alexander.tordnscrypt.stable	InviZible Pro	no	
