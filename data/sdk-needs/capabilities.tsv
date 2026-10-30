@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: CC0-1.0
+# SDK capabilities that need a system service (ADR 0021), written by update.py. Only grades 1 to 3
+# reach the phone. Columns: capability, services it needs (all), match type, identifier, grade,
+# where the vendor states the dependency, artefact read, its SHA-256, checked.
+google-ad-id	google-play-services	class	com.google.android.gms.ads.identifier.AdvertisingIdClient	1	https://developers.google.com/android/reference/com/google/android/gms/ads/identifier/AdvertisingIdClient	https://dl.google.com/android/maven2/com/google/android/gms/play-services-ads-identifier/18.3.0/play-services-ads-identifier-18.3.0.aar	533f39adb40639c0125b355b15ba11d35078bd2c7cdd0e741d8c175a14fff9bd	2026-10-30
+fcm-push	google-play-services,google-play-store	class	com.google.firebase.messaging.FirebaseMessagingService	4	https://firebase.google.com/docs/cloud-messaging/android/client			2026-10-30
+play-install-referrer	google-play-store	class	com.android.installreferrer.api.InstallReferrerClient	4	https://developer.android.com/google/play/installreferrer/library			2026-10-30
+play-integrity-app-check	google-play-services	class	com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory	4	https://firebase.google.com/docs/android/android-play-services			2026-10-30
+hms-push	hms-core	class	com.huawei.hms.push.HmsMessageService	4	https://developer.huawei.com/consumer/en/doc/HMSCore-Guides/service-introduction-0000001050040060			2026-10-30
+hms-account	hms-core	class	com.huawei.hms.support.account.AccountAuthManager	4	https://developer.huawei.com/consumer/en/doc/HMSCore-Guides/introduction-0000001050048870			2026-10-30
+hms-oaid	hms-core	class	com.huawei.hms.ads.identifier.AdvertisingIdClient	4	https://developer.huawei.com/consumer/en/doc/HMSCore-Guides/publisher-service-introduction-0000001070671805			2026-10-30

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: CC0-1.0
+# System services that some SDK capabilities need (ADR 0021), reviewed by hand.
+# Columns: service, name, packages that provide it (any one is enough).
+google-play-services	Google Play services	com.google.android.gms
+google-play-store	Google Play Store	com.android.vending
+hms-core	HMS Core	com.huawei.hwid,com.huawei.hwid.tv,com.huawei.hwid.car

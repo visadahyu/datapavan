@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: CC0-1.0
+# Capabilities of SDKs that need a system service, and where update.py reads them (ADR 0021). One row per
+# capability. Columns: capability, the services it needs (all of them, separated by commas), artefact
+# (maven:<repository>|<group>:<artifact>, with :<version> once it has been read, else the newest
+# release), the class that shows the capability, and where the vendor states the dependency.
+google-ad-id	google-play-services	maven:https://dl.google.com/android/maven2|com.google.android.gms:play-services-ads-identifier:18.3.0	com.google.android.gms.ads.identifier.AdvertisingIdClient	https://developers.google.com/android/reference/com/google/android/gms/ads/identifier/AdvertisingIdClient
+fcm-push	google-play-services,google-play-store	maven:https://dl.google.com/android/maven2|com.google.firebase:firebase-messaging	com.google.firebase.messaging.FirebaseMessagingService	https://firebase.google.com/docs/cloud-messaging/android/client
+play-install-referrer	google-play-store	maven:https://dl.google.com/android/maven2|com.android.installreferrer:installreferrer	com.android.installreferrer.api.InstallReferrerClient	https://developer.android.com/google/play/installreferrer/library
+play-integrity-app-check	google-play-services	maven:https://dl.google.com/android/maven2|com.google.firebase:firebase-appcheck-playintegrity	com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory	https://firebase.google.com/docs/android/android-play-services
+hms-push	hms-core	maven:https://developer.huawei.com/repo|com.huawei.hms:push	com.huawei.hms.push.HmsMessageService	https://developer.huawei.com/consumer/en/doc/HMSCore-Guides/service-introduction-0000001050040060
+hms-account	hms-core	maven:https://developer.huawei.com/repo|com.huawei.hms:hwid	com.huawei.hms.support.account.AccountAuthManager	https://developer.huawei.com/consumer/en/doc/HMSCore-Guides/introduction-0000001050048870
+hms-oaid	hms-core	maven:https://developer.huawei.com/repo|com.huawei.hms:ads-identifier	com.huawei.hms.ads.identifier.AdvertisingIdClient	https://developer.huawei.com/consumer/en/doc/HMSCore-Guides/publisher-service-introduction-0000001070671805

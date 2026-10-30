@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: CC0-1.0
+# Where update.py reads the certificates of each service's genuine packages (ADR 0021). Columns: service,
+# artefact (as in sources.tsv), method. "embedded-certificates": the X.509 certificates that the vendor's
+# own client library carries to check the service, except certificates with AOSP's test-key subject
+# (android@android.com), which do not prove that a package is genuine.
+google-play-services	maven:https://dl.google.com/android/maven2|com.google.android.gms:play-services-basement:18.12.0	embedded-certificates
+google-play-store	maven:https://dl.google.com/android/maven2|com.google.android.gms:play-services-basement:18.12.0	embedded-certificates
+hms-core	maven:https://developer.huawei.com/repo|com.huawei.hms:base	embedded-certificates
