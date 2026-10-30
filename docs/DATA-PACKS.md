@@ -96,16 +96,25 @@ Otherwise the app uses its own pack again.
 
 ## Keys
 
-**The data-signing key is created and kept offline by the maintainer.** Until it exists, `data/PACK`
-names no key, and release builds refuse every import with a message that says so.
+**The data-signing key is created and kept offline by the maintainer, before the first public
+release.** Until then, development uses the test key below. `data/PACK` names no key, so release builds
+refuse every import with a message that says so. The key is never made on the development computer:
+that computer is online and runs build tools and AI agents, so a key made there would be only as safe
+as the computer.
+
+No second computer is needed. The development computer can start a live USB system, for example Debian
+Live, with networking off and with the `signify-openbsd` package copied onto the stick. The key is made
+there and kept, with a backup, on encrypted USB media that never goes into an online computer. Signing a
+pack works the same way: start the live system, bring the payload in on a USB stick, sign it, and take
+the pack out.
 
 ```sh
-# On a computer that is never online, with signify (Debian: signify-openbsd):
+# In the offline system, with signify (Debian: signify-openbsd):
 signify-openbsd -G -c "Datapavan data-signing key 1" -p datapavan-data-1.pub -s datapavan-data-1.sec
 ```
 
-The secret key is encrypted with a passphrase (bcrypt-pbkdf). It stays on the offline computer and its
-backup media, and never enters the repository or CI. The public key's second line goes into `data/PACK`
+The secret key is encrypted with a passphrase (bcrypt-pbkdf). It stays on the offline media and their
+backup, and never enters the repository, CI or an online computer. The public key's second line goes into `data/PACK`
 as a `key` line, and the whole `.pub` file is published with the releases, so that anyone can check a
 pack with `signify` itself.
 
