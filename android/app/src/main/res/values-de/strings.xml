@@ -160,4 +160,32 @@
     <string name="signature_disguised_hidden">Mit dem Schlüssel einer bekannten App signiert. Zeigen, welche</string>
     <string name="signature_disguised">Ein echter Build von %1$s unter anderem Namen. Der Entwickler tarnt manche Builds, um Menschen zu schützen, deren Telefone durchsucht werden.</string>
     <string name="dataset_app_signers">Offizielle Signaturzertifikate von VPN-, Proxy- und Umgehungs-Apps</string>
+
+    <!-- M3 traffic-sharing, remote-support and screen-recording SDKs (ADR 0019) -->
+    <string name="finding_traffic_sharing_title">Kann Ihre Internetverbindung teilen</string>
+    <string name="finding_traffic_sharing_body">Diese App enthält Code, der den Internetverkehr anderer Menschen über dieses Telefon leiten kann. Details stehen auf dieser Seite.</string>
+    <string name="finding_remote_support_title">Fernwartungswerkzeug</string>
+    <string name="finding_remote_support_body">Diese App enthält Code, mit dem ein Support-Mitarbeiter den Bildschirm sehen und in manchen Fällen das Telefon steuern kann. Details stehen auf dieser Seite.</string>
+    <string name="finding_screen_recording_title">Zeichnet Ihre Nutzung dieser App auf</string>
+    <string name="finding_screen_recording_body">Diese App enthält Code, der aufzeichnen kann, was Sie in ihr sehen und antippen, damit ihr Hersteller es abspielen kann.</string>
+    <string name="sdks_heading">Verbindung teilen, Fernwartung und Aufzeichnung</string>
+    <string name="sdk_name">%1$s von %2$s</string>
+    <string name="sdk_traffic_sharing">Der Hersteller beschreibt es als Weg für Apps, Geld zu verdienen, indem seine Kunden Internetverkehr über die Telefone der Nutzer senden. Wenn dieser Code aktiv ist, läuft fremder Verkehr über Ihr Telefon: Websites sehen ihn als von Ihrer Internetverbindung kommend, und er verbraucht Ihr Datenvolumen und Ihren Akku.</string>
+    <string name="sdk_traffic_sharing_not_checked">Datapavan hat den Code gefunden, nicht seine Aktivität. Es kann nicht feststellen, ob die Funktion in dieser App aktiv ist oder ob Sie zugestimmt haben.</string>
+    <string name="sdk_traffic_sharing_vendor">%1$s gibt an, dass der Code ausgeschaltet bleibt, bis der Nutzer in der App zustimmt, und dass die App das Abschalten jederzeit ermöglichen muss.</string>
+    <string name="sdk_settings_label">Suchen Sie in den Einstellungen dieser App nach einem Schalter namens „%1$s“.</string>
+    <string name="sdk_play_policy">Google Play erlaubt Apps nur dann, Verkehr für andere zu leiten, wenn das der wichtigste, sichtbare Zweck der App ist.</string>
+    <string name="sdk_remote_support">Ein Fernwartungswerkzeug. Je nachdem, wie diese App es nutzt, kann es:</string>
+    <string name="sdk_capability_app_screen">einem Support-Mitarbeiter den Bildschirm dieser App zeigen</string>
+    <string name="sdk_capability_whole_screen">einem Support-Mitarbeiter Ihren gesamten Bildschirm zeigen, auch andere Apps und die Tastatur</string>
+    <string name="sdk_capability_app_control">den Mitarbeiter in dieser App tippen und schreiben lassen, wenn Sie es erlauben</string>
+    <string name="sdk_capability_device_control">den Mitarbeiter Ihr Telefon steuern lassen, auch andere Apps und Einstellungen, sobald sein Bedienungshilfen-Dienst eingeschaltet ist</string>
+    <string name="sdk_capability_files">Dateien übertragen</string>
+    <string name="sdk_accessibility_on">Der Bedienungshilfen-Dienst dieser App ist eingeschaltet, daher kann dieses Werkzeug auch andere Apps steuern.</string>
+    <string name="sdk_remote_support_not_checked">Dass der Code vorhanden ist, zeigt nicht, dass sich jemand mit Ihrem Telefon verbunden hat.</string>
+    <string name="sdk_screen_recording">Er kann aufzeichnen, was Sie in dieser App sehen und antippen, und es an %1$s senden, damit der Hersteller der App es abspielen kann. Er zeichnet nur diese App auf, keine anderen.</string>
+    <string name="sdk_screen_recording_live">Der Hersteller der App kann eine Sitzung auch live verfolgen.</string>
+    <string name="sdk_screen_recording_not_checked">Datapavan kann nicht feststellen, ob die Aufzeichnung aktiv ist.</string>
+    <string name="sdk_evidence">Am %1$s im SDK erkannt, das %2$s veröffentlicht.</string>
+    <string name="dataset_sdks">SDKs, die die Verbindung teilen, Fernwartung ermöglichen oder den Bildschirm aufzeichnen</string>
 </resources>

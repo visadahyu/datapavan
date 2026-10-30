@@ -176,4 +176,34 @@
     <string name="signature_disguised_hidden">Signed with the key of a known app. Show which</string>
     <string name="signature_disguised">A genuine build of %1$s under another name. Its developer disguises some builds to protect people whose phones are searched.</string>
     <string name="dataset_app_signers">Official signing certificates of VPN, proxy and circumvention apps</string>
+
+    <!-- M3 traffic-sharing, remote-support and screen-recording SDKs (ADR 0019) -->
+    <string name="finding_traffic_sharing_title">Can share your internet connection</string>
+    <string name="finding_traffic_sharing_body">This app contains code that can let other people\'s internet traffic pass through this phone. Details are on this page.</string>
+    <string name="finding_remote_support_title">Remote support tool</string>
+    <string name="finding_remote_support_body">This app contains code that lets a support agent see the screen and, in some cases, control the phone. Details are on this page.</string>
+    <string name="finding_screen_recording_title">Records your use of this app</string>
+    <string name="finding_screen_recording_body">This app contains code that can record what you see and tap in it, so that its maker can replay it.</string>
+    <string name="sdks_heading">Connection sharing, remote support and recording</string>
+    <!-- %1$s is an SDK, %2$s its vendor. -->
+    <string name="sdk_name">%1$s by %2$s</string>
+    <string name="sdk_traffic_sharing">Its maker describes it as a way for apps to earn money by letting the maker\'s customers send internet traffic through their users\' phones. When this code is on, other people\'s traffic passes through your phone: websites see it as coming from your internet connection, and it uses your data and battery.</string>
+    <string name="sdk_traffic_sharing_not_checked">Datapavan found the code, not its activity. It cannot tell whether this feature is on in this app, or whether you agreed to it.</string>
+    <string name="sdk_traffic_sharing_vendor">%1$s says the code stays off until the user agrees in the app, and that the app must let you turn it off at any time.</string>
+    <string name="sdk_settings_label">In this app\'s settings, look for a switch called “%1$s”.</string>
+    <string name="sdk_play_policy">Google Play allows apps to carry traffic for others only when that is the app\'s main, visible purpose.</string>
+    <string name="sdk_remote_support">A remote support tool. Depending on how this app uses it, it can:</string>
+    <string name="sdk_capability_app_screen">show a support agent this app\'s screen</string>
+    <string name="sdk_capability_whole_screen">show a support agent your whole screen, including other apps and the keyboard</string>
+    <string name="sdk_capability_app_control">let the agent tap and type in this app, if you allow it</string>
+    <string name="sdk_capability_device_control">let the agent control your phone, including other apps and settings, once its accessibility service is turned on</string>
+    <string name="sdk_capability_files">transfer files</string>
+    <string name="sdk_accessibility_on">This app\'s accessibility service is turned on, so this tool can control apps other than this one.</string>
+    <string name="sdk_remote_support_not_checked">Finding the code does not show that anyone has connected to your phone.</string>
+    <string name="sdk_screen_recording">It can record what you see and tap in this app and send it to %1$s, so that the app\'s maker can replay it. It records this app only, not other apps.</string>
+    <string name="sdk_screen_recording_live">The app\'s maker can also watch a session while it is happening.</string>
+    <string name="sdk_screen_recording_not_checked">Datapavan cannot tell whether recording is on.</string>
+    <!-- %1$s is a date (YYYY-MM-DD), %2$s a vendor. -->
+    <string name="sdk_evidence">Identified on %1$s in the SDK that %2$s publishes.</string>
+    <string name="dataset_sdks">SDKs that share the connection, give remote support or record the screen</string>
 </resources>

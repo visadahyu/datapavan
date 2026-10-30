@@ -160,4 +160,32 @@
     <string name="signature_disguised_hidden">Signée avec la clé d\'une appli connue. Montrer laquelle</string>
     <string name="signature_disguised">Une version authentique de %1$s sous un autre nom. Son développeur déguise certaines versions pour protéger les personnes dont le téléphone est fouillé.</string>
     <string name="dataset_app_signers">Certificats de signature officiels des applis VPN, proxy et de contournement</string>
+
+    <!-- M3 traffic-sharing, remote-support and screen-recording SDKs (ADR 0019) -->
+    <string name="finding_traffic_sharing_title">Peut partager votre connexion Internet</string>
+    <string name="finding_traffic_sharing_body">Cette appli contient du code qui peut faire passer le trafic Internet d\'autres personnes par ce téléphone. Les détails sont sur cette page.</string>
+    <string name="finding_remote_support_title">Outil d\'assistance à distance</string>
+    <string name="finding_remote_support_body">Cette appli contient du code qui permet à un agent d\'assistance de voir l\'écran et, dans certains cas, de contrôler le téléphone. Les détails sont sur cette page.</string>
+    <string name="finding_screen_recording_title">Enregistre votre utilisation de cette appli</string>
+    <string name="finding_screen_recording_body">Cette appli contient du code qui peut enregistrer ce que vous voyez et touchez, afin que son éditeur puisse le rejouer.</string>
+    <string name="sdks_heading">Partage de connexion, assistance à distance et enregistrement</string>
+    <string name="sdk_name">%1$s de %2$s</string>
+    <string name="sdk_traffic_sharing">Son éditeur le présente comme un moyen pour les applis de gagner de l\'argent en laissant ses clients faire passer du trafic Internet par les téléphones des utilisateurs. Quand ce code est actif, le trafic d\'autres personnes passe par votre téléphone : les sites le voient comme venant de votre connexion, et il consomme vos données et votre batterie.</string>
+    <string name="sdk_traffic_sharing_not_checked">Datapavan a trouvé le code, pas son activité. Il ne peut pas savoir si la fonction est active dans cette appli, ni si vous l\'avez acceptée.</string>
+    <string name="sdk_traffic_sharing_vendor">%1$s indique que le code reste inactif tant que l\'utilisateur n\'a pas accepté dans l\'appli, et que l\'appli doit permettre de le désactiver à tout moment.</string>
+    <string name="sdk_settings_label">Dans les réglages de cette appli, cherchez un interrupteur nommé « %1$s ».</string>
+    <string name="sdk_play_policy">Google Play n\'autorise une appli à faire passer du trafic pour d\'autres que si c\'est sa fonction principale et visible.</string>
+    <string name="sdk_remote_support">Un outil d\'assistance à distance. Selon l\'usage qu\'en fait cette appli, il peut :</string>
+    <string name="sdk_capability_app_screen">montrer l\'écran de cette appli à un agent d\'assistance</string>
+    <string name="sdk_capability_whole_screen">montrer tout votre écran à un agent, y compris les autres applis et le clavier</string>
+    <string name="sdk_capability_app_control">laisser l\'agent toucher et saisir dans cette appli, si vous l\'autorisez</string>
+    <string name="sdk_capability_device_control">laisser l\'agent contrôler votre téléphone, y compris les autres applis et les réglages, une fois son service d\'accessibilité activé</string>
+    <string name="sdk_capability_files">transférer des fichiers</string>
+    <string name="sdk_accessibility_on">Le service d\'accessibilité de cette appli est activé : cet outil peut donc contrôler d\'autres applis.</string>
+    <string name="sdk_remote_support_not_checked">La présence de ce code ne montre pas que quelqu\'un s\'est connecté à votre téléphone.</string>
+    <string name="sdk_screen_recording">Il peut enregistrer ce que vous voyez et touchez dans cette appli et l\'envoyer à %1$s, afin que l\'éditeur de l\'appli puisse le rejouer. Il n\'enregistre que cette appli, pas les autres.</string>
+    <string name="sdk_screen_recording_live">L\'éditeur de l\'appli peut aussi suivre une session en direct.</string>
+    <string name="sdk_screen_recording_not_checked">Datapavan ne peut pas savoir si l\'enregistrement est actif.</string>
+    <string name="sdk_evidence">Identifié le %1$s dans le SDK que publie %2$s.</string>
+    <string name="dataset_sdks">SDK qui partagent la connexion, assurent l\'assistance à distance ou enregistrent l\'écran</string>
 </resources>

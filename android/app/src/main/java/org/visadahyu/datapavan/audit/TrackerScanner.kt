@@ -57,16 +57,32 @@ object TrackerData {
  * of a phone reads several gigabytes.
  */
 class TrackerScanner(private val context: Context) {
-    // Missing only from a broken pack; then nothing is found rather than the app failing.
-    private val tsv: String by lazy { DataPackStore.get(context).text(TrackerData.PATH).orEmpty() }
+    private val data = DataPackStore.get(context)
 
-    /** The trackers of the data pack in use, by εxodus id. */
+    /** Traffic-sharing, remote-support and screen-recording SDKs, found in the same pass (ADR 0019). */
+    val sdkList: SdkList by lazy { SdkList.parse(data.text(SdkList.SDKS_PATH).orEmpty(), data.text(SdkList.SIGNATURES_PATH).orEmpty()) }
+
+    // Missing only from a broken pack; then nothing is found rather than the app failing. Every line
+    // keeps its trailing tabs: an empty last column is still a column.
+    private val exodus: String by lazy { data.text(TrackerData.PATH).orEmpty().let { if (it.isEmpty() || it.endsWith("\n")) it else it + "\n" } }
+    private val tsv: String by lazy { exodus + sdkList.signatureTsv() }
+
+    /** The trackers of the data pack in use, by εxodus id, and the SDKs of [sdkList] by their ids. */
     val trackers: Map<Int, TrackerInfo> by lazy { TrackerData.parse(tsv) }
 
     /** Scans [apps], calling [onProgress] with the number done after each one. */
     suspend fun scan(apps: List<AppFacts>, onProgress: (done: Int, total: Int) -> Unit): Map<String, AppTrackers> = coroutineScope {
-        NativeCore.loadTrackers(tsv)
-        val dataVersion = sha256(tsv)
+        // Signature data the engine cannot read must not stop the audit: without the SDK list, and
+        // then without any signatures, the scan finds less instead of the app failing.
+        val signatures = listOf(tsv, exodus).firstOrNull { candidate ->
+            try {
+                NativeCore.loadTrackers(candidate)
+                true
+            } catch (_: RuntimeException) {
+                false
+            }
+        } ?: return@coroutineScope emptyMap()
+        val dataVersion = sha256(signatures)
         val cached = ScanCache.read(cacheFile, dataVersion)
         val done = AtomicInteger()
         // Saved every few apps as well, so that a first scan cut short (the user leaves, Android

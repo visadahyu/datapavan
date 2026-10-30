@@ -13,6 +13,9 @@ enum class FindingKind(val severity: Severity) {
     INSTALLS_APPS(Severity.MEDIUM),
     SENSORS(Severity.LOW),
     TRACKERS(Severity.LOW),
+    TRAFFIC_SHARING(Severity.MEDIUM),
+    REMOTE_SUPPORT(Severity.LOW),
+    SCREEN_RECORDING(Severity.LOW),
     UNKNOWN_SOURCE(Severity.INFO),
     SIGNER_UNKNOWN(Severity.INFO),
 
@@ -92,9 +95,18 @@ object Rules {
 
     /**
      * [trackers] is the tracker scan of the app, or null while it is still running. [signature] is
-     * the app's signature judged against the list of official certificates (ADR 0018).
+     * the app's signature judged against the list of official certificates (ADR 0018). [sdks] are
+     * the categories of the SDKs from `data/sdks` whose code the app contains (ADR 0019).
      */
-    fun forApp(app: AppFacts, trackers: AppTrackers? = null, signature: SignatureVerdict? = null): List<FindingKind> = buildList {
+    fun forApp(
+        app: AppFacts,
+        trackers: AppTrackers? = null,
+        signature: SignatureVerdict? = null,
+        sdks: Set<SdkCategory> = emptySet(),
+    ): List<FindingKind> = buildList {
+        if (SdkCategory.TRAFFIC_SHARING in sdks) add(FindingKind.TRAFFIC_SHARING)
+        if (SdkCategory.REMOTE_SUPPORT in sdks) add(FindingKind.REMOTE_SUPPORT)
+        if (SdkCategory.SCREEN_RECORDING in sdks) add(FindingKind.SCREEN_RECORDING)
         if (signature is SignatureVerdict.Modified) add(FindingKind.MODIFIED_APP)
         if (signature is SignatureVerdict.UnknownKey) add(FindingKind.SIGNER_UNKNOWN)
         val control = app.special intersect REMOTE_CONTROL

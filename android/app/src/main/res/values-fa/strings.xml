@@ -160,4 +160,32 @@
     <string name="signature_disguised_hidden">با کلید یک برنامه شناخته‌شده امضا شده است. نشان بده کدام</string>
     <string name="signature_disguised">ساخته اصل %1$s با نامی دیگر. توسعه‌دهنده برخی ساخته‌ها را پنهان می‌کند تا از کسانی که گوشی‌شان گشته می‌شود محافظت کند.</string>
     <string name="dataset_app_signers">گواهی‌های امضای رسمی برنامه‌های وی‌پی‌ان، پروکسی و دور زدن</string>
+
+    <!-- M3 traffic-sharing, remote-support and screen-recording SDKs (ADR 0019) -->
+    <string name="finding_traffic_sharing_title">می‌تواند اینترنت شما را به اشتراک بگذارد</string>
+    <string name="finding_traffic_sharing_body">این برنامه کدی دارد که می‌تواند ترافیک اینترنت دیگران را از این گوشی عبور دهد. جزئیات در همین صفحه است.</string>
+    <string name="finding_remote_support_title">ابزار پشتیبانی از راه دور</string>
+    <string name="finding_remote_support_body">این برنامه کدی دارد که به یک کارشناس پشتیبانی اجازه می‌دهد صفحه را ببیند و گاهی گوشی را کنترل کند. جزئیات در همین صفحه است.</string>
+    <string name="finding_screen_recording_title">استفاده شما از این برنامه را ضبط می‌کند</string>
+    <string name="finding_screen_recording_body">این برنامه کدی دارد که می‌تواند آنچه را در آن می‌بینید و لمس می‌کنید ضبط کند تا سازنده برنامه آن را بازپخش کند.</string>
+    <string name="sdks_heading">اشتراک اینترنت، پشتیبانی از راه دور و ضبط صفحه</string>
+    <string name="sdk_name">%1$s از %2$s</string>
+    <string name="sdk_traffic_sharing">سازنده‌اش آن را راهی برای کسب درآمد برنامه‌ها معرفی می‌کند: مشتریان سازنده ترافیک اینترنت خود را از گوشی کاربران عبور می‌دهند. وقتی این کد روشن باشد، ترافیک دیگران از گوشی شما می‌گذرد: وب‌سایت‌ها آن را از اتصال اینترنت شما می‌بینند و از داده و باتری شما مصرف می‌کند.</string>
+    <string name="sdk_traffic_sharing_not_checked">این کد پیدا شد، نه فعالیتش. نمی‌توان فهمید این قابلیت در این برنامه روشن است یا نه، یا شما با آن موافقت کرده‌اید یا نه.</string>
+    <string name="sdk_traffic_sharing_vendor">%1$s می‌گوید این کد تا وقتی کاربر در برنامه موافقت نکند خاموش می‌ماند، و برنامه باید بگذارد هر وقت خواستید خاموشش کنید.</string>
+    <string name="sdk_settings_label">در تنظیمات این برنامه دنبال کلیدی به نام «%1$s» بگردید.</string>
+    <string name="sdk_play_policy">گوگل پلی فقط وقتی اجازه می‌دهد برنامه‌ای ترافیک دیگران را عبور دهد که این کار هدف اصلی و آشکار آن برنامه باشد.</string>
+    <string name="sdk_remote_support">ابزار پشتیبانی از راه دور. بسته به این که این برنامه چطور از آن استفاده کند، می‌تواند:</string>
+    <string name="sdk_capability_app_screen">صفحه این برنامه را به کارشناس پشتیبانی نشان دهد</string>
+    <string name="sdk_capability_whole_screen">کل صفحه شما را، شامل برنامه‌های دیگر و صفحه‌کلید، به کارشناس نشان دهد</string>
+    <string name="sdk_capability_app_control">اگر اجازه دهید، به کارشناس امکان لمس و تایپ در این برنامه بدهد</string>
+    <string name="sdk_capability_device_control">وقتی سرویس دسترس‌پذیری‌اش روشن شود، به کارشناس امکان کنترل گوشی، شامل برنامه‌های دیگر و تنظیمات، بدهد</string>
+    <string name="sdk_capability_files">فایل جابه‌جا کند</string>
+    <string name="sdk_accessibility_on">سرویس دسترس‌پذیری این برنامه روشن است، پس این ابزار می‌تواند برنامه‌های دیگر را هم کنترل کند.</string>
+    <string name="sdk_remote_support_not_checked">پیدا شدن این کد نشان نمی‌دهد کسی به گوشی شما وصل شده است.</string>
+    <string name="sdk_screen_recording">می‌تواند آنچه را در این برنامه می‌بینید و لمس می‌کنید ضبط کند و برای %1$s بفرستد تا سازنده برنامه آن را بازپخش کند. فقط همین برنامه را ضبط می‌کند، نه برنامه‌های دیگر را.</string>
+    <string name="sdk_screen_recording_live">سازنده برنامه می‌تواند یک جلسه را همان وقت که در جریان است تماشا کند.</string>
+    <string name="sdk_screen_recording_not_checked">نمی‌توان فهمید ضبط روشن است یا نه.</string>
+    <string name="sdk_evidence">در تاریخ %1$s در کیتی که %2$s منتشر می‌کند شناسایی شد.</string>
+    <string name="dataset_sdks">کیت‌هایی که اینترنت را به اشتراک می‌گذارند، پشتیبانی از راه دور می‌دهند یا صفحه را ضبط می‌کنند</string>
 </resources>

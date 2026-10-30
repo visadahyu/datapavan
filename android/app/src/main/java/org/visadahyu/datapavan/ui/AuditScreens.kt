@@ -62,6 +62,8 @@ import org.visadahyu.datapavan.audit.DeviceFacts
 import org.visadahyu.datapavan.audit.FindingKind
 import org.visadahyu.datapavan.audit.KnownCollectors
 import org.visadahyu.datapavan.audit.Rules
+import org.visadahyu.datapavan.audit.Sdk
+import org.visadahyu.datapavan.audit.SdkList
 import org.visadahyu.datapavan.audit.Severity
 import org.visadahyu.datapavan.audit.SignatureVerdict
 import org.visadahyu.datapavan.audit.SpecialAccess
@@ -88,12 +90,23 @@ private class AuditResult(
     val signatures: Map<String, SignatureVerdict>,
     val trackers: Map<String, AppTrackers>? = null,
     val trackerInfo: Map<Int, TrackerInfo> = emptyMap(),
+    /** SDKs from `data/sdks` whose code each app contains (ADR 0019), by package. */
+    val sdks: Map<String, List<Sdk>> = emptyMap(),
 ) {
-    /** The same audit with the tracker scan's findings added. */
-    fun withTrackers(found: Map<String, AppTrackers>, info: Map<Int, TrackerInfo>): AuditResult {
-        val judged = apps.map { (app, _) -> app to Rules.forApp(app, found[app.packageName], signatures[app.packageName]) }
-            .sortedWith(Rules.byUrgency)
-        return AuditResult(device, deviceFindings, judged, dataDate, signatures, found, info)
+    /**
+     * The same audit with the scan's findings added. The scan matched εxodus trackers and the SDKs of
+     * [sdkList] in one pass; they are told apart by id, and only SDK code the app contains counts.
+     */
+    fun withTrackers(found: Map<String, AppTrackers>, info: Map<Int, TrackerInfo>, sdkList: SdkList): AuditResult {
+        val exodus = found.mapValues { (_, t) ->
+            t.copy(embedded = t.embedded.filter { it < SdkList.FIRST_ID }, referencedOnly = t.referencedOnly.filter { it < SdkList.FIRST_ID })
+        }
+        val sdks = found.mapValues { (_, t) -> t.embedded.mapNotNull(sdkList::byId) }.filterValues { it.isNotEmpty() }
+        val judged = apps.map { (app, _) ->
+            val categories = sdks[app.packageName].orEmpty().map { it.category }.toSet()
+            app to Rules.forApp(app, exodus[app.packageName], signatures[app.packageName], categories)
+        }.sortedWith(Rules.byUrgency)
+        return AuditResult(device, deviceFindings, judged, dataDate, signatures, exodus, info, sdks)
     }
 }
 
@@ -121,7 +134,7 @@ private suspend fun AuditResult.withAllLabels(context: Context): AuditResult {
     val missing = apps.filter { it.first.label == null }.map { it.first }
     val labelled = AppCollector(context).withLabels(missing).associateBy { it.packageName }
     val all = apps.map { (app, findings) -> (labelled[app.packageName] ?: app) to findings }.sortedWith(Rules.byUrgency)
-    return AuditResult(device, deviceFindings, all, dataDate, signatures, trackers, trackerInfo)
+    return AuditResult(device, deviceFindings, all, dataDate, signatures, trackers, trackerInfo, sdks)
 }
 
 /** Root of the v0.1 audit UI: an overview of the phone and its apps, and a detail page per app. */
@@ -143,7 +156,7 @@ internal fun DatapavanApp(engineVersion: String) {
         val found = withContext(Dispatchers.Default) {
             scanner.scan(labelled.apps.map { it.first }) { done, total -> scanProgressFlow.value = done to total }
         }
-        value = labelled.withTrackers(found, scanner.trackers)
+        value = labelled.withTrackers(found, scanner.trackers, scanner.sdkList)
         scanProgressFlow.value = null
     }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
@@ -159,7 +172,7 @@ internal fun DatapavanApp(engineVersion: String) {
                 BackHandler { selected = null }
                 AppDetail(
                     entry, audit.trackers?.get(entry.first.packageName), audit.trackerInfo, audit.signatures[entry.first.packageName],
-                    insets, onBack = { selected = null },
+                    audit.sdks[entry.first.packageName].orEmpty(), insets, onBack = { selected = null },
                 )
             }
             reviewing -> {
@@ -292,7 +305,7 @@ private fun AppRow(app: AppFacts, findings: List<FindingKind>, onClick: () -> Un
 
 @Composable
 private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<Int, TrackerInfo>, signature: SignatureVerdict?,
-    insets: PaddingValues, onBack: () -> Unit) {
+    sdks: List<Sdk>, insets: PaddingValues, onBack: () -> Unit) {
     val (app, findings) = entry
     val context = LocalContext.current
     val collector = remember { AppCollector(context) }
@@ -325,6 +338,7 @@ private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<
         items(findings) { kind -> FindingCard(kind, company = KnownCollectors.companyOf(app.packageName), action = null) }
         if (FindingKind.PREINSTALLED_COLLECTOR in findings) item { DisableGuide(app.packageName) }
         if (signature != null) item { SignatureSection(signature) }
+        if (sdks.isNotEmpty()) item { SdkSection(sdks, accessibilityOn = SpecialAccess.ACCESSIBILITY in app.special) }
         item { TrackerSection(trackers, trackerInfo) }
         item {
             SectionTitle(R.string.detail_special)
@@ -440,6 +454,9 @@ private fun title(kind: FindingKind) = when (kind) {
     FindingKind.TRACKERS -> R.string.finding_trackers_title
     FindingKind.UNKNOWN_SOURCE -> R.string.finding_unknown_source_title
     FindingKind.MODIFIED_APP -> R.string.finding_modified_app_title
+    FindingKind.TRAFFIC_SHARING -> R.string.finding_traffic_sharing_title
+    FindingKind.REMOTE_SUPPORT -> R.string.finding_remote_support_title
+    FindingKind.SCREEN_RECORDING -> R.string.finding_screen_recording_title
     FindingKind.SIGNER_UNKNOWN -> R.string.finding_signer_unknown_title
     FindingKind.USER_CERTIFICATE_AUTHORITY -> R.string.finding_user_ca_title
     FindingKind.WIRELESS_DEBUGGING -> R.string.finding_wireless_debugging_title
@@ -463,6 +480,9 @@ private fun body(kind: FindingKind) = when (kind) {
     FindingKind.TRACKERS -> R.string.finding_trackers_body
     FindingKind.UNKNOWN_SOURCE -> R.string.finding_unknown_source_body
     FindingKind.MODIFIED_APP -> R.string.finding_modified_app_body
+    FindingKind.TRAFFIC_SHARING -> R.string.finding_traffic_sharing_body
+    FindingKind.REMOTE_SUPPORT -> R.string.finding_remote_support_body
+    FindingKind.SCREEN_RECORDING -> R.string.finding_screen_recording_body
     FindingKind.SIGNER_UNKNOWN -> R.string.finding_signer_unknown_body
     FindingKind.USER_CERTIFICATE_AUTHORITY -> R.string.finding_user_ca_body
     FindingKind.WIRELESS_DEBUGGING -> R.string.finding_wireless_debugging_body

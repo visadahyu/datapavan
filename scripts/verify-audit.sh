@@ -87,8 +87,8 @@ enable_fixture_accessibility() {
 echo "== Audit verification on Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
 
 # The fixture: a VPN app with an enabled accessibility service, microphone, camera and location,
-# allowed to install apps, installed over adb rather than from a store, and with a class that
-# matches a tracker signature (Sentry).
+# allowed to install apps, installed over adb rather than from a store, and with classes that match
+# a tracker signature (Sentry) and a traffic-sharing SDK (Pawns, data/sdks).
 fixture_apk=$("$ROOT/scripts/fixture-app/build.sh" | tail -1)
 # Each build signs with a new throwaway key, so a fixture left behind would block the install.
 adb uninstall "$FIXTURE" >/dev/null 2>&1 || true
@@ -132,6 +132,10 @@ expect "Microphone, camera or location"
 expect "Not from a known app store"
 expect "Contains trackers"
 expect "Sentry (crash reporting)"
+# Above the tracker list: the finding card, then the SDK section.
+scroll_to_top
+expect "Can share your internet connection"
+expect "Pawns SDK by IPRoyal"
 
 # A known app signed by someone else.
 impostor_apk=$("$ROOT/scripts/fixture-app/build.sh" "$IMPOSTOR" | tail -1)
