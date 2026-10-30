@@ -5,7 +5,8 @@ helps you stop it.** Everything runs on the device. It needs no root and no clou
 0.1 does not even have permission to use the internet.
 
 > Status: **pre-alpha.** Milestones M1 (the build skeleton) and M2 (the app and permission audit) are
-> complete; nothing has been released yet. See the [roadmap](ROADMAP.md).
+> complete, and most of M3 (the code scanner and its data) is built. Nothing has been released yet. See
+> the [roadmap](ROADMAP.md).
 
 ## Why
 
@@ -20,8 +21,8 @@ see what left, where it went, and when.**
 
 ## What it does today
 
-Built in milestone M2. It is checked on every change on an Android 15 emulator in CI, and was checked on
-Android 11 and 17 emulators and a Galaxy A40.
+Built in milestones M2 and M3. It is checked on every change on an Android 15 emulator in CI, and was
+checked on Android 11 and 17 emulators and on Galaxy A40 and A56 phones.
 
 - **App and permission audit.** Every installed app, with its install source, dates, dangerous
   permissions and special access (accessibility, notification listener, device admin, overlay, usage
@@ -45,16 +46,31 @@ Android 11 and 17 emulators and a Galaxy A40.
   checked against Google's attestation root certificates and decoded by a parser in the Rust engine, and
   the age of the security patch. *Why:* on a phone with an unlocked bootloader or a modified system, no
   app can be trusted, Datapavan included.
+- **Tracker scan.** The code of every installed app, in its base APK and every split, is read by a DEX
+  parser in the Rust engine and matched against the εxodus tracker database. Trackers whose code the app
+  contains are shown apart from those it only refers to. *Why:* tracking SDKs collect data inside apps
+  that the user chose for other reasons, and only their code shows they are there.
+- **Connection sharing, remote support and screen recording.** Datapavan's own list of SDKs that can let
+  other people's internet traffic pass through the phone, let a support agent see or control it, or
+  record what the user does in an app for its maker. Every identifier is read in the SDK its vendor
+  publishes. Findings state what was found, what the code does when it is on, and what Datapavan cannot
+  check. *Why:* traffic sent through someone's phone is traced back to that person, and it uses their
+  data and battery.
+- **Genuine or modified VPN and circumvention apps.** The official signing certificates of 35 VPN, proxy
+  and circumvention packages, collected from the developers' own channels with a grade for the evidence.
+  A copy that someone else signed is called modified only on positive evidence; an unknown key is shown
+  with its fingerprint, without a warning. *Why:* a modified VPN app sees all of its user's traffic and
+  looks exactly like the real one.
+- **Signed data packs.** All of this data reaches the phone in packs signed with the project's key, which
+  can be imported as files without any network permission. A *Data sources* screen shows each dataset's
+  date, licence and the pack's fingerprint, and the app warns when its data is more than six months old.
+  *Why:* data must stay current, and it must be impossible to slip a fake list onto someone's phone.
 
 ## What comes next
 
 Each item is designed in [docs/DESIGN.md](docs/DESIGN.md) and [docs/VPN.md](docs/VPN.md), but not built
 yet.
 
-- **Tracker scanner** (v0.1, M3). Tracking SDKs inside each app, including proxy and remote-access SDKs,
-  and modified copies of known circumvention tools, found by their signing certificates. *Why:* a hidden
-  proxy SDK turns the phone into an exit node for other people's traffic, which is traced back to the
-  owner. A modified copy of a known tool looks genuine.
 - **Network use per app** (v0.1, M4): bytes sent and received, on screen and in the background.
 - **Connection log** (v0.2). A local VPN, with no server, records which domain and organisation each app
   talks to. *Why:* this is the question users actually ask, and only the phone itself can answer it.
