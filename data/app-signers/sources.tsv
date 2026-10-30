@@ -7,7 +7,10 @@
 #   index          the signer in a repository index whose signature update.py checks (grade 2, IzzyOnDroid 3);
 #                  value: the repository (fdroid, guardian, izzy, flclash)
 #   apk            certificates read from an APK of an official channel (grade 4 when two channels agree,
-#                  else 5); location: a URL or github:owner/repo; value: a regular expression for the asset
+#                  else 5); location: a URL, github:owner/repo, or page:<listing URL>; value: a regular
+#                  expression for the asset or file. An optional seventh column checks a detached OpenPGP
+#                  signature first (grade 3): the signature's suffix, the key's URL, the key's fingerprint
+#                  as the developer publishes it, and where it is published.
 com.psiphon3	website	developer	published	https://psiphon.ca/en/trust-center.html#verify	76:DB:EF:15:F6:77:26:D4:51:A1:23:59:B8:57:9C:0D:7A:9F:63:5D:52:6A:A3:74:24:DF:13:16:32:F1:78:10
 com.psiphon3	website	developer	apk	https://psiphon.ca/PsiphonAndroid.apk	
 org.torproject.torbrowser	guardian	developer	index	https://guardianproject.info/fdroid/repo	guardian
@@ -36,8 +39,8 @@ com.zaneschepke.wireguardautotunnel	izzy	developer	index	https://apt.izzysoft.de
 com.zaneschepke.wireguardautotunnel	github	developer	apk	github:wgtunnel/android	^wgtunnel-standalone-v[0-9.]+-arm64\.apk$
 moe.nb4a	izzy	developer	index	https://apt.izzysoft.de/fdroid/repo	izzy
 moe.nb4a	github	developer	apk	github:MatsuriDayo/NekoBoxForAndroid	-arm64-v8a\.apk$
-com.v2ray.ang	github	developer	apk	github:2dust/v2rayNG	^v2rayNG_[0-9.]+_arm64-v8a\.apk$
-com.v2ray.ang.fdroid	github	developer	apk	github:2dust/v2rayNG	-fdroid_arm64-v8a\.apk$
+com.v2ray.ang	github	developer	apk	github:2dust/v2rayNG	^v2rayNG_[0-9.]+_arm64-v8a\.apk$	.sig https://github.com/2dust/v2rayNG/releases/latest/download/v2rayN-public-key.asc 76945E9F3E9A168F8070F195805D661C134DFAF68903C199463C31E5AE903AE0 https://github.com/2dust/v2rayNG/blob/master/README.md
+com.v2ray.ang.fdroid	github	developer	apk	github:2dust/v2rayNG	-fdroid_arm64-v8a\.apk$	.sig https://github.com/2dust/v2rayNG/releases/latest/download/v2rayN-public-key.asc 76945E9F3E9A168F8070F195805D661C134DFAF68903C199463C31E5AE903AE0 https://github.com/2dust/v2rayNG/blob/master/README.md
 org.getlantern.lantern	github	developer	apk	github:getlantern/lantern	^lantern-installer\.apk$
 app.hiddify.com	github	developer	apk	github:hiddify/hiddify-app	^Hiddify-Android-arm64\.apk$
 org.amnezia.vpn	github	developer	apk	github:amnezia-vpn/amnezia-client	android11\+_arm64-v8a\.apk$
@@ -52,9 +55,11 @@ de.unboundtech.defyxvpn	github	developer	apk	github:UnboundTechCo/defyxVPN	-arm6
 com.MahsaNet.MahsaNG	github	developer	apk	github:GFW-knocker/MahsaNG	_arm64-v8a\.apk$
 de.blinkt.openvpn	github	developer	apk	github:schwabe/ics-openvpn	\.apk$
 de.blinkt.openvpn	fdroid	fdroid	index	https://f-droid.org/repo	fdroid
-net.mullvad.mullvadvpn	github	developer	apk	github:mullvad/mullvadvpn-app	\.apk$
+net.mullvad.mullvadvpn	github	developer	apk	github:mullvad/mullvadvpn-app	\.apk$	.asc https://mullvad.net/media/mullvad-code-signing.asc A1198702FC3E0A09A9AE5B75D5A1D4F266DE8DDF https://mullvad.net/en/help/verifying-signatures
 net.mullvad.mullvadvpn	fdroid	fdroid	index	https://f-droid.org/repo	fdroid
 org.outline.android.client	fdroid	fdroid	index	https://f-droid.org/repo	fdroid
 com.windscribe.vpn	fdroid	fdroid	index	https://f-droid.org/repo	fdroid
 pan.alexander.tordnscrypt	izzy	developer	index	https://apt.izzysoft.de/fdroid/repo	izzy
 pan.alexander.tordnscrypt.stable	fdroid	fdroid	index	https://f-droid.org/repo	fdroid
+org.getlantern.lantern	website	developer	apk	https://s3.amazonaws.com/lantern.io/releases/production/latest/lantern-installer.apk	
+com.wireguard.android	website	developer	apk	page:https://download.wireguard.com/android-client	com\.wireguard\.android-[0-9.]+\.apk

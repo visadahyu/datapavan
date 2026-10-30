@@ -12,7 +12,8 @@ Evidence, from strongest (ADR 0018):
   1  a fingerprint the developer publishes;
   2  F-Droid's AllowedAPKSigningKeys, or a repository index whose signature matches the repository's
      published key;
-  3  IzzyOnDroid's index (it checks the author's key);
+  3  IzzyOnDroid's index (it checks the author's key), or an APK whose OpenPGP signature verifies
+     with the key whose fingerprint the developer publishes;
   4  APKs of official channels that agree across two channels;
   5  a single reading.
 Every APK is read with apksigner across Android 10 to 17, so that every signer some phone sees is
@@ -104,6 +105,33 @@ def github_asset(repository, pattern, cache):
     return url, fetch(url, cache, f"{repository.replace('/', '_')}_{assets[0]['name']}", keep=True)
 
 
+def page_asset(page, pattern, cache):
+    """The URL and file of the newest download on a listing page whose name matches pattern."""
+    names = sorted(set(re.findall(pattern, fetch(page, cache).read_text(errors="replace"))))
+    if not names:
+        fail(f"{page}: nothing matches {pattern}")
+    url = page.rstrip("/") + "/" + names[-1]
+    return url, fetch(url, cache, names[-1], keep=True)
+
+
+def verify_openpgp(url, path, spec, cache):
+    """Checks the APK's detached OpenPGP signature against the developer's published key.
+
+    spec: the signature file's suffix, the key's URL, the key's fingerprint as the developer
+    publishes it, and where it is published."""
+    suffix, key_url, expected, _ = spec.split()
+    expected = re.sub(r"[^0-9A-Fa-f]", "", expected).upper()
+    signature = fetch(url + suffix, cache)
+    key = fetch(key_url, cache)
+    home = cache / "gnupg"
+    home.mkdir(mode=0o700, exist_ok=True)
+    run("gpg", "--homedir", str(home), "--batch", "--quiet", "--import", str(key))
+    code, output = run("gpg", "--homedir", str(home), "--batch", "--status-fd", "1", "--verify", str(signature), str(path))
+    valid = re.search(r"^\[GNUPG:\] VALIDSIG .* ([0-9A-F]{40,64})$", output, re.M)
+    if code != 0 or not valid or valid.group(1) != expected:
+        fail(f"{url}: the OpenPGP signature does not verify with key {expected}:\n{output[-600:]}")
+
+
 def apk_certificates(path):
     """Package name, and each signing certificate with whether it is a debug certificate."""
     code, badging = run(tool("aapt2"), "dump", "packagename", str(path))
@@ -185,7 +213,7 @@ def main():
         if reading:
             entry["readings"].add(channel)
 
-    def collect(package, channel, controller, method, location, value):
+    def collect(package, channel, controller, method, location, value, openpgp):
         if method == "published":
             record(package, fingerprint(value), 1, channel, controller, location)
         elif method == "fdroid-allowed":
@@ -202,25 +230,34 @@ def main():
         elif method == "apk":
             if location.startswith("github:"):
                 url, path = github_asset(location[len("github:"):], value, args.cache)
+            elif location.startswith("page:"):
+                url, path = page_asset(location[len("page:"):], value, args.cache)
             else:
                 url, path = location, fetch(location, args.cache)
+            grade = 5
+            if openpgp:
+                verify_openpgp(url, path, openpgp, args.cache)
+                grade = 3
             actual, certificates, from_play = apk_certificates(path)
             if actual != package:
                 fail(f"{url}: the APK is {actual}")
             for digest, debug in certificates.items():
                 # An APK exported from Google Play carries Play's stamp and, usually, a key Google holds.
-                record(package, digest, 5, channel, "google" if from_play else controller, url, reading=True, debug=debug)
+                record(package, digest, grade, channel, "google" if from_play else controller, url, reading=True, debug=debug)
+                if openpgp:
+                    found[(package, digest)]["sources"].add(openpgp.split()[3])
                 if from_play:
                     found[(package, digest)]["channels"].add("play")
             print(f"read {package} from {url}: {', '.join(certificates)}{' (exported from Google Play)' if from_play else ''}")
         else:
             fail(f"unknown method {method}")
 
-    for package, channel, controller, method, location, value in sources:
+    for row in sources:
+        package, channel, controller, method, location, value = row[:6]
         if package not in apps:
             problems.append(f"{package} is in sources.tsv but not in apps.tsv")
         try:
-            collect(package, channel, controller, method, location, value)
+            collect(package, channel, controller, method, location, value, row[6] if len(row) > 6 else "")
         except (Problem, OSError, ValueError, KeyError) as error:
             problems.append(f"{package} ({method} {location}): {error}")
 
