@@ -34,6 +34,8 @@ data class AppFacts(
     val isVpnApp: Boolean,
     /** The user has accepted this app's VPN dialog. */
     val vpnAuthorised: Boolean,
+    /** The app's signing certificates; null when Android does not report them. */
+    val signing: AppSigning? = null,
 )
 
 /** Hardware key attestation, decoded by the Rust engine. Null fields were absent. */

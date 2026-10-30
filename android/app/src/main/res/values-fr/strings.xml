@@ -143,4 +143,21 @@
     <string name="data_refused_unreadable">Le fichier n\'a pas pu être lu.</string>
     <string name="data_fingerprint">Empreinte (SHA-256), à comparer avec celle publiée avec le paquet :</string>
     <string name="data_stale">Ces données datent du %1$s, il y a plus de six mois. Les listes de traqueurs et les données de sécurité changent ; importez un paquet de données plus récent.</string>
+
+    <!-- M3 official signing certificates (ADR 0018) -->
+    <string name="finding_modified_app_title">Copie modifiée</string>
+    <string name="finding_modified_app_body">Cette copie n\'est pas signée par son développeur. Quelqu\'un l\'a modifiée, et une appli VPN ou proxy modifiée peut lire tout ce qui passe par elle.</string>
+    <string name="finding_signer_unknown_title">Clé de signature encore inconnue</string>
+    <string name="finding_signer_unknown_body">Datapavan connaît cette appli, mais pas encore la clé du canal d\'où vient cette copie. C\'est courant pour les copies des magasins d\'applis et ce n\'est pas un avertissement.</string>
+    <string name="signature_heading">Signature</string>
+    <string name="signature_genuine_developer">Copie authentique de %1$s, signée par son développeur.</string>
+    <string name="signature_genuine_google">Copie authentique de %1$s, signée par Google Play pour son développeur.</string>
+    <string name="signature_genuine_fdroid">Copie authentique de %1$s, compilée et signée par F-Droid.</string>
+    <string name="signature_past_key">Elle est signée avec une ancienne clé du développeur, que l\'appli a remplacée depuis.</string>
+    <string name="signature_unknown">Datapavan connaît %1$s, mais pas encore la clé de cette copie. Les copies des magasins d\'applis portent souvent la clé du magasin. Comparez cette empreinte avec celle que publie le développeur :</string>
+    <string name="signature_modified">Cette copie de %1$s n\'est pas signée par son développeur. Quelqu\'un l\'a modifiée, et elle peut voir tout ce qui passe par elle. Supprimez-la et installez %1$s depuis son site ou son magasin officiel.</string>
+    <string name="signature_modified_debug">Cette copie de %1$s porte une clé de débogage, que les versions du développeur n\'utilisent jamais : quelqu\'un d\'autre l\'a recompilée. Supprimez-la et installez %1$s depuis son site ou son magasin officiel.</string>
+    <string name="signature_disguised_hidden">Signée avec la clé d\'une appli connue. Montrer laquelle</string>
+    <string name="signature_disguised">Une version authentique de %1$s sous un autre nom. Son développeur déguise certaines versions pour protéger les personnes dont le téléphone est fouillé.</string>
+    <string name="dataset_app_signers">Certificats de signature officiels des applis VPN, proxy et de contournement</string>
 </resources>

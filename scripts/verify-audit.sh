@@ -2,7 +2,9 @@
 # End-to-end check of the audit's findings (milestone M2) on an emulator. A test fixture app (see
 # scripts/fixture-app) is installed and given risky access over adb, and, where adb can become root,
 # the device gets a user-installed certificate authority. Datapavan must then report each of them,
-# and the USB debugging that every emulator has on. Everything is undone afterwards.
+# and the USB debugging that every emulator has on. Last, the fixture is installed again under the
+# package name of Exclave, whose official keys data/app-signers records completely (ADR 0018), and it
+# must be reported as a modified copy. Everything is undone afterwards.
 #
 # Wireless debugging cannot be checked here: Android switches it straight back off without a Wi-Fi
 # network that allows it. The unit tests cover that rule.
@@ -15,6 +17,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FIXTURE=org.visadahyu.datapavan.fixture
+IMPOSTOR=com.github.dyhkwong.sagernet
 # shellcheck source=scripts/adb-ui.sh
 . "$ROOT/scripts/adb-ui.sh"
 
@@ -28,6 +31,7 @@ ROOTED=""
 cleanup() {
     adb shell settings delete secure enabled_accessibility_services >/dev/null 2>&1 || true
     adb uninstall "$FIXTURE" >/dev/null 2>&1 || true
+    adb uninstall "$IMPOSTOR" >/dev/null 2>&1 || true
     if [ -n "$CA_FILE" ]; then
         adb shell rm -f "/data/misc/user/0/cacerts-added/$CA_FILE" >/dev/null 2>&1 || true
     fi
@@ -128,5 +132,17 @@ expect "Microphone, camera or location"
 expect "Not from a known app store"
 expect "Contains trackers"
 expect "Sentry (crash reporting)"
+
+# A known app signed by someone else.
+impostor_apk=$("$ROOT/scripts/fixture-app/build.sh" "$IMPOSTOR" | tail -1)
+adb uninstall "$FIXTURE" >/dev/null 2>&1 || true
+adb uninstall "$IMPOSTOR" >/dev/null 2>&1 || true
+adb install -r "$impostor_apk" >/dev/null
+start_audit || fail "the audit overview did not appear with the impostor installed"
+tap_text "Datapavan test fixture" || fail "the impostor is not listed"
+sleep 1
+scroll_to_top
+expect "Modified copy"
+expect "This copy of Exclave is not signed by its developer."
 
 echo "== audit verification passed"

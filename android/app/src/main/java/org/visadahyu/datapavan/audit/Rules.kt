@@ -6,6 +6,7 @@ enum class Severity { HIGH, MEDIUM, LOW, INFO }
 /** Everything the audit can report. Wording lives in string resources, keyed by these names. */
 enum class FindingKind(val severity: Severity) {
     // Apps
+    MODIFIED_APP(Severity.HIGH),
     VPN_WITH_REMOTE_CONTROL(Severity.HIGH),
     REMOTE_CONTROL(Severity.MEDIUM),
     PREINSTALLED_COLLECTOR(Severity.MEDIUM),
@@ -13,6 +14,7 @@ enum class FindingKind(val severity: Severity) {
     SENSORS(Severity.LOW),
     TRACKERS(Severity.LOW),
     UNKNOWN_SOURCE(Severity.INFO),
+    SIGNER_UNKNOWN(Severity.INFO),
 
     // Device
     USER_CERTIFICATE_AUTHORITY(Severity.HIGH),
@@ -88,8 +90,13 @@ object Rules {
         else -> ReviewStatus.CHANGED
     }
 
-    /** [trackers] is the tracker scan of the app, or null while it is still running. */
-    fun forApp(app: AppFacts, trackers: AppTrackers? = null): List<FindingKind> = buildList {
+    /**
+     * [trackers] is the tracker scan of the app, or null while it is still running. [signature] is
+     * the app's signature judged against the list of official certificates (ADR 0018).
+     */
+    fun forApp(app: AppFacts, trackers: AppTrackers? = null, signature: SignatureVerdict? = null): List<FindingKind> = buildList {
+        if (signature is SignatureVerdict.Modified) add(FindingKind.MODIFIED_APP)
+        if (signature is SignatureVerdict.UnknownKey) add(FindingKind.SIGNER_UNKNOWN)
         val control = app.special intersect REMOTE_CONTROL
         if (app.isVpnApp && control.isNotEmpty()) add(FindingKind.VPN_WITH_REMOTE_CONTROL)
         if (!app.isVpnApp && !app.isSystem && control.isNotEmpty()) add(FindingKind.REMOTE_CONTROL)

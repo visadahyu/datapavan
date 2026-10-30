@@ -54,6 +54,7 @@ import kotlinx.coroutines.withContext
 import org.visadahyu.datapavan.R
 import org.visadahyu.datapavan.audit.AppCollector
 import org.visadahyu.datapavan.audit.AppFacts
+import org.visadahyu.datapavan.audit.AppSigners
 import org.visadahyu.datapavan.audit.AppTrackers
 import org.visadahyu.datapavan.audit.AttestationTrust
 import org.visadahyu.datapavan.audit.DeviceCollector
@@ -62,6 +63,7 @@ import org.visadahyu.datapavan.audit.FindingKind
 import org.visadahyu.datapavan.audit.KnownCollectors
 import org.visadahyu.datapavan.audit.Rules
 import org.visadahyu.datapavan.audit.Severity
+import org.visadahyu.datapavan.audit.SignatureVerdict
 import org.visadahyu.datapavan.audit.SpecialAccess
 import org.visadahyu.datapavan.audit.TrackerInfo
 import org.visadahyu.datapavan.audit.TrackerScanner
@@ -82,13 +84,16 @@ private class AuditResult(
     val apps: List<AppEntry>,
     /** The date of the data pack in use. */
     val dataDate: String,
+    /** Each app's signature judged against the list of official certificates (ADR 0018), by package. */
+    val signatures: Map<String, SignatureVerdict>,
     val trackers: Map<String, AppTrackers>? = null,
     val trackerInfo: Map<Int, TrackerInfo> = emptyMap(),
 ) {
     /** The same audit with the tracker scan's findings added. */
     fun withTrackers(found: Map<String, AppTrackers>, info: Map<Int, TrackerInfo>): AuditResult {
-        val judged = apps.map { (app, _) -> app to Rules.forApp(app, found[app.packageName]) }.sortedWith(Rules.byUrgency)
-        return AuditResult(device, deviceFindings, judged, dataDate, found, info)
+        val judged = apps.map { (app, _) -> app to Rules.forApp(app, found[app.packageName], signatures[app.packageName]) }
+            .sortedWith(Rules.byUrgency)
+        return AuditResult(device, deviceFindings, judged, dataDate, signatures, found, info)
     }
 }
 
@@ -99,11 +104,16 @@ private class AuditResult(
 private suspend fun runAudit(context: Context): AuditResult = coroutineScope {
     val device = async(Dispatchers.IO) { DeviceCollector(context).collect() }
     val collector = AppCollector(context)
-    val judged = collector.collect().map { it to Rules.forApp(it) }
+    val data = DataPackStore.get(context)
+    val signers = AppSigners.parse(data.text(AppSigners.APPS_PATH).orEmpty(), data.text(AppSigners.SIGNERS_PATH).orEmpty())
+    val fresh = !DataPackRules.isStale(data.active.date, LocalDate.now())
+    val collected = collector.collect()
+    val signatures = collected.mapNotNull { app -> signers.judge(app.packageName, app.signing, fresh)?.let { app.packageName to it } }.toMap()
+    val judged = collected.map { it to Rules.forApp(it, signature = signatures[it.packageName]) }
     val labelled = collector.withLabels(judged.filter { (_, f) -> f.isNotEmpty() }.map { it.first }).associateBy { it.packageName }
     val apps = judged.map { (app, findings) -> (labelled[app.packageName] ?: app) to findings }.sortedWith(Rules.byUrgency)
     val now = Calendar.getInstance().let { it.get(Calendar.YEAR) * 100 + it.get(Calendar.MONTH) + 1 }
-    AuditResult(device.await(), Rules.forDevice(device.await(), now), apps, DataPackStore.get(context).active.date)
+    AuditResult(device.await(), Rules.forDevice(device.await(), now), apps, data.active.date, signatures)
 }
 
 /** Second pass: the labels of all remaining apps, for the full list. */
@@ -111,7 +121,7 @@ private suspend fun AuditResult.withAllLabels(context: Context): AuditResult {
     val missing = apps.filter { it.first.label == null }.map { it.first }
     val labelled = AppCollector(context).withLabels(missing).associateBy { it.packageName }
     val all = apps.map { (app, findings) -> (labelled[app.packageName] ?: app) to findings }.sortedWith(Rules.byUrgency)
-    return AuditResult(device, deviceFindings, all, dataDate, trackers, trackerInfo)
+    return AuditResult(device, deviceFindings, all, dataDate, signatures, trackers, trackerInfo)
 }
 
 /** Root of the v0.1 audit UI: an overview of the phone and its apps, and a detail page per app. */
@@ -147,7 +157,10 @@ internal fun DatapavanApp(engineVersion: String) {
             audit == null -> Loading(insets)
             entry != null -> {
                 BackHandler { selected = null }
-                AppDetail(entry, audit.trackers?.get(entry.first.packageName), audit.trackerInfo, insets, onBack = { selected = null })
+                AppDetail(
+                    entry, audit.trackers?.get(entry.first.packageName), audit.trackerInfo, audit.signatures[entry.first.packageName],
+                    insets, onBack = { selected = null },
+                )
             }
             reviewing -> {
                 BackHandler { reviewing = false }
@@ -278,7 +291,8 @@ private fun AppRow(app: AppFacts, findings: List<FindingKind>, onClick: () -> Un
 }
 
 @Composable
-private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<Int, TrackerInfo>, insets: PaddingValues, onBack: () -> Unit) {
+private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<Int, TrackerInfo>, signature: SignatureVerdict?,
+    insets: PaddingValues, onBack: () -> Unit) {
     val (app, findings) = entry
     val context = LocalContext.current
     val collector = remember { AppCollector(context) }
@@ -310,6 +324,7 @@ private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<
         }
         items(findings) { kind -> FindingCard(kind, company = KnownCollectors.companyOf(app.packageName), action = null) }
         if (FindingKind.PREINSTALLED_COLLECTOR in findings) item { DisableGuide(app.packageName) }
+        if (signature != null) item { SignatureSection(signature) }
         item { TrackerSection(trackers, trackerInfo) }
         item {
             SectionTitle(R.string.detail_special)
@@ -424,6 +439,8 @@ private fun title(kind: FindingKind) = when (kind) {
     FindingKind.SENSORS -> R.string.finding_sensors_title
     FindingKind.TRACKERS -> R.string.finding_trackers_title
     FindingKind.UNKNOWN_SOURCE -> R.string.finding_unknown_source_title
+    FindingKind.MODIFIED_APP -> R.string.finding_modified_app_title
+    FindingKind.SIGNER_UNKNOWN -> R.string.finding_signer_unknown_title
     FindingKind.USER_CERTIFICATE_AUTHORITY -> R.string.finding_user_ca_title
     FindingKind.WIRELESS_DEBUGGING -> R.string.finding_wireless_debugging_title
     FindingKind.BOOTLOADER_UNLOCKED -> R.string.finding_bootloader_unlocked_title
@@ -445,6 +462,8 @@ private fun body(kind: FindingKind) = when (kind) {
     FindingKind.SENSORS -> R.string.finding_sensors_body
     FindingKind.TRACKERS -> R.string.finding_trackers_body
     FindingKind.UNKNOWN_SOURCE -> R.string.finding_unknown_source_body
+    FindingKind.MODIFIED_APP -> R.string.finding_modified_app_body
+    FindingKind.SIGNER_UNKNOWN -> R.string.finding_signer_unknown_body
     FindingKind.USER_CERTIFICATE_AUTHORITY -> R.string.finding_user_ca_body
     FindingKind.WIRELESS_DEBUGGING -> R.string.finding_wireless_debugging_body
     FindingKind.BOOTLOADER_UNLOCKED -> R.string.finding_bootloader_unlocked_body

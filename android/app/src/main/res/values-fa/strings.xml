@@ -143,4 +143,21 @@
     <string name="data_refused_unreadable">فایل خوانده نشد.</string>
     <string name="data_fingerprint">اثر انگشت (SHA-256)، برای مقایسه با اثر انگشتی که همراه بسته منتشر شده است:</string>
     <string name="data_stale">این داده مربوط به %1$s است، یعنی بیش از شش ماه پیش. فهرست ردیاب‌ها و داده‌های امنیتی تغییر می‌کنند؛ یک بسته داده تازه‌تر وارد کنید.</string>
+
+    <!-- M3 official signing certificates (ADR 0018) -->
+    <string name="finding_modified_app_title">نسخه دستکاری‌شده</string>
+    <string name="finding_modified_app_body">این نسخه را توسعه‌دهنده‌اش امضا نکرده است. کسی آن را تغییر داده است و یک برنامه وی‌پی‌ان یا پروکسی دستکاری‌شده می‌تواند همه چیزی را که از آن می‌گذرد بخواند.</string>
+    <string name="finding_signer_unknown_title">کلید امضا هنوز شناخته نیست</string>
+    <string name="finding_signer_unknown_body">این برنامه شناخته‌شده است، ولی کلید کانالی که این نسخه از آن آمده هنوز شناخته نیست. این برای نسخه‌های فروشگاه‌ها رایج است و هشدار نیست.</string>
+    <string name="signature_heading">امضا</string>
+    <string name="signature_genuine_developer">نسخه اصل %1$s، با امضای توسعه‌دهنده‌اش.</string>
+    <string name="signature_genuine_google">نسخه اصل %1$s، با امضای گوگل پلی از طرف توسعه‌دهنده‌اش.</string>
+    <string name="signature_genuine_fdroid">نسخه اصل %1$s، ساخته و امضاشده به دست اف‌دروید.</string>
+    <string name="signature_past_key">با یکی از کلیدهای قبلی توسعه‌دهنده امضا شده است که برنامه از آن پس عوضش کرده است.</string>
+    <string name="signature_unknown">%1$s شناخته‌شده است، ولی کلید این نسخه هنوز شناخته نیست. نسخه‌های فروشگاه‌ها اغلب کلید خود فروشگاه را دارند. این اثر انگشت را با اثر انگشتی که توسعه‌دهنده منتشر می‌کند مقایسه کنید:</string>
+    <string name="signature_modified">این نسخه از %1$s را توسعه‌دهنده‌اش امضا نکرده است. کسی آن را تغییر داده است و می‌تواند همه چیزی را که از آن می‌گذرد ببیند. آن را حذف کنید و %1$s را از وب‌سایت یا فروشگاه رسمی‌اش نصب کنید.</string>
+    <string name="signature_modified_debug">این نسخه از %1$s کلید اشکال‌زدایی دارد که ساخته‌های خود توسعه‌دهنده هرگز ندارند: کس دیگری آن را دوباره ساخته است. آن را حذف کنید و %1$s را از وب‌سایت یا فروشگاه رسمی‌اش نصب کنید.</string>
+    <string name="signature_disguised_hidden">با کلید یک برنامه شناخته‌شده امضا شده است. نشان بده کدام</string>
+    <string name="signature_disguised">ساخته اصل %1$s با نامی دیگر. توسعه‌دهنده برخی ساخته‌ها را پنهان می‌کند تا از کسانی که گوشی‌شان گشته می‌شود محافظت کند.</string>
+    <string name="dataset_app_signers">گواهی‌های امضای رسمی برنامه‌های وی‌پی‌ان، پروکسی و دور زدن</string>
 </resources>

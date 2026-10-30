@@ -143,4 +143,21 @@
     <string name="data_refused_unreadable">Die Datei konnte nicht gelesen werden.</string>
     <string name="data_fingerprint">Fingerabdruck (SHA-256), zum Vergleich mit dem, der mit dem Paket veröffentlicht wurde:</string>
     <string name="data_stale">Diese Daten stammen vom %1$s, also von vor mehr als sechs Monaten. Trackerlisten und Sicherheitsdaten ändern sich; importieren Sie ein neueres Datenpaket.</string>
+
+    <!-- M3 official signing certificates (ADR 0018) -->
+    <string name="finding_modified_app_title">Veränderte Kopie</string>
+    <string name="finding_modified_app_body">Diese Kopie ist nicht von ihrem Entwickler signiert. Jemand hat sie verändert, und eine veränderte VPN- oder Proxy-App kann alles lesen, was durch sie läuft.</string>
+    <string name="finding_signer_unknown_title">Signaturschlüssel noch unbekannt</string>
+    <string name="finding_signer_unknown_body">Datapavan kennt diese App, aber noch nicht den Schlüssel des Kanals, aus dem diese Kopie stammt. Das ist bei Kopien aus App-Stores üblich und keine Warnung.</string>
+    <string name="signature_heading">Signatur</string>
+    <string name="signature_genuine_developer">Echte Kopie von %1$s, von ihrem Entwickler signiert.</string>
+    <string name="signature_genuine_google">Echte Kopie von %1$s, von Google Play für ihren Entwickler signiert.</string>
+    <string name="signature_genuine_fdroid">Echte Kopie von %1$s, von F-Droid gebaut und signiert.</string>
+    <string name="signature_past_key">Sie ist mit einem früheren Schlüssel des Entwicklers signiert, den die App inzwischen ersetzt hat.</string>
+    <string name="signature_unknown">Datapavan kennt %1$s, aber noch nicht den Schlüssel dieser Kopie. Kopien aus App-Stores tragen oft den Schlüssel des Stores. Vergleichen Sie diesen Fingerabdruck mit dem, den der Entwickler veröffentlicht:</string>
+    <string name="signature_modified">Diese Kopie von %1$s ist nicht von ihrem Entwickler signiert. Jemand hat sie verändert, und sie kann alles sehen, was durch sie läuft. Entfernen Sie sie und installieren Sie %1$s von der offiziellen Website oder aus dem offiziellen Store.</string>
+    <string name="signature_modified_debug">Diese Kopie von %1$s trägt einen Debug-Schlüssel, den die Builds des Entwicklers nie verwenden: Jemand anderes hat sie neu gebaut. Entfernen Sie sie und installieren Sie %1$s von der offiziellen Website oder aus dem offiziellen Store.</string>
+    <string name="signature_disguised_hidden">Mit dem Schlüssel einer bekannten App signiert. Zeigen, welche</string>
+    <string name="signature_disguised">Ein echter Build von %1$s unter anderem Namen. Der Entwickler tarnt manche Builds, um Menschen zu schützen, deren Telefone durchsucht werden.</string>
+    <string name="dataset_app_signers">Offizielle Signaturzertifikate von VPN-, Proxy- und Umgehungs-Apps</string>
 </resources>

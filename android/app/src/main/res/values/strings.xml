@@ -158,4 +158,22 @@
     <string name="data_fingerprint">Fingerprint (SHA-256), to compare with the one published with the pack:</string>
     <!-- %1$s is a date (YYYY-MM-DD). -->
     <string name="data_stale">This data is from %1$s, more than six months ago. Tracker lists and security data change; import a newer data pack.</string>
+
+    <!-- M3 official signing certificates (ADR 0018) -->
+    <string name="finding_modified_app_title">Modified copy</string>
+    <string name="finding_modified_app_body">This copy is not signed by its developer. Someone changed it, and a modified VPN or proxy app can read everything that passes through it.</string>
+    <string name="finding_signer_unknown_title">Signing key not known yet</string>
+    <string name="finding_signer_unknown_body">Datapavan knows this app, but not yet the key of the channel this copy came from. That is common for copies from app stores and is not a warning.</string>
+    <string name="signature_heading">Signature</string>
+    <string name="signature_genuine_developer">Genuine copy of %1$s, signed by its developer.</string>
+    <string name="signature_genuine_google">Genuine copy of %1$s, signed by Google Play for its developer.</string>
+    <string name="signature_genuine_fdroid">Genuine copy of %1$s, built and signed by F-Droid.</string>
+    <string name="signature_past_key">It is signed with an earlier key of the developer, which the app has since replaced.</string>
+    <!-- %1$s is an app name, e.g. Psiphon. -->
+    <string name="signature_unknown">Datapavan knows %1$s, but not yet the key of this copy. Copies from app stores often carry the store\'s key. Compare this fingerprint with the one the developer publishes:</string>
+    <string name="signature_modified">This copy of %1$s is not signed by its developer. Someone changed it, and it can see everything that passes through it. Remove it and install %1$s from its official website or store.</string>
+    <string name="signature_modified_debug">This copy of %1$s carries a debug key, which the developer\'s own builds never use: someone else rebuilt it. Remove it and install %1$s from its official website or store.</string>
+    <string name="signature_disguised_hidden">Signed with the key of a known app. Show which</string>
+    <string name="signature_disguised">A genuine build of %1$s under another name. Its developer disguises some builds to protect people whose phones are searched.</string>
+    <string name="dataset_app_signers">Official signing certificates of VPN, proxy and circumvention apps</string>
 </resources>
