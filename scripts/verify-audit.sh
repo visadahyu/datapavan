@@ -59,8 +59,10 @@ fail() {
     exit 1
 }
 
+# Looks below the current position first, then once more from the top: on a tall screen an item can
+# already be above the place where the previous one was found.
 expect() {
-    scroll_to "$1" || fail "expected \"$1\" on screen"
+    scroll_to "$1" || { scroll_to_top; scroll_to "$1"; } || fail "expected \"$1\" on screen"
     echo "ok: $1"
 }
 
