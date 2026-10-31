@@ -4,9 +4,9 @@
 helps you stop it.** Everything runs on the device. It needs no root and no cloud service, and version
 0.1 does not even have permission to use the internet.
 
-> Status: **pre-alpha.** Milestones M1 (the build skeleton), M2 (the app and permission audit) and M3
-> (the code scanner and its data) are complete. Nothing has been released yet. See the
-> [roadmap](ROADMAP.md).
+> Status: **pre-alpha.** Milestones M1 (the build skeleton), M2 (the app and permission audit), M3
+> (the code scanner and its data) and M4 (network use per app) are complete. Nothing has been released
+> yet. See the [roadmap](ROADMAP.md).
 
 ## Why
 
@@ -21,7 +21,7 @@ see what left, where it went, and when.**
 
 ## What it does today
 
-Built in milestones M2 and M3. It is checked on every change on an Android 15 emulator in CI, and was
+Built in milestones M2 to M4. It is checked on every change on an Android 15 emulator in CI, and was
 checked on Android 11 and 17 emulators and on Galaxy A40 and A56 phones.
 
 - **App and permission audit.** Every installed app, with its install source, dates, dangerous
@@ -65,13 +65,18 @@ checked on Android 11 and 17 emulators and on Galaxy A40 and A56 phones.
   can be imported as files without any network permission. A *Data sources* screen shows each dataset's
   date, licence and the pack's fingerprint, and the app warns when its data is more than six months old.
   *Why:* data must stay current, and it must be impossible to slip a fake list onto someone's phone.
+- **Network use per app.** With usage access, which the user grants and nothing requires: what each app
+  received and sent on mobile data and Wi-Fi in the last 30 or 7 days, and how much in the background,
+  in the same units as the phone's own Settings. Apps not opened for 90 days that still hold a
+  permission, special access or background data are listed. Only totals are read, never which app was
+  opened when, and nothing is kept. *Why:* an app the user forgot can still send data, and Android's
+  own clean-up skips some apps and all special access.
 
 ## What comes next
 
 Each item is designed in [docs/DESIGN.md](docs/DESIGN.md) and [docs/VPN.md](docs/VPN.md), but not built
 yet.
 
-- **Network use per app** (v0.1, M4): bytes sent and received, on screen and in the background.
 - **Connection log** (v0.2). A local VPN, with no server, records which domain and organisation each app
   talks to. *Why:* this is the question users actually ask, and only the phone itself can answer it.
 - **Sensor activity log** (v0.2). When the microphone recorded or the camera was on, with an alert for

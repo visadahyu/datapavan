@@ -24,7 +24,7 @@ The app cannot open a network connection. That is the strongest trust signal we 
 | M1 | Skeleton: Android app, Rust core, JNI bridge, i18n and RTL, quality gates, CI, brand | ✅ |
 | M2 | App inventory and permission audit, including special access (accessibility, notification listener, device admin, overlay, usage access, VPN, install unknown apps, battery-optimisation exemptions), plus risk checks for VPN users: VPN apps with remote-control access, user-installed certificate authorities, enabled debugging; device integrity from hardware key attestation. Preinstalled system apps from data-collecting companies (for example Meta's services that device makers ship), with their state and a guide to disable or remove them reversibly. Apps that hold microphone, camera or location access, with a link to the system's privacy dashboard | ✅ |
 | M3 | Tracker SDK scanner: a DEX parser in the Rust engine, matched against a tracker-signature database and Datapavan's own list of traffic-sharing, remote-support and screen-recording SDKs ([ADR 0019](docs/decisions/0019-traffic-sharing-remote-support-sdks.md)); installed VPN, proxy and circumvention apps checked against their developers' official signing certificates, Google Play copies included ([ADR 0018](docs/decisions/0018-app-signing-certificates.md)); datasets shipped as signed data packs that the user can also import as files, without network access ([DATA-PACKS.md](docs/DATA-PACKS.md)); each entry that names a company records its evidence, with a public way to dispute it (ADR 0015). Done on 2026-10-30: the scan finds every tracker of the εxodus reports for 22 apps of the same version ([spike](docs/spikes/2026-10-m3-exodus-comparison.md)), and a re-signed copy of a known app is reported as modified | ✅ |
-| M4 | Network usage per app, from `NetworkStatsManager`; unused apps from usage access, for the remediation plan | ⏳ |
+| M4 | Network usage per app, from `NetworkStatsManager`; unused apps from usage access, for the remediation plan ([ADR 0022](docs/decisions/0022-network-use-and-unused-apps.md)). Done on 2026-10-31: every app's size matched Settings on an Android 17 emulator, and the A40's ten largest Wi-Fi rows within 0.07 % ([spike](docs/spikes/2026-10-m4-network-use.md)) | ✅ |
 | M5 | Plain-language UI, brand theme, first release on GitHub, submission to F-Droid. The data-signing key, made offline before the release ([docs/DATA-PACKS.md](docs/DATA-PACKS.md#keys)). The remediation plan ([docs/REMEDIATION.md](docs/REMEDIATION.md)): three levels, a short queue of actions ordered by impact, each confirmed in one tap, a journal with undo, and a safety floor that no level can lower | ⏳ |
 
 The data behind M3 keeps growing next to the later milestones:
@@ -43,6 +43,12 @@ The data behind M3 keeps growing next to the later milestones:
   ([ADR 0021](docs/decisions/0021-service-dependent-capabilities.md)): the service check and seven
   capabilities are done; more follow as their vendors' artefacts are read, and the check still needs
   a device matrix. The scan's lower memory and parallelism by memory are done.
+
+Checks left from M4 (ADR 0022):
+
+- How Android counts traffic through a VPN service and through a local proxy app.
+- Whether Android 13 to 16 also lock usage access for apps installed from a file.
+- The units of other vendors' data-usage screens, Android 10, and mobile data on a Samsung phone.
 
 ### v0.2 "Watch": local VPN, observe only
 
