@@ -6,7 +6,9 @@
 # package name of Exclave, whose official keys data/app-signers records completely (ADR 0018), and it
 # must be reported as a modified copy. Where the emulator has Google Play services, it is turned off
 # for a moment, and the fixture's class that reads Google's advertising ID must then be marked as
-# needing it (ADR 0021). Everything is undone afterwards.
+# needing it (ADR 0021). Usage access is checked both ways: without it, the overview asks for it;
+# with it, the overview shows network use, and the fixture's page its use and that it was never
+# opened (ADR 0022). Everything is undone afterwards.
 #
 # Wireless debugging cannot be checked here: Android switches it straight back off without a Wi-Fi
 # network that allows it. The unit tests cover that rule.
@@ -20,6 +22,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FIXTURE=org.visadahyu.datapavan.fixture
 IMPOSTOR=com.github.dyhkwong.sagernet
+DATAPAVAN=org.visadahyu.datapavan
 # shellcheck source=scripts/adb-ui.sh
 . "$ROOT/scripts/adb-ui.sh"
 
@@ -34,6 +37,7 @@ GMS=com.google.android.gms
 GMS_TURNED_OFF=""
 cleanup() {
     [ -z "$GMS_TURNED_OFF" ] || adb shell pm enable "$GMS" >/dev/null 2>&1 || true
+    adb shell appops set "$DATAPAVAN" GET_USAGE_STATS default >/dev/null 2>&1 || true
     adb shell settings delete secure enabled_accessibility_services >/dev/null 2>&1 || true
     adb uninstall "$FIXTURE" >/dev/null 2>&1 || true
     adb uninstall "$IMPOSTOR" >/dev/null 2>&1 || true
@@ -122,10 +126,18 @@ fi
 
 enable_fixture_accessibility || fail "Android does not keep the fixture's accessibility service enabled"
 
+# Without usage access, the overview asks for it.
+adb shell appops set "$DATAPAVAN" GET_USAGE_STATS default
 start_audit || fail "the audit overview did not appear"
+expect "Allow usage access"
+
+adb shell appops set "$DATAPAVAN" GET_USAGE_STATS allow
+start_audit || fail "the audit overview did not appear with usage access"
 expect "USB debugging is on"
 [ -z "$CA_FILE" ] || expect "Extra certificate authority installed"
 expect "No hardware check available"
+expect "Network use"
+expect "Show the last 7 days"
 wait_for_tracker_scan || fail "the tracker scan did not finish"
 
 tap_text "Datapavan test fixture" || fail "the fixture app is not listed"
@@ -143,6 +155,9 @@ expect "Sentry (crash reporting)"
 scroll_to_top
 expect "Can share your internet connection"
 expect "Pawns SDK by IPRoyal"
+# Installed a moment ago and never opened; a VPN app, so its page explains proxy counting.
+expect "Not opened since"
+expect "If other apps use this app as a proxy"
 
 # Google Play services on: no capability is marked. Turned off: the advertising-ID class is.
 if adb shell pm list packages -e "$GMS" | tr -d '\r' | grep -q "^package:$GMS\$"; then

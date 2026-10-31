@@ -17,9 +17,10 @@ of the Android 17 emulator and the A40 (Android 11) show:
   so background use. A summary query adds up a period; per-app data is kept in two-hour buckets on both
   devices. AOSP keeps it for 90 days; the A40 still had 200 days. Mobile use is read for all SIMs
   together, because an ordinary app cannot read the subscriber ID; Settings shows each SIM separately.
-- **The numbers lag.** The system writes its counters about every 30 minutes and whenever about 2 MB
-  more has been used. On the Android 17 emulator, none of 1,509 queries triggered that write, so the
-  last minutes can be missing.
+- **When the numbers are written.** The system writes its counters about every 30 minutes, whenever
+  about 2 MB more has been used, and when an app opens a query. (A first reading said that queries
+  did not trigger a write; those were the system's own queries. Datapavan's and Settings' do, as the
+  build showed on 2026-10-31.)
 - **Who is counted.** Several packages can share one UID; Android has a single count for all of them.
   Traffic that apps send through a local proxy app counts under the proxy app, because the proxy opens
   the connections. AOSP moves traffic through a VPN service back to the apps that made it, and leaves
@@ -56,7 +57,9 @@ of the Android 17 emulator and the A40 (Android 11) show:
 4. **What an app page shows:**
    - received and sent bytes, for mobile and for Wi-Fi;
    - how much of it Android counted as background;
-   - the time of the system's last count, so that a lag is visible.
+   - that the numbers come from Android's own count. (This line first said the time of the
+     system's last count; the build showed on 2026-10-31 that a query brings the count up to date,
+     so there is no lag to show.)
 
    Notes:
    - where several packages share the UID, the page says so, names them and shows the shared total.
