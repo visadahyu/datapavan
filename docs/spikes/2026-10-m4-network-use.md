@@ -52,8 +52,9 @@ Settings' four weeks start at midnight, Datapavan's 28 days at the time of readi
 - **Units differ by vendor.** AOSP's Settings, on the emulator, counts in steps of 1,024 under the
   names kB, MB and GB; with Android's public formatter, which steps by 1,000, the emulator's totals
   read 39.19 MB and 4.56 GB against Settings' 37.39 MB and 4.26 GB, exactly 1.024² and 1.024³ more.
-  Samsung's Settings, on the A40 and the A56 (One UI on Android 16), steps by 1,000: with steps of 1,024, Datapavan's numbers there were
-  4.4 to 4.7 % lower for every row in megabytes and 6.7 % for the one in gigabytes, within a few
+  Samsung's Settings, on the A40 and the A56 (One UI on Android 16), steps by 1,000: with steps of
+  1,024, Datapavan's numbers on the A40 were 4.4 to 4.7 % lower for every row in megabytes and 6.7 %
+  for the one in gigabytes, within a few
   tenths of the ratio of the steps (4.6 and 6.9 %). Datapavan now uses the step of the phone's
   Settings (`ui/DataSize.kt`): 1,000 on Samsung phones, 1,024 elsewhere until other vendors are
   measured.
@@ -67,7 +68,9 @@ Settings' four weeks start at midnight, Datapavan's 28 days at the time of readi
   and when an app opens a query. A first reading of `dumpsys netstats` found no write on opening
   (`OPEN_SESSION: 0` for 1,509 queries), but those were the system's own; after Datapavan's and
   Settings' queries the count rose to 387, and a write followed each time Datapavan read alone. The
-  pages therefore show no lag note, and ADR 0022 was corrected twice on this point.
+  pages therefore show no lag note, and ADR 0022 was corrected twice on this point. AOSP limits it:
+  a query writes the counters only if no app other than the system opened one in the previous 15
+  seconds, so two readings meant to be exact must be at least 15 seconds apart.
 - **Settings' period can end before now.** Between two readings that day, 15 MB appeared for Chrome
   in the emulator's two-hour bucket that starts at 03:00 local time, hours before the readings; why
   the system placed the bytes there was not found. Settings showed 7.50 MB for Chrome and Datapavan,

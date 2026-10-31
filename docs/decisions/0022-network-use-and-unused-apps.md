@@ -18,9 +18,11 @@ of the Android 17 emulator and the A40 (Android 11) show:
   devices. AOSP keeps it for 90 days; the A40 still had 200 days. Mobile use is read for all SIMs
   together, because an ordinary app cannot read the subscriber ID; Settings shows each SIM separately.
 - **When the numbers are written.** The system writes its counters about every 30 minutes, whenever
-  about 2 MB more has been used, and when an app opens a query. (A first reading said that queries
-  did not trigger a write; those were the system's own queries. Datapavan's and Settings' do, as the
-  build showed on 2026-10-31.)
+  about 2 MB more has been used, and when an app opens a query, unless any app other than the system
+  opened one in the previous 15 seconds (`POLL_RATE_LIMIT_MS` in AOSP, one timer for all apps). (A
+  first reading said that queries did not trigger a write; those were the system's own queries.
+  Datapavan's and Settings' do, as the build showed on 2026-10-31; the 15-second limit was found in
+  the source the same day.)
 - **Who is counted.** Several packages can share one UID; Android has a single count for all of them.
   Traffic that apps send through a local proxy app counts under the proxy app, because the proxy opens
   the connections. AOSP moves traffic through a VPN service back to the apps that made it, and leaves
