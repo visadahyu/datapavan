@@ -22,6 +22,8 @@ data class AppFacts(
     val label: String?,
     val isSystem: Boolean,
     val enabled: Boolean,
+    /** A system app that has been updated since the phone was made. */
+    val updatedSystemApp: Boolean = false,
     /** Package that installed the app, or null when Android does not know (preinstalled, adb). */
     val installer: String?,
     val firstInstall: Long,

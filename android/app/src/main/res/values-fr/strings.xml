@@ -137,6 +137,27 @@
     <string name="dormant_vpn">l\'autorisation VPN</string>
     <string name="dormant_background">une utilisation de données en arrière-plan</string>
     <string name="dormant_unused_apps">Ouvrir les applis inutilisées d\'Android</string>
+    <!-- The phone's system key and keys that cannot be trusted (ADR 0023). -->
+    <string name="finding_untrusted_system_key_title">Signée avec une clé système divulguée ou publique</string>
+    <string name="finding_untrusted_system_key_body">Cette appli est signée avec l\'une des clés de test publiques d\'Android ou avec la clé système divulguée d\'un fabricant, et elle ne vient ni de Google Play ni de la boutique du fabricant du téléphone. Des logiciels malveillants sont signés ainsi pour se faire passer pour une partie du système. Sauf si vous savez exactement d\'où elle vient, désinstallez-la.</string>
+    <string name="finding_leaked_key_from_store_title">Signée avec une clé système divulguée</string>
+    <string name="finding_leaked_key_from_store_body">Cette appli est signée avec la clé système d\'un fabricant, divulguée en 2022. Elle vient de Google Play, de la boutique du fabricant ou de la configuration du téléphone, et le fabricant signe toujours ses applis avec cette clé : cela seul n\'indique donc pas un logiciel malveillant.</string>
+    <string name="finding_system_key_public_title">La clé système de ce téléphone est publique</string>
+    <string name="finding_system_key_public_body">Le système de ce téléphone est signé avec l\'une des clés de test publiques d\'Android. N\'importe qui peut signer une appli avec, et le téléphone la traite alors comme une partie du système. Les téléphones certifiés ne sont jamais livrés ainsi ; certains systèmes modifiés le sont.</string>
+    <string name="finding_system_key_leaked_title">La clé système de ce téléphone a été divulguée</string>
+    <string name="finding_system_key_leaked_body">Le système de ce téléphone est signé avec une clé de la liste publiée par Google en 2022 des clés de fabricants qui ont servi à signer des logiciels malveillants, et le fabricant l\'utilise toujours. Une appli signée avec peut se faire passer pour une mise à jour d\'une appli préinstallée et garder ses droits ; jusqu\'à Android 14, elle peut aussi tourner comme le système. N\'installez des applis que depuis Google Play et la boutique du fabricant du téléphone.</string>
+    <string name="finding_system_key_development_title">Système construit pour le développement</string>
+    <string name="finding_system_key_development_body">Ce système est signé avec la clé de développement de Google, comme les émulateurs et les appareils de test, et non avec la clé de publication d\'un fabricant.</string>
+    <string name="system_key_heading">Clé système</string>
+    <string name="system_key_platform">Signée avec la clé système de ce téléphone : son fabricant a livré ou approuvé cette appli avec des droits système. Elle peut tout de même contenir le code d\'une autre entreprise. Le téléphone indique comme fabricant %1$s.</string>
+    <string name="system_key_runs_as_system">Tourne comme l\'utilisateur système, avec les droits d\'Android lui-même.</string>
+    <string name="origin_system_image">Fait partie de l\'image système du téléphone.</string>
+    <string name="origin_updated_system_app">Une appli système mise à jour après la fabrication du téléphone.</string>
+    <string name="origin_installed_later">Installée après la fabrication du téléphone.</string>
+    <string name="key_kind_aosp_test">Sa clé est l\'une des clés de test publiques d\'Android.</string>
+    <string name="key_kind_google_dev">Sa clé est l\'une des clés de développement de Google.</string>
+    <string name="key_kind_leaked">Sa clé figure sur la liste des clés système divulguées publiée par Google en 2022.</string>
+    <string name="dataset_system_keys">Clés de signature système non fiables</string>
     <string name="tracker_with_categories">%1$s (%2$s)</string>
     <string name="tracker_category_advertisement">publicité</string>
     <string name="tracker_category_analytics">statistiques</string>

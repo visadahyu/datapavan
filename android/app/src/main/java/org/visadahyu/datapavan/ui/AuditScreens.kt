@@ -3,6 +3,7 @@ package org.visadahyu.datapavan.ui
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
@@ -62,6 +63,7 @@ import org.visadahyu.datapavan.audit.Capability
 import org.visadahyu.datapavan.audit.DeviceCollector
 import org.visadahyu.datapavan.audit.DeviceFacts
 import org.visadahyu.datapavan.audit.FindingKind
+import org.visadahyu.datapavan.audit.KeyFacts
 import org.visadahyu.datapavan.audit.KnownCollectors
 import org.visadahyu.datapavan.audit.OwnerNotes
 import org.visadahyu.datapavan.audit.Owners
@@ -73,6 +75,7 @@ import org.visadahyu.datapavan.audit.ServiceState
 import org.visadahyu.datapavan.audit.Severity
 import org.visadahyu.datapavan.audit.SignatureVerdict
 import org.visadahyu.datapavan.audit.SpecialAccess
+import org.visadahyu.datapavan.audit.SystemKeys
 import org.visadahyu.datapavan.audit.TrackerInfo
 import org.visadahyu.datapavan.audit.TrackerScanner
 import org.visadahyu.datapavan.audit.UsageFacts
@@ -106,6 +109,8 @@ private class AuditResult(
     val services: ServiceStates? = null,
     /** Who runs the services of each app's SDKs, by package, where there is something to say (ADR 0020). */
     val owners: Map<String, OwnerNotes> = emptyMap(),
+    /** What the phone's system key says about each app, by package (ADR 0023). */
+    val keys: Map<String, KeyFacts> = emptyMap(),
 ) {
     /**
      * The same audit with the scan's findings added. The scan matched εxodus trackers and the SDKs of
@@ -128,9 +133,9 @@ private class AuditResult(
         }.toMap()
         val judged = apps.map { (app, _) ->
             val categories = sdks[app.packageName].orEmpty().map { it.category }.toSet()
-            app to Rules.forApp(app, exodus[app.packageName], signatures[app.packageName], categories)
+            app to Rules.forApp(app, exodus[app.packageName], signatures[app.packageName], categories, keys[app.packageName])
         }.sortedWith(Rules.byUrgency)
-        return AuditResult(device, deviceFindings, judged, dataDate, signatures, exodus, info, sdks, unavailable, services, notes)
+        return AuditResult(device, deviceFindings, judged, dataDate, signatures, exodus, info, sdks, unavailable, services, notes, keys)
     }
 }
 
@@ -149,19 +154,25 @@ private suspend fun runAudit(context: Context): AuditResult = coroutineScope {
     val fresh = !DataPackRules.isStale(data.active.date, LocalDate.now())
     val collected = collector.collect()
     val signatures = collected.mapNotNull { app -> signers.judge(app.packageName, app.signing, fresh)?.let { app.packageName to it } }.toMap()
-    val judged = collected.map { it to Rules.forApp(it, signature = signatures[it.packageName]) }
+    // The key that signs the package `android` is the phone's system key (ADR 0023).
+    val systemKeys = SystemKeys.parse(data.text(SystemKeys.PATH).orEmpty())
+    val platform = collected.firstOrNull { it.packageName == PLATFORM_PACKAGE }?.signing
+    val keys = collected.associate { it.packageName to systemKeys.facts(it, platform, Build.MANUFACTURER.orEmpty()) }
+    val judged = collected.map { it to Rules.forApp(it, signature = signatures[it.packageName], keys = keys[it.packageName]) }
     val labelled = collector.withLabels(judged.filter { (_, f) -> f.isNotEmpty() }.map { it.first }).associateBy { it.packageName }
     val apps = judged.map { (app, findings) -> (labelled[app.packageName] ?: app) to findings }.sortedWith(Rules.byUrgency)
     val now = Calendar.getInstance().let { it.get(Calendar.YEAR) * 100 + it.get(Calendar.MONTH) + 1 }
-    AuditResult(device.await(), Rules.forDevice(device.await(), now), apps, data.active.date, signatures)
+    AuditResult(device.await(), Rules.forDevice(device.await(), now, systemKeys.untrusted(platform)), apps, data.active.date, signatures, keys = keys)
 }
+
+private const val PLATFORM_PACKAGE = "android"
 
 /** Second pass: the labels of all remaining apps, for the full list. */
 private suspend fun AuditResult.withAllLabels(context: Context): AuditResult {
     val missing = apps.filter { it.first.label == null }.map { it.first }
     val labelled = AppCollector(context).withLabels(missing).associateBy { it.packageName }
     val all = apps.map { (app, findings) -> (labelled[app.packageName] ?: app) to findings }.sortedWith(Rules.byUrgency)
-    return AuditResult(device, deviceFindings, all, dataDate, signatures, trackers, trackerInfo, sdks, unavailable, services, owners)
+    return AuditResult(device, deviceFindings, all, dataDate, signatures, trackers, trackerInfo, sdks, unavailable, services, owners, keys)
 }
 
 /** Root of the v0.1 audit UI: an overview of the phone and its apps, and a detail page per app. */
@@ -219,7 +230,7 @@ internal fun DatapavanApp(engineVersion: String, usageUntil: Long? = null, usage
                 AppDetail(
                     entry, audit.trackers?.get(app.packageName), audit.trackerInfo, audit.signatures[app.packageName],
                     audit.sdks[app.packageName].orEmpty(), audit.unavailable[app.packageName].orEmpty(),
-                    audit.services, audit.owners[app.packageName], insets, onBack = { selected = null },
+                    audit.services, audit.owners[app.packageName], audit.keys[app.packageName], insets, onBack = { selected = null },
                     usage = { AppUsageSection(app, usage, days, sharedWith, app.isVpnApp || app.packageName in audit.signatures) { days = it } },
                 )
             }
@@ -358,7 +369,7 @@ private fun AppRow(app: AppFacts, findings: List<FindingKind>, onClick: () -> Un
 
 @Composable
 private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<Int, TrackerInfo>, signature: SignatureVerdict?,
-    sdks: List<Sdk>, unavailable: List<Capability>, services: ServiceStates?, owners: OwnerNotes?, insets: PaddingValues, onBack: () -> Unit,
+    sdks: List<Sdk>, unavailable: List<Capability>, services: ServiceStates?, owners: OwnerNotes?, keys: KeyFacts?, insets: PaddingValues, onBack: () -> Unit,
     usage: @Composable () -> Unit) {
     val (app, findings) = entry
     val context = LocalContext.current
@@ -392,6 +403,7 @@ private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<
         items(findings) { kind -> FindingCard(kind, company = KnownCollectors.companyOf(app.packageName), action = null) }
         if (FindingKind.PREINSTALLED_COLLECTOR in findings) item { DisableGuide(app.packageName) }
         if (signature != null) item { SignatureSection(signature) }
+        if (keys != null && (keys.systemKey || keys.runsAsSystem || keys.untrusted != null)) item { SystemKeySection(keys, Build.MANUFACTURER.orEmpty()) }
         if (sdks.isNotEmpty()) item { SdkSection(sdks, accessibilityOn = SpecialAccess.ACCESSIBILITY in app.special) }
         item { TrackerSection(trackers, trackerInfo) }
         if (owners != null) item { OwnerSection(owners) }
@@ -527,6 +539,11 @@ private fun title(kind: FindingKind) = when (kind) {
     FindingKind.ATTESTATION_REVOKED -> R.string.finding_attestation_revoked_title
     FindingKind.ATTESTATION_UNCONFIRMED -> R.string.finding_attestation_unconfirmed_title
     FindingKind.VPN_ACTIVE -> R.string.finding_vpn_active_title
+    FindingKind.UNTRUSTED_SYSTEM_KEY -> R.string.finding_untrusted_system_key_title
+    FindingKind.LEAKED_KEY_FROM_STORE -> R.string.finding_leaked_key_from_store_title
+    FindingKind.SYSTEM_KEY_PUBLIC -> R.string.finding_system_key_public_title
+    FindingKind.SYSTEM_KEY_LEAKED -> R.string.finding_system_key_leaked_title
+    FindingKind.SYSTEM_KEY_DEVELOPMENT -> R.string.finding_system_key_development_title
 }
 
 @StringRes
@@ -553,4 +570,9 @@ private fun body(kind: FindingKind) = when (kind) {
     FindingKind.ATTESTATION_REVOKED -> R.string.finding_attestation_revoked_body
     FindingKind.ATTESTATION_UNCONFIRMED -> R.string.finding_attestation_unconfirmed_body
     FindingKind.VPN_ACTIVE -> R.string.finding_vpn_active_body
+    FindingKind.UNTRUSTED_SYSTEM_KEY -> R.string.finding_untrusted_system_key_body
+    FindingKind.LEAKED_KEY_FROM_STORE -> R.string.finding_leaked_key_from_store_body
+    FindingKind.SYSTEM_KEY_PUBLIC -> R.string.finding_system_key_public_body
+    FindingKind.SYSTEM_KEY_LEAKED -> R.string.finding_system_key_leaked_body
+    FindingKind.SYSTEM_KEY_DEVELOPMENT -> R.string.finding_system_key_development_body
 }

@@ -8,7 +8,8 @@
 # for a moment, and the fixture's class that reads Google's advertising ID must then be marked as
 # needing it (ADR 0021). Usage access is checked both ways: without it, the overview asks for it;
 # with it, the overview shows network use, and the fixture's page its use and that it was never
-# opened (ADR 0022). Everything is undone afterwards.
+# opened (ADR 0022). Last, the fixture is signed with AOSP's public platform test key and must be
+# reported as signed with a key that cannot be trusted (ADR 0023). Everything is undone afterwards.
 #
 # Wireless debugging cannot be checked here: Android switches it straight back off without a Wi-Fi
 # network that allows it. The unit tests cover that rule.
@@ -188,5 +189,16 @@ sleep 1
 scroll_to_top
 expect "Modified copy"
 expect "This copy of Exclave is not signed by its developer."
+
+# An app signed with AOSP's public platform test key and installed over adb (ADR 0023).
+public_key_apk=$(FIXTURE_KEY=aosp-platform "$ROOT/scripts/fixture-app/build.sh" | tail -1)
+adb uninstall "$IMPOSTOR" >/dev/null 2>&1 || true
+adb install -r "$public_key_apk" >/dev/null
+start_audit || fail "the audit overview did not appear with the public-key fixture installed"
+tap_text "Datapavan test fixture" || fail "the public-key fixture is not listed"
+sleep 1
+scroll_to_top
+expect "Signed with a leaked or public system key"
+expect "Its key is one of Android"
 
 echo "== audit verification passed"

@@ -148,6 +148,27 @@
     <string name="dormant_vpn">VPN permission</string>
     <string name="dormant_background">data use in the background</string>
     <string name="dormant_unused_apps">Open Android\'s unused apps</string>
+    <!-- The phone's system key and keys that cannot be trusted (ADR 0023). -->
+    <string name="finding_untrusted_system_key_title">Signed with a leaked or public system key</string>
+    <string name="finding_untrusted_system_key_body">This app is signed with one of Android\'s public test keys or a phone maker\'s leaked system key, and it did not come from Google Play or the phone maker\'s own store. Malware is signed this way to pose as part of the system. Unless you know exactly where it comes from, uninstall it.</string>
+    <string name="finding_leaked_key_from_store_title">Signed with a leaked system key</string>
+    <string name="finding_leaked_key_from_store_body">This app is signed with a phone maker\'s system key that leaked in 2022. It came from Google Play, the maker\'s own store or the phone\'s own setup, and the maker still signs its apps with that key, so this alone is not a sign of malware.</string>
+    <string name="finding_system_key_public_title">This phone\'s system key is public</string>
+    <string name="finding_system_key_public_body">The key that signs this phone\'s system is one of Android\'s public test keys. Anyone can sign an app with it, and the phone then treats that app as part of the system. Certified phones never ship this way; custom systems sometimes do.</string>
+    <string name="finding_system_key_leaked_title">This phone\'s system key has leaked</string>
+    <string name="finding_system_key_leaked_body">The key that signs this phone\'s system is on Google\'s 2022 list of phone makers\' keys that were used to sign malware, and the maker still uses it. An app signed with it can pose as an update of a preinstalled app and keep that app\'s rights; up to Android 14 it can also run as the system. Install apps only from Google Play and the phone maker\'s own store.</string>
+    <string name="finding_system_key_development_title">System built for development</string>
+    <string name="finding_system_key_development_body">This system is signed with Google\'s development key, as emulators and test devices are, rather than with a phone maker\'s release key.</string>
+    <string name="system_key_heading">System key</string>
+    <string name="system_key_platform">Signed with this phone\'s system key: the phone\'s maker shipped or approved this app with system rights. It may still contain another company\'s code. The phone reports its maker as %1$s.</string>
+    <string name="system_key_runs_as_system">Runs as the system user, with the rights of Android itself.</string>
+    <string name="origin_system_image">Part of the phone\'s system image.</string>
+    <string name="origin_updated_system_app">A system app that was updated after the phone was made.</string>
+    <string name="origin_installed_later">Installed after the phone was made.</string>
+    <string name="key_kind_aosp_test">Its key is one of Android\'s public test keys.</string>
+    <string name="key_kind_google_dev">Its key is one of Google\'s development keys.</string>
+    <string name="key_kind_leaked">Its key is on Google\'s 2022 list of leaked system keys.</string>
+    <string name="dataset_system_keys">System signing keys that cannot be trusted</string>
     <string name="tracker_with_categories">%1$s (%2$s)</string>
     <string name="tracker_category_advertisement">advertising</string>
     <string name="tracker_category_analytics">analytics</string>

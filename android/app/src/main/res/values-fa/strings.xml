@@ -132,6 +132,27 @@
     <string name="dormant_vpn">مجوز وی‌پی‌ان</string>
     <string name="dormant_background">مصرف داده در پس‌زمینه</string>
     <string name="dormant_unused_apps">باز کردن برنامه‌های استفاده‌نشده در اندروید</string>
+    <!-- The phone's system key and keys that cannot be trusted (ADR 0023). -->
+    <string name="finding_untrusted_system_key_title">امضاشده با کلید سیستمی فاش‌شده یا عمومی</string>
+    <string name="finding_untrusted_system_key_body">این برنامه با یکی از کلیدهای آزمایشی عمومی اندروید یا کلید سیستمی فاش‌شده یک سازنده امضا شده و از گوگل پلی یا فروشگاه خود سازنده گوشی نیامده است. بدافزارها این‌طور امضا می‌شوند تا خود را بخشی از سیستم جا بزنند. مگر اینکه دقیقاً بدانید از کجا آمده، آن را حذف کنید.</string>
+    <string name="finding_leaked_key_from_store_title">امضاشده با کلید سیستمی فاش‌شده</string>
+    <string name="finding_leaked_key_from_store_body">این برنامه با کلید سیستمی یک سازنده امضا شده که در ۲۰۲۲ فاش شد. از گوگل پلی، فروشگاه خود سازنده یا راه‌اندازی خود گوشی آمده و سازنده هنوز برنامه‌هایش را با همین کلید امضا می‌کند، پس این به‌تنهایی نشانه بدافزار نیست.</string>
+    <string name="finding_system_key_public_title">کلید سیستمی این گوشی عمومی است</string>
+    <string name="finding_system_key_public_body">سیستم این گوشی با یکی از کلیدهای آزمایشی عمومی اندروید امضا شده است. هر کسی می‌تواند برنامه‌ای را با آن امضا کند و گوشی آن برنامه را بخشی از سیستم می‌داند. گوشی‌های تأییدشده هرگز این‌طور عرضه نمی‌شوند؛ بعضی سیستم‌های سفارشی چرا.</string>
+    <string name="finding_system_key_leaked_title">کلید سیستمی این گوشی فاش شده است</string>
+    <string name="finding_system_key_leaked_body">سیستم این گوشی با کلیدی امضا شده که در فهرست ۲۰۲۲ گوگل از کلیدهای سازندگان آمده که برای امضای بدافزار به کار رفته‌اند، و سازنده هنوز از آن استفاده می‌کند. برنامه‌ای که با آن امضا شده باشد می‌تواند خود را به‌روزرسانی یک برنامه پیش‌نصب جا بزند و اختیارات آن را نگه دارد؛ تا اندروید ۱۴ حتی می‌تواند با اختیارات سیستم اجرا شود. برنامه‌ها را فقط از گوگل پلی و فروشگاه خود سازنده گوشی نصب کنید.</string>
+    <string name="finding_system_key_development_title">سیستم ساخته‌شده برای توسعه</string>
+    <string name="finding_system_key_development_body">این سیستم با کلید توسعه گوگل امضا شده، مثل شبیه‌سازها و دستگاه‌های آزمایشی، نه با کلید انتشار یک سازنده.</string>
+    <string name="system_key_heading">کلید سیستمی</string>
+    <string name="system_key_platform">با کلید سیستمی این گوشی امضا شده است: سازنده گوشی این برنامه را با اختیارات سیستمی عرضه یا تأیید کرده است. با این حال ممکن است کد شرکت دیگری را داشته باشد. گوشی سازنده‌اش را %1$s معرفی می‌کند.</string>
+    <string name="system_key_runs_as_system">با کاربر سیستم اجرا می‌شود، با اختیارات خود اندروید.</string>
+    <string name="origin_system_image">بخشی از تصویر سیستم گوشی است.</string>
+    <string name="origin_updated_system_app">یک برنامه سیستمی که پس از ساخت گوشی به‌روز شده است.</string>
+    <string name="origin_installed_later">پس از ساخت گوشی نصب شده است.</string>
+    <string name="key_kind_aosp_test">کلید آن یکی از کلیدهای آزمایشی عمومی اندروید است.</string>
+    <string name="key_kind_google_dev">کلید آن یکی از کلیدهای توسعه گوگل است.</string>
+    <string name="key_kind_leaked">کلید آن در فهرست ۲۰۲۲ گوگل از کلیدهای سیستمی فاش‌شده است.</string>
+    <string name="dataset_system_keys">کلیدهای امضای سیستمی که نمی‌توان به آن‌ها اعتماد کرد</string>
     <string name="tracker_with_categories">%1$s (%2$s)</string>
     <string name="tracker_category_advertisement">تبلیغات</string>
     <string name="tracker_category_analytics">آمار</string>

@@ -132,6 +132,27 @@
     <string name="dormant_vpn">VPN-Berechtigung</string>
     <string name="dormant_background">Datennutzung im Hintergrund</string>
     <string name="dormant_unused_apps">Nicht verwendete Apps von Android öffnen</string>
+    <!-- The phone's system key and keys that cannot be trusted (ADR 0023). -->
+    <string name="finding_untrusted_system_key_title">Mit einem geleakten oder öffentlichen Systemschlüssel signiert</string>
+    <string name="finding_untrusted_system_key_body">Diese App ist mit einem der öffentlichen Testschlüssel von Android oder mit dem geleakten Systemschlüssel eines Herstellers signiert und stammt nicht aus Google Play oder dem Store des Telefonherstellers. So signierte Schadsoftware gibt sich als Teil des Systems aus. Wenn Sie nicht genau wissen, woher sie stammt, deinstallieren Sie sie.</string>
+    <string name="finding_leaked_key_from_store_title">Mit einem geleakten Systemschlüssel signiert</string>
+    <string name="finding_leaked_key_from_store_body">Diese App ist mit dem Systemschlüssel eines Herstellers signiert, der 2022 geleakt wurde. Sie stammt aus Google Play, dem Store des Herstellers oder der Einrichtung des Telefons, und der Hersteller signiert seine Apps weiterhin mit diesem Schlüssel. Das allein ist also kein Zeichen für Schadsoftware.</string>
+    <string name="finding_system_key_public_title">Der Systemschlüssel dieses Telefons ist öffentlich</string>
+    <string name="finding_system_key_public_body">Das System dieses Telefons ist mit einem der öffentlichen Testschlüssel von Android signiert. Jeder kann eine App damit signieren, und das Telefon behandelt sie dann als Teil des Systems. Zertifizierte Telefone werden nie so ausgeliefert, eigene Systeme manchmal.</string>
+    <string name="finding_system_key_leaked_title">Der Systemschlüssel dieses Telefons ist geleakt</string>
+    <string name="finding_system_key_leaked_body">Das System dieses Telefons ist mit einem Schlüssel signiert, der auf Googles Liste von 2022 mit Herstellerschlüsseln steht, die Schadsoftware signiert haben, und der Hersteller verwendet ihn weiterhin. Eine damit signierte App kann sich als Update einer vorinstallierten App ausgeben und deren Rechte behalten; bis Android 14 kann sie auch als System laufen. Installieren Sie Apps nur aus Google Play und dem Store des Telefonherstellers.</string>
+    <string name="finding_system_key_development_title">System für die Entwicklung gebaut</string>
+    <string name="finding_system_key_development_body">Dieses System ist mit Googles Entwicklungsschlüssel signiert, wie Emulatoren und Testgeräte, nicht mit dem Release-Schlüssel eines Herstellers.</string>
+    <string name="system_key_heading">Systemschlüssel</string>
+    <string name="system_key_platform">Mit dem Systemschlüssel dieses Telefons signiert: Der Hersteller hat diese App mit Systemrechten ausgeliefert oder freigegeben. Sie kann trotzdem Code einer anderen Firma enthalten. Das Telefon nennt als Hersteller %1$s.</string>
+    <string name="system_key_runs_as_system">Läuft als Systembenutzer, mit den Rechten von Android selbst.</string>
+    <string name="origin_system_image">Teil des Systemabbilds des Telefons.</string>
+    <string name="origin_updated_system_app">Eine System-App, die nach der Herstellung des Telefons aktualisiert wurde.</string>
+    <string name="origin_installed_later">Nach der Herstellung des Telefons installiert.</string>
+    <string name="key_kind_aosp_test">Ihr Schlüssel ist einer der öffentlichen Testschlüssel von Android.</string>
+    <string name="key_kind_google_dev">Ihr Schlüssel ist einer der Entwicklungsschlüssel von Google.</string>
+    <string name="key_kind_leaked">Ihr Schlüssel steht auf Googles Liste geleakter Systemschlüssel von 2022.</string>
+    <string name="dataset_system_keys">Systemschlüssel, denen nicht vertraut werden kann</string>
     <string name="tracker_with_categories">%1$s (%2$s)</string>
     <string name="tracker_category_advertisement">Werbung</string>
     <string name="tracker_category_analytics">Statistik</string>

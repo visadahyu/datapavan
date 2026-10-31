@@ -6,6 +6,7 @@ enum class Severity { HIGH, MEDIUM, LOW, INFO }
 /** Everything the audit can report. Wording lives in string resources, keyed by these names. */
 enum class FindingKind(val severity: Severity) {
     // Apps
+    UNTRUSTED_SYSTEM_KEY(Severity.HIGH),
     MODIFIED_APP(Severity.HIGH),
     VPN_WITH_REMOTE_CONTROL(Severity.HIGH),
     REMOTE_CONTROL(Severity.MEDIUM),
@@ -18,18 +19,22 @@ enum class FindingKind(val severity: Severity) {
     SCREEN_RECORDING(Severity.LOW),
     UNKNOWN_SOURCE(Severity.INFO),
     SIGNER_UNKNOWN(Severity.INFO),
+    LEAKED_KEY_FROM_STORE(Severity.INFO),
 
     // Device
+    SYSTEM_KEY_PUBLIC(Severity.HIGH),
     USER_CERTIFICATE_AUTHORITY(Severity.HIGH),
     WIRELESS_DEBUGGING(Severity.HIGH),
     BOOTLOADER_UNLOCKED(Severity.HIGH),
     BOOT_NOT_VERIFIED(Severity.HIGH),
     ATTESTATION_REVOKED(Severity.HIGH),
     ATTESTATION_UNCONFIRMED(Severity.MEDIUM),
+    SYSTEM_KEY_LEAKED(Severity.MEDIUM),
     USB_DEBUGGING(Severity.MEDIUM),
     OLD_SECURITY_PATCH(Severity.MEDIUM),
     INTEGRITY_SOFTWARE_ONLY(Severity.LOW),
     VPN_ACTIVE(Severity.INFO),
+    SYSTEM_KEY_DEVELOPMENT(Severity.INFO),
 }
 
 /**
@@ -96,14 +101,27 @@ object Rules {
     /**
      * [trackers] is the tracker scan of the app, or null while it is still running. [signature] is
      * the app's signature judged against the list of official certificates (ADR 0018). [sdks] are
-     * the categories of the SDKs from `data/sdks` whose code the app contains (ADR 0019).
+     * the categories of the SDKs from `data/sdks` whose code the app contains (ADR 0019). [keys] is
+     * what the phone's system key says about the app (ADR 0023).
      */
     fun forApp(
         app: AppFacts,
         trackers: AppTrackers? = null,
         signature: SignatureVerdict? = null,
         sdks: Set<SdkCategory> = emptySet(),
+        keys: KeyFacts? = null,
     ): List<FindingKind> = buildList {
+        keys?.untrusted?.let { kind ->
+            // Code from the system image is what the phone shipped with; anything installed later, or an
+            // update, could be malware posing as a system app, unless the maker's store, Play or the
+            // phone's own setup put it there.
+            val later = keys.origin != Origin.SYSTEM_IMAGE
+            when {
+                later && !keys.fromTrustedStore && !keys.fromSetup -> add(FindingKind.UNTRUSTED_SYSTEM_KEY)
+                later && kind == KeyKind.LEAKED -> add(FindingKind.LEAKED_KEY_FROM_STORE)
+                else -> Unit
+            }
+        }
         if (SdkCategory.TRAFFIC_SHARING in sdks) add(FindingKind.TRAFFIC_SHARING)
         if (SdkCategory.REMOTE_SUPPORT in sdks) add(FindingKind.REMOTE_SUPPORT)
         if (SdkCategory.SCREEN_RECORDING in sdks) add(FindingKind.SCREEN_RECORDING)
@@ -119,8 +137,17 @@ object Rules {
         if (!app.isSystem && app.installer !in KNOWN_STORES) add(FindingKind.UNKNOWN_SOURCE)
     }.sortedBy { it.severity }
 
-    /** [nowYearMonth] is the current month as `YYYYMM`; a patch more than 12 months older is flagged. */
-    fun forDevice(device: DeviceFacts, nowYearMonth: Int): List<FindingKind> = buildList {
+    /**
+     * [nowYearMonth] is the current month as `YYYYMM`; a patch more than 12 months older is flagged.
+     * [systemKey] says why the key that signs the package `android` cannot be trusted, or is null.
+     */
+    fun forDevice(device: DeviceFacts, nowYearMonth: Int, systemKey: KeyKind? = null): List<FindingKind> = buildList {
+        when (systemKey) {
+            KeyKind.AOSP_TEST -> add(FindingKind.SYSTEM_KEY_PUBLIC)
+            KeyKind.LEAKED -> add(FindingKind.SYSTEM_KEY_LEAKED)
+            KeyKind.GOOGLE_DEV -> add(FindingKind.SYSTEM_KEY_DEVELOPMENT)
+            null -> Unit
+        }
         if (device.userCertificateAuthorities.isNotEmpty()) add(FindingKind.USER_CERTIFICATE_AUTHORITY)
         if (device.wirelessDebugging) add(FindingKind.WIRELESS_DEBUGGING)
         if (device.usbDebugging) add(FindingKind.USB_DEBUGGING)

@@ -108,6 +108,7 @@ class AppCollector(private val context: Context) {
             label = null,
             isSystem = app.flags and ApplicationInfo.FLAG_SYSTEM != 0,
             enabled = app.enabled,
+            updatedSystemApp = app.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP != 0,
             installer = installer(info.packageName),
             firstInstall = info.firstInstallTime,
             lastUpdate = info.lastUpdateTime,
