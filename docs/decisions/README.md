@@ -31,6 +31,7 @@ in the Git history.
 | [0021](0021-service-dependent-capabilities.md) | Tracker capabilities that need a service the phone lacks | Accepted |
 | [0022](0022-network-use-and-unused-apps.md) | Network use per app and apps not opened, from Android's own records | Accepted |
 | [0023](0023-maker-software-and-system-keys.md) | The phone maker's software and leaked system keys | Accepted |
+| [0024](0024-fake-copies-of-datapavan.md) | Fake copies of Datapavan | Accepted |
 
 ## Template
 
