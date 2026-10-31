@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: CC0-1.0
+# Where update.py reads the certificates of keys that cannot be trusted (ADR 0023). Columns: kind, name,
+# format, URL. Kinds:
+#   aosp-test   AOSP's public test keys, whose private halves are in the AOSP source; any device that
+#               trusts one trusts code that anyone can sign;
+#   google-dev  Google's development keys, used for emulator and other development images; the
+#               compatibility tests reject them on certified phones.
+# Formats: pem (an X.509 certificate in PEM) or der; googlesource serves both as base64 (?format=TEXT).
+# The leaked platform certificates are in leaked.tsv, copied by hand from Google's list.
+aosp-test	platform	pem	https://android.googlesource.com/platform/build/+/refs/heads/main/target/product/security/platform.x509.pem?format=TEXT
+aosp-test	testkey	pem	https://android.googlesource.com/platform/build/+/refs/heads/main/target/product/security/testkey.x509.pem?format=TEXT
+aosp-test	shared	pem	https://android.googlesource.com/platform/build/+/refs/heads/main/target/product/security/shared.x509.pem?format=TEXT
+aosp-test	media	pem	https://android.googlesource.com/platform/build/+/refs/heads/main/target/product/security/media.x509.pem?format=TEXT
+aosp-test	networkstack	pem	https://android.googlesource.com/platform/build/+/refs/heads/main/target/product/security/networkstack.x509.pem?format=TEXT
+aosp-test	sdk_sandbox	pem	https://android.googlesource.com/platform/build/+/refs/heads/main/target/product/security/sdk_sandbox.x509.pem?format=TEXT
+aosp-test	bluetooth	pem	https://android.googlesource.com/platform/build/+/refs/heads/main/target/product/security/bluetooth.x509.pem?format=TEXT
+aosp-test	nfc	pem	https://android.googlesource.com/platform/build/+/refs/heads/main/target/product/security/nfc.x509.pem?format=TEXT
+aosp-test	cts_uicc_2021	pem	https://android.googlesource.com/platform/build/+/refs/heads/main/target/product/security/cts_uicc_2021.x509.pem?format=TEXT
+google-dev	platform	der	https://android.googlesource.com/platform/cts/+/refs/heads/main/tests/tests/security/res/raw/sig_devkeys_platform.bin?format=TEXT
+google-dev	releasekey	der	https://android.googlesource.com/platform/cts/+/refs/heads/main/tests/tests/security/res/raw/sig_devkeys.bin?format=TEXT
+google-dev	shared	der	https://android.googlesource.com/platform/cts/+/refs/heads/main/tests/tests/security/res/raw/sig_devkeys_shared.bin?format=TEXT
+google-dev	media	der	https://android.googlesource.com/platform/cts/+/refs/heads/main/tests/tests/security/res/raw/sig_devkeys_media.bin?format=TEXT
+google-dev	networkstack	der	https://android.googlesource.com/platform/cts/+/refs/heads/main/tests/tests/security/res/raw/sig_devkeys_networkstack.bin?format=TEXT

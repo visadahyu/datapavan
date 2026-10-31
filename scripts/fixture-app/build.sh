@@ -5,7 +5,9 @@
 #   scripts/fixture-app/build.sh [package]
 #
 # With a package name, the same app is built under that name into build/fixture-<package>/, for
-# example to pose as a known app signed by someone else (ADR 0018).
+# example to pose as a known app signed by someone else (ADR 0018). With FIXTURE_KEY=aosp-platform,
+# it is signed with AOSP's public platform test key (scripts/testdata), as an app signed with a key
+# that cannot be trusted (ADR 0023), into build/fixture-aosp-platform/.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,7 +15,7 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/sdk}}"
 TOOLS="$SDK/build-tools/37.0.0"
 PLATFORM="$SDK/platforms/android-37.0/android.jar"
-OUT="$ROOT/build/fixture${1:+-$1}"
+OUT="$ROOT/build/fixture${1:+-$1}${FIXTURE_KEY:+-$FIXTURE_KEY}"
 
 rm -rf "$OUT" && mkdir -p "$OUT/classes" "$OUT/dex"
 javac --release 17 -cp "$PLATFORM" -d "$OUT/classes" $(find "$HERE/src" -name '*.java')
@@ -24,8 +26,15 @@ javac --release 17 -cp "$PLATFORM" -d "$OUT/classes" $(find "$HERE/src" -name '*
     ${1:+--rename-manifest-package "$1"} -o "$OUT/unsigned.apk" "$OUT/res.zip"
 (cd "$OUT/dex" && zip -q "$OUT/unsigned.apk" classes.dex)
 "$TOOLS/zipalign" -f 4 "$OUT/unsigned.apk" "$OUT/aligned.apk"
-# A throwaway key: the fixture is never distributed.
-keytool -genkeypair -keystore "$OUT/fixture.keystore" -storepass fixture -keypass fixture \
-    -alias fixture -keyalg EC -validity 1 -dname "CN=Datapavan test fixture" >/dev/null 2>&1
-"$TOOLS/apksigner" sign 2>/dev/null --ks "$OUT/fixture.keystore" --ks-pass pass:fixture --out "$OUT/fixture.apk" "$OUT/aligned.apk"
+case "${FIXTURE_KEY:-}" in
+    aosp-platform)
+        "$TOOLS/apksigner" sign 2>/dev/null --key "$ROOT/scripts/testdata/aosp-platform.pk8" \
+            --cert "$ROOT/scripts/testdata/aosp-platform.x509.pem" --out "$OUT/fixture.apk" "$OUT/aligned.apk" ;;
+    "")
+        # A throwaway key: the fixture is never distributed.
+        keytool -genkeypair -keystore "$OUT/fixture.keystore" -storepass fixture -keypass fixture \
+            -alias fixture -keyalg EC -validity 1 -dname "CN=Datapavan test fixture" >/dev/null 2>&1
+        "$TOOLS/apksigner" sign 2>/dev/null --ks "$OUT/fixture.keystore" --ks-pass pass:fixture --out "$OUT/fixture.apk" "$OUT/aligned.apk" ;;
+    *) echo "unknown FIXTURE_KEY: $FIXTURE_KEY" >&2; exit 2 ;;
+esac
 echo "$OUT/fixture.apk"

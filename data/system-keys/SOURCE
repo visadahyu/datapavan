@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: CC0-1.0
+retrieved: 2026-10-31
+keys: 24
+method: data/system-keys/update.py, from sources.tsv (AOSP and CTS certificate files) and leaked.tsv (by hand)

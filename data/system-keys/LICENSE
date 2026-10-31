@@ -1,0 +1,8 @@
+SPDX-License-Identifier: CC0-1.0
+
+Fingerprints of system signing keys that cannot be trusted: AOSP's public test keys, Google's
+development keys, and platform certificates that Google reported as leaked. Collected by the Datapavan
+project and dedicated to the public domain under CC0 1.0
+(https://creativecommons.org/publicdomain/zero/1.0/). Recorded in ADR 0015 and ADR 0023. The
+fingerprints are computed from certificate files in AOSP (Apache-2.0) or copied from Google's
+published list; no certificate or key file is included.

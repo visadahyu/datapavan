@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: CC0-1.0
+# Platform certificates that Google reported as leaked and used to sign malware (ADR 0023), copied by
+# hand from the source, in its order. Columns: SHA-256 of the certificate, SHA-256 of the malware sample
+# the source pairs with it, source, date published, date read.
+# Source: Android Partner Vulnerability Initiative, "Platform certificates used to sign malware",
+# https://issues.chromium.org/issues/42420002 (formerly Monorail apvi #100), created 2022-11-11.
+2464ddfefa071f268ea7667123df05ead2293272ff2a64d9cee021c38b46c6af	e4e28de8ad3f826fe50a456217d11e9e6a80563b35871ac37845357628b95f6a	https://issues.chromium.org/issues/42420002	2022-11-11	2026-10-31
+2bfa22964760a25d99ab9a14910e44fe2063b51d5b4ac2e4282573ce94996aa3	5c173df9e86e959c2eadcc3ef9897c8e1438b7a154c7c692d0fe054837530458	https://issues.chromium.org/issues/42420002	2022-11-11	2026-10-31
+34df0e7a9f1cf1892e45c056b4973cd81ccf148a4050d11aea4ac5a65f900a42	b1f191b1ee463679c7c2fa7db5a224b6759c5474b73a59be3e133a6825b2a284	https://issues.chromium.org/issues/42420002	2022-11-11	2026-10-31
+369c38b18401ea16785f11720e37d7a2bc5a4d209e76955c0858ea469ad62fdf	19c84a2386abde0c0dae8661b394e53bf246f6f0f9a12d84cfc7864e4a809697	https://issues.chromium.org/issues/42420002	2022-11-11	2026-10-31
+4274243d7a954ac6482866f0cc67ca1843ca94d68a0ee53f837d6740a8134421	0251bececeffbf4bf90eaaad27c147bb023388817d9fbec1054fac1324c6f8bf	https://issues.chromium.org/issues/42420002	2022-11-11	2026-10-31
+5304915c4bb7baca28776231993996fde1baffcbbe6500fb0fc7f2d3a2888cb7	c612917d68803efbd2f0e960ade1662be9751096afe0fd81cee283c5a35e7618	https://issues.chromium.org/issues/42420002	2022-11-11	2026-10-31
+9200c550f2374706eff37e3a8674bc03aeba8b25c052de638972ab94365af0a2	6792324c1095458d6b78e92d5ae003a317fe3991d187447020d680e99d9b6129	https://issues.chromium.org/issues/42420002	2022-11-11	2026-10-31
+9fc510e167d8d312e758273285414e77edac9fed944741f5682be92501f095d4	091733658c7a32f4673415b11733ae729b87e2a2540c87d08ba9adf7bc62d7ed	https://issues.chromium.org/issues/42420002	2022-11-11	2026-10-31
+a7a0e10a61a5af93624376df60e9def9436358f50aa6174e5423633b856e2be1	5aaefc5b4fb1e1973832f44ba2d82a70106d3e8999680df6deed3570cd30fb97	https://issues.chromium.org/issues/42420002	2022-11-11	2026-10-31
+b01dcea669eefdd991fc6a24678a8b6e6a6d0ad8986950328c69d0eea1dec0d5	32b9a33ad3d5a063cd4f08e0739a6ce1e11130532fd0b7e13a3a37edaf9893eb	https://issues.chromium.org/issues/42420002	2022-11-11	2026-10-31
