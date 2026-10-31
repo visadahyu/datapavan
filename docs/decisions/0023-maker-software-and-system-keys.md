@@ -88,6 +88,8 @@ The research behind this record is kept in the foundation's private repository.
    prefers the maker's own privacy settings, saying that they reduce collection but may not stop it.
 
 ## Consequences
+- The Galaxy A56 (Android 16, 2025) carries the same leaked key (same SHA-256 and serial number, read
+  on 2026-10-31), so the leak is not limited to old phones.
 - On the A40, the overview reports the leaked system key, and Samsung's six store apps signed with it
   get a note, not a warning. The emulator gets the development-key note.
 - Before it is built:

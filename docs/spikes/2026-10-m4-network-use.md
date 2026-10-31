@@ -28,8 +28,13 @@ The ten largest rows of each list, compared after the unit fix described below:
 | Emulator, mobile data (Oct 28 – Nov 27) | 8 | 0.00 % | 2 system rows |
 | Emulator, Wi-Fi (Oct 3 – 31) | 9 | 0.00 % | 1 system row |
 | A40, Wi-Fi (Oct 3 – 31) | 9 | 0.07 % | 1 system row |
+| A56, Wi-Fi (Oct 3 – 31) | 10 | 0.71 % | none |
 
-**M4's definition of done (within 5 % of Settings) is met** on both devices. On the emulator every
+**M4's definition of done (within 5 % of Settings) is met** on both devices, and on the A56 (Samsung,
+Android 16), checked the same way on 2026-10-31 with the user's consent and `PRIVATE=1`; there,
+usage access was switched on by the user through the access card, set back afterwards, and the debug
+build removed. Its mobile data was not compared: it has two SIMs, which Settings shows apart and
+Datapavan adds together. On the emulator every
 size read the same as in Settings, from 3.90 GB down to 7.43 kB. A later Wi-Fi run, after the
 emulator had counted new traffic, matched seven apps exactly and differed for Chrome, which the end
 of Settings' period explains (below). The A40's small differences come from the edges of the period:
@@ -47,7 +52,7 @@ Settings' four weeks start at midnight, Datapavan's 28 days at the time of readi
 - **Units differ by vendor.** AOSP's Settings, on the emulator, counts in steps of 1,024 under the
   names kB, MB and GB; with Android's public formatter, which steps by 1,000, the emulator's totals
   read 39.19 MB and 4.56 GB against Settings' 37.39 MB and 4.26 GB, exactly 1.024² and 1.024³ more.
-  Samsung's Settings, on the A40, steps by 1,000: with steps of 1,024, Datapavan's numbers there were
+  Samsung's Settings, on the A40 and the A56 (One UI on Android 16), steps by 1,000: with steps of 1,024, Datapavan's numbers there were
   4.4 to 4.7 % lower for every row in megabytes and 6.7 % for the one in gigabytes, within a few
   tenths of the ratio of the steps (4.6 and 6.9 %). Datapavan now uses the step of the phone's
   Settings (`ui/DataSize.kt`): 1,000 on Samsung phones, 1,024 elsewhere until other vendors are
