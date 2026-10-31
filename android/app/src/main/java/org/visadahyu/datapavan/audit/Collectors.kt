@@ -3,20 +3,27 @@ package org.visadahyu.datapavan.audit
 import android.Manifest
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.AppOpsManager
+import android.app.WallpaperManager
 import android.app.admin.DevicePolicyManager
+import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.content.pm.PermissionInfo
+import android.content.pm.ResolveInfo
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.provider.Telephony
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import android.telecom.TelecomManager
 import android.view.accessibility.AccessibilityManager
+import android.view.inputmethod.InputMethodManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -56,8 +63,17 @@ class AppCollector(private val context: Context) {
         val listeners = enabledNotificationListenerPackages()
         val admins = context.getSystemService(DevicePolicyManager::class.java)
             .activeAdmins.orEmpty().map { it.packageName }.toSet()
+        val launchable = launchablePackages()
+        val roles = roleHolders()
         val packages = installedPackages()
-        packages.inParallel { facts(it, accessibility, listeners, admins) }
+        packages.inParallel { info ->
+            facts(info, accessibility, listeners, admins)?.let { app ->
+                app.copy(
+                    launcherIcon = app.packageName in launchable,
+                    worksUnopened = app.packageName in roles || app.isVpnApp || app.special.any { it in BOUND_ACCESS },
+                )
+            }
+        }
     }
 
     /** Fills in the labels of [apps], in parallel. */
@@ -101,7 +117,46 @@ class AppCollector(private val context: Context) {
             isVpnApp = info.services.orEmpty().any { it.permission == Manifest.permission.BIND_VPN_SERVICE },
             vpnAuthorised = opMode(OP_ACTIVATE_VPN, app.uid, info.packageName) == AppOpsManager.MODE_ALLOWED,
             signing = signing(info),
+            uid = app.uid,
         )
+    }
+
+    private fun launchablePackages(): Set<String> =
+        activities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)).map { it.activityInfo.packageName }.toSet()
+
+    private fun activities(intent: Intent): List<ResolveInfo> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.queryIntentActivities(intent, 0)
+        }
+
+    /** The activity that [intent] opens by default, or null when the user has not chosen one. */
+    private fun defaultActivity(intent: Intent): ResolveInfo? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.resolveActivity(intent, PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong()))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+        }
+
+    /**
+     * Apps that work without being opened because of a role the user gave them: the enabled keyboards,
+     * the home screen, the default SMS and phone apps, the live wallpaper, and every app that offers a
+     * widget (whether one is placed cannot be read).
+     */
+    private fun roleHolders(): Set<String> = buildSet {
+        context.getSystemService(InputMethodManager::class.java).enabledInputMethodList.mapTo(this) { it.packageName }
+        defaultActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))?.activityInfo?.packageName?.let(::add)
+        Telephony.Sms.getDefaultSmsPackage(context)?.let(::add)
+        context.getSystemService(TelecomManager::class.java)?.defaultDialerPackage?.let(::add)
+        try {
+            WallpaperManager.getInstance(context).wallpaperInfo?.packageName?.let(::add)
+        } catch (_: SecurityException) {
+            // Some versions guard the wallpaper; a live wallpaper is then not known.
+        }
+        AppWidgetManager.getInstance(context)?.installedProviders.orEmpty().mapTo(this) { it.provider.packageName }
     }
 
     /** SHA-256 of each signing certificate, as apksigner prints it, for matching against ADR 0018's list. */
@@ -210,6 +265,9 @@ class AppCollector(private val context: Context) {
     private companion object {
         const val SETTING_NOTIFICATION_LISTENERS = "enabled_notification_listeners"
         const val OP_ACTIVATE_VPN = "android:activate_vpn"
+
+        /** Special access through which the system keeps an app running without it being opened. */
+        val BOUND_ACCESS = setOf(SpecialAccess.ACCESSIBILITY, SpecialAccess.NOTIFICATION_LISTENER, SpecialAccess.DEVICE_ADMIN)
 
         val APP_OP_ACCESS = listOf(
             Triple(Manifest.permission.SYSTEM_ALERT_WINDOW, AppOpsManager.OPSTR_SYSTEM_ALERT_WINDOW, SpecialAccess.OVERLAY),

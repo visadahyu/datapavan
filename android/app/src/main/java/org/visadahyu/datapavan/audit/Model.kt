@@ -36,6 +36,15 @@ data class AppFacts(
     val vpnAuthorised: Boolean,
     /** The app's signing certificates; null when Android does not report them. */
     val signing: AppSigning? = null,
+    /** The Linux user ID under which Android counts the app's network use; several apps can share one. */
+    val uid: Int = -1,
+    /** Has an icon in the app drawer. */
+    val launcherIcon: Boolean = false,
+    /**
+     * Can do its work without being opened: a keyboard, the home screen, the default SMS or phone app,
+     * a live wallpaper, a widget, a VPN, or one bound through special access (ADR 0022).
+     */
+    val worksUnopened: Boolean = false,
 )
 
 /** Hardware key attestation, decoded by the Rust engine. Null fields were absent. */
