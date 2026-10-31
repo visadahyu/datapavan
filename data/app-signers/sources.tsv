@@ -66,3 +66,5 @@ pan.alexander.tordnscrypt	izzy	developer	index	https://apt.izzysoft.de/fdroid/re
 pan.alexander.tordnscrypt.stable	fdroid	fdroid	index	https://f-droid.org/repo	fdroid
 org.getlantern.lantern	website	developer	apk	https://s3.amazonaws.com/lantern.io/releases/production/latest/lantern-installer.apk	
 com.wireguard.android	website	developer	apk	page:https://download.wireguard.com/android-client	com\.wireguard\.android-[0-9.]+\.apk
+org.telegram.messenger.web	website	developer	apk	https://telegram.org/dl/android/apk	
+org.thunderdog.challegram	fdroid	fdroid	index	https://f-droid.org/repo	fdroid

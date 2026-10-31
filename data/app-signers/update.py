@@ -2,13 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """Collects the official signing certificates of the apps in sources.tsv and writes signers.tsv (ADR 0018).
 
-    data/app-signers/update.py [--cache DIR]
+    data/app-signers/update.py [--cache DIR] [--cache-only]
     data/app-signers/update.py --read-play DIR --api LEVEL
 
 
 Needs network access, apksigner and aapt2 from the Android SDK's build-tools, and a JDK's jarsigner and
 keytool. Downloaded APKs and indexes are untrusted: they are only read, by apksigner, aapt2 and the JDK,
-never run. They are kept in the cache folder (default ~/.cache/datapavan/app-signers).
+never run. They are kept in the cache folder (default ~/.cache/datapavan/app-signers). With
+--cache-only, nothing is downloaded: every file must already be in the cache, for example when one new
+channel was fetched by hand with the maintainer's approval.
 
 Evidence, from strongest (ADR 0018):
   1  a fingerprint the developer publishes;
@@ -83,9 +85,17 @@ def fingerprint(text):
     return digits
 
 
+# Set by --cache-only: read files from the cache and download nothing.
+OFFLINE = False
+
+
 def fetch(url, cache, name=None, keep=False):
     """Downloads url into the cache. Only files whose name carries a version are kept between runs."""
     path = cache / (name or re.sub(r"[^A-Za-z0-9._-]", "_", url))
+    if OFFLINE:
+        if not path.exists():
+            raise Problem(f"{url} is not in the cache")
+        return path
     if not (keep and path.exists()):
         request = urllib.request.Request(url, headers={"User-Agent": "datapavan-app-signers"})
         with urllib.request.urlopen(request, timeout=120) as response, open(str(path) + ".part", "wb") as out:
@@ -199,10 +209,13 @@ def read_play(folder, api):
         package, certificates, from_play, schemes = apk_certificates(apk)
         if package not in apps:
             fail(f"{apk.name}: {package} is not in apps.tsv")
+        digest = hashlib.sha256(apk.read_bytes()).hexdigest()
+        # The same APK read again keeps the date it was first read; only a new copy is dated today.
+        before = rows.get((package, str(api)))
         rows[(package, str(api))] = [
-            package, str(api), version_code(apk), hashlib.sha256(apk.read_bytes()).hexdigest(),
+            package, str(api), version_code(apk), digest,
             ",".join(d + (":debug" if debug else "") for d, debug in certificates.items()),
-            "yes" if from_play else "no", ",".join(schemes), today,
+            "yes" if from_play else "no", ",".join(schemes), before[7] if before and before[3] == digest else today,
         ]
         print(f"{package} on API {api}: {', '.join(certificates)} ({', '.join(schemes)})")
     path.write_text("\n".join(PLAY_HEADER + ["\t".join(r) for _, r in sorted(rows.items())]) + "\n")
@@ -241,7 +254,10 @@ def main():
     parser.add_argument("--cache", type=pathlib.Path, default=pathlib.Path.home() / ".cache/datapavan/app-signers")
     parser.add_argument("--read-play", type=pathlib.Path, metavar="DIR", help="record the Play APKs in DIR in play.tsv")
     parser.add_argument("--api", type=int, help="the API level of the device the Play APKs come from")
+    parser.add_argument("--cache-only", action="store_true", help="read only files already in the cache")
     args = parser.parse_args()
+    global OFFLINE
+    OFFLINE = args.cache_only
     if args.read_play:
         if not args.api:
             parser.error("--read-play needs --api")
@@ -348,6 +364,13 @@ def main():
                 problems.append(f"{package}: the published key {digest} is on none of the APKs read")
 
     today = datetime.date.today().isoformat()
+    # Offline, nothing was checked again: a certificate already recorded keeps the date it was checked.
+    checked = {}
+    if OFFLINE and (HERE / "signers.tsv").exists():
+        for line in (HERE / "signers.tsv").read_text().splitlines():
+            if line and not line.startswith("#"):
+                columns = line.split("\t")
+                checked[(columns[0], columns[1])] = columns[6]
     lines = [
         "# SPDX-License-Identifier: CC0-1.0",
         "# Official signing certificates of VPN, proxy and circumvention apps (ADR 0018), written by update.py.",
@@ -357,7 +380,7 @@ def main():
     for (package, digest), entry in sorted(found.items()):
         lines.append("\t".join([
             package, digest, str(min(entry["grades"])), ",".join(sorted(entry["controllers"])),
-            ",".join(sorted(entry["channels"])), "yes" if entry["debug"] else "no", today,
+            ",".join(sorted(entry["channels"])), "yes" if entry["debug"] else "no", checked.get((package, digest), today),
             " ".join(sorted(entry["sources"])),
         ]))
     (HERE / "signers.tsv").write_text("\n".join(lines) + "\n")

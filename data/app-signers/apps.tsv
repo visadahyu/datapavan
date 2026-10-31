@@ -39,3 +39,6 @@ pan.alexander.tordnscrypt	InviZible Pro (beta)	no
 pan.alexander.tordnscrypt.stable	InviZible Pro	no	
 pan.alexander.tordnscrypt.gp	InviZible Pro (Google Play)	no	The Google Play build
 com.wireguard.android	WireGuard	no	One key for the website build and the Google Play copy
+org.telegram.messenger.web	Telegram (website build)	no	The build telegram.org offers for download; it updates itself, so it needs to install apps
+org.telegram.messenger	Telegram	no	The Google Play build
+org.thunderdog.challegram	Telegram X	no	Google Play; F-Droid builds Telegram X FOSS under the same package with its own key
