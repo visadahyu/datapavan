@@ -29,6 +29,7 @@ in the Git history.
 | [0019](0019-traffic-sharing-remote-support-sdks.md) | Traffic-sharing, remote-support and screen-recording SDKs | Accepted |
 | [0020](0020-same-company-trackers.md) | Trackers from the app's own company group | Accepted |
 | [0021](0021-service-dependent-capabilities.md) | Tracker capabilities that need a service the phone lacks | Accepted |
+| [0022](0022-network-use-and-unused-apps.md) | Network use per app and apps not opened, from Android's own records | Accepted |
 
 ## Template
 
