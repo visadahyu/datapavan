@@ -79,6 +79,64 @@
     <string name="owners_heading">Qui exploite ces services</string>
     <string name="owner_same_group">Du même groupe d\'entreprises que cette application (%1$s) : %2$s. Le groupe peut combiner ces données avec ce que collectent ses autres applications et services.</string>
     <string name="owner_shut_down">Le service derrière %1$s a fermé le %2$s.</string>
+    <!-- Network use and apps not opened, from usage access (ADR 0022). -->
+    <string name="usage_access_title">Utilisation du réseau et applis que vous n\'ouvrez pas</string>
+    <string name="usage_access_body">Avec l\'accès aux données d\'utilisation, Datapavan peut montrer combien de données chaque appli a utilisé, et quelles applis vous n\'avez pas ouvertes depuis longtemps. Le même accès permettrait aussi à une appli de voir quelles applis vous avez ouvertes, et quand. Datapavan ne lit que des totaux et la date de dernière utilisation de chaque appli, n\'en garde rien et ne peut rien envoyer, car il n\'a pas d\'accès au réseau. Tout le reste fonctionne sans cet accès.</string>
+    <string name="usage_access_button">Autoriser l\'accès aux données d\'utilisation</string>
+    <string name="usage_access_restricted">Android grise ce bouton pour les applis installées à partir d\'un fichier. Dans ce cas, ouvrez les infos de cette appli, autorisez les paramètres restreints dans son menu (⋮), puis réessayez.</string>
+    <string name="usage_access_app_info">Ouvrir les infos de l\'appli</string>
+    <string name="usage_reading">Lecture des relevés d\'Android…</string>
+    <string name="usage_missing">L\'utilisation du réseau et la dernière ouverture nécessitent l\'accès aux données d\'utilisation, que vous pouvez autoriser dans la vue d\'ensemble.</string>
+    <string name="section_network">Utilisation du réseau</string>
+    <plurals name="network_period">
+        <item quantity="one">%1$d dernier jour : du %2$s au %3$s</item>
+        <item quantity="many">%1$d derniers jours : du %2$s au %3$s</item>
+        <item quantity="other">%1$d derniers jours : du %2$s au %3$s</item>
+    </plurals>
+    <string name="network_totals">Données mobiles %1$s · Wi-Fi %2$s</string>
+    <string name="network_show_7">Afficher les 7 derniers jours</string>
+    <string name="network_show_30">Afficher les 30 derniers jours</string>
+    <string name="network_app_line">%1$s : %2$s</string>
+    <string name="network_removed">Applis supprimées : %1$s</string>
+    <string name="network_tethering">Point d\'accès et partage de connexion : %1$s</string>
+    <string name="network_system">Système Android : %1$s</string>
+    <string name="network_lag">D\'après le décompte d\'Android. Les données mobiles regroupent toutes les cartes SIM. Datapavan ne garde aucun de ces chiffres.</string>
+    <string name="network_none">Aucune utilisation du réseau sur cette période.</string>
+    <string name="network_mobile">Données mobiles %1$s : %2$s reçus, %3$s envoyés, dont %4$s en arrière-plan</string>
+    <string name="network_wifi">Wi-Fi %1$s : %2$s reçus, %3$s envoyés, dont %4$s en arrière-plan</string>
+    <string name="network_mobile_foreground">Données mobiles %1$s : %2$s reçus, %3$s envoyés, rien en arrière-plan</string>
+    <string name="network_wifi_foreground">Wi-Fi %1$s : %2$s reçus, %3$s envoyés, rien en arrière-plan</string>
+    <string name="network_shared">Android compte cette appli avec %1$s, car elles partagent un même identifiant d\'utilisateur. Ces chiffres valent pour toutes.</string>
+    <string name="network_proxy">Si d\'autres applis utilisent cette appli comme proxy, leur trafic est compté ici.</string>
+    <string name="network_background_note">En arrière-plan signifie que l\'appli n\'était pas à l\'écran et n\'affichait aucune notification en cours. Les notifications push, la synchronisation et les sauvegardes se font aussi en arrière-plan.</string>
+    <plurals name="use_last">
+        <item quantity="one">Dernière ouverture ou activité : %1$s (il y a %2$d jour)</item>
+        <item quantity="many">Dernière ouverture ou activité : %1$s (il y a %2$d jours)</item>
+        <item quantity="other">Dernière ouverture ou activité : %1$s (il y a %2$d jours)</item>
+    </plurals>
+    <string name="use_none_since">Pas ouverte depuis le %1$s, aussi loin que remontent les relevés d\'Android.</string>
+    <string name="use_works_unopened">Cette appli peut fonctionner sans être ouverte, par exemple comme clavier, widget ou VPN : cela en dit donc peu.</string>
+    <string name="section_dormant">Pas ouvertes depuis longtemps</string>
+    <plurals name="dormant_intro">
+        <item quantity="one">Android retire les autorisations de la plupart des applis que vous n\'utilisez plus, mais pas de toutes, et jamais les accès spéciaux. Ces applis n\'ont pas été ouvertes depuis %1$d jour ou plus et détiennent encore quelque chose :</item>
+        <item quantity="many">Android retire les autorisations de la plupart des applis que vous n\'utilisez plus, mais pas de toutes, et jamais les accès spéciaux. Ces applis n\'ont pas été ouvertes depuis %1$d jours ou plus et détiennent encore quelque chose :</item>
+        <item quantity="other">Android retire les autorisations de la plupart des applis que vous n\'utilisez plus, mais pas de toutes, et jamais les accès spéciaux. Ces applis n\'ont pas été ouvertes depuis %1$d jours ou plus et détiennent encore quelque chose :</item>
+    </plurals>
+    <plurals name="dormant_none">
+        <item quantity="one">Aucune appli non ouverte depuis %1$d jour ne détient encore d\'autorisation, d\'accès spécial ou d\'utilisation de données.</item>
+        <item quantity="many">Aucune appli non ouverte depuis %1$d jours ne détient encore d\'autorisation, d\'accès spécial ou d\'utilisation de données.</item>
+        <item quantity="other">Aucune appli non ouverte depuis %1$d jours ne détient encore d\'autorisation, d\'accès spécial ou d\'utilisation de données.</item>
+    </plurals>
+    <plurals name="dormant_line">
+        <item quantity="one">Pas ouverte depuis %1$d jour. Détient encore : %2$s</item>
+        <item quantity="many">Pas ouverte depuis %1$d jours. Détient encore : %2$s</item>
+        <item quantity="other">Pas ouverte depuis %1$d jours. Détient encore : %2$s</item>
+    </plurals>
+    <string name="dormant_sensitive">des autorisations sensibles</string>
+    <string name="dormant_special">des accès spéciaux</string>
+    <string name="dormant_vpn">l\'autorisation VPN</string>
+    <string name="dormant_background">une utilisation de données en arrière-plan</string>
+    <string name="dormant_unused_apps">Ouvrir les applis inutilisées d\'Android</string>
     <string name="tracker_with_categories">%1$s (%2$s)</string>
     <string name="tracker_category_advertisement">publicité</string>
     <string name="tracker_category_analytics">statistiques</string>

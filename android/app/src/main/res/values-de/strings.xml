@@ -79,6 +79,59 @@
     <string name="owners_heading">Wer diese Dienste betreibt</string>
     <string name="owner_same_group">Von derselben Unternehmensgruppe wie diese App (%1$s): %2$s. Die Gruppe kann diese Daten mit dem verbinden, was ihre anderen Apps und Dienste sammeln.</string>
     <string name="owner_shut_down">Der Dienst hinter %1$s wurde am %2$s eingestellt.</string>
+    <!-- Network use and apps not opened, from usage access (ADR 0022). -->
+    <string name="usage_access_title">Netzwerknutzung und Apps, die Sie nicht öffnen</string>
+    <string name="usage_access_body">Mit dem Zugriff auf Nutzungsdaten kann Datapavan zeigen, wie viele Daten jede App verbraucht hat und welche Apps Sie lange nicht geöffnet haben. Derselbe Zugriff würde einer App auch zeigen, welche Apps Sie wann geöffnet haben. Datapavan liest nur Summen und das Datum der letzten Nutzung jeder App, speichert nichts davon und kann es nirgendwohin senden, weil es keinen Netzwerkzugang hat. Alles andere funktioniert auch ohne diesen Zugriff.</string>
+    <string name="usage_access_button">Zugriff auf Nutzungsdaten erlauben</string>
+    <string name="usage_access_restricted">Android graut diesen Schalter bei Apps aus, die aus einer Datei installiert wurden. In diesem Fall öffnen Sie die App-Info dieser App, erlauben im Menü (⋮) eingeschränkte Einstellungen und versuchen es erneut.</string>
+    <string name="usage_access_app_info">App-Info öffnen</string>
+    <string name="usage_reading">Die Aufzeichnungen von Android werden gelesen …</string>
+    <string name="usage_missing">Netzwerknutzung und letzte Öffnung brauchen den Zugriff auf Nutzungsdaten, den Sie in der Übersicht erlauben können.</string>
+    <string name="section_network">Netzwerknutzung</string>
+    <plurals name="network_period">
+        <item quantity="one">Letzter %1$d Tag: %2$s bis %3$s</item>
+        <item quantity="other">Letzte %1$d Tage: %2$s bis %3$s</item>
+    </plurals>
+    <string name="network_totals">Mobile Daten %1$s · WLAN %2$s</string>
+    <string name="network_show_7">Letzte 7 Tage zeigen</string>
+    <string name="network_show_30">Letzte 30 Tage zeigen</string>
+    <string name="network_app_line">%1$s: %2$s</string>
+    <string name="network_removed">Entfernte Apps: %1$s</string>
+    <string name="network_tethering">Hotspot und Tethering: %1$s</string>
+    <string name="network_system">Android-System: %1$s</string>
+    <string name="network_lag">Aus der Zählung von Android. Mobile Daten gelten für alle SIM-Karten zusammen. Datapavan speichert keine dieser Zahlen.</string>
+    <string name="network_none">In diesem Zeitraum keine Netzwerknutzung.</string>
+    <string name="network_mobile">Mobile Daten %1$s: %2$s empfangen, %3$s gesendet, davon %4$s im Hintergrund</string>
+    <string name="network_wifi">WLAN %1$s: %2$s empfangen, %3$s gesendet, davon %4$s im Hintergrund</string>
+    <string name="network_mobile_foreground">Mobile Daten %1$s: %2$s empfangen, %3$s gesendet, nichts davon im Hintergrund</string>
+    <string name="network_wifi_foreground">WLAN %1$s: %2$s empfangen, %3$s gesendet, nichts davon im Hintergrund</string>
+    <string name="network_shared">Android zählt diese App zusammen mit %1$s, weil sie eine Benutzer-ID teilen. Diese Zahlen gelten für alle zusammen.</string>
+    <string name="network_proxy">Wenn andere Apps diese App als Proxy nutzen, wird ihr Datenverkehr hier gezählt.</string>
+    <string name="network_background_note">Hintergrund heißt: Die App war nicht auf dem Bildschirm und zeigte keine laufende Benachrichtigung. Push-Nachrichten, Synchronisierung und Sicherungen geschehen ebenfalls im Hintergrund.</string>
+    <plurals name="use_last">
+        <item quantity="one">Zuletzt geöffnet oder aktiv: %1$s (vor %2$d Tag)</item>
+        <item quantity="other">Zuletzt geöffnet oder aktiv: %1$s (vor %2$d Tagen)</item>
+    </plurals>
+    <string name="use_none_since">Seit %1$s nicht geöffnet, so weit die Aufzeichnungen von Android zurückreichen.</string>
+    <string name="use_works_unopened">Diese App kann arbeiten, ohne geöffnet zu werden, zum Beispiel als Tastatur, Widget oder VPN. Das sagt hier also wenig.</string>
+    <string name="section_dormant">Lange nicht geöffnet</string>
+    <plurals name="dormant_intro">
+        <item quantity="one">Android entzieht den meisten Apps, die Sie nicht mehr nutzen, die Berechtigungen, aber nicht jeder App und nie spezielle Zugriffe. Diese Apps wurden %1$d Tag oder länger nicht geöffnet und haben noch etwas:</item>
+        <item quantity="other">Android entzieht den meisten Apps, die Sie nicht mehr nutzen, die Berechtigungen, aber nicht jeder App und nie spezielle Zugriffe. Diese Apps wurden %1$d Tage oder länger nicht geöffnet und haben noch etwas:</item>
+    </plurals>
+    <plurals name="dormant_none">
+        <item quantity="one">Keine App, die %1$d Tag nicht geöffnet wurde, hat noch eine Berechtigung, einen speziellen Zugriff oder Datennutzung.</item>
+        <item quantity="other">Keine App, die %1$d Tage nicht geöffnet wurde, hat noch eine Berechtigung, einen speziellen Zugriff oder Datennutzung.</item>
+    </plurals>
+    <plurals name="dormant_line">
+        <item quantity="one">%1$d Tag nicht geöffnet. Hat noch: %2$s</item>
+        <item quantity="other">%1$d Tage nicht geöffnet. Hat noch: %2$s</item>
+    </plurals>
+    <string name="dormant_sensitive">sensible Berechtigungen</string>
+    <string name="dormant_special">spezielle Zugriffe</string>
+    <string name="dormant_vpn">VPN-Berechtigung</string>
+    <string name="dormant_background">Datennutzung im Hintergrund</string>
+    <string name="dormant_unused_apps">Nicht verwendete Apps von Android öffnen</string>
     <string name="tracker_with_categories">%1$s (%2$s)</string>
     <string name="tracker_category_advertisement">Werbung</string>
     <string name="tracker_category_analytics">Statistik</string>

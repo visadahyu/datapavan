@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -74,6 +75,8 @@ import org.visadahyu.datapavan.audit.SignatureVerdict
 import org.visadahyu.datapavan.audit.SpecialAccess
 import org.visadahyu.datapavan.audit.TrackerInfo
 import org.visadahyu.datapavan.audit.TrackerScanner
+import org.visadahyu.datapavan.audit.UsageFacts
+import org.visadahyu.datapavan.audit.UsageReader
 import org.visadahyu.datapavan.datapack.DataPackRules
 import org.visadahyu.datapavan.datapack.DataPackStore
 import java.text.DateFormat
@@ -163,7 +166,7 @@ private suspend fun AuditResult.withAllLabels(context: Context): AuditResult {
 
 /** Root of the v0.1 audit UI: an overview of the phone and its apps, and a detail page per app. */
 @Composable
-internal fun DatapavanApp(engineVersion: String) {
+internal fun DatapavanApp(engineVersion: String, usageUntil: Long? = null, usageDays: Int? = null) {
     val context = LocalContext.current.applicationContext
     // The scan reports progress from background threads; a StateFlow carries it safely to the UI.
     val scanProgressFlow = remember { MutableStateFlow<Pair<Int, Int>?>(null) }
@@ -187,6 +190,18 @@ internal fun DatapavanApp(engineVersion: String) {
         value = labelled.withTrackers(found, scanner.trackers, scanner.sdkList, scanner.needs, states, scanner.owners)
         scanProgressFlow.value = null
     }
+    // Usage access is granted in Settings, so it is read again whenever the user comes back (ADR 0022).
+    var usageVersion by remember { mutableIntStateOf(0) }
+    LifecycleResumeEffect(Unit) {
+        usageVersion++
+        onPauseOrDispose { }
+    }
+    val usage by produceState<UsageState>(initialValue = UsageState.Reading, usageVersion) {
+        val periods = (listOfNotNull(usageDays) + UsageFacts.PERIODS).distinct()
+        value = withContext(Dispatchers.IO) { UsageReader(context).read(usageUntil ?: System.currentTimeMillis(), periods) }
+            ?.let(UsageState::Ready) ?: UsageState.NoAccess
+    }
+    var days by rememberSaveable { mutableIntStateOf(usageDays ?: UsageFacts.PERIODS.first()) }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var reviewing by rememberSaveable { mutableStateOf(false) }
     var showingData by rememberSaveable { mutableStateOf(false) }
@@ -198,10 +213,14 @@ internal fun DatapavanApp(engineVersion: String) {
             audit == null -> Loading(insets)
             entry != null -> {
                 BackHandler { selected = null }
+                val app = entry.first
+                val sharedWith = audit.apps.map { it.first }.filter { it.uid == app.uid && it.packageName != app.packageName }
+                    .map { it.label ?: it.packageName }
                 AppDetail(
-                    entry, audit.trackers?.get(entry.first.packageName), audit.trackerInfo, audit.signatures[entry.first.packageName],
-                    audit.sdks[entry.first.packageName].orEmpty(), audit.unavailable[entry.first.packageName].orEmpty(),
-                    audit.services, audit.owners[entry.first.packageName], insets, onBack = { selected = null },
+                    entry, audit.trackers?.get(app.packageName), audit.trackerInfo, audit.signatures[app.packageName],
+                    audit.sdks[app.packageName].orEmpty(), audit.unavailable[app.packageName].orEmpty(),
+                    audit.services, audit.owners[app.packageName], insets, onBack = { selected = null },
+                    usage = { AppUsageSection(app, usage, days, sharedWith, app.isVpnApp || app.packageName in audit.signatures) { days = it } },
                 )
             }
             reviewing -> {
@@ -215,6 +234,7 @@ internal fun DatapavanApp(engineVersion: String) {
             else -> Overview(
                 audit, engineVersion, scanProgress, insets,
                 onOpen = { selected = it }, onReview = { reviewing = true }, onData = { showingData = true },
+                usage = { UsageOverview(usage, days, audit.apps.map { it.first }, onDays = { days = it }, onOpen = { selected = it }) },
             )
         }
     }
@@ -235,7 +255,7 @@ private fun Loading(insets: PaddingValues) {
 
 @Composable
 private fun Overview(audit: AuditResult, engineVersion: String, scanProgress: Pair<Int, Int>?, insets: PaddingValues,
-    onOpen: (String) -> Unit, onReview: () -> Unit, onData: () -> Unit) {
+    onOpen: (String) -> Unit, onReview: () -> Unit, onData: () -> Unit, usage: @Composable () -> Unit) {
     var showAll by rememberSaveable { mutableStateOf(false) }
     val flagged = audit.apps.filter { (_, findings) -> findings.any { it.severity != Severity.INFO } }
     val shown = if (showAll) audit.apps else flagged
@@ -264,6 +284,10 @@ private fun Overview(audit: AuditResult, engineVersion: String, scanProgress: Pa
         }
         item { IntegrityLine(audit.device) }
         item { StrictReviewEntry(audit.apps.map { it.first }, onStart = onReview) }
+        item {
+            Spacer(Modifier.height(16.dp))
+            usage()
+        }
         item {
             Spacer(Modifier.height(16.dp))
             SectionTitle(R.string.section_apps)
@@ -334,7 +358,8 @@ private fun AppRow(app: AppFacts, findings: List<FindingKind>, onClick: () -> Un
 
 @Composable
 private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<Int, TrackerInfo>, signature: SignatureVerdict?,
-    sdks: List<Sdk>, unavailable: List<Capability>, services: ServiceStates?, owners: OwnerNotes?, insets: PaddingValues, onBack: () -> Unit) {
+    sdks: List<Sdk>, unavailable: List<Capability>, services: ServiceStates?, owners: OwnerNotes?, insets: PaddingValues, onBack: () -> Unit,
+    usage: @Composable () -> Unit) {
     val (app, findings) = entry
     val context = LocalContext.current
     val collector = remember { AppCollector(context) }
@@ -373,6 +398,7 @@ private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<
         if (unavailable.isNotEmpty() && services != null) {
             item { ServiceNeedsSection(unavailable, services.states, services.names, services.checkedAt) }
         }
+        item { usage() }
         item {
             SectionTitle(R.string.detail_special)
             Text(

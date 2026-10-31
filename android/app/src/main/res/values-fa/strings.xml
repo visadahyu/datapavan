@@ -79,6 +79,59 @@
     <string name="owners_heading">چه کسی این سرویس‌ها را اداره می‌کند</string>
     <string name="owner_same_group">ساخت همان گروه شرکتی این برنامه (%1$s): %2$s. این گروه می‌تواند این داده را با داده‌ای که برنامه‌ها و سرویس‌های دیگرش جمع می‌کنند ترکیب کند.</string>
     <string name="owner_shut_down">سرویس پشت %1$s در %2$s تعطیل شده است.</string>
+    <!-- Network use and apps not opened, from usage access (ADR 0022). -->
+    <string name="usage_access_title">مصرف شبکه و برنامه‌هایی که باز نمی‌کنید</string>
+    <string name="usage_access_body">با دسترسی به آمار استفاده، این برنامه می‌تواند نشان دهد هر برنامه چقدر داده مصرف کرده و کدام برنامه‌ها را مدت‌هاست باز نکرده‌اید. همین دسترسی به یک برنامه اجازه می‌دهد ببیند کدام برنامه‌ها را کی باز کرده‌اید. این برنامه فقط جمع‌ها و تاریخ آخرین استفاده از هر برنامه را می‌خواند، هیچ‌کدام را نگه نمی‌دارد و نمی‌تواند جایی بفرستد، چون به شبکه دسترسی ندارد. بقیه بخش‌ها بدون این دسترسی هم کار می‌کنند.</string>
+    <string name="usage_access_button">اجازه دسترسی به آمار استفاده</string>
+    <string name="usage_access_restricted">اندروید این کلید را برای برنامه‌هایی که از فایل نصب شده‌اند خاکستری می‌کند. در این صورت، اطلاعات این برنامه را باز کنید، از منوی آن (⋮) اجازه تنظیمات محدودشده را بدهید و دوباره امتحان کنید.</string>
+    <string name="usage_access_app_info">باز کردن اطلاعات برنامه</string>
+    <string name="usage_reading">در حال خواندن سوابق اندروید…</string>
+    <string name="usage_missing">مصرف شبکه و آخرین باز شدن به دسترسی به آمار استفاده نیاز دارند، که می‌توانید در صفحه اصلی اجازه‌اش را بدهید.</string>
+    <string name="section_network">مصرف شبکه</string>
+    <plurals name="network_period">
+        <item quantity="one">%1$d روز گذشته: از %2$s تا %3$s</item>
+        <item quantity="other">%1$d روز گذشته: از %2$s تا %3$s</item>
+    </plurals>
+    <string name="network_totals">داده همراه %1$s · وای‌فای %2$s</string>
+    <string name="network_show_7">نمایش ۷ روز گذشته</string>
+    <string name="network_show_30">نمایش ۳۰ روز گذشته</string>
+    <string name="network_app_line">%1$s: %2$s</string>
+    <string name="network_removed">برنامه‌های حذف‌شده: %1$s</string>
+    <string name="network_tethering">نقطه اتصال و اشتراک اینترنت: %1$s</string>
+    <string name="network_system">سیستم اندروید: %1$s</string>
+    <string name="network_lag">این اعداد از شمارش خود اندروید است. داده همراه برای همه سیم‌کارت‌ها با هم است. این برنامه هیچ‌کدام از این اعداد را نگه نمی‌دارد.</string>
+    <string name="network_none">در این بازه مصرف شبکه‌ای نبوده است.</string>
+    <string name="network_mobile">داده همراه %1$s: %2$s دریافت، %3$s ارسال، که %4$s از آن در پس‌زمینه بوده است</string>
+    <string name="network_wifi">وای‌فای %1$s: %2$s دریافت، %3$s ارسال، که %4$s از آن در پس‌زمینه بوده است</string>
+    <string name="network_mobile_foreground">داده همراه %1$s: %2$s دریافت، %3$s ارسال، که هیچ‌کدام در پس‌زمینه نبوده است</string>
+    <string name="network_wifi_foreground">وای‌فای %1$s: %2$s دریافت، %3$s ارسال، که هیچ‌کدام در پس‌زمینه نبوده است</string>
+    <string name="network_shared">اندروید این برنامه را همراه با %1$s می‌شمارد، چون شناسه کاربری مشترکی دارند. این اعداد برای همه آن‌هاست.</string>
+    <string name="network_proxy">اگر برنامه‌های دیگر از این برنامه به‌عنوان پراکسی استفاده کنند، ترافیک آن‌ها اینجا شمرده می‌شود.</string>
+    <string name="network_background_note">پس‌زمینه یعنی برنامه روی صفحه نبوده و اعلان در حال اجرایی هم نشان نمی‌داده است. پیام‌های پوش، همگام‌سازی و پشتیبان‌گیری هم در پس‌زمینه انجام می‌شوند.</string>
+    <plurals name="use_last">
+        <item quantity="one">آخرین باز شدن یا اجرا: %1$s (%2$d روز پیش)</item>
+        <item quantity="other">آخرین باز شدن یا اجرا: %1$s (%2$d روز پیش)</item>
+    </plurals>
+    <string name="use_none_since">تا جایی که سوابق اندروید نشان می‌دهد، از %1$s باز نشده است.</string>
+    <string name="use_works_unopened">این برنامه بدون باز شدن هم می‌تواند کار کند، مثلاً به‌عنوان صفحه‌کلید، ابزارک یا وی‌پی‌ان، پس این نکته چیز زیادی نمی‌گوید.</string>
+    <string name="section_dormant">مدت‌هاست باز نشده‌اند</string>
+    <plurals name="dormant_intro">
+        <item quantity="one">اندروید مجوزهای بیشتر برنامه‌هایی را که دیگر استفاده نمی‌کنید پس می‌گیرد، اما نه از همه برنامه‌ها، و هرگز دسترسی‌های ویژه را. این برنامه‌ها %1$d روز یا بیشتر باز نشده‌اند و هنوز چیزی در اختیار دارند:</item>
+        <item quantity="other">اندروید مجوزهای بیشتر برنامه‌هایی را که دیگر استفاده نمی‌کنید پس می‌گیرد، اما نه از همه برنامه‌ها، و هرگز دسترسی‌های ویژه را. این برنامه‌ها %1$d روز یا بیشتر باز نشده‌اند و هنوز چیزی در اختیار دارند:</item>
+    </plurals>
+    <plurals name="dormant_none">
+        <item quantity="one">هیچ برنامه‌ای که %1$d روز باز نشده باشد، هنوز مجوز، دسترسی ویژه یا مصرف داده ندارد.</item>
+        <item quantity="other">هیچ برنامه‌ای که %1$d روز باز نشده باشد، هنوز مجوز، دسترسی ویژه یا مصرف داده ندارد.</item>
+    </plurals>
+    <plurals name="dormant_line">
+        <item quantity="one">%1$d روز باز نشده است. هنوز دارد: %2$s</item>
+        <item quantity="other">%1$d روز باز نشده است. هنوز دارد: %2$s</item>
+    </plurals>
+    <string name="dormant_sensitive">مجوزهای حساس</string>
+    <string name="dormant_special">دسترسی‌های ویژه</string>
+    <string name="dormant_vpn">مجوز وی‌پی‌ان</string>
+    <string name="dormant_background">مصرف داده در پس‌زمینه</string>
+    <string name="dormant_unused_apps">باز کردن برنامه‌های استفاده‌نشده در اندروید</string>
     <string name="tracker_with_categories">%1$s (%2$s)</string>
     <string name="tracker_category_advertisement">تبلیغات</string>
     <string name="tracker_category_analytics">آمار</string>

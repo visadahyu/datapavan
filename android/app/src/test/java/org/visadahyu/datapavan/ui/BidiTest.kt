@@ -17,4 +17,10 @@ class BidiTest {
         assertEquals(token, wrapped.substring(1, wrapped.length - 1))
         assertTrue(wrapped.first() == '\u2066' && wrapped.last() == '\u2069')
     }
+
+    @Test
+    fun wrapsTextOfEitherDirectionInFirstStrongIsolate() {
+        assertEquals("\u2068Google\u2069", isolate("Google"))
+        assertEquals("\u2068خدمات Google Play\u2069", isolate("خدمات Google Play"))
+    }
 }

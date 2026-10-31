@@ -1,6 +1,6 @@
 # Privacy policy
 
-- **Effective:** 2026-10-29
+- **Effective:** 2026-10-31
 - **Responsible:** the Datapavan maintainer (mehdashti), until the Visadahyu Foundation is established
 
 **Datapavan collects no data about you.**
@@ -26,7 +26,7 @@ or share a report.
 | Permission | Used for | From |
 |---|---|---|
 | See installed apps | Listing apps and their permissions | v0.1 |
-| Usage access (granted by you in Settings) | Showing how much data each app has sent | v0.1 |
+| Usage access (granted by you in Settings; optional) | Showing how much data each app has sent and received, and which apps you have not opened for a long time. Datapavan reads only totals and the date each app was last used, never which app you opened when, and keeps none of it | v0.1 |
 | Network state | Telling whether a VPN is active. It does not allow any connection | v0.1 |
 | VPN (granted by you) | The **local** firewall. Traffic is filtered on the phone and never sent to us | v0.2 |
 | Internet | Forwarding the traffic of other apps through the local firewall, and optional list updates | v0.2 |
