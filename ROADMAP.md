@@ -37,8 +37,12 @@ The data behind M3 keeps growing next to the later milestones:
 - Apps named in reports on networks that relay traffic, matched by package and certificate
   (ADR 0019).
 - Trackers from the app's own company group ([ADR 0020](docs/decisions/0020-same-company-trackers.md)):
-  the rule and the first owners are done; more owners and publishers follow, and the phone maker's
-  own software by its platform key.
+  the rule and the first owners are done; more owners and publishers follow, among them the makers'
+  own keys from their Digital Asset Links files.
+- The phone maker's software and system keys that cannot be trusted
+  ([ADR 0023](docs/decisions/0023-maker-software-and-system-keys.md)): the system key is read on the
+  phone and checked against AOSP's public test keys, Google's development keys and the platform keys
+  Google listed as leaked in 2022; further leaks join `data/system-keys` as they are published.
 - Tracker capabilities that need a service the phone lacks
   ([ADR 0021](docs/decisions/0021-service-dependent-capabilities.md)): the service check and seven
   capabilities are done; more follow as their vendors' artefacts are read, and the check still needs
