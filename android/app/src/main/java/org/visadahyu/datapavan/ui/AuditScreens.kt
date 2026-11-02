@@ -201,10 +201,12 @@ internal fun DatapavanApp(engineVersion: String, usageUntil: Long? = null, usage
         value = labelled.withTrackers(found, scanner.trackers, scanner.sdkList, scanner.needs, states, scanner.owners)
         scanProgressFlow.value = null
     }
+    // The app being checked (ADR 0025); while a check runs, nothing else may query Android's counts.
+    var checking by rememberSaveable { mutableStateOf<String?>(null) }
     // Usage access is granted in Settings, so it is read again whenever the user comes back (ADR 0022).
     var usageVersion by remember { mutableIntStateOf(0) }
     LifecycleResumeEffect(Unit) {
-        usageVersion++
+        if (checking == null) usageVersion++
         onPauseOrDispose { }
     }
     val usage by produceState<UsageState>(initialValue = UsageState.Reading, usageVersion) {
@@ -220,8 +222,23 @@ internal fun DatapavanApp(engineVersion: String, usageUntil: Long? = null, usage
     Scaffold(modifier = Modifier.fillMaxSize()) { insets ->
         val audit = result
         val entry = audit?.apps?.firstOrNull { it.first.packageName == selected }
+        val checked = audit?.apps?.firstOrNull { it.first.packageName == checking }?.first
         when {
             audit == null -> Loading(insets)
+            checked != null -> {
+                val close: () -> Unit = {
+                    checking = null
+                    usageVersion++
+                }
+                BackHandler(onBack = close)
+                GuidedCheckScreen(
+                    checked,
+                    carriesOthers = checked.packageName in audit.signatures,
+                    sharedUid = audit.apps.any { it.first.uid == checked.uid && it.first.packageName != checked.packageName },
+                    insets = insets,
+                    onBack = close,
+                )
+            }
             entry != null -> {
                 BackHandler { selected = null }
                 val app = entry.first
@@ -231,7 +248,12 @@ internal fun DatapavanApp(engineVersion: String, usageUntil: Long? = null, usage
                     entry, audit.trackers?.get(app.packageName), audit.trackerInfo, audit.signatures[app.packageName],
                     audit.sdks[app.packageName].orEmpty(), audit.unavailable[app.packageName].orEmpty(),
                     audit.services, audit.owners[app.packageName], audit.keys[app.packageName], insets, onBack = { selected = null },
-                    usage = { AppUsageSection(app, usage, days, sharedWith, app.isVpnApp || app.packageName in audit.signatures) { days = it } },
+                    usage = {
+                        AppUsageSection(
+                            app, usage, days, sharedWith, app.isVpnApp || app.packageName in audit.signatures,
+                            onDays = { days = it }, onCheck = { checking = app.packageName },
+                        )
+                    },
                 )
             }
             reviewing -> {

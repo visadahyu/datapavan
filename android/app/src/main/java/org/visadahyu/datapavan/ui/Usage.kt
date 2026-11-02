@@ -30,8 +30,10 @@ import org.visadahyu.datapavan.R
 import org.visadahyu.datapavan.audit.AppFacts
 import org.visadahyu.datapavan.audit.Dormancy
 import org.visadahyu.datapavan.audit.Dormant
+import org.visadahyu.datapavan.audit.QuietRole
 import org.visadahyu.datapavan.audit.StillHolds
 import org.visadahyu.datapavan.audit.Traffic
+import org.visadahyu.datapavan.audit.TrafficFacts
 import org.visadahyu.datapavan.audit.UsageFacts
 import java.text.DateFormat
 import java.util.Date
@@ -186,11 +188,19 @@ internal fun DormantSection(dormant: List<Dormant>, onOpen: (String) -> Unit) {
 
 /**
  * An app page's use section: network use in the period and the last opening, with what Android's
- * counting means for this app. [sharedWith] are the other apps of its UID; [proxyNote] is shown on
- * VPN, proxy and circumvention apps.
+ * counting means for this app, the facts of ADR 0025 and the way into the guided check. [sharedWith]
+ * are the other apps of its UID; [proxyNote] is shown on VPN, proxy and circumvention apps.
  */
 @Composable
-internal fun AppUsageSection(app: AppFacts, usage: UsageState, days: Int, sharedWith: List<String>, proxyNote: Boolean, onDays: (Int) -> Unit) {
+internal fun AppUsageSection(
+    app: AppFacts,
+    usage: UsageState,
+    days: Int,
+    sharedWith: List<String>,
+    proxyNote: Boolean,
+    onDays: (Int) -> Unit,
+    onCheck: () -> Unit,
+) {
     Column {
         SectionTitle(R.string.section_network)
         when (usage) {
@@ -206,9 +216,11 @@ internal fun AppUsageSection(app: AppFacts, usage: UsageState, days: Int, shared
                     TrafficLine(R.string.network_mobile, R.string.network_mobile_foreground, use.mobile)
                     TrafficLine(R.string.network_wifi, R.string.network_wifi_foreground, use.wifi)
                 }
+                TrafficFactLines(app, facts, sharedWith.isNotEmpty())
                 TextButton(onClick = { onDays(if (days == 30) 7 else 30) }) {
                     Text(stringResource(if (days == 30) R.string.network_show_7 else R.string.network_show_30))
                 }
+                TextButton(onClick = onCheck) { Text(stringResource(R.string.check_button)) }
                 if (sharedWith.isNotEmpty()) Note(stringResource(R.string.network_shared, sharedWith.joinToString(", ") { isolate(it) }))
                 if (proxyNote) Note(stringResource(R.string.network_proxy))
                 Note(stringResource(R.string.network_background_note))
@@ -229,6 +241,24 @@ internal fun AppUsageSection(app: AppFacts, usage: UsageState, days: Int, shared
     }
 }
 
+/** The facts of ADR 0025 that need no comparison, stated with their limits. */
+@Composable
+private fun TrafficFactLines(app: AppFacts, facts: UsageFacts, sharedUid: Boolean) {
+    TrafficFacts.neverOpened(app, facts, sharedUid)?.let { (installed, use) ->
+        val date = DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(installed))
+        Text(stringResource(R.string.fact_never_opened, date, size(use.received), size(use.sent)), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
+        Note(stringResource(R.string.fact_never_opened_note))
+    }
+    TrafficFacts.quietRoleSent(app, facts)?.let { sent ->
+        val text = when (app.quietRole) {
+            QuietRole.KEYBOARD -> R.string.fact_quiet_keyboard
+            QuietRole.LIVE_WALLPAPER -> R.string.fact_quiet_wallpaper
+            QuietRole.HOME, null -> R.string.fact_quiet_home
+        }
+        Text(stringResource(text, size(sent)), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
+    }
+}
+
 @Composable
 private fun TrafficLine(@StringRes label: Int, @StringRes foregroundOnly: Int, traffic: Traffic) {
     if (traffic.total == 0L) return
@@ -243,7 +273,7 @@ private fun TrafficLine(@StringRes label: Int, @StringRes foregroundOnly: Int, t
 }
 
 @Composable
-private fun Note(text: String) {
+internal fun Note(text: String) {
     Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
 }
 
@@ -254,7 +284,7 @@ private fun periodText(usage: UsageFacts, days: Int): String {
 }
 
 /** Sizes as Settings' data-usage screen shows them, in the user's language. */
-private fun size(bytes: Long): String = isolate(DataSize.format(bytes))
+internal fun size(bytes: Long): String = isolate(DataSize.format(bytes))
 
 @StringRes
 private fun holdName(hold: StillHolds) = when (hold) {
