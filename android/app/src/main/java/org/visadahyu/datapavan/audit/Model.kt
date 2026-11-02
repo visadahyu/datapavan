@@ -15,6 +15,9 @@ enum class SpecialAccess {
 /** Sensors behind a granted runtime permission. */
 enum class Sensor { MICROPHONE, CAMERA, LOCATION }
 
+/** A role, declared in the app's manifest, whose work needs no network (ADR 0025). */
+enum class QuietRole { KEYBOARD, LIVE_WALLPAPER, HOME }
+
 /** What the audit learned about one installed app. Plain data, so the rules can be unit-tested. */
 data class AppFacts(
     val packageName: String,
@@ -47,6 +50,8 @@ data class AppFacts(
      * a live wallpaper, a widget, a VPN, or one bound through special access (ADR 0022).
      */
     val worksUnopened: Boolean = false,
+    /** Declares a keyboard, a live wallpaper or a home screen, whether or not it is in use. */
+    val quietRole: QuietRole? = null,
 )
 
 /** Hardware key attestation, decoded by the Rust engine. Null fields were absent. */

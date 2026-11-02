@@ -8,8 +8,10 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
+import android.net.TrafficStats
 import android.os.Process
 import android.os.RemoteException
+import android.os.SystemClock
 
 /** Bytes received and sent on one kind of network, and how much of each Android counted as background. */
 data class Traffic(
@@ -24,12 +26,20 @@ data class Traffic(
     operator fun plus(other: Traffic) = Traffic(
         received + other.received, sent + other.sent, backgroundReceived + other.backgroundReceived, backgroundSent + other.backgroundSent,
     )
+
+    operator fun minus(other: Traffic) = Traffic(
+        received - other.received, sent - other.sent, backgroundReceived - other.backgroundReceived, backgroundSent - other.backgroundSent,
+    )
 }
 
 /** One UID's use of mobile networks (all SIMs together) and of Wi-Fi in a period. */
 data class NetworkUse(val mobile: Traffic = Traffic(), val wifi: Traffic = Traffic()) {
     val total: Long get() = mobile.total + wifi.total
     val background: Long get() = mobile.background + wifi.background
+    val received: Long get() = mobile.received + wifi.received
+    val sent: Long get() = mobile.sent + wifi.sent
+
+    operator fun minus(other: NetworkUse) = NetworkUse(mobile - other.mobile, wifi - other.wifi)
 }
 
 /**
@@ -131,6 +141,7 @@ class UsageReader(private val context: Context) {
      */
     fun read(now: Long = System.currentTimeMillis(), periods: List<Int> = UsageFacts.PERIODS): UsageFacts? {
         if (!hasAccess()) return null
+        lastQuery = SystemClock.elapsedRealtime()
         val stats = context.getSystemService(NetworkStatsManager::class.java)
         val network = periods.associateWith { days -> network(stats, now - days * UsageFacts.DAY, now) }
         // Android keeps yearly records for three years; a longer span reads all of them.
@@ -139,6 +150,21 @@ class UsageReader(private val context: Context) {
             .filterValues { it > 0 }
         val since = used.values.minOfOrNull { it.firstTimeStamp } ?: now
         return UsageFacts(now, network, lastUsed, since)
+    }
+
+    /**
+     * One reading for the guided check (ADR 0025): [uid]'s use in [period] and the sum over all UIDs,
+     * with `TrafficStats`' live totals read just before. Null without usage access. Off the main thread.
+     */
+    fun readCheck(uid: Int, period: Pair<Long, Long>): CheckReading? {
+        if (!hasAccess()) return null
+        val now = System.currentTimeMillis()
+        val rx = TrafficStats.getTotalRxBytes()
+        val tx = TrafficStats.getTotalTxBytes()
+        lastQuery = SystemClock.elapsedRealtime()
+        val network = network(context.getSystemService(NetworkStatsManager::class.java), period.first, period.second)
+        val live = if (rx == TrafficStats.UNSUPPORTED.toLong() || tx == TrafficStats.UNSUPPORTED.toLong()) null else rx + tx
+        return CheckReading(now, network[uid] ?: NetworkUse(), network.values.sumOf { it.total }, live)
     }
 
     private fun network(stats: NetworkStatsManager, start: Long, end: Long): Map<Int, NetworkUse> {
@@ -172,7 +198,15 @@ class UsageReader(private val context: Context) {
         return totals
     }
 
-    private companion object {
-        const val RECORD_SPAN = 4 * 366 * UsageFacts.DAY
+    companion object {
+        private const val RECORD_SPAN = 4 * 366 * UsageFacts.DAY
+
+        /**
+         * When this process last queried Android's counts, in `elapsedRealtime`, or null. Each query
+         * restarts Android's 15 seconds before a query brings the counts up to date (ADR 0025).
+         */
+        @Volatile
+        var lastQuery: Long? = null
+            private set
     }
 }

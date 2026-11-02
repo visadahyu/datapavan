@@ -23,6 +23,8 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.telecom.TelecomManager
 import android.view.accessibility.AccessibilityManager
+import android.service.wallpaper.WallpaperService
+import android.view.inputmethod.InputMethod
 import android.view.inputmethod.InputMethodManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -65,12 +67,14 @@ class AppCollector(private val context: Context) {
             .activeAdmins.orEmpty().map { it.packageName }.toSet()
         val launchable = launchablePackages()
         val roles = roleHolders()
+        val quiet = quietRoles()
         val packages = installedPackages()
         packages.inParallel { info ->
             facts(info, accessibility, listeners, admins)?.let { app ->
                 app.copy(
                     launcherIcon = app.packageName in launchable,
                     worksUnopened = app.packageName in roles || app.isVpnApp || app.special.any { it in BOUND_ACCESS },
+                    quietRole = quiet[app.packageName],
                 )
             }
         }
@@ -159,6 +163,24 @@ class AppCollector(private val context: Context) {
         }
         AppWidgetManager.getInstance(context)?.installedProviders.orEmpty().mapTo(this) { it.provider.packageName }
     }
+
+    /**
+     * Apps whose manifests declare a keyboard, a live wallpaper or a home screen, in use or not: roles
+     * that need no network (ADR 0025). An app with several gets the first in that order.
+     */
+    private fun quietRoles(): Map<String, QuietRole> = buildMap {
+        for (home in activities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))) put(home.activityInfo.packageName, QuietRole.HOME)
+        for (wallpaper in services(Intent(WallpaperService.SERVICE_INTERFACE))) put(wallpaper.serviceInfo.packageName, QuietRole.LIVE_WALLPAPER)
+        for (keyboard in services(Intent(InputMethod.SERVICE_INTERFACE))) put(keyboard.serviceInfo.packageName, QuietRole.KEYBOARD)
+    }
+
+    private fun services(intent: Intent): List<ResolveInfo> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.queryIntentServices(intent, PackageManager.ResolveInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.queryIntentServices(intent, 0)
+        }
 
     /** SHA-256 of each signing certificate, as apksigner prints it, for matching against ADR 0018's list. */
     private fun signing(info: PackageInfo): AppSigning? {
