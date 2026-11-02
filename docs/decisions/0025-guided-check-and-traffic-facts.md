@@ -57,6 +57,9 @@ measured the method on the Android 17 emulator against packet captures and on th
      more than 64 KB, it says that Android's count is not up to date yet and reads again 15 seconds
      later, up to three times; then it shows the numbers and says that they may be incomplete. With
      a VPN active the comparison is not made, because it was not tested, and the result says so.
+     (Amended while building it, 2026-11-02: the first reading also waits 15 seconds after any
+     earlier query, and a sum above the live totals by the same margin means that the first reading
+     was behind, so the result may include traffic from before the check, and says so.)
    - **Show** the duration, and received and sent bytes for mobile data and Wi-Fi apart, per minute,
      with the share that Android counted as background. For activities that only receive, the sent
      bytes are also shown as a share of the received ones, next to one sentence: while an app only
