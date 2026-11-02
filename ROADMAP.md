@@ -69,7 +69,7 @@ starts, a two-week spike picks the packet engine (Rust netstack or Go gVisor). D
 - Apps that keep their own always-on connection instead of the system push service are flagged.
 - An optional advanced mode, granted once over USB, reads Android's own history of microphone and camera use and names the app exactly.
 - Cross-checks report contradictions: our sensor log against Android's record, and Android's per-app data accounting against what the VPN saw.
-- Unusual behaviour: each app's normal traffic shape is learned on the device, and deviations are reported, for example a steady audio-like upload or large uploads while the user only scrolled. Because a learned baseline only detects change, uploads are also split by destination (content, analytics, advertising) and compared with lab reference measurements. Ranges for kinds of app come from the project's lab and get their own ADR first (ADR 0025, point 5).
+- Unusual behaviour: each app's normal traffic shape is learned on the device, and deviations are reported, for example a steady audio-like upload or large uploads while the user only scrolled. Because a learned baseline only detects change, uploads are also split by destination (content, analytics, advertising) and compared with lab reference measurements. Ranges for kinds of app come from the project's lab ([docs/LAB.md](docs/LAB.md)): measured on its own phones, published with every run, and compared with a user's guided check, which can be repeated and reported; they get their own ADR first (ADR 0025, point 5).
 
 ### v0.3 "Guard": blocking
 
