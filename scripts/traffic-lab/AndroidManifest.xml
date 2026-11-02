@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Lab tool for the guided check spike (scripts/traffic-lab/run.py): it moves known amounts of data
+    to and from a server on the computer, and reads Android's network counts with the calls that
+    Datapavan uses. Unlike Datapavan it has network access. Runs on emulators only; never shipped.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.visadahyu.datapavan.trafficlab">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+
+    <application
+        android:label="Datapavan traffic lab"
+        android:hasCode="true"
+        android:usesCleartextTraffic="true">
+        <activity android:name=".TransferActivity" android:exported="true" />
+        <receiver android:name=".TransferReceiver" android:exported="true" />
+        <receiver android:name=".ReadReceiver" android:exported="true" />
+    </application>
+</manifest>
