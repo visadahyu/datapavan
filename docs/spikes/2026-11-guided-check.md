@@ -112,6 +112,44 @@ After a fresh reading and a 1 MB transfer, in three runs:
   are live and need no permission. When a reading is fresh, the sum over all UIDs of the difference
   matches their difference; when it is stale, it falls short (here 0 against about 1 MB).
 
+## On a real phone: the A40
+
+The same trials on Wi-Fi ran on the A40 (Samsung, Android 11, kernel 4.4) on the maintainer's home
+network, the same day, with `run.py private`: it changes no setting and keeps nothing, the phone
+returns other apps' counts only as a sum (the lab app's `private` extra), and only the lab app's
+numbers and percentages are printed. The computer's firewall lets no connection in, so the lab app
+listened and the computer connected to it. With no capture, the reference is the bytes moved.
+
+| Activity, three runs each | Android's count against the bytes moved | Counted as background |
+|---|---|---|
+| 1 MB down, on screen | + 52.0 bytes per packet (1,036,096 bytes in 694 packets, every run) | 0 % |
+| 20 MB down, on screen | + 52.0 bytes per packet (20,718,440 in 13,816) | 0 to 1 % |
+| 5 MB down, in the background | + 52.0 bytes per packet (5,179,772 in 3,457) | 100 % |
+| 5 MB up, on screen | + 10 to + 29 % (5.52 to 6.43 MB, in 982 to 1,673 packets) | 22 to 64 % |
+
+- **Received bytes are exact:** the payload plus 52 bytes per packet, which are the IPv4 header
+  (20), the TCP header (20) and its timestamp option (12).
+- **Sent bytes were well above what was moved.** The A40's kernel has no eBPF, so Android counts
+  per app with the older `xt_qtaguid` module, which counts packets as the kernel hands them out:
+  offloaded packets as one (fewer packets than the 3,454 segments that 5 MB needs) and, most likely,
+  every retransmission on the home Wi-Fi. The cause was not shown. The background share is an
+  artefact of the listening mode: the lab app closed its screen once it had handed the data to the
+  kernel, which was still sending it.
+- **The windows** behaved as on the emulator: −0.027 to +0.004 % for the windows ending now, and
+  −61 to −99 % for a single reading.
+- **The 15-second limit** is the same on Android 11. In two runs the readings at 10 and 20 seconds
+  were stale and the one at 36 seconds fresh. In the first run the reading at 10 seconds was already
+  fresh: something else, most likely other apps' traffic reaching Android's own threshold, had made
+  Android count. The sum over all apps against `TrafficStats` was −100 % for every stale reading,
+  and between −1.2 and 0 % for fresh ones.
+- **A guided check of a real app.** The user sent a file of 10,000,000 random bytes from a computer
+  to their own account and downloaded it on the A40 in a messaging app of their choice, between two
+  readings 249 seconds apart. Android counted 10,625,896 bytes received in 8,438 packets and 324,541
+  sent in 3,784 packets, none in the background; the sum over all apps matched `TrafficStats` within
+  0.08 %. Of the received bytes, 4.39 % are TCP/IP headers (52 per packet) and 1.87 % the app's
+  protocol and whatever else it did in those four minutes. Sent bytes were 3.05 % of received: the
+  top of the transport floor of 0.5 to 3 % that the research expects while only downloading.
+
 ## What this means for the guided check
 
 1. **Two readings, never one,** each with the same start and an end in the future. The start is a
@@ -126,16 +164,19 @@ After a fresh reading and a 1 MB transfer, in three runs:
    over all UIDs falls clearly short, Datapavan says the count is not up to date yet and reads again
    15 seconds later. (According to AOSP, Android also counts on its own once about 2 MB more has
    been used, less on some devices, so a stale reading misses at most that much; not measured.)
-3. **The numbers are IP bytes, headers included,** and can be a fraction of a percent above the
-   bytes on the wire. That is far below the spread of any range of apps, and the check reports
-   them as Android's count.
+3. **The numbers are IP bytes, headers included.** Received bytes matched the capture to the byte
+   on the emulator's Wi-Fi, were up to 0.46 % above it on its mobile data, and on the A40 were the
+   payload plus exactly its headers. Sent bytes include every transmission: up to 0.72 % above the
+   bytes on the wire on the emulator, and 10 to 29 % above the bytes moved on the A40, whose kernel
+   counts with `xt_qtaguid`. The check reports them as Android's count and says that sent bytes
+   include resent packets; phones with kernels older than 4.9, which cannot count with eBPF, need
+   that note most.
 4. **Foreground and background can be shown apart** for the activity, as Android recorded them.
 
 ## Not checked yet
 
-- Real phones: a capture needs a lab access point (lab plan, research note); without one, the
-  readings, the windows, the 15-second limit and the check against `TrafficStats` can still be
-  tested on the A40 (Android 11) and other vendors' phones against the server's own byte counts.
-- A network with TCP timestamps, IPv6, and QUIC or other UDP traffic.
+- Phones that count with eBPF, of other vendors, against a capture at a lab access point (lab plan,
+  research note); whether retransmissions explain the A40's sent bytes.
+- Mobile data on a real carrier, IPv6, and QUIC or other UDP traffic.
 - Another app querying in between, a 2 MB activity during a stale period, an activity across a
   two-hour boundary, and traffic through a VPN.
