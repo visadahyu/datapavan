@@ -10,9 +10,12 @@ public final class TransferReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         long down = intent.getLongExtra("down", 0);
         long up = intent.getLongExtra("up", 0);
+        String server = intent.getStringExtra("server");
+        int listen = intent.getIntExtra("listen", 0);
         PendingResult result = goAsync();
         new Thread(() -> {
-            Transfer.run(down, up);
+            if (listen > 0) Transfer.serve(listen, down, up);
+            else Transfer.run(server, down, up);
             result.finish();
         }).start();
     }

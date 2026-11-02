@@ -14,8 +14,11 @@ public final class TransferActivity extends Activity {
         setContentView(text);
         long down = getIntent().getLongExtra("down", 0);
         long up = getIntent().getLongExtra("up", 0);
+        String server = getIntent().getStringExtra("server");
+        int listen = getIntent().getIntExtra("listen", 0);
         new Thread(() -> {
-            Transfer.run(down, up);
+            if (listen > 0) Transfer.serve(listen, down, up);
+            else Transfer.run(server, down, up);
             runOnUiThread(this::finish);
         }).start();
     }

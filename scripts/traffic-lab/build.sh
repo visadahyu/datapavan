@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Builds the traffic lab APK with the SDK's build tools only, like scripts/fixture-app/build.sh.
-# Output: build/traffic-lab/traffic-lab.apk under the repository root.
+# Output: build/traffic-lab/traffic-lab.apk under the repository root. Each build is signed with a new
+# throwaway key, so a phone needs the previous build uninstalled first.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
