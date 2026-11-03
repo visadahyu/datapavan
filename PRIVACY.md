@@ -1,6 +1,6 @@
 # Privacy policy
 
-- **Effective:** 2026-11-02
+- **Effective:** 2026-11-03
 - **Responsible:** the Datapavan maintainer (mehdashti), until the Visadahyu Foundation is established
 
 **Datapavan collects no data about you.**
@@ -13,6 +13,19 @@
 - **Everything stays on your phone.** All analysis happens on the device. Datapavan's own data lives in app-private storage, encrypted where it records network activity.
 - **No backups leave the phone.** Android cloud backup and device-to-device transfer are disabled for Datapavan's data.
 - **Uninstalling deletes Datapavan's data.** The only exception is files you exported yourself, for example a report you saved to shared storage.
+
+## What Datapavan keeps on your phone
+
+- **The remediation plan's journal.** For each change you make through the plan: the app's package
+  name, the time, the screen it opened, and what the app held before and after (its sensitive
+  permissions, special access and VPN permission, and whether it was enabled and installed). It lets
+  you undo a change and see whether one has come back. The journal screen deletes it in one tap.
+- **The strict sensor review:** which access each app had when you reviewed it.
+- **The tracker scan's results,** so that unchanged apps are not scanned again, and **data packs** you
+  imported.
+
+All of it stays in app-private storage and is never backed up or sent. Anyone who can open Datapavan on
+your unlocked phone can see it, as they can see the rest of the app.
 
 ## Version 0.1 cannot open network connections
 
