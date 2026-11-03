@@ -79,7 +79,8 @@ internal val DarkColors: ColorScheme = darkColorScheme(
     surfaceContainerHighest = Color(0xFF35373E),
 )
 
+/** The brand's colours, light or dark as the user chose in the settings (ADR 0027). */
 @Composable
-internal fun DatapavanTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors, content = content)
+internal fun DatapavanTheme(mode: ThemeMode = ThemeMode.SYSTEM, content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = if (mode.isDark(isSystemInDarkTheme())) DarkColors else LightColors, content = content)
 }

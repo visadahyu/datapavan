@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -44,7 +46,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -71,9 +79,9 @@ import org.visadahyu.datapavan.audit.JournalEntry
 import org.visadahyu.datapavan.audit.JournalStore
 import org.visadahyu.datapavan.audit.KeyFacts
 import org.visadahyu.datapavan.audit.KnownCollectors
+import org.visadahyu.datapavan.audit.Outcome
 import org.visadahyu.datapavan.audit.OwnerNotes
 import org.visadahyu.datapavan.audit.Owners
-import org.visadahyu.datapavan.audit.Outcome
 import org.visadahyu.datapavan.audit.Plan
 import org.visadahyu.datapavan.audit.PlanInput
 import org.visadahyu.datapavan.audit.PlanItem
@@ -100,10 +108,10 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-private typealias AppEntry = Pair<AppFacts, List<FindingKind>>
+internal typealias AppEntry = Pair<AppFacts, List<FindingKind>>
 
 /** One complete audit of the phone. [trackers] is null until the tracker scan has finished. */
-private class AuditResult(
+internal class AuditResult(
     val device: DeviceFacts,
     val deviceFindings: List<FindingKind>,
     val apps: List<AppEntry>,
@@ -154,7 +162,7 @@ private class AuditResult(
 }
 
 /** The state of each system service (ADR 0021), as read at [checkedAt], with the services' names. */
-private class ServiceStates(val states: Map<String, ServiceState>, val names: Map<String, String>, val checkedAt: Long)
+internal class ServiceStates(val states: Map<String, ServiceState>, val names: Map<String, String>, val checkedAt: Long)
 
 /**
  * Device and app checks run in parallel; the hardware key attestation alone can take a moment.
@@ -215,9 +223,19 @@ private suspend fun AuditResult.withAllLabels(context: Context): AuditResult {
     return AuditResult(device, deviceFindings, all, dataDate, signatures, trackers, trackerInfo, sdks, unavailable, services, owners, keys, floor)
 }
 
-/** Root of the v0.1 audit UI: an overview of the phone and its apps, and a detail page per app. */
+/**
+ * Root of the v0.1 UI (ADR 0027): four destinations in a navigation bar, each app's page, the plan,
+ * the reviews and checks, and the settings with their pages. [theme] and [onTheme] are the settings'
+ * appearance, which the activity applies.
+ */
 @Composable
-internal fun DatapavanApp(engineVersion: String, usageUntil: Long? = null, usageDays: Int? = null) {
+internal fun DatapavanApp(
+    engineVersion: String,
+    usageUntil: Long? = null,
+    usageDays: Int? = null,
+    theme: ThemeMode = ThemeMode.SYSTEM,
+    onTheme: (ThemeMode) -> Unit = {},
+) {
     val context = LocalContext.current.applicationContext
     // The scan reports progress from background threads; a StateFlow carries it safely to the UI.
     val scanProgressFlow = remember { MutableStateFlow<Pair<Int, Int>?>(null) }
@@ -257,7 +275,9 @@ internal fun DatapavanApp(engineVersion: String, usageUntil: Long? = null, usage
     var days by rememberSaveable { mutableIntStateOf(usageDays ?: UsageFacts.PERIODS.first()) }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var reviewing by rememberSaveable { mutableStateOf(false) }
-    var showingData by rememberSaveable { mutableStateOf(false) }
+    var tab by rememberSaveable { mutableStateOf(Destination.SUMMARY) }
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var settingsPage by rememberSaveable { mutableStateOf<SettingsPage?>(null) }
     var planning by rememberSaveable { mutableStateOf(false) }
     var journaling by rememberSaveable { mutableStateOf(false) }
     // The remediation plan's journal (ADR 0026), small enough to read and write in one go.
@@ -267,12 +287,16 @@ internal fun DatapavanApp(engineVersion: String, usageUntil: Long? = null, usage
         journal = it
         journalStore.save(it)
     }
-    var checkingCopy by rememberSaveable { mutableStateOf(false) }
+    val audit = result
+    val entry = audit?.apps?.firstOrNull { it.first.packageName == selected }
+    val checked = audit?.apps?.firstOrNull { it.first.packageName == checking }?.first
+    val topLevel = audit != null && checked == null && entry == null && !reviewing && !planning && !journaling && !settingsOpen && settingsPage == null
 
-    Scaffold(modifier = Modifier.fillMaxSize()) { insets ->
-        val audit = result
-        val entry = audit?.apps?.firstOrNull { it.first.packageName == selected }
-        val checked = audit?.apps?.firstOrNull { it.first.packageName == checking }?.first
+    Scaffold(
+        // Stable names for the emulator scripts, which cannot read labels in every language.
+        modifier = Modifier.fillMaxSize().semantics { testTagsAsResourceId = true },
+        bottomBar = { if (topLevel) NavigationBar(tab) { tab = it } },
+    ) { insets ->
         when {
             audit == null -> Loading(insets)
             checked != null -> {
@@ -294,10 +318,14 @@ internal fun DatapavanApp(engineVersion: String, usageUntil: Long? = null, usage
                 val app = entry.first
                 val sharedWith = audit.apps.map { it.first }.filter { it.uid == app.uid && it.packageName != app.packageName }
                     .map { it.label ?: it.packageName }
+                val inPlan = Plan.items(planInput(audit, usage, context.packageName), PlanLevel.STRICT).items.any { it.app?.packageName == app.packageName }
                 AppDetail(
                     entry, audit.trackers?.get(app.packageName), audit.trackerInfo, audit.signatures[app.packageName],
                     audit.sdks[app.packageName].orEmpty(), audit.unavailable[app.packageName].orEmpty(),
                     audit.services, audit.owners[app.packageName], audit.keys[app.packageName], insets, onBack = { selected = null },
+                    plain = {
+                        PlainCard(app, audit.trackers?.get(app.packageName), audit.trackerInfo, usage, onPlan = if (inPlan) ({ planning = true }) else null)
+                    },
                     usage = {
                         AppUsageSection(
                             app, usage, days, sharedWith, app.isVpnApp || app.packageName in audit.signatures,
@@ -309,10 +337,6 @@ internal fun DatapavanApp(engineVersion: String, usageUntil: Long? = null, usage
             reviewing -> {
                 BackHandler { reviewing = false }
                 StrictReview(audit.apps.map { it.first }, insets, onBack = { reviewing = false })
-            }
-            showingData -> {
-                BackHandler { showingData = false }
-                DataSources(insets, onBack = { showingData = false }, onImported = { dataVersion++ })
             }
             planning -> {
                 // Done runs the audit again, so that the overview shows what changed.
@@ -337,15 +361,29 @@ internal fun DatapavanApp(engineVersion: String, usageUntil: Long? = null, usage
                     },
                 )
             }
-            checkingCopy -> {
-                BackHandler { checkingCopy = false }
-                val own = audit.apps.firstOrNull { it.first.packageName == context.packageName }?.first
-                OwnCopyScreen(own?.signing, audit.signatures[context.packageName], insets, onBack = { checkingCopy = false })
+            settingsPage != null -> {
+                val back: () -> Unit = { settingsPage = null }
+                BackHandler(onBack = back)
+                when (settingsPage) {
+                    SettingsPage.DATA_SOURCES -> DataSources(insets, onBack = back, onImported = { dataVersion++ })
+                    SettingsPage.OWN_COPY -> {
+                        val own = audit.apps.firstOrNull { it.first.packageName == context.packageName }?.first
+                        OwnCopyScreen(own?.signing, audit.signatures[context.packageName], insets, onBack = back)
+                    }
+                    SettingsPage.PRIVACY -> TextPage(R.string.privacy_title, privacyParagraphs(), insets, back)
+                    SettingsPage.LICENCES -> LicencesScreen(insets, back)
+                    SettingsPage.ABOUT, null -> TextPage(R.string.about_title, aboutParagraphs(engineVersion), insets, back)
+                }
             }
-            else -> Overview(
-                audit, engineVersion, scanProgress, insets,
-                onOpen = { selected = it }, onReview = { reviewing = true }, onData = { showingData = true }, onCopy = { checkingCopy = true },
-                usage = { UsageOverview(usage, days, audit.apps.map { it.first }, onDays = { days = it }, onOpen = { selected = it }) },
+            settingsOpen -> {
+                BackHandler { settingsOpen = false }
+                SettingsScreen(theme, insets, onTheme, onPage = { settingsPage = it }, onBack = { settingsOpen = false })
+            }
+            else -> Destinations(
+                tab, audit, scanProgress, usage, insets,
+                onTab = { tab = it }, onOpen = { selected = it }, onReview = { reviewing = true },
+                onData = { settingsPage = SettingsPage.DATA_SOURCES }, onSettings = { settingsOpen = true },
+                network = { UsageOverview(usage, days, audit.apps.map { it.first }, onDays = { days = it }, onOpen = { selected = it }) },
                 plan = {
                     val input = planInput(audit, usage, context.packageName)
                     val level = journal.sessions.lastOrNull()?.level ?: PlanLevel.LIGHT
@@ -379,70 +417,6 @@ private fun Loading(insets: PaddingValues) {
     }
 }
 
-@Composable
-private fun Overview(audit: AuditResult, engineVersion: String, scanProgress: Pair<Int, Int>?, insets: PaddingValues,
-    onOpen: (String) -> Unit, onReview: () -> Unit, onData: () -> Unit, onCopy: () -> Unit, usage: @Composable () -> Unit,
-    plan: @Composable () -> Unit) {
-    var showAll by rememberSaveable { mutableStateOf(false) }
-    val flagged = audit.apps.filter { (_, findings) -> findings.any { it.severity != Severity.INFO } }
-    val shown = if (showAll) audit.apps else flagged
-    val context = LocalContext.current
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(insets),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        item {
-            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
-            Text(stringResource(R.string.tagline), style = MaterialTheme.typography.bodyLarge)
-            if (DataPackRules.isStale(audit.dataDate, LocalDate.now())) {
-                Spacer(Modifier.height(8.dp))
-                StaleDataCard(audit.dataDate, onData)
-            }
-            Spacer(Modifier.height(16.dp))
-            plan()
-            Spacer(Modifier.height(16.dp))
-            SectionTitle(R.string.section_device)
-        }
-        if (audit.deviceFindings.isEmpty()) {
-            item { Text(stringResource(R.string.device_all_clear), style = MaterialTheme.typography.bodyMedium) }
-        }
-        items(audit.deviceFindings) { kind ->
-            FindingCard(kind, company = null, action = deviceAction(kind)?.let { (label, intent) -> label to { context.startActivity(intent) } })
-        }
-        item { IntegrityLine(audit.device) }
-        item { StrictReviewEntry(audit.apps.map { it.first }, onStart = onReview) }
-        item {
-            Spacer(Modifier.height(16.dp))
-            usage()
-        }
-        item {
-            Spacer(Modifier.height(16.dp))
-            SectionTitle(R.string.section_apps)
-            Text(
-                stringResource(R.string.apps_summary, audit.apps.size, flagged.size),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            TrackerScanStatus(scanProgress, audit.trackers)
-            TextButton(onClick = { showAll = !showAll }) {
-                Text(stringResource(if (showAll) R.string.show_flagged_apps else R.string.show_all_apps))
-            }
-        }
-        items(shown, key = { it.first.packageName }) { (app, findings) -> AppRow(app, findings) { onOpen(app.packageName) } }
-        item {
-            Spacer(Modifier.height(24.dp))
-            TextButton(onClick = onData) { Text(stringResource(R.string.data_sources_title)) }
-            TextButton(onClick = onCopy) { Text(stringResource(R.string.own_title)) }
-            Text(
-                stringResource(R.string.engine_version, isolateLtr(engineVersion)),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
 /** The items of a list joined as the user's language writes them, for example with "،" in Persian. */
 @Composable
 internal fun List<String>.joinedForUser(): String = joinToString(stringResource(R.string.list_separator))
@@ -453,7 +427,7 @@ internal fun SectionTitle(@StringRes title: Int) {
 }
 
 @Composable
-private fun IntegrityLine(device: DeviceFacts) {
+internal fun IntegrityLine(device: DeviceFacts) {
     val integrity = device.integrity
     val text = when {
         integrity == null -> stringResource(R.string.device_integrity_unavailable)
@@ -469,8 +443,8 @@ private fun IntegrityLine(device: DeviceFacts) {
 }
 
 @Composable
-private fun AppRow(app: AppFacts, findings: List<FindingKind>, onClick: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+internal fun AppRow(app: AppFacts, findings: List<FindingKind>, onClick: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth().testTag("app-row").clickable(onClick = onClick)) {
         Column(Modifier.padding(12.dp)) {
             Text(app.label ?: app.packageName, style = MaterialTheme.typography.titleMedium)
             Text(isolateLtr(app.packageName), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -490,14 +464,21 @@ private fun AppRow(app: AppFacts, findings: List<FindingKind>, onClick: () -> Un
     }
 }
 
+/**
+ * One app's page (ADR 0027, point 2): the plain-language card, then sections that open and close, the
+ * findings open. [plain] is the card, [usage] the network section with the guided check.
+ */
 @Composable
 private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<Int, TrackerInfo>, signature: SignatureVerdict?,
     sdks: List<Sdk>, unavailable: List<Capability>, services: ServiceStates?, owners: OwnerNotes?, keys: KeyFacts?, insets: PaddingValues, onBack: () -> Unit,
-    usage: @Composable () -> Unit) {
+    plain: @Composable () -> Unit, usage: @Composable () -> Unit) {
     val (app, findings) = entry
     val context = LocalContext.current
     val collector = remember { AppCollector(context) }
     val date = remember { DateFormat.getDateInstance(DateFormat.MEDIUM) }
+    var open by rememberSaveable { mutableStateOf(listOf(DetailGroup.FINDINGS.name)) }
+    val toggle: (DetailGroup) -> Unit = { group -> open = if (group.name in open) open - group.name else open + group.name }
+    val showKeys = keys != null && (keys.systemKey || keys.runsAsSystem || keys.untrusted != null)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(insets),
@@ -519,43 +500,83 @@ private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<
                 stringResource(R.string.detail_dates, date.format(Date(app.firstInstall)), date.format(Date(app.lastUpdate))),
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Spacer(Modifier.height(8.dp))
-            SectionTitle(R.string.detail_findings)
-            if (findings.isEmpty()) Text(stringResource(R.string.detail_no_findings), style = MaterialTheme.typography.bodyMedium)
         }
-        items(findings) { kind -> FindingCard(kind, company = KnownCollectors.companyOf(app.packageName), action = null) }
-        if (FindingKind.PREINSTALLED_COLLECTOR in findings) item { DisableGuide(app.packageName) }
-        if (signature != null) item { SignatureSection(signature) }
-        if (keys != null && (keys.systemKey || keys.runsAsSystem || keys.untrusted != null)) item { SystemKeySection(keys, Build.MANUFACTURER.orEmpty()) }
-        if (sdks.isNotEmpty()) item { SdkSection(sdks, accessibilityOn = SpecialAccess.ACCESSIBILITY in app.special) }
-        item { TrackerSection(trackers, trackerInfo) }
-        if (owners != null) item { OwnerSection(owners) }
-        if (unavailable.isNotEmpty() && services != null) {
-            item { ServiceNeedsSection(unavailable, services.states, services.names, services.checkedAt) }
+        item { plain() }
+        item { GroupHeader(DetailGroup.FINDINGS, DetailGroup.FINDINGS.name in open, toggle) }
+        if (DetailGroup.FINDINGS.name in open) {
+            if (findings.isEmpty()) item { Text(stringResource(R.string.detail_no_findings), style = MaterialTheme.typography.bodyMedium) }
+            items(findings) { kind -> FindingCard(kind, company = KnownCollectors.companyOf(app.packageName), action = null) }
+            if (FindingKind.PREINSTALLED_COLLECTOR in findings) item { DisableGuide(app.packageName) }
         }
-        item { usage() }
-        item {
-            SectionTitle(R.string.detail_special)
-            Text(
-                app.special.sortedBy { it.ordinal }.map { stringResource(specialName(it)) }.ifEmpty { listOf(stringResource(R.string.detail_none)) }.joinToString("\n"),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Spacer(Modifier.height(8.dp))
-            SectionTitle(R.string.detail_permissions)
-            Text(
-                app.grantedDangerous.map { collector.permissionLabel(it) }.distinct().ifEmpty { listOf(stringResource(R.string.detail_none)) }.joinToString("\n"),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Spacer(Modifier.height(16.dp))
-            OutlinedButton(onClick = {
-                context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", app.packageName, null)))
-            }) { Text(stringResource(R.string.open_app_settings)) }
+        item { GroupHeader(DetailGroup.ACCESS, DetailGroup.ACCESS.name in open, toggle) }
+        if (DetailGroup.ACCESS.name in open) {
+            item {
+                SectionTitle(R.string.detail_special)
+                Text(
+                    app.special.sortedBy { it.ordinal }.map { stringResource(specialName(it)) }.ifEmpty { listOf(stringResource(R.string.detail_none)) }.joinToString("\n"),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(8.dp))
+                SectionTitle(R.string.detail_permissions)
+                Text(
+                    app.grantedDangerous.map { collector.permissionLabel(it) }.distinct().ifEmpty { listOf(stringResource(R.string.detail_none)) }.joinToString("\n"),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(16.dp))
+                OutlinedButton(onClick = { context.startActivity(appSettings(app.packageName)) }) { Text(stringResource(R.string.open_app_settings)) }
+            }
+        }
+        item { GroupHeader(DetailGroup.TRACKERS, DetailGroup.TRACKERS.name in open, toggle) }
+        if (DetailGroup.TRACKERS.name in open) {
+            if (sdks.isNotEmpty()) item { SdkSection(sdks, accessibilityOn = SpecialAccess.ACCESSIBILITY in app.special) }
+            item { TrackerSection(trackers, trackerInfo) }
+            if (owners != null) item { OwnerSection(owners) }
+            if (unavailable.isNotEmpty() && services != null) {
+                item { ServiceNeedsSection(unavailable, services.states, services.names, services.checkedAt) }
+            }
+        }
+        item { GroupHeader(DetailGroup.NETWORK, DetailGroup.NETWORK.name in open, toggle) }
+        if (DetailGroup.NETWORK.name in open) item { usage() }
+        if (signature != null || showKeys) {
+            item { GroupHeader(DetailGroup.SIGNATURE, DetailGroup.SIGNATURE.name in open, toggle) }
+            if (DetailGroup.SIGNATURE.name in open) {
+                if (signature != null) item { SignatureSection(signature) }
+                if (showKeys && keys != null) item { SystemKeySection(keys, Build.MANUFACTURER.orEmpty()) }
+            }
         }
     }
 }
 
+/** The sections of an app's page. */
+private enum class DetailGroup(@StringRes val title: Int) {
+    FINDINGS(R.string.detail_findings),
+    ACCESS(R.string.detail_group_access),
+    TRACKERS(R.string.detail_group_trackers),
+    NETWORK(R.string.detail_group_network),
+    SIGNATURE(R.string.detail_group_signature),
+}
+
+/** A section's header, which opens and closes it; screen readers hear its state. */
 @Composable
-private fun FindingCard(kind: FindingKind, company: String?, action: Pair<Int, () -> Unit>?) {
+private fun GroupHeader(group: DetailGroup, open: Boolean, onToggle: (DetailGroup) -> Unit) {
+    val state = stringResource(if (open) R.string.section_open else R.string.section_closed)
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+            .clickable(role = Role.Button) { onToggle(group) }
+            .semantics { stateDescription = state }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(group.title), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+        Icon(painterResource(if (open) R.drawable.ic_expand_less else R.drawable.ic_expand_more), contentDescription = null)
+    }
+}
+
+internal fun appSettings(packageName: String) =
+    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
+
+@Composable
+internal fun FindingCard(kind: FindingKind, company: String?, action: Pair<Int, () -> Unit>?) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -612,7 +633,7 @@ private fun SeverityDot(severity: Severity) {
     }
 }
 
-private fun deviceAction(kind: FindingKind): Pair<Int, Intent>? = when (kind) {
+internal fun deviceAction(kind: FindingKind): Pair<Int, Intent>? = when (kind) {
     FindingKind.USB_DEBUGGING, FindingKind.WIRELESS_DEBUGGING -> R.string.action_developer_settings to Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
     FindingKind.USER_CERTIFICATE_AUTHORITY -> R.string.action_security_settings to Intent(Settings.ACTION_SECURITY_SETTINGS)
     else -> null

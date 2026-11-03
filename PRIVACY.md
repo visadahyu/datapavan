@@ -21,6 +21,7 @@
   permissions, special access and VPN permission, and whether it was enabled and installed). It lets
   you undo a change and see whether one has come back. The journal screen deletes it in one tap.
 - **The strict sensor review:** which access each app had when you reviewed it.
+- **Your settings:** the appearance, and before Android 13 the language you chose.
 - **The tracker scan's results,** so that unchanged apps are not scanned again, and **data packs** you
   imported.
 

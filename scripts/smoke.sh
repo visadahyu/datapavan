@@ -31,8 +31,8 @@ adb wait-for-device
 adb install -r "$APK" >/dev/null
 adb logcat -c
 start_audit || fail "the audit overview did not appear within 60 seconds"
-scroll_to "Apps checked:" || fail "the app summary is missing"
-echo "ok: audit overview shown"
+scroll_to "Your plan" || fail "the summary has no plan"
+echo "ok: summary shown"
 wait_for_tracker_scan || fail "the tracker scan did not finish within 5 minutes"
 echo "ok: tracker scan finished"
 

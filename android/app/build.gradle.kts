@@ -59,6 +59,14 @@ android {
         localeFilters += listOf("en", "fr", "de", "fa")
     }
 
+    // The language can be chosen in the app (ADR 0027), so every install carries all four, also
+    // from an app bundle.
+    bundle {
+        language {
+            enableSplit = false
+        }
+    }
+
     // Google's encrypted dependency report is opaque to users and rejected by F-Droid.
     dependenciesInfo {
         includeInApk = false

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Drawn for Datapavan (ADR 0027): a gear, for the settings -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M18.92,10.02L21.68,10.47L21.68,13.53L18.92,13.98L18.30,15.49L19.93,17.76L17.76,19.93L15.49,18.30L13.98,18.92L13.53,21.68L10.47,21.68L10.02,18.92L8.51,18.30L6.24,19.93L4.07,17.76L5.70,15.49L5.08,13.98L2.32,13.53L2.32,10.47L5.08,10.02L5.70,8.51L4.07,6.24L6.24,4.07L8.51,5.70L10.02,5.08L10.47,2.32L13.53,2.32L13.98,5.08L15.49,5.70L17.76,4.07L19.93,6.24L18.30,8.51ZM12,9A3,3 0,1 1,12 15A3,3 0,1 1,12 9Z" android:strokeColor="#FF000000" android:strokeWidth="2"
+        android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

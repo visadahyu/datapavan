@@ -42,8 +42,12 @@ adb install "$("$ROOT/scripts/traffic-lab/build.sh" 2>/dev/null | tail -1)" >/de
 adb shell appops set "$DATAPAVAN" GET_USAGE_STATS allow
 
 start_audit || fail "the audit overview did not appear"
-tap_text "Show all apps" || fail "no way to show all apps"
+open_tab apps || fail "no apps destination"
+tap_id filter-all || fail "no filter for all apps"
+sleep 1
 tap_text "Datapavan traffic lab" || fail "the lab app is not listed"
+sleep 1
+open_sections
 tap_text "Check one activity" || fail "the app's page offers no guided check"
 tap_text "Download a file" || fail "no activity to choose"
 tap_text "Start" || fail "no start button"

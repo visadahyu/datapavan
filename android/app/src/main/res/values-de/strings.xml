@@ -11,9 +11,6 @@
     <string name="device_integrity_ok">Hardware-Prüfung, signiert mit Googles Attestierungsschlüssel: Der Bootloader ist gesperrt und das System ist verifiziert.</string>
     <string name="device_integrity_unavailable">Die Hardware-Prüfung ist auf diesem Telefon nicht verfügbar.</string>
     <string name="device_patch">Sicherheitspatch: %1$s</string>
-    <string name="apps_summary">Geprüfte Apps: %1$d. Prüfenswert: %2$d.</string>
-    <string name="show_all_apps">Alle Apps anzeigen</string>
-    <string name="show_flagged_apps">Nur prüfenswerte Apps anzeigen</string>
     <string name="finding_and_more">%1$s (+%2$d)</string>
     <!-- Between the items of a list. -->
     <string name="list_separator">", "</string>
@@ -491,4 +488,83 @@
     <string name="own_debug">Dies ist eine Testversion, signiert mit einem Debug-Schlüssel.</string>
     <string name="own_updates">Ist eine echte Kopie installiert, lehnt Android jedes Update ab, das mit einem anderen Schlüssel signiert ist; prüfen Sie also bei der ersten Installation.</string>
     <string name="own_limit">Eine gefälschte Kopie kann alles auf diesem Bildschirm vortäuschen. Die echte Prüfung geschieht von außen: Vergleichen Sie den Schlüssel oben mit dem, der mit jeder Version veröffentlicht wird, zum Beispiel mit der App AppVerifier.</string>
+
+    <!-- The app's structure and settings (ADR 0027). -->
+    <string name="nav_summary">Übersicht</string>
+    <string name="nav_apps">Apps</string>
+    <string name="nav_phone">Telefon</string>
+    <string name="nav_network">Netzwerk</string>
+    <string name="settings_title">Einstellungen</string>
+    <string name="settings_appearance">Darstellung</string>
+    <string name="settings_theme_system">Wie das System</string>
+    <string name="settings_theme_light">Hell</string>
+    <string name="settings_theme_dark">Dunkel</string>
+    <string name="settings_language">Sprache</string>
+    <string name="settings_language_system">Wie das System</string>
+    <string name="privacy_title">Datenschutz</string>
+    <string name="privacy_none">Datapavan sammelt keine Daten über Sie. Es hat keine Konten, keine Analyse und keine Server, und nichts über Ihr Telefon verlässt es.</string>
+    <string name="privacy_no_network">Diese Version darf das Internet nicht nutzen, also verhindert Android selbst, dass sie etwas sendet.</string>
+    <string name="privacy_kept">Auf dem Telefon behält es nur das Protokoll des Plans, Ihre Prüfung der Sensoren, die Ergebnisse der Tracker-Suche und importierte Datenpakete. Sie werden nie gesichert oder gesendet, und Deinstallieren löscht sie.</string>
+    <string name="privacy_usage">Mit Zugriff auf Nutzungsdaten liest es nur Summen und die letzte Nutzung jeder App, nie welche App Sie wann geöffnet haben, und behält nichts davon.</string>
+    <string name="licences_title">Open-Source-Lizenzen</string>
+    <string name="licences_intro">Datapavan besteht aus diesen Open-Source-Teilen. Die Daten, die es mitbringt, nennen ihre Lizenzen unter Datenquellen.</string>
+    <string name="about_title">Über</string>
+    <string name="about_version">Version %1$s</string>
+    <string name="about_licence">Datapavan ist freie Software unter der Apache-Lizenz 2.0.</string>
+    <string name="about_source">Quellcode: %1$s</string>
+    <string name="summary_phone_look">Einige seiner Einstellungen sind einen Blick wert.</string>
+    <string name="summary_scan_done">Die Suche nach Trackern ist fertig.</string>
+    <string name="summary_network">Wie viele Daten jede App in 30 Tagen genutzt hat</string>
+    <string name="summary_network_no_access">Braucht Zugriff auf Nutzungsdaten, den Sie dort erlauben können.</string>
+    <string name="apps_search">Apps suchen</string>
+    <string name="apps_filter_count">%1$s %2$d</string>
+    <string name="filter_with_findings">Mit Befunden</string>
+    <string name="filter_trackers">Tracker</string>
+    <string name="filter_control">Steuerzugriff</string>
+    <string name="filter_not_opened">Seit 90 Tagen nicht geöffnet</string>
+    <string name="filter_preinstalled">Vorinstalliert</string>
+    <string name="filter_vpn_proxy">VPN und Proxy</string>
+    <string name="filter_all">Alle</string>
+    <plurals name="apps_shown">
+        <item quantity="one">%1$d von %2$d App</item>
+        <item quantity="other">%1$d von %2$d Apps</item>
+    </plurals>
+    <string name="apps_sort">Sortierung: %1$s</string>
+    <string name="sort_urgency">Dringlichkeit</string>
+    <string name="sort_name">Name</string>
+    <string name="sort_data_use">Datennutzung</string>
+    <string name="sort_installed">Installationsdatum</string>
+    <string name="apps_none">Keine App passt.</string>
+    <string name="detail_group_access">Zugriffe und Berechtigungen</string>
+    <string name="detail_group_trackers">Tracker und SDKs</string>
+    <string name="detail_group_network">Netzwerk</string>
+    <string name="detail_group_signature">Signatur und Schlüssel</string>
+    <string name="section_open">offen</string>
+    <string name="section_closed">geschlossen</string>
+    <string name="plain_title">Kurz gesagt</string>
+    <string name="plain_reach_title">Worauf sie zugreifen kann</string>
+    <string name="plain_reach_none">Kein Sensor, kein besonderer Zugriff und keine VPN-Berechtigung.</string>
+    <string name="plain_trackers_title">Tracker in ihrem Code</string>
+    <string name="plain_trackers_scanning">Wird noch geprüft.</string>
+    <string name="plain_trackers_none">Kein bekannter Tracker gefunden.</string>
+    <string name="plain_trackers_unreadable">Ihr Code konnte nicht gelesen werden.</string>
+    <string name="purpose_advertising">Werbung</string>
+    <string name="purpose_analytics">Analyse</string>
+    <string name="purpose_profiling">Profilbildung</string>
+    <string name="purpose_identification">Identifizierung</string>
+    <string name="purpose_location">Standort</string>
+    <string name="purpose_crash_reports">Absturzberichte</string>
+    <string name="plain_use_title">In den letzten 30 Tagen</string>
+    <string name="plain_use_no_access">Erlauben Sie den Zugriff auf Nutzungsdaten, um das zu sehen.</string>
+    <string name="plain_use_line">%1$s empfangen und %2$s gesendet, davon %3$s im Hintergrund.</string>
+    <string name="plain_do_title">Was Sie tun können</string>
+    <string name="plain_app_settings">Systemeinstellungen</string>
+    <plurals name="plain_trackers_count">
+        <item quantity="one">%1$d Tracker</item>
+        <item quantity="other">%1$d Tracker</item>
+    </plurals>
+    <plurals name="plain_trackers_some">
+        <item quantity="one">%1$d Tracker: %2$s</item>
+        <item quantity="other">%1$d Tracker: %2$s</item>
+    </plurals>
 </resources>

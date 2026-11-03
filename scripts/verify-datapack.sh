@@ -53,6 +53,8 @@ expect() {
 # The overview lists every app with a finding before its last line, so on a phone in daily use the
 # data sources button can be many screens down.
 open_data_sources() {
+    tap_id settings || fail "no settings button"
+    sleep 1
     for _ in 1 2 3 4 5; do
         tap_text "Data sources" && break
     done

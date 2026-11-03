@@ -11,9 +11,6 @@
     <string name="device_integrity_ok">بررسی سخت‌افزاری، امضاشده با کلید گواهی گوگل: بوت‌لودر قفل است و سیستم تأیید شده است.</string>
     <string name="device_integrity_unavailable">بررسی سخت‌افزاری روی این گوشی در دسترس نیست.</string>
     <string name="device_patch">وصله امنیتی: %1$s</string>
-    <string name="apps_summary">برنامه‌های بررسی‌شده: %1$d. نیازمند توجه: %2$d.</string>
-    <string name="show_all_apps">نمایش همه برنامه‌ها</string>
-    <string name="show_flagged_apps">فقط برنامه‌هایی که نیاز به توجه دارند</string>
     <string name="finding_and_more">%1$s (+%2$d)</string>
     <!-- Between the items of a list. -->
     <string name="list_separator">"، "</string>
@@ -491,4 +488,83 @@
     <string name="own_debug">این یک نسخه آزمایشی است که با کلید اشکال‌زدایی امضا شده است.</string>
     <string name="own_updates">وقتی یک نسخه اصل نصب شد، اندروید هر به‌روزرسانی با کلید دیگر را رد می‌کند؛ پس لحظه بررسی همان نصب اول است.</string>
     <string name="own_limit">یک نسخه جعلی می‌تواند همه چیز این صفحه را جعل کند. بررسی واقعی از بیرون است: کلید بالا را با کلیدی که با هر انتشار منتشر می‌شود مقایسه کنید، مثلا با برنامه AppVerifier.</string>
+
+    <!-- The app's structure and settings (ADR 0027). -->
+    <string name="nav_summary">خلاصه</string>
+    <string name="nav_apps">برنامه‌ها</string>
+    <string name="nav_phone">گوشی</string>
+    <string name="nav_network">شبکه</string>
+    <string name="settings_title">تنظیمات</string>
+    <string name="settings_appearance">نمایش</string>
+    <string name="settings_theme_system">همانند سیستم</string>
+    <string name="settings_theme_light">روشن</string>
+    <string name="settings_theme_dark">تیره</string>
+    <string name="settings_language">زبان</string>
+    <string name="settings_language_system">همانند سیستم</string>
+    <string name="privacy_title">حریم خصوصی</string>
+    <string name="privacy_none">این برنامه هیچ داده‌ای درباره شما جمع نمی‌کند. حساب کاربری، آمارگیری و سروری ندارد و هیچ چیز از گوشی شما بیرون نمی‌رود.</string>
+    <string name="privacy_no_network">این نسخه اجازه استفاده از اینترنت ندارد، پس خود اندروید نمی‌گذارد چیزی بفرستد.</string>
+    <string name="privacy_kept">روی گوشی فقط دفترچه طرح، بررسی حسگرهای شما، نتیجه جست‌وجوی ردیاب‌ها و بسته‌های داده‌ای را که وارد کرده‌اید نگه می‌دارد. از این‌ها هرگز پشتیبان گرفته نمی‌شود و جایی فرستاده نمی‌شوند، و با حذف برنامه پاک می‌شوند.</string>
+    <string name="privacy_usage">با دسترسی به آمار استفاده فقط جمع‌ها و آخرین زمان استفاده از هر برنامه را می‌خواند، هرگز اینکه کدام برنامه را کی باز کرده‌اید، و هیچ‌کدام را نگه نمی‌دارد.</string>
+    <string name="licences_title">مجوزهای نرم‌افزارهای متن‌باز</string>
+    <string name="licences_intro">این برنامه از این بخش‌های متن‌باز ساخته شده است. داده‌هایی که همراه دارد، مجوزهای خود را در «منابع داده» می‌گویند.</string>
+    <string name="about_title">درباره</string>
+    <string name="about_version">نسخه %1$s</string>
+    <string name="about_licence">این برنامه نرم‌افزار آزاد است، با مجوز Apache 2.0.</string>
+    <string name="about_source">کد منبع: %1$s</string>
+    <string name="summary_phone_look">بعضی تنظیمات آن ارزش یک نگاه را دارد.</string>
+    <string name="summary_scan_done">جست‌وجوی ردیاب‌ها تمام شد.</string>
+    <string name="summary_network">مصرف داده هر برنامه در ۳۰ روز</string>
+    <string name="summary_network_no_access">دسترسی به آمار استفاده لازم است، که همان‌جا می‌توانید بدهید.</string>
+    <string name="apps_search">جست‌وجوی برنامه</string>
+    <string name="apps_filter_count">%1$s %2$d</string>
+    <string name="filter_with_findings">دارای یافته</string>
+    <string name="filter_trackers">ردیاب</string>
+    <string name="filter_control">دسترسی کنترل</string>
+    <string name="filter_not_opened">۹۰ روز باز نشده</string>
+    <string name="filter_preinstalled">از پیش نصب‌شده</string>
+    <string name="filter_vpn_proxy">وی‌پی‌ان و پروکسی</string>
+    <string name="filter_all">همه</string>
+    <plurals name="apps_shown">
+        <item quantity="one">%1$d برنامه از %2$d</item>
+        <item quantity="other">%1$d برنامه از %2$d</item>
+    </plurals>
+    <string name="apps_sort">ترتیب: %1$s</string>
+    <string name="sort_urgency">فوریت</string>
+    <string name="sort_name">نام</string>
+    <string name="sort_data_use">مصرف داده</string>
+    <string name="sort_installed">تاریخ نصب</string>
+    <string name="apps_none">هیچ برنامه‌ای جور نیست.</string>
+    <string name="detail_group_access">دسترسی‌ها و مجوزها</string>
+    <string name="detail_group_trackers">ردیاب‌ها و کیت‌ها</string>
+    <string name="detail_group_network">شبکه</string>
+    <string name="detail_group_signature">امضا و کلیدها</string>
+    <string name="section_open">باز</string>
+    <string name="section_closed">بسته</string>
+    <string name="plain_title">به زبان ساده</string>
+    <string name="plain_reach_title">به چه دسترسی دارد</string>
+    <string name="plain_reach_none">به هیچ حسگر، دسترسی ویژه یا مجوز وی‌پی‌ان دسترسی ندارد.</string>
+    <string name="plain_trackers_title">ردیاب‌های درون کدش</string>
+    <string name="plain_trackers_scanning">هنوز در حال بررسی است.</string>
+    <string name="plain_trackers_none">هیچ ردیاب شناخته‌شده‌ای پیدا نشد.</string>
+    <string name="plain_trackers_unreadable">کدش خوانده نشد.</string>
+    <string name="purpose_advertising">تبلیغات</string>
+    <string name="purpose_analytics">تحلیل</string>
+    <string name="purpose_profiling">نمایه‌سازی</string>
+    <string name="purpose_identification">شناسایی</string>
+    <string name="purpose_location">مکان</string>
+    <string name="purpose_crash_reports">گزارش خرابی</string>
+    <string name="plain_use_title">در ۳۰ روز گذشته</string>
+    <string name="plain_use_no_access">برای دیدن این، دسترسی به آمار استفاده را بدهید.</string>
+    <string name="plain_use_line">%1$s گرفت و %2$s فرستاد؛ %3$s از آن در پس‌زمینه.</string>
+    <string name="plain_do_title">چه می‌توانید بکنید</string>
+    <string name="plain_app_settings">تنظیمات سیستم</string>
+    <plurals name="plain_trackers_count">
+        <item quantity="one">%1$d ردیاب</item>
+        <item quantity="other">%1$d ردیاب</item>
+    </plurals>
+    <plurals name="plain_trackers_some">
+        <item quantity="one">%1$d ردیاب: %2$s</item>
+        <item quantity="other">%1$d ردیاب: %2$s</item>
+    </plurals>
 </resources>

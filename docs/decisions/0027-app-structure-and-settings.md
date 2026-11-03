@@ -25,8 +25,8 @@ destinations in a navigation bar at the bottom.
      change that came back, the journal), the strict sensor review, the scan's progress and the data
      pack's age. It names what to do, never a count of problems (ADR 0026, point 7).
    - **Apps:** the app list with a search field (name or package), filters (with findings, the
-     default; trackers; access that can control the phone; not opened for 90 days; preinstalled; VPN
-     and proxy apps; all) and a sort (urgency, name, data use, install date). A filter shows how many
+     default; all; trackers; access that can control the phone; not opened for 90 days; preinstalled;
+     VPN and proxy apps) and a sort (urgency, name, data use, install date). A filter shows how many
      apps it holds, since the user came here to browse; the Summary does not.
    - **Phone:** the phone's own findings with their screens, the integrity line and the security
      patch.
@@ -54,8 +54,8 @@ destinations in a navigation bar at the bottom.
    without AppCompat. Dependency verification (ADR 0008) stays as it is.
 5. **Every destination is checked.** The emulator scripts reach each part through the navigation
    bar and labels, never through scroll positions on one long page; `scripts/screenshots.sh` takes
-   every destination, the settings and an app's page in each language and both pseudo-locales, with
-   its accessibility check, in light and dark.
+   every destination, the settings and an app's page in each language and both pseudo-locales, and in
+   dark mode in English and Persian, each with its accessibility check.
 
 ## Consequences
 - The overview's content moves, nothing is removed. The scripts that wait for "This phone" on the

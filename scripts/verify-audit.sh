@@ -130,27 +130,32 @@ enable_fixture_accessibility || fail "Android does not keep the fixture's access
 # Without usage access, the overview asks for it.
 adb shell appops set "$DATAPAVAN" GET_USAGE_STATS default
 start_audit || fail "the audit overview did not appear"
+open_tab network || fail "no network destination"
 expect "Allow usage access"
 
 adb shell appops set "$DATAPAVAN" GET_USAGE_STATS allow
 start_audit || fail "the audit overview did not appear with usage access"
+open_tab phone || fail "no phone destination"
 expect "USB debugging is on"
 [ -z "$CA_FILE" ] || expect "Extra certificate authority installed"
 expect "No hardware check available"
+open_tab network || fail "no network destination"
 expect "Network use"
 expect "Show the last 7 days"
 wait_for_tracker_scan || fail "the tracker scan did not finish"
 
+open_tab apps || fail "no apps destination"
 tap_text "Datapavan test fixture" || fail "the fixture app is not listed"
 sleep 1
-# The fixture's own page, not another app's: its name above the findings heading.
-screen_has "What we found" && screen_has "Datapavan test fixture" || fail "the fixture's page did not open"
+# The fixture's own page, not another app's: its name above the plain-language card (ADR 0027).
+screen_has "In plain words" && screen_has "Datapavan test fixture" || fail "the fixture's page did not open"
 scroll_to_top
 expect "VPN app that can control the phone"
 expect "Can install other apps"
 expect "Microphone, camera or location"
 expect "Not from a known app store"
 expect "Contains trackers"
+open_sections
 expect "Sentry (crash reporting)"
 # Above the tracker list: the finding card, then the SDK section.
 scroll_to_top
@@ -168,9 +173,10 @@ if adb shell pm list packages -e "$GMS" | tr -d '\r' | grep -q "^package:$GMS\$"
     adb shell pm disable-user "$GMS" >/dev/null && GMS_TURNED_OFF=1
     start_audit || fail "the audit overview did not appear with Google Play services off"
     wait_for_tracker_scan || fail "the tracker scan did not finish with Google Play services off"
+    open_tab apps || fail "no apps destination with Google Play services off"
     tap_text "Datapavan test fixture" || fail "the fixture app is not listed with Google Play services off"
     sleep 1
-    scroll_to_top
+    open_sections
     expect "Needs a service this phone lacks"
     expect "Reading Google"
     adb shell pm enable "$GMS" >/dev/null && GMS_TURNED_OFF=""
@@ -184,9 +190,10 @@ adb uninstall "$FIXTURE" >/dev/null 2>&1 || true
 adb uninstall "$IMPOSTOR" >/dev/null 2>&1 || true
 adb install -r "$impostor_apk" >/dev/null
 start_audit || fail "the audit overview did not appear with the impostor installed"
+open_tab apps || fail "no apps destination with the impostor installed"
 tap_text "Datapavan test fixture" || fail "the impostor is not listed"
 sleep 1
-scroll_to_top
+open_sections
 expect "Modified copy"
 expect "This copy of Exclave is not signed by its developer."
 
@@ -195,9 +202,10 @@ public_key_apk=$(FIXTURE_KEY=aosp-platform "$ROOT/scripts/fixture-app/build.sh" 
 adb uninstall "$IMPOSTOR" >/dev/null 2>&1 || true
 adb install -r "$public_key_apk" >/dev/null
 start_audit || fail "the audit overview did not appear with the public-key fixture installed"
+open_tab apps || fail "no apps destination with the public-key fixture installed"
 tap_text "Datapavan test fixture" || fail "the public-key fixture is not listed"
 sleep 1
-scroll_to_top
+open_sections
 expect "Signed with a leaked or public system key"
 expect "Its key is one of Android"
 

@@ -11,9 +11,6 @@
     <string name="device_integrity_ok">Contrôle matériel, signé avec la clé d\'attestation de Google : le bootloader est verrouillé et le système est vérifié.</string>
     <string name="device_integrity_unavailable">Le contrôle matériel n\'est pas disponible sur ce téléphone.</string>
     <string name="device_patch">Correctif de sécurité : %1$s</string>
-    <string name="apps_summary">Applis vérifiées : %1$d. À examiner : %2$d.</string>
-    <string name="show_all_apps">Afficher toutes les applis</string>
-    <string name="show_flagged_apps">N\'afficher que les applis à examiner</string>
     <string name="finding_and_more">%1$s (+%2$d)</string>
     <!-- Between the items of a list. -->
     <string name="list_separator">", "</string>
@@ -497,4 +494,86 @@
     <string name="own_debug">C\'est une version de test, signée avec une clé de débogage.</string>
     <string name="own_updates">Une fois une copie authentique installée, Android refuse toute mise à jour signée avec une autre clé : c\'est donc à la première installation qu\'il faut vérifier.</string>
     <string name="own_limit">Une copie falsifiée peut tout simuler sur cet écran. La vraie vérification se fait de l\'extérieur : comparez la clé ci-dessus avec celle publiée à chaque version, par exemple avec l\'appli AppVerifier.</string>
+
+    <!-- The app's structure and settings (ADR 0027). -->
+    <string name="nav_summary">Résumé</string>
+    <string name="nav_apps">Applis</string>
+    <string name="nav_phone">Téléphone</string>
+    <string name="nav_network">Réseau</string>
+    <string name="settings_title">Paramètres</string>
+    <string name="settings_appearance">Apparence</string>
+    <string name="settings_theme_system">Comme le système</string>
+    <string name="settings_theme_light">Clair</string>
+    <string name="settings_theme_dark">Sombre</string>
+    <string name="settings_language">Langue</string>
+    <string name="settings_language_system">Comme le système</string>
+    <string name="privacy_title">Confidentialité</string>
+    <string name="privacy_none">Datapavan ne collecte aucune donnée sur vous. Pas de compte, pas de mesure d\'audience, pas de serveur : rien de votre téléphone n\'en sort.</string>
+    <string name="privacy_no_network">Cette version n\'a pas le droit d\'utiliser Internet, c\'est donc Android lui-même qui l\'empêche d\'envoyer quoi que ce soit.</string>
+    <string name="privacy_kept">Sur le téléphone, il ne garde que le journal du plan, votre revue des capteurs, les résultats de l\'analyse des traceurs et les paquets de données importés. Ils ne sont jamais sauvegardés ni envoyés, et la désinstallation les supprime.</string>
+    <string name="privacy_usage">Avec l\'accès aux données d\'utilisation, il ne lit que des totaux et la dernière utilisation de chaque appli, jamais quelle appli vous avez ouverte et quand, et n\'en garde rien.</string>
+    <string name="licences_title">Licences open source</string>
+    <string name="licences_intro">Datapavan est fait de ces composants open source. Les données qu\'il contient indiquent leurs licences dans Sources des données.</string>
+    <string name="about_title">À propos</string>
+    <string name="about_version">Version %1$s</string>
+    <string name="about_licence">Datapavan est un logiciel libre sous licence Apache 2.0.</string>
+    <string name="about_source">Code source : %1$s</string>
+    <string name="summary_phone_look">Certains de ses réglages méritent un coup d\'œil.</string>
+    <string name="summary_scan_done">L\'analyse des traceurs est terminée.</string>
+    <string name="summary_network">Les données utilisées par chaque appli en 30 jours</string>
+    <string name="summary_network_no_access">Demande l\'accès aux données d\'utilisation, que vous pouvez y accorder.</string>
+    <string name="apps_search">Rechercher une appli</string>
+    <string name="apps_filter_count">%1$s %2$d</string>
+    <string name="filter_with_findings">Avec constats</string>
+    <string name="filter_trackers">Traceurs</string>
+    <string name="filter_control">Accès de contrôle</string>
+    <string name="filter_not_opened">Non ouvertes depuis 90 jours</string>
+    <string name="filter_preinstalled">Préinstallées</string>
+    <string name="filter_vpn_proxy">VPN et proxy</string>
+    <string name="filter_all">Toutes</string>
+    <plurals name="apps_shown">
+        <item quantity="one">%1$d appli sur %2$d</item>
+        <item quantity="many">%1$d applis sur %2$d</item>
+        <item quantity="other">%1$d applis sur %2$d</item>
+    </plurals>
+    <string name="apps_sort">Tri : %1$s</string>
+    <string name="sort_urgency">urgence</string>
+    <string name="sort_name">nom</string>
+    <string name="sort_data_use">données</string>
+    <string name="sort_installed">date d\'installation</string>
+    <string name="apps_none">Aucune appli ne correspond.</string>
+    <string name="detail_group_access">Accès et autorisations</string>
+    <string name="detail_group_trackers">Traceurs et SDK</string>
+    <string name="detail_group_network">Réseau</string>
+    <string name="detail_group_signature">Signature et clés</string>
+    <string name="section_open">ouvert</string>
+    <string name="section_closed">fermé</string>
+    <string name="plain_title">En clair</string>
+    <string name="plain_reach_title">Ce qu\'elle peut atteindre</string>
+    <string name="plain_reach_none">Aucun capteur, accès spécial ni autorisation VPN.</string>
+    <string name="plain_trackers_title">Traceurs dans son code</string>
+    <string name="plain_trackers_scanning">Vérification en cours.</string>
+    <string name="plain_trackers_none">Aucun traceur connu trouvé.</string>
+    <string name="plain_trackers_unreadable">Son code n\'a pas pu être lu.</string>
+    <string name="purpose_advertising">publicité</string>
+    <string name="purpose_analytics">mesure d\'audience</string>
+    <string name="purpose_profiling">profilage</string>
+    <string name="purpose_identification">identification</string>
+    <string name="purpose_location">localisation</string>
+    <string name="purpose_crash_reports">rapports de plantage</string>
+    <string name="plain_use_title">Ces 30 derniers jours</string>
+    <string name="plain_use_no_access">Accordez l\'accès aux données d\'utilisation pour le voir.</string>
+    <string name="plain_use_line">%1$s reçus et %2$s envoyés, dont %3$s en arrière-plan.</string>
+    <string name="plain_do_title">Ce que vous pouvez faire</string>
+    <string name="plain_app_settings">Paramètres du système</string>
+    <plurals name="plain_trackers_count">
+        <item quantity="one">%1$d traceur</item>
+        <item quantity="many">%1$d traceurs</item>
+        <item quantity="other">%1$d traceurs</item>
+    </plurals>
+    <plurals name="plain_trackers_some">
+        <item quantity="one">%1$d traceur : %2$s</item>
+        <item quantity="many">%1$d traceurs : %2$s</item>
+        <item quantity="other">%1$d traceurs : %2$s</item>
+    </plurals>
 </resources>

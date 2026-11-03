@@ -74,18 +74,25 @@ start_datapavan() {
     [ -z "$UNTIL" ] || extras+=(--el usage_until "$UNTIL")
     adb shell am start -n "$PKG/.MainActivity" "${extras[@]}" >/dev/null
     for _ in $(seq 1 60); do
-        screen_has "This phone" && return 0
+        has_id nav-summary && return 0
         sleep 1
     done
     return 1
 }
 
-# Opens an app's page: from the overview's network list ("Name: size", or "Name (+2): size" for a
-# shared user ID), else from the list of all apps.
+# Opens an app's page: from the network destination's list ("Name: size", or "Name (+2): size" for a
+# shared user ID), else from the list of all apps (ADR 0027).
 open_app() {
-    local row
+    local row previous=""
     for list in network all; do
-        [ "$list" = all ] && { scroll_to_top; tap_text "Show all apps" >/dev/null 2>&1 || true; }
+        if [ "$list" = network ]; then
+            open_tab network || return 1
+        else
+            open_tab apps || return 1
+            tap_id filter-all || return 1
+            sleep 1
+        fi
+        scroll_to_top
         for _ in $(seq 1 80); do
             if [ "$list" = network ]; then
                 row=$(texts | perl -CSA -ne 'BEGIN { $n = shift } $p = $_; $p =~ s/'"$ISOLATES"'//g; if (index($p, $n) == 0 && substr($p, length $n) =~ /^( \(\+\d+\))?: /) { print; exit }' "$1")
@@ -108,7 +115,11 @@ open_app() {
                 return
             fi
             [ "$list" = network ] && screen_has "Not opened for a long time" && break
-            screen_has "Data sources" && break
+            # The end of the list: a swipe that changes nothing.
+            local now
+            now=$(texts | md5sum)
+            [ "$now" = "$previous" ] && break
+            previous=$now
             swipe_up
         done
     done
@@ -117,6 +128,7 @@ open_app() {
 
 # The app page's line for this network type, as "size" ("0" when the app used none).
 datapavan_size() {
+    open_sections
     scroll_to "Network use" >/dev/null || return 1
     for _ in 1 2 3 4; do
         local line

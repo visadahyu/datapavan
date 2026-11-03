@@ -15,9 +15,6 @@
     <!-- %1$s is a date such as 2023-03, passed in already bidi-isolated. -->
     <string name="device_patch">Security patch: %1$s</string>
     <!-- Both values are counts. -->
-    <string name="apps_summary">Apps checked: %1$d. Need attention: %2$d.</string>
-    <string name="show_all_apps">Show all apps</string>
-    <string name="show_flagged_apps">Show only apps that need attention</string>
     <!-- %1$s is a finding title; %2$d is the number of further findings, shown as "+2". -->
     <string name="finding_and_more">%1$s (+%2$d)</string>
     <!-- Between the items of a list. -->
@@ -518,4 +515,83 @@
     <string name="own_debug">This is a test build, signed with a debug key.</string>
     <string name="own_updates">Once a genuine copy is installed, Android refuses updates signed with another key. So check at the first install.</string>
     <string name="own_limit">A forged copy can fake everything on this screen. The real check is from outside: compare the key above with the one published with each release, for example with the AppVerifier app.</string>
+
+    <!-- The app's structure and settings (ADR 0027). -->
+    <string name="nav_summary">Summary</string>
+    <string name="nav_apps">Apps</string>
+    <string name="nav_phone">Phone</string>
+    <string name="nav_network">Network</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme_system">As the system</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_system">As the system</string>
+    <string name="privacy_title">Privacy</string>
+    <string name="privacy_none">Datapavan collects no data about you. It has no accounts, no analytics and no servers, and nothing about your phone leaves it.</string>
+    <string name="privacy_no_network">This version has no permission to use the internet, so Android itself keeps it from sending anything.</string>
+    <string name="privacy_kept">On the phone it keeps only the plan\'s journal, your sensor review, the tracker scan\'s results and data packs you imported. They are never backed up or sent, and uninstalling deletes them.</string>
+    <string name="privacy_usage">With usage access it reads only totals and the last time each app was used, never which app you opened when, and keeps none of it.</string>
+    <string name="licences_title">Open-source licences</string>
+    <string name="licences_intro">Datapavan is built from these open-source parts. The data it carries names its own licences under Data sources.</string>
+    <string name="about_title">About</string>
+    <string name="about_version">Version %1$s</string>
+    <string name="about_licence">Datapavan is free software under the Apache License 2.0.</string>
+    <string name="about_source">Source code: %1$s</string>
+    <string name="summary_phone_look">Some of its settings deserve a look.</string>
+    <string name="summary_scan_done">The tracker check is done.</string>
+    <string name="summary_network">How much data each app used in 30 days</string>
+    <string name="summary_network_no_access">Needs usage access, which you can allow there.</string>
+    <string name="apps_search">Search apps</string>
+    <string name="apps_filter_count">%1$s %2$d</string>
+    <string name="filter_with_findings">With findings</string>
+    <string name="filter_trackers">Trackers</string>
+    <string name="filter_control">Control access</string>
+    <string name="filter_not_opened">Not opened for 90 days</string>
+    <string name="filter_preinstalled">Preinstalled</string>
+    <string name="filter_vpn_proxy">VPN and proxy</string>
+    <string name="filter_all">All</string>
+    <plurals name="apps_shown">
+        <item quantity="one">%1$d of %2$d app</item>
+        <item quantity="other">%1$d of %2$d apps</item>
+    </plurals>
+    <string name="apps_sort">Sort: %1$s</string>
+    <string name="sort_urgency">urgency</string>
+    <string name="sort_name">name</string>
+    <string name="sort_data_use">data use</string>
+    <string name="sort_installed">install date</string>
+    <string name="apps_none">No app matches.</string>
+    <string name="detail_group_access">Access and permissions</string>
+    <string name="detail_group_trackers">Trackers and SDKs</string>
+    <string name="detail_group_network">Network</string>
+    <string name="detail_group_signature">Signature and keys</string>
+    <string name="section_open">open</string>
+    <string name="section_closed">closed</string>
+    <string name="plain_title">In plain words</string>
+    <string name="plain_reach_title">What it can reach</string>
+    <string name="plain_reach_none">No sensor, special access or VPN permission.</string>
+    <string name="plain_trackers_title">Trackers in its code</string>
+    <string name="plain_trackers_scanning">Still being checked.</string>
+    <string name="plain_trackers_none">No known tracker found.</string>
+    <string name="plain_trackers_unreadable">Its code could not be read.</string>
+    <string name="purpose_advertising">advertising</string>
+    <string name="purpose_analytics">analytics</string>
+    <string name="purpose_profiling">profiling</string>
+    <string name="purpose_identification">identification</string>
+    <string name="purpose_location">location</string>
+    <string name="purpose_crash_reports">crash reports</string>
+    <string name="plain_use_title">In the last 30 days</string>
+    <string name="plain_use_no_access">Allow usage access to see this.</string>
+    <string name="plain_use_line">Received %1$s and sent %2$s; %3$s of it in the background.</string>
+    <string name="plain_do_title">What you can do</string>
+    <string name="plain_app_settings">System settings</string>
+    <plurals name="plain_trackers_count">
+        <item quantity="one">%1$d tracker</item>
+        <item quantity="other">%1$d trackers</item>
+    </plurals>
+    <plurals name="plain_trackers_some">
+        <item quantity="one">%1$d tracker: %2$s</item>
+        <item quantity="other">%1$d trackers: %2$s</item>
+    </plurals>
 </resources>
