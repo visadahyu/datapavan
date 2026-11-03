@@ -48,6 +48,12 @@ The data behind M3 keeps growing next to the later milestones:
   capabilities are done; more follow as their vendors' artefacts are read, and the check still needs
   a device matrix. The scan's lower memory and parallelism by memory are done.
 
+Also for v0.1: shortcuts on the launcher icon (a long press opens the plan, the apps or network use
+directly). They need no background work and put nothing new on the home screen. A home-screen widget
+does not come with v0.1: it would show the counts and warning colours that ADR 0025 and ADR 0026 rule
+out, tell anyone who looks at the phone more than the icon does, and need the background queries that
+disturb the guided check.
+
 Checks left from M4 (ADR 0022):
 
 - How Android counts traffic through a VPN service and through a local proxy app.
@@ -71,6 +77,9 @@ starts, a two-week spike picks the packet engine (Rust netstack or Go gVisor). D
 - Cross-checks report contradictions: our sensor log against Android's record, and Android's per-app data accounting against what the VPN saw.
 - Unusual behaviour: each app's normal traffic shape is learned on the device, and deviations are reported, for example a steady audio-like upload or large uploads while the user only scrolled. Because a learned baseline only detects change, uploads are also split by destination (content, analytics, advertising) and compared with lab reference measurements. Ranges for kinds of app come from the project's lab ([docs/LAB.md](docs/LAB.md)): measured on its own phones, published with every run, and compared with a user's guided check, which can be repeated and reported; they get their own ADR first (ADR 0025, point 5).
 
+- A Quick Settings tile that turns the local VPN on and off, and an optional widget that shows only its
+  state and the date of the last check, never a count of problems.
+
 ### v0.3 "Guard": blocking
 
 - Network access per app (Wi-Fi, mobile, background), and tracker-domain blocking with per-app exceptions.
@@ -83,6 +92,24 @@ starts, a two-week spike picks the packet engine (Rust netstack or Go gVisor). D
 - A weekly plain-language report, exportable as PDF or JSON.
 - A GDPR Article 15 helper: for each company whose trackers were observed, a ready-to-send data-access request.
 - Declared against observed: each app's data-safety label on Google Play compared with what Datapavan saw. The labels come from the lab, cited by hand, until researcher access under DSA Article 40(12) or Google's permission allows more (ADR 0015).
+
+
+### Other devices
+
+One app and one code base, never a separate product: the Rust engine, the audit, the rules, the plan
+and the data packs do not depend on the kind of device, and a second app would mean a second signing
+key and fingerprint to defend (ADR 0024).
+
+- **Tablets, foldables and Chromebooks:** the same screens in a wider layout, with the navigation at the
+  side on wide screens.
+- **Android TV and TV boxes:** the same app with a layout for the remote control and a television, from
+  the TV launcher. Cheap TV boxes are where the audit matters most: public reports in 2024 and 2025 (the
+  Vo1d and BADBOX 2.0 botnets) found millions of boxes shipped with residential-proxy code, many with
+  system images signed by AOSP's public test keys, which Datapavan already reports (ADR 0019, ADR
+  0023). After v0.1, a spike on two or three devices (a cheap AOSP box, a Google TV device and, if
+  possible, a Fire TV) checks Settings' screens, usage access and the network counts there; then the TV
+  layout gets its own ADR, and the boxes join the lab's phones.
+- **Watches and cars:** not planned; their systems give an app little to audit.
 
 ---
 
