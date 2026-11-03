@@ -71,12 +71,13 @@ one an action; it has no journal of what the user changed and no undo.
      background data use, and the strict level's preinstalled apps.
 
    Within a class: items whose app contains advertising, analytics or profiling trackers first, then
-   the longest time not opened, then the name. A numeric score would claim a precision that nobody has
+   the longest time not opened, then the reason in the order above, then the name. A numeric score would claim a precision that nobody has
    measured; Safety Center orders by severity in the same way.
 4. **Three levels, which differ in what they include:**
    - **Light** (the default): class A, and apps not opened for 90 days that hold a sensor, special
      access or VPN permission.
-   - **Medium:** all of classes A and B, and class C without preinstalled apps.
+   - **Medium:** all of classes A and B, and apps not opened for 90 days that hold another sensitive
+     permission or used data in the background.
    - **Strict:** everything above, and preinstalled apps through App info. Each preinstalled item
      says that Datapavan has not tested it on this phone, what may stop working, and that it can be
      enabled again on the same screen, and it needs one extra confirmation.
@@ -110,8 +111,8 @@ one an action; it has no journal of what the user changed and no undo.
    "uninstalled", "nothing changed".
    - **Undo** opens the same screen and says what to turn back on. For an uninstalled app it says
      that Datapavan cannot bring it back and that its data is gone.
-   - **After a restart** (Android's boot count), and at every start, the journal compares the current
-     state with what it recorded and says where something came back, for example after an update.
+   - **At every start,** and so after every restart, the journal compares the current state with
+     what it recorded and says where something came back, for example after an update.
    - **Three days after a session,** the plan asks once whether everything still works. "Something is
      wrong" lists that session's changes with their undo.
    - The journal is kept in app-private storage, excluded from backups like all of Datapavan's data,

@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: CC0-1.0
+# The safety floor's deny-list by function (ADR 0026, point 5), written by hand. The remediation plan
+# never makes an item of these apps, at any level. Columns: package, or a prefix followed by *; vendor
+# (* for every phone, otherwise the maker as Android names it, in lower case); function (core,
+# telephony, emergency, updates, setup, time-zone, connectivity, device-lock); source; checked.
+# A source shows what the package does, or a public report of what broke without it. Community debloat
+# lists are not copied (ADR 0015).
+android	*	core	https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/core/res/AndroidManifest.xml	2026-11-03
+com.android.systemui	*	core	https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/packages/SystemUI/AndroidManifest.xml	2026-11-03
+com.android.settings	*	core	https://android.googlesource.com/platform/packages/apps/Settings/+/refs/heads/main/AndroidManifest.xml	2026-11-03
+com.android.providers.*	*	core	https://android.googlesource.com/platform/packages/providers/	2026-11-03
+com.android.shell	*	core	https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/packages/Shell/AndroidManifest.xml	2026-11-03
+com.android.externalstorage	*	core	https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/packages/ExternalStorageProvider/AndroidManifest.xml	2026-11-03
+com.android.keychain	*	core	https://android.googlesource.com/platform/packages/apps/KeyChain/+/refs/heads/main/AndroidManifest.xml	2026-11-03
+com.android.location.fused	*	core	https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/packages/FusedLocation/AndroidManifest.xml	2026-11-03
+com.android.ext.services	*	core	https://android.googlesource.com/platform/packages/modules/ExtServices/	2026-11-03
+com.google.android.ext.services	*	core	https://github.com/0x192/universal-android-debloater/issues/194	2026-11-03
+com.google.android.apps.wellbeing	*	core	https://xdaforums.com/t/do-not-uninstall-digital-wellbeing-app-via-adb.4356493/	2026-11-03
+com.android.permissioncontroller	*	core	https://android.googlesource.com/platform/packages/modules/Permission/+/refs/heads/main/PermissionController/AndroidManifest.xml	2026-11-03
+com.google.android.permissioncontroller	*	core	https://android.googlesource.com/platform/packages/modules/Permission/+/refs/heads/main/PermissionController/AndroidManifest.xml	2026-11-03
+com.android.packageinstaller	*	core	https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/packages/PackageInstaller/AndroidManifest.xml	2026-11-03
+com.google.android.packageinstaller	*	core	https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/packages/PackageInstaller/AndroidManifest.xml	2026-11-03
+com.android.phone	*	telephony	https://android.googlesource.com/platform/packages/services/Telephony/+/refs/heads/main/AndroidManifest.xml	2026-11-03
+com.android.server.telecom	*	telephony	https://android.googlesource.com/platform/packages/services/Telecomm/+/refs/heads/main/AndroidManifest.xml	2026-11-03
+com.android.stk	*	telephony	https://android.googlesource.com/platform/packages/apps/Stk/+/refs/heads/main/AndroidManifest.xml	2026-11-03
+com.android.carrierconfig	*	telephony	https://android.googlesource.com/platform/packages/apps/CarrierConfig/+/refs/heads/main/AndroidManifest.xml	2026-11-03
+com.sec.phone	samsung	telephony	https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/79	2026-11-03
+com.android.cellbroadcast*	*	emergency	https://android.googlesource.com/platform/packages/apps/CellBroadcastReceiver/	2026-11-03
+com.google.android.cellbroadcast*	*	emergency	https://android.googlesource.com/platform/packages/apps/CellBroadcastReceiver/	2026-11-03
+com.android.emergency	*	emergency	https://android.googlesource.com/platform/packages/apps/EmergencyInfo/+/refs/heads/main/AndroidManifest.xml	2026-11-03
+com.samsung.android.app.contacts	samsung	emergency	https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/78	2026-11-03
+com.android.vending	*	updates	https://source.android.com/docs/core/ota/modular-system	2026-11-03
+com.android.provision	*	setup	https://android.googlesource.com/platform/packages/apps/Provision/+/refs/heads/main/AndroidManifest.xml	2026-11-03
+com.sec.android.app.SecSetupWizard	samsung	setup	https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/79	2026-11-03
+com.samsung.android.timezone.data*	samsung	time-zone	https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/1311	2026-11-03
+com.android.networkstack*	*	connectivity	https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/1311	2026-11-03
+com.google.android.networkstack*	*	connectivity	https://android.googlesource.com/platform/packages/modules/NetworkStack/	2026-11-03
+com.android.wifi.*	*	connectivity	https://android.googlesource.com/platform/packages/modules/Wifi/	2026-11-03
+com.google.android.wifi.*	*	connectivity	https://android.googlesource.com/platform/packages/modules/Wifi/	2026-11-03
+com.android.bluetooth	*	connectivity	https://android.googlesource.com/platform/packages/modules/Bluetooth/	2026-11-03
+com.google.android.bluetooth	*	connectivity	https://android.googlesource.com/platform/packages/modules/Bluetooth/	2026-11-03
+com.android.nfc	*	connectivity	https://android.googlesource.com/platform/packages/modules/Nfc/+/refs/heads/main/NfcNci/AndroidManifest.xml	2026-11-03
+com.android.se	*	connectivity	https://android.googlesource.com/platform/packages/apps/SecureElement/+/refs/heads/main/AndroidManifest.xml	2026-11-03
+com.android.uwb.*	*	connectivity	https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/1353	2026-11-03
+com.google.android.uwb.*	*	connectivity	https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/issues/1353	2026-11-03
+com.android.devicelockcontroller	*	device-lock	https://android.googlesource.com/platform/packages/modules/DeviceLock/+/refs/heads/main/DeviceLockController/AndroidManifest.xml	2026-11-03
+com.google.android.devicelockcontroller	*	device-lock	https://android.googlesource.com/platform/packages/modules/DeviceLock/+/refs/heads/main/DeviceLockController/AndroidManifest.xml	2026-11-03
+com.samsung.android.kgclient	samsung	device-lock	https://docs.samsungknox.com/admin/knox-guard/	2026-11-03

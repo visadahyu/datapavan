@@ -14,6 +14,7 @@ import android.content.pm.PackageManager
 import android.content.pm.PermissionInfo
 import android.content.pm.ResolveInfo
 import android.net.ConnectivityManager
+import android.net.Uri
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.PowerManager
@@ -26,6 +27,7 @@ import android.view.accessibility.AccessibilityManager
 import android.service.wallpaper.WallpaperService
 import android.view.inputmethod.InputMethod
 import android.view.inputmethod.InputMethodManager
+import androidx.core.net.toUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -89,6 +91,72 @@ class AppCollector(private val context: Context) {
         }
         app.copy(label = label)
     }
+
+    /**
+     * What one app holds now, read again when the user comes back from a system screen of the
+     * remediation plan (ADR 0026); [ItemState.UNINSTALLED] once it is gone.
+     */
+    fun state(packageName: String): ItemState {
+        val info = try {
+            packageInfo(packageName)
+        } catch (_: PackageManager.NameNotFoundException) {
+            return ItemState.UNINSTALLED
+        }
+        val admins = context.getSystemService(DevicePolicyManager::class.java).activeAdmins.orEmpty().map { it.packageName }.toSet()
+        val app = facts(info, enabledAccessibilityPackages(), enabledNotificationListenerPackages(), admins) ?: return ItemState.UNINSTALLED
+        return ItemState.of(app)
+    }
+
+    /**
+     * The apps that the safety floor protects on this phone (ADR 0026, point 5), apart from its
+     * deny-list: the default home, phone, SMS and browser apps, every enabled keyboard, the screen
+     * readers in use, the device or profile owner and preinstalled device admins, the package installer
+     * and permission controller, and Datapavan. [apps] tells preinstalled admins apart.
+     */
+    fun protectedApps(apps: List<AppFacts>): Map<String, FloorReason> = buildMap {
+        fun protect(packageName: String?, reason: FloorReason) {
+            // "android" resolves an intent that has no default, with its chooser.
+            if (packageName != null && packageName != PLATFORM && packageName !in this) put(packageName, reason)
+        }
+        protect(context.packageName, FloorReason.DATAPAVAN)
+        protect(defaultActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))?.activityInfo?.packageName, FloorReason.HOME)
+        protect(context.getSystemService(TelecomManager::class.java)?.defaultDialerPackage, FloorReason.PHONE)
+        protect(Telephony.Sms.getDefaultSmsPackage(context), FloorReason.SMS)
+        val web = Intent(Intent.ACTION_VIEW, "https://example.org/".toUri()).addCategory(Intent.CATEGORY_BROWSABLE)
+        protect(defaultActivity(web)?.activityInfo?.packageName, FloorReason.BROWSER)
+        context.getSystemService(InputMethodManager::class.java).enabledInputMethodList.forEach { protect(it.packageName, FloorReason.KEYBOARD) }
+        val accessibility = context.getSystemService(AccessibilityManager::class.java)
+        // Only while a screen reader is on, so that an app cannot hide from the plan by declaring speech.
+        if (accessibility.isTouchExplorationEnabled) {
+            accessibility.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_SPOKEN or AccessibilityServiceInfo.FEEDBACK_BRAILLE)
+                .forEach { protect(it.resolveInfo.serviceInfo.packageName, FloorReason.SCREEN_READER) }
+        }
+        val policy = context.getSystemService(DevicePolicyManager::class.java)
+        val system = apps.filter { it.isSystem }.map { it.packageName }.toSet()
+        for (admin in policy.activeAdmins.orEmpty().map { it.packageName }.distinct()) {
+            when {
+                policy.isDeviceOwnerApp(admin) || policy.isProfileOwnerApp(admin) -> protect(admin, FloorReason.DEVICE_OWNER)
+                admin in system -> protect(admin, FloorReason.PREINSTALLED_ADMIN)
+            }
+        }
+        val apk = Intent(Intent.ACTION_VIEW).setDataAndType("content://org.visadahyu.datapavan/app.apk".toUri(), APK_TYPE)
+        protect(defaultActivity(apk)?.activityInfo?.packageName, FloorReason.INSTALLER)
+        protect(defaultActivity(Intent(Intent.ACTION_DELETE, Uri.fromParts("package", context.packageName, null)))?.activityInfo?.packageName, FloorReason.INSTALLER)
+        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Intent(Intent.ACTION_AUTO_REVOKE_PERMISSIONS, Uri.fromParts("package", context.packageName, null))
+        } else {
+            Intent(ACTION_MANAGE_PERMISSIONS)
+        }
+        protect(defaultActivity(permissions)?.activityInfo?.packageName, FloorReason.PERMISSION_CONTROLLER)
+    }
+
+    private fun packageInfo(packageName: String): PackageInfo =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(PACKAGE_FLAGS.toLong()))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.getPackageInfo(packageName, PACKAGE_FLAGS)
+        }
 
     private suspend fun <T, R : Any> List<T>.inParallel(transform: (T) -> R?): List<R> = coroutineScope {
         val chunk = size / Runtime.getRuntime().availableProcessors() + 1
@@ -210,15 +278,13 @@ class AppCollector(private val context: Context) {
         permission.substringAfterLast('.')
     }
 
-    private fun installedPackages(): List<PackageInfo> {
-        val flags = PackageManager.GET_PERMISSIONS or PackageManager.GET_SERVICES or PackageManager.GET_SIGNING_CERTIFICATES
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(flags.toLong()))
+    private fun installedPackages(): List<PackageInfo> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(PACKAGE_FLAGS.toLong()))
         } else {
             @Suppress("DEPRECATION")
-            pm.getInstalledPackages(flags)
+            pm.getInstalledPackages(PACKAGE_FLAGS)
         }
-    }
 
     private fun grantedDangerous(info: PackageInfo): List<String> {
         val requested = info.requestedPermissions ?: return emptyList()
@@ -288,6 +354,12 @@ class AppCollector(private val context: Context) {
     private companion object {
         const val SETTING_NOTIFICATION_LISTENERS = "enabled_notification_listeners"
         const val OP_ACTIVATE_VPN = "android:activate_vpn"
+        const val PLATFORM = "android"
+        const val PACKAGE_FLAGS = PackageManager.GET_PERMISSIONS or PackageManager.GET_SERVICES or PackageManager.GET_SIGNING_CERTIFICATES
+        const val APK_TYPE = "application/vnd.android.package-archive"
+
+        /** The permission controller's own action on Android 10, which has no public one. */
+        const val ACTION_MANAGE_PERMISSIONS = "android.intent.action.MANAGE_PERMISSIONS"
 
         /** Special access through which the system keeps an app running without it being opened. */
         val BOUND_ACCESS = setOf(SpecialAccess.ACCESSIBILITY, SpecialAccess.NOTIFICATION_LISTENER, SpecialAccess.DEVICE_ADMIN)
@@ -317,6 +389,13 @@ class DeviceCollector(private val context: Context) {
         userCertificateAuthorities = userCertificateAuthorities(),
         vpnActive = vpnActive(),
         integrity = integrity(),
+    )
+
+    /** Debugging and user certificate authorities only, read again after a system screen of the plan (ADR 0026). */
+    fun planState(): ItemState = ItemState(
+        usbDebugging = global(Settings.Global.ADB_ENABLED) == "1",
+        wirelessDebugging = global(SETTING_ADB_WIFI) == "1",
+        authorities = userCertificateAuthorities().size,
     )
 
     private fun global(key: String): String? = try {
