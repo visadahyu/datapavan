@@ -1,6 +1,6 @@
 # 0027. The app's structure, and settings for appearance and language
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-03
 - Decided by: mehdashti
 
@@ -50,7 +50,7 @@ destinations in a navigation bar at the bottom.
    - **Data sources**, **Is this copy genuine?**, the **privacy policy** as text in the app, the
      **open-source licences**, and **about** (versions, the source code's address as text).
 4. **No new dependency.** Navigation stays plain Compose state, as the app does now; icons are vector
-   drawables copied from Material Symbols (Apache-2.0) with their licence noted; the language works
+   drawables drawn for Datapavan, so no third-party artwork comes in; the language works
    without AppCompat. Dependency verification (ADR 0008) stays as it is.
 5. **Every destination is checked.** The emulator scripts reach each part through the navigation
    bar and labels, never through scroll positions on one long page; `scripts/screenshots.sh` takes
