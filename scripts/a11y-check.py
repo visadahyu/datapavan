@@ -41,7 +41,9 @@ def main() -> int:
         label = next((n.get("text") or n.get("content-desc") for n in node.iter() if n.get("text") or n.get("content-desc")), "")
         if not label:
             problems.append(f"clickable element without a label at {node.get('bounds')}")
-        if box[2] - box[0] < min_px or box[3] - box[1] < min_px:
+        # Bounds are whole pixels with each edge rounded on its own, so an element of exactly 48 dp
+        # can measure one pixel less at densities such as 420 dpi (CI's Pixel 7): 126 px as 125.
+        if box[2] - box[0] < min_px - 1 or box[3] - box[1] < min_px - 1:
             problems.append(f"touch target smaller than 48 dp at {node.get('bounds')}: {label[:40]!r}")
     for problem in problems:
         print(f"{path}: {problem}", file=sys.stderr)
