@@ -1,6 +1,6 @@
 # 0026. The remediation plan in v0.1
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-03
 - Decided by: mehdashti
 
