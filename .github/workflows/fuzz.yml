@@ -30,7 +30,8 @@ concurrency:
 jobs:
   fuzz:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Forty minutes of fuzzing at most (the Fuzz step), plus the toolchain and the builds.
+    timeout-minutes: 60
     env:
       CARGO_FUZZ_VERSION: "0.13.2"
     steps:
@@ -61,8 +62,9 @@ jobs:
           restore-keys: fuzz-corpus-
 
       - name: Fuzz
-        # Two minutes per target on a push or pull request, twenty in the weekly and manual runs.
-        run: scripts/fuzz.sh ${{ (github.event_name == 'push' || github.event_name == 'pull_request') && 120 || 1200 }}
+        # Eight minutes in all on a push or pull request, forty in the weekly and manual runs, shared
+        # among the targets. Twenty minutes for each of four targets outlasted the job's time limit.
+        run: scripts/fuzz.sh ${{ (github.event_name == 'push' || github.event_name == 'pull_request') && 480 || 2400 }}
 
       - name: Keep the inputs that found a bug
         if: failure()

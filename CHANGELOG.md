@@ -44,7 +44,7 @@ All notable changes to this project are documented here. The format follows
   - a cargo-deny policy;
   - native libraries built without paths from the build machine.
 - Quality gates in `scripts/check.sh`, run by CI on GitHub, including a check that every APK carries the Rust library and its JNI export, a check that every bundled dataset names its licence and source, an emulator smoke test (`scripts/smoke.sh`), an end-to-end check of the audit's findings with a test fixture app (`scripts/verify-audit.sh`), and screenshots in all four languages and both pseudo-locales with an accessibility check (`scripts/screenshots.sh`).
-- Fuzzing of the attestation, DEX and data pack parsers and, against a plain search, of the tracker matcher, with cargo fuzz (`scripts/fuzz.sh`): locally, for two minutes in CI when the engine changes, and for twenty minutes every week.
+- Fuzzing of the attestation, DEX and data pack parsers and, against a plain search, of the tracker matcher, with cargo fuzz (`scripts/fuzz.sh`): locally, in CI for eight minutes in all when the engine changes, and for forty minutes every week, shared among the targets.
 - Brand: the Old Persian sign DA as the product mark and app icon, the DAHYĀUŠ logogram for the foundation, a palette with measured contrast ratios, and avatars.
 - Documentation: design, roadmap, names, brand, VPN design, restricted regions, foundation charter, security policy, contributing guide (with the AI-assistance rules), privacy policy, code of conduct, and architecture decision records, including the licence check of every planned dataset (ADR 0015) and the decision to collect no data from users (ADR 0016); the design of the remediation plan.
 

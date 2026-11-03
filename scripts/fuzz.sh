@@ -6,7 +6,10 @@
 #   rustup toolchain install nightly-2026-10-01 --profile minimal
 #   cargo install cargo-fuzz --version 0.13.2 --locked
 #
-#   scripts/fuzz.sh [seconds per target, default 60]
+#   scripts/fuzz.sh [seconds in all, default 240]
+#
+# The time is shared evenly among the targets, so that a new target does not make a run outlast the
+# time limit of its CI job.
 #
 # Inputs that find a bug are saved in core/fuzz/artifacts/<target>/; seeds live in
 # core/fuzz/seeds/<target>/, and the growing corpus in core/fuzz/corpus/<target>/ (not committed).
@@ -14,13 +17,21 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NIGHTLY=nightly-2026-10-01
-SECONDS_PER_TARGET="${1:-60}"
+TOTAL_SECONDS="${1:-240}"
 
 cd "$ROOT/core"
 # Fails if fuzz/Cargo.lock would change, as --locked does for the other builds.
 cargo +"$NIGHTLY" metadata --locked --format-version 1 --manifest-path fuzz/Cargo.toml >/dev/null
 
-for target in $(cargo +"$NIGHTLY" fuzz list); do
+targets=$(cargo +"$NIGHTLY" fuzz list)
+SECONDS_PER_TARGET=$((TOTAL_SECONDS / $(wc -w <<<"$targets")))
+# libFuzzer reads -max_total_time=0 as no limit.
+if ((SECONDS_PER_TARGET < 1)); then
+    echo "fuzz.sh: $TOTAL_SECONDS s is less than a second for each target" >&2
+    exit 1
+fi
+
+for target in $targets; do
     echo "== Fuzzing $target for $SECONDS_PER_TARGET s"
     mkdir -p "fuzz/corpus/$target"
     cargo +"$NIGHTLY" fuzz run "$target" "fuzz/corpus/$target" "fuzz/seeds/$target" -- \
