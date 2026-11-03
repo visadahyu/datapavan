@@ -339,6 +339,7 @@
     <string name="dataset_sdks">SDK qui partagent la connexion, assurent l\'assistance à distance ou enregistrent l\'écran</string>
     <string name="dataset_sdk_needs">Fonctions de SDK qui ont besoin d\'un service système, et les certificats de ces services</string>
     <string name="dataset_owners">Qui exploite les services des SDK, et qui publie quelle application</string>
+    <string name="dataset_remediation">Applis auxquelles le plan ne touche jamais, par fonction</string>
     <!-- The remediation plan and its journal (ADR 0026). -->
     <string name="plan_title">Votre plan</string>
     <string name="plan_entry_first">D\'abord : %1$s</string>

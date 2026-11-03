@@ -61,9 +61,14 @@ open_data_sources() {
 }
 
 # Imports $1 from Downloads through the system file picker. The picker opens where it was last used,
-# so it may already show Downloads.
+# so it may already show Downloads. Every dataset adds its licence above the button, so it can be
+# further down than one call of tap_text scrolls.
 import_pack() {
-    tap_text "Import a data pack" || fail "no import button"
+    local tapped=""
+    for _ in 1 2 3; do
+        tap_text "Import a data pack" && tapped=1 && break
+    done
+    [ -n "$tapped" ] || fail "no import button"
     for _ in $(seq 1 10); do
         screen_has "Recent" || screen_has "Downloads" || screen_has "$1" && break
         sleep 1
