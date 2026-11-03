@@ -95,10 +95,18 @@ tap_id() {
     adb shell input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 ))
 }
 
-# Opens a destination of the navigation bar: summary, apps, phone or network.
+# Opens a destination of the navigation bar: summary, apps, phone or network. The bar is missing
+# while the audit loads, also when the activity restarts because the app's language arrived late, so
+# it is waited for.
 open_tab() {
-    tap_id "nav-$1" || return 1
-    sleep 1
+    for _ in $(seq 1 60); do
+        if tap_id "nav-$1"; then
+            sleep 1
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
 }
 
 # Opens every section of an app's page (ADR 0027), from the top each time, as opening one moves the
