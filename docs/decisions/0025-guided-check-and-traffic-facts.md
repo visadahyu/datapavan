@@ -105,6 +105,9 @@ measured the method on the Android 17 emulator against packet captures and on th
   pure functions with unit tests, and `scripts/traffic-lab` checks the whole check on the emulator.
 - The kernel version comes from `os.version`. Before the check ships: whether a kernel older than
   4.9 is the right test for `xt_qtaguid`, and how Android counts a keyboard while it is on screen.
+  (Amended 2026-11-03: a keyboard's traffic counts as foreground while it is shown and as background
+  after it is hidden, on Android 11, 15 and 17 emulators, so the fact about quiet roles does not
+  count what a keyboard sends while the user types; [spike](../spikes/2026-11-keyboard-counting.md).)
 - The privacy policy says that the check reads the phone's total traffic counters, in memory only.
 - The guided check and the facts of point 3 join M5, before the first release; ranges for kinds of
   app become a research item next to the v0.2 cross-checks. DESIGN.md says so.

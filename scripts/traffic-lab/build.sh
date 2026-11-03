@@ -14,7 +14,8 @@ OUT="$ROOT/build/traffic-lab"
 rm -rf "$OUT" && mkdir -p "$OUT/classes" "$OUT/dex"
 javac --release 17 -cp "$PLATFORM" -d "$OUT/classes" $(find "$HERE/src" -name '*.java')
 "$TOOLS/d8" --min-api 29 --lib "$PLATFORM" --output "$OUT/dex" $(find "$OUT/classes" -name '*.class')
-"$TOOLS/aapt2" link -I "$PLATFORM" --manifest "$HERE/AndroidManifest.xml" \
+"$TOOLS/aapt2" compile --dir "$HERE/res" -o "$OUT/res.zip"
+"$TOOLS/aapt2" link -I "$PLATFORM" --manifest "$HERE/AndroidManifest.xml" -R "$OUT/res.zip" \
     --min-sdk-version 29 --target-sdk-version 35 --version-code 1 --version-name lab -o "$OUT/unsigned.apk"
 (cd "$OUT/dex" && zip -q "$OUT/unsigned.apk" classes.dex)
 "$TOOLS/zipalign" -f 4 "$OUT/unsigned.apk" "$OUT/aligned.apk"

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Lab tool for the guided check spike (scripts/traffic-lab/run.py): it moves known amounts of data
+    Lab tool for the guided check spike (scripts/traffic-lab/run.py) and the keyboard spike
+    (scripts/traffic-lab/keyboard.sh): it moves known amounts of data
     to and from a server on the computer, and reads Android's network counts with the calls that
     Datapavan uses. Unlike Datapavan it has network access. Runs on emulators only; never shipped.
 -->
@@ -17,5 +18,16 @@
         <activity android:name=".TransferActivity" android:exported="true" />
         <receiver android:name=".TransferReceiver" android:exported="true" />
         <receiver android:name=".ReadReceiver" android:exported="true" />
+        <!-- The keyboard spike: a keyboard that downloads known amounts while shown and after. -->
+        <service
+            android:name=".LabKeyboard"
+            android:exported="true"
+            android:label="Datapavan lab keyboard"
+            android:permission="android.permission.BIND_INPUT_METHOD">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data android:name="android.view.im" android:resource="@xml/method" />
+        </service>
     </application>
 </manifest>
