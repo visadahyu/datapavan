@@ -50,7 +50,7 @@ Each limit is a reason for the next stage. Where each one is addressed:
 2. **Zero telemetry.** No data leaves the phone unless the user sends it ([ADR 0016](decisions/0016-no-user-data.md)). No analytics or crash-reporting SDKs. Crash reports stay local and are shared only by explicit user action.
 3. **No Google Play Services dependency.** The app must work on de-Googled devices.
 4. **Least privilege.** Each feature asks only for the permission it needs, and explains why before asking.
-5. **Plain language.** Every finding has a short, non-technical explanation.
+5. **Plain language.** Every finding has a short, non-technical explanation. Every English string of twelve words or more reaches a Flesch-Kincaid grade of 10 or lower, which `scripts/plain-language.py` checks in `scripts/check.sh`; the median is about 6. Licence notices, which must name the licence, are exempt.
 6. **Hands off other apps.** No patching, injection or repackaging of third-party apps. We work only at the system and network level.
 7. **Verifiable.** Open source, reproducible builds, signed releases, pinned dependencies.
 8. **Clean revenue.** We follow the foundation charter: no ads, no data sales, and no money from parties whose data collection we restrict.

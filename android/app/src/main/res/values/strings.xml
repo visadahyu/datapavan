@@ -169,7 +169,7 @@
     <string name="check_nc_shared">Sent bytes are not set against received ones here, because Android counts this app together with others.</string>
     <string name="check_nc_system">Sent bytes are not set against received ones here, because this part of the system works for other apps.</string>
     <string name="check_nc_little">Sent bytes are not set against received ones here, because the app received less than 1 MB.</string>
-    <string name="check_nc_kernel">Sent bytes are not set against received ones here, because this phone\'s kernel counts sent packets in an older way, which can make them tens of percent higher.</string>
+    <string name="check_nc_kernel">Sent bytes are not compared with received ones here. This phone counts sent data in an older way, which can make the number much too high.</string>
     <string name="check_behind">Android\'s count was still not up to date after three readings, so some traffic may be missing.</string>
     <string name="check_first_behind">Android\'s count was not up to date at the start, so the result may include traffic from before the check.</string>
     <string name="check_not_checked_vpn">A VPN is active, so Datapavan could not check that Android\'s count was up to date.</string>
@@ -212,7 +212,7 @@
     <string name="finding_system_key_leaked_title">This phone\'s system key has leaked</string>
     <string name="finding_system_key_leaked_body">The key that signs this phone\'s system is on Google\'s 2022 list of phone makers\' keys that were used to sign malware, and the maker still uses it. An app signed with it can pose as an update of a preinstalled app and keep that app\'s rights; up to Android 14 it can also run as the system. Install apps only from Google Play and the phone maker\'s own store.</string>
     <string name="finding_system_key_development_title">System built for development</string>
-    <string name="finding_system_key_development_body">This system is signed with Google\'s development key, as emulators and test devices are, rather than with a phone maker\'s release key.</string>
+    <string name="finding_system_key_development_body">This system is signed with Google\'s key for test phones and emulators, not with a phone maker\'s key for phones that are sold.</string>
     <string name="system_key_heading">System key</string>
     <string name="system_key_platform">Signed with this phone\'s system key: the phone\'s maker shipped or approved this app with system rights. It may still contain another company\'s code. The phone reports its maker as %1$s.</string>
     <string name="system_key_runs_as_system">Runs as the system user, with the rights of Android itself.</string>
@@ -239,7 +239,7 @@
     <string name="finding_bootloader_unlocked_title">Bootloader unlocked</string>
     <string name="finding_bootloader_unlocked_body">The bootloader is unlocked, so the system can be replaced without your knowledge. If you did not unlock it yourself, treat this as a serious warning.</string>
     <string name="finding_boot_not_verified_title">System not verified</string>
-    <string name="finding_boot_not_verified_body">The bootloader reports that the operating system could not be verified with the maker\'s key.</string>
+    <string name="finding_boot_not_verified_body">When the phone started, it could not confirm that its system is the one from the maker.</string>
     <string name="finding_usb_debugging_title">USB debugging is on</string>
     <string name="finding_usb_debugging_body">A computer connected by cable can install apps and read data once you accept its key. Turn it off when you do not need it.</string>
     <string name="finding_old_patch_title">Security updates are old</string>
@@ -349,7 +349,7 @@
     <string name="sdk_capability_app_screen">show a support agent this app\'s screen</string>
     <string name="sdk_capability_whole_screen">show a support agent your whole screen, including other apps and the keyboard</string>
     <string name="sdk_capability_app_control">let the agent tap and type in this app, if you allow it</string>
-    <string name="sdk_capability_device_control">let the agent control your phone, including other apps and settings, once its accessibility service is turned on</string>
+    <string name="sdk_capability_device_control">let the support agent control the phone, its apps and settings once its accessibility service is on</string>
     <string name="sdk_capability_files">transfer files</string>
     <string name="sdk_accessibility_on">This app\'s accessibility service is turned on, so this tool can control apps other than this one.</string>
     <string name="sdk_remote_support_not_checked">Finding the code does not show that anyone has connected to your phone.</string>

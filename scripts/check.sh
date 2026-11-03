@@ -52,6 +52,8 @@ rust_gates() {
 }
 
 android_gates() {
+    echo "== Android: plain English strings (scripts/plain-language.py)"
+    python3 -I "$ROOT/scripts/plain-language.py" "$ROOT/android/app/src/main/res/values/strings.xml"
     echo "== Android: lint, unit tests, APK and bundle builds, permission guard, native-library check"
     cd "$ROOT/android"
     ./gradlew --no-daemon --stacktrace \
