@@ -1,6 +1,7 @@
 # Remediation plan
 
-Status: designed. The first tier comes with v0.1; later tiers come with stage 2. The design applies to every
+Status: designed. The first tier comes with v0.1, as [ADR 0026](decisions/0026-remediation-plan-v0.1.md)
+decides; later tiers come with stage 2. The design applies to every
 Android phone. Vendor features appear only as examples, and evidence is kept per vendor, model and build.
 
 ## Why
@@ -144,7 +145,9 @@ ADR 0015's rules on evidence and disputes.
 ## Releases
 
 - **v0.1 (M4, M5):** the plan screen, the three levels, the queue, the journal of hand-offs and unused
-  apps from usage access, all at the ordinary-app level.
+  apps from usage access, all at the ordinary-app level ([ADR 0026](decisions/0026-remediation-plan-v0.1.md)):
+  every action is a hand-off to a system screen, and Datapavan opens no uninstall dialog of its own,
+  because an uninstall deletes the app's data.
 - **v0.2:** traffic observations raise or lower an app's priority.
 - **v0.3:** background network blocking becomes an action.
 - **Stage 2:** the Device Owner edition and the work-profile isolation helper apply the plan without a
