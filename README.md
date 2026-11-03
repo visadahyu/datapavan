@@ -5,8 +5,10 @@ helps you stop it.** Everything runs on the device. It needs no root and no clou
 0.1 does not even have permission to use the internet.
 
 > Status: **pre-alpha.** Milestones M1 (the build skeleton), M2 (the app and permission audit), M3
-> (the code scanner and its data) and M4 (network use per app) are complete. Nothing has been released
-> yet. See the [roadmap](ROADMAP.md).
+> (the code scanner and its data) and M4 (network use per app) are complete. M5, the first release, is
+> in progress: the guided check, the remediation plan, the app's structure and settings, the brand
+> theme, the genuine-copy check and the release steps are built; the signing keys, made offline, and
+> the release itself come next. Nothing has been released yet. See the [roadmap](ROADMAP.md).
 
 ## Why
 
@@ -71,6 +73,23 @@ checked on Android 11 and 17 emulators and on Galaxy A40 and A56 phones.
   permission, special access or background data are listed. Only totals are read, never which app was
   opened when, and nothing is kept. *Why:* an app the user forgot can still send data, and Android's
   own clean-up skips some apps and all special access.
+- **Checking one activity.** On an app's page, the user names what they will do (watch, scroll,
+  download, send), Datapavan reads Android's counts, opens the app, and reads again when the user comes
+  back, checking that the count is up to date. For activities that only receive, sent bytes appear as
+  a share of received ones, next to what acknowledgements alone take. Facts, never alerts (ADR 0025).
+  *Why:* a 30-day total cannot be judged, but one activity can.
+- **Remediation plan.** Findings become a short session of cards, those that remove the most risk
+  first, at a light, medium or strict level. Each card opens the right screen of Android, where the
+  user decides; Datapavan changes nothing itself. A journal on the phone records what actually changed,
+  notices when a change comes back, and offers undo; a safety floor leaves alone the apps the phone
+  needs (ADR 0026). *Why:* a phone in daily use can have hundreds of apps and dozens of findings, and
+  nobody works through that by hand. See [docs/REMEDIATION.md](docs/REMEDIATION.md).
+- **Easy to find your way.** A summary, the apps with search, filters and orders, the phone, and network
+  use, each one tap away; a plain-language card on each app's page; appearance and language settings on
+  every Android version (ADR 0027). *Why:* the findings only help if people can reach them.
+- **Is this copy genuine?** The app shows its own signing key, checks it against its own list, and says
+  plainly that the real check is to compare the key with the one published with each release (ADR
+  0024). *Why:* a privacy tool is a tempting thing to fake.
 
 ## What comes next
 
@@ -96,11 +115,6 @@ yet.
 - **Blocking** (v0.3): network access per app, tracker domains, and "notifications yes, hidden uploads
   no", which allows an app the network only while it is on screen. *Why:* notifications arrive through
   the system's push service, so most apps need no connection of their own in the background.
-- **Remediation plan** (v0.1, M5). Findings become a short list of actions, ordered by how much risk
-  each removes, at a light, medium or strict level; each is previewed, confirmed in one tap, recorded
-  and reversible, and a safety floor protects the phone's core functions. *Why:* a phone in daily use
-  can have hundreds of apps and dozens of findings, and nobody works through that by hand. See
-  [docs/REMEDIATION.md](docs/REMEDIATION.md).
 - **Reports** (v0.4): a weekly report, a GDPR Article 15 data-access request for each company whose
   trackers were seen, and each app's declared data practices compared with what was observed. *Why:*
   every observation is a concrete reason to ask a company what it holds.
@@ -128,7 +142,8 @@ stage that addresses it, is listed in [docs/DESIGN.md](docs/DESIGN.md#2-what-we-
 - **Zero telemetry.** Datapavan collects nothing about its users and contains no analytics SDKs. It learns
   from its own lab, never from its users' phones ([ADR 0016](docs/decisions/0016-no-user-data.md)).
 - **No Google Play Services.** It works on phones without Google's services.
-- **Open source.** You can check every claim yourself. Builds will be reproducible and releases signed.
+- **Open source.** You can check every claim yourself. Release builds are reproducible
+  (`scripts/reproducible.sh`), and releases will be signed with keys kept offline.
 - **Plain language.** Every finding is explained so that anyone can understand it.
 - **Hands off other apps.** Datapavan never modifies or injects into other apps. It works only at the system and network level.
 
@@ -153,6 +168,8 @@ The history and meaning of both names are in [docs/NAMES.md](docs/NAMES.md); log
 | [docs/VPN.md](docs/VPN.md) | Design of the local VPN (v0.2 and v0.3) |
 | [docs/REMEDIATION.md](docs/REMEDIATION.md) | The remediation plan: levels, actions, safety floor, evidence |
 | [docs/DATA-PACKS.md](docs/DATA-PACKS.md) | Signed data packs: how data reaches a phone without network access |
+| [docs/LAB.md](docs/LAB.md) | The traffic lab: measuring apps on the project's own phones |
+| [docs/RELEASE.md](docs/RELEASE.md) | Releasing: the offline keys, the checklist, reproducible builds |
 | [docs/RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md) | Working under censorship and surveillance |
 | [docs/FOUNDATION.md](docs/FOUNDATION.md) | Charter principles of the Visadahyu Foundation |
 | [docs/decisions/](docs/decisions/README.md) | Architecture decision records, including the licences of every dataset (ADR 0015) |
