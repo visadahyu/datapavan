@@ -477,4 +477,18 @@
     <string name="journal_delete_confirm">Endgültig löschen? Datapavan weiß dann nicht mehr, was Sie geändert haben.</string>
     <string name="journal_delete_yes">Löschen</string>
     <string name="journal_cancel">Abbrechen</string>
+
+    <!-- Whether this copy is genuine (ADR 0024). -->
+    <string name="own_title">Ist diese Kopie echt?</string>
+    <string name="own_teach">Echtes Datapavan v0.1 hat keinen Internetzugriff und fragt nie danach. Eine Kopie, die danach fragt, ist nicht echt.</string>
+    <string name="own_internet_none">Diese Kopie hat keinen Internetzugriff.</string>
+    <string name="own_internet_present">Diese Kopie fragt nach Internetzugriff, sie ist also kein echtes Datapavan. Deinstallieren Sie sie und installieren Sie Datapavan aus einer Quelle, der Sie vertrauen.</string>
+    <string name="own_key_label">Signaturschlüssel dieser Kopie (SHA-256)</string>
+    <string name="own_key_unknown">Android sagt nicht, welcher Schlüssel diese Kopie signiert hat.</string>
+    <string name="own_genuine">Er stimmt mit dem offiziellen Schlüssel von Datapavan in der Liste überein, die diese Kopie mitbringt.</string>
+    <string name="own_not_genuine">Er stimmt nicht mit dem offiziellen Schlüssel von Datapavan überein. Deinstallieren Sie diese Kopie und installieren Sie Datapavan aus einer Quelle, der Sie vertrauen.</string>
+    <string name="own_no_record">Die Liste enthält noch keinen offiziellen Schlüssel, weil Datapavan noch nicht veröffentlicht wurde.</string>
+    <string name="own_debug">Dies ist eine Testversion, signiert mit einem Debug-Schlüssel.</string>
+    <string name="own_updates">Ist eine echte Kopie installiert, lehnt Android jedes Update ab, das mit einem anderen Schlüssel signiert ist; prüfen Sie also bei der ersten Installation.</string>
+    <string name="own_limit">Eine gefälschte Kopie kann alles auf diesem Bildschirm vortäuschen. Die echte Prüfung geschieht von außen: Vergleichen Sie den Schlüssel oben mit dem, der mit jeder Version veröffentlicht wird, zum Beispiel mit der App AppVerifier.</string>
 </resources>

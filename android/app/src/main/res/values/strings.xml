@@ -504,4 +504,18 @@
     <string name="journal_delete_confirm">Delete it for good? Datapavan then no longer knows what you changed.</string>
     <string name="journal_delete_yes">Delete</string>
     <string name="journal_cancel">Cancel</string>
+
+    <!-- Whether this copy is genuine (ADR 0024). -->
+    <string name="own_title">Is this copy genuine?</string>
+    <string name="own_teach">Genuine Datapavan v0.1 has no internet access and never asks for it. A copy that asks for it is not genuine.</string>
+    <string name="own_internet_none">This copy has no internet access.</string>
+    <string name="own_internet_present">This copy asks for internet access, so it is not genuine Datapavan. Uninstall it and install Datapavan from a channel you trust.</string>
+    <string name="own_key_label">This copy\'s signing key (SHA-256)</string>
+    <string name="own_key_unknown">Android does not say which key signed this copy.</string>
+    <string name="own_genuine">It matches Datapavan\'s official key in the list this copy carries.</string>
+    <string name="own_not_genuine">It does not match Datapavan\'s official key. Uninstall this copy and install Datapavan from a channel you trust.</string>
+    <string name="own_no_record">No official key is in the list yet, because Datapavan has not been released.</string>
+    <string name="own_debug">This is a test build, signed with a debug key.</string>
+    <string name="own_updates">Once a genuine copy is installed, Android refuses any update signed with another key, so the first install is the moment to check.</string>
+    <string name="own_limit">A forged copy can fake everything on this screen. The real check is from outside: compare the key above with the one published with each release, for example with the AppVerifier app.</string>
 </resources>

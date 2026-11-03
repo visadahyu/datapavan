@@ -267,6 +267,7 @@ internal fun DatapavanApp(engineVersion: String, usageUntil: Long? = null, usage
         journal = it
         journalStore.save(it)
     }
+    var checkingCopy by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(modifier = Modifier.fillMaxSize()) { insets ->
         val audit = result
@@ -336,9 +337,14 @@ internal fun DatapavanApp(engineVersion: String, usageUntil: Long? = null, usage
                     },
                 )
             }
+            checkingCopy -> {
+                BackHandler { checkingCopy = false }
+                val own = audit.apps.firstOrNull { it.first.packageName == context.packageName }?.first
+                OwnCopyScreen(own?.signing, audit.signatures[context.packageName], insets, onBack = { checkingCopy = false })
+            }
             else -> Overview(
                 audit, engineVersion, scanProgress, insets,
-                onOpen = { selected = it }, onReview = { reviewing = true }, onData = { showingData = true },
+                onOpen = { selected = it }, onReview = { reviewing = true }, onData = { showingData = true }, onCopy = { checkingCopy = true },
                 usage = { UsageOverview(usage, days, audit.apps.map { it.first }, onDays = { days = it }, onOpen = { selected = it }) },
                 plan = {
                     val input = planInput(audit, usage, context.packageName)
@@ -375,7 +381,8 @@ private fun Loading(insets: PaddingValues) {
 
 @Composable
 private fun Overview(audit: AuditResult, engineVersion: String, scanProgress: Pair<Int, Int>?, insets: PaddingValues,
-    onOpen: (String) -> Unit, onReview: () -> Unit, onData: () -> Unit, usage: @Composable () -> Unit, plan: @Composable () -> Unit) {
+    onOpen: (String) -> Unit, onReview: () -> Unit, onData: () -> Unit, onCopy: () -> Unit, usage: @Composable () -> Unit,
+    plan: @Composable () -> Unit) {
     var showAll by rememberSaveable { mutableStateOf(false) }
     val flagged = audit.apps.filter { (_, findings) -> findings.any { it.severity != Severity.INFO } }
     val shown = if (showAll) audit.apps else flagged
@@ -426,6 +433,7 @@ private fun Overview(audit: AuditResult, engineVersion: String, scanProgress: Pa
         item {
             Spacer(Modifier.height(24.dp))
             TextButton(onClick = onData) { Text(stringResource(R.string.data_sources_title)) }
+            TextButton(onClick = onCopy) { Text(stringResource(R.string.own_title)) }
             Text(
                 stringResource(R.string.engine_version, isolateLtr(engineVersion)),
                 style = MaterialTheme.typography.bodySmall,

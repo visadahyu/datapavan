@@ -477,4 +477,18 @@
     <string name="journal_delete_confirm">برای همیشه پاک شود؟ پس از آن این برنامه دیگر نمی‌داند چه چیزهایی را تغییر داده‌اید.</string>
     <string name="journal_delete_yes">پاک شود</string>
     <string name="journal_cancel">انصراف</string>
+
+    <!-- Whether this copy is genuine (ADR 0024). -->
+    <string name="own_title">آیا این نسخه اصل است؟</string>
+    <string name="own_teach">نسخه اصل Datapavan ۰٫۱ به اینترنت دسترسی ندارد و هرگز آن را نمی‌خواهد. نسخه‌ای که آن را بخواهد اصل نیست.</string>
+    <string name="own_internet_none">این نسخه به اینترنت دسترسی ندارد.</string>
+    <string name="own_internet_present">این نسخه دسترسی به اینترنت می‌خواهد، پس Datapavan اصل نیست. حذفش کنید و Datapavan را از منبعی که به آن اعتماد دارید نصب کنید.</string>
+    <string name="own_key_label">کلید امضای این نسخه (SHA-256)</string>
+    <string name="own_key_unknown">اندروید نمی‌گوید کدام کلید این نسخه را امضا کرده است.</string>
+    <string name="own_genuine">با کلید رسمی Datapavan در فهرستی که همین نسخه همراه دارد جور است.</string>
+    <string name="own_not_genuine">با کلید رسمی Datapavan جور نیست. این نسخه را حذف کنید و Datapavan را از منبعی که به آن اعتماد دارید نصب کنید.</string>
+    <string name="own_no_record">هنوز کلید رسمی در فهرست نیست، چون Datapavan هنوز منتشر نشده است.</string>
+    <string name="own_debug">این یک نسخه آزمایشی است که با کلید اشکال‌زدایی امضا شده است.</string>
+    <string name="own_updates">وقتی یک نسخه اصل نصب شد، اندروید هر به‌روزرسانی با کلید دیگر را رد می‌کند؛ پس لحظه بررسی همان نصب اول است.</string>
+    <string name="own_limit">یک نسخه جعلی می‌تواند همه چیز این صفحه را جعل کند. بررسی واقعی از بیرون است: کلید بالا را با کلیدی که با هر انتشار منتشر می‌شود مقایسه کنید، مثلا با برنامه AppVerifier.</string>
 </resources>
