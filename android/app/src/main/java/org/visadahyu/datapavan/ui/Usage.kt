@@ -168,7 +168,7 @@ internal fun DormantSection(dormant: List<Dormant>, onOpen: (String) -> Unit) {
                     Text(
                         pluralStringResource(
                             R.plurals.dormant_line, notOpened.days.toInt(), notOpened.days,
-                            holds.sortedBy { it.ordinal }.map { stringResource(holdName(it)) }.joinToString(", "),
+                            holds.sortedBy { it.ordinal }.map { stringResource(holdName(it)) }.joinedForUser(),
                         ),
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -221,7 +221,7 @@ internal fun AppUsageSection(
                     Text(stringResource(if (days == 30) R.string.network_show_7 else R.string.network_show_30))
                 }
                 TextButton(onClick = onCheck) { Text(stringResource(R.string.check_button)) }
-                if (sharedWith.isNotEmpty()) Note(stringResource(R.string.network_shared, sharedWith.joinToString(", ") { isolate(it) }))
+                if (sharedWith.isNotEmpty()) Note(stringResource(R.string.network_shared, sharedWith.map { isolate(it) }.joinedForUser()))
                 if (proxyNote) Note(stringResource(R.string.network_proxy))
                 Note(stringResource(R.string.network_background_note))
                 Spacer(Modifier.height(8.dp))

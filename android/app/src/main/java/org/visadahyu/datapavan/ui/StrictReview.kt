@@ -161,7 +161,7 @@ private fun WakeWordCard(assistant: AppFacts) {
 private fun reviewCandidates(apps: List<AppFacts>, includeSystem: Boolean) =
     apps.filter { it.sensors.isNotEmpty() && (includeSystem || !it.isSystem) }
 
-private fun sensorName(sensor: Sensor) = when (sensor) {
+internal fun sensorName(sensor: Sensor) = when (sensor) {
     Sensor.MICROPHONE -> R.string.sensor_microphone
     Sensor.CAMERA -> R.string.sensor_camera
     Sensor.LOCATION -> R.string.sensor_location

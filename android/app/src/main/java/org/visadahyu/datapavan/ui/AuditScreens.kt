@@ -63,11 +63,23 @@ import org.visadahyu.datapavan.audit.Capability
 import org.visadahyu.datapavan.audit.DeviceCollector
 import org.visadahyu.datapavan.audit.DeviceFacts
 import org.visadahyu.datapavan.audit.FindingKind
+import org.visadahyu.datapavan.audit.FloorReason
+import org.visadahyu.datapavan.audit.HealthAnswer
+import org.visadahyu.datapavan.audit.ItemState
+import org.visadahyu.datapavan.audit.Journal
+import org.visadahyu.datapavan.audit.JournalEntry
+import org.visadahyu.datapavan.audit.JournalStore
 import org.visadahyu.datapavan.audit.KeyFacts
 import org.visadahyu.datapavan.audit.KnownCollectors
 import org.visadahyu.datapavan.audit.OwnerNotes
 import org.visadahyu.datapavan.audit.Owners
+import org.visadahyu.datapavan.audit.Outcome
+import org.visadahyu.datapavan.audit.Plan
+import org.visadahyu.datapavan.audit.PlanInput
+import org.visadahyu.datapavan.audit.PlanItem
+import org.visadahyu.datapavan.audit.PlanLevel
 import org.visadahyu.datapavan.audit.Rules
+import org.visadahyu.datapavan.audit.SafetyFloor
 import org.visadahyu.datapavan.audit.Sdk
 import org.visadahyu.datapavan.audit.SdkList
 import org.visadahyu.datapavan.audit.ServiceNeeds
@@ -111,6 +123,8 @@ private class AuditResult(
     val owners: Map<String, OwnerNotes> = emptyMap(),
     /** What the phone's system key says about each app, by package (ADR 0023). */
     val keys: Map<String, KeyFacts> = emptyMap(),
+    /** Why the remediation plan's safety floor leaves an app alone, by package (ADR 0026). */
+    val floor: Map<String, FloorReason> = emptyMap(),
 ) {
     /**
      * The same audit with the scan's findings added. The scan matched εxodus trackers and the SDKs of
@@ -135,7 +149,7 @@ private class AuditResult(
             val categories = sdks[app.packageName].orEmpty().map { it.category }.toSet()
             app to Rules.forApp(app, exodus[app.packageName], signatures[app.packageName], categories, keys[app.packageName])
         }.sortedWith(Rules.byUrgency)
-        return AuditResult(device, deviceFindings, judged, dataDate, signatures, exodus, info, sdks, unavailable, services, notes, keys)
+        return AuditResult(device, deviceFindings, judged, dataDate, signatures, exodus, info, sdks, unavailable, services, notes, keys, floor)
     }
 }
 
@@ -162,17 +176,43 @@ private suspend fun runAudit(context: Context): AuditResult = coroutineScope {
     val labelled = collector.withLabels(judged.filter { (_, f) -> f.isNotEmpty() }.map { it.first }).associateBy { it.packageName }
     val apps = judged.map { (app, findings) -> (labelled[app.packageName] ?: app) to findings }.sortedWith(Rules.byUrgency)
     val now = Calendar.getInstance().let { it.get(Calendar.YEAR) * 100 + it.get(Calendar.MONTH) + 1 }
-    AuditResult(device.await(), Rules.forDevice(device.await(), now, systemKeys.untrusted(platform)), apps, data.active.date, signatures, keys = keys)
+    // The safety floor: what the phone itself shows it needs, then the deny-list by function (ADR 0026).
+    val denyList = SafetyFloor.parse(data.text(SafetyFloor.PATH).orEmpty())
+    val computed = collector.protectedApps(collected)
+    val floor = collected.mapNotNull { app ->
+        (computed[app.packageName] ?: denyList.reason(app.packageName, Build.MANUFACTURER.orEmpty()))?.let { app.packageName to it }
+    }.toMap()
+    AuditResult(
+        device.await(), Rules.forDevice(device.await(), now, systemKeys.untrusted(platform)), apps, data.active.date, signatures, keys = keys, floor = floor,
+    )
 }
 
 private const val PLATFORM_PACKAGE = "android"
+
+/** The remediation plan's input from one audit and, when granted, usage access (ADR 0026). */
+private fun planInput(audit: AuditResult, usage: UsageState, ownPackage: String) = PlanInput(
+    audit.deviceFindings, audit.apps, (usage as? UsageState.Ready)?.facts, audit.trackers, audit.trackerInfo, audit.floor, ownPackage,
+)
+
+/** What a plan item, or a journal entry, concerned when the audit ran. */
+private fun AuditResult.stateOf(packageName: String?): ItemState =
+    if (packageName == null) ItemState.of(device) else ItemState.of(apps.firstOrNull { it.first.packageName == packageName }?.first)
+
+private fun AuditResult.stateOf(item: PlanItem): ItemState = stateOf(item.app?.packageName)
+
+private fun AuditResult.stateOf(entry: JournalEntry): ItemState = stateOf(entry.packageName)
+
+/** Whether something the user changed through the plan has come back, judged on each item's latest entry. */
+private fun AuditResult.cameBack(journal: Journal): Boolean =
+    journal.entries.groupBy { it.key }.values.map { list -> list.maxBy { it.at } }.filter { it.outcome == Outcome.CHANGED }
+        .any { entry -> entry.changes.any { Journal.cameBack(it, entry.after, stateOf(entry)) } }
 
 /** Second pass: the labels of all remaining apps, for the full list. */
 private suspend fun AuditResult.withAllLabels(context: Context): AuditResult {
     val missing = apps.filter { it.first.label == null }.map { it.first }
     val labelled = AppCollector(context).withLabels(missing).associateBy { it.packageName }
     val all = apps.map { (app, findings) -> (labelled[app.packageName] ?: app) to findings }.sortedWith(Rules.byUrgency)
-    return AuditResult(device, deviceFindings, all, dataDate, signatures, trackers, trackerInfo, sdks, unavailable, services, owners, keys)
+    return AuditResult(device, deviceFindings, all, dataDate, signatures, trackers, trackerInfo, sdks, unavailable, services, owners, keys, floor)
 }
 
 /** Root of the v0.1 audit UI: an overview of the phone and its apps, and a detail page per app. */
@@ -218,6 +258,15 @@ internal fun DatapavanApp(engineVersion: String, usageUntil: Long? = null, usage
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var reviewing by rememberSaveable { mutableStateOf(false) }
     var showingData by rememberSaveable { mutableStateOf(false) }
+    var planning by rememberSaveable { mutableStateOf(false) }
+    var journaling by rememberSaveable { mutableStateOf(false) }
+    // The remediation plan's journal (ADR 0026), small enough to read and write in one go.
+    val journalStore = remember { JournalStore(context) }
+    var journal by remember { mutableStateOf(journalStore.load()) }
+    val saveJournal: (Journal) -> Unit = {
+        journal = it
+        journalStore.save(it)
+    }
 
     Scaffold(modifier = Modifier.fillMaxSize()) { insets ->
         val audit = result
@@ -264,10 +313,48 @@ internal fun DatapavanApp(engineVersion: String, usageUntil: Long? = null, usage
                 BackHandler { showingData = false }
                 DataSources(insets, onBack = { showingData = false }, onImported = { dataVersion++ })
             }
+            planning -> {
+                // Done runs the audit again, so that the overview shows what changed.
+                val done: () -> Unit = {
+                    planning = false
+                    dataVersion++
+                }
+                BackHandler { planning = false }
+                PlanScreen(
+                    planInput(audit, usage, context.packageName), usage == UsageState.NoAccess, journal, audit::stateOf, insets,
+                    onJournal = saveJournal, onBack = { planning = false }, onDone = done,
+                )
+            }
+            journaling -> {
+                BackHandler { journaling = false }
+                JournalScreen(
+                    journal, audit.apps.associate { (app, _) -> app.packageName to (app.label ?: app.packageName) }, audit::stateOf, insets,
+                    onBack = { journaling = false },
+                    onDelete = {
+                        journalStore.delete()
+                        journal = Journal()
+                    },
+                )
+            }
             else -> Overview(
                 audit, engineVersion, scanProgress, insets,
                 onOpen = { selected = it }, onReview = { reviewing = true }, onData = { showingData = true },
                 usage = { UsageOverview(usage, days, audit.apps.map { it.first }, onDays = { days = it }, onOpen = { selected = it }) },
+                plan = {
+                    val input = planInput(audit, usage, context.packageName)
+                    val level = journal.sessions.lastOrNull()?.level ?: PlanLevel.LIGHT
+                    val first = remember(input, journal) { Plan.session(Plan.items(input, level).items, journal.kept(), audit::stateOf).firstOrNull() }
+                    PlanEntry(
+                        first, journal.healthCheckDue(System.currentTimeMillis()), audit.cameBack(journal), journal.entries.isNotEmpty(),
+                        onStart = { planning = true },
+                        onJournal = { journaling = true },
+                        onAnswer = { answer ->
+                            val due = journal.healthCheckDue(System.currentTimeMillis()) ?: return@PlanEntry
+                            saveJournal(journal.answered(due.start, answer))
+                            if (answer == HealthAnswer.SOMETHING_WRONG) journaling = true
+                        },
+                    )
+                },
             )
         }
     }
@@ -288,7 +375,7 @@ private fun Loading(insets: PaddingValues) {
 
 @Composable
 private fun Overview(audit: AuditResult, engineVersion: String, scanProgress: Pair<Int, Int>?, insets: PaddingValues,
-    onOpen: (String) -> Unit, onReview: () -> Unit, onData: () -> Unit, usage: @Composable () -> Unit) {
+    onOpen: (String) -> Unit, onReview: () -> Unit, onData: () -> Unit, usage: @Composable () -> Unit, plan: @Composable () -> Unit) {
     var showAll by rememberSaveable { mutableStateOf(false) }
     val flagged = audit.apps.filter { (_, findings) -> findings.any { it.severity != Severity.INFO } }
     val shown = if (showAll) audit.apps else flagged
@@ -306,6 +393,8 @@ private fun Overview(audit: AuditResult, engineVersion: String, scanProgress: Pa
                 Spacer(Modifier.height(8.dp))
                 StaleDataCard(audit.dataDate, onData)
             }
+            Spacer(Modifier.height(16.dp))
+            plan()
             Spacer(Modifier.height(16.dp))
             SectionTitle(R.string.section_device)
         }
@@ -345,6 +434,10 @@ private fun Overview(audit: AuditResult, engineVersion: String, scanProgress: Pa
         }
     }
 }
+
+/** The items of a list joined as the user's language writes them, for example with "،" in Persian. */
+@Composable
+internal fun List<String>.joinedForUser(): String = joinToString(stringResource(R.string.list_separator))
 
 @Composable
 internal fun SectionTitle(@StringRes title: Int) {
@@ -526,7 +619,7 @@ private fun severityName(severity: Severity) = when (severity) {
 }
 
 @StringRes
-private fun specialName(access: SpecialAccess) = when (access) {
+internal fun specialName(access: SpecialAccess) = when (access) {
     SpecialAccess.ACCESSIBILITY -> R.string.special_accessibility
     SpecialAccess.NOTIFICATION_LISTENER -> R.string.special_notification_listener
     SpecialAccess.DEVICE_ADMIN -> R.string.special_device_admin

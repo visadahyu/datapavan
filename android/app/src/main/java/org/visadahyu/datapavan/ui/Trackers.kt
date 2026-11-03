@@ -60,7 +60,7 @@ private fun TrackerLine(tracker: TrackerInfo?, id: Int) {
     val categories = tracker?.categories.orEmpty().mapNotNull { category(it) }.map { stringResource(it) }
     val name = tracker?.name ?: "#$id"
     Text(
-        if (categories.isEmpty()) name else stringResource(R.string.tracker_with_categories, name, categories.joinToString(", ")),
+        if (categories.isEmpty()) name else stringResource(R.string.tracker_with_categories, name, categories.joinedForUser()),
         style = MaterialTheme.typography.bodyMedium,
     )
 }

@@ -204,9 +204,13 @@ object Plan {
         return PlanResult(merged.sortedWith(order), leftAlone)
     }
 
-    /** The items of one session: those the user has not kept as they are, while their state is still the one kept. */
+    /** The items that the user has not kept as they are, or whose state has changed since they kept them. */
+    fun pending(items: List<PlanItem>, kept: Map<String, ItemState>, state: (PlanItem) -> ItemState): List<PlanItem> =
+        items.filter { kept[it.key] != state(it) }
+
+    /** The items of one session. */
     fun session(items: List<PlanItem>, kept: Map<String, ItemState>, state: (PlanItem) -> ItemState): List<PlanItem> =
-        items.filter { kept[it.key] != state(it) }.take(SESSION_CARDS)
+        pending(items, kept, state).take(SESSION_CARDS)
 
     /** Class, then apps with advertising, analytics or profiling trackers, then the longest time not opened, then the name. */
     val order: Comparator<PlanItem> = compareBy<PlanItem> { it.reason.planClass }

@@ -45,6 +45,16 @@ import java.security.cert.X509Certificate
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
+/** The sensor that a runtime permission gives access to, if any. */
+fun sensorOf(permission: String): Sensor? = SENSOR_PERMISSIONS[permission]
+
+private val SENSOR_PERMISSIONS = mapOf(
+    Manifest.permission.RECORD_AUDIO to Sensor.MICROPHONE,
+    Manifest.permission.CAMERA to Sensor.CAMERA,
+    Manifest.permission.ACCESS_FINE_LOCATION to Sensor.LOCATION,
+    Manifest.permission.ACCESS_COARSE_LOCATION to Sensor.LOCATION,
+)
+
 /**
  * Reads what an unprivileged app can learn about the installed apps. Every API used here was
  * checked in the M2 spike (docs/spikes/2026-10-m2-access.md). Components are found by their
@@ -371,12 +381,6 @@ class AppCollector(private val context: Context) {
             Triple("android.permission.MANAGE_EXTERNAL_STORAGE", "android:manage_external_storage", SpecialAccess.ALL_FILES),
         )
 
-        val SENSOR_PERMISSIONS = mapOf(
-            Manifest.permission.RECORD_AUDIO to Sensor.MICROPHONE,
-            Manifest.permission.CAMERA to Sensor.CAMERA,
-            Manifest.permission.ACCESS_FINE_LOCATION to Sensor.LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION to Sensor.LOCATION,
-        )
     }
 }
 

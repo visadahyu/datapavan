@@ -168,6 +168,11 @@ object JournalCodec {
         return Journal(sessions, entries)
     }
 
+    /** One state in the file's own form, for keeping it across a recreated screen. */
+    fun encodeState(state: ItemState): String = state(state)
+
+    fun decodeState(text: String): ItemState? = state(text)
+
     /** Flags, then the authorities, permissions and special access, separated by `/`. */
     private fun state(s: ItemState): String = listOf(
         listOf(s.installed, s.enabled, s.vpn, s.usbDebugging, s.wirelessDebugging).joinToString("") { if (it) "1" else "0" },
