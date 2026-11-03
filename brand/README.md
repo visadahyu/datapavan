@@ -49,6 +49,16 @@ Measured WCAG contrast ratios:
 
 Blue and gold stay distinct for the most common colour-vision deficiencies (red-green).
 
+### In the app
+
+The app's Material 3 colour scheme (`android/app/src/main/java/org/visadahyu/datapavan/ui/Theme.kt`) is
+built from this palette: lapis as the primary colour on a lighter clay (`#FBF7F0`) in light mode, light
+lapis and light gold on night in dark mode, with cards in clay tones. Gold text in light mode uses
+`#7A5212`, darker than dark gold, because dark gold falls below 4.5:1 on the darker clay of cards. The
+app does not take its colours from the wallpaper: `ThemeTest` checks that every text colour reaches
+4.5:1 on every surface (WCAG AA) and outlines 3:1, in both modes, and a finding's colour means the same
+on every phone. The lowest text ratios are 4.94 (light) and 5.26 (dark).
+
 ## Rules
 
 - The foundation leans on clay (calm, institutional); the product leans on lapis.
