@@ -1,0 +1,19 @@
+Datapavan zeigt, was die Apps auf Ihrem Telefon erreichen können und was sie senden, und hilft Ihnen, es zu stoppen. Alles läuft auf dem Telefon, ohne Root und ohne Konto, und Version 0.1 darf das Internet überhaupt nicht nutzen.
+
+<b>Was es prüft</b>
+<ul>
+<li>Jede installierte App: woher sie kommt, ihre sensiblen Berechtigungen und die besonderen Zugriffe, mit denen eine App den Bildschirm lesen oder für Sie handeln kann.</li>
+<li>Tracker und SDKs im Code jeder App, auf dem Telefon abgeglichen mit der εxodus-Datenbank und der eigenen Liste von Datapavan mit SDKs, die Ihre Verbindung teilen, Fernsupport geben oder den Bildschirm aufzeichnen.</li>
+<li>VPN-, Proxy- und Umgehungs-Apps, geprüft gegen die offiziellen Signaturschlüssel ihrer Entwickler, damit eine veränderte Kopie auffällt.</li>
+<li>Das Telefon selbst: USB- und drahtloses Debugging, zusätzlich installierte Zertifizierungsstellen, der Sicherheitspatch und der Startzustand laut Hardware-Schlüsselbestätigung.</li>
+<li>Wie viele Daten jede App über mobile Daten und WLAN empfangen und gesendet hat, und welche Apps seit Monaten nicht geöffnet wurden, aber noch Zugriffe haben.</li>
+<li>Eine Aktivität nach der anderen: Zähler lesen, eine App nutzen, erneut lesen und sehen, was sie gesendet hat, während Sie nur geschaut oder gescrollt haben.</li>
+</ul>
+
+<b>Wobei es Ihnen hilft</b>
+Ein kurzer Plan, zuerst die Änderungen, die das meiste Risiko entfernen. Jede öffnet den passenden Bildschirm von Android, auf dem Sie entscheiden, und ein Protokoll auf dem Telefon hält fest, was Sie geändert haben, damit Sie es rückgängig machen können. Apps, die das Telefon braucht, rührt es nie an.
+
+<b>Was es nie tut</b>
+Keine Analyse, keine Absturzberichte, keine Server, keine Konten. Nichts verlässt das Telefon. Echtes Datapavan v0.1 hat keinen Internetzugriff und fragt nie danach: Eine Kopie, die danach fragt, ist nicht echt.
+
+Sprachen: Englisch, Französisch, Deutsch und Persisch.

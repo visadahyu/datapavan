@@ -1,0 +1,19 @@
+Datapavan shows what the apps on your phone can reach and what they send, and helps you stop it. Everything runs on the phone. It needs no root and no account, and version 0.1 has no permission to use the internet at all.
+
+<b>What it checks</b>
+<ul>
+<li>Every installed app: where it came from, its sensitive permissions and the special access that lets an app read the screen or act for you.</li>
+<li>Trackers and SDKs inside each app's code, matched on the phone against the εxodus database and Datapavan's own list of SDKs that share your connection, give remote support or record the screen.</li>
+<li>VPN, proxy and circumvention apps, checked against their developers' official signing keys, so that a modified copy shows.</li>
+<li>The phone itself: USB and wireless debugging, certificate authorities you installed, the security patch, and the boot state from hardware key attestation.</li>
+<li>How much data each app received and sent over mobile data and Wi-Fi, and which apps you have not opened for months but still hold access.</li>
+<li>One activity at a time: read the counts, use an app, read again, and see what it sent while you only watched or scrolled.</li>
+</ul>
+
+<b>What it helps you do</b>
+A short plan, the changes that remove the most risk first. Each one opens the right Android screen where you decide, and a journal on the phone keeps what you changed so that you can undo it. The apps your phone needs are never touched.
+
+<b>What it never does</b>
+No analytics, no crash reports, no servers, no accounts. Nothing leaves the phone. Genuine Datapavan v0.1 has no internet access and never asks for it: a copy that asks for it is not genuine.
+
+Languages: English, French, German and Persian.

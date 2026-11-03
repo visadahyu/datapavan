@@ -1,0 +1,1 @@
+First release: the app and permission audit, the tracker and SDK scan, network use per app, the guided check of one activity, and the remediation plan with its journal. No internet permission.

@@ -1,0 +1,1 @@
+Première version : l'audit des applis et des autorisations, l'analyse des traceurs et SDK, les données par appli, la mesure guidée d'une activité, et le plan de remédiation avec son journal. Sans autorisation Internet.

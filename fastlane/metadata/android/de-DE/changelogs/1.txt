@@ -1,0 +1,1 @@
+Erste Version: Prüfung der Apps und Berechtigungen, Suche nach Trackern und SDKs, Datennutzung pro App, die geführte Messung einer Aktivität und der Plan zur Behebung mit seinem Protokoll. Ohne Internetberechtigung.
