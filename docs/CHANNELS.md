@@ -38,20 +38,29 @@ Accrescent and Google Play come later: Play in the foundation's name and as an a
 
 ## F-Droid
 
-- **Recipe:** [fdroid/org.visadahyu.datapavan.yml](fdroid/org.visadahyu.datapavan.yml), a draft for
-  `fdroiddata`. It installs JDK 21, the Rust toolchain from `rust-toolchain.toml` through F-Droid's
-  pinned rustup source library, cargo-ndk 4.1.2 and NDK 30.0.16248370, then builds the release with
-  Gradle. With `Binaries` and `AllowedAPKSigningKeys`, F-Droid publishes the project's signed APK when
-  its build matches.
-- **Before the merge request:**
-  - Build the recipe with `fdroid build` on F-Droid's build server image, or in its Docker
-    container, which needs `fdroidserver` installed here first.
-  - Run `fdroid lint` and `fdroid rewritemeta` on it.
-  - Compare the result with `scripts/reproducible.sh`'s APK.
-
-  So far `scripts/reproducible.sh` has shown the build identical across two directories on one
-  computer only. F-Droid's server differs in user, paths and installed packages, so a mismatch there
-  is the likeliest problem; the build already remaps the cargo paths for this reason.
+- **Recipe:** [fdroid/org.visadahyu.datapavan.yml](fdroid/org.visadahyu.datapavan.yml), for `fdroiddata`,
+  in the form `fdroid rewritemeta` writes, which keeps no comments; the reasons are here. The values in
+  angle brackets exist only after the key ceremony and the release.
+  - **`sudo`:** `build-essential`, since F-Droid's build server has no C compiler, and installing
+    cargo-ndk builds crates whose build scripts need one. It needs no JDK step: the build server runs
+    Debian 13, whose default JDK is 21, as Gradle's daemon criteria require (ADR 0009).
+  - **`srclibs` and `prebuild`:** rustup comes from F-Droid's pinned source library. rustup 1.28 no
+    longer installs a project's toolchain on first use, so `rustup toolchain install` installs the
+    one in `rust-toolchain.toml`. cargo-ndk is pinned as in CI.
+  - **`scandelete`:** F-Droid's scanner refuses binary files in the source: the fuzzing seeds and a
+    test DEX file. Neither is needed to build the app, so they are deleted from the build tree.
+  - **`Binaries` and `AllowedAPKSigningKeys`:** F-Droid publishes the project's own signed APK when
+    its build matches the one on GitHub Releases, so both channels carry the same key (ADR 0024).
+- **Checked on 2026-11-05:** `main` (`121ca38`) was built with this recipe and `fdroid build
+  --on-server` in F-Droid's build server image (`registry.gitlab.com/fdroid/fdroidserver:buildserver`,
+  Debian 13). Its unsigned APK was identical to `scripts/reproducible.sh`'s two builds on the
+  development computer, SHA-256 `88470c1e47359056a180143a76df6bfd7b751cd5561f321ba2a942a125f0a163`.
+  The NDK, the same revision, was mounted from the development computer, and everything else was
+  fetched fresh. `fdroid lint` raised nothing that applies outside the test setup.
+- **How to repeat it:** clone `fdroidserver`, put the recipe (with `Repo:` pointing at a checkout and
+  a real `commit:`) and fdroiddata's `srclibs/rustup.yml` in a directory with `config.yml`, and run in
+  the image: `fdroid fetch_srclibs <appid>:<code>`, then `fdroid build --on-server --no-tarball
+  <appid>:<code>`.
 - **Anti-features:** none expected. The app has no network access, no tracking and no non-free
   dependencies.
 
