@@ -480,7 +480,7 @@
 
     <!-- Whether this copy is genuine (ADR 0024). -->
     <string name="own_title">آیا این نسخه اصل است؟</string>
-    <string name="own_teach">نسخه اصل Datapavan ۰٫۱ به اینترنت دسترسی ندارد و هرگز آن را نمی‌خواهد. نسخه‌ای که آن را بخواهد اصل نیست.</string>
+    <string name="own_teach">نسخه اصل Datapavan به اینترنت دسترسی ندارد و هرگز آن را نمی‌خواهد. نسخه‌ای که آن را بخواهد اصل نیست.</string>
     <string name="own_internet_none">این نسخه به اینترنت دسترسی ندارد.</string>
     <string name="own_internet_present">این نسخه دسترسی به اینترنت می‌خواهد، پس Datapavan اصل نیست. حذفش کنید و Datapavan را از منبعی که به آن اعتماد دارید نصب کنید.</string>
     <string name="own_key_label">کلید امضای این نسخه (SHA-256)</string>

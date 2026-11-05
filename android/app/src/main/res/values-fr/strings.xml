@@ -486,7 +486,7 @@
 
     <!-- Whether this copy is genuine (ADR 0024). -->
     <string name="own_title">Cette copie est-elle authentique ?</string>
-    <string name="own_teach">Datapavan v0.1 authentique n\'a pas accès à Internet et ne le demande jamais. Une copie qui le demande n\'est pas authentique.</string>
+    <string name="own_teach">Datapavan authentique n\'a pas accès à Internet et ne le demande jamais. Une copie qui le demande n\'est pas authentique.</string>
     <string name="own_internet_none">Cette copie n\'a pas accès à Internet.</string>
     <string name="own_internet_present">Cette copie demande l\'accès à Internet, ce n\'est donc pas Datapavan authentique. Désinstallez-la et installez Datapavan depuis une source de confiance.</string>
     <string name="own_key_label">Clé de signature de cette copie (SHA-256)</string>

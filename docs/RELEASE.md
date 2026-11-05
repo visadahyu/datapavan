@@ -77,7 +77,7 @@ development computer, or by an assistant.
    publishes (found by the rehearsal on 2026-11-05). `--min-sdk-version 24` makes `verify` report v2
    too, which it otherwise skips for this minSdk.
 5. **Release notes, signed.** The notes name the version, the APK's SHA-256, the certificate's
-   fingerprint and the sentence to teach ("Genuine Datapavan v0.1 has no internet access and never
+   fingerprint and the sentence to teach ("Genuine Datapavan has no internet access and never
    asks for it"). They are signed offline with the release notes key
    (`signify-openbsd -S -e -s datapavan-notes-1.sec -m notes.txt`), so that users and channel
    operators can check them with `signify -V -e` (ADR 0024, point 3).

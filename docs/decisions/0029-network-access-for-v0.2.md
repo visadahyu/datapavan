@@ -71,4 +71,6 @@ From the measurements, three parts of [VPN.md](../VPN.md) move earlier:
 - **Installing:** users who want the connection log install a second app. Datapavan offers it where
   the log would answer a question, with the same fingerprint check as for itself.
 - **Before work starts:** ADR 0012's spike for the packet engine runs first, in Watch's module.
+- **The sentence to teach** drops its version number at once, in the app's self-check, the store
+  texts, RELEASE.md and the website (ADR 0024, point 8).
 - **Accepted:** the maintainer chose option 2 on 2026-11-05.

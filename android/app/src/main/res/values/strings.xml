@@ -511,7 +511,7 @@
 
     <!-- Whether this copy is genuine (ADR 0024). -->
     <string name="own_title">Is this copy genuine?</string>
-    <string name="own_teach">Genuine Datapavan v0.1 has no internet access and never asks for it. A copy that asks for it is not genuine.</string>
+    <string name="own_teach">Genuine Datapavan has no internet access and never asks for it. A copy that asks for it is not genuine.</string>
     <string name="own_internet_none">This copy has no internet access.</string>
     <string name="own_internet_present">This copy asks for internet access, so it is not genuine Datapavan. Uninstall it and install Datapavan from a channel you trust.</string>
     <string name="own_key_label">This copy\'s signing key (SHA-256)</string>

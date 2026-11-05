@@ -76,7 +76,7 @@ APK: datapavan-$version.apk
 APK SHA-256: $apk_sha
 Signing certificate SHA-256: $expected
 
-Genuine Datapavan v0.1 has no internet access and never asks for it.
+Genuine Datapavan has no internet access and never asks for it.
 NOTES
 # The same bytes as signify -G and signify -S -e: a key number, the raw Ed25519 public key, and a
 # signature over the whole message, which follows the signature line. The check after it is the one a
