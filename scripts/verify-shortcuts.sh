@@ -49,6 +49,13 @@ start_audit || fail "Datapavan did not start"
 # Android parses the shortcuts when the app is installed; the dump shows what a launcher receives.
 listed=$(adb shell dumpsys shortcut | tr -d '\r' | awk -v pkg="$PKG" '/Package: /{mine = ($2 == pkg)} mine')
 [ -n "$listed" ] || fail "Android lists no shortcuts for $PKG"
+# User builds of Android, as on phones, hide each shortcut's id, labels and intent in the dump
+# (emulator images show them). There the shortcuts are told apart by their label resources and
+# started with the actions of shortcuts.xml and the flags Android gives every static shortcut.
+hidden=false
+grep -q 'ShortcutInfo {id=\*\*\*,' <<<"$listed" && hidden=true
+XML="$ROOT/android/app/src/main/res/xml/shortcuts.xml"
+STATIC_FLAGS=0x1000c000 # FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_CLEAR_TASK | FLAG_ACTIVITY_TASK_ON_HOME
 
 check_label() {
     grep -A6 "ShortcutInfo {id=$1," <<<"$listed" | grep -q "$2=$3, " || fail "shortcut $1: $2 is not \"$3\""
@@ -56,20 +63,33 @@ check_label() {
 
 open_shortcut() {
     local intent action flags
-    intent=$(grep -A14 "ShortcutInfo {id=$1," <<<"$listed" | grep -m1 'intents=\[Intent {') || fail "shortcut $1 is not listed"
-    action=$(sed -n 's/.*act=\([^ ]*\).*/\1/p' <<<"$intent")
-    flags=$(sed -n 's/.*flg=\(0x[0-9a-f]*\).*/\1/p' <<<"$intent")
-    [ -n "$action" ] && [ -n "$flags" ] || fail "shortcut $1 has no action or flags: $intent"
-    grep -q "cmp=$PKG/.MainActivity" <<<"$intent" || fail "shortcut $1 does not start MainActivity: $intent"
+    if $hidden; then
+        action=$(grep -A8 "android:shortcutId=\"$1\"" "$XML" | sed -n 's/.*android:action="\([^"]*\)".*/\1/p' | head -1)
+        flags=$STATIC_FLAGS
+    else
+        intent=$(grep -A14 "ShortcutInfo {id=$1," <<<"$listed" | grep -m1 'intents=\[Intent {') || fail "shortcut $1 is not listed"
+        action=$(sed -n 's/.*act=\([^ ]*\).*/\1/p' <<<"$intent")
+        flags=$(sed -n 's/.*flg=\(0x[0-9a-f]*\).*/\1/p' <<<"$intent")
+        grep -q "cmp=$PKG/.MainActivity" <<<"$intent" || fail "shortcut $1 does not start MainActivity: $intent"
+    fi
+    [ -n "$action" ] && [ -n "$flags" ] || fail "shortcut $1 has no action or flags"
     adb shell am start -W -a "$action" -f "$flags" -n "$PKG/.MainActivity" >/dev/null
 }
 
-check_label plan shortLabel Plan
-check_label plan longLabel "Your plan"
-check_label apps shortLabel Apps
-check_label network shortLabel Network
-check_label network longLabel "Network use"
-echo "ok: Android lists the three shortcuts"
+if $hidden; then
+    for label in shortcut_plan nav_apps nav_network; do
+        grep -q "shortLabel=\*\*\*, resId=[0-9]*\[$label\]" <<<"$listed" || fail "no shortcut is labelled with $label"
+    done
+    [ "$(grep -c 'activity=ComponentInfo{'"$PKG/$PKG.MainActivity"'}' <<<"$listed")" = 3 ] || fail "not three shortcuts start MainActivity"
+    echo "ok: Android lists the three shortcuts (this build hides their labels; ShortcutsTest checks them)"
+else
+    check_label plan shortLabel Plan
+    check_label plan longLabel "Your plan"
+    check_label apps shortLabel Apps
+    check_label network shortLabel Network
+    check_label network longLabel "Network use"
+    echo "ok: Android lists the three shortcuts"
+fi
 
 open_shortcut apps
 wait_until selected_id nav-apps || fail "the apps shortcut did not open the apps"
