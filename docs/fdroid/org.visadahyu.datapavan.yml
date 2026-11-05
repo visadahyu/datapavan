@@ -1,0 +1,53 @@
+# Draft of Datapavan's recipe for fdroiddata (metadata/org.visadahyu.datapavan.yml), for the first
+# release. Not yet built with `fdroid build`, so every line below is to be checked against fdroiddata's
+# linter and build server before the merge request (docs/CHANNELS.md). The values in angle brackets
+# exist only after the offline key ceremony (docs/RELEASE.md) and the release.
+#
+# Reproducible build: F-Droid builds the tag, compares its unsigned APK with the one in Binaries and,
+# when they match, publishes the project's own signed APK, so updates from GitHub and F-Droid are the
+# same app with the same key (ADR 0024).
+
+Categories:
+  - Security
+  - System
+License: Apache-2.0
+WebSite: https://datapavan.org
+SourceCode: https://github.com/visadahyu/datapavan
+IssueTracker: https://github.com/visadahyu/datapavan/issues
+Changelog: https://github.com/visadahyu/datapavan/blob/HEAD/CHANGELOG.md
+
+AutoName: Datapavan
+
+RepoType: git
+Repo: https://github.com/visadahyu/datapavan.git
+Binaries: https://github.com/visadahyu/datapavan/releases/download/v%v/datapavan-%v.apk
+
+Builds:
+  - versionName: 0.1.0
+    versionCode: 1
+    commit: <full commit hash of the signed tag v0.1.0>
+    subdir: android/app
+    # JDK 21, as Gradle's daemon criteria require (ADR 0009); the build server's default may differ.
+    sudo:
+      - apt-get update
+      - apt-get install -y openjdk-21-jdk-headless
+      - update-java-alternatives -a
+    gradle:
+      - yes
+    srclibs:
+      - rustup@1.28.2
+    # The Rust toolchain comes from rust-toolchain.toml (1.99.1 with both Android targets); rustup 1.28
+    # no longer installs it on first use, so it is installed by name. cargo-ndk is pinned as in CI.
+    prebuild:
+      - $$rustup$$/rustup-init.sh -y --default-toolchain none --profile minimal
+      - source $HOME/.cargo/env
+      - pushd ../.. && rustup toolchain install && popd
+      - cargo install cargo-ndk --version 4.1.2 --locked
+    ndk: 30.0.16248370
+
+AllowedAPKSigningKeys: <the release certificate's SHA-256, lowercase, without colons>
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^v[0-9.]+$
+CurrentVersion: 0.1.0
+CurrentVersionCode: 1

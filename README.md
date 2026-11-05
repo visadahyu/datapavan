@@ -171,6 +171,7 @@ The history and meaning of both names are in [docs/NAMES.md](docs/NAMES.md); log
 | [docs/DATA-PACKS.md](docs/DATA-PACKS.md) | Signed data packs: how data reaches a phone without network access |
 | [docs/LAB.md](docs/LAB.md) | The traffic lab: measuring apps on the project's own phones |
 | [docs/RELEASE.md](docs/RELEASE.md) | Releasing: the offline keys, the checklist, reproducible builds |
+| [docs/CHANNELS.md](docs/CHANNELS.md) | Where releases go: GitHub, IzzyOnDroid, F-Droid, Obtainium |
 | [docs/RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md) | Working under censorship and surveillance |
 | [docs/FOUNDATION.md](docs/FOUNDATION.md) | Charter principles of the Visadahyu Foundation |
 | [docs/decisions/](docs/decisions/README.md) | Architecture decision records, including the licences of every dataset (ADR 0015) |
