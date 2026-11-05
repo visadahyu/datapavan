@@ -22,9 +22,14 @@
     <string name="back">Back</string>
     <string name="open_app_settings">Open in system settings</string>
     <string name="detail_system_app">Preinstalled system app</string>
-    <string name="detail_user_app">Installed by the user</string>
     <!-- %1$s is a package name, passed in already bidi-isolated. -->
     <string name="detail_installer">Installed by %1$s</string>
+    <!-- %1$s is a store's name (audit/Stores.kt), passed in already bidi-isolated. -->
+    <string name="detail_installed_from">Installed from %1$s</string>
+    <!-- %1$s is the installing app's label, %2$s its package name, both passed in already bidi-isolated. -->
+    <string name="detail_installed_by_app">Installed by %1$s (%2$s)</string>
+    <!-- %1$s is a store's name or a package name, passed in already bidi-isolated. -->
+    <string name="detail_system_app_source">Preinstalled system app · install source: %1$s</string>
     <string name="detail_installer_unknown">Install source unknown</string>
     <!-- %1$s and %2$s are localised dates. -->
     <string name="detail_dates">Installed %1$s · last updated %2$s</string>

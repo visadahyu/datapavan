@@ -17,8 +17,10 @@
     <string name="back">بازگشت</string>
     <string name="open_app_settings">باز کردن در تنظیمات سیستم</string>
     <string name="detail_system_app">برنامه سیستمی از پیش نصب‌شده</string>
-    <string name="detail_user_app">نصب‌شده توسط کاربر</string>
     <string name="detail_installer">نصب‌شده با %1$s</string>
+    <string name="detail_installed_from">نصب‌شده از %1$s</string>
+    <string name="detail_installed_by_app">نصب‌شده با %1$s (%2$s)</string>
+    <string name="detail_system_app_source">برنامه سیستمی از پیش نصب‌شده · منبع نصب: %1$s</string>
     <string name="detail_installer_unknown">منبع نصب نامعلوم</string>
     <string name="detail_dates">نصب: %1$s · آخرین به‌روزرسانی: %2$s</string>
     <string name="detail_findings">یافته‌ها</string>

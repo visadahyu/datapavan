@@ -52,16 +52,8 @@ object KnownCollectors {
     fun companyOf(packageName: String): String? = prefixes.firstOrNull { (prefix, _) -> packageName.startsWith(prefix) }?.second
 }
 
-/** App stores whose installs are not reported as an unknown source. */
-private val KNOWN_STORES = setOf(
-    "com.android.vending", // Google Play
-    "com.sec.android.app.samsungapps", // Galaxy Store
-    "org.fdroid.fdroid",
-    "org.fdroid.basic",
-    "com.aurora.store",
-    "com.huawei.appmarket",
-    "com.xiaomi.market",
-)
+/** App stores whose installs are not reported as an unknown source (Stores.kt). */
+private val KNOWN_STORES = Stores.names.keys
 
 /**
  * Access that lets an app read the screen or notifications, or control the device. Drawing over

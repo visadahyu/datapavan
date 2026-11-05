@@ -17,8 +17,10 @@
     <string name="back">Zurück</string>
     <string name="open_app_settings">In den Systemeinstellungen öffnen</string>
     <string name="detail_system_app">Vorinstallierte System-App</string>
-    <string name="detail_user_app">Vom Nutzer installiert</string>
     <string name="detail_installer">Installiert von %1$s</string>
+    <string name="detail_installed_from">Installiert über %1$s</string>
+    <string name="detail_installed_by_app">Installiert von %1$s (%2$s)</string>
+    <string name="detail_system_app_source">Vorinstallierte System-App · Installationsquelle: %1$s</string>
     <string name="detail_installer_unknown">Installationsquelle unbekannt</string>
     <string name="detail_dates">Installiert am %1$s · aktualisiert am %2$s</string>
     <string name="detail_findings">Unsere Befunde</string>

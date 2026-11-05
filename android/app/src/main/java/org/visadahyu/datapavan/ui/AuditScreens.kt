@@ -74,6 +74,7 @@ import org.visadahyu.datapavan.audit.DeviceFacts
 import org.visadahyu.datapavan.audit.FindingKind
 import org.visadahyu.datapavan.audit.FloorReason
 import org.visadahyu.datapavan.audit.HealthAnswer
+import org.visadahyu.datapavan.audit.InstallSource
 import org.visadahyu.datapavan.audit.ItemState
 import org.visadahyu.datapavan.audit.Journal
 import org.visadahyu.datapavan.audit.JournalEntry
@@ -344,7 +345,9 @@ internal fun DatapavanApp(
                 AppDetail(
                     entry, audit.trackers?.get(app.packageName), audit.trackerInfo, audit.signatures[app.packageName],
                     audit.sdks[app.packageName].orEmpty(), audit.unavailable[app.packageName].orEmpty(),
-                    audit.services, audit.owners[app.packageName], audit.keys[app.packageName], insets, onBack = { selected = null },
+                    audit.services, audit.owners[app.packageName], audit.keys[app.packageName],
+                    installerLabel = audit.apps.firstOrNull { it.first.packageName == app.installer }?.first?.label,
+                    insets = insets, onBack = { selected = null },
                     plain = {
                         PlainCard(app, audit.trackers?.get(app.packageName), audit.trackerInfo, usage, onPlan = if (inPlan) ({ planning = true }) else null)
                     },
@@ -439,6 +442,17 @@ private fun Loading(insets: PaddingValues) {
     }
 }
 
+/** Where an app came from, in one line (audit/Stores.kt); names and package names are isolated. */
+@Composable
+private fun installLine(source: InstallSource): String = when (source) {
+    InstallSource.Preinstalled -> stringResource(R.string.detail_system_app)
+    is InstallSource.PreinstalledWith -> stringResource(R.string.detail_system_app_source, isolateLtr(source.source))
+    is InstallSource.FromStore -> stringResource(R.string.detail_installed_from, isolateLtr(source.store))
+    is InstallSource.ByApp -> source.label?.let { stringResource(R.string.detail_installed_by_app, isolate(it), isolateLtr(source.packageName)) }
+        ?: stringResource(R.string.detail_installer, isolateLtr(source.packageName))
+    InstallSource.Unknown -> stringResource(R.string.detail_installer_unknown)
+}
+
 /** The items of a list joined as the user's language writes them, for example with "،" in Persian. */
 @Composable
 internal fun List<String>.joinedForUser(): String = joinToString(stringResource(R.string.list_separator))
@@ -492,8 +506,8 @@ internal fun AppRow(app: AppFacts, findings: List<FindingKind>, onClick: () -> U
  */
 @Composable
 private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<Int, TrackerInfo>, signature: SignatureVerdict?,
-    sdks: List<Sdk>, unavailable: List<Capability>, services: ServiceStates?, owners: OwnerNotes?, keys: KeyFacts?, insets: PaddingValues, onBack: () -> Unit,
-    plain: @Composable () -> Unit, usage: @Composable () -> Unit) {
+    sdks: List<Sdk>, unavailable: List<Capability>, services: ServiceStates?, owners: OwnerNotes?, keys: KeyFacts?, installerLabel: String?,
+    insets: PaddingValues, onBack: () -> Unit, plain: @Composable () -> Unit, usage: @Composable () -> Unit) {
     val (app, findings) = entry
     val context = LocalContext.current
     val collector = remember { AppCollector(context) }
@@ -512,12 +526,8 @@ private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<
             Text(app.label ?: app.packageName, style = MaterialTheme.typography.headlineSmall)
             Text(isolateLtr(app.packageName), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
-            Text(stringResource(if (app.isSystem) R.string.detail_system_app else R.string.detail_user_app), style = MaterialTheme.typography.bodyMedium)
+            Text(installLine(InstallSource.of(app.isSystem, app.installer, installerLabel)), style = MaterialTheme.typography.bodyMedium)
             Text(stringResource(if (app.enabled) R.string.detail_state_enabled else R.string.detail_state_disabled), style = MaterialTheme.typography.bodyMedium)
-            Text(
-                app.installer?.let { stringResource(R.string.detail_installer, isolateLtr(it)) } ?: stringResource(R.string.detail_installer_unknown),
-                style = MaterialTheme.typography.bodyMedium,
-            )
             Text(
                 stringResource(R.string.detail_dates, date.format(Date(app.firstInstall)), date.format(Date(app.lastUpdate))),
                 style = MaterialTheme.typography.bodyMedium,
