@@ -39,8 +39,8 @@ Accrescent and Google Play come later: Play in the foundation's name and as an a
 ## F-Droid
 
 - **Recipe:** [fdroid/org.visadahyu.datapavan.yml](fdroid/org.visadahyu.datapavan.yml), for `fdroiddata`,
-  in the form `fdroid rewritemeta` writes, which keeps no comments; the reasons are here. The values in
-  angle brackets exist only after the key ceremony and the release.
+  in the form `fdroid rewritemeta` writes, which keeps no comments; the reasons are here. The commit in
+  angle brackets exists only after the release.
   - **`sudo`:** `build-essential`, since F-Droid's build server has no C compiler, and installing
     cargo-ndk builds crates whose build scripts need one. It needs no JDK step: the build server runs
     Debian 13, whose default JDK is 21, as Gradle's daemon criteria require (ADR 0009).
@@ -66,8 +66,9 @@ Accrescent and Google Play come later: Play in the foundation's name and as an a
 
 ## Obtainium
 
-Nothing to submit. The README's install section names the repository's URL and the fingerprint to
-compare after the first install, since Obtainium checks updates against the installed key.
+Nothing to submit. The README's section on checking a copy names the repository's URL and the
+fingerprint to compare after the first install, since Obtainium checks updates against the installed
+key.
 
 ## Store texts and images
 

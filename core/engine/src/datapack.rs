@@ -465,6 +465,14 @@ mod tests {
         PublicKey::parse(line).unwrap_or_else(|e| unreachable!("{e}"))
     }
 
+    /// `data/PACK` pins this key: if this reader refused it, release builds would refuse every pack.
+    #[test]
+    fn the_published_data_key_is_a_valid_key() {
+        let file = include_str!("../../../keys/datapavan-data-1.pub");
+        let line = file.lines().nth(1).unwrap_or_default();
+        assert_eq!(PublicKey::parse(line.as_bytes()).map(|_| ()), Ok(()));
+    }
+
     fn text(payload: &[u8], range: &core::ops::Range<usize>) -> String {
         String::from_utf8_lossy(&payload[range.clone()]).into_owned()
     }

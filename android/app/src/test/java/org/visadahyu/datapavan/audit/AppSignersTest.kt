@@ -5,6 +5,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.security.MessageDigest
+import java.security.cert.CertificateFactory
 
 class AppSignersTest {
     private val dev = "a".repeat(64)
@@ -87,5 +89,17 @@ class AppSignersTest {
         assertTrue(bundled.size > 20)
         val proton = "dcc9439ec1a6c6a8d0203f3423ee42bcc8b970628e53cb73a0393f398dd5b853"
         assertEquals(SignatureVerdict.Genuine("Proton VPN", "developer", pastKeyOnly = false), bundled.judge("ch.protonvpn.android", signing(proton), fresh = true))
+    }
+
+    @Test
+    fun `the bundled lists hold the published certificate as Datapavan's only key`() {
+        val bundled = AppSigners.parse(File("../../data/app-signers/apps.tsv").readText(), File("../../data/app-signers/signers.tsv").readText())
+        val certificate = File("../../keys/datapavan-release.pem").inputStream().use { CertificateFactory.getInstance("X.509").generateCertificate(it) }
+        val own = MessageDigest.getInstance("SHA-256").digest(certificate.encoded).joinToString("") { "%02x".format(it) }
+        val datapavan = "org.visadahyu.datapavan"
+        assertEquals(SignatureVerdict.Genuine("Datapavan", "developer", pastKeyOnly = false), bundled.judge(datapavan, signing(own), fresh = true))
+        assertEquals(SignatureVerdict.Modified("Datapavan", other, debugKey = false), bundled.judge(datapavan, signing(other), fresh = true))
+        assertEquals(SignatureVerdict.Modified("Datapavan", other, debugKey = true), bundled.judge(datapavan, signing(other, debug = true), fresh = true))
+        assertEquals(SignatureVerdict.Disguised("Datapavan"), bundled.judge("org.example.lookalike", signing(own), fresh = true))
     }
 }

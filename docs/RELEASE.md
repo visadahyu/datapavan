@@ -9,6 +9,10 @@ itself. The keys never touch an online computer ([DATA-PACKS.md](DATA-PACKS.md#k
 These steps need the maintainer and an offline system. They cannot be done by CI, by a script on the
 development computer, or by an assistant.
 
+Steps 1 to 3 were done on 2026-11-05, on a live Debian system with networking off. The public halves are
+in [keys/](../keys/README.md), and the certificate's fingerprint is `FF:DF:39:72:91:80:12:31:AB:2D:81:20:8D:F8:AD:7E:52:03:1D:3D:1E:D8:FD:62:11:C3:29:FC:5A:14:CE:2D`.
+The steps stay here for the day a key must be replaced. Step 4 is still open.
+
 1. **The APK signing key**, made offline like the data-signing key: start a live USB system with
    networking off (for example Debian Live), with a JDK and the Android SDK's `apksigner` copied onto
    the stick, and make the key there:
@@ -92,6 +96,8 @@ development computer, or by an assistant.
 - The build fails if any component adds the INTERNET permission, and `verifyApkRelease` checks the
   native library and its JNI export.
 - `scripts/reproducible.sh` compares two builds of the same commit.
+- `scripts/check-keys.py` fails if the fingerprint or a key in the README, the website, the F-Droid
+  recipe, `data/PACK` or `data/app-signers` differs from the files in `keys/`.
 - `scripts/release-rehearsal.sh` signs a release build and its notes with throwaway keys and checks
   the schemes, the certificate, the version, the permissions and the notes' signature.
 - `ThemeTest`, `scripts/plain-language.py` and `scripts/screenshots.sh` keep the interface's contrast,

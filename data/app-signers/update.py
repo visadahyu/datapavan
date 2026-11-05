@@ -373,7 +373,8 @@ def main():
                 checked[(columns[0], columns[1])] = columns[6]
     lines = [
         "# SPDX-License-Identifier: CC0-1.0",
-        "# Official signing certificates of VPN, proxy and circumvention apps (ADR 0018), written by update.py.",
+        "# Official signing certificates of VPN, proxy and circumvention apps, and of Datapavan itself (ADR 0018,",
+        "# ADR 0024), written by update.py.",
         "# Columns: package, SHA-256 of the signing certificate, grade (1 strongest to 5), whose key, channels,",
         "# debug (yes: an Android debug certificate), checked, sources.",
     ]

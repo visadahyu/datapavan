@@ -42,3 +42,4 @@ com.wireguard.android	WireGuard	no	One key for the website build and the Google 
 org.telegram.messenger.web	Telegram (website build)	no	The build telegram.org offers for download; it updates itself, so it needs to install apps
 org.telegram.messenger	Telegram	no	The Google Play build
 org.thunderdog.challegram	Telegram X	no	Google Play; F-Droid builds Telegram X FOSS under the same package with its own key
+org.visadahyu.datapavan	Datapavan	yes	One key on every channel: GitHub Releases, IzzyOnDroid and F-Droid carry the same signed APK (ADR 0024)

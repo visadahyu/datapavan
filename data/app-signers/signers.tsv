@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: CC0-1.0
-# Official signing certificates of VPN, proxy and circumvention apps (ADR 0018), written by update.py.
+# Official signing certificates of VPN, proxy and circumvention apps, and of Datapavan itself (ADR 0018,
+# ADR 0024), written by update.py.
 # Columns: package, SHA-256 of the signing certificate, grade (1 strongest to 5), whose key, channels,
 # debug (yes: an Android debug certificate), checked, sources.
 app.hiddify.com	454bf1f622d0fd5ebf93d4ce51fe5d4a93083b710bf2a01480cd570254c73d92	4	developer,google	github,play	no	2026-10-30	https://github.com/hiddify/hiddify-app/releases/download/v4.1.1/Hiddify-Android-arm64.apk https://play.google.com/store/apps/details?id=app.hiddify.com
@@ -51,6 +52,7 @@ org.torproject.torbrowser	20061f045e737c67375c17794cfedb436a03cec6bacb7cb9f96642
 org.torproject.torbrowser_alpha	15f760b41acbe4783e667102c9f67119be2af62fab07763f9d57f01e5e1074e1	2	developer	guardian,play	no	2026-10-30	https://guardianproject.info/fdroid/repo/index-v1.jar https://play.google.com/store/apps/details?id=org.torproject.torbrowser_alpha
 org.torproject.vpn	77c3ca0339b21064594867fb9523660d7c74b2601c1931250516d5f2b34cf5e2	5	google	play	no	2026-10-30	https://play.google.com/store/apps/details?id=org.torproject.vpn
 org.torproject.vpn	c2f6ffa30e56a7c53a226248ef908612ee539df2f52bede5a55037425b83331d	2	developer	fdroid	no	2026-10-30	https://gitlab.com/fdroid/fdroiddata/-/raw/master/metadata/org.torproject.vpn.yml
+org.visadahyu.datapavan	ffdf397291801231ab2d81208df8ad7e52031d3d1ed8fd6211c329fc5a14ce2d	1	developer	github	no	2026-11-05	https://github.com/visadahyu/datapavan#checking-a-copy
 pan.alexander.tordnscrypt	1ea09e9062285984ffe8965605edab8b01ed19dfa019c31484a3382accc19ace	3	developer	izzy	no	2026-10-30	https://apt.izzysoft.de/fdroid/repo/index-v1.jar
 pan.alexander.tordnscrypt.gp	884f59db4cce11b22471869d2ae3523a19a8a7219054c99438afcb9d05a0eaa8	5	google	play	no	2026-10-30	https://play.google.com/store/apps/details?id=pan.alexander.tordnscrypt.gp
 pan.alexander.tordnscrypt.stable	977d4ca02ca0b94948c58be87bc34bbdd58e12350de078e28b17fcda176b3141	2	fdroid	fdroid	no	2026-10-30	https://f-droid.org/repo/index-v1.jar

@@ -35,6 +35,8 @@ data_gates() {
         echo "data/PACK is missing, or lacks its licence, sequence or date" >&2
         failed=1
     fi
+    # Every published copy of the project's keys (ADR 0024).
+    python3 -I "$ROOT/scripts/check-keys.py" || failed=1
     [ "$failed" -eq 0 ]
 }
 

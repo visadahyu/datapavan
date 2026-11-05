@@ -96,11 +96,10 @@ Otherwise the app uses its own pack again.
 
 ## Keys
 
-**The data-signing key is created and kept offline by the maintainer, before the first public
-release.** Until then, development uses the test key below. `data/PACK` names no key, so release builds
-refuse every import with a message that says so. The key is never made on the development computer:
-that computer is online and runs build tools and AI agents, so a key made there would be only as safe
-as the computer.
+**The maintainer made the data-signing key offline on 2026-11-05, and it stays offline.** Its public half
+is [keys/datapavan-data-1.pub](../keys/datapavan-data-1.pub), and `data/PACK` names it, so release
+builds accept the packs it signs. The key is never on the development computer: that computer is online
+and runs build tools and AI agents, so a key there would be only as safe as the computer.
 
 No second computer is needed. The development computer can start a live USB system, for example Debian
 Live, with networking off and with the `signify-openbsd` package copied onto the stick. The key is made

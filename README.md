@@ -7,8 +7,8 @@ helps you stop it.** Everything runs on the device. It needs no root and no clou
 > Status: **pre-alpha.** Milestones M1 (the build skeleton), M2 (the app and permission audit), M3
 > (the code scanner and its data) and M4 (network use per app) are complete. M5, the first release, is
 > in progress: the guided check, the remediation plan, the app's structure and settings, the brand
-> theme, the genuine-copy check and the release steps are built; the signing keys, made offline, and
-> the release itself come next. Nothing has been released yet. See the [roadmap](ROADMAP.md).
+> theme, the genuine-copy check and the release steps are built, and the signing keys were made offline
+> on 2026-11-05; the release itself comes next. Nothing has been released yet. See the [roadmap](ROADMAP.md).
 
 ## Why
 
@@ -127,6 +127,28 @@ decrypt it. It cannot remove the maker's system apps without a computer, control
 or clean a phone that is already compromised; it finds the risk and guides the user. Each limit, and the
 stage that addresses it, is listed in [docs/DESIGN.md](docs/DESIGN.md#2-what-we-can-and-cannot-protect).
 
+## Checking a copy
+
+Nothing has been released yet. Releases will be on GitHub Releases, IzzyOnDroid and F-Droid, and
+[Obtainium](https://github.com/ImranR98/Obtainium) can follow this repository's URL. Every genuine copy,
+on every channel, is signed with one key. The SHA-256 fingerprint of its certificate is:
+
+```
+FF:DF:39:72:91:80:12:31:
+AB:2D:81:20:8D:F8:AD:7E:
+52:03:1D:3D:1E:D8:FD:62:
+11:C3:29:FC:5A:14:CE:2D
+```
+
+Compare it at the first install, with a tool other than Datapavan itself, since a fake can show any
+text: for example [AppVerifier](https://github.com/soupslurpr/AppVerifier) on the phone, or
+`apksigner verify --print-certs` on a computer. After that, Android refuses updates signed with another
+key. **Genuine Datapavan has no internet access and never asks for it.**
+
+Data packs are signed with the key `RWTvKNnePsEUaJrL7VYOD589PmfVSfBApZ8LtNM12T3GtlQemrgp4cf0`, and release notes with
+`RWSV0XJ7jyVe9uaZq/mrqIHyhE6cGIaSzN0wg0DA7nlVsNqZ8jZ8pb1q`. The files, and the commands that check with them, are in
+[keys/](keys/README.md).
+
 ## Three stages
 
 1. **A layer app** for individuals on stock Android, without root (this repository today).
@@ -172,6 +194,7 @@ The history and meaning of both names are in [docs/NAMES.md](docs/NAMES.md); log
 | [docs/LAB.md](docs/LAB.md) | The traffic lab: measuring apps on the project's own phones |
 | [docs/RELEASE.md](docs/RELEASE.md) | Releasing: the offline keys, the checklist, reproducible builds |
 | [docs/CHANNELS.md](docs/CHANNELS.md) | Where releases go: GitHub, IzzyOnDroid, F-Droid, Obtainium |
+| [keys/](keys/README.md) | The signing certificate and public keys, and how to check with them |
 | [docs/RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md) | Working under censorship and surveillance |
 | [docs/FOUNDATION.md](docs/FOUNDATION.md) | Charter principles of the Visadahyu Foundation |
 | [docs/decisions/](docs/decisions/README.md) | Architecture decision records, including the licences of every dataset (ADR 0015) |
