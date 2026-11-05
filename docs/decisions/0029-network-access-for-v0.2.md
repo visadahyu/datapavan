@@ -1,6 +1,6 @@
 # 0029. Where network access lives in v0.2
 
-- Status: Proposed
+- Status: Accepted (by the maintainer on 2026-11-05)
 - Date: 2026-11-05
 
 (0028 is kept for the ranges of kinds of app from the lab, ADR 0025 point 5.)
@@ -45,7 +45,7 @@ v0.1 cannot see and v0.2 must:
 3. **No forwarding.** The VPN only watches and drops, so it needs no INTERNET. It would cut the phone
    off, so it is not a real option.
 
-## Proposed decision
+## Decision
 
 Option 2. The sentence to teach stays true without a version number: "Datapavan never has internet
 access. Datapavan Watch, a separate app, uses it only to pass your own traffic on to where it was
@@ -71,5 +71,4 @@ From the measurements, three parts of [VPN.md](../VPN.md) move earlier:
 - **Installing:** users who want the connection log install a second app. Datapavan offers it where
   the log would answer a question, with the same fingerprint check as for itself.
 - **Before work starts:** ADR 0012's spike for the packet engine runs first, in Watch's module.
-- **For the maintainer to decide:** this record stays Proposed until the maintainer accepts option 2
-  or chooses option 1.
+- **Accepted:** the maintainer chose option 2 on 2026-11-05.

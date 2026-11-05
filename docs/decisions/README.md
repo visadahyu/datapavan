@@ -35,7 +35,7 @@ in the Git history.
 | [0025](0025-guided-check-and-traffic-facts.md) | The guided check of one activity, and two traffic facts that need no comparison | Accepted |
 | [0026](0026-remediation-plan-v0.1.md) | The remediation plan's part for v0.1 | Accepted |
 | [0027](0027-app-structure-and-settings.md) | The app's structure and settings | Accepted |
-| [0029](0029-network-access-for-v0.2.md) | v0.2's VPN in a separate app, Datapavan Watch, so that Datapavan never holds INTERNET | Proposed |
+| [0029](0029-network-access-for-v0.2.md) | v0.2's VPN in a separate app, Datapavan Watch, so that Datapavan never holds INTERNET | Accepted |
 
 ## Template
 

@@ -66,7 +66,7 @@ Checks left from M4 (ADR 0022):
 ### v0.2 "Watch": local VPN, observe only
 
 A **local** VPN: no server is involved and the user's IP address does not change. [ADR 0029](docs/decisions/0029-network-access-for-v0.2.md)
-(proposed) puts it in a separate app, Datapavan Watch, so that Datapavan itself never holds the INTERNET
+(accepted on 2026-11-05) puts it in a separate app, Datapavan Watch, so that Datapavan itself never holds the INTERNET
 permission, and moves the QUIC server name and apps' own encrypted DNS into v0.2. Before this version
 starts, a two-week spike picks the packet engine (Rust netstack or Go gVisor). Design: [docs/VPN.md](docs/VPN.md).
 
