@@ -487,7 +487,7 @@
     <string name="own_key_unknown">اندروید نمی‌گوید کدام کلید این نسخه را امضا کرده است.</string>
     <string name="own_genuine">با کلید رسمی Datapavan در فهرستی که همین نسخه همراه دارد جور است.</string>
     <string name="own_not_genuine">با کلید رسمی Datapavan جور نیست. این نسخه را حذف کنید و Datapavan را از منبعی که به آن اعتماد دارید نصب کنید.</string>
-    <string name="own_no_record">هنوز کلید رسمی در فهرست نیست، چون Datapavan هنوز منتشر نشده است.</string>
+    <string name="own_no_record">فهرستی که همین نسخه همراه دارد کلید رسمی Datapavan را ندارد، پس نمی‌تواند چیزی بگوید.</string>
     <string name="own_debug">این یک نسخه آزمایشی است که با کلید اشکال‌زدایی امضا شده است.</string>
     <string name="own_updates">وقتی یک نسخه اصل نصب شد، اندروید هر به‌روزرسانی با کلید دیگر را رد می‌کند؛ پس لحظه بررسی همان نصب اول است.</string>
     <string name="own_limit">یک نسخه جعلی می‌تواند همه چیز این صفحه را جعل کند. بررسی واقعی از بیرون است: کلید بالا را با کلیدی که با هر انتشار منتشر می‌شود مقایسه کنید، مثلا با برنامه AppVerifier.</string>

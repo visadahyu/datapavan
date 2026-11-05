@@ -2,6 +2,7 @@ package org.visadahyu.datapavan.ui
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -177,7 +178,13 @@ private suspend fun runAudit(context: Context): AuditResult = coroutineScope {
     val signers = AppSigners.parse(data.text(AppSigners.APPS_PATH).orEmpty(), data.text(AppSigners.SIGNERS_PATH).orEmpty())
     val fresh = !DataPackRules.isStale(data.active.date, LocalDate.now())
     val collected = collector.collect()
-    val signatures = collected.mapNotNull { app -> signers.judge(app.packageName, app.signing, fresh)?.let { app.packageName to it } }.toMap()
+    // A debug build is this app's own test build: its debug key says nothing about a fake, and the
+    // self-check calls it a test build (ADR 0024). A release build is judged like any other app.
+    val testBuild = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+    val signatures = collected
+        .filterNot { testBuild && it.packageName == context.packageName }
+        .mapNotNull { app -> signers.judge(app.packageName, app.signing, fresh)?.let { app.packageName to it } }
+        .toMap()
     // The key that signs the package `android` is the phone's system key (ADR 0023).
     val systemKeys = SystemKeys.parse(data.text(SystemKeys.PATH).orEmpty())
     val platform = collected.firstOrNull { it.packageName == PLATFORM_PACKAGE }?.signing

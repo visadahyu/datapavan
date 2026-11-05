@@ -493,7 +493,7 @@
     <string name="own_key_unknown">Android n\'indique pas quelle clé a signé cette copie.</string>
     <string name="own_genuine">Elle correspond à la clé officielle de Datapavan dans la liste que porte cette copie.</string>
     <string name="own_not_genuine">Elle ne correspond pas à la clé officielle de Datapavan. Désinstallez cette copie et installez Datapavan depuis une source de confiance.</string>
-    <string name="own_no_record">La liste ne contient pas encore de clé officielle, car Datapavan n\'a pas encore été publié.</string>
+    <string name="own_no_record">La liste que porte cette copie ne contient aucune clé officielle de Datapavan, elle ne peut donc rien dire.</string>
     <string name="own_debug">C\'est une version de test, signée avec une clé de débogage.</string>
     <string name="own_updates">Une fois une copie authentique installée, Android refuse toute mise à jour signée avec une autre clé : c\'est donc à la première installation qu\'il faut vérifier.</string>
     <string name="own_limit">Une copie falsifiée peut tout simuler sur cet écran. La vraie vérification se fait de l\'extérieur : comparez la clé ci-dessus avec celle publiée à chaque version, par exemple avec l\'appli AppVerifier.</string>

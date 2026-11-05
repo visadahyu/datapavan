@@ -62,11 +62,11 @@ internal fun OwnCopyScreen(signing: AppSigning?, verdict: SignatureVerdict?, ins
                 )
             }
         }
-        item {
+        if (signing != null) item {
             Text(
                 stringResource(
                     when {
-                        signing?.debug == true -> R.string.own_debug
+                        signing.debug -> R.string.own_debug
                         verdict is SignatureVerdict.Genuine -> R.string.own_genuine
                         verdict is SignatureVerdict.Modified || verdict is SignatureVerdict.UnknownKey -> R.string.own_not_genuine
                         else -> R.string.own_no_record
