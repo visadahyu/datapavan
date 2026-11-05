@@ -34,6 +34,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -235,6 +236,8 @@ internal fun DatapavanApp(
     usageDays: Int? = null,
     theme: ThemeMode = ThemeMode.SYSTEM,
     onTheme: (ThemeMode) -> Unit = {},
+    launch: LaunchTarget? = null,
+    onLaunched: () -> Unit = {},
 ) {
     val context = LocalContext.current.applicationContext
     // The scan reports progress from background threads; a StateFlow carries it safely to the UI.
@@ -286,6 +289,25 @@ internal fun DatapavanApp(
     val saveJournal: (Journal) -> Unit = {
         journal = it
         journalStore.save(it)
+    }
+    // A launcher shortcut opens its screen in place of whatever was open; back then leads to the
+    // summary, as from the plan's own entry. The plan shows once the audit has loaded.
+    LaunchedEffect(launch) {
+        val target = launch ?: return@LaunchedEffect
+        if (checking != null) usageVersion++
+        checking = null
+        selected = null
+        reviewing = false
+        journaling = false
+        settingsOpen = false
+        settingsPage = null
+        planning = target == LaunchTarget.PLAN
+        tab = when (target) {
+            LaunchTarget.PLAN -> Destination.SUMMARY
+            LaunchTarget.APPS -> Destination.APPS
+            LaunchTarget.NETWORK -> Destination.NETWORK
+        }
+        onLaunched()
     }
     val audit = result
     val entry = audit?.apps?.firstOrNull { it.first.packageName == selected }

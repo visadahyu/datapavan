@@ -334,6 +334,7 @@
     <string name="dataset_remediation">برنامه‌هایی که طرح هرگز به آن‌ها دست نمی‌زند، بر اساس کارکرد</string>
     <!-- The remediation plan and its journal (ADR 0026). -->
     <string name="plan_title">طرح شما</string>
+    <string name="shortcut_plan">طرح</string>
     <string name="plan_entry_first">اول: %1$s</string>
     <string name="plan_entry_none">در این سطح فعلا کاری نمانده است.</string>
     <string name="plan_open">باز کردن طرح</string>

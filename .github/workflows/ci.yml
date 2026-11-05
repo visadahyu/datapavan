@@ -103,9 +103,10 @@ jobs:
 
       # On a real Android system: the smoke test (overview shown, no INTERNET permission, no crash),
       # then the audit verification, which gives a test fixture app risky access and checks that the
-      # audit reports it, the remediation plan's hand-off, journal and undo with the same fixture, then
-      # screenshots in every language with an accessibility check (scripts/smoke.sh,
-      # scripts/verify-audit.sh, scripts/verify-plan.sh, scripts/verify-datapack.sh, scripts/screenshots.sh).
+      # audit reports it, the remediation plan's hand-off, journal and undo with the same fixture, the
+      # launcher shortcuts as Android hands them to the launcher, then screenshots in every language with
+      # an accessibility check (scripts/smoke.sh, scripts/verify-audit.sh, scripts/verify-plan.sh,
+      # scripts/verify-shortcuts.sh, scripts/verify-datapack.sh, scripts/screenshots.sh).
       # The emulator needs 7.4 GB for its data partition; after the build only 5.8 GB are left. The
       # Rust build directory is no longer needed (the APK already holds the library), nor are large
       # preinstalled toolchains this project never uses.
@@ -136,6 +137,7 @@ jobs:
             scripts/smoke.sh
             scripts/verify-audit.sh
             scripts/verify-plan.sh
+            scripts/verify-shortcuts.sh
             scripts/verify-datapack.sh
             scripts/screenshots.sh build/screenshots
 

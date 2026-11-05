@@ -1,6 +1,7 @@
 package org.visadahyu.datapavan
 
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.graphics.Color
@@ -18,11 +19,15 @@ import org.visadahyu.datapavan.ui.AppPreferences
 import org.visadahyu.datapavan.ui.DatapavanApp
 import org.visadahyu.datapavan.ui.DatapavanTheme
 import org.visadahyu.datapavan.ui.Languages
+import org.visadahyu.datapavan.ui.LaunchTarget
 import org.visadahyu.datapavan.ui.ThemeMode
 import org.visadahyu.datapavan.ui.applyNightMode
 import org.visadahyu.datapavan.ui.isDark
 
 class MainActivity : ComponentActivity() {
+    /** The screen a launcher shortcut asked for, until the app has opened it (ui/Shortcuts.kt). */
+    private val launch = mutableStateOf<LaunchTarget?>(null)
+
     /** Before Android 13, the language chosen in the settings (ADR 0027). */
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(Languages.wrap(newBase))
@@ -39,11 +44,14 @@ class MainActivity : ComponentActivity() {
         val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
         val usageUntil = intent.getLongExtra(EXTRA_USAGE_UNTIL, 0).takeIf { debuggable && it > 0 }
         val usageDays = intent.getIntExtra(EXTRA_USAGE_DAYS, 0).takeIf { debuggable && it > 0 }
+        // An activity restored after a rotation or a language change keeps the screen it showed.
+        if (savedInstanceState == null) launch.value = LaunchTarget.of(intent.action)
         setContent {
             var theme by remember { mutableStateOf(preferences.theme) }
             DatapavanTheme(theme) {
                 DatapavanApp(
                     engineVersion = engineVersion, usageUntil = usageUntil, usageDays = usageDays, theme = theme,
+                    launch = launch.value, onLaunched = { launch.value = null },
                     onTheme = {
                         theme = it
                         preferences.theme = it
@@ -53,6 +61,16 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    /**
+     * Launchers start a shortcut in a fresh task, so this runs only when another app sends one of the
+     * shortcuts' actions to a running Datapavan.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        LaunchTarget.of(intent.action)?.let { launch.value = it }
     }
 
     /** The system bars' icons in the colours of the chosen appearance. */

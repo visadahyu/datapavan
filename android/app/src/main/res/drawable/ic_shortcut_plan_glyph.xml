@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Drawn for Datapavan: a checklist, for the plan. The glyph of the launcher shortcut (xml/shortcuts.xml), in lapis on
+    clay and scaled into the adaptive icon's safe zone. Shortcut icons cannot be tinted, so the colour
+    is part of the drawing.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="24" android:viewportHeight="24">
+    <group android:scaleX="0.45" android:scaleY="0.45" android:pivotX="12" android:pivotY="12">
+        <path android:pathData="M4,6.5L6,8.5L9.5,5M12.5,7L20,7M4,12.5L6,14.5L9.5,11M12.5,13L20,13M5,19L8.5,19M12.5,19L20,19" android:strokeColor="@color/brand_lapis" android:strokeWidth="2"
+            android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    </group>
+</vector>

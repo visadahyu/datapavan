@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Launcher shortcuts (ROADMAP, v0.1): a long press on the icon opens the plan, the apps or network
+    use. They are static, so no code runs in the background to keep them up to date, and their labels
+    are the app's own words, the same whatever the phone's state: no counts and no warning colours
+    (ADR 0025, ADR 0026). The actions are LaunchTarget's (ui/Shortcuts.kt); ShortcutsTest checks that
+    both agree, and scripts/verify-shortcuts.sh starts each shortcut the way a launcher does.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="plan"
+        android:icon="@drawable/ic_shortcut_plan"
+        android:shortcutShortLabel="@string/shortcut_plan"
+        android:shortcutLongLabel="@string/plan_title">
+        <intent
+            android:action="org.visadahyu.datapavan.action.OPEN_PLAN"
+            android:targetPackage="org.visadahyu.datapavan"
+            android:targetClass="org.visadahyu.datapavan.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="apps"
+        android:icon="@drawable/ic_shortcut_apps"
+        android:shortcutShortLabel="@string/nav_apps"
+        android:shortcutLongLabel="@string/section_apps">
+        <intent
+            android:action="org.visadahyu.datapavan.action.OPEN_APPS"
+            android:targetPackage="org.visadahyu.datapavan"
+            android:targetClass="org.visadahyu.datapavan.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="network"
+        android:icon="@drawable/ic_shortcut_network"
+        android:shortcutShortLabel="@string/nav_network"
+        android:shortcutLongLabel="@string/section_network">
+        <intent
+            android:action="org.visadahyu.datapavan.action.OPEN_NETWORK"
+            android:targetPackage="org.visadahyu.datapavan"
+            android:targetClass="org.visadahyu.datapavan.MainActivity" />
+    </shortcut>
+</shortcuts>
