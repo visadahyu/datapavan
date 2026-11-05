@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Screenshots of every destination, the settings and an app's page (ADR 0027), in every UI language
+# Screenshots of every destination, the settings, an app's page (ADR 0027) and the plan (ADR 0026),
+# opened by its launcher shortcut, in every UI language
 # and in the pseudo-locales (accented and right-to-left), and in dark mode in English and Persian,
 # each with an accessibility check of the screen (scripts/a11y-check.py). CI keeps the screenshots as
 # a build artifact, so layout changes in every language can be reviewed.
@@ -51,7 +52,7 @@ capture() {
 echo "== Screenshots and accessibility check on Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
 adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
-# Every destination, the settings and an app's page (ADR 0027): light in every language and both
+# Every destination, the settings, an app's page and the plan: light in every language and both
 # pseudo-locales, dark in English and Persian.
 for mode in light dark; do
     if [ "$mode" = dark ]; then locales="en fa"; adb shell cmd uimode night yes >/dev/null; else locales="en fr de fa en-XA ar-XB"; adb shell cmd uimode night no >/dev/null; fi
@@ -75,6 +76,11 @@ for mode in light dark; do
         open_tab apps
         tap_id app-row || { echo "SCREENSHOTS FAILED: no app in the list in $locale" >&2; exit 1; }
         capture app
+        # The plan, opened as its launcher shortcut opens it (xml/shortcuts.xml).
+        adb shell am start -W -a org.visadahyu.datapavan.action.OPEN_PLAN -f 0x1000c000 -n "$PKG/.MainActivity" >/dev/null
+        for _ in $(seq 1 60); do has_id plan && break; sleep 1; done
+        has_id plan || { echo "SCREENSHOTS FAILED: the plan did not open in $locale" >&2; exit 1; }
+        capture plan
         if [ -n "$passed" ]; then echo "ok: $locale ($mode)"; else echo "problems: $locale ($mode)"; failed=1; fi
     done
 done
