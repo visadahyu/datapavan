@@ -32,6 +32,10 @@ in the Git history.
 | [0022](0022-network-use-and-unused-apps.md) | Network use per app and apps not opened, from Android's own records | Accepted |
 | [0023](0023-maker-software-and-system-keys.md) | The phone maker's software and leaked system keys | Accepted |
 | [0024](0024-fake-copies-of-datapavan.md) | Fake copies of Datapavan | Accepted |
+| [0025](0025-guided-check-and-traffic-facts.md) | The guided check of one activity, and two traffic facts that need no comparison | Accepted |
+| [0026](0026-remediation-plan-v0.1.md) | The remediation plan's part for v0.1 | Accepted |
+| [0027](0027-app-structure-and-settings.md) | The app's structure and settings | Accepted |
+| [0029](0029-network-access-for-v0.2.md) | v0.2's VPN in a separate app, Datapavan Watch, so that Datapavan never holds INTERNET | Proposed |
 
 ## Template
 
