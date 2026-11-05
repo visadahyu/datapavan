@@ -49,7 +49,10 @@ The data behind M3 keeps growing next to the later milestones:
   a device matrix. The scan's lower memory and parallelism by memory are done.
 
 Also for v0.1: shortcuts on the launcher icon (a long press opens the plan, the apps or network use
-directly). They need no background work and put nothing new on the home screen. A home-screen widget
+directly), built on 2026-11-05 and checked by `scripts/verify-shortcuts.sh`, also in CI. They need no
+background work and put nothing new on the home screen. Their labels follow the phone's language, also
+when another language is chosen in Datapavan's settings: Android reads a static shortcut's labels in
+the system's language (seen on Android 15). A home-screen widget
 does not come with v0.1: it would show the counts and warning colours that ADR 0025 and ADR 0026 rule
 out, tell anyone who looks at the phone more than the icon does, and need the background queries that
 disturb the guided check.

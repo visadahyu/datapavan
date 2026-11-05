@@ -86,7 +86,8 @@ checked on Android 11 and 17 emulators and on Galaxy A40 and A56 phones.
   nobody works through that by hand. See [docs/REMEDIATION.md](docs/REMEDIATION.md).
 - **Easy to find your way.** A summary, the apps with search, filters and orders, the phone, and network
   use, each one tap away; a plain-language card on each app's page; appearance and language settings on
-  every Android version (ADR 0027). *Why:* the findings only help if people can reach them.
+  every Android version (ADR 0027). A long press on the app's icon goes straight to the plan, the apps
+  or network use. *Why:* the findings only help if people can reach them.
 - **Is this copy genuine?** The app shows its own signing key, checks it against its own list, and says
   plainly that the real check is to compare the key with the one published with each release (ADR
   0024). *Why:* a privacy tool is a tempting thing to fake.
