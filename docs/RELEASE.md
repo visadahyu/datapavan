@@ -50,23 +50,32 @@ development computer, or by an assistant.
 1. **Version.** Raise `versionCode` by one and set `versionName` in `android/app/build.gradle.kts`;
    move the changelog's "Unreleased" items under the new version; write
    `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt` (500 characters at most) and its
-   translations.
+   translations. If the interface changed, take the store images again with `scripts/store-images.sh`
+   on `dp-api35-ci` at a phone's size (`wm size 1080x2400; wm density 420`): the icon from the launcher
+   icon's layers, and six screenshots per language in SystemUI's demo mode.
 2. **Checks.** `scripts/check.sh all`, the emulator scripts (`smoke.sh`, `verify-audit.sh`,
-   `verify-plan.sh`, `verify-datapack.sh`, `screenshots.sh`) on the CI image `dp-api35-ci`, and
-   `scripts/reproducible.sh`, which builds the release twice from clean checkouts in different
-   directories and fails unless the two unsigned APKs are identical. CI must be green on the release
-   commit.
+   `verify-plan.sh`, `verify-shortcuts.sh`, `verify-datapack.sh`, `screenshots.sh`) on the CI image
+   `dp-api35-ci`, and `scripts/reproducible.sh`, which builds the release twice from clean checkouts in
+   different directories and fails unless the two unsigned APKs are identical. Then
+   `scripts/release-rehearsal.sh --install` runs steps 4 and 5 with throwaway keys and puts the signed
+   release build, the only one R8 shrinks, through the smoke test and the shortcut check on the
+   emulator. CI must be green on the release commit.
 3. **Data pack.** If `data/` changed, raise the sequence in `data/PACK`, set its date, and sign the
    pack offline ([DATA-PACKS.md](DATA-PACKS.md#publishing-a-pack)).
 4. **Signing, offline.** Copy the unsigned APK to the offline system and sign it:
 
    ```sh
-   apksigner sign --ks datapavan-release.p12 --ks-key-alias datapavan --out datapavan-<version>.apk \
-       app-release-unsigned.apk
-   apksigner verify --print-certs datapavan-<version>.apk
+   apksigner sign --ks datapavan-release.p12 --ks-key-alias datapavan \
+       --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true \
+       --v4-signing-enabled false --out datapavan-<version>.apk app-release-unsigned.apk
+   apksigner verify --verbose --print-certs --min-sdk-version 24 datapavan-<version>.apk
    ```
 
-   The printed SHA-256 must be the published fingerprint.
+   The printed SHA-256 must be the published fingerprint, and both v2 and v3 must say `true`. The
+   schemes are named because apksigner's defaults depend on the APK: for minSdk 29 it signs with v3
+   alone, which tools that read only v2 cannot check, and it writes a v4 `.idsig` file that no channel
+   publishes (found by the rehearsal on 2026-11-05). `--min-sdk-version 24` makes `verify` report v2
+   too, which it otherwise skips for this minSdk.
 5. **Release notes, signed.** The notes name the version, the APK's SHA-256, the certificate's
    fingerprint and the sentence to teach ("Genuine Datapavan v0.1 has no internet access and never
    asks for it"). They are signed offline with the release notes key
@@ -83,5 +92,7 @@ development computer, or by an assistant.
 - The build fails if any component adds the INTERNET permission, and `verifyApkRelease` checks the
   native library and its JNI export.
 - `scripts/reproducible.sh` compares two builds of the same commit.
+- `scripts/release-rehearsal.sh` signs a release build and its notes with throwaway keys and checks
+  the schemes, the certificate, the version, the permissions and the notes' signature.
 - `ThemeTest`, `scripts/plain-language.py` and `scripts/screenshots.sh` keep the interface's contrast,
   wording and touch targets.
