@@ -1,0 +1,94 @@
+<!doctype html>
+<!--
+  Draft of datapavan.org's one page (docs/CHANNELS.md). It loads nothing from anywhere else: no fonts,
+  scripts, analytics, cookies or images from other servers, so that visiting it tells no third party
+  anything. Placeholders in angle brackets are filled after the key ceremony and the first release.
+  French, German and Persian pages follow from the store texts in fastlane/.
+-->
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Datapavan</title>
+<meta name="description" content="See what the apps on your Android phone can reach and send, on the phone itself. No internet access, no account, no root.">
+<style>
+  :root { --bg: #FBF7F0; --text: #1D1B17; --muted: #4A4436; --accent: #1F4E8C; --line: #CEC5B3; --card: #F3EBDC; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14161C; --text: #E4E2DC; --muted: #C4C6D0; --accent: #8DB0E6; --line: #44474F; --card: #1D2026; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 1.0625rem/1.6 system-ui, sans-serif; }
+  main { max-width: 42rem; margin: 0 auto; padding: 2.5rem 1rem 4rem; }
+  h1 { font-size: 2rem; margin: 0 0 .25rem; color: var(--accent); }
+  h2 { font-size: 1.25rem; margin: 2.25rem 0 .5rem; }
+  p, li { color: var(--text); }
+  .lead { font-size: 1.2rem; color: var(--muted); margin-top: 0; }
+  a { color: var(--accent); }
+  ul { padding-inline-start: 1.25rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: .75rem; padding: 1rem 1.25rem; }
+  code { font: .95rem/1.5 ui-monospace, monospace; overflow-wrap: anywhere; }
+  footer { margin-top: 3rem; border-top: 1px solid var(--line); padding-top: 1rem; color: var(--muted); font-size: .95rem; }
+</style>
+</head>
+<body>
+<main>
+<h1>Datapavan</h1>
+<p class="lead">See what the apps on your Android phone can reach and send, and stop it. Everything runs on
+the phone. No internet access, no account, no root.</p>
+
+<h2>What it checks</h2>
+<ul>
+  <li>Every installed app: where it came from, its sensitive permissions, and the special access that lets
+    an app read the screen or act for you.</li>
+  <li>Trackers and SDKs inside each app's code, matched on the phone.</li>
+  <li>VPN, proxy and circumvention apps, against their developers' official signing keys, so that a
+    modified copy shows.</li>
+  <li>The phone itself: debugging, certificate authorities you installed, the security patch and the boot
+    state.</li>
+  <li>How much data each app sent and received, and which apps you have not opened for months but still
+    hold access.</li>
+</ul>
+
+<h2>What it helps you do</h2>
+<p>A short plan, the changes that remove the most risk first. Each one opens the right Android screen,
+where you decide. A journal on the phone keeps what you changed, so that you can undo it. The apps your
+phone needs are never touched.</p>
+
+<h2>What it never does</h2>
+<p>No analytics, no crash reports, no servers, no accounts. Nothing leaves the phone. <strong>Genuine
+Datapavan v0.1 has no internet access and never asks for it.</strong> A copy that asks for it is not
+genuine.</p>
+
+<h2>Get it</h2>
+<ul>
+  <li><a href="https://github.com/visadahyu/datapavan/releases">GitHub Releases</a>: the signed APK, its
+    SHA-256 and the signed release notes.</li>
+  <li>F-Droid and IzzyOnDroid: coming with the first release.</li>
+  <li>Obtainium: add <code>https://github.com/visadahyu/datapavan</code>.</li>
+</ul>
+
+<h2>Check your copy</h2>
+<div class="card">
+  <p>Every genuine copy is signed with one key. Its certificate's SHA-256 fingerprint is:</p>
+  <p><code>&lt;the release certificate's SHA-256, in four lines of eight pairs&gt;</code></p>
+  <p>Compare it with a tool other than Datapavan itself, since a modified copy can show any text: for
+    example AppVerifier on the phone, or <code>apksigner verify --print-certs</code> on a computer. The
+    same fingerprint is in the README and in every release's signed notes.</p>
+</div>
+
+<h2>Security and privacy</h2>
+<p>Report a vulnerability privately to <a href="mailto:security@datapavan.org">security@datapavan.org</a>
+(OpenPGP key: <a href="/.well-known/openpgp-key.asc">openpgp-key.asc</a>) or through GitHub's private
+vulnerability reporting. See the <a href="https://github.com/visadahyu/datapavan/blob/main/SECURITY.md">security
+policy</a> and the <a href="https://github.com/visadahyu/datapavan/blob/main/PRIVACY.md">privacy
+notes</a>. This page sets no cookies and loads nothing from other servers.</p>
+
+<footer>
+  Datapavan is free software under the Apache License 2.0.
+  <a href="https://github.com/visadahyu/datapavan">Source code</a>.
+</footer>
+</main>
+</body>
+</html>
