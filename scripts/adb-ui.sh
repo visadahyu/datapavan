@@ -3,9 +3,36 @@
 
 DUMP=/sdcard/datapavan-ui.xml
 
+# Reads the screen into $DUMP. On a slow emulator Android can put an "isn't responding" dialog over
+# anything: CI failed twice in a row when the launcher hung behind the app. For another app's process
+# that says nothing about ours, so the dialog is answered with Wait and the screen read again. A
+# dialog for one of our own processes, or for one that cannot be named, stays on screen, so that the
+# check waiting for the app fails and shows it. The resource id and the window title are the same in
+# every language.
+dump_screen() {
+    local screen owner
+    for _ in 1 2 3; do
+        adb shell uiautomator dump "$DUMP" >/dev/null 2>&1 || return 1
+        screen=$(adb shell cat "$DUMP" 2>/dev/null) || return 1
+        case $screen in
+            *'resource-id="android:id/aerr_wait"'*) ;;
+            *) return 0 ;;
+        esac
+        owner=$(adb shell dumpsys window 2>/dev/null | tr -d '\r' |
+            sed -n 's/.*mCurrentFocus=.*Application Not Responding: \([^}]*\)}.*/\1/p' | head -1) || owner=""
+        case $owner in
+            "" | org.visadahyu.datapavan*) return 0 ;;
+        esac
+        echo "Answering Wait to Android's dialog for $owner" >&2
+        tap_dumped_id android:id/aerr_wait || return 0
+        sleep 1
+    done
+    adb shell uiautomator dump "$DUMP" >/dev/null 2>&1
+}
+
 # True when an element whose text starts with $1 is on screen.
 screen_has() {
-    adb shell uiautomator dump "$DUMP" >/dev/null 2>&1 || return 1
+    dump_screen || return 1
     adb shell cat "$DUMP" 2>/dev/null | grep -q "text=\"$1"
 }
 
@@ -56,7 +83,7 @@ tap_text() {
         [ -n "$bounds" ] && [ "$bounds" = "$previous" ] && break
         previous=$bounds
         sleep 1
-        adb shell uiautomator dump "$DUMP" >/dev/null 2>&1 || true
+        dump_screen || true
     done
     [ -n "$bounds" ] && [ "$bounds" = "$previous" ] || return 1
     set -- $bounds
@@ -66,7 +93,7 @@ tap_text() {
     if [ "$4" -gt $((height * 7 / 8)) ]; then
         adb shell input swipe $(( ($1 + $3) / 2 )) $((height * 3 / 5)) $(( ($1 + $3) / 2 )) $((height * 2 / 5)) 300
         sleep 1
-        adb shell uiautomator dump "$DUMP" >/dev/null 2>&1 || true
+        dump_screen || true
         bounds=$(text_bounds "$text")
         [ -n "$bounds" ] || return 1
         set -- $bounds
@@ -76,7 +103,7 @@ tap_text() {
 
 # Taps the centre of the first element whose content description is exactly $1: icons have no text.
 tap_desc() {
-    adb shell uiautomator dump "$DUMP" >/dev/null 2>&1 || return 1
+    dump_screen || return 1
     local bounds
     bounds=$(adb shell cat "$DUMP" | grep -o "content-desc=\"$1\"[^>]*bounds=\"[^\"]*\"" | head -1 | grep -o 'bounds="[^"]*"' | grep -o '[0-9]\+' | tr '\n' ' ')
     [ -n "$bounds" ] || return 1
@@ -87,7 +114,12 @@ tap_desc() {
 # Taps the centre of the first element whose resource-id is $1. The app names its navigation with
 # Compose test tags shown as resource ids (ADR 0027), so a script can move around in any language.
 tap_id() {
-    adb shell uiautomator dump "$DUMP" >/dev/null 2>&1 || return 1
+    dump_screen || return 1
+    tap_dumped_id "$1"
+}
+
+# Taps the centre of the first element whose resource-id is $1 in the last dump.
+tap_dumped_id() {
     local bounds
     bounds=$(adb shell cat "$DUMP" | grep -o "resource-id=\"$1\"[^>]*bounds=\"[^\"]*\"" | head -1 | grep -o 'bounds="[^"]*"' | grep -o '[0-9]\+' | tr '\n' ' ')
     [ -n "$bounds" ] || return 1
@@ -138,14 +170,14 @@ start_audit() {
 
 # True when an element whose resource-id is $1 is on screen; the navigation bar always is (ADR 0027).
 has_id() {
-    adb shell uiautomator dump "$DUMP" >/dev/null 2>&1 || return 1
+    dump_screen || return 1
     adb shell cat "$DUMP" 2>/dev/null | grep -q "resource-id=\"$1\""
 }
 
 # Waits until the audit overview shows, in any language: the loading screen has nothing to tap.
 wait_for_overview() {
     for _ in $(seq 1 60); do
-        if adb shell uiautomator dump "$DUMP" >/dev/null 2>&1 &&
+        if dump_screen &&
             adb shell cat "$DUMP" | grep -q 'clickable="true"'; then
             return 0
         fi
@@ -178,7 +210,7 @@ installed() {
 
 # Taps the element whose text is exactly $1 on the current screen, without scrolling.
 tap_now() {
-    adb shell uiautomator dump "$DUMP" >/dev/null 2>&1 || return 1
+    dump_screen || return 1
     local bounds
     bounds=$(text_bounds "$1")
     [ -n "$bounds" ] || return 1

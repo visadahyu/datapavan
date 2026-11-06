@@ -31,7 +31,7 @@ fail() {
 
 # True when the element whose resource-id is $1 is on screen and selected, as a navigation tab is.
 selected_id() {
-    adb shell uiautomator dump "$DUMP" >/dev/null 2>&1 || return 1
+    dump_screen || return 1
     adb shell cat "$DUMP" 2>/dev/null | grep -o "resource-id=\"$1\"[^>]*" | grep -q 'selected="true"'
 }
 

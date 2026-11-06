@@ -34,7 +34,7 @@ capture() {
     sleep 1
     # uiautomator gives up while the screen is still moving, so it gets three tries.
     for _ in 1 2 3; do
-        if adb shell uiautomator dump "$DUMP" >/dev/null 2>&1; then
+        if dump_screen; then
             dumped=1
             break
         fi
