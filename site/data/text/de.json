@@ -39,6 +39,10 @@
   [
    "#get",
    "Download"
+  ],
+  [
+   "#names",
+   "Die Namen"
   ]
  ],
  "label_title": "App-Etikett",
@@ -419,5 +423,47 @@
  "news_title": "Neuigkeiten",
  "news_lead": "Was in diesem Bereich passiert ist und was es für Menschen mit einem Android-Telefon bedeutet.",
  "news_source": "Quelle:",
- "news_disputed": "Bestritten:"
+ "news_disputed": "Bestritten:",
+ "name_native": "",
+ "names_title": "Die Namen",
+ "names_lead": "Beide Namen stammen aus dem Altpersischen, der Sprache der achämenidischen Könige, die fast nur aus vor rund 2.500 Jahren in Stein gehauenen Inschriften bekannt ist.",
+ "names_more": "Quellen und mehr",
+ "names": [
+  [
+   "Datapavan",
+   "",
+   "DA-ta-pa-wan",
+   "Die App",
+   [
+    [
+     "dāta",
+     "Gesetz"
+    ],
+    [
+     "pāvan",
+     "Beschützer"
+    ]
+   ],
+   "Beschützer des Gesetzes",
+   "Dāta heißt Gesetz, das Festgelegte. Das Wort steht in der Inschrift von Dareios I. in Behistun und lebt im Persischen als dād fort, Gerechtigkeit. Pāvan heißt Wächter: Es steckt in xšaçapāvan, „Beschützer des Reiches“, dem Titel, der im Deutschen zu Satrap wurde. Die Zusammensetzung stammt von uns, gebildet aus diesen beiden belegten Teilen. Dass data im Englischen Daten bedeutet, ist ein beabsichtigtes Wortspiel und keine gemeinsame Herkunft."
+  ],
+  [
+   "Visadahyu",
+   "",
+   "wi-sa-DA-hju",
+   "Die geplante Stiftung",
+   [
+    [
+     "visa",
+     "alle"
+    ],
+    [
+     "dahyu",
+     "Land, Volk"
+    ]
+   ],
+   "Aller Völker",
+   "Das Wort stammt aus der Inschrift von Xerxes I. am Tor aller Völker in Persepolis, die von „diesem Tor aller Völker“ spricht. Die Inschrift ist dreisprachig, und an den Durchgängen des Tores stehen Wächter. Wir haben den Namen für eine geplante Stiftung gewählt, die keinem einzelnen Volk und keinem Unternehmen gehört."
+  ]
+ ]
 }

@@ -11,7 +11,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
 <meta name="description" content="{{ $t.tagline }}">
-<title>{{ if $isHome }}Datapavan{{ else }}{{ .Title }} · Datapavan{{ end }}</title>
+<title>{{ if not $isHome }}{{ .Title }} · {{ end }}{{ with $t.name_native }}{{ . }} · {{ end }}Datapavan</title>
 <link rel="icon" href="{{ $toSite }}favicon.svg" type="image/svg+xml">
 {{- range .AllTranslations }}
 <link rel="alternate" hreflang="{{ .Language.Lang }}" href="{{ .Permalink }}">
@@ -24,7 +24,7 @@
 {{ (resources.Get "style.css").Content | safeCSS }}</style>
 </head>
 <body>
-<div class="w"><header class="top"><a class="brand" href="{{ $toLang }}index.html"><span>{{ partial "mark.html" . }}</span><span class="ltr">Datapavan</span></a><nav>
+<div class="w"><header class="top"><a class="brand" href="{{ $toLang }}index.html"><span>{{ partial "mark.html" . }}</span>{{ with $t.name_native }}<span>{{ . }}</span><span class="lat2 ltr">Datapavan</span>{{ else }}<span class="ltr">Datapavan</span>{{ end }}</a><nav>
 {{- $homeLink := cond $isHome "" "../index.html" -}}
 {{- range $t.nav }}{{ $href := printf "%s%s" $homeLink (index . 0) }}<a href="{{ $href | safeURL }}">{{ index . 1 }}</a>{{ end -}}
 <a href="{{ $toLang }}news/index.html">{{ $t.news_title }}</a></nav>

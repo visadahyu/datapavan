@@ -39,6 +39,10 @@
   [
    "#get",
    "Consíguelo"
+  ],
+  [
+   "#names",
+   "Los nombres"
   ]
  ],
  "label_title": "Etiqueta de la app",
@@ -419,5 +423,47 @@
  "news_title": "Noticias",
  "news_lead": "Lo que ha pasado en este campo y lo que significa para quien tiene un teléfono Android.",
  "news_source": "Fuente:",
- "news_disputed": "Cuestionado:"
+ "news_disputed": "Cuestionado:",
+ "name_native": "",
+ "names_title": "Los nombres",
+ "names_lead": "Los dos nombres vienen del persa antiguo, la lengua de los reyes aqueménidas, conocida casi solo por inscripciones grabadas en piedra hace unos 2500 años.",
+ "names_more": "Fuentes y más detalles",
+ "names": [
+  [
+   "Datapavan",
+   "",
+   "DA-ta-pa-van",
+   "La app",
+   [
+    [
+     "dāta",
+     "ley"
+    ],
+    [
+     "pāvan",
+     "protector"
+    ]
+   ],
+   "Protector de la ley",
+   "Dāta significa ley, lo que se ha establecido. Aparece en la inscripción de Darío I en Behistún y sigue viva en persa como dād, justicia. Pāvan significa guardián: está en xšaçapāvan, «protector del reino», el título que llegó al español como sátrapa. El compuesto es nuestro, formado con esas dos partes documentadas. Que data signifique «datos» en inglés es un juego de palabras buscado, sin un origen común."
+  ],
+  [
+   "Visadahyu",
+   "",
+   "vi-sa-DA-hiu",
+   "La fundación, en proyecto",
+   [
+    [
+     "visa",
+     "todo"
+    ],
+    [
+     "dahyu",
+     "tierra, nación"
+    ]
+   ],
+   "De todas las naciones",
+   "La palabra viene de la inscripción de Jerjes I en la Puerta de Todas las Naciones de Persépolis, que habla de «esta puerta de todas las naciones». La inscripción está en tres lenguas, y hay guardianes en las entradas de la puerta. Elegimos el nombre para una fundación en proyecto que no pertenece a ninguna nación ni empresa."
+  ]
+ ]
 }

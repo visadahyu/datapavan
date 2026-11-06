@@ -39,6 +39,10 @@
   [
    "#get",
    "Get it"
+  ],
+  [
+   "#names",
+   "The names"
   ]
  ],
  "label_title": "App label",
@@ -419,5 +423,47 @@
  "news_title": "News",
  "news_lead": "What has happened in this field, and what it means for someone with an Android phone.",
  "news_source": "Source:",
- "news_disputed": "Disputed:"
+ "news_disputed": "Disputed:",
+ "name_native": "",
+ "names_title": "The names",
+ "names_lead": "Both names come from Old Persian, the language of the Achaemenid kings, known almost only from inscriptions carved in stone about 2,500 years ago.",
+ "names_more": "Sources and more",
+ "names": [
+  [
+   "Datapavan",
+   "",
+   "DAH-tah-pah-vahn",
+   "The app",
+   [
+    [
+     "dāta",
+     "law"
+    ],
+    [
+     "pāvan",
+     "protector"
+    ]
+   ],
+   "Protector of the law",
+   "Dāta means law, what has been set down. It appears in Darius I's inscription at Behistun, and lives on in Persian as dād, justice. Pāvan means guardian: it is in xšaçapāvan, protector of the realm, the title that reached English as satrap. The compound itself is ours, built from those two attested parts. That data means data in English is deliberate wordplay, not a shared origin."
+  ],
+  [
+   "Visadahyu",
+   "",
+   "vee-sah-DAH-hyoo",
+   "The foundation, planned",
+   [
+    [
+     "visa",
+     "all"
+    ],
+    [
+     "dahyu",
+     "land, nation"
+    ]
+   ],
+   "Of all nations",
+   "The word comes from Xerxes I's inscription on the Gate of All Nations at Persepolis, which speaks of this gateway of all nations. The inscription is in three languages, and guardians stand at the gate's doorways. We chose the name for a planned foundation that belongs to no single nation or company."
+  ]
+ ]
 }
