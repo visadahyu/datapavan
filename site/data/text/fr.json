@@ -286,7 +286,7 @@
  ],
  "never_body": "C’est Android qui l’impose. Une appli sans autorisation Internet ne peut pas ouvrir de connexion réseau. Datapavan authentique ne la demande jamais, et une copie qui la demande n’est pas authentique.",
  "compare_title": "Comparaison",
- "compare_note": "Par type d’outil, car chacun fait un travail différent. Datapavan 0.1 regarde et guide ; il ne bloque pas.",
+ "compare_note": "Par type d’outil, car chacun fait un travail différent. Datapavan 0.1 regarde et guide ; il ne bloque pas. Vérifié en novembre 2026 par rapport à εxodus, AppCensus, TrackerControl, RethinkDNS, NetGuard, DuckDuckGo App Tracking Protection, AdGuard, AFWall+ et Android 15 et 16.",
  "compare_cols": [
   "Datapavan 0.1",
   "Sites de rapports en ligne",
@@ -299,7 +299,7 @@
    [
     "Sur le téléphone",
     "Sur leur serveur",
-    "Certaines",
+    "Peu le font",
     "Non"
    ]
   ],
@@ -308,7 +308,7 @@
    [
     "Oui",
     "Non",
-    "Oui",
+    "Certaines",
     "Oui"
    ]
   ],
@@ -316,7 +316,7 @@
    "Montre où vont les données",
    [
     "Prévu",
-    "Non",
+    "Audits payants seulement",
     "Oui",
     "Non"
    ]
@@ -333,7 +333,7 @@
   [
    "Vérifie qu’une appli VPN est l’officielle",
    [
-    "Oui",
+    "Pour 35 applis connues",
     "Non",
     "Non",
     "Non"
@@ -344,12 +344,12 @@
    [
     "Non",
     "Non",
-    "Oui",
+    "Oui, sans root",
     "Non"
    ]
   ],
   [
-   "A lui-même besoin d’un accès à Internet",
+   "Nécessite lui-même un accès à Internet",
    [
     "Non",
     "Oui",

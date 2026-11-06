@@ -286,7 +286,7 @@
  ],
  "never_body": "Android setzt das durch. Eine App ohne Internetberechtigung kann keine Netzwerkverbindung öffnen. Echtes Datapavan fragt nie danach, und eine Kopie, die danach fragt, ist nicht echt.",
  "compare_title": "Im Vergleich",
- "compare_note": "Nach Art des Werkzeugs, denn jedes hat eine andere Aufgabe. Datapavan 0.1 schaut hin und führt Sie; es blockiert nicht.",
+ "compare_note": "Nach Art des Werkzeugs, denn jedes hat eine andere Aufgabe. Datapavan 0.1 schaut hin und führt Sie; es blockiert nicht. Geprüft im November 2026 anhand von εxodus, AppCensus, TrackerControl, RethinkDNS, NetGuard, DuckDuckGo App Tracking Protection, AdGuard, AFWall+ und Android 15 und 16.",
  "compare_cols": [
   "Datapavan 0.1",
   "Online-Berichtsseiten",
@@ -299,7 +299,7 @@
    [
     "Auf dem Telefon",
     "Auf ihrem Server",
-    "Manche",
+    "Nur wenige",
     "Nein"
    ]
   ],
@@ -308,7 +308,7 @@
    [
     "Ja",
     "Nein",
-    "Ja",
+    "Manche",
     "Ja"
    ]
   ],
@@ -316,7 +316,7 @@
    "Zeigt, wohin Daten gehen",
    [
     "Geplant",
-    "Nein",
+    "Nur kostenpflichtige Prüfungen",
     "Ja",
     "Nein"
    ]
@@ -327,13 +327,13 @@
     "Geplant",
     "Nein",
     "Ja",
-    "Begrenzt"
+    "Eingeschränkt"
    ]
   ],
   [
    "Prüft, ob eine VPN-App die offizielle ist",
    [
-    "Ja",
+    "Für 35 bekannte Apps",
     "Nein",
     "Nein",
     "Nein"
@@ -344,7 +344,7 @@
    [
     "Nein",
     "Nein",
-    "Ja",
+    "Ja, ohne Root",
     "Nein"
    ]
   ],
