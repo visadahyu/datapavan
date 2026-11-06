@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-06
+
 ### Added
 
 - Spanish, Russian, Simplified Chinese and Arabic, in the app and the store texts. Each translation is reviewed by independent AI models, with the names of Android's screens taken from AOSP's own translations ([ADR 0030](docs/decisions/0030-more-languages-reviewed-by-independent-models.md)). `scripts/check-translations.py` checks what a translation can break without anyone reading it.
@@ -64,4 +66,5 @@ All notable changes to this project are documented here. The format follows
 - EmojiCompat's start-up lookup of a downloadable font through Google Play services is disabled.
 - Release builds of the Rust engine keep integer-overflow checks.
 
-[Unreleased]: https://github.com/visadahyu/datapavan/commits/main
+[Unreleased]: https://github.com/visadahyu/datapavan/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/visadahyu/datapavan/releases/tag/v0.1.0
