@@ -68,4 +68,4 @@ org.getlantern.lantern	website	developer	apk	https://s3.amazonaws.com/lantern.io
 com.wireguard.android	website	developer	apk	page:https://download.wireguard.com/android-client	com\.wireguard\.android-[0-9.]+\.apk
 org.telegram.messenger.web	website	developer	apk	https://telegram.org/dl/android/apk	
 org.thunderdog.challegram	fdroid	fdroid	index	https://f-droid.org/repo	fdroid
-org.visadahyu.datapavan	github	developer	published	https://github.com/visadahyu/datapavan#checking-a-copy	FF:DF:39:72:91:80:12:31:AB:2D:81:20:8D:F8:AD:7E:52:03:1D:3D:1E:D8:FD:62:11:C3:29:FC:5A:14:CE:2D
+org.visadahyu.datapavan	github	developer	published	https://github.com/visadahyu/datapavan#checking-a-copy	FA:6A:24:04:2A:BC:AC:8B:D0:09:01:10:F7:04:FF:EF:E7:DA:D3:AD:F5:DB:38:FB:07:38:90:AB:4C:B1:FA:84

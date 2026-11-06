@@ -9,8 +9,8 @@ itself. The keys never touch an online computer ([DATA-PACKS.md](DATA-PACKS.md#k
 These steps need the maintainer and an offline system. They cannot be done by CI, by a script on the
 development computer, or by an assistant.
 
-Steps 1 to 3 were done on 2026-11-05, on a live Debian system with networking off. The public halves are
-in [keys/](../keys/README.md), and the certificate's fingerprint is `FF:DF:39:72:91:80:12:31:AB:2D:81:20:8D:F8:AD:7E:52:03:1D:3D:1E:D8:FD:62:11:C3:29:FC:5A:14:CE:2D`.
+Steps 1 to 3 were done on 2026-11-06, on a live Debian system with networking off. The public halves are
+in [keys/](../keys/README.md), and the certificate's fingerprint is `FA:6A:24:04:2A:BC:AC:8B:D0:09:01:10:F7:04:FF:EF:E7:DA:D3:AD:F5:DB:38:FB:07:38:90:AB:4C:B1:FA:84`.
 The steps stay here for the day a key must be replaced. Step 4 is still open.
 
 1. **The APK signing key**, made offline like the data-signing key: start a live USB system with
@@ -23,7 +23,9 @@ The steps stay here for the day a key must be replaced. Step 4 is still open.
    ```
 
    RSA 4096 is accepted by every Android version Datapavan supports and by every store. The keystore
-   and its backup stay on encrypted offline media. The key's certificate is what users and other apps
+   and its backup stay on encrypted offline media. Prove the backup before relying on it: close the media, open it again
+   read-only, compare every file, and sign something with the copy on it. A check of a copy in memory passes with no media at
+   all, which is how the first set of keys was lost on 2026-11-05, before anything was signed with them. The key's certificate is what users and other apps
    compare, so it must outlive the project's releases: 18,250 days is 50 years. If the key is ever lost,
    no update can reach an installed copy (ADR 0024, point 1); if it leaks, the project must say so
    publicly and ask users to reinstall.

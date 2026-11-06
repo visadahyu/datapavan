@@ -8,7 +8,7 @@ helps you stop it.** Everything runs on the device. It needs no root and no clou
 > (the code scanner and its data) and M4 (network use per app) are complete. M5, the first release, is
 > in progress: the guided check, the remediation plan, the app's structure and settings, the brand
 > theme, the genuine-copy check and the release steps are built, and the signing keys were made offline
-> on 2026-11-05; the release itself comes next. Nothing has been released yet. See the [roadmap](ROADMAP.md).
+> on 2026-11-06; the release itself comes next. Nothing has been released yet. See the [roadmap](ROADMAP.md).
 
 ## Why
 
@@ -134,10 +134,10 @@ Nothing has been released yet. Releases will be on GitHub Releases, IzzyOnDroid 
 on every channel, is signed with one key. The SHA-256 fingerprint of its certificate is:
 
 ```
-FF:DF:39:72:91:80:12:31:
-AB:2D:81:20:8D:F8:AD:7E:
-52:03:1D:3D:1E:D8:FD:62:
-11:C3:29:FC:5A:14:CE:2D
+FA:6A:24:04:2A:BC:AC:8B:
+D0:09:01:10:F7:04:FF:EF:
+E7:DA:D3:AD:F5:DB:38:FB:
+07:38:90:AB:4C:B1:FA:84
 ```
 
 Compare it at the first install, with a tool other than Datapavan itself, since a fake can show any
@@ -145,8 +145,8 @@ text: for example [AppVerifier](https://github.com/soupslurpr/AppVerifier) on th
 `apksigner verify --print-certs` on a computer. After that, Android refuses updates signed with another
 key. **Genuine Datapavan has no internet access and never asks for it.**
 
-Data packs are signed with the key `RWTvKNnePsEUaJrL7VYOD589PmfVSfBApZ8LtNM12T3GtlQemrgp4cf0`, and release notes with
-`RWSV0XJ7jyVe9uaZq/mrqIHyhE6cGIaSzN0wg0DA7nlVsNqZ8jZ8pb1q`. The files, and the commands that check with them, are in
+Data packs are signed with the key `RWSw7mCAus7/cGyV88xK46P7J51/oMhXNl/V6+25UHD888smCReEQdRB`, and release notes with
+`RWQ/vFWwVJPevJW9d5d398A2Pp/MTT0TkpvR+7gsVitHUETHkb92YCvk`. The files, and the commands that check with them, are in
 [keys/](keys/README.md).
 
 ## Three stages

@@ -4,4 +4,4 @@
 # trusts (the second line of a signify public key file); "revoked" lines name keys it must not.
 sequence 1
 date 2026-10-30
-key RWTvKNnePsEUaJrL7VYOD589PmfVSfBApZ8LtNM12T3GtlQemrgp4cf0
+key RWSw7mCAus7/cGyV88xK46P7J51/oMhXNl/V6+25UHD888smCReEQdRB

@@ -96,7 +96,7 @@ Otherwise the app uses its own pack again.
 
 ## Keys
 
-**The maintainer made the data-signing key offline on 2026-11-05, and it stays offline.** Its public half
+**The maintainer made the data-signing key offline on 2026-11-06, and it stays offline.** Its public half
 is [keys/datapavan-data-1.pub](../keys/datapavan-data-1.pub), and `data/PACK` names it, so release
 builds accept the packs it signs. The key is never on the development computer: that computer is online
 and runs build tools and AI agents, so a key there would be only as safe as the computer.

@@ -35,7 +35,7 @@ Builds:
       - core/engine/testdata
     ndk: 30.0.16248370
 
-AllowedAPKSigningKeys: ffdf397291801231ab2d81208df8ad7e52031d3d1ed8fd6211c329fc5a14ce2d
+AllowedAPKSigningKeys: fa6a24042abcac8bd0090110f704ffefe7dad3adf5db38fb073890ab4cb1fa84
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9.]+$
