@@ -46,7 +46,8 @@ AI tools may be used, under the same conditions for contributors and maintainers
 
 ## Translations
 
-The UI ships in English, French, German and Persian. Translations will move to Weblate. Until then,
+The UI ships in English, French, German, Spanish, Russian, Simplified Chinese, Arabic and Persian. Corrections from native
+speakers are especially welcome ([ADR 0030](docs/decisions/0030-more-languages-reviewed-by-independent-models.md)). Translations will move to Weblate. Until then,
 open a pull request against `android/app/src/main/res/values-<lang>/strings.xml`. Keep key terms consistent
 with the existing translations (a per-language glossary will come with the Weblate setup), and keep the
 plain-language tone.

@@ -1,6 +1,6 @@
 # 0004. UI languages at launch, RTL from the first commit
 
-- Status: Accepted
+- Status: Accepted; the list of languages was changed by [ADR 0030](0030-more-languages-reviewed-by-independent-models.md)
 - Date: 2026-10-28
 
 ## Context

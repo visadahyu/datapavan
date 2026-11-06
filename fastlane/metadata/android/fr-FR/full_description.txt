@@ -1,4 +1,4 @@
-Datapavan montre ce que les applis de votre téléphone peuvent atteindre et combien elles envoient, et vous guide vers les réglages d'Android qui le limitent. Tout fonctionne sur le téléphone, sans root ni compte, et l'appli n'a même pas le droit d'utiliser Internet.
+Datapavan montre ce que les applis de votre téléphone peuvent atteindre et combien elles envoient, et vous guide vers les paramètres d'Android qui le limitent. Tout fonctionne sur le téléphone, sans root ni compte, et l'appli n'a même pas le droit d'utiliser Internet.
 
 <b>Ce qu'il vérifie</b>
 <ul>
@@ -7,7 +7,7 @@ Datapavan montre ce que les applis de votre téléphone peuvent atteindre et com
 <li>Les applis VPN, proxy et de contournement, comparées aux clés de signature officielles de leurs développeurs, pour qu'une copie modifiée se voie.</li>
 <li>Le téléphone lui-même : débogage USB et sans fil, autorités de certification ajoutées, correctif de sécurité, état du démarrage d'après l'attestation matérielle.</li>
 <li>Les données reçues et envoyées par chaque appli en données mobiles et en Wi-Fi, et les applis non ouvertes depuis des mois qui gardent des accès.</li>
-<li>Une activité à la fois : relever les compteurs, utiliser une appli, relever encore, et voir combien elle a envoyé pendant que vous regardiez ou faisiez défiler.</li>
+<li>Une activité à la fois : relever les compteurs, utiliser une appli, relever encore, et voir combien elle a envoyé pendant que vous ne faisiez que regarder ou faire défiler.</li>
 </ul>
 
 <b>Ce qu'il vous aide à faire</b>
@@ -16,4 +16,4 @@ Un plan court, en commençant par ce qui retire le plus de risque. Chaque étape
 <b>Ce qu'il ne fait jamais</b>
 Pas de mesure d'audience, pas de rapports de plantage, pas de serveurs, pas de comptes. Datapavan lui-même n'envoie rien. Datapavan authentique n'a pas accès à Internet et ne le demande jamais : une copie qui le demande n'est pas authentique.
 
-Langues : anglais, français, allemand et persan.
+Langues : anglais, français, allemand, espagnol, russe, chinois, arabe et persan.

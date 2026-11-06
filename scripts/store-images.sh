@@ -4,9 +4,10 @@
 # language (the summary, the apps, an app's page, the plan, network use and the phone), taken by
 # scripts/screenshots.sh in SystemUI's demo mode, so the status bar shows nothing of the device, and
 # with usage access allowed for the run, so that network use has numbers. Both are undone afterwards.
+# Three of the screens also go to site/static/images, for the website.
 #
-# Only for emulators: it changes device settings. Run scripts/smoke.sh first, which installs the debug
-# APK, on a phone-sized screen (the pixel_7 profile, or `wm size 1080x2400; wm density 420`).
+# Only for emulators: it changes device settings. Run scripts/store-scene.sh and then scripts/smoke.sh
+# first, which set the stage and install the debug APK.
 #
 #   scripts/store-images.sh            icon and screenshots
 #   scripts/store-images.sh icon       the icon only, no device needed
@@ -68,9 +69,11 @@ adb shell appops set "$PKG" GET_USAGE_STATS allow
 
 "$ROOT/scripts/screenshots.sh" "$WORK/shots"
 
-for pair in en:en-US fr:fr-FR de:de-DE fa:fa-IR; do
-    locale=${pair%%:*}
-    dir="$META/${pair#*:}/images/phoneScreenshots"
+SITE="$ROOT/site/static/images"
+mkdir -p "$SITE"
+for triple in en:en-US:en fr:fr-FR:fr de:de-DE:de fa:fa-IR:fa es:es-ES:es ru:ru-RU:ru zh-CN:zh-CN:zh ar:ar:ar; do
+    IFS=: read -r locale store site <<<"$triple"
+    dir="$META/$store/images/phoneScreenshots"
     rm -rf "$dir"
     mkdir -p "$dir"
     n=1
@@ -78,6 +81,10 @@ for pair in en:en-US fr:fr-FR de:de-DE fa:fa-IR; do
         magick "$WORK/shots/$screen-$locale-light.png" -depth 8 -strip "$dir/$n.png"
         n=$((n + 1))
     done
-    echo "ok: ${pair#*:}"
+    # Three of them for the website, small enough to load over a slow connection.
+    for screen in summary app plan; do
+        magick "$WORK/shots/$screen-$locale-light.png" -resize 540x -strip -define webp:method=6 -quality 82 "$SITE/$site-$screen.webp"
+    done
+    echo "ok: $store"
 done
 echo "== store images in ${META#"$ROOT/"}"

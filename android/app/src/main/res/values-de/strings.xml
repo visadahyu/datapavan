@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="tagline">Sehen Sie, was Ihre Apps erreichen und wie viel sie senden. Dann begrenzen Sie es.</string>
+    <string name="tagline">Sehen Sie, worauf Ihre Apps zugreifen können und wie viel sie senden. Dann begrenzen Sie es.</string>
     <string name="engine_version">Kern-Engine %1$s</string>
 
     <!-- M2 audit -->
@@ -37,9 +37,9 @@
     <string name="special_device_admin">Geräteadministrator</string>
     <string name="special_overlay">Über anderen Apps einblenden</string>
     <string name="special_usage_access">Zugriff auf Nutzungsdaten</string>
-    <string name="special_install_unknown_apps">Unbekannte Apps installieren</string>
+    <string name="special_install_unknown_apps">Installieren unbekannter Apps</string>
     <string name="special_all_files">Zugriff auf alle Dateien</string>
-    <string name="special_battery_exempt">Akku ohne Einschränkung</string>
+    <string name="special_battery_exempt">Uneingeschränkte Akkunutzung</string>
     <string name="action_developer_settings">Entwickleroptionen öffnen</string>
     <string name="action_security_settings">Sicherheitseinstellungen öffnen</string>
     <string name="finding_vpn_remote_control_title">VPN-App, die das Telefon steuern kann</string>
@@ -53,7 +53,7 @@
     <string name="finding_sensors_title">Mikrofon, Kamera oder Standort</string>
     <string name="finding_sensors_body">Diese App darf Mikrofon, Kamera oder Ihren Standort nutzen, während Sie sie verwenden. Prüfen Sie, ob sie das wirklich braucht.</string>
     <string name="finding_trackers_title">Enthält Tracker</string>
-    <string name="finding_trackers_body">Diese App enthält Code von Firmen, die Daten über ihre Nutzung sammeln, für Werbung, Statistik oder Profilbildung. Jede ist auf dieser Seite aufgeführt.</string>
+    <string name="finding_trackers_body">Diese App enthält Code von Firmen, die Daten über ihre Nutzung sammeln, für Werbung, Analyse oder Profilbildung. Jede ist auf dieser Seite aufgeführt.</string>
     <string name="trackers_heading">Tracker</string>
     <string name="trackers_scanning">Suche nach Trackern: App %1$d von %2$d</string>
     <string name="trackers_summary">Apps mit Trackern: %1$d</string>
@@ -84,7 +84,7 @@
     <string name="usage_access_title">Netzwerknutzung und Apps, die Sie nicht öffnen</string>
     <string name="usage_access_body">Mit dem Zugriff auf Nutzungsdaten kann Datapavan zeigen, wie viele Daten jede App verbraucht hat und welche Apps Sie lange nicht geöffnet haben. Derselbe Zugriff würde einer App auch zeigen, welche Apps Sie wann geöffnet haben. Datapavan liest nur Summen und das Datum der letzten Nutzung jeder App, speichert nichts davon und kann es nirgendwohin senden, weil es keinen Netzwerkzugang hat. Alles andere funktioniert auch ohne diesen Zugriff.</string>
     <string name="usage_access_button">Zugriff auf Nutzungsdaten erlauben</string>
-    <string name="usage_access_restricted">Android graut diesen Schalter bei Apps aus, die aus einer Datei installiert wurden. In diesem Fall öffnen Sie die App-Info dieser App, erlauben im Menü (⋮) eingeschränkte Einstellungen und versuchen es erneut.</string>
+    <string name="usage_access_restricted">Android graut diesen Schalter bei Apps aus, die aus einer Datei installiert wurden. In diesem Fall öffnen Sie die App-Info dieser App, wählen im Menü (⋮) „Eingeschränkte Einstellungen zulassen“ und versuchen es erneut.</string>
     <string name="usage_access_app_info">App-Info öffnen</string>
     <string name="usage_reading">Die Aufzeichnungen von Android werden gelesen …</string>
     <string name="usage_missing">Netzwerknutzung und letzte Öffnung brauchen den Zugriff auf Nutzungsdaten, den Sie in der Übersicht erlauben können.</string>
@@ -146,14 +146,14 @@
     <string name="check_mobile">Mobile Daten: %1$s empfangen, %2$s gesendet</string>
     <string name="check_wifi">WLAN: %1$s empfangen, %2$s gesendet</string>
     <string name="check_per_minute">Pro Minute: %1$s empfangen, %2$s gesendet</string>
-    <string name="check_background">Davon hat Android %1$s als Hintergrund gezählt.</string>
+    <string name="check_background">Davon hat Android %1$s als Hintergrundnutzung gezählt.</string>
     <string name="check_share">Gesendet: %1$s des Empfangenen.</string>
     <string name="check_share_basis" formatted="false">Solange eine App nur empfängt, machen ihre Bestätigungen und Anfragen etwa 0,5 bis 3 % dessen aus, was sie empfängt.</string>
     <string name="check_nc_proxy">Gesendete Bytes werden hier nicht ins Verhältnis zu empfangenen gesetzt, weil diese App den Datenverkehr anderer Apps weiterleiten kann.</string>
     <string name="check_nc_shared">Gesendete Bytes werden hier nicht ins Verhältnis zu empfangenen gesetzt, weil Android diese App zusammen mit anderen zählt.</string>
     <string name="check_nc_system">Gesendete Bytes werden hier nicht ins Verhältnis zu empfangenen gesetzt, weil dieser Teil des Systems für andere Apps arbeitet.</string>
     <string name="check_nc_little">Gesendete Bytes werden hier nicht ins Verhältnis zu empfangenen gesetzt, weil die App weniger als 1 MB empfangen hat.</string>
-    <string name="check_nc_kernel">Gesendete Bytes werden hier nicht ins Verhältnis zu empfangenen gesetzt, weil der Kernel dieses Telefons gesendete Pakete auf eine ältere Weise zählt, die sie um Dutzende Prozent höher ausfallen lassen kann.</string>
+    <string name="check_nc_kernel">Gesendete Bytes werden hier nicht ins Verhältnis zu empfangenen gesetzt. Dieses Telefon zählt gesendete Daten auf eine ältere Weise, wodurch die Zahl viel zu hoch ausfallen kann.</string>
     <string name="check_behind">Die Zählung von Android war auch nach drei Ablesungen nicht aktuell; es kann Datenverkehr fehlen.</string>
     <string name="check_first_behind">Die Zählung von Android war zu Beginn nicht aktuell; das Ergebnis kann Datenverkehr von vor der Messung enthalten.</string>
     <string name="check_not_checked_vpn">Ein VPN ist aktiv, daher konnte Datapavan nicht prüfen, ob die Zählung von Android aktuell war.</string>
@@ -190,24 +190,24 @@
     <string name="finding_leaked_key_from_store_title">Mit einem geleakten Systemschlüssel signiert</string>
     <string name="finding_leaked_key_from_store_body">Diese App ist mit dem Systemschlüssel eines Herstellers signiert, der 2022 geleakt wurde. Sie stammt aus Google Play, dem Store des Herstellers oder der Einrichtung des Telefons, und der Hersteller signiert seine Apps weiterhin mit diesem Schlüssel. Das allein ist also kein Zeichen für Schadsoftware.</string>
     <string name="finding_system_key_public_title">Der Systemschlüssel dieses Telefons ist öffentlich</string>
-    <string name="finding_system_key_public_body">Das System dieses Telefons ist mit einem der öffentlichen Testschlüssel von Android signiert. Jeder kann eine App damit signieren, und das Telefon behandelt sie dann als Teil des Systems. Zertifizierte Telefone werden nie so ausgeliefert, eigene Systeme manchmal.</string>
+    <string name="finding_system_key_public_body">Das System dieses Telefons ist mit einem der öffentlichen Testschlüssel von Android signiert. Jeder kann eine App damit signieren, und das Telefon behandelt sie dann als Teil des Systems. Zertifizierte Telefone werden nie so ausgeliefert, angepasste Systeme manchmal.</string>
     <string name="finding_system_key_leaked_title">Der Systemschlüssel dieses Telefons ist geleakt</string>
     <string name="finding_system_key_leaked_body">Das System dieses Telefons ist mit einem Schlüssel signiert, der auf Googles Liste von 2022 mit Herstellerschlüsseln steht, die Schadsoftware signiert haben, und der Hersteller verwendet ihn weiterhin. Eine damit signierte App kann sich als Update einer vorinstallierten App ausgeben und deren Rechte behalten; bis Android 14 kann sie auch als System laufen. Installieren Sie Apps nur aus Google Play und dem Store des Telefonherstellers.</string>
     <string name="finding_system_key_development_title">System für die Entwicklung gebaut</string>
-    <string name="finding_system_key_development_body">Dieses System ist mit Googles Entwicklungsschlüssel signiert, wie Emulatoren und Testgeräte, nicht mit dem Release-Schlüssel eines Herstellers.</string>
+    <string name="finding_system_key_development_body">Dieses System ist mit Googles Schlüssel für Testgeräte und Emulatoren signiert, nicht mit dem Schlüssel eines Herstellers für verkaufte Telefone.</string>
     <string name="system_key_heading">Systemschlüssel</string>
     <string name="system_key_platform">Mit dem Systemschlüssel dieses Telefons signiert: Der Hersteller hat diese App mit Systemrechten ausgeliefert oder freigegeben. Sie kann trotzdem Code einer anderen Firma enthalten. Das Telefon nennt als Hersteller %1$s.</string>
     <string name="system_key_runs_as_system">Läuft als Systembenutzer, mit den Rechten von Android selbst.</string>
     <string name="origin_system_image">Teil des Systemabbilds des Telefons.</string>
     <string name="origin_updated_system_app">Eine System-App, die nach der Herstellung des Telefons aktualisiert wurde.</string>
     <string name="origin_installed_later">Nach der Herstellung des Telefons installiert.</string>
-    <string name="key_kind_aosp_test">Ihr Schlüssel ist einer der öffentlichen Testschlüssel von Android.</string>
-    <string name="key_kind_google_dev">Ihr Schlüssel ist einer der Entwicklungsschlüssel von Google.</string>
-    <string name="key_kind_leaked">Ihr Schlüssel steht auf Googles Liste geleakter Systemschlüssel von 2022.</string>
+    <string name="key_kind_aosp_test">Der Schlüssel ist einer der öffentlichen Testschlüssel von Android.</string>
+    <string name="key_kind_google_dev">Der Schlüssel ist einer der Entwicklungsschlüssel von Google.</string>
+    <string name="key_kind_leaked">Der Schlüssel steht auf Googles Liste geleakter Systemschlüssel von 2022.</string>
     <string name="dataset_system_keys">Systemschlüssel, denen nicht vertraut werden kann</string>
     <string name="tracker_with_categories">%1$s (%2$s)</string>
     <string name="tracker_category_advertisement">Werbung</string>
-    <string name="tracker_category_analytics">Statistik</string>
+    <string name="tracker_category_analytics">Analyse</string>
     <string name="tracker_category_crash_reporting">Absturzberichte</string>
     <string name="tracker_category_identification">Identifizierung</string>
     <string name="tracker_category_location">Standort</string>
@@ -216,12 +216,12 @@
     <string name="finding_unknown_source_body">Diese App wurde nicht aus einem bekannten App-Store installiert. Das ist in Ordnung, wenn Sie sie selbst von der offiziellen Website installiert haben; eine veränderte Kopie kann Spionagesoftware enthalten.</string>
     <string name="finding_user_ca_title">Zusätzliche Zertifizierungsstelle installiert</string>
     <string name="finding_user_ca_body">Auf diesem Telefon wurde eine Zertifizierungsstelle hinzugefügt. Wer sie kontrolliert, kann verschlüsselten Datenverkehr lesen, zum Beispiel ein VPN-Anbieter oder ein Arbeitgeber. Entfernen Sie sie, wenn Sie nicht genau wissen, warum sie da ist.</string>
-    <string name="finding_wireless_debugging_title">Drahtloses Debugging ist an</string>
+    <string name="finding_wireless_debugging_title">Debugging über WLAN ist an</string>
     <string name="finding_wireless_debugging_body">Geräte im selben Netzwerk können versuchen, sich mit diesem Telefon zu verbinden und es zu steuern. Schalten Sie es aus, wenn Sie keine Apps entwickeln.</string>
     <string name="finding_bootloader_unlocked_title">Bootloader entsperrt</string>
     <string name="finding_bootloader_unlocked_body">Der Bootloader ist entsperrt, das System kann also ohne Ihr Wissen ersetzt werden. Wenn Sie ihn nicht selbst entsperrt haben, nehmen Sie diese Warnung ernst.</string>
     <string name="finding_boot_not_verified_title">System nicht verifiziert</string>
-    <string name="finding_boot_not_verified_body">Der Bootloader meldet, dass das Betriebssystem nicht mit dem Schlüssel des Herstellers verifiziert werden konnte.</string>
+    <string name="finding_boot_not_verified_body">Beim Start konnte das Telefon nicht bestätigen, dass sein System das des Herstellers ist.</string>
     <string name="finding_usb_debugging_title">USB-Debugging ist an</string>
     <string name="finding_usb_debugging_body">Ein per Kabel verbundener Computer kann Apps installieren und Daten lesen, sobald Sie seinen Schlüssel akzeptieren. Schalten Sie es aus, wenn Sie es nicht brauchen.</string>
     <string name="finding_old_patch_title">Sicherheitsupdates sind alt</string>
@@ -239,8 +239,8 @@
     <string name="strict_title">Mikrofon, Kamera und Standort</string>
     <string name="strict_entry_body">Apps, die sie nutzen können: %1$d. Prüfen Sie jede und erlauben Sie nur, was sie braucht.</string>
     <string name="strict_start">Prüfung starten</string>
-    <string name="strict_intro">Android lässt keine App die Berechtigungen einer anderen ändern, deshalb führt Sie diese Prüfung hindurch. Öffnen Sie für jede App ihre Berechtigungen und wählen Sie „Jedes Mal fragen“ oder verweigern Sie den Zugriff. Geprüfte Apps sind abgehakt; erhält eine wieder Zugriff, erscheint sie erneut hier.</string>
-    <string name="strict_dashboard">Datenschutzübersicht öffnen</string>
+    <string name="strict_intro">Android lässt keine App die Berechtigungen einer anderen ändern, deshalb führt Sie diese Prüfung durch die Berechtigungen. Öffnen Sie für jede App ihre Berechtigungen und wählen Sie „Jedes Mal fragen“ oder „Nicht zulassen“. Geprüfte Apps sind abgehakt; erhält eine wieder Zugriff, erscheint sie erneut hier.</string>
+    <string name="strict_dashboard">Privatsphäredashboard öffnen</string>
     <string name="strict_progress">Geprüft: %1$d / %2$d</string>
     <string name="strict_show_system">System-Apps einbeziehen</string>
     <string name="strict_hide_system">System-Apps ausblenden</string>
@@ -259,7 +259,7 @@
     <string name="detail_state_enabled">Aktiviert</string>
     <string name="detail_state_disabled">Deaktiviert</string>
     <string name="guide_title">So schalten Sie sie aus</string>
-    <string name="guide_steps">1. Öffnen Sie die App in den Systemeinstellungen.\n2. Tippen Sie auf Deaktivieren.\n3. Ist die Schaltfläche ausgegraut, verhindert das der Hersteller. Von einem Computer mit USB-Debugging aus können Sie die App stattdessen für Ihren Nutzer entfernen; das lässt sich rückgängig machen.</string>
+    <string name="guide_steps">1. Öffnen Sie die App in den Systemeinstellungen.\n2. Tippen Sie auf Deaktivieren oder Ausschalten.\n3. Ist die Schaltfläche ausgegraut, verhindert das der Hersteller. Von einem Computer mit USB-Debugging aus können Sie die App stattdessen für Ihren Nutzer entfernen; das lässt sich rückgängig machen.</string>
     <string name="guide_remove">Für Ihren Nutzer entfernen:</string>
     <string name="guide_restore">Wiederherstellen:</string>
 
@@ -322,11 +322,11 @@
     <string name="sdk_capability_app_screen">einem Support-Mitarbeiter den Bildschirm dieser App zeigen</string>
     <string name="sdk_capability_whole_screen">einem Support-Mitarbeiter Ihren gesamten Bildschirm zeigen, auch andere Apps und die Tastatur</string>
     <string name="sdk_capability_app_control">den Mitarbeiter in dieser App tippen und schreiben lassen, wenn Sie es erlauben</string>
-    <string name="sdk_capability_device_control">den Mitarbeiter Ihr Telefon steuern lassen, auch andere Apps und Einstellungen, sobald sein Bedienungshilfen-Dienst eingeschaltet ist</string>
+    <string name="sdk_capability_device_control">den Mitarbeiter Ihr Telefon steuern lassen, auch andere Apps und Einstellungen, sobald die Bedienungshilfe dieser App eingeschaltet ist</string>
     <string name="sdk_capability_files">Dateien übertragen</string>
-    <string name="sdk_accessibility_on">Der Bedienungshilfen-Dienst dieser App ist eingeschaltet, daher kann dieses Werkzeug auch andere Apps steuern.</string>
+    <string name="sdk_accessibility_on">Die Bedienungshilfe dieser App ist eingeschaltet, daher kann dieses Werkzeug auch andere Apps steuern.</string>
     <string name="sdk_remote_support_not_checked">Dass der Code vorhanden ist, zeigt nicht, dass sich jemand mit Ihrem Telefon verbunden hat.</string>
-    <string name="sdk_screen_recording">Er kann aufzeichnen, was Sie in dieser App sehen und antippen, und es an %1$s senden, damit der Hersteller der App es abspielen kann. Er zeichnet nur diese App auf, keine anderen.</string>
+    <string name="sdk_screen_recording">Das SDK kann aufzeichnen, was Sie in dieser App sehen und antippen, und es an %1$s senden, damit der Hersteller der App es abspielen kann. Es zeichnet nur diese App auf, keine anderen.</string>
     <string name="sdk_screen_recording_live">Der Hersteller der App kann eine Sitzung auch live verfolgen.</string>
     <string name="sdk_screen_recording_not_checked">Datapavan kann nicht feststellen, ob die Aufzeichnung aktiv ist.</string>
     <string name="sdk_evidence">Am %1$s im SDK erkannt, das %2$s veröffentlicht.</string>
@@ -348,9 +348,9 @@
     <string name="plan_no_usage">Ohne Zugriff auf Nutzungsdaten kann der Plan nicht erkennen, welche Apps lange nicht geöffnet wurden.</string>
     <string name="plan_level">Stufe</string>
     <string name="plan_level_light">Leicht</string>
-    <string name="plan_level_light_body">Kontrolle über das Telefon, und Apps, die seit 90 Tagen nicht geöffnet wurden und noch einen Sensor, einen besonderen Zugriff oder die VPN-Berechtigung haben.</string>
+    <string name="plan_level_light_body">Kontrolle über das Telefon, und Apps, die seit 90 Tagen nicht geöffnet wurden und noch einen Sensor, einen speziellen Zugriff oder die VPN-Berechtigung haben.</string>
     <string name="plan_level_medium">Mittel</string>
-    <string name="plan_level_medium_body">Außerdem Apps, die Apps installieren können, Traffic-Sharing, USB-Debugging und die übrigen Zugriffe von Apps, die seit 90 Tagen nicht geöffnet wurden.</string>
+    <string name="plan_level_medium_body">Außerdem Apps, die Apps installieren können, das Teilen der Verbindung, USB-Debugging und die übrigen Zugriffe von Apps, die seit 90 Tagen nicht geöffnet wurden.</string>
     <string name="plan_level_strict">Streng</string>
     <string name="plan_level_strict_body">Außerdem vorinstallierte Apps, die Datapavan auf diesem Telefon nicht getestet hat.</string>
     <string name="plan_session_title">Diese Sitzung</string>
@@ -358,15 +358,15 @@
     <string name="plan_empty">Auf dieser Stufe gibt es nichts zu tun.</string>
     <string name="plan_start">Starten</string>
     <string name="plan_left_alone_title">Unangetastet</string>
-    <string name="plan_left_alone_body">Der Plan rührt diese Apps nie an, weil das Telefon sie braucht. Ihre Befunde bleiben auf ihren Seiten.</string>
+    <string name="plan_left_alone_body">Der Plan rührt diese Apps nie an, weil das Telefon sie braucht. Die Befunde bleiben auf ihren Seiten.</string>
     <string name="plan_left_alone_line">%1$s: %2$s</string>
     <string name="plan_card_progress">%1$d von %2$d</string>
-    <string name="plan_holds">Sie hat: %1$s</string>
+    <string name="plan_holds">Die App hat: %1$s</string>
     <string name="plan_also">Außerdem: %1$s</string>
-    <string name="plan_tracker_note">Ihr Code enthält Tracker für Werbung, Analyse oder Profilbildung.</string>
+    <string name="plan_tracker_note">Der Code der App enthält Tracker für Werbung, Analyse oder Profilbildung.</string>
     <string name="plan_reading">Lese, was sie hat…</string>
-    <string name="plan_care_control">Falls jemand anderes diese App installiert haben könnte, um Sie zu überwachen, kann eine Änderung diese Person warnen. Wenn Sie das beunruhigt, sprechen Sie zuerst mit einer Vertrauensperson oder einer Beratungsstelle für Menschen, die Gewalt erleben.</string>
-    <string name="plan_care_untested">Datapavan hat das auf Ihrem Telefon nicht getestet. Eine vorinstallierte App auszuschalten kann andere Teile des Telefons stören. Android entscheidet auf der Seite der App, ob sie sich ausschalten lässt, und dort können Sie sie wieder einschalten.</string>
+    <string name="plan_care_control">Falls jemand anderes diese App installiert haben könnte, um Sie zu überwachen, kann eine Änderung diese Person darauf aufmerksam machen. Wenn Sie das beunruhigt, sprechen Sie zuerst mit einer Vertrauensperson oder einer Beratungsstelle für Menschen, die Gewalt erleben.</string>
+    <string name="plan_care_untested">Datapavan hat das auf Ihrem Telefon nicht getestet. Eine vorinstallierte App auszuschalten kann dazu führen, dass andere Teile des Telefons nicht mehr funktionieren. Android entscheidet auf der Seite der App, ob sie sich ausschalten lässt, und dort können Sie sie wieder einschalten.</string>
     <string name="plan_care_continue">Verstanden, weiter</string>
     <string name="plan_uninstall_note">Deinstallieren löscht die Daten der App, und Datapavan kann sie nicht zurückholen.</string>
     <string name="plan_device_admins_note">Apps zur Geräteverwaltung stehen in den Sicherheitseinstellungen; manche Telefone führen sie unter weiteren Sicherheitseinstellungen.</string>
@@ -383,45 +383,45 @@
     <string name="plan_summary_journal">Alles steht im Protokoll, wo Sie es rückgängig machen können.</string>
     <string name="plan_done">Fertig</string>
 
-    <string name="plan_wireless_title">Drahtloses Debugging ist an</string>
+    <string name="plan_wireless_title">Debugging über WLAN ist an</string>
     <string name="plan_wireless_body">Ein Computer im selben Netz kann das Telefon nach dem Koppeln steuern. Schalten Sie es in den Entwickleroptionen aus, wenn Sie es gerade nicht nutzen.</string>
     <string name="plan_authority_title">Eine Zertifizierungsstelle, die Sie installiert haben</string>
-    <string name="plan_authority_body">Wer ihren Schlüssel hat, kann die verschlüsselten Verbindungen von Apps lesen, die ihr vertrauen. Entfernen Sie sie unter „Verschlüsselung und Anmeldedaten“, wenn Ihre Arbeit oder Schule sie nicht braucht.</string>
+    <string name="plan_authority_body">Wer ihren Schlüssel hat, kann die verschlüsselten Verbindungen von Apps lesen, die ihr vertrauen. Entfernen Sie sie unter „Verschlüsselung &amp; Anmeldedaten“, wenn Ihre Arbeit oder Schule sie nicht braucht.</string>
     <string name="plan_usb_title">USB-Debugging ist an</string>
     <string name="plan_usb_body">Ein per Kabel verbundener Computer kann das Telefon steuern, sobald Sie es erlauben. Schalten Sie es in den Entwickleroptionen aus, wenn Sie es gerade nicht nutzen.</string>
     <string name="plan_control_title">%1$s kann den Bildschirm lesen oder für Sie handeln</string>
     <string name="plan_control_body">Mit diesem Zugriff kann eine App lesen, was auf dem Bildschirm oder in Benachrichtigungen steht, oder auf dem Telefon handeln. Schalten Sie ihn aus, wenn Sie ihn nicht brauchen.</string>
     <string name="plan_copy_title">%1$s weicht von der offiziellen App ab</string>
-    <string name="plan_copy_body">Ihre Signatur passt nicht zu der des Entwicklers. Wenn Sie diese Kopie nicht bewusst gewählt haben, deinstallieren Sie sie auf ihrer Seite und installieren Sie sie aus einer Quelle neu, der Sie vertrauen.</string>
+    <string name="plan_copy_body">Die Signatur stimmt nicht mit der offiziellen des Entwicklers überein. Wenn Sie diese Kopie nicht bewusst gewählt haben, deinstallieren Sie sie auf ihrer Seite und installieren Sie sie aus einer Quelle neu, der Sie vertrauen.</string>
     <string name="plan_installs_title">%1$s kann Apps installieren</string>
-    <string name="plan_installs_body">Sie kann andere Apps ohne einen Store installieren. Schalten Sie das aus, wenn Sie Apps nicht auf diesem Weg installieren.</string>
-    <string name="plan_sharing_title">%1$s enthält ein Traffic-Sharing-SDK</string>
-    <string name="plan_sharing_body">Solche SDKs können andere Datenverkehr über Ihre Verbindung leiten lassen; vorhandener Code wird nicht unbedingt genutzt. Wenn Sie die App nicht brauchen, deinstallieren Sie sie auf ihrer Seite.</string>
+    <string name="plan_installs_body">Die App darf andere Apps ohne einen Store installieren. Schalten Sie das aus, wenn Sie Apps nicht auf diesem Weg installieren.</string>
+    <string name="plan_sharing_title">%1$s enthält ein SDK zum Teilen der Verbindung</string>
+    <string name="plan_sharing_body">Solche SDKs können es anderen erlauben, Datenverkehr über Ihre Verbindung zu leiten; vorhandener Code wird nicht unbedingt genutzt. Wenn Sie die App nicht brauchen, deinstallieren Sie sie auf ihrer Seite.</string>
     <plurals name="plan_not_opened_title">
         <item quantity="one">%1$s, seit %2$d Tag nicht geöffnet</item>
         <item quantity="other">%1$s, seit %2$d Tagen nicht geöffnet</item>
     </plurals>
-    <string name="plan_not_opened_sensitive_body">Sie hat noch die Zugriffe unten. Entfernen Sie, was Sie nicht brauchen, oder lassen Sie Android Berechtigungen entfernen, solange die App nicht genutzt wird.</string>
-    <string name="plan_not_opened_other_body">Sie hat noch eine Berechtigung oder hat im Hintergrund Daten genutzt. Entfernen Sie, was Sie nicht brauchen, oder deinstallieren Sie die App auf ihrer Seite.</string>
+    <string name="plan_not_opened_sensitive_body">Die App hat noch die Zugriffe unten. Entfernen Sie, was Sie nicht brauchen, oder lassen Sie Android Berechtigungen entfernen, solange die App nicht genutzt wird.</string>
+    <string name="plan_not_opened_other_body">Die App hat noch eine Berechtigung oder hat im Hintergrund Daten genutzt. Entfernen Sie, was Sie nicht brauchen, oder deinstallieren Sie die App auf ihrer Seite.</string>
     <string name="plan_preinstalled_title">%1$s war auf dem Telefon vorinstalliert</string>
     <string name="plan_preinstalled_body">Wenn Sie sie nicht nutzen, lässt Android Sie sie vielleicht auf ihrer Seite ausschalten.</string>
 
-    <string name="plan_short_wireless">Drahtloses Debugging</string>
+    <string name="plan_short_wireless">Debugging über WLAN</string>
     <string name="plan_short_authority">Zertifizierungsstelle</string>
     <string name="plan_short_usb">USB-Debugging</string>
     <string name="plan_short_control">Liest den Bildschirm oder handelt für Sie</string>
     <string name="plan_short_copy">Weicht von der offiziellen App ab</string>
     <string name="plan_short_installs">Kann Apps installieren</string>
-    <string name="plan_short_sharing">Traffic-Sharing-SDK</string>
+    <string name="plan_short_sharing">SDK zum Teilen der Verbindung</string>
     <string name="plan_short_not_opened">Seit 90 Tagen nicht geöffnet</string>
     <string name="plan_short_preinstalled">Vorinstalliert</string>
 
     <string name="screen_app_info">Seite der App</string>
-    <string name="screen_unused">Einstellung für ungenutzte Apps</string>
+    <string name="screen_unused">Einstellungen für App bei Nichtnutzung</string>
     <string name="screen_accessibility">Bedienungshilfen</string>
-    <string name="screen_notification_listener">Zugriff auf Benachrichtigungen</string>
+    <string name="screen_notification_listener">Benachrichtigungszugriff</string>
     <string name="screen_device_admins">Sicherheitseinstellungen</string>
-    <string name="screen_install_unknown">Unbekannte Apps installieren</string>
+    <string name="screen_install_unknown">Installieren unbekannter Apps</string>
     <string name="screen_overlay">Über anderen Apps einblenden</string>
     <string name="screen_usage_access">Zugriff auf Nutzungsdaten</string>
     <string name="screen_all_files">Zugriff auf alle Dateien</string>
@@ -436,7 +436,7 @@
     <string name="change_special">%1$s entfernt</string>
     <string name="change_vpn">VPN-Berechtigung entfernt</string>
     <string name="change_usb">USB-Debugging aus</string>
-    <string name="change_wireless">drahtloses Debugging aus</string>
+    <string name="change_wireless">Debugging über WLAN aus</string>
     <string name="change_authority">eine Zertifizierungsstelle entfernt</string>
     <string name="undo_enable">die App selbst</string>
     <string name="undo_authority">die Zertifizierungsstelle, falls Sie ihre Datei noch haben</string>
@@ -462,7 +462,7 @@
     <string name="floor_device_lock">Gerätesperre und Diebstahlschutz</string>
 
     <string name="journal_title">Protokoll</string>
-    <string name="journal_intro">Was Sie über den Plan geändert haben, nur auf diesem Telefon gespeichert. Um eine Änderung rückgängig zu machen, öffnen Sie denselben Bildschirm und schalten Sie sie wieder ein.</string>
+    <string name="journal_intro">Was Sie über den Plan geändert haben, wird nur auf diesem Telefon gespeichert. Um eine Änderung rückgängig zu machen, öffnen Sie denselben Bildschirm und schalten Sie sie wieder ein.</string>
     <string name="journal_empty">Noch nichts.</string>
     <string name="journal_session">Sitzung</string>
     <string name="journal_session_line">%1$s, Stufe %2$s</string>
@@ -544,13 +544,13 @@
     <string name="detail_group_signature">Signatur und Schlüssel</string>
     <string name="section_open">offen</string>
     <string name="section_closed">geschlossen</string>
-    <string name="plain_title">Kurz gesagt</string>
+    <string name="plain_title">Einfach gesagt</string>
     <string name="plain_reach_title">Worauf sie zugreifen kann</string>
-    <string name="plain_reach_none">Kein Sensor, kein besonderer Zugriff und keine VPN-Berechtigung.</string>
+    <string name="plain_reach_none">Kein Sensor, kein spezieller Zugriff und keine VPN-Berechtigung.</string>
     <string name="plain_trackers_title">Tracker in ihrem Code</string>
     <string name="plain_trackers_scanning">Wird noch geprüft.</string>
     <string name="plain_trackers_none">Kein bekannter Tracker gefunden.</string>
-    <string name="plain_trackers_unreadable">Ihr Code konnte nicht gelesen werden.</string>
+    <string name="plain_trackers_unreadable">Der Code konnte nicht gelesen werden.</string>
     <string name="purpose_advertising">Werbung</string>
     <string name="purpose_analytics">Analyse</string>
     <string name="purpose_profiling">Profilbildung</string>

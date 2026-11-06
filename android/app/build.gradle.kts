@@ -56,10 +56,10 @@ android {
         generateLocaleConfig = true
         // Ship only the languages we translate. Without this, library translations for ~85
         // languages are bundled and the UI would mix languages on unsupported locales.
-        localeFilters += listOf("en", "fr", "de", "fa")
+        localeFilters += listOf("en", "fr", "de", "fa", "ru", "zh-rCN", "es", "ar")
     }
 
-    // The language can be chosen in the app (ADR 0027), so every install carries all four, also
+    // The language can be chosen in the app (ADR 0027), so every install carries all of them, also
     // from an app bundle.
     bundle {
         language {

@@ -58,8 +58,8 @@ class ShortcutsTest {
     /** Google's advice for launchers: a short label of at most 10 characters and a long one of at most 25. */
     @Test
     fun everyLabelExistsInEveryLanguageAndFits() {
-        val languages = res.listFiles { file -> file.isDirectory && file.name.matches(Regex("values(-[a-z]{2})?")) }!!
-        assertEquals(4, languages.size)
+        val languages = res.listFiles { file -> file.isDirectory && file.name.matches(Regex("values(-[a-z]{2}(-r[A-Z]{2})?)?")) }!!
+        assertEquals(8, languages.size)
         languages.forEach { values ->
             val strings = parse(File(values, "strings.xml")).children("string").associate { it.getAttribute("name") to it.textContent.replace("\\", "") }
             shortcuts.forEach { shortcut ->

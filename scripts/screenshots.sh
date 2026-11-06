@@ -55,7 +55,7 @@ adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
 # Every destination, the settings, an app's page and the plan: light in every language and both
 # pseudo-locales, dark in English and Persian.
 for mode in light dark; do
-    if [ "$mode" = dark ]; then locales="en fa"; adb shell cmd uimode night yes >/dev/null; else locales="en fr de fa en-XA ar-XB"; adb shell cmd uimode night no >/dev/null; fi
+    if [ "$mode" = dark ]; then locales="en fa"; adb shell cmd uimode night yes >/dev/null; else locales="en fr de es ru zh-CN ar fa en-XA ar-XB"; adb shell cmd uimode night no >/dev/null; fi
     for locale in $locales; do
         adb shell cmd locale set-app-locales "$PKG" --locales "$locale"
         adb shell am force-stop "$PKG"

@@ -16,4 +16,4 @@ A short plan, the changes that remove the most risk first. Each one opens the ri
 <b>What it never does</b>
 No analytics, no crash reports, no servers, no accounts. Datapavan itself sends nothing anywhere. Genuine Datapavan has no internet access and never asks for it: a copy that asks for it is not genuine.
 
-Languages: English, French, German and Persian.
+Languages: English, French, German, Spanish, Russian, Chinese, Arabic and Persian.

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="tagline">Voyez ce que vos applis atteignent et combien elles envoient. Puis limitez-le.</string>
+    <string name="tagline">Voyez ce que vos applis peuvent atteindre et combien elles envoient. Puis limitez-le.</string>
     <string name="engine_version">Moteur principal %1$s</string>
 
     <!-- M2 audit -->
@@ -35,7 +35,7 @@
     <string name="special_accessibility">Service d\'accessibilité</string>
     <string name="special_notification_listener">Lit les notifications</string>
     <string name="special_device_admin">Administrateur de l\'appareil</string>
-    <string name="special_overlay">Superposition aux autres applis</string>
+    <string name="special_overlay">Superposition sur d\'autres applis</string>
     <string name="special_usage_access">Accès aux données d\'utilisation</string>
     <string name="special_install_unknown_apps">Installation d\'applis inconnues</string>
     <string name="special_all_files">Accès à tous les fichiers</string>
@@ -50,22 +50,22 @@
     <string name="finding_preinstalled_collector_body">Le fabricant a préinstallé cette appli de %1$s, une entreprise dont le métier est la collecte de données. Elle fonctionne même si vous ne l\'utilisez jamais. Vous pouvez la désactiver dans les paramètres.</string>
     <string name="finding_installs_apps_title">Peut installer d\'autres applis</string>
     <string name="finding_installs_apps_body">Cette appli peut installer d\'autres applis. C\'est ainsi que les logiciels malveillants se propagent. Ne l\'autorisez que pour des boutiques de confiance.</string>
-    <string name="finding_sensors_title">Micro, caméra ou position</string>
-    <string name="finding_sensors_body">Cette appli peut utiliser le micro, la caméra ou votre position pendant que vous l\'utilisez. Vérifiez qu\'elle en a vraiment besoin.</string>
-    <string name="finding_trackers_title">Contient des traqueurs</string>
-    <string name="finding_trackers_body">Cette app contient du code d\'entreprises qui collectent des données sur son utilisation, pour la publicité, les statistiques ou le profilage. Chacune est indiquée sur cette page.</string>
-    <string name="trackers_heading">Traqueurs</string>
-    <string name="trackers_scanning">Recherche de traqueurs : app %1$d sur %2$d</string>
-    <string name="trackers_summary">Apps avec des traqueurs : %1$d</string>
-    <string name="trackers_pending">Recherche de traqueurs en cours…</string>
-    <string name="trackers_none">Aucun traqueur connu trouvé.</string>
-    <string name="trackers_unreadable">Le code de cette app n\'a pas pu être lu ; elle n\'a donc pas été vérifiée.</string>
+    <string name="finding_sensors_title">Micro, appareil photo ou position</string>
+    <string name="finding_sensors_body">Cette appli peut utiliser le micro, l\'appareil photo ou votre position pendant que vous l\'utilisez. Vérifiez qu\'elle en a vraiment besoin.</string>
+    <string name="finding_trackers_title">Contient des traceurs</string>
+    <string name="finding_trackers_body">Cette appli contient du code d\'entreprises qui collectent des données sur son utilisation, pour la publicité, la mesure d\'audience ou le profilage. Chacune est indiquée sur cette page.</string>
+    <string name="trackers_heading">Traceurs</string>
+    <string name="trackers_scanning">Recherche de traceurs : appli %1$d sur %2$d</string>
+    <string name="trackers_summary">Applis avec des traceurs : %1$d</string>
+    <string name="trackers_pending">Recherche de traceurs en cours…</string>
+    <string name="trackers_none">Aucun traceur connu trouvé.</string>
+    <string name="trackers_unreadable">Le code de cette appli n\'a pas pu être lu ; la recherche de traceurs n\'a donc pas été faite.</string>
     <string name="trackers_referenced_heading">Mentionnés, non inclus</string>
-    <string name="trackers_referenced_note">Le code de l\'app fait référence à ces traqueurs sans contenir leur code.</string>
-    <string name="trackers_source">Signatures de traqueurs : base de données de traqueurs d\'εxodus, disponible sous la licence Open Database License (ODbL).</string>
+    <string name="trackers_referenced_note">Le code de l\'appli fait référence à ces traceurs sans contenir leur code.</string>
+    <string name="trackers_source">Signatures de traceurs : base de données de traceurs d\'εxodus, disponible sous la licence Open Database License (ODbL).</string>
     <!-- SDK capabilities that need a system service the phone lacks (ADR 0021). -->
     <string name="needs_heading">A besoin d\'un service absent de ce téléphone</string>
-    <string name="needs_line">%1$s a besoin de %2$s, qui n\'est pas installé ou est désactivé dans ce profil en ce moment (vérifié le %3$s). Une fois installé ou activé, cela fonctionne de nouveau. Le reste du code de cette application et ses traceurs peuvent toujours fonctionner.</string>
+    <string name="needs_line">%1$s a besoin de %2$s. Ce service n\'est pas installé ou est désactivé dans ce profil en ce moment (vérifié le %3$s). Une fois le service installé ou activé, cela fonctionne de nouveau. Le reste du code de cette appli, et ses traceurs, peuvent toujours fonctionner.</string>
     <string name="need_google_ad_id">La lecture de l\'identifiant publicitaire de Google</string>
     <string name="need_fcm_push">La réception de notifications push via Firebase Cloud Messaging</string>
     <string name="need_play_install_referrer">Le référent d\'installation de Google Play</string>
@@ -73,19 +73,19 @@
     <string name="need_hms_push">La réception de notifications push via Huawei Push Kit</string>
     <string name="need_hms_account">La connexion avec un compte Huawei</string>
     <string name="need_hms_oaid">La lecture de l\'identifiant publicitaire de Huawei (OAID)</string>
-    <string name="service_google_play_services">Google Play services</string>
+    <string name="service_google_play_services">Services Google Play</string>
     <string name="service_google_play_store">Google Play Store</string>
     <string name="service_hms_core">HMS Core de Huawei</string>
     <!-- Who runs the services of an app's SDKs (ADR 0020). -->
     <string name="owners_heading">Qui exploite ces services</string>
-    <string name="owner_same_group">Du même groupe d\'entreprises que cette application (%1$s) : %2$s. Le groupe peut combiner ces données avec ce que collectent ses autres applications et services.</string>
+    <string name="owner_same_group">Du même groupe d\'entreprises que cette appli (%1$s) : %2$s. Le groupe peut combiner ces données avec ce que collectent ses autres applis et services.</string>
     <string name="owner_shut_down">Le service derrière %1$s a fermé le %2$s.</string>
     <!-- Network use and apps not opened, from usage access (ADR 0022). -->
     <string name="usage_access_title">Utilisation du réseau et applis que vous n\'ouvrez pas</string>
-    <string name="usage_access_body">Avec l\'accès aux données d\'utilisation, Datapavan peut montrer combien de données chaque appli a utilisé, et quelles applis vous n\'avez pas ouvertes depuis longtemps. Le même accès permettrait aussi à une appli de voir quelles applis vous avez ouvertes, et quand. Datapavan ne lit que des totaux et la date de dernière utilisation de chaque appli, n\'en garde rien et ne peut rien envoyer, car il n\'a pas d\'accès au réseau. Tout le reste fonctionne sans cet accès.</string>
+    <string name="usage_access_body">Avec l\'accès aux données d\'utilisation, Datapavan peut montrer combien de données chaque appli a utilisées, et quelles applis vous n\'avez pas ouvertes depuis longtemps. Le même accès permettrait aussi à une appli de voir quelles applis vous avez ouvertes, et quand. Datapavan ne lit que des totaux et la date de dernière utilisation de chaque appli, n\'en garde rien et ne peut rien envoyer, car il n\'a pas d\'accès au réseau. Tout le reste fonctionne sans cet accès.</string>
     <string name="usage_access_button">Autoriser l\'accès aux données d\'utilisation</string>
-    <string name="usage_access_restricted">Android grise ce bouton pour les applis installées à partir d\'un fichier. Dans ce cas, ouvrez les infos de cette appli, autorisez les paramètres restreints dans son menu (⋮), puis réessayez.</string>
-    <string name="usage_access_app_info">Ouvrir les infos de l\'appli</string>
+    <string name="usage_access_restricted">Android grise ce bouton pour les applis installées à partir d\'un fichier. Dans ce cas, ouvrez les infos sur cette appli, choisissez « Autoriser les paramètres restreints » dans son menu (⋮), puis réessayez.</string>
+    <string name="usage_access_app_info">Ouvrir les infos sur l\'appli</string>
     <string name="usage_reading">Lecture des relevés d\'Android…</string>
     <string name="usage_missing">L\'utilisation du réseau et la dernière ouverture nécessitent l\'accès aux données d\'utilisation, que vous pouvez autoriser dans la vue d\'ensemble.</string>
     <string name="section_network">Utilisation du réseau</string>
@@ -132,7 +132,7 @@
     <string name="check_activity_open">La laisser ouverte sur un écran</string>
     <string name="check_activity_other">Autre chose</string>
     <string name="check_receive_only_hint">Pendant la mesure, ne publiez rien, n\'envoyez aucun fichier, ne mettez pas de « j\'aime », ne vous connectez pas et restez sur le même réseau.</string>
-    <string name="check_no_launch">Datapavan ne peut pas ouvrir cette appli. Après le début, ouvrez-la vous-même, faites l\'activité, puis revenez.</string>
+    <string name="check_no_launch">Datapavan ne peut pas ouvrir cette appli. Une fois la mesure commencée, ouvrez-la vous-même, faites l\'activité, puis revenez.</string>
     <string name="check_start">Commencer</string>
     <string name="check_preparing">Préparation : %1$s</string>
     <string name="check_gap_note">Android ne met son décompte à jour que si aucune appli ne l\'a demandé dans les 15 dernières secondes ; Datapavan attend donc.</string>
@@ -155,7 +155,7 @@
     <string name="check_nc_shared">Les octets envoyés ne sont pas rapportés aux octets reçus ici, car Android compte cette appli avec d\'autres.</string>
     <string name="check_nc_system">Les octets envoyés ne sont pas rapportés aux octets reçus ici, car cette partie du système travaille pour d\'autres applis.</string>
     <string name="check_nc_little">Les octets envoyés ne sont pas rapportés aux octets reçus ici, car l\'appli a reçu moins de 1 Mo.</string>
-    <string name="check_nc_kernel">Les octets envoyés ne sont pas rapportés aux octets reçus ici, car le noyau de ce téléphone compte les paquets envoyés d\'une manière plus ancienne, qui peut les augmenter de plusieurs dizaines de pour cent.</string>
+    <string name="check_nc_kernel">Les octets envoyés ne sont pas comparés aux octets reçus ici. Ce téléphone compte les données envoyées d\'une manière plus ancienne, ce qui peut rendre le chiffre beaucoup trop élevé.</string>
     <string name="check_behind">Le décompte d\'Android n\'était toujours pas à jour après trois lectures : une partie du trafic peut manquer.</string>
     <string name="check_first_behind">Le décompte d\'Android n\'était pas à jour au début : le résultat peut inclure du trafic antérieur à la mesure.</string>
     <string name="check_not_checked_vpn">Un VPN est actif : Datapavan n\'a pas pu vérifier que le décompte d\'Android était à jour.</string>
@@ -195,14 +195,14 @@
     <string name="finding_leaked_key_from_store_title">Signée avec une clé système divulguée</string>
     <string name="finding_leaked_key_from_store_body">Cette appli est signée avec la clé système d\'un fabricant, divulguée en 2022. Elle vient de Google Play, de la boutique du fabricant ou de la configuration du téléphone, et le fabricant signe toujours ses applis avec cette clé : cela seul n\'indique donc pas un logiciel malveillant.</string>
     <string name="finding_system_key_public_title">La clé système de ce téléphone est publique</string>
-    <string name="finding_system_key_public_body">Le système de ce téléphone est signé avec l\'une des clés de test publiques d\'Android. N\'importe qui peut signer une appli avec, et le téléphone la traite alors comme une partie du système. Les téléphones certifiés ne sont jamais livrés ainsi ; certains systèmes modifiés le sont.</string>
+    <string name="finding_system_key_public_body">Le système de ce téléphone est signé avec l\'une des clés de test publiques d\'Android. N\'importe qui peut signer une appli avec cette clé, et le téléphone traite alors cette appli comme une partie du système. Les téléphones certifiés ne sont jamais livrés ainsi ; certains systèmes personnalisés le sont.</string>
     <string name="finding_system_key_leaked_title">La clé système de ce téléphone a été divulguée</string>
-    <string name="finding_system_key_leaked_body">Le système de ce téléphone est signé avec une clé de la liste publiée par Google en 2022 des clés de fabricants qui ont servi à signer des logiciels malveillants, et le fabricant l\'utilise toujours. Une appli signée avec peut se faire passer pour une mise à jour d\'une appli préinstallée et garder ses droits ; jusqu\'à Android 14, elle peut aussi tourner comme le système. N\'installez des applis que depuis Google Play et la boutique du fabricant du téléphone.</string>
-    <string name="finding_system_key_development_title">Système construit pour le développement</string>
-    <string name="finding_system_key_development_body">Ce système est signé avec la clé de développement de Google, comme les émulateurs et les appareils de test, et non avec la clé de publication d\'un fabricant.</string>
+    <string name="finding_system_key_leaked_body">Le système de ce téléphone est signé avec une clé de la liste publiée par Google en 2022 des clés de fabricants qui ont servi à signer des logiciels malveillants, et le fabricant l\'utilise toujours. Une appli signée avec cette clé peut se faire passer pour une mise à jour d\'une appli préinstallée et garder ses droits ; jusqu\'à Android 14, elle peut aussi s\'exécuter comme le système. N\'installez des applis que depuis Google Play et la boutique du fabricant du téléphone.</string>
+    <string name="finding_system_key_development_title">Système conçu pour le développement</string>
+    <string name="finding_system_key_development_body">Ce système est signé avec la clé de Google destinée aux téléphones de test et aux émulateurs, et non avec la clé qu\'un fabricant utilise pour les téléphones vendus.</string>
     <string name="system_key_heading">Clé système</string>
     <string name="system_key_platform">Signée avec la clé système de ce téléphone : son fabricant a livré ou approuvé cette appli avec des droits système. Elle peut tout de même contenir le code d\'une autre entreprise. Le téléphone indique comme fabricant %1$s.</string>
-    <string name="system_key_runs_as_system">Tourne comme l\'utilisateur système, avec les droits d\'Android lui-même.</string>
+    <string name="system_key_runs_as_system">S\'exécute comme utilisateur système, avec les droits d\'Android lui-même.</string>
     <string name="origin_system_image">Fait partie de l\'image système du téléphone.</string>
     <string name="origin_updated_system_app">Une appli système mise à jour après la fabrication du téléphone.</string>
     <string name="origin_installed_later">Installée après la fabrication du téléphone.</string>
@@ -212,12 +212,12 @@
     <string name="dataset_system_keys">Clés de signature système non fiables</string>
     <string name="tracker_with_categories">%1$s (%2$s)</string>
     <string name="tracker_category_advertisement">publicité</string>
-    <string name="tracker_category_analytics">statistiques</string>
+    <string name="tracker_category_analytics">mesure d\'audience</string>
     <string name="tracker_category_crash_reporting">rapports de plantage</string>
     <string name="tracker_category_identification">identification</string>
     <string name="tracker_category_location">localisation</string>
     <string name="tracker_category_profiling">profilage</string>
-    <string name="finding_unknown_source_title">Pas d\'une boutique connue</string>
+    <string name="finding_unknown_source_title">Ne vient pas d\'une boutique connue</string>
     <string name="finding_unknown_source_body">Cette appli n\'a pas été installée depuis une boutique connue. C\'est sans problème si vous l\'avez installée vous-même depuis son site officiel ; une copie modifiée peut contenir un logiciel espion.</string>
     <string name="finding_user_ca_title">Autorité de certification ajoutée</string>
     <string name="finding_user_ca_body">Une autorité de certification a été ajoutée à ce téléphone. Celui qui la contrôle peut lire le trafic chiffré, par exemple un fournisseur de VPN ou un employeur. Supprimez-la, sauf si vous savez exactement pourquoi elle est là.</string>
@@ -226,7 +226,7 @@
     <string name="finding_bootloader_unlocked_title">Bootloader déverrouillé</string>
     <string name="finding_bootloader_unlocked_body">Le bootloader est déverrouillé : le système peut être remplacé à votre insu. Si vous ne l\'avez pas déverrouillé vous-même, prenez cet avertissement au sérieux.</string>
     <string name="finding_boot_not_verified_title">Système non vérifié</string>
-    <string name="finding_boot_not_verified_body">Le bootloader indique que le système d\'exploitation n\'a pas pu être vérifié avec la clé du fabricant.</string>
+    <string name="finding_boot_not_verified_body">Au démarrage, le téléphone n\'a pas pu confirmer que son système est bien celui du fabricant.</string>
     <string name="finding_usb_debugging_title">Débogage USB activé</string>
     <string name="finding_usb_debugging_body">Un ordinateur relié par câble peut installer des applis et lire des données une fois sa clé acceptée. Désactivez-le si vous n\'en avez pas besoin.</string>
     <string name="finding_old_patch_title">Mises à jour de sécurité anciennes</string>
@@ -241,11 +241,11 @@
     <string name="finding_vpn_active_body">Tout le trafic passe actuellement par une appli VPN. Assurez-vous qu\'elle est digne de confiance.</string>
 
     <!-- M2 strict sensor review and disable guide -->
-    <string name="strict_title">Micro, caméra et position</string>
+    <string name="strict_title">Micro, appareil photo et position</string>
     <string name="strict_entry_body">Applis pouvant les utiliser : %1$d. Examinez chacune et n\'autorisez que ce dont elle a besoin.</string>
     <string name="strict_start">Commencer l\'examen</string>
-    <string name="strict_intro">Android ne permet pas à une appli de modifier les autorisations d\'une autre ; cet examen vous guide donc. Pour chaque appli, ouvrez ses autorisations et choisissez de toujours demander, ou refusez l\'accès. Les applis examinées sont cochées ; si l\'une retrouve un accès, elle revient ici.</string>
-    <string name="strict_dashboard">Ouvrir le tableau de bord de confidentialité</string>
+    <string name="strict_intro">Android ne permet pas à une appli de modifier les autorisations d\'une autre ; cet examen vous guide donc. Pour chaque appli, ouvrez ses autorisations et choisissez « Toujours demander », ou refusez l\'accès. Les applis examinées sont cochées ; si l\'une retrouve un accès, elle revient ici.</string>
+    <string name="strict_dashboard">Ouvrir le tableau de bord Confidentialité</string>
     <string name="strict_progress">Examinées : %1$d / %2$d</string>
     <string name="strict_show_system">Inclure les applis système</string>
     <string name="strict_hide_system">Masquer les applis système</string>
@@ -256,11 +256,11 @@
     <string name="strict_mark_reviewed">Marquer comme examinée</string>
     <string name="strict_undo">Annuler</string>
     <string name="sensor_microphone">Micro</string>
-    <string name="sensor_camera">Caméra</string>
+    <string name="sensor_camera">Appareil photo</string>
     <string name="sensor_location">Position</string>
     <string name="wake_title">Mot d\'activation : %1$s</string>
     <string name="wake_body">Cet assistant vocal peut garder le micro ouvert pour attendre son mot d\'activation. Sur un téléphone de test, l\'appli Google l\'a fait en permanence jusqu\'à ce que « Hey Google » soit désactivé. Désactivez-le si vous ne l\'utilisez pas.</string>
-    <string name="wake_open">Ouvrir le réglage du mot d\'activation</string>
+    <string name="wake_open">Ouvrir le paramètre du mot d\'activation</string>
     <string name="detail_state_enabled">Activée</string>
     <string name="detail_state_disabled">Désactivée</string>
     <string name="guide_title">Comment la désactiver</string>
@@ -274,7 +274,7 @@
     <string name="data_pack_bundled">Paquet de données %1$d du %2$s, fourni avec l\'appli.</string>
     <string name="data_pack_imported">Paquet de données %1$d du %2$s, importé.</string>
     <string name="dataset_attestation">Racines et liste de révocation de l\'attestation de clés Google</string>
-    <string name="dataset_exodus">Signatures de traqueurs εxodus</string>
+    <string name="dataset_exodus">Signatures de traceurs εxodus</string>
     <string name="dataset_retrieved">Récupéré le %1$s</string>
     <string name="data_import_title">Données plus récentes</string>
     <string name="data_import_body">Datapavan ne se connecte jamais à Internet. Un paquet de données plus récent peut venir de la page des versions du projet, d\'un miroir ou d\'un autre téléphone. Il doit être signé par le projet : Datapavan vérifie la signature avant de lire quoi que ce soit, et refuse un paquet qui n\'est pas plus récent que celui utilisé.</string>
@@ -290,23 +290,23 @@
     <string name="data_refused_not_newer">Ce paquet n\'est pas plus récent que celui utilisé.</string>
     <string name="data_refused_unreadable">Le fichier n\'a pas pu être lu.</string>
     <string name="data_fingerprint">Empreinte (SHA-256), à comparer avec celle publiée avec le paquet :</string>
-    <string name="data_stale">Ces données datent du %1$s, il y a plus de six mois. Les listes de traqueurs et les données de sécurité changent ; importez un paquet de données plus récent.</string>
+    <string name="data_stale">Ces données datent du %1$s, il y a plus de six mois. Les listes de traceurs et les données de sécurité changent ; importez un paquet de données plus récent.</string>
 
     <!-- M3 official signing certificates (ADR 0018) -->
     <string name="finding_modified_app_title">Copie modifiée</string>
     <string name="finding_modified_app_body">Cette copie n\'est pas signée par son développeur. Quelqu\'un l\'a modifiée, et une appli VPN ou proxy modifiée peut lire tout ce qui passe par elle.</string>
     <string name="finding_signer_unknown_title">Clé de signature encore inconnue</string>
-    <string name="finding_signer_unknown_body">Datapavan connaît cette appli, mais pas encore la clé du canal d\'où vient cette copie. C\'est courant pour les copies des magasins d\'applis et ce n\'est pas un avertissement.</string>
+    <string name="finding_signer_unknown_body">Datapavan connaît cette appli, mais pas encore la clé du canal d\'où vient cette copie. C\'est courant pour les copies des boutiques d\'applis et ce n\'est pas un avertissement.</string>
     <string name="signature_heading">Signature</string>
-    <string name="signature_genuine_developer">Copie authentique de %1$s, signée par son développeur.</string>
-    <string name="signature_genuine_google">Copie authentique de %1$s, signée par Google Play pour son développeur.</string>
-    <string name="signature_genuine_fdroid">Copie authentique de %1$s, compilée et signée par F-Droid.</string>
+    <string name="signature_genuine_developer">Copie authentique de l\'appli %1$s, signée par son développeur.</string>
+    <string name="signature_genuine_google">Copie authentique de l\'appli %1$s, signée par Google Play pour son développeur.</string>
+    <string name="signature_genuine_fdroid">Copie authentique de l\'appli %1$s, compilée et signée par F-Droid.</string>
     <string name="signature_past_key">Elle est signée avec une ancienne clé du développeur, que l\'appli a remplacée depuis.</string>
-    <string name="signature_unknown">Datapavan connaît %1$s, mais pas encore la clé de cette copie. Les copies des magasins d\'applis portent souvent la clé du magasin. Comparez cette empreinte avec celle que publie le développeur :</string>
-    <string name="signature_modified">Cette copie de %1$s n\'est pas signée par son développeur. Quelqu\'un l\'a modifiée, et elle peut voir tout ce qui passe par elle. Supprimez-la et installez %1$s depuis son site ou son magasin officiel.</string>
-    <string name="signature_modified_debug">Cette copie de %1$s porte une clé de débogage, que les versions du développeur n\'utilisent jamais : quelqu\'un d\'autre l\'a recompilée. Supprimez-la et installez %1$s depuis son site ou son magasin officiel.</string>
+    <string name="signature_unknown">Datapavan connaît %1$s, mais pas encore la clé de cette copie. Les copies des boutiques d\'applis portent souvent la clé de la boutique. Comparez cette empreinte avec celle que publie le développeur :</string>
+    <string name="signature_modified">Cette copie de l\'appli %1$s n\'est pas signée par son développeur. Quelqu\'un l\'a modifiée, et elle peut voir tout ce qui passe par elle. Supprimez-la et installez %1$s depuis son site officiel ou sa boutique officielle.</string>
+    <string name="signature_modified_debug">Cette copie de l\'appli %1$s porte une clé de débogage, que les versions du développeur n\'utilisent jamais : quelqu\'un d\'autre l\'a recompilée. Supprimez-la et installez %1$s depuis son site officiel ou sa boutique officielle.</string>
     <string name="signature_disguised_hidden">Signée avec la clé d\'une appli connue. Montrer laquelle</string>
-    <string name="signature_disguised">Une version authentique de %1$s sous un autre nom. Son développeur déguise certaines versions pour protéger les personnes dont le téléphone est fouillé.</string>
+    <string name="signature_disguised">Une version authentique de l\'appli %1$s sous un autre nom. Son développeur déguise certaines versions pour protéger les personnes dont le téléphone est fouillé.</string>
     <string name="dataset_app_signers">Certificats de signature officiels des applis VPN, proxy et de contournement</string>
 
     <!-- M3 traffic-sharing, remote-support and screen-recording SDKs (ADR 0019) -->
@@ -317,17 +317,17 @@
     <string name="finding_screen_recording_title">Enregistre votre utilisation de cette appli</string>
     <string name="finding_screen_recording_body">Cette appli contient du code qui peut enregistrer ce que vous voyez et touchez, afin que son éditeur puisse le rejouer.</string>
     <string name="sdks_heading">Partage de connexion, assistance à distance et enregistrement</string>
-    <string name="sdk_name">%1$s de %2$s</string>
+    <string name="sdk_name">%1$s par %2$s</string>
     <string name="sdk_traffic_sharing">Son éditeur le présente comme un moyen pour les applis de gagner de l\'argent en laissant ses clients faire passer du trafic Internet par les téléphones des utilisateurs. Quand ce code est actif, le trafic d\'autres personnes passe par votre téléphone : les sites le voient comme venant de votre connexion, et il consomme vos données et votre batterie.</string>
     <string name="sdk_traffic_sharing_not_checked">Datapavan a trouvé le code, pas son activité. Il ne peut pas savoir si la fonction est active dans cette appli, ni si vous l\'avez acceptée.</string>
     <string name="sdk_traffic_sharing_vendor">%1$s indique que le code reste inactif tant que l\'utilisateur n\'a pas accepté dans l\'appli, et que l\'appli doit permettre de le désactiver à tout moment.</string>
-    <string name="sdk_settings_label">Dans les réglages de cette appli, cherchez un interrupteur nommé « %1$s ».</string>
+    <string name="sdk_settings_label">Dans les paramètres de cette appli, cherchez un interrupteur nommé « %1$s ».</string>
     <string name="sdk_play_policy">Google Play n\'autorise une appli à faire passer du trafic pour d\'autres que si c\'est sa fonction principale et visible.</string>
     <string name="sdk_remote_support">Un outil d\'assistance à distance. Selon l\'usage qu\'en fait cette appli, il peut :</string>
     <string name="sdk_capability_app_screen">montrer l\'écran de cette appli à un agent d\'assistance</string>
     <string name="sdk_capability_whole_screen">montrer tout votre écran à un agent, y compris les autres applis et le clavier</string>
     <string name="sdk_capability_app_control">laisser l\'agent toucher et saisir dans cette appli, si vous l\'autorisez</string>
-    <string name="sdk_capability_device_control">laisser l\'agent contrôler votre téléphone, y compris les autres applis et les réglages, une fois son service d\'accessibilité activé</string>
+    <string name="sdk_capability_device_control">laisser l\'agent contrôler votre téléphone, y compris les autres applis et les paramètres, une fois son service d\'accessibilité activé</string>
     <string name="sdk_capability_files">transférer des fichiers</string>
     <string name="sdk_accessibility_on">Le service d\'accessibilité de cette appli est activé : cet outil peut donc contrôler d\'autres applis.</string>
     <string name="sdk_remote_support_not_checked">La présence de ce code ne montre pas que quelqu\'un s\'est connecté à votre téléphone.</string>
@@ -337,7 +337,7 @@
     <string name="sdk_evidence">Identifié le %1$s dans le SDK que publie %2$s.</string>
     <string name="dataset_sdks">SDK qui partagent la connexion, assurent l\'assistance à distance ou enregistrent l\'écran</string>
     <string name="dataset_sdk_needs">Fonctions de SDK qui ont besoin d\'un service système, et les certificats de ces services</string>
-    <string name="dataset_owners">Qui exploite les services des SDK, et qui publie quelle application</string>
+    <string name="dataset_owners">Qui exploite les services des SDK, et qui publie quelle appli</string>
     <string name="dataset_remediation">Applis auxquelles le plan ne touche jamais, par fonction</string>
     <!-- The remediation plan and its journal (ADR 0026). -->
     <string name="plan_title">Votre plan</string>
@@ -345,7 +345,7 @@
     <string name="plan_entry_first">D\'abord : %1$s</string>
     <string name="plan_entry_none">Rien à faire à ce niveau pour l\'instant.</string>
     <string name="plan_open">Ouvrir le plan</string>
-    <string name="plan_came_back">Un changement fait avec le plan est revenu, par exemple après une mise à jour. Le journal indique lequel.</string>
+    <string name="plan_came_back">Quelque chose que vous avez changé avec le plan est revenu, par exemple après une mise à jour. Le journal indique quoi.</string>
     <string name="plan_health_question">Vous avez changé certaines choses le %1$s. Tout fonctionne-t-il encore ?</string>
     <string name="plan_health_works">Tout fonctionne</string>
     <string name="plan_health_wrong">Quelque chose ne va pas</string>
@@ -373,7 +373,7 @@
     <string name="plan_care_control">Si quelqu\'un d\'autre a pu installer cette appli pour vous surveiller, la modifier peut l\'alerter. Si cela vous inquiète, parlez-en d\'abord à une personne de confiance ou à un service d\'aide aux personnes victimes de violences.</string>
     <string name="plan_care_untested">Datapavan n\'a pas testé cela sur votre téléphone. Désactiver une appli préinstallée peut empêcher d\'autres parties du téléphone de fonctionner. Android décide sur la page de l\'appli si elle peut être désactivée, et vous pouvez la réactiver au même endroit.</string>
     <string name="plan_care_continue">J\'ai compris, continuer</string>
-    <string name="plan_uninstall_note">Désinstaller supprime les données de l\'appli, et Datapavan ne peut pas la rétablir.</string>
+    <string name="plan_uninstall_note">Désinstaller supprime les données de l\'appli, et Datapavan ne peut pas les récupérer.</string>
     <string name="plan_device_admins_note">Les applis d\'administration de l\'appareil se trouvent dans les paramètres de sécurité ; certains téléphones les placent sous d\'autres paramètres de sécurité.</string>
     <string name="plan_nothing_yet">Rien n\'a encore changé.</string>
     <string name="plan_changed">Changé : %1$s</string>
@@ -397,7 +397,7 @@
     <string name="plan_control_title">%1$s peut lire l\'écran ou agir à votre place</string>
     <string name="plan_control_body">Avec cet accès, une appli peut lire ce qui est à l\'écran ou dans les notifications, ou agir sur le téléphone. Désactivez-le, sauf si vous en avez besoin.</string>
     <string name="plan_copy_title">%1$s diffère de l\'appli officielle</string>
-    <string name="plan_copy_body">Sa signature ne correspond pas à celle du développeur. Si vous n\'avez pas choisi cette copie exprès, désinstallez-la sur sa page et réinstallez-la depuis une source de confiance.</string>
+    <string name="plan_copy_body">Sa signature ne correspond pas à la signature officielle du développeur. Si vous n\'avez pas choisi cette copie exprès, désinstallez-la sur sa page et réinstallez-la depuis une source de confiance.</string>
     <string name="plan_installs_title">%1$s peut installer des applis</string>
     <string name="plan_installs_body">Elle peut installer d\'autres applis sans passer par une boutique. Désactivez cela, sauf si c\'est ainsi que vous installez vos applis.</string>
     <string name="plan_sharing_title">%1$s contient un SDK de partage de trafic</string>
@@ -409,7 +409,7 @@
     </plurals>
     <string name="plan_not_opened_sensitive_body">Elle détient encore les accès ci-dessous. Retirez ce dont vous n\'avez pas besoin, ou laissez Android retirer les autorisations tant que l\'appli n\'est pas utilisée.</string>
     <string name="plan_not_opened_other_body">Elle détient encore une autorisation, ou a utilisé des données en arrière-plan. Retirez ce dont vous n\'avez pas besoin, ou désinstallez l\'appli sur sa page.</string>
-    <string name="plan_preinstalled_title">%1$s est venue avec le téléphone</string>
+    <string name="plan_preinstalled_title">%1$s est fournie avec le téléphone</string>
     <string name="plan_preinstalled_body">Si vous ne l\'utilisez pas, Android vous laissera peut-être la désactiver sur sa page.</string>
 
     <string name="plan_short_wireless">Débogage sans fil</string>
@@ -420,15 +420,15 @@
     <string name="plan_short_installs">Peut installer des applis</string>
     <string name="plan_short_sharing">SDK de partage de trafic</string>
     <string name="plan_short_not_opened">Non ouverte depuis 90 jours</string>
-    <string name="plan_short_preinstalled">Venue avec le téléphone</string>
+    <string name="plan_short_preinstalled">Fournie avec le téléphone</string>
 
     <string name="screen_app_info">Page de l\'appli</string>
-    <string name="screen_unused">Réglage des applis inutilisées</string>
+    <string name="screen_unused">Paramètre des applis inutilisées</string>
     <string name="screen_accessibility">Accessibilité</string>
     <string name="screen_notification_listener">Accès aux notifications</string>
     <string name="screen_device_admins">Paramètres de sécurité</string>
-    <string name="screen_install_unknown">Installer des applis inconnues</string>
-    <string name="screen_overlay">Superposition</string>
+    <string name="screen_install_unknown">Installation d\'applis inconnues</string>
+    <string name="screen_overlay">Superposition sur d\'autres applis</string>
     <string name="screen_usage_access">Accès aux données d\'utilisation</string>
     <string name="screen_all_files">Accès à tous les fichiers</string>
     <string name="screen_battery">Optimisation de la batterie</string>
@@ -438,8 +438,8 @@
 
     <string name="change_uninstalled">désinstallée</string>
     <string name="change_disabled">désactivée</string>
-    <string name="change_permission">%1$s retiré</string>
-    <string name="change_special">%1$s retiré</string>
+    <string name="change_permission">autorisation retirée (%1$s)</string>
+    <string name="change_special">accès spécial retiré (%1$s)</string>
     <string name="change_vpn">autorisation VPN retirée</string>
     <string name="change_usb">débogage USB désactivé</string>
     <string name="change_wireless">débogage sans fil désactivé</string>
@@ -513,17 +513,17 @@
     <string name="privacy_title">Confidentialité</string>
     <string name="privacy_none">Datapavan ne collecte aucune donnée sur vous. Pas de compte, pas de mesure d\'audience, pas de serveur : rien de votre téléphone n\'en sort.</string>
     <string name="privacy_no_network">Cette version n\'a pas le droit d\'utiliser Internet, c\'est donc Android lui-même qui l\'empêche d\'envoyer quoi que ce soit.</string>
-    <string name="privacy_kept">Sur le téléphone, il ne garde que le journal du plan, votre revue des capteurs, les résultats de l\'analyse des traceurs et les paquets de données importés. Ils ne sont jamais sauvegardés ni envoyés, et la désinstallation les supprime.</string>
+    <string name="privacy_kept">Sur le téléphone, il ne garde que le journal du plan, votre examen des capteurs, les résultats de l\'analyse des traceurs et les paquets de données importés. Ils ne sont jamais sauvegardés ni envoyés, et la désinstallation les supprime.</string>
     <string name="privacy_usage">Avec l\'accès aux données d\'utilisation, il ne lit que des totaux et la dernière utilisation de chaque appli, jamais quelle appli vous avez ouverte et quand, et n\'en garde rien.</string>
     <string name="licences_title">Licences open source</string>
-    <string name="licences_intro">Datapavan est fait de ces composants open source. Les données qu\'il contient indiquent leurs licences dans Sources des données.</string>
+    <string name="licences_intro">Datapavan est fait de ces composants open source. Les données qu\'il contient indiquent leurs licences dans Sources de données.</string>
     <string name="about_title">À propos</string>
     <string name="about_version">Version %1$s</string>
     <string name="about_licence">Datapavan est un logiciel libre sous licence Apache 2.0.</string>
     <string name="about_source">Code source : %1$s</string>
-    <string name="summary_phone_look">Certains de ses réglages méritent un coup d\'œil.</string>
+    <string name="summary_phone_look">Certains de ses paramètres méritent un coup d\'œil.</string>
     <string name="summary_scan_done">L\'analyse des traceurs est terminée.</string>
-    <string name="summary_network">Les données utilisées par chaque appli en 30 jours</string>
+    <string name="summary_network">Combien de données chaque appli a utilisées en 30 jours</string>
     <string name="summary_network_no_access">Demande l\'accès aux données d\'utilisation, que vous pouvez y accorder.</string>
     <string name="apps_search">Rechercher une appli</string>
     <string name="apps_filter_count">%1$s %2$d</string>
@@ -542,7 +542,7 @@
     <string name="apps_sort">Tri : %1$s</string>
     <string name="sort_urgency">urgence</string>
     <string name="sort_name">nom</string>
-    <string name="sort_data_use">données</string>
+    <string name="sort_data_use">données utilisées</string>
     <string name="sort_installed">date d\'installation</string>
     <string name="apps_none">Aucune appli ne correspond.</string>
     <string name="detail_group_access">Accès et autorisations</string>
@@ -568,7 +568,7 @@
     <string name="plain_use_no_access">Accordez l\'accès aux données d\'utilisation pour le voir.</string>
     <string name="plain_use_line">%1$s reçus et %2$s envoyés, dont %3$s en arrière-plan.</string>
     <string name="plain_do_title">Ce que vous pouvez faire</string>
-    <string name="plain_app_settings">Paramètres du système</string>
+    <string name="plain_app_settings">Paramètres système</string>
     <plurals name="plain_trackers_count">
         <item quantity="one">%1$d traceur</item>
         <item quantity="many">%1$d traceurs</item>

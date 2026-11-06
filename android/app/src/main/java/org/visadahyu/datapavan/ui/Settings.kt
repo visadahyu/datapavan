@@ -43,7 +43,9 @@ import java.util.Locale
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
 /** The app's languages; [tag] is null for the system's. */
-enum class AppLanguage(val tag: String?) { SYSTEM(null), ENGLISH("en"), FRENCH("fr"), GERMAN("de"), PERSIAN("fa") }
+enum class AppLanguage(val tag: String?) {
+    SYSTEM(null), ENGLISH("en"), FRENCH("fr"), GERMAN("de"), SPANISH("es"), RUSSIAN("ru"), CHINESE("zh-CN"), ARABIC("ar"), PERSIAN("fa")
+}
 
 /**
  * The settings, in app-private storage that backups exclude like all of Datapavan's data. The language
@@ -177,6 +179,10 @@ private fun languageName(language: AppLanguage): String = when (language) {
     AppLanguage.ENGLISH -> isolate("English")
     AppLanguage.FRENCH -> isolate("Français")
     AppLanguage.GERMAN -> isolate("Deutsch")
+    AppLanguage.SPANISH -> isolate("Español")
+    AppLanguage.RUSSIAN -> isolate("Русский")
+    AppLanguage.CHINESE -> isolate("简体中文")
+    AppLanguage.ARABIC -> isolate("العربية")
     AppLanguage.PERSIAN -> isolate("فارسی")
 }
 

@@ -1,0 +1,1 @@
+Primera versión: la revisión de apps y permisos, el análisis de rastreadores y SDK, el uso de la red por app, la comprobación guiada de una actividad y el plan de corrección con su registro. Sin permiso de internet.

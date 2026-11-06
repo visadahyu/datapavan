@@ -1,0 +1,19 @@
+Datapavan muestra a qué pueden acceder las apps de tu teléfono y cuánto envían, y te guía a los ajustes de Android que lo limitan. Todo se ejecuta en el teléfono. No necesita root ni cuenta, y no tiene ningún permiso para usar internet.
+
+<b>Qué comprueba</b>
+<ul>
+<li>Cada app instalada: de dónde vino, sus permisos sensibles y el acceso especial que permite a una app leer la pantalla o actuar por ti.</li>
+<li>Rastreadores y SDK dentro del código de cada app, comparados en el teléfono con la base de datos de εxodus y con la lista propia de Datapavan de SDK que comparten tu conexión, dan asistencia remota o graban la pantalla.</li>
+<li>Apps de VPN, proxy y elusión de bloqueos, comparadas con las claves de firma oficiales de sus desarrolladores, para que se note una copia modificada.</li>
+<li>El propio teléfono: depuración por USB e inalámbrica, autoridades de certificación que instalaste, el parche de seguridad y el estado de arranque según la certificación de claves por hardware.</li>
+<li>Cuántos datos recibió y envió cada app por datos móviles y Wi-Fi, y qué apps llevas meses sin abrir pero aún tienen acceso.</li>
+<li>Una actividad cada vez: lee los recuentos, usa una app, vuelve a leer y mira cuánto envió mientras solo mirabas o te desplazabas.</li>
+</ul>
+
+<b>Qué te ayuda a hacer</b>
+Un plan breve, primero los cambios que más riesgo eliminan. Cada uno abre la pantalla correcta de Android donde tú decides, y un registro en el teléfono guarda lo que cambiaste para que puedas deshacerlo. Deja fuera las apps que reconoce como esenciales.
+
+<b>Lo que nunca hace</b>
+Sin analítica, sin informes de errores, sin servidores, sin cuentas. Datapavan no envía nada a ningún sitio. El Datapavan auténtico no tiene acceso a internet y nunca lo pide: una copia que lo pida no es auténtica.
+
+Idiomas: inglés, francés, alemán, español, ruso, chino, árabe y persa.
