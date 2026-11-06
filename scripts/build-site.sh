@@ -21,6 +21,7 @@ if [ ! -x "$HUGO" ]; then
 fi
 
 # The privacy policy has one source, PRIVACY.md at the repository's root.
+mkdir -p "$ROOT/site/content/privacy"
 {
     printf -- '---\ntitle: Privacy policy\n---\n'
     sed -E '1d; s#\]\(([^):]+)\)#](https://github.com/visadahyu/datapavan/blob/main/\1)#g' "$ROOT/PRIVACY.md"
