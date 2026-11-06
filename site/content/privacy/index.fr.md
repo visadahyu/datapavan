@@ -4,7 +4,7 @@ title: "Politique de confidentialité"
 
 Ceci est une traduction. Le [texte anglais](https://datapavan.org/privacy/index.html) est celui qui s’applique.
 
-- **En vigueur :** 2026-11-03
+- **En vigueur :** 2026-11-07
 - **Responsable :** le mainteneur de Datapavan (mehdashti), jusqu’à ce que la fondation Visadahyu soit établie
 
 **Datapavan ne collecte aucune donnée sur vous.**
@@ -30,6 +30,8 @@ Tout cela reste dans le stockage privé de l’appli et n’est jamais sauvegard
 ## La version 0.1 ne peut pas ouvrir de connexions réseau
 
 La version 0.1 (« Audit ») ne demande pas l’autorisation INTERNET : Android lui-même l’empêche donc d’ouvrir des connexions réseau. La compilation échoue si un composant essaie d’ajouter cette autorisation. Comme toute appli, elle peut quand même transmettre des informations à une autre appli quand vous le lui demandez, par exemple quand vous ouvrez un lien.
+
+Ce que fait Android lui-même échappe à Datapavan. Sur les téléphones dotés des services de Google, Play Protect peut donner à Google des informations sur les applis que vous installez depuis n’importe quelle source, Datapavan compris, et peut lui envoyer une appli inconnue pour vérification. Vous pouvez désactiver une partie de cela dans les paramètres de Play Protect, sur le Play Store.
 
 ## Autorisations et pourquoi elles sont nécessaires
 

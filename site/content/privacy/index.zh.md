@@ -4,7 +4,7 @@ title: "隐私政策"
 
 这是译文。以[英文文本](https://datapavan.org/privacy/index.html)为准。
 
-- **生效日期：** 2026-11-03
+- **生效日期：** 2026-11-07
 - **负责人：** Datapavan 维护者（mehdashti），直至 Visadahyu 基金会成立
 
 **Datapavan 不收集任何关于您的数据。**
@@ -30,6 +30,8 @@ title: "隐私政策"
 ## 0.1 版无法打开网络连接
 
 0.1 版（“Audit”）不请求 INTERNET 权限，所以 Android 本身会阻止它打开网络连接。如果任何组件试图添加该权限，构建就会失败。和任何应用一样，在您要求时，它仍然可以把信息交给另一个应用，例如当您打开链接时。
+
+Android 本身的行为不受 Datapavan 控制。在装有 Google 服务的手机上，Play 保护机制可能会向 Google 提供您从任何来源安装的应用（包括 Datapavan）的信息，也可能把未知应用发送给 Google 检查。您可以在 Play 商店的 Play 保护机制设置中关闭其中一部分。
 
 ## 权限及需要它们的原因
 

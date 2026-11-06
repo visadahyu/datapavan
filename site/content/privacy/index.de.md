@@ -4,7 +4,7 @@ title: "Hinweise zum Datenschutz"
 
 Dies ist eine Übersetzung. Maßgeblich ist der [englische Text](https://datapavan.org/privacy/index.html).
 
-- **Gültig ab:** 2026-11-03
+- **Gültig ab:** 2026-11-07
 - **Verantwortlich:** der Maintainer von Datapavan (mehdashti), bis die Visadahyu-Stiftung gegründet ist
 
 **Datapavan sammelt keine Daten über Sie.**
@@ -39,6 +39,8 @@ Version 0.1 („Audit“) fordert die Berechtigung INTERNET nicht an, daher verh
 Netzwerkverbindungen öffnet. Der Build schlägt fehl, wenn eine Komponente versucht, diese Berechtigung hinzuzufügen.
 Wie jede App kann sie trotzdem Informationen an eine andere App übergeben, wenn Sie sie darum bitten, zum Beispiel
 wenn Sie einen Link öffnen.
+
+Was Android selbst tut, liegt außerhalb der Kontrolle von Datapavan. Auf Telefonen mit Googles Diensten kann Play Protect Google Informationen über die Apps geben, die Sie aus beliebigen Quellen installieren, auch über Datapavan, und ihm eine unbekannte App zur Prüfung senden. Einen Teil davon können Sie in den Einstellungen von Play Protect im Play Store ausschalten.
 
 ## Berechtigungen und wofür sie nötig sind
 

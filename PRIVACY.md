@@ -1,6 +1,6 @@
 # Privacy policy
 
-- **Effective:** 2026-11-03
+- **Effective:** 2026-11-07
 - **Responsible:** the Datapavan maintainer (mehdashti), until the Visadahyu Foundation is established
 
 **Datapavan collects no data about you.**
@@ -33,6 +33,8 @@ your unlocked phone can see it, as they can see the rest of the app.
 Version 0.1 ("Audit") does not request the INTERNET permission, so Android itself prevents it from
 opening network connections. The build fails if any component tries to add that permission. Like any
 app, it can still hand information to another app when you ask it to, for example when you open a link.
+
+What Android itself does is outside Datapavan's control. On phones with Google's services, Play Protect may give Google information about the apps you install from any source, Datapavan included, and may send it an unknown app to check. You can turn part of this off in Play Protect's settings in the Play Store.
 
 ## Permissions and why they are needed
 
