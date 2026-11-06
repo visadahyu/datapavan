@@ -42,6 +42,9 @@ def main():
             if re.match(r"[a-z]+:|//|#", link):
                 continue
             target = (page.parent / link.split("#")[0]).resolve()
+            # A release's signed files are published beside the site, not built with it (site/README.md).
+            if target.is_relative_to(SITE.resolve() / "download"):
+                continue
             if not target.exists():
                 bad.append(f"{name}: broken link {link}")
     home = pages and (SITE / "index.html").read_text(encoding="utf-8")

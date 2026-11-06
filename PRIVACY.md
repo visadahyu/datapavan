@@ -9,7 +9,7 @@
 
 - **No analytics, no crash reporting, no telemetry.** The app contains no third-party SDKs that could send data.
 - **No accounts.** You never sign up and never give us anything.
-- **No servers that receive user data.** The app contacts none. The project's website, datapavan.org, is static and keeps no access log. Downloads come from GitHub and app stores, under their own policies.
+- **No servers that receive user data.** The app contacts none. The project's website, datapavan.org, is static and keeps no access log. It keeps no record of the downloads it serves either. Downloads from GitHub and app stores fall under those services' own policies.
 - **Everything stays on your phone.** All analysis happens on the device. Datapavan's own data lives in app-private storage.
 - **No backups leave the phone.** Android cloud backup and device-to-device transfer are disabled for Datapavan's data.
 - **Uninstalling deletes Datapavan's data.**

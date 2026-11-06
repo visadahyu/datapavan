@@ -2,7 +2,8 @@
 
 datapavan.org is built from here into `../docs/site`, which is what gets deployed. `scripts/build-site.sh` fetches a
 pinned [Hugo](https://gohugo.io) by its hash and builds; with `--check`, which `scripts/check.sh` runs, it fails if the
-two differ. Nothing runs on the server: the output is plain files.
+two differ. Nothing runs on the server: the output is plain files. A release's signed files are not built with the site or
+kept in Git: they go to `download/` on the server beside it, and `hugo.toml` names the current APK, its hash and size.
 
 - `data/text/<lang>.json`: every word of the main page, one file per language, all with the shape of `en.json`.
 - `content/news/`: one file per item and language. Each item says what happened, why it matters and where it was reported.

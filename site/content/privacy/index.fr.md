@@ -13,7 +13,7 @@ Ceci est une traduction. Le [texte anglais](https://datapavan.org/privacy/index.
 
 - **Pas de mesure d’audience, pas de rapports de plantage, pas de télémétrie.** L’appli ne contient aucun SDK tiers qui pourrait envoyer des données.
 - **Pas de comptes.** Vous ne vous inscrivez jamais et ne nous donnez jamais rien.
-- **Pas de serveurs qui reçoivent des données d’utilisateurs.** L’appli n’en contacte aucun. Le site web du projet, datapavan.org, est statique et ne garde aucun journal d’accès. Les téléchargements viennent de GitHub et des boutiques d’applis, soumis à leurs propres politiques.
+- **Pas de serveurs qui reçoivent des données d’utilisateurs.** L’appli n’en contacte aucun. Le site web du projet, datapavan.org, est statique et ne garde aucun journal d’accès. Il ne garde pas non plus de trace des téléchargements qu’il fournit. Les téléchargements depuis GitHub et les boutiques d’applis sont soumis à leurs propres politiques.
 - **Tout reste sur votre téléphone.** Toute l’analyse se fait sur l’appareil. Les données de Datapavan lui-même se trouvent dans le stockage privé de l’appli.
 - **Aucune sauvegarde ne quitte le téléphone.** La sauvegarde Android dans le cloud et le transfert d’appareil à appareil sont désactivés pour les données de Datapavan.
 - **Désinstaller l’appli supprime les données de Datapavan.**

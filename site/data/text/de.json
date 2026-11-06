@@ -16,8 +16,8 @@
  "h1": "Das Etikett, das Ihren Apps fehlte.",
  "tagline": "Sehen Sie, worauf Ihre Apps zugreifen können und wie viel sie senden. Dann begrenzen Sie es.",
  "lead": "Auf Ihrem eigenen Telefon, über die Einstellungen von Android selbst. Kein Internetzugriff, kein Konto, kein Root.",
- "status": "Pre-Alpha. Noch nichts zum Herunterladen.",
- "cta_follow": "Die erste Version verfolgen",
+ "status": "Version 0.1.0: eine Vorabversion, die noch getestet wird.",
+ "cta_get": "Version 0.1.0 herunterladen",
  "cta_how": "So prüfen Sie eine Kopie",
  "nav": [
   [
@@ -390,7 +390,9 @@
   ]
  ],
  "get_title": "Download",
- "get_body": "Noch gibt es nichts herunterzuladen. Mit der ersten Version:",
+ "get_body": "Version 0.1.0 ist eine Vorabversion und wird auf weiteren Telefonen erprobt. F-Droid und IzzyOnDroid folgen nach diesen Tests.",
+ "get_button": "APK herunterladen",
+ "get_install": "Android bittet Sie, die Installation aus Ihrem Browser zu erlauben; das können Sie danach wieder ausschalten. Danach prüft „Ist diese Kopie echt?“ in den Einstellungen der App Ihre Kopie.",
  "channels": [
   [
    "GitHub Releases",

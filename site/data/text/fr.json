@@ -16,8 +16,8 @@
  "h1": "L’étiquette qui manquait à vos applis.",
  "tagline": "Voyez ce que vos applis peuvent atteindre et combien elles envoient. Puis limitez-le.",
  "lead": "Sur votre propre téléphone, avec les paramètres d’Android lui-même. Sans accès à Internet, sans compte, sans root.",
- "status": "Pré-alpha. Rien à télécharger pour l’instant.",
- "cta_follow": "Suivre la première version",
+ "status": "Version 0.1.0 : une préversion, encore en cours de test.",
+ "cta_get": "Télécharger la version 0.1.0",
  "cta_how": "Comment vérifier une copie",
  "nav": [
   [
@@ -390,7 +390,9 @@
   ]
  ],
  "get_title": "L’obtenir",
- "get_body": "Il n’y a encore rien à télécharger. Avec la première version :",
+ "get_body": "La version 0.1.0 est une préversion, en cours d’essai sur d’autres téléphones. F-Droid et IzzyOnDroid viendront après ces essais.",
+ "get_button": "Télécharger l’APK",
+ "get_install": "Android vous demande d’autoriser l’installation depuis votre navigateur ; vous pourrez la désactiver ensuite. Puis, dans les paramètres de l’appli, « Cette copie est-elle authentique ? » vérifie votre copie.",
  "channels": [
   [
    "GitHub Releases",

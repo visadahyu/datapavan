@@ -13,7 +13,7 @@ Dies ist eine Übersetzung. Maßgeblich ist der [englische Text](https://datapav
 
 - **Keine Nutzungsanalyse, keine Absturzberichte, keine Telemetrie.** Die App enthält keine SDKs von Dritten, die Daten senden könnten.
 - **Keine Konten.** Sie registrieren sich nie und geben uns nie etwas.
-- **Keine Server, die Nutzerdaten empfangen.** Die App kontaktiert keine. Die Website des Projekts, datapavan.org, ist statisch und führt kein Zugriffsprotokoll. Downloads kommen von GitHub und aus App-Stores, nach deren eigenen Richtlinien.
+- **Keine Server, die Nutzerdaten empfangen.** Die App kontaktiert keine. Die Website des Projekts, datapavan.org, ist statisch und führt kein Zugriffsprotokoll. Auch über die Downloads, die sie anbietet, führt sie keine Aufzeichnungen. Downloads von GitHub und aus App-Stores unterliegen deren eigenen Richtlinien.
 - **Alles bleibt auf Ihrem Telefon.** Die gesamte Analyse findet auf dem Gerät statt. Die eigenen Daten von Datapavan liegen im privaten Speicher der App.
 - **Keine Sicherungen verlassen das Telefon.** Die Cloud-Sicherung von Android und die Übertragung von Gerät zu Gerät sind für die Daten von Datapavan deaktiviert.
 - **Die Deinstallation löscht die Daten von Datapavan.**
