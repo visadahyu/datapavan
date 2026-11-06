@@ -27,7 +27,7 @@
 <div class="w"><header class="top"><a class="brand" href="{{ $toLang }}index.html"><span>{{ partial "mark.html" . }}</span>{{ with $t.name_native }}<span>{{ . }}</span><span class="lat2 ltr">Datapavan</span>{{ else }}<span class="ltr">Datapavan</span>{{ end }}</a><nav>
 {{- $homeLink := cond $isHome "" "../index.html" -}}
 {{- range $t.nav }}{{ $href := printf "%s%s" $homeLink (index . 0) }}<a href="{{ $href | safeURL }}">{{ index . 1 }}</a>{{ end -}}
-<a href="{{ $toLang }}news/index.html">{{ $t.news_title }}</a></nav>
+<a href="{{ $toLang }}news/index.html">{{ $t.news_title }}</a><a href="{{ site.Params.repo }}" class="ltr">GitHub</a></nav>
 <details class="lng"><summary aria-label="{{ $t.language_label }}">{{ site.Language.Label }}</summary><ul>
 {{- $here := . -}}
 {{- range .Sites -}}
@@ -41,7 +41,7 @@
 </ul></details></header></div>
 {{ block "main" . }}{{ end }}
 <div class="w"><footer><div class="fl"><a href="{{ $toLang }}news/index.html">{{ $t.news_title }}</a>
-<a href="{{ $toSite }}privacy/index.html">{{ $t.foot_privacy }}</a>
+<a href="{{ $toLang }}privacy/index.html">{{ $t.foot_privacy }}</a>
 <a href="{{ site.Params.repo }}/security/advisories/new">{{ $t.foot_report }}</a>
 <a href="{{ site.Params.repo }}/blob/main/SECURITY.md">{{ $t.foot_security }}</a>
 <a href="{{ site.Params.repo }}">{{ $t.foot_source }}</a></div><p>{{ $t.foot_licence }}</p><p>{{ $t.foot_clean }}</p></footer></div>

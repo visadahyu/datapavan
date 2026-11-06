@@ -11,6 +11,8 @@ below is either attested in those inscriptions or explicitly marked as reconstru
 | Old Persian parts | *dāta-* "law" + *pāvan-* "protector" | *visa-* "all" + *dahyu-* "land, nation" |
 | Meaning | "Protector of the law" | "Of all nations" |
 | Pronunciation | DAH-tah-pah-vahn | vee-sah-DAH-hyoo |
+| In Persian | داتاپاوان | ویسَه‌دَهیو |
+| In Arabic | داتاباوان | فيسَدَهْيو |
 
 ---
 
@@ -60,6 +62,8 @@ may leave the phone, in the spirit of data-protection law.
 the **Gate of All Nations** at Persepolis (inscription XPa):
 
 > *duvarθim visadahyum* — "this gateway of all nations"
+
+Persian sources write this phrase دوِرثیم ویسَه دَهیوم, which is why the Persian name has no long vowel after the *s*.
 
 The gate was the formal entrance to the Persepolis terrace, and the reliefs of the city show envoys of
 many lands carrying their gifts. Two features of the gate make the name especially fitting:

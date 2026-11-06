@@ -1,0 +1,283 @@
+<!doctype html>
+
+<html lang="ru" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="Смотрите, к чему у ваших приложений есть доступ и сколько они отправляют. А затем ограничьте это.">
+<title>Политика конфиденциальности · Датапаван · Datapavan</title>
+<link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+<link rel="alternate" hreflang="en" href="https://datapavan.org/privacy/">
+<link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/privacy/">
+<link rel="alternate" hreflang="de" href="https://datapavan.org/de/privacy/">
+<link rel="alternate" hreflang="es" href="https://datapavan.org/es/privacy/">
+<link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/privacy/">
+<link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/privacy/">
+<link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/privacy/">
+<link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/privacy/">
+<style>
+@font-face{font-family:"Sofia Sans Extra Condensed";src:url(../../fonts/sofia-sans-extra-condensed-cyrillic-wght-normal.woff2) format("woff2");font-weight:1 1000;font-display:swap;unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;}
+@font-face{font-family:"Sofia Sans Extra Condensed";src:url(../../fonts/sofia-sans-extra-condensed-latin-wght-normal.woff2) format("woff2");font-weight:1 1000;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-200B,U+200F,U+2012-204E,U+2050-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:"Sofia Sans";src:url(../../fonts/sofia-sans-cyrillic-wght-normal.woff2) format("woff2");font-weight:1 1000;font-display:swap;unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;}
+@font-face{font-family:"Sofia Sans";src:url(../../fonts/sofia-sans-latin-wght-normal.woff2) format("woff2");font-weight:1 1000;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-200B,U+200F,U+2012-204E,U+2050-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+:root{--f-disp:"Sofia Sans Extra Condensed","Arial Narrow",sans-serif;--f-sub:"Sofia Sans",system-ui,sans-serif;--f-body:"Sofia Sans",system-ui,sans-serif;--h1w:800;--h1lh:.95;--h2lh:1;--h1ls:0;--blh:1.55;--notlh:1.45;--big:clamp(5rem,31vw,28rem);--biglh:.95}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+a{color:inherit}
+a:focus-visible,summary:focus-visible{outline:3px solid currentColor;outline-offset:3px}
+h1,h2,h3{text-wrap:balance;hyphens:auto}
+p{text-wrap:pretty}
+table{border-collapse:collapse;width:100%}
+.w{max-width:84rem;margin-inline:auto;padding-left:max(clamp(16px,4vw,48px),env(safe-area-inset-left,0px));padding-right:max(clamp(16px,4vw,48px),env(safe-area-inset-right,0px))}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.fp{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;direction:ltr;text-align:left;unicode-bidi:isolate}
+.ltr{direction:ltr;unicode-bidi:isolate}
+.phones{display:grid;grid-template-columns:repeat(3,minmax(0,19rem));justify-content:space-between;gap:clamp(1rem,3vw,2.5rem);align-items:start}
+.phones img{display:block;width:100%;height:auto;border-radius:1.6rem;border:.42rem solid #101114;box-shadow:0 1.2rem 2.4rem -1.2rem rgb(0 0 0/.45);background:var(--paper)}
+@media (max-width:760px){.phones{grid-template-columns:repeat(3,min(72vw,19rem));justify-content:start;overflow-x:auto;padding-bottom:1rem;scroll-snap-type:x mandatory}.phones img{scroll-snap-align:center}}
+
+/* Layout: one object, a facts label, set against big type; the page repeats its heavy bars as structure. */
+:root{--paper:#FBF7F0;--panel:#FFFDF9;--ink:#1D1B17;--mute:#4A4436;--lab:#1F4E8C;--rule:#CEC5B3;--band:#F3EBDC;--deep:#1F4E8C;--on-deep:#F3EBDC;--tag:#7A5212;--mk-b:#1F4E8C;--mk-f:#F3EBDC}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#14161C;--panel:#1D2026;--ink:#E4E2DC;--mute:#C4C6D0;--lab:#8DB0E6;--rule:#44474F;--band:#1D2026;--deep:#1F4E8C;--on-deep:#F3EBDC;--tag:#D9A54A;--mk-b:#8DB0E6;--mk-f:#14161C;color-scheme:dark}}
+:root[data-theme="dark"]{--paper:#14161C;--panel:#1D2026;--ink:#E4E2DC;--mute:#C4C6D0;--lab:#8DB0E6;--rule:#44474F;--band:#1D2026;--deep:#1F4E8C;--on-deep:#F3EBDC;--tag:#D9A54A;--mk-b:#8DB0E6;--mk-f:#14161C;color-scheme:dark}
+body{background:var(--paper);color:var(--ink);font:400 1.0625rem/var(--blh) var(--f-body);overflow-wrap:break-word}
+.mk-b{fill:var(--mk-b)}.mk-f{fill:var(--mk-f)}
+.top{display:flex;align-items:center;gap:1.5rem;padding-block:1.1rem;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:.6rem;text-decoration:none;font:800 1.3rem/1 var(--f-sub);font-stretch:88%;color:var(--lab)}
+.mark{width:2rem;height:2rem}
+.top nav{display:flex;gap:1.15rem;margin-inline-start:auto;flex-wrap:wrap;font-size:.95rem}
+.top nav a{text-decoration:none}.top nav a:hover{text-decoration:underline}
+.lng{position:relative;font-weight:600}
+.lng summary{cursor:pointer;list-style-position:inside}
+.lng ul{position:absolute;inset-inline-end:0;z-index:5;list-style:none;margin:.4rem 0 0;padding:.35rem 0;background:var(--panel);border:2px solid var(--lab);min-width:9.5rem}
+.lng li a{display:block;padding:.3rem .8rem;text-decoration:none;font-weight:500}
+.lng li a:hover,.lng li a[aria-current]{background:var(--band)}
+.hero{display:grid;grid-template-columns:minmax(0,1.32fr) minmax(19rem,1fr);gap:clamp(1.5rem,5vw,5rem);align-items:start;padding-block:clamp(1.25rem,4vw,3.5rem) 0}
+.status{display:inline-block;font:700 .92rem/1.2 var(--f-sub);border:2px solid var(--lab);color:var(--lab);padding:.4rem .65rem;margin:0 0 1.5rem}
+h1{font:var(--h1w) clamp(3rem,7.7vw,7.25rem)/var(--h1lh) var(--f-disp);font-stretch:74%;margin:0 0 1.5rem;letter-spacing:var(--h1ls);color:var(--lab)}
+.lead{font-size:clamp(1.25rem,2.1vw,1.625rem);line-height:1.4;margin:0 0 .75rem;max-width:34em}
+.lead2{color:var(--mute);margin:0 0 1.75rem;max-width:36em}
+.cta{display:flex;flex-wrap:wrap;gap:.75rem 1.5rem;align-items:center;margin:0}
+.btn{background:var(--lab);color:var(--paper);font:700 1.05rem/1 var(--f-sub);padding:.95rem 1.3rem;text-decoration:none;display:inline-block}
+.btn:hover{background:var(--ink)}
+.label{background:var(--panel);border:3px solid var(--lab);padding:.75rem .9rem .85rem;color:var(--ink);position:relative}
+.l-title{font:900 clamp(2.9rem,5.1vw,4.6rem)/.92 var(--f-disp);font-stretch:62%;color:var(--lab);margin:0;letter-spacing:var(--h1ls)}
+.l-name{display:flex;justify-content:space-between;align-items:baseline;gap:.75rem;flex-wrap:wrap;margin:.5rem 0 .55rem;font-weight:700}
+.l-tag{font:700 .78rem/1 var(--f-sub);text-transform:uppercase;letter-spacing:.06em;color:var(--tag);border:1.5px dashed var(--tag);padding:.25rem .4rem}
+.l-g{border-top:.62rem solid var(--lab)}
+.l-g h3{font:800 1.02rem/1.3 var(--f-sub);margin:.3rem 0;font-stretch:90%}
+.l-g dl{margin:0}
+.l-g dl div{display:flex;justify-content:space-between;gap:1rem;border-top:1px solid var(--lab);padding-block:.2rem}
+.l-g dt{font-weight:400}.l-g dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums;text-align:end}
+.fine{font-size:.82rem;line-height:1.4;margin:.6rem 0 0;border-top:.3rem solid var(--lab);padding-top:.45rem}
+section{padding-block:clamp(3rem,7vw,6rem)}
+h2{font:var(--h1w) clamp(2.1rem,4.6vw,4rem)/var(--h2lh) var(--f-disp);font-stretch:78%;margin:0 0 .75rem;letter-spacing:var(--h1ls);color:var(--lab)}
+.sub{color:var(--mute);margin:0 0 2rem;max-width:40em}
+.rows{border-top:.62rem solid var(--lab);border-bottom:.3rem solid var(--lab)}
+.rw{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,8fr) minmax(0,3fr);gap:.75rem clamp(1rem,3vw,3rem);padding-block:1.1rem;border-top:1px solid var(--lab)}
+.rw:first-child{border-top:0}
+.rw h3{font:800 clamp(1.25rem,2vw,1.6rem)/1.15 var(--f-sub);font-stretch:82%;margin:0}
+.rw p{margin:0}
+.need{font-size:.92rem;color:var(--mute)}.need b{display:block;font:700 .72rem/1.4 var(--f-sub);text-transform:uppercase;letter-spacing:.06em;color:var(--tag)}
+.band{background:var(--band)}
+.note{font-size:.92rem;color:var(--mute);margin:1.25rem 0 0;max-width:46em}
+.off{border:2px dashed var(--lab);padding:clamp(1rem,2.5vw,2rem);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.5rem clamp(1.5rem,4vw,3.5rem)}
+.off h3{font:800 1.2rem/1.2 var(--f-sub);font-stretch:85%;margin:0 0 .3rem}.off p{margin:0}
+.lvls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(1rem,3vw,2.5rem);margin-block:2rem 2.25rem}
+.lvl{display:flex;flex-direction:column;gap:.5rem}
+.bars{display:flex;flex-direction:column;gap:.22rem}.bars i{display:block;height:.62rem;background:var(--lab)}
+.lvl h3{font:800 1.6rem/1.1 var(--f-sub);font-stretch:80%;margin:.3rem 0 0}.lvl p{margin:0}
+.more{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(1rem,3vw,2.5rem);border-top:1px solid var(--lab);padding-top:1.1rem}
+.more h3{font:800 1.1rem/1.3 var(--f-sub);margin:0}.more p{margin:0}
+.own{background:var(--deep);color:var(--on-deep)}
+.own .wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(19rem,30rem);gap:clamp(2rem,5vw,5rem);align-items:start}
+.own h2{color:var(--on-deep)}.own .wrap>div>p{max-width:32em;font-size:1.15rem;margin:0}
+.own .label{--lab:var(--own-ink);background:var(--own-p);color:var(--own-t);border-color:var(--own-p)}
+:root{--own-ink:#1F4E8C;--own-p:#FBF7F0;--own-t:#1D1B17}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--own-ink:#8DB0E6;--own-p:#14161C;--own-t:#E4E2DC}}
+:root[data-theme="dark"]{--own-ink:#8DB0E6;--own-p:#14161C;--own-t:#E4E2DC}
+.own .ltr-t{direction:ltr;unicode-bidi:isolate;text-align:start}
+.cmp{font-size:.98rem;min-width:44rem}
+.cmp th,.cmp td{padding:.65rem .7rem;text-align:start;border-top:1px solid var(--lab);vertical-align:top}
+.cmp thead td,.cmp thead th{border-top:.62rem solid var(--lab);font:800 1rem/1.2 var(--f-sub);vertical-align:bottom}
+.cmp tbody th{font-weight:500}
+.cmp .us{background:var(--band);font-weight:700}
+.faq details{border-top:1px solid var(--lab)}.faq details:last-child{border-bottom:.3rem solid var(--lab)}
+.faq summary{cursor:pointer;font:700 clamp(1.1rem,1.6vw,1.3rem)/1.3 var(--f-sub);padding-block:.85rem}
+.faq p{margin:0 0 1.1rem;max-width:46em}
+.get{display:grid;grid-template-columns:minmax(0,1fr) minmax(19rem,1fr);gap:clamp(2rem,5vw,5rem);align-items:start}
+.chan{list-style:none;padding:0;margin:0}.chan li{border-top:1px solid var(--lab);padding-block:.75rem}
+.chan .cn{display:block;font:800 1.1rem/1.3 var(--f-sub)}
+.fpv{font-size:clamp(1.05rem,2vw,1.4rem);line-height:1.5;margin:.5rem 0 .75rem;font-weight:400;overflow-wrap:anywhere}
+.label p{margin:0 0 .5rem}
+footer{border-top:.62rem solid var(--lab);padding-block:1.5rem 2.5rem}
+.fl{display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;margin-bottom:.75rem}
+footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
+@media (max-width:860px){
+.hero,.own .wrap,.get{grid-template-columns:minmax(0,1fr)}
+.rw{grid-template-columns:minmax(0,1fr)}
+.lvls,.more,.off{grid-template-columns:minmax(0,1fr)}
+.top nav{display:none}.lng{margin-inline-start:auto}
+.lvl h3{margin-top:.15rem}
+}
+
+/* The drawing, in the label's ink on the page's paper. It opens as it scrolls into view where the browser can do that without script. */
+.seen{--bg:var(--paper);--ln:var(--lab);--fg:var(--ink);--f-sans:var(--f-body);--f-mono:ui-monospace,Menlo,Consolas,monospace;display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:clamp(1.5rem,4vw,4rem);align-items:start;margin-top:1.5rem}
+.dwg{display:block;width:100%;height:auto;max-width:44rem}
+.dwg path,.dwg ellipse,.dwg circle,.dwg rect{vector-effect:non-scaling-stroke}
+.dwg .tp{fill:var(--bg);stroke:var(--ln);stroke-width:1.6}
+.dwg .sd{fill:var(--bg);stroke:var(--ln);stroke-width:1}
+.dwg .pd .tp,.dwg .pd .sd{stroke-dasharray:6 5}
+.dwg .ln,.dwg .bar{fill:none;stroke:var(--ln);stroke-width:1.05;stroke-linejoin:round}
+.dwg .bar{fill:var(--bg)}
+.dwg .ds{stroke-dasharray:4 4}
+.dwg .hv{fill:none;stroke:var(--ln);stroke-width:3;stroke-linecap:round}
+.dwg .fl{fill:var(--ln);stroke:var(--ln);stroke-width:1}
+.dwg .ld path{fill:none;stroke:var(--ln);stroke-width:1}
+.dwg .ld circle{fill:var(--bg);stroke:var(--ln);stroke-width:1.3}
+.dwg .ldd path,.dwg .ldd circle{stroke-dasharray:4 3.4}
+.dwg text{fill:var(--fg);font:600 15px var(--f-sans);text-anchor:middle;dominant-baseline:central}
+.dwg .ncb{fill:var(--ln)}.dwg .mkf{fill:var(--bg)}
+.dwg .nct{font:600 18px var(--f-mono);fill:var(--fg)}
+@keyframes open{from{transform:translateY(var(--d))}to{transform:none}}
+@keyframes lead{from{opacity:0}to{opacity:1}}
+@supports (animation-timeline:view()){
+.dwg .pl{animation:open linear both;animation-timeline:view();animation-range:entry 15% cover 48%}
+.dwg .lds,.dwg .nc{animation:lead linear both;animation-timeline:view();animation-range:cover 30% cover 48%}
+}
+.seen-l h3{font:800 1.3rem/1.2 var(--f-sub);font-stretch:85%;color:var(--lab);margin:0 0 .5rem}
+.reads{list-style:none;margin:0 0 1.5rem;padding:0;border-top:.62rem solid var(--lab)}
+.reads li{display:grid;grid-template-columns:1.9rem minmax(0,1fr);gap:.5rem;align-items:center;padding-block:.32rem;border-bottom:1px solid var(--lab)}
+.num{width:1.6rem;height:1.6rem;border:1.4px solid var(--lab);border-radius:50%;display:grid;place-items:center;font-style:normal;font-weight:600;font-size:.84rem;font-variant-numeric:tabular-nums}
+.not{border:2px dashed var(--lab);padding:.9rem 1rem;display:grid;gap:.9rem}
+.not .row{display:grid;grid-template-columns:1.9rem minmax(0,1fr);gap:.5rem}
+.not .num{border-style:dashed}
+.not h4{font:800 1.08rem/1.25 var(--f-sub);font-stretch:88%;margin:.1rem 0 .15rem}
+.not p{margin:0;font-size:.98rem;line-height:var(--notlh)}
+.nc-line{margin:1rem 0 0;font-weight:600}
+.own-q{font:800 clamp(1.5rem,3.4vw,3rem)/1.15 var(--f-disp);font-stretch:80%;margin:0;color:var(--on-deep);letter-spacing:var(--h1ls)}
+.nothing{font:900 var(--big)/var(--biglh) var(--f-disp);font-stretch:62%;margin:0 0 clamp(1.5rem,4vw,3rem);color:var(--on-deep);letter-spacing:-.01em;white-space:nowrap}
+.own{overflow:hidden}
+@media (max-width:860px){.seen{grid-template-columns:minmax(0,1fr)}.dwg text{font-size:27px}.dwg .ld circle{r:23px}.dwg .nct{font-size:30px}}
+.news{list-style:none;margin:1.5rem 0 0;padding:0;border-top:.62rem solid var(--lab)}
+.news li{padding-block:1.15rem;border-bottom:1px solid var(--lab);display:grid;grid-template-columns:minmax(0,3fr) minmax(0,9fr);gap:.4rem clamp(1rem,3vw,2.5rem)}
+.news time{color:var(--mute);font-variant-numeric:tabular-nums;font-size:.95rem}
+.news h3{font:800 clamp(1.2rem,2vw,1.5rem)/1.25 var(--f-sub);font-stretch:88%;margin:0 0 .35rem}
+.news p{margin:0 0 .4rem;max-width:44em}
+.news .src{font-size:.95rem;color:var(--mute);margin:0}
+.prose{max-width:46em}.prose h1{font-size:clamp(2.2rem,5vw,4rem);margin-bottom:1rem}.prose h2{font-size:clamp(1.5rem,2.8vw,2.2rem);margin:2rem 0 .5rem}
+@media (max-width:760px){.news li{grid-template-columns:minmax(0,1fr)}}
+.lat2{font-weight:500;font-size:.8em;opacity:.75}
+.brand{flex-wrap:wrap}
+.names{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(1.5rem,4vw,4rem);margin-top:.5rem}
+.names article{min-width:0}
+.names .mark,.nm{width:3.4rem;height:3.4rem;display:block;margin-bottom:.7rem}
+.names h3{font:var(--h1w) clamp(2rem,4.2vw,3.4rem)/1.1 var(--f-disp);font-stretch:74%;color:var(--lab);margin:0 0 .3rem;letter-spacing:var(--h1ls)}
+.names .nat{font-weight:700;font-size:.62em;color:var(--ink);white-space:nowrap}
+.names p{margin:0 0 .6rem;max-width:40em}
+.names .say{color:var(--mute);font-size:.95rem}
+.names .parts{font-weight:600}.names .parts i{font-style:italic;font-weight:700}
+.names .mean{font:800 1.2rem/1.3 var(--f-sub);margin-bottom:.5rem}
+@media (max-width:860px){.names{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head>
+<body>
+<div class="w"><header class="top"><a class="brand" href="../index.html"><span><svg class="mark" viewBox="0 0 240 240" aria-hidden="true"><rect width="240" height="240" rx="52" class="mk-b"/><path class="mk-f" d="M62.58,72.28 Q63.23,66.59 63.67,61.12 Q64.11,55.65 64.11,49.95 Q64.11,44.04 63.56,37.91 Q63.01,31.79 61.7,25.0 Q70.24,28.72 87.97,32.22 Q105.7,35.73 129.23,38.46 Q152.76,41.2 178.37,43.17 L178.37,48.2 Q136.78,53.68 106.57,59.48 Q76.37,65.28 62.58,72.28 Z M146.63,215.0 Q144.44,189.83 142.47,171.33 Q140.5,152.83 138.64,139.37 Q136.78,125.91 134.59,115.62 Q132.4,105.33 129.67,96.36 Q126.93,87.38 123.21,77.97 Q135.03,79.94 146.85,79.94 Q157.79,79.94 170.49,77.97 Q166.77,88.04 163.92,99.53 Q161.08,111.03 158.89,126.57 Q156.7,142.11 155.06,163.56 Q153.42,185.01 152.32,215.0 L146.63,215.0 Z M92.56,215.0 Q90.38,189.83 88.41,171.33 Q86.44,152.83 84.57,139.37 Q82.71,125.91 80.52,115.62 Q78.34,105.33 75.6,96.36 Q72.86,87.38 69.14,77.97 Q80.96,79.94 92.78,79.94 Q103.73,79.94 116.42,77.97 Q112.7,88.04 109.86,99.53 Q107.01,111.03 104.82,126.57 Q102.63,142.11 100.99,163.56 Q99.35,185.01 98.26,215.0 L92.56,215.0 Z"/></svg></span><span>Датапаван</span><span class="lat2 ltr">Datapavan</span></a><nav><a href="../index.html#checks">Что проверяет</a><a href="../index.html#limits">Чего не видит</a><a href="../index.html#plan">Что можно сделать</a><a href="../index.html#faq">Вопросы</a><a href="../index.html#get">Как получить</a><a href="../index.html#names">Названия</a><a href="../news/index.html">Новости</a><a href="https://github.com/visadahyu/datapavan" class="ltr">GitHub</a></nav>
+<details class="lng"><summary aria-label="Язык">Русский</summary><ul><li><a href="../../privacy/index.html" hreflang="en" lang="en">English</a></li><li><a href="../../fr/privacy/index.html" hreflang="fr" lang="fr">Français</a></li><li><a href="../../de/privacy/index.html" hreflang="de" lang="de">Deutsch</a></li><li><a href="../../es/privacy/index.html" hreflang="es" lang="es">Español</a></li><li><a href="../../ru/privacy/index.html" hreflang="ru" lang="ru" aria-current="true">Русский</a></li><li><a href="../../zh/privacy/index.html" hreflang="zh" lang="zh">简体中文</a></li><li><a href="../../ar/privacy/index.html" hreflang="ar" lang="ar">العربية</a></li><li><a href="../../fa/privacy/index.html" hreflang="fa" lang="fa">فارسی</a></li></ul></details></header></div>
+<main><section><div class="w prose"><h1>Политика конфиденциальности</h1><p>Это перевод. Действует именно <a href="https://datapavan.org/privacy/index.html">текст на английском</a>.</p>
+<ul>
+<li><strong>Действует с:</strong> 2026-11-03</li>
+<li><strong>Ответственный:</strong> сопровождающий Datapavan (mehdashti), пока не будет учреждён фонд Visadahyu</li>
+</ul>
+<p><strong>Datapavan не собирает никаких данных о вас.</strong></p>
+<h2 id="что-это-значит-на-практике">Что это значит на практике</h2>
+<ul>
+<li><strong>Никакой аналитики, отчётов о сбоях и телеметрии.</strong> В приложении нет сторонних SDK, которые могли бы отправлять данные.</li>
+<li><strong>Никаких аккаунтов.</strong> Вы никогда не регистрируетесь и никогда ничего нам не передаёте.</li>
+<li><strong>Никаких серверов, получающих данные пользователей.</strong> Приложение не связывается ни с одним из них. Сайт проекта, datapavan.org, статический и не ведёт журнал доступа. Скачивание идёт с GitHub и из магазинов приложений, по их собственным правилам.</li>
+<li><strong>Всё остаётся на вашем телефоне.</strong> Весь анализ выполняется на устройстве. Собственные данные Datapavan хранятся в закрытом хранилище приложения.</li>
+<li><strong>Резервные копии не покидают телефон.</strong> Облачное резервное копирование Android и перенос с устройства на устройство для данных Datapavan отключены.</li>
+<li><strong>При удалении приложения данные Datapavan удаляются.</strong></li>
+</ul>
+<h2 id="что-datapavan-хранит-на-вашем-телефоне">Что Datapavan хранит на вашем телефоне</h2>
+<ul>
+<li><strong>Журнал плана.</strong> Для каждого изменения, которое вы делаете через план: имя пакета приложения, время,
+открытый экран и то, что было у приложения до и после (его чувствительные разрешения, специальный
+доступ и разрешение VPN, а также было ли оно включено и установлено). Журнал позволяет отменить
+изменение и увидеть, не вернулось ли оно. На экране журнала его можно удалить одним нажатием.</li>
+<li><strong>Строгая проверка датчиков:</strong> какой доступ был у каждого приложения, когда вы его проверяли.</li>
+<li><strong>Ваши настройки:</strong> внешний вид, а до Android 13 ещё и выбранный вами язык.</li>
+<li><strong>Результаты поиска трекеров,</strong> чтобы неизменившиеся приложения не проверялись снова, и <strong>пакеты данных</strong>,
+которые вы импортировали.</li>
+</ul>
+<p>Всё это остаётся в закрытом хранилище приложения, никогда не попадает в резервные копии и не отправляется.
+Любой, кто может открыть Datapavan на вашем разблокированном телефоне, может это увидеть, как и всё
+остальное в приложении.</p>
+<h2 id="версия-01-не-может-открывать-сетевые-соединения">Версия 0.1 не может открывать сетевые соединения</h2>
+<p>Версия 0.1 («Audit») не запрашивает разрешение INTERNET, поэтому сам Android не даёт ей открывать сетевые
+соединения. Сборка завершается ошибкой, если какой-либо компонент пытается добавить это разрешение. Как и
+любое приложение, она всё же может передать информацию другому приложению, когда вы её об этом просите,
+например когда открываете ссылку.</p>
+<h2 id="разрешения-и-зачем-они-нужны">Разрешения и зачем они нужны</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Разрешение</th>
+					<th>Для чего</th>
+					<th>С какой версии</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td>Просмотр установленных приложений</td>
+					<td>Список приложений и их разрешений</td>
+					<td>v0.1</td>
+			</tr>
+			<tr>
+					<td>Доступ к данным об использовании (разрешаете вы в настройках; необязательно)</td>
+					<td>Показывает, сколько данных отправило и получило каждое приложение и какие приложения вы давно не открывали. Datapavan читает только итоговые суммы и дату последнего использования каждого приложения, но никогда не читает, какое приложение вы открывали и когда, и ничего из этого не хранит. Когда вы проверяете одно действие в приложении, он также читает общие счётчики трафика телефона, для которых разрешение не нужно, чтобы узнать, обновлён ли подсчёт Android; эти числа остаются в памяти, пока проверка на экране</td>
+					<td>v0.1</td>
+			</tr>
+			<tr>
+					<td>Состояние сети</td>
+					<td>Определяет, активен ли VPN. Никаких соединений оно не разрешает</td>
+					<td>v0.1</td>
+			</tr>
+			<tr>
+					<td>VPN (разрешаете вы)</td>
+					<td><strong>Локальный</strong> файрвол. Трафик фильтруется на телефоне и никогда не отправляется нам</td>
+					<td>Datapavan Watch, отдельное приложение, с v0.2</td>
+			</tr>
+			<tr>
+					<td>Интернет</td>
+					<td>Пересылка трафика других приложений через локальный файрвол. Сам Datapavan никогда его не запрашивает</td>
+					<td>Datapavan Watch, отдельное приложение, с v0.2</td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="необязательные-обновления-списков-трекеров-запланировано">Необязательные обновления списков трекеров (запланировано)</h2>
+<p>Сам Datapavan только импортирует подписанные файлы списков. Если появятся необязательные загрузки, Datapavan Watch
+будет получать их с публичного зеркала, и только если вы это включите. Как и при любой загрузке:</p>
+<ul>
+<li>оператор зеркала видит ваш IP-адрес и время запроса;</li>
+<li>оператор и любой, кто наблюдает за вашей сетью, могут определить, что на устройстве используется Datapavan.</li>
+</ul>
+<p>Запрос не содержит ничего о вашем телефоне, ваших приложениях или ваших действиях. Обновления подписаны, а более
+старые списки никогда не принимаются вместо более новых. Вы можете отключить обновления и импортировать файлы
+списков вручную. Когда зеркала появятся, в этой политике будет назван каждый оператор и сказано, что он записывает
+в журналы и как долго.</p>
+<h2 id="связь">Связь</h2>
+<p>Вопросы об этой политике: создайте issue на GitHub. Для всего чувствительного используйте закрытую форму для
+сообщений, указанную в <a href="https://github.com/visadahyu/datapavan/blob/main/SECURITY.md">SECURITY.md</a>.</p>
+</div></section></main>
+<div class="w"><footer><div class="fl"><a href="../news/index.html">Новости</a>
+<a href="../privacy/index.html">О конфиденциальности</a>
+<a href="https://github.com/visadahyu/datapavan/security/advisories/new">Сообщить об уязвимости конфиденциально</a>
+<a href="https://github.com/visadahyu/datapavan/blob/main/SECURITY.md">Политика безопасности</a>
+<a href="https://github.com/visadahyu/datapavan">Исходный код</a></div><p>Свободное ПО под лицензией Apache License 2.0.</p><p>Эта страница не использует файлы cookie и ничего не загружает с других серверов.</p></footer></div>
+</body>
+</html>

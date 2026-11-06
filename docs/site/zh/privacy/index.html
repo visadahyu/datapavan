@@ -1,0 +1,266 @@
+<!doctype html>
+
+<html lang="zh" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="查看您的应用能访问什么、发送了多少数据。然后加以限制。">
+<title>隐私政策 · 达塔帕万 · Datapavan</title>
+<link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+<link rel="alternate" hreflang="en" href="https://datapavan.org/privacy/">
+<link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/privacy/">
+<link rel="alternate" hreflang="de" href="https://datapavan.org/de/privacy/">
+<link rel="alternate" hreflang="es" href="https://datapavan.org/es/privacy/">
+<link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/privacy/">
+<link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/privacy/">
+<link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/privacy/">
+<link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/privacy/">
+<style>
+/* No web font for Chinese: one would weigh megabytes, and every phone already has a good one. */
+:root{--f-disp:"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei",system-ui,sans-serif;--f-sub:"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei",system-ui,sans-serif;--f-body:"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei",system-ui,sans-serif;--h1w:800;--h1lh:1.14;--h2lh:1.2;--h1ls:0;--blh:1.8;--notlh:1.7;--big:clamp(6rem,28vw,24rem);--biglh:1.2}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+a{color:inherit}
+a:focus-visible,summary:focus-visible{outline:3px solid currentColor;outline-offset:3px}
+h1,h2,h3{text-wrap:balance;hyphens:auto}
+p{text-wrap:pretty}
+table{border-collapse:collapse;width:100%}
+.w{max-width:84rem;margin-inline:auto;padding-left:max(clamp(16px,4vw,48px),env(safe-area-inset-left,0px));padding-right:max(clamp(16px,4vw,48px),env(safe-area-inset-right,0px))}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.fp{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;direction:ltr;text-align:left;unicode-bidi:isolate}
+.ltr{direction:ltr;unicode-bidi:isolate}
+.phones{display:grid;grid-template-columns:repeat(3,minmax(0,19rem));justify-content:space-between;gap:clamp(1rem,3vw,2.5rem);align-items:start}
+.phones img{display:block;width:100%;height:auto;border-radius:1.6rem;border:.42rem solid #101114;box-shadow:0 1.2rem 2.4rem -1.2rem rgb(0 0 0/.45);background:var(--paper)}
+@media (max-width:760px){.phones{grid-template-columns:repeat(3,min(72vw,19rem));justify-content:start;overflow-x:auto;padding-bottom:1rem;scroll-snap-type:x mandatory}.phones img{scroll-snap-align:center}}
+
+/* Layout: one object, a facts label, set against big type; the page repeats its heavy bars as structure. */
+:root{--paper:#FBF7F0;--panel:#FFFDF9;--ink:#1D1B17;--mute:#4A4436;--lab:#1F4E8C;--rule:#CEC5B3;--band:#F3EBDC;--deep:#1F4E8C;--on-deep:#F3EBDC;--tag:#7A5212;--mk-b:#1F4E8C;--mk-f:#F3EBDC}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#14161C;--panel:#1D2026;--ink:#E4E2DC;--mute:#C4C6D0;--lab:#8DB0E6;--rule:#44474F;--band:#1D2026;--deep:#1F4E8C;--on-deep:#F3EBDC;--tag:#D9A54A;--mk-b:#8DB0E6;--mk-f:#14161C;color-scheme:dark}}
+:root[data-theme="dark"]{--paper:#14161C;--panel:#1D2026;--ink:#E4E2DC;--mute:#C4C6D0;--lab:#8DB0E6;--rule:#44474F;--band:#1D2026;--deep:#1F4E8C;--on-deep:#F3EBDC;--tag:#D9A54A;--mk-b:#8DB0E6;--mk-f:#14161C;color-scheme:dark}
+body{background:var(--paper);color:var(--ink);font:400 1.0625rem/var(--blh) var(--f-body);overflow-wrap:break-word}
+.mk-b{fill:var(--mk-b)}.mk-f{fill:var(--mk-f)}
+.top{display:flex;align-items:center;gap:1.5rem;padding-block:1.1rem;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:.6rem;text-decoration:none;font:800 1.3rem/1 var(--f-sub);font-stretch:88%;color:var(--lab)}
+.mark{width:2rem;height:2rem}
+.top nav{display:flex;gap:1.15rem;margin-inline-start:auto;flex-wrap:wrap;font-size:.95rem}
+.top nav a{text-decoration:none}.top nav a:hover{text-decoration:underline}
+.lng{position:relative;font-weight:600}
+.lng summary{cursor:pointer;list-style-position:inside}
+.lng ul{position:absolute;inset-inline-end:0;z-index:5;list-style:none;margin:.4rem 0 0;padding:.35rem 0;background:var(--panel);border:2px solid var(--lab);min-width:9.5rem}
+.lng li a{display:block;padding:.3rem .8rem;text-decoration:none;font-weight:500}
+.lng li a:hover,.lng li a[aria-current]{background:var(--band)}
+.hero{display:grid;grid-template-columns:minmax(0,1.32fr) minmax(19rem,1fr);gap:clamp(1.5rem,5vw,5rem);align-items:start;padding-block:clamp(1.25rem,4vw,3.5rem) 0}
+.status{display:inline-block;font:700 .92rem/1.2 var(--f-sub);border:2px solid var(--lab);color:var(--lab);padding:.4rem .65rem;margin:0 0 1.5rem}
+h1{font:var(--h1w) clamp(3rem,7.7vw,7.25rem)/var(--h1lh) var(--f-disp);font-stretch:74%;margin:0 0 1.5rem;letter-spacing:var(--h1ls);color:var(--lab)}
+.lead{font-size:clamp(1.25rem,2.1vw,1.625rem);line-height:1.4;margin:0 0 .75rem;max-width:34em}
+.lead2{color:var(--mute);margin:0 0 1.75rem;max-width:36em}
+.cta{display:flex;flex-wrap:wrap;gap:.75rem 1.5rem;align-items:center;margin:0}
+.btn{background:var(--lab);color:var(--paper);font:700 1.05rem/1 var(--f-sub);padding:.95rem 1.3rem;text-decoration:none;display:inline-block}
+.btn:hover{background:var(--ink)}
+.label{background:var(--panel);border:3px solid var(--lab);padding:.75rem .9rem .85rem;color:var(--ink);position:relative}
+.l-title{font:900 clamp(2.9rem,5.1vw,4.6rem)/.92 var(--f-disp);font-stretch:62%;color:var(--lab);margin:0;letter-spacing:var(--h1ls)}
+.l-name{display:flex;justify-content:space-between;align-items:baseline;gap:.75rem;flex-wrap:wrap;margin:.5rem 0 .55rem;font-weight:700}
+.l-tag{font:700 .78rem/1 var(--f-sub);text-transform:uppercase;letter-spacing:.06em;color:var(--tag);border:1.5px dashed var(--tag);padding:.25rem .4rem}
+.l-g{border-top:.62rem solid var(--lab)}
+.l-g h3{font:800 1.02rem/1.3 var(--f-sub);margin:.3rem 0;font-stretch:90%}
+.l-g dl{margin:0}
+.l-g dl div{display:flex;justify-content:space-between;gap:1rem;border-top:1px solid var(--lab);padding-block:.2rem}
+.l-g dt{font-weight:400}.l-g dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums;text-align:end}
+.fine{font-size:.82rem;line-height:1.4;margin:.6rem 0 0;border-top:.3rem solid var(--lab);padding-top:.45rem}
+section{padding-block:clamp(3rem,7vw,6rem)}
+h2{font:var(--h1w) clamp(2.1rem,4.6vw,4rem)/var(--h2lh) var(--f-disp);font-stretch:78%;margin:0 0 .75rem;letter-spacing:var(--h1ls);color:var(--lab)}
+.sub{color:var(--mute);margin:0 0 2rem;max-width:40em}
+.rows{border-top:.62rem solid var(--lab);border-bottom:.3rem solid var(--lab)}
+.rw{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,8fr) minmax(0,3fr);gap:.75rem clamp(1rem,3vw,3rem);padding-block:1.1rem;border-top:1px solid var(--lab)}
+.rw:first-child{border-top:0}
+.rw h3{font:800 clamp(1.25rem,2vw,1.6rem)/1.15 var(--f-sub);font-stretch:82%;margin:0}
+.rw p{margin:0}
+.need{font-size:.92rem;color:var(--mute)}.need b{display:block;font:700 .72rem/1.4 var(--f-sub);text-transform:uppercase;letter-spacing:.06em;color:var(--tag)}
+.band{background:var(--band)}
+.note{font-size:.92rem;color:var(--mute);margin:1.25rem 0 0;max-width:46em}
+.off{border:2px dashed var(--lab);padding:clamp(1rem,2.5vw,2rem);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.5rem clamp(1.5rem,4vw,3.5rem)}
+.off h3{font:800 1.2rem/1.2 var(--f-sub);font-stretch:85%;margin:0 0 .3rem}.off p{margin:0}
+.lvls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(1rem,3vw,2.5rem);margin-block:2rem 2.25rem}
+.lvl{display:flex;flex-direction:column;gap:.5rem}
+.bars{display:flex;flex-direction:column;gap:.22rem}.bars i{display:block;height:.62rem;background:var(--lab)}
+.lvl h3{font:800 1.6rem/1.1 var(--f-sub);font-stretch:80%;margin:.3rem 0 0}.lvl p{margin:0}
+.more{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(1rem,3vw,2.5rem);border-top:1px solid var(--lab);padding-top:1.1rem}
+.more h3{font:800 1.1rem/1.3 var(--f-sub);margin:0}.more p{margin:0}
+.own{background:var(--deep);color:var(--on-deep)}
+.own .wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(19rem,30rem);gap:clamp(2rem,5vw,5rem);align-items:start}
+.own h2{color:var(--on-deep)}.own .wrap>div>p{max-width:32em;font-size:1.15rem;margin:0}
+.own .label{--lab:var(--own-ink);background:var(--own-p);color:var(--own-t);border-color:var(--own-p)}
+:root{--own-ink:#1F4E8C;--own-p:#FBF7F0;--own-t:#1D1B17}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--own-ink:#8DB0E6;--own-p:#14161C;--own-t:#E4E2DC}}
+:root[data-theme="dark"]{--own-ink:#8DB0E6;--own-p:#14161C;--own-t:#E4E2DC}
+.own .ltr-t{direction:ltr;unicode-bidi:isolate;text-align:start}
+.cmp{font-size:.98rem;min-width:44rem}
+.cmp th,.cmp td{padding:.65rem .7rem;text-align:start;border-top:1px solid var(--lab);vertical-align:top}
+.cmp thead td,.cmp thead th{border-top:.62rem solid var(--lab);font:800 1rem/1.2 var(--f-sub);vertical-align:bottom}
+.cmp tbody th{font-weight:500}
+.cmp .us{background:var(--band);font-weight:700}
+.faq details{border-top:1px solid var(--lab)}.faq details:last-child{border-bottom:.3rem solid var(--lab)}
+.faq summary{cursor:pointer;font:700 clamp(1.1rem,1.6vw,1.3rem)/1.3 var(--f-sub);padding-block:.85rem}
+.faq p{margin:0 0 1.1rem;max-width:46em}
+.get{display:grid;grid-template-columns:minmax(0,1fr) minmax(19rem,1fr);gap:clamp(2rem,5vw,5rem);align-items:start}
+.chan{list-style:none;padding:0;margin:0}.chan li{border-top:1px solid var(--lab);padding-block:.75rem}
+.chan .cn{display:block;font:800 1.1rem/1.3 var(--f-sub)}
+.fpv{font-size:clamp(1.05rem,2vw,1.4rem);line-height:1.5;margin:.5rem 0 .75rem;font-weight:400;overflow-wrap:anywhere}
+.label p{margin:0 0 .5rem}
+footer{border-top:.62rem solid var(--lab);padding-block:1.5rem 2.5rem}
+.fl{display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;margin-bottom:.75rem}
+footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
+@media (max-width:860px){
+.hero,.own .wrap,.get{grid-template-columns:minmax(0,1fr)}
+.rw{grid-template-columns:minmax(0,1fr)}
+.lvls,.more,.off{grid-template-columns:minmax(0,1fr)}
+.top nav{display:none}.lng{margin-inline-start:auto}
+.lvl h3{margin-top:.15rem}
+}
+
+/* The drawing, in the label's ink on the page's paper. It opens as it scrolls into view where the browser can do that without script. */
+.seen{--bg:var(--paper);--ln:var(--lab);--fg:var(--ink);--f-sans:var(--f-body);--f-mono:ui-monospace,Menlo,Consolas,monospace;display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:clamp(1.5rem,4vw,4rem);align-items:start;margin-top:1.5rem}
+.dwg{display:block;width:100%;height:auto;max-width:44rem}
+.dwg path,.dwg ellipse,.dwg circle,.dwg rect{vector-effect:non-scaling-stroke}
+.dwg .tp{fill:var(--bg);stroke:var(--ln);stroke-width:1.6}
+.dwg .sd{fill:var(--bg);stroke:var(--ln);stroke-width:1}
+.dwg .pd .tp,.dwg .pd .sd{stroke-dasharray:6 5}
+.dwg .ln,.dwg .bar{fill:none;stroke:var(--ln);stroke-width:1.05;stroke-linejoin:round}
+.dwg .bar{fill:var(--bg)}
+.dwg .ds{stroke-dasharray:4 4}
+.dwg .hv{fill:none;stroke:var(--ln);stroke-width:3;stroke-linecap:round}
+.dwg .fl{fill:var(--ln);stroke:var(--ln);stroke-width:1}
+.dwg .ld path{fill:none;stroke:var(--ln);stroke-width:1}
+.dwg .ld circle{fill:var(--bg);stroke:var(--ln);stroke-width:1.3}
+.dwg .ldd path,.dwg .ldd circle{stroke-dasharray:4 3.4}
+.dwg text{fill:var(--fg);font:600 15px var(--f-sans);text-anchor:middle;dominant-baseline:central}
+.dwg .ncb{fill:var(--ln)}.dwg .mkf{fill:var(--bg)}
+.dwg .nct{font:600 18px var(--f-mono);fill:var(--fg)}
+@keyframes open{from{transform:translateY(var(--d))}to{transform:none}}
+@keyframes lead{from{opacity:0}to{opacity:1}}
+@supports (animation-timeline:view()){
+.dwg .pl{animation:open linear both;animation-timeline:view();animation-range:entry 15% cover 48%}
+.dwg .lds,.dwg .nc{animation:lead linear both;animation-timeline:view();animation-range:cover 30% cover 48%}
+}
+.seen-l h3{font:800 1.3rem/1.2 var(--f-sub);font-stretch:85%;color:var(--lab);margin:0 0 .5rem}
+.reads{list-style:none;margin:0 0 1.5rem;padding:0;border-top:.62rem solid var(--lab)}
+.reads li{display:grid;grid-template-columns:1.9rem minmax(0,1fr);gap:.5rem;align-items:center;padding-block:.32rem;border-bottom:1px solid var(--lab)}
+.num{width:1.6rem;height:1.6rem;border:1.4px solid var(--lab);border-radius:50%;display:grid;place-items:center;font-style:normal;font-weight:600;font-size:.84rem;font-variant-numeric:tabular-nums}
+.not{border:2px dashed var(--lab);padding:.9rem 1rem;display:grid;gap:.9rem}
+.not .row{display:grid;grid-template-columns:1.9rem minmax(0,1fr);gap:.5rem}
+.not .num{border-style:dashed}
+.not h4{font:800 1.08rem/1.25 var(--f-sub);font-stretch:88%;margin:.1rem 0 .15rem}
+.not p{margin:0;font-size:.98rem;line-height:var(--notlh)}
+.nc-line{margin:1rem 0 0;font-weight:600}
+.own-q{font:800 clamp(1.5rem,3.4vw,3rem)/1.15 var(--f-disp);font-stretch:80%;margin:0;color:var(--on-deep);letter-spacing:var(--h1ls)}
+.nothing{font:900 var(--big)/var(--biglh) var(--f-disp);font-stretch:62%;margin:0 0 clamp(1.5rem,4vw,3rem);color:var(--on-deep);letter-spacing:-.01em;white-space:nowrap}
+.own{overflow:hidden}
+@media (max-width:860px){.seen{grid-template-columns:minmax(0,1fr)}.dwg text{font-size:27px}.dwg .ld circle{r:23px}.dwg .nct{font-size:30px}}
+.news{list-style:none;margin:1.5rem 0 0;padding:0;border-top:.62rem solid var(--lab)}
+.news li{padding-block:1.15rem;border-bottom:1px solid var(--lab);display:grid;grid-template-columns:minmax(0,3fr) minmax(0,9fr);gap:.4rem clamp(1rem,3vw,2.5rem)}
+.news time{color:var(--mute);font-variant-numeric:tabular-nums;font-size:.95rem}
+.news h3{font:800 clamp(1.2rem,2vw,1.5rem)/1.25 var(--f-sub);font-stretch:88%;margin:0 0 .35rem}
+.news p{margin:0 0 .4rem;max-width:44em}
+.news .src{font-size:.95rem;color:var(--mute);margin:0}
+.prose{max-width:46em}.prose h1{font-size:clamp(2.2rem,5vw,4rem);margin-bottom:1rem}.prose h2{font-size:clamp(1.5rem,2.8vw,2.2rem);margin:2rem 0 .5rem}
+@media (max-width:760px){.news li{grid-template-columns:minmax(0,1fr)}}
+.lat2{font-weight:500;font-size:.8em;opacity:.75}
+.brand{flex-wrap:wrap}
+.names{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(1.5rem,4vw,4rem);margin-top:.5rem}
+.names article{min-width:0}
+.names .mark,.nm{width:3.4rem;height:3.4rem;display:block;margin-bottom:.7rem}
+.names h3{font:var(--h1w) clamp(2rem,4.2vw,3.4rem)/1.1 var(--f-disp);font-stretch:74%;color:var(--lab);margin:0 0 .3rem;letter-spacing:var(--h1ls)}
+.names .nat{font-weight:700;font-size:.62em;color:var(--ink);white-space:nowrap}
+.names p{margin:0 0 .6rem;max-width:40em}
+.names .say{color:var(--mute);font-size:.95rem}
+.names .parts{font-weight:600}.names .parts i{font-style:italic;font-weight:700}
+.names .mean{font:800 1.2rem/1.3 var(--f-sub);margin-bottom:.5rem}
+@media (max-width:860px){.names{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head>
+<body>
+<div class="w"><header class="top"><a class="brand" href="../index.html"><span><svg class="mark" viewBox="0 0 240 240" aria-hidden="true"><rect width="240" height="240" rx="52" class="mk-b"/><path class="mk-f" d="M62.58,72.28 Q63.23,66.59 63.67,61.12 Q64.11,55.65 64.11,49.95 Q64.11,44.04 63.56,37.91 Q63.01,31.79 61.7,25.0 Q70.24,28.72 87.97,32.22 Q105.7,35.73 129.23,38.46 Q152.76,41.2 178.37,43.17 L178.37,48.2 Q136.78,53.68 106.57,59.48 Q76.37,65.28 62.58,72.28 Z M146.63,215.0 Q144.44,189.83 142.47,171.33 Q140.5,152.83 138.64,139.37 Q136.78,125.91 134.59,115.62 Q132.4,105.33 129.67,96.36 Q126.93,87.38 123.21,77.97 Q135.03,79.94 146.85,79.94 Q157.79,79.94 170.49,77.97 Q166.77,88.04 163.92,99.53 Q161.08,111.03 158.89,126.57 Q156.7,142.11 155.06,163.56 Q153.42,185.01 152.32,215.0 L146.63,215.0 Z M92.56,215.0 Q90.38,189.83 88.41,171.33 Q86.44,152.83 84.57,139.37 Q82.71,125.91 80.52,115.62 Q78.34,105.33 75.6,96.36 Q72.86,87.38 69.14,77.97 Q80.96,79.94 92.78,79.94 Q103.73,79.94 116.42,77.97 Q112.7,88.04 109.86,99.53 Q107.01,111.03 104.82,126.57 Q102.63,142.11 100.99,163.56 Q99.35,185.01 98.26,215.0 L92.56,215.0 Z"/></svg></span><span>达塔帕万</span><span class="lat2 ltr">Datapavan</span></a><nav><a href="../index.html#checks">检查内容</a><a href="../index.html#limits">看不到什么</a><a href="../index.html#plan">您能做什么</a><a href="../index.html#faq">常见问题</a><a href="../index.html#get">获取</a><a href="../index.html#names">名称的由来</a><a href="../news/index.html">新闻</a><a href="https://github.com/visadahyu/datapavan" class="ltr">GitHub</a></nav>
+<details class="lng"><summary aria-label="语言">简体中文</summary><ul><li><a href="../../privacy/index.html" hreflang="en" lang="en">English</a></li><li><a href="../../fr/privacy/index.html" hreflang="fr" lang="fr">Français</a></li><li><a href="../../de/privacy/index.html" hreflang="de" lang="de">Deutsch</a></li><li><a href="../../es/privacy/index.html" hreflang="es" lang="es">Español</a></li><li><a href="../../ru/privacy/index.html" hreflang="ru" lang="ru">Русский</a></li><li><a href="../../zh/privacy/index.html" hreflang="zh" lang="zh" aria-current="true">简体中文</a></li><li><a href="../../ar/privacy/index.html" hreflang="ar" lang="ar">العربية</a></li><li><a href="../../fa/privacy/index.html" hreflang="fa" lang="fa">فارسی</a></li></ul></details></header></div>
+<main><section><div class="w prose"><h1>隐私政策</h1><p>这是译文。以<a href="https://datapavan.org/privacy/index.html">英文文本</a>为准。</p>
+<ul>
+<li><strong>生效日期：</strong> 2026-11-03</li>
+<li><strong>负责人：</strong> Datapavan 维护者（mehdashti），直至 Visadahyu 基金会成立</li>
+</ul>
+<p><strong>Datapavan 不收集任何关于您的数据。</strong></p>
+<h2 id="这在实际中意味着什么">这在实际中意味着什么</h2>
+<ul>
+<li><strong>没有分析功能，没有崩溃报告，没有遥测。</strong> 应用中不含任何可能发送数据的第三方 SDK。</li>
+<li><strong>没有账号。</strong> 您从不需要注册，也从不需要向我们提供任何东西。</li>
+<li><strong>没有接收用户数据的服务器。</strong> 应用不联系任何此类服务器。本项目的网站 datapavan.org 是静态网站，不保留访问日志。下载来自 GitHub 和应用商店，适用它们各自的政策。</li>
+<li><strong>一切都留在您的手机上。</strong> 所有分析都在设备上进行。Datapavan 自己的数据存放在应用私有存储中。</li>
+<li><strong>没有备份会离开手机。</strong> 对 Datapavan 的数据，Android 云备份和设备间传输均已停用。</li>
+<li><strong>卸载会删除 Datapavan 的数据。</strong></li>
+</ul>
+<h2 id="datapavan-在您的手机上保留什么">Datapavan 在您的手机上保留什么</h2>
+<ul>
+<li><strong>修复计划的日志。</strong> 对于您通过计划所做的每项更改，记录：应用的包名、时间、打开的界面，以及应用在更改前后持有的内容（其敏感权限、特殊权限和 VPN 权限，以及它是否已启用和已安装）。它让您可以撤销更改，并查看某项更改是否又恢复了。在日志界面点按一次即可将其删除。</li>
+<li><strong>严格的传感器检查：</strong> 您检查时每个应用拥有哪些访问权限。</li>
+<li><strong>您的设置：</strong> 外观，以及在 Android 13 之前您选择的语言。</li>
+<li><strong>跟踪器扫描的结果，</strong> 这样未更改的应用就不会被再次扫描；以及您导入的<strong>数据包</strong>。</li>
+</ul>
+<p>所有这些内容都留在应用私有存储中，绝不会被备份或发送。任何能在您已解锁的手机上打开 Datapavan 的人都能看到这些内容，就像能看到应用的其他部分一样。</p>
+<h2 id="01-版无法打开网络连接">0.1 版无法打开网络连接</h2>
+<p>0.1 版（“Audit”）不请求 INTERNET 权限，所以 Android 本身会阻止它打开网络连接。如果任何组件试图添加该权限，构建就会失败。和任何应用一样，在您要求时，它仍然可以把信息交给另一个应用，例如当您打开链接时。</p>
+<h2 id="权限及需要它们的原因">权限及需要它们的原因</h2>
+<table>
+	<thead>
+			<tr>
+					<th>权限</th>
+					<th>用途</th>
+					<th>起始版本</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td>查看已安装的应用</td>
+					<td>列出应用及其权限</td>
+					<td>v0.1</td>
+			</tr>
+			<tr>
+					<td>使用情况访问权限（由您在设置中授予；可选）</td>
+					<td>显示每个应用发送和接收了多少数据，以及哪些应用您已很久没有打开。Datapavan 只读取总量和每个应用上次使用的日期，从不读取您在何时打开了哪个应用，也不保留其中任何内容。当您检查某个应用中的一项活动时，它还会读取手机的总流量计数器（无需任何权限），以判断 Android 的统计是否为最新；在检查显示于屏幕期间，这些数字保留在内存中</td>
+					<td>v0.1</td>
+			</tr>
+			<tr>
+					<td>网络状态</td>
+					<td>判断 VPN 是否处于活动状态。此权限不允许任何连接</td>
+					<td>v0.1</td>
+			</tr>
+			<tr>
+					<td>VPN（由您授予）</td>
+					<td><strong>本地</strong>防火墙。流量在手机上过滤，绝不会发送给我们</td>
+					<td>Datapavan Watch（单独的应用），从 v0.2 起</td>
+			</tr>
+			<tr>
+					<td>互联网</td>
+					<td>通过本地防火墙转发其他应用的流量。Datapavan 本身从不请求此权限</td>
+					<td>Datapavan Watch（单独的应用），从 v0.2 起</td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="跟踪器列表的可选更新计划中">跟踪器列表的可选更新（计划中）</h2>
+<p>Datapavan 本身只导入已签名的列表文件。如果今后提供可选下载，Datapavan Watch 会从公共镜像获取，而且只有在您开启此功能时才会这样做。和任何下载一样：</p>
+<ul>
+<li>镜像的运营者能看到您的 IP 地址和请求时间；</li>
+<li>运营者以及任何观察您网络的人，都能判断出该设备在使用 Datapavan。</li>
+</ul>
+<p>请求中不包含任何关于您的手机、您的应用或您的活动的内容。更新都经过签名，绝不会接受用旧列表替换新列表。您可以关闭更新，手动导入列表文件。一旦有了镜像，本政策将列出每个运营者，并说明其记录哪些内容以及保留多久。</p>
+<h2 id="联系方式">联系方式</h2>
+<p>有关本政策的问题：请在 GitHub 上提交 issue。涉及任何敏感内容时，请使用 <a href="https://github.com/visadahyu/datapavan/blob/main/SECURITY.md">SECURITY.md</a> 中提到的私下报告表单。</p>
+</div></section></main>
+<div class="w"><footer><div class="fl"><a href="../news/index.html">新闻</a>
+<a href="../privacy/index.html">隐私说明</a>
+<a href="https://github.com/visadahyu/datapavan/security/advisories/new">私下报告漏洞</a>
+<a href="https://github.com/visadahyu/datapavan/blob/main/SECURITY.md">安全策略</a>
+<a href="https://github.com/visadahyu/datapavan">源代码</a></div><p>依据 Apache License 2.0 发布的自由软件。</p><p>此页面不设置 Cookie，也不从其他服务器加载任何内容。</p></footer></div>
+</body>
+</html>

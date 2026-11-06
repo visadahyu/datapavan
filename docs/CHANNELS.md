@@ -73,7 +73,7 @@ key.
 ## The website
 
 datapavan.org is plain files in `docs/site`, built with a pinned Hugo from `site/` ([site/README.md](../site/README.md)):
-the main page and news in every language, the privacy policy in English so far. `scripts/check.sh` fails if the
+the main page, news and privacy policy in every language. `scripts/check.sh` fails if the
 two differ, if a page has a script or loads anything from another server, or if a first load is over about 200 KB.
 
 ## Store texts and images

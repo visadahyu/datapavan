@@ -1,0 +1,5 @@
+{{- /* Dates in the digits the text around them uses. */ -}}
+{{- $d := .Date | time.Format ":date_long" -}}
+{{- $digits := dict "fa" (slice "۰" "۱" "۲" "۳" "۴" "۵" "۶" "۷" "۸" "۹") "ar" (slice "٠" "١" "٢" "٣" "٤" "٥" "٦" "٧" "٨" "٩") -}}
+{{- with index $digits site.Language.Lang -}}{{- range $i, $x := . -}}{{- $d = replace $d (string $i) $x -}}{{- end -}}{{- end -}}
+{{- $d -}}

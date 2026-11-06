@@ -419,21 +419,21 @@
   "Applis",
   "Votre plan"
  ],
- "shots_note": "Écrans réels d'un émulateur Android, avec une appli de test à nous.",
+ "shots_note": "Écrans réels d’un émulateur Android, avec notre propre appli de test.",
  "news_title": "Actualités",
- "news_lead": "Ce qui s'est passé dans ce domaine, et ce que cela signifie pour une personne qui utilise un téléphone Android.",
- "news_source": "Source :",
- "news_disputed": "Contesté :",
+ "news_lead": "Ce qui s’est passé dans ce domaine, et ce que cela signifie pour une personne qui utilise un téléphone Android.",
+ "news_source": "Source :",
+ "news_disputed": "Contesté :",
  "name_native": "",
  "names_title": "Les noms",
- "names_lead": "Les deux noms viennent du vieux-perse, la langue des rois achéménides, connue presque uniquement par des inscriptions gravées dans la pierre il y a environ 2 500 ans.",
+ "names_lead": "Les deux noms viennent du vieux-perse, la langue des rois achéménides, connue presque uniquement par des inscriptions gravées dans la pierre il y a environ 2 500 ans.",
  "names_more": "Sources et détails",
  "names": [
   [
    "Datapavan",
    "",
-   "da-ta-pa-van",
-   "L'application",
+   "da-ta-pa-vane",
+   "L’application",
    [
     [
      "dāta",
@@ -445,7 +445,7 @@
     ]
    ],
    "Protecteur de la loi",
-   "Dāta signifie la loi, ce qui a été établi. Le mot figure dans l'inscription de Darius Ier à Behistun et survit en persan dans dād, la justice. Pāvan signifie gardien : on le trouve dans xšaçapāvan, « protecteur du royaume », le titre devenu satrape en français. Le composé est de nous, formé de ces deux éléments attestés. Que data désigne les données en anglais est un jeu de mots voulu, sans origine commune."
+   "Dāta signifie la loi, ce qui a été établi. Le mot figure dans l’inscription de Darius Ier à Behistun et survit en persan dans dād, la justice. Pāvan signifie gardien : on le trouve dans xšaçapāvan, « protecteur du royaume », le titre devenu satrape en français. Le composé est de nous, formé de ces deux éléments attestés. Que data désigne les données en anglais est un jeu de mots voulu, sans origine commune."
   ],
   [
    "Visadahyu",
@@ -463,7 +463,7 @@
     ]
    ],
    "De toutes les nations",
-   "Le mot vient de l'inscription de Xerxès Ier sur la Porte de toutes les nations à Persépolis, qui parle de « cette porte de toutes les nations ». L'inscription est en trois langues, et des gardiens se dressent aux entrées de la porte. Nous avons choisi ce nom pour une fondation en projet qui n'appartient à aucune nation ni à aucune entreprise."
+   "Le mot vient de l’inscription de Xerxès Ier sur la Porte de toutes les nations à Persépolis, qui parle de « cette porte de toutes les nations ». L’inscription est en trois langues, et des gardiens se dressent aux entrées de la porte. Nous avons choisi ce nom pour une fondation en projet qui n’appartient à aucune nation ni à aucune entreprise."
   ]
  ]
 }
