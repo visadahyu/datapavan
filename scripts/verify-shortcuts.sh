@@ -29,12 +29,6 @@ fail() {
     exit 1
 }
 
-# True when the element whose resource-id is $1 is on screen and selected, as a navigation tab is.
-selected_id() {
-    dump_screen || return 1
-    adb shell cat "$DUMP" 2>/dev/null | grep -o "resource-id=\"$1\"[^>]*" | grep -q 'selected="true"'
-}
-
 # Waits up to a minute for $@ to succeed: the audit loads before any screen shows.
 wait_until() {
     for _ in $(seq 1 60); do

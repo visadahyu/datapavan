@@ -3,14 +3,21 @@
 
 DUMP=/sdcard/datapavan-ui.xml
 
+# True on an emulator, which holds nothing of anyone's.
+is_emulator() {
+    [ "$(adb shell getprop ro.boot.qemu | tr -d '\r')" = 1 ] || [ "$(adb shell getprop ro.kernel.qemu | tr -d '\r')" = 1 ]
+}
+
 # Reads the screen into $DUMP. On a slow emulator Android can put an "isn't responding" dialog over
-# anything: CI failed twice in a row when the launcher hung behind the app. For another app's process
-# that says nothing about ours, so the dialog is answered with Wait and the screen read again. A
-# dialog for one of our own processes, or for one that cannot be named, stays on screen, so that the
-# check waiting for the app fails and shows it. The resource id and the window title are the same in
-# every language.
+# anything: on CI the launcher hangs behind the app in about half the runs. For another app's process
+# that says nothing about ours, so the dialog is answered and the screen read again. Wait only closes
+# the dialog: a process that stays hung brings it back within seconds, and it can take a tap meant for
+# the app. So on an emulator the hung process is closed and starts afresh; on a phone, someone's app is
+# left running. A dialog for one of our own processes, or for one that cannot be named, stays on screen,
+# so that the check waiting for the app fails and shows it. The resource id and the window title are the
+# same in every language.
 dump_screen() {
-    local screen owner
+    local screen owner button
     for _ in 1 2 3; do
         adb shell uiautomator dump "$DUMP" >/dev/null 2>&1 || return 1
         screen=$(adb shell cat "$DUMP" 2>/dev/null) || return 1
@@ -23,8 +30,10 @@ dump_screen() {
         case $owner in
             "" | org.visadahyu.datapavan*) return 0 ;;
         esac
-        echo "Answering Wait to Android's dialog for $owner" >&2
-        tap_dumped_id android:id/aerr_wait || return 0
+        button=wait
+        is_emulator && button=close
+        echo "Answering $button to Android's dialog for $owner" >&2
+        tap_dumped_id "android:id/aerr_$button" || return 0
         sleep 1
     done
     adb shell uiautomator dump "$DUMP" >/dev/null 2>&1
@@ -127,14 +136,21 @@ tap_dumped_id() {
     adb shell input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 ))
 }
 
+# True when the element whose resource-id is $1 is on screen and selected, as a navigation tab is.
+selected_id() {
+    dump_screen || return 1
+    adb shell cat "$DUMP" 2>/dev/null | grep -o "resource-id=\"$1\"[^>]*" | grep -q 'selected="true"'
+}
+
 # Opens a destination of the navigation bar: summary, apps, phone or network. The bar is missing
 # while the audit loads, also when the activity restarts because the app's language arrived late, so
-# it is waited for.
+# it is waited for. A tap can be lost to a dialog that appears at that moment, so it counts only once
+# the tab shows as selected.
 open_tab() {
     for _ in $(seq 1 60); do
         if tap_id "nav-$1"; then
             sleep 1
-            return 0
+            selected_id "nav-$1" && return 0
         fi
         sleep 1
     done

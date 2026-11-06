@@ -4,9 +4,11 @@
 # Fuzzing has its own workflow (fuzz.yml).
 name: CI
 
-# A push that changes only documentation or brand files has nothing for CI to check.
+# A push that changes only documentation or brand files has nothing for CI to check. A tag points at a
+# commit that CI has already checked on its branch, so a tag runs nothing.
 on:
   push:
+    branches: ["**"]
     paths-ignore:
       - "**.md"
       - "docs/**"
