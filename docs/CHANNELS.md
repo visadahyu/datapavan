@@ -15,8 +15,8 @@ copy can be checked against the one published fingerprint (ADR 0024).
 4. **Obtainium**, which needs nothing from the project: users add the repository's URL and get the
    releases from GitHub. The README says how.
 
-Accrescent and Google Play come later: Play as an audit-only edition, Accrescent once it accepts new
-developers again.
+Accrescent comes later, once it accepts new developers again. Google Play gets a separate app, Datapavan Lite, with its
+own name, package and key ([ADR 0031](decisions/0031-datapavan-lite-on-google-play.md)), after the first release here.
 
 ## GitHub Releases
 
