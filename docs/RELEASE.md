@@ -69,7 +69,9 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    emulator. CI must be green on the release commit.
 3. **Data pack.** If `data/` changed, raise the sequence in `data/PACK`, set its date, and sign the
    pack offline ([DATA-PACKS.md](DATA-PACKS.md#publishing-a-pack)).
-4. **Signing, offline.** Copy the unsigned APK to the offline system and sign it:
+4. **Signing, offline.** `scripts/prepare-signing.sh <directory>` gathers what goes to the offline system,
+   from a clean commit on `main`: the unsigned APK, once two builds agree, the data pack's payload, the notes
+   and their hashes. Copy them over and sign the APK:
 
    ```sh
    apksigner sign --ks datapavan-release.p12 --ks-key-alias datapavan \
@@ -83,13 +85,15 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    alone, which tools that read only v2 cannot check, and it writes a v4 `.idsig` file that no channel
    publishes (found by the rehearsal on 2026-11-05). `--min-sdk-version 24` makes `verify` report v2
    too, which it otherwise skips for this minSdk.
-5. **Release notes, signed.** The notes name the version, the APK's SHA-256, the certificate's
+5. **Release notes, signed.** The notes name the version, the commit, the APK's SHA-256, the certificate's
    fingerprint and the sentence to teach ("Genuine Datapavan has no internet access and never
    asks for it"). They are signed offline with the release notes key
    (`signify-openbsd -S -e -s datapavan-notes-1.sec -m notes.txt`), so that users and channel
    operators can check them with `signify -V -e` (ADR 0024, point 3).
-6. **Publish** the signed APK, the notes and their signature on GitHub Releases; tag the commit
-   (`v<version>`), signed.
+6. **Publish** the signed APK, the notes and their signature on GitHub Releases, and tag the commit
+   (`v<version>`). The tag itself is not signed, since none of the offline keys can sign a Git tag. The
+   signed notes name the commit, so a tag moved later no longer matches them: compare with
+   `git rev-parse v<version>^{commit}`. A key for tags can be added later, if `git verify-tag` should work too.
 7. **F-Droid.** F-Droid builds from the tag. With reproducible builds it publishes the APK signed by
    the project only when its own build matches; the recipe lists the certificate's fingerprint.
    [fastlane/](../fastlane/) holds the store texts, which F-Droid reads from the repository.

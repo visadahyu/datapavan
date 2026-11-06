@@ -38,8 +38,8 @@ signify-openbsd -V -e -p keys/datapavan-data-1.pub -x datapavan-data-N.pack -m /
 
 ## The release notes key
 
-[datapavan-notes-1.pub](datapavan-notes-1.pub) signs each release's notes, which name the APK's SHA-256
-and the certificate's fingerprint:
+[datapavan-notes-1.pub](datapavan-notes-1.pub) signs each release's notes, which name the commit, the
+APK's SHA-256 and the certificate's fingerprint:
 
 ```
 RWQ/vFWwVJPevJW9d5d398A2Pp/MTT0TkpvR+7gsVitHUETHkb92YCvk

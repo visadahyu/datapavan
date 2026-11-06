@@ -8,7 +8,7 @@
 # Needs what the normal build needs (ANDROID_HOME, the NDK, the pinned Rust toolchain). Takes two full
 # builds.
 #
-#   scripts/reproducible.sh [commit, default HEAD]
+#   scripts/reproducible.sh [commit, default HEAD] [file to keep the APK in, if the builds agree]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -34,6 +34,7 @@ a=$(sha256sum "$WORK/first.apk" | cut -d' ' -f1)
 b=$(sha256sum "$WORK/second-with-a-longer-path.apk" | cut -d' ' -f1)
 if [ "$a" = "$b" ]; then
     echo "== reproducible: both builds are $a"
+    [ -z "${2:-}" ] || cp "$WORK/first.apk" "$2"
     exit 0
 fi
 

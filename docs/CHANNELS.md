@@ -20,8 +20,9 @@ own name, package and key ([ADR 0031](decisions/0031-datapavan-lite-on-google-pl
 
 ## GitHub Releases
 
-- Tag `v<version>`, signed. The release holds `datapavan-<version>.apk`, `notes.txt` and
-  `notes.txt.sig`, and the README and website carry the certificate's fingerprint.
+- Tag `v<version>`, not signed: the signed `notes.txt` names its commit ([RELEASE.md](RELEASE.md)). The release
+  holds `datapavan-<version>.apk`, `notes.txt` and `notes.txt.sig`, and the README and website carry the
+  certificate's fingerprint.
 - The APK's file name is fixed, since F-Droid's `Binaries` line and Obtainium find it by name.
 
 ## IzzyOnDroid

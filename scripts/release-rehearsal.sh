@@ -72,6 +72,7 @@ apk_sha=$(sha256sum "$signed" | cut -d' ' -f1)
 cat >"$WORK/notes.txt" <<NOTES
 Datapavan $version (rehearsal, not a release)
 
+Commit: $(git -C "$ROOT" rev-parse HEAD)
 APK: datapavan-$version.apk
 APK SHA-256: $apk_sha
 Signing certificate SHA-256: $expected
