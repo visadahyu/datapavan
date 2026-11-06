@@ -1,6 +1,6 @@
 # Releasing Datapavan
 
-Status: prepared for v0.1. Nothing has been released yet. This file says what the maintainer does by
+Status: v0.1.0 was signed and published as a pre-release on 2026-11-06. This file says what the maintainer does by
 hand, once before the first release and then for every release, and what the repository checks by
 itself. The keys never touch an online computer ([DATA-PACKS.md](DATA-PACKS.md#keys), ADR 0024).
 
@@ -90,7 +90,8 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    asks for it"). They are signed offline with the release notes key
    (`signify-openbsd -S -e -s datapavan-notes-1.sec -m notes.txt`), so that users and channel
    operators can check them with `signify -V -e` (ADR 0024, point 3).
-6. **Publish** the signed APK, the notes and their signature on GitHub Releases, and tag the commit
+6. **Publish** the signed APK, the notes and their signature on GitHub Releases and under `download/` on the
+   website, where `site/hugo.toml` names the current APK, its hash and size, and tag the commit
    (`v<version>`). The tag itself is not signed, since none of the offline keys can sign a Git tag. The
    signed notes name the commit, so a tag moved later no longer matches them: compare with
    `git rev-parse v<version>^{commit}`. A key for tags can be added later, if `git verify-tag` should work too.

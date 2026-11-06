@@ -1,6 +1,6 @@
 # Distribution channels
 
-Status: prepared for v0.1 on 2026-11-05; no build is published yet. [RELEASE.md](RELEASE.md) says how a
+Status: version 0.1.0 is out as a pre-release on GitHub Releases and the website since 2026-11-06; the other channels follow once it has been tried on more phones. [RELEASE.md](RELEASE.md) says how a
 release is made and signed; this file says where it goes and what each channel needs. Every channel
 carries the same APK, signed with the same offline key, so a user can move between them and every
 copy can be checked against the one published fingerprint (ADR 0024).
@@ -9,11 +9,12 @@ copy can be checked against the one published fingerprint (ADR 0024).
 
 1. **GitHub Releases**, the source of every other channel: the signed APK, its SHA-256, the release
    notes and their signify signature (RELEASE.md, steps 4 to 6).
-2. **IzzyOnDroid**, which lists an app within days of a request, from the APK on GitHub Releases.
-3. **F-Droid**, which builds from source and needs a reviewed merge request; it takes weeks, so the
-   request goes in with the first release.
-4. **Obtainium**, which needs nothing from the project: users add the repository's URL and get the
-   releases from GitHub. The README says how.
+2. **The website**, `datapavan.org/download/`: the same signed files from a server that keeps no access log.
+3. **IzzyOnDroid**, which lists an app within days of a request, from the APK on GitHub Releases.
+4. **F-Droid**, which builds from source and needs a reviewed merge request; it takes weeks, so the
+   request goes in with the first full release.
+5. **Obtainium**, which needs nothing from the project: users add the repository's URL and get the
+   releases from GitHub, with its option for pre-releases on while there is only a pre-release. The README says how.
 
 Accrescent comes later, once it accepts new developers again. Google Play gets a separate app, Datapavan Lite, with its
 own name, package and key ([ADR 0031](decisions/0031-datapavan-lite-on-google-play.md)), after the first release here.
