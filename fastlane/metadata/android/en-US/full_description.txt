@@ -7,7 +7,7 @@ Datapavan shows what the apps on your phone can reach and how much they send, an
 <li>VPN, proxy and circumvention apps, checked against their developers' official signing keys, so that a modified copy shows.</li>
 <li>The phone itself: USB and wireless debugging, certificate authorities you installed, the security patch, and the boot state from hardware key attestation.</li>
 <li>How much data each app received and sent over mobile data and Wi-Fi, and which apps you have not opened for months but still hold access.</li>
-<li>One activity at a time: read the counts, use an app, read again, and see what it sent while you only watched or scrolled.</li>
+<li>One activity at a time: read the counts, use an app, read again, and see how much it sent while you only watched or scrolled.</li>
 </ul>
 
 <b>What it helps you do</b>

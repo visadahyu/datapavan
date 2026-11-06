@@ -7,7 +7,7 @@ Datapavan zeigt, was die Apps auf Ihrem Telefon erreichen können und wie viel s
 <li>VPN-, Proxy- und Umgehungs-Apps, geprüft gegen die offiziellen Signaturschlüssel ihrer Entwickler, damit eine veränderte Kopie auffällt.</li>
 <li>Das Telefon selbst: USB- und drahtloses Debugging, zusätzlich installierte Zertifizierungsstellen, der Sicherheitspatch und der Startzustand laut Hardware-Schlüsselbestätigung.</li>
 <li>Wie viele Daten jede App über mobile Daten und WLAN empfangen und gesendet hat, und welche Apps seit Monaten nicht geöffnet wurden, aber noch Zugriffe haben.</li>
-<li>Eine Aktivität nach der anderen: Zähler lesen, eine App nutzen, erneut lesen und sehen, was sie gesendet hat, während Sie nur geschaut oder gescrollt haben.</li>
+<li>Eine Aktivität nach der anderen: Zähler lesen, eine App nutzen, erneut lesen und sehen, wie viel sie gesendet hat, während Sie nur geschaut oder gescrollt haben.</li>
 </ul>
 
 <b>Wobei es Ihnen hilft</b>

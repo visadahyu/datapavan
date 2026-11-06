@@ -7,7 +7,7 @@ Datapavan montre ce que les applis de votre téléphone peuvent atteindre et com
 <li>Les applis VPN, proxy et de contournement, comparées aux clés de signature officielles de leurs développeurs, pour qu'une copie modifiée se voie.</li>
 <li>Le téléphone lui-même : débogage USB et sans fil, autorités de certification ajoutées, correctif de sécurité, état du démarrage d'après l'attestation matérielle.</li>
 <li>Les données reçues et envoyées par chaque appli en données mobiles et en Wi-Fi, et les applis non ouvertes depuis des mois qui gardent des accès.</li>
-<li>Une activité à la fois : relever les compteurs, utiliser une appli, relever encore, et voir ce qu'elle a envoyé pendant que vous regardiez ou faisiez défiler.</li>
+<li>Une activité à la fois : relever les compteurs, utiliser une appli, relever encore, et voir combien elle a envoyé pendant que vous regardiez ou faisiez défiler.</li>
 </ul>
 
 <b>Ce qu'il vous aide à faire</b>
