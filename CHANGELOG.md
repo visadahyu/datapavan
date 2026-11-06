@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Spanish, Russian, Simplified Chinese and Arabic, in the app and the store texts. Each translation is reviewed by independent AI models, with the names of Android's screens taken from AOSP's own translations ([ADR 0030](docs/decisions/0030-more-languages-reviewed-by-independent-models.md)). `scripts/check-translations.py` checks what a translation can break without anyone reading it.
+- The website, built with a pinned Hugo from `site/`, in eight languages: the main page, news and the privacy policy. `scripts/check-site.py` enforces its rules: no script, nothing from other servers, about 200 KB on a first load, no broken link.
 - Project skeleton (milestone M1):
   - Android app: Kotlin and Jetpack Compose, minSdk 29, target SDK 37.
   - Rust engine (`datapavan-engine`, `unsafe` forbidden) and JNI bridge (`datapavan-jni`).

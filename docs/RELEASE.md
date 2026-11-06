@@ -11,7 +11,7 @@ system and AI assistants never touch the keys.
 
 Steps 1 to 3 were done on 2026-11-06, on a live Debian system with networking off. The public halves are
 in [keys/](../keys/README.md), and the certificate's fingerprint is `FA:6A:24:04:2A:BC:AC:8B:D0:09:01:10:F7:04:FF:EF:E7:DA:D3:AD:F5:DB:38:FB:07:38:90:AB:4C:B1:FA:84`.
-The steps stay here for the day a key must be replaced. Step 4 is still open.
+The steps stay here for the day a key must be replaced. Step 4 was done on the same day, when the repository went public.
 
 1. **The APK signing key**, made offline like the data-signing key: start a live USB system with
    networking off (for example Debian Live), with a JDK and the Android SDK's `apksigner` copied onto
