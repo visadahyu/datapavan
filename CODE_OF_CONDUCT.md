@@ -18,8 +18,8 @@ Datapavan is built for people of all nations, and so is its community.
 
 ## Enforcement
 
-Report concerns to the maintainers privately (see [SECURITY.md](SECURITY.md) for the contact until a
-dedicated address exists). Reports are handled confidentially. Consequences range from a warning to a
+Report concerns privately through the form named in [SECURITY.md](SECURITY.md), saying that the report is
+about conduct, until a dedicated address exists. Reports are handled confidentially. Consequences range from a warning to a
 permanent ban, depending on severity.
 
 This code applies in all project spaces: the GitHub repository, chats, and events.

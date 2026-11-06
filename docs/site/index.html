@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-  Draft of datapavan.org's one page (docs/CHANNELS.md). It loads nothing from anywhere else: no fonts,
+  datapavan.org's one page (docs/CHANNELS.md). It loads nothing from anywhere else: no fonts,
   scripts, analytics, cookies or images from other servers, so that visiting it tells no third party
   anything.
   French, German and Persian pages follow from the store texts in fastlane/.
@@ -35,8 +35,9 @@
 <body>
 <main>
 <h1>Datapavan</h1>
-<p class="lead">See what the apps on your Android phone can reach and send, and stop it. Everything runs on
-the phone. No internet access, no account, no root.</p>
+<p class="lead">See what the apps on your Android phone can reach and how much they send, and change it in
+Android's own settings. Everything runs on the phone. No internet access, no account, no root.</p>
+<p><strong>Status: pre-alpha. Nothing has been released yet.</strong></p>
 
 <h2>What it checks</h2>
 <ul>
@@ -51,21 +52,26 @@ the phone. No internet access, no account, no root.</p>
     hold access.</li>
 </ul>
 
+<p>It looks for known names in an app's code, so a renamed or hidden SDK is missed: finding nothing is not
+proof that nothing is there.</p>
+
 <h2>What it helps you do</h2>
 <p>A short plan, the changes that remove the most risk first. Each one opens the right Android screen,
-where you decide. A journal on the phone keeps what you changed, so that you can undo it. The apps your
-phone needs are never touched.</p>
+where you decide. A journal on the phone keeps what you changed, so that you can undo it. It leaves out the
+apps it recognises as essential.</p>
 
 <h2>What it never does</h2>
-<p>No analytics, no crash reports, no servers, no accounts. Nothing leaves the phone. <strong>Genuine
+<p>No analytics, no crash reports, no accounts, and the app contacts no server. Datapavan itself sends nothing
+anywhere. <strong>Genuine
 Datapavan has no internet access and never asks for it.</strong> A copy that asks for it is not
 genuine.</p>
 
 <h2>Get it</h2>
+<p>There is nothing to download yet. With the first release:</p>
 <ul>
   <li><a href="https://github.com/visadahyu/datapavan/releases">GitHub Releases</a>: the signed APK, its
     SHA-256 and the signed release notes.</li>
-  <li>F-Droid and IzzyOnDroid: coming with the first release.</li>
+  <li>F-Droid and IzzyOnDroid.</li>
   <li>Obtainium: add <code>https://github.com/visadahyu/datapavan</code>.</li>
 </ul>
 

@@ -33,7 +33,7 @@ A review of tools, research, law and platform rules found:
   groups.
 - **The largest same-company case is the phone maker's own software**, which no existing list covers.
 
-The research behind this record is kept in the foundation's private repository.
+The research behind this record is kept in the maintainer's private repository.
 
 ## Decision
 1. **A fact, never a discount.** When a tracker and the app belong to the same company group, the

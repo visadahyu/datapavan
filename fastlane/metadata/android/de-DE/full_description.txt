@@ -1,4 +1,4 @@
-Datapavan zeigt, was die Apps auf Ihrem Telefon erreichen können und was sie senden, und hilft Ihnen, es zu stoppen. Alles läuft auf dem Telefon, ohne Root und ohne Konto, und die App darf das Internet überhaupt nicht nutzen.
+Datapavan zeigt, was die Apps auf Ihrem Telefon erreichen können und wie viel sie senden, und führt Sie zu den Android-Einstellungen, die das begrenzen. Alles läuft auf dem Telefon, ohne Root und ohne Konto, und die App darf das Internet überhaupt nicht nutzen.
 
 <b>Was es prüft</b>
 <ul>
@@ -11,9 +11,9 @@ Datapavan zeigt, was die Apps auf Ihrem Telefon erreichen können und was sie se
 </ul>
 
 <b>Wobei es Ihnen hilft</b>
-Ein kurzer Plan, zuerst die Änderungen, die das meiste Risiko entfernen. Jede öffnet den passenden Bildschirm von Android, auf dem Sie entscheiden, und ein Protokoll auf dem Telefon hält fest, was Sie geändert haben, damit Sie es rückgängig machen können. Apps, die das Telefon braucht, rührt es nie an.
+Ein kurzer Plan, zuerst die Änderungen, die das meiste Risiko entfernen. Jede öffnet den passenden Bildschirm von Android, auf dem Sie entscheiden, und ein Protokoll auf dem Telefon hält fest, was Sie geändert haben, damit Sie es rückgängig machen können. Es lässt die Apps aus, die es als unverzichtbar erkennt.
 
 <b>Was es nie tut</b>
-Keine Analyse, keine Absturzberichte, keine Server, keine Konten. Nichts verlässt das Telefon. Echtes Datapavan hat keinen Internetzugriff und fragt nie danach: Eine Kopie, die danach fragt, ist nicht echt.
+Keine Analyse, keine Absturzberichte, keine Server, keine Konten. Datapavan selbst sendet nichts. Echtes Datapavan hat keinen Internetzugriff und fragt nie danach: Eine Kopie, die danach fragt, ist nicht echt.
 
 Sprachen: Englisch, Französisch, Deutsch und Persisch.

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="tagline">Voyez ce que vos applis envoient, et à qui. Puis bloquez-le.</string>
+    <string name="tagline">Voyez ce que vos applis atteignent et combien elles envoient. Puis limitez-le.</string>
     <string name="engine_version">Moteur principal %1$s</string>
 
     <!-- M2 audit -->

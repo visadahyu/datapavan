@@ -1,4 +1,4 @@
-Datapavan shows what the apps on your phone can reach and what they send, and helps you stop it. Everything runs on the phone. It needs no root and no account, and it has no permission to use the internet at all.
+Datapavan shows what the apps on your phone can reach and how much they send, and guides you to the Android settings that limit it. Everything runs on the phone. It needs no root and no account, and it has no permission to use the internet at all.
 
 <b>What it checks</b>
 <ul>
@@ -11,9 +11,9 @@ Datapavan shows what the apps on your phone can reach and what they send, and he
 </ul>
 
 <b>What it helps you do</b>
-A short plan, the changes that remove the most risk first. Each one opens the right Android screen where you decide, and a journal on the phone keeps what you changed so that you can undo it. The apps your phone needs are never touched.
+A short plan, the changes that remove the most risk first. Each one opens the right Android screen where you decide, and a journal on the phone keeps what you changed so that you can undo it. It leaves out the apps it recognises as essential.
 
 <b>What it never does</b>
-No analytics, no crash reports, no servers, no accounts. Nothing leaves the phone. Genuine Datapavan has no internet access and never asks for it: a copy that asks for it is not genuine.
+No analytics, no crash reports, no servers, no accounts. Datapavan itself sends nothing anywhere. Genuine Datapavan has no internet access and never asks for it: a copy that asks for it is not genuine.
 
 Languages: English, French, German and Persian.

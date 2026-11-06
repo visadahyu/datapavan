@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="tagline">ببینید برنامه‌هایتان چه چیزی را برای چه کسی می‌فرستند و جلویش را بگیرید.</string>
+    <string name="tagline">ببینید برنامه‌هایتان به چه دسترسی دارند و چقدر می‌فرستند. بعد محدودشان کنید.</string>
     <string name="engine_version">موتور هسته %1$s</string>
 
     <!-- M2 audit -->

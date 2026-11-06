@@ -8,7 +8,7 @@
 # With --install and an emulator attached, it also installs the signed release build in place of the
 # debug build and runs the smoke test and the shortcut check on it, since only the release build is
 # shrunk by R8; afterwards the debug build is installed again. Nothing this script makes may be
-# published: its keys exist only for the run, and the real ones are made offline (ACTION 26).
+# published: its keys exist only for the run, and the real ones are made offline.
 #
 #   scripts/release-rehearsal.sh [--install]
 set -euo pipefail

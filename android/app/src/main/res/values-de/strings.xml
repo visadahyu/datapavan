@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="tagline">Sehen Sie, was Ihre Apps senden – und an wen. Dann stoppen Sie es.</string>
+    <string name="tagline">Sehen Sie, was Ihre Apps erreichen und wie viel sie senden. Dann begrenzen Sie es.</string>
     <string name="engine_version">Kern-Engine %1$s</string>
 
     <!-- M2 audit -->

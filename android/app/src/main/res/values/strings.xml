@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">Datapavan</string>
-    <string name="tagline">See what your apps send, and to whom. Then stop it.</string>
+    <string name="tagline">See what your apps can reach and how much they send. Then limit it.</string>
     <!-- %1$s is a version number such as 0.1.0. It is passed in already bidi-isolated. -->
     <string name="engine_version">Core engine %1$s</string>
 

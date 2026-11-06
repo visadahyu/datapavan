@@ -32,7 +32,7 @@ fake and repackaged copies, and existing verifiers found:
 - **Existing verifiers** (AppVerifier, Verified Apps) compare only the newest key, which fails after a
   rotation. Their databases are small or of unclear licence, so they serve for cross-checks only.
 
-The research behind this record is kept in the foundation's private repository.
+The research behind this record is kept in the maintainer's private repository.
 
 ## Decision
 1. **An app is identified by its package name and its set of signing certificates**, never by its name

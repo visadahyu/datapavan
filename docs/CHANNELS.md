@@ -1,6 +1,6 @@
 # Distribution channels
 
-Status: prepared for v0.1 on 2026-11-05; nothing is published yet. [RELEASE.md](RELEASE.md) says how a
+Status: prepared for v0.1 on 2026-11-05; no build is published yet. [RELEASE.md](RELEASE.md) says how a
 release is made and signed; this file says where it goes and what each channel needs. Every channel
 carries the same APK, signed with the same offline key, so a user can move between them and every
 copy can be checked against the one published fingerprint (ADR 0024).
@@ -15,8 +15,8 @@ copy can be checked against the one published fingerprint (ADR 0024).
 4. **Obtainium**, which needs nothing from the project: users add the repository's URL and get the
    releases from GitHub. The README says how.
 
-Accrescent and Google Play come later: Play in the foundation's name and as an audit-only edition
-(see the private strategy notes), Accrescent once it accepts new developers again.
+Accrescent and Google Play come later: Play as an audit-only edition, Accrescent once it accepts new
+developers again.
 
 ## GitHub Releases
 

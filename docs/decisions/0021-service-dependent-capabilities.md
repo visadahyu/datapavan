@@ -37,7 +37,7 @@ the substitutes for Google's services found:
   events to Play services, so they may leave the phone from Play services' process rather than the
   app's.
 
-The research behind this record is kept in the foundation's private repository.
+The research behind this record is kept in the maintainer's private repository.
 
 ## Decision
 1. **Labels name a capability, never an SDK, a vendor or an app.** For example: "Push messages through

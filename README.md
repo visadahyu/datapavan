@@ -1,14 +1,16 @@
 # Datapavan
 
-**Datapavan shows what the apps on your Android phone can reach and what they send, and to whom, and
-helps you stop it.** Everything runs on the device. It needs no root and no cloud service, and version
+**Datapavan shows what the apps on your Android phone can reach and how much they send, and guides you
+to the Android settings that limit it.** Who they send to, and blocking, are planned for v0.2 and v0.3. Everything runs on the device. It needs no root and no cloud service, and version
 0.1 does not even have permission to use the internet.
 
 > Status: **pre-alpha.** Milestones M1 (the build skeleton), M2 (the app and permission audit), M3
 > (the code scanner and its data) and M4 (network use per app) are complete. M5, the first release, is
 > in progress: the guided check, the remediation plan, the app's structure and settings, the brand
 > theme, the genuine-copy check and the release steps are built, and the signing keys were made offline
-> on 2026-11-06; the release itself comes next. Nothing has been released yet. See the [roadmap](ROADMAP.md).
+> on 2026-11-06; the release itself comes next. Nothing has been released yet, and nothing has been
+> independently audited; the project has one maintainer. It is built for 64-bit phones with Android 10 or
+> newer, and tested from Android 11. See the [roadmap](ROADMAP.md) and <https://datapavan.org>.
 
 ## Why
 
@@ -63,10 +65,10 @@ checked on Android 11 and 17 emulators and on Galaxy A40 and A56 phones.
   A copy that someone else signed is called modified only on positive evidence; an unknown key is shown
   with its fingerprint, without a warning. *Why:* a modified VPN app sees all of its user's traffic and
   looks exactly like the real one.
-- **Signed data packs.** All of this data reaches the phone in packs signed with the project's key, which
-  can be imported as files without any network permission. A *Data sources* screen shows each dataset's
+- **Signed data packs.** All of this data comes inside the signed app. Newer data will come in packs signed
+  with the project's key, which can be imported as files without any network permission. A *Data sources* screen shows each dataset's
   date, licence and the pack's fingerprint, and the app warns when its data is more than six months old.
-  *Why:* data must stay current, and it must be impossible to slip a fake list onto someone's phone.
+  *Why:* data must stay current, and a list without the project's signature is refused.
 - **Network use per app.** With usage access, which the user grants and nothing requires: what each app
   received and sent on mobile data and Wi-Fi in the last 30 or 7 days, and how much in the background,
   in the same units as the phone's own Settings. Apps not opened for 90 days that still hold a
@@ -109,7 +111,7 @@ yet.
   uploads while the user only scrolled. Datapavan never decrypts traffic. *Why:* content stays encrypted,
   but its shape does not. A baseline learned on the phone only detects change, so uploads are also split
   by destination and compared with the project's lab measurements.
-- **Chaining with circumvention tools** (v0.2). Datapavan stays the phone's VPN and sends traffic
+- **Chaining with circumvention tools** (v0.2). Datapavan Watch stays the phone's VPN and sends traffic
   through the tool's local proxy, so the tool becomes a pipe, not the owner of the network. *Why:* Android
   allows one VPN at a time, and people under censorship should not have to choose between access and
   safety. See [docs/RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md).
@@ -126,6 +128,9 @@ On a stock phone Datapavan has the limits of an app. It cannot read encrypted co
 decrypt it. It cannot remove the maker's system apps without a computer, control firmware or the modem,
 or clean a phone that is already compromised; it finds the risk and guides the user. Each limit, and the
 stage that addresses it, is listed in [docs/DESIGN.md](docs/DESIGN.md#2-what-we-can-and-cannot-protect).
+
+The tracker scan looks for known names in an app's code, as εxodus does, so an SDK that is renamed,
+obfuscated or loaded later is missed. Finding nothing is not proof that nothing is there.
 
 ## Checking a copy
 
@@ -160,13 +165,14 @@ Data packs are signed with the key `RWSw7mCAus7/cGyV88xK46P7J51/oMhXNl/V6+25UHD8
 
 - **No internet permission in v0.1.** The app cannot open a network connection, and the build fails if
   anything adds the permission. Newer data arrives as signed packs that the user imports as files
-  ([DATA-PACKS.md](docs/DATA-PACKS.md)), so no server learns who uses Datapavan.
+  ([DATA-PACKS.md](docs/DATA-PACKS.md)), so the app itself contacts no server.
 - **Local-first.** All analysis happens on the device. Datapavan has no servers that receive user data.
 - **Zero telemetry.** Datapavan collects nothing about its users and contains no analytics SDKs. It learns
   from its own lab, never from its users' phones ([ADR 0016](docs/decisions/0016-no-user-data.md)).
-- **No Google Play Services.** It works on phones without Google's services.
-- **Open source.** You can check every claim yourself. Release builds are reproducible
-  (`scripts/reproducible.sh`), and releases will be signed with keys kept offline.
+- **No Google Play Services.** It does not depend on Google's services.
+- **Open source.** You can read the code behind these claims. `scripts/reproducible.sh` compares two release
+  builds, [docs/CHANNELS.md](docs/CHANNELS.md) records F-Droid's build matching ours on one commit, and
+  releases will be signed with keys kept offline.
 - **Plain language.** Every finding is explained so that anyone can understand it.
 - **Hands off other apps.** Datapavan never modifies or injects into other apps. It works only at the system and network level.
 
@@ -211,7 +217,7 @@ reviewed by the maintainer before it is committed. Commits made this way carry a
 The rules for contributors are in [CONTRIBUTING.md](CONTRIBUTING.md#ai-assisted-contributions).
 
 **What is public and what is not.** Strategy, funding, legal questions under review and the research
-behind them are kept in a private repository of the Visadahyu Foundation. Every decision that changes what
+behind them are kept in the maintainer's private repository. Every decision that changes what
 the software does, or how it treats its users, is published here with its reasons, as an
 [architecture decision record](docs/decisions/README.md), together with the spikes that measure the
 software's behaviour.

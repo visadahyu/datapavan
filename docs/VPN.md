@@ -4,7 +4,7 @@
 
 ## What "VPN" means here
 
-Datapavan uses Android's `VpnService` only to see and filter traffic on the device. It is a
+Datapavan Watch, the separate app planned for v0.2 ([ADR 0029](decisions/0029-network-access-for-v0.2.md)), uses Android's `VpnService` only to see and filter traffic on the device. It is a
 **firewall**, not a tunnel:
 
 - No Datapavan server exists, and no traffic is sent to us.

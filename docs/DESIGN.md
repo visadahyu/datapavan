@@ -5,6 +5,7 @@
 | Version | 0.2 (draft, revised 2026-10-29) |
 | Date | 2026-10-28 |
 | Scope | Stage 1: the layer app for stock Android, with no root |
+| Status | The whole design, much of it not built yet. The [README](../README.md) says what exists today |
 | Maintainer (planned) | Visadahyu Foundation |
 
 Items marked **TBV** (to be verified) still need checking against a primary source before we rely on them.

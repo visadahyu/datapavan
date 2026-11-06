@@ -1,4 +1,4 @@
-Datapavan montre ce que les applis de votre téléphone peuvent atteindre et ce qu'elles envoient, et vous aide à l'arrêter. Tout fonctionne sur le téléphone, sans root ni compte, et l'appli n'a même pas le droit d'utiliser Internet.
+Datapavan montre ce que les applis de votre téléphone peuvent atteindre et combien elles envoient, et vous guide vers les réglages d'Android qui le limitent. Tout fonctionne sur le téléphone, sans root ni compte, et l'appli n'a même pas le droit d'utiliser Internet.
 
 <b>Ce qu'il vérifie</b>
 <ul>
@@ -11,9 +11,9 @@ Datapavan montre ce que les applis de votre téléphone peuvent atteindre et ce 
 </ul>
 
 <b>Ce qu'il vous aide à faire</b>
-Un plan court, en commençant par ce qui retire le plus de risque. Chaque étape ouvre l'écran d'Android où vous décidez, et un journal sur le téléphone garde ce que vous avez changé pour que vous puissiez l'annuler. Les applis dont le téléphone a besoin ne sont jamais touchées.
+Un plan court, en commençant par ce qui retire le plus de risque. Chaque étape ouvre l'écran d'Android où vous décidez, et un journal sur le téléphone garde ce que vous avez changé pour que vous puissiez l'annuler. Il laisse de côté les applis qu'il reconnaît comme essentielles.
 
 <b>Ce qu'il ne fait jamais</b>
-Pas de mesure d'audience, pas de rapports de plantage, pas de serveurs, pas de comptes. Rien ne quitte le téléphone. Datapavan authentique n'a pas accès à Internet et ne le demande jamais : une copie qui le demande n'est pas authentique.
+Pas de mesure d'audience, pas de rapports de plantage, pas de serveurs, pas de comptes. Datapavan lui-même n'envoie rien. Datapavan authentique n'a pas accès à Internet et ne le demande jamais : une copie qui le demande n'est pas authentique.
 
 Langues : anglais, français, allemand et persan.

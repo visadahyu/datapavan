@@ -44,7 +44,7 @@ on preinstalled software and the tools that list it, found:
   not stop it (Liu, Patras and Leith, 2023). No study tested how people read a label such as "made by
   your phone's maker".
 
-The research behind this record is kept in the foundation's private repository.
+The research behind this record is kept in the maintainer's private repository.
 
 ## Decision
 1. **The platform key is read on the phone.** Datapavan reads the signing certificate and its history

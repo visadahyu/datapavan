@@ -2,9 +2,8 @@
 
 Datapavan is a security product. Reports of vulnerabilities are welcome and taken seriously.
 
-> **Pre-release.** Private reports go through GitHub's private vulnerability reporting, which is turned on
-> when the repository becomes public. Until then, contact the maintainer directly. An e-mail address with a
-> published OpenPGP key is planned for 1.0.
+> **Pre-release.** No version has been released yet. Private reports go through GitHub's private
+> vulnerability reporting. An e-mail address with a published OpenPGP key is planned for 1.0.
 
 ## Reporting a vulnerability
 

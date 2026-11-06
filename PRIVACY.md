@@ -9,10 +9,10 @@
 
 - **No analytics, no crash reporting, no telemetry.** The app contains no third-party SDKs that could send data.
 - **No accounts.** You never sign up and never give us anything.
-- **No servers that receive user data.** The project does not operate any.
-- **Everything stays on your phone.** All analysis happens on the device. Datapavan's own data lives in app-private storage, encrypted where it records network activity.
+- **No servers that receive user data.** The app contacts none. The project's website, datapavan.org, is static and keeps no access log. Downloads come from GitHub and app stores, under their own policies.
+- **Everything stays on your phone.** All analysis happens on the device. Datapavan's own data lives in app-private storage.
 - **No backups leave the phone.** Android cloud backup and device-to-device transfer are disabled for Datapavan's data.
-- **Uninstalling deletes Datapavan's data.** The only exception is files you exported yourself, for example a report you saved to shared storage.
+- **Uninstalling deletes Datapavan's data.**
 
 ## What Datapavan keeps on your phone
 
@@ -32,8 +32,7 @@ your unlocked phone can see it, as they can see the rest of the app.
 
 Version 0.1 ("Audit") does not request the INTERNET permission, so Android itself prevents it from
 opening network connections. The build fails if any component tries to add that permission. Like any
-app, it can still hand information to another app when you ask it to, for example when you open a link
-or share a report.
+app, it can still hand information to another app when you ask it to, for example when you open a link.
 
 ## Permissions and why they are needed
 
@@ -42,12 +41,13 @@ or share a report.
 | See installed apps | Listing apps and their permissions | v0.1 |
 | Usage access (granted by you in Settings; optional) | Showing how much data each app has sent and received, and which apps you have not opened for a long time. Datapavan reads only totals and the date each app was last used, never which app you opened when, and keeps none of it. When you check one activity in an app, it also reads the phone's total traffic counters, which need no permission, to see whether Android's count is up to date; these numbers stay in memory while the check is on screen | v0.1 |
 | Network state | Telling whether a VPN is active. It does not allow any connection | v0.1 |
-| VPN (granted by you) | The **local** firewall. Traffic is filtered on the phone and never sent to us | v0.2 |
-| Internet | Forwarding the traffic of other apps through the local firewall, and optional list updates | v0.2 |
+| VPN (granted by you) | The **local** firewall. Traffic is filtered on the phone and never sent to us | Datapavan Watch, a separate app, from v0.2 |
+| Internet | Forwarding the traffic of other apps through the local firewall. Datapavan itself never asks for it | Datapavan Watch, a separate app, from v0.2 |
 
-## Optional updates of tracker lists (from v0.2)
+## Optional updates of tracker lists (planned)
 
-If you turn this on, Datapavan downloads signed tracker lists from a public mirror. Like any download:
+Datapavan itself only imports signed list files. If optional downloads come, Datapavan Watch will fetch them
+from a public mirror, and only if you turn this on. Like any download:
 
 - the mirror's operator sees your IP address and the time of the request;
 - the operator, and anyone observing your network, can tell that the device uses Datapavan.
@@ -58,5 +58,5 @@ manually. Once mirrors exist, this policy will name each operator, and say what 
 
 ## Contact
 
-Questions about this policy: open an issue on GitHub. For anything sensitive, use the security
-contact in [SECURITY.md](SECURITY.md).
+Questions about this policy: open an issue on GitHub. For anything sensitive, use the private
+reporting form named in [SECURITY.md](SECURITY.md).

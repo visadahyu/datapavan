@@ -14,5 +14,5 @@ License everything under Apache-2.0.
 
 ## Consequences
 - Device makers and enterprises can adopt the code easily, and the explicit patent grant protects users and contributors.
-- Others may build closed products on our code. We accept this. Our protection is the trademark and the release signing keys, both held by the foundation, not copyleft.
+- Others may build closed products on our code. We accept this. Our protection will be the trademark and the release signing keys, to be held by the foundation once it exists.
 - GPL code (for example from NetGuard) can never be copied into the project.

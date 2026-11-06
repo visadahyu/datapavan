@@ -34,7 +34,7 @@ A review of vendor documentation, platform reports, court actions, academic work
 - **Wording carries legal risk.** Courts have treated labels such as "malicious" or "threat" as factual
   claims a company can sue over, while plain descriptions of what was found have held up.
 
-The research behind this record is kept in the foundation's private repository.
+The research behind this record is kept in the maintainer's private repository.
 
 ## Decision
 1. **Three categories, kept apart:**

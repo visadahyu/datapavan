@@ -20,8 +20,8 @@ Measurements on a Galaxy A56 with Android 17 on 2026-11-05, read over adb withou
 v0.1 cannot see and v0.2 must:
 
 - **Instagram**, in about two and a half minutes of use: about 75 MB received and 3.6 MB sent. The
-  socket tables showed only two TCP connections, both to Meta (AS32934): an MQTT edge in Istanbul and a
-  measurement edge in Marseille. The images and videos came over QUIC, on UDP sockets that name no
+  socket tables showed only two TCP connections, both to Meta (AS32934): an MQTT edge and a
+  measurement edge. The images and videos came over QUIC, on UDP sockets that name no
   destination, so their servers stayed unknown. Android's records showed that Instagram read precise
   location, cell information and nearby Wi-Fi networks while the user only scrolled.
 - **imo**, during two voice calls: about 9.5 MB received and 8.3 MB sent. Instagram reached one
