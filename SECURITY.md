@@ -2,14 +2,15 @@
 
 Datapavan is a security product. Reports of vulnerabilities are welcome and taken seriously.
 
-> **Pre-release.** A dedicated security contact (an e-mail address with a published OpenPGP key) will be
-> set up before the repository becomes public. Until then, contact the maintainer directly.
+> **Pre-release.** Private reports go through GitHub's private vulnerability reporting, which is turned on
+> when the repository becomes public. Until then, contact the maintainer directly. An e-mail address with a
+> published OpenPGP key is planned for 1.0.
 
 ## Reporting a vulnerability
 
 - **Do not** open a public issue for a vulnerability.
-- Report privately to the security contact. Once the repository is public, GitHub's private
-  vulnerability reporting will also be enabled.
+- Report privately through [GitHub's private vulnerability
+  reporting](https://github.com/visadahyu/datapavan/security/advisories/new).
 - Please include the affected version or commit, the device and Android version, steps to reproduce,
   the impact you expect, and whether you want to be credited.
 

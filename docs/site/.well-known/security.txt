@@ -1,9 +1,4 @@
-# Draft (RFC 9116), published with the domain and the security address (ACTIONS 1 and 3). Before it
-# goes online: set Expires to less than a year ahead, put the OpenPGP key next to it, and sign this
-# file with that key (gpg --clearsign), as RFC 9116 recommends.
-Contact: mailto:security@datapavan.org
 Contact: https://github.com/visadahyu/datapavan/security/advisories/new
-Encryption: https://datapavan.org/.well-known/openpgp-key.asc
 Expires: 2027-11-01T00:00:00.000Z
 Preferred-Languages: en, fa, fr, de
 Canonical: https://datapavan.org/.well-known/security.txt

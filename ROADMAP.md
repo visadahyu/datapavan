@@ -143,8 +143,10 @@ key and fingerprint to defend (ADR 0024).
 |---|---|
 | Name and brand (see [docs/NAMES.md](docs/NAMES.md), [brand/](brand/README.md)) | ✅ |
 | Foundation charter (see [docs/FOUNDATION.md](docs/FOUNDATION.md)) | 🔄 principles written; legal entity planned |
-| Domains and EU trademark registration | ⏳ |
-| Security contact with an OpenPGP key | ⏳ blocks going public |
+| Domains | ✅ `datapavan.org`, with the website |
+| EU trademark registration | ⏳ |
+| Private vulnerability reporting on GitHub | ⏳ blocks going public |
+| Security e-mail with an OpenPGP key | ⏳ for 1.0 |
 | Hosting: GitHub as the only home (ADR 0013); a self-hosted EU forge reconsidered once the domain exists | ✅ |
 | Make the repository public | ⏳ before v0.1 is released |
 | F-Droid submission | ⏳ with v0.1 |

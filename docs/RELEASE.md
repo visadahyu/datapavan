@@ -48,8 +48,9 @@ The steps stay here for the day a key must be replaced. Step 4 is still open.
    It goes into `data/app-signers` as Datapavan's own row (developer key, closed), so that the app's
    self-check ("Is this copy genuine?") and partner tools can judge a copy (ADR 0024, point 4), and
    into the README and the website.
-4. **A security contact with an OpenPGP key** in [SECURITY.md](../SECURITY.md), before the repository
-   goes public.
+4. **Private vulnerability reporting** turned on in the repository's settings when it goes public, as
+   [SECURITY.md](../SECURITY.md) says. An e-mail address with an OpenPGP key waits for 1.0: its private
+   key needs a device of its own, and until then the server runs no mail service.
 
 ## Every release
 
