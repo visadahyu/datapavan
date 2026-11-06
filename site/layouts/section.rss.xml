@@ -1,0 +1,6 @@
+{{- printf "<?xml version=\"1.0\" encoding=\"utf-8\"?>" | safeHTML }}
+<rss version="2.0"><channel><title>Datapavan: {{ .Title }}</title><link>{{ .Permalink }}</link><description>{{ (index site.Data.text site.Language.Lang).news_lead }}</description><language>{{ site.Language.Lang }}</language>
+{{- range .Pages.ByDate.Reverse }}
+<item><title>{{ .Title }}</title><link>{{ .Params.link }}</link><guid isPermaLink="false">datapavan-news-{{ .File.ContentBaseName }}</guid><pubDate>{{ .Date.Format "Mon, 02 Jan 2006 15:04:05 -0700" }}</pubDate><description>{{ .Params.what }} {{ .Params.why }}</description></item>
+{{- end }}
+</channel></rss>

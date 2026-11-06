@@ -1,0 +1,2 @@
+/* No web font for Chinese: one would weigh megabytes, and every phone already has a good one. */
+:root{--f-disp:"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei",system-ui,sans-serif;--f-sub:"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei",system-ui,sans-serif;--f-body:"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei",system-ui,sans-serif;--h1w:800;--h1lh:1.14;--h2lh:1.2;--h1ls:0;--blh:1.8;--notlh:1.7;--big:clamp(6rem,28vw,24rem);--biglh:1.2}

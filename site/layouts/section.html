@@ -1,0 +1,10 @@
+{{ define "main" }}
+{{- $t := index site.Data.text site.Language.Lang -}}
+<main><section><div class="w"><h1 class="pg">{{ .Title }}</h1><p class="sub">{{ $t.news_lead }}</p>
+<ol class="news">
+{{- range .Pages.ByDate.Reverse }}
+{{- $p := . }}
+<li id="{{ .File.ContentBaseName }}"><time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date | time.Format ":date_long" }}</time><div><h3>{{ .Title }}</h3><p>{{ .Params.what }}</p><p>{{ .Params.why }}</p>{{ with .Params.disputed }}<p><b>{{ $t.news_disputed }}</b> {{ . }}</p>{{ end }}<p class="src">{{ $t.news_source }} <a href="{{ .Params.link }}" rel="noreferrer">{{ .Params.source }}</a>{{ with .Params.link2 }} · <a href="{{ . }}" rel="noreferrer">{{ $p.Params.source2 }}</a>{{ end }}</p></div></li>
+{{- end }}
+</ol></div></section></main>
+{{ end }}

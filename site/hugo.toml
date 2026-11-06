@@ -1,0 +1,68 @@
+# datapavan.org. Hugo builds plain HTML into docs/site (scripts/build-site.sh); nothing runs on the server.
+baseURL = "https://datapavan.org/"
+title = "Datapavan"
+defaultContentLanguage = "en"
+defaultContentLanguageInSubdir = false
+disableDefaultLanguageRedirect = true
+publishDir = "../docs/site"
+disableKinds = ["taxonomy", "term", "sitemap", "robotsTXT", "404"]
+enableGitInfo = false
+timeZone = "UTC"
+
+[outputs]
+home = ["html"]
+section = ["html", "rss"]
+page = ["html"]
+
+[languages.en]
+label = "English"
+direction = "ltr"
+weight = 1
+[languages.en.params]
+script = "latin"
+[languages.fr]
+label = "Français"
+direction = "ltr"
+weight = 2
+[languages.fr.params]
+script = "latin"
+[languages.de]
+label = "Deutsch"
+direction = "ltr"
+weight = 3
+[languages.de.params]
+script = "latin"
+[languages.es]
+label = "Español"
+direction = "ltr"
+weight = 4
+[languages.es.params]
+script = "latin"
+[languages.ru]
+label = "Русский"
+direction = "ltr"
+weight = 5
+[languages.ru.params]
+script = "ru"
+[languages.zh]
+label = "简体中文"
+direction = "ltr"
+weight = 6
+[languages.zh.params]
+script = "zh"
+[languages.ar]
+label = "العربية"
+direction = "rtl"
+weight = 7
+[languages.ar.params]
+script = "rtl"
+[languages.fa]
+label = "فارسی"
+direction = "rtl"
+weight = 8
+[languages.fa.params]
+script = "rtl"
+
+[params]
+repo = "https://github.com/visadahyu/datapavan"
+fingerprint = ["FA:6A:24:04:2A:BC:AC:8B", "D0:09:01:10:F7:04:FF:EF", "E7:DA:D3:AD:F5:DB:38:FB", "07:38:90:AB:4C:B1:FA:84"]

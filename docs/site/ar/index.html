@@ -1,0 +1,208 @@
+<!doctype html>
+
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="اعرف ما يمكن لتطبيقاتك الوصول إليه وكم ترسل من بيانات. ثم ضع لذلك حدًّا.">
+<title>Datapavan</title>
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="alternate" hreflang="en" href="https://datapavan.org/">
+<link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/">
+<link rel="alternate" hreflang="de" href="https://datapavan.org/de/">
+<link rel="alternate" hreflang="es" href="https://datapavan.org/es/">
+<link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/">
+<link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/">
+<link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/">
+<link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/">
+<style>
+@font-face{font-family:"Vazirmatn";src:url(../fonts/vazirmatn-arabic-wght-normal.woff2) format("woff2");font-weight:100 900;font-display:swap;unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC;}
+@font-face{font-family:"Vazirmatn";src:url(../fonts/vazirmatn-latin-wght-normal.woff2) format("woff2");font-weight:100 900;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-200B,U+200F,U+2012-204E,U+2050-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+:root{--f-disp:"Vazirmatn",Tahoma,system-ui,sans-serif;--f-sub:"Vazirmatn",Tahoma,system-ui,sans-serif;--f-body:"Vazirmatn",Tahoma,system-ui,sans-serif;--h1w:900;--h1lh:1.14;--h2lh:1.2;--h1ls:0;--blh:1.85;--notlh:1.75;--big:clamp(4.5rem,19vw,17rem);--biglh:1.3}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+a{color:inherit}
+a:focus-visible,summary:focus-visible{outline:3px solid currentColor;outline-offset:3px}
+h1,h2,h3{text-wrap:balance;hyphens:auto}
+p{text-wrap:pretty}
+table{border-collapse:collapse;width:100%}
+.w{max-width:84rem;margin-inline:auto;padding-left:max(clamp(16px,4vw,48px),env(safe-area-inset-left,0px));padding-right:max(clamp(16px,4vw,48px),env(safe-area-inset-right,0px))}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.fp{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;direction:ltr;text-align:left;unicode-bidi:isolate}
+.ltr{direction:ltr;unicode-bidi:isolate}
+.phones{display:grid;grid-template-columns:repeat(3,minmax(0,19rem));justify-content:space-between;gap:clamp(1rem,3vw,2.5rem);align-items:start}
+.phones img{display:block;width:100%;height:auto;border-radius:1.6rem;border:.42rem solid #101114;box-shadow:0 1.2rem 2.4rem -1.2rem rgb(0 0 0/.45);background:var(--paper)}
+@media (max-width:760px){.phones{grid-template-columns:repeat(3,min(72vw,19rem));justify-content:start;overflow-x:auto;padding-bottom:1rem;scroll-snap-type:x mandatory}.phones img{scroll-snap-align:center}}
+
+/* Layout: one object, a facts label, set against big type; the page repeats its heavy bars as structure. */
+:root{--paper:#FBF7F0;--panel:#FFFDF9;--ink:#1D1B17;--mute:#4A4436;--lab:#1F4E8C;--rule:#CEC5B3;--band:#F3EBDC;--deep:#1F4E8C;--on-deep:#F3EBDC;--tag:#7A5212;--mk-b:#1F4E8C;--mk-f:#F3EBDC}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#14161C;--panel:#1D2026;--ink:#E4E2DC;--mute:#C4C6D0;--lab:#8DB0E6;--rule:#44474F;--band:#1D2026;--deep:#1F4E8C;--on-deep:#F3EBDC;--tag:#D9A54A;--mk-b:#8DB0E6;--mk-f:#14161C;color-scheme:dark}}
+:root[data-theme="dark"]{--paper:#14161C;--panel:#1D2026;--ink:#E4E2DC;--mute:#C4C6D0;--lab:#8DB0E6;--rule:#44474F;--band:#1D2026;--deep:#1F4E8C;--on-deep:#F3EBDC;--tag:#D9A54A;--mk-b:#8DB0E6;--mk-f:#14161C;color-scheme:dark}
+body{background:var(--paper);color:var(--ink);font:400 1.0625rem/var(--blh) var(--f-body);overflow-wrap:break-word}
+.mk-b{fill:var(--mk-b)}.mk-f{fill:var(--mk-f)}
+.top{display:flex;align-items:center;gap:1.5rem;padding-block:1.1rem;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:.6rem;text-decoration:none;font:800 1.3rem/1 var(--f-sub);font-stretch:88%;color:var(--lab)}
+.mark{width:2rem;height:2rem}
+.top nav{display:flex;gap:1.15rem;margin-inline-start:auto;flex-wrap:wrap;font-size:.95rem}
+.top nav a{text-decoration:none}.top nav a:hover{text-decoration:underline}
+.lng{position:relative;font-weight:600}
+.lng summary{cursor:pointer;list-style-position:inside}
+.lng ul{position:absolute;inset-inline-end:0;z-index:5;list-style:none;margin:.4rem 0 0;padding:.35rem 0;background:var(--panel);border:2px solid var(--lab);min-width:9.5rem}
+.lng li a{display:block;padding:.3rem .8rem;text-decoration:none;font-weight:500}
+.lng li a:hover,.lng li a[aria-current]{background:var(--band)}
+.hero{display:grid;grid-template-columns:minmax(0,1.32fr) minmax(19rem,1fr);gap:clamp(1.5rem,5vw,5rem);align-items:start;padding-block:clamp(1.25rem,4vw,3.5rem) 0}
+.status{display:inline-block;font:700 .92rem/1.2 var(--f-sub);border:2px solid var(--lab);color:var(--lab);padding:.4rem .65rem;margin:0 0 1.5rem}
+h1{font:var(--h1w) clamp(3rem,7.7vw,7.25rem)/var(--h1lh) var(--f-disp);font-stretch:74%;margin:0 0 1.5rem;letter-spacing:var(--h1ls);color:var(--lab)}
+.lead{font-size:clamp(1.25rem,2.1vw,1.625rem);line-height:1.4;margin:0 0 .75rem;max-width:34em}
+.lead2{color:var(--mute);margin:0 0 1.75rem;max-width:36em}
+.cta{display:flex;flex-wrap:wrap;gap:.75rem 1.5rem;align-items:center;margin:0}
+.btn{background:var(--lab);color:var(--paper);font:700 1.05rem/1 var(--f-sub);padding:.95rem 1.3rem;text-decoration:none;display:inline-block}
+.btn:hover{background:var(--ink)}
+.label{background:var(--panel);border:3px solid var(--lab);padding:.75rem .9rem .85rem;color:var(--ink);position:relative}
+.l-title{font:900 clamp(2.9rem,5.1vw,4.6rem)/.92 var(--f-disp);font-stretch:62%;color:var(--lab);margin:0;letter-spacing:var(--h1ls)}
+.l-name{display:flex;justify-content:space-between;align-items:baseline;gap:.75rem;flex-wrap:wrap;margin:.5rem 0 .55rem;font-weight:700}
+.l-tag{font:700 .78rem/1 var(--f-sub);text-transform:uppercase;letter-spacing:.06em;color:var(--tag);border:1.5px dashed var(--tag);padding:.25rem .4rem}
+.l-g{border-top:.62rem solid var(--lab)}
+.l-g h3{font:800 1.02rem/1.3 var(--f-sub);margin:.3rem 0;font-stretch:90%}
+.l-g dl{margin:0}
+.l-g dl div{display:flex;justify-content:space-between;gap:1rem;border-top:1px solid var(--lab);padding-block:.2rem}
+.l-g dt{font-weight:400}.l-g dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums;text-align:end}
+.fine{font-size:.82rem;line-height:1.4;margin:.6rem 0 0;border-top:.3rem solid var(--lab);padding-top:.45rem}
+section{padding-block:clamp(3rem,7vw,6rem)}
+h2{font:var(--h1w) clamp(2.1rem,4.6vw,4rem)/var(--h2lh) var(--f-disp);font-stretch:78%;margin:0 0 .75rem;letter-spacing:var(--h1ls);color:var(--lab)}
+.sub{color:var(--mute);margin:0 0 2rem;max-width:40em}
+.rows{border-top:.62rem solid var(--lab);border-bottom:.3rem solid var(--lab)}
+.rw{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,8fr) minmax(0,3fr);gap:.75rem clamp(1rem,3vw,3rem);padding-block:1.1rem;border-top:1px solid var(--lab)}
+.rw:first-child{border-top:0}
+.rw h3{font:800 clamp(1.25rem,2vw,1.6rem)/1.15 var(--f-sub);font-stretch:82%;margin:0}
+.rw p{margin:0}
+.need{font-size:.92rem;color:var(--mute)}.need b{display:block;font:700 .72rem/1.4 var(--f-sub);text-transform:uppercase;letter-spacing:.06em;color:var(--tag)}
+.band{background:var(--band)}
+.note{font-size:.92rem;color:var(--mute);margin:1.25rem 0 0;max-width:46em}
+.off{border:2px dashed var(--lab);padding:clamp(1rem,2.5vw,2rem);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.5rem clamp(1.5rem,4vw,3.5rem)}
+.off h3{font:800 1.2rem/1.2 var(--f-sub);font-stretch:85%;margin:0 0 .3rem}.off p{margin:0}
+.lvls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(1rem,3vw,2.5rem);margin-block:2rem 2.25rem}
+.lvl{display:flex;flex-direction:column;gap:.5rem}
+.bars{display:flex;flex-direction:column;gap:.22rem}.bars i{display:block;height:.62rem;background:var(--lab)}
+.lvl h3{font:800 1.6rem/1.1 var(--f-sub);font-stretch:80%;margin:.3rem 0 0}.lvl p{margin:0}
+.more{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(1rem,3vw,2.5rem);border-top:1px solid var(--lab);padding-top:1.1rem}
+.more h3{font:800 1.1rem/1.3 var(--f-sub);margin:0}.more p{margin:0}
+.own{background:var(--deep);color:var(--on-deep)}
+.own .wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(19rem,30rem);gap:clamp(2rem,5vw,5rem);align-items:start}
+.own h2{color:var(--on-deep)}.own .wrap>div>p{max-width:32em;font-size:1.15rem;margin:0}
+.own .label{--lab:var(--own-ink);background:var(--own-p);color:var(--own-t);border-color:var(--own-p)}
+:root{--own-ink:#1F4E8C;--own-p:#FBF7F0;--own-t:#1D1B17}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--own-ink:#8DB0E6;--own-p:#14161C;--own-t:#E4E2DC}}
+:root[data-theme="dark"]{--own-ink:#8DB0E6;--own-p:#14161C;--own-t:#E4E2DC}
+.own .ltr-t{direction:ltr;unicode-bidi:isolate;text-align:start}
+.cmp{font-size:.98rem;min-width:44rem}
+.cmp th,.cmp td{padding:.65rem .7rem;text-align:start;border-top:1px solid var(--lab);vertical-align:top}
+.cmp thead td,.cmp thead th{border-top:.62rem solid var(--lab);font:800 1rem/1.2 var(--f-sub);vertical-align:bottom}
+.cmp tbody th{font-weight:500}
+.cmp .us{background:var(--band);font-weight:700}
+.faq details{border-top:1px solid var(--lab)}.faq details:last-child{border-bottom:.3rem solid var(--lab)}
+.faq summary{cursor:pointer;font:700 clamp(1.1rem,1.6vw,1.3rem)/1.3 var(--f-sub);padding-block:.85rem}
+.faq p{margin:0 0 1.1rem;max-width:46em}
+.get{display:grid;grid-template-columns:minmax(0,1fr) minmax(19rem,1fr);gap:clamp(2rem,5vw,5rem);align-items:start}
+.chan{list-style:none;padding:0;margin:0}.chan li{border-top:1px solid var(--lab);padding-block:.75rem}
+.chan .cn{display:block;font:800 1.1rem/1.3 var(--f-sub)}
+.fpv{font-size:clamp(1.05rem,2vw,1.4rem);line-height:1.5;margin:.5rem 0 .75rem;font-weight:400;overflow-wrap:anywhere}
+.label p{margin:0 0 .5rem}
+footer{border-top:.62rem solid var(--lab);padding-block:1.5rem 2.5rem}
+.fl{display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;margin-bottom:.75rem}
+footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
+@media (max-width:860px){
+.hero,.own .wrap,.get{grid-template-columns:minmax(0,1fr)}
+.rw{grid-template-columns:minmax(0,1fr)}
+.lvls,.more,.off{grid-template-columns:minmax(0,1fr)}
+.top nav{display:none}.lng{margin-inline-start:auto}
+.lvl h3{margin-top:.15rem}
+}
+
+/* The drawing, in the label's ink on the page's paper. It opens as it scrolls into view where the browser can do that without script. */
+.seen{--bg:var(--paper);--ln:var(--lab);--fg:var(--ink);--f-sans:var(--f-body);--f-mono:ui-monospace,Menlo,Consolas,monospace;display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:clamp(1.5rem,4vw,4rem);align-items:start;margin-top:1.5rem}
+.dwg{display:block;width:100%;height:auto;max-width:44rem}
+.dwg path,.dwg ellipse,.dwg circle,.dwg rect{vector-effect:non-scaling-stroke}
+.dwg .tp{fill:var(--bg);stroke:var(--ln);stroke-width:1.6}
+.dwg .sd{fill:var(--bg);stroke:var(--ln);stroke-width:1}
+.dwg .pd .tp,.dwg .pd .sd{stroke-dasharray:6 5}
+.dwg .ln,.dwg .bar{fill:none;stroke:var(--ln);stroke-width:1.05;stroke-linejoin:round}
+.dwg .bar{fill:var(--bg)}
+.dwg .ds{stroke-dasharray:4 4}
+.dwg .hv{fill:none;stroke:var(--ln);stroke-width:3;stroke-linecap:round}
+.dwg .fl{fill:var(--ln);stroke:var(--ln);stroke-width:1}
+.dwg .ld path{fill:none;stroke:var(--ln);stroke-width:1}
+.dwg .ld circle{fill:var(--bg);stroke:var(--ln);stroke-width:1.3}
+.dwg .ldd path,.dwg .ldd circle{stroke-dasharray:4 3.4}
+.dwg text{fill:var(--fg);font:600 15px var(--f-sans);text-anchor:middle;dominant-baseline:central}
+.dwg .ncb{fill:var(--ln)}.dwg .mkf{fill:var(--bg)}
+.dwg .nct{font:600 18px var(--f-mono);fill:var(--fg)}
+@keyframes open{from{transform:translateY(var(--d))}to{transform:none}}
+@keyframes lead{from{opacity:0}to{opacity:1}}
+@supports (animation-timeline:view()){
+.dwg .pl{animation:open linear both;animation-timeline:view();animation-range:entry 15% cover 48%}
+.dwg .lds,.dwg .nc{animation:lead linear both;animation-timeline:view();animation-range:cover 30% cover 48%}
+}
+.seen-l h3{font:800 1.3rem/1.2 var(--f-sub);font-stretch:85%;color:var(--lab);margin:0 0 .5rem}
+.reads{list-style:none;margin:0 0 1.5rem;padding:0;border-top:.62rem solid var(--lab)}
+.reads li{display:grid;grid-template-columns:1.9rem minmax(0,1fr);gap:.5rem;align-items:center;padding-block:.32rem;border-bottom:1px solid var(--lab)}
+.num{width:1.6rem;height:1.6rem;border:1.4px solid var(--lab);border-radius:50%;display:grid;place-items:center;font-style:normal;font-weight:600;font-size:.84rem;font-variant-numeric:tabular-nums}
+.not{border:2px dashed var(--lab);padding:.9rem 1rem;display:grid;gap:.9rem}
+.not .row{display:grid;grid-template-columns:1.9rem minmax(0,1fr);gap:.5rem}
+.not .num{border-style:dashed}
+.not h4{font:800 1.08rem/1.25 var(--f-sub);font-stretch:88%;margin:.1rem 0 .15rem}
+.not p{margin:0;font-size:.98rem;line-height:var(--notlh)}
+.nc-line{margin:1rem 0 0;font-weight:600}
+.own-q{font:800 clamp(1.5rem,3.4vw,3rem)/1.15 var(--f-disp);font-stretch:80%;margin:0;color:var(--on-deep);letter-spacing:var(--h1ls)}
+.nothing{font:900 var(--big)/var(--biglh) var(--f-disp);font-stretch:62%;margin:0 0 clamp(1.5rem,4vw,3rem);color:var(--on-deep);letter-spacing:-.01em;white-space:nowrap}
+.own{overflow:hidden}
+@media (max-width:860px){.seen{grid-template-columns:minmax(0,1fr)}.dwg text{font-size:27px}.dwg .ld circle{r:23px}.dwg .nct{font-size:30px}}
+.news{list-style:none;margin:1.5rem 0 0;padding:0;border-top:.62rem solid var(--lab)}
+.news li{padding-block:1.15rem;border-bottom:1px solid var(--lab);display:grid;grid-template-columns:minmax(0,3fr) minmax(0,9fr);gap:.4rem clamp(1rem,3vw,2.5rem)}
+.news time{color:var(--mute);font-variant-numeric:tabular-nums;font-size:.95rem}
+.news h3{font:800 clamp(1.2rem,2vw,1.5rem)/1.25 var(--f-sub);font-stretch:88%;margin:0 0 .35rem}
+.news p{margin:0 0 .4rem;max-width:44em}
+.news .src{font-size:.95rem;color:var(--mute);margin:0}
+.prose{max-width:46em}.prose h1{font-size:clamp(2.2rem,5vw,4rem);margin-bottom:1rem}.prose h2{font-size:clamp(1.5rem,2.8vw,2.2rem);margin:2rem 0 .5rem}
+@media (max-width:760px){.news li{grid-template-columns:minmax(0,1fr)}}
+</style>
+	<meta name="generator" content="Hugo 0.169.0">
+</head>
+<body>
+<div class="w"><header class="top"><a class="brand" href="index.html"><span><svg class="mark" viewBox="0 0 240 240" aria-hidden="true"><rect width="240" height="240" rx="52" class="mk-b"/><path class="mk-f" d="M62.58,72.28 Q63.23,66.59 63.67,61.12 Q64.11,55.65 64.11,49.95 Q64.11,44.04 63.56,37.91 Q63.01,31.79 61.7,25.0 Q70.24,28.72 87.97,32.22 Q105.7,35.73 129.23,38.46 Q152.76,41.2 178.37,43.17 L178.37,48.2 Q136.78,53.68 106.57,59.48 Q76.37,65.28 62.58,72.28 Z M146.63,215.0 Q144.44,189.83 142.47,171.33 Q140.5,152.83 138.64,139.37 Q136.78,125.91 134.59,115.62 Q132.4,105.33 129.67,96.36 Q126.93,87.38 123.21,77.97 Q135.03,79.94 146.85,79.94 Q157.79,79.94 170.49,77.97 Q166.77,88.04 163.92,99.53 Q161.08,111.03 158.89,126.57 Q156.7,142.11 155.06,163.56 Q153.42,185.01 152.32,215.0 L146.63,215.0 Z M92.56,215.0 Q90.38,189.83 88.41,171.33 Q86.44,152.83 84.57,139.37 Q82.71,125.91 80.52,115.62 Q78.34,105.33 75.6,96.36 Q72.86,87.38 69.14,77.97 Q80.96,79.94 92.78,79.94 Q103.73,79.94 116.42,77.97 Q112.7,88.04 109.86,99.53 Q107.01,111.03 104.82,126.57 Q102.63,142.11 100.99,163.56 Q99.35,185.01 98.26,215.0 L92.56,215.0 Z"/></svg></span><span class="ltr">Datapavan</span></a><nav><a href="#checks">ما الذي يفحصه</a><a href="#limits">ما لا يمكنه رؤيته</a><a href="#plan">ما يمكنك فعله</a><a href="#faq">أسئلة</a><a href="#get">الحصول عليه</a><a href="news/index.html">الأخبار</a></nav>
+<details class="lng"><summary aria-label="اللغة">العربية</summary><ul><li><a href="../index.html" hreflang="en" lang="en">English</a></li><li><a href="../fr/index.html" hreflang="fr" lang="fr">Français</a></li><li><a href="../de/index.html" hreflang="de" lang="de">Deutsch</a></li><li><a href="../es/index.html" hreflang="es" lang="es">Español</a></li><li><a href="../ru/index.html" hreflang="ru" lang="ru">Русский</a></li><li><a href="../zh/index.html" hreflang="zh" lang="zh">简体中文</a></li><li><a href="../ar/index.html" hreflang="ar" lang="ar" aria-current="true">العربية</a></li><li><a href="../fa/index.html" hreflang="fa" lang="fa">فارسی</a></li></ul></details></header></div>
+<main>
+<div class="w"><div class="hero">
+<div><p class="status">مرحلة ما قبل ألفا. لا يوجد ما يمكن تنزيله بعد.</p><h1>الملصق الذي جاءت تطبيقاتك من دونه.</h1><p class="lead">اعرف ما يمكن لتطبيقاتك الوصول إليه وكم ترسل من بيانات. ثم ضع لذلك حدًّا.</p><p class="lead2">على هاتفك أنت، عبر إعدادات Android نفسها. بلا وصول إلى الإنترنت، وبلا حساب، وبلا صلاحيات الجذر.</p>
+<p class="cta"><a class="btn" href="https://github.com/visadahyu/datapavan/releases">تابع الإصدار الأول</a><a href="#get">كيف تتحقق من نسخة</a></p></div>
+<aside class="label" aria-label="ملصق التطبيق, بيانات نموذجية">
+<p class="l-title">ملصق التطبيق</p>
+<div class="l-name"><span>Bright Torch</span><span class="l-tag">بيانات نموذجية</span></div>
+<div class="l-g"><h3>من أين جاء</h3><dl><div><dt>مصدر التثبيت</dt><dd>ملف</dd></div><div><dt>آخر فتح</dt><dd>قبل ٩٦ يومًا</dd></div></dl></div><div class="l-g"><h3>يمكنه الوصول إلى</h3><dl><div><dt>الميكروفون</dt><dd>مسموح</dd></div><div><dt>جهات الاتصال</dt><dd>مسموح</dd></div><div><dt>الموقع الجغرافي</dt><dd>مسموح</dd></div></dl></div><div class="l-g"><h3>الوصول الخاص</h3><dl><div><dt>خدمة تسهيل الاستخدام</dt><dd>مفعَّلة</dd></div></dl></div><div class="l-g"><h3>في رمزه البرمجي*</h3><dl><div><dt>أدوات التتبّع</dt><dd>٢</dd></div><div><dt>حزم SDK لمشاركة الاتصال</dt><dd>١</dd></div></dl></div><div class="l-g"><h3>المُرسَل في ٣٠ يومًا</h3><dl><div><dt>بيانات الجوّال</dt><dd>٢٤٠ ميغابايت</dd></div><div><dt>Wi-Fi</dt><dd>٨٥ ميغابايت</dd></div><div><dt>في الخلفية</dt><dd>٢٩٠ ميغابايت</dd></div></dl></div>
+<p class="fine">*الأسماء المعروفة فقط. لن تُكتشف حزمة SDK أُعيدت تسميتها أو أُخفيت، لذا فإن عدم العثور على شيء ليس دليلًا على عدم وجود شيء.</p></aside>
+</div></div>
+<section id="checks"><div class="w"><h2>ما الذي يفحصه</h2><p class="sub">كل سطر في الملصق مصدره هاتفك أنت.</p><div class="rows"><div class="rw"><h3>التطبيقات وما يمكنها الوصول إليه</h3><p>كل تطبيق مثبَّت: من أين جاء، وأذوناته الحسّاسة، والوصول الخاص الذي يتيح للتطبيق قراءة الشاشة أو التصرف نيابةً عنك.</p><p class="need"><b>يطلب منك</b>لا شيء</p></div><div class="rw"><h3>أدوات التتبّع في الرمز البرمجي</h3><p>يُقرأ الرمز البرمجي لكل تطبيق على الهاتف ويُطابَق مع قائمة أدوات التتبّع εxodus، ومع قائمتنا لحزم SDK التي تشارك اتصالك أو تقدّم الدعم عن بُعد أو تسجّل الشاشة.</p><p class="need"><b>يطلب منك</b>لا شيء</p></div><div class="rw"><h3>تطبيقات VPN الأصلية أو المعدَّلة</h3><p>تُقارَن تطبيقات VPN والخادم الوكيل وتجاوز الحجب بمفاتيح التوقيع الرسمية لمطوّريها، فتظهر النسخة المعدَّلة.</p><p class="need"><b>يطلب منك</b>لا شيء</p></div><div class="rw"><h3>الهاتف نفسه</h3><p>تصحيح أخطاء USB وتصحيح الأخطاء اللاسلكي، والمراجع المصدّقة التي قمت بتثبيتها، وتصحيح الأمان، وحالة الإقلاع من عتاد الهاتف.</p><p class="need"><b>يطلب منك</b>لا شيء</p></div><div class="rw"><h3>البيانات لكل تطبيق</h3><p>ما استلمه كل تطبيق وأرسله عبر بيانات الجوّال وشبكة Wi-Fi في آخر ٣٠ يومًا أو ٧ أيام، ومقدار ما كان منه في الخلفية، من عدّاد Android نفسه.</p><p class="need"><b>يطلب منك</b>الوصول إلى بيانات الاستخدام، إذا سمحت بذلك</p></div><div class="rw"><h3>التطبيقات المنسية</h3><p>تطبيقات لم تفتحها منذ ٩٠ يومًا ولا يزال لديها إذن أو وصول خاص أو بيانات في الخلفية.</p><p class="need"><b>يطلب منك</b>الوصول إلى بيانات الاستخدام، إذا سمحت بذلك</p></div><div class="rw"><h3>نشاط واحد في كل مرة</h3><p>اقرأ العدّاد، واستخدم التطبيق، واقرأ مرة أخرى، وانظر كم أرسل بينما كنت تكتفي بالمشاهدة أو التمرير.</p><p class="need"><b>يطلب منك</b>الوصول إلى بيانات الاستخدام، إذا سمحت بذلك</p></div></div></div></section>
+<section class="band"><div class="w"><h2>داخل التطبيق</h2><div class="phones"><img src="../images/ar-summary.webp" width="540" height="1200" loading="lazy" alt="الملخّص"><img src="../images/ar-app.webp" width="540" height="1200" loading="lazy" alt="التطبيقات"><img src="../images/ar-plan.webp" width="540" height="1200" loading="lazy" alt="خطتك"></div><p class="note">شاشات حقيقية من محاكي Android، مع تطبيق اختبار خاص بنا.</p></div></section>
+<section id="limits"><div class="w"><h2>ما يراه، وما لا يمكنه رؤيته</h2><p class="sub" style="margin-bottom:0">الخطوط المتصلة: ما يقرؤه Datapavan. الخطوط المتقطعة: ما لا يمكن لهذا الإصدار رؤيته.</p>
+<div class="seen"><div><svg class="dwg" viewBox="0 0 720 880" role="img" aria-label="ما يراه، وما لا يمكنه رؤيته"><g class="lds"><g class="ld ldd p8"><path d="M265.3 664.0L32 664.0"/><circle cx="32" cy="664.0" r="15"/><text x="32" y="664.0">٨</text></g><g class="ld p5"><path d="M265.3 574.0L32 574.0"/><circle cx="32" cy="574.0" r="15"/><text x="32" y="574.0">٥</text></g><g class="ld p4"><path d="M265.3 484.0L32 484.0"/><circle cx="32" cy="484.0" r="15"/><text x="32" y="484.0">٤</text></g><g class="ld p3"><path d="M265.3 394.0L32 394.0"/><circle cx="32" cy="394.0" r="15"/><text x="32" y="394.0">٣</text></g><g class="ld p2"><path d="M265.3 304.0L32 304.0"/><circle cx="32" cy="304.0" r="15"/><text x="32" y="304.0">٢</text></g><g class="ld p1"><path d="M265.3 214.0L32 214.0"/><circle cx="32" cy="214.0" r="15"/><text x="32" y="214.0">١</text></g><g class="ld ldd p6"><path d="M265.3 124.0L32 124.0"/><circle cx="32" cy="124.0" r="15"/><text x="32" y="124.0">٦</text></g></g><g class="pl pd p8" style="--d:-270px"><path class="sd" d="M378.6 602.4L276.7 661.2Q265.3 667.8 276.7 674.4L503.3 805.2Q514.7 811.8 526.1 805.2L628.0 746.4Q639.4 739.8 628.0 733.2L401.4 602.4Q390.0 595.8 378.6 602.4Z"/><path class="tp" d="M378.6 598.6L276.7 657.4Q265.3 664.0 276.7 670.6L503.3 801.4Q514.7 808.0 526.1 801.4L628.0 742.6Q639.4 736.0 628.0 729.4L401.4 598.6Q390.0 592.0 378.6 598.6Z"/><path class="ln ds" d="M427.4 642.4L352.6 685.6L427.4 728.8L502.2 685.6ZM514.7 712.0L473.1 736.0L514.7 760.0L556.3 736.0Z"/></g><g class="pl p5" style="--d:-180px"><path class="sd" d="M378.6 512.4L276.7 571.2Q265.3 577.8 276.7 584.4L503.3 715.2Q514.7 721.8 526.1 715.2L628.0 656.4Q639.4 649.8 628.0 643.2L401.4 512.4Q390.0 505.8 378.6 512.4Z"/><path class="tp" d="M378.6 508.6L276.7 567.4Q265.3 574.0 276.7 580.6L503.3 711.4Q514.7 718.0 526.1 711.4L628.0 652.6Q639.4 646.0 628.0 639.4L401.4 508.6Q390.0 502.0 378.6 508.6Z"/><path class="ln" d="M398.3 523.6L338.0 558.4"/><path class="ln" d="M322.5 559.0L295.4 574.6L310.0 583.0L337.0 567.4Z"/><ellipse class="fl" cx="310.0" cy="574.6" rx="5.4" ry="3.2"/><path class="ln" d="M437.8 546.4L377.5 581.2"/><path class="ln" d="M361.9 581.8L334.9 597.4L349.5 605.8L376.5 590.2Z"/><ellipse class="ln" cx="361.9" cy="590.2" rx="5.4" ry="3.2"/><path class="ln" d="M477.3 569.2L417.0 604.0"/><path class="ln" d="M401.4 604.6L374.4 620.2L389.0 628.6L416.0 613.0Z"/><ellipse class="fl" cx="389.0" cy="620.2" rx="5.4" ry="3.2"/><path class="ln" d="M516.8 592.0L456.5 626.8"/><path class="ln" d="M440.9 627.4L413.9 643.0L428.5 651.4L455.5 635.8Z"/><ellipse class="fl" cx="428.5" cy="643.0" rx="5.4" ry="3.2"/><path class="ln" d="M556.3 614.8L496.0 649.6"/><path class="ln" d="M480.4 650.2L453.4 665.8L467.9 674.2L495.0 658.6Z"/><ellipse class="ln" cx="480.4" cy="658.6" rx="5.4" ry="3.2"/><path class="ln" d="M595.8 637.6L535.5 672.4"/><path class="ln" d="M519.9 673.0L492.9 688.6L507.4 697.0L534.4 681.4Z"/><ellipse class="fl" cx="507.4" cy="688.6" rx="5.4" ry="3.2"/></g><g class="pl p4" style="--d:-90px"><path class="sd" d="M378.6 422.4L276.7 481.2Q265.3 487.8 276.7 494.4L503.3 625.2Q514.7 631.8 526.1 625.2L628.0 566.4Q639.4 559.8 628.0 553.2L401.4 422.4Q390.0 415.8 378.6 422.4Z"/><path class="tp" d="M378.6 418.6L276.7 477.4Q265.3 484.0 276.7 490.6L503.3 621.4Q514.7 628.0 526.1 621.4L628.0 562.6Q639.4 556.0 628.0 549.4L401.4 418.6Q390.0 412.0 378.6 418.6Z"/><path class="bar" d="M382.7 463.0L382.7 451.0L360.9 463.6L360.9 475.6Z"/><path class="bar" d="M339.1 463.0L339.1 451.0L360.9 463.6L360.9 475.6Z"/><path class="bar" d="M360.9 438.4L339.1 451.0L360.9 463.6L382.7 451.0Z"/><path class="bar" d="M413.9 481.0L413.9 440.2L392.1 452.8L392.1 493.6Z"/><path class="bar" d="M370.3 481.0L370.3 440.2L392.1 452.8L392.1 493.6Z"/><path class="bar" d="M392.1 427.6L370.3 440.2L392.1 452.8L413.9 440.2Z"/><path class="bar" d="M445.1 499.0L445.1 477.4L423.3 490.0L423.3 511.6Z"/><path class="bar" d="M401.4 499.0L401.4 477.4L423.3 490.0L423.3 511.6Z"/><path class="bar" d="M423.3 464.8L401.4 477.4L423.3 490.0L445.1 477.4Z"/><path class="bar" d="M476.3 517.0L476.3 457.0L454.4 469.6L454.4 529.6Z"/><path class="bar" d="M432.6 517.0L432.6 457.0L454.4 469.6L454.4 529.6Z"/><path class="fl" d="M454.4 444.4L432.6 457.0L454.4 469.6L476.3 457.0Z"/><path class="bar" d="M507.4 535.0L507.4 526.6L485.6 539.2L485.6 547.6Z"/><path class="bar" d="M463.8 535.0L463.8 526.6L485.6 539.2L485.6 547.6Z"/><path class="bar" d="M485.6 514.0L463.8 526.6L485.6 539.2L507.4 526.6Z"/><path class="bar" d="M538.6 553.0L538.6 524.2L516.8 536.8L516.8 565.6Z"/><path class="bar" d="M495.0 553.0L495.0 524.2L516.8 536.8L516.8 565.6Z"/><path class="bar" d="M516.8 511.6L495.0 524.2L516.8 536.8L538.6 524.2Z"/><path class="bar" d="M569.8 571.0L569.8 554.2L548.0 566.8L548.0 583.6Z"/><path class="bar" d="M526.1 571.0L526.1 554.2L548.0 566.8L548.0 583.6Z"/><path class="bar" d="M548.0 541.6L526.1 554.2L548.0 566.8L569.8 554.2Z"/></g><g class="pl p3" style="--d:0px"><path class="sd" d="M378.6 332.4L276.7 391.2Q265.3 397.8 276.7 404.4L503.3 535.2Q514.7 541.8 526.1 535.2L628.0 476.4Q639.4 469.8 628.0 463.2L401.4 332.4Q390.0 325.8 378.6 332.4Z"/><path class="tp" d="M378.6 328.6L276.7 387.4Q265.3 394.0 276.7 400.6L503.3 531.4Q514.7 538.0 526.1 531.4L628.0 472.6Q639.4 466.0 628.0 459.4L401.4 328.6Q390.0 322.0 378.6 328.6Z"/><ellipse class="ln" cx="392.1" cy="364.0" rx="16" ry="9.5"/><path class="ln" d="M400.4 359.2L400.4 368.8L372.3 365.8"/><ellipse class="ln" cx="338.0" cy="395.2" rx="16" ry="9.5"/><path class="ln" d="M346.4 390.4L346.4 400.0L318.3 397.0"/><ellipse class="ln" cx="450.3" cy="397.6" rx="16" ry="9.5"/><path class="ln" d="M458.6 392.8L458.6 402.4L430.5 399.4"/><ellipse class="ln" cx="396.2" cy="428.8" rx="16" ry="9.5"/><path class="ln" d="M404.5 424.0L404.5 433.6L376.5 430.6"/><ellipse class="ln" cx="508.5" cy="431.2" rx="16" ry="9.5"/><path class="ln" d="M516.8 426.4L516.8 436.0L488.7 433.0"/><ellipse class="ln ds" cx="454.4" cy="462.4" rx="16" ry="9.5"/><ellipse class="ln" cx="566.7" cy="464.8" rx="16" ry="9.5"/><path class="ln" d="M575.0 460.0L575.0 469.6L546.9 466.6"/><ellipse class="ln" cx="512.6" cy="496.0" rx="16" ry="9.5"/><path class="ln" d="M520.9 491.2L520.9 500.8L492.9 497.8"/></g><g class="pl p2" style="--d:90px"><path class="sd" d="M378.6 242.4L276.7 301.2Q265.3 307.8 276.7 314.4L503.3 445.2Q514.7 451.8 526.1 445.2L628.0 386.4Q639.4 379.8 628.0 373.2L401.4 242.4Q390.0 235.8 378.6 242.4Z"/><path class="tp" d="M378.6 238.6L276.7 297.4Q265.3 304.0 276.7 310.6L503.3 441.4Q514.7 448.0 526.1 441.4L628.0 382.6Q639.4 376.0 628.0 369.4L401.4 238.6Q390.0 232.0 378.6 238.6Z"/><path class="ln" d="M391.0 247.0L310.0 293.8M408.5 257.1L358.6 285.9M443.4 277.2L406.0 298.8M460.9 287.3L394.4 325.7M478.3 297.4L382.7 352.6M495.8 307.5L437.6 341.1M530.7 327.6L499.5 345.6M548.2 337.7L460.9 388.1M583.1 357.9L537.4 384.3M600.5 368.0L517.4 416.0"/><path class="hv" d="M426.0 267.2L332.4 321.2M513.2 317.6L436.3 362.0M565.6 347.8L503.3 383.8"/></g><g class="pl p1" style="--d:180px"><path class="sd" d="M378.6 152.4L276.7 211.2Q265.3 217.8 276.7 224.4L503.3 355.2Q514.7 361.8 526.1 355.2L628.0 296.4Q639.4 289.8 628.0 283.2L401.4 152.4Q390.0 145.8 378.6 152.4Z"/><path class="tp" d="M378.6 148.6L276.7 207.4Q265.3 214.0 276.7 220.6L503.3 351.4Q514.7 358.0 526.1 351.4L628.0 292.6Q639.4 286.0 628.0 279.4L401.4 148.6Q390.0 142.0 378.6 148.6Z"/><path class="ln" d="M392.1 158.1L371.7 169.8L392.1 181.6L412.4 169.8ZM366.1 173.1L345.7 184.8L366.1 196.6L386.5 184.8ZM314.1 203.1L293.8 214.8L314.1 226.6L334.5 214.8ZM423.3 176.1L402.9 187.8L423.3 199.6L443.6 187.8ZM397.3 191.1L376.9 202.8L397.3 214.6L417.6 202.8ZM371.3 206.1L350.9 217.8L371.3 229.6L391.7 217.8ZM345.3 221.1L324.9 232.8L345.3 244.6L365.7 232.8ZM454.4 194.1L434.1 205.8L454.4 217.6L474.8 205.8ZM402.5 224.1L382.1 235.8L402.5 247.6L422.8 235.8ZM376.5 239.1L356.1 250.8L376.5 262.6L396.9 250.8ZM485.6 212.1L465.2 223.8L485.6 235.6L506.0 223.8ZM433.6 242.1L413.3 253.8L433.6 265.6L454.0 253.8ZM407.7 257.1L387.3 268.8L407.7 280.6L428.0 268.8ZM516.8 230.1L496.4 241.8L516.8 253.6L537.2 241.8ZM490.8 245.1L470.4 256.8L490.8 268.6L511.2 256.8ZM438.8 275.1L418.5 286.8L438.8 298.6L459.2 286.8ZM548.0 248.1L527.6 259.8L548.0 271.6L568.3 259.8ZM522.0 263.1L501.6 274.8L522.0 286.6L542.3 274.8ZM496.0 278.1L475.6 289.8L496.0 301.6L516.4 289.8ZM470.0 293.1L449.7 304.8L470.0 316.6L490.4 304.8ZM553.2 281.1L532.8 292.8L553.2 304.6L573.5 292.8ZM527.2 296.1L506.8 307.8L527.2 319.6L547.5 307.8ZM501.2 311.1L480.8 322.8L501.2 334.6L521.6 322.8Z"/><path class="fl" d="M340.1 188.1L319.8 199.8L340.1 211.6L360.5 199.8ZM428.5 209.1L408.1 220.8L428.5 232.6L448.8 220.8ZM459.6 227.1L439.3 238.8L459.6 250.6L480.0 238.8ZM464.8 260.1L444.5 271.8L464.8 283.6L485.2 271.8ZM579.1 266.1L558.8 277.8L579.1 289.6L599.5 277.8Z"/></g><g class="pl pd p6" style="--d:270px"><path class="sd" d="M378.6 62.4L276.7 121.2Q265.3 127.8 276.7 134.4L503.3 265.2Q514.7 271.8 526.1 265.2L628.0 206.4Q639.4 199.8 628.0 193.2L401.4 62.4Q390.0 55.8 378.6 62.4Z"/><path class="tp" d="M378.6 58.6L276.7 117.4Q265.3 124.0 276.7 130.6L503.3 261.4Q514.7 268.0 526.1 261.4L628.0 202.6Q639.4 196.0 628.0 189.4L401.4 58.6Q390.0 52.0 378.6 58.6Z"/><path class="ln ds" d="M431.6 100.0L352.6 145.6M460.7 116.8L410.8 145.6M489.8 133.6L419.1 174.4M518.9 150.4L485.6 169.6"/></g><g class="lds"><g class="ld ldd p7"><path d="M639.4 556.0L688.0 556.0"/><circle cx="688.0" cy="556.0" r="15"/><text x="688.0" y="556.0">٧</text></g></g><g class="nc"><rect x="628" y="828" width="58" height="44" rx="9" class="ncb"/><path class="mkf" transform="translate(640 832) scale(.15)" d="M62.58,72.28 Q63.23,66.59 63.67,61.12 Q64.11,55.65 64.11,49.95 Q64.11,44.04 63.56,37.91 Q63.01,31.79 61.7,25.0 Q70.24,28.72 87.97,32.22 Q105.7,35.73 129.23,38.46 Q152.76,41.2 178.37,43.17 L178.37,48.2 Q136.78,53.68 106.57,59.48 Q76.37,65.28 62.58,72.28 Z M146.63,215.0 Q144.44,189.83 142.47,171.33 Q140.5,152.83 138.64,139.37 Q136.78,125.91 134.59,115.62 Q132.4,105.33 129.67,96.36 Q126.93,87.38 123.21,77.97 Q135.03,79.94 146.85,79.94 Q157.79,79.94 170.49,77.97 Q166.77,88.04 163.92,99.53 Q161.08,111.03 158.89,126.57 Q156.7,142.11 155.06,163.56 Q153.42,185.01 152.32,215.0 L146.63,215.0 Z M92.56,215.0 Q90.38,189.83 88.41,171.33 Q86.44,152.83 84.57,139.37 Q82.71,125.91 80.52,115.62 Q78.34,105.33 75.6,96.36 Q72.86,87.38 69.14,77.97 Q80.96,79.94 92.78,79.94 Q103.73,79.94 116.42,77.97 Q112.7,88.04 109.86,99.53 Q107.01,111.03 104.82,126.57 Q102.63,142.11 100.99,163.56 Q99.35,185.01 98.26,215.0 L92.56,215.0 Z"/><path class="ln" d="M628 850L536 850"/><path class="hv" d="M527 841l18 18M545 841l-18 18"/><text class="nct" x="518" y="850" style="text-anchor:start">NC</text></g></svg>
+</div><div class="seen-l"><h3>يقرأ</h3><ul class="reads"><li><i class="num">١</i><span>التطبيقات وما يمكنها الوصول إليه</span></li><li><i class="num">٢</i><span>الرمز البرمجي داخل كل تطبيق</span></li><li><i class="num">٣</i><span>مفاتيح توقيع تطبيقات VPN</span></li><li><i class="num">٤</i><span>عدّاد البيانات في Android</span></li><li><i class="num">٥</i><span>إعدادات الهاتف</span></li></ul><h3>لا يمكنه رؤية</h3><div class="not"><div class="row"><i class="num">٢</i><div><h4>رمز برمجي أُعيدت تسميته أو أُخفي</h4><p>يبحث الفحص عن أسماء معروفة، لذا لن يكتشف حزمة SDK أُعيدت تسميتها أو جرى تمويهها أو تُحمَّل لاحقًا. عدم العثور على شيء ليس دليلًا على عدم وجود شيء.</p></div></div><div class="row"><i class="num">٧</i><div><h4>إلى أين تذهب البيانات</h4><p>يحسب هذا الإصدار المقدار، لا الجهة التي تذهب إليها البيانات. وهذا مخطَّط له في v0.2، في تطبيق منفصل اسمه Datapavan Watch.</p></div></div><div class="row"><i class="num">٦</i><div><h4>ما بداخل حركة بياناتك</h4><p>لا يمكنه قراءة المحتوى المشفَّر أو ما تكتبه داخل تطبيق، ولن يحاول أبدًا فك تشفير أي شيء.</p></div></div><div class="row"><i class="num">٨</i><div><h4>البرامج الثابتة والمودم</h4><p>لا يمكن لأي تطبيق التحكم فيهما، أو تنظيف هاتف مخترق بالفعل. يكتشف Datapavan الخطر ويرشدك.</p></div></div></div><p class="nc-line"><span class="ltr">NC</span>: لا اتصال: لا يملك Datapavan إذن الإنترنت.</p></div></div></div></section>
+<section id="plan" class="band"><div class="w"><h2>ما يمكنك فعله به</h2><p class="sub" style="margin-bottom:0">خطة قصيرة تبدأ بالتغييرات التي تزيل أكبر قدر من المخاطر. يفتح كل تغيير شاشة Android المناسبة، حيث تتخذ القرار بنفسك. لا يغيّر Datapavan أي شيء بنفسه.</p><div class="lvls"><div class="lvl"><div class="bars" aria-hidden="true"><i></i></div><h3>خفيف</h3><p>التطبيقات التي يمكنها التحكم في الهاتف، والتطبيقات التي لم تُفتح منذ ٩٠ يومًا ولا يزال لديها وصول إلى مستشعر أو وصول خاص أو إذن VPN.</p></div><div class="lvl"><div class="bars" aria-hidden="true"><i></i><i></i></div><h3>متوسط</h3><p>وأيضًا التطبيقات التي يمكنها تثبيت تطبيقات، ومشاركة حركة البيانات، وتصحيح أخطاء USB، وبقية أنواع الوصول لدى التطبيقات التي لم تُفتح منذ ٩٠ يومًا.</p></div><div class="lvl"><div class="bars" aria-hidden="true"><i></i><i></i><i></i></div><h3>صارم</h3><p>وأيضًا التطبيقات المثبَّتة مسبقًا، التي لم يختبرها Datapavan على هاتفك.</p></div></div><div class="more"><div><h3>السجلّ</h3><p>يسجّل ما تغيّر فعلًا، وينتبه عندما يعود تغيير ما، ويتيح التراجع.</p></div><div><h3>حدّ الأمان</h3><p>لا يمسّ التطبيقات التي يحتاج إليها هاتفك، مثل تطبيقاتك التلقائية ولوحة المفاتيح.</p></div></div></div></section>
+<section class="own"><div class="w"><p class="own-q">وماذا يرسل Datapavan؟</p><p class="nothing">لا شيء.</p><div class="wrap"><div><h2>ملصق Datapavan نفسه</h2><p>يفرض Android ذلك. لا يمكن لتطبيق بلا إذن الإنترنت فتح اتصال بالشبكة. لا يطلب Datapavan الأصلي هذا الإذن أبدًا، والنسخة التي تطلبه ليست أصلية.</p></div>
+<aside class="label" aria-label="ملصق Datapavan نفسه"><p class="l-title ltr-t">Datapavan</p><div class="l-g" style="margin-top:.5rem"><dl style="padding-top:.2rem"><div><dt>الوصول إلى الإنترنت</dt><dd>لا يوجد</dd></div><div><dt>أدوات التتبّع</dt><dd>٠</dd></div><div><dt>التحليلات</dt><dd>لا يوجد</dd></div><div><dt>إرسال تقارير الأعطال</dt><dd>لا يوجد</dd></div><div><dt>الحسابات</dt><dd>لا يوجد</dd></div><div><dt>الخوادم التي يتصل بها</dt><dd>لا يوجد</dd></div><div><dt>صلاحيات الجذر</dt><dd>غير مطلوبة</dd></div><div><dt>خدمات Google Play</dt><dd>غير مطلوبة</dd></div></dl></div><p class="fine" style="margin-bottom:0">برنامج حر بموجب Apache License 2.0.</p></aside></div></div></section>
+<section><div class="w"><h2>كيف يُقارن بغيره</h2><p class="sub">بحسب نوع الأداة، لأن كلًا منها يؤدي عملًا مختلفًا. يفحص Datapavan 0.1 ويرشد، لكنه لا يحظر.</p><div class="scroll" tabindex="0"><table class="cmp"><thead><tr><td></td><th scope="col" class="us">Datapavan 0.1</th><th scope="col">مواقع التقارير على الإنترنت</th><th scope="col">تطبيقات جدار الحماية والحظر</th><th scope="col">إعدادات Android نفسها</th></tr></thead><tbody><tr><th scope="row">يقرأ الرمز البرمجي للتطبيقات بحثًا عن أدوات التتبّع</th><td class="us">على الهاتف</td><td>على خادمها</td><td>بعضها</td><td>لا</td></tr><tr><th scope="row">يحسب البيانات لكل تطبيق</th><td class="us">نعم</td><td>لا</td><td>نعم</td><td>نعم</td></tr><tr><th scope="row">يعرض وجهة البيانات</th><td class="us">مخطَّط له</td><td>لا</td><td>نعم</td><td>لا</td></tr><tr><th scope="row">يحظر الاتصالات</th><td class="us">مخطَّط له</td><td>لا</td><td>نعم</td><td>محدود</td></tr><tr><th scope="row">يتحقق من أن تطبيق VPN هو التطبيق الرسمي</th><td class="us">نعم</td><td>لا</td><td>لا</td><td>لا</td></tr><tr><th scope="row">يشغل خانة VPN الوحيدة في هاتفك</th><td class="us">لا</td><td>لا</td><td>نعم</td><td>لا</td></tr><tr><th scope="row">يحتاج هو نفسه إلى الوصول إلى الإنترنت</th><td class="us">لا</td><td>نعم</td><td>نعم</td><td>جزء من Android</td></tr></tbody></table></div></div></section>
+<section id="faq" class="band"><div class="w"><h2>أسئلة</h2><div class="faq"><details><summary>هل يرسل أي شيء إلى أي مكان؟</summary><p>لا. ليس لديه إذن باستخدام الإنترنت، لذا لا يمكنه فتح اتصال بالشبكة. يبقى ما يعثر عليه على الهاتف إلا إذا شاركته بنفسك.</p></details><details><summary>هل يعمل إلى جانب شبكة VPN التي أستخدمها؟</summary><p>نعم. لا يستخدم هذا الإصدار خانة VPN في Android، لذا تستمر شبكة VPN أو أداة تجاوز الحجب لديك في العمل كما هي.</p></details><details><summary>هل يحظر أي شيء؟</summary><p>ليس في هذا الإصدار. تُجري كل تغيير بنفسك في إعدادات Android. الحظر مخطَّط له في v0.3.</p></details><details><summary>لماذا يطلب الوصول إلى بيانات الاستخدام؟</summary><p>لقراءة مقدار البيانات التي استخدمها كل تطبيق وآخر مرة ظهر فيها على الشاشة. يمكنك الرفض، وسيظل الباقي يعمل. لا تُقرأ إلا الإجماليات، ولا يُحفظ أي شيء.</p></details><details><summary>على أي هواتف يعمل؟</summary><p>هواتف ٦٤ بت من أي شركة مصنّعة تعمل بنظام Android 10 أو أحدث، مع خدمات Google أو بدونها. جرى اختباره ابتداءً من Android 11.</p></details><details><summary>هل هو مجاني؟</summary><p>نعم. هو برنامج حر بموجب Apache License 2.0، بلا إعلانات وبلا بيع للبيانات.</p></details><details><summary>من يصنعه؟ هل دقّقه أحد؟</summary><p>شخص واحد يتولى صيانته حتى الآن، والرمز البرمجي علني. لم يخضع أي شيء لتدقيق مستقل بعد.</p></details></div></div></section>
+<section id="get"><div class="w get"><div><h2>الحصول عليه</h2><p class="sub" style="margin-bottom:1rem">لا يوجد ما يمكن تنزيله بعد. مع الإصدار الأول:</p><ul class="chan"><li><strong class="cn">GitHub Releases</strong> <span>ملف APK الموقَّع، وقيمة SHA-256 الخاصة به، وملاحظات الإصدار الموقَّعة.</span></li><li><strong class="cn">F-Droid و IzzyOnDroid</strong> <span>المفتاح نفسه في كل قناة.</span></li><li><strong class="cn">Obtainium</strong> <span>أضف github.com/visadahyu/datapavan.</span></li></ul></div>
+<aside class="label"><p class="l-title" style="font-size:clamp(2.1rem,3.6vw,3.2rem)">تحقَّق من نسختك</p><div class="l-g" style="margin-top:.5rem;padding-top:.5rem"><p>كل نسخة أصلية موقَّعة بمفتاح واحد. بصمة SHA-256 لشهادته هي:</p><p class="fp fpv">FA:6A:24:04:2A:BC:AC:8B:<br>D0:09:01:10:F7:04:FF:EF:<br>E7:DA:D3:AD:F5:DB:38:FB:<br>07:38:90:AB:4C:B1:FA:84</p></div><p class="fine">قارنها بأداة غير Datapavan نفسه، لأن النسخة المعدَّلة يمكنها عرض أي نص: مثلًا AppVerifier على الهاتف، أو apksigner verify --print-certs على جهاز كمبيوتر.</p></aside></div></section>
+</main>
+
+<div class="w"><footer><div class="fl"><a href="news/index.html">الأخبار</a>
+<a href="../privacy/index.html">ملاحظات الخصوصية</a>
+<a href="https://github.com/visadahyu/datapavan/security/advisories/new">الإبلاغ عن ثغرة بسرّية</a>
+<a href="https://github.com/visadahyu/datapavan/blob/main/SECURITY.md">سياسة الأمان</a>
+<a href="https://github.com/visadahyu/datapavan">الرمز المصدري</a></div><p>برنامج حر بموجب Apache License 2.0.</p><p>لا تضع هذه الصفحة ملفات تعريف ارتباط ولا تحمّل شيئًا من خوادم أخرى.</p></footer></div>
+</body>
+</html>

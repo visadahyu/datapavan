@@ -1,0 +1,2 @@
+@font-face{font-family:"Archivo";src:url(@@ROOT@@fonts/archivo-latin-wdth-normal.woff2) format("woff2");font-weight:100 900;font-stretch:62% 125%;font-display:swap;}
+:root{--f-disp:"Archivo",system-ui,sans-serif;--f-sub:"Archivo",system-ui,sans-serif;--f-body:"Archivo",system-ui,sans-serif;--h1w:800;--h1lh:.92;--h2lh:.98;--h1ls:-.015em;--blh:1.6;--notlh:1.45;--big:clamp(5rem,31vw,28rem);--biglh:.92}

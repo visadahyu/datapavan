@@ -37,6 +37,10 @@ data_gates() {
     fi
     # Every published copy of the project's keys (ADR 0024).
     python3 -I "$ROOT/scripts/check-keys.py" || failed=1
+    # What a translation can break without anyone reading it (ADR 0030).
+    python3 -I "$ROOT/scripts/check-translations.py" || failed=1
+    # The website in docs/site is what site/ builds, and it keeps the site's rules.
+    "$ROOT/scripts/build-site.sh" --check || failed=1
     [ "$failed" -eq 0 ]
 }
 

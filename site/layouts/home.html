@@ -1,0 +1,44 @@
+{{ define "main" }}
+{{- $t := index site.Data.text site.Language.Lang -}}
+{{- $d := $t.digits -}}
+{{- $toSite := cond (eq site.Language.Lang "en") "" "../" -}}
+{{- $shots := slice (slice "summary" (index $t.shots 0)) (slice "app" (index $t.shots 1)) (slice "plan" (index $t.shots 2)) -}}
+<main>
+<div class="w"><div class="hero">
+<div><p class="status">{{ $t.status }}</p><h1>{{ $t.h1 }}</h1><p class="lead">{{ $t.tagline }}</p><p class="lead2">{{ $t.lead }}</p>
+<p class="cta"><a class="btn" href="{{ site.Params.repo }}/releases">{{ $t.cta_follow }}</a><a href="#get">{{ $t.cta_how }}</a></p></div>
+<aside class="label" aria-label="{{ $t.label_title }}, {{ $t.sample_tag }}">
+<p class="l-title">{{ $t.label_title }}</p>
+<div class="l-name"><span>{{ $t.sample_name }}</span><span class="l-tag">{{ $t.sample_tag }}</span></div>
+{{ range $t.label_rows }}<div class="l-g"><h3>{{ index . 0 }}</h3><dl>{{ range index . 1 }}<div><dt>{{ index . 0 }}</dt><dd>{{ index . 1 }}</dd></div>{{ end }}</dl></div>{{ end }}
+<p class="fine">{{ $t.label_fine }}</p></aside>
+</div></div>
+<section id="checks"><div class="w"><h2>{{ $t.checks_title }}</h2><p class="sub">{{ $t.checks_lead }}</p><div class="rows">
+{{- range $t.checks }}<div class="rw"><h3>{{ index . 0 }}</h3><p>{{ index . 1 }}</p><p class="need"><b>{{ $t.needs_label }}</b>{{ if index . 2 }}{{ $t.needs_usage }}{{ else }}{{ $t.needs_nothing }}{{ end }}</p></div>{{ end -}}
+</div></div></section>
+<section class="band"><div class="w"><h2>{{ $t.screens_title }}</h2><div class="phones">
+{{- range $shots }}{{ $src := printf "%simages/%s-%s.webp" $toSite site.Language.Lang (index . 0) }}<img src="{{ $src | safeURL }}" width="540" height="1200" loading="lazy" alt="{{ index . 1 }}">{{ end -}}
+</div><p class="note">{{ $t.shots_note }}</p></div></section>
+<section id="limits"><div class="w"><h2>{{ $t.limits_title }}</h2><p class="sub" style="margin-bottom:0">{{ $t.legend_solid }} {{ $t.legend_dash }}</p>
+<div class="seen"><div>{{ partial (printf "drawing-%s.html" site.Language.Direction) (dict "digits" $d "title" $t.limits_title) }}</div><div class="seen-l"><h3>{{ $t.reads_title }}</h3><ul class="reads">
+{{- range $i, $p := $t.parts }}{{ if index $p 1 }}<li><i class="num">{{ index $d $i }}</i><span>{{ index $p 0 }}</span></li>{{ end }}{{ end -}}
+</ul><h3>{{ $t.cannot_title }}</h3><div class="not">
+{{- /* The limits in their file order: hidden code belongs to part 2, then parts 7, 6 and 8. */ -}}
+{{- $marks := slice (index $d 1) (index $d 6) (index $d 5) (index $d 7) -}}
+{{- range $i, $l := $t.limits }}<div class="row"><i class="num">{{ index $marks $i }}</i><div><h4>{{ index $l 0 }}</h4><p>{{ index $l 1 }}</p></div></div>{{ end -}}
+</div><p class="nc-line"><span class="ltr">NC</span>: {{ $t.nc_label }}</p></div></div></div></section>
+<section id="plan" class="band"><div class="w"><h2>{{ $t.plan_title }}</h2><p class="sub" style="margin-bottom:0">{{ $t.plan_body }}</p><div class="lvls">
+{{- range $i, $l := $t.levels }}<div class="lvl"><div class="bars" aria-hidden="true">{{ range seq (add $i 1) }}<i></i>{{ end }}</div><h3>{{ index $l 0 }}</h3><p>{{ index $l 1 }}</p></div>{{ end -}}
+</div><div class="more">{{ range $t.plan_more }}<div><h3>{{ index . 0 }}</h3><p>{{ index . 1 }}</p></div>{{ end }}</div></div></section>
+<section class="own"><div class="w"><p class="own-q">{{ $t.never_q }}</p><p class="nothing">{{ $t.never_a }}</p><div class="wrap"><div><h2>{{ $t.never_title }}</h2><p>{{ $t.never_body }}</p></div>
+<aside class="label" aria-label="{{ $t.never_title }}"><p class="l-title ltr-t">Datapavan</p><div class="l-g" style="margin-top:.5rem"><dl style="padding-top:.2rem">{{ range $t.never_rows }}<div><dt>{{ index . 0 }}</dt><dd>{{ index . 1 }}</dd></div>{{ end }}</dl></div><p class="fine" style="margin-bottom:0">{{ $t.foot_licence }}</p></aside></div></div></section>
+<section><div class="w"><h2>{{ $t.compare_title }}</h2><p class="sub">{{ $t.compare_note }}</p><div class="scroll" tabindex="0"><table class="cmp"><thead><tr><td></td>
+{{- range $i, $c := $t.compare_cols }}<th scope="col"{{ if eq $i 0 }} class="us"{{ end }}>{{ $c }}</th>{{ end -}}
+</tr></thead><tbody>
+{{- range $t.compare_rows }}<tr><th scope="row">{{ index . 0 }}</th>{{ range $i, $v := index . 1 }}<td{{ if eq $i 0 }} class="us"{{ end }}>{{ $v }}</td>{{ end }}</tr>{{ end -}}
+</tbody></table></div></div></section>
+<section id="faq" class="band"><div class="w"><h2>{{ $t.faq_title }}</h2><div class="faq">{{ range $t.faq }}<details><summary>{{ index . 0 }}</summary><p>{{ index . 1 }}</p></details>{{ end }}</div></div></section>
+<section id="get"><div class="w get"><div><h2>{{ $t.get_title }}</h2><p class="sub" style="margin-bottom:1rem">{{ $t.get_body }}</p><ul class="chan">{{ range $t.channels }}<li><strong class="cn">{{ index . 0 }}</strong> <span>{{ index . 1 }}</span></li>{{ end }}</ul></div>
+<aside class="label"><p class="l-title" style="font-size:clamp(2.1rem,3.6vw,3.2rem)">{{ $t.verify_title }}</p><div class="l-g" style="margin-top:.5rem;padding-top:.5rem"><p>{{ $t.verify_body }}</p><p class="fp fpv">{{ range $i, $f := site.Params.fingerprint }}{{ if $i }}:<br>{{ end }}{{ $f }}{{ end }}</p></div><p class="fine">{{ $t.verify_how }}</p></aside></div></section>
+</main>
+{{ end }}

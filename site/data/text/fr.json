@@ -1,0 +1,423 @@
+{
+ "lang": "fr",
+ "dir": "ltr",
+ "name": "Français",
+ "language_label": "Langue",
+ "digits": [
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8"
+ ],
+ "h1": "L’étiquette qui manquait à vos applis.",
+ "tagline": "Voyez ce que vos applis peuvent atteindre et combien elles envoient. Puis limitez-le.",
+ "lead": "Sur votre propre téléphone, avec les paramètres d’Android lui-même. Sans accès à Internet, sans compte, sans root.",
+ "status": "Pré-alpha. Rien à télécharger pour l’instant.",
+ "cta_follow": "Suivre la première version",
+ "cta_how": "Comment vérifier une copie",
+ "nav": [
+  [
+   "#checks",
+   "Ce qu’il vérifie"
+  ],
+  [
+   "#limits",
+   "Ce qu’il ne voit pas"
+  ],
+  [
+   "#plan",
+   "Ce que vous pouvez faire"
+  ],
+  [
+   "#faq",
+   "Questions"
+  ],
+  [
+   "#get",
+   "L’obtenir"
+  ]
+ ],
+ "label_title": "Étiquette de l’appli",
+ "sample_tag": "Données d’exemple",
+ "sample_name": "Bright Torch",
+ "label_rows": [
+  [
+   "Sa provenance",
+   [
+    [
+     "Installée depuis",
+     "Un fichier"
+    ],
+    [
+     "Dernière ouverture",
+     "Il y a 96 jours"
+    ]
+   ]
+  ],
+  [
+   "Peut atteindre",
+   [
+    [
+     "Micro",
+     "Autorisé"
+    ],
+    [
+     "Contacts",
+     "Autorisés"
+    ],
+    [
+     "Position",
+     "Autorisée"
+    ]
+   ]
+  ],
+  [
+   "Accès spéciaux",
+   [
+    [
+     "Service d’accessibilité",
+     "Activé"
+    ]
+   ]
+  ],
+  [
+   "Dans son code*",
+   [
+    [
+     "Traceurs",
+     "2"
+    ],
+    [
+     "SDK de partage de connexion",
+     "1"
+    ]
+   ]
+  ],
+  [
+   "Envoyé en 30 jours",
+   [
+    [
+     "Données mobiles",
+     "240 Mo"
+    ],
+    [
+     "Wi-Fi",
+     "85 Mo"
+    ],
+    [
+     "En arrière-plan",
+     "290 Mo"
+    ]
+   ]
+  ]
+ ],
+ "label_fine": "*Noms connus uniquement. Un SDK renommé ou caché passe inaperçu : ne rien trouver ne prouve donc pas qu’il n’y a rien.",
+ "checks_title": "Ce qu’il vérifie",
+ "checks_lead": "Chaque ligne de l’étiquette vient de votre propre téléphone.",
+ "needs_label": "Vous demande",
+ "needs_nothing": "Rien",
+ "needs_usage": "L’accès aux données d’utilisation, si vous l’autorisez",
+ "checks": [
+  [
+   "Les applis et leurs accès",
+   "Chaque appli installée : sa provenance, ses autorisations sensibles et les accès spéciaux qui permettent de lire l’écran ou d’agir à votre place.",
+   false
+  ],
+  [
+   "Les traceurs dans le code",
+   "Le code de chaque appli est lu sur le téléphone et comparé à la liste de traceurs d’εxodus et à notre propre liste de SDK qui partagent votre connexion, donnent une assistance à distance ou enregistrent l’écran.",
+   false
+  ],
+  [
+   "Les applis VPN authentiques ou modifiées",
+   "Les applis VPN, proxy et de contournement sont comparées aux clés de signature officielles de leurs développeurs, pour qu’une copie modifiée se voie.",
+   false
+  ],
+  [
+   "Le téléphone lui-même",
+   "Le débogage USB et sans fil, les autorités de certification que vous avez installées, le correctif de sécurité et l’état du démarrage d’après le matériel du téléphone.",
+   false
+  ],
+  [
+   "Les données par appli",
+   "Combien chaque appli a reçu et envoyé en données mobiles et en Wi-Fi au cours des 30 ou 7 derniers jours, et quelle part en arrière-plan, d’après le décompte d’Android lui-même.",
+   true
+  ],
+  [
+   "Les applis oubliées",
+   "Les applis que vous n’avez pas ouvertes depuis 90 jours et qui gardent une autorisation, un accès spécial ou une utilisation de données en arrière-plan.",
+   true
+  ],
+  [
+   "Une activité à la fois",
+   "Relever le décompte, utiliser l’appli, relever encore, et voir combien elle a envoyé pendant que vous ne faisiez que regarder ou faire défiler.",
+   true
+  ]
+ ],
+ "screens_title": "Dans l’appli",
+ "limits_title": "Ce qu’il voit, et ce qu’il ne voit pas",
+ "legend_solid": "Traits pleins : ce que Datapavan lit.",
+ "legend_dash": "Pointillés : ce que cette version ne peut pas voir.",
+ "reads_title": "Il lit",
+ "cannot_title": "Il ne peut pas voir",
+ "parts": [
+  [
+   "Les applis et leurs accès",
+   true
+  ],
+  [
+   "Le code de chaque appli",
+   true
+  ],
+  [
+   "Les clés de signature des applis VPN",
+   true
+  ],
+  [
+   "Le décompte de données d’Android",
+   true
+  ],
+  [
+   "Les paramètres du téléphone",
+   true
+  ],
+  [
+   "Ce que vous saisissez, et le contenu chiffré",
+   false
+  ],
+  [
+   "Où vont les données",
+   false
+  ],
+  [
+   "Le firmware et le modem",
+   false
+  ]
+ ],
+ "limits": [
+  [
+   "Code renommé ou caché",
+   "L’analyse cherche des noms connus : un SDK renommé, brouillé ou chargé plus tard passe donc inaperçu. Ne rien trouver ne prouve pas qu’il n’y a rien."
+  ],
+  [
+   "Où vont les données",
+   "Cette version compte combien, pas à qui. C’est prévu pour la v0.2, dans une appli séparée appelée Datapavan Watch."
+  ],
+  [
+   "Ce que contient votre trafic",
+   "Il ne peut pas lire le contenu chiffré ni ce que vous saisissez dans une appli, et il n’essaiera jamais de déchiffrer quoi que ce soit."
+  ],
+  [
+   "Le firmware et le modem",
+   "Aucune appli ne peut les contrôler, ni nettoyer un téléphone déjà compromis. Il trouve le risque et vous guide."
+  ]
+ ],
+ "nc_label": "Aucune connexion : Datapavan n’a pas le droit d’utiliser Internet.",
+ "plan_title": "Ce que vous pouvez en faire",
+ "plan_body": "Un plan court, en commençant par les changements qui retirent le plus de risque. Chacun ouvre le bon écran d’Android, où vous décidez. Datapavan ne change rien lui-même.",
+ "levels": [
+  [
+   "Léger",
+   "Les applis qui peuvent contrôler le téléphone, et les applis non ouvertes depuis 90 jours qui gardent un capteur, un accès spécial ou l’autorisation VPN."
+  ],
+  [
+   "Moyen",
+   "En plus : les applis qui peuvent installer des applis, le partage de trafic, le débogage USB et les autres accès des applis non ouvertes depuis 90 jours."
+  ],
+  [
+   "Strict",
+   "En plus : les applis préinstallées, que Datapavan n’a pas testées sur votre téléphone."
+  ]
+ ],
+ "plan_more": [
+  [
+   "Journal",
+   "Note ce qui a vraiment changé, remarque quand un changement revient et propose de l’annuler."
+  ],
+  [
+   "Socle de sécurité",
+   "Laisse de côté les applis dont votre téléphone a besoin, comme vos applis par défaut et votre clavier."
+  ]
+ ],
+ "never_q": "Et Datapavan, qu’envoie-t-il ?",
+ "never_a": "Rien.",
+ "never_title": "L’étiquette de Datapavan lui-même",
+ "never_rows": [
+  [
+   "Accès à Internet",
+   "Aucun"
+  ],
+  [
+   "Traceurs",
+   "0"
+  ],
+  [
+   "Mesure d’audience",
+   "Aucune"
+  ],
+  [
+   "Rapports de plantage envoyés",
+   "Aucun"
+  ],
+  [
+   "Comptes",
+   "Aucun"
+  ],
+  [
+   "Serveurs contactés",
+   "Aucun"
+  ],
+  [
+   "Root",
+   "Pas nécessaire"
+  ],
+  [
+   "Services Google Play",
+   "Pas nécessaires"
+  ]
+ ],
+ "never_body": "C’est Android qui l’impose. Une appli sans autorisation Internet ne peut pas ouvrir de connexion réseau. Datapavan authentique ne la demande jamais, et une copie qui la demande n’est pas authentique.",
+ "compare_title": "Comparaison",
+ "compare_note": "Par type d’outil, car chacun fait un travail différent. Datapavan 0.1 regarde et guide ; il ne bloque pas.",
+ "compare_cols": [
+  "Datapavan 0.1",
+  "Sites de rapports en ligne",
+  "Applis de pare-feu et de blocage",
+  "Paramètres d’Android lui-même"
+ ],
+ "compare_rows": [
+  [
+   "Cherche les traceurs dans le code des applis",
+   [
+    "Sur le téléphone",
+    "Sur leur serveur",
+    "Certaines",
+    "Non"
+   ]
+  ],
+  [
+   "Compte les données par appli",
+   [
+    "Oui",
+    "Non",
+    "Oui",
+    "Oui"
+   ]
+  ],
+  [
+   "Montre où vont les données",
+   [
+    "Prévu",
+    "Non",
+    "Oui",
+    "Non"
+   ]
+  ],
+  [
+   "Bloque les connexions",
+   [
+    "Prévu",
+    "Non",
+    "Oui",
+    "Limité"
+   ]
+  ],
+  [
+   "Vérifie qu’une appli VPN est l’officielle",
+   [
+    "Oui",
+    "Non",
+    "Non",
+    "Non"
+   ]
+  ],
+  [
+   "Occupe l’unique emplacement VPN de votre téléphone",
+   [
+    "Non",
+    "Non",
+    "Oui",
+    "Non"
+   ]
+  ],
+  [
+   "A lui-même besoin d’un accès à Internet",
+   [
+    "Non",
+    "Oui",
+    "Oui",
+    "Fait partie d’Android"
+   ]
+  ]
+ ],
+ "faq_title": "Questions",
+ "faq": [
+  [
+   "Envoie-t-il quelque chose quelque part ?",
+   "Non. Il n’a pas le droit d’utiliser Internet, il ne peut donc pas ouvrir de connexion réseau. Ce qu’il trouve reste sur le téléphone, sauf si vous le partagez vous-même."
+  ],
+  [
+   "Fonctionne-t-il en même temps que mon VPN ?",
+   "Oui. Cette version n’utilise pas l’emplacement VPN d’Android : votre VPN ou votre outil de contournement continue donc de fonctionner comme avant."
+  ],
+  [
+   "Bloque-t-il quelque chose ?",
+   "Pas dans cette version. Vous faites chaque changement dans les paramètres d’Android. Le blocage est prévu pour la v0.3."
+  ],
+  [
+   "Pourquoi demande-t-il l’accès aux données d’utilisation ?",
+   "Pour lire combien de données chaque appli a utilisées et quand elle était à l’écran pour la dernière fois. Vous pouvez refuser, et le reste fonctionne quand même. Seuls des totaux sont lus, et rien n’est gardé."
+  ],
+  [
+   "Sur quels téléphones fonctionne-t-il ?",
+   "Les téléphones 64 bits de tout fabricant avec Android 10 ou plus récent, avec ou sans les services Google. Il est testé à partir d’Android 11."
+  ],
+  [
+   "Est-il gratuit ?",
+   "Oui. C’est un logiciel libre sous licence Apache 2.0, sans publicité ni vente de données."
+  ],
+  [
+   "Qui le développe ? Quelqu’un l’a-t-il audité ?",
+   "Un seul mainteneur pour l’instant, et le code est public. Rien n’a encore été audité de façon indépendante."
+  ]
+ ],
+ "get_title": "L’obtenir",
+ "get_body": "Il n’y a encore rien à télécharger. Avec la première version :",
+ "channels": [
+  [
+   "GitHub Releases",
+   "L’APK signé, son SHA-256 et les notes de version signées."
+  ],
+  [
+   "F-Droid et IzzyOnDroid",
+   "La même clé sur tous les canaux."
+  ],
+  [
+   "Obtainium",
+   "Ajoutez github.com/visadahyu/datapavan."
+  ]
+ ],
+ "verify_title": "Vérifiez votre copie",
+ "verify_body": "Chaque copie authentique est signée avec une seule clé. L’empreinte SHA-256 de son certificat est :",
+ "verify_how": "Comparez-la avec un autre outil que Datapavan lui-même, car une copie modifiée peut afficher n’importe quel texte : par exemple AppVerifier sur le téléphone, ou apksigner verify --print-certs sur un ordinateur.",
+ "foot_report": "Signaler une faille en privé",
+ "foot_security": "Politique de sécurité",
+ "foot_privacy": "Notes sur la confidentialité",
+ "foot_source": "Code source",
+ "foot_licence": "Logiciel libre sous licence Apache 2.0.",
+ "foot_clean": "Cette page ne dépose aucun cookie et ne charge rien depuis d’autres serveurs.",
+ "shots": [
+  "Résumé",
+  "Applis",
+  "Votre plan"
+ ],
+ "shots_note": "Écrans réels d'un émulateur Android, avec une appli de test à nous.",
+ "news_title": "Actualités",
+ "news_lead": "Ce qui s'est passé dans ce domaine, et ce que cela signifie pour une personne qui utilise un téléphone Android.",
+ "news_source": "Source :",
+ "news_disputed": "Contesté :"
+}

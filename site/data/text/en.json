@@ -1,0 +1,423 @@
+{
+ "lang": "en",
+ "dir": "ltr",
+ "name": "English",
+ "language_label": "Language",
+ "digits": [
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8"
+ ],
+ "h1": "The label your apps came without.",
+ "tagline": "See what your apps can reach and how much they send. Then limit it.",
+ "lead": "On your own phone, through Android’s own settings. No internet access, no account, no root.",
+ "status": "Pre-alpha. Nothing to download yet.",
+ "cta_follow": "Follow the first release",
+ "cta_how": "How to check a copy",
+ "nav": [
+  [
+   "#checks",
+   "What it checks"
+  ],
+  [
+   "#limits",
+   "What it can’t see"
+  ],
+  [
+   "#plan",
+   "What you can do"
+  ],
+  [
+   "#faq",
+   "Questions"
+  ],
+  [
+   "#get",
+   "Get it"
+  ]
+ ],
+ "label_title": "App label",
+ "sample_tag": "Sample data",
+ "sample_name": "Bright Torch",
+ "label_rows": [
+  [
+   "Where it came from",
+   [
+    [
+     "Installed from",
+     "A file"
+    ],
+    [
+     "Last opened",
+     "96 days ago"
+    ]
+   ]
+  ],
+  [
+   "Can reach",
+   [
+    [
+     "Microphone",
+     "Allowed"
+    ],
+    [
+     "Contacts",
+     "Allowed"
+    ],
+    [
+     "Location",
+     "Allowed"
+    ]
+   ]
+  ],
+  [
+   "Special access",
+   [
+    [
+     "Accessibility service",
+     "On"
+    ]
+   ]
+  ],
+  [
+   "In its code*",
+   [
+    [
+     "Trackers",
+     "2"
+    ],
+    [
+     "Connection-sharing SDKs",
+     "1"
+    ]
+   ]
+  ],
+  [
+   "Sent in 30 days",
+   [
+    [
+     "Mobile data",
+     "240 MB"
+    ],
+    [
+     "Wi-Fi",
+     "85 MB"
+    ],
+    [
+     "In the background",
+     "290 MB"
+    ]
+   ]
+  ]
+ ],
+ "label_fine": "*Known names only. A renamed or hidden SDK is missed, so finding nothing is not proof that nothing is there.",
+ "checks_title": "What it checks",
+ "checks_lead": "Every line on the label comes from your own phone.",
+ "needs_label": "Asks you for",
+ "needs_nothing": "Nothing",
+ "needs_usage": "Usage access, if you allow it",
+ "checks": [
+  [
+   "Apps and their access",
+   "Every installed app: where it came from, its sensitive permissions, and the special access that lets an app read the screen or act for you.",
+   false
+  ],
+  [
+   "Trackers in the code",
+   "The code of every app is read on the phone and matched against the εxodus tracker list, and our own list of SDKs that share your connection, give remote support or record the screen.",
+   false
+  ],
+  [
+   "Genuine or modified VPN apps",
+   "VPN, proxy and circumvention apps are compared with their developers’ official signing keys, so a modified copy shows.",
+   false
+  ],
+  [
+   "The phone itself",
+   "USB and wireless debugging, certificate authorities you installed, the security patch, and the boot state from the phone’s hardware.",
+   false
+  ],
+  [
+   "Data per app",
+   "What each app received and sent on mobile data and Wi-Fi in the last 30 or 7 days, and how much of it in the background, from Android’s own count.",
+   true
+  ],
+  [
+   "Forgotten apps",
+   "Apps you have not opened for 90 days that still hold a permission, special access or background data.",
+   true
+  ],
+  [
+   "One activity at a time",
+   "Read the count, use the app, read again, and see how much it sent while you only watched or scrolled.",
+   true
+  ]
+ ],
+ "screens_title": "In the app",
+ "limits_title": "What it sees, and what it can’t",
+ "legend_solid": "Solid lines: what Datapavan reads.",
+ "legend_dash": "Dashed lines: what this version can’t see.",
+ "reads_title": "It reads",
+ "cannot_title": "It can’t see",
+ "parts": [
+  [
+   "Apps and their access",
+   true
+  ],
+  [
+   "Code inside each app",
+   true
+  ],
+  [
+   "Signing keys of VPN apps",
+   true
+  ],
+  [
+   "Android’s data count",
+   true
+  ],
+  [
+   "The phone’s settings",
+   true
+  ],
+  [
+   "What you type, and encrypted content",
+   false
+  ],
+  [
+   "Where the data goes",
+   false
+  ],
+  [
+   "Firmware and the modem",
+   false
+  ]
+ ],
+ "limits": [
+  [
+   "Renamed or hidden code",
+   "The scan looks for known names, so an SDK that is renamed, obfuscated or loaded later is missed. Finding nothing is not proof that nothing is there."
+  ],
+  [
+   "Where the data goes",
+   "This version counts how much, not to whom. That is planned for v0.2, in a separate app called Datapavan Watch."
+  ],
+  [
+   "What is inside your traffic",
+   "It cannot read encrypted content or what you type inside an app, and it will never try to decrypt anything."
+  ],
+  [
+   "Firmware and the modem",
+   "No app can control them, or clean a phone that is already compromised. It finds the risk and guides you."
+  ]
+ ],
+ "nc_label": "No connection: Datapavan has no internet permission.",
+ "plan_title": "What you can do with it",
+ "plan_body": "A short plan, starting with the changes that remove the most risk. Each one opens the right Android screen, where you decide. Datapavan changes nothing itself.",
+ "levels": [
+  [
+   "Light",
+   "Apps that can control the phone, and apps not opened for 90 days that still hold a sensor, special access or VPN permission."
+  ],
+  [
+   "Medium",
+   "Also apps that can install apps, traffic sharing, USB debugging, and the other access of apps not opened for 90 days."
+  ],
+  [
+   "Strict",
+   "Also preinstalled apps, which Datapavan has not tested on your phone."
+  ]
+ ],
+ "plan_more": [
+  [
+   "Journal",
+   "Records what actually changed, notices when a change comes back, and offers undo."
+  ],
+  [
+   "Safety floor",
+   "Leaves alone the apps your phone needs, such as your default apps and keyboard."
+  ]
+ ],
+ "never_q": "And what does Datapavan send?",
+ "never_a": "Nothing.",
+ "never_title": "Datapavan’s own label",
+ "never_rows": [
+  [
+   "Internet access",
+   "None"
+  ],
+  [
+   "Trackers",
+   "0"
+  ],
+  [
+   "Analytics",
+   "None"
+  ],
+  [
+   "Crash reports sent",
+   "None"
+  ],
+  [
+   "Accounts",
+   "None"
+  ],
+  [
+   "Servers it contacts",
+   "None"
+  ],
+  [
+   "Root",
+   "Not needed"
+  ],
+  [
+   "Google Play services",
+   "Not needed"
+  ]
+ ],
+ "never_body": "Android enforces this. An app without the internet permission cannot open a network connection. Genuine Datapavan never asks for it, and a copy that asks is not genuine.",
+ "compare_title": "How it compares",
+ "compare_note": "By kind of tool, since each does a different job. Datapavan 0.1 looks and guides; it does not block.",
+ "compare_cols": [
+  "Datapavan 0.1",
+  "Online report sites",
+  "Firewall and blocker apps",
+  "Android’s own settings"
+ ],
+ "compare_rows": [
+  [
+   "Reads apps’ code for trackers",
+   [
+    "On the phone",
+    "On their server",
+    "Some do",
+    "No"
+   ]
+  ],
+  [
+   "Counts data per app",
+   [
+    "Yes",
+    "No",
+    "Yes",
+    "Yes"
+   ]
+  ],
+  [
+   "Shows where data goes",
+   [
+    "Planned",
+    "No",
+    "Yes",
+    "No"
+   ]
+  ],
+  [
+   "Blocks connections",
+   [
+    "Planned",
+    "No",
+    "Yes",
+    "Limited"
+   ]
+  ],
+  [
+   "Checks a VPN app is the official one",
+   [
+    "Yes",
+    "No",
+    "No",
+    "No"
+   ]
+  ],
+  [
+   "Takes your phone’s one VPN slot",
+   [
+    "No",
+    "No",
+    "Yes",
+    "No"
+   ]
+  ],
+  [
+   "Needs internet access itself",
+   [
+    "No",
+    "Yes",
+    "Yes",
+    "Part of Android"
+   ]
+  ]
+ ],
+ "faq_title": "Questions",
+ "faq": [
+  [
+   "Does it send anything anywhere?",
+   "No. It has no permission to use the internet, so it cannot open a network connection. What it finds stays on the phone unless you share it yourself."
+  ],
+  [
+   "Will it work next to my VPN?",
+   "Yes. This version does not use Android’s VPN slot, so your VPN or circumvention tool keeps running as it is."
+  ],
+  [
+   "Does it block anything?",
+   "Not in this version. You make each change in Android’s settings. Blocking is planned for v0.3."
+  ],
+  [
+   "Why does it ask for usage access?",
+   "To read how much data each app used and when it was last on screen. You can refuse, and the rest still works. Only totals are read, and nothing is kept."
+  ],
+  [
+   "Which phones does it run on?",
+   "64-bit phones from any maker with Android 10 or newer, with or without Google services. It is tested from Android 11."
+  ],
+  [
+   "Is it free?",
+   "Yes. It is free software under the Apache License 2.0, with no ads and no data sales."
+  ],
+  [
+   "Who makes it? Has anyone audited it?",
+   "One maintainer so far, and the code is public. Nothing has been independently audited yet."
+  ]
+ ],
+ "get_title": "Get it",
+ "get_body": "There is nothing to download yet. With the first release:",
+ "channels": [
+  [
+   "GitHub Releases",
+   "The signed APK, its SHA-256 and the signed release notes."
+  ],
+  [
+   "F-Droid and IzzyOnDroid",
+   "The same key on every channel."
+  ],
+  [
+   "Obtainium",
+   "Add github.com/visadahyu/datapavan."
+  ]
+ ],
+ "verify_title": "Check your copy",
+ "verify_body": "Every genuine copy is signed with one key. Its certificate’s SHA-256 fingerprint is:",
+ "verify_how": "Compare it with a tool other than Datapavan itself, since a modified copy can show any text: for example AppVerifier on the phone, or apksigner verify --print-certs on a computer.",
+ "foot_report": "Report a vulnerability privately",
+ "foot_security": "Security policy",
+ "foot_privacy": "Privacy notes",
+ "foot_source": "Source code",
+ "foot_licence": "Free software under the Apache License 2.0.",
+ "foot_clean": "This page sets no cookies and loads nothing from other servers.",
+ "shots": [
+  "Summary",
+  "Apps",
+  "Your plan"
+ ],
+ "shots_note": "Real screens from an Android emulator, showing a test app of our own.",
+ "news_title": "News",
+ "news_lead": "What has happened in this field, and what it means for someone with an Android phone.",
+ "news_source": "Source:",
+ "news_disputed": "Disputed:"
+}
