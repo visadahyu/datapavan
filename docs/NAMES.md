@@ -74,6 +74,10 @@ many lands carrying their gifts. Two features of the gate make the name especial
 **What it stands for:** a foundation that belongs to no single nation or company, open to everyone, and
 working for people in all lands.
 
+**The English coincidence.** To an English reader, the name opens with *visa*. This is deliberate wordplay, not a
+shared origin: English *visa* comes from Latin, through French, and has nothing to do with Old Persian *visa-* "all".
+A gateway of all nations asks no one for a visa.
+
 ---
 
 ## Sources
