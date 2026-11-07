@@ -1,6 +1,6 @@
 # Distribution channels
 
-Status: version 0.1.2, the first release for everyone, is out on GitHub Releases and the website since 2026-11-08, after the pre-releases 0.1.0 and 0.1.1; IzzyOnDroid and F-Droid were asked on the same day. [RELEASE.md](RELEASE.md) says how a
+Status: version 0.1.2, the first release for everyone, is out on GitHub Releases and the website since 2026-11-07, after the pre-releases 0.1.0 and 0.1.1; IzzyOnDroid and F-Droid list it once they have reviewed it. [RELEASE.md](RELEASE.md) says how a
 release is made and signed; this file says where it goes and what each channel needs. Every channel
 carries the same APK, signed with the same offline key, so a user can move between them and every
 copy can be checked against the one published fingerprint (ADR 0024).

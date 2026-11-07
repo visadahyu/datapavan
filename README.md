@@ -10,7 +10,7 @@ to the Android settings that limit it.** Who they send to, and blocking, are pla
 > (the code scanner and its data) and M4 (network use per app) are complete. M5, the first release, is
 > in progress: the guided check, the remediation plan, the app's structure and settings, the brand
 > theme, the genuine-copy check and the release steps are built, and the signing keys were made offline
-> on 2026-11-06. Version 0.1.2, the first release for everyone, is out since 2026-11-08. Nothing has been
+> on 2026-11-06. Version 0.1.2, the first release for everyone, is out since 2026-11-07. Nothing has been
 > independently audited; the project has one maintainer. It is built for phones with Android 10 or
 > newer, 64-bit and, since 0.1.1, 32-bit, and tested from Android 11. See the [roadmap](ROADMAP.md) and <https://datapavan.org>.
 

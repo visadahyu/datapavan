@@ -180,5 +180,5 @@ code base to keep safe.
 | Security e-mail with an OpenPGP key | ⏳ for 1.0 |
 | Hosting: GitHub as the only home (ADR 0013); a self-hosted EU forge reconsidered later | ✅ |
 | Make the repository public | ✅ on 2026-11-06 |
-| F-Droid submission | ⏳ asked on 2026-11-08, with 0.1.2 |
+| F-Droid submission | ⏳ with 0.1.2, released on 2026-11-07 |
 | Measurement lab: reference measurements on the project's own phones, public reports, and evidence for data-protection authorities and civil-society organisations (legal advice first) | ⏳ from v0.2 |
