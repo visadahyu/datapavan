@@ -16,7 +16,8 @@ All notable changes to this project are documented here. The format follows
 
 - On the card that asks for usage access, the app says that some phones show a strong warning of their own when it is turned on, sometimes with a countdown, for every app that asks (seen on Xiaomi).
 - Under the apps list and the network list, the app says that apps in another profile, such as a work profile, a private space or a secure folder, are not included: Android shows an app only its own profile.
-- On the website, a sentence for a download that does not start, with a link to the same file on GitHub.
+- Where newer versions are. Datapavan has no internet access and cannot learn of an update, and copies installed from a file, not through a store or Obtainium, had no other way to hear of one. Settings' About page now gives the release's date and the website's and GitHub's addresses, as text to copy into a browser of one's choice, such as Tor Browser, and a button that opens the website's download section in the browser; the app itself still connects to nothing. About four months after a release the overview says that a newer version may be out and leads there.
+- On the website, a sentence for a download that does not start, with a link to the same file on GitHub, and what changed in the current version, from the store changelog.
 - `scripts/verify-signed.py` and `scripts/verify-signed-release.sh` check a release's signed files from the published keys and run the signed APK on an emulator ([RELEASE.md](docs/RELEASE.md), step 6). They checked 0.1.0 from outside the repository and now take any version.
 - `scripts/check-translations.py` measures every store changelog, not only the first.
 
