@@ -66,7 +66,11 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    different directories and fails unless the two unsigned APKs are identical. Then
    `scripts/release-rehearsal.sh --install` runs steps 4 and 5 with throwaway keys and puts the signed
    release build, the only one R8 shrinks, through the smoke test and the shortcut check on the
-   emulator. CI must be green on the release commit.
+   emulator. CI's emulator cannot run 32-bit ARM code, so the 32-bit build is tried by hand on the
+   Android 11 emulator (`dp-api30`), which translates ARM code: `INSTALL_ABI=armeabi-v7a scripts/smoke.sh`,
+   then `verify-audit.sh`, `verify-plan.sh` and `verify-shortcuts.sh`. The data pack scripts stay on
+   CI's image: Android 11's file picker there would not pick a file that adb had put in Downloads
+   (2026-11-07, with the 64-bit build too). CI must be green on the release commit.
 3. **Data pack.** If `data/` changed, raise the sequence in `data/PACK`, set its date, and sign the
    pack offline ([DATA-PACKS.md](DATA-PACKS.md#publishing-a-pack)).
 4. **Signing, offline.** `scripts/prepare-signing.sh <directory>` gathers what goes to the offline system,
@@ -90,12 +94,19 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    asks for it"). They are signed offline with the release notes key
    (`signify-openbsd -S -e -s datapavan-notes-1.sec -m notes.txt`), so that users and channel
    operators can check them with `signify -V -e` (ADR 0024, point 3).
-6. **Publish** the signed APK, the notes and their signature on GitHub Releases and under `download/` on the
+6. **Check what came back** on the main system, from the published keys only:
+   `python3 -I scripts/verify-signed.py <directory>` checks the signatures of the notes and the data
+   pack, that the notes name the release commit, its version, the APK's hash and certificate and the
+   pack's fingerprint, and that the pack holds the data the APK carries. Then
+   `scripts/verify-signed-release.sh <directory>` runs the signed APK on CI's emulator image: it must
+   know itself genuine and refuse a damaged copy of the pack. On `dp-api30`, put the signed APK
+   through `INSTALL_ABI=armeabi-v7a scripts/smoke.sh <apk>` and `verify-shortcuts.sh`.
+7. **Publish** the signed APK, the notes and their signature on GitHub Releases and under `download/` on the
    website, where `site/hugo.toml` names the current APK, its hash and size, and tag the commit
    (`v<version>`). The tag itself is not signed, since none of the offline keys can sign a Git tag. The
    signed notes name the commit, so a tag moved later no longer matches them: compare with
    `git rev-parse v<version>^{commit}`. A key for tags can be added later, if `git verify-tag` should work too.
-7. **F-Droid.** F-Droid builds from the tag. With reproducible builds it publishes the APK signed by
+8. **F-Droid.** F-Droid builds from the tag. With reproducible builds it publishes the APK signed by
    the project only when its own build matches; the recipe lists the certificate's fingerprint.
    [fastlane/](../fastlane/) holds the store texts, which F-Droid reads from the repository.
 
