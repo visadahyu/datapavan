@@ -1,0 +1,1 @@
+Runs on phones whose Android is 32-bit, common among low-cost models, where Android called it not compatible. Before the usage access switch, it says that some phones show a strong warning of their own there. Under the app and network lists, it says that apps in another profile, such as a work profile or a secure folder, are not included.

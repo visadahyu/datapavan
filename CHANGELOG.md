@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-07
+
+### Fixed
+
+- The app now runs on phones whose Android is 32-bit, common among low-cost models although their processor is 64-bit, such as some Samsung Galaxy A13s. Android refused to install 0.1.0 there as "not compatible", because the Rust library was built for 64-bit ARM and x86_64 only. It is now also built for `armeabi-v7a`; the engine's tests pass as a 32-bit program on a real phone, and `INSTALL_ABI=armeabi-v7a scripts/smoke.sh` installs the app as one, which the Android 11 emulator can run but CI's emulator cannot.
+
+### Added
+
+- On the card that asks for usage access, the app says that some phones show a strong warning of their own when it is turned on, sometimes with a countdown, for every app that asks (seen on Xiaomi).
+- Under the apps list and the network list, the app says that apps in another profile, such as a work profile, a private space or a secure folder, are not included: Android shows an app only its own profile.
+- On the website, a sentence for a download that does not start, with a link to the same file on GitHub.
+- `scripts/verify-signed.py` and `scripts/verify-signed-release.sh` check a release's signed files from the published keys and run the signed APK on an emulator ([RELEASE.md](docs/RELEASE.md), step 6). They checked 0.1.0 from outside the repository and now take any version.
+- `scripts/check-translations.py` measures every store changelog, not only the first.
+
 ## [0.1.0] - 2026-11-06
 
 ### Added
@@ -66,5 +80,6 @@ All notable changes to this project are documented here. The format follows
 - EmojiCompat's start-up lookup of a downloadable font through Google Play services is disabled.
 - Release builds of the Rust engine keep integer-overflow checks.
 
-[Unreleased]: https://github.com/visadahyu/datapavan/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/visadahyu/datapavan/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/visadahyu/datapavan/releases/tag/v0.1.1
 [0.1.0]: https://github.com/visadahyu/datapavan/releases/tag/v0.1.0

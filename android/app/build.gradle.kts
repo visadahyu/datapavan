@@ -24,8 +24,8 @@ android {
         applicationId = "org.visadahyu.datapavan"
         minSdk = 29
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
         // The ABIs we ship: arm64 for real phones; 32-bit ARM for the many low-cost phones whose
         // Android is 32-bit although their processor is not; x86_64 for the emulator and ChromeOS.
         // This list is the single source of truth; the Rust build reads it in finalizeDsl.
