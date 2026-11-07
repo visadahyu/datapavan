@@ -11,7 +11,8 @@ other people's apps.
 
 | Phone | Android | Release | Result |
 |---|---|---|---|
-| Samsung Galaxy A56 | not recorded | 0.1.0 | Installed from the website. Play Protect offered a scan and passed it. |
+| Samsung Galaxy A56 | 17 | 0.1.0 | Installed from the website, opened from My Files. Play Protect offered a scan and passed it. Usage access was locked: Android 17 treats an app installed from a downloaded file as a restricted setting, and the switch worked only after "Allow restricted settings" in the app's info menu. The app's card says so, but below the button, and in the app's language (Persian here) while Settings was in English. |
+| Samsung Galaxy A56 | 17 | 0.1.1 | Installed from the website over 0.1.0, again from a downloaded file. The restricted-settings allowance and usage access both stayed, and the app read the usage data seconds after the update. |
 | Samsung Galaxy A40 | 11 | 0.1.0 | Installed over adb after a debug build signed with another key was removed. Opens in 8 seconds, knows itself genuine, every settings button tried opens the right page, the plan's two cards at Medium are right, and the ten largest network rows match Android's own counters. Play Protect checked it after the install without asking. The engine's tests also pass there as a 32-bit program. |
 | Samsung Galaxy A40 | 11 | 0.1.1 | Installed over 0.1.0 over adb as a 32-bit app (`--abi armeabi-v7a`), keeping its data. The tracker check finishes in about 18 seconds, it knows itself genuine, and About shows the website's and GitHub's addresses. |
 | Samsung Galaxy A16 | not recorded | 0.1.0 | Installed. |
