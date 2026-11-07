@@ -14,9 +14,9 @@ Repo: https://github.com/visadahyu/datapavan.git
 Binaries: https://github.com/visadahyu/datapavan/releases/download/v%v/datapavan-%v.apk
 
 Builds:
-  - versionName: 0.1.0
-    versionCode: 1
-    commit: <full commit hash of the tag v0.1.0>
+  - versionName: 0.1.2
+    versionCode: 3
+    commit: e48da881b9a2e6b1433522f5c843b80daa09ba25
     subdir: android/app
     sudo:
       - apt-get update
@@ -39,5 +39,5 @@ AllowedAPKSigningKeys: fa6a24042abcac8bd0090110f704ffefe7dad3adf5db38fb073890ab4
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9.]+$
-CurrentVersion: 0.1.0
-CurrentVersionCode: 1
+CurrentVersion: 0.1.2
+CurrentVersionCode: 3

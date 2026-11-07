@@ -16,8 +16,8 @@
  "h1": "La etiqueta que tus apps no traen.",
  "tagline": "Mira a qué pueden acceder tus apps y cuánto envían. Luego, limítalo.",
  "lead": "En tu propio teléfono, con los ajustes del propio Android. Sin acceso a internet, sin cuenta, sin root.",
- "status": "Versión 0.1.1: una versión preliminar, aún en pruebas.",
- "cta_get": "Descargar la versión 0.1.1",
+ "status": "La versión 0.1.2 ya está disponible.",
+ "cta_get": "Descargar la versión 0.1.2",
  "cta_how": "Cómo comprobar una copia",
  "nav": [
   [
@@ -390,12 +390,13 @@
   ]
  ],
  "get_title": "Consíguelo",
- "get_body": "La versión 0.1.1 es una versión preliminar que se está probando en más teléfonos. F-Droid e IzzyOnDroid llegarán después de estas pruebas.",
+ "get_body": "La versión 0.1.2 es la primera pensada para todos. F-Droid e IzzyOnDroid la incluirán cuando la hayan revisado.",
  "get_changes": "Novedades de esta versión:",
  "get_button": "Descargar el APK",
  "get_install": "Android te pide que permitas instalar desde el navegador; después puedes volver a desactivarlo. Luego, en los ajustes de la app, «¿Es auténtica esta copia?» comprueba tu copia.",
  "get_blocked": "Si la descarga no empieza, puede que tu red la esté bloqueando. Prueba con GitHub en su lugar o pide a alguien de confianza que te envíe el archivo. Una copia de cualquier origen está bien siempre que su clave coincida con la que se muestra aquí.",
  "get_github": "Descargarlo desde GitHub",
+ "get_older": "Las versiones anteriores, cada una con sus notas firmadas, están en GitHub.",
  "channels": [
   [
    "GitHub Releases",

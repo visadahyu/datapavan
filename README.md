@@ -10,7 +10,7 @@ to the Android settings that limit it.** Who they send to, and blocking, are pla
 > (the code scanner and its data) and M4 (network use per app) are complete. M5, the first release, is
 > in progress: the guided check, the remediation plan, the app's structure and settings, the brand
 > theme, the genuine-copy check and the release steps are built, and the signing keys were made offline
-> on 2026-11-06. Version 0.1.1 is out as a pre-release, being tried on more phones. Nothing has been
+> on 2026-11-06. Version 0.1.2, the first release for everyone, is out since 2026-11-08. Nothing has been
 > independently audited; the project has one maintainer. It is built for phones with Android 10 or
 > newer, 64-bit and, since 0.1.1, 32-bit, and tested from Android 11. See the [roadmap](ROADMAP.md) and <https://datapavan.org>.
 
@@ -136,10 +136,9 @@ obfuscated or loaded later is missed. Finding nothing is not proof that nothing 
 
 ## Checking a copy
 
-Version 0.1.1 is a pre-release on [GitHub Releases](https://github.com/visadahyu/datapavan/releases/tag/v0.1.1) and
-[the website](https://datapavan.org/download/datapavan-0.1.1.apk). IzzyOnDroid and F-Droid come once it has been tried on
-more phones. [Obtainium](https://github.com/ImranR98/Obtainium) can follow this repository's URL, for now with its option
-for pre-releases on. Every genuine copy,
+Version 0.1.2 is on [GitHub Releases](https://github.com/visadahyu/datapavan/releases/tag/v0.1.2) and
+[the website](https://datapavan.org/download/datapavan-0.1.2.apk). IzzyOnDroid and F-Droid list it once they have reviewed
+it. [Obtainium](https://github.com/ImranR98/Obtainium) can follow this repository's URL. Every genuine copy,
 on every channel, is signed with one key. The SHA-256 fingerprint of its certificate is:
 
 ```
