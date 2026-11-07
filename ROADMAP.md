@@ -95,8 +95,13 @@ Three releases, each of use on its own (agreed with the maintainer on 2026-11-07
    domain, IP, organisation, bytes, time, foreground or background. Names come from DNS, the TLS and
    QUIC server names, and apps' own encrypted DNS is recognised. Datapavan reads the log through the
    one-way interface of ADR 0029.
-2. **0.2.1, next to circumvention tools:** SOCKS5 chaining with UDP, proxy-like behaviour flagged,
-   per-tool guides.
+2. **0.2.1, next to circumvention tools:** Watch works beside every tool the user has, as far as
+   Android allows (one VPN at a time), since the tools themselves can take people's data
+   ([RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md)). It brings SOCKS5 chaining with UDP, a
+   WireGuard upstream for VPN providers that offer one (Proton VPN, Mullvad and others), apps' own
+   built-in proxies named (Telegram's, for example), proxy-like behaviour flagged, per-tool guides,
+   and blocking of tracker domains, off until the user turns it on and undone in one tap. Fuller
+   blocking stays in v0.3.
 3. **0.2.2, behaviour:** the sensor log, the cross-checks and the learned traffic shapes.
 
 The items, in order:
