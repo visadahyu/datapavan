@@ -8,7 +8,7 @@
 <main>
 <div class="w"><div class="hero">
 <div><p class="status">{{ $t.status }}</p><h1>{{ $t.h1 }}</h1><p class="lead">{{ $t.tagline }}</p><p class="lead2">{{ $t.lead }}</p>
-<p class="cta"><a class="btn" href="{{ $apk | safeURL }}">{{ $t.cta_get }}</a><a href="#get">{{ $t.cta_how }}</a></p></div>
+<p class="cta"><a class="btn" href="{{ $apk | safeURL }}">{{ $t.cta_get }}</a><a href="#verify">{{ $t.cta_how }}</a></p></div>
 <aside class="label" aria-label="{{ $t.label_title }}, {{ $t.sample_tag }}">
 <p class="l-title">{{ $t.label_title }}</p>
 <div class="l-name"><span>{{ $t.sample_name }}</span><span class="l-tag">{{ $t.sample_tag }}</span></div>
@@ -41,7 +41,7 @@
 </tbody></table></div></div></section>
 <section id="faq" class="band"><div class="w"><h2>{{ $t.faq_title }}</h2><div class="faq">{{ range $t.faq }}<details><summary>{{ index . 0 }}</summary><p>{{ index . 1 }}</p></details>{{ end }}</div></div></section>
 <section id="get"><div class="w get"><div><h2>{{ $t.get_title }}</h2><p class="sub" style="margin-bottom:1rem">{{ $t.get_body }}</p>{{ with index site.Data.changes site.Language.Lang }}<p class="note" style="margin-bottom:1rem"><strong>{{ $t.get_changes }}</strong>{{ if ne site.Language.Lang "zh" }} {{ end }}{{ . }}</p>{{ end }}<p class="cta"><a class="btn" href="{{ $apk | safeURL }}">{{ $t.get_button }}</a></p><p class="note"><span class="ltr">{{ site.Params.release_apk }}, {{ site.Params.release_size }}</span><br><span class="ltr" style="overflow-wrap:anywhere">SHA-256: {{ site.Params.release_sha256 }}</span></p><p class="note">{{ $t.get_install }}</p><p class="note" style="margin-bottom:1.25rem">{{ $t.get_blocked }} <a href="{{ $github | safeURL }}">{{ $t.get_github }}</a></p><ul class="chan">{{ range $t.channels }}<li><strong class="cn">{{ index . 0 }}</strong> <span>{{ index . 1 }}</span></li>{{ end }}</ul></div>
-<aside class="label"><p class="l-title" style="font-size:clamp(2.1rem,3.6vw,3.2rem)">{{ $t.verify_title }}</p><div class="l-g" style="margin-top:.5rem;padding-top:.5rem"><p>{{ $t.verify_body }}</p><p class="fp fpv">{{ range $i, $f := site.Params.fingerprint }}{{ if $i }}:<br>{{ end }}{{ $f }}{{ end }}</p></div><p class="fine">{{ $t.verify_how }}</p></aside></div></section>
+<aside class="label" id="verify"><p class="l-title" style="font-size:clamp(2.1rem,3.6vw,3.2rem)">{{ $t.verify_title }}</p><div class="l-g" style="margin-top:.5rem;padding-top:.5rem"><p>{{ $t.verify_body }}</p><p class="fp fpv">{{ range $i, $f := site.Params.fingerprint }}{{ if $i }}:<br>{{ end }}{{ $f }}{{ end }}</p></div><p class="fine">{{ $t.verify_how }}</p></aside></div></section>
 <section id="names" class="band"><div class="w"><h2>{{ $t.names_title }}</h2><p class="sub">{{ $t.names_lead }}</p><div class="names">
 {{- range $i, $n := $t.names }}<article>{{ if eq $i 0 }}{{ partial "mark.html" . }}{{ else }}{{ partial "mark-visadahyu.html" . }}{{ end }}<h3><span class="ltr">{{ index $n 0 }}</span>{{ with index $n 1 }} <span class="nat">{{ . }}</span>{{ end }}</h3><p class="say">{{ index $n 3 }} · {{ index $n 2 }}</p><p class="parts">{{ range $j, $p := index $n 4 }}{{ if $j }} + {{ end }}<i class="ltr">{{ index $p 0 }}</i> {{ index $p 1 }}{{ end }}</p><p class="mean">{{ index $n 5 }}</p><p>{{ index $n 6 }}</p></article>{{ end -}}
 </div><p class="note"><a href="{{ site.Params.repo }}/blob/main/docs/NAMES.md">{{ $t.names_more }}</a></p></div></section>
