@@ -85,7 +85,14 @@
     <string name="usage_access_body">مع الوصول إلى بيانات الاستخدام، يمكن لتطبيق Datapavan أن يعرض مقدار البيانات التي استخدمها كل تطبيق، والتطبيقات التي لم تفتحها منذ مدة طويلة. والوصول نفسه من شأنه أن يتيح لأي تطبيق معرفة التطبيقات التي فتحتها ومتى فتحتها. لا يقرأ Datapavan إلا الإجماليات وتاريخ آخر استخدام لكل تطبيق، ولا يحتفظ بشيء من ذلك، ولا يمكنه إرساله إلى أي مكان لأنه لا يملك وصولًا إلى الشبكة. كل ما عدا ذلك يعمل من دون هذا الوصول.</string>
     <string name="usage_access_phone_warning">عند تفعيل هذا الوصول، تعرض بعض الهواتف تحذيرًا قويًا خاصًا بها، وأحيانًا مع عدّ تنازلي. وهي تعرضه لكل تطبيق يطلب الوصول إلى بيانات الاستخدام.</string>
     <string name="usage_access_button">السماح بالوصول إلى بيانات الاستخدام</string>
-    <string name="usage_access_restricted">يجعل Android مفتاح التبديل هذا رماديًا للتطبيقات المثبَّتة من ملف. إذا حدث ذلك، فافتح معلومات هذا التطبيق، واختر «السماح بالإعدادات المحظورة» من قائمته (⋮)، ثم حاول مرة أخرى.</string>
+    <!-- Shown only when Datapavan was installed from a file (Android 13 and later), before the two steps below. -->
+    <string name="usage_access_two_steps">ثُبِّت هذا التطبيق من ملف، لذا قد يقفل Android مفتاح تبديل الوصول إلى بيانات الاستخدام. وعندها يلزم اتباع خطوتين.</string>
+    <!-- %1$s is the button usage_access_button. -->
+    <string name="usage_access_step_try">١. انقر على «%1$s». إذا كان مفتاح التبديل رماديًا، أو لم يسمح لك Android بتفعيله، فعُد إلى هنا.</string>
+    <!-- %1$s is the button usage_access_app_info, %3$s the button usage_access_button. %2$s is restricted_settings_label, perhaps in the phone's language, as its Settings show it. -->
+    <string name="usage_access_step_allow">٢. انقر على «%1$s»، ثم على القائمة (⋮) في أعلى تلك الصفحة. اختر «%2$s»، وهو خيار لا يظهر هناك إلا بعد الخطوة ١، ثم أكِّد اختيارك. بعد ذلك انقر على «%3$s» مرة أخرى.</string>
+    <!-- Android's own words for this choice in an app's info menu: AOSP Settings' app_restricted_settings_lockscreen_title in this language. The phone shows exactly these. -->
+    <string name="restricted_settings_label">السماح بالإعدادات المحظورة</string>
     <string name="usage_access_app_info">فتح معلومات التطبيق</string>
     <string name="usage_reading">جارٍ قراءة سجلات Android…</string>
     <string name="usage_missing">يحتاج استخدام الشبكة وآخر فتح للتطبيق إلى الوصول إلى بيانات الاستخدام، ويمكنك السماح به في شاشة «الملخّص».</string>

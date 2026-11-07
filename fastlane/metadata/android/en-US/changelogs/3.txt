@@ -1,0 +1,1 @@
+When Datapavan was installed from a file, the card that asks for usage access now gives the two steps for a switch that Android locks before its buttons: try once, then choose “Allow restricted settings” in the app's info. It names that choice as the phone's own Settings do, also when Datapavan uses another language.

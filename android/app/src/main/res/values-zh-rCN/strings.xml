@@ -82,7 +82,14 @@
     <string name="usage_access_body">有了使用情况访问权限，Datapavan 可以显示每个应用使用了多少数据，以及哪些应用您已很久没有打开。同样的权限也能让一个应用看到您打开过哪些应用以及打开的时间。Datapavan 只读取总量和每个应用上次使用的日期，不保留任何这些信息，也无法将其发送到任何地方，因为它没有网络访问权限。没有此权限，其他功能都能正常使用。</string>
     <string name="usage_access_phone_warning">您开启此权限时，有些手机会显示自己的强烈警告，有时还带有倒计时。任何应用请求使用情况访问权限时，这些手机都会显示这一警告。</string>
     <string name="usage_access_button">授予使用情况访问权限</string>
-    <string name="usage_access_restricted">对于通过文件安装的应用，Android 会将此开关显示为灰色。如果出现这种情况，请打开此应用的“应用信息”，在菜单（⋮）中选择“允许受限制的设置”，然后重试。</string>
+    <!-- Shown only when Datapavan was installed from a file (Android 13 and later), before the two steps below. -->
+    <string name="usage_access_two_steps">Datapavan 是通过文件安装的，因此 Android 可能会锁定使用情况访问权限的开关。这时需要两个步骤。</string>
+    <!-- %1$s is the button usage_access_button. -->
+    <string name="usage_access_step_try">1. 点按“%1$s”。如果开关显示为灰色，或者 Android 不允许您开启它，请回到这里。</string>
+    <!-- %1$s is the button usage_access_app_info, %3$s the button usage_access_button. %2$s is restricted_settings_label, perhaps in the phone's language, as its Settings show it. -->
+    <string name="usage_access_step_allow">2. 点按“%1$s”，然后点按该页面顶部的菜单（⋮）。选择“%2$s”（完成第 1 步后才会显示在那里），然后确认。之后再次点按“%3$s”。</string>
+    <!-- Android's own words for this choice in an app's info menu: AOSP Settings' app_restricted_settings_lockscreen_title in this language. The phone shows exactly these. -->
+    <string name="restricted_settings_label">允许受限制的设置</string>
     <string name="usage_access_app_info">打开应用信息</string>
     <string name="usage_reading">正在读取 Android 的记录…</string>
     <string name="usage_missing">网络使用情况和上次打开时间需要使用情况访问权限，您可以在“概览”页面授予。</string>

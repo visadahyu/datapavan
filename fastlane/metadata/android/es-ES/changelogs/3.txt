@@ -1,0 +1,1 @@
+Si Datapavan se instaló desde un archivo, la tarjeta que pide el acceso a datos de uso ahora indica, antes de sus botones, los dos pasos para un interruptor que Android bloquea: intentarlo una vez y luego elegir «Permitir ajustes restringidos» en la información de la app. Nombra esa opción como lo hacen los propios ajustes del teléfono, también cuando Datapavan usa otro idioma.

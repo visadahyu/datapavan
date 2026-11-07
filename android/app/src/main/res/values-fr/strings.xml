@@ -85,7 +85,14 @@
     <string name="usage_access_body">Avec l\'accès aux données d\'utilisation, Datapavan peut montrer combien de données chaque appli a utilisées, et quelles applis vous n\'avez pas ouvertes depuis longtemps. Le même accès permettrait aussi à une appli de voir quelles applis vous avez ouvertes, et quand. Datapavan ne lit que des totaux et la date de dernière utilisation de chaque appli, n\'en garde rien et ne peut rien envoyer, car il n\'a pas d\'accès au réseau. Tout le reste fonctionne sans cet accès.</string>
     <string name="usage_access_phone_warning">Quand vous activez cet accès, certains téléphones affichent un avertissement sévère qui leur est propre, parfois avec un compte à rebours. Ils l\'affichent pour toutes les applis qui demandent l\'accès aux données d\'utilisation.</string>
     <string name="usage_access_button">Autoriser l\'accès aux données d\'utilisation</string>
-    <string name="usage_access_restricted">Android grise ce bouton pour les applis installées à partir d\'un fichier. Dans ce cas, ouvrez les infos sur cette appli, choisissez « Autoriser les paramètres restreints » dans son menu (⋮), puis réessayez.</string>
+    <!-- Shown only when Datapavan was installed from a file (Android 13 and later), before the two steps below. -->
+    <string name="usage_access_two_steps">Datapavan a été installé à partir d\'un fichier, donc Android peut verrouiller l\'interrupteur d\'accès aux données d\'utilisation. Il faut alors deux étapes.</string>
+    <!-- %1$s is the button usage_access_button. -->
+    <string name="usage_access_step_try">1. Touchez « %1$s ». Si l\'interrupteur est grisé ou si Android ne vous laisse pas l\'activer, revenez ici.</string>
+    <!-- %1$s is the button usage_access_app_info, %3$s the button usage_access_button. %2$s is restricted_settings_label, perhaps in the phone's language, as its Settings show it. -->
+    <string name="usage_access_step_allow">2. Touchez « %1$s », puis le menu (⋮) en haut de la page qui s\'ouvre. Choisissez « %2$s », qui n\'y apparaît qu\'après l\'étape 1, et confirmez. Touchez ensuite à nouveau « %3$s ».</string>
+    <!-- Android's own words for this choice in an app's info menu: AOSP Settings' app_restricted_settings_lockscreen_title in this language. The phone shows exactly these. -->
+    <string name="restricted_settings_label">Autoriser les paramètres restreints</string>
     <string name="usage_access_app_info">Ouvrir les infos sur l\'appli</string>
     <string name="usage_reading">Lecture des relevés d\'Android…</string>
     <string name="usage_missing">L\'utilisation du réseau et la dernière ouverture nécessitent l\'accès aux données d\'utilisation, que vous pouvez autoriser dans la vue d\'ensemble.</string>
