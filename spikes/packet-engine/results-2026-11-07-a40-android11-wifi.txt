@@ -18,7 +18,7 @@ cpu_ticks=0 engine=none
 meminfo: TOTAL    42910    25624     3240      220   165340    19808    17762     2045
 meminfo: TOTAL PSS:    42910            TOTAL RSS:   165340       TOTAL SWAP PSS:      220
 === userspace 16:23:20
-started engine=userspace allow=[org.visadahyu.datapavan.watch.load] dns=[/192.168.1.1] pid=23937
+started engine=userspace allow=[org.visadahyu.datapavan.watch.load] dns=[the home router] pid=23937
 tag=1794068602-d1 op=download n=1 bytes=50000000 seconds=10.561 mbps=37.9
 tag=1794068602-u1 op=upload n=1 bytes=20000000 seconds=3.423 mbps=46.7
 tag=1794068602-p1 op=parallel n=1 bytes=50000000 seconds=11.713 mbps=34.2
@@ -39,7 +39,7 @@ meminfo: TOTAL    46272    29016     3248      210   168796    24151    20061   
 meminfo: TOTAL PSS:    46272            TOTAL RSS:   168796       TOTAL SWAP PSS:      210
 stats: engine=userspace tcp=304 udp=0 up=60056874 down=300045831 lookups=304 lookup_ms=9.025 unknown=147 errors=0 pkt_in=232848 pkt_out=329500
 === system 16:24:59
-started engine=system allow=[org.visadahyu.datapavan.watch.load, org.visadahyu.datapavan.watch.spike] dns=[/192.168.1.1] pid=23937
+started engine=system allow=[org.visadahyu.datapavan.watch.load, org.visadahyu.datapavan.watch.spike] dns=[the home router] pid=23937
 tag=1794068701-d1 op=download n=1 bytes=50000000 seconds=13.087 mbps=30.6
 tag=1794068701-u1 op=upload n=1 bytes=20000000 seconds=3.332 mbps=48.0
 tag=1794068701-p1 op=parallel n=1 bytes=50000000 seconds=12.836 mbps=31.2
@@ -60,7 +60,7 @@ meminfo: TOTAL    46512    29156     3252      210   169632    24312    19549   
 meminfo: TOTAL PSS:    46512            TOTAL RSS:   169632       TOTAL SWAP PSS:      210
 stats: engine=system tcp=304 udp=0 up=60056874 down=300045831 lookups=304 lookup_ms=3.198 unknown=0 errors=0 pkt_in=351170 pkt_out=351168
 === gvisor 16:26:51
-started engine=gvisor allow=[org.visadahyu.datapavan.watch.load] dns=[/192.168.1.1] pid=23937
+started engine=gvisor allow=[org.visadahyu.datapavan.watch.load] dns=[the home router] pid=23937
 tag=1794068813-d1 op=download n=1 bytes=50000000 seconds=11.092 mbps=36.1
 tag=1794068813-u1 op=upload n=1 bytes=20000000 seconds=3.356 mbps=47.7
 tag=1794068813-p1 op=parallel n=1 bytes=50000000 seconds=13.301 mbps=30.1
