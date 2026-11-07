@@ -58,6 +58,22 @@ Medians of three rounds; the baseline of six.
 The first download after gVisor started failed once to connect; the other 44 transfers of all
 engines went through.
 
+**The system engine with the SYN held** until Android has named the app and the real server has
+accepted (three rounds, the same day):
+
+| | Download | Upload | 4 parallel | Connect p50 | Round trip p50 | CPU | App not found |
+|---|---|---|---|---|---|---|---|
+| Rust system, SYN held | 292 Mbit/s | 238 | 296 | 0.62 ms | 0.39 ms | 3.4 s | 1 of 305 |
+
+**A refused connection** (a closed port on the test server, three tries each):
+
+| Engine | What the app saw |
+|---|---|
+| Without a VPN | "Connection refused" |
+| Rust system, SYN held | "Connection refused" |
+| Go gVisor | "Connection refused" |
+| Rust userspace (`ipstack`) | a connection that opened, in 0.24 ms, to a server that does not listen |
+
 ## Findings so far
 
 1. **Throughput is not where they differ on the emulator.** Every engine reached the emulator's own
@@ -65,14 +81,15 @@ engines went through.
 2. **gVisor costs about twice the CPU** of either Rust engine for the same bytes, and 15 MB more
    memory. CPU time is the best stand-in for battery until the 8-hour runs. Its library is 5.4 MB per
    ABI against VPN.md's target of under 1 MB. That would also triple the APK people pass on by hand.
-3. **Only gVisor found the app of short connections.** It finishes the handshake with the app only
+3. **At first only gVisor found the app of short connections.** It finishes the handshake with the app only
    after the real server accepted, so the app's socket still exists when Android is asked. The Rust
    engines answer the handshake at once. By the time they ask, a connect-and-close test has already
    closed its socket, and Android knows no owner. This decides a lot for a tool whose point is "which
    app": the Rust system engine can do the same by holding the app's SYN until the lookup and the
    upstream connect are done. `ipstack` cannot without changing it.
 4. **The same holds for honest failures.** With an early handshake, an app sees a refused server as a
-   connection that opens and then breaks. gVisor shows it as refused, as without a VPN.
+   connection that opens and then breaks. gVisor and the system engine with the SYN held show it as
+   refused, as without a VPN; `ipstack` did not (table above).
 5. **`ipstack` blocks in its TCP stream's Drop** (`block_in_place` and `block_on`). It needs tokio's
    multi-threaded runtime, against VPN.md's single engine thread. On a current-thread runtime it hung
    the engine when it stopped, with connections still open. Its README calls it "unstable, under
@@ -90,9 +107,8 @@ engines went through.
 ## Leaning, before the A40
 
 - **The Rust system stack is the leading candidate.** It is small, efficient and safe Rust. The
-  kernel's own TCP does the hard part, with Android's tuned congestion control. It still has to pass
-  three things:
-  - holding the SYN until the lookup and the upstream connect are done (finding 3);
+  kernel's own TCP does the hard part, with Android's tuned congestion control. With the SYN held it
+  attributes and fails as honestly as gVisor. It still has to pass two things:
   - Android 10 to 16 and other vendors, since it leans on policy routing and `tcp_fwmark_accept`;
   - the A40's numbers.
 - **gVisor is the fallback** if the system stack fails on real phones. It is proven and correct, but
@@ -102,13 +118,12 @@ engines went through.
 
 ## Still to do
 
-1. Hold the SYN in the system engine and measure attribution again.
-2. The A40 round over Wi-Fi to `tools/server.py`, with the VPN consent tapped on the phone:
+1. The A40 round over Wi-Fi to `tools/server.py`, with the VPN consent tapped on the phone:
    - throughput, latency, CPU, memory;
    - Wi-Fi switched off and on during a transfer;
    - IPv6;
    - 8 hours of a scripted workload per engine and without a VPN, unplugged, read from batterystats
      and the battery level.
-3. Chaining through a local SOCKS5 proxy (RESTRICTED-REGIONS.md), at least as a check that each engine
+2. Chaining through a local SOCKS5 proxy (RESTRICTED-REGIONS.md), at least as a check that each engine
    can.
-4. The choice, recorded in ADR 0012.
+3. The choice, recorded in ADR 0012.

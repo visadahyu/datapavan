@@ -37,12 +37,24 @@ const TCP_IDLE: Duration = Duration::from_secs(600);
 const FIRST_PORT: u16 = 10_000;
 const LAST_PORT: u16 = 60_000;
 
-/// One rewritten TCP connection: the app's port and the real destination.
+/// One rewritten TCP connection: the app's port and the real destination. It opens once the real
+/// server has accepted; until then the app's SYN is held, as gVisor's forwarder does, so that the
+/// app's socket still exists when Android is asked whose it is, and a refused server looks refused.
 #[derive(Clone, Copy)]
 struct Entry {
     app_port: u16,
     destination: SocketAddr,
     seen: Instant,
+    open: bool,
+}
+
+/// What to do with a TCP packet from the tunnel.
+enum Tcp {
+    /// Rewritten in place: write it back.
+    Send,
+    /// The first SYN of a connection: connect upstream first.
+    Hold { fake_port: u16, app: SocketAddr, destination: SocketAddr, sequence: u32 },
+    Drop,
 }
 
 /// The TCP table, by fake port and by the app's side.
@@ -54,12 +66,12 @@ struct Nat {
 }
 
 impl Nat {
-    fn fake_port(&mut self, app_port: u16, destination: SocketAddr, syn: bool) -> Option<u16> {
+    /// The fake port of a connection, whether it is open, and whether this call created it.
+    fn fake_port(&mut self, app_port: u16, destination: SocketAddr, syn: bool) -> Option<(u16, bool, bool)> {
         if let Some(&port) = self.by_app.get(&(app_port, destination)) {
-            if let Some(entry) = self.by_fake.get_mut(&port) {
-                entry.seen = Instant::now();
-            }
-            return Some(port);
+            let entry = self.by_fake.get_mut(&port)?;
+            entry.seen = Instant::now();
+            return Some((port, entry.open, false));
         }
         if !syn {
             return None;
@@ -68,12 +80,24 @@ impl Nat {
             self.next = if self.next < FIRST_PORT || self.next >= LAST_PORT { FIRST_PORT } else { self.next + 1 };
             if !self.by_fake.contains_key(&self.next) {
                 let port = self.next;
-                self.by_fake.insert(port, Entry { app_port, destination, seen: Instant::now() });
+                self.by_fake.insert(port, Entry { app_port, destination, seen: Instant::now(), open: false });
                 self.by_app.insert((app_port, destination), port);
-                return Some(port);
+                return Some((port, false, true));
             }
         }
         None
+    }
+
+    fn open(&mut self, port: u16) {
+        if let Some(entry) = self.by_fake.get_mut(&port) {
+            entry.open = true;
+        }
+    }
+
+    fn remove(&mut self, port: u16) {
+        if let Some(entry) = self.by_fake.remove(&port) {
+            self.by_app.remove(&(entry.app_port, entry.destination));
+        }
     }
 
     fn by_fake(&mut self, port: u16) -> Option<Entry> {
@@ -103,14 +127,15 @@ fn lock<T>(shared: &Shared<T>) -> std::sync::MutexGuard<'_, T> {
 pub async fn run(tun: Tun, mtu: u16, stats: Arc<Stats>, owners: Arc<dyn OwnerLookup>, mut stop: watch::Receiver<bool>) {
     let tun = Arc::new(tun);
     let nat: Shared<Nat> = Arc::default();
+    let pending: Shared<HashMap<u16, TcpStream>> = Arc::default();
     let udp: Shared<HashMap<(SocketAddr, SocketAddr), Arc<UdpSocket>>> = Arc::default();
     let Ok(listener4) = TcpListener::bind((TUN4, 0)).await else { return };
     let listener6 = TcpListener::bind((TUN6, 0)).await.ok();
     let Ok(port4) = listener4.local_addr().map(|a| a.port()) else { return };
     let port6 = listener6.as_ref().and_then(|l| l.local_addr().ok()).map_or(0, |a| a.port());
-    tokio::spawn(accept(listener4, Arc::clone(&nat), Arc::clone(&stats), Arc::clone(&owners)));
+    tokio::spawn(accept(listener4, Arc::clone(&pending), Arc::clone(&stats)));
     if let Some(listener6) = listener6 {
-        tokio::spawn(accept(listener6, Arc::clone(&nat), Arc::clone(&stats), Arc::clone(&owners)));
+        tokio::spawn(accept(listener6, Arc::clone(&pending), Arc::clone(&stats)));
     }
     let mut packet = vec![0u8; usize::from(mtu).max(1500) + 64];
     let mut sweep = tokio::time::interval(Duration::from_secs(30));
@@ -122,11 +147,18 @@ pub async fn run(tun: Tun, mtu: u16, stats: Arc<Stats>, owners: Arc<dyn OwnerLoo
                 let Ok(n) = read else { return };
                 let packet = &mut packet[..n];
                 match parse(packet) {
-                    Some(Parsed { protocol: TCP, header, .. }) => {
-                        if rewrite_tcp(packet, header, &nat, port4, port6) {
+                    Some(Parsed { protocol: TCP, header, .. }) => match rewrite_tcp(packet, header, &nat, port4, port6) {
+                        Tcp::Send => {
                             let _ = tun.send(packet).await;
                         }
-                    }
+                        Tcp::Hold { fake_port, app, destination, sequence } => {
+                            Stats::add(&stats.tcp_flows, 1);
+                            let listener = if app.is_ipv4() { port4 } else { port6 };
+                            let held = Held { packet: packet.to_vec(), header, fake_port, listener, app, destination, sequence };
+                            tokio::spawn(open(held, Arc::clone(&tun), Arc::clone(&nat), Arc::clone(&pending), Arc::clone(&stats), Arc::clone(&owners)));
+                        }
+                        Tcp::Drop => {}
+                    },
                     Some(Parsed { protocol: UDP, header, source, destination }) => {
                         relay_udp(packet, header, source, destination, &tun, &udp, &stats, &owners).await;
                     }
@@ -212,50 +244,106 @@ fn set_ends(packet: &mut [u8], header: usize, source: SocketAddr, destination: S
     Some(())
 }
 
-/// Rewrites one TCP packet in place; false when it is to be dropped.
-fn rewrite_tcp(packet: &mut [u8], header: usize, nat: &Shared<Nat>, port4: u16, port6: u16) -> bool {
-    let Some(parsed) = parse(packet) else { return false };
-    let Some(flags) = packet.get(header + 13).copied() else { return false };
+/// Decides what to do with one TCP packet, rewriting it in place when it is to be sent.
+fn rewrite_tcp(packet: &mut [u8], header: usize, nat: &Shared<Nat>, port4: u16, port6: u16) -> Tcp {
+    let Some(parsed) = parse(packet) else { return Tcp::Drop };
+    let Some(flags) = packet.get(header + 13).copied() else { return Tcp::Drop };
     let (tun, fake, listener) = match parsed.source.ip() {
         IpAddr::V4(_) => (IpAddr::V4(TUN4), IpAddr::V4(FAKE4), port4),
         IpAddr::V6(_) => (IpAddr::V6(TUN6), IpAddr::V6(FAKE6), port6),
     };
     if listener == 0 {
-        return false;
+        return Tcp::Drop;
     }
     let mut nat = lock(nat);
     if parsed.source == SocketAddr::new(tun, listener) && parsed.destination.ip() == fake {
         // The kernel's answer: back to the app, as if from the real destination.
-        let Some(entry) = nat.by_fake(parsed.destination.port()) else { return false };
+        let Some(entry) = nat.by_fake(parsed.destination.port()) else { return Tcp::Drop };
         drop(nat);
-        return set_ends(packet, header, entry.destination, SocketAddr::new(tun, entry.app_port)).is_some();
+        return if set_ends(packet, header, entry.destination, SocketAddr::new(tun, entry.app_port)).is_some() { Tcp::Send } else { Tcp::Drop };
     }
     if parsed.source.ip() != tun {
-        return false;
+        return Tcp::Drop;
     }
     let syn = flags & 0x02 != 0 && flags & 0x10 == 0;
-    let Some(fake_port) = nat.fake_port(parsed.source.port(), parsed.destination, syn) else { return false };
+    let Some((fake_port, open, created)) = nat.fake_port(parsed.source.port(), parsed.destination, syn) else { return Tcp::Drop };
     drop(nat);
-    set_ends(packet, header, SocketAddr::new(fake, fake_port), SocketAddr::new(tun, listener)).is_some()
+    if created {
+        let Some(bytes) = packet.get(header + 4..header + 8) else { return Tcp::Drop };
+        let sequence = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        return Tcp::Hold { fake_port, app: parsed.source, destination: parsed.destination, sequence };
+    }
+    // A SYN sent again while the real server has not answered yet is dropped; the held one goes on.
+    if !open {
+        return Tcp::Drop;
+    }
+    if set_ends(packet, header, SocketAddr::new(fake, fake_port), SocketAddr::new(tun, listener)).is_some() { Tcp::Send } else { Tcp::Drop }
 }
 
-/// Accepts the rewritten connections and relays each to its real destination.
-async fn accept(listener: TcpListener, nat: Shared<Nat>, stats: Arc<Stats>, owners: Arc<dyn OwnerLookup>) {
+/// A connection's first SYN, held until the real server accepts.
+struct Held {
+    packet: Vec<u8>,
+    header: usize,
+    fake_port: u16,
+    listener: u16,
+    app: SocketAddr,
+    destination: SocketAddr,
+    sequence: u32,
+}
+
+/// Asks Android whose the connection is while the app still waits for its SYN-ACK, connects to the
+/// real server, and only then lets the SYN on to the kernel's listener. A server that refuses or
+/// cannot be reached gets the app a reset, as without a VPN.
+async fn open(mut held: Held, tun: Arc<Tun>, nat: Shared<Nat>, pending: Shared<HashMap<u16, TcpStream>>, stats: Arc<Stats>, owners: Arc<dyn OwnerLookup>) {
+    let lookup = look_up(&owners, &stats, 6, held.app, held.destination);
+    let (_uid, upstream) = tokio::join!(lookup, connect_protected(&owners, held.destination));
+    let (tun_ip, fake) = match held.app.ip() {
+        IpAddr::V4(_) => (IpAddr::V4(TUN4), IpAddr::V4(FAKE4)),
+        IpAddr::V6(_) => (IpAddr::V6(TUN6), IpAddr::V6(FAKE6)),
+    };
+    match upstream {
+        Ok(upstream) => {
+            lock(&pending).insert(held.fake_port, upstream);
+            lock(&nat).open(held.fake_port);
+            if set_ends(&mut held.packet, held.header, SocketAddr::new(fake, held.fake_port), SocketAddr::new(tun_ip, held.listener)).is_some() {
+                let _ = tun.send(&held.packet).await;
+            }
+        }
+        Err(_) => {
+            Stats::add(&stats.connect_errors, 1);
+            lock(&nat).remove(held.fake_port);
+            if let Some(reset) = reset(held.app, held.destination, held.sequence) {
+                let _ = tun.send(&reset).await;
+            }
+        }
+    }
+}
+
+/// A TCP reset from `destination` to the app, answering its SYN numbered `sequence`.
+fn reset(app: SocketAddr, destination: SocketAddr, sequence: u32) -> Option<Vec<u8>> {
+    let mut packet = Vec::new();
+    let built = match (destination.ip(), app.ip()) {
+        (IpAddr::V4(from), IpAddr::V4(to)) => etherparse::PacketBuilder::ipv4(from.octets(), to.octets(), 64)
+            .tcp(destination.port(), app.port(), 0, 0)
+            .rst()
+            .ack(sequence.wrapping_add(1))
+            .write(&mut packet, &[]),
+        (IpAddr::V6(from), IpAddr::V6(to)) => etherparse::PacketBuilder::ipv6(from.octets(), to.octets(), 64)
+            .tcp(destination.port(), app.port(), 0, 0)
+            .rst()
+            .ack(sequence.wrapping_add(1))
+            .write(&mut packet, &[]),
+        _ => return None,
+    };
+    built.ok().map(|()| packet)
+}
+
+/// Accepts the rewritten connections and relays each over the upstream socket opened for it.
+async fn accept(listener: TcpListener, pending: Shared<HashMap<u16, TcpStream>>, stats: Arc<Stats>) {
     while let Ok((mut app, peer)) = listener.accept().await {
-        let Some(entry) = lock(&nat).by_fake(peer.port()) else { continue };
-        Stats::add(&stats.tcp_flows, 1);
-        let (stats, owners) = (Arc::clone(&stats), Arc::clone(&owners));
-        let local_ip = match peer.ip() {
-            IpAddr::V4(_) => IpAddr::V4(TUN4),
-            IpAddr::V6(_) => IpAddr::V6(TUN6),
-        };
+        let Some(upstream) = lock(&pending).remove(&peer.port()) else { continue };
+        let stats = Arc::clone(&stats);
         tokio::spawn(async move {
-            let lookup = look_up(&owners, &stats, 6, SocketAddr::new(local_ip, entry.app_port), entry.destination);
-            let (_uid, upstream) = tokio::join!(lookup, connect_protected(&owners, entry.destination));
-            let Ok(upstream) = upstream else {
-                Stats::add(&stats.connect_errors, 1);
-                return;
-            };
             let _ = upstream.set_nodelay(true);
             let _ = app.set_nodelay(true);
             let mut upstream = Counted::new(upstream, Arc::clone(&stats));
@@ -373,7 +461,12 @@ mod tests {
         let nat: Shared<Nat> = Arc::default();
         let mut packet = syn();
         assert!(checksums_valid(&packet));
-        assert!(rewrite_tcp(&mut packet, 20, &nat, 5555, 0));
+        // The first SYN is held until the real server accepts; then it goes on, rewritten.
+        let Tcp::Hold { fake_port, sequence, .. } = rewrite_tcp(&mut packet, 20, &nat, 5555, 0) else { panic!("not held") };
+        assert_eq!(sequence, 1);
+        assert!(matches!(rewrite_tcp(&mut syn(), 20, &nat, 5555, 0), Tcp::Drop), "a repeated SYN is dropped while held");
+        lock(&nat).open(fake_port);
+        assert!(set_ends(&mut packet, 20, SocketAddr::from((FAKE4, fake_port)), SocketAddr::from((TUN4, 5555))).is_some());
         let parsed = parse(&packet).map(|p| (p.source, p.destination));
         let fake_port = parsed.map_or(0, |(s, _)| s.port());
         assert_eq!(parsed.map(|(s, d)| (s.ip(), d)), Some((IpAddr::V4(FAKE4), SocketAddr::from((TUN4, 5555)))));
@@ -386,10 +479,19 @@ mod tests {
             .ack(2)
             .write(&mut answer, &[])
             .unwrap_or_default();
-        assert!(rewrite_tcp(&mut answer, 20, &nat, 5555, 0));
+        assert!(matches!(rewrite_tcp(&mut answer, 20, &nat, 5555, 0), Tcp::Send));
         let back = parse(&answer).map(|p| (p.source, p.destination));
         assert_eq!(back, Some((SocketAddr::from(([93, 184, 216, 34], 80)), SocketAddr::from((TUN4, 40_000)))));
         assert!(checksums_valid(&answer));
+    }
+
+    #[test]
+    fn answers_a_refused_syn_with_a_valid_reset() {
+        let app = SocketAddr::from((TUN4, 40_000));
+        let server = SocketAddr::from(([93, 184, 216, 34], 80));
+        let packet = reset(app, server, 1).unwrap_or_default();
+        assert_eq!(parse(&packet).map(|p| (p.source, p.destination)), Some((server, app)));
+        assert!(checksums_valid(&packet));
     }
 
     #[test]
@@ -401,6 +503,6 @@ mod tests {
             .ack(1)
             .write(&mut packet, &[])
             .unwrap_or_default();
-        assert!(!rewrite_tcp(&mut packet, 20, &nat, 5555, 0));
+        assert!(matches!(rewrite_tcp(&mut packet, 20, &nat, 5555, 0), Tcp::Drop));
     }
 }

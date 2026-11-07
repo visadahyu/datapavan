@@ -1,0 +1,20 @@
+started engine=system allow=[org.visadahyu.datapavan.watch.load, org.visadahyu.datapavan.watch.spike] dns=[/10.0.2.3] pid=12200
+tag=1794067225-d1 op=download n=1 bytes=50000000 seconds=1.869 mbps=214.1
+tag=1794067225-u1 op=upload n=1 bytes=20000000 seconds=0.664 mbps=241.1
+tag=1794067225-p1 op=parallel n=1 bytes=50000000 seconds=1.334 mbps=300.0
+tag=1794067225-c1 op=connect n=100 p50_ms=0.62 p90_ms=1.64 p99_ms=4.32 mean_ms=0.91
+tag=1794067225-r1 op=rtt n=100 p50_ms=0.41 p90_ms=0.64 p99_ms=3.49 mean_ms=0.53
+tag=1794067225-d2 op=download n=1 bytes=50000000 seconds=1.345 mbps=297.5
+tag=1794067225-u2 op=upload n=1 bytes=20000000 seconds=0.668 mbps=239.4
+tag=1794067225-p2 op=parallel n=1 bytes=50000000 seconds=1.330 mbps=300.7
+tag=1794067225-c2 op=connect n=100 p50_ms=0.65 p90_ms=1.05 p99_ms=3.94 mean_ms=0.86
+tag=1794067225-r2 op=rtt n=100 p50_ms=0.39 p90_ms=1.03 p99_ms=4.07 mean_ms=0.68
+tag=1794067225-d3 op=download n=1 bytes=50000000 seconds=1.369 mbps=292.1
+tag=1794067225-u3 op=upload n=1 bytes=20000000 seconds=0.659 mbps=242.7
+tag=1794067225-p3 op=parallel n=1 bytes=50000000 seconds=1.308 mbps=305.9
+tag=1794067225-c3 op=connect n=100 p50_ms=0.60 p90_ms=1.47 p99_ms=4.85 mean_ms=0.91
+tag=1794067225-r3 op=rtt n=100 p50_ms=0.38 p90_ms=0.69 p99_ms=1.98 mean_ms=0.49
+cpu_ticks=339 engine=system
+meminfo: TOTAL    34297    20252     3296     2692   132304    21228    13692     2779
+meminfo: TOTAL PSS:    34297            TOTAL RSS:   132304       TOTAL SWAP PSS:     2692
+stats: engine=system tcp=305 udp=0 up=60060084 down=300045831 lookups=305 lookup_ms=0.237 unknown=1 errors=0 pkt_in=427326 pkt_out=427310
