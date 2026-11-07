@@ -393,6 +393,8 @@
  "get_body": "La version 0.1.0 est une préversion, en cours d’essai sur d’autres téléphones. F-Droid et IzzyOnDroid viendront après ces essais.",
  "get_button": "Télécharger l’APK",
  "get_install": "Android vous demande d’autoriser l’installation depuis votre navigateur ; vous pourrez la désactiver ensuite. Puis, dans les paramètres de l’appli, « Cette copie est-elle authentique ? » vérifie votre copie.",
+ "get_blocked": "Si le téléchargement ne démarre pas, votre réseau le bloque peut-être. Essayez plutôt GitHub, ou demandez à une personne de confiance de vous envoyer le fichier. Une copie venue de n’importe où convient, du moment que sa clé correspond à celle affichée ici.",
+ "get_github": "Télécharger depuis GitHub",
  "channels": [
   [
    "GitHub Releases",

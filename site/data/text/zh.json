@@ -393,6 +393,8 @@
  "get_body": "0.1.0 版是预发布版，正在更多手机上试用。这些测试完成后才会上架 F-Droid 和 IzzyOnDroid。",
  "get_button": "下载 APK",
  "get_install": "Android 会要求您允许从浏览器安装；之后可以再次关闭。然后在应用的设置中，“此副本是正版吗？”会检查您的副本。",
+ "get_blocked": "如果下载没有开始，可能是您的网络阻止了它。您可以改用 GitHub，或请您信任的人把文件发给您。只要副本的密钥与此处显示的一致，无论它来自哪里都没有问题。",
+ "get_github": "从 GitHub 下载",
  "channels": [
   [
    "GitHub Releases",

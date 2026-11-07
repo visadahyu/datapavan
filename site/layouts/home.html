@@ -3,6 +3,7 @@
 {{- $d := $t.digits -}}
 {{- $toSite := cond (eq site.Language.Lang "en") "" "../" -}}
 {{- $apk := printf "%sdownload/%s" $toSite site.Params.release_apk -}}
+{{- $github := printf "https://github.com/visadahyu/datapavan/releases/download/%s/%s" site.Params.release_tag site.Params.release_apk -}}
 {{- $shots := slice (slice "summary" (index $t.shots 0)) (slice "app" (index $t.shots 1)) (slice "plan" (index $t.shots 2)) -}}
 <main>
 <div class="w"><div class="hero">
@@ -39,7 +40,7 @@
 {{- range $t.compare_rows }}<tr><th scope="row">{{ index . 0 }}</th>{{ range $i, $v := index . 1 }}<td{{ if eq $i 0 }} class="us"{{ end }}>{{ $v }}</td>{{ end }}</tr>{{ end -}}
 </tbody></table></div></div></section>
 <section id="faq" class="band"><div class="w"><h2>{{ $t.faq_title }}</h2><div class="faq">{{ range $t.faq }}<details><summary>{{ index . 0 }}</summary><p>{{ index . 1 }}</p></details>{{ end }}</div></div></section>
-<section id="get"><div class="w get"><div><h2>{{ $t.get_title }}</h2><p class="sub" style="margin-bottom:1rem">{{ $t.get_body }}</p><p class="cta"><a class="btn" href="{{ $apk | safeURL }}">{{ $t.get_button }}</a></p><p class="note"><span class="ltr">{{ site.Params.release_apk }}, {{ site.Params.release_size }}</span><br><span class="ltr" style="overflow-wrap:anywhere">SHA-256: {{ site.Params.release_sha256 }}</span></p><p class="note" style="margin-bottom:1.25rem">{{ $t.get_install }}</p><ul class="chan">{{ range $t.channels }}<li><strong class="cn">{{ index . 0 }}</strong> <span>{{ index . 1 }}</span></li>{{ end }}</ul></div>
+<section id="get"><div class="w get"><div><h2>{{ $t.get_title }}</h2><p class="sub" style="margin-bottom:1rem">{{ $t.get_body }}</p><p class="cta"><a class="btn" href="{{ $apk | safeURL }}">{{ $t.get_button }}</a></p><p class="note"><span class="ltr">{{ site.Params.release_apk }}, {{ site.Params.release_size }}</span><br><span class="ltr" style="overflow-wrap:anywhere">SHA-256: {{ site.Params.release_sha256 }}</span></p><p class="note">{{ $t.get_install }}</p><p class="note" style="margin-bottom:1.25rem">{{ $t.get_blocked }} <a href="{{ $github | safeURL }}">{{ $t.get_github }}</a></p><ul class="chan">{{ range $t.channels }}<li><strong class="cn">{{ index . 0 }}</strong> <span>{{ index . 1 }}</span></li>{{ end }}</ul></div>
 <aside class="label"><p class="l-title" style="font-size:clamp(2.1rem,3.6vw,3.2rem)">{{ $t.verify_title }}</p><div class="l-g" style="margin-top:.5rem;padding-top:.5rem"><p>{{ $t.verify_body }}</p><p class="fp fpv">{{ range $i, $f := site.Params.fingerprint }}{{ if $i }}:<br>{{ end }}{{ $f }}{{ end }}</p></div><p class="fine">{{ $t.verify_how }}</p></aside></div></section>
 <section id="names" class="band"><div class="w"><h2>{{ $t.names_title }}</h2><p class="sub">{{ $t.names_lead }}</p><div class="names">
 {{- range $i, $n := $t.names }}<article>{{ if eq $i 0 }}{{ partial "mark.html" . }}{{ else }}{{ partial "mark-visadahyu.html" . }}{{ end }}<h3><span class="ltr">{{ index $n 0 }}</span>{{ with index $n 1 }} <span class="nat">{{ . }}</span>{{ end }}</h3><p class="say">{{ index $n 3 }} · {{ index $n 2 }}</p><p class="parts">{{ range $j, $p := index $n 4 }}{{ if $j }} + {{ end }}<i class="ltr">{{ index $p 0 }}</i> {{ index $p 1 }}{{ end }}</p><p class="mean">{{ index $n 5 }}</p><p>{{ index $n 6 }}</p></article>{{ end -}}
