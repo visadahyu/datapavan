@@ -54,6 +54,9 @@ enum Tcp {
     Send,
     /// The first SYN of a connection: connect upstream first.
     Hold { fake_port: u16, app: SocketAddr, destination: SocketAddr, sequence: u32 },
+    /// A segment of a connection the engine does not know, as after it restarted: answer with a
+    /// reset, as a real stack would, so that the app opens a new connection at once.
+    Reset(Vec<u8>),
     Drop,
 }
 
@@ -124,7 +127,7 @@ fn lock<T>(shared: &Shared<T>) -> std::sync::MutexGuard<'_, T> {
 }
 
 /// Runs until `stop` changes or the tunnel closes.
-pub async fn run(tun: Tun, mtu: u16, stats: Arc<Stats>, owners: Arc<dyn OwnerLookup>, mut stop: watch::Receiver<bool>) {
+pub async fn run(tun: Tun, mtu: u16, stats: Arc<Stats>, owners: Arc<dyn OwnerLookup>, proxy: Option<SocketAddr>, mut stop: watch::Receiver<bool>) {
     let tun = Arc::new(tun);
     let nat: Shared<Nat> = Arc::default();
     let pending: Shared<HashMap<u16, TcpStream>> = Arc::default();
@@ -155,7 +158,10 @@ pub async fn run(tun: Tun, mtu: u16, stats: Arc<Stats>, owners: Arc<dyn OwnerLoo
                             Stats::add(&stats.tcp_flows, 1);
                             let listener = if app.is_ipv4() { port4 } else { port6 };
                             let held = Held { packet: packet.to_vec(), header, fake_port, listener, app, destination, sequence };
-                            tokio::spawn(open(held, Arc::clone(&tun), Arc::clone(&nat), Arc::clone(&pending), Arc::clone(&stats), Arc::clone(&owners)));
+                            tokio::spawn(open(held, proxy, Arc::clone(&tun), Arc::clone(&nat), Arc::clone(&pending), Arc::clone(&stats), Arc::clone(&owners)));
+                        }
+                        Tcp::Reset(reset) => {
+                            let _ = tun.send(&reset).await;
                         }
                         Tcp::Drop => {}
                     },
@@ -266,7 +272,17 @@ fn rewrite_tcp(packet: &mut [u8], header: usize, nat: &Shared<Nat>, port4: u16, 
         return Tcp::Drop;
     }
     let syn = flags & 0x02 != 0 && flags & 0x10 == 0;
-    let Some((fake_port, open, created)) = nat.fake_port(parsed.source.port(), parsed.destination, syn) else { return Tcp::Drop };
+    let Some((fake_port, open, created)) = nat.fake_port(parsed.source.port(), parsed.destination, syn) else {
+        drop(nat);
+        // No reset for a reset; otherwise RFC 9293 3.10.7.1: answer an ACK with a reset numbered as
+        // that acknowledgement.
+        if flags & 0x04 != 0 || flags & 0x10 == 0 {
+            return Tcp::Drop;
+        }
+        let Some(ack) = packet.get(header + 8..header + 12) else { return Tcp::Drop };
+        let ack = u32::from_be_bytes([ack[0], ack[1], ack[2], ack[3]]);
+        return reset_for(parsed.source, parsed.destination, ack).map_or(Tcp::Drop, Tcp::Reset);
+    };
     drop(nat);
     if created {
         let Some(bytes) = packet.get(header + 4..header + 8) else { return Tcp::Drop };
@@ -294,9 +310,15 @@ struct Held {
 /// Asks Android whose the connection is while the app still waits for its SYN-ACK, connects to the
 /// real server, and only then lets the SYN on to the kernel's listener. A server that refuses or
 /// cannot be reached gets the app a reset, as without a VPN.
-async fn open(mut held: Held, tun: Arc<Tun>, nat: Shared<Nat>, pending: Shared<HashMap<u16, TcpStream>>, stats: Arc<Stats>, owners: Arc<dyn OwnerLookup>) {
+async fn open(mut held: Held, proxy: Option<SocketAddr>, tun: Arc<Tun>, nat: Shared<Nat>, pending: Shared<HashMap<u16, TcpStream>>, stats: Arc<Stats>, owners: Arc<dyn OwnerLookup>) {
     let lookup = look_up(&owners, &stats, 6, held.app, held.destination);
-    let (_uid, upstream) = tokio::join!(lookup, connect_protected(&owners, held.destination));
+    let connect = async {
+        let Some(proxy) = proxy else { return connect_protected(&owners, held.destination).await };
+        let mut stream = connect_protected(&owners, proxy).await?;
+        crate::socks::connect(&mut stream, held.destination).await?;
+        Ok(stream)
+    };
+    let (_uid, upstream) = tokio::join!(lookup, connect);
     let (tun_ip, fake) = match held.app.ip() {
         IpAddr::V4(_) => (IpAddr::V4(TUN4), IpAddr::V4(FAKE4)),
         IpAddr::V6(_) => (IpAddr::V6(TUN6), IpAddr::V6(FAKE6)),
@@ -309,7 +331,8 @@ async fn open(mut held: Held, tun: Arc<Tun>, nat: Shared<Nat>, pending: Shared<H
                 let _ = tun.send(&held.packet).await;
             }
         }
-        Err(_) => {
+        Err(e) => {
+            crate::stats::note_error(&format!("connect {}: {e}", held.destination));
             Stats::add(&stats.connect_errors, 1);
             lock(&nat).remove(held.fake_port);
             if let Some(reset) = reset(held.app, held.destination, held.sequence) {
@@ -332,6 +355,24 @@ fn reset(app: SocketAddr, destination: SocketAddr, sequence: u32) -> Option<Vec<
             .tcp(destination.port(), app.port(), 0, 0)
             .rst()
             .ack(sequence.wrapping_add(1))
+            .write(&mut packet, &[]),
+        _ => return None,
+    };
+    built.ok().map(|()| packet)
+}
+
+/// A bare reset from `destination` to the app, numbered `sequence`, for a segment of an unknown
+/// connection.
+fn reset_for(app: SocketAddr, destination: SocketAddr, sequence: u32) -> Option<Vec<u8>> {
+    let mut packet = Vec::new();
+    let built = match (destination.ip(), app.ip()) {
+        (IpAddr::V4(from), IpAddr::V4(to)) => etherparse::PacketBuilder::ipv4(from.octets(), to.octets(), 64)
+            .tcp(destination.port(), app.port(), sequence, 0)
+            .rst()
+            .write(&mut packet, &[]),
+        (IpAddr::V6(from), IpAddr::V6(to)) => etherparse::PacketBuilder::ipv6(from.octets(), to.octets(), 64)
+            .tcp(destination.port(), app.port(), sequence, 0)
+            .rst()
             .write(&mut packet, &[]),
         _ => return None,
     };
@@ -495,14 +536,19 @@ mod tests {
     }
 
     #[test]
-    fn drops_a_segment_of_an_unknown_connection() {
+    fn resets_a_segment_of_an_unknown_connection() {
         let nat: Shared<Nat> = Arc::default();
         let mut packet = Vec::new();
         etherparse::PacketBuilder::ipv4(TUN4.octets(), [1, 1, 1, 1], 64)
             .tcp(40_001, 443, 1, 65_535)
-            .ack(1)
+            .ack(77)
             .write(&mut packet, &[])
             .unwrap_or_default();
-        assert!(matches!(rewrite_tcp(&mut packet, 20, &nat, 5555, 0), Tcp::Drop));
+        let Tcp::Reset(reset) = rewrite_tcp(&mut packet, 20, &nat, 5555, 0) else { panic!("no reset") };
+        assert!(checksums_valid(&reset));
+        let sliced = etherparse::SlicedPacket::from_ip(&reset).ok();
+        let Some(etherparse::TransportSlice::Tcp(tcp)) = sliced.and_then(|s| s.transport) else { panic!("not tcp") };
+        assert!(tcp.rst() && !tcp.ack());
+        assert_eq!((tcp.source_port(), tcp.destination_port(), tcp.sequence_number()), (443, 40_001, 77));
     }
 }

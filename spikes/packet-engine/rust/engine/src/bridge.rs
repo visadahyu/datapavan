@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
 
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
-use jni::objects::{JClass, JLongArray, JObject};
+use jni::objects::{JClass, JLongArray, JObject, JString};
 use jni::sys::{jboolean, jint};
 use jni::{EnvUnowned, JValue, JavaVM, jni_sig, jni_str};
 use tokio::sync::watch;
@@ -95,7 +95,7 @@ fn stop_running() {
 /// `RustEngine.nativeStart(service, fd, mtu, kind)`: takes ownership of `fd` and runs the engine on a
 /// thread of its own, with one tokio thread as VPN.md asks; owner lookups run on tokio's blocking pool.
 // SAFETY: exported under the JNI name of the static Kotlin method
-// `external fun nativeStart(service: Any, fd: Int, mtu: Int, kind: Int): Boolean`, unique in this library.
+// `external fun nativeStart(service: Any, fd: Int, mtu: Int, kind: Int, socks: String): Boolean`, unique in this library.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_watch_spike_RustEngine_nativeStart<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
@@ -104,11 +104,14 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_spike_RustEngine_nativ
     fd: jint,
     mtu: jint,
     kind: jint,
+    socks: JString<'caller>,
 ) -> jboolean {
     unowned_env
         .with_env(|env| -> Result<jboolean, Error> {
             stop_running();
             let Some(kind) = Kind::from_code(kind) else { return Ok(false) };
+            // "host:port" of a SOCKS5 proxy for the system engine's upstream connections, or empty.
+            let proxy: Option<SocketAddr> = socks.try_to_string(env).ok().and_then(|s| s.parse().ok());
             if fd < 0 {
                 return Ok(false);
             }
@@ -136,7 +139,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_spike_RustEngine_nativ
                         let Ok(tun) = Tun::new(fd, Arc::clone(&stats)) else { return };
                         match kind {
                             Kind::Userspace => userspace::run(tun, mtu, stats, owners, stopped).await,
-                            Kind::System => system::run(tun, mtu, stats, owners, stopped).await,
+                            Kind::System => system::run(tun, mtu, stats, owners, proxy, stopped).await,
                         }
                     });
                     runtime.shutdown_background();
@@ -176,6 +179,21 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_spike_RustEngine_nativ
             let array = JLongArray::new(env, values.len())?;
             array.set_region(env, 0, &values)?;
             Ok(array)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `RustEngine.nativeLastError()`: the last error an engine met, or "".
+// SAFETY: exported under the JNI name of the static Kotlin method `external fun nativeLastError(): String`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_spike_RustEngine_nativeLastError<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) -> JString<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let last = crate::stats::LAST_ERROR.lock().map(|e| e.clone()).unwrap_or_default();
+            JString::from_str(env, &last)
         })
         .resolve::<ThrowRuntimeExAndDefault>()
 }

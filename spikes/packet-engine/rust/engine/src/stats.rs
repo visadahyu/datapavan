@@ -8,6 +8,16 @@ use std::task::{Context, Poll};
 
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
+/// The last error an engine met, for the spike's log.
+pub static LAST_ERROR: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+
+/// Keeps `error` as the last one.
+pub fn note_error(error: &str) {
+    if let Ok(mut last) = LAST_ERROR.lock() {
+        error.clone_into(&mut last);
+    }
+}
+
 /// What an engine counted since it started.
 #[derive(Default)]
 pub struct Stats {

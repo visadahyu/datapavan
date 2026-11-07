@@ -1,7 +1,7 @@
 # Spike: the packet engine for Datapavan Watch (ADR 0012)
 
-Status: **in progress.** Started 2026-11-07. The emulator round and the A40's first round are done;
-the battery runs are not. Code: [spikes/packet-engine/](../../spikes/packet-engine/README.md).
+Status: **done for the choice** (2026-11-07), recorded in [ADR 0012](../decisions/0012-packet-engine.md).
+The day's battery cost is measured on Watch itself, not here. Code: [spikes/packet-engine/](../../spikes/packet-engine/README.md).
 
 ## Question
 
@@ -103,6 +103,40 @@ their spread. CPU and memory are what the engines themselves add.
   That is mostly the owner lookup, a binder call that takes about 3 ms on this phone and runs while
   the upstream connects. gVisor takes the same path, at 10.9 ms.
 
+## The short checks of the leading engine
+
+The same evening, on the emulators and with the system engine unless said otherwise.
+
+**QUIC-sized UDP**, 1,200-byte datagrams echoed by the test server, 32 in flight, 60,000 each way per
+engine (Android 17 emulator):
+
+| | Baseline | Rust userspace | Rust system | Go gVisor |
+|---|---|---|---|---|
+| Each way, Mbit/s (median of three) | 162 | 158 | 159 | 157 |
+| Engine CPU, s | | 1.3 | 1.0 | 2.6 |
+| Lost | 0 | 0 | 0 | 32, all at the start |
+
+gVisor lost the first window of its first flow: the datagrams that arrive before the forwarder has
+dialled upstream are dropped, which a real build would have to queue.
+
+- **Android 15** (CI's emulator image): the system engine carried TCP and UDP as on 11 and 17, and
+  found every flow's app.
+- **A Wi-Fi switch** in the middle of a 400 MB download: the download broke, as it does without a
+  VPN, and the tunnel stayed up. The next download ran at full speed, and every new flow's app was
+  found.
+- **IPv6** without an IPv6 network: the app's IPv6 connection entered the tunnel and failed at once,
+  as "refused" where Android without a VPN says "network unreachable"; both let an app fall back to
+  IPv4 at once. A real build should answer with ICMPv6 "unreachable" instead. None of the devices had
+  IPv6 on the home network, so a working IPv6 path is still unchecked.
+- **SOCKS5 chaining** through a test proxy on the computer's loopback (`tools/socks5.py`, CONNECT
+  only): 208 Mbit/s down and 220 up on the emulator, every connection through the proxy. Two traps
+  for later. The phone's Private DNS probe (DNS over TLS to the network's resolver) also went into
+  the tunnel, since Watch is inside it, and a proxy that cannot reach the network's own resolver
+  refuses it. UDP ASSOCIATE is not built.
+- **A restart under a kept-alive connection.** At first the engine dropped a segment of a connection
+  it did not know, so after a restart an app's pooled connection hung until its timeouts. Now it
+  answers with a reset, as a real stack does, and the app reconnected within a second.
+
 ## Findings so far
 
 1. **Throughput is not where they differ on the emulator.** Every engine reached the emulator's own
@@ -145,13 +179,8 @@ their spread. CPU and memory are what the engines themselves add.
   parsers split between Go and Rust.
 - **`ipstack` is out** unless it is forked, for findings 3 and 5.
 
-## Still to do
+## Left for Watch itself
 
-1. On the A40:
-   - Wi-Fi switched off and on during a transfer;
-   - IPv6;
-   - 8 hours of a scripted workload per engine and without a VPN, unplugged, read from batterystats
-     and the battery level.
-2. Chaining through a local SOCKS5 proxy (RESTRICTED-REGIONS.md), at least as a check that each engine
-   can.
-3. The choice, recorded in ADR 0012.
+- The battery cost of a day of ordinary use, against VPN.md's 3 %, on Watch rather than the spike.
+- Android 10 and 12 to 14, and other vendors.
+- A working IPv6 path; SOCKS5 UDP ASSOCIATE; ICMP answers for unreachable destinations.

@@ -8,6 +8,7 @@
 //! - [`userspace`]: a userspace TCP/IP stack (`ipstack`) terminates each connection.
 //! - [`system`]: packets are rewritten so that Android's own TCP stack terminates them.
 
+pub mod socks;
 pub mod stats;
 pub mod system;
 pub mod tun;

@@ -21,6 +21,10 @@ class SpikeVpnService : VpnService() {
     private var engine: PacketEngine? = null
     private var name = ""
 
+    /** "host:port" of a SOCKS5 proxy the system engine chains through, from the start command, or "". */
+    var socks = ""
+        private set
+
     private val tick = object : Runnable {
         override fun run() {
             logStats("SPIKE_STATS")
@@ -33,6 +37,7 @@ class SpikeVpnService : VpnService() {
             stopEngine()
             stopSelf()
         } else {
+            socks = intent?.getStringExtra(EXTRA_SOCKS).orEmpty()
             startEngine(intent?.getStringExtra(EXTRA_ENGINE) ?: "userspace", intent?.getStringExtra(EXTRA_ALLOW) ?: LOAD_APP)
         }
         return START_NOT_STICKY
@@ -61,7 +66,7 @@ class SpikeVpnService : VpnService() {
         if (!selected.start(this, tunnel.detachFd(), MTU)) return Log.e(TAG, "SPIKE_ERROR $which did not start").let { }
         engine = selected
         name = which
-        Log.i(TAG, "SPIKE_STARTED engine=$which allow=$allowed dns=$dns pid=${Process.myPid()}")
+        Log.i(TAG, "SPIKE_STARTED engine=$which allow=$allowed dns=$dns socks=$socks pid=${Process.myPid()}")
         handler.postDelayed(tick, STATS_EVERY_MS)
     }
 
@@ -79,7 +84,8 @@ class SpikeVpnService : VpnService() {
         Log.i(
             TAG,
             "$label engine=$name tcp=${s[0]} udp=${s[1]} up=${s[2]} down=${s[3]} lookups=${s[4]} " +
-                "lookup_ms=${"%.3f".format(lookupMs)} unknown=${s[6]} errors=${s[7]} pkt_in=${s[8]} pkt_out=${s[9]}",
+                "lookup_ms=${"%.3f".format(lookupMs)} unknown=${s[6]} errors=${s[7]} pkt_in=${s[8]} pkt_out=${s[9]}" +
+                (if (name != "gvisor") " last_error=${RustEngine.nativeLastError()}" else ""),
         )
     }
 
@@ -115,6 +121,7 @@ class SpikeVpnService : VpnService() {
         const val ACTION_STOP = "org.visadahyu.datapavan.watch.spike.STOP"
         const val EXTRA_ENGINE = "engine"
         const val EXTRA_ALLOW = "allow"
+        const val EXTRA_SOCKS = "socks"
         const val LOAD_APP = "org.visadahyu.datapavan.watch.load"
         const val TUN4 = "10.111.0.1"
         const val TUN6 = "fd00:111::1"

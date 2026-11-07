@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 # The spike's test server on the development computer: GET /bytes/N sends N bytes, POST /sink reads
-# and drops the body, GET /ping answers four bytes. The emulator reaches it at 10.0.2.2, a phone on
+# and drops the body, GET /ping answers four bytes. UDP on the next port echoes every datagram, for a
+# QUIC-like load of datagrams both ways. The emulator reaches it at 10.0.2.2, a phone on
 # the same Wi-Fi at the computer's address. Nothing it receives is kept.
 #
 #   python3 -I tools/server.py [port, default 8790]
+import socket
 import sys
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 CHUNK = bytes(64 * 1024)
@@ -61,7 +64,17 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+def echo_udp(port):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 << 20)
+    sock.bind(("0.0.0.0", port))
+    while True:
+        data, peer = sock.recvfrom(65535)
+        sock.sendto(data, peer)
+
+
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8790
+    threading.Thread(target=echo_udp, args=(port + 1,), daemon=True).start()
     ThreadingHTTPServer.daemon_threads = True
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()

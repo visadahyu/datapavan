@@ -1,0 +1,23 @@
+=== none
+tag=1794070222-q1 op=udp n=20000 sent=20000 received=20000 lost=0 seconds=1.214 mbps_each_way=158.2
+tag=1794070222-q2 op=udp n=20000 sent=20000 received=20000 lost=0 seconds=1.173 mbps_each_way=163.7
+tag=1794070222-q3 op=udp n=20000 sent=20000 received=20000 lost=0 seconds=1.182 mbps_each_way=162.4
+cpu_ticks=0 engine=none datagrams=60000
+=== userspace
+tag=1794070229-q1 op=udp n=20000 sent=20000 received=20000 lost=0 seconds=1.208 mbps_each_way=158.9
+tag=1794070229-q2 op=udp n=20000 sent=20000 received=20000 lost=0 seconds=1.226 mbps_each_way=156.6
+tag=1794070229-q3 op=udp n=20000 sent=20000 received=20000 lost=0 seconds=1.214 mbps_each_way=158.2
+cpu_ticks=129 engine=userspace datagrams=60000
+stats: engine=userspace tcp=1 udp=3 up=72000000 down=72000000 lookups=4 lookup_ms=0.345 unknown=1 errors=0 pkt_in=60009 pkt_out=60002
+=== system
+tag=1794070236-q1 op=udp n=20000 sent=20000 received=20000 lost=0 seconds=1.197 mbps_each_way=160.5
+tag=1794070236-q2 op=udp n=20000 sent=20000 received=20000 lost=0 seconds=1.204 mbps_each_way=159.4
+tag=1794070236-q3 op=udp n=20000 sent=20000 received=20000 lost=0 seconds=1.217 mbps_each_way=157.8
+cpu_ticks=100 engine=system datagrams=60000
+stats: engine=userspace tcp=1 udp=3 up=72000000 down=72000000 lookups=4 lookup_ms=0.345 unknown=1 errors=0 pkt_in=60009 pkt_out=60002
+=== gvisor
+tag=1794070243-q1 op=udp n=20000 sent=20000 received=19968 lost=32 seconds=11.173 mbps_each_way=17.2
+tag=1794070243-q2 op=udp n=20000 sent=20000 received=20000 lost=0 seconds=1.225 mbps_each_way=156.8
+tag=1794070243-q3 op=udp n=20000 sent=20000 received=20000 lost=0 seconds=1.218 mbps_each_way=157.6
+cpu_ticks=263 engine=gvisor datagrams=60000
+stats: engine=system tcp=1 udp=3 up=72000000 down=72000000 lookups=4 lookup_ms=1.938 unknown=1 errors=0 pkt_in=60013 pkt_out=60000

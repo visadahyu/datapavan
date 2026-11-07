@@ -18,7 +18,9 @@ import kotlin.concurrent.thread
  * - connect: n TCP connections to the host and port of url, the percentiles of the time to connect;
  * - rtt: n GETs of url on one kept-alive connection, the percentiles of the time to each answer;
  * - parallel: P downloads at once, n times each;
- * - dns: n lookups of names that do not exist under the host of url.
+ * - dns: n lookups of names that do not exist under the host of url;
+ * - udp: n datagrams of 1,200 bytes, QUIC's usual size, to the echo port next to url's, at most 32
+ *   unanswered at a time; the megabits per second each way and how many came back.
  */
 class LoadActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,6 +52,7 @@ class LoadActivity : Activity() {
                         fetch(url, close = false)
                         percentiles((1..n).map { timed { fetch(url, close = false) } })
                     }
+                    "udp" -> udp(url, n)
                     "dns" -> percentiles((1..n).map { i -> timed { lookup("spike-${System.nanoTime()}-$i.${URL(url).host}") } })
                     else -> "error=unknown-op"
                 }
@@ -131,6 +134,37 @@ class LoadActivity : Activity() {
     private fun connect(url: String) {
         val target = URL(url)
         java.net.Socket().use { it.connect(java.net.InetSocketAddress(target.host, target.port), 10_000) }
+    }
+
+    private fun udp(url: String, count: Int): String {
+        val target = URL(url)
+        val socket = java.net.DatagramSocket()
+        socket.connect(java.net.InetSocketAddress(target.host, target.port + 1))
+        socket.soTimeout = 200
+        val payload = ByteArray(1200)
+        val answer = java.net.DatagramPacket(ByteArray(2048), 2048)
+        var sent = 0
+        var received = 0
+        var lost = 0
+        val start = System.nanoTime()
+        socket.use {
+            while (received + lost < count) {
+                while (sent < count && sent - received - lost < 32) {
+                    it.send(java.net.DatagramPacket(payload, payload.size))
+                    sent++
+                }
+                try {
+                    it.receive(answer)
+                    received++
+                } catch (_: java.net.SocketTimeoutException) {
+                    // Count the oldest unanswered datagram as lost and go on.
+                    lost++
+                }
+            }
+        }
+        val seconds = (System.nanoTime() - start) / 1e9
+        return "sent=$sent received=$received lost=$lost seconds=${"%.3f".format(seconds)} " +
+            "mbps_each_way=${"%.1f".format(received * 1200L * 8 / seconds / 1e6)}"
     }
 
     private fun lookup(name: String) {

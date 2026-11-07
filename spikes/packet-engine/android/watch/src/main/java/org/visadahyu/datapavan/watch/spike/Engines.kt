@@ -20,15 +20,18 @@ object RustEngine {
         System.loadLibrary("spike_engine")
     }
 
-    @JvmStatic external fun nativeStart(service: Any, fd: Int, mtu: Int, kind: Int): Boolean
+    /** [socks] is "host:port" of a SOCKS5 proxy for the system engine's upstream connections, or "". */
+    @JvmStatic external fun nativeStart(service: Any, fd: Int, mtu: Int, kind: Int, socks: String): Boolean
 
     @JvmStatic external fun nativeStop()
 
     @JvmStatic external fun nativeStats(): LongArray
 
+    @JvmStatic external fun nativeLastError(): String
+
     /** [kind] 0 is the userspace stack (ipstack), 1 Android's own stack through rewritten addresses. */
     fun engine(kind: Int) = object : PacketEngine {
-        override fun start(service: SpikeVpnService, fd: Int, mtu: Int) = nativeStart(service, fd, mtu, kind)
+        override fun start(service: SpikeVpnService, fd: Int, mtu: Int) = nativeStart(service, fd, mtu, kind, service.socks)
 
         override fun stop() = nativeStop()
 

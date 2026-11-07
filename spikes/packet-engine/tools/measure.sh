@@ -53,6 +53,7 @@ for r in $(seq 1 "$ROUNDS"); do
     load "$run-p$r" parallel "http://$HOST/bytes/$((DOWNLOAD_BYTES / 4))" --ei parallel 4 --ei n 1
     load "$run-c$r" connect "http://$HOST/ping" --ei n 100
     load "$run-r$r" rtt "http://$HOST/ping" --ei n 100
+    [ -n "${UDP_DATAGRAMS:-}" ] && load "$run-q$r" udp "http://$HOST/ping" --ei n "$UDP_DATAGRAMS"
 done
 after=$(cpu_ticks)
 echo "cpu_ticks=$((after - before)) engine=$ENGINE"
