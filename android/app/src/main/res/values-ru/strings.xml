@@ -80,7 +80,14 @@
     <string name="usage_access_body">С доступом к данным об использовании Datapavan может показать, сколько данных использовало каждое приложение и какие приложения вы давно не открывали. Такой же доступ позволил бы приложению видеть, какие приложения вы открывали и когда. Datapavan читает только итоговые суммы и дату последнего использования каждого приложения, ничего из этого не хранит и не может никуда отправить, потому что у него нет доступа к сети. Всё остальное работает без этого доступа.</string>
     <string name="usage_access_phone_warning">Когда вы включаете этот доступ, некоторые телефоны показывают собственное серьёзное предупреждение, иногда с обратным отсчётом. Они показывают его для любого приложения, которое запрашивает доступ к данным об использовании.</string>
     <string name="usage_access_button">Разрешить доступ к данным об использовании</string>
-    <string name="usage_access_restricted">Android делает этот переключатель неактивным для приложений, установленных из файла. Если это так, откройте сведения об этом приложении, в его меню (⋮) выберите «Разрешить доступ к настройкам» и попробуйте снова.</string>
+    <!-- Shown only when Datapavan was installed from a file (Android 13 and later), before the two steps below. -->
+    <string name="usage_access_two_steps">Datapavan установлен из файла, поэтому Android может заблокировать переключатель доступа к данным об использовании. Тогда понадобятся два шага.</string>
+    <!-- %1$s is the button usage_access_button. -->
+    <string name="usage_access_step_try">1. Нажмите «%1$s». Если переключатель неактивен или Android не даёт его включить, вернитесь сюда.</string>
+    <!-- %1$s is the button usage_access_app_info, %3$s the button usage_access_button. %2$s is restricted_settings_label, perhaps in the phone's language, as its Settings show it. -->
+    <string name="usage_access_step_allow">2. Нажмите «%1$s», а затем меню (⋮) вверху открывшейся страницы. Выберите пункт «%2$s», который появляется там только после шага 1, и подтвердите. Затем снова нажмите «%3$s».</string>
+    <!-- Android's own words for this choice in an app's info menu: AOSP Settings' app_restricted_settings_lockscreen_title in this language. The phone shows exactly these. -->
+    <string name="restricted_settings_label">Разрешить доступ к настройкам</string>
     <string name="usage_access_app_info">Открыть сведения о приложении</string>
     <string name="usage_reading">Читаем записи Android…</string>
     <string name="usage_missing">Для передачи данных и времени последнего открытия нужен доступ к данным об использовании. Его можно разрешить на экране «Сводка».</string>

@@ -78,7 +78,8 @@ The Google Play edition will leave out the reminder and the button, since Play u
 Checks left from M4 (ADR 0022):
 
 - How Android counts traffic through a VPN service and through a local proxy app.
-- Whether Android 13 to 16 also lock usage access for apps installed from a file.
+- Whether Android 13 to 16 also lock usage access for apps installed from a file. Android 17 does, on the
+  emulator and on a Galaxy A56, and the allowance survives an update installed the same way.
 - The units of other vendors' data-usage screens, Android 10, and mobile data on a Samsung phone.
 
 ### v0.2 "Watch": local VPN, observe only

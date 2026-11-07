@@ -85,7 +85,14 @@
     <string name="usage_access_body">با دسترسی به داده‌های مصرف، این برنامه می‌تواند نشان دهد هر برنامه چقدر داده مصرف کرده و کدام برنامه‌ها را مدت‌هاست باز نکرده‌اید. همین دسترسی به یک برنامه اجازه می‌دهد ببیند کدام برنامه‌ها را کی باز کرده‌اید. این برنامه فقط جمع‌ها و تاریخ آخرین استفاده از هر برنامه را می‌خواند، هیچ‌کدام را نگه نمی‌دارد و نمی‌تواند جایی بفرستد، چون به شبکه دسترسی ندارد. بقیه بخش‌ها بدون این دسترسی هم کار می‌کنند.</string>
     <string name="usage_access_phone_warning">وقتی این دسترسی را روشن می‌کنید، بعضی گوشی‌ها خودشان هشدار شدیدی نشان می‌دهند، گاهی با شمارش معکوس. این هشدار را برای هر برنامه‌ای نشان می‌دهند که دسترسی به داده‌های مصرف بخواهد.</string>
     <string name="usage_access_button">اجازه دسترسی به داده‌های مصرف</string>
-    <string name="usage_access_restricted">اندروید این کلید را برای برنامه‌هایی که از فایل نصب شده‌اند خاکستری می‌کند. در این صورت، اطلاعات این برنامه را باز کنید، از منوی آن (⋮) «مجاز کردن تنظیمات محدودشده» را انتخاب کنید و دوباره امتحان کنید.</string>
+    <!-- Shown only when Datapavan was installed from a file (Android 13 and later), before the two steps below. -->
+    <string name="usage_access_two_steps">این برنامه از فایل نصب شده است، برای همین ممکن است اندروید کلید دسترسی به داده‌های مصرف را قفل کند. در این صورت دو مرحله لازم است.</string>
+    <!-- %1$s is the button usage_access_button. -->
+    <string name="usage_access_step_try">۱. «%1$s» را بزنید. اگر کلید خاکستری است یا اندروید نمی‌گذارد آن را روشن کنید، به اینجا برگردید.</string>
+    <!-- %1$s is the button usage_access_app_info, %3$s the button usage_access_button. %2$s is restricted_settings_label, perhaps in the phone's language, as its Settings show it. -->
+    <string name="usage_access_step_allow">۲. «%1$s» را بزنید و بعد در بالای همان صفحه منوی (⋮) را بزنید. گزینه «%2$s» را انتخاب کنید (این گزینه فقط پس از مرحله ۱ آنجا دیده می‌شود) و تأیید کنید. بعد دوباره «%3$s» را بزنید.</string>
+    <!-- Android's own words for this choice in an app's info menu: AOSP Settings' app_restricted_settings_lockscreen_title in this language. The phone shows exactly these. -->
+    <string name="restricted_settings_label">اجازه دادن به تنظیمات محدودشده</string>
     <string name="usage_access_app_info">باز کردن اطلاعات برنامه</string>
     <string name="usage_reading">در حال خواندن سوابق اندروید…</string>
     <string name="usage_missing">مصرف شبکه و آخرین باز شدن به دسترسی به داده‌های مصرف نیاز دارند، که می‌توانید در صفحه اصلی اجازه‌اش را بدهید.</string>

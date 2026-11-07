@@ -96,7 +96,14 @@
     <string name="usage_access_body">With usage access, Datapavan can show how much data each app used, and which apps you have not opened for a long time. The same access would let an app see which apps you opened and when. Datapavan reads only totals and the date each app was last used, keeps none of it, and cannot send it anywhere, because it has no network access. Everything else works without it.</string>
     <string name="usage_access_phone_warning">When you turn it on, some phones show a strong warning of their own, sometimes with a countdown. They show it for every app that asks for usage access.</string>
     <string name="usage_access_button">Allow usage access</string>
-    <string name="usage_access_restricted">Android greys out this switch for apps installed from a file. If it does, open this app\'s info, choose “Allow restricted settings” in its menu (⋮), and try again.</string>
+    <!-- Shown only when Datapavan was installed from a file (Android 13 and later), before the two steps below. -->
+    <string name="usage_access_two_steps">Datapavan was installed from a file, so Android may lock the switch for usage access. Then it takes two steps.</string>
+    <!-- %1$s is the button usage_access_button. -->
+    <string name="usage_access_step_try">1. Tap “%1$s”. If the switch is grey, or Android does not let you turn it on, come back here.</string>
+    <!-- %1$s is the button usage_access_app_info, %3$s the button usage_access_button. %2$s is restricted_settings_label, perhaps in the phone's language, as its Settings show it. -->
+    <string name="usage_access_step_allow">2. Tap “%1$s”, then the menu (⋮) at the top of that page. Choose “%2$s”, which shows there only after step 1, and confirm. Then tap “%3$s” again.</string>
+    <!-- Android's own words for this choice in an app's info menu, from AOSP Settings' translations: the phone shows exactly these. -->
+    <string name="restricted_settings_label">Allow restricted settings</string>
     <string name="usage_access_app_info">Open app info</string>
     <string name="usage_reading">Reading Android\'s records…</string>
     <string name="usage_missing">Network use and the last opening need usage access, which you can allow on the overview.</string>

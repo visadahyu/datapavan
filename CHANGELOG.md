@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-08
+
+### Changed
+
+- When Datapavan was installed from a file, the card that asks for usage access gives the two steps around Android's lock before its buttons, not after them: tap "Allow usage access" once, then choose "Allow restricted settings" in the app's info, confirm, and try again. That choice shows only after a first try, so the order matters. On a Galaxy A56 with Android 17 the explanation below the button was missed.
+- The card names "Allow restricted settings" in the phone's language when Datapavan has it, since Settings follow the phone, not Datapavan: on that A56, Settings were in English and Datapavan in Persian.
+
+### Fixed
+
+- The Persian card named the menu item «مجاز کردن تنظیمات محدودشده», which is not Android's wording. It now uses AOSP Settings' own, «اجازه دادن به تنظیمات محدودشده»; the six other languages already matched AOSP.
+
 ## [0.1.1] - 2026-11-07
 
 ### Fixed
@@ -81,6 +92,7 @@ All notable changes to this project are documented here. The format follows
 - EmojiCompat's start-up lookup of a downloadable font through Google Play services is disabled.
 - Release builds of the Rust engine keep integer-overflow checks.
 
-[Unreleased]: https://github.com/visadahyu/datapavan/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/visadahyu/datapavan/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/visadahyu/datapavan/releases/tag/v0.1.2
 [0.1.1]: https://github.com/visadahyu/datapavan/releases/tag/v0.1.1
 [0.1.0]: https://github.com/visadahyu/datapavan/releases/tag/v0.1.0

@@ -80,7 +80,14 @@
     <string name="usage_access_body">Con el acceso a datos de uso, Datapavan puede mostrar cuántos datos usó cada app y qué apps llevas mucho tiempo sin abrir. Ese mismo acceso permitiría a una app ver qué apps abriste y cuándo. Datapavan solo lee los totales y la fecha en que se usó cada app por última vez, no guarda nada de ello y no puede enviarlo a ningún sitio, porque no tiene acceso a la red. Todo lo demás funciona sin este acceso.</string>
     <string name="usage_access_phone_warning">Cuando activas este acceso, algunos teléfonos muestran su propia advertencia severa, a veces con una cuenta regresiva. La muestran para todas las apps que piden acceso a datos de uso.</string>
     <string name="usage_access_button">Permitir el acceso a datos de uso</string>
-    <string name="usage_access_restricted">Android pone en gris este interruptor para las apps instaladas desde un archivo. Si te ocurre, abre la información de esta app, elige «Permitir ajustes restringidos» en su menú (⋮) y vuelve a intentarlo.</string>
+    <!-- Shown only when Datapavan was installed from a file (Android 13 and later), before the two steps below. -->
+    <string name="usage_access_two_steps">Datapavan se instaló desde un archivo, así que Android puede bloquear el interruptor del acceso a datos de uso. En ese caso, hacen falta dos pasos.</string>
+    <!-- %1$s is the button usage_access_button. -->
+    <string name="usage_access_step_try">1. Toca «%1$s». Si el interruptor está en gris o Android no te deja activarlo, vuelve aquí.</string>
+    <!-- %1$s is the button usage_access_app_info, %3$s the button usage_access_button. %2$s is restricted_settings_label, perhaps in the phone's language, as its Settings show it. -->
+    <string name="usage_access_step_allow">2. Toca «%1$s» y luego el menú (⋮) de la parte superior de esa página. Elige «%2$s», que solo aparece ahí después del paso 1, y confirma. Luego vuelve a tocar «%3$s».</string>
+    <!-- Android's own words for this choice in an app's info menu: AOSP Settings' app_restricted_settings_lockscreen_title in this language. The phone shows exactly these. -->
+    <string name="restricted_settings_label">Permitir ajustes restringidos</string>
     <string name="usage_access_app_info">Abrir información de la aplicación</string>
     <string name="usage_reading">Leyendo los registros de Android…</string>
     <string name="usage_missing">El uso de la red y la última apertura requieren el acceso a datos de uso, que puedes permitir en el resumen.</string>
