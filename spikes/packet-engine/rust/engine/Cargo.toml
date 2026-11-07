@@ -1,0 +1,16 @@
+[package]
+name = "spike-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+ipstack = "1.0.1"
+etherparse = "0.21.0"
+tokio = { version = "1.54.1", features = ["rt", "net", "io-util", "time", "macros", "sync"] }
+jni = "0.22.4"
+libc = "0.2"

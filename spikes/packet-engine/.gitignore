@@ -1,0 +1,6 @@
+rust/target/
+android/.gradle/
+android/build/
+android/*/build/
+android/local.properties
+android/watch/libs/
