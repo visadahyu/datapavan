@@ -29,7 +29,9 @@ LANGUAGES = {
     "es": ("values-es", "es-ES", "es", {"one", "many", "other"}),
     "ar": ("values-ar", "ar", "ar", {"zero", "one", "two", "few", "many", "other"}),
 }
-LIMITS = {"title.txt": 30, "short_description.txt": 80, "full_description.txt": 4000, "changelogs/1.txt": 500}
+LIMITS = {"title.txt": 30, "short_description.txt": 80, "full_description.txt": 4000}
+# Each versionCode's store changelog, as F-Droid and Google Play limit it.
+CHANGELOG_LIMIT = 500
 PLACEHOLDER = re.compile(r"%(?:\d+\$)?[-#+0,(]*\d*(?:\.\d+)?[a-zA-Z]")
 MARKS = "⁦⁧⁨⁩‪‫‬‭‮‎‏"
 
@@ -100,7 +102,10 @@ def check_resources(code, directory, forms, problems):
 
 
 def check_store(code, directory, problems):
-    for file, limit in LIMITS.items():
+    files = dict(LIMITS)
+    for changelog in sorted((META / "en-US" / "changelogs").glob("*.txt")):
+        files[f"changelogs/{changelog.name}"] = CHANGELOG_LIMIT
+    for file, limit in files.items():
         path = META / directory / file
         if not path.exists():
             problems.append(f"{code}: {path.relative_to(ROOT)} is missing")
