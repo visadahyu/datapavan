@@ -1,6 +1,6 @@
 # 0012. Packet engine for the local VPN
 
-- Status: Proposed (2026-11-07, from the spike; the maintainer decides)
+- Status: Accepted (by the maintainer on 2026-11-07)
 - Date: 2026-10-28, decided from the spike on 2026-11-07
 
 ## Context
@@ -62,4 +62,4 @@ single engine thread.
     the spike, since an idle VPN's cost is in its timers and wakeups.
 - **Still to build for chaining:** SOCKS5 UDP ASSOCIATE, so that QUIC and calls can go through a proxy
   too; the spike chained TCP only.
-- **Accepted:** when the maintainer accepts this record, the Status says so with the date.
+- **Accepted:** the maintainer chose the system stack on 2026-11-07, after the spike.

@@ -86,7 +86,7 @@ Checks left from M4 (ADR 0022):
 A **local** VPN: no server is involved and the user's IP address does not change. [ADR 0029](docs/decisions/0029-network-access-for-v0.2.md)
 (accepted on 2026-11-05) puts it in a separate app, Datapavan Watch, so that Datapavan itself never holds the INTERNET
 permission, and moves the QUIC server name and apps' own encrypted DNS into v0.2. Before this version
-starts, a two-week spike picks the packet engine (Rust netstack or Go gVisor). Design: [docs/VPN.md](docs/VPN.md).
+starts, a spike picked the packet engine on 2026-11-07: Android's own TCP stack reached through rewritten addresses, in Rust ([ADR 0012](docs/decisions/0012-packet-engine.md)). Design: [docs/VPN.md](docs/VPN.md).
 
 - A connection log per app: domain, IP, organisation, bytes, time, foreground or background.
 - Chaining through a local SOCKS5 proxy, so Datapavan can run next to circumvention tools (see
