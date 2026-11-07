@@ -1,6 +1,8 @@
 package org.visadahyu.datapavan.ui
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.app.LocaleManager
 import android.app.UiModeManager
 import android.content.Context
@@ -30,13 +32,21 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
+import androidx.core.net.toUri
 import org.visadahyu.datapavan.R
+import org.visadahyu.datapavan.Release
+import java.text.DateFormat
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeParseException
+import java.util.Date
 import java.util.Locale
 
 /** The appearance the user picked (ADR 0027, point 3). */
@@ -216,6 +226,57 @@ internal fun TextPage(@StringRes title: Int, paragraphs: List<String>, insets: P
         }
         items(paragraphs) { Text(it, style = MaterialTheme.typography.bodyLarge) }
     }
+}
+
+/**
+ * About (ADR 0027, point 3): the version and its date, the licence and the source, then where newer
+ * versions are. The addresses are plain text in a fixed direction, without bidi marks, so that a copy of
+ * one works in a browser's address bar; the button opens the website's download section in the browser,
+ * and Datapavan itself still connects to nothing.
+ */
+@Composable
+internal fun AboutPage(engineVersion: String, insets: PaddingValues, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val locale = LocalConfiguration.current.locales[0]
+    val paragraphs = aboutParagraphs(engineVersion)
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(insets),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item {
+            TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
+            Text(stringResource(R.string.about_title), style = MaterialTheme.typography.headlineSmall)
+        }
+        items(paragraphs) { Text(it, style = MaterialTheme.typography.bodyLarge) }
+        item {
+            Text(stringResource(R.string.about_updates_title), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.about_updates), style = MaterialTheme.typography.bodyLarge)
+            val address = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Ltr)
+            SelectionContainer {
+                Column(Modifier.padding(vertical = 8.dp)) {
+                    Text(Release.WEBSITE, style = address)
+                    Text(Release.RELEASES, style = address)
+                }
+            }
+            Text(stringResource(R.string.about_copy_hint), style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = {
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Release.downloadPage(locale).toUri()))
+                } catch (_: ActivityNotFoundException) {
+                    // No browser: the addresses above can still be copied.
+                }
+            }) { Text(stringResource(R.string.about_open_website)) }
+        }
+    }
+}
+
+/** This version's release date in the user's format, as the network period shows dates. */
+internal fun releaseDateText(): String = try {
+    val day = LocalDate.parse(Release.date)
+    DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date.from(day.atStartOfDay(ZoneId.systemDefault()).toInstant()))
+} catch (_: DateTimeParseException) {
+    Release.date
 }
 
 /**

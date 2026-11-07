@@ -46,6 +46,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.visadahyu.datapavan.R
+import org.visadahyu.datapavan.Release
 import org.visadahyu.datapavan.audit.AppFacts
 import org.visadahyu.datapavan.audit.AppFilter
 import org.visadahyu.datapavan.audit.AppQuery
@@ -97,6 +98,7 @@ internal fun Destinations(
     onOpen: (String) -> Unit,
     onReview: () -> Unit,
     onData: () -> Unit,
+    onAbout: () -> Unit,
     onSettings: () -> Unit,
     network: @Composable () -> Unit,
     plan: @Composable () -> Unit,
@@ -120,7 +122,7 @@ internal fun Destinations(
     ) {
         item { TopBar(if (tab == Destination.SUMMARY) R.string.app_name else tab.label, onSettings) }
         when (tab) {
-            Destination.SUMMARY -> summary(audit, scanProgress, usage, onTab, onReview, onData, plan)
+            Destination.SUMMARY -> summary(audit, scanProgress, usage, onTab, onReview, onData, onAbout, plan)
             Destination.APPS -> {
                 item {
                     AppsControls(
@@ -153,6 +155,21 @@ private fun TopBar(@StringRes title: Int, onSettings: () -> Unit) {
     }
 }
 
+/**
+ * On the overview, about four months after this version's release: Datapavan cannot learn of a newer
+ * one, so it says how old it is and leads to where newer versions are (About). Like the card for old
+ * data, it only points at a date.
+ */
+@Composable
+private fun OldVersionCard(onOpen: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp)) {
+            Text(stringResource(R.string.version_old, releaseDateText()), style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = onOpen) { Text(stringResource(R.string.version_old_button)) }
+        }
+    }
+}
+
 /** The summary names what to do, never a count of problems (ADR 0026, point 7). */
 private fun androidx.compose.foundation.lazy.LazyListScope.summary(
     audit: AuditResult,
@@ -161,10 +178,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.summary(
     onTab: (Destination) -> Unit,
     onReview: () -> Unit,
     onData: () -> Unit,
+    onAbout: () -> Unit,
     plan: @Composable () -> Unit,
 ) {
     item { Text(stringResource(R.string.tagline), style = MaterialTheme.typography.bodyLarge) }
     if (DataPackRules.isStale(audit.dataDate, LocalDate.now())) item { StaleDataCard(audit.dataDate, onData) }
+    if (Release.isOld(Release.date, LocalDate.now())) item { OldVersionCard(onAbout) }
     item { plan() }
     item { StrictReviewEntry(audit.apps.map { it.first }, onStart = onReview) }
     item {
@@ -378,6 +397,7 @@ internal fun aboutParagraphs(engineVersion: String): List<String> {
     val version = context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
     return listOf(
         stringResource(R.string.about_version, isolateLtr(version)),
+        stringResource(R.string.about_release_date, releaseDateText()),
         stringResource(R.string.engine_version, isolateLtr(engineVersion)),
         stringResource(R.string.about_licence),
         stringResource(R.string.about_source, isolateLtr("github.com/visadahyu/datapavan")),

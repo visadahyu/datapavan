@@ -517,6 +517,16 @@
     <string name="about_version">Версия %1$s</string>
     <string name="about_licence">Datapavan — свободное ПО под лицензией Apache License 2.0.</string>
     <string name="about_source">Исходный код: %1$s</string>
+    <!-- %1$s is a date in the user's format. -->
+    <string name="about_release_date">Дата выпуска: %1$s</string>
+    <!-- Where newer versions are: the app has no internet access and cannot check. -->
+    <string name="about_updates_title">Новые версии</string>
+    <string name="about_updates">Datapavan не может сам проверить, есть ли более новая версия, потому что у него нет доступа к интернету. Последняя версия и список изменений есть на его сайте. Если сайт не открывается, те же файлы есть на GitHub.</string>
+    <string name="about_copy_hint">Чтобы открыть адрес в другом браузере, например в Tor Browser, скопируйте его: нажмите на него и удерживайте.</string>
+    <string name="about_open_website">Открыть сайт</string>
+    <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
+    <string name="version_old">Эта версия Datapavan от %1$s, и, возможно, уже вышла более новая. Datapavan не может проверить это за вас.</string>
+    <string name="version_old_button">Где её получить</string>
     <string name="summary_phone_look">На некоторые его настройки стоит взглянуть.</string>
     <string name="summary_scan_done">Проверка на трекеры завершена.</string>
     <string name="summary_network">Сколько данных использовало каждое приложение за 30 дней</string>

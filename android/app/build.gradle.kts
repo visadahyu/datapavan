@@ -26,6 +26,9 @@ android {
         targetSdk = 37
         versionCode = 2
         versionName = "0.1.1"
+        // The release's date, set with the version (docs/RELEASE.md, step 1). The app has no internet
+        // access, so this date is all it knows of how old it is (Release.kt).
+        buildConfigField("String", "RELEASE_DATE", "\"2026-11-07\"")
         // The ABIs we ship: arm64 for real phones; 32-bit ARM for the many low-cost phones whose
         // Android is 32-bit although their processor is not; x86_64 for the emulator and ChromeOS.
         // This list is the single source of truth; the Rust build reads it in finalizeDsl.
@@ -50,7 +53,7 @@ android {
 
     buildFeatures {
         compose = true
-        buildConfig = false
+        buildConfig = true
     }
 
     androidResources {

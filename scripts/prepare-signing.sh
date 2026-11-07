@@ -23,6 +23,9 @@ code=$(sed -n 's/^ *versionCode = \([0-9]*\)$/\1/p' "$gradle")
 case $version in
     "" | *-*) fail "\"$version\" is not a release's version" ;;
 esac
+# The app shows this date and counts its age from it (Release.kt), so it must be the changelog's.
+date=$(sed -n 's/^ *buildConfigField("String", "RELEASE_DATE", "\\"\([0-9-]*\)\\"")$/\1/p' "$gradle")
+grep -qxF "## [$version] - $date" "$ROOT/CHANGELOG.md" || fail "CHANGELOG.md has no \"## [$version] - $date\" for RELEASE_DATE \"$date\""
 changes="$ROOT/fastlane/metadata/android/en-US/changelogs/$code.txt"
 [ -f "$changes" ] || fail "no store changelog for versionCode $code"
 sequence=$(sed -n 's/^sequence //p' "$ROOT/data/PACK")

@@ -518,6 +518,16 @@
     <string name="about_version">نسخه %1$s</string>
     <string name="about_licence">این برنامه نرم‌افزار آزاد است، با پروانه Apache 2.0.</string>
     <string name="about_source">کد منبع: %1$s</string>
+    <!-- %1$s is a date in the user's format. -->
+    <string name="about_release_date">تاریخ انتشار: %1$s</string>
+    <!-- Where newer versions are: the app has no internet access and cannot check. -->
+    <string name="about_updates_title">نسخه‌های تازه‌تر</string>
+    <string name="about_updates">این برنامه خودش نمی‌تواند بررسی کند که نسخه تازه‌تری آمده است یا نه، چون به اینترنت دسترسی ندارد. تازه‌ترین نسخه و تغییراتش در وب‌سایت برنامه است. اگر وب‌سایت باز نشد، همین فایل‌ها در GitHub هم هست.</string>
+    <string name="about_copy_hint">برای باز کردن یک نشانی در مرورگری دیگر، مثل Tor Browser، آن را لمس کنید و نگه دارید تا کپی شود.</string>
+    <string name="about_open_website">باز کردن وب‌سایت</string>
+    <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
+    <string name="version_old">این نسخه از Datapavan مربوط به %1$s است. شاید نسخه تازه‌تری آمده باشد و Datapavan نمی‌تواند به جای شما بررسی کند.</string>
+    <string name="version_old_button">محل دریافت</string>
     <string name="summary_phone_look">بعضی تنظیمات آن ارزش یک نگاه را دارد.</string>
     <string name="summary_scan_done">جست‌وجوی ردیاب‌ها تمام شد.</string>
     <string name="summary_network">مصرف داده هر برنامه در ۳۰ روز</string>

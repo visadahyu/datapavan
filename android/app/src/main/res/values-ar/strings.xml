@@ -543,6 +543,16 @@
     <string name="about_version">الإصدار %1$s</string>
     <string name="about_licence">تطبيق Datapavan برنامج حر بموجب Apache License 2.0.</string>
     <string name="about_source">الرمز المصدري: %1$s</string>
+    <!-- %1$s is a date in the user's format. -->
+    <string name="about_release_date">صدر في %1$s.</string>
+    <!-- Where newer versions are: the app has no internet access and cannot check. -->
+    <string name="about_updates_title">الإصدارات الأحدث</string>
+    <string name="about_updates">لا يستطيع Datapavan التحقق بنفسه من وجود إصدار أحدث، لأنه لا يملك وصولًا إلى الإنترنت. يوجد أحدث إصدار وما تغيّر فيه على موقعه الإلكتروني. وإذا لم يُفتح الموقع، فالملفات نفسها موجودة على GitHub.</string>
+    <string name="about_copy_hint">لفتح عنوان في متصفّح آخر، مثل Tor Browser، انقر مع الاستمرار عليه لنسخه.</string>
+    <string name="about_open_website">فتح الموقع الإلكتروني</string>
+    <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
+    <string name="version_old">يعود هذا الإصدار من Datapavan إلى %1$s. ربما صدر إصدار أحدث، ولا يستطيع Datapavan التحقق من ذلك نيابةً عنك.</string>
+    <string name="version_old_button">من أين تحصل عليه</string>
     <string name="summary_phone_look">بعض إعداداته تستحق نظرة.</string>
     <string name="summary_scan_done">اكتمل فحص أدوات التتبّع.</string>
     <string name="summary_network">مقدار البيانات التي استخدمها كل تطبيق في ثلاثين يومًا</string>

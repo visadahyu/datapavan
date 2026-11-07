@@ -518,6 +518,16 @@
     <string name="about_version">Version %1$s</string>
     <string name="about_licence">Datapavan ist freie Software unter der Apache-Lizenz 2.0.</string>
     <string name="about_source">Quellcode: %1$s</string>
+    <!-- %1$s is a date in the user's format. -->
+    <string name="about_release_date">Veröffentlicht am %1$s.</string>
+    <!-- Where newer versions are: the app has no internet access and cannot check. -->
+    <string name="about_updates_title">Neuere Versionen</string>
+    <string name="about_updates">Datapavan kann nicht selbst prüfen, ob es eine neuere Version gibt, weil es keinen Internetzugriff hat. Auf seiner Website stehen die neueste Version und was sich geändert hat. Wenn sich die Website nicht öffnen lässt, liegen dieselben Dateien auf GitHub.</string>
+    <string name="about_copy_hint">Wenn Sie eine Adresse in einem anderen Browser öffnen möchten, etwa im Tor Browser, halten Sie sie gedrückt, um sie zu kopieren.</string>
+    <string name="about_open_website">Website öffnen</string>
+    <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
+    <string name="version_old">Diese Version von Datapavan stammt vom %1$s. Vielleicht ist schon eine neuere erschienen, und Datapavan kann das nicht für Sie prüfen.</string>
+    <string name="version_old_button">Wo Sie sie bekommen</string>
     <string name="summary_phone_look">Einige seiner Einstellungen sind einen Blick wert.</string>
     <string name="summary_scan_done">Die Suche nach Trackern ist fertig.</string>
     <string name="summary_network">Wie viele Daten jede App in 30 Tagen genutzt hat</string>

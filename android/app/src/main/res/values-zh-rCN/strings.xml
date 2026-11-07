@@ -510,6 +510,16 @@
     <string name="about_version">版本 %1$s</string>
     <string name="about_licence">Datapavan 是依据 Apache License 2.0 发布的自由软件。</string>
     <string name="about_source">源代码：%1$s</string>
+    <!-- %1$s is a date in the user's format. -->
+    <string name="about_release_date">发布于 %1$s。</string>
+    <!-- Where newer versions are: the app has no internet access and cannot check. -->
+    <string name="about_updates_title">较新版本</string>
+    <string name="about_updates">Datapavan 无法自行检查是否有较新版本，因为它没有互联网访问权限。最新版本及更改内容都在其网站上。如果网站打不开，GitHub 上也有相同的文件。</string>
+    <string name="about_copy_hint">若要在其他浏览器（例如 Tor Browser）中打开某个地址，请轻触并按住该地址以复制。</string>
+    <string name="about_open_website">打开网站</string>
+    <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
+    <string name="version_old">此版本的 Datapavan 发布于 %1$s。可能已有较新的版本，而 Datapavan 无法替您检查。</string>
+    <string name="version_old_button">在哪里获取</string>
     <string name="summary_phone_look">它的一些设置值得看一看。</string>
     <string name="summary_scan_done">跟踪器检查已完成。</string>
     <string name="summary_network">30 天内每个应用使用了多少数据</string>

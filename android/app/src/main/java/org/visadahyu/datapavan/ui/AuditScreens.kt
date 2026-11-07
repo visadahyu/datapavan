@@ -404,7 +404,7 @@ internal fun DatapavanApp(
                     }
                     SettingsPage.PRIVACY -> TextPage(R.string.privacy_title, privacyParagraphs(), insets, back)
                     SettingsPage.LICENCES -> LicencesScreen(insets, back)
-                    SettingsPage.ABOUT, null -> TextPage(R.string.about_title, aboutParagraphs(engineVersion), insets, back)
+                    SettingsPage.ABOUT, null -> AboutPage(engineVersion, insets, back)
                 }
             }
             settingsOpen -> {
@@ -414,7 +414,8 @@ internal fun DatapavanApp(
             else -> Destinations(
                 tab, audit, scanProgress, usage, insets,
                 onTab = { tab = it }, onOpen = { selected = it }, onReview = { reviewing = true },
-                onData = { settingsPage = SettingsPage.DATA_SOURCES }, onSettings = { settingsOpen = true },
+                onData = { settingsPage = SettingsPage.DATA_SOURCES }, onAbout = { settingsPage = SettingsPage.ABOUT },
+                onSettings = { settingsOpen = true },
                 network = { UsageOverview(usage, days, audit.apps.map { it.first }, onDays = { days = it }, onOpen = { selected = it }) },
                 plan = {
                     val input = planInput(audit, usage, context.packageName)

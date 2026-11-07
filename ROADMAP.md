@@ -57,6 +57,24 @@ does not come with v0.1: it would show the counts and warning colours that ADR 0
 out, tell anyone who looks at the phone more than the icon does, and need the background queries that
 disturb the guided check.
 
+Also for v0.1, since 0.1.1 (built on 2026-11-07): a way to learn of a newer version, for copies
+installed by hand. Datapavan has no internet access, so it cannot ask whether a newer version exists,
+and someone who installed it from a file, not through F-Droid, IzzyOnDroid, Obtainium or Google Play,
+heard of an update only by chance: the first testers of 0.1.0 had no way to learn of 0.1.1.
+
+- **Newer versions, in Settings' About page:** the release's date, and a sentence that Datapavan cannot
+  check for a newer version itself. The website's and GitHub's addresses as text that can be copied, so
+  that someone on a watched network can open them in a browser of their choice, such as Tor Browser;
+  GitHub's for networks where the website does not load. A button opens the website's download section
+  in the user's language in the browser: the app itself still connects to nothing.
+- **A reminder of the version's age:** about four months after the release, by the phone's clock, the
+  overview says so in one calm line, as it does for old data, and leads to About. The date is set with
+  the version in the build file, so reproducible builds still agree, and nothing is sent.
+- **On the website:** the download section shows what changed in the current version, from the store
+  changelog that is translated and reviewed in eight languages.
+
+The Google Play edition will leave out the reminder and the button, since Play updates it.
+
 Checks left from M4 (ADR 0022):
 
 - How Android counts traffic through a VPN service and through a local proxy app.

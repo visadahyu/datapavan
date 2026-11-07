@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Smoke test on a connected device or emulator: installs the debug APK, starts the app, and checks
-# that the audit overview appears, that the tracker scan of every app finishes, that the app holds
-# no INTERNET permission, and that it did not crash. It needs nothing but adb, so it adds no test dependencies. CI runs it on an emulator; run
+# that the audit overview appears, that the tracker scan of every app finishes, that About says where
+# newer versions are, that the app holds no INTERNET permission, and that it did not crash. It needs nothing but adb, so it adds no test dependencies. CI runs it on an emulator; run
 # it locally against a phone with USB debugging (set ANDROID_SERIAL if several are connected).
 #
 #   scripts/smoke.sh [path/to/app-debug.apk]
@@ -49,6 +49,19 @@ if adb shell dumpsys package "$PKG" | grep -q "android.permission.INTERNET"; the
     fail "the installed app holds the INTERNET permission"
 fi
 echo "ok: no INTERNET permission"
+
+# The app cannot learn of a newer version, so About says where newer versions are (Release.kt). The
+# settings button scrolls away with the summary's top.
+scroll_to_top
+tap_id settings || fail "no settings button"
+sleep 1
+tap_text "About" || fail "settings have no About"
+sleep 1
+scroll_to "Newer versions" || fail "About does not say where newer versions are"
+screen_has "datapavan.org" || fail "About does not show the website's address"
+echo "ok: About says where newer versions are"
+adb shell input keyevent KEYCODE_BACK
+adb shell input keyevent KEYCODE_BACK
 
 adb shell pidof "$PKG" >/dev/null || fail "the app is no longer running"
 if adb logcat -d -b crash 2>/dev/null | grep -q "$PKG"; then
