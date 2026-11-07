@@ -89,6 +89,18 @@ A **local** VPN: no server is involved and the user's IP address does not change
 permission, and moves the QUIC server name and apps' own encrypted DNS into v0.2. Before this version
 starts, a spike picked the packet engine on 2026-11-07: Android's own TCP stack reached through rewritten addresses, in Rust ([ADR 0012](docs/decisions/0012-packet-engine.md)). Design: [docs/VPN.md](docs/VPN.md).
 
+Three releases, each of use on its own (agreed with the maintainer on 2026-11-07):
+
+1. **0.2.0, the connection log:** Watch with its packet engine. It keeps a connection log per app:
+   domain, IP, organisation, bytes, time, foreground or background. Names come from DNS, the TLS and
+   QUIC server names, and apps' own encrypted DNS is recognised. Datapavan reads the log through the
+   one-way interface of ADR 0029.
+2. **0.2.1, next to circumvention tools:** SOCKS5 chaining with UDP, proxy-like behaviour flagged,
+   per-tool guides.
+3. **0.2.2, behaviour:** the sensor log, the cross-checks and the learned traffic shapes.
+
+The items, in order:
+
 - A connection log per app: domain, IP, organisation, bytes, time, foreground or background.
 - Chaining through a local SOCKS5 proxy, so Datapavan can run next to circumvention tools (see
   [docs/RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md)). The tool becomes a pipe, not the owner of
