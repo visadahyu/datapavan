@@ -26,9 +26,10 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
-        // The ABIs we ship: arm64 for real phones, x86_64 for the emulator and ChromeOS.
+        // The ABIs we ship: arm64 for real phones; 32-bit ARM for the many low-cost phones whose
+        // Android is 32-bit although their processor is not; x86_64 for the emulator and ChromeOS.
         // This list is the single source of truth; the Rust build reads it in finalizeDsl.
-        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
     }
 
     buildTypes {

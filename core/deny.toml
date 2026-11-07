@@ -2,7 +2,7 @@
 # The enterprise flavour will be commercial, so only permissive, commercial-friendly licences pass.
 
 [graph]
-targets = ["aarch64-linux-android", "x86_64-linux-android", "x86_64-unknown-linux-gnu"]
+targets = ["aarch64-linux-android", "armv7-linux-androideabi", "x86_64-linux-android", "x86_64-unknown-linux-gnu"]
 
 [advisories]
 yanked = "deny"

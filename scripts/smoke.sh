@@ -5,6 +5,10 @@
 # it locally against a phone with USB debugging (set ANDROID_SERIAL if several are connected).
 #
 #   scripts/smoke.sh [path/to/app-debug.apk]
+#
+# INSTALL_ABI=armeabi-v7a installs the app as a 32-bit program, as on phones whose Android is 32-bit.
+# CI's emulator cannot run 32-bit ARM code; a phone with a 64-bit Android that still runs 32-bit apps
+# can, and so can the Android 11 (API 30) emulator, which translates ARM code.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -28,7 +32,12 @@ fail() {
 
 echo "== Smoke test on $(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
 adb wait-for-device
-adb install -r "$APK" >/dev/null
+adb install -r ${INSTALL_ABI:+--abi "$INSTALL_ABI"} "$APK" >/dev/null
+if [ -n "${INSTALL_ABI:-}" ]; then
+    abi=$(adb shell dumpsys package "$PKG" | tr -d '\r' | sed -n 's/.*primaryCpuAbi=\([^ ]*\).*/\1/p' | head -1)
+    [ "$abi" = "$INSTALL_ABI" ] || fail "installed as $abi, not $INSTALL_ABI"
+    echo "ok: installed as $abi"
+fi
 adb logcat -c
 start_audit || fail "the audit overview did not appear within 60 seconds"
 scroll_to "Your plan" || fail "the summary has no plan"

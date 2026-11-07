@@ -49,7 +49,7 @@ rust_gates() {
     cd "$ROOT/core"
     cargo fmt --all --check
     cargo clippy --workspace --all-targets --locked -- -D warnings
-    for target in aarch64-linux-android x86_64-linux-android; do
+    for target in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android; do
         cargo clippy --workspace --all-targets --locked --target "$target" -- -D warnings
     done
     cargo test --workspace --locked
