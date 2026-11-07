@@ -141,13 +141,18 @@ pub async fn run(tun: Tun, mtu: u16, stats: Arc<Stats>, owners: Arc<dyn OwnerLoo
         tokio::spawn(accept(listener6, Arc::clone(&pending), Arc::clone(&stats)));
     }
     let mut packet = vec![0u8; usize::from(mtu).max(1500) + 64];
-    let mut sweep = tokio::time::interval(Duration::from_secs(30));
+    // No timer of its own: an idle tunnel must not wake the phone. Stale connections are swept when
+    // packets come anyway, at most once a minute.
+    let mut swept = Instant::now();
     loop {
         tokio::select! {
             _ = stop.changed() => return,
-            _ = sweep.tick() => lock(&nat).sweep(),
             read = tun.recv(&mut packet) => {
                 let Ok(n) = read else { return };
+                if swept.elapsed() > Duration::from_secs(60) {
+                    lock(&nat).sweep();
+                    swept = Instant::now();
+                }
                 let packet = &mut packet[..n];
                 match parse(packet) {
                     Some(Parsed { protocol: TCP, header, .. }) => match rewrite_tcp(packet, header, &nat, port4, port6) {

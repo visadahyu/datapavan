@@ -7,7 +7,7 @@ import android.os.Bundle
 
 /**
  * Started by the measuring script: `--es action start --es engine userspace|system|gvisor
- * [--es allow pkg,pkg]` or `--es action stop`. Asks for VPN consent the first time.
+ * [--es allow pkg,pkg|*] [--ez quiet true]`, `--es action stats` or `--es action stop`. Asks for VPN consent the first time.
  */
 class MainActivity : Activity() {
     private var pending: Intent? = null
@@ -25,8 +25,8 @@ class MainActivity : Activity() {
     private fun handle(intent: Intent) {
         val action = intent.getStringExtra("action") ?: return
         val service = Intent(this, SpikeVpnService::class.java).putExtras(intent)
-        if (action == "stop") {
-            startService(service.setAction(SpikeVpnService.ACTION_STOP))
+        if (action == "stop" || action == "stats") {
+            startService(service.setAction(if (action == "stop") SpikeVpnService.ACTION_STOP else SpikeVpnService.ACTION_STATS))
             finish()
             return
         }

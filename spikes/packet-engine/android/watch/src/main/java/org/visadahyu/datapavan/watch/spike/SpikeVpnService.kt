@@ -20,6 +20,7 @@ class SpikeVpnService : VpnService() {
     private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
     private var engine: PacketEngine? = null
     private var name = ""
+    private var quiet = false
 
     /** "host:port" of a SOCKS5 proxy the system engine chains through, from the start command, or "". */
     var socks = ""
@@ -36,7 +37,11 @@ class SpikeVpnService : VpnService() {
         if (intent?.action == ACTION_STOP) {
             stopEngine()
             stopSelf()
+        } else if (intent?.action == ACTION_STATS) {
+            logStats("SPIKE_STATS")
         } else {
+            // Quiet: no stats every few seconds, so that an idle tunnel wakes nothing (battery runs).
+            quiet = intent?.getBooleanExtra(EXTRA_QUIET, false) ?: false
             socks = intent?.getStringExtra(EXTRA_SOCKS).orEmpty()
             startEngine(intent?.getStringExtra(EXTRA_ENGINE) ?: "userspace", intent?.getStringExtra(EXTRA_ALLOW) ?: LOAD_APP)
         }
@@ -59,15 +64,21 @@ class SpikeVpnService : VpnService() {
         // The system engine's listener answers through the tunnel only for apps inside it, so the
         // watch app joins its own tunnel there and protects its sockets instead (system.rs).
         val allowed = allow.split(',').map { it.trim() }.filter { it.isNotEmpty() } + if (which == "system") listOf(packageName) else emptyList()
-        // An empty list would put every app in the tunnel, this one too.
-        if (allowed.isEmpty()) builder.addDisallowedApplication(packageName) else allowed.forEach { builder.addAllowedApplication(it) }
+        when {
+            // "*": every app on the phone, as in real use. The system engine needs this app inside too;
+            // the others keep it out, since their sockets are not protected.
+            allow == "*" -> if (which != "system") builder.addDisallowedApplication(packageName)
+            // An empty list would put every app in the tunnel, this one too.
+            allowed.isEmpty() -> builder.addDisallowedApplication(packageName)
+            else -> allowed.forEach { builder.addAllowedApplication(it) }
+        }
         dns.forEach { builder.addDnsServer(it) }
         val tunnel = builder.establish() ?: return Log.e(TAG, "SPIKE_ERROR establish failed: no consent?").let { }
         if (!selected.start(this, tunnel.detachFd(), MTU)) return Log.e(TAG, "SPIKE_ERROR $which did not start").let { }
         engine = selected
         name = which
-        Log.i(TAG, "SPIKE_STARTED engine=$which allow=$allowed dns=$dns socks=$socks pid=${Process.myPid()}")
-        handler.postDelayed(tick, STATS_EVERY_MS)
+        Log.i(TAG, "SPIKE_STARTED engine=$which allow=${if (allow == "*") "all apps" else allowed.toString()} dns=$dns socks=$socks quiet=$quiet pid=${Process.myPid()}")
+        if (!quiet) handler.postDelayed(tick, STATS_EVERY_MS)
     }
 
     private fun stopEngine() {
@@ -119,6 +130,8 @@ class SpikeVpnService : VpnService() {
         const val TAG = "WatchSpike"
         const val ACTION_START = "org.visadahyu.datapavan.watch.spike.START"
         const val ACTION_STOP = "org.visadahyu.datapavan.watch.spike.STOP"
+        const val ACTION_STATS = "org.visadahyu.datapavan.watch.spike.STATS"
+        const val EXTRA_QUIET = "quiet"
         const val EXTRA_ENGINE = "engine"
         const val EXTRA_ALLOW = "allow"
         const val EXTRA_SOCKS = "socks"
