@@ -11,7 +11,7 @@ use tokio::net::{TcpStream, UdpSocket};
 use tokio::sync::watch;
 
 use crate::OwnerLookup;
-use crate::stats::Stats;
+use crate::stats::{Counted, Stats};
 use crate::tun::Tun;
 
 /// How long a UDP flow may stay silent before it is closed, as Android firewalls commonly do.
@@ -65,15 +65,13 @@ async fn relay_tcp(mut tcp: IpStackTcpStream, stats: Arc<Stats>, owners: Arc<dyn
     let lookup = look_up(&owners, &stats, 6, local, remote);
     let connect = TcpStream::connect(remote);
     let (_uid, upstream) = tokio::join!(lookup, connect);
-    let Ok(mut upstream) = upstream else {
+    let Ok(upstream) = upstream else {
         Stats::add(&stats.connect_errors, 1);
         return;
     };
     let _ = upstream.set_nodelay(true);
-    if let Ok((up, down)) = tokio::io::copy_bidirectional(&mut tcp, &mut upstream).await {
-        Stats::add(&stats.bytes_up, up);
-        Stats::add(&stats.bytes_down, down);
-    }
+    let mut upstream = Counted::new(upstream, Arc::clone(&stats));
+    let _ = tokio::io::copy_bidirectional(&mut tcp, &mut upstream).await;
     let _ = upstream.shutdown().await;
     let _ = tcp.shutdown().await;
 }

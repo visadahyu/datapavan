@@ -36,30 +36,21 @@ object RustEngine {
     }
 }
 
-/** The engines by the name the measuring script passes. The Go engine joins once its AAR is built. */
-val engines: Map<String, PacketEngine> = buildMap {
-    put("userspace", RustEngine.engine(0))
-    put("system", RustEngine.engine(1))
-    GoEngine.load()?.let { put("gvisor", it) }
-}
+/** The engines by the name the measuring script passes. */
+val engines: Map<String, PacketEngine> = mapOf(
+    "userspace" to RustEngine.engine(0),
+    "system" to RustEngine.engine(1),
+    "gvisor" to GoEngine,
+)
 
-/** gomobile's binding of the gVisor engine, found by reflection so the app builds without it. */
-object GoEngine {
-    fun load(): PacketEngine? = try {
-        val engine = Class.forName("gvisorengine.Gvisorengine")
-        val start = engine.getMethod("start", Long::class.javaPrimitiveType, Long::class.javaPrimitiveType)
-        val stop = engine.getMethod("stop")
-        val stats = engine.getMethod("stats")
-        object : PacketEngine {
-            override fun start(service: SpikeVpnService, fd: Int, mtu: Int) = start.invoke(null, fd.toLong(), mtu.toLong()) as Boolean
-
-            override fun stop() {
-                stop.invoke(null)
-            }
-
-            override fun stats(): LongArray = (stats.invoke(null) as String).split(',').map { it.trim().toLong() }.toLongArray()
+/** gomobile's binding of the gVisor engine in ../go: `gvisorengine.Gvisorengine`. */
+object GoEngine : PacketEngine {
+    override fun start(service: SpikeVpnService, fd: Int, mtu: Int): Boolean =
+        gvisorengine.Gvisorengine.start(fd.toLong(), mtu.toLong()) { protocol, source, sourcePort, destination, destinationPort ->
+            service.ownerUid(protocol, source, sourcePort, destination, destinationPort)
         }
-    } catch (_: ReflectiveOperationException) {
-        null
-    }
+
+    override fun stop() = gvisorengine.Gvisorengine.stop()
+
+    override fun stats(): LongArray = gvisorengine.Gvisorengine.stats().split(',').map { it.trim().toLong() }.toLongArray()
 }

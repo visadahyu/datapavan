@@ -1,6 +1,12 @@
 //! Counters every engine keeps, read by Kotlin as a `long[]` in the order of [`Stats::snapshot`].
 
+use std::io;
+use std::pin::Pin;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::task::{Context, Poll};
+
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 /// What an engine counted since it started.
 #[derive(Default)]
@@ -49,5 +55,49 @@ impl Stats {
             read(&self.packets_in),
             read(&self.packets_out),
         ]
+    }
+}
+
+/// An upstream socket that counts as it goes: what is read from it went down to an app, what is
+/// written to it went up. Counting at the end of a relay would miss every connection that ends in
+/// an error or is still open when the engine stops.
+pub struct Counted<T> {
+    inner: T,
+    stats: Arc<Stats>,
+}
+
+impl<T> Counted<T> {
+    /// Wraps `inner`.
+    pub fn new(inner: T, stats: Arc<Stats>) -> Self {
+        Self { inner, stats }
+    }
+}
+
+impl<T: AsyncRead + Unpin> AsyncRead for Counted<T> {
+    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
+        let before = buf.filled().len();
+        let result = Pin::new(&mut self.inner).poll_read(cx, buf);
+        if let Poll::Ready(Ok(())) = result {
+            Stats::add(&self.stats.bytes_down, (buf.filled().len() - before) as u64);
+        }
+        result
+    }
+}
+
+impl<T: AsyncWrite + Unpin> AsyncWrite for Counted<T> {
+    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, data: &[u8]) -> Poll<io::Result<usize>> {
+        let result = Pin::new(&mut self.inner).poll_write(cx, data);
+        if let Poll::Ready(Ok(n)) = result {
+            Stats::add(&self.stats.bytes_up, n as u64);
+        }
+        result
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.inner).poll_flush(cx)
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.inner).poll_shutdown(cx)
     }
 }

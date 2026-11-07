@@ -23,5 +23,6 @@ android {
 }
 
 dependencies {
-    // Added when the Go engine is built: implementation(files("libs/gvisorengine.aar"))
+    // The Go engine, from `gomobile bind` in ../go (README.md); not kept in the repository.
+    implementation(files("libs/gvisorengine.aar"))
 }

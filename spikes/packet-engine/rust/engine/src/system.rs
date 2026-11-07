@@ -17,7 +17,7 @@ use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
 use tokio::sync::watch;
 
 use crate::OwnerLookup;
-use crate::stats::Stats;
+use crate::stats::{Counted, Stats};
 use crate::tun::Tun;
 use crate::userspace::look_up;
 
@@ -252,16 +252,14 @@ async fn accept(listener: TcpListener, nat: Shared<Nat>, stats: Arc<Stats>, owne
         tokio::spawn(async move {
             let lookup = look_up(&owners, &stats, 6, SocketAddr::new(local_ip, entry.app_port), entry.destination);
             let (_uid, upstream) = tokio::join!(lookup, connect_protected(&owners, entry.destination));
-            let Ok(mut upstream) = upstream else {
+            let Ok(upstream) = upstream else {
                 Stats::add(&stats.connect_errors, 1);
                 return;
             };
             let _ = upstream.set_nodelay(true);
             let _ = app.set_nodelay(true);
-            if let Ok((up, down)) = tokio::io::copy_bidirectional(&mut app, &mut upstream).await {
-                Stats::add(&stats.bytes_up, up);
-                Stats::add(&stats.bytes_down, down);
-            }
+            let mut upstream = Counted::new(upstream, Arc::clone(&stats));
+            let _ = tokio::io::copy_bidirectional(&mut app, &mut upstream).await;
             let _ = upstream.shutdown().await;
         });
     }
