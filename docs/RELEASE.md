@@ -54,8 +54,9 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
 
 ## Every release
 
-1. **Version.** Raise `versionCode` by one and set `versionName` in `android/app/build.gradle.kts`;
-   move the changelog's "Unreleased" items under the new version; write
+1. **Version.** Raise `versionCode` by one and set `versionName` and `RELEASE_DATE` in
+   `android/app/build.gradle.kts`; move the changelog's "Unreleased" items under the new version, with
+   the same date; write
    `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt` (500 characters at most) and its
    translations. If the interface changed, take the store images again with `scripts/store-images.sh`
    on an emulator with CI's image (`dp-api35-ci`) at a phone's size (`wm size 1080x2400; wm density 420`): the icon from the launcher
@@ -102,7 +103,8 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    know itself genuine and refuse a damaged copy of the pack. On `dp-api30`, put the signed APK
    through `INSTALL_ABI=armeabi-v7a scripts/smoke.sh <apk>` and `verify-shortcuts.sh`.
 7. **Publish** the signed APK, the notes and their signature on GitHub Releases and under `download/` on the
-   website, where `site/hugo.toml` names the current APK, its hash and size, and tag the commit
+   website, where `site/hugo.toml` names the current APK, its hash, size, tag and `release_code`, whose
+   store changelog the download section shows, and tag the commit
    (`v<version>`). The tag itself is not signed, since none of the offline keys can sign a Git tag. The
    signed notes name the commit, so a tag moved later no longer matches them: compare with
    `git rev-parse v<version>^{commit}`. A key for tags can be added later, if `git verify-tag` should work too.

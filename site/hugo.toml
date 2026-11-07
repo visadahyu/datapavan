@@ -67,6 +67,8 @@ script = "rtl"
 repo = "https://github.com/visadahyu/datapavan"
 # The release on the download button. Its signed files reach the server's download/ beside the site (site/README.md).
 release_tag = "v0.1.0"
+# Its versionCode, whose store changelog the download section shows.
+release_code = 1
 release_apk = "datapavan-0.1.0.apk"
 release_sha256 = "8e290a36dbeddc8490d36e421ac28c49b21c73da1af0064143632c10d176c96a"
 release_size = "4.2 MB"

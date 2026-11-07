@@ -391,6 +391,7 @@
  ],
  "get_title": "Get it",
  "get_body": "Version 0.1.0 is a pre-release, being tried on more phones. F-Droid and IzzyOnDroid come after those tests.",
+ "get_changes": "What is new in this version:",
  "get_button": "Download the APK",
  "get_install": "Android asks you to allow installing from your browser; you can turn that off again afterwards. Then, in the app’s settings, “Is this copy genuine?” checks your copy.",
  "get_blocked": "If the download does not start, your network may be blocking it. Try GitHub instead, or ask someone you trust to send you the file. A copy from anywhere is fine once its key matches the one shown here.",

@@ -27,6 +27,21 @@ mkdir -p "$ROOT/site/content/privacy"
     sed -E '1d; s#\]\(([^):]+)\)#](https://github.com/visadahyu/datapavan/blob/main/\1)#g' "$ROOT/PRIVACY.md"
 } >"$ROOT/site/content/privacy/index.en.md"
 
+# The current release's store changelog in each language, for the download section: fastlane/ holds it,
+# translated and reviewed like the app (ADR 0030).
+code=$(sed -n 's/^release_code = \([0-9]*\)$/\1/p' "$ROOT/site/hugo.toml")
+[ -n "$code" ] || { echo "site/hugo.toml has no release_code" >&2; exit 1; }
+python3 -I - "$ROOT" "$code" <<'PY'
+import json, pathlib, sys
+root, code = pathlib.Path(sys.argv[1]), sys.argv[2]
+stores = {"en": "en-US", "fr": "fr-FR", "de": "de-DE", "es": "es-ES", "ru": "ru-RU", "zh": "zh-CN", "ar": "ar", "fa": "fa-IR"}
+changes = {
+    language: (root / "fastlane/metadata/android" / store / "changelogs" / f"{code}.txt").read_text(encoding="utf-8").strip()
+    for language, store in stores.items()
+}
+(root / "site/data/changes.json").write_text(json.dumps(changes, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+PY
+
 if [ "${1:-}" = --check ]; then
     OUT="$(mktemp -d)"
     trap 'rm -rf "$OUT"' EXIT
