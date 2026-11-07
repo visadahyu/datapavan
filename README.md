@@ -204,6 +204,7 @@ The history and meaning of both names are in [docs/NAMES.md](docs/NAMES.md); log
 | [docs/LAB.md](docs/LAB.md) | The traffic lab: measuring apps on the project's own phones |
 | [docs/RELEASE.md](docs/RELEASE.md) | Releasing: the offline keys, the checklist, reproducible builds |
 | [docs/CHANNELS.md](docs/CHANNELS.md) | Where releases go: GitHub, IzzyOnDroid, F-Droid, Obtainium |
+| [docs/DEVICES.md](docs/DEVICES.md) | Phones Datapavan has been tried on, and how to add one |
 | [keys/](keys/README.md) | The signing certificate and public keys, and how to check with them |
 | [docs/RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md) | Working under censorship and surveillance |
 | [docs/FOUNDATION.md](docs/FOUNDATION.md) | Charter principles of the Visadahyu Foundation |
