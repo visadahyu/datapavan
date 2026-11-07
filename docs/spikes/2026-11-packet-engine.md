@@ -1,7 +1,7 @@
 # Spike: the packet engine for Datapavan Watch (ADR 0012)
 
-Status: **in progress.** Started 2026-11-07. The emulator round is done; the round on the Galaxy A40,
-which decides, is not. Code: [spikes/packet-engine/](../../spikes/packet-engine/README.md).
+Status: **in progress.** Started 2026-11-07. The emulator round and the A40's first round are done;
+the battery runs are not. Code: [spikes/packet-engine/](../../spikes/packet-engine/README.md).
 
 ## Question
 
@@ -74,6 +74,35 @@ accepted (three rounds, the same day):
 | Go gVisor | "Connection refused" |
 | Rust userspace (`ipstack`) | a connection that opened, in 0.24 ms, to a server that does not listen |
 
+## Results on the Galaxy A40
+
+Android 11, Exynos 7904, over the home Wi-Fi to the test server on the development computer,
+2026-11-07 evening, the system engine with its SYN held. Same workload and rounds as on the emulator.
+Wi-Fi varies by up to half between rounds, the baseline's too, so the transfer rates differ less than
+their spread. CPU and memory are what the engines themselves add.
+
+| | Baseline | Rust userspace | Rust system | Go gVisor |
+|---|---|---|---|---|
+| Download, Mbit/s | 40 | 38 | 35 | 36 |
+| Upload, Mbit/s | 59 | 40 | 45 | 48 |
+| 4 parallel, Mbit/s | 39 | 44 | 31 | 34 |
+| Connect, p50 ms | 9.2 | 6.0 | 10.1 | 10.9 |
+| Kept-alive round trip, p50 ms | 6.6 | 7.4 | 6.9 | 7.1 |
+| **Engine CPU for the three rounds, s** | | 63 | **40** | 139 |
+| Watch app memory (PSS), MB | | 46 | 46 | 60 |
+| Owner lookup, mean ms | | 9.0 | 3.2 | 2.2 |
+| Flows whose app was not found | | 147 of 304 | 0 of 304 | 0 of 304 |
+
+- **The system stack works on Android 11 and on Samsung's build too.** The policy routing that finding
+  6 below relies on behaves there as on Android 17.
+- **On a real phone the CPU gap is wide.** The system engine needed 40 s of CPU for 360 MB and 600
+  connections. The userspace stack needed 1.6 times that and gVisor 3.5 times. On the emulator's
+  fast cores the Rust engines were close and gVisor about double. CPU is the battery, so the battery
+  runs will tell how much of this a day costs.
+- **The held SYN costs about 1 ms of connect time** on Wi-Fi: 10.1 ms against 9.2 ms without a VPN.
+  That is mostly the owner lookup, a binder call that takes about 3 ms on this phone and runs while
+  the upstream connects. gVisor takes the same path, at 10.9 ms.
+
 ## Findings so far
 
 1. **Throughput is not where they differ on the emulator.** Every engine reached the emulator's own
@@ -104,13 +133,13 @@ accepted (three rounds, the same day):
 8. **The tunnel descriptor:** `Builder.setBlocking(false)` is needed. The engines read until "would
    block", and the Rust side also sets `O_NONBLOCK` itself.
 
-## Leaning, before the A40
+## Leaning, after the A40's first round
 
-- **The Rust system stack is the leading candidate.** It is small, efficient and safe Rust. The
-  kernel's own TCP does the hard part, with Android's tuned congestion control. With the SYN held it
-  attributes and fails as honestly as gVisor. It still has to pass two things:
-  - Android 10 to 16 and other vendors, since it leans on policy routing and `tcp_fwmark_accept`;
-  - the A40's numbers.
+- **The Rust system stack is the leading candidate.** It is small, safe Rust, and on the A40 it used
+  the least CPU by far. The kernel's own TCP does the hard part, with Android's tuned congestion
+  control. With the SYN held it attributes and fails as honestly as gVisor. It worked on Android 11
+  (Samsung) and 17 (emulator). Still to pass: Android 10 and 12 to 16, other vendors, and the battery
+  runs.
 - **gVisor is the fallback** if the system stack fails on real phones. It is proven and correct, but
   it carries a cost in size, CPU and memory, a second toolchain in the reproducible build, and
   parsers split between Go and Rust.
@@ -118,8 +147,7 @@ accepted (three rounds, the same day):
 
 ## Still to do
 
-1. The A40 round over Wi-Fi to `tools/server.py`, with the VPN consent tapped on the phone:
-   - throughput, latency, CPU, memory;
+1. On the A40:
    - Wi-Fi switched off and on during a transfer;
    - IPv6;
    - 8 hours of a scripted workload per engine and without a VPN, unplugged, read from batterystats

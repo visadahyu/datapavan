@@ -1,0 +1,101 @@
+=== none 16:21:55
+tag=1794068516-d1 op=download n=1 bytes=50000000 seconds=10.245 mbps=39.0
+tag=1794068516-u1 op=upload n=1 bytes=20000000 seconds=2.634 mbps=60.7
+tag=1794068516-p1 op=parallel n=1 bytes=50000000 seconds=6.585 mbps=60.7
+tag=1794068516-c1 op=connect n=100 p50_ms=9.34 p90_ms=12.76 p99_ms=22.39 mean_ms=10.15
+tag=1794068516-r1 op=rtt n=100 p50_ms=11.07 p90_ms=17.33 p99_ms=24.01 mean_ms=12.46
+tag=1794068516-d2 op=download n=1 bytes=50000000 seconds=6.304 mbps=63.5
+tag=1794068516-u2 op=upload n=1 bytes=20000000 seconds=2.624 mbps=61.0
+tag=1794068516-p2 op=parallel n=1 bytes=50000000 seconds=9.330 mbps=42.9
+tag=1794068516-c2 op=connect n=100 p50_ms=9.27 p90_ms=12.69 p99_ms=21.98 mean_ms=10.32
+tag=1794068516-r2 op=rtt n=100 p50_ms=11.13 p90_ms=15.33 p99_ms=17.10 mean_ms=10.60
+tag=1794068516-d3 op=download n=1 bytes=50000000 seconds=10.607 mbps=37.7
+tag=1794068516-u3 op=upload n=1 bytes=20000000 seconds=3.671 mbps=43.6
+tag=1794068516-p3 op=parallel n=1 bytes=50000000 seconds=9.115 mbps=43.9
+tag=1794068516-c3 op=connect n=100 p50_ms=8.90 p90_ms=11.55 p99_ms=19.65 mean_ms=9.65
+tag=1794068516-r3 op=rtt n=100 p50_ms=6.25 p90_ms=10.67 p99_ms=16.86 mean_ms=6.97
+cpu_ticks=0 engine=none
+meminfo: TOTAL    42910    25624     3240      220   165340    19808    17762     2045
+meminfo: TOTAL PSS:    42910            TOTAL RSS:   165340       TOTAL SWAP PSS:      220
+=== userspace 16:23:20
+started engine=userspace allow=[org.visadahyu.datapavan.watch.load] dns=[/192.168.1.1] pid=23937
+tag=1794068602-d1 op=download n=1 bytes=50000000 seconds=10.561 mbps=37.9
+tag=1794068602-u1 op=upload n=1 bytes=20000000 seconds=3.423 mbps=46.7
+tag=1794068602-p1 op=parallel n=1 bytes=50000000 seconds=11.713 mbps=34.2
+tag=1794068602-c1 op=connect n=100 p50_ms=7.78 p90_ms=12.35 p99_ms=18.41 mean_ms=8.34
+tag=1794068602-r1 op=rtt n=100 p50_ms=7.44 p90_ms=12.91 p99_ms=17.64 mean_ms=8.34
+tag=1794068602-d2 op=download n=1 bytes=50000000 seconds=10.411 mbps=38.4
+tag=1794068602-u2 op=upload n=1 bytes=20000000 seconds=3.979 mbps=40.2
+tag=1794068602-p2 op=parallel n=1 bytes=50000000 seconds=7.914 mbps=50.5
+tag=1794068602-c2 op=connect n=100 p50_ms=5.62 p90_ms=11.63 p99_ms=18.91 mean_ms=6.71
+tag=1794068602-r2 op=rtt n=100 p50_ms=10.80 p90_ms=16.63 p99_ms=22.43 mean_ms=11.61
+tag=1794068602-d3 op=download n=1 bytes=50000000 seconds=11.511 mbps=34.7
+tag=1794068602-u3 op=upload n=1 bytes=20000000 seconds=4.417 mbps=36.2
+tag=1794068602-p3 op=parallel n=1 bytes=50000000 seconds=9.054 mbps=44.2
+tag=1794068602-c3 op=connect n=100 p50_ms=5.38 p90_ms=10.90 p99_ms=23.34 mean_ms=6.70
+tag=1794068602-r3 op=rtt n=100 p50_ms=6.40 p90_ms=12.54 p99_ms=19.93 mean_ms=7.72
+cpu_ticks=6256 engine=userspace
+meminfo: TOTAL    46272    29016     3248      210   168796    24151    20061     4089
+meminfo: TOTAL PSS:    46272            TOTAL RSS:   168796       TOTAL SWAP PSS:      210
+stats: engine=userspace tcp=304 udp=0 up=60056874 down=300045831 lookups=304 lookup_ms=9.025 unknown=147 errors=0 pkt_in=232848 pkt_out=329500
+=== system 16:24:59
+started engine=system allow=[org.visadahyu.datapavan.watch.load, org.visadahyu.datapavan.watch.spike] dns=[/192.168.1.1] pid=23937
+tag=1794068701-d1 op=download n=1 bytes=50000000 seconds=13.087 mbps=30.6
+tag=1794068701-u1 op=upload n=1 bytes=20000000 seconds=3.332 mbps=48.0
+tag=1794068701-p1 op=parallel n=1 bytes=50000000 seconds=12.836 mbps=31.2
+tag=1794068701-c1 op=connect n=100 p50_ms=10.79 p90_ms=21.56 p99_ms=30.92 mean_ms=13.88
+tag=1794068701-r1 op=rtt n=100 p50_ms=7.13 p90_ms=11.01 p99_ms=20.06 mean_ms=7.83
+tag=1794068701-d2 op=download n=1 bytes=50000000 seconds=11.577 mbps=34.6
+tag=1794068701-u2 op=upload n=1 bytes=20000000 seconds=3.901 mbps=41.0
+tag=1794068701-p2 op=parallel n=1 bytes=50000000 seconds=11.429 mbps=35.0
+tag=1794068701-c2 op=connect n=100 p50_ms=10.09 p90_ms=19.61 p99_ms=37.34 mean_ms=12.41
+tag=1794068701-r2 op=rtt n=100 p50_ms=6.68 p90_ms=12.77 p99_ms=20.53 mean_ms=7.83
+tag=1794068701-d3 op=download n=1 bytes=50000000 seconds=10.328 mbps=38.7
+tag=1794068701-u3 op=upload n=1 bytes=20000000 seconds=3.560 mbps=44.9
+tag=1794068701-p3 op=parallel n=1 bytes=50000000 seconds=13.678 mbps=29.2
+tag=1794068701-c3 op=connect n=100 p50_ms=9.14 p90_ms=24.25 p99_ms=40.75 mean_ms=12.72
+tag=1794068701-r3 op=rtt n=100 p50_ms=6.92 p90_ms=17.73 p99_ms=34.24 mean_ms=8.78
+cpu_ticks=4038 engine=system
+meminfo: TOTAL    46512    29156     3252      210   169632    24312    19549     4762
+meminfo: TOTAL PSS:    46512            TOTAL RSS:   169632       TOTAL SWAP PSS:      210
+stats: engine=system tcp=304 udp=0 up=60056874 down=300045831 lookups=304 lookup_ms=3.198 unknown=0 errors=0 pkt_in=351170 pkt_out=351168
+=== gvisor 16:26:51
+started engine=gvisor allow=[org.visadahyu.datapavan.watch.load] dns=[/192.168.1.1] pid=23937
+tag=1794068813-d1 op=download n=1 bytes=50000000 seconds=11.092 mbps=36.1
+tag=1794068813-u1 op=upload n=1 bytes=20000000 seconds=3.356 mbps=47.7
+tag=1794068813-p1 op=parallel n=1 bytes=50000000 seconds=13.301 mbps=30.1
+tag=1794068813-c1 op=connect n=100 p50_ms=10.72 p90_ms=18.96 p99_ms=24.51 mean_ms=12.47
+tag=1794068813-r1 op=rtt n=100 p50_ms=7.15 p90_ms=10.21 p99_ms=15.16 mean_ms=7.45
+tag=1794068813-d2 op=download n=1 bytes=50000000 seconds=11.341 mbps=35.3
+tag=1794068813-u2 op=upload n=1 bytes=20000000 seconds=3.584 mbps=44.6
+tag=1794068813-p2 op=parallel n=1 bytes=50000000 seconds=11.842 mbps=33.8
+tag=1794068813-c2 op=connect n=100 p50_ms=10.87 p90_ms=17.92 p99_ms=42.84 mean_ms=13.24
+tag=1794068813-r2 op=rtt n=100 p50_ms=7.14 p90_ms=11.83 p99_ms=33.11 mean_ms=8.57
+tag=1794068813-d3 op=download n=1 bytes=50000000 seconds=9.591 mbps=41.7
+tag=1794068813-u3 op=upload n=1 bytes=20000000 seconds=3.112 mbps=51.4
+tag=1794068813-p3 op=parallel n=1 bytes=50000000 seconds=10.993 mbps=36.4
+tag=1794068813-c3 op=connect n=100 p50_ms=11.20 p90_ms=23.65 p99_ms=29.87 mean_ms=13.54
+tag=1794068813-r3 op=rtt n=100 p50_ms=6.12 p90_ms=10.52 p99_ms=14.14 mean_ms=6.92
+cpu_ticks=13884 engine=gvisor
+meminfo: TOTAL    60436    38548     7728      210   183700    28388    20474     7913
+meminfo: TOTAL PSS:    60436            TOTAL RSS:   183700       TOTAL SWAP PSS:      210
+stats: engine=gvisor tcp=304 udp=0 up=60056874 down=300045831 lookups=304 lookup_ms=2.209 unknown=0 errors=0 pkt_in=169618 pkt_out=260208
+=== none 16:28:37
+tag=1794068917-d1 op=download n=1 bytes=50000000 seconds=9.850 mbps=40.6
+tag=1794068917-u1 op=upload n=1 bytes=20000000 seconds=2.668 mbps=60.0
+tag=1794068917-p1 op=parallel n=1 bytes=50000000 seconds=11.421 mbps=35.0
+tag=1794068917-c1 op=connect n=100 p50_ms=9.04 p90_ms=12.00 p99_ms=29.25 mean_ms=10.34
+tag=1794068917-r1 op=rtt n=100 p50_ms=6.67 p90_ms=13.21 p99_ms=23.19 mean_ms=8.71
+tag=1794068917-d2 op=download n=1 bytes=50000000 seconds=9.773 mbps=40.9
+tag=1794068917-u2 op=upload n=1 bytes=20000000 seconds=3.085 mbps=51.9
+tag=1794068917-p2 op=parallel n=1 bytes=50000000 seconds=11.650 mbps=34.3
+tag=1794068917-c2 op=connect n=100 p50_ms=9.05 p90_ms=15.28 p99_ms=23.08 mean_ms=10.39
+tag=1794068917-r2 op=rtt n=100 p50_ms=5.82 p90_ms=12.82 p99_ms=19.98 mean_ms=7.27
+tag=1794068917-d3 op=download n=1 bytes=50000000 seconds=11.500 mbps=34.8
+tag=1794068917-u3 op=upload n=1 bytes=20000000 seconds=2.777 mbps=57.6
+tag=1794068917-p3 op=parallel n=1 bytes=50000000 seconds=11.810 mbps=33.9
+tag=1794068917-c3 op=connect n=100 p50_ms=10.75 p90_ms=18.76 p99_ms=24.99 mean_ms=12.49
+tag=1794068917-r3 op=rtt n=100 p50_ms=6.55 p90_ms=10.36 p99_ms=17.69 mean_ms=7.14
+cpu_ticks=4 engine=none
+meminfo: TOTAL    58693    36840     7728      206   182096    21654    19172     2481
+meminfo: TOTAL PSS:    58693            TOTAL RSS:   182096       TOTAL SWAP PSS:      206
