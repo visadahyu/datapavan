@@ -66,10 +66,10 @@ script = "rtl"
 [params]
 repo = "https://github.com/visadahyu/datapavan"
 # The release on the download button. Its signed files reach the server's download/ beside the site (site/README.md).
-release_tag = "v0.1.0"
+release_tag = "v0.1.1"
 # Its versionCode, whose store changelog the download section shows.
-release_code = 1
-release_apk = "datapavan-0.1.0.apk"
-release_sha256 = "8e290a36dbeddc8490d36e421ac28c49b21c73da1af0064143632c10d176c96a"
-release_size = "4.2 MB"
+release_code = 2
+release_apk = "datapavan-0.1.1.apk"
+release_sha256 = "3f9691894c7adc1ba596693403ef912cd269702adc6fb114e69098c3b16524c3"
+release_size = "4.8 MB"
 fingerprint = ["FA:6A:24:04:2A:BC:AC:8B", "D0:09:01:10:F7:04:FF:EF", "E7:DA:D3:AD:F5:DB:38:FB", "07:38:90:AB:4C:B1:FA:84"]

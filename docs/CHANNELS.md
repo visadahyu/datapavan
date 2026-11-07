@@ -1,6 +1,6 @@
 # Distribution channels
 
-Status: version 0.1.0 is out as a pre-release on GitHub Releases and the website since 2026-11-06; the other channels follow once it has been tried on more phones. [RELEASE.md](RELEASE.md) says how a
+Status: version 0.1.1 is out as a pre-release on GitHub Releases and the website since 2026-11-07, after 0.1.0 on 2026-11-06; the other channels follow once it has been tried on more phones. [RELEASE.md](RELEASE.md) says how a
 release is made and signed; this file says where it goes and what each channel needs. Every channel
 carries the same APK, signed with the same offline key, so a user can move between them and every
 copy can be checked against the one published fingerprint (ADR 0024).
