@@ -83,6 +83,7 @@
     <!-- Network use and apps not opened, from usage access (ADR 0022). -->
     <string name="usage_access_title">Netzwerknutzung und Apps, die Sie nicht öffnen</string>
     <string name="usage_access_body">Mit dem Zugriff auf Nutzungsdaten kann Datapavan zeigen, wie viele Daten jede App verbraucht hat und welche Apps Sie lange nicht geöffnet haben. Derselbe Zugriff würde einer App auch zeigen, welche Apps Sie wann geöffnet haben. Datapavan liest nur Summen und das Datum der letzten Nutzung jeder App, speichert nichts davon und kann es nirgendwohin senden, weil es keinen Netzwerkzugang hat. Alles andere funktioniert auch ohne diesen Zugriff.</string>
+    <string name="usage_access_phone_warning">Wenn Sie diesen Zugriff aktivieren, zeigen manche Telefone eine eigene, eindringliche Warnung, manchmal mit einem Countdown. Diese Warnung zeigen sie bei jeder App, die Zugriff auf Nutzungsdaten anfordert.</string>
     <string name="usage_access_button">Zugriff auf Nutzungsdaten erlauben</string>
     <string name="usage_access_restricted">Android graut diesen Schalter bei Apps aus, die aus einer Datei installiert wurden. In diesem Fall öffnen Sie die App-Info dieser App, wählen im Menü (⋮) „Eingeschränkte Einstellungen zulassen“ und versuchen es erneut.</string>
     <string name="usage_access_app_info">App-Info öffnen</string>
@@ -101,6 +102,8 @@
     <string name="network_tethering">Hotspot und Tethering: %1$s</string>
     <string name="network_system">Android-System: %1$s</string>
     <string name="network_lag">Aus der Zählung von Android. Mobile Daten gelten für alle SIM-Karten zusammen. Datapavan speichert keine dieser Zahlen.</string>
+    <!-- Below the network list and the apps list. -->
+    <string name="other_profiles">Apps in einem anderen Profil auf diesem Telefon, etwa in einem Arbeitsprofil, einem vertraulichen Profil oder einem sicheren Ordner, sind hier nicht enthalten. Android zeigt Datapavan nur das Profil, in dem es installiert ist.</string>
     <string name="network_none">In diesem Zeitraum keine Netzwerknutzung.</string>
     <string name="network_mobile">Mobile Daten %1$s: %2$s empfangen, %3$s gesendet, davon %4$s im Hintergrund</string>
     <string name="network_wifi">WLAN %1$s: %2$s empfangen, %3$s gesendet, davon %4$s im Hintergrund</string>

@@ -83,6 +83,7 @@
     <!-- Network use and apps not opened, from usage access (ADR 0022). -->
     <string name="usage_access_title">Utilisation du réseau et applis que vous n\'ouvrez pas</string>
     <string name="usage_access_body">Avec l\'accès aux données d\'utilisation, Datapavan peut montrer combien de données chaque appli a utilisées, et quelles applis vous n\'avez pas ouvertes depuis longtemps. Le même accès permettrait aussi à une appli de voir quelles applis vous avez ouvertes, et quand. Datapavan ne lit que des totaux et la date de dernière utilisation de chaque appli, n\'en garde rien et ne peut rien envoyer, car il n\'a pas d\'accès au réseau. Tout le reste fonctionne sans cet accès.</string>
+    <string name="usage_access_phone_warning">Quand vous activez cet accès, certains téléphones affichent un avertissement sévère qui leur est propre, parfois avec un compte à rebours. Ils l\'affichent pour toutes les applis qui demandent l\'accès aux données d\'utilisation.</string>
     <string name="usage_access_button">Autoriser l\'accès aux données d\'utilisation</string>
     <string name="usage_access_restricted">Android grise ce bouton pour les applis installées à partir d\'un fichier. Dans ce cas, ouvrez les infos sur cette appli, choisissez « Autoriser les paramètres restreints » dans son menu (⋮), puis réessayez.</string>
     <string name="usage_access_app_info">Ouvrir les infos sur l\'appli</string>
@@ -102,6 +103,8 @@
     <string name="network_tethering">Point d\'accès et partage de connexion : %1$s</string>
     <string name="network_system">Système Android : %1$s</string>
     <string name="network_lag">D\'après le décompte d\'Android. Les données mobiles regroupent toutes les cartes SIM. Datapavan ne garde aucun de ces chiffres.</string>
+    <!-- Below the network list and the apps list. -->
+    <string name="other_profiles">Les applis d\'un autre profil sur ce téléphone, comme un profil professionnel, un espace privé ou un dossier sécurisé, ne sont pas incluses ici. Android ne montre à Datapavan que le profil où il est installé.</string>
     <string name="network_none">Aucune utilisation du réseau sur cette période.</string>
     <string name="network_mobile">Données mobiles %1$s : %2$s reçus, %3$s envoyés, dont %4$s en arrière-plan</string>
     <string name="network_wifi">Wi-Fi %1$s : %2$s reçus, %3$s envoyés, dont %4$s en arrière-plan</string>

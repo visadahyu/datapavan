@@ -73,6 +73,8 @@ internal fun UsageAccessCard() {
             Text(stringResource(R.string.usage_access_title), style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(4.dp))
             Text(stringResource(R.string.usage_access_body), style = MaterialTheme.typography.bodyMedium)
+            // Some vendors' settings put their own alarming screen in front of the switch (seen on Xiaomi).
+            Note(stringResource(R.string.usage_access_phone_warning))
             TextButton(onClick = { openUsageAccess(context) }) { Text(stringResource(R.string.usage_access_button)) }
             if (remember { installedFromFile(context) }) {
                 Text(stringResource(R.string.usage_access_restricted), style = MaterialTheme.typography.bodyMedium)
@@ -153,6 +155,9 @@ internal fun NetworkOverview(usage: UsageFacts, days: Int, apps: List<AppFacts>,
         }
         Spacer(Modifier.height(4.dp))
         Text(stringResource(R.string.network_lag), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // Android counts other users' and profiles' apps (a work profile, Secure Folder) under their
+        // own UIDs, which usage access does not show to an app in this profile.
+        Note(stringResource(R.string.other_profiles))
     }
 }
 

@@ -78,6 +78,7 @@
     <string name="owner_shut_down">El servicio que hay detrás de %1$s cerró el %2$s.</string>
     <string name="usage_access_title">Uso de la red y apps que no abres</string>
     <string name="usage_access_body">Con el acceso a datos de uso, Datapavan puede mostrar cuántos datos usó cada app y qué apps llevas mucho tiempo sin abrir. Ese mismo acceso permitiría a una app ver qué apps abriste y cuándo. Datapavan solo lee los totales y la fecha en que se usó cada app por última vez, no guarda nada de ello y no puede enviarlo a ningún sitio, porque no tiene acceso a la red. Todo lo demás funciona sin este acceso.</string>
+    <string name="usage_access_phone_warning">Cuando activas este acceso, algunos teléfonos muestran su propia advertencia severa, a veces con una cuenta regresiva. La muestran para todas las apps que piden acceso a datos de uso.</string>
     <string name="usage_access_button">Permitir el acceso a datos de uso</string>
     <string name="usage_access_restricted">Android pone en gris este interruptor para las apps instaladas desde un archivo. Si te ocurre, abre la información de esta app, elige «Permitir ajustes restringidos» en su menú (⋮) y vuelve a intentarlo.</string>
     <string name="usage_access_app_info">Abrir información de la aplicación</string>
@@ -97,6 +98,8 @@
     <string name="network_tethering">Compartir internet: %1$s</string>
     <string name="network_system">Sistema Android: %1$s</string>
     <string name="network_lag">Según el recuento del propio Android. Los datos móviles incluyen todas las tarjetas SIM juntas. Datapavan no guarda ninguno de estos números.</string>
+    <!-- Below the network list and the apps list. -->
+    <string name="other_profiles">Las apps de otro perfil de este teléfono, como un perfil de trabajo, un espacio privado o una carpeta segura, no se incluyen aquí. Android solo le muestra a Datapavan el perfil en el que está instalado.</string>
     <string name="network_none">Sin uso de la red en este período.</string>
     <string name="network_mobile">Datos móviles %1$s: %2$s recibidos, %3$s enviados, %4$s de ellos en segundo plano</string>
     <string name="network_wifi">Wi-Fi %1$s: %2$s recibidos, %3$s enviados, %4$s de ellos en segundo plano</string>

@@ -129,6 +129,8 @@ internal fun Destinations(
                     )
                 }
                 items(shown, key = { it.app.packageName }) { item -> AppRow(item.app, item.findings) { onOpen(item.app.packageName) } }
+                // Android lists to an app only the apps of its own profile.
+                item { Note(stringResource(R.string.other_profiles)) }
             }
             Destination.PHONE -> phone(audit)
             Destination.NETWORK -> item { network() }

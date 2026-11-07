@@ -83,6 +83,7 @@
     <!-- Network use and apps not opened, from usage access (ADR 0022). -->
     <string name="usage_access_title">استخدام الشبكة والتطبيقات التي لا تفتحها</string>
     <string name="usage_access_body">مع الوصول إلى بيانات الاستخدام، يمكن لتطبيق Datapavan أن يعرض مقدار البيانات التي استخدمها كل تطبيق، والتطبيقات التي لم تفتحها منذ مدة طويلة. والوصول نفسه من شأنه أن يتيح لأي تطبيق معرفة التطبيقات التي فتحتها ومتى فتحتها. لا يقرأ Datapavan إلا الإجماليات وتاريخ آخر استخدام لكل تطبيق، ولا يحتفظ بشيء من ذلك، ولا يمكنه إرساله إلى أي مكان لأنه لا يملك وصولًا إلى الشبكة. كل ما عدا ذلك يعمل من دون هذا الوصول.</string>
+    <string name="usage_access_phone_warning">عند تفعيل هذا الوصول، تعرض بعض الهواتف تحذيرًا قويًا خاصًا بها، وأحيانًا مع عدّ تنازلي. وهي تعرضه لكل تطبيق يطلب الوصول إلى بيانات الاستخدام.</string>
     <string name="usage_access_button">السماح بالوصول إلى بيانات الاستخدام</string>
     <string name="usage_access_restricted">يجعل Android مفتاح التبديل هذا رماديًا للتطبيقات المثبَّتة من ملف. إذا حدث ذلك، فافتح معلومات هذا التطبيق، واختر «السماح بالإعدادات المحظورة» من قائمته (⋮)، ثم حاول مرة أخرى.</string>
     <string name="usage_access_app_info">فتح معلومات التطبيق</string>
@@ -105,6 +106,8 @@
     <string name="network_tethering">نقطة الاتصال والتوصيل: %1$s</string>
     <string name="network_system">نظام Android: %1$s</string>
     <string name="network_lag">من عدّاد Android نفسه. بيانات الجوّال تشمل كل شرائح SIM معًا. لا يحتفظ Datapavan بأيٍّ من هذه الأرقام.</string>
+    <!-- Below the network list and the apps list. -->
+    <string name="other_profiles">التطبيقات الموجودة في ملف شخصي آخر على هذا الهاتف، مثل ملف العمل أو المساحة الخاصة أو المجلد الآمن، غير مشمولة هنا. لا يعرض Android لتطبيق Datapavan إلا الملف الشخصي الذي ثُبِّت فيه.</string>
     <string name="network_none">لا يوجد استخدام للشبكة في هذه الفترة.</string>
     <string name="network_mobile">بيانات الجوّال %1$s: تم استلام %2$s وإرسال %3$s، منها %4$s في الخلفية</string>
     <string name="network_wifi">شبكة Wi-Fi %1$s: تم استلام %2$s وإرسال %3$s، منها %4$s في الخلفية</string>

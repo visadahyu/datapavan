@@ -94,6 +94,7 @@
     <!-- Network use and apps not opened, from usage access (ADR 0022). -->
     <string name="usage_access_title">Network use and apps you do not open</string>
     <string name="usage_access_body">With usage access, Datapavan can show how much data each app used, and which apps you have not opened for a long time. The same access would let an app see which apps you opened and when. Datapavan reads only totals and the date each app was last used, keeps none of it, and cannot send it anywhere, because it has no network access. Everything else works without it.</string>
+    <string name="usage_access_phone_warning">When you turn it on, some phones show a strong warning of their own, sometimes with a countdown. They show it for every app that asks for usage access.</string>
     <string name="usage_access_button">Allow usage access</string>
     <string name="usage_access_restricted">Android greys out this switch for apps installed from a file. If it does, open this app\'s info, choose “Allow restricted settings” in its menu (⋮), and try again.</string>
     <string name="usage_access_app_info">Open app info</string>
@@ -115,6 +116,8 @@
     <string name="network_tethering">Hotspot and tethering: %1$s</string>
     <string name="network_system">Android system: %1$s</string>
     <string name="network_lag">From Android\'s own count. Mobile data is for all SIM cards together. Datapavan keeps none of these numbers.</string>
+    <!-- Below the network list and the apps list. -->
+    <string name="other_profiles">Apps in another profile on this phone, such as a work profile, a private space or a secure folder, are not included here. Android shows Datapavan only the profile it is installed in.</string>
     <string name="network_none">No network use in this period.</string>
     <!-- All four values are data sizes: the total, received, sent and the part in the background. -->
     <string name="network_mobile">Mobile data %1$s: %2$s received, %3$s sent, %4$s of it in the background</string>
