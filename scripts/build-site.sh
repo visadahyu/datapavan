@@ -14,7 +14,7 @@ HUGO="$TOOLS/hugo"
 
 if [ ! -x "$HUGO" ]; then
     mkdir -p "$TOOLS"
-    curl -fsSL -o "$TOOLS/hugo.tar.gz" "https://github.com/gohugoio/hugo/releases/download/v$VERSION/hugo_${VERSION}_linux-amd64.tar.gz"
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "$TOOLS/hugo.tar.gz" "https://github.com/gohugoio/hugo/releases/download/v$VERSION/hugo_${VERSION}_linux-amd64.tar.gz"
     echo "$SHA256  $TOOLS/hugo.tar.gz" | sha256sum -c --quiet -
     tar -xzf "$TOOLS/hugo.tar.gz" -C "$TOOLS" hugo
     rm "$TOOLS/hugo.tar.gz"
