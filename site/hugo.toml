@@ -65,6 +65,9 @@ script = "rtl"
 
 [params]
 repo = "https://github.com/visadahyu/datapavan"
+# Opens Obtainium's Add screen with this repository filled in (obtainium:// links: wiki.obtainium.imranr.dev/deep_links).
+# A bare scheme link, not Obtainium's redirect page, so the site sends nobody to another server.
+obtainium = "obtainium://add/https://github.com/visadahyu/datapavan"
 # The release on the download button. Its signed files reach the server's download/ beside the site (site/README.md).
 release_tag = "v0.1.2"
 # Its versionCode, whose store changelog the download section shows.

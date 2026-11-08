@@ -137,8 +137,8 @@ obfuscated or loaded later is missed. Finding nothing is not proof that nothing 
 ## Checking a copy
 
 Version 0.1.2 is on [GitHub Releases](https://github.com/visadahyu/datapavan/releases/tag/v0.1.2) and
-[the website](https://datapavan.org/download/datapavan-0.1.2.apk). IzzyOnDroid and F-Droid list it once they have reviewed
-it. [Obtainium](https://github.com/ImranR98/Obtainium) can follow this repository's URL. Every genuine copy,
+[the website](https://datapavan.org/download/datapavan-0.1.2.apk). F-Droid is asked in early 2027, after the
+three months of development its policy asks for. [Obtainium](https://github.com/ImranR98/Obtainium) can follow this repository's URL. Every genuine copy,
 on every channel, is signed with one key. The SHA-256 fingerprint of its certificate is:
 
 ```
@@ -202,7 +202,7 @@ The history and meaning of both names are in [docs/NAMES.md](docs/NAMES.md); log
 | [docs/DATA-PACKS.md](docs/DATA-PACKS.md) | Signed data packs: how data reaches a phone without network access |
 | [docs/LAB.md](docs/LAB.md) | The traffic lab: measuring apps on the project's own phones |
 | [docs/RELEASE.md](docs/RELEASE.md) | Releasing: the offline keys, the checklist, reproducible builds |
-| [docs/CHANNELS.md](docs/CHANNELS.md) | Where releases go: GitHub, IzzyOnDroid, F-Droid, Obtainium |
+| [docs/CHANNELS.md](docs/CHANNELS.md) | Where releases go: GitHub, the website, F-Droid (from 2027), Obtainium |
 | [docs/DEVICES.md](docs/DEVICES.md) | Phones Datapavan has been tried on, and how to add one |
 | [keys/](keys/README.md) | The signing certificate and public keys, and how to check with them |
 | [docs/RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md) | Working under censorship and surveillance |

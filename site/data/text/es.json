@@ -390,7 +390,7 @@
   ]
  ],
  "get_title": "Consíguelo",
- "get_body": "La versión 0.1.2 es la primera pensada para todos. F-Droid e IzzyOnDroid la incluirán cuando la hayan revisado.",
+ "get_body": "La versión 0.1.2 es la primera pensada para todos. A principios de 2027 pediremos a F-Droid que la incluya.",
  "get_changes": "Novedades de esta versión:",
  "get_button": "Descargar el APK",
  "get_install": "Android te pide que permitas instalar desde el navegador; después puedes volver a desactivarlo. Luego, en los ajustes de la app, «¿Es auténtica esta copia?» comprueba tu copia.",
@@ -403,8 +403,8 @@
    "El APK firmado, su SHA-256 y las notas de la versión firmadas."
   ],
   [
-   "F-Droid e IzzyOnDroid",
-   "La misma clave en todos los canales."
+   "F-Droid (todavía no)",
+   "A principios de 2027 lo pediremos. La misma clave en todos los canales."
   ],
   [
    "Obtainium",

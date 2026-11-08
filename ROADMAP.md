@@ -59,7 +59,7 @@ disturb the guided check.
 
 Also for v0.1, since 0.1.1 (built on 2026-11-07): a way to learn of a newer version, for copies
 installed by hand. Datapavan has no internet access, so it cannot ask whether a newer version exists,
-and someone who installed it from a file, not through F-Droid, IzzyOnDroid, Obtainium or Google Play,
+and someone who installed it from a file, not through F-Droid, Obtainium or Google Play,
 heard of an update only by chance: the first testers of 0.1.0 had no way to learn of 0.1.1.
 
 - **Newer versions, in Settings' About page:** the release's date, and a sentence that Datapavan cannot
@@ -222,5 +222,5 @@ comes later and gets its own ADR.
 | Security e-mail with an OpenPGP key | ⏳ for 1.0 |
 | Hosting: GitHub as the only home (ADR 0013); a self-hosted EU forge reconsidered later | ✅ |
 | Make the repository public | ✅ on 2026-11-06 |
-| F-Droid submission | ⏳ with 0.1.2, released on 2026-11-07 |
+| F-Droid submission | ⏳ after about 2027-01-28: F-Droid asks for three months of development ([CHANNELS.md](docs/CHANNELS.md)) |
 | Measurement lab: reference measurements on the project's own phones, public reports, and evidence for data-protection authorities and civil-society organisations (legal advice first) | ⏳ from v0.2 |

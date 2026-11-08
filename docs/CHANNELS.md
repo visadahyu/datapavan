@@ -1,6 +1,6 @@
 # Distribution channels
 
-Status: version 0.1.2, the first release for everyone, is out on GitHub Releases and the website since 2026-11-07, after the pre-releases 0.1.0 and 0.1.1; IzzyOnDroid and F-Droid list it once they have reviewed it. [RELEASE.md](RELEASE.md) says how a
+Status: version 0.1.2, the first release for everyone, is out on GitHub Releases and the website since 2026-11-07, after the pre-releases 0.1.0 and 0.1.1. F-Droid is asked in early 2027; IzzyOnDroid is not asked (below). [RELEASE.md](RELEASE.md) says how a
 release is made and signed; this file says where it goes and what each channel needs. Every channel
 carries the same APK, signed with the same offline key, so a user can move between them and every
 copy can be checked against the one published fingerprint (ADR 0024).
@@ -10,10 +10,11 @@ copy can be checked against the one published fingerprint (ADR 0024).
 1. **GitHub Releases**, the source of every other channel: the signed APK, its SHA-256, the release
    notes and their signify signature (RELEASE.md, steps 4 to 6).
 2. **The website**, `datapavan.org/download/`: the same signed files from a server that keeps no access log.
-3. **IzzyOnDroid**, which lists an app within days of a request, from the APK on GitHub Releases.
-4. **F-Droid**, which builds from source and needs a reviewed merge request; it takes weeks, so the
-   request goes in with the first full release.
-5. **Obtainium**, which needs nothing from the project: users add the repository's URL and get the
+3. **F-Droid**, which builds from source and needs a reviewed merge request. Its inclusion policy
+   asks for at least three months of active development (Quality, point 6); Datapavan's began on
+   2026-10-28, so the request goes in after about 2027-01-28, with the recipe at the release of that
+   time. Decided by the maintainer on 2026-11-08.
+4. **Obtainium**, which needs nothing from the project: users add the repository's URL and get the
    releases from GitHub. The README says how.
 
 Accrescent comes later, once it accepts new developers again. Google Play gets a separate app, Datapavan Lite, with its
@@ -28,15 +29,9 @@ own name, package and key ([ADR 0031](decisions/0031-datapavan-lite-on-google-pl
 
 ## IzzyOnDroid
 
-- **Request:** an issue in IzzyOnDroid's repository on GitLab (`IzzyOnDroid/repo`), naming the
-  GitHub repository and the package. Its client scans each APK for trackers and non-free libraries;
-  Datapavan has none, and its INTERNET-free manifest is easy to confirm.
-- **What it reads:** the APK from the latest release, and the texts and images from
-  `fastlane/metadata/android` in the repository: titles, short and full descriptions in four
-  languages, changelogs by versionCode, the 512 px icon and six screenshots per language
-  (`scripts/store-images.sh`).
-- **Reproducible builds:** IzzyOnDroid can check that its own build of the tag matches the APK. The
-  same recipe facts as for F-Droid apply (below).
+Not asked for now. Its App Inclusion Policy (read on 2026-11-08) sets rules on how an app's code is
+written that Datapavan does not meet, so a request would be refused. IzzyOnDroid has also moved its
+requests from GitLab to Codeberg.
 
 ## F-Droid
 

@@ -390,7 +390,7 @@
   ]
  ],
  "get_title": "Download",
- "get_body": "Version 0.1.2 ist die erste Version, die sich an alle richtet. F-Droid und IzzyOnDroid nehmen sie auf, sobald sie dort geprüft wurde.",
+ "get_body": "Version 0.1.2 ist die erste Version, die sich an alle richtet. Anfang 2027 bitten wir F-Droid, sie aufzunehmen.",
  "get_changes": "Neu in dieser Version:",
  "get_button": "APK herunterladen",
  "get_install": "Android bittet Sie, die Installation aus Ihrem Browser zu erlauben; das können Sie danach wieder ausschalten. Danach prüft „Ist diese Kopie echt?“ in den Einstellungen der App Ihre Kopie.",
@@ -403,8 +403,8 @@
    "Das signierte APK, sein SHA-256 und die signierten Versionshinweise."
   ],
   [
-   "F-Droid und IzzyOnDroid",
-   "Derselbe Schlüssel auf jedem Kanal."
+   "F-Droid (noch nicht)",
+   "Anfang 2027 bitten wir darum. Derselbe Schlüssel auf jedem Kanal."
   ],
   [
    "Obtainium",

@@ -390,7 +390,7 @@
   ]
  ],
  "get_title": "Get it",
- "get_body": "Version 0.1.2 is the first release for everyone. F-Droid and IzzyOnDroid will list it once they have reviewed it.",
+ "get_body": "Version 0.1.2 is the first release for everyone. We will ask F-Droid to list it in early 2027.",
  "get_changes": "What is new in this version:",
  "get_button": "Download the APK",
  "get_install": "Android asks you to allow installing from your browser; you can turn that off again afterwards. Then, in the app’s settings, “Is this copy genuine?” checks your copy.",
@@ -403,8 +403,8 @@
    "The signed APK, its SHA-256 and the signed release notes."
   ],
   [
-   "F-Droid and IzzyOnDroid",
-   "The same key on every channel."
+   "F-Droid (not yet)",
+   "We will ask in early 2027. The same key on every channel."
   ],
   [
    "Obtainium",

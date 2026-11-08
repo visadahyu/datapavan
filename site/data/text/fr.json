@@ -390,7 +390,7 @@
   ]
  ],
  "get_title": "L’obtenir",
- "get_body": "La version 0.1.2 est la première version destinée à tous. F-Droid et IzzyOnDroid la proposeront une fois qu’ils l’auront examinée.",
+ "get_body": "La version 0.1.2 est la première version destinée à tous. Début 2027, nous demanderons à F-Droid de la proposer.",
  "get_changes": "Nouveautés de cette version :",
  "get_button": "Télécharger l’APK",
  "get_install": "Android vous demande d’autoriser l’installation depuis votre navigateur ; vous pourrez la désactiver ensuite. Puis, dans les paramètres de l’appli, « Cette copie est-elle authentique ? » vérifie votre copie.",
@@ -403,8 +403,8 @@
    "L’APK signé, son SHA-256 et les notes de version signées."
   ],
   [
-   "F-Droid et IzzyOnDroid",
-   "La même clé sur tous les canaux."
+   "F-Droid (pas encore)",
+   "Début 2027, nous le demanderons. La même clé sur tous les canaux."
   ],
   [
    "Obtainium",
