@@ -40,7 +40,7 @@ in the Git history.
 | [0030](0030-more-languages-reviewed-by-independent-models.md) | Spanish, Russian, Chinese and Arabic at launch, reviewed by independent models | Accepted |
 | [0031](0031-datapavan-lite-on-google-play.md) | Datapavan Lite on Google Play: its own name, package and key | Accepted, not built yet |
 | [0032](0032-expert-tool-for-preinstalled-apps.md) | An expert tool of Datapavan's own for preinstalled apps | Proposed |
-| [0033](0033-organisational-edition-beside-a-suite.md) | The organisational edition beside a device-management suite | Proposed |
+| [0033](0033-organisational-edition-beside-a-suite.md) | The organisational edition beside a device-management suite | Accepted, not built yet |
 
 ## Template
 

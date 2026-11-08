@@ -189,7 +189,7 @@ code base to keep safe.
 First, the audit app beside the device-management suite an organisation already runs: policy in
 through managed configurations, verdicts out to the suite's agent, and the phone's network log read
 on the phone, all without the INTERNET permission; the organisation receives verdicts, never the
-phone's contents ([ADR 0033](docs/decisions/0033-organisational-edition-beside-a-suite.md), proposed;
+phone's contents ([ADR 0033](docs/decisions/0033-organisational-edition-beside-a-suite.md), accepted on 2026-11-08;
 [spike](docs/spikes/2026-11-enterprise-channels.md)). A complete edition that manages phones itself
 comes later and gets its own ADR.
 

@@ -1,6 +1,6 @@
 # 0033. The organisational edition beside a device-management suite
 
-- Status: Proposed (the direction agreed by the maintainer on 2026-11-08; details open)
+- Status: Accepted (by the maintainer on 2026-11-08), not built yet
 - Date: 2026-11-08
 
 ## Context
