@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A stand-in for the audit app's organisational edition. Deliberately WITHOUT the INTERNET
+     permission: the question is whether policy can come in and verdicts go out without it. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:label="Enterprise spike probe" android:allowBackup="false">
+        <meta-data android:name="android.content.APP_RESTRICTIONS" android:resource="@xml/app_restrictions" />
+        <activity android:name=".ProbeActivity" android:exported="true" android:launchMode="singleTask"
+            android:theme="@android:style/Theme.NoDisplay" />
+        <!-- Receives network-log batches when the controller delegates network logging to this app. -->
+        <receiver android:name=".LogsReceiver" android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
+            <intent-filter>
+                <action android:name="android.app.action.NETWORK_LOGS_AVAILABLE" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

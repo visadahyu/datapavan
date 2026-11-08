@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A stand-in for an organisation's device-management agent (its device policy controller), for the
+     spike only. testOnly, so that adb can remove it as device owner again. No INTERNET either. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:label="Enterprise spike controller" android:allowBackup="false" android:testOnly="true">
+        <receiver android:name=".Admin" android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
+            <meta-data android:name="android.app.device_admin" android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+        <!-- Where managed apps' keyed app states arrive (androidx.enterprise:enterprise-feedback). -->
+        <service android:name=".FeedbackService" android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.enterprise.feedback.action.APP_STATES" />
+            </intent-filter>
+        </service>
+        <activity android:name=".ControlActivity" android:exported="true" android:launchMode="singleTask"
+            android:theme="@android:style/Theme.NoDisplay" />
+    </application>
+</manifest>

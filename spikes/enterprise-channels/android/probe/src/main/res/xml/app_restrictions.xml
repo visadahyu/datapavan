@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The managed configuration an organisation's suite can set (its admin console reads this schema). -->
+<restrictions xmlns:android="http://schemas.android.com/apk/res/android">
+    <restriction android:key="level" android:title="Level of the checks" android:restrictionType="choice"
+        android:entries="@array/levels" android:entryValues="@array/levels" android:defaultValue="medium" />
+    <restriction android:key="report" android:title="Report a verdict to the device-management suite"
+        android:restrictionType="bool" android:defaultValue="true" />
+    <restriction android:key="allowed_vpn" android:title="VPN apps the organisation allows (package names, comma-separated)"
+        android:restrictionType="string" android:defaultValue="" />
+</restrictions>
