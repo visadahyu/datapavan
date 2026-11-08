@@ -137,6 +137,31 @@ dialled upstream are dropped, which a real build would have to queue.
   it did not know, so after a restart an app's pooled connection hung until its timeouts. Now it
   answers with a reset, as a real stack does, and the app reconnected within a second.
 
+## An idle night on the Galaxy A40
+
+The system engine carried every app of the A40 (Android 11, Samsung) from 2026-11-07 19:50 to
+2026-11-08 08:34 UTC: 12 h 43 min unplugged from 100 %, the screen off apart from 7 seconds, on the
+home Wi-Fi, in quiet mode (no line per flow) and with no timer of the engine's own. The phone is not
+in daily use, so this is the idle cost only.
+
+| | |
+|---|---|
+| Battery | 100 % to 90 %: 288 mAh by the charge counter, 22.6 mAh an hour |
+| Watch, by Android's estimate | 1.84 mAh, all of it Wi-Fi (191 Wi-Fi wakeups charged to it); 2.93 mAh with the system's share spread over apps. That is 0.6 to 1.0 % of the night's drain |
+| Watch's CPU | 8.9 s in the whole night (2.2 user, 6.8 kernel), and no wakelock of its own |
+| Phone awake | 30 min of the 12 h 43 min (4 %): the tunnel did not keep the phone awake |
+| Engine | 440 TCP and 544 UDP flows, 2.0 MB up and 5.5 MB down; 984 owner lookups, 11.3 ms on average; 3 flows without a known owner; 184 failed upstream connects |
+
+- **Below VPN.md's 3 % a day, by Android's estimate**, by a wide margin: 2.93 mAh is 0.1 % of the
+  battery. But Android's model explains only 125 of the 272 to 302 mAh actually drawn, so the
+  estimate is not the answer. The answer is the same night without a VPN, the next measurement.
+- **Owner lookups took 11.3 ms on average**, against about 3 ms in the daytime runs above. A phone in
+  deep idle is slower to answer a binder call. The connect waits for the slower of the lookup and the
+  upstream connect, so this matters for the first connection after the phone wakes. To measure on
+  Watch.
+- **The last failed connect was IPv6 on a network without IPv6** ("network unreachable"), the case of
+  the short checks above. The counters do not say how many of the 184 were.
+
 ## Findings so far
 
 1. **Throughput is not where they differ on the emulator.** Every engine reached the emulator's own
@@ -172,8 +197,8 @@ dialled upstream are dropped, which a real build would have to queue.
 - **The Rust system stack is the leading candidate.** It is small, safe Rust, and on the A40 it used
   the least CPU by far. The kernel's own TCP does the hard part, with Android's tuned congestion
   control. With the SYN held it attributes and fails as honestly as gVisor. It worked on Android 11
-  (Samsung) and 17 (emulator). Still to pass: Android 10 and 12 to 16, other vendors, and the battery
-  runs.
+  (Samsung) and 17 (emulator), and an idle night on the A40 cost little by Android's estimate. Still to
+  pass: Android 10 and 12 to 16, other vendors, and the A40's night without a VPN for comparison.
 - **gVisor is the fallback** if the system stack fails on real phones. It is proven and correct, but
   it carries a cost in size, CPU and memory, a second toolchain in the reproducible build, and
   parsers split between Go and Rust.
