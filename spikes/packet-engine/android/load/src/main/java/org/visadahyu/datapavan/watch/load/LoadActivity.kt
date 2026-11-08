@@ -20,7 +20,10 @@ import kotlin.concurrent.thread
  * - parallel: P downloads at once, n times each;
  * - dns: n lookups of names that do not exist under the host of url;
  * - udp: n datagrams of 1,200 bytes, QUIC's usual size, to the echo port next to url's, at most 32
- *   unanswered at a time; the megabits per second each way and how many came back.
+ *   unanswered at a time; the megabits per second each way and how many came back;
+ * - listen (no url): play a circumvention tool's local proxy. Listen on `--ei port P` for n seconds,
+ *   bound as `--es bind v4|any4|any6` (127.0.0.1, 0.0.0.0 or ::), and hold every accepted
+ *   connection open, so that the watch app can ask Android who owns the other end.
  */
 class LoadActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,6 +38,7 @@ class LoadActivity : Activity() {
 
     private fun handle(intent: Intent) {
         val op = intent.getStringExtra("op") ?: return
+        if (op == "listen") return listen(intent.getIntExtra("port", 10808), intent.getStringExtra("bind") ?: "v4", intent.getIntExtra("n", 60))
         val url = intent.getStringExtra("url") ?: return
         val n = intent.getIntExtra("n", 1)
         val bytes = intent.getLongExtra("bytes", 10_000_000L)
@@ -165,6 +169,38 @@ class LoadActivity : Activity() {
         val seconds = (System.nanoTime() - start) / 1e9
         return "sent=$sent received=$received lost=$lost seconds=${"%.3f".format(seconds)} " +
             "mbps_each_way=${"%.1f".format(received * 1200L * 8 / seconds / 1e6)}"
+    }
+
+    private fun listen(port: Int, bind: String, seconds: Int) {
+        val address = when (bind) {
+            "any4" -> InetAddress.getByName("0.0.0.0")
+            "any6" -> InetAddress.getByName("::")
+            else -> InetAddress.getByName("127.0.0.1")
+        }
+        val held = mutableListOf<java.net.Socket>()
+        thread(name = "listen") {
+            val result = try {
+                java.net.ServerSocket(port, 16, address).use { server ->
+                    Log.i(TAG, "SPIKE_LISTENING port=$port bind=$bind uid=${android.os.Process.myUid()}")
+                    server.soTimeout = 1_000
+                    val end = System.nanoTime() + seconds * 1_000_000_000L
+                    while (System.nanoTime() < end) {
+                        try {
+                            synchronized(held) { held += server.accept() }
+                        } catch (_: java.net.SocketTimeoutException) {
+                            // Check the time and go on listening.
+                        }
+                    }
+                }
+                "accepted=${held.size}"
+            } catch (e: Exception) {
+                "error=${e.javaClass.simpleName}:${e.message}"
+            } finally {
+                synchronized(held) { held.forEach { runCatching { it.close() } } }
+            }
+            Log.i(TAG, "SPIKE_RESULT op=listen port=$port bind=$bind $result")
+            runOnUiThread { finish() }
+        }
     }
 
     private fun lookup(name: String) {

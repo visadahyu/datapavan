@@ -162,6 +162,35 @@ in daily use, so this is the idle cost only.
 - **The last failed connect was IPv6 on a network without IPv6** ("network unreachable"), the case of
   the short checks above. The counters do not say how many of the 184 were.
 
+## Who owns a local proxy port
+
+The circumvention research left one idea untested: Watch connects to a tool's local proxy and asks
+Android who owns the other end of that loopback connection, to learn which app is behind the port.
+The workload app played the tool, listening on a loopback port (`--es op listen`); the watch app
+connected and asked `getConnectionOwnerUid` for both ends (`--es action loopback`). Run on 2026-11-08
+on the A40 (Samsung, Android 11) and the Android 17 emulator (Google), both apps targeting API 37:
+
+| Case | A40, Android 11 | Emulator, Android 17 |
+|---|---|---|
+| No VPN running | `SecurityException` | -1 |
+| Tool inside Watch's tunnel, bound to 127.0.0.1 | the tool's UID | the tool's UID |
+| The same, bound to 0.0.0.0 | the tool's UID | the tool's UID |
+| The same, bound to `::` | the tool's UID | the tool's UID |
+| Tool outside the tunnel | -1 | -1 |
+
+- **It works, on both,** for every way a tool binds its port. Watch learns the UID of the app behind
+  the port, with no root and nothing read from the connection.
+- **Only while the tool is inside Watch's tunnel.** Android shows a VPN the owner of a connection only
+  for apps its VPN covers. So Watch must never exclude the tool from its tunnel, which is also what
+  chaining needs (finding 6).
+- **The UID is not yet a name.** `getPackagesForUid` gave nothing without package visibility. Watch
+  needs a `<queries>` entry or `QUERY_ALL_PACKAGES` to turn the UID into the tool's package; the
+  circumvention report notes that a `<queries>` entry missed a VPN app before. To settle on Watch.
+- **Android 17's local network permission does not cover loopback.** Both apps had
+  `ACCESS_LOCAL_NETWORK` declared but not granted, and the loopback connection went through.
+- **Still to run:** a phone of another maker (a Pixel and a Xiaomi), and real tools (v2rayNG,
+  NekoBox, Orbot) in their proxy modes.
+
 ## Findings so far
 
 1. **Throughput is not where they differ on the emulator.** Every engine reached the emulator's own

@@ -39,6 +39,8 @@ class SpikeVpnService : VpnService() {
             stopSelf()
         } else if (intent?.action == ACTION_STATS) {
             logStats("SPIKE_STATS")
+        } else if (intent?.action == ACTION_LOOPBACK) {
+            loopback(intent.getIntExtra(EXTRA_PORT, 10808))
         } else {
             // Quiet: no stats every few seconds, so that an idle tunnel wakes nothing (battery runs).
             quiet = intent?.getBooleanExtra(EXTRA_QUIET, false) ?: false
@@ -112,6 +114,34 @@ class SpikeVpnService : VpnService() {
         -1
     }
 
+    /**
+     * The untested idea of the circumvention research: connect to a tool's local proxy port, then ask
+     * Android who owns each end of that loopback connection. The tool's end names the app behind the
+     * port, if Android tells a VPN about a socket on loopback at all.
+     */
+    private fun loopback(port: Int) = Thread {
+        val line = try {
+            java.net.Socket().use { socket ->
+                socket.connect(InetSocketAddress(InetAddress.getByName("127.0.0.1"), port), 2_000)
+                val mine = socket.localSocketAddress as InetSocketAddress
+                val theirs = socket.remoteSocketAddress as InetSocketAddress
+                fun owner(local: InetSocketAddress, remote: InetSocketAddress): String {
+                    val uid = try {
+                        connectivity.getConnectionOwnerUid(android.system.OsConstants.IPPROTO_TCP, local, remote)
+                    } catch (e: RuntimeException) {
+                        return "${e.javaClass.simpleName}"
+                    }
+                    val names = if (uid >= 0) packageManager.getPackagesForUid(uid)?.joinToString("|") else null
+                    return "$uid(${names ?: "-"})"
+                }
+                "own=${owner(mine, theirs)} peer=${owner(theirs, mine)}"
+            }
+        } catch (e: Exception) {
+            "error=${e.javaClass.simpleName}:${e.message}"
+        }
+        Log.i(TAG, "SPIKE_LOOPBACK port=$port engine=${name.ifEmpty { "none" }} $line")
+    }.start()
+
     /** Called by the engines before an upstream socket connects, when the watch app is inside the tunnel. */
     @Suppress("unused")
     fun protectSocket(fd: Int): Boolean = protect(fd)
@@ -131,6 +161,8 @@ class SpikeVpnService : VpnService() {
         const val ACTION_START = "org.visadahyu.datapavan.watch.spike.START"
         const val ACTION_STOP = "org.visadahyu.datapavan.watch.spike.STOP"
         const val ACTION_STATS = "org.visadahyu.datapavan.watch.spike.STATS"
+        const val ACTION_LOOPBACK = "org.visadahyu.datapavan.watch.spike.LOOPBACK"
+        const val EXTRA_PORT = "port"
         const val EXTRA_QUIET = "quiet"
         const val EXTRA_ENGINE = "engine"
         const val EXTRA_ALLOW = "allow"
