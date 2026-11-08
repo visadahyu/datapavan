@@ -89,25 +89,29 @@ A **local** VPN: no server is involved and the user's IP address does not change
 permission, and moves the QUIC server name and apps' own encrypted DNS into v0.2. Before this version
 starts, a spike picked the packet engine on 2026-11-07: Android's own TCP stack reached through rewritten addresses, in Rust ([ADR 0012](docs/decisions/0012-packet-engine.md)). Design: [docs/VPN.md](docs/VPN.md).
 
-Three releases, each of use on its own (agreed with the maintainer on 2026-11-07):
+Two releases, each of use on its own (the maintainer, 2026-11-09, in place of the three agreed on
+2026-11-07: the connection log alone would leave out everyone who already runs a VPN or a
+circumvention tool, since Android allows one VPN at a time, and every release costs an offline
+signing session and texts reviewed in eight languages):
 
-1. **0.2.0, the connection log:** Watch with its packet engine. It keeps a connection log per app:
-   domain, IP, organisation, bytes, time, foreground or background. Names come from DNS, the TLS and
-   QUIC server names, and apps' own encrypted DNS is recognised. The audit app reads the log through
-   the one-way interface of ADR 0029.
-2. **0.2.1, next to circumvention tools:** Watch works beside every tool the user has, as far as
-   Android allows (one VPN at a time), since the tools themselves can take people's data
-   ([RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md)). It brings SOCKS5 chaining with UDP, a
-   WireGuard upstream for VPN providers that offer one (Proton VPN, Mullvad and others), the user's
-   tool and its proxy port found by Watch itself (asking Android who owns the port worked on
-   2026-11-08, [spike](docs/spikes/2026-11-packet-engine.md)), a password for the tool's proxy where
-   the tool allows one, apps' own built-in proxies named (Telegram's, for example), proxy-like
-   behaviour flagged, per-tool guides, and blocking of tracker domains, off until the user turns it
-   on and undone in one tap. Fuller blocking stays in v0.3.
-3. **0.2.2, behaviour:** the sensor log, the cross-checks and the learned traffic shapes.
+1. **0.2.0, the connection log, next to circumvention tools:** Watch with its packet engine. It keeps
+   a connection log per app: domain, IP, organisation, bytes, time, foreground or background. Names
+   come from DNS, the TLS and QUIC server names, and apps' own encrypted DNS is recognised. The audit
+   app reads the log through the one-way interface of ADR 0029. Watch works beside every tool the
+   user has, as far as Android allows (one VPN at a time), since the tools themselves can take
+   people's data ([RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md)). It brings SOCKS5 chaining
+   with UDP, a WireGuard upstream for VPN providers that offer one (Proton VPN, Mullvad and others),
+   the user's tool and its proxy port found by Watch itself (asking Android who owns the port worked
+   on 2026-11-08, [spike](docs/spikes/2026-11-packet-engine.md)), a password for the tool's proxy
+   where the tool allows one, apps' own built-in proxies named (Telegram's, for example), proxy-like
+   behaviour flagged, per-tool guides, a DNS resolver of the user's choice with a strict setting, and
+   blocking of tracker domains, off until the user turns it on and undone in one tap. Fuller blocking
+   stays in v0.3.
+2. **0.2.1, behaviour:** the sensor log, the cross-checks and the learned traffic shapes. Their
+   feasibility spikes come first, so 0.2.0 does not wait for their results.
 
-The milestones of 0.2.0, W1 to W6, with what each must show before it counts as done, are in
-[DESIGN.md §13.2](docs/DESIGN.md#132-v020-watch-the-connection-log).
+The milestones of 0.2.0, W1 to W9, with what each must show before it counts as done, are in
+[DESIGN.md §13.2](docs/DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools).
 
 The items, in order:
 

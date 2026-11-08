@@ -1,6 +1,6 @@
 # Local VPN design (v0.2 "Watch", v0.3 "Guard")
 
-> Status: **design draft.** The packet engine is chosen: the system stack in Rust, accepted on 2026-11-07 ([ADR 0012](decisions/0012-packet-engine.md), [findings](spikes/2026-11-packet-engine.md)). The milestones of the first release, 0.2.0, are in [DESIGN.md §13.2](DESIGN.md#132-v020-watch-the-connection-log).
+> Status: **design draft.** The packet engine is chosen: the system stack in Rust, accepted on 2026-11-07 ([ADR 0012](decisions/0012-packet-engine.md), [findings](spikes/2026-11-packet-engine.md)). The milestones of the first release, 0.2.0, are in [DESIGN.md §13.2](DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools).
 
 ## What "VPN" means here
 
@@ -65,7 +65,7 @@ proxy offered by another app in its proxy-only mode (for example v2rayNG, NekoBo
 The user keeps both their circumvention tool and Watch. Some tools have no proxy mode and run only as
 a VPN: WireGuard's own app, Outline, Psiphon and Lantern's released app. For providers that hand out
 a WireGuard configuration (Proton VPN, also on its free plan, Mullvad and others), Watch carries it
-as its own upstream (0.2.1). Datapavan does **not** implement circumvention itself.
+as its own upstream (0.2.0). Datapavan does **not** implement circumvention itself.
 
 Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED-REGIONS.md)):
 
