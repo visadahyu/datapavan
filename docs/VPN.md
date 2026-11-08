@@ -4,7 +4,7 @@
 
 ## What "VPN" means here
 
-Datapavan Watch, the separate app planned for v0.2 ([ADR 0029](decisions/0029-network-access-for-v0.2.md)), uses Android's `VpnService` only to see and filter traffic on the device. It is a
+Watch, the part of Datapavan planned for v0.2, is an app of its own beside the audit app ([ADR 0029](decisions/0029-network-access-for-v0.2.md)). It uses Android's `VpnService` only to see and filter traffic on the device. It is a
 **firewall**, not a tunnel:
 
 - No Datapavan server exists, and no traffic is sent to us.
@@ -23,7 +23,7 @@ Datapavan Watch, the separate app planned for v0.2 ([ADR 0029](decisions/0029-ne
                                         └─ statistics → encrypted local store
 ```
 
-1. **Tunnel.** `VpnService.Builder` creates a TUN interface. Routes cover all of IPv4 and IPv6, DNS points to a virtual address inside the tunnel, and Datapavan itself is excluded from the tunnel.
+1. **Tunnel.** `VpnService.Builder` creates a TUN interface. Routes cover all of IPv4 and IPv6, and DNS points to a virtual address inside the tunnel. Watch itself is inside its own tunnel and calls `protect()` on each upstream socket: the system stack needs this, because Android routes the answers of the engine's listener back through the tunnel only for apps inside it ([spike](spikes/2026-11-packet-engine.md), finding 6).
 2. **Hand-off.** The TUN file descriptor is passed to the Rust engine over JNI. From then on Kotlin only controls the lifecycle; all packet handling is in Rust.
 3. **Which app?** For every new TCP or UDP flow, the engine asks `ConnectivityManager.getConnectionOwnerUid()` (Android 10+, available only to the active VPN app). That is a Java API, so the engine makes one JNI upcall per new flow; the answer is cached for the lifetime of the flow.
 4. **Which destination?** In order of preference:
@@ -33,14 +33,14 @@ Datapavan Watch, the separate app planned for v0.2 ([ADR 0029](decisions/0029-ne
    4. an offline IP → ASN/organisation database.
    When none applies, the UI says "unknown" plainly.
 5. **Decision.** The rule engine returns allow, block or log-only.
-6. **Forwarding.** A userspace TCP/IP stack terminates each connection locally and opens a real, `protect()`-ed socket to the destination, then relays bytes. UDP flows go through a NAT table with idle timeouts.
+6. **Forwarding.** Android's own TCP stack, reached through rewritten addresses, terminates each connection locally ([ADR 0012](decisions/0012-packet-engine.md)). The app's SYN is held until the owner lookup and the real, `protect()`-ed connection to the destination are done, then bytes are relayed. UDP flows go through a NAT table with idle timeouts.
 7. **Recording.** Per-flow statistics go to app-private, encrypted SQLite (key in the Android Keystore). Retention is the user's choice: none, 1 day, 7 days or 30 days, with a one-tap wipe. Flows chained through a circumvention proxy are counted but their destinations are **not** recorded by default, because a log of them is evidence in a phone search.
 
 ## Policies
 
 | Topic | Policy |
 |---|---|
-| DNS | Our resolver answers inside the tunnel and resolves upstream through a protected socket: the network's resolver by default, or a DoH/DoT resolver the user chooses. Blocked tracker domains get an empty answer. If the chosen upstream fails, the default is to fall back to the network's resolver and show a visible warning. In censored networks that fallback would hand every query to the censor, so a **strict DNS** setting never falls back (recommended in restricted regions). |
+| DNS | Our resolver answers inside the tunnel and resolves upstream through a protected socket: the network's resolver by default, or a DoH/DoT resolver the user chooses. Blocked tracker domains get an empty answer. If the chosen upstream fails, the default is to fall back to the network's resolver and show a visible warning. In censored networks that fallback would hand every query to the censor, so a **strict DNS** setting never falls back (recommended in restricted regions). Apps chained through a circumvention tool never use the network's resolver: their names go to the tool (SOCKS5 with the domain name, or DNS through the proxy), or the network would see every name they look up. |
 | QUIC | Optional "block QUIC" setting (UDP 443). Apps then fall back to TCP + TLS, where the SNI is visible. Off by default in v0.2, so we observe without interfering. |
 | Connectivity and fail mode | Datapavan never breaks connectivity through its own policy decisions. The one deliberate exception is an engine crash under Android's *Always-on VPN* with *Block connections without VPN*: traffic then stops until Android restarts the service, instead of silently bypassing the firewall (fail-closed, see [ADR 0006](decisions/0006-rust-engine-unsafe-forbidden.md)). Onboarding recommends this mode. |
 | Private DNS | If Android Private DNS is in strict mode, hostnames are hidden from us. Onboarding detects this and explains the trade-off. |
@@ -60,15 +60,20 @@ Datapavan Watch, the separate app planned for v0.2 ([ADR 0029](decisions/0029-ne
 ## Coexistence with other VPNs
 
 Android allows **one active VPN at a time**. This matters most where people depend on circumvention
-tools. Datapavan therefore supports **chaining**: its upstream sockets can go through a local SOCKS5
-proxy offered by another app (for example v2rayNG, NekoBox, Orbot or Psiphon in proxy mode). The user
-keeps both their circumvention tool and Datapavan. Datapavan does **not** implement circumvention
-itself. Later, an optional upstream WireGuard connection can serve users of commercial VPN providers.
+tools. Watch therefore supports **chaining**: its upstream sockets can go through a local SOCKS5
+proxy offered by another app in its proxy-only mode (for example v2rayNG, NekoBox, Hiddify or Orbot).
+The user keeps both their circumvention tool and Watch. Some tools have no proxy mode and run only as
+a VPN: WireGuard's own app, Outline, Psiphon and Lantern's released app. For providers that hand out
+a WireGuard configuration (Proton VPN, also on its free plan, Mullvad and others), Watch carries it
+as its own upstream (0.2.1). Datapavan does **not** implement circumvention itself.
 
 Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED-REGIONS.md)):
 
 - **No inbound path.** SOCKS5 `CONNECT` only carries connections the phone opens, so the phone gets no address in the VPN provider's network. The engine accepts packets only for flows a local app started, UDP replies included, and drops everything else. SOCKS5 `BIND` is never used.
-- **The tool's own traffic is visible.** In proxy mode the tool is an ordinary app inside Datapavan's tunnel. Its own connections, to its servers and anywhere else, are attributed to it like any other app's. They are forwarded directly, never back into the proxy, which also prevents loops.
+- **The tool's own traffic is visible.** In proxy mode the tool is an ordinary app inside Watch's tunnel. Its own connections, to its servers and anywhere else, are attributed to it like any other app's. They are forwarded directly, never back into the proxy, which also prevents loops. Watch never excludes the tool from its tunnel: Android names a connection's owner to a VPN only for the apps that VPN covers.
+- **Which app is behind the port.** Watch connects to the proxy port and asks Android who owns the other end of that loopback connection. On 2026-11-08 this gave the listening app's UID on a Samsung phone with Android 11 and on Android 17's emulator, for a port bound to 127.0.0.1, 0.0.0.0 or `::` alike, and nothing for an app outside the tunnel ([spike](spikes/2026-11-packet-engine.md)). A port number alone is only a hint: several tools share 10808, 9050 or 2080.
+- **Watch must not become the leak.** When the tool stops, the apps sent through it wait and Watch says so; they never go directly, which would show the network every destination from the user's own address. UDP of a chained app goes through the proxy or not at all. Checks that the chain works use the address Android itself checks connectivity with, never a Datapavan host, so the tool's operator learns nothing about the user.
+- **The proxy port is a door.** Many tools leave their local proxy open with no password, so any app on the phone, even one kept out of the tunnel, can use it to reach the tool's servers. Watch offers a generated password where the tool supports one, opens no unauthenticated port of its own, and never writes SOCKS credentials to its log.
 - **Proxy-like behaviour is flagged** (v0.2) and can be blocked (v0.3): many distinct destinations in a short time, sustained upload, or activity while the screen is off. Thresholds come from measurements, and a flag says what was seen instead of accusing the app. Detection counts destinations in memory, so it does not need the destination log that is off by default for chained flows.
 - **Per-app choice.** The user decides which apps go through the tool. Everything else goes directly or is blocked.
 - **Proxy mode, step by step.** Onboarding has a guide per popular tool, in every UI language, for running it in proxy mode instead of VPN mode.
@@ -80,15 +85,11 @@ Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED
 - **Size:** target: the engine adds less than 1 MB per ABI. To be measured in the spike; the M1 bridge alone is about 340 KB on arm64, mostly the Rust standard library.
 - **Samsung and other OEM battery managers:** a health check in the app, plus per-vendor onboarding guides.
 
-## Spike plan (two weeks)
+## The spike
 
-Build a minimal forwarder twice, with the same JNI surface:
-
-1. a Rust userspace stack (`smoltcp` or `ipstack`);
-2. Go's gVisor netstack (the approach of existing Android firewalls).
-
-Measure both on the A40: throughput, latency, battery drain over 8 hours of mixed use, memory, binary
-size, and robustness when the network changes. Record the choice as an ADR.
+Done in November 2026: three engines measured on emulators and the Galaxy A40, with an idle night on
+all of the A40's apps. Findings in [spikes/2026-11-packet-engine.md](spikes/2026-11-packet-engine.md),
+the choice in [ADR 0012](decisions/0012-packet-engine.md).
 
 ## Licence hygiene
 
