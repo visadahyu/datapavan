@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import androidx.core.net.toUri
+import org.visadahyu.datapavan.BuildConfig
 import org.visadahyu.datapavan.R
 import org.visadahyu.datapavan.Release
 import java.text.DateFormat
@@ -249,20 +250,32 @@ internal fun AboutPage(engineVersion: String, insets: PaddingValues, onBack: () 
             Text(stringResource(R.string.about_title), style = MaterialTheme.typography.headlineSmall)
         }
         items(paragraphs) { Text(it, style = MaterialTheme.typography.bodyLarge) }
+        // The two editions (ADR 0031), in a few calm lines, with no prompt.
         item {
-            Text(stringResource(R.string.about_updates_title), style = MaterialTheme.typography.titleMedium)
-            Text(stringResource(R.string.about_updates), style = MaterialTheme.typography.bodyLarge)
+            Text(stringResource(R.string.about_editions_title), style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(if (BuildConfig.PLAY) R.string.about_editions_lite else R.string.about_editions_full),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        }
+        item {
+            // Google Play updates Lite, so Lite says nothing of newer versions and links the website's main page.
+            if (!BuildConfig.PLAY) {
+                Text(stringResource(R.string.about_updates_title), style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.about_updates), style = MaterialTheme.typography.bodyLarge)
+            }
             val address = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Ltr)
             SelectionContainer {
                 Column(Modifier.padding(vertical = 8.dp)) {
                     Text(Release.WEBSITE, style = address)
-                    Text(Release.RELEASES, style = address)
+                    if (!BuildConfig.PLAY) Text(Release.RELEASES, style = address)
                 }
             }
             Text(stringResource(R.string.about_copy_hint), style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = {
+                val page = if (BuildConfig.PLAY) Release.homePage(locale) else Release.downloadPage(locale)
                 try {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Release.downloadPage(locale).toUri()))
+                    context.startActivity(Intent(Intent.ACTION_VIEW, page.toUri()))
                 } catch (_: ActivityNotFoundException) {
                     // No browser: the addresses above can still be copied.
                 }

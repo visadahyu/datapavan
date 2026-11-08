@@ -31,6 +31,9 @@ object Release {
         false
     }
 
+    /** The website's main page in [locale]'s language: where Datapavan Lite points to the other edition. */
+    fun homePage(locale: Locale): String = downloadPage(locale).removeSuffix("#get")
+
     /** The website's download section, which names the newest version, in [locale]'s language. */
     fun downloadPage(locale: Locale): String {
         val language = locale.language

@@ -538,6 +538,10 @@
     <string name="about_updates">Datapavan ne peut pas vérifier lui-même s\'il existe une version plus récente, car il n\'a pas accès à Internet. La dernière version et ce qui a changé se trouvent sur son site web. Si le site ne s\'ouvre pas, les mêmes fichiers sont sur GitHub.</string>
     <string name="about_copy_hint">Pour ouvrir une adresse dans un autre navigateur, comme Tor Browser, copiez-la en appuyant dessus de manière prolongée.</string>
     <string name="about_open_website">Ouvrir le site web</string>
+    <!-- The two editions (ADR 0031). Datapavan Lite is on Google Play, which updates it. -->
+    <string name="about_editions_title">Éditions</string>
+    <string name="about_editions_full">Il s\'agit de Datapavan, signé par son développeur avec une seule clé conservée hors ligne. Datapavan Lite, sur Google Play, fait les mêmes vérifications, et c\'est Google qui le signe.</string>
+    <string name="about_editions_lite">Il s\'agit de Datapavan Lite, qui vient de Google Play et que Google Play tient à jour. C\'est Google qui le signe. Datapavan lui-même, qui fait les mêmes vérifications et est signé par son développeur avec une seule clé conservée hors ligne, se trouve sur son site web.</string>
     <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
     <string name="version_old">Cette version de Datapavan date du %1$s. Une version plus récente est peut-être sortie, et Datapavan ne peut pas le vérifier pour vous.</string>
     <string name="version_old_button">Où l\'obtenir</string>

@@ -532,6 +532,10 @@
     <string name="about_updates">این برنامه خودش نمی‌تواند بررسی کند که نسخه تازه‌تری آمده است یا نه، چون به اینترنت دسترسی ندارد. تازه‌ترین نسخه و تغییراتش در وب‌سایت برنامه است. اگر وب‌سایت باز نشد، همین فایل‌ها در GitHub هم هست.</string>
     <string name="about_copy_hint">برای باز کردن یک نشانی در مرورگری دیگر، مثل Tor Browser، آن را لمس کنید و نگه دارید تا کپی شود.</string>
     <string name="about_open_website">باز کردن وب‌سایت</string>
+    <!-- The two editions (ADR 0031). Datapavan Lite is on Google Play, which updates it. -->
+    <string name="about_editions_title">ویرایش‌ها</string>
+    <string name="about_editions_full">این Datapavan است. توسعه‌دهنده‌اش آن را با یک کلید امضا می‌کند که دور از اینترنت نگه داشته می‌شود. Datapavan Lite، که در گوگل پلی است، همین بررسی‌ها را انجام می‌دهد و گوگل آن را امضا می‌کند.</string>
+    <string name="about_editions_lite">این Datapavan Lite است که از گوگل پلی آمده و گوگل پلی آن را به‌روز نگه می‌دارد. گوگل آن را امضا می‌کند. خود Datapavan، با همین بررسی‌ها، در وب‌سایتش است و توسعه‌دهنده‌اش آن را با یک کلید امضا می‌کند که دور از اینترنت نگه داشته می‌شود.</string>
     <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
     <string name="version_old">این نسخه از Datapavan مربوط به %1$s است. شاید نسخه تازه‌تری آمده باشد و Datapavan نمی‌تواند به جای شما بررسی کند.</string>
     <string name="version_old_button">محل دریافت</string>
