@@ -28,9 +28,9 @@ com.github.shadowsocks	Shadowsocks	no
 com.nebula.karing	Karing	no	
 com.happproxy	Happ	no	The Google Play build; the GitHub build is su.happ.proxyutility
 su.happ.proxyutility	Happ (GitHub build)	no	
-org.bepass.oblivion	Oblivion	no	
+org.bepass.oblivion	Oblivion	no	The key of version 8 on GitHub and Google Play is recorded. GitHub's versions 1 to 7 (2024 to 2025) carry another key, be905e28b2da3374f8c6c68d7ce61f3f0b0077e416180b27ac119cfa8699ac5f, and the early 2024 test builds a third, 0ce492e70a148cf6518c0d6a3a692cd97b73e821ea1c908f0eaeb51b7428ef14, with no rotation proof between them; none is a debug key (all GitHub releases read on 2026-11-08)
 de.unboundtech.defyxvpn	Defyx VPN	no	
-com.MahsaNet.MahsaNG	MahsaNG	no	Official builds may be signed with a debug key
+com.MahsaNet.MahsaNG	MahsaNG	no	One key on GitHub and Google Play; every GitHub release under this package, 4.0 (2023) to 18, carries it and none a debug key (all read on 2026-11-08). Releases before 4.0 used the package com.MahsaNG.EMS
 de.blinkt.openvpn	OpenVPN for Android	no	Two developer keys, one per flavour
 net.mullvad.mullvadvpn	Mullvad VPN	no	Separate keys for the website, Google Play and F-Droid
 org.outline.android.client	Outline	no	

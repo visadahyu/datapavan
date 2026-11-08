@@ -138,7 +138,7 @@
   ],
   [
    "Genuine or modified VPN apps",
-   "VPN, proxy and circumvention apps are compared with their developers’ official signing keys, so a modified copy shows.",
+   "VPN, proxy and circumvention apps are compared with their developers’ official signing keys. A copy is called modified only on firm evidence; an unknown key is shown, without a warning.",
    false
   ],
   [
@@ -378,7 +378,7 @@
   ],
   [
    "Which phones does it run on?",
-   "64-bit phones from any maker with Android 10 or newer, with or without Google services. It is tested from Android 11."
+   "Phones from any maker with Android 10 or newer, 64-bit or 32-bit, with or without Google services. It is tested from Android 11."
   ],
   [
    "Is it free?",

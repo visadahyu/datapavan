@@ -138,7 +138,7 @@
   ],
   [
    "Apps de VPN auténticas o modificadas",
-   "Las apps de VPN, proxy y elusión de bloqueos se comparan con las claves de firma oficiales de sus desarrolladores, para que se note una copia modificada.",
+   "Las apps de VPN, proxy y elusión de bloqueos se comparan con las claves de firma oficiales de sus desarrolladores. Una copia solo se señala como modificada si hay pruebas firmes; una clave desconocida se muestra, sin advertencia.",
    false
   ],
   [
@@ -378,7 +378,7 @@
   ],
   [
    "¿En qué teléfonos funciona?",
-   "Teléfonos de 64 bits de cualquier fabricante con Android 10 o posterior, con o sin servicios de Google. Se prueba a partir de Android 11."
+   "Teléfonos de cualquier fabricante con Android 10 o posterior, de 64 o 32 bits, con o sin servicios de Google. Se prueba a partir de Android 11."
   ],
   [
    "¿Es gratis?",

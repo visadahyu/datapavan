@@ -138,7 +138,7 @@
   ],
   [
    "Echte oder veränderte VPN-Apps",
-   "VPN-, Proxy- und Umgehungs-Apps werden mit den offiziellen Signaturschlüsseln ihrer Entwickler verglichen, damit eine veränderte Kopie auffällt.",
+   "VPN-, Proxy- und Umgehungs-Apps werden mit den offiziellen Signaturschlüsseln ihrer Entwickler verglichen. Eine Kopie gilt nur bei klaren Belegen als verändert; ein unbekannter Schlüssel wird angezeigt, ohne Warnung.",
    false
   ],
   [
@@ -378,7 +378,7 @@
   ],
   [
    "Auf welchen Telefonen läuft es?",
-   "Auf 64-Bit-Telefonen jedes Herstellers mit Android 10 oder neuer, mit oder ohne Google-Dienste. Getestet wird es ab Android 11."
+   "Auf Telefonen jedes Herstellers mit Android 10 oder neuer, 64-Bit oder 32-Bit, mit oder ohne Google-Dienste. Getestet wird es ab Android 11."
   ],
   [
    "Ist es kostenlos?",
