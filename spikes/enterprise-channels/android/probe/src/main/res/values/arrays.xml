@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="levels">
+        <item>light</item>
+        <item>medium</item>
+        <item>strict</item>
+    </string-array>
+</resources>

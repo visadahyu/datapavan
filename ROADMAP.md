@@ -186,6 +186,13 @@ code base to keep safe.
 
 ## Stage 2: organisations
 
+First, the audit app beside the device-management suite an organisation already runs: policy in
+through managed configurations, verdicts out to the suite's agent, and the phone's network log read
+on the phone, all without the INTERNET permission; the organisation receives verdicts, never the
+phone's contents ([ADR 0033](docs/decisions/0033-organisational-edition-beside-a-suite.md), accepted on 2026-11-08;
+[spike](docs/spikes/2026-11-enterprise-channels.md)). A complete edition that manages phones itself
+comes later and gets its own ADR.
+
 - **Device Owner flavour.** Disables system apps, enforces always-on VPN in lockdown mode, controls installs and permissions on stock devices, with no root and no bootloader unlocking.
 - **Circumvention policy** for organisations in filtered networks: only approved, signature-verified tools; no user-installed certificate authorities; no debugging; Datapavan always in front of the tool.
 - **Work-profile isolation.** Puts high-tracking apps (for example Meta's) in a separate profile that cannot see the rest of the phone, and pauses the whole profile when those apps are not in use. Possible without a factory reset.
