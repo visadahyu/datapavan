@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Datapavan</string>
     <string name="tagline">See what your apps can reach and how much they send. Then limit it.</string>
     <!-- %1$s is a version number such as 0.1.0. It is passed in already bidi-isolated. -->
     <string name="engine_version">Core engine %1$s</string>
@@ -563,6 +562,10 @@
     <string name="about_updates">Datapavan cannot check for a newer version itself, because it has no internet access. The newest version and what changed are on its website. If the website does not open, the same files are on GitHub.</string>
     <string name="about_copy_hint">To open an address in another browser, such as Tor Browser, touch and hold it to copy it.</string>
     <string name="about_open_website">Open the website</string>
+    <!-- The two editions (ADR 0031). Datapavan Lite is on Google Play, which updates it. -->
+    <string name="about_editions_title">Editions</string>
+    <string name="about_editions_full">This is Datapavan, signed by its developer with one key kept offline. Datapavan Lite, on Google Play, has the same checks, and Google signs it.</string>
+    <string name="about_editions_lite">This is Datapavan Lite, from Google Play, which keeps it up to date. Google signs it. Datapavan itself, with the same checks and signed by its developer with one key kept offline, is on its website.</string>
     <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
     <string name="version_old">This version of Datapavan is from %1$s. A newer one may be out, and Datapavan cannot check for you.</string>
     <string name="version_old_button">Where to get it</string>

@@ -12,6 +12,12 @@ plugins {
 // if any library tries to add one of these, the build fails instead of silently shipping it.
 val forbiddenPermissions = listOf("android.permission.INTERNET")
 
+// The edition (ADR 0031): Datapavan for the open channels, or Datapavan Lite for Google Play, which
+// Google signs. Lite is built from the same code with -Pdatapavan.edition=lite. A property rather than a
+// product flavour, so that every task, output path and recipe (F-Droid, scripts/reproducible.sh, CI)
+// still builds Datapavan exactly as before.
+val lite = providers.gradleProperty("datapavan.edition").orNull == "lite"
+
 // The JNI symbol every packaged libdatapavan.so must export (see core/jni and NativeCore.kt).
 val requiredJniSymbol = "Java_org_visadahyu_datapavan_core_NativeCore_version"
 
@@ -21,7 +27,7 @@ android {
     ndkVersion = "30.0.16248370"
 
     defaultConfig {
-        applicationId = "org.visadahyu.datapavan"
+        applicationId = if (lite) "org.visadahyu.datapavan.lite" else "org.visadahyu.datapavan"
         minSdk = 29
         targetSdk = 37
         versionCode = 3
@@ -29,6 +35,9 @@ android {
         // The release's date, set with the version (docs/RELEASE.md, step 1). The app has no internet
         // access, so this date is all it knows of how old it is (Release.kt).
         buildConfigField("String", "RELEASE_DATE", "\"2026-11-08\"")
+        // Lite: Google Play updates it, so it says nothing of newer versions; About names both editions.
+        buildConfigField("boolean", "PLAY", lite.toString())
+        resValue("string", "app_name", if (lite) "Datapavan Lite" else "Datapavan")
         // The ABIs we ship: arm64 for real phones; 32-bit ARM for the many low-cost phones whose
         // Android is 32-bit although their processor is not; x86_64 for the emulator and ChromeOS.
         // This list is the single source of truth; the Rust build reads it in finalizeDsl.
@@ -54,6 +63,8 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        // app_name differs by edition (above).
+        resValues = true
     }
 
     androidResources {

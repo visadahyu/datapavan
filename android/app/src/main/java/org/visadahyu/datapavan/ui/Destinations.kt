@@ -45,6 +45,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import org.visadahyu.datapavan.BuildConfig
 import org.visadahyu.datapavan.R
 import org.visadahyu.datapavan.Release
 import org.visadahyu.datapavan.audit.AppFacts
@@ -183,7 +184,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.summary(
 ) {
     item { Text(stringResource(R.string.tagline), style = MaterialTheme.typography.bodyLarge) }
     if (DataPackRules.isStale(audit.dataDate, LocalDate.now())) item { StaleDataCard(audit.dataDate, onData) }
-    if (Release.isOld(Release.date, LocalDate.now())) item { OldVersionCard(onAbout) }
+    // Google Play updates Datapavan Lite, so it has no reminder of the version's age (ADR 0031).
+    if (!BuildConfig.PLAY && Release.isOld(Release.date, LocalDate.now())) item { OldVersionCard(onAbout) }
     item { plan() }
     item { StrictReviewEntry(audit.apps.map { it.first }, onStart = onReview) }
     item {

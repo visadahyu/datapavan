@@ -1,6 +1,6 @@
 # 0031. Datapavan Lite on Google Play: its own name, package and key
 
-- Status: Accepted, not built yet
+- Status: Accepted; the build is in progress (2026-11-08)
 - Date: 2026-11-06
 
 ## Context
@@ -25,3 +25,11 @@ key online. Play also forbids an app to block or interfere with other apps' ads,
 - Google could change what its key signs, so Lite is a matter of reach, not of trust. The text must not claim otherwise.
 - Play's requirements still apply to Lite: a declaration for `QUERY_ALL_PACKAGES`, whose listed uses do not name privacy audits, so it may be refused; and for a personal account created
   after November 2023, a closed test with 12 testers for 14 days.
+
+## Note, 2026-11-08
+
+Lite is built with the Gradle property `-Pdatapavan.edition=lite` rather than a product flavour, so that
+every existing task, output path and recipe (F-Droid, `scripts/reproducible.sh`, CI) still builds
+Datapavan unchanged. The property sets the package, the name and `BuildConfig.PLAY`, which leaves out
+the reminder of the version's age and the list of newer versions, and switches the About page's lines
+on the editions.
