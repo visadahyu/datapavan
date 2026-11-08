@@ -67,7 +67,7 @@ jobs:
       - name: Validate the Gradle wrapper jar against the official checksum
         run: |
           version=$(sed -n 's/.*gradle-\([0-9.]*\)-bin\.zip.*/\1/p' android/gradle/wrapper/gradle-wrapper.properties)
-          expected=$(curl -fsSL "https://services.gradle.org/distributions/gradle-${version}-wrapper.jar.sha256")
+          expected=$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 "https://services.gradle.org/distributions/gradle-${version}-wrapper.jar.sha256")
           echo "${expected}  android/gradle/wrapper/gradle-wrapper.jar" | sha256sum -c -
 
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
@@ -99,6 +99,23 @@ jobs:
           rustup show active-toolchain
           command -v cargo-ndk || cargo install cargo-ndk --version "$CARGO_NDK_VERSION" --locked
           command -v cargo-deny || cargo install cargo-deny --version "$CARGO_DENY_VERSION" --locked
+
+      # Gradle and Hugo are published on GitHub, which at times times out anonymous downloads
+      # (2026-11-08, three runs lost). They are cached, and fetched with the workflow's token when the
+      # cache is empty; the token is given to this step only, and each file is checked against its
+      # pinned SHA-256 (scripts/ci-fetch.sh).
+      - name: Cache Gradle's distribution and Hugo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/wrapper/dists
+            build/tools
+          key: downloads-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'scripts/build-site.sh') }}
+
+      - name: Fetch Gradle's distribution and Hugo with the workflow's token
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/ci-fetch.sh
 
       - name: Quality gates
         run: scripts/check.sh all

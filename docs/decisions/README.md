@@ -39,6 +39,7 @@ in the Git history.
 | [0029](0029-network-access-for-v0.2.md) | v0.2's VPN in a separate app, Datapavan Watch, so that Datapavan never holds INTERNET | Accepted |
 | [0030](0030-more-languages-reviewed-by-independent-models.md) | Spanish, Russian, Chinese and Arabic at launch, reviewed by independent models | Accepted |
 | [0031](0031-datapavan-lite-on-google-play.md) | Datapavan Lite on Google Play: its own name, package and key | Accepted, not built yet |
+| [0032](0032-expert-tool-for-preinstalled-apps.md) | An expert tool of Datapavan's own for preinstalled apps | Proposed |
 
 ## Template
 

@@ -85,12 +85,31 @@ Checks left from M4 (ADR 0022):
 ### v0.2 "Watch": local VPN, observe only
 
 A **local** VPN: no server is involved and the user's IP address does not change. [ADR 0029](docs/decisions/0029-network-access-for-v0.2.md)
-(accepted on 2026-11-05) puts it in a separate app, Datapavan Watch, so that Datapavan itself never holds the INTERNET
+(accepted on 2026-11-05) makes it an app of its own within Datapavan, Watch, so that the audit app never holds the INTERNET
 permission, and moves the QUIC server name and apps' own encrypted DNS into v0.2. Before this version
 starts, a spike picked the packet engine on 2026-11-07: Android's own TCP stack reached through rewritten addresses, in Rust ([ADR 0012](docs/decisions/0012-packet-engine.md)). Design: [docs/VPN.md](docs/VPN.md).
 
+Three releases, each of use on its own (agreed with the maintainer on 2026-11-07):
+
+1. **0.2.0, the connection log:** Watch with its packet engine. It keeps a connection log per app:
+   domain, IP, organisation, bytes, time, foreground or background. Names come from DNS, the TLS and
+   QUIC server names, and apps' own encrypted DNS is recognised. The audit app reads the log through
+   the one-way interface of ADR 0029.
+2. **0.2.1, next to circumvention tools:** Watch works beside every tool the user has, as far as
+   Android allows (one VPN at a time), since the tools themselves can take people's data
+   ([RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md)). It brings SOCKS5 chaining with UDP, a
+   WireGuard upstream for VPN providers that offer one (Proton VPN, Mullvad and others), the user's
+   tool and its proxy port found by Watch itself (asking Android who owns the port worked on
+   2026-11-08, [spike](docs/spikes/2026-11-packet-engine.md)), a password for the tool's proxy where
+   the tool allows one, apps' own built-in proxies named (Telegram's, for example), proxy-like
+   behaviour flagged, per-tool guides, and blocking of tracker domains, off until the user turns it
+   on and undone in one tap. Fuller blocking stays in v0.3.
+3. **0.2.2, behaviour:** the sensor log, the cross-checks and the learned traffic shapes.
+
+The items, in order:
+
 - A connection log per app: domain, IP, organisation, bytes, time, foreground or background.
-- Chaining through a local SOCKS5 proxy, so Datapavan can run next to circumvention tools (see
+- Chaining through a local SOCKS5 proxy, so Watch can run next to circumvention tools (see
   [docs/RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md)). The tool becomes a pipe, not the owner of
   the phone's network: no inbound access from the VPN provider's network, and proxy-like behaviour,
   including the tool's own, is flagged. Per-tool guides for proxy mode.
@@ -116,6 +135,34 @@ starts, a spike picked the packet engine on 2026-11-07: Android's own TCP stack 
 - A weekly plain-language report, exportable as PDF or JSON.
 - A GDPR Article 15 helper: for each company whose trackers were observed, a ready-to-send data-access request.
 - Declared against observed: each app's data-safety label on Google Play compared with what Datapavan saw. The labels come from the lab, cited by hand, until researcher access under DSA Article 40(12) or Google's permission allows more (ADR 0015).
+
+### The expert tool, for preinstalled apps
+
+⏳ Planned, agreed with the maintainer on 2026-11-07; design in [ADR 0032](docs/decisions/0032-expert-tool-for-preinstalled-apps.md)
+(proposed).
+
+Android's Settings cannot turn off many preinstalled apps, and the tools that can (debloaters that work
+through ADB or Shizuku) are made for experts and rank apps by the risk of breaking the phone, not by
+what they send. Datapavan builds its own expert tool rather than sending people to them: a third app
+within Datapavan, with the same key, that turns system apps off through Android's own wireless
+debugging on the phone, records every change in a journal with undo, and ranks apps by what the lab
+and Watch measured them sending. The audit app leads to it only for the apps that Settings cannot
+handle, after what Settings can do (permissions, background data, special access) and, from v0.3,
+Watch's blocking.
+
+### Known stalkerware, in the audit app
+
+⏳ Planned, agreed with the maintainer on 2026-11-07, beside Watch's versions.
+
+The audit's check of special access already finds an unknown spyware app by what it holds. Known
+stalkerware adds a name: a separate data pack built from published indicators (package names and
+signing certificates, for example Echap's list under CC BY 4.0, kept apart from Datapavan's CC0 data),
+matched as the audit already matches keys. The finding is shown only inside the app, in calm words,
+with no notification: stalkerware often sees the screen, and an alert can warn the abuser. The advice
+comes before any removal, since removing it at once can put the person at risk, and points to human
+helplines. No record of the finding stays on the phone. Experts in this field review the wording
+before release. Spyware sold to governments (Pegasus and the like) is out of reach of an app and is
+referred to helplines that do forensic checks.
 
 
 ### Other devices
@@ -168,5 +215,5 @@ code base to keep safe.
 | Security e-mail with an OpenPGP key | ⏳ for 1.0 |
 | Hosting: GitHub as the only home (ADR 0013); a self-hosted EU forge reconsidered later | ✅ |
 | Make the repository public | ✅ on 2026-11-06 |
-| F-Droid submission | ⏳ once v0.1's pre-release has been tried on more phones |
+| F-Droid submission | ⏳ with 0.1.2, released on 2026-11-07 |
 | Measurement lab: reference measurements on the project's own phones, public reports, and evidence for data-protection authorities and civil-society organisations (legal advice first) | ⏳ from v0.2 |

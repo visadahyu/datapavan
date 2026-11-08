@@ -14,7 +14,11 @@ China, Iran and Russia. This document describes how.
 | Challenge | Answer |
 |---|---|
 | **One VPN at a time.** Users depend on circumvention VPNs | Chaining through a local SOCKS5 proxy from the user's circumvention tool (see [VPN.md](VPN.md)). We never build circumvention ourselves |
-| **Phone seizure or inspection** at borders and checkpoints | Destinations of chained flows are not recorded by default. Retention is selectable, including none, with a one-tap wipe. The VPN-free modes keep no network log at all |
+| **Tools that run only as a VPN**, with no proxy mode: some commercial VPNs, and some tools handed out by the authorities that filter the network | Watch must work beside every tool the user has, as far as Android allows. Where a provider offers a WireGuard configuration, Watch carries it as its own upstream, so one VPN does both (0.2.1). Otherwise the tool keeps the VPN, and the audit app still audits it without a tunnel: its official signing certificate (ADR 0018), its permissions and special access, the trackers and traffic-sharing SDKs in its code (ADR 0019), and its own data use from Android's counters. The app says plainly which of these a tool allows |
+| **Most people do not know which kind of tool they have**, and should not have to | Watch finds out by itself (0.2.1). It carries the same signed list of tools and certificates as the audit app (ADR 0018) and a signed table of each tool's modes, ports, password options and UDP support, so it sees which tools are installed and whether one is genuine. Android tells it that another VPN is active but not whose, so it works that out from the installed tools. It probes only the known ports, with a SOCKS5 greeting, and then asks Android which app owns the port: a port number alone is only a hint, since several tools share one. It picks the way that works, chaining, WireGuard upstream or the audit alone. The user is asked only for what Android or the tool reserves to them, one step at a time, in plain words: the tap that allows a VPN; switching the tool to proxy mode first, since a new VPN stops the old one and the tool's proxy with it; turning off another VPN's "always-on", which keeps Watch from starting (Watch opens that screen); and fetching a provider's WireGuard file, which providers give only after a login on their website |
+| **Proxies built into apps**: Telegram's MTProto and SOCKS5 proxies, and the proxy settings of WhatsApp and Signal | These connect from inside the app, so they pass through Watch like any other connection. The log names the app and the proxy's address, and says when the proxy is run by someone other than the app's maker: such an operator sees the user's address and when they use the app, not their messages. A SOCKS5 password in an app's proxy settings travels in clear and is never written to the log (0.2.1) |
+| **Tools handed out to watch their users**, by a government or its contractors | Treated as untrusted, like every tool: chained where possible, so that their own traffic is attributed to them, and always audited. Findings that name a tool follow ADR 0015's evidence rules |
+| **Phone seizure or inspection** at borders and checkpoints | Destinations of chained flows are not recorded by default. Retention is selectable, including none, with a one-tap wipe. The VPN-free modes keep no network log at all. No list of the user's tools and no history of checks is kept, and no notification names a VPN or a tool: someone who opens the phone should learn no more than the installed apps already tell |
 | **Distribution.** Play is absent or restricted; F-Droid or GitHub may be blocked | APKs on several independent mirrors, with reproducible builds, so that F-Droid can ship the developer-signed APK and anyone can rebuild it. The website's download section also links the same file on GitHub, since one network let the page through while the download did nothing (2026-11-07), and says that a copy passed on by hand is fine once its key matches |
 | **Fake or trojanised copies** circulating in messenger channels | Verify every APK with an **external** tool (`apksigner`, AppVerifier, or F-Droid's own checks) against the signing-certificate fingerprint published in the repository and on the website. The app's own display of a fingerprint proves nothing, because a modified copy can show any text. Instructions are given in every UI language |
 | **Updating tracker lists** when our servers are unreachable | Lists ship inside the app. Updates are signed (Ed25519) and never roll back to older versions, so they are valid from any mirror, a file sent over a messenger, or a USB stick. The signature makes an update genuine, not the way it travelled |
@@ -43,12 +47,16 @@ and the networks they connect to at risk.
 | **Debugging left on** | Setup guides for some tools tell users to enable USB or wireless debugging | The audit flags enabled debugging | v0.1 (M2) |
 
 **The principle:** the circumvention tool becomes a pipe, not the owner of the phone's network.
-Datapavan stays the device's VPN, decides which apps may use the pipe, and sees what goes into it (see
-[VPN.md](VPN.md)).
+Watch stays the device's VPN, decides which apps may use the pipe, and sees what goes into it (see
+[VPN.md](VPN.md)). Watch must not become a leak itself: chained apps never fall back to a direct
+connection, their names never go to the network's resolver, and checks of the chain never contact a
+Datapavan host.
 
 **Limits:**
 
-- If the tool runs in VPN mode instead of proxy mode, only the VPN-free checks apply. Per-tool guides show how to switch to proxy mode, which most popular tools offer.
+- If the tool runs in VPN mode instead of proxy mode, only the VPN-free checks apply. Per-tool guides show how to switch to proxy mode, which most popular tools offer. Some have none: WireGuard's own app, Outline, Psiphon and Lantern's released app run only as a VPN.
+- A copy signed with an unknown key is reported as modified only when every official key of that tool is known. For most circumvention tools some channel's key is still missing, so such a copy is shown as unconfirmed, not as fake (ADR 0018). Tools that publish their keys' fingerprints close this gap; we ask their developers to.
+- Advice never stops at "remove this tool": a user who loses their only tool may turn to a worse one. The advice is to install a trusted tool first, then remove the doubtful one.
 - Datapavan cannot clean a phone that is already compromised. It finds the risk, checks device integrity through hardware attestation, and guides removal, including through Android's safe mode. Stage 2 starts from a factory reset and prevents reinfection.
 - It sees metadata, never the content of encrypted traffic.
 - For organisations, stage 2 enforces the same protection: only approved, signature-verified tools; no user-installed certificate authorities; no debugging; always-on VPN with Datapavan in front of the tool.
@@ -63,5 +71,5 @@ carries legal and sanctions risk, and starts a cat-and-mouse game with censors.
 ## Principles
 
 1. **Never endanger the user.** No feature that could identify a user to authorities. No telemetry, ever. No log that becomes evidence by default. No claims we cannot keep.
-2. **Never break connectivity by our own choice.** A privacy tool that cuts people off gets uninstalled, and leaves them worse off. The only exceptions are ones the user turns on: strict DNS, and fail-closed lockdown.
+2. **Never break connectivity by our own choice.** A privacy tool that cuts people off gets uninstalled, and leaves them worse off. The only exceptions are ones the user turns on: strict DNS, fail-closed lockdown, and apps sent through a circumvention tool, which wait while the tool is down instead of going out directly.
 3. **Trust the signature, not the channel.** Everything we ship (apps, lists, updates) can be verified independently of where it came from.

@@ -16,8 +16,8 @@
  "h1": "The label your apps came without.",
  "tagline": "See what your apps can reach and how much they send. Then limit it.",
  "lead": "On your own phone, through Android’s own settings. No internet access, no account, no root.",
- "status": "Version 0.1.1: a pre-release, still being tested.",
- "cta_get": "Download version 0.1.1",
+ "status": "Version 0.1.2 is out.",
+ "cta_get": "Download version 0.1.2",
  "cta_how": "How to check a copy",
  "nav": [
   [
@@ -390,12 +390,13 @@
   ]
  ],
  "get_title": "Get it",
- "get_body": "Version 0.1.1 is a pre-release, being tried on more phones. F-Droid and IzzyOnDroid come after those tests.",
+ "get_body": "Version 0.1.2 is the first release for everyone. F-Droid and IzzyOnDroid will list it once they have reviewed it.",
  "get_changes": "What is new in this version:",
  "get_button": "Download the APK",
  "get_install": "Android asks you to allow installing from your browser; you can turn that off again afterwards. Then, in the app’s settings, “Is this copy genuine?” checks your copy.",
  "get_blocked": "If the download does not start, your network may be blocking it. Try GitHub instead, or ask someone you trust to send you the file. A copy from anywhere is fine once its key matches the one shown here.",
  "get_github": "Download it from GitHub",
+ "get_older": "Earlier versions, each with its signed notes, are on GitHub.",
  "channels": [
   [
    "GitHub Releases",

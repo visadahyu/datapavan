@@ -1,6 +1,6 @@
 # Releasing Datapavan
 
-Status: v0.1.0 was signed and published as a pre-release on 2026-11-06, and v0.1.1 on 2026-11-07. This file says what the maintainer does by
+Status: v0.1.0 and v0.1.1 were signed and published as pre-releases on 2026-11-06 and 2026-11-07, and v0.1.2 as the first full release on 2026-11-07 (its build is dated 2026-11-08, the day it was planned for). This file says what the maintainer does by
 hand, once before the first release and then for every release, and what the repository checks by
 itself. The keys never touch an online computer ([DATA-PACKS.md](DATA-PACKS.md#keys), ADR 0024).
 
