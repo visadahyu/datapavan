@@ -30,7 +30,7 @@ com.happproxy	Happ	no	The Google Play build; the GitHub build is su.happ.proxyut
 su.happ.proxyutility	Happ (GitHub build)	no	
 org.bepass.oblivion	Oblivion	no	
 de.unboundtech.defyxvpn	Defyx VPN	no	
-com.MahsaNet.MahsaNG	MahsaNG	no	Official builds may be signed with a debug key
+com.MahsaNet.MahsaNG	MahsaNG	no	One key on GitHub and Google Play, not a debug key (version 18, read on 2026-10-30); older GitHub releases not checked yet
 de.blinkt.openvpn	OpenVPN for Android	no	Two developer keys, one per flavour
 net.mullvad.mullvadvpn	Mullvad VPN	no	Separate keys for the website, Google Play and F-Droid
 org.outline.android.client	Outline	no	

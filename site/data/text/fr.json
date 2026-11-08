@@ -138,7 +138,7 @@
   ],
   [
    "Les applis VPN authentiques ou modifiées",
-   "Les applis VPN, proxy et de contournement sont comparées aux clés de signature officielles de leurs développeurs, pour qu’une copie modifiée se voie.",
+   "Les applis VPN, proxy et de contournement sont comparées aux clés de signature officielles de leurs développeurs. Une copie n’est signalée comme modifiée qu’avec des preuves solides ; une clé inconnue est affichée, sans avertissement.",
    false
   ],
   [
@@ -378,7 +378,7 @@
   ],
   [
    "Sur quels téléphones fonctionne-t-il ?",
-   "Les téléphones 64 bits de tout fabricant avec Android 10 ou plus récent, avec ou sans les services Google. Il est testé à partir d’Android 11."
+   "Les téléphones de tout fabricant avec Android 10 ou plus récent, en 64 bits ou 32 bits, avec ou sans les services Google. Il est testé à partir d’Android 11."
   ],
   [
    "Est-il gratuit ?",
