@@ -1,6 +1,6 @@
 # Local VPN design (v0.2 "Watch", v0.3 "Guard")
 
-> Status: **design draft.** The packet engine is chosen: the system stack in Rust, accepted on 2026-11-07 ([ADR 0012](decisions/0012-packet-engine.md), [findings](spikes/2026-11-packet-engine.md)).
+> Status: **design draft.** The packet engine is chosen: the system stack in Rust, accepted on 2026-11-07 ([ADR 0012](decisions/0012-packet-engine.md), [findings](spikes/2026-11-packet-engine.md)). The milestones of the first release, 0.2.0, are in [DESIGN.md §13.2](DESIGN.md#132-v020-watch-the-connection-log).
 
 ## What "VPN" means here
 

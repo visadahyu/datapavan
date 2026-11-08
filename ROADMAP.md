@@ -106,6 +106,9 @@ Three releases, each of use on its own (agreed with the maintainer on 2026-11-07
    on and undone in one tap. Fuller blocking stays in v0.3.
 3. **0.2.2, behaviour:** the sensor log, the cross-checks and the learned traffic shapes.
 
+The milestones of 0.2.0, W1 to W6, with what each must show before it counts as done, are in
+[DESIGN.md §13.2](docs/DESIGN.md#132-v020-watch-the-connection-log).
+
 The items, in order:
 
 - A connection log per app: domain, IP, organisation, bytes, time, foreground or background.

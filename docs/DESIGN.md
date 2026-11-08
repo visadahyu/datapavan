@@ -136,15 +136,19 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 |------------------------------  JNI (jni crate, no JNA)  ------------------------------|
 |  Rust core  (libdatapavan)                                                            |
 |   packet parser · flow table · DNS & TLS-SNI extraction · rule engine · statistics    |
-|   userspace TCP/UDP forwarder (netstack)                                              |
+|   TCP/UDP forwarder through Android's own TCP stack (ADR 0012)                        |
 +---------------------------------------------------------------------------------------+
 ```
+
+The picture shows the parts, not the packages. Since [ADR 0029](decisions/0029-network-access-for-v0.2.md)
+the VPN host and the forwarder live in Watch, a separate app with `INTERNET`, and the audit app reads
+Watch's log through a one-way interface and never holds `INTERNET` itself.
 
 ### 6.1 Why a Rust core
 
 - **Memory safety where it matters most.** The core parses untrusted bytes from every app and every server. A parser bug in C or C++ here becomes a security hole on the user's phone.
 - **One engine for all three stages.** The same library runs inside the VpnService app (stage 1), the Device Owner flavour (stage 2), and later as a system daemon in our own hardened OS (stage 3). Platform code stays thin.
-- **Plan B:** the Go gVisor netstack approach used by existing open-source Android firewalls. We decide after a two-week spike (ADR 0012).
+- **Plan B:** the Go gVisor netstack approach used by existing open-source Android firewalls. The spike of November 2026 chose the Rust system stack and kept gVisor as the fallback (ADR 0012).
 
 ### 6.2 Attributing traffic to apps
 
@@ -291,7 +295,9 @@ datapavan/
   data/                bundled dataset snapshots, each with LICENSE, SOURCE and its converter (ADR 0015): attestation/ (Google's attestation roots and revocation list), exodus/ (tracker signatures), app-signers/ (official signing certificates of VPN, proxy and circumvention apps), sdks/ (traffic-sharing, remote-support and screen-recording SDKs), sdk-needs/ (SDK capabilities that need a system service, and the certificates of those services), owners/ (who runs SDK services, who controls which company, who publishes which app), system-keys/ (system signing keys that cannot be trusted: AOSP's public test keys, Google's development keys and the platform keys Google listed as leaked); CORRECTIONS.md says how to dispute an entry; PACK holds the data pack's sequence, date and keys
 ```
 
-## 13. Milestones for v0.1 "Audit"
+## 13. Milestones
+
+### 13.1 v0.1 "Audit"
 
 | # | Milestone | Done when |
 |---|---|---|
@@ -300,6 +306,51 @@ datapavan/
 | M3 | Tracker SDK scanner | For 20 popular apps whose installed version has a published εxodus report, every tracker in the report is found (embedded or referenced), and every other difference is explained (APK splits, see the [comparison spike](spikes/2026-10-m3-exodus-comparison.md)); a re-signed copy of a known circumvention tool is reported as not genuine |
 | M4 | Network usage per app | Byte counts within 5 % of the Settings data-usage screen |
 | M5 | Plain-language UI and first release | v0.1 published on GitHub in eight languages, and submitted to F-Droid; manifest has **no INTERNET permission**; build is reproducible |
+
+### 13.2 v0.2.0 "Watch": the connection log
+
+v0.2 comes in three releases ([ROADMAP.md](../ROADMAP.md)). This plan covers the first: Watch, the
+separate app of [ADR 0029](decisions/0029-network-access-for-v0.2.md), with its packet engine and a
+connection log per app that the audit app reads. 0.2.1 (next to circumvention tools) and 0.2.2
+(behaviour) get their own tables once 0.2.0 is out. The milestones are named W1 to W6, so that they
+are not confused with v0.1's M1 to M5, which the ADRs cite.
+
+**Before W1:**
+
+- **The battery baseline:** the Galaxy A40 for a night and a day without a VPN, to compare with the
+  idle night under the spike's engine ([spike](spikes/2026-11-packet-engine.md), "Left for Watch
+  itself"). W6's battery target is measured against it.
+- **Watch's permissions,** in an ADR of their own, as ADR 0014 did for v0.1: each permission, why, and
+  what fails without it, read for every Android version from 10 to 17. Watch needs `INTERNET` and, on
+  Android 17, `ACCESS_LOCAL_NETWORK` (spike, finding 7). Proposed: Watch records the app's UID only,
+  and the audit app, which already holds package visibility and usage access (ADR 0014), turns UIDs
+  into apps and flow times into foreground or background. Watch then needs neither, and knows the
+  least it can.
+- **The IP-to-organisation dataset,** under ADR 0015: candidates (among them iptoasn.com's table, DB-IP's
+  IP to ASN Lite, and tables built from RIPE RIS or RouteViews data) are compared for licence,
+  coverage and freshness before one is chosen. It ships like the other datasets, with LICENSE, SOURCE
+  and a converter, and is updated through data packs (ADR 0017).
+
+| # | Milestone | Done when |
+|---|---|---|
+| W1 | Watch's skeleton | A second Gradle module, `:watch`, package `org.visadahyu.datapavan.watch`, signed with the same key. Both APKs come from one build, CI is green, and each is reproducible on its own. The build fails if the audit app gains `INTERNET`, as now, or if Watch's manifest holds anything outside its permissions ADR. Watch opens on the emulator and the A40 with strings in all eight languages, RTL and pseudo-locales from the start, and an icon from the brand marks. Its tunnel starts and stops. |
+| W2 | The packet engine in the product | The system-stack forwarder moves from the spike into `core/`, with `unsafe` forbidden (ADR 0006) and every parser fuzzed in CI. It holds each app's SYN until the owner lookup and the protected upstream connection are done; UDP goes through a NAT table with idle timeouts; a segment of an unknown connection gets a reset; unreachable destinations get ICMP and ICMPv6 answers; a network switch re-binds the upstream sockets without dropping the tunnel. An end-to-end test in CI, grown from the spike's workload app, carries TCP and UDP through Watch and finds the owner of every flow, connect-and-close and refused connections included. It passes on emulators with Android 10 and 12 to 17 and on the A40, and IPv6 is checked end to end on a network that has it. The engine adds at most 1 MB per ABI ([VPN.md](VPN.md)). |
+| W3 | A name for every flow | Watch's resolver answers inside the tunnel and asks the network's resolver through a protected socket. Watch never lowers what the phone had: where Android spoke DNS over TLS to the network's resolver (Private DNS on "automatic"), Watch's upstream does too, and strict Private DNS is detected and explained. Each flow is named, in this order, from the DNS answers Watch served, the TLS server name, the QUIC Initial server name, or the organisation in the offline dataset, and otherwise shown as "unknown". Apps' own encrypted DNS to known resolvers, and plain DNS sent past the network's resolver, are recognised and named (ADR 0029). On the emulator, a fixture app's flows are named by each of the four routes. A scripted session of ten popular apps on an emulator with test accounts, run once under Watch and once under PCAPdroid, the usual tool for logging connections without root, leaves no larger share of flows unnamed under Watch than under PCAPdroid. |
+| W4 | The connection log | Each flow is stored with the app's UID, the name and where it came from, IP and port, protocol, organisation, bytes each way, and start and end time. The store is app-private, encrypted SQLite, its key in the Android Keystore. Retention is none, 1, 7 or 30 days (30 by default, §6.4), with a one-tap wipe. Tests show that the database cannot be read without the key, that no destination reaches logcat, and that the wipe leaves nothing behind. Over a scripted emulator session, each app's bytes in the log are within 5 % of Android's own count for that app, the bar of M4, once ADR 0022's open check says how Android counts traffic that passes a VPN. |
+| W5 | The audit app reads the log | Watch offers the log through a read-only, versioned interface that only an app signed with the same key may use, and takes nothing from the audit app (ADR 0029). The audit app names the apps behind the UIDs, where a flow older than the app that now holds its UID belongs to "an app since removed", and marks each flow foreground or background from usage access when it has it. Each app's page answers "who did this app talk to?" as a timeline, with tracker destinations flagged from the εxodus network signatures. Tests: an app signed with another key gets nothing; the audit app works unchanged without Watch; where the log would answer a question, the audit app offers Watch with the same fingerprint check as for itself. The new screens pass the accessibility check in all eight languages (`scripts/screenshots.sh`). |
+| W6 | Onboarding and the 0.2.0 release | Onboarding covers the VPN consent, Android 17's local-network permission, strict Private DNS, the always-on VPN with "block connections without VPN" ([VPN.md](VPN.md)), and battery managers, Samsung's first, with guides for other vendors. A Quick Settings tile turns Watch on and off. A day of ordinary use on the A40 costs at most 3 % extra battery against the baseline. The sentence of ADR 0029 is taught in the self-check, the store texts, RELEASE.md and the website. Store texts and changelog are translated and reviewed in eight languages (ADR 0030); both apps are in `data/app-signers` with their fingerprints; a review against the threat model (§8) covers what Watch adds. 0.2.0 is published on GitHub with both APKs, on the website and through Obtainium. F-Droid follows [CHANNELS.md](CHANNELS.md); Google Play gets only the audit app for now (ADR 0029, ADR 0031). |
+
+The order is W1, W2, then W3 and W4 side by side, then W5 and W6. Tests on the A40 use the workload
+and fixture apps and the battery measurement; sessions with popular apps run on emulators with test
+accounts, so that no one's personal data enters a test log. Phones from other vendors are still
+missing: until one is found, W2's device test covers Samsung and the emulators only, and the release
+notes say so.
+
+**Not in 0.2.0:** chaining through a circumvention tool's proxy, a WireGuard upstream, a DNS resolver
+of the user's choice with the strict DNS setting, per-tool guides, proxy-like behaviour flagged, and
+tracker blocking that the user turns on (0.2.1); the sensor log, the cross-checks, learned traffic
+shapes and apps that keep their own push connection (0.2.2); TLS fingerprints of client libraries
+(later in v0.2).
 
 ## 14. Decisions
 
@@ -319,7 +370,7 @@ Each decision is recorded in full, with context and consequences, as an ADR in
 | [0009](decisions/0009-no-automatic-jdk-download.md) | Gradle daemon pinned to JDK 21, no automatic JDK download | Accepted |
 | [0010](decisions/0010-cuneiform-brand-marks.md) | Old Persian cuneiform signs as brand marks | Accepted |
 | [0011](decisions/0011-m1-test-devices.md) | M1 tested on emulators and the Galaxy A40 | Accepted |
-| [0012](decisions/0012-packet-engine.md) | Packet engine for the local VPN | Proposed (spike pending) |
+| [0012](decisions/0012-packet-engine.md) | Packet engine for the local VPN: Android's own TCP stack through rewritten addresses, in Rust | Accepted |
 | [0013](decisions/0013-github-as-home.md) | GitHub as the only home; Codeberg dropped | Accepted |
 | [0014](decisions/0014-v0.1-permissions.md) | Permissions for v0.1 "Audit" | Accepted |
 | [0015](decisions/0015-dataset-licences.md) | Licences of bundled datasets | Accepted |
