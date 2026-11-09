@@ -88,8 +88,9 @@ watch_dump log-flush | grep -q '^log-flushed$' || fail "the log did not take the
 today=$(watch_dump log-today | sed -n 's/^log-record //p')
 grep -qE "^tcp $SHELL_UID $HOST:$PORT up=22 down=[1-9][0-9]* ended " <<<"$today" ||
     fail "the log has no ended TCP flow of the shell with its 22 bytes up: $(grep -c . <<<"$today") records"
-grep -qE "^udp $SHELL_UID $HOST:$((PORT + 1)) up=10 down=10 continues " <<<"$today" ||
-    fail "the log has no segment of the shell's UDP flow with 10 bytes each way"
+# A network change, as on a freshly started emulator, ends UDP flows: then the segment is the whole flow.
+grep -qE "^udp $SHELL_UID $HOST:$((PORT + 1)) up=10 down=10 (continues|ended) " <<<"$today" ||
+    fail "the log has no segment of the shell's UDP flow with 10 bytes each way; the shell's records: $(grep "^[a-z]* $SHELL_UID " <<<"$today" | tr '\n' ';')"
 echo "ok: the log holds the shell's TCP flow and its UDP flow so far, with their bytes"
 
 # A flow open when the tunnel stops still reaches the log: the engine hands over its last records.

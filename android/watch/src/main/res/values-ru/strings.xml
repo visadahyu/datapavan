@@ -10,4 +10,16 @@
     <string name="private_dns_strict">На вашем телефоне частный DNS-сервер настроен на %1$s. Android отправляет туда в зашифрованном виде имена, которые ищут приложения. Так они скрыты от вашей сети, но Watch не может их прочитать.</string>
     <string name="private_dns_network">DNS-сервер вашей сети поддерживает шифрование, и Android использует его для имён, которые ищут приложения. Так они остаются скрытыми, но Watch не может их прочитать.</string>
     <string name="private_dns_still_named">Watch всё равно определяет большинство подключений по тому, что отправляет каждое приложение, или по тому, кто управляет сетью, куда ведут эти подключения.</string>
+    <string name="log_title">Журнал подключений</string>
+    <string name="log_explained">Watch записывает каждое подключение на этом телефоне в зашифрованном виде. Записи за прошлые дни можно открыть, только пока телефон разблокирован.</string>
+    <string name="log_keep">Хранить записи</string>
+    <string name="log_keep_none">Не хранить</string>
+    <plurals name="log_keep_days">
+        <item quantity="one">%d день</item>
+        <item quantity="few">%d дня</item>
+        <item quantity="many">%d дней</item>
+        <item quantity="other">%d дня</item>
+    </plurals>
+    <string name="log_delete">Удалить журнал сейчас</string>
+    <string name="log_deleted">Журнал удалён.</string>
 </resources>

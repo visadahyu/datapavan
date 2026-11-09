@@ -14,13 +14,19 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import org.visadahyu.datapavan.watch.log.ConnectionLog
 import org.visadahyu.datapavan.watch.ui.WatchScreen
 import org.visadahyu.datapavan.watch.ui.WatchTheme
 
 class MainActivity : ComponentActivity() {
     /** Android refused the VPN consent the last time Watch asked. */
     private val refused = mutableStateOf(false)
+
+    /** How long the connection log keeps its records, and whether the user just deleted it. */
+    private val retention = mutableIntStateOf(30)
+    private val deleted = mutableStateOf(false)
 
     /** Debug builds: the only apps the end-to-end test sends through the tunnel, comma-separated. */
     private var onlyApps: String? = null
@@ -34,6 +40,8 @@ class MainActivity : ComponentActivity() {
         val dark = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         val style = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
         enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+        val log = ConnectionLog.of(this)
+        retention.intValue = log.retentionDays
         setContent {
             val running by WatchVpnService.running.collectAsState()
             val privateDns by WatchVpnService.privateDns.collectAsState()
@@ -42,8 +50,16 @@ class MainActivity : ComponentActivity() {
                     running = running,
                     privateDns = privateDns,
                     refused = refused.value,
+                    retentionDays = retention.intValue,
+                    deleted = deleted.value,
                     onStart = ::requestStart,
                     onStop = ::stopTunnel,
+                    onRetention = { days ->
+                        log.retentionDays = days
+                        retention.intValue = days
+                        deleted.value = false
+                    },
+                    onDelete = { log.wipe { runOnUiThread { deleted.value = true } } },
                 )
             }
         }

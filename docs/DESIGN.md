@@ -421,6 +421,21 @@ Inc.". Still to build: the ten-app comparison. One run of
 right after a network switch; three tries could not repeat it, so the check now waits 60 s and, if it
 fails, prints what Android itself reports for each network.
 
+W4, on `watch-w4`, 2026-11-09: the connection log as [ADR 0037](decisions/0037-connection-log-storage.md)
+decides. The engine counts each flow's bytes as they pass and hands the log a record when a flow ends,
+a segment of every open flow at each quarter hour, each app's lookups to Watch's own DNS address, and
+what is open when the tunnel stops; Watch seals each record under its day's key in SQLite. The screen
+offers retention of none, 1, 7 or 30 days and deletes the log in one tap, in eight languages, reviewed
+by two models and settled by a third. `scripts/verify-log.sh` passes on the Android 17 emulator: flows
+with their bytes, no destination in the files or in Watch's logcat, an earlier day shut while the screen
+is locked and open once it is unlocked, and a wipe that leaves no file and no key. How Android counts
+traffic through a VPN, the open check of ADR 0022: it keeps each app's traffic on the VPN's network
+under that network, with its own entry per app (type 17, transport VPN, in `dumpsys netstats`), counted
+as IP packets on the tunnel, headers included, while the log counts what the apps sent and received.
+Still to do in W4: count each flow's IP bytes as the tunnel carries them, so that the log and Android
+can be compared within M4's 5 %, and that comparison over a scripted session; the log on Android 10,
+11 and 15, and on the A40; Watch's memory (96 MB PSS with its screen).
+
 | # | Milestone | Done when |
 |---|---|---|
 | W1 | Watch's skeleton | A second Gradle module, `:watch`, package `org.visadahyu.datapavan.watch`, signed with the same key. Both APKs come from one build, CI is green, and each is reproducible on its own. The build fails if the audit app gains `INTERNET`, as now, or if Watch's manifest holds anything outside its permissions ADR. Watch opens on the emulator and the A40 with strings in all eight languages, RTL and pseudo-locales from the start, and an icon from the brand marks. Its tunnel starts and stops. |

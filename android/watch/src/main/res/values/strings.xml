@@ -18,4 +18,17 @@
     <string name="private_dns_network">Your network\'s DNS server supports encryption, and Android uses it for the names that apps look up. This keeps them private, but Watch cannot read them.</string>
     <!-- Shown after either of the two above. -->
     <string name="private_dns_still_named">Watch still names most connections from what each app sends, or by who runs the network they reach.</string>
+    <!-- The heading of the connection log's settings (W4). -->
+    <string name="log_title">Connection log</string>
+    <string name="log_explained">Watch keeps a record of each connection on this phone, in encrypted form. Records of earlier days can be opened only while the phone is unlocked.</string>
+    <!-- The heading of the choice of how long the log keeps its records. -->
+    <string name="log_keep">Keep records for</string>
+    <string name="log_keep_none">Don\'t keep any</string>
+    <plurals name="log_keep_days">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
+    <string name="log_delete">Delete the log now</string>
+    <!-- Shown after the user deleted the log. -->
+    <string name="log_deleted">The log is deleted.</string>
 </resources>

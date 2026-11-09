@@ -214,9 +214,11 @@ PY
     # A flow to an address no DNS answer gave is named after its network's organisation, when this
     # build carries the table (data/dbip-asn/update.py; a clean checkout has none, ADR 0036).
     if adb shell dumpsys activity service "$PKG/.WatchVpnService" | grep -q 'organisations 20'; then
-        device 6 "echo watch | nc -u -w 1 8.8.8.8 9" >/dev/null
-        has_named_flow udp 9 'Google LLC' org || fail "$round: a flow to 8.8.8.8 was not named after Google's network"
-        flows | grep -qE "^udp [^ ]+ 8\.8\.8\.8:9 $SHELL_UID opened org [^ ]+ [^ ]+ as15169:hosting Google LLC$" ||
+        # One of Google's name servers' addresses: apps rarely look its name up, and a name from DNS
+        # would come first (Android or an app may look up dns.google, which names 8.8.8.8).
+        device 6 "echo watch | nc -u -w 1 216.239.32.10 9" >/dev/null
+        has_named_flow udp 9 'Google LLC' org || fail "$round: a flow to 216.239.32.10 was not named after Google's network"
+        flows | grep -qE "^udp [^ ]+ 216\.239\.32\.10:9 $SHELL_UID opened org [^ ]+ [^ ]+ as15169:hosting Google LLC$" ||
             fail "$round: Google's network was not marked as one that hosts other companies' servers"
         echo "ok: $round: a flow named from the organisation table"
         # The owners' table names the company people know, not the registry's "Facebook, Inc.".

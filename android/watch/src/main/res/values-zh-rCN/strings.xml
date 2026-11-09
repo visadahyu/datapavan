@@ -10,4 +10,13 @@
     <string name="private_dns_strict">您手机的专用 DNS 已设置为 %1$s。Android 会将应用查询的名称加密后发送到那里。这能防止您的网络看到这些名称，但 Watch 也无法读取它们。</string>
     <string name="private_dns_network">您所在网络的 DNS 服务器支持加密，Android 会用它来处理应用查询的名称。这能保护这些名称，但 Watch 无法读取它们。</string>
     <string name="private_dns_still_named">Watch 仍会根据每个应用发送的内容，或根据其所连接网络的运营方，为大多数连接标注名称。</string>
+    <string name="log_title">连接日志</string>
+    <string name="log_explained">Watch 会在这部手机上以加密形式记录每一次连接。只有在手机解锁时，才能打开今天之前的记录。</string>
+    <string name="log_keep">记录保留时长</string>
+    <string name="log_keep_none">不保留</string>
+    <plurals name="log_keep_days">
+        <item quantity="other">%d 天</item>
+    </plurals>
+    <string name="log_delete">立即删除日志</string>
+    <string name="log_deleted">日志已删除。</string>
 </resources>

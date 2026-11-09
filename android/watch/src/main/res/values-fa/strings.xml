@@ -10,4 +10,14 @@
     <string name="private_dns_strict">تنظیم DNS خصوصی گوشی شما روی %1$s است. اندروید نام‌هایی را که برنامه‌ها جست‌وجو می‌کنند، رمزگذاری‌شده به آنجا می‌فرستد. این کار آن‌ها را از دید شبکه شما پنهان نگه می‌دارد، اما Watch نمی‌تواند آن‌ها را بخواند.</string>
     <string name="private_dns_network">سرور DNS شبکه شما از رمزگذاری پشتیبانی می‌کند و اندروید برای نام‌هایی که برنامه‌ها جست‌وجو می‌کنند از آن استفاده می‌کند. این کار آن‌ها را پنهان نگه می‌دارد، اما Watch نمی‌تواند آن‌ها را بخواند.</string>
     <string name="private_dns_still_named">برنامه Watch همچنان بیشتر اتصال‌ها را از روی آنچه هر برنامه می‌فرستد، یا از روی اینکه چه کسی شبکه مقصد را اداره می‌کند، نام‌گذاری می‌کند.</string>
+    <string name="log_title">سابقهٔ اتصال‌ها</string>
+    <string name="log_explained">برنامه Watch از هر اتصال روی این گوشی سابقه‌ای رمزگذاری‌شده نگه می‌دارد. سابقهٔ روزهای قبل فقط وقتی باز می‌شود که قفل گوشی باز باشد.</string>
+    <string name="log_keep">نگه داشتن سابقه برای</string>
+    <string name="log_keep_none">نگه نداشتن هیچ سابقه‌ای</string>
+    <plurals name="log_keep_days">
+        <item quantity="one">%d روز</item>
+        <item quantity="other">%d روز</item>
+    </plurals>
+    <string name="log_delete">پاک کردن سابقه همین حالا</string>
+    <string name="log_deleted">سابقه پاک شد.</string>
 </resources>

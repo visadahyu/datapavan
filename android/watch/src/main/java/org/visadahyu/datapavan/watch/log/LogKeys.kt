@@ -5,6 +5,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.security.keystore.StrongBoxUnavailableException
 import android.util.Log
+import androidx.core.content.edit
 import java.security.GeneralSecurityException
 import java.security.KeyPairGenerator
 import java.security.KeyStore
@@ -86,7 +87,7 @@ class KeystoreWrap(private val prefs: SharedPreferences) : KeyWrap {
                     .setIsStrongBoxBacked(strongBox)
                     .build()
                 KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA, PROVIDER).apply { initialize(spec) }.generateKeyPair()
-                prefs.edit().putBoolean(UNLOCKED_ONLY, unlocked).apply()
+                prefs.edit { putBoolean(UNLOCKED_ONLY, unlocked) }
                 return
             } catch (e: StrongBoxUnavailableException) {
                 continue

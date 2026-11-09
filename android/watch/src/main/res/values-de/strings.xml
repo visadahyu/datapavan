@@ -10,4 +10,14 @@
     <string name="private_dns_strict">Privates DNS ist auf Ihrem Telefon auf %1$s eingestellt. Android sendet die Namen, die Apps nachschlagen, verschlüsselt dorthin. So bleiben sie vor Ihrem Netzwerk geschützt, aber Watch kann sie nicht lesen.</string>
     <string name="private_dns_network">Der DNS-Server Ihres Netzwerks unterstützt Verschlüsselung, und Android nutzt sie für die Namen, die Apps nachschlagen. So bleiben sie geschützt, aber Watch kann sie nicht lesen.</string>
     <string name="private_dns_still_named">Watch benennt die meisten Verbindungen trotzdem: nach dem, was jede App sendet, oder nach dem Betreiber des Netzwerks, das sie erreichen.</string>
+    <string name="log_title">Verbindungsprotokoll</string>
+    <string name="log_explained">Watch speichert für jede Verbindung auf diesem Telefon einen verschlüsselten Eintrag. Einträge früherer Tage lassen sich nur öffnen, solange das Telefon entsperrt ist.</string>
+    <string name="log_keep">Einträge behalten für</string>
+    <string name="log_keep_none">Nichts behalten</string>
+    <plurals name="log_keep_days">
+        <item quantity="one">%d Tag</item>
+        <item quantity="other">%d Tage</item>
+    </plurals>
+    <string name="log_delete">Protokoll jetzt löschen</string>
+    <string name="log_deleted">Das Protokoll ist gelöscht.</string>
 </resources>

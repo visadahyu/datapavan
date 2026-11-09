@@ -1,10 +1,13 @@
 package org.visadahyu.datapavan.watch.log
 
+import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.util.Log
+import androidx.core.content.edit
+import androidx.core.database.sqlite.transaction
 import java.security.GeneralSecurityException
 import java.time.Instant
 import java.time.LocalDate
@@ -36,7 +39,7 @@ class ConnectionLog private constructor(private val context: Context) {
         get() = prefs.getInt(RETENTION, DEFAULT_RETENTION)
         set(days) {
             require(days in RETENTION_CHOICES)
-            prefs.edit().putInt(RETENTION, days).apply()
+            prefs.edit { putInt(RETENTION, days) }
             worker.execute { if (days == 0) wipeNow() else expire(force = true) }
         }
 
@@ -108,13 +111,12 @@ class ConnectionLog private constructor(private val context: Context) {
         val records = LogRecord.batch(batch)
         if (records.isEmpty()) return
         val db = open().writableDatabase
-        db.beginTransaction()
-        try {
+        db.transaction {
             for ((record, bytes) in records) {
                 val day = localDay(record.start)
                 val (keyId, sealer) = sealerFor(db, day)
                 val token = sealer.token(record.uid)
-                db.insertOrThrow(
+                insertOrThrow(
                     "records", null,
                     ContentValues().apply {
                         put("day", day)
@@ -124,9 +126,6 @@ class ConnectionLog private constructor(private val context: Context) {
                     },
                 )
             }
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
         }
         forgetOldKeys()
         expire(force = false)
@@ -158,14 +157,9 @@ class ConnectionLog private constructor(private val context: Context) {
         expired = today
         val db = existing() ?: return
         val first = today - retentionDays + 1
-        val writable = db.writableDatabase
-        writable.beginTransaction()
-        try {
-            writable.delete("records", "day < ?", arrayOf(first.toString()))
-            writable.delete("day_keys", "day < ?", arrayOf(first.toString()))
-            writable.setTransactionSuccessful()
-        } finally {
-            writable.endTransaction()
+        db.writableDatabase.transaction {
+            delete("records", "day < ?", arrayOf(first.toString()))
+            delete("day_keys", "day < ?", arrayOf(first.toString()))
         }
         for (day in keys.keys.filter { it < first }) {
             keys.remove(day)?.second?.fill(0)
@@ -215,6 +209,8 @@ class ConnectionLog private constructor(private val context: Context) {
         private const val DEFAULT_RETENTION = 30
         val RETENTION_CHOICES = listOf(0, 1, 7, 30)
 
+        // Holds only the application's context, which lives as long as the process.
+        @SuppressLint("StaticFieldLeak")
         @Volatile
         private var instance: ConnectionLog? = null
 
