@@ -4,14 +4,16 @@
 //! arguments, calls the engine and converts the result; all logic is in the engine, which holds no
 //! unsafe code (ADR 0006).
 
+use std::fs::File;
 use std::net::{IpAddr, SocketAddr};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::sync::{Arc, Mutex, PoisonError};
 
+use datapavan_net::organisations::{FilePart, Organisations};
 use datapavan_net::{Config, Engine, NamedBy, Outcome, Platform};
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
 use jni::objects::{JClass, JLongArray, JObject, JString};
-use jni::sys::{jboolean, jint};
+use jni::sys::{jboolean, jint, jlong};
 use jni::{EnvUnowned, JValue, JavaVM, jni_sig, jni_str};
 
 /// The running engine, if any.
@@ -87,11 +89,14 @@ fn set_non_blocking(fd: &OwnedFd) {
     }
 }
 
-/// `Engine.nativeStart(service, fd, mtu, keepFlows)`: takes ownership of the tunnel's descriptor `fd`
-/// and starts the engine, stopping one that runs. `keepFlows` is how many of the latest flows to keep
-/// for debug builds; release builds pass 0.
-// SAFETY: exported under the JNI name of the Kotlin method
-// `external fun nativeStart(service: Any, fd: Int, mtu: Int, keepFlows: Int): Boolean`, unique in this library.
+/// `Engine.nativeStart(service, fd, mtu, keepFlows, tableFd, tableStart, tableLength)`: takes ownership
+/// of the tunnel's descriptor `fd` and starts the engine, stopping one that runs. `keepFlows` is how
+/// many of the latest flows to keep for debug builds; release builds pass 0. `tableFd`, if not -1, is a
+/// descriptor of the IP-to-organisation table (ADR 0036), which the engine takes over too; the table
+/// is its `tableLength` bytes from `tableStart`, an asset inside the APK.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeStart(service: Any,
+// fd: Int, mtu: Int, keepFlows: Int, tableFd: Int, tableStart: Long, tableLength: Long): Boolean`,
+// unique in this library.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStart<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
@@ -100,6 +105,9 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStart<'ca
     fd: jint,
     mtu: jint,
     keep_flows: jint,
+    table_fd: jint,
+    table_start: jlong,
+    table_length: jlong,
 ) -> jboolean {
     unowned_env
         .with_env(|env| -> Result<jboolean, Error> {
@@ -121,7 +129,17 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStart<'ca
                 mtu: u16::try_from(mtu).unwrap_or(1500),
                 keep_flows: usize::try_from(keep_flows).unwrap_or(0),
             };
-            let Ok(started) = Engine::start(fd, config, platform) else {
+            let organisations = (table_fd >= 0).then(|| {
+                // SAFETY: as for `fd`: Kotlin hands over a duplicate it detached, owned by nothing else.
+                let file = File::from(unsafe { OwnedFd::from_raw_fd(table_fd) });
+                let part = FilePart::new(
+                    file,
+                    u64::try_from(table_start).unwrap_or(0),
+                    u64::try_from(table_length).unwrap_or(0),
+                );
+                Organisations::open(Box::new(part)).ok()
+            });
+            let Ok(started) = Engine::start(fd, config, platform, organisations.flatten()) else {
                 return Ok(false);
             };
             *engine() = Some(started);
@@ -170,6 +188,25 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeNetworkCh
         .resolve::<ThrowRuntimeExAndDefault>();
 }
 
+/// `Engine.nativeOrganisations()`: the release month of the organisation table the running engine
+/// reads, such as `2026-11`, or empty when it has none or no engine runs.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeOrganisations(): String`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeOrganisations<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) -> JString<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let month = engine()
+                .as_ref()
+                .and_then(Engine::organisations)
+                .unwrap_or_default();
+            JString::from_str(env, month)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
 /// `Engine.nativeCounters()`: the running engine's counters, in the order of
 /// `datapavan_net::engine::Counters::snapshot`, or an empty array when none runs.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeCounters(): LongArray`.
@@ -194,7 +231,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeCounters<
 }
 
 /// `Engine.nativeFlows()`: the flows the engine kept, one per line as
-/// `protocol app destination uid outcome name named-by` (`-` for none), for debug builds and the
+/// `protocol app destination uid outcome named-by name` (`-` for none; the name may hold spaces), for debug builds and the
 /// end-to-end test. Empty when the engine keeps none, as in release builds.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlows(): String`.
 #[unsafe(no_mangle)]
@@ -224,10 +261,12 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlows<'ca
                     let named_by = match f.named_by {
                         NamedBy::Dns => "dns",
                         NamedBy::Tls => "tls",
+                        NamedBy::Organisation => "org",
                         NamedBy::Unknown => "-",
                     };
+                    // The name last: an organisation's may hold spaces.
                     format!(
-                        "{protocol} {} {} {uid} {outcome} {name} {named_by}",
+                        "{protocol} {} {} {uid} {outcome} {named_by} {name}",
                         f.app, f.destination
                     )
                 })

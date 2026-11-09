@@ -13,12 +13,25 @@ internal object Engine {
      * Starts the engine on the tunnel descriptor [fd], which it takes over (from
      * `ParcelFileDescriptor.detachFd()`). It calls back into [service] for `ownerUid` and
      * `protectSocket`. [keepFlows] is how many of the latest flows it keeps for debug builds; 0 in
-     * release builds, where the connection log (W4) decides what is recorded.
+     * release builds, where the connection log (W4) decides what is recorded. [tableFd], if not -1, is
+     * a descriptor of the IP-to-organisation table (ADR 0036), [tableLength] bytes from [tableStart],
+     * which the engine takes over as well.
      */
-    external fun nativeStart(service: WatchVpnService, fd: Int, mtu: Int, keepFlows: Int): Boolean
+    external fun nativeStart(
+        service: WatchVpnService,
+        fd: Int,
+        mtu: Int,
+        keepFlows: Int,
+        tableFd: Int,
+        tableStart: Long,
+        tableLength: Long,
+    ): Boolean
 
     /** Stops the engine and closes the tunnel's descriptor. */
     external fun nativeStop()
+
+    /** The release month of the organisation table the engine reads, such as "2026-11", or "" for none. */
+    external fun nativeOrganisations(): String
 
     /**
      * The network beneath the tunnel or its DNS server changed; [dns] is its DNS server's address, or
@@ -32,6 +45,6 @@ internal object Engine {
      */
     external fun nativeCounters(): LongArray
 
-    /** The flows kept, one per line as `protocol app destination uid outcome name named-by`; debug builds only. */
+    /** The flows kept, one per line as `protocol app destination uid outcome named-by name`; debug builds only. */
     external fun nativeFlows(): String
 }

@@ -47,7 +47,7 @@ fail() {
     exit 1
 }
 
-# The flows the engine kept, one per line: protocol app destination uid outcome name named-by.
+# The flows the engine kept, one per line: protocol app destination uid outcome named-by name.
 flows() {
     adb shell dumpsys activity service "$PKG/.WatchVpnService" | tr -d '\r' | sed -n 's/^ *flow //p'
 }
@@ -59,7 +59,7 @@ has_flow() {
 
 # Whether a flow of the shell, by protocol $1 to any address on port $2, is named $3 by $4 (W3).
 has_named_flow() {
-    flows | grep -qE "^$1 [^ ]+ [^ ]+:$2 $SHELL_UID opened ${3//./\\.} $4\$"
+    flows | grep -qE "^$1 [^ ]+ [^ ]+:$2 $SHELL_UID opened $4 ${3//./\\.}\$"
 }
 
 vpn_up() {
@@ -116,6 +116,16 @@ traffic() {
     device 10 "nc -w 2 $HOST $PORT < $HELLO_ON_DEVICE" >/dev/null
     has_named_flow tcp "$PORT" watch.test tls || fail "$round: a TLS connection was not named after its server name"
     echo "ok: $round: a flow named from its TLS server name"
+
+    # A flow to an address no DNS answer gave is named after its network's organisation, when this
+    # build carries the table (data/dbip-asn/update.py; a clean checkout has none, ADR 0036).
+    if adb shell dumpsys activity service "$PKG/.WatchVpnService" | grep -q 'organisations 20'; then
+        device 6 "echo watch | nc -u -w 1 8.8.8.8 9" >/dev/null
+        has_named_flow udp 9 'Google LLC' org || fail "$round: a flow to 8.8.8.8 was not named after Google's network"
+        echo "ok: $round: a flow named from the organisation table"
+    else
+        echo "skipped: $round: this build has no organisation table"
+    fi
 }
 
 echo "== Watch's engine, end to end, on $(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
@@ -133,7 +143,7 @@ body += struct.pack("!H", len(extension)) + extension
 handshake = b"\x01\x00" + struct.pack("!H", len(body)) + body
 open(sys.argv[1], "wb").write(b"\x16\x03\x01" + struct.pack("!H", len(handshake)) + handshake)
 PY
-adb push "$hello" "$HELLO_ON_DEVICE" >/dev/null
+adb push "$hello" "$HELLO_ON_DEVICE" >/dev/null 2>&1
 rm -f "$hello"
 is_emulator && adb shell appops set "$PKG" ACTIVATE_VPN allow
 # Android 17: the server is on the local network, which Watch reaches for every app (ADR 0034).

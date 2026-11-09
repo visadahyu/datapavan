@@ -10,6 +10,7 @@ pub mod dns;
 pub mod engine;
 pub mod names;
 pub mod nat;
+pub mod organisations;
 pub mod packet;
 pub mod tls;
 pub mod tun;

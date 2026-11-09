@@ -1,0 +1,14 @@
+SPDX-License-Identifier: CC-BY-4.0
+
+asn.bin, Watch's table from IP address to network and organisation (ADR 0036), is converted from
+the IP to ASN Lite database by DB-IP (https://db-ip.com), which DB-IP licenses under the Creative
+Commons Attribution 4.0 International License (https://creativecommons.org/licenses/by/4.0/).
+IP Geolocation by DB-IP: https://db-ip.com
+
+Changes made by the Datapavan project (update.py): ranges of private, reserved and documentation
+addresses and AS numbers are dropped, neighbouring ranges of the same AS number are merged, each AS
+number keeps one organisation name (the one covering the most addresses, cut at 120 characters),
+and the result is written in a binary format of its own. The table is offered under the same
+licence; nothing in it is endorsed by DB-IP.
+
+update.py is part of Datapavan's code, under the Apache License 2.0 (LICENSE at the repository's root).

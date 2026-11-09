@@ -1,5 +1,7 @@
 # Android / Gradle
 .gradle/
+# Kotlin's own session and error files when it compiles in the Gradle process
+.kotlin/
 build/
 local.properties
 captures/
@@ -20,3 +22,7 @@ target/
 # OS and editor files
 .DS_Store
 *.swp
+
+# Watch's IP-to-organisation table (data/dbip-asn/update.py, ADR 0036): about 10 MB a month, so it is
+# not committed until the size question of ADR 0036 is settled; SOURCE records each build.
+data/dbip-asn/asn.bin

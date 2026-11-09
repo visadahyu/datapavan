@@ -354,6 +354,13 @@ and 16, and IPv6 end to end on a network that has it (this one has none). Known 
 counters count a connection only when it ends cleanly, and Watch's memory (96 MB PSS with its screen,
 against the spike's 29 MB) needs a look.
 
+W3, on `watch-w3`, 2026-11-09: flows are named from the DNS answers Watch passes on (the name the app
+asked for, through CNAME chains), from the TLS server name of the app's first bytes, and last from the
+organisation table of [ADR 0036](decisions/0036-ip-to-organisation-dataset.md), read in place; each name
+says where it came from. `scripts/verify-watch.sh` checks all three. Still to build: the QUIC Initial
+server name, strict Private DNS detected and explained, apps' own encrypted DNS recognised, and the
+ten-app comparison with PCAPdroid on an emulator with test accounts.
+
 | # | Milestone | Done when |
 |---|---|---|
 | W1 | Watch's skeleton | A second Gradle module, `:watch`, package `org.visadahyu.datapavan.watch`, signed with the same key. Both APKs come from one build, CI is green, and each is reproducible on its own. The build fails if the audit app gains `INTERNET`, as now, or if Watch's manifest holds anything outside its permissions ADR. Watch opens on the emulator and the A40 with strings in all eight languages, RTL and pseudo-locales from the start, and an icon from the brand marks. Its tunnel starts and stops. |

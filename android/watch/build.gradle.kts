@@ -72,6 +72,8 @@ android {
     }
 
     androidResources {
+        // The table from address to organisation (ADR 0036) is read in place, which needs it stored.
+        noCompress += "bin"
         generateLocaleConfig = true
         // The audit app's languages (ADR 0004, ADR 0030), and no library's others.
         localeFilters += listOf("en", "fr", "de", "fa", "ru", "zh-rCN", "es", "ar")
@@ -316,6 +318,24 @@ val remappedRustFlags = cargoHome.map { home ->
     )
 }
 
+/** Copies the table from address to organisation into the assets, when there is one. */
+abstract class OrganisationTable : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val table: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val out = outputDir.get().asFile
+        out.deleteRecursively()
+        out.mkdirs()
+        table.files.singleOrNull()?.takeIf { it.isFile }?.copyTo(out.resolve("asn.bin"))
+    }
+}
+
 var shippedAbis: List<String> = emptyList()
 
 androidComponents {
@@ -343,6 +363,13 @@ androidComponents {
             rustFlags.set(remappedRustFlags)
         }
         variant.sources.jniLibs?.addGeneratedSourceDirectory(cargoTask, CargoNdkTask::outputDir)
+
+        // The table from address to organisation, if data/dbip-asn/update.py has built one; it is not
+        // committed until ADR 0036's size question is settled, so a clean checkout builds without it.
+        val tableTask = tasks.register<OrganisationTable>("organisationTable$suffix") {
+            table.from(repositoryRoot.file("data/dbip-asn/asn.bin"))
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(tableTask, OrganisationTable::outputDir)
 
         tasks.register<ApkNativeLibraryCheck>("verifyApk$suffix") {
             apkDirectory.set(variant.artifacts.get(SingleArtifact.APK))

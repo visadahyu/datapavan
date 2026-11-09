@@ -84,6 +84,18 @@ Accepted with the proposals below; W3's ten-app session decides between them.
 - **Which app carries it.** If Watch stores the AS number and name with each flow when it logs it, only
   Watch needs the table, and the audit app reads names from the log (W5).
 
+**First build, 2026-11-09.** `data/dbip-asn/update.py` turned DB-IP's November release (485,292 lines)
+into 409,312 IPv4 and 75,978 IPv6 ranges of 83,024 AS numbers: 10.7 MB raw, 4.2 MB with gzip, 2.5 MB
+with xz. Watch reads it in place, stored uncompressed in the APK, so the engine's memory does not grow.
+On the Android 17 emulator, 32 flows of Chrome and the system, DNS excluded, were named 88 % from DNS
+answers and 12 % from the table; none stayed unnamed. A new point for the size question: committing a
+10 MB table every month would grow the repository by several megabytes a month, so the table is not
+committed (`.gitignore`) until the question is settled, and a clean checkout builds Watch without it;
+`SOURCE` records each build. Option (c) keeps the committed part small; the full table would then
+travel only in packs.
+- **Data from only Watch stays out of the audit app.** `dbip-asn` is left out of the audit app's
+  payload (`android/app/build.gradle.kts`); Watch's build copies the table into its own assets.
+
 ## Consequences
 
 - Watch names the last share of flows from a source with organisation names, under a licence that allows

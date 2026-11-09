@@ -15,6 +15,7 @@ import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import java.io.FileDescriptor
+import java.io.IOException
 import java.io.PrintWriter
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -136,10 +137,27 @@ class WatchVpnService : VpnService() {
         }
     }
 
-    /** Hands the tunnel's descriptor to the engine, which owns it from then on. */
+    /**
+     * Hands the tunnel's descriptor to the engine, which owns it from then on, with the table from
+     * address to organisation (ADR 0036) where this build carries it: the engine reads it in place,
+     * inside the APK, without loading it.
+     */
     private fun startEngine(tunnel: ParcelFileDescriptor): Boolean {
         val fd = tunnel.detachFd()
-        return Engine.nativeStart(this, fd, MTU, if (debuggable) KEPT_FLOWS else 0)
+        var tableFd = -1
+        var tableStart = 0L
+        var tableLength = 0L
+        try {
+            assets.openFd(ORGANISATIONS).use { asset ->
+                tableFd = asset.parcelFileDescriptor.dup().detachFd()
+                tableStart = asset.startOffset
+                tableLength = asset.length
+            }
+        } catch (e: IOException) {
+            // This build has no table: flows that nothing else names stay unnamed.
+            Log.i(TAG, "No table from address to organisation in this build")
+        }
+        return Engine.nativeStart(this, fd, MTU, if (debuggable) KEPT_FLOWS else 0, tableFd, tableStart, tableLength)
     }
 
     private fun stop() {
@@ -199,6 +217,7 @@ class WatchVpnService : VpnService() {
     override fun dump(fd: FileDescriptor?, writer: PrintWriter, args: Array<out String>?) {
         writer.println("running ${state.value}")
         writer.println("counters ${Engine.nativeCounters().joinToString(" ")}")
+        writer.println("organisations ${Engine.nativeOrganisations().ifEmpty { "none" }}")
         if (debuggable) {
             Engine.nativeFlows().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("flow $it") }
         }
@@ -213,6 +232,9 @@ class WatchVpnService : VpnService() {
         private const val TAG = "Watch"
         private const val MTU = 1500
         private const val KEPT_FLOWS = 512
+
+        /** The asset of the table from address to organisation, stored uncompressed (build.gradle.kts). */
+        private const val ORGANISATIONS = "asn.bin"
 
         // The tunnel's own addresses and its DNS server, the same as the engine's (core/net,
         // engine.rs): from the ranges for private networks (RFC 1918) and unique local addresses

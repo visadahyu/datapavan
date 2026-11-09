@@ -28,6 +28,7 @@ use tokio::sync::watch;
 use crate::dns;
 use crate::names::Names;
 use crate::nat::{Lookup, Nat};
+use crate::organisations::Organisations;
 use crate::packet::{self, ACK, Packet, RST, SYN, Skip, TCP, UDP, Unreachable};
 use crate::tls::{self, ServerName};
 use crate::tun::Tun;
@@ -89,8 +90,24 @@ pub enum NamedBy {
     Dns,
     /// The server name of the TLS connection.
     Tls,
+    /// The organisation whose network the address is in, from the offline table (ADR 0036).
+    Organisation,
     /// Not named.
     Unknown,
+}
+
+impl NamedBy {
+    /// Whether a name from this source gives way to one from `other`: W3's order is DNS, TLS, QUIC,
+    /// then the organisation.
+    fn yields_to(self, other: Self) -> bool {
+        let rank = |by: Self| match by {
+            Self::Dns => 0,
+            Self::Tls => 1,
+            Self::Organisation => 3,
+            Self::Unknown => 4,
+        };
+        rank(other) < rank(self)
+    }
 }
 
 /// A flow the engine opened for an app.
@@ -176,6 +193,8 @@ struct Shared {
     upstream_dns: Mutex<Option<IpAddr>>,
     /// Names from the DNS answers Watch passed on, by address.
     names: Mutex<Names>,
+    /// The offline table from address to organisation, if Watch has one.
+    organisations: Option<Organisations>,
     next_id: AtomicU64,
 }
 
@@ -184,27 +203,30 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl Shared {
-    /// A new flow's number, and its name from the DNS answers Watch passed on, if any.
+    /// A new flow's number and its first name: from the DNS answers Watch passed on, else from the
+    /// organisation of the destination's network. A TLS or QUIC server name may come later.
     fn begin(&self, destination: SocketAddr) -> (u64, Option<String>, NamedBy) {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed) + 1;
-        let name = lock(&self.names)
-            .get(destination.ip(), Instant::now())
-            .map(str::to_owned);
-        let named_by = if name.is_some() {
-            NamedBy::Dns
-        } else {
-            NamedBy::Unknown
-        };
-        (id, name, named_by)
+        if let Some(name) = lock(&self.names).get(destination.ip(), Instant::now()) {
+            return (id, Some(name.to_owned()), NamedBy::Dns);
+        }
+        match self
+            .organisations
+            .as_ref()
+            .and_then(|table| table.lookup(destination.ip()))
+        {
+            Some(organisation) => (id, Some(organisation.name), NamedBy::Organisation),
+            None => (id, None, NamedBy::Unknown),
+        }
     }
 
-    /// Names a recorded flow that had no name yet.
+    /// Gives a recorded flow a better name, by W3's order.
     fn name(&self, id: u64, name: String, named_by: NamedBy) {
         if self.keep_flows == 0 {
             return;
         }
         if let Some(flow) = lock(&self.flows).iter_mut().rev().find(|f| f.id == id)
-            && flow.name.is_none()
+            && flow.named_by.yields_to(named_by)
         {
             flow.name = Some(name);
             flow.named_by = named_by;
@@ -275,7 +297,12 @@ impl Engine {
     ///
     /// # Errors
     /// When the thread or its event loop cannot be made.
-    pub fn start(fd: OwnedFd, config: Config, platform: Arc<dyn Platform>) -> io::Result<Self> {
+    pub fn start(
+        fd: OwnedFd,
+        config: Config,
+        platform: Arc<dyn Platform>,
+        organisations: Option<Organisations>,
+    ) -> io::Result<Self> {
         let shared = Arc::new(Shared {
             platform,
             counters: Counters::default(),
@@ -283,6 +310,7 @@ impl Engine {
             flows: Mutex::new(VecDeque::new()),
             upstream_dns: Mutex::new(None),
             names: Mutex::new(Names::default()),
+            organisations,
             next_id: AtomicU64::new(0),
         });
         let (stop, stopped) = watch::channel(false);
@@ -332,6 +360,15 @@ impl Engine {
         }
     }
 
+    /// The release month of the organisation table the engine reads, if it has one.
+    #[must_use]
+    pub fn organisations(&self) -> Option<String> {
+        self.shared
+            .organisations
+            .as_ref()
+            .map(|table| table.month().to_owned())
+    }
+
     /// The counters, as [`Counters::snapshot`] orders them.
     #[must_use]
     pub fn counters(&self) -> [u64; 11] {
@@ -356,7 +393,7 @@ struct Upstream {
     stream: TcpStream,
     /// The flow's number.
     id: u64,
-    /// Whether the flow already has a name (from DNS); else the relay looks for the TLS server name.
+    /// Whether the flow already has a name from DNS; else the relay looks for the TLS server name.
     named: bool,
 }
 
@@ -741,7 +778,7 @@ async fn open(
         Err(_) => Outcome::Failed,
     };
     let (id, name, named_by) = shared.begin(destination);
-    let named = name.is_some();
+    let named = named_by == NamedBy::Dns;
     shared.record(Flow {
         id,
         protocol: TCP,
