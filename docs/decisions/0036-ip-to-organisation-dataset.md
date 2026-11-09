@@ -72,6 +72,12 @@ Option 2.
    network", not "Amazon": the network is the host, not necessarily the service the app used.
 5. **ADR 0015** gets its decision 4 and DESIGN.md §9 their new order once this is accepted.
 
+**Decision 4, built on 2026-11-09:** `data/owners/asns.tsv` starts with 39 AS numbers of 17 companies,
+chosen before W3's ten-app session (which will add the networks it finds most), each with its registry
+record and the link to its company. A network counts as the company's own only where a page of the
+company names it so (Meta's AS32934 and AS63293, Netflix's AS2906); every other listed network is
+marked as hosting others, the stricter reading when the evidence does not settle it.
+
 ## Left to measurement
 
 Accepted with the proposals below; W3's ten-app session decides between them.

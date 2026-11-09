@@ -74,7 +74,8 @@ fail() {
     exit 1
 }
 
-# The flows the engine kept, one per line: protocol app destination uid outcome named-by ech dns name.
+# The flows the engine kept, one per line: protocol app destination uid outcome named-by ech dns network
+# name.
 flows() {
     adb shell dumpsys activity service "$PKG/.WatchVpnService" | tr -d '\r' | sed -n 's/^ *flow //p'
 }
@@ -87,7 +88,7 @@ has_flow() {
 # Whether a flow of the shell, by protocol $1 to any address on port $2, is named $3 by $4 (W3), with
 # the ECH column $5 (any if not given).
 has_named_flow() {
-    flows | grep -qE "^$1 [^ ]+ [^ ]+:$2 $SHELL_UID opened $4 ${5:-[^ ]+} [^ ]+ ${3//./\\.}\$"
+    flows | grep -qE "^$1 [^ ]+ [^ ]+:$2 $SHELL_UID opened $4 ${5:-[^ ]+} [^ ]+ [^ ]+ ${3//./\\.}\$"
 }
 
 # What Watch says of Private DNS on its network: plain, network, or strict and the provider (debug).
@@ -166,7 +167,7 @@ traffic() {
     echo "ok: $round: a flow named from its TLS server name"
     device 10 "(cat $QUIC_ON_DEVICE-1.bin; sleep 1; cat $QUIC_ON_DEVICE-2.bin) | nc -u -w 2 $HOST $((PORT + 1))" >/dev/null
     has_named_flow udp "$((PORT + 1))" watch.test quic ech ||
-        fail "$round: a QUIC connection was not named after its server name, with ECH offered"
+        fail "$round: a QUIC connection was not named after its server name, with ECH offered; its flows: $(flows | grep -E ":$((PORT + 1)) ")"
     echo "ok: $round: a flow named from its QUIC server name, put together from two datagrams"
 
     # An app's own DNS, past Watch's resolver (ADR 0029): plain DNS to Google's public resolver, and a
@@ -215,7 +216,14 @@ PY
     if adb shell dumpsys activity service "$PKG/.WatchVpnService" | grep -q 'organisations 20'; then
         device 6 "echo watch | nc -u -w 1 8.8.8.8 9" >/dev/null
         has_named_flow udp 9 'Google LLC' org || fail "$round: a flow to 8.8.8.8 was not named after Google's network"
+        flows | grep -qE "^udp [^ ]+ 8\.8\.8\.8:9 $SHELL_UID opened org [^ ]+ [^ ]+ as15169:hosting Google LLC$" ||
+            fail "$round: Google's network was not marked as one that hosts other companies' servers"
         echo "ok: $round: a flow named from the organisation table"
+        # The owners' table names the company people know, not the registry's "Facebook, Inc.".
+        device 6 "echo watch | nc -u -w 1 157.240.1.35 9" >/dev/null
+        flows | grep -qE "^udp [^ ]+ 157\.240\.1\.35:9 $SHELL_UID opened org [^ ]+ [^ ]+ as32934:own Meta Platforms, Inc\.$" ||
+            fail "$round: a flow to Meta's network was not named after Meta"
+        echo "ok: $round: a network named after the company that owns it"
     else
         echo "skipped: $round: this build has no organisation table"
     fi

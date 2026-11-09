@@ -406,8 +406,17 @@ to Alibaba, Tencent's DNSPod, Yandex and Shecan, each checked again by two other
 left out, since its page says it closed on 2026-11-02. The answers an app gets from a resolver of its
 own name that app's later flows, and only that app's: the app chose that resolver and must not rename
 other apps' connections through it. ECH public names come only from Android's resolver. Two counters
-without destinations count the app's own plain and encrypted DNS. Still to build: the map from AS
-numbers to companies (`data/owners/asns.tsv`, ADR 0036) and the ten-app comparison. One run of
+without destinations count the app's own plain and encrypted DNS.
+
+Networks named after their companies, the same evening (ADR 0036, decision 4). `data/owners/asns.tsv`
+maps 39 AS numbers to 17 companies of `entities.tsv`, which grew by eleven, each AS from its registry's
+RDAP record and linked to its company by the company's own page or the record's contacts; one model
+compiled it, two others checked it alone. A network is marked as hosting other companies' servers
+unless a page of the company names it as its own: only Meta's two and Netflix's main AS are marked as
+their own, and Watch names the others "a server on <company>'s network". Twitter's three AS numbers
+were left out: only one contact's e-mail address linked them to X Corp. A flow named by its network
+now carries the AS number and that mark, and shows Meta Platforms, Inc., not the registry's "Facebook,
+Inc.". Still to build: the ten-app comparison. One run of
 `scripts/verify-watch.sh` saw Watch still read strict Private DNS 20 s after the setting was restored,
 right after a network switch; three tries could not repeat it, so the check now waits 60 s and, if it
 fails, prints what Android itself reports for each network.

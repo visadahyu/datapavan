@@ -349,8 +349,10 @@ androidComponents {
         val cargoTask = tasks.register<CargoNdkTask>("cargoNdk$suffix") {
             sources.from(fileTree(rustWorkspace) { exclude("target/**", "fuzz/**") })
             sources.from(rootProject.layout.projectDirectory.file("../rust-toolchain.toml"))
-            // The resolvers' table is compiled into the engine (core/net/src/resolvers.rs).
+            // Tables compiled into the engine: the resolvers (core/net/src/resolvers.rs) and the
+            // networks' owners (core/net/src/owners.rs).
             sources.from(repositoryRoot.file("data/resolvers/resolvers.tsv"))
+            sources.from(repositoryRoot.file("data/owners/asns.tsv"), repositoryRoot.file("data/owners/entities.tsv"))
             workspaceDir.set(rustWorkspace)
             crate.set("datapavan-watch-jni")
             abis.set(shippedAbis)

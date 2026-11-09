@@ -10,7 +10,7 @@ use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use datapavan_net::organisations::{FilePart, Organisations};
-use datapavan_net::{Config, DnsUse, Ech, Engine, NamedBy, Outcome, Platform};
+use datapavan_net::{Config, DnsUse, Ech, Engine, NamedBy, NetworkKind, Outcome, Platform};
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
 use jni::objects::{JClass, JLongArray, JObject, JString};
 use jni::sys::{jboolean, jint, jlong};
@@ -231,9 +231,9 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeCounters<
 }
 
 /// `Engine.nativeFlows()`: the flows the engine kept, one per line as
-/// `protocol app destination uid outcome named-by ech dns name` (`-` for none; `dns` is `plain` or
-/// `encrypted`, with `:resolver` when it is a known one; the name may hold spaces), for debug builds
-/// and the end-to-end test. Empty when the engine keeps none, as in release builds.
+/// `protocol app destination uid outcome named-by ech dns network name` (`-` for none; `dns` is
+/// `plain` or `encrypted`, with `:resolver` when it is a known one; `network` is `as<number>:own`,
+/// `:hosting` or `:unlisted`; the name may hold spaces), for debug builds and the end-to-end test. Empty when the engine keeps none, as in release builds.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlows(): String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlows<'caller>(
@@ -278,9 +278,20 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlows<'ca
                         (DnsUse::Encrypted, None) => "encrypted".to_owned(),
                         (DnsUse::Encrypted, Some(r)) => format!("encrypted:{r}"),
                     };
+                    let network = f.network.map_or_else(
+                        || "-".to_owned(),
+                        |n| {
+                            let kind = match n.kind {
+                                NetworkKind::Own => "own",
+                                NetworkKind::Hosting => "hosting",
+                                NetworkKind::Unlisted => "unlisted",
+                            };
+                            format!("as{}:{kind}", n.asn)
+                        },
+                    );
                     // The name last: an organisation's may hold spaces.
                     format!(
-                        "{protocol} {} {} {uid} {outcome} {named_by} {ech} {dns} {name}",
+                        "{protocol} {} {} {uid} {outcome} {named_by} {ech} {dns} {network} {name}",
                         f.app, f.destination
                     )
                 })

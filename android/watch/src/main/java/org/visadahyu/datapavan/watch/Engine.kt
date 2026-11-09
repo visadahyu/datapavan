@@ -48,6 +48,6 @@ internal object Engine {
      */
     external fun nativeCounters(): LongArray
 
-    /** The flows kept, one per line as `protocol app destination uid outcome named-by ech dns name`; debug builds only. */
+    /** The flows kept, one per line as `protocol app destination uid outcome named-by ech dns network name`; debug builds only. */
     external fun nativeFlows(): String
 }

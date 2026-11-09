@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: CC0-1.0
 retrieved: 2026-10-30
-entities: 10
+entities: 21
+asns: 39
 sdk-operators: 14
 publisher-certificates: 235
 method: data/owners/update.py, from publisher-sources.tsv; entities.tsv and sdk-operators.tsv by hand
+asns-method: 2026-11-09, each AS from its registry's RDAP record, linked to its company by the company's own page or the
+  record's contacts, and marked as hosting others unless a page of the company names it as its own network; compiled
+  by one model and checked by two others alone, their findings settled (eleven new entities with it)

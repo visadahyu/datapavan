@@ -29,6 +29,7 @@ use crate::dns;
 use crate::names::Names;
 use crate::nat::{Lookup, Nat};
 use crate::organisations::Organisations;
+use crate::owners::{NetworkKind, Owners};
 use crate::packet::{self, ACK, Packet, RST, SYN, Skip, TCP, UDP, Unreachable};
 use crate::quic;
 use crate::resolvers::Resolvers;
@@ -164,6 +165,25 @@ pub struct Flow {
     pub dns: DnsUse,
     /// The known resolver it goes to (`data/resolvers`), if it is one.
     pub resolver: Option<String>,
+    /// The network of its address, when the organisation table named it.
+    pub network: Option<Network>,
+}
+
+/// The network a flow's address is in, when the organisation table named the flow (ADR 0036).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Network {
+    /// Its AS number.
+    pub asn: u32,
+    /// Whether its owner is a known company, and whether that company hosts others' servers.
+    pub kind: NetworkKind,
+}
+
+/// A new flow's number and first name.
+struct Begun {
+    id: u64,
+    name: Option<String>,
+    named_by: NamedBy,
+    network: Option<Network>,
 }
 
 /// What the engine knew of a flow when it opened, for what the flow's hello may add.
@@ -257,6 +277,8 @@ struct Shared {
     organisations: Option<Organisations>,
     /// Well-known public DNS resolvers.
     resolvers: Resolvers,
+    /// The companies behind well-known networks.
+    owners: Owners,
     next_id: AtomicU64,
 }
 
@@ -266,19 +288,41 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 impl Shared {
     /// A new flow's number and its first name: from the DNS answers the app was given, else from the
-    /// organisation of the destination's network. A TLS or QUIC server name may come later.
-    fn begin(&self, destination: SocketAddr, uid: Option<u32>) -> (u64, Option<String>, NamedBy) {
+    /// organisation of the destination's network, as the company people know when the owners' table
+    /// names it. A TLS or QUIC server name may come later.
+    fn begin(&self, destination: SocketAddr, uid: Option<u32>) -> Begun {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed) + 1;
         if let Some(name) = lock(&self.names).get(destination.ip(), uid, Instant::now()) {
-            return (id, Some(name.to_owned()), NamedBy::Dns);
+            return Begun {
+                id,
+                name: Some(name.to_owned()),
+                named_by: NamedBy::Dns,
+                network: None,
+            };
         }
         match self
             .organisations
             .as_ref()
             .and_then(|table| table.lookup(destination.ip()))
         {
-            Some(organisation) => (id, Some(organisation.name), NamedBy::Organisation),
-            None => (id, None, NamedBy::Unknown),
+            Some(organisation) => {
+                let owner = self.owners.of(organisation.asn);
+                Begun {
+                    id,
+                    network: Some(Network {
+                        asn: organisation.asn,
+                        kind: owner.map_or(NetworkKind::Unlisted, |o| o.kind),
+                    }),
+                    name: Some(owner.map_or(organisation.name, |o| o.name.clone())),
+                    named_by: NamedBy::Organisation,
+                }
+            }
+            None => Begun {
+                id,
+                name: None,
+                named_by: NamedBy::Unknown,
+                network: None,
+            },
         }
     }
 
@@ -438,6 +482,7 @@ impl Engine {
             names: Mutex::new(Names::default()),
             organisations,
             resolvers: Resolvers::bundled(),
+            owners: Owners::bundled(),
             next_id: AtomicU64::new(0),
         });
         let (stop, stopped) = watch::channel(false);
@@ -800,7 +845,12 @@ impl Loop {
     async fn open_udp(&self, packet: &[u8], parsed: &Packet) -> Option<Arc<UdpSocket>> {
         let (app, destination) = (parsed.source, parsed.destination);
         let uid = owner(&self.shared, UDP, app, destination).await;
-        let (id, name, named_by) = self.shared.begin(destination, uid);
+        let Begun {
+            id,
+            name,
+            named_by,
+            network,
+        } = self.shared.begin(destination, uid);
         let by_dns = (named_by == NamedBy::Dns)
             .then_some(name.as_deref())
             .flatten();
@@ -822,6 +872,7 @@ impl Loop {
             ech: Ech::Absent,
             dns,
             resolver,
+            network,
         };
         let Some(target) = self.shared.target(destination) else {
             flow.outcome = Outcome::Unreachable;
@@ -966,7 +1017,12 @@ async fn open(
         Err(error) if is_unreachable(error) => Outcome::Unreachable,
         Err(_) => Outcome::Failed,
     };
-    let (id, name, named_by) = shared.begin(destination, uid);
+    let Begun {
+        id,
+        name,
+        named_by,
+        network,
+    } = shared.begin(destination, uid);
     let by_dns = (named_by == NamedBy::Dns)
         .then_some(name.as_deref())
         .flatten();
@@ -988,6 +1044,7 @@ async fn open(
         ech: Ech::Absent,
         dns,
         resolver,
+        network,
     });
     let answer = if let Ok(stream) = upstream {
         lock(&pending).insert(held.port, Upstream { stream, opened });
@@ -1182,6 +1239,7 @@ mod tests {
             resolvers: Resolvers::parse(
                 "sample\tSample\tSample DNS\tdoh.sample.example\t-\t192.0.2.53\t-\t-\n",
             ),
+            owners: Owners::default(),
             next_id: AtomicU64::new(0),
         }
     }
@@ -1189,7 +1247,12 @@ mod tests {
     const UID: u32 = 10_123;
 
     fn open_flow(shared: &Shared, destination: SocketAddr) -> Opened {
-        let (id, name, named_by) = shared.begin(destination, Some(UID));
+        let Begun {
+            id,
+            name,
+            named_by,
+            network,
+        } = shared.begin(destination, Some(UID));
         let by_dns = (named_by == NamedBy::Dns)
             .then_some(name.as_deref())
             .flatten();
@@ -1206,6 +1269,7 @@ mod tests {
             ech: Ech::Absent,
             dns,
             resolver,
+            network,
         });
         Opened {
             id,

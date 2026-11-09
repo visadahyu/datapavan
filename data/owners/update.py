@@ -88,6 +88,14 @@ def main():
     for row in rows(HERE / "sdk-operators.tsv"):
         if row[3] not in entities:
             problems.append(f"{row[0]}: unknown entity {row[3]}")
+    # The networks' owners (ADR 0036, decision 4): nine columns, an AS number once, a known entity.
+    asns = rows(HERE / "asns.tsv")
+    problems += [f"asns.tsv: {row[0]} has {len(row)} columns, not 9" for row in asns if len(row) != 9]
+    numbers = [row[0] for row in asns]
+    problems += [f"asns.tsv: AS {n} is listed twice" for n in sorted(set(numbers)) if numbers.count(n) > 1]
+    for row in asns:
+        if not row[0].isdigit() or row[1] not in entities or row[2] not in ("yes", "no"):
+            problems.append(f"asns.tsv: AS {row[0]}: not a number, unknown entity {row[1]} or hosting {row[2]}")
 
     services = {row[0]: row[2].split(",") for row in rows(NEEDS / "services.tsv")}
     service_signers = {}
