@@ -2,12 +2,13 @@
 //! Watch's Kotlin side, which seals each one under the day's key. Version 1, little-endian:
 //!
 //! - a flow segment: version, kind 1, the flow's number, the app's UID (`u32::MAX` unknown), start and
-//!   end in milliseconds since 1970 (UTC), bytes up and down, protocol, outcome, where the name came
+//!   end in milliseconds since 1970 (UTC), bytes up and down as the app sent and received them, bytes
+//!   up and down as IP packets on the tunnel (what Android counts), protocol, outcome, where the name came
 //!   from, ECH, the app's own DNS, flags (bit 0: the flow continues), the destination's address
 //!   (length 4 or 16, then the bytes) and port, the AS number (0 none) and what its owner is, then the
 //!   name and the resolver, each a length byte and UTF-8.
-//! - lookups an app sent to Watch's own DNS address: version, kind 2, the UID, start and end, and
-//!   their count.
+//! - lookups an app sent to Watch's own DNS address: version, kind 2, the UID, start and end, their
+//!   count, and their packets' bytes up and down on the tunnel.
 //!
 //! A batch is a count (u32), then each record after its length (u16).
 
@@ -31,10 +32,8 @@ pub enum Record {
         start: u64,
         /// The segment's end.
         end: u64,
-        /// The bytes the app sent in the segment.
-        up: u64,
-        /// The bytes the app received in the segment.
-        down: u64,
+        /// The bytes the app sent and received in the segment, then the tunnel's IP bytes up and down.
+        bytes: [u64; 4],
         /// Whether the flow was still open at the segment's end.
         continues: bool,
     },
@@ -48,6 +47,10 @@ pub enum Record {
         end: u64,
         /// How many lookups.
         count: u32,
+        /// Their packets' bytes on the tunnel, up.
+        wire_up: u64,
+        /// The answers' bytes on the tunnel.
+        wire_down: u64,
     },
 }
 
@@ -61,14 +64,13 @@ impl Record {
                 flow,
                 start,
                 end,
-                up,
-                down,
+                bytes,
                 continues,
             } => {
                 out.push(1);
                 out.extend_from_slice(&flow.id.to_le_bytes());
                 out.extend_from_slice(&flow.uid.unwrap_or(u32::MAX).to_le_bytes());
-                for value in [*start, *end, *up, *down] {
+                for value in [*start, *end].iter().chain(bytes) {
                     out.extend_from_slice(&value.to_le_bytes());
                 }
                 out.push(flow.protocol);
@@ -117,12 +119,16 @@ impl Record {
                 start,
                 end,
                 count,
+                wire_up,
+                wire_down,
             } => {
                 out.push(2);
                 out.extend_from_slice(&uid.unwrap_or(u32::MAX).to_le_bytes());
                 out.extend_from_slice(&start.to_le_bytes());
                 out.extend_from_slice(&end.to_le_bytes());
                 out.extend_from_slice(&count.to_le_bytes());
+                out.extend_from_slice(&wire_up.to_le_bytes());
+                out.extend_from_slice(&wire_down.to_le_bytes());
             }
         }
         out
@@ -207,15 +213,14 @@ mod tests {
             flow: flow(),
             start: 1_000,
             end: 2_000,
-            up: 300,
-            down: 40_000,
+            bytes: [300, 40_000, 820, 42_900],
             continues: true,
         };
         let bytes = record.encode();
         let mut expected = vec![1, 1];
         expected.extend_from_slice(&7u64.to_le_bytes());
         expected.extend_from_slice(&10_123u32.to_le_bytes());
-        for v in [1_000u64, 2_000, 300, 40_000] {
+        for v in [1_000u64, 2_000, 300, 40_000, 820, 42_900] {
             expected.extend_from_slice(&v.to_le_bytes());
         }
         expected.extend_from_slice(&[6, 0, 3, 1, 0, 1, 4, 157, 240, 1, 35]);
@@ -239,8 +244,7 @@ mod tests {
             flow: long,
             start: 0,
             end: 0,
-            up: 0,
-            down: 0,
+            bytes: [0; 4],
             continues: false,
         };
         let bytes = record.encode();
@@ -251,6 +255,8 @@ mod tests {
             start: 5,
             end: 6,
             count: 3,
+            wire_up: 210,
+            wire_down: 540,
         };
         let all = batch(&[record.clone(), lookups.clone()]);
         assert_eq!(all[..4], 2u32.to_le_bytes());

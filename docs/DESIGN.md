@@ -432,9 +432,17 @@ is locked and open once it is unlocked, and a wipe that leaves no file and no ke
 traffic through a VPN, the open check of ADR 0022: it keeps each app's traffic on the VPN's network
 under that network, with its own entry per app (type 17, transport VPN, in `dumpsys netstats`), counted
 as IP packets on the tunnel, headers included, while the log counts what the apps sent and received.
-Still to do in W4: count each flow's IP bytes as the tunnel carries them, so that the log and Android
-can be compared within M4's 5 %, and that comparison over a scripted session; the log on Android 10,
-11 and 15, and on the A40; Watch's memory (96 MB PSS with its screen).
+So the engine now also counts each flow's IP packets as the tunnel carries them, and each app's lookups
+to Watch's DNS address with their answers. Over a scripted session (6 MB down, 1 MB up, small UDP
+flows, lookups) the shell's bytes in the log and Android's own count were 0.02 % and 0.00 % apart on
+Android 15, 0.03 % and 0.00 % on Android 17, and 0.03 % and 0.00 % on Android 11, against M4's 5 %;
+`scripts/verify-log.sh` checks it, and passes in full on all three. Android 11 prints that network as
+"type=VPN" and also repeats the same traffic under the network beneath, so summing every network counts
+it twice. An open check for ADR 0022 and W5: the audit app asks Android for Wi-Fi and mobile traffic
+only, so with Watch on, an app's traffic may be missing from those totals from Android 12, and present
+before; the audit app must say so or read the VPN's network too. Still to do in W4: the log on the A40
+(verify-log.sh sets a PIN, so it runs on emulators only) and on an Android 10 emulator, whose system
+image is not on this computer; Watch's memory (96 MB PSS with its screen).
 
 | # | Milestone | Done when |
 |---|---|---|

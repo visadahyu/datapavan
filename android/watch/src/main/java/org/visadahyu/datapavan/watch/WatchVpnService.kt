@@ -282,8 +282,8 @@ class WatchVpnService : VpnService() {
             }
             "log-test-day" in args && testDay != null -> {
                 val noon = java.time.LocalDate.ofEpochDay(testDay).atTime(12, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
-                val record = java.nio.ByteBuffer.allocate(1 + 1 + 4 + 8 + 8 + 4).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-                    .put(1).put(2).putInt(-1).putLong(noon).putLong(noon).putInt(1).array()
+                val record = java.nio.ByteBuffer.allocate(1 + 1 + 4 + 8 + 8 + 4 + 8 + 8).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                    .put(1).put(2).putInt(-1).putLong(noon).putLong(noon).putInt(1).putLong(0).putLong(0).array()
                 val batch = java.nio.ByteBuffer.allocate(4 + 2 + record.size).order(java.nio.ByteOrder.LITTLE_ENDIAN)
                     .putInt(1).putShort(record.size.toShort()).put(record).array()
                 log.write(batch)
@@ -296,9 +296,10 @@ class WatchVpnService : VpnService() {
     private fun describe(record: LogRecord): String = when (record) {
         is LogRecord.Segment -> listOf(
             if (record.protocol == 6) "tcp" else "udp", record.uid ?: "-", "${record.address.hostAddress}:${record.port}",
-            "up=${record.up}", "down=${record.down}", if (record.continues) "continues" else "ended", record.name.ifEmpty { "-" },
+            "up=${record.up}", "down=${record.down}", if (record.continues) "continues" else "ended",
+            "wire=${record.wireUp}/${record.wireDown}", record.name.ifEmpty { "-" },
         ).joinToString(" ")
-        is LogRecord.Lookups -> "lookups ${record.uid ?: "-"} ${record.count}"
+        is LogRecord.Lookups -> "lookups ${record.uid ?: "-"} ${record.count} wire=${record.wireUp}/${record.wireDown}"
     }
 
     companion object {

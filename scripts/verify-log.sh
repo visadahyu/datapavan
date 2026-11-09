@@ -5,7 +5,9 @@
 # (UID 2000) through Watch, has the engine hand over its records at once (a debug command), and checks:
 # that the log holds both flows with their bytes; that the database files hold no destination in the
 # clear; that Watch's log output names no destination; that an earlier day cannot be opened while the
-# phone is locked and can once it is unlocked; and that the wipe leaves no file and no key.
+# phone is locked and can once it is unlocked; that the wipe leaves no file and no key; and that over a
+# scripted session the shell's bytes in the log are within 5 % of Android's own count (M4's bar), both
+# counted as IP packets on the tunnel.
 #
 #   scripts/verify-log.sh [path/to/watch-debug.apk]
 set -euo pipefail
@@ -53,6 +55,37 @@ vpn_up() {
     local uid
     uid=$(adb shell cmd package list packages -U "$PKG" | tr -d '\r' | sed -n "s/^package:$PKG uid:\([0-9]*\)$/\1/p")
     adb shell dumpsys connectivity | tr -d '\r' | grep -E 'ni\{(VPN |\[type: VPN)' | grep -q "OwnerUid: $uid "
+}
+
+# Android's own count of the shell's traffic through the VPN, as "up down": the entries of the VPN's
+# network for UID 2000 (printed "type=17" from Android 12, "type=VPN" before), every bucket, all tags
+# together (tag 0x0). Android 11 also repeats that traffic under the network beneath; those entries are
+# left out.
+android_bytes() {
+    adb shell dumpsys netstats --poll >/dev/null
+    adb shell dumpsys netstats --uid | tr -d '\r' | python3 -I -c '
+import re, sys
+uid, up, down, on = sys.argv[1], 0, 0, False
+for line in sys.stdin:
+    if "ident=" in line:
+        on = re.search(r"type=(17|VPN)\b", line) is not None and f" uid={uid} " in line and "tag=0x0" in line
+    elif on and (m := re.search(r" rb=(\d+) .* tb=(\d+)", line)):
+        down, up = down + int(m.group(1)), up + int(m.group(2))
+print(up, down)' "$SHELL_UID"
+}
+
+# The log's count of the same, as "up down": every record of the shell today, as the tunnel carried it.
+log_bytes() {
+    watch_dump log-flush >/dev/null
+    watch_dump log-today | sed -n 's/^log-record //p' | python3 -I -c '
+import re, sys
+uid, up, down = sys.argv[1], 0, 0
+for line in sys.stdin:
+    fields = line.split()
+    m = re.search(r" wire=(\d+)/(\d+)", line)
+    if m and len(fields) > 1 and fields[1] == uid:
+        up, down = up + int(m.group(1)), down + int(m.group(2))
+print(up, down)' "$SHELL_UID"
 }
 
 # The phone's local day, as days since 1970, as Watch counts it.
@@ -106,6 +139,36 @@ vpn_up || fail "Watch's tunnel did not come up again"
 watch_dump log-today | grep -qE "^log-record tcp $SHELL_UID $HOST:$PORT up=0 down=0 ended " ||
     fail "a flow open when the tunnel stopped did not reach the log"
 echo "ok: a flow open when the tunnel stops reaches the log"
+
+# Over a scripted session, the log's bytes for the shell match Android's own count within 5 %: downloads,
+# an upload, small UDP flows, and names looked up (no ping: Watch does not carry ICMP yet).
+read -r android_up0 android_down0 <<<"$(android_bytes)"
+read -r log_up0 log_down0 <<<"$(log_bytes)"
+for _ in 1 2 3; do
+    timeout 60 adb shell "printf 'GET /bytes/2000000 HTTP/1.0\r\n\r\n' | nc -w 10 $HOST $PORT > /dev/null" || true
+done
+timeout 60 adb shell "(printf 'POST /sink HTTP/1.0\r\nContent-Length: 1000000\r\n\r\n'; head -c 1000000 /dev/zero) | nc -w 10 $HOST $PORT > /dev/null" || true
+for i in 1 2 3 4 5; do
+    timeout 10 adb shell "echo watch-$i | nc -u -q 1 $HOST $((PORT + 1))" >/dev/null || true
+done
+for name in example.com example.org example.net; do
+    timeout 10 adb shell "echo watch | nc -u -q 1 $name 9" >/dev/null 2>&1 || true
+done
+sleep 2
+read -r android_up1 android_down1 <<<"$(android_bytes)"
+read -r log_up1 log_down1 <<<"$(log_bytes)"
+python3 -I - "$((android_up1 - android_up0))" "$((android_down1 - android_down0))" \
+    "$((log_up1 - log_up0))" "$((log_down1 - log_down0))" <<'PY' || fail "the log's bytes are not within 5 % of Android's count"
+import sys
+android_up, android_down, log_up, log_down = map(int, sys.argv[1:])
+ok = True
+for way, android, log in (("up", android_up, log_up), ("down", android_down, log_down)):
+    off = abs(log - android) / android if android else 1.0
+    print(f"  {way}: Android {android} bytes, the log {log} bytes, {off * 100:.2f} % apart")
+    ok = ok and android > 0 and off <= 0.05
+sys.exit(0 if ok else 1)
+PY
+echo "ok: over a scripted session the log's bytes are within 5 % of Android's own count"
 
 # The database and its journal, read as Watch itself could, hold no destination in the clear.
 files=$(mktemp -d)

@@ -12,7 +12,7 @@ class LogTest {
     /** The segment of core/net/src/log.rs's test `encodes_a_segment_field_by_field`, byte for byte. */
     private val segment: ByteArray = ByteBuffer.allocate(200).order(ByteOrder.LITTLE_ENDIAN).apply {
         put(1).put(1).putLong(7).putInt(10_123)
-        for (v in longArrayOf(1_000, 2_000, 300, 40_000)) putLong(v)
+        for (v in longArrayOf(1_000, 2_000, 300, 40_000, 820, 42_900)) putLong(v)
         put(byteArrayOf(6, 0, 3, 1, 0, 1, 4, 157.toByte(), 240.toByte(), 1, 35))
         putShort(443).putInt(32934).put(1)
         put(20).put("Meta Platforms, Inc.".toByteArray()).put(0)
@@ -25,6 +25,7 @@ class LogTest {
         assertEquals(10_123, record.uid)
         assertEquals(1_000L to 2_000L, record.start to record.end)
         assertEquals(300L to 40_000L, record.up to record.down)
+        assertEquals(820L to 42_900L, record.wireUp to record.wireDown)
         assertEquals(listOf(6, 0, 3, 1, 0), listOf(record.protocol, record.outcome, record.namedBy, record.ech, record.dns))
         assertEquals(true, record.continues)
         assertEquals("157.240.1.35", record.address.hostAddress)
@@ -36,13 +37,13 @@ class LogTest {
 
     @Test
     fun readsABatchAndStopsAtWhatIsCutShort() {
-        val lookups = ByteBuffer.allocate(26).order(ByteOrder.LITTLE_ENDIAN)
-            .put(1).put(2).putInt(-1).putLong(5).putLong(6).putInt(3).array()
+        val lookups = ByteBuffer.allocate(42).order(ByteOrder.LITTLE_ENDIAN)
+            .put(1).put(2).putInt(-1).putLong(5).putLong(6).putInt(3).putLong(210).putLong(540).array()
         val batch = ByteBuffer.allocate(4 + 2 + segment.size + 2 + lookups.size).order(ByteOrder.LITTLE_ENDIAN)
             .putInt(2).putShort(segment.size.toShort()).put(segment).putShort(lookups.size.toShort()).put(lookups).array()
         val records = LogRecord.batch(batch)
         assertEquals(2, records.size)
-        assertEquals(LogRecord.Lookups(null, 5, 6, 3), records[1].first)
+        assertEquals(LogRecord.Lookups(null, 5, 6, 3, 210, 540), records[1].first)
         assertArrayEquals(segment, records[0].second)
         assertEquals(1, LogRecord.batch(batch.copyOf(batch.size - 3)).size)
         assertNull(LogRecord.parse(segment.copyOf(30)))

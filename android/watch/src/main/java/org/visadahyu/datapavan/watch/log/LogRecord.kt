@@ -24,6 +24,9 @@ sealed interface LogRecord {
         override val end: Long,
         val up: Long,
         val down: Long,
+        /** The IP packets' bytes on the tunnel, headers included: what Android counts for the app. */
+        val wireUp: Long,
+        val wireDown: Long,
         val protocol: Int,
         val outcome: Int,
         val namedBy: Int,
@@ -38,8 +41,15 @@ sealed interface LogRecord {
         val resolver: String,
     ) : LogRecord
 
-    /** Lookups the app sent to Watch's own DNS address. */
-    data class Lookups(override val uid: Int?, override val start: Long, override val end: Long, val count: Long) : LogRecord
+    /** Lookups the app sent to Watch's own DNS address, and their packets' bytes on the tunnel. */
+    data class Lookups(
+        override val uid: Int?,
+        override val start: Long,
+        override val end: Long,
+        val count: Long,
+        val wireUp: Long,
+        val wireDown: Long,
+    ) : LogRecord
 
     companion object {
         private const val VERSION: Byte = 1
@@ -74,13 +84,15 @@ sealed interface LogRecord {
                         val end = b.long
                         val up = b.long
                         val down = b.long
+                        val wireUp = b.long
+                        val wireDown = b.long
                         val fields = IntArray(6) { b.get().toInt() and 0xff }
                         val address = ByteArray(b.get().toInt() and 0xff).also { b.get(it) }
                         val port = b.short.toInt() and 0xffff
                         val asn = b.int.toLong() and 0xffffffffL
                         val network = b.get().toInt() and 0xff
                         Segment(
-                            flow, uid.takeIf { it != UNKNOWN_UID }, start, end, up, down,
+                            flow, uid.takeIf { it != UNKNOWN_UID }, start, end, up, down, wireUp, wireDown,
                             protocol = fields[0], outcome = fields[1], namedBy = fields[2], ech = fields[3],
                             dns = fields[4], continues = fields[5] and 1 != 0,
                             address = InetAddress.getByAddress(address), port = port, asn = asn, network = network,
@@ -88,7 +100,7 @@ sealed interface LogRecord {
                         )
                     }
                     2 -> Lookups(
-                        b.int.takeIf { it != UNKNOWN_UID }, b.long, b.long, b.int.toLong() and 0xffffffffL,
+                        b.int.takeIf { it != UNKNOWN_UID }, b.long, b.long, b.int.toLong() and 0xffffffffL, b.long, b.long,
                     )
                     else -> null
                 }

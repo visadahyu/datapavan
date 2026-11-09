@@ -195,11 +195,14 @@ struct Begun {
     network: Option<Network>,
 }
 
-/// The bytes of one open flow, counted as they pass.
+/// The bytes of one open flow, counted as they pass: what the app sent and received, and the IP
+/// packets the tunnel carried for it, headers included, which is what Android counts for the app.
 #[derive(Debug, Default)]
 pub(crate) struct FlowBytes {
     up: AtomicU64,
     down: AtomicU64,
+    wire_up: AtomicU64,
+    wire_down: AtomicU64,
 }
 
 impl FlowBytes {
@@ -210,6 +213,19 @@ impl FlowBytes {
     fn add_down(&self, n: usize) {
         self.down.fetch_add(n as u64, Ordering::Relaxed);
     }
+
+    fn add_wire_up(&self, n: usize) {
+        self.wire_up.fetch_add(n as u64, Ordering::Relaxed);
+    }
+
+    fn add_wire_down(&self, n: usize) {
+        self.wire_down.fetch_add(n as u64, Ordering::Relaxed);
+    }
+
+    /// Up, down, and the tunnel's up and down.
+    fn now(&self) -> [u64; 4] {
+        [&self.up, &self.down, &self.wire_up, &self.wire_down].map(|c| c.load(Ordering::Relaxed))
+    }
 }
 
 /// A flow that is open, for the log: what is known of it, its bytes, and where its current segment
@@ -218,8 +234,30 @@ struct Live {
     flow: Flow,
     bytes: Arc<FlowBytes>,
     start: u64,
-    up: u64,
-    down: u64,
+    /// The counts at the segment's start.
+    base: [u64; 4],
+}
+
+/// An app's lookups to Watch's own DNS address: since when, how many, and the tunnel's bytes for them.
+#[derive(Debug, Clone, Copy)]
+struct Lookups {
+    start: u64,
+    count: u32,
+    wire_up: u64,
+    wire_down: u64,
+}
+
+impl Lookups {
+    fn record(self, uid: Option<u32>, end: u64) -> Record {
+        Record::Lookups {
+            uid,
+            start: self.start,
+            end: end.max(self.start),
+            count: self.count,
+            wire_up: self.wire_up,
+            wire_down: self.wire_down,
+        }
+    }
 }
 
 /// Milliseconds since 1970, UTC.
@@ -325,8 +363,10 @@ struct Shared {
     next_id: AtomicU64,
     /// The flows open now, for the log.
     live: Mutex<HashMap<u64, Live>>,
-    /// Lookups each app sent to Watch's own DNS address since the last segment, and since when.
-    lookups: Mutex<HashMap<Option<u32>, (u64, u32)>>,
+    /// Lookups each app sent to Watch's own DNS address since the last segment.
+    lookups: Mutex<HashMap<Option<u32>, Lookups>>,
+    /// The bytes of open TCP flows by fake port, for the packets the tunnel carries.
+    wire: Mutex<HashMap<u16, Arc<FlowBytes>>>,
     /// Records waiting to go to Watch's log.
     pending_log: Mutex<Vec<Record>>,
     /// Woken when a record waits or a flow opens.
@@ -484,8 +524,7 @@ impl Shared {
                 flow: flow.clone(),
                 start: now,
                 end: now,
-                up: 0,
-                down: 0,
+                bytes: [0; 4],
                 continues: false,
             });
             return None;
@@ -497,18 +536,33 @@ impl Shared {
                 flow: flow.clone(),
                 bytes: Arc::clone(&bytes),
                 start: now,
-                up: 0,
-                down: 0,
+                base: [0; 4],
             },
         );
         self.log_ready.notify_one();
         Some(bytes)
     }
 
-    /// Counts a lookup an app sent to Watch's own DNS address.
-    fn lookup(&self, uid: Option<u32>) {
-        lock(&self.lookups).entry(uid).or_insert((now_ms(), 0)).1 += 1;
+    /// Counts a lookup an app sent to Watch's own DNS address, `packet` bytes on the tunnel.
+    fn lookup(&self, uid: Option<u32>, packet: usize) {
+        let mut lookups = lock(&self.lookups);
+        let entry = lookups.entry(uid).or_insert(Lookups {
+            start: now_ms(),
+            count: 0,
+            wire_up: 0,
+            wire_down: 0,
+        });
+        entry.count += 1;
+        entry.wire_up += packet as u64;
+        drop(lookups);
         self.log_ready.notify_one();
+    }
+
+    /// Counts an answer to an app's lookup, `packet` bytes on the tunnel.
+    fn lookup_answered(&self, uid: Option<u32>, packet: usize) {
+        if let Some(entry) = lock(&self.lookups).get_mut(&uid) {
+            entry.wire_down += packet as u64;
+        }
     }
 
     /// A live flow ended: its last segment is written.
@@ -527,29 +581,19 @@ impl Shared {
             if live.start >= boundary {
                 continue;
             }
-            let (up, down) = (
-                live.bytes.up.load(Ordering::Relaxed),
-                live.bytes.down.load(Ordering::Relaxed),
-            );
+            let now = live.bytes.now();
             records.push(Record::Segment {
                 flow: live.flow.clone(),
                 start: live.start,
                 end: boundary,
-                up: up - live.up,
-                down: down - live.down,
+                bytes: delta(now, live.base),
                 continues: true,
             });
             live.start = boundary;
-            live.up = up;
-            live.down = down;
+            live.base = now;
         }
-        for (uid, (start, count)) in lock(&self.lookups).drain() {
-            records.push(Record::Lookups {
-                uid,
-                start,
-                end: boundary.max(start),
-                count,
-            });
+        for (uid, lookups) in lock(&self.lookups).drain() {
+            records.push(lookups.record(uid, boundary));
         }
         lock(&self.pending_log).extend(records);
     }
@@ -565,13 +609,8 @@ impl Shared {
                 segment(l, end, false)
             })
             .collect();
-        for (uid, (start, count)) in lock(&self.lookups).drain() {
-            records.push(Record::Lookups {
-                uid,
-                start,
-                end: now.max(start),
-                count,
-            });
+        for (uid, lookups) in lock(&self.lookups).drain() {
+            records.push(lookups.record(uid, now));
         }
         lock(&self.pending_log).extend(records);
     }
@@ -645,11 +684,14 @@ fn segment(live: Live, end: u64, continues: bool) -> Record {
     Record::Segment {
         start: live.start,
         end,
-        up: live.bytes.up.load(Ordering::Relaxed) - live.up,
-        down: live.bytes.down.load(Ordering::Relaxed) - live.down,
+        bytes: delta(live.bytes.now(), live.base),
         flow: live.flow,
         continues,
     }
+}
+
+fn delta(now: [u64; 4], base: [u64; 4]) -> [u64; 4] {
+    [0, 1, 2, 3].map(|i| now[i].saturating_sub(base[i]))
 }
 
 impl Engine {
@@ -676,6 +718,7 @@ impl Engine {
             next_id: AtomicU64::new(0),
             live: Mutex::default(),
             lookups: Mutex::default(),
+            wire: Mutex::default(),
             pending_log: Mutex::default(),
             log_ready: Notify::new(),
         });
@@ -925,6 +968,7 @@ impl Loop {
         let forgotten = lock(&self.nat).sweep(Instant::now());
         let mut pending = lock(&self.pending);
         for port in forgotten {
+            lock(&self.shared.wire).remove(&port);
             // A connection Android's stack never handed over still ends in the log.
             if let Some(upstream) = pending.remove(&port) {
                 self.shared.finish(upstream.opened.id);
@@ -969,10 +1013,14 @@ impl Loop {
             && parsed.destination.ip() == fake
         {
             // Android's answer, back to the app as if from the real destination.
-            let Some(entry) = lock(&self.nat).by_fake(parsed.destination.port(), now) else {
+            let port = parsed.destination.port();
+            let Some(entry) = lock(&self.nat).by_fake(port, now) else {
                 return;
             };
             if packet::set_ends(packet, parsed, entry.destination, entry.app).is_some() {
+                if let Some(bytes) = lock(&self.shared.wire).get(&port) {
+                    bytes.add_wire_down(packet.len());
+                }
                 self.send(packet).await;
             }
             return;
@@ -989,6 +1037,9 @@ impl Loop {
         };
         match lookup {
             Lookup::Open(port) => {
+                if let Some(bytes) = lock(&self.shared.wire).get(&port) {
+                    bytes.add_wire_up(packet.len());
+                }
                 if packet::set_ends(
                     packet,
                     parsed,
@@ -1067,13 +1118,14 @@ impl Loop {
             .get(&key)
             .map_or((None, None), |flow| (flow.uid, flow.bytes.clone()));
         if is_tunnel_dns(key.1.ip()) {
-            self.shared.lookup(uid);
+            self.shared.lookup(uid, packet.len());
         }
         match socket.send(payload).await {
             Ok(n) => {
                 Counters::add(&self.shared.counters.bytes_up, n as u64);
                 if let Some(bytes) = bytes {
                     bytes.add_up(n);
+                    bytes.add_wire_up(packet.len());
                 }
             }
             Err(_) => {
@@ -1318,6 +1370,10 @@ async fn open(
         network,
     });
     let answer = if let Ok(stream) = upstream {
+        if let Some(bytes) = &bytes {
+            bytes.add_wire_up(held.packet.len());
+            lock(&shared.wire).insert(held.port, Arc::clone(bytes));
+        }
         lock(&pending).insert(
             held.port,
             Upstream {
@@ -1489,6 +1545,13 @@ async fn answers(
                     Err(_) => break,
                 };
                 if let Some(answer) = answer {
+                    match &logged {
+                        Some((_, bytes)) => bytes.add_wire_down(answer.len()),
+                        None if destination.port() == 53 && is_tunnel_dns(destination.ip()) => {
+                            shared.lookup_answered(uid, answer.len());
+                        }
+                        None => {}
+                    }
                     if tun.send(&answer).await.is_err() {
                         break;
                     }
@@ -1537,6 +1600,7 @@ mod tests {
             next_id: AtomicU64::new(0),
             live: Mutex::default(),
             lookups: Mutex::default(),
+            wire: Mutex::default(),
             pending_log: Mutex::default(),
             log_ready: Notify::new(),
         }
@@ -1713,10 +1777,13 @@ mod tests {
                 ))
                 .is_none()
         );
-        shared.lookup(Some(UID));
-        shared.lookup(Some(UID));
+        shared.lookup(Some(UID), 70);
+        shared.lookup(Some(UID), 72);
+        shared.lookup_answered(Some(UID), 300);
         bytes.add_up(100);
+        bytes.add_wire_up(140);
         bytes.add_down(5_000);
+        bytes.add_wire_down(5_200);
         let started = lock(&shared.live)[&1].start;
         // A quarter hour passes: the open flow's first segment, and the lookups.
         shared.checkpoint(started + 1);
@@ -1729,14 +1796,20 @@ mod tests {
             .map(|r| match r {
                 Record::Segment {
                     flow,
-                    up,
-                    down,
+                    bytes,
                     continues,
                     ..
-                } => (flow.id, *up, *down, *continues),
-                Record::Lookups { count, uid, .. } => {
+                } => (flow.id, bytes[0], bytes[1], *continues),
+                Record::Lookups {
+                    count,
+                    uid,
+                    wire_up,
+                    wire_down,
+                    ..
+                } if *wire_up == 142 && *wire_down == 300 => {
                     (u64::from(uid.unwrap_or(0)), 0, u64::from(*count), false)
                 }
+                Record::Lookups { .. } => (0, 0, 0, true),
             })
             .collect();
         assert_eq!(
@@ -1748,6 +1821,14 @@ mod tests {
                 (1, 0, 700, false),
             ]
         );
+        let wire: Vec<_> = records
+            .iter()
+            .filter_map(|r| match r {
+                Record::Segment { flow, bytes, .. } if flow.id == 1 => Some([bytes[2], bytes[3]]),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(wire, vec![[140, 5_200], [0, 0]]);
         assert!(lock(&shared.live).is_empty());
         assert!(shared.take_log().is_none());
     }
