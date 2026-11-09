@@ -41,6 +41,9 @@ in the Git history.
 | [0031](0031-datapavan-lite-on-google-play.md) | Datapavan Lite on Google Play: its own name, package and key | Accepted, being built |
 | [0032](0032-expert-tool-for-preinstalled-apps.md) | An expert tool of Datapavan's own for preinstalled apps | Proposed |
 | [0033](0033-organisational-edition-beside-a-suite.md) | The organisational edition beside a device-management suite | Accepted, not built yet |
+| [0034](0034-watch-permissions.md) | Permissions for Watch: five, one only on Android 10 and 11 and one only on 17, and the build's allowlist | Proposed |
+| [0035](0035-wireguard-upstream.md) | WireGuard upstream: GotaTun's protocol core in the engine, raw packets forwarded | Proposed |
+| [0036](0036-ip-to-organisation-dataset.md) | The IP-to-organisation dataset: DB-IP Lite, checked against iptoasn | Proposed |
 
 ## Template
 
