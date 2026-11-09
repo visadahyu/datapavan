@@ -52,15 +52,30 @@ wait_for() {
     return 1
 }
 
-# The VPN network Android lists, if it is Watch's: one line, empty when there is none.
+# The VPN network Android lists, if it is Watch's: one line, empty when there is none. Android 12 and
+# later write "ni{VPN CONNECTED ...", Android 10 and 11 "ni{[type: VPN[] ..."; both name the owner.
 vpn_line() {
-    adb shell dumpsys connectivity | tr -d '\r' | grep "ni{VPN CONNECTED extra: VPN:$PKG}" | head -1 || true
+    adb shell dumpsys connectivity | tr -d '\r' | grep -E 'ni\{(VPN |\[type: VPN)' | grep "OwnerUid: $uid " | head -1 || true
+}
+
+# The apps inside the tunnel, as Android's routing rules send them to it: the UID ranges of the rules
+# that look up the tunnel's own table (the one with its default route), other than root's, one per
+# line. Other tables have rules for other apps, such as per-app network preferences. Watch's UID can
+# come with its SDK sandbox's (Android 13 and later: 10000 more), and each user of the phone (a work
+# profile, a private space) adds both again in that user, with the same last five digits.
+tunnel_uids() {
+    local table
+    table=$(adb shell ip route show table all | tr -d '\r' | sed -n 's/^default dev tun[0-9]* table \([0-9a-z_]*\) .*/\1/p' | head -1)
+    [ -n "$table" ] || return 0
+    adb shell ip rule | tr -d '\r' | grep -E "lookup $table( |\$)" | grep -o 'uidrange [0-9]*-[0-9]*' |
+        cut -d' ' -f2 | grep -v '^0-0$' | sort -u || true
 }
 
 echo "== Watch smoke test on $(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
 adb wait-for-device
 adb install -r "$APK" >/dev/null
-uid=$(adb shell cmd package list packages -U "$PKG" | tr -d '\r' | sed -n 's/.*uid:\([0-9]*\).*/\1/p')
+# Exactly Watch's package: the listing also matches names that start with it, such as the spike's.
+uid=$(adb shell cmd package list packages -U "$PKG" | tr -d '\r' | sed -n "s/^package:$PKG uid:\([0-9]*\)$/\1/p")
 [ -n "$uid" ] || fail "Watch is not installed"
 adb logcat -c
 
@@ -108,10 +123,15 @@ if ! wait_for "$(string values status_on)" 5; then
 fi
 line=$(vpn_line)
 [ -n "$line" ] || fail "Android lists no VPN of Watch's while Watch says it is on"
-case $line in
-    *"Uids: <{$uid-$uid, "*) ;;
-    *) fail "the tunnel holds more than Watch itself: $(echo "$line" | grep -o 'Uids: <[^>]*>')" ;;
-esac
+ranges=$(tunnel_uids)
+[ -n "$ranges" ] || fail "Android's routing rules send no app into the tunnel"
+for range in $ranges; do
+    first=${range%-*}
+    last=${range#*-}
+    app=$((first % 100000))
+    [ "$first" = "$last" ] && { [ "$app" = "$uid" ] || [ "$app" = $((uid + 10000)) ]; } ||
+        fail "the tunnel holds more than Watch itself: $(echo $ranges)"
+done
 echo "ok: the tunnel is up, with Watch alone inside it"
 
 tap_now "$(string values turn_off)" || fail "no button to turn Watch off"
