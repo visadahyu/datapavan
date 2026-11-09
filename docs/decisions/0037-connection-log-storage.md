@@ -1,6 +1,6 @@
 # 0037. The connection log: records sealed one by one, a key for each day, readable only on an unlocked phone
 
-- Status: Proposed
+- Status: Accepted (by the maintainer on 2026-11-09)
 - Date: 2026-11-09
 
 ## Context
