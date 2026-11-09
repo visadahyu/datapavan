@@ -116,9 +116,11 @@ The milestones of 0.2.0, W1 to W9, with what each must show before it counts as 
 Where it stands on 2026-11-09: the four items before W1 are drafted (ADRs
 [0034](docs/decisions/0034-watch-permissions.md), [0035](docs/decisions/0035-wireguard-upstream.md) and
 [0036](docs/decisions/0036-ip-to-organisation-dataset.md), accepted; the table of tools in `data/tools/`),
-W1, Watch's skeleton, is built on the branch `watch-w1` (CI passed), and W2, the packet engine in the
-product, on `watch-w2`: every app's traffic passes through Watch on the Android 11, 15 and 17 emulators and
-the A40, each flow with its app, at less CPU than the spike's engine
+W1, Watch's skeleton, and W2, the packet engine in the product, are in `main`: every app's traffic passes
+through Watch on the Android 11, 15 and 17 emulators and the A40, each flow with its app, at less CPU than the
+spike's engine. W3, a name for every flow, is built on the branch `watch-w3` but for its ten-app comparison,
+which needs a test account; W4, the connection log ([ADR 0037](docs/decisions/0037-connection-log-storage.md)),
+on `watch-w4` but for its runs on the A40 and an Android 10 emulator
 ([DESIGN.md §13.2](docs/DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools) has what is left).
 
 The items, in order:
