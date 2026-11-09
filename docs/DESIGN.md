@@ -337,6 +337,11 @@ M1 to M5, which the ADRs cite.
   its maintained forks are the candidates) against Go's wireguard-go, which would bring back the Go
   toolchain ADR 0012 kept out. Licence, upkeep and audit history decide.
 
+Status of the items before W1, 2026-11-09: Watch's permissions in [ADR 0034](decisions/0034-watch-permissions.md),
+WireGuard in [ADR 0035](decisions/0035-wireguard-upstream.md) and the dataset in
+[ADR 0036](decisions/0036-ip-to-organisation-dataset.md), all three proposed; the table of tools in
+`data/tools/` ([notes](spikes/2026-11-table-of-tools.md)).
+
 | # | Milestone | Done when |
 |---|---|---|
 | W1 | Watch's skeleton | A second Gradle module, `:watch`, package `org.visadahyu.datapavan.watch`, signed with the same key. Both APKs come from one build, CI is green, and each is reproducible on its own. The build fails if the audit app gains `INTERNET`, as now, or if Watch's manifest holds anything outside its permissions ADR. Watch opens on the emulator and the A40 with strings in all eight languages, RTL and pseudo-locales from the start, and an icon from the brand marks. Its tunnel starts and stops. |

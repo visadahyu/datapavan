@@ -113,6 +113,12 @@ signing session and texts reviewed in eight languages):
 The milestones of 0.2.0, W1 to W9, with what each must show before it counts as done, are in
 [DESIGN.md §13.2](docs/DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools).
 
+Where it stands on 2026-11-09: the four items before W1 are drafted (ADRs
+[0034](docs/decisions/0034-watch-permissions.md), [0035](docs/decisions/0035-wireguard-upstream.md) and
+[0036](docs/decisions/0036-ip-to-organisation-dataset.md), proposed; the table of tools in `data/tools/`),
+and W1, Watch's skeleton, is built on the branch `watch-w1`: its tunnel starts and stops on the Android 17
+emulator and the A40, and both apps' release APKs are reproducible.
+
 The items, in order:
 
 - A connection log per app: domain, IP, organisation, bytes, time, foreground or background.
