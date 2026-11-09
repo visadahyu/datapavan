@@ -5,5 +5,5 @@
     <string name="status_off">تطبيق Watch متوقف.</string>
     <string name="turn_on">تشغيل</string>
     <string name="turn_off">إيقاف</string>
-    <string name="consent_refused">لم يسمح أندرويد بتشغيل تطبيق Watch. إذا كان تطبيق VPN آخر مضبوطًا ليبقى قيد التشغيل دائمًا، فأوقف هذا الإعداد أولًا.</string>
+    <string name="consent_refused">لم يسمح Android بتشغيل تطبيق Watch. إذا كان تطبيق VPN آخر مضبوطًا ليبقى قيد التشغيل دائمًا، فأوقف هذا الإعداد أولًا.</string>
 </resources>
