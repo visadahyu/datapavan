@@ -12,6 +12,9 @@ publish.workspace = true
 # One event loop on one thread (docs/VPN.md, "Battery"): the current-thread runtime, with IO and timers.
 tokio = { version = "1.54.1", default-features = false, features = ["rt", "net", "io-util", "time", "sync", "macros"] }
 
+# Inflates one block of the organisation table at a time (ADR 0036): pure Rust, MIT.
+miniz_oxide = "0.9.1"
+
 [dev-dependencies]
 # Checks the packets the engine builds against an independent implementation, in tests only.
 etherparse = "0.21.0"

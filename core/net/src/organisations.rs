@@ -2,23 +2,31 @@
 //! `data/dbip-asn/update.py` from DB-IP's IP to ASN Lite: the last way a flow gets a name, when no DNS
 //! answer, TLS server name or QUIC server name gave one (W3).
 //!
-//! The table is about 10 MB, so it is read where it lies, a few bytes per step of a binary search,
-//! not loaded into memory: a lookup costs about twenty small reads and runs only for flows nothing
-//! else named. Its layout is in update.py. The table comes in the APK or a data pack, but it is still
-//! read as untrusted: every count, index and offset is checked (`fuzz_targets/organisations.rs`).
+//! The table is about 2.7 MB of blocks compressed one by one, read where it lies, not loaded into
+//! memory: a lookup reads a few index rows by binary search and inflates one block of a few
+//! kilobytes, and runs only for flows nothing else named. Its layout is in update.py. The table comes
+//! in the APK or a data pack, but it is still read as untrusted: every count, index, offset and block
+//! is checked (`fuzz_targets/organisations.rs`).
 
 use std::fs::File;
 use std::io;
 use std::net::IpAddr;
 use std::os::unix::fs::FileExt;
 
-const MAGIC: &[u8; 8] = b"DPASN\0\0\x01";
-const HEADER: u64 = 8 + 8 + 32 + 16;
+const MAGIC: &[u8; 8] = b"DPASN\0\0\x02";
+const HEADER: u64 = 64;
 const V4_ROW: u64 = 12;
-const V6_ROW: u64 = 36;
-const AS_ROW: u64 = 12;
-/// The longest name the converter writes.
-const MAX_NAME: u32 = 512;
+const V6_ROW: u64 = 24;
+const AS_ROW: u64 = 8;
+/// The AS index of an entry that no range covers.
+const GAP: u32 = 0x00FF_FFFF;
+const ASES_PER_BLOCK: u32 = 256;
+/// The most bytes a block may inflate to; the converter's blocks stay far below.
+const MAX_INFLATED: usize = 64 * 1024;
+/// The most bytes a block may take compressed.
+const MAX_BLOCK: u32 = 64 * 1024;
+/// The longest name kept.
+const MAX_NAME: usize = 512;
 
 /// Where the table's bytes are: a file, or memory in tests and fuzzing.
 pub trait Source: Send + Sync {
@@ -103,22 +111,37 @@ pub struct Organisation {
 pub struct Organisations {
     source: Box<dyn Source>,
     month: String,
-    v4: u64,
-    v4_count: u64,
-    v6: u64,
-    v6_count: u64,
-    ases: u64,
+    v4_index: u64,
+    v4_blocks: u64,
+    v6_index: u64,
+    v6_blocks: u64,
+    as_index: u64,
+    as_blocks: u64,
     as_count: u32,
-    names: u64,
-    names_length: u32,
+    data: u64,
+    data_length: u64,
 }
 
 fn u32_le(bytes: &[u8], at: usize) -> u32 {
     u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]])
 }
 
+/// Reads a varint (7 bits a byte, low first) at `*at`, moving past it.
+fn varint(bytes: &[u8], at: &mut usize) -> Option<u128> {
+    let mut value = 0u128;
+    for shift in (0..133).step_by(7) {
+        let byte = *bytes.get(*at)?;
+        *at += 1;
+        value |= u128::from(byte & 0x7f).checked_shl(shift)?;
+        if byte & 0x80 == 0 {
+            return Some(value);
+        }
+    }
+    None
+}
+
 impl Organisations {
-    /// Opens a table, checking its header and that its parts add up to its size.
+    /// Opens a table, checking its header and that its parts fit its size.
     ///
     /// # Errors
     /// When the bytes cannot be read or are not such a table.
@@ -137,29 +160,29 @@ impl Organisations {
         let month = std::str::from_utf8(&header[8..15])
             .map_err(|_| invalid())?
             .to_owned();
-        let (v4_count, v6_count) = (
-            u64::from(u32_le(&header, 48)),
-            u64::from(u32_le(&header, 52)),
-        );
-        let (as_count, names_length) = (u32_le(&header, 56), u32_le(&header, 60));
-        let v4 = HEADER;
-        let v6 = v4 + v4_count * V4_ROW;
-        let ases = v6 + v6_count * V6_ROW;
-        let names = ases + u64::from(as_count) * AS_ROW;
-        if names + u64::from(names_length) != source.size()? {
+        let count = |at| u64::from(u32_le(&header, at));
+        let (v4_blocks, v6_blocks, as_blocks) = (count(48), count(52), count(56));
+        let as_count = u32_le(&header, 60);
+        let v4_index = HEADER;
+        let v6_index = v4_index + v4_blocks * V4_ROW;
+        let as_index = v6_index + v6_blocks * V6_ROW;
+        let data = as_index + as_blocks * AS_ROW;
+        let data_length = source.size()?.checked_sub(data).ok_or_else(invalid)?;
+        if as_blocks != u64::from(as_count.div_ceil(ASES_PER_BLOCK)) {
             return Err(invalid());
         }
         Ok(Self {
             source,
             month,
-            v4,
-            v4_count,
-            v6,
-            v6_count,
-            ases,
+            v4_index,
+            v4_blocks,
+            v6_index,
+            v6_blocks,
+            as_index,
+            as_blocks,
             as_count,
-            names,
-            names_length,
+            data,
+            data_length,
         })
     }
 
@@ -173,62 +196,106 @@ impl Organisations {
     #[must_use]
     pub fn lookup(&self, address: IpAddr) -> Option<Organisation> {
         let index = match address {
-            IpAddr::V4(a) => self.find(self.v4, self.v4_count, V4_ROW, u128::from(u32::from(a)))?,
-            IpAddr::V6(a) => self.find(self.v6, self.v6_count, V6_ROW, u128::from(a))?,
+            IpAddr::V4(a) => self.find(
+                self.v4_index,
+                self.v4_blocks,
+                false,
+                u128::from(u32::from(a)),
+            )?,
+            IpAddr::V6(a) => self.find(self.v6_index, self.v6_blocks, true, u128::from(a))?,
         };
-        if index >= self.as_count {
-            return None;
-        }
-        let mut row = [0u8; 12];
-        self.source
-            .read_exact_at(&mut row, self.ases + u64::from(index) * AS_ROW)
-            .ok()?;
-        let (asn, offset, length) = (u32_le(&row, 0), u32_le(&row, 4), u32_le(&row, 8));
-        if length > MAX_NAME || offset.checked_add(length)? > self.names_length {
-            return None;
-        }
-        let mut name = vec![0u8; usize::try_from(length).ok()?];
-        self.source
-            .read_exact_at(&mut name, self.names + u64::from(offset))
-            .ok()?;
-        let name = String::from_utf8(name).ok()?;
-        if name.chars().any(char::is_control) {
-            return None;
-        }
-        Some(Organisation { asn, name })
+        self.organisation(index)
     }
 
-    /// Binary search for the last range starting at or before `address`; its AS index, if the range
-    /// holds the address.
-    fn find(&self, base: u64, count: u64, row: u64, address: u128) -> Option<u32> {
-        let wide = row == V6_ROW;
-        let read = |i: u64| -> Option<(u128, u128, u32)> {
-            let mut bytes = [0u8; 36];
-            let bytes = &mut bytes[..usize::try_from(row).ok()?];
-            self.source.read_exact_at(bytes, base + i * row).ok()?;
-            Some(if wide {
-                let start = u128::from_le_bytes(bytes[..16].try_into().ok()?);
-                let end = u128::from_le_bytes(bytes[16..32].try_into().ok()?);
-                (start, end, u32_le(bytes, 32))
-            } else {
-                (
-                    u128::from(u32_le(bytes, 0)),
-                    u128::from(u32_le(bytes, 4)),
-                    u32_le(bytes, 8),
-                )
-            })
+    /// Reads and inflates the block at `offset` of the data, `length` bytes long.
+    fn block(&self, offset: u32, length: u32) -> Option<Vec<u8>> {
+        if length > MAX_BLOCK || u64::from(offset) + u64::from(length) > self.data_length {
+            return None;
+        }
+        let mut packed = vec![0u8; usize::try_from(length).ok()?];
+        self.source
+            .read_exact_at(&mut packed, self.data + u64::from(offset))
+            .ok()?;
+        miniz_oxide::inflate::decompress_to_vec_with_limit(&packed, MAX_INFLATED).ok()
+    }
+
+    /// The AS index of the range holding `address`: the block whose first address is the last at or
+    /// before it, then the last entry of that block at or before it.
+    fn find(&self, index: u64, blocks: u64, wide: bool, address: u128) -> Option<u32> {
+        let row_size = if wide { V6_ROW } else { V4_ROW };
+        let row = |i: u64| -> Option<(u128, u32, u32)> {
+            let mut bytes = [0u8; 24];
+            let bytes = &mut bytes[..usize::try_from(row_size).ok()?];
+            self.source
+                .read_exact_at(bytes, index + i * row_size)
+                .ok()?;
+            let width = if wide { 16 } else { 4 };
+            let mut first = [0u8; 16];
+            first[..width].copy_from_slice(&bytes[..width]);
+            Some((
+                u128::from_le_bytes(first),
+                u32_le(bytes, width),
+                u32_le(bytes, width + 4),
+            ))
         };
-        let (mut low, mut high) = (0u64, count);
+        let (mut low, mut high) = (0u64, blocks);
         while low < high {
             let middle = low + (high - low) / 2;
-            if read(middle)?.0 <= address {
+            if row(middle)?.0 <= address {
                 low = middle + 1;
             } else {
                 high = middle;
             }
         }
-        let (start, end, index) = read(low.checked_sub(1)?)?;
-        (start <= address && address <= end).then_some(index)
+        let (first, offset, length) = row(low.checked_sub(1)?)?;
+        let block = self.block(offset, length)?;
+        let (mut at, mut start, mut found) = (0, first, None);
+        while at < block.len() {
+            start = start.checked_add(varint(&block, &mut at)?)?;
+            let as_index = u32::try_from(varint(&block, &mut at)?).ok()?;
+            if start > address {
+                break;
+            }
+            found = Some(as_index);
+        }
+        found.filter(|&i| i != GAP)
+    }
+
+    /// The AS number and name at `index` of the AS blocks.
+    fn organisation(&self, index: u32) -> Option<Organisation> {
+        if index >= self.as_count {
+            return None;
+        }
+        let block_number = u64::from(index / ASES_PER_BLOCK);
+        if block_number >= self.as_blocks {
+            return None;
+        }
+        let mut row = [0u8; 8];
+        self.source
+            .read_exact_at(&mut row, self.as_index + block_number * AS_ROW)
+            .ok()?;
+        let block = self.block(u32_le(&row, 0), u32_le(&row, 4))?;
+        let (mut at, mut asn) = (0usize, 0u128);
+        for position in 0..=index % ASES_PER_BLOCK {
+            asn = asn.checked_add(varint(&block, &mut at)?)?;
+            let length = usize::try_from(varint(&block, &mut at)?).ok()?;
+            let name = block.get(at..at.checked_add(length)?)?;
+            at += length;
+            if position == index % ASES_PER_BLOCK {
+                if length > MAX_NAME {
+                    return None;
+                }
+                let name = String::from_utf8(name.to_vec()).ok()?;
+                if name.chars().any(char::is_control) {
+                    return None;
+                }
+                return Some(Organisation {
+                    asn: u32::try_from(asn).ok()?,
+                    name,
+                });
+            }
+        }
+        None
     }
 }
 
@@ -237,39 +304,86 @@ pub(crate) mod tests {
     use super::*;
     use std::net::{Ipv4Addr, Ipv6Addr};
 
-    /// A table as update.py writes it: two IPv4 ranges, one IPv6 range, two networks.
+    fn varint_bytes(mut n: u128) -> Vec<u8> {
+        let mut out = Vec::new();
+        loop {
+            let low = u8::try_from(n & 0x7f).unwrap_or(0);
+            n >>= 7;
+            out.push(low | if n == 0 { 0 } else { 0x80 });
+            if n == 0 {
+                return out;
+            }
+        }
+    }
+
+    fn deflated(raw: &[u8]) -> Vec<u8> {
+        miniz_oxide::deflate::compress_to_vec(raw, 9)
+    }
+
+    /// A table as update.py writes it: two IPv4 ranges with a gap between, one IPv6 range, two networks.
     pub(crate) fn sample() -> Vec<u8> {
+        let mut data = Vec::new();
+        let block = |entries: &[(u128, u32)], first: u128, data: &mut Vec<u8>| -> (u32, u32) {
+            let mut raw = Vec::new();
+            let mut previous = first;
+            for &(start, index) in entries {
+                raw.extend(varint_bytes(start - previous));
+                raw.extend(varint_bytes(u128::from(index)));
+                previous = start;
+            }
+            let packed = deflated(&raw);
+            let offset = u32::try_from(data.len()).unwrap_or(0);
+            data.extend_from_slice(&packed);
+            (offset, u32::try_from(packed.len()).unwrap_or(0))
+        };
+        let ip4 = |a: [u8; 4]| u128::from(u32::from(Ipv4Addr::from(a)));
+        let v4 = [
+            (ip4([93, 184, 216, 0]), 0),
+            (ip4([93, 184, 217, 0]), GAP),
+            (ip4([157, 240, 0, 0]), 1),
+            (ip4([157, 241, 0, 0]), GAP),
+        ];
+        let (v4_offset, v4_length) = block(&v4, v4[0].0, &mut data);
+        let v6_first = u128::from(Ipv6Addr::new(0x2a03, 0x2880, 0, 0, 0, 0, 0, 0));
+        let v6 = [
+            (v6_first, 1),
+            (
+                u128::from(Ipv6Addr::new(0x2a03, 0x2881, 0, 0, 0, 0, 0, 0)),
+                GAP,
+            ),
+        ];
+        let (v6_offset, v6_length) = block(&v6, v6_first, &mut data);
+        let mut as_raw = Vec::new();
+        for (asn, previous, name) in [
+            (15133u128, 0u128, &b"Example Net, Inc."[..]),
+            (32934, 15133, b"Meta Platforms, Inc."),
+        ] {
+            as_raw.extend(varint_bytes(asn - previous));
+            as_raw.extend(varint_bytes(name.len() as u128));
+            as_raw.extend_from_slice(name);
+        }
+        let packed = deflated(&as_raw);
+        let (as_offset, as_length) = (
+            u32::try_from(data.len()).unwrap_or(0),
+            u32::try_from(packed.len()).unwrap_or(0),
+        );
+        data.extend_from_slice(&packed);
+
         let mut t = MAGIC.to_vec();
         t.extend_from_slice(b"2026-11\0");
         t.extend_from_slice(&[0; 32]);
-        let names = b"Example Net, Inc.Meta Platforms, Inc.";
-        for n in [2u32, 1, 2, u32::try_from(names.len()).unwrap_or(0)] {
+        for n in [1u32, 1, 1, 2] {
             t.extend_from_slice(&n.to_le_bytes());
         }
-        for (start, end, index) in [
-            ([93, 184, 216, 0], [93, 184, 216, 255], 0u32),
-            ([157, 240, 0, 0], [157, 240, 255, 255], 1),
-        ] {
-            t.extend_from_slice(&u32::from(Ipv4Addr::from(start)).to_le_bytes());
-            t.extend_from_slice(&u32::from(Ipv4Addr::from(end)).to_le_bytes());
-            t.extend_from_slice(&index.to_le_bytes());
-        }
-        t.extend_from_slice(
-            &u128::from(Ipv6Addr::new(0x2a03, 0x2880, 0, 0, 0, 0, 0, 0)).to_le_bytes(),
-        );
-        t.extend_from_slice(
-            &u128::from(Ipv6Addr::new(
-                0x2a03, 0x2880, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff,
-            ))
-            .to_le_bytes(),
-        );
-        t.extend_from_slice(&1u32.to_le_bytes());
-        for (asn, offset, length) in [(15133u32, 0u32, 17u32), (32934, 17, 20)] {
-            for n in [asn, offset, length] {
-                t.extend_from_slice(&n.to_le_bytes());
-            }
-        }
-        t.extend_from_slice(names);
+        t.extend_from_slice(&u32::try_from(v4[0].0).unwrap_or(0).to_le_bytes());
+        t.extend_from_slice(&v4_offset.to_le_bytes());
+        t.extend_from_slice(&v4_length.to_le_bytes());
+        t.extend_from_slice(&v6_first.to_le_bytes());
+        t.extend_from_slice(&v6_offset.to_le_bytes());
+        t.extend_from_slice(&v6_length.to_le_bytes());
+        t.extend_from_slice(&as_offset.to_le_bytes());
+        t.extend_from_slice(&as_length.to_le_bytes());
+        t.extend_from_slice(&data);
         t
     }
 
@@ -328,13 +442,18 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn refuses_a_table_whose_parts_do_not_add_up() {
-        let mut short = sample();
-        short.pop();
-        assert!(Organisations::open(Box::new(short)).is_err());
+    fn refuses_a_damaged_table_without_failing() {
         let mut wrong = sample();
         wrong[0] = b'X';
         assert!(Organisations::open(Box::new(wrong)).is_err());
         assert!(Organisations::open(Box::new(Vec::new())).is_err());
+        // A cut block: the table opens, but the networks in that block are not found.
+        let mut short = sample();
+        short.pop();
+        let table = Organisations::open(Box::new(short)).unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(
+            table.lookup(IpAddr::V4(Ipv4Addr::new(157, 240, 1, 35))),
+            None
+        );
     }
 }

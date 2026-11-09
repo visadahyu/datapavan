@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: CC0-1.0
-retrieved: 2026-11-09T14:11:39Z
+retrieved: 2026-11-09T14:25:26Z
 release: 2026-11
 file: https://download.db-ip.com/free/dbip-asn-lite-2026-11.csv.gz
 file-sha256: 0ea3ba480ed39127fb2ff6bcbea44db14bc978f387efedc28f0411c054c4b1e4
@@ -8,5 +8,5 @@ lines: 485292
 v4-ranges: 409312
 v6-ranges: 75978
 as-numbers: 83024
-table-bytes: 10679977
-table-sha256: 19139d85041b580e7d10260f160d6abcb48dbc90687bd87de0ae90555354584a
+table-bytes: 2713844
+table-sha256: 1c6676b4a32f116904e9af8a7c9cee83fd1a39093c1137aad9bbe0814d6c8c4d

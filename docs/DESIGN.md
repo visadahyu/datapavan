@@ -356,8 +356,12 @@ against the spike's 29 MB) needs a look.
 
 W3, on `watch-w3`, 2026-11-09: flows are named from the DNS answers Watch passes on (the name the app
 asked for, through CNAME chains), from the TLS server name of the app's first bytes, and last from the
-organisation table of [ADR 0036](decisions/0036-ip-to-organisation-dataset.md), read in place; each name
-says where it came from. `scripts/verify-watch.sh` checks all three. Still to build: the QUIC Initial
+organisation table of [ADR 0036](decisions/0036-ip-to-organisation-dataset.md), 2.71 MB in compressed
+blocks, read in place; each name says where it came from. Decided on 2026-11-09: when Private DNS is on
+"automatic" and the network's resolver speaks DNS over TLS, Android's queries pass through Watch still
+encrypted, so their names come from TLS or QUIC; W8 brings a TLS client into the engine anyway (the user's
+DoH or DoT resolver), and with it Watch answers Android's DNS over TLS itself and keeps both the
+encryption upstream and the names, within 0.2.0. `scripts/verify-watch.sh` checks all three. Still to build: the QUIC Initial
 server name, strict Private DNS detected and explained, apps' own encrypted DNS recognised, and the
 ten-app comparison with PCAPdroid on an emulator with test accounts.
 

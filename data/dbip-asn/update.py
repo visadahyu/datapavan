@@ -14,14 +14,21 @@ public AS numbers, with neighbouring ranges of the same AS merged, and one name 
 covers the most addresses. Private, reserved and documentation addresses and AS numbers are dropped:
 Watch names local addresses itself, and nobody owns the others.
 
-asn.bin, little-endian, the same bytes for the same input:
+asn.bin, little-endian, in blocks that are each compressed on their own (raw deflate), so that a
+lookup reads and inflates one block of a few kilobytes and the table stays about 2.7 MB:
 
-    magic "DPASN\\0\\0\\1", release month (8 bytes, "2026-11" and a zero), the source file's SHA-256 (32)
-    v4 count, v6 count, AS count, names length (u32 each)
-    v4 ranges: start (u32), end (u32), AS index (u32), sorted by start
-    v6 ranges: start (u128), end (u128), AS index (u32), sorted by start
-    ASes: number (u32), name offset (u32), name length (u32), sorted by number
-    names: UTF-8, one after another
+    magic "DPASN\0\0\2", release month (8 bytes, "2026-11" and a zero), the source file's SHA-256 (32)
+    v4 blocks, v6 blocks, AS blocks, AS count (u32 each)
+    v4 index: per block, its first address (u32), offset and length of its data (u32 each)
+    v6 index: per block, its first address (u128), offset and length (u32 each)
+    AS index: per block, offset and length (u32 each)
+    the blocks' data, offsets counted from its start
+
+A block of addresses holds up to 512 entries, each the start of a range (a varint, the difference from
+the entry before, the block's first counting from the block's first address) and its AS index (a
+varint; 16777215 for a gap that no range covers). An entry holds until the next one starts. A block of
+ASes holds 256 ASes in index order, each its number (a varint, the difference from the one before, the
+block's first from 0), the length of its name (a varint) and the name in UTF-8.
 
 core/net/src/organisations.rs reads it.
 """
@@ -39,6 +46,7 @@ import struct
 import sys
 import tempfile
 import urllib.request
+import zlib
 
 PAGE_URL = "https://db-ip.com/db/download/ip-to-asn-lite"
 FILE_URL = "https://download.db-ip.com/free/dbip-asn-lite-{month}.csv.gz"
@@ -47,7 +55,7 @@ LICENCE_STATEMENT = (
     "International License."
 )
 HERE = pathlib.Path(__file__).resolve().parent
-MAGIC = b"DPASN\0\0\1"
+MAGIC = b"DPASN\0\0\2"
 # The longest organisation name kept; longer ones are cut at a character boundary.
 MAX_NAME = 120
 # How far the counts may move from the last table before a person has to confirm.
@@ -67,6 +75,70 @@ def public_as(number: int) -> bool:
         0 < number < 64496 and number != 23456
         or 131072 <= number < 4200000000
     )
+
+
+GAP = 0xFFFFFF
+RANGES_PER_BLOCK = 512
+ASES_PER_BLOCK = 256
+
+
+def varint(n: int) -> bytes:
+    out = bytearray()
+    while True:
+        low, n = n & 0x7F, n >> 7
+        out.append(low | (0x80 if n else 0))
+        if not n:
+            return bytes(out)
+
+
+def deflate(data: bytes) -> bytes:
+    compressor = zlib.compressobj(9, zlib.DEFLATED, -15, 9)
+    return compressor.compress(data) + compressor.flush()
+
+
+def write_table(month, digest, v4, v6, ases, index) -> bytes:
+    """The table in the layout of the module's docstring."""
+    def entries(ranges):
+        out = []
+        for i, (start, end, number) in enumerate(ranges):
+            out.append((start, index[number]))
+            if i + 1 == len(ranges) or ranges[i + 1][0] > end + 1:
+                out.append((end + 1, GAP))
+        return out
+
+    data = bytearray()
+    indexes = []
+    for family, width in ((entries(v4), 4), (entries(v6), 16)):
+        rows = bytearray()
+        for i in range(0, len(family), RANGES_PER_BLOCK):
+            block = family[i:i + RANGES_PER_BLOCK]
+            raw = bytearray()
+            previous = block[0][0]
+            for start, as_index in block:
+                raw += varint(start - previous) + varint(as_index)
+                previous = start
+            packed = deflate(bytes(raw))
+            # An entry past the end of the address space (a gap after the last range) is left out.
+            first = block[0][0]
+            if first >= 1 << (8 * width):
+                continue
+            rows += first.to_bytes(width, "little") + struct.pack("<II", len(data), len(packed))
+            data += packed
+        indexes.append(rows)
+    as_rows = bytearray()
+    for i in range(0, len(ases), ASES_PER_BLOCK):
+        raw = bytearray()
+        previous = 0
+        for number, name in ases[i:i + ASES_PER_BLOCK]:
+            raw += varint(number - previous) + varint(len(name)) + name
+            previous = number
+        packed = deflate(bytes(raw))
+        as_rows += struct.pack("<II", len(data), len(packed))
+        data += packed
+    v4_blocks, v6_blocks = len(indexes[0]) // 12, len(indexes[1]) // 24
+    header = MAGIC + month.encode("ascii") + b"\0" + bytes.fromhex(digest)
+    header += struct.pack("<IIII", v4_blocks, v6_blocks, len(as_rows) // 8, len(ases))
+    return header + bytes(indexes[0]) + bytes(indexes[1]) + bytes(as_rows) + bytes(data)
 
 
 def main() -> None:
@@ -133,25 +205,7 @@ def main() -> None:
             if key in old and abs(new - int(old[key])) > MAX_CHANGE * int(old[key]):
                 sys.exit(f"{key} moved from {old[key]} to {new}; check, then run with DATAPAVAN_ACCEPT_CHANGE=1")
 
-    name_bytes = bytearray()
-    as_table = bytearray()
-    for number, name in zip(numbers, names):
-        encoded = name.encode("utf-8")
-        as_table += struct.pack("<III", number, len(name_bytes), len(encoded))
-        name_bytes += encoded
-    out = io.BytesIO()
-    out.write(MAGIC)
-    out.write(month.encode("ascii") + b"\0")
-    out.write(bytes.fromhex(digest))
-    out.write(struct.pack("<IIII", len(v4), len(v6), len(numbers), len(name_bytes)))
-    for start, end, number in v4:
-        out.write(struct.pack("<III", start, end, index[number]))
-    for start, end, number in v6:
-        out.write(start.to_bytes(16, "little") + end.to_bytes(16, "little") + struct.pack("<I", index[number]))
-    out.write(as_table)
-    out.write(name_bytes)
-    table = out.getvalue()
-
+    table = write_table(month, digest, v4, v6, [(n, names[i].encode("utf-8")) for i, n in enumerate(numbers)], index)
     (HERE / "asn.bin").write_bytes(table)
     retrieved = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     (HERE / "SOURCE").write_text(

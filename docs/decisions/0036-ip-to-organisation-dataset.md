@@ -93,6 +93,15 @@ answers and 12 % from the table; none stayed unnamed. A new point for the size q
 committed (`.gitignore`) until the question is settled, and a clean checkout builds Watch without it;
 `SOURCE` records each build. Option (c) keeps the committed part small; the full table would then
 travel only in packs.
+
+**Revised by the maintainer the same day:** option (c) is dropped. The table is the last way a flow
+gets a name, so the flows it names are those that went around DNS (addresses written into an app, an
+app's own encrypted DNS), the most telling ones, and they are often on small networks that (c) would
+leave out. Instead the whole table ships in a compact layout: blocks of 512 ranges or 256 networks,
+each compressed on its own (raw deflate, read by `miniz_oxide`), so that a lookup inflates one block of
+a few kilobytes. The November table takes **2.71 MB**, stored as it is in Watch's APK. Still open: how
+the monthly table is kept, committed (about 2.7 MB a month in the repository's history) or in a data
+repository of its own.
 - **Data from only Watch stays out of the audit app.** `dbip-asn` is left out of the audit app's
   payload (`android/app/build.gradle.kts`); Watch's build copies the table into its own assets.
 
