@@ -13,6 +13,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "=0.4.13"
 datapavan-engine = { path = "../engine" }
+datapavan-net = { path = "../net" }
 
 [[bin]]
 name = "attestation"
@@ -41,6 +42,13 @@ bench = false
 [[bin]]
 name = "datapack"
 path = "fuzz_targets/datapack.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "packet"
+path = "fuzz_targets/packet.rs"
 test = false
 doc = false
 bench = false

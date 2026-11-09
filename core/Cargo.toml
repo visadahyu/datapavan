@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["engine", "jni"]
+members = ["engine", "jni", "net", "watch-jni"]
 
 [workspace.package]
 version = "0.1.0"
