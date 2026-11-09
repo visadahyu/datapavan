@@ -13,7 +13,8 @@ pub mod nat;
 pub mod organisations;
 pub mod packet;
 pub mod quic;
+pub mod resolvers;
 pub mod tls;
 pub mod tun;
 
-pub use engine::{Config, Ech, Engine, Flow, NamedBy, Outcome, Platform};
+pub use engine::{Config, DnsUse, Ech, Engine, Flow, NamedBy, Outcome, Platform};

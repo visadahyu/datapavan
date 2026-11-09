@@ -218,8 +218,9 @@ abstract class BundledDataTask : DefaultTask() {
         val path = Regex("[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*")
         val files = source.walkTopDown()
             .filter { it.isFile && it.parentFile != source && it.extension !in setOf("py", "sh") && !it.name.startsWith(".") }
-            // Datasets that only Watch uses go into Watch's APK, not the audit app's (ADR 0036).
-            .filter { it.relativeTo(source).invariantSeparatorsPath.substringBefore('/') !in setOf("dbip-asn") }
+            // Datasets that only Watch uses go into Watch's APK, not the audit app's (ADR 0036): the
+            // organisation table, and the resolvers compiled into Watch's engine.
+            .filter { it.relativeTo(source).invariantSeparatorsPath.substringBefore('/') !in setOf("dbip-asn", "resolvers") }
             .map { it.relativeTo(source).invariantSeparatorsPath to it }
             .sortedBy { it.first }
             .toList()

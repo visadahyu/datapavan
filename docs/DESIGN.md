@@ -395,8 +395,22 @@ also covers "automatic" on a network whose DNS server encrypts, which the emulat
 network's server has no DNS over TLS. The four strings were translated into the seven languages with
 Android's own names for the setting, read from the emulator's Settings app, and reviewed by two other
 models; one finding was settled. `scripts/verify-watch.sh` turns strict mode on and off on the emulator
-and checks that Watch reads both. Still to build: apps' own encrypted DNS recognised, and the ten-app
-comparison.
+and checks that Watch reads both.
+
+An app's own DNS, the same evening (ADR 0029). A flow is marked as the app's own DNS when it is plain
+DNS on port 53 to another server than Watch's, DNS over TLS or QUIC on port 853, or DNS over HTTPS on
+port 443 to a known resolver's address or host name (from DNS, TLS or QUIC). The known resolvers are a
+new CC0 table, `data/resolvers`, every host and address from its operator's own page, compiled into the
+engine and kept out of the audit app: 60 services of 18 operators, from Google, Cloudflare and Quad9
+to Alibaba, Tencent's DNSPod, Yandex and Shecan, each checked again by two other models; Mullvad's was
+left out, since its page says it closed on 2026-11-02. The answers an app gets from a resolver of its
+own name that app's later flows, and only that app's: the app chose that resolver and must not rename
+other apps' connections through it. ECH public names come only from Android's resolver. Two counters
+without destinations count the app's own plain and encrypted DNS. Still to build: the map from AS
+numbers to companies (`data/owners/asns.tsv`, ADR 0036) and the ten-app comparison. One run of
+`scripts/verify-watch.sh` saw Watch still read strict Private DNS 20 s after the setting was restored,
+right after a network switch; three tries could not repeat it, so the check now waits 60 s and, if it
+fails, prints what Android itself reports for each network.
 
 | # | Milestone | Done when |
 |---|---|---|

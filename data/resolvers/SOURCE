@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: CC0-1.0
+retrieved: 2026-11-09
+services: 60
+operators: 18
+values: 349
+evidence: 385
+method: every host name and address read on its operator's own page (website, documentation or official
+  repository at a pinned commit), one row of sources.tsv per value; no third-party list. Mozilla's own
+  documentation of its Trusted Recursive Resolver program is the source of Firefox's Cloudflare host name.
+  Checked again by two other models, each alone, against the same pages; their findings were settled before
+  this release (pages that need a browser were read in one).
+left-out: Comcast Xfinity (its page names no public DoH host); Mullvad's public encrypted DNS, which its page
+  says was discontinued on 2026-11-02.

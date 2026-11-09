@@ -6,7 +6,8 @@
 # once, a refused one and an unreachable one each get their owner named; that the app sees the refusal
 # as "refused" and an unreachable IPv6 address as "no route", as without a VPN; that names resolve
 # through the tunnel's DNS, and flows are named after a DNS answer, a TLS server name or a QUIC one,
-# with the ECH a hello offers noted, and strict Private DNS is detected (W3); and that
+# with the ECH a hello offers noted, an app's own DNS is recognised, and strict Private DNS is
+# detected (W3); and that
 # all of it still works after the network beneath switches from Wi-Fi to mobile data. Nothing is left
 # running: the tunnel and the server stop at the end.
 #
@@ -48,8 +49,11 @@ HELLO_ON_DEVICE=/data/local/tmp/watch-hello.bin
 # A QUIC ClientHello for watch.test offering ECH, in two Initial datagrams, its CRYPTO frames out of
 # order as Chrome sends them; the UDP echo sends them back, and only the name counts.
 QUIC_ON_DEVICE=/data/local/tmp/watch-quic
+# An app's own DNS (ADR 0029): a plain query for example.org, and a TLS hello for dns.google.
+DNS_ON_DEVICE=/data/local/tmp/watch-dns.bin
+DOH_ON_DEVICE=/data/local/tmp/watch-doh.bin
 cleanup() {
-    adb shell rm -f "$HELLO_ON_DEVICE" "$QUIC_ON_DEVICE-1.bin" "$QUIC_ON_DEVICE-2.bin" >/dev/null 2>&1 || true
+    adb shell rm -f "$HELLO_ON_DEVICE" "$QUIC_ON_DEVICE-1.bin" "$QUIC_ON_DEVICE-2.bin" "$DNS_ON_DEVICE" "$DOH_ON_DEVICE" >/dev/null 2>&1 || true
     adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
     if is_emulator; then
         adb shell svc wifi enable >/dev/null 2>&1 || true
@@ -70,7 +74,7 @@ fail() {
     exit 1
 }
 
-# The flows the engine kept, one per line: protocol app destination uid outcome named-by ech name.
+# The flows the engine kept, one per line: protocol app destination uid outcome named-by ech dns name.
 flows() {
     adb shell dumpsys activity service "$PKG/.WatchVpnService" | tr -d '\r' | sed -n 's/^ *flow //p'
 }
@@ -83,7 +87,7 @@ has_flow() {
 # Whether a flow of the shell, by protocol $1 to any address on port $2, is named $3 by $4 (W3), with
 # the ECH column $5 (any if not given).
 has_named_flow() {
-    flows | grep -qE "^$1 [^ ]+ [^ ]+:$2 $SHELL_UID opened $4 ${5:-[^ ]+} ${3//./\\.}\$"
+    flows | grep -qE "^$1 [^ ]+ [^ ]+:$2 $SHELL_UID opened $4 ${5:-[^ ]+} [^ ]+ ${3//./\\.}\$"
 }
 
 # What Watch says of Private DNS on its network: plain, network, or strict and the provider (debug).
@@ -92,11 +96,18 @@ private_dns() {
 }
 
 wait_private_dns() {
-    for _ in $(seq 1 20); do
+    for _ in $(seq 1 "${2:-20}"); do
         [ "$(private_dns)" = "$1" ] && return 0
         sleep 1
     done
     return 1
+}
+
+# What Android itself says of Private DNS on each network, for a failure: whether Watch or Android lags.
+android_private_dns() {
+    adb shell dumpsys connectivity | tr -d '\r' |
+        grep -oE 'NetworkAgentInfo\{network\{[0-9]+\}|InterfaceName: [a-z0-9]+|UsePrivateDns: [a-z]+|PrivateDnsServerName: [^ ]+' |
+        paste -sd' '
 }
 
 vpn_up() {
@@ -157,6 +168,47 @@ traffic() {
     has_named_flow udp "$((PORT + 1))" watch.test quic ech ||
         fail "$round: a QUIC connection was not named after its server name, with ECH offered"
     echo "ok: $round: a flow named from its QUIC server name, put together from two datagrams"
+
+    # An app's own DNS, past Watch's resolver (ADR 0029): plain DNS to Google's public resolver, and a
+    # TLS hello for its DNS-over-HTTPS name. Neither needs an answer to be recognised. nc quits 3 s after
+    # its input ends (-q), so that od sees the end of the answer.
+    answer=$(device 10 "nc -u -q 3 8.8.8.8 53 < $DNS_ON_DEVICE | od -An -tx1")
+    flows | grep -qE "^udp [^ ]+ 8\.8\.8\.8:53 $SHELL_UID [a-z]+ [^ ]+ [^ ]+ plain:google " ||
+        fail "$round: plain DNS to 8.8.8.8 was not recognised as the app's own"
+    echo "ok: $round: an app's own plain DNS, to a known resolver"
+    # The answer of a resolver the app asked itself names that app's next flow, and only its flows. Where
+    # a network filters public resolvers, an emulator's own DNS server, asked directly instead of through
+    # Watch's, answers instead.
+    if [ -z "$answer" ] && is_emulator; then
+        answer=$(device 10 "nc -u -q 3 10.0.2.3 53 < $DNS_ON_DEVICE | od -An -tx1")
+    fi
+    own=$(python3 -I - "$answer" 2>/dev/null <<'PY'
+import sys
+data = bytes.fromhex(sys.argv[1].replace(" ", "").replace("\n", ""))
+at = 12
+while data[at]:
+    at += 1 + data[at]
+at += 5
+for _ in range(int.from_bytes(data[6:8], "big")):
+    at += 2 if data[at] >= 0xC0 else 1 + data[at]
+    kind, length = int.from_bytes(data[at:at + 2], "big"), int.from_bytes(data[at + 8:at + 10], "big")
+    if kind == 1 and length == 4:
+        print(".".join(str(b) for b in data[at + 10:at + 14]))
+        break
+    at += 10 + length
+PY
+    ) || own=""
+    if [ -n "$own" ]; then
+        device 6 "echo watch | nc -u -w 1 $own 7" >/dev/null
+        has_named_flow udp 7 example.org dns || fail "$round: the app's own DNS answer did not name its next flow"
+        echo "ok: $round: the answer of the app's own resolver names its next flow"
+    else
+        echo "skipped: $round: no answer from a resolver the app asked itself"
+    fi
+    device 10 "nc -w 3 8.8.8.8 443 < $DOH_ON_DEVICE" >/dev/null
+    flows | grep -qE "^tcp [^ ]+ 8\.8\.8\.8:443 $SHELL_UID [a-z]+ [^ ]+ [^ ]+ encrypted:google " ||
+        fail "$round: a TLS hello for dns.google was not recognised as encrypted DNS"
+    echo "ok: $round: an app's own encrypted DNS, to a known resolver"
 
     # A flow to an address no DNS answer gave is named after its network's organisation, when this
     # build carries the table (data/dbip-asn/update.py; a clean checkout has none, ADR 0036).
@@ -236,7 +288,20 @@ for n, packet in ((1, initial(0, first, 1250)), (2, initial(1, second, 1250))):
     open(f"{sys.argv[1]}-{n}.bin", "wb").write(packet)
 PY
 for n in 1 2; do adb push "$hello-$n.bin" "$QUIC_ON_DEVICE-$n.bin" >/dev/null 2>&1; done
-rm -f "$hello" "$hello-1.bin" "$hello-2.bin"
+python3 -I - "$hello" <<'PY'
+import struct, sys
+query = struct.pack("!HHHHHH", 0x5741, 0x0100, 1, 0, 0, 0) + b"\x07example\x03org\x00" + struct.pack("!HH", 1, 1)
+open(sys.argv[1] + "-dns.bin", "wb").write(query)
+name = b"dns.google"
+body = b"\x03\x03" + bytes(32) + b"\x00\x00\x02\x13\x01\x01\x00"
+extension = struct.pack("!HHHBH", 0, len(name) + 5, len(name) + 3, 0, len(name)) + name
+body += struct.pack("!H", len(extension)) + extension
+handshake = b"\x01\x00" + struct.pack("!H", len(body)) + body
+open(sys.argv[1] + "-doh.bin", "wb").write(b"\x16\x03\x01" + struct.pack("!H", len(handshake)) + handshake)
+PY
+adb push "$hello-dns.bin" "$DNS_ON_DEVICE" >/dev/null 2>&1
+adb push "$hello-doh.bin" "$DOH_ON_DEVICE" >/dev/null 2>&1
+rm -f "$hello" "$hello-1.bin" "$hello-2.bin" "$hello-dns.bin" "$hello-doh.bin"
 is_emulator && adb shell appops set "$PKG" ACTIVATE_VPN allow
 # Android 17: the server is on the local network, which Watch reaches for every app (ADR 0034).
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
@@ -277,7 +342,11 @@ if is_emulator; then
     adb shell settings put global private_dns_mode hostname
     wait_private_dns "strict dns.google" || fail "strict Private DNS was not detected: '$(private_dns)'"
     restore_private_dns
-    wait_private_dns plain || fail "Watch still reads Private DNS as '$(private_dns)' once it was restored"
+    # Once, right after the network switch, Watch still read strict mode 20 s after the restore; three
+    # tries could not repeat it. This waits longer, and a failure shows whether Android itself still
+    # reports the provider.
+    wait_private_dns plain 60 ||
+        fail "Watch still reads Private DNS as '$(private_dns)' once it was restored; Android says: $(android_private_dns)"
     echo "ok: strict Private DNS is detected, and its end"
 else
     echo "skipped: Private DNS, on a phone"

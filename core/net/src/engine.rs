@@ -31,6 +31,7 @@ use crate::nat::{Lookup, Nat};
 use crate::organisations::Organisations;
 use crate::packet::{self, ACK, Packet, RST, SYN, Skip, TCP, UDP, Unreachable};
 use crate::quic;
+use crate::resolvers::Resolvers;
 use crate::tls::{self, Hello, ServerName};
 use crate::tun::Tun;
 
@@ -127,6 +128,17 @@ pub enum Ech {
     Hidden,
 }
 
+/// Whether a flow carries an app's own DNS, past Watch's resolver (W3, ADR 0029).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DnsUse {
+    /// Not DNS, as far as Watch can tell, or the phone's own lookups through Watch's resolver.
+    None,
+    /// Plain DNS on port 53 to another server than Watch's: around the phone's DNS settings.
+    Plain,
+    /// DNS over TLS or QUIC (port 853), or DNS over HTTPS to a known resolver.
+    Encrypted,
+}
+
 /// A flow the engine opened for an app.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Flow {
@@ -148,6 +160,18 @@ pub struct Flow {
     pub named_by: NamedBy,
     /// Whether the hello hid the real name.
     pub ech: Ech,
+    /// Whether the flow carries the app's own DNS.
+    pub dns: DnsUse,
+    /// The known resolver it goes to (`data/resolvers`), if it is one.
+    pub resolver: Option<String>,
+}
+
+/// What the engine knew of a flow when it opened, for what the flow's hello may add.
+#[derive(Clone, Copy, Debug)]
+struct Opened {
+    id: u64,
+    port: u16,
+    dns: DnsUse,
 }
 
 /// The engine's settings.
@@ -179,6 +203,8 @@ pub struct Counters {
     quic_unread: AtomicU64,
     ech_offered: AtomicU64,
     ech_hidden: AtomicU64,
+    dns_plain: AtomicU64,
+    dns_encrypted: AtomicU64,
 }
 
 impl Counters {
@@ -188,10 +214,11 @@ impl Counters {
 
     /// TCP flows, UDP flows, bytes up, bytes down, flows without an owner, refused, unreachable,
     /// failed, packets skipped, packets in, packets out, server names read from TLS and from QUIC, QUIC
-    /// flows whose name could not be read, hellos that offered ECH, and hellos whose name was an ECH
-    /// public name. None names a destination: they can be read on any phone.
+    /// flows whose name could not be read, hellos that offered ECH, hellos whose name was an ECH public
+    /// name, and flows of an app's own plain and encrypted DNS. None names a destination: they can be
+    /// read on any phone.
     #[must_use]
-    pub fn snapshot(&self) -> [u64; 16] {
+    pub fn snapshot(&self) -> [u64; 18] {
         [
             &self.tcp_flows,
             &self.udp_flows,
@@ -209,6 +236,8 @@ impl Counters {
             &self.quic_unread,
             &self.ech_offered,
             &self.ech_hidden,
+            &self.dns_plain,
+            &self.dns_encrypted,
         ]
         .map(|c| c.load(Ordering::Relaxed))
     }
@@ -226,6 +255,8 @@ struct Shared {
     names: Mutex<Names>,
     /// The offline table from address to organisation, if Watch has one.
     organisations: Option<Organisations>,
+    /// Well-known public DNS resolvers.
+    resolvers: Resolvers,
     next_id: AtomicU64,
 }
 
@@ -234,11 +265,11 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl Shared {
-    /// A new flow's number and its first name: from the DNS answers Watch passed on, else from the
+    /// A new flow's number and its first name: from the DNS answers the app was given, else from the
     /// organisation of the destination's network. A TLS or QUIC server name may come later.
-    fn begin(&self, destination: SocketAddr) -> (u64, Option<String>, NamedBy) {
+    fn begin(&self, destination: SocketAddr, uid: Option<u32>) -> (u64, Option<String>, NamedBy) {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed) + 1;
-        if let Some(name) = lock(&self.names).get(destination.ip(), Instant::now()) {
+        if let Some(name) = lock(&self.names).get(destination.ip(), uid, Instant::now()) {
             return (id, Some(name.to_owned()), NamedBy::Dns);
         }
         match self
@@ -251,11 +282,37 @@ impl Shared {
         }
     }
 
+    /// Whether a flow to `destination`, named `name` by DNS if at all, carries the app's own DNS, and
+    /// to which known resolver: port 53 to another server than Watch's, port 853, or port 443 to a
+    /// known resolver's address or host name.
+    fn dns_use(&self, destination: SocketAddr, name: Option<&str>) -> (DnsUse, Option<String>) {
+        let known = self
+            .resolvers
+            .at(destination.ip())
+            .or_else(|| name.and_then(|n| self.resolvers.named(n)))
+            .map(str::to_owned);
+        match destination.port() {
+            53 if !is_tunnel_dns(destination.ip()) => (DnsUse::Plain, known),
+            853 => (DnsUse::Encrypted, known),
+            443 if known.is_some() => (DnsUse::Encrypted, known),
+            _ => (DnsUse::None, None),
+        }
+    }
+
     /// Notes what a flow's TLS or QUIC hello said: its server name names the flow by W3's order,
-    /// unless it is the public name of an ECH configuration, behind which the real name is hidden.
-    fn hello(&self, id: u64, hello: Hello, by: NamedBy) {
+    /// unless it is the public name of an ECH configuration, behind which the real name is hidden. A
+    /// known resolver's host name marks the flow as the app's own encrypted DNS.
+    fn hello(&self, opened: Opened, hello: Hello, by: NamedBy) {
+        let id = opened.id;
         let hidden = hello.ech && lock(&self.names).is_public(&hello.name, Instant::now());
+        let resolver = matches!(opened.port, 443 | 853)
+            .then(|| self.resolvers.named(&hello.name))
+            .flatten()
+            .map(str::to_owned);
         let counters = &self.counters;
+        if resolver.is_some() && opened.dns == DnsUse::None {
+            Counters::add(&counters.dns_encrypted, 1);
+        }
         Counters::add(
             if by == NamedBy::Quic {
                 &counters.quic_names
@@ -279,6 +336,10 @@ impl Shared {
                 (true, false) => Ech::Offered,
                 (false, false) => Ech::Absent,
             };
+            if let Some(resolver) = resolver {
+                flow.dns = DnsUse::Encrypted;
+                flow.resolver.get_or_insert(resolver);
+            }
             if !hidden && flow.named_by.yields_to(by) {
                 flow.name = Some(hello.name);
                 flow.named_by = by;
@@ -286,16 +347,20 @@ impl Shared {
         }
     }
 
-    /// Learns the names in a DNS answer passed back to an app.
-    fn learn(&self, answer: &[u8]) {
+    /// Learns the names in a DNS answer passed back to an app: for every app's flows from Android's
+    /// resolver, or for one app's flows from a resolver of its own. ECH public names are taken only
+    /// from Android's: they hide names in every app's flows.
+    fn learn(&self, answer: &[u8], scope: Option<u32>) {
         if let Some(response) = dns::response(answer) {
             let now = Instant::now();
             let mut names = lock(&self.names);
             for (address, ttl) in response.addresses {
-                names.insert(address, &response.question, ttl, now);
+                names.insert(address, scope, &response.question, ttl, now);
             }
-            for (public, ttl) in response.public_names {
-                names.insert_public(&public, ttl, now);
+            if scope.is_none() {
+                for (public, ttl) in response.public_names {
+                    names.insert_public(&public, ttl, now);
+                }
             }
         }
     }
@@ -320,6 +385,11 @@ impl Shared {
         }
         if flow.uid.is_none() {
             Counters::add(&self.counters.owner_unknown, 1);
+        }
+        match flow.dns {
+            DnsUse::None => {}
+            DnsUse::Plain => Counters::add(&self.counters.dns_plain, 1),
+            DnsUse::Encrypted => Counters::add(&self.counters.dns_encrypted, 1),
         }
         if self.keep_flows > 0 {
             let mut flows = lock(&self.flows);
@@ -367,6 +437,7 @@ impl Engine {
             upstream_dns: Mutex::new(None),
             names: Mutex::new(Names::default()),
             organisations,
+            resolvers: Resolvers::bundled(),
             next_id: AtomicU64::new(0),
         });
         let (stop, stopped) = watch::channel(false);
@@ -427,7 +498,7 @@ impl Engine {
 
     /// The counters, as [`Counters::snapshot`] orders them.
     #[must_use]
-    pub fn counters(&self) -> [u64; 16] {
+    pub fn counters(&self) -> [u64; 18] {
         self.shared.counters.snapshot()
     }
 
@@ -447,8 +518,8 @@ impl Drop for Engine {
 /// An upstream connection waiting for Android's TCP stack to hand over the app's end.
 struct Upstream {
     stream: TcpStream,
-    /// The flow's number.
-    id: u64,
+    /// The flow, as it opened.
+    opened: Opened,
 }
 
 type Pending = Arc<Mutex<HashMap<u16, Upstream>>>;
@@ -456,10 +527,17 @@ type Pending = Arc<Mutex<HashMap<u16, Upstream>>>;
 /// Initial packets read so far, with the flow's number.
 struct UdpFlow {
     socket: Arc<UdpSocket>,
-    quic: Option<(u64, quic::Initial)>,
+    quic: Option<(Opened, quic::Initial)>,
 }
 
 type UdpFlows = Arc<Mutex<HashMap<(SocketAddr, SocketAddr), UdpFlow>>>;
+
+/// A UDP flow's two ends and its app's UID, for the task that relays its answers.
+struct UdpEnds {
+    app: SocketAddr,
+    destination: SocketAddr,
+    uid: Option<u32>,
+}
 
 /// The engine's state inside its event loop.
 struct Loop {
@@ -699,10 +777,10 @@ impl Loop {
         let Some(flow) = flows.get_mut(&key) else {
             return;
         };
-        let Some((id, initial)) = flow.quic.as_mut() else {
+        let Some((opened, initial)) = flow.quic.as_mut() else {
             return;
         };
-        let id = *id;
+        let opened = *opened;
         let read = initial.push(payload);
         if read == ServerName::Incomplete {
             return;
@@ -711,7 +789,7 @@ impl Loop {
         flow.quic = None;
         drop(flows);
         match read {
-            ServerName::Found(hello) => self.shared.hello(id, hello, NamedBy::Quic),
+            ServerName::Found(hello) => self.shared.hello(opened, hello, NamedBy::Quic),
             _ if was_quic => Counters::add(&self.shared.counters.quic_unread, 1),
             _ => {}
         }
@@ -722,7 +800,16 @@ impl Loop {
     async fn open_udp(&self, packet: &[u8], parsed: &Packet) -> Option<Arc<UdpSocket>> {
         let (app, destination) = (parsed.source, parsed.destination);
         let uid = owner(&self.shared, UDP, app, destination).await;
-        let (id, name, named_by) = self.shared.begin(destination);
+        let (id, name, named_by) = self.shared.begin(destination, uid);
+        let by_dns = (named_by == NamedBy::Dns)
+            .then_some(name.as_deref())
+            .flatten();
+        let (dns, resolver) = self.shared.dns_use(destination, by_dns);
+        let opened = Opened {
+            id,
+            port: destination.port(),
+            dns,
+        };
         let mut flow = Flow {
             id,
             protocol: UDP,
@@ -733,6 +820,8 @@ impl Loop {
             name,
             named_by,
             ech: Ech::Absent,
+            dns,
+            resolver,
         };
         let Some(target) = self.shared.target(destination) else {
             flow.outcome = Outcome::Unreachable;
@@ -762,7 +851,7 @@ impl Loop {
         };
         self.shared.record(flow);
         // The tunnel's own DNS address is never QUIC.
-        let quic = (!is_tunnel_dns(destination.ip())).then(|| (id, quic::Initial::new()));
+        let quic = (!is_tunnel_dns(destination.ip())).then(|| (opened, quic::Initial::new()));
         lock(&self.udp).insert(
             (app, destination),
             UdpFlow {
@@ -772,8 +861,11 @@ impl Loop {
         );
         tokio::spawn(answers(
             Arc::clone(&socket),
-            app,
-            destination,
+            UdpEnds {
+                app,
+                destination,
+                uid,
+            },
             Arc::clone(&self.tun),
             Arc::clone(&self.shared),
             Arc::clone(&self.udp),
@@ -874,7 +966,16 @@ async fn open(
         Err(error) if is_unreachable(error) => Outcome::Unreachable,
         Err(_) => Outcome::Failed,
     };
-    let (id, name, named_by) = shared.begin(destination);
+    let (id, name, named_by) = shared.begin(destination, uid);
+    let by_dns = (named_by == NamedBy::Dns)
+        .then_some(name.as_deref())
+        .flatten();
+    let (dns, resolver) = shared.dns_use(destination, by_dns);
+    let opened = Opened {
+        id,
+        port: destination.port(),
+        dns,
+    };
     shared.record(Flow {
         id,
         protocol: TCP,
@@ -885,9 +986,11 @@ async fn open(
         name,
         named_by,
         ech: Ech::Absent,
+        dns,
+        resolver,
     });
     let answer = if let Ok(stream) = upstream {
-        lock(&pending).insert(held.port, Upstream { stream, id });
+        lock(&pending).insert(held.port, Upstream { stream, opened });
         lock(&nat).open(held.port);
         let (fake, tun_ip) = if app.is_ipv4() {
             (IpAddr::V4(FAKE4), IpAddr::V4(TUN4))
@@ -964,7 +1067,7 @@ async fn relay(app: TcpStream, upstream: Upstream, shared: &Arc<Shared>) {
                 seen.extend_from_slice(&buffer[..n]);
                 match tls::server_name(seen) {
                     ServerName::Found(hello) => {
-                        shared.hello(upstream.id, hello, NamedBy::Tls);
+                        shared.hello(upstream.opened, hello, NamedBy::Tls);
                         start = None;
                     }
                     ServerName::None => start = None,
@@ -1000,13 +1103,17 @@ async fn relay(app: TcpStream, upstream: Upstream, shared: &Arc<Shared>) {
 /// network beneath changes.
 async fn answers(
     socket: Arc<UdpSocket>,
-    app: SocketAddr,
-    destination: SocketAddr,
+    ends: UdpEnds,
     tun: Arc<Tun>,
     shared: Arc<Shared>,
     flows: UdpFlows,
     mut changes: watch::Receiver<u64>,
 ) {
+    let UdpEnds {
+        app,
+        destination,
+        uid,
+    } = ends;
     let mut buffer = vec![0u8; 65_535];
     // Only a change after the flow opened ends it: a clone starts with the loop's last-seen version.
     changes.borrow_and_update();
@@ -1018,8 +1125,13 @@ async fn answers(
                 let answer = match received {
                     Ok(n) => {
                         Counters::add(&shared.counters.bytes_down, n as u64);
-                        if destination.port() == 53 && is_tunnel_dns(destination.ip()) {
-                            shared.learn(&buffer[..n]);
+                        // Android's resolver names every app's flows; an app's own, only its own.
+                        if destination.port() == 53 {
+                            if is_tunnel_dns(destination.ip()) {
+                                shared.learn(&buffer[..n], None);
+                            } else if uid.is_some() {
+                                shared.learn(&buffer[..n], uid);
+                            }
                         }
                         packet::udp(destination, app, &buffer[..n])
                     }
@@ -1067,24 +1179,39 @@ mod tests {
             upstream_dns: Mutex::default(),
             names: Mutex::default(),
             organisations: None,
+            resolvers: Resolvers::parse(
+                "sample\tSample\tSample DNS\tdoh.sample.example\t-\t192.0.2.53\t-\t-\n",
+            ),
             next_id: AtomicU64::new(0),
         }
     }
 
-    fn open_flow(shared: &Shared, destination: SocketAddr) -> u64 {
-        let (id, name, named_by) = shared.begin(destination);
+    const UID: u32 = 10_123;
+
+    fn open_flow(shared: &Shared, destination: SocketAddr) -> Opened {
+        let (id, name, named_by) = shared.begin(destination, Some(UID));
+        let by_dns = (named_by == NamedBy::Dns)
+            .then_some(name.as_deref())
+            .flatten();
+        let (dns, resolver) = shared.dns_use(destination, by_dns);
         shared.record(Flow {
             id,
             protocol: TCP,
             app: SocketAddr::from(([10, 215, 173, 1], 40_000)),
             destination,
-            uid: Some(10_123),
+            uid: Some(UID),
             outcome: Outcome::Opened,
             name,
             named_by,
             ech: Ech::Absent,
+            dns,
+            resolver,
         });
-        id
+        Opened {
+            id,
+            port: destination.port(),
+            dns,
+        }
     }
 
     fn hello(name: &str, ech: bool) -> Hello {
@@ -1099,7 +1226,7 @@ mod tests {
         let shared = shared();
         let now = Instant::now();
         let asked = SocketAddr::from(([93, 184, 216, 34], 443));
-        lock(&shared.names).insert(asked.ip(), "www.example.com", 60, now);
+        lock(&shared.names).insert(asked.ip(), None, "www.example.com", 60, now);
         lock(&shared.names).insert_public("cover.example", 60, now);
         let by_dns = open_flow(&shared, asked);
         let by_quic = open_flow(&shared, SocketAddr::from(([203, 0, 113, 9], 443)));
@@ -1133,7 +1260,76 @@ mod tests {
             ]
         );
         // TLS and QUIC names read, QUIC unread, ECH offered, ECH hidden.
-        assert_eq!(shared.counters.snapshot()[11..], [2, 2, 0, 3, 2]);
+        assert_eq!(shared.counters.snapshot()[11..16], [2, 2, 0, 3, 2]);
+    }
+
+    #[test]
+    fn an_apps_own_dns_is_recognised_by_port_address_or_name() {
+        let shared = shared();
+        let now = Instant::now();
+        let at = |ip: [u8; 4], port| SocketAddr::from((ip, port));
+        // A resolver of the app's own, by address: its answer names only this app's flows.
+        let plain = open_flow(&shared, at([192, 0, 2, 53], 53));
+        shared.learn(&dns_answer("own.example", [203, 0, 113, 20]), Some(UID));
+        let named_by_own = open_flow(&shared, at([203, 0, 113, 20], 443));
+        // Android's resolver through Watch: not the app's own.
+        let tunnel = open_flow(&shared, SocketAddr::new(IpAddr::V4(DNS4), 53));
+        // DNS over TLS anywhere, and DNS over HTTPS to a known address, or to a known name in the hello.
+        let dot = open_flow(&shared, at([198, 51, 100, 1], 853));
+        let doh = open_flow(&shared, at([192, 0, 2, 53], 443));
+        let doh_by_name = open_flow(&shared, at([198, 51, 100, 2], 443));
+        shared.hello(
+            doh_by_name,
+            hello("doh.sample.example", false),
+            NamedBy::Tls,
+        );
+        let web = open_flow(&shared, at([198, 51, 100, 3], 443));
+        shared.hello(web, hello("www.example.com", false), NamedBy::Tls);
+        let _ = (plain, named_by_own, tunnel, dot, doh);
+
+        let flows = lock(&shared.flows);
+        let seen: Vec<_> = flows
+            .iter()
+            .map(|f| (f.destination.port(), f.dns, f.resolver.as_deref()))
+            .collect();
+        assert_eq!(
+            seen,
+            vec![
+                (53, DnsUse::Plain, Some("sample")),
+                (443, DnsUse::None, None),
+                (53, DnsUse::None, None),
+                (853, DnsUse::Encrypted, None),
+                (443, DnsUse::Encrypted, Some("sample")),
+                (443, DnsUse::Encrypted, Some("sample")),
+                (443, DnsUse::None, None),
+            ]
+        );
+        assert_eq!(flows[1].name.as_deref(), Some("own.example"));
+        assert_eq!(flows[1].named_by, NamedBy::Dns);
+        drop(flows);
+        // Plain, encrypted.
+        assert_eq!(shared.counters.snapshot()[16..], [1, 3]);
+        // Another app's flow to the same address is not named by that answer.
+        assert_eq!(
+            lock(&shared.names).get(
+                IpAddr::V4(Ipv4Addr::new(203, 0, 113, 20)),
+                Some(10_456),
+                now
+            ),
+            None
+        );
+    }
+
+    /// A DNS response for `name` with one A record, `address`.
+    fn dns_answer(name: &str, address: [u8; 4]) -> Vec<u8> {
+        let mut m = vec![0x12, 0x34, 0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0];
+        for label in name.split('.') {
+            m.push(u8::try_from(label.len()).unwrap_or(0));
+            m.extend_from_slice(label.as_bytes());
+        }
+        m.extend_from_slice(&[0, 0, 1, 0, 1, 0xc0, 12, 0, 1, 0, 1, 0, 0, 1, 0x2c, 0, 4]);
+        m.extend_from_slice(&address);
+        m
     }
 
     #[test]
