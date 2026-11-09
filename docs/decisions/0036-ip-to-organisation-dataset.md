@@ -99,9 +99,16 @@ gets a name, so the flows it names are those that went around DNS (addresses wri
 app's own encrypted DNS), the most telling ones, and they are often on small networks that (c) would
 leave out. Instead the whole table ships in a compact layout: blocks of 512 ranges or 256 networks,
 each compressed on its own (raw deflate, read by `miniz_oxide`), so that a lookup inflates one block of
-a few kilobytes. The November table takes **2.71 MB**, stored as it is in Watch's APK. Still open: how
-the monthly table is kept, committed (about 2.7 MB a month in the repository's history) or in a data
-repository of its own.
+a few kilobytes. The November table takes **2.71 MB**, stored as it is in Watch's APK.
+
+**Decided by the maintainer the same evening:** the monthly table lives in a public data repository of
+its own, which this repository pins as a git submodule at one commit, with the table's SHA-256 in
+`SOURCE`. Committed here, it would add about 2.7 MB a month, some 32 MB a year against a `.git` of 40 MB
+today: the compressed blocks change nearly all at once, so git cannot store one month as a change to
+the last. A submodule pinned at a commit keeps the builds reproducible, F-Droid builds submodules, and a
+checkout without it still builds Watch, without the table. Tor commits its geoip files into its own
+repository each month; that is simpler, but this repository would double in a year. The data
+repository is created before the first monthly update.
 - **Data from only Watch stays out of the audit app.** `dbip-asn` is left out of the audit app's
   payload (`android/app/build.gradle.kts`); Watch's build copies the table into its own assets.
 
@@ -112,5 +119,8 @@ repository of its own.
 - One more credit line on the Data sources screen, and one more converter to keep.
 - The legal review of ADR 0015 (decision 12) covers the CC BY 4.0 notice and how signing fits its "no
   downstream restrictions" clause; ADR 0015 already reasons the same way for ODbL.
+- When an app looks names up past Watch (its own encrypted DNS) and also hides its server name with
+  Encrypted Client Hello, this table's organisation is the only name left. Naming such a flow more
+  closely, from the shape of its traffic, is open research; it is accepted as a limit and not attempted.
 - The full comparison, with every source and its date, is in the private strategy repository
   (`research/2026-11-ip-datasets.md`).
