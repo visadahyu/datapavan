@@ -1,6 +1,6 @@
 # 0034. Permissions for Watch
 
-- Status: Proposed
+- Status: Accepted (by the maintainer on 2026-11-09)
 - Date: 2026-11-09
 
 ## Context
@@ -40,7 +40,7 @@ Tags used below: **[doc]** Android's documentation; **[code]** read in AOSP sour
 our spikes; **[source]** another app's published source; **[unverified]** reasoning or memory that was
 not checked.
 
-## Decision (proposed)
+## Decision
 
 ### Watch requests these permissions
 

@@ -55,8 +55,9 @@ project's own channels.
    and JA4+.
 4. **v0.2 uses these, under these terms:**
    - EasyPrivacy, under CC BY-SA 3.0 or later;
-   - IPtoASN, under PDDL;
-   - DB-IP Lite, only if IPtoASN falls short;
+   - DB-IP Lite, under CC BY 4.0 with its credit, and IPtoASN, under PDDL, to check it every month and
+     as its fallback ([ADR 0036](0036-ip-to-organisation-dataset.md), which reversed the first order on
+     2026-11-09: IPtoASN gives AS handles, not organisations);
    - JA3 and JA4, computed by our own code.
 
    HaGeZi and any fingerprint database get their own check before use.

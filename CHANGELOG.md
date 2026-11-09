@@ -8,7 +8,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- Datapavan Watch, the separate app of ADR 0029, begins (milestone W1 of 0.2.0): a second Gradle module, `:watch`, whose tunnel starts and stops and holds only Watch itself until the packet engine arrives. Its strings are in all eight languages, reviewed by two models and settled by a third (ADR 0030); its icon is the brand's shield with DA. The build fails if its manifest holds anything its permissions ADR (0034, proposed) does not allow. `scripts/smoke-watch.sh` checks it in every language and both pseudo-locales, on the emulator in CI; `scripts/reproducible.sh` now compares both apps' release APKs.
+- Datapavan Watch, the separate app of ADR 0029, begins (milestone W1 of 0.2.0): a second Gradle module, `:watch`, whose tunnel starts and stops and holds only Watch itself until the packet engine arrives. Its strings are in all eight languages, reviewed by two models and settled by a third (ADR 0030); its icon is the brand's shield with DA. The build fails if its manifest holds anything its permissions ADR (0034) does not allow. `scripts/smoke-watch.sh` checks it in every language and both pseudo-locales, on the emulator in CI; `scripts/reproducible.sh` now compares both apps' release APKs.
 - The table of tools (`data/tools/`): how each known VPN and circumvention app runs on Android, with evidence for every value.
 
 ## [0.1.2] - 2026-11-08

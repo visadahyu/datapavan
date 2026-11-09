@@ -215,7 +215,7 @@ checked against each source on 2026-10-29; the details and obligations are in
 | Attestation trust anchors and revoked keys | Google's root certificates (Android Developers documentation) and attestation revocation list | Roots: Apache-2.0, as the documentation states. Revocation list: no licence stated; facts published for verifiers; bundled since M2's hardening, released only if the legal review agrees |
 | Tracker SDK signatures | εxodus tracker database | ODbL 1.0; bundled in `data/exodus` as a derivative database, with the ODbL notice in the app |
 | Tracker domains | EasyPrivacy; εxodus network signatures | EasyPrivacy under CC BY-SA 3.0 or later (v0.2). HaGeZi (GPL-3.0) only after its upstream sources are checked. **Excluded as non-commercial:** Disconnect and DuckDuckGo Tracker Radar (both CC BY-NC-SA 4.0) |
-| IP → ASN / organisation | IPtoASN; DB-IP Lite as fallback | PDDL 1.0; CC BY 4.0 with attribution (v0.2) |
+| IP → ASN / organisation | DB-IP Lite, checked against IPtoASN, which is the fallback ([ADR 0036](decisions/0036-ip-to-organisation-dataset.md)); our own CC0 map from AS numbers to companies in `data/owners` | CC BY 4.0 with attribution; PDDL 1.0 (v0.2) |
 | Official signing certificates of VPN, proxy and circumvention apps | Fingerprints the developers publish, F-Droid's reviewed metadata, signed repository indexes, and APKs from official channels, read by `data/app-signers/update.py` | Our list, CC0 1.0, in the signed data pack; each certificate records its source, date and evidence grade (ADR 0018) |
 | Traffic-sharing (proxy), remote-support and screen-recording SDK identifiers | The vendors' own published SDKs, read by `data/sdks/update.py`; SDKs known only from platform or security research once Datapavan has read them in samples (εxodus has none) | Our list, CC0 1.0, in the signed data pack; each identifier records its artefact's SHA-256, evidence grade and date, and only grades 1 to 3 ship (ADR 0019) |
 | Reference traffic measurements | The project's own lab phones | Our data; published with the reports |
@@ -339,8 +339,11 @@ M1 to M5, which the ADRs cite.
 
 Status of the items before W1, 2026-11-09: Watch's permissions in [ADR 0034](decisions/0034-watch-permissions.md),
 WireGuard in [ADR 0035](decisions/0035-wireguard-upstream.md) and the dataset in
-[ADR 0036](decisions/0036-ip-to-organisation-dataset.md), all three proposed; the table of tools in
-`data/tools/` ([notes](spikes/2026-11-table-of-tools.md)).
+[ADR 0036](decisions/0036-ip-to-organisation-dataset.md), all three accepted by the maintainer on
+2026-11-09; the table of tools in `data/tools/` ([notes](spikes/2026-11-table-of-tools.md)). Before W6,
+one question needs a closer look: Android keeps one DNS cache for all apps of a VPN network, so an app
+sent through the tool or WireGuard may be given an answer the network's resolver gave another app,
+possibly a censored one (ADR 0035, open question 4).
 
 | # | Milestone | Done when |
 |---|---|---|

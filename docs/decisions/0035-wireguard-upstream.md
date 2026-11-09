@@ -1,6 +1,6 @@
 # 0035. WireGuard upstream: GotaTun's protocol core in the engine, raw packets forwarded
 
-- Status: Proposed
+- Status: Accepted (by the maintainer on 2026-11-09)
 - Date: 2026-11-09
 
 ## Context
@@ -165,7 +165,7 @@ counter on 32-bit targets, a handshake race wireguard-go fixed on 2026-10-06).
    TCP then runs end to end with the server. Address swaps with checksum updates are basic NAT
    (RFC 3022, RFC 1624), which the system stack already does.
 
-## Decision (proposed)
+## Decision
 
 **The protocol core is GotaTun's `noise::Tunn`,** pinned to an exact version, with
 `default-features = false, features = ["ring"]`: no device, TUN, socket or DAITA code. It is the only
@@ -231,7 +231,8 @@ in one tunnel. No research is needed; the spike is.
 
 ## Consequences
 
-- **`deny.toml` gains BSD-3-Clause, BSD-2-Clause, ISC and MPL-2.0.** The maintainer decides; the
+- **`deny.toml` gains BSD-3-Clause, BSD-2-Clause, ISC and MPL-2.0** (accepted with this ADR), in the
+  commit that brings GotaTun in (W7), not before, so that nothing else slips in under them; the
   comment "only permissive" changes for MPL-2.0. The licence screen and NOTICE list them. Changes to
   GotaTun's files, if ever needed, are published upstream or under MPL-2.0.
 - **No Go.** The reproducible build gains C objects from `ring` only, through the NDK's clang.

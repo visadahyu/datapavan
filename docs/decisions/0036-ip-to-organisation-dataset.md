@@ -1,6 +1,6 @@
 # 0036. The IP-to-organisation dataset
 
-- Status: Proposed
+- Status: Accepted (by the maintainer on 2026-11-09)
 - Date: 2026-11-09
 
 ## Context
@@ -49,7 +49,7 @@ W1 APK 1.5 MB; people pass APKs on by hand.
 3. **The project's own table** from RouteViews and RIS dumps: full control, but an MRT parser, a pipeline
    over large dumps, logos and revocable permissions in the paid editions, and still no names.
 
-## Decision (proposed)
+## Decision
 
 Option 2.
 
@@ -72,7 +72,9 @@ Option 2.
    network", not "Amazon": the network is the host, not necessarily the service the app used.
 5. **ADR 0015** gets its decision 4 and DESIGN.md §9 their new order once this is accepted.
 
-## Open, for the maintainer
+## Left to measurement
+
+Accepted with the proposals below; W3's ten-app session decides between them.
 
 - **The size budget.** (a) The full table in Watch's APK, about 4 to 5 MB more; (b) the table stored
   xz-compressed in the APK and expanded on first start, which needs a pure-Rust decoder crate, a new
