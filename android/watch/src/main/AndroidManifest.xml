@@ -10,10 +10,22 @@
         allowBackup=false disables cloud backup; data_extraction_rules also excludes device-to-device
         transfer on Android 12+, and backup_rules everything on Android 10-11.
     -->
-    <!-- Sockets, to pass each app's traffic on to where it was going (from W2). -->
+    <!-- Sockets, to pass each app's traffic on to where it was going. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Which network is beneath the tunnel, and when it changes (from W2). -->
+    <!-- Which network is beneath the tunnel, its DNS server, and when it changes. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!--
+        Android 10 and 11 only: Watch is inside its own tunnel, so it follows the network beneath
+        with requestNetwork, which needs this. From Android 12 a best-matching callback does without.
+    -->
+    <uses-permission
+        android:name="android.permission.CHANGE_NETWORK_STATE"
+        android:maxSdkVersion="30" />
+    <!--
+        Android 17: every app's traffic to the local network (a printer, a TV, the router's page) leaves
+        through Watch's sockets, which Android checks as Watch's (ADR 0034).
+    -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
     <application
         android:allowBackup="false"

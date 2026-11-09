@@ -2,6 +2,7 @@ package org.visadahyu.datapavan.watch
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.graphics.Color
 import android.net.VpnService
@@ -21,6 +22,9 @@ class MainActivity : ComponentActivity() {
     /** Android refused the VPN consent the last time Watch asked. */
     private val refused = mutableStateOf(false)
 
+    /** Debug builds: the only apps the end-to-end test sends through the tunnel, comma-separated. */
+    private var onlyApps: String? = null
+
     private val consent = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) startTunnel() else refused.value = true
     }
@@ -35,6 +39,13 @@ class MainActivity : ComponentActivity() {
             WatchTheme {
                 WatchScreen(running = running, refused = refused.value, onStart = ::requestStart, onStop = ::stopTunnel)
             }
+        }
+        // Debug builds only: scripts/verify-watch.sh starts the tunnel for its own apps from adb, since
+        // the VPN service itself is not exported.
+        val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        if (debuggable && savedInstanceState == null && intent.getBooleanExtra(EXTRA_START, false)) {
+            onlyApps = intent.getStringExtra(WatchVpnService.EXTRA_ONLY_APPS)
+            requestStart()
         }
     }
 
@@ -51,10 +62,17 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startTunnel() {
-        startService(Intent(this, WatchVpnService::class.java).setAction(WatchVpnService.ACTION_START))
+        val start = Intent(this, WatchVpnService::class.java).setAction(WatchVpnService.ACTION_START)
+        onlyApps?.let { start.putExtra(WatchVpnService.EXTRA_ONLY_APPS, it) }
+        startService(start)
     }
 
     private fun stopTunnel() {
         startService(Intent(this, WatchVpnService::class.java).setAction(WatchVpnService.ACTION_STOP))
+    }
+
+    private companion object {
+        /** Debug builds: start the tunnel at once (scripts/verify-watch.sh). */
+        const val EXTRA_START = "start"
     }
 }

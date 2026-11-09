@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Smoke test of Datapavan Watch, milestone W1 (docs/DESIGN.md, 13.2), on a connected device or
+# Smoke test of Datapavan Watch (milestones W1 and W2, docs/DESIGN.md, 13.2) on a connected device or
 # emulator: installs the debug APK, opens Watch in every UI language and two pseudo-locales, and checks
 # that its text is translated and laid out right to left where the language is; then turns the tunnel
 # on and off from Watch's screen and checks that Android lists Watch's VPN only while it is on, with
-# Watch alone inside it, and that Watch did not crash. It needs nothing but adb.
+# every app inside it, Watch itself and adb's shell among them, and that Watch did not crash. It needs
+# nothing but adb. scripts/verify-watch.sh checks the traffic through it.
 #
 # On an emulator the VPN consent is given through appops. On a phone, the person holding it taps
 # Android's consent dialog the first time; the script waits three minutes for that.
@@ -60,9 +61,7 @@ vpn_line() {
 
 # The apps inside the tunnel, as Android's routing rules send them to it: the UID ranges of the rules
 # that look up the tunnel's own table (the one with its default route), other than root's, one per
-# line. Other tables have rules for other apps, such as per-app network preferences. Watch's UID can
-# come with its SDK sandbox's (Android 13 and later: 10000 more), and each user of the phone (a work
-# profile, a private space) adds both again in that user, with the same last five digits.
+# line. Other tables have rules for other apps, such as per-app network preferences.
 tunnel_uids() {
     local table
     table=$(adb shell ip route show table all | tr -d '\r' | sed -n 's/^default dev tun[0-9]* table \([0-9a-z_]*\) .*/\1/p' | head -1)
@@ -125,14 +124,17 @@ line=$(vpn_line)
 [ -n "$line" ] || fail "Android lists no VPN of Watch's while Watch says it is on"
 ranges=$(tunnel_uids)
 [ -n "$ranges" ] || fail "Android's routing rules send no app into the tunnel"
-for range in $ranges; do
-    first=${range%-*}
-    last=${range#*-}
-    app=$((first % 100000))
-    [ "$first" = "$last" ] && { [ "$app" = "$uid" ] || [ "$app" = $((uid + 10000)) ]; } ||
-        fail "the tunnel holds more than Watch itself: $(echo $ranges)"
-done
-echo "ok: the tunnel is up, with Watch alone inside it"
+# Whether a range of $ranges holds the UID $1.
+inside() {
+    local range
+    for range in $ranges; do
+        [ "${range%-*}" -le "$1" ] && [ "$1" -le "${range#*-}" ] && return 0
+    done
+    return 1
+}
+inside "$uid" || fail "Watch is not inside its own tunnel, which its engine needs: $(echo $ranges)"
+inside 2000 || fail "adb's shell, an app like any other, is not inside the tunnel: $(echo $ranges)"
+echo "ok: the tunnel is up, with every app inside it"
 
 tap_now "$(string values turn_off)" || fail "no button to turn Watch off"
 wait_for "$(string values status_off)" 10 || fail "Watch did not say it is off"

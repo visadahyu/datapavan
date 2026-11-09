@@ -1,4 +1,7 @@
 import com.android.build.api.artifact.SingleArtifact
+import com.android.build.api.variant.BuiltArtifactsLoader
+import java.util.zip.ZipFile
+import javax.inject.Inject
 import javax.xml.parsers.DocumentBuilderFactory
 
 plugins {
@@ -22,6 +25,9 @@ val allowedPermissions = mapOf(
     // androidx.core defines it, app-internal, for its non-exported receivers.
     "$watchApplicationId.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" to null,
 )
+// The JNI symbol every packaged libdatapavan_watch.so must export (see core/watch-jni and Engine.kt).
+val requiredJniSymbol = "Java_org_visadahyu_datapavan_watch_Engine_nativeStart"
+
 val allowedPermissionDefinitions = listOf("$watchApplicationId.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
 // Exported components, each with the permission that guards it ("" for none: the launcher, and the log
 // interface of W5, which checks its caller's key at run time).
@@ -33,6 +39,7 @@ val allowedExported = mapOf(
 android {
     namespace = "org.visadahyu.datapavan.watch"
     compileSdk = 37
+    ndkVersion = "30.0.16248370"
 
     defaultConfig {
         applicationId = watchApplicationId
@@ -40,6 +47,8 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "0.2.0"
+        // The audit app's ABIs (app/build.gradle.kts), read by the Rust build in finalizeDsl.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
     }
 
     buildTypes {
@@ -175,9 +184,171 @@ abstract class ManifestAllowlistCheck : DefaultTask() {
     }
 }
 
+/**
+ * Builds Watch's Rust JNI library (`core/watch-jni`) for every shipped ABI with cargo-ndk: the audit
+ * app's task (app/build.gradle.kts), with the crate as an input.
+ *
+ * The cargo environment is controlled: inherited flags that could change the output are dropped, and
+ * absolute paths (the cargo registry, the workspace) are remapped, so the library neither leaks the
+ * builder's home directory nor differs between machines.
+ */
+abstract class CargoNdkTask : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val sources: ConfigurableFileCollection
+
+    @get:Internal
+    abstract val workspaceDir: DirectoryProperty
+
+    @get:Input
+    abstract val crate: Property<String>
+
+    @get:Input
+    abstract val abis: ListProperty<String>
+
+    @get:Input
+    abstract val platformLevel: Property<Int>
+
+    @get:Input
+    abstract val release: Property<Boolean>
+
+    @get:Input
+    abstract val cargo: Property<String>
+
+    @get:Input
+    abstract val cargoNdkVersion: Property<String>
+
+    @get:Input
+    abstract val ndkPath: Property<String>
+
+    @get:Input
+    abstract val rustFlags: ListProperty<String>
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @get:Inject
+    abstract val execOperations: ExecOperations
+
+    @TaskAction
+    fun build() {
+        val out = outputDir.get().asFile
+        out.deleteRecursively()
+        out.mkdirs()
+        val args = mutableListOf(cargo.get(), "ndk")
+        abis.get().forEach { args += listOf("-t", it) }
+        args += listOf("--platform", platformLevel.get().toString(), "-o", out.absolutePath)
+        args += listOf("build", "--locked", "-p", crate.get())
+        if (release.get()) args += "--release"
+
+        val dropped = setOf(
+            "RUSTFLAGS", "CARGO_BUILD_RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS",
+            "CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR",
+        )
+        val environment = System.getenv().filterKeys { it !in dropped && !it.startsWith("CARGO_PROFILE_") } +
+            mapOf(
+                "ANDROID_NDK_HOME" to ndkPath.get(),
+                "CARGO_ENCODED_RUSTFLAGS" to rustFlags.get().joinToString("\u001f"),
+            )
+        execOperations.exec {
+            workingDir = workspaceDir.get().asFile
+            setEnvironment(environment)
+            commandLine(args)
+        }
+    }
+}
+
+/** Fails if a built APK lacks Watch's library for a shipped ABI, or if it does not export the JNI symbol. */
+abstract class ApkNativeLibraryCheck : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val apkDirectory: DirectoryProperty
+
+    @get:Internal
+    abstract val loader: Property<BuiltArtifactsLoader>
+
+    @get:Input
+    abstract val abis: ListProperty<String>
+
+    @get:Input
+    abstract val library: Property<String>
+
+    @get:Input
+    abstract val symbol: Property<String>
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val artifacts = loader.get().load(apkDirectory.get())
+            ?: throw GradleException("No APK found in ${apkDirectory.get().asFile}")
+        val lines = mutableListOf<String>()
+        artifacts.elements.forEach { element ->
+            ZipFile(element.outputFile).use { zip ->
+                abis.get().forEach { abi ->
+                    val entry = zip.getEntry("lib/$abi/${library.get()}")
+                        ?: throw GradleException("${element.outputFile}: lib/$abi/${library.get()} is missing")
+                    val bytes = zip.getInputStream(entry).use { it.readBytes() }
+                    if (!String(bytes, Charsets.ISO_8859_1).contains(symbol.get())) {
+                        throw GradleException("${element.outputFile}: lib/$abi/${library.get()} does not export ${symbol.get()}")
+                    }
+                    lines += "OK ${File(element.outputFile).name} lib/$abi/${library.get()} (${bytes.size} bytes)"
+                }
+            }
+        }
+        report.get().asFile.writeText(lines.joinToString("\n", postfix = "\n"))
+    }
+}
+
+val repositoryRoot = rootProject.layout.projectDirectory.dir("..")
+val rustWorkspace = rootProject.layout.projectDirectory.dir("../core")
+val cargoHome = providers.environmentVariable("CARGO_HOME")
+    .orElse(providers.systemProperty("user.home").map { "$it/.cargo" })
+val cargoExecutable = providers.environmentVariable("CARGO")
+    .orElse(cargoHome.map { home -> File(home, "bin/cargo").let { if (it.canExecute()) it.path else "cargo" } })
+val cargoNdkVersionProvider = providers.exec { commandLine(cargoExecutable.get(), "ndk", "--version") }
+    .standardOutput.asText.map { it.trim() }
+val remappedRustFlags = cargoHome.map { home ->
+    listOf(
+        "--remap-path-prefix=$home/registry/src=/cargo/registry/src",
+        "--remap-path-prefix=${repositoryRoot.asFile.absolutePath}=/datapavan",
+    )
+}
+
+var shippedAbis: List<String> = emptyList()
+
 androidComponents {
+    finalizeDsl { extension ->
+        shippedAbis = extension.defaultConfig.ndk.abiFilters.sorted()
+    }
+
     onVariants { variant ->
         val suffix = variant.name.replaceFirstChar(Char::uppercase)
+
+        val cargoTask = tasks.register<CargoNdkTask>("cargoNdk$suffix") {
+            sources.from(fileTree(rustWorkspace) { exclude("target/**", "fuzz/**") })
+            sources.from(rootProject.layout.projectDirectory.file("../rust-toolchain.toml"))
+            workspaceDir.set(rustWorkspace)
+            crate.set("datapavan-watch-jni")
+            abis.set(shippedAbis)
+            platformLevel.set(variant.minSdk.apiLevel)
+            release.set(variant.buildType == "release")
+            cargo.set(cargoExecutable)
+            cargoNdkVersion.set(cargoNdkVersionProvider)
+            ndkPath.set(androidComponents.sdkComponents.ndkDirectory.map { it.asFile.absolutePath })
+            rustFlags.set(remappedRustFlags)
+        }
+        variant.sources.jniLibs?.addGeneratedSourceDirectory(cargoTask, CargoNdkTask::outputDir)
+
+        tasks.register<ApkNativeLibraryCheck>("verifyApk$suffix") {
+            apkDirectory.set(variant.artifacts.get(SingleArtifact.APK))
+            loader.set(variant.artifacts.getBuiltArtifactsLoader())
+            abis.set(shippedAbis)
+            library.set("libdatapavan_watch.so")
+            symbol.set(requiredJniSymbol)
+            report.set(layout.buildDirectory.file("reports/apk-native/${variant.name}.txt"))
+        }
         val manifestCheck = tasks.register<ManifestAllowlistCheck>("checkManifest$suffix") {
             permissions.set(allowedPermissions.mapValues { it.value ?: "" })
             definitions.set(allowedPermissionDefinitions)

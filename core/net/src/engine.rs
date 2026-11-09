@@ -712,6 +712,8 @@ async fn answers(
     mut changes: watch::Receiver<u64>,
 ) {
     let mut buffer = vec![0u8; 65_535];
+    // Only a change after the flow opened ends it: a clone starts with the loop's last-seen version.
+    changes.borrow_and_update();
     loop {
         tokio::select! {
             _ = changes.changed() => break,
