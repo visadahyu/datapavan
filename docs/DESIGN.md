@@ -345,6 +345,15 @@ one question needs a closer look: Android keeps one DNS cache for all apps of a 
 sent through the tool or WireGuard may be given an answer the network's resolver gave another app,
 possibly a censored one (ADR 0035, open question 4).
 
+Status of W1 and W2, 2026-11-09, on the branches `watch-w1` and `watch-w2`. W1 is built: its CI run
+passed. W2 is built and passes `scripts/smoke-watch.sh` and `scripts/verify-watch.sh` on the emulators
+with Android 11, 15 and 17 and on the A40 (Android 11), where the engine's CPU for the spike's workload
+was 37.8 and 38.8 s against the spike's 42.4 and 41.4 s, back to back (`scripts/watch-lab/measure.sh`).
+The release library is 533 KB on arm64. Still open for W2: the emulators with Android 10, 12, 13, 14
+and 16, and IPv6 end to end on a network that has it (this one has none). Known for W4: the byte
+counters count a connection only when it ends cleanly, and Watch's memory (96 MB PSS with its screen,
+against the spike's 29 MB) needs a look.
+
 | # | Milestone | Done when |
 |---|---|---|
 | W1 | Watch's skeleton | A second Gradle module, `:watch`, package `org.visadahyu.datapavan.watch`, signed with the same key. Both APKs come from one build, CI is green, and each is reproducible on its own. The build fails if the audit app gains `INTERNET`, as now, or if Watch's manifest holds anything outside its permissions ADR. Watch opens on the emulator and the A40 with strings in all eight languages, RTL and pseudo-locales from the start, and an icon from the brand marks. Its tunnel starts and stops. |
