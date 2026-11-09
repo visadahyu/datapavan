@@ -6,4 +6,8 @@
     <string name="turn_on">Включить</string>
     <string name="turn_off">Выключить</string>
     <string name="consent_refused">Android не дал запустить Watch. Если другое VPN-приложение настроено на постоянную работу, сначала отключите эту настройку.</string>
+    <string name="private_dns">Частный DNS-сервер</string>
+    <string name="private_dns_strict">На вашем телефоне частный DNS-сервер настроен на %1$s. Android отправляет туда в зашифрованном виде имена, которые ищут приложения. Так они скрыты от вашей сети, но Watch не может их прочитать.</string>
+    <string name="private_dns_network">DNS-сервер вашей сети поддерживает шифрование, и Android использует его для имён, которые ищут приложения. Так они остаются скрытыми, но Watch не может их прочитать.</string>
+    <string name="private_dns_still_named">Watch всё равно определяет большинство подключений по тому, что отправляет каждое приложение, или по тому, кто управляет сетью, куда ведут эти подключения.</string>
 </resources>

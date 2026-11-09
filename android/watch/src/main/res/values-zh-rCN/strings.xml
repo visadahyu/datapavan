@@ -6,4 +6,8 @@
     <string name="turn_on">开启</string>
     <string name="turn_off">关闭</string>
     <string name="consent_refused">Android 未允许 Watch 启动。如果另一个 VPN 应用设置为始终开启，请先关闭该设置。</string>
+    <string name="private_dns">专用 DNS</string>
+    <string name="private_dns_strict">您手机的专用 DNS 已设置为 %1$s。Android 会将应用查询的名称加密后发送到那里。这能防止您的网络看到这些名称，但 Watch 也无法读取它们。</string>
+    <string name="private_dns_network">您所在网络的 DNS 服务器支持加密，Android 会用它来处理应用查询的名称。这能保护这些名称，但 Watch 无法读取它们。</string>
+    <string name="private_dns_still_named">Watch 仍会根据每个应用发送的内容，或根据其所连接网络的运营方，为大多数连接标注名称。</string>
 </resources>

@@ -36,8 +36,15 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
         setContent {
             val running by WatchVpnService.running.collectAsState()
+            val privateDns by WatchVpnService.privateDns.collectAsState()
             WatchTheme {
-                WatchScreen(running = running, refused = refused.value, onStart = ::requestStart, onStop = ::stopTunnel)
+                WatchScreen(
+                    running = running,
+                    privateDns = privateDns,
+                    refused = refused.value,
+                    onStart = ::requestStart,
+                    onStop = ::stopTunnel,
+                )
             }
         }
         // Debug builds only: scripts/verify-watch.sh starts the tunnel for its own apps from adb, since

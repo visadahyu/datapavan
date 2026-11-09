@@ -6,7 +6,7 @@
 # once, a refused one and an unreachable one each get their owner named; that the app sees the refusal
 # as "refused" and an unreachable IPv6 address as "no route", as without a VPN; that names resolve
 # through the tunnel's DNS, and flows are named after a DNS answer, a TLS server name or a QUIC one,
-# with the ECH a hello offers noted (W3); and that
+# with the ECH a hello offers noted, and strict Private DNS is detected (W3); and that
 # all of it still works after the network beneath switches from Wi-Fi to mobile data. Nothing is left
 # running: the tunnel and the server stop at the end.
 #
@@ -27,6 +27,22 @@ if is_emulator; then HOST=${WATCH_TEST_HOST:-10.0.2.2}; else HOST=${WATCH_TEST_H
 PORT=${WATCH_TEST_PORT:-8790}
 
 SERVER=""
+# The emulator's Private DNS setting before the test changed it, restored at the end.
+DNS_MODE=""
+DNS_HOST=""
+restore_private_dns() {
+    [ -n "$DNS_MODE" ] || return 0
+    for key in mode specifier; do
+        value=$DNS_MODE
+        [ "$key" = mode ] || value=$DNS_HOST
+        if [ "$value" = null ]; then
+            adb shell settings delete global "private_dns_$key" >/dev/null 2>&1 || true
+        else
+            adb shell settings put global "private_dns_$key" "$value" >/dev/null 2>&1 || true
+        fi
+    done
+    DNS_MODE=""
+}
 # A TLS ClientHello for watch.test, which the test server answers as bad HTTP; only its name counts.
 HELLO_ON_DEVICE=/data/local/tmp/watch-hello.bin
 # A QUIC ClientHello for watch.test offering ECH, in two Initial datagrams, its CRYPTO frames out of
@@ -35,7 +51,10 @@ QUIC_ON_DEVICE=/data/local/tmp/watch-quic
 cleanup() {
     adb shell rm -f "$HELLO_ON_DEVICE" "$QUIC_ON_DEVICE-1.bin" "$QUIC_ON_DEVICE-2.bin" >/dev/null 2>&1 || true
     adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
-    if is_emulator; then adb shell svc wifi enable >/dev/null 2>&1 || true; fi
+    if is_emulator; then
+        adb shell svc wifi enable >/dev/null 2>&1 || true
+        restore_private_dns
+    fi
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -65,6 +84,19 @@ has_flow() {
 # the ECH column $5 (any if not given).
 has_named_flow() {
     flows | grep -qE "^$1 [^ ]+ [^ ]+:$2 $SHELL_UID opened $4 ${5:-[^ ]+} ${3//./\\.}\$"
+}
+
+# What Watch says of Private DNS on its network: plain, network, or strict and the provider (debug).
+private_dns() {
+    adb shell dumpsys activity service "$PKG/.WatchVpnService" | tr -d '\r' | sed -n 's/^ *private-dns //p'
+}
+
+wait_private_dns() {
+    for _ in $(seq 1 20); do
+        [ "$(private_dns)" = "$1" ] && return 0
+        sleep 1
+    done
+    return 1
 }
 
 vpn_up() {
@@ -231,6 +263,24 @@ if is_emulator; then
     adb shell svc wifi enable
 else
     echo "skipped: the network switch, on a phone"
+fi
+
+# Strict Private DNS sends every app's lookups past Watch's resolver; Watch says so on its screen. Only
+# on an emulator: a phone's settings are its owner's. Android needs no answer from the provider to
+# report the setting, and the setting is restored at once. It runs last: Android then looks up
+# dns.google through Watch, which names 8.8.8.8 after it from then on.
+if is_emulator; then
+    wait_private_dns plain || fail "Watch reads Private DNS as '$(private_dns)', not plain, before the test"
+    DNS_MODE=$(adb shell settings get global private_dns_mode | tr -d '\r')
+    DNS_HOST=$(adb shell settings get global private_dns_specifier | tr -d '\r')
+    adb shell settings put global private_dns_specifier dns.google
+    adb shell settings put global private_dns_mode hostname
+    wait_private_dns "strict dns.google" || fail "strict Private DNS was not detected: '$(private_dns)'"
+    restore_private_dns
+    wait_private_dns plain || fail "Watch still reads Private DNS as '$(private_dns)' once it was restored"
+    echo "ok: strict Private DNS is detected, and its end"
+else
+    echo "skipped: Private DNS, on a phone"
 fi
 
 if flows | awk -v host="$HOST" 'index($3, host) && $4 == "-"' | grep -q .; then

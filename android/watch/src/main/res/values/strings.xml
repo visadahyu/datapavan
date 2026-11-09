@@ -10,4 +10,12 @@
     <string name="turn_off">Turn off</string>
     <!-- After Android refused the VPN consent, or another app's always-on VPN kept Watch from starting. -->
     <string name="consent_refused">Android did not let Watch start. If another VPN app is set to stay always on, turn that setting off first.</string>
+    <!-- The heading of a note shown while Watch is on: Android's own name for the setting (Settings, Network and internet). -->
+    <string name="private_dns">Private DNS</string>
+    <!-- Private DNS set to a provider by name, %1$s (for example dns.google). Watch does not ask the user to change it. -->
+    <string name="private_dns_strict">Your phone\'s Private DNS is set to %1$s. Android sends the names that apps look up there, encrypted. This keeps them private from your network, but Watch cannot read them.</string>
+    <!-- Private DNS on "Automatic", and the network's DNS server supports encryption, so Android uses it. -->
+    <string name="private_dns_network">Your network\'s DNS server supports encryption, and Android uses it for the names that apps look up. This keeps them private, but Watch cannot read them.</string>
+    <!-- Shown after either of the two above. -->
+    <string name="private_dns_still_named">Watch still names most connections from what each app sends, or by who runs the network they reach.</string>
 </resources>

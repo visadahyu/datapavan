@@ -72,6 +72,16 @@ class WatchVpnService : VpnService() {
         }
     }
 
+    /**
+     * Follows Private DNS on Watch's own default network, which is its VPN while the tunnel is up:
+     * what Android does with the lookups of every app in the tunnel.
+     */
+    private val ownNetwork = object : ConnectivityManager.NetworkCallback() {
+        override fun onLinkPropertiesChanged(network: Network, properties: LinkProperties) {
+            dnsState.value = PrivateDns.of(properties)
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) stop() else start(intent)
         return START_NOT_STICKY
@@ -135,6 +145,7 @@ class WatchVpnService : VpnService() {
         } else {
             connectivity.requestNetwork(request, network, handler)
         }
+        connectivity.registerDefaultNetworkCallback(ownNetwork, handler)
     }
 
     /**
@@ -167,15 +178,18 @@ class WatchVpnService : VpnService() {
 
     private fun close() {
         if (active) {
-            try {
-                connectivity.unregisterNetworkCallback(network)
-            } catch (e: IllegalArgumentException) {
-                Log.w(TAG, "The network callback was not registered", e)
+            for (callback in listOf(network, ownNetwork)) {
+                try {
+                    connectivity.unregisterNetworkCallback(callback)
+                } catch (e: IllegalArgumentException) {
+                    Log.w(TAG, "A network callback was not registered", e)
+                }
             }
         }
         Engine.nativeStop()
         active = false
         state.value = false
+        dnsState.value = null
     }
 
     /** Another VPN took Android's one VPN slot, or the user turned Watch off in Settings. */
@@ -211,11 +225,19 @@ class WatchVpnService : VpnService() {
 
     /**
      * `adb shell dumpsys activity service org.visadahyu.datapavan.watch/.WatchVpnService`: the
-     * engine's counters, and in debug builds the flows it kept, for the end-to-end test
-     * (scripts/verify-watch.sh). Release builds print no destination.
+     * engine's counters and Private DNS, and in debug builds the flows it kept and Private DNS's
+     * provider, for the end-to-end test (scripts/verify-watch.sh). Release builds print no
+     * destination and no provider.
      */
     override fun dump(fd: FileDescriptor?, writer: PrintWriter, args: Array<out String>?) {
         writer.println("running ${state.value}")
+        val dns = when (val mode = dnsState.value) {
+            null -> "-"
+            PrivateDns.Plain -> "plain"
+            PrivateDns.Network -> "network"
+            is PrivateDns.Strict -> if (debuggable) "strict ${mode.host}" else "strict"
+        }
+        writer.println("private-dns $dns")
         writer.println("counters ${Engine.nativeCounters().joinToString(" ")}")
         writer.println("organisations ${Engine.nativeOrganisations().ifEmpty { "none" }}")
         if (debuggable) {
@@ -248,5 +270,10 @@ class WatchVpnService : VpnService() {
 
         /** Whether the tunnel is up, for Watch's own screens. */
         val running: StateFlow<Boolean> = state.asStateFlow()
+
+        private val dnsState = MutableStateFlow<PrivateDns?>(null)
+
+        /** Private DNS on Watch's network while the tunnel is up, else null, for Watch's own screens. */
+        val privateDns: StateFlow<PrivateDns?> = dnsState.asStateFlow()
     }
 }

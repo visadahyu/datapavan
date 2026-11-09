@@ -1,5 +1,6 @@
 package org.visadahyu.datapavan.watch.ui
 
+import android.text.BidiFormatter
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,11 +21,21 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import org.visadahyu.datapavan.watch.PrivateDns
 import org.visadahyu.datapavan.watch.R
 
-/** Watch's one screen in W1: what it is for, whether it is on, and the switch. */
+/**
+ * Watch's one screen: what it is for, whether it is on, the switch, and while it is on, what Private
+ * DNS hides from it (W3).
+ */
 @Composable
-internal fun WatchScreen(running: Boolean, refused: Boolean, onStart: () -> Unit, onStop: () -> Unit) {
+internal fun WatchScreen(
+    running: Boolean,
+    privateDns: PrivateDns?,
+    refused: Boolean,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
@@ -51,6 +62,9 @@ internal fun WatchScreen(running: Boolean, refused: Boolean, onStart: () -> Unit
             } else {
                 Button(onClick = onStart) { Text(stringResource(R.string.turn_on)) }
             }
+            if (running && privateDns != null && privateDns != PrivateDns.Plain) {
+                PrivateDnsNote(privateDns)
+            }
             if (refused && !running) {
                 Text(
                     stringResource(R.string.consent_refused),
@@ -59,5 +73,26 @@ internal fun WatchScreen(running: Boolean, refused: Boolean, onStart: () -> Unit
                 )
             }
         }
+    }
+}
+
+/** Why Watch reads fewer names while Private DNS encrypts the lookups, and what it still names. */
+@Composable
+private fun PrivateDnsNote(privateDns: PrivateDns) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            stringResource(R.string.private_dns),
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.semantics { heading() },
+        )
+        Text(
+            when (privateDns) {
+                // The provider's name keeps its own direction inside a right-to-left sentence.
+                is PrivateDns.Strict -> stringResource(R.string.private_dns_strict, BidiFormatter.getInstance().unicodeWrap(privateDns.host))
+                else -> stringResource(R.string.private_dns_network)
+            },
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Text(stringResource(R.string.private_dns_still_named), style = MaterialTheme.typography.bodyMedium)
     }
 }

@@ -6,4 +6,8 @@
     <string name="turn_on">Activar</string>
     <string name="turn_off">Desactivar</string>
     <string name="consent_refused">Android no dejó que Watch se iniciara. Si otra app de VPN está configurada para estar siempre activa, desactiva primero ese ajuste.</string>
+    <string name="private_dns">DNS privado</string>
+    <string name="private_dns_strict">El DNS privado de tu teléfono está configurado como %1$s. Android envía allí, cifrados, los nombres que buscan las apps. Así quedan protegidos de tu red, pero Watch no puede leerlos.</string>
+    <string name="private_dns_network">El servidor DNS de tu red admite cifrado, y Android lo usa para los nombres que buscan las apps. Así quedan protegidos, pero Watch no puede leerlos.</string>
+    <string name="private_dns_still_named">Aun así, Watch identifica la mayoría de las conexiones por lo que envía cada app, o por quién gestiona la red a la que llegan.</string>
 </resources>

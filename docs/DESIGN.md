@@ -383,8 +383,20 @@ up past Watch (ADR 0036 records that limit). Two crates came in for it, `aes` an
 about 27 KB per ABI. Counters without destinations, readable on any phone, count the names read from
 TLS and QUIC, the QUIC flows whose name could not be read, and the hellos that offered ECH or hid the
 name. On the Android 17 emulator, Chrome opening Google over QUIC gave six QUIC names and no QUIC flow
-left unread, every hello offering ECH as Chrome's GREASE does. Still to build: strict Private DNS
-detected and explained, apps' own encrypted DNS recognised, and the ten-app comparison.
+left unread, every hello offering ECH as Chrome's GREASE does.
+
+Private DNS, the same evening. On the Android 17 emulator, Android applies strict Private DNS to Watch's
+network as to any other: the resolver (UID 1051) sends every app's lookups to the provider over DNS over
+TLS, through the tunnel but past Watch's resolver, and Watch names those connections only by the
+provider. Watch reads the setting from its own network's link properties and, while it is on, says on
+its screen what this hides and what it still names; it does not ask the user to turn Private DNS off,
+since that would show the lookups to the network as well (W9's onboarding guides the choice). The note
+also covers "automatic" on a network whose DNS server encrypts, which the emulator cannot show: its
+network's server has no DNS over TLS. The four strings were translated into the seven languages with
+Android's own names for the setting, read from the emulator's Settings app, and reviewed by two other
+models; one finding was settled. `scripts/verify-watch.sh` turns strict mode on and off on the emulator
+and checks that Watch reads both. Still to build: apps' own encrypted DNS recognised, and the ten-app
+comparison.
 
 | # | Milestone | Done when |
 |---|---|---|
