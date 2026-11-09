@@ -22,6 +22,8 @@ import java.net.InetSocketAddress
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.visadahyu.datapavan.watch.log.ConnectionLog
+import org.visadahyu.datapavan.watch.log.LogRecord
 
 /**
  * Watch's VPN (docs/VPN.md). Every app's traffic enters the tunnel, and the packet engine in Rust
@@ -223,6 +225,10 @@ class WatchVpnService : VpnService() {
     @Suppress("unused")
     fun protectSocket(fd: Int): Boolean = protect(fd)
 
+    /** Called by the engine with a batch of finished records for the connection log (ADR 0037). */
+    @Suppress("unused")
+    fun logRecords(batch: ByteArray) = ConnectionLog.of(this).write(batch)
+
     /**
      * `adb shell dumpsys activity service org.visadahyu.datapavan.watch/.WatchVpnService`: the
      * engine's counters and Private DNS, and in debug builds the flows it kept and Private DNS's
@@ -240,9 +246,59 @@ class WatchVpnService : VpnService() {
         writer.println("private-dns $dns")
         writer.println("counters ${Engine.nativeCounters().joinToString(" ")}")
         writer.println("organisations ${Engine.nativeOrganisations().ifEmpty { "none" }}")
+        val log = ConnectionLog.of(this)
+        val (days, rows) = log.counts()
+        writer.println("log retention ${log.retentionDays} days $days records $rows key ${log.hasKey} unlocked-only ${log.unlockedOnly}")
         if (debuggable) {
             Engine.nativeFlows().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("flow $it") }
+            debugLog(log, args.orEmpty().toList(), writer)
         }
+    }
+
+    /**
+     * Debug builds only, for scripts/verify-log.sh: `log-flush` hands the log every waiting record and
+     * each open flow's segment so far, and waits until they are written, `log-today`
+     * prints today's records, `log-day N` says whether day N (days since 1970) opens now, `log-test-day N`
+     * writes a test record dated day N, and `log-wipe` wipes the log.
+     */
+    private fun debugLog(log: ConnectionLog, args: List<String>, writer: PrintWriter) {
+        val day = args.getOrNull(args.indexOf("log-day") + 1)?.toLongOrNull()
+        val testDay = args.getOrNull(args.indexOf("log-test-day") + 1)?.toLongOrNull()
+        when {
+            "log-wipe" in args -> {
+                val done = java.util.concurrent.CountDownLatch(1)
+                log.wipe { done.countDown() }
+                writer.println("log-wiped ${done.await(10, java.util.concurrent.TimeUnit.SECONDS)}")
+            }
+            "log-flush" in args -> {
+                Engine.nativeFlushLog()
+                log.settle()
+                writer.println("log-flushed")
+            }
+            "log-today" in args -> log.read(ConnectionLog.today())?.forEach { writer.println("log-record ${describe(it)}") }
+            "log-day" in args && day != null -> {
+                val records = log.read(day)
+                writer.println(if (records == null) "log-day $day locked" else "log-day $day open ${records.size}")
+            }
+            "log-test-day" in args && testDay != null -> {
+                val noon = java.time.LocalDate.ofEpochDay(testDay).atTime(12, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+                val record = java.nio.ByteBuffer.allocate(1 + 1 + 4 + 8 + 8 + 4).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                    .put(1).put(2).putInt(-1).putLong(noon).putLong(noon).putInt(1).array()
+                val batch = java.nio.ByteBuffer.allocate(4 + 2 + record.size).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                    .putInt(1).putShort(record.size.toShort()).put(record).array()
+                log.write(batch)
+                log.settle()
+                writer.println("log-test-day $testDay written")
+            }
+        }
+    }
+
+    private fun describe(record: LogRecord): String = when (record) {
+        is LogRecord.Segment -> listOf(
+            if (record.protocol == 6) "tcp" else "udp", record.uid ?: "-", "${record.address.hostAddress}:${record.port}",
+            "up=${record.up}", "down=${record.down}", if (record.continues) "continues" else "ended", record.name.ifEmpty { "-" },
+        ).joinToString(" ")
+        is LogRecord.Lookups -> "lookups ${record.uid ?: "-"} ${record.count}"
     }
 
     companion object {

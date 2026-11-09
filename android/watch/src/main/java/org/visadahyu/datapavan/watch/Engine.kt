@@ -48,6 +48,9 @@ internal object Engine {
      */
     external fun nativeCounters(): LongArray
 
+    /** Hands the connection log every waiting record now, with each open flow's segment so far; debug builds' test only. */
+    external fun nativeFlushLog()
+
     /** The flows kept, one per line as `protocol app destination uid outcome named-by ech dns network name`; debug builds only. */
     external fun nativeFlows(): String
 }

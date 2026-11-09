@@ -8,6 +8,7 @@
 
 pub mod dns;
 pub mod engine;
+pub mod log;
 pub mod names;
 pub mod nat;
 pub mod organisations;

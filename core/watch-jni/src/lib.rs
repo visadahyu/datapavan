@@ -73,6 +73,19 @@ impl Platform for Service {
             })
             .unwrap_or(false)
     }
+
+    fn log(&self, batch: &[u8]) {
+        let _ = self.vm.attach_current_thread(|env| -> Result<(), Error> {
+            let records = env.byte_array_from_slice(batch)?;
+            env.call_method(
+                &self.service,
+                jni_str!("logRecords"),
+                jni_sig!("([B)V"),
+                &[JValue::Object(&records)],
+            )?;
+            Ok(())
+        });
+    }
 }
 
 /// Makes sure the tunnel's descriptor does not block: the engine reads until "would block", so a
@@ -205,6 +218,23 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeOrganisat
             JString::from_str(env, month)
         })
         .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `Engine.nativeFlushLog()`: hands the connection log every waiting record now (debug builds' test).
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlushLog()`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlushLog<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) {
+    unowned_env
+        .with_env(|_env| -> Result<_, Error> {
+            if let Some(engine) = engine().as_ref() {
+                engine.flush_log();
+            }
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>();
 }
 
 /// `Engine.nativeCounters()`: the running engine's counters, in the order of

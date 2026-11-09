@@ -54,6 +54,19 @@ class MainActivity : ComponentActivity() {
             onlyApps = intent.getStringExtra(WatchVpnService.EXTRA_ONLY_APPS)
             requestStart()
         }
+        if (debuggable && intent.getBooleanExtra(EXTRA_STOP, false)) stopTunnel()
+    }
+
+    /** The activity is single-top: a debug start or stop sent while it is open comes here. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        if (!debuggable) return
+        if (intent.getBooleanExtra(EXTRA_START, false)) {
+            onlyApps = intent.getStringExtra(WatchVpnService.EXTRA_ONLY_APPS)
+            requestStart()
+        }
+        if (intent.getBooleanExtra(EXTRA_STOP, false)) stopTunnel()
     }
 
     /** Asks for Android's VPN consent the first time, then starts the tunnel. */
@@ -81,5 +94,8 @@ class MainActivity : ComponentActivity() {
     private companion object {
         /** Debug builds: start the tunnel at once (scripts/verify-watch.sh). */
         const val EXTRA_START = "start"
+
+        /** Debug builds: stop the tunnel, so that the engine hands its last records to the log (scripts/verify-log.sh). */
+        const val EXTRA_STOP = "stop"
     }
 }

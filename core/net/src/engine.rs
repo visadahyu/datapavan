@@ -19,13 +19,14 @@ use std::os::fd::{AsRawFd, OwnedFd, RawFd};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
-use tokio::sync::watch;
+use tokio::sync::{Notify, watch};
 
 use crate::dns;
+use crate::log::{self, Record};
 use crate::names::Names;
 use crate::nat::{Lookup, Nat};
 use crate::organisations::Organisations;
@@ -62,6 +63,11 @@ const BATCH: usize = 64;
 /// Stale TCP connections are swept at most this often, and only when packets come anyway: an idle
 /// tunnel must not wake the phone.
 const SWEEP_EVERY: Duration = Duration::from_secs(60);
+/// How long finished records gather before they go to Watch's log together (ADR 0037).
+const LOG_DELAY: Duration = Duration::from_secs(30);
+/// A flow still open is written as a segment at every quarter of an hour, UTC. Every time zone is a
+/// whole number of quarter hours from UTC, so no segment spans a local midnight.
+const SEGMENT_MS: u64 = 15 * 60 * 1000;
 
 /// What the engine asks of Android, through Watch's Kotlin side.
 pub trait Platform: Send + Sync + 'static {
@@ -71,6 +77,9 @@ pub trait Platform: Send + Sync + 'static {
 
     /// `VpnService.protect`: keeps one of the engine's sockets out of the tunnel.
     fn protect(&self, fd: RawFd) -> bool;
+
+    /// Hands a batch of records to Watch's connection log ([`crate::log::batch`]).
+    fn log(&self, batch: &[u8]);
 }
 
 /// How a flow went, for the counters and the flows kept for tests.
@@ -186,6 +195,40 @@ struct Begun {
     network: Option<Network>,
 }
 
+/// The bytes of one open flow, counted as they pass.
+#[derive(Debug, Default)]
+pub(crate) struct FlowBytes {
+    up: AtomicU64,
+    down: AtomicU64,
+}
+
+impl FlowBytes {
+    fn add_up(&self, n: usize) {
+        self.up.fetch_add(n as u64, Ordering::Relaxed);
+    }
+
+    fn add_down(&self, n: usize) {
+        self.down.fetch_add(n as u64, Ordering::Relaxed);
+    }
+}
+
+/// A flow that is open, for the log: what is known of it, its bytes, and where its current segment
+/// starts.
+struct Live {
+    flow: Flow,
+    bytes: Arc<FlowBytes>,
+    start: u64,
+    up: u64,
+    down: u64,
+}
+
+/// Milliseconds since 1970, UTC.
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
+}
+
 /// What the engine knew of a flow when it opened, for what the flow's hello may add.
 #[derive(Clone, Copy, Debug)]
 struct Opened {
@@ -280,6 +323,14 @@ struct Shared {
     /// The companies behind well-known networks.
     owners: Owners,
     next_id: AtomicU64,
+    /// The flows open now, for the log.
+    live: Mutex<HashMap<u64, Live>>,
+    /// Lookups each app sent to Watch's own DNS address since the last segment, and since when.
+    lookups: Mutex<HashMap<Option<u32>, (u64, u32)>>,
+    /// Records waiting to go to Watch's log.
+    pending_log: Mutex<Vec<Record>>,
+    /// Woken when a record waits or a flow opens.
+    log_ready: Notify,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -346,7 +397,7 @@ impl Shared {
     /// Notes what a flow's TLS or QUIC hello said: its server name names the flow by W3's order,
     /// unless it is the public name of an ECH configuration, behind which the real name is hidden. A
     /// known resolver's host name marks the flow as the app's own encrypted DNS.
-    fn hello(&self, opened: Opened, hello: Hello, by: NamedBy) {
+    fn hello(&self, opened: Opened, hello: &Hello, by: NamedBy) {
         let id = opened.id;
         let hidden = hello.ech && lock(&self.names).is_public(&hello.name, Instant::now());
         let resolver = matches!(opened.port, 443 | 853)
@@ -371,23 +422,28 @@ impl Shared {
         if hidden {
             Counters::add(&counters.ech_hidden, 1);
         }
-        if self.keep_flows == 0 {
-            return;
-        }
-        if let Some(flow) = lock(&self.flows).iter_mut().rev().find(|f| f.id == id) {
+        let apply = |flow: &mut Flow| {
             flow.ech = match (hello.ech, hidden) {
                 (_, true) => Ech::Hidden,
                 (true, false) => Ech::Offered,
                 (false, false) => Ech::Absent,
             };
-            if let Some(resolver) = resolver {
+            if let Some(resolver) = &resolver {
                 flow.dns = DnsUse::Encrypted;
-                flow.resolver.get_or_insert(resolver);
+                flow.resolver.get_or_insert_with(|| resolver.clone());
             }
             if !hidden && flow.named_by.yields_to(by) {
-                flow.name = Some(hello.name);
+                flow.name = Some(hello.name.clone());
                 flow.named_by = by;
             }
+        };
+        if let Some(live) = lock(&self.live).get_mut(&id) {
+            apply(&mut live.flow);
+        }
+        if self.keep_flows > 0
+            && let Some(flow) = lock(&self.flows).iter_mut().rev().find(|f| f.id == id)
+        {
+            apply(flow);
         }
     }
 
@@ -409,7 +465,129 @@ impl Shared {
         }
     }
 
-    fn record(&self, flow: Flow) {
+    /// Counts a new flow and keeps it for tests. For the log, a flow that opened becomes live and gets
+    /// its byte counts; one that did not is written at once. Lookups to Watch's own DNS address are
+    /// counted per app instead.
+    fn record(&self, flow: Flow) -> Option<Arc<FlowBytes>> {
+        let logged = self.log_flow(&flow);
+        self.keep(flow);
+        logged
+    }
+
+    fn log_flow(&self, flow: &Flow) -> Option<Arc<FlowBytes>> {
+        if is_tunnel_dns(flow.destination.ip()) {
+            return None;
+        }
+        let now = now_ms();
+        if flow.outcome != Outcome::Opened {
+            self.write(Record::Segment {
+                flow: flow.clone(),
+                start: now,
+                end: now,
+                up: 0,
+                down: 0,
+                continues: false,
+            });
+            return None;
+        }
+        let bytes = Arc::new(FlowBytes::default());
+        lock(&self.live).insert(
+            flow.id,
+            Live {
+                flow: flow.clone(),
+                bytes: Arc::clone(&bytes),
+                start: now,
+                up: 0,
+                down: 0,
+            },
+        );
+        self.log_ready.notify_one();
+        Some(bytes)
+    }
+
+    /// Counts a lookup an app sent to Watch's own DNS address.
+    fn lookup(&self, uid: Option<u32>) {
+        lock(&self.lookups).entry(uid).or_insert((now_ms(), 0)).1 += 1;
+        self.log_ready.notify_one();
+    }
+
+    /// A live flow ended: its last segment is written.
+    fn finish(&self, id: u64) {
+        let Some(live) = lock(&self.live).remove(&id) else {
+            return;
+        };
+        let end = now_ms().max(live.start);
+        self.write(segment(live, end, false));
+    }
+
+    /// Writes every live flow's segment up to `boundary`, and the lookups counted so far.
+    fn checkpoint(&self, boundary: u64) {
+        let mut records = Vec::new();
+        for live in lock(&self.live).values_mut() {
+            if live.start >= boundary {
+                continue;
+            }
+            let (up, down) = (
+                live.bytes.up.load(Ordering::Relaxed),
+                live.bytes.down.load(Ordering::Relaxed),
+            );
+            records.push(Record::Segment {
+                flow: live.flow.clone(),
+                start: live.start,
+                end: boundary,
+                up: up - live.up,
+                down: down - live.down,
+                continues: true,
+            });
+            live.start = boundary;
+            live.up = up;
+            live.down = down;
+        }
+        for (uid, (start, count)) in lock(&self.lookups).drain() {
+            records.push(Record::Lookups {
+                uid,
+                start,
+                end: boundary.max(start),
+                count,
+            });
+        }
+        lock(&self.pending_log).extend(records);
+    }
+
+    /// Ends every live flow now, as when the engine stops.
+    fn finish_all(&self) {
+        let now = now_ms();
+        let live: Vec<Live> = lock(&self.live).drain().map(|(_, l)| l).collect();
+        let mut records: Vec<Record> = live
+            .into_iter()
+            .map(|l| {
+                let end = now.max(l.start);
+                segment(l, end, false)
+            })
+            .collect();
+        for (uid, (start, count)) in lock(&self.lookups).drain() {
+            records.push(Record::Lookups {
+                uid,
+                start,
+                end: now.max(start),
+                count,
+            });
+        }
+        lock(&self.pending_log).extend(records);
+    }
+
+    fn write(&self, record: Record) {
+        lock(&self.pending_log).push(record);
+        self.log_ready.notify_one();
+    }
+
+    /// The records waiting, as one batch, if there are any.
+    fn take_log(&self) -> Option<Vec<u8>> {
+        let records = std::mem::take(&mut *lock(&self.pending_log));
+        (!records.is_empty()).then(|| log::batch(&records))
+    }
+
+    fn keep(&self, flow: Flow) {
         let counter = match flow.outcome {
             Outcome::Opened => None,
             Outcome::Refused => Some(&self.counters.refused),
@@ -462,6 +640,18 @@ pub struct Engine {
     thread: Option<JoinHandle<()>>,
 }
 
+/// A live flow's segment from its start to `end`.
+fn segment(live: Live, end: u64, continues: bool) -> Record {
+    Record::Segment {
+        start: live.start,
+        end,
+        up: live.bytes.up.load(Ordering::Relaxed) - live.up,
+        down: live.bytes.down.load(Ordering::Relaxed) - live.down,
+        flow: live.flow,
+        continues,
+    }
+}
+
 impl Engine {
     /// Starts the engine on its own thread, reading the tunnel `fd` until [`Engine::stop`].
     ///
@@ -484,6 +674,10 @@ impl Engine {
             resolvers: Resolvers::bundled(),
             owners: Owners::bundled(),
             next_id: AtomicU64::new(0),
+            live: Mutex::default(),
+            lookups: Mutex::default(),
+            pending_log: Mutex::default(),
+            log_ready: Notify::new(),
         });
         let (stop, stopped) = watch::channel(false);
         let (network, changes) = watch::channel(0);
@@ -547,6 +741,15 @@ impl Engine {
         self.shared.counters.snapshot()
     }
 
+    /// Hands the log every waiting record now, with a segment of each open flow up to now, as the
+    /// quarter hour would: for the end-to-end test, which cannot wait.
+    pub fn flush_log(&self) {
+        self.shared.checkpoint(now_ms());
+        if let Some(batch) = self.shared.take_log() {
+            self.shared.platform.log(&batch);
+        }
+    }
+
     /// The latest flows kept, oldest first (only when [`Config::keep_flows`] is above 0).
     #[must_use]
     pub fn flows(&self) -> Vec<Flow> {
@@ -565,6 +768,8 @@ struct Upstream {
     stream: TcpStream,
     /// The flow, as it opened.
     opened: Opened,
+    /// Its bytes, for the log.
+    bytes: Option<Arc<FlowBytes>>,
 }
 
 type Pending = Arc<Mutex<HashMap<u16, Upstream>>>;
@@ -573,6 +778,9 @@ type Pending = Arc<Mutex<HashMap<u16, Upstream>>>;
 struct UdpFlow {
     socket: Arc<UdpSocket>,
     quic: Option<(Opened, quic::Initial)>,
+    /// The app's UID, and the flow's bytes for the log (none for Watch's own DNS address).
+    uid: Option<u32>,
+    bytes: Option<Arc<FlowBytes>>,
 }
 
 type UdpFlows = Arc<Mutex<HashMap<(SocketAddr, SocketAddr), UdpFlow>>>;
@@ -582,6 +790,8 @@ struct UdpEnds {
     app: SocketAddr,
     destination: SocketAddr,
     uid: Option<u32>,
+    /// The flow's number and bytes, when the log follows it.
+    logged: Option<(u64, Arc<FlowBytes>)>,
 }
 
 /// The engine's state inside its event loop.
@@ -619,13 +829,14 @@ async fn run(
     };
     let mut buffer = vec![0u8; usize::from(mtu).max(1500) + 64];
     let mut swept = Instant::now();
+    let logging = tokio::spawn(logger(Arc::clone(&state.shared)));
     loop {
         tokio::select! {
-            _ = stop.changed() => return,
+            _ = stop.changed() => break,
             read = state.tun.recv(&mut buffer) => {
-                let Ok(n) = read else { return };
+                let Ok(n) = read else { break };
                 if n == 0 {
-                    return;
+                    break;
                 }
                 if swept.elapsed() > SWEEP_EVERY {
                     state.sweep();
@@ -641,6 +852,49 @@ async fn run(
                 }
             }
         }
+    }
+    // What is open ends with the tunnel; the log gets it before the engine's thread does.
+    logging.abort();
+    state.shared.finish_all();
+    if let Some(batch) = state.shared.take_log() {
+        state.shared.platform.log(&batch);
+    }
+}
+
+/// Hands finished records to Watch's log: gathered for [`LOG_DELAY`] after the first one, and at every
+/// quarter hour the segments of the flows still open. With nothing open and nothing waiting it sleeps
+/// without a timer, so an idle tunnel does not wake the phone.
+async fn logger(shared: Arc<Shared>) {
+    let mut last = now_ms() / SEGMENT_MS * SEGMENT_MS;
+    loop {
+        let open = !lock(&shared.live).is_empty() || !lock(&shared.lookups).is_empty();
+        let next = open.then(|| {
+            let now = now_ms();
+            Duration::from_millis(SEGMENT_MS - now % SEGMENT_MS)
+        });
+        tokio::select! {
+            () = shared.log_ready.notified() => {
+                tokio::time::sleep(next.map_or(LOG_DELAY, |n| n.min(LOG_DELAY))).await;
+            }
+            () = sleep_for(next) => {}
+        }
+        let boundary = now_ms() / SEGMENT_MS * SEGMENT_MS;
+        if boundary > last {
+            shared.checkpoint(boundary);
+            last = boundary;
+        }
+        if let Some(batch) = shared.take_log() {
+            let platform = Arc::clone(&shared.platform);
+            let _ = tokio::task::spawn_blocking(move || platform.log(&batch)).await;
+        }
+    }
+}
+
+/// Sleeps for `duration`, or for ever when there is none.
+async fn sleep_for(duration: Option<Duration>) {
+    match duration {
+        Some(duration) => tokio::time::sleep(duration).await,
+        None => std::future::pending().await,
     }
 }
 
@@ -671,7 +925,10 @@ impl Loop {
         let forgotten = lock(&self.nat).sweep(Instant::now());
         let mut pending = lock(&self.pending);
         for port in forgotten {
-            pending.remove(&port);
+            // A connection Android's stack never handed over still ends in the log.
+            if let Some(upstream) = pending.remove(&port) {
+                self.shared.finish(upstream.opened.id);
+            }
         }
     }
 
@@ -806,8 +1063,19 @@ impl Loop {
             socket
         };
         self.read_quic(key, payload);
+        let (uid, bytes) = lock(&self.udp)
+            .get(&key)
+            .map_or((None, None), |flow| (flow.uid, flow.bytes.clone()));
+        if is_tunnel_dns(key.1.ip()) {
+            self.shared.lookup(uid);
+        }
         match socket.send(payload).await {
-            Ok(n) => Counters::add(&self.shared.counters.bytes_up, n as u64),
+            Ok(n) => {
+                Counters::add(&self.shared.counters.bytes_up, n as u64);
+                if let Some(bytes) = bytes {
+                    bytes.add_up(n);
+                }
+            }
             Err(_) => {
                 if let Some(error) = packet::unreachable(packet, parsed, Unreachable::Host) {
                     self.send(&error).await;
@@ -834,7 +1102,7 @@ impl Loop {
         flow.quic = None;
         drop(flows);
         match read {
-            ServerName::Found(hello) => self.shared.hello(opened, hello, NamedBy::Quic),
+            ServerName::Found(hello) => self.shared.hello(opened, &hello, NamedBy::Quic),
             _ if was_quic => Counters::add(&self.shared.counters.quic_unread, 1),
             _ => {}
         }
@@ -900,7 +1168,7 @@ impl Loop {
                 return None;
             }
         };
-        self.shared.record(flow);
+        let bytes = self.shared.record(flow);
         // The tunnel's own DNS address is never QUIC.
         let quic = (!is_tunnel_dns(destination.ip())).then(|| (opened, quic::Initial::new()));
         lock(&self.udp).insert(
@@ -908,6 +1176,8 @@ impl Loop {
             UdpFlow {
                 socket: Arc::clone(&socket),
                 quic,
+                uid,
+                bytes: bytes.clone(),
             },
         );
         tokio::spawn(answers(
@@ -916,6 +1186,7 @@ impl Loop {
                 app,
                 destination,
                 uid,
+                logged: bytes.map(|b| (id, b)),
             },
             Arc::clone(&self.tun),
             Arc::clone(&self.shared),
@@ -1032,7 +1303,7 @@ async fn open(
         port: destination.port(),
         dns,
     };
-    shared.record(Flow {
+    let bytes = shared.record(Flow {
         id,
         protocol: TCP,
         app,
@@ -1047,7 +1318,14 @@ async fn open(
         network,
     });
     let answer = if let Ok(stream) = upstream {
-        lock(&pending).insert(held.port, Upstream { stream, opened });
+        lock(&pending).insert(
+            held.port,
+            Upstream {
+                stream,
+                opened,
+                bytes,
+            },
+        );
         lock(&nat).open(held.port);
         let (fake, tun_ip) = if app.is_ipv4() {
             (IpAddr::V4(FAKE4), IpAddr::V4(TUN4))
@@ -1124,7 +1402,7 @@ async fn relay(app: TcpStream, upstream: Upstream, shared: &Arc<Shared>) {
                 seen.extend_from_slice(&buffer[..n]);
                 match tls::server_name(seen) {
                     ServerName::Found(hello) => {
-                        shared.hello(upstream.opened, hello, NamedBy::Tls);
+                        shared.hello(upstream.opened, &hello, NamedBy::Tls);
                         start = None;
                     }
                     ServerName::None => start = None,
@@ -1136,6 +1414,9 @@ async fn relay(app: TcpStream, upstream: Upstream, shared: &Arc<Shared>) {
                 break;
             }
             Counters::add(&shared.counters.bytes_up, n as u64);
+            if let Some(bytes) = &upstream.bytes {
+                bytes.add_up(n);
+            }
         }
         let _ = up_write.shutdown().await;
     };
@@ -1150,10 +1431,14 @@ async fn relay(app: TcpStream, upstream: Upstream, shared: &Arc<Shared>) {
                 break;
             }
             Counters::add(&shared.counters.bytes_down, n as u64);
+            if let Some(bytes) = &upstream.bytes {
+                bytes.add_down(n);
+            }
         }
         let _ = app_write.shutdown().await;
     };
     tokio::join!(up, down);
+    shared.finish(upstream.opened.id);
 }
 
 /// Wraps each answer of a UDP flow in an IP packet to the app, until the flow falls silent or the
@@ -1170,6 +1455,7 @@ async fn answers(
         app,
         destination,
         uid,
+        logged,
     } = ends;
     let mut buffer = vec![0u8; 65_535];
     // Only a change after the flow opened ends it: a clone starts with the loop's last-seen version.
@@ -1182,6 +1468,9 @@ async fn answers(
                 let answer = match received {
                     Ok(n) => {
                         Counters::add(&shared.counters.bytes_down, n as u64);
+                        if let Some((_, bytes)) = &logged {
+                            bytes.add_down(n);
+                        }
                         // Android's resolver names every app's flows; an app's own, only its own.
                         if destination.port() == 53 {
                             if is_tunnel_dns(destination.ip()) {
@@ -1209,6 +1498,9 @@ async fn answers(
         }
     }
     lock(&flows).remove(&(app, destination));
+    if let Some((id, _)) = logged {
+        shared.finish(id);
+    }
 }
 
 #[cfg(test)]
@@ -1225,6 +1517,8 @@ mod tests {
         fn protect(&self, _: RawFd) -> bool {
             true
         }
+
+        fn log(&self, _: &[u8]) {}
     }
 
     fn shared() -> Shared {
@@ -1241,6 +1535,10 @@ mod tests {
             ),
             owners: Owners::default(),
             next_id: AtomicU64::new(0),
+            live: Mutex::default(),
+            lookups: Mutex::default(),
+            pending_log: Mutex::default(),
+            log_ready: Notify::new(),
         }
     }
 
@@ -1298,14 +1596,14 @@ mod tests {
         let hidden_after_dns = open_flow(&shared, asked);
 
         // DNS comes first: a TLS name does not replace it.
-        shared.hello(by_dns, hello("other.example", false), NamedBy::Tls);
+        shared.hello(by_dns, &hello("other.example", false), NamedBy::Tls);
         // A QUIC name names a flow without one; ECH offered, perhaps GREASE, does not stop it.
-        shared.hello(by_quic, hello("quic.example", true), NamedBy::Quic);
+        shared.hello(by_quic, &hello("quic.example", true), NamedBy::Quic);
         // A public name under ECH never names a flow, and the real name stays as DNS gave it.
-        shared.hello(hidden, hello("cover.example", true), NamedBy::Tls);
+        shared.hello(hidden, &hello("cover.example", true), NamedBy::Tls);
         shared.hello(
             hidden_after_dns,
-            hello("cover.example", true),
+            &hello("cover.example", true),
             NamedBy::Quic,
         );
 
@@ -1344,11 +1642,11 @@ mod tests {
         let doh_by_name = open_flow(&shared, at([198, 51, 100, 2], 443));
         shared.hello(
             doh_by_name,
-            hello("doh.sample.example", false),
+            &hello("doh.sample.example", false),
             NamedBy::Tls,
         );
         let web = open_flow(&shared, at([198, 51, 100, 3], 443));
-        shared.hello(web, hello("www.example.com", false), NamedBy::Tls);
+        shared.hello(web, &hello("www.example.com", false), NamedBy::Tls);
         let _ = (plain, named_by_own, tunnel, dot, doh);
 
         let flows = lock(&shared.flows);
@@ -1382,6 +1680,76 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn the_log_gets_segments_of_open_flows_their_ends_and_lookups() {
+        let shared = shared();
+        let flow = |id: u64, destination: SocketAddr, outcome| Flow {
+            id,
+            protocol: TCP,
+            app: SocketAddr::from(([10, 215, 173, 1], 40_000)),
+            destination,
+            uid: Some(UID),
+            outcome,
+            name: None,
+            named_by: NamedBy::Unknown,
+            ech: Ech::Absent,
+            dns: DnsUse::None,
+            resolver: None,
+            network: None,
+        };
+        let server = SocketAddr::from(([198, 51, 100, 9], 443));
+        let Some(bytes) = shared.record(flow(1, server, Outcome::Opened)) else {
+            unreachable!("an open flow is live")
+        };
+        assert!(shared.record(flow(2, server, Outcome::Refused)).is_none());
+        assert!(
+            shared
+                .record(flow(
+                    3,
+                    SocketAddr::new(IpAddr::V4(DNS4), 53),
+                    Outcome::Opened
+                ))
+                .is_none()
+        );
+        shared.lookup(Some(UID));
+        shared.lookup(Some(UID));
+        bytes.add_up(100);
+        bytes.add_down(5_000);
+        let started = lock(&shared.live)[&1].start;
+        // A quarter hour passes: the open flow's first segment, and the lookups.
+        shared.checkpoint(started + 1);
+        bytes.add_down(700);
+        shared.finish(1);
+        shared.finish(1);
+        let records = std::mem::take(&mut *lock(&shared.pending_log));
+        let segments: Vec<_> = records
+            .iter()
+            .map(|r| match r {
+                Record::Segment {
+                    flow,
+                    up,
+                    down,
+                    continues,
+                    ..
+                } => (flow.id, *up, *down, *continues),
+                Record::Lookups { count, uid, .. } => {
+                    (u64::from(uid.unwrap_or(0)), 0, u64::from(*count), false)
+                }
+            })
+            .collect();
+        assert_eq!(
+            segments,
+            vec![
+                (2, 0, 0, false),
+                (1, 100, 5_000, true),
+                (u64::from(UID), 0, 2, false),
+                (1, 0, 700, false),
+            ]
+        );
+        assert!(lock(&shared.live).is_empty());
+        assert!(shared.take_log().is_none());
     }
 
     /// A DNS response for `name` with one A record, `address`.
