@@ -15,6 +15,12 @@ tokio = { version = "1.54.1", default-features = false, features = ["rt", "net",
 # Inflates one block of the organisation table at a time (ADR 0036): pure Rust, MIT.
 miniz_oxide = "0.9.1"
 
+# Read the server name of a QUIC Initial packet (W3, RFC 9001 5): AES removes its header and payload
+# protection, SHA-256 derives its keys. Pure Rust, MIT or Apache-2.0, from RustCrypto. HKDF, and
+# GCM's counter mode without its tag, are a few lines on top (src/quic.rs).
+aes = { version = "0.9.4", default-features = false }
+sha2 = { version = "0.11.1", default-features = false }
+
 [dev-dependencies]
 # Checks the packets the engine builds against an independent implementation, in tests only.
 etherparse = "0.21.0"

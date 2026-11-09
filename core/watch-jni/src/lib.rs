@@ -10,7 +10,7 @@ use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use datapavan_net::organisations::{FilePart, Organisations};
-use datapavan_net::{Config, Engine, NamedBy, Outcome, Platform};
+use datapavan_net::{Config, Ech, Engine, NamedBy, Outcome, Platform};
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
 use jni::objects::{JClass, JLongArray, JObject, JString};
 use jni::sys::{jboolean, jint, jlong};
@@ -231,8 +231,8 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeCounters<
 }
 
 /// `Engine.nativeFlows()`: the flows the engine kept, one per line as
-/// `protocol app destination uid outcome named-by name` (`-` for none; the name may hold spaces), for debug builds and the
-/// end-to-end test. Empty when the engine keeps none, as in release builds.
+/// `protocol app destination uid outcome named-by ech name` (`-` for none; the name may hold
+/// spaces), for debug builds and the end-to-end test. Empty when the engine keeps none, as in release builds.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlows(): String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlows<'caller>(
@@ -261,12 +261,18 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlows<'ca
                     let named_by = match f.named_by {
                         NamedBy::Dns => "dns",
                         NamedBy::Tls => "tls",
+                        NamedBy::Quic => "quic",
                         NamedBy::Organisation => "org",
                         NamedBy::Unknown => "-",
                     };
+                    let ech = match f.ech {
+                        Ech::Absent => "-",
+                        Ech::Offered => "ech",
+                        Ech::Hidden => "hidden",
+                    };
                     // The name last: an organisation's may hold spaces.
                     format!(
-                        "{protocol} {} {} {uid} {outcome} {named_by} {name}",
+                        "{protocol} {} {} {uid} {outcome} {named_by} {ech} {name}",
                         f.app, f.destination
                     )
                 })

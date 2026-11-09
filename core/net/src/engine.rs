@@ -30,7 +30,8 @@ use crate::names::Names;
 use crate::nat::{Lookup, Nat};
 use crate::organisations::Organisations;
 use crate::packet::{self, ACK, Packet, RST, SYN, Skip, TCP, UDP, Unreachable};
-use crate::tls::{self, ServerName};
+use crate::quic;
+use crate::tls::{self, Hello, ServerName};
 use crate::tun::Tun;
 
 /// The tunnel's IPv4 address, a /32 (ADR 0034: a wider prefix would count as local network on
@@ -90,6 +91,8 @@ pub enum NamedBy {
     Dns,
     /// The server name of the TLS connection.
     Tls,
+    /// The server name of the QUIC connection's Initial packets.
+    Quic,
     /// The organisation whose network the address is in, from the offline table (ADR 0036).
     Organisation,
     /// Not named.
@@ -103,11 +106,25 @@ impl NamedBy {
         let rank = |by: Self| match by {
             Self::Dns => 0,
             Self::Tls => 1,
+            Self::Quic => 2,
             Self::Organisation => 3,
             Self::Unknown => 4,
         };
         rank(other) < rank(self)
     }
+}
+
+/// What the app's TLS or QUIC hello said about Encrypted Client Hello (ECH).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ech {
+    /// No ECH, or no hello read.
+    Absent,
+    /// ECH offered: a real one, or GREASE, which look the same by design. The server name in the hello
+    /// names the flow.
+    Offered,
+    /// The hello's server name is the public name of an ECH configuration in a DNS answer Watch passed
+    /// on: the real name is hidden, and the public name does not name the flow.
+    Hidden,
 }
 
 /// A flow the engine opened for an app.
@@ -129,6 +146,8 @@ pub struct Flow {
     pub name: Option<String>,
     /// Where the name came from.
     pub named_by: NamedBy,
+    /// Whether the hello hid the real name.
+    pub ech: Ech,
 }
 
 /// The engine's settings.
@@ -155,6 +174,11 @@ pub struct Counters {
     skipped: AtomicU64,
     packets_in: AtomicU64,
     packets_out: AtomicU64,
+    tls_names: AtomicU64,
+    quic_names: AtomicU64,
+    quic_unread: AtomicU64,
+    ech_offered: AtomicU64,
+    ech_hidden: AtomicU64,
 }
 
 impl Counters {
@@ -163,9 +187,11 @@ impl Counters {
     }
 
     /// TCP flows, UDP flows, bytes up, bytes down, flows without an owner, refused, unreachable,
-    /// failed, packets skipped, packets in, packets out.
+    /// failed, packets skipped, packets in, packets out, server names read from TLS and from QUIC, QUIC
+    /// flows whose name could not be read, hellos that offered ECH, and hellos whose name was an ECH
+    /// public name. None names a destination: they can be read on any phone.
     #[must_use]
-    pub fn snapshot(&self) -> [u64; 11] {
+    pub fn snapshot(&self) -> [u64; 16] {
         [
             &self.tcp_flows,
             &self.udp_flows,
@@ -178,6 +204,11 @@ impl Counters {
             &self.skipped,
             &self.packets_in,
             &self.packets_out,
+            &self.tls_names,
+            &self.quic_names,
+            &self.quic_unread,
+            &self.ech_offered,
+            &self.ech_hidden,
         ]
         .map(|c| c.load(Ordering::Relaxed))
     }
@@ -220,16 +251,38 @@ impl Shared {
         }
     }
 
-    /// Gives a recorded flow a better name, by W3's order.
-    fn name(&self, id: u64, name: String, named_by: NamedBy) {
+    /// Notes what a flow's TLS or QUIC hello said: its server name names the flow by W3's order,
+    /// unless it is the public name of an ECH configuration, behind which the real name is hidden.
+    fn hello(&self, id: u64, hello: Hello, by: NamedBy) {
+        let hidden = hello.ech && lock(&self.names).is_public(&hello.name, Instant::now());
+        let counters = &self.counters;
+        Counters::add(
+            if by == NamedBy::Quic {
+                &counters.quic_names
+            } else {
+                &counters.tls_names
+            },
+            1,
+        );
+        if hello.ech {
+            Counters::add(&counters.ech_offered, 1);
+        }
+        if hidden {
+            Counters::add(&counters.ech_hidden, 1);
+        }
         if self.keep_flows == 0 {
             return;
         }
-        if let Some(flow) = lock(&self.flows).iter_mut().rev().find(|f| f.id == id)
-            && flow.named_by.yields_to(named_by)
-        {
-            flow.name = Some(name);
-            flow.named_by = named_by;
+        if let Some(flow) = lock(&self.flows).iter_mut().rev().find(|f| f.id == id) {
+            flow.ech = match (hello.ech, hidden) {
+                (_, true) => Ech::Hidden,
+                (true, false) => Ech::Offered,
+                (false, false) => Ech::Absent,
+            };
+            if !hidden && flow.named_by.yields_to(by) {
+                flow.name = Some(hello.name);
+                flow.named_by = by;
+            }
         }
     }
 
@@ -240,6 +293,9 @@ impl Shared {
             let mut names = lock(&self.names);
             for (address, ttl) in response.addresses {
                 names.insert(address, &response.question, ttl, now);
+            }
+            for (public, ttl) in response.public_names {
+                names.insert_public(&public, ttl, now);
             }
         }
     }
@@ -371,7 +427,7 @@ impl Engine {
 
     /// The counters, as [`Counters::snapshot`] orders them.
     #[must_use]
-    pub fn counters(&self) -> [u64; 11] {
+    pub fn counters(&self) -> [u64; 16] {
         self.shared.counters.snapshot()
     }
 
@@ -393,12 +449,17 @@ struct Upstream {
     stream: TcpStream,
     /// The flow's number.
     id: u64,
-    /// Whether the flow already has a name from DNS; else the relay looks for the TLS server name.
-    named: bool,
 }
 
 type Pending = Arc<Mutex<HashMap<u16, Upstream>>>;
-type UdpFlows = Arc<Mutex<HashMap<(SocketAddr, SocketAddr), Arc<UdpSocket>>>>;
+/// A UDP flow: the protected socket, and while its first datagrams may still name it, their QUIC
+/// Initial packets read so far, with the flow's number.
+struct UdpFlow {
+    socket: Arc<UdpSocket>,
+    quic: Option<(u64, quic::Initial)>,
+}
+
+type UdpFlows = Arc<Mutex<HashMap<(SocketAddr, SocketAddr), UdpFlow>>>;
 
 /// The engine's state inside its event loop.
 struct Loop {
@@ -610,7 +671,9 @@ impl Loop {
             return;
         };
         let key = (parsed.source, parsed.destination);
-        let existing = lock(&self.udp).get(&key).cloned();
+        let existing = lock(&self.udp)
+            .get(&key)
+            .map(|flow| Arc::clone(&flow.socket));
         let socket = if let Some(socket) = existing {
             socket
         } else {
@@ -619,6 +682,7 @@ impl Loop {
             };
             socket
         };
+        self.read_quic(key, payload);
         match socket.send(payload).await {
             Ok(n) => Counters::add(&self.shared.counters.bytes_up, n as u64),
             Err(_) => {
@@ -626,6 +690,30 @@ impl Loop {
                     self.send(&error).await;
                 }
             }
+        }
+    }
+
+    /// Reads a datagram of a UDP flow that may still be named by its QUIC Initial packets.
+    fn read_quic(&self, key: (SocketAddr, SocketAddr), payload: &[u8]) {
+        let mut flows = lock(&self.udp);
+        let Some(flow) = flows.get_mut(&key) else {
+            return;
+        };
+        let Some((id, initial)) = flow.quic.as_mut() else {
+            return;
+        };
+        let id = *id;
+        let read = initial.push(payload);
+        if read == ServerName::Incomplete {
+            return;
+        }
+        let was_quic = initial.is_quic();
+        flow.quic = None;
+        drop(flows);
+        match read {
+            ServerName::Found(hello) => self.shared.hello(id, hello, NamedBy::Quic),
+            _ if was_quic => Counters::add(&self.shared.counters.quic_unread, 1),
+            _ => {}
         }
     }
 
@@ -644,6 +732,7 @@ impl Loop {
             outcome: Outcome::Opened,
             name,
             named_by,
+            ech: Ech::Absent,
         };
         let Some(target) = self.shared.target(destination) else {
             flow.outcome = Outcome::Unreachable;
@@ -672,7 +761,15 @@ impl Loop {
             }
         };
         self.shared.record(flow);
-        lock(&self.udp).insert((app, destination), Arc::clone(&socket));
+        // The tunnel's own DNS address is never QUIC.
+        let quic = (!is_tunnel_dns(destination.ip())).then(|| (id, quic::Initial::new()));
+        lock(&self.udp).insert(
+            (app, destination),
+            UdpFlow {
+                socket: Arc::clone(&socket),
+                quic,
+            },
+        );
         tokio::spawn(answers(
             Arc::clone(&socket),
             app,
@@ -778,7 +875,6 @@ async fn open(
         Err(_) => Outcome::Failed,
     };
     let (id, name, named_by) = shared.begin(destination);
-    let named = named_by == NamedBy::Dns;
     shared.record(Flow {
         id,
         protocol: TCP,
@@ -788,9 +884,10 @@ async fn open(
         outcome,
         name,
         named_by,
+        ech: Ech::Absent,
     });
     let answer = if let Ok(stream) = upstream {
-        lock(&pending).insert(held.port, Upstream { stream, id, named });
+        lock(&pending).insert(held.port, Upstream { stream, id });
         lock(&nat).open(held.port);
         let (fake, tun_ip) = if app.is_ipv4() {
             (IpAddr::V4(FAKE4), IpAddr::V4(TUN4))
@@ -846,9 +943,10 @@ async fn accept(
     }
 }
 
-/// Relays one connection both ways, counting the bytes as they pass. Until the flow has a name, the
-/// app's first bytes are read for a TLS server name (at most [`tls::MAX_HELLO`]); nothing is held
-/// back for that, so a protocol in which the server speaks first is not delayed.
+/// Relays one connection both ways, counting the bytes as they pass. The app's first bytes are read
+/// for a TLS hello (at most [`tls::MAX_HELLO`]), even when DNS named the flow, since only the hello
+/// tells whether ECH hid the name; nothing is held back for that, so a protocol in which the server
+/// speaks first is not delayed.
 async fn relay(app: TcpStream, upstream: Upstream, shared: &Arc<Shared>) {
     let _ = app.set_nodelay(true);
     let _ = upstream.stream.set_nodelay(true);
@@ -856,11 +954,7 @@ async fn relay(app: TcpStream, upstream: Upstream, shared: &Arc<Shared>) {
     let (mut up_read, mut up_write) = upstream.stream.into_split();
     let up = async {
         let mut buffer = vec![0u8; 16 * 1024];
-        let mut start = if upstream.named {
-            None
-        } else {
-            Some(Vec::new())
-        };
+        let mut start = Some(Vec::new());
         loop {
             let n = match app_read.read(&mut buffer).await {
                 Ok(0) | Err(_) => break,
@@ -869,8 +963,8 @@ async fn relay(app: TcpStream, upstream: Upstream, shared: &Arc<Shared>) {
             if let Some(seen) = start.as_mut() {
                 seen.extend_from_slice(&buffer[..n]);
                 match tls::server_name(seen) {
-                    ServerName::Found(name) => {
-                        shared.name(upstream.id, name, NamedBy::Tls);
+                    ServerName::Found(hello) => {
+                        shared.hello(upstream.id, hello, NamedBy::Tls);
                         start = None;
                     }
                     ServerName::None => start = None,
@@ -946,4 +1040,110 @@ async fn answers(
         }
     }
     lock(&flows).remove(&(app, destination));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct NoPlatform;
+
+    impl Platform for NoPlatform {
+        fn owner(&self, _: u8, _: SocketAddr, _: SocketAddr) -> Option<u32> {
+            None
+        }
+
+        fn protect(&self, _: RawFd) -> bool {
+            true
+        }
+    }
+
+    fn shared() -> Shared {
+        Shared {
+            platform: Arc::new(NoPlatform),
+            counters: Counters::default(),
+            keep_flows: 8,
+            flows: Mutex::default(),
+            upstream_dns: Mutex::default(),
+            names: Mutex::default(),
+            organisations: None,
+            next_id: AtomicU64::new(0),
+        }
+    }
+
+    fn open_flow(shared: &Shared, destination: SocketAddr) -> u64 {
+        let (id, name, named_by) = shared.begin(destination);
+        shared.record(Flow {
+            id,
+            protocol: TCP,
+            app: SocketAddr::from(([10, 215, 173, 1], 40_000)),
+            destination,
+            uid: Some(10_123),
+            outcome: Outcome::Opened,
+            name,
+            named_by,
+            ech: Ech::Absent,
+        });
+        id
+    }
+
+    fn hello(name: &str, ech: bool) -> Hello {
+        Hello {
+            name: name.into(),
+            ech,
+        }
+    }
+
+    #[test]
+    fn a_hello_names_a_flow_in_w3s_order_unless_ech_hides_the_name() {
+        let shared = shared();
+        let now = Instant::now();
+        let asked = SocketAddr::from(([93, 184, 216, 34], 443));
+        lock(&shared.names).insert(asked.ip(), "www.example.com", 60, now);
+        lock(&shared.names).insert_public("cover.example", 60, now);
+        let by_dns = open_flow(&shared, asked);
+        let by_quic = open_flow(&shared, SocketAddr::from(([203, 0, 113, 9], 443)));
+        let hidden = open_flow(&shared, SocketAddr::from(([203, 0, 113, 10], 443)));
+        let hidden_after_dns = open_flow(&shared, asked);
+
+        // DNS comes first: a TLS name does not replace it.
+        shared.hello(by_dns, hello("other.example", false), NamedBy::Tls);
+        // A QUIC name names a flow without one; ECH offered, perhaps GREASE, does not stop it.
+        shared.hello(by_quic, hello("quic.example", true), NamedBy::Quic);
+        // A public name under ECH never names a flow, and the real name stays as DNS gave it.
+        shared.hello(hidden, hello("cover.example", true), NamedBy::Tls);
+        shared.hello(
+            hidden_after_dns,
+            hello("cover.example", true),
+            NamedBy::Quic,
+        );
+
+        let flows = lock(&shared.flows);
+        let seen: Vec<_> = flows
+            .iter()
+            .map(|f| (f.name.as_deref(), f.named_by, f.ech))
+            .collect();
+        assert_eq!(
+            seen,
+            vec![
+                (Some("www.example.com"), NamedBy::Dns, Ech::Absent),
+                (Some("quic.example"), NamedBy::Quic, Ech::Offered),
+                (None, NamedBy::Unknown, Ech::Hidden),
+                (Some("www.example.com"), NamedBy::Dns, Ech::Hidden),
+            ]
+        );
+        // TLS and QUIC names read, QUIC unread, ECH offered, ECH hidden.
+        assert_eq!(shared.counters.snapshot()[11..], [2, 2, 0, 3, 2]);
+    }
+
+    #[test]
+    fn w3s_order_is_dns_tls_quic_then_the_organisation() {
+        use NamedBy::{Dns, Organisation, Quic, Tls, Unknown};
+        let order = [Dns, Tls, Quic, Organisation, Unknown];
+        for (i, &better) in order.iter().enumerate() {
+            for &worse in &order[i + 1..] {
+                assert!(worse.yields_to(better) && !better.yields_to(worse));
+            }
+        }
+    }
 }

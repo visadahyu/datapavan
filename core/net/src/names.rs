@@ -4,6 +4,10 @@
 //! An entry lives at least [`MIN_KEEP`], however short the answer's TTL: apps keep addresses longer
 //! than DNS says, and a flow named "unknown" because the TTL ran out a minute earlier tells the user
 //! less than the name. The table holds at most [`CAPACITY`] addresses; the oldest go first.
+//!
+//! It also keeps the public names of the ECH configurations in the DNS answers, as long as the
+//! addresses, at most [`PUBLIC_CAPACITY`] of them: a hello that offers ECH and names one of them hides
+//! the real name.
 
 use std::collections::{HashMap, VecDeque};
 use std::net::IpAddr;
@@ -15,12 +19,16 @@ pub const MIN_KEEP: Duration = Duration::from_secs(3600);
 pub const MAX_KEEP: Duration = Duration::from_hours(24);
 /// The most addresses kept.
 pub const CAPACITY: usize = 8192;
+/// The most public names kept.
+pub const PUBLIC_CAPACITY: usize = 256;
 
 /// Names by address.
 #[derive(Debug, Default)]
 pub struct Names {
     by_address: HashMap<IpAddr, (String, Instant)>,
     order: VecDeque<IpAddr>,
+    public: HashMap<String, Instant>,
+    public_order: VecDeque<String>,
 }
 
 impl Names {
@@ -41,6 +49,25 @@ impl Names {
         }
     }
 
+    /// Remembers that a DNS answer gave an ECH configuration with the public name `name`.
+    pub fn insert_public(&mut self, name: &str, ttl: u32, now: Instant) {
+        let keep = Duration::from_secs(u64::from(ttl)).clamp(MIN_KEEP, MAX_KEEP);
+        if self.public.insert(name.to_owned(), now + keep).is_none() {
+            self.public_order.push_back(name.to_owned());
+        }
+        while self.public_order.len() > PUBLIC_CAPACITY {
+            if let Some(oldest) = self.public_order.pop_front() {
+                self.public.remove(&oldest);
+            }
+        }
+    }
+
+    /// Whether `name` is the public name of an ECH configuration still kept.
+    #[must_use]
+    pub fn is_public(&self, name: &str, now: Instant) -> bool {
+        self.public.get(name).is_some_and(|until| *until > now)
+    }
+
     /// The name last given for `address`, if it is still kept.
     #[must_use]
     pub fn get(&self, address: IpAddr, now: Instant) -> Option<&str> {
@@ -54,6 +81,8 @@ impl Names {
     pub fn clear(&mut self) {
         self.by_address.clear();
         self.order.clear();
+        self.public.clear();
+        self.public_order.clear();
     }
 
     /// How many addresses are kept.
@@ -92,5 +121,24 @@ mod tests {
         }
         assert_eq!(names.len(), CAPACITY);
         assert_eq!(names.get(a, now), None, "the oldest went first");
+    }
+
+    #[test]
+    fn keeps_public_names_for_a_while_and_the_newest_ones() {
+        let mut names = Names::default();
+        let now = Instant::now();
+        names.insert_public("cover.example", 300, now);
+        assert!(names.is_public("cover.example", now));
+        assert!(!names.is_public("other.example", now));
+        assert!(!names.is_public("cover.example", now + MIN_KEEP + Duration::from_secs(1)));
+        for i in 0..PUBLIC_CAPACITY {
+            names.insert_public(&format!("p{i}.example"), 300, now);
+        }
+        assert!(
+            !names.is_public("cover.example", now),
+            "the oldest went first"
+        );
+        names.clear();
+        assert!(!names.is_public("p1.example", now));
     }
 }

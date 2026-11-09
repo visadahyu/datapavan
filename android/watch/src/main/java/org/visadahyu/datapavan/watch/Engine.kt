@@ -41,10 +41,12 @@ internal object Engine {
 
     /**
      * The counters: TCP flows, UDP flows, bytes up, bytes down, flows without an owner, refused,
-     * unreachable, failed, packets skipped, packets in, packets out. Empty when no engine runs.
+     * unreachable, failed, packets skipped, packets in, packets out, server names read from TLS and
+     * from QUIC, QUIC flows whose name could not be read, hellos that offered ECH, and hellos whose
+     * name was an ECH public name. None names a destination. Empty when no engine runs.
      */
     external fun nativeCounters(): LongArray
 
-    /** The flows kept, one per line as `protocol app destination uid outcome named-by name`; debug builds only. */
+    /** The flows kept, one per line as `protocol app destination uid outcome named-by ech name`; debug builds only. */
     external fun nativeFlows(): String
 }

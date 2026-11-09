@@ -5,7 +5,8 @@
 # Through Watch it checks that TCP and UDP reach the server and come back; that a connection closed at
 # once, a refused one and an unreachable one each get their owner named; that the app sees the refusal
 # as "refused" and an unreachable IPv6 address as "no route", as without a VPN; that names resolve
-# through the tunnel's DNS, and flows are named after a DNS answer or a TLS server name (W3); and that
+# through the tunnel's DNS, and flows are named after a DNS answer, a TLS server name or a QUIC one,
+# with the ECH a hello offers noted (W3); and that
 # all of it still works after the network beneath switches from Wi-Fi to mobile data. Nothing is left
 # running: the tunnel and the server stop at the end.
 #
@@ -28,8 +29,11 @@ PORT=${WATCH_TEST_PORT:-8790}
 SERVER=""
 # A TLS ClientHello for watch.test, which the test server answers as bad HTTP; only its name counts.
 HELLO_ON_DEVICE=/data/local/tmp/watch-hello.bin
+# A QUIC ClientHello for watch.test offering ECH, in two Initial datagrams, its CRYPTO frames out of
+# order as Chrome sends them; the UDP echo sends them back, and only the name counts.
+QUIC_ON_DEVICE=/data/local/tmp/watch-quic
 cleanup() {
-    adb shell rm -f "$HELLO_ON_DEVICE" >/dev/null 2>&1 || true
+    adb shell rm -f "$HELLO_ON_DEVICE" "$QUIC_ON_DEVICE-1.bin" "$QUIC_ON_DEVICE-2.bin" >/dev/null 2>&1 || true
     adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
     if is_emulator; then adb shell svc wifi enable >/dev/null 2>&1 || true; fi
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
@@ -47,7 +51,7 @@ fail() {
     exit 1
 }
 
-# The flows the engine kept, one per line: protocol app destination uid outcome named-by name.
+# The flows the engine kept, one per line: protocol app destination uid outcome named-by ech name.
 flows() {
     adb shell dumpsys activity service "$PKG/.WatchVpnService" | tr -d '\r' | sed -n 's/^ *flow //p'
 }
@@ -57,9 +61,10 @@ has_flow() {
     flows | grep -qE "^$1 [^ ]+ $(sed 's/[.[]/\\&/g; s/]/\\]/g' <<<"$2") $SHELL_UID $3 "
 }
 
-# Whether a flow of the shell, by protocol $1 to any address on port $2, is named $3 by $4 (W3).
+# Whether a flow of the shell, by protocol $1 to any address on port $2, is named $3 by $4 (W3), with
+# the ECH column $5 (any if not given).
 has_named_flow() {
-    flows | grep -qE "^$1 [^ ]+ [^ ]+:$2 $SHELL_UID opened $4 ${3//./\\.}\$"
+    flows | grep -qE "^$1 [^ ]+ [^ ]+:$2 $SHELL_UID opened $4 ${5:-[^ ]+} ${3//./\\.}\$"
 }
 
 vpn_up() {
@@ -114,8 +119,12 @@ traffic() {
     has_named_flow udp 9 example.com dns || fail "$round: a flow to example.com was not named after its DNS answer"
     echo "ok: $round: a flow named from its DNS answer"
     device 10 "nc -w 2 $HOST $PORT < $HELLO_ON_DEVICE" >/dev/null
-    has_named_flow tcp "$PORT" watch.test tls || fail "$round: a TLS connection was not named after its server name"
+    has_named_flow tcp "$PORT" watch.test tls - || fail "$round: a TLS connection was not named after its server name"
     echo "ok: $round: a flow named from its TLS server name"
+    device 10 "(cat $QUIC_ON_DEVICE-1.bin; sleep 1; cat $QUIC_ON_DEVICE-2.bin) | nc -u -w 2 $HOST $((PORT + 1))" >/dev/null
+    has_named_flow udp "$((PORT + 1))" watch.test quic ech ||
+        fail "$round: a QUIC connection was not named after its server name, with ECH offered"
+    echo "ok: $round: a flow named from its QUIC server name, put together from two datagrams"
 
     # A flow to an address no DNS answer gave is named after its network's organisation, when this
     # build carries the table (data/dbip-asn/update.py; a clean checkout has none, ADR 0036).
@@ -144,7 +153,58 @@ handshake = b"\x01\x00" + struct.pack("!H", len(body)) + body
 open(sys.argv[1], "wb").write(b"\x16\x03\x01" + struct.pack("!H", len(handshake)) + handshake)
 PY
 adb push "$hello" "$HELLO_ON_DEVICE" >/dev/null 2>&1
-rm -f "$hello"
+# The QUIC Initial packets are protected with Python's HMAC and OpenSSL's AES, apart from Watch's own
+# code (RFC 9001 5): the keys from the connection ID, AES-CTR with GCM's counter, a zero tag (Watch
+# does not check it), then the header protection.
+python3 -I - "$hello" <<'PY'
+import hashlib, hmac, struct, subprocess, sys
+
+def expand_label(secret, label, length):
+    label = b"tls13 " + label
+    info = struct.pack("!HB", length, len(label)) + label + b"\x00\x01"
+    return hmac.new(secret, info, hashlib.sha256).digest()[:length]
+
+def aes(key, data, mode, iv=b""):
+    command = ["openssl", "enc", "-aes-128-" + mode, "-K", key.hex(), "-nopad"]
+    command += ["-iv", iv.hex()] if iv else []
+    return subprocess.run(command, input=data, capture_output=True, check=True).stdout
+
+cid = bytes.fromhex("5761746368517569")
+salt = bytes.fromhex("38762cf7f55934b34d179ae6a4c80cadccbb7f0a")
+secret = expand_label(hmac.new(salt, cid, hashlib.sha256).digest(), b"client in", 32)
+key, iv, hp = (expand_label(secret, b"quic " + l, n) for l, n in ((b"key", 16), (b"iv", 12), (b"hp", 16)))
+
+def initial(pn, frames, size):
+    header = b"\xc3" + struct.pack("!IB", 1, len(cid)) + cid + b"\x00\x00"
+    length = max(size - len(header) - 22, len(frames))
+    header += struct.pack("!H", 0x4000 | (length + 20))
+    at = len(header)
+    header += struct.pack("!I", pn)
+    nonce = bytes(a ^ b for a, b in zip(iv, struct.pack("!IQ", 0, pn)))
+    packet = bytearray(header + aes(key, frames.ljust(length, b"\x00"), "ctr", nonce + b"\x00\x00\x00\x02"))
+    packet += bytes(16)
+    mask = aes(hp, bytes(packet[at + 4:at + 20]), "ecb")
+    packet[0] ^= mask[0] & 0x0F
+    for i in range(4):
+        packet[at + i] ^= mask[1 + i]
+    return bytes(packet)
+
+def crypto(offset, data):
+    return b"\x06" + struct.pack("!HH", 0x4000 | offset, 0x4000 | len(data)) + data
+
+name = b"watch.test"
+extensions = struct.pack("!HHHBH", 0, len(name) + 5, len(name) + 3, 0, len(name)) + name
+extensions += bytes([0xFE, 0x0D, 0, 12, 0, 0, 1, 0, 1, 7, 0, 0, 0, 2, 1, 2])
+extensions += struct.pack("!HH", 21, 1400) + bytes(1400)
+body = b"\x03\x03" + bytes(32) + b"\x00\x00\x02\x13\x01\x01\x00" + struct.pack("!H", len(extensions)) + extensions
+hello = b"\x01\x00" + struct.pack("!H", len(body)) + body
+first = crypto(40, hello[40:700]) + b"\x01" + crypto(0, hello[:40])
+second = crypto(700, hello[700:])
+for n, packet in ((1, initial(0, first, 1250)), (2, initial(1, second, 1250))):
+    open(f"{sys.argv[1]}-{n}.bin", "wb").write(packet)
+PY
+for n in 1 2; do adb push "$hello-$n.bin" "$QUIC_ON_DEVICE-$n.bin" >/dev/null 2>&1; done
+rm -f "$hello" "$hello-1.bin" "$hello-2.bin"
 is_emulator && adb shell appops set "$PKG" ACTIVATE_VPN allow
 # Android 17: the server is on the local network, which Watch reaches for every app (ADR 0034).
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK

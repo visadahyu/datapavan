@@ -120,7 +120,9 @@ repository is created before the first monthly update.
 - The legal review of ADR 0015 (decision 12) covers the CC BY 4.0 notice and how signing fits its "no
   downstream restrictions" clause; ADR 0015 already reasons the same way for ODbL.
 - When an app looks names up past Watch (its own encrypted DNS) and also hides its server name with
-  Encrypted Client Hello, this table's organisation is the only name left. Naming such a flow more
-  closely, from the shape of its traffic, is open research; it is accepted as a limit and not attempted.
+  Encrypted Client Hello, its hello carries only the provider's public name, which looks the same as
+  Chrome's GREASE with a real name: Watch shows that name marked "ECH offered", and this table's
+  organisation is the only name it can vouch for. Naming such a flow more closely, from the shape of its
+  traffic, is open research; it is accepted as a limit and not attempted.
 - The full comparison, with every source and its date, is in the private strategy repository
   (`research/2026-11-ip-datasets.md`).

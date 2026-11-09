@@ -12,7 +12,8 @@ pub mod names;
 pub mod nat;
 pub mod organisations;
 pub mod packet;
+pub mod quic;
 pub mod tls;
 pub mod tun;
 
-pub use engine::{Config, Engine, Flow, NamedBy, Outcome, Platform};
+pub use engine::{Config, Ech, Engine, Flow, NamedBy, Outcome, Platform};

@@ -4,10 +4,15 @@
 //!
 //! The name the app asked for is kept, not the end of a CNAME chain: an app that asks for
 //! `graph.instagram.com` and is sent on to a CDN's name connects to Instagram, as far as it knows.
+//! The ECH configurations in HTTPS and SVCB records (RFC 9460) are read for their public names: an
+//! app whose TLS or QUIC hello then names one of them hides the real name behind it ([`crate::tls`]).
+//!
 //! Every function takes bytes a resolver on the network can choose, so none may panic or loop without
 //! end (`fuzz_targets/dns.rs`).
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
+use crate::tls;
 
 /// The longest name DNS allows, in its text form.
 const MAX_NAME: usize = 253;
@@ -18,6 +23,14 @@ const MAX_ANSWERS: usize = 64;
 
 const TYPE_A: u16 = 1;
 const TYPE_AAAA: u16 = 28;
+const TYPE_SVCB: u16 = 64;
+const TYPE_HTTPS: u16 = 65;
+/// The `ech` parameter of an SVCB or HTTPS record (RFC 9460 14.3.2).
+const KEY_ECH: u16 = 5;
+/// The version of an `ECHConfig` the public name is read from (`draft-ietf-tls-esni`, RFC 9849).
+const ECH_VERSION: u16 = 0xfe0d;
+/// Public names read from one message.
+const MAX_PUBLIC_NAMES: usize = 8;
 const CLASS_IN: u16 = 1;
 
 /// What one DNS response says.
@@ -27,6 +40,8 @@ pub struct Response {
     pub question: String,
     /// The addresses given for it, each with its time to live in seconds.
     pub addresses: Vec<(IpAddr, u32)>,
+    /// The public names of the ECH configurations given for it, each with its time to live.
+    pub public_names: Vec<(String, u32)>,
 }
 
 fn u16_at(bytes: &[u8], at: usize) -> Option<u16> {
@@ -114,6 +129,7 @@ pub fn response(message: &[u8]) -> Option<Response> {
     // The question and every name a CNAME in the answer led to.
     let mut owners = vec![question.clone()];
     let mut addresses = Vec::new();
+    let mut public_names = Vec::new();
     for _ in 0..answers.min(u16::try_from(MAX_ANSWERS).unwrap_or(u16::MAX)) {
         let (owner, after) = read_name(message, at)?;
         let kind = u16_at(message, after)?;
@@ -143,13 +159,75 @@ pub fn response(message: &[u8]) -> Option<Response> {
                     owners.push(target);
                 }
             }
+            (TYPE_SVCB | TYPE_HTTPS, _) => {
+                let mut names = Vec::new();
+                // A malformed record gives no names; the rest of the answer still counts.
+                let _ = ech_public_names(record, &mut names);
+                for name in names {
+                    if public_names.len() < MAX_PUBLIC_NAMES {
+                        public_names.push((name, ttl));
+                    }
+                }
+            }
             _ => {}
         }
     }
     Some(Response {
         question,
         addresses,
+        public_names,
     })
+}
+
+/// Adds the public names of the `ECHConfig`s in an SVCB or HTTPS record's data to `names`: the record's
+/// priority, its target name (never compressed, RFC 9460 2.2), then its parameters, whose `ech` value
+/// is an `ECHConfigList`.
+fn ech_public_names(record: &[u8], names: &mut Vec<String>) -> Option<()> {
+    // Priority 0 is alias mode, which has no parameters.
+    if u16_at(record, 0)? == 0 {
+        return Some(());
+    }
+    let mut at = 2;
+    loop {
+        let length = usize::from(*record.get(at)?);
+        if length > 63 {
+            return None;
+        }
+        at += 1 + length;
+        if length == 0 {
+            break;
+        }
+    }
+    while at < record.len() {
+        let key = u16_at(record, at)?;
+        let length = usize::from(u16_at(record, at + 2)?);
+        let value = record.get(at + 4..at + 4 + length)?;
+        at += 4 + length;
+        if key != KEY_ECH {
+            continue;
+        }
+        let list = value.get(2..2 + usize::from(u16_at(value, 0)?))?;
+        let mut config = 0;
+        while config + 4 <= list.len() {
+            let version = u16_at(list, config)?;
+            let length = usize::from(u16_at(list, config + 2)?);
+            let contents = list.get(config + 4..config + 4 + length)?;
+            config += 4 + length;
+            if version != ECH_VERSION {
+                continue;
+            }
+            // config_id, kem_id, public_key, cipher_suites, maximum_name_length, then public_name.
+            let mut p = 3;
+            p += 2 + usize::from(u16_at(contents, p)?);
+            p += 2 + usize::from(u16_at(contents, p)?);
+            p += 1;
+            let name_length = usize::from(*contents.get(p)?);
+            if let Some(name) = tls::valid_name(contents.get(p + 1..p + 1 + name_length)?) {
+                names.push(name);
+            }
+        }
+    }
+    Some(())
 }
 
 #[cfg(test)]
@@ -221,8 +299,52 @@ mod tests {
                         30
                     ),
                 ],
+                public_names: vec![],
             })
         );
+    }
+
+    /// [`sample`] with an HTTPS record for the question after the others, whose `ech` parameter holds
+    /// an `ECHConfig` with the public name `public`, after an `alpn` parameter.
+    fn with_https(public: &str) -> Vec<u8> {
+        let mut config = vec![7, 0, 0x20, 0, 32];
+        config.extend_from_slice(&[9; 32]);
+        config.extend_from_slice(&[0, 4, 0, 1, 0, 1, 0]);
+        config.push(u8::try_from(public.len()).unwrap_or(0));
+        config.extend_from_slice(public.as_bytes());
+        config.extend_from_slice(&[0, 0]);
+        let mut list = vec![0xfe, 0x0d];
+        list.extend_from_slice(&u16::try_from(config.len()).unwrap_or(0).to_be_bytes());
+        list.extend_from_slice(&config);
+        let mut data = vec![0, 1, 0, 0, 1, 0, 3, 2, b'h', b'2', 0, 5];
+        data.extend_from_slice(&u16::try_from(list.len() + 2).unwrap_or(0).to_be_bytes());
+        data.extend_from_slice(&u16::try_from(list.len()).unwrap_or(0).to_be_bytes());
+        data.extend_from_slice(&list);
+        let mut m = sample();
+        m[7] += 1;
+        m.extend_from_slice(&[0xc0, 12, 0, 65, 0, 1, 0, 0, 2, 0x58]);
+        m.extend_from_slice(&u16::try_from(data.len()).unwrap_or(0).to_be_bytes());
+        m.extend_from_slice(&data);
+        m
+    }
+
+    #[test]
+    fn reads_the_public_names_of_ech_configurations() {
+        let Some(parsed) = response(&with_https("Cover.Example")) else {
+            unreachable!("a response")
+        };
+        assert_eq!(parsed.public_names, vec![("cover.example".into(), 600)]);
+        assert_eq!(parsed.addresses.len(), 2);
+        // An ECHConfig whose public key runs past its end gives no names; the addresses still count.
+        let mut cut = with_https("cover.example");
+        let at = cut.len() - 60 + 3;
+        assert_eq!(cut[at..at + 2], [0, 32], "the public key's length");
+        cut[at] = 0xff;
+        let Some(parsed) = response(&cut) else {
+            unreachable!("a response")
+        };
+        assert_eq!(parsed.public_names, Vec::<(String, u32)>::new());
+        assert_eq!(parsed.addresses.len(), 2);
     }
 
     #[test]
