@@ -1,0 +1,251 @@
+//! DNS answers as they pass from the network's resolver back to an app (RFC 1035): which name the app
+//! asked for, and which addresses it was given, so that a later flow to one of those addresses can be
+//! named after what the app asked (W3).
+//!
+//! The name the app asked for is kept, not the end of a CNAME chain: an app that asks for
+//! `graph.instagram.com` and is sent on to a CDN's name connects to Instagram, as far as it knows.
+//! Every function takes bytes a resolver on the network can choose, so none may panic or loop without
+//! end (`fuzz_targets/dns.rs`).
+
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
+/// The longest name DNS allows, in its text form.
+const MAX_NAME: usize = 253;
+/// Compression pointers followed in one name before it is refused.
+const MAX_JUMPS: usize = 32;
+/// Answers read from one message.
+const MAX_ANSWERS: usize = 64;
+
+const TYPE_A: u16 = 1;
+const TYPE_AAAA: u16 = 28;
+const CLASS_IN: u16 = 1;
+
+/// What one DNS response says.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Response {
+    /// The name the app asked for, in lower case.
+    pub question: String,
+    /// The addresses given for it, each with its time to live in seconds.
+    pub addresses: Vec<(IpAddr, u32)>,
+}
+
+fn u16_at(bytes: &[u8], at: usize) -> Option<u16> {
+    Some(u16::from_be_bytes([
+        *bytes.get(at)?,
+        *bytes.get(at.checked_add(1)?)?,
+    ]))
+}
+
+fn u32_at(bytes: &[u8], at: usize) -> Option<u32> {
+    let b = bytes.get(at..at.checked_add(4)?)?;
+    Some(u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
+}
+
+/// Reads the name at `at`, following compression pointers. Returns the name in lower case and where
+/// the record continues after it, or `None` for a name that is malformed, too long, loops, or holds
+/// bytes outside printable ASCII (an app's log must not carry control characters).
+fn read_name(message: &[u8], mut at: usize) -> Option<(String, usize)> {
+    let mut name = String::new();
+    let mut end = None;
+    let mut jumps = 0;
+    loop {
+        let length = *message.get(at)?;
+        match length >> 6 {
+            0 if length == 0 => {
+                let next = end.unwrap_or(at + 1);
+                return Some((name, next));
+            }
+            0 => {
+                let label = message.get(at + 1..at + 1 + usize::from(length))?;
+                if !label.iter().all(u8::is_ascii_graphic) {
+                    return None;
+                }
+                if !name.is_empty() {
+                    name.push('.');
+                }
+                name.extend(label.iter().map(|b| char::from(b.to_ascii_lowercase())));
+                if name.len() > MAX_NAME {
+                    return None;
+                }
+                at += 1 + usize::from(length);
+            }
+            3 => {
+                jumps += 1;
+                if jumps > MAX_JUMPS {
+                    return None;
+                }
+                let pointer = usize::from(u16_at(message, at)? & 0x3fff);
+                end.get_or_insert(at + 2);
+                // A pointer must point back, so that a name cannot point into itself.
+                if pointer >= at {
+                    return None;
+                }
+                at = pointer;
+            }
+            _ => return None,
+        }
+    }
+}
+
+/// Reads a DNS response: its first question and the A and AAAA records of the answer section. Records
+/// whose owner is not the question or a name a CNAME of the answer led to are left out, so that a
+/// resolver cannot name an address after a name the app never asked for. Returns `None` for anything
+/// that is not a well-formed response with one question.
+#[must_use]
+pub fn response(message: &[u8]) -> Option<Response> {
+    let flags = u16_at(message, 2)?;
+    // QR set: a response; opcode 0: a standard query.
+    if flags & 0x8000 == 0 || flags & 0x7800 != 0 {
+        return None;
+    }
+    let questions = u16_at(message, 4)?;
+    let answers = u16_at(message, 6)?;
+    if questions != 1 {
+        return None;
+    }
+    let (question, mut at) = read_name(message, 12)?;
+    if question.is_empty() {
+        return None;
+    }
+    at = at.checked_add(4)?;
+    if at > message.len() {
+        return None;
+    }
+    // The question and every name a CNAME in the answer led to.
+    let mut owners = vec![question.clone()];
+    let mut addresses = Vec::new();
+    for _ in 0..answers.min(u16::try_from(MAX_ANSWERS).unwrap_or(u16::MAX)) {
+        let (owner, after) = read_name(message, at)?;
+        let kind = u16_at(message, after)?;
+        let class = u16_at(message, after + 2)?;
+        let ttl = u32_at(message, after + 4)?;
+        let length = usize::from(u16_at(message, after + 8)?);
+        let data = after + 10;
+        let record = message.get(data..data.checked_add(length)?)?;
+        at = data + length;
+        if class != CLASS_IN || !owners.contains(&owner) {
+            continue;
+        }
+        match (kind, record.len()) {
+            (TYPE_A, 4) => addresses.push((
+                IpAddr::V4(Ipv4Addr::new(record[0], record[1], record[2], record[3])),
+                ttl,
+            )),
+            (TYPE_AAAA, 16) => {
+                let octets: [u8; 16] = record.try_into().ok()?;
+                addresses.push((IpAddr::V6(Ipv6Addr::from(octets)), ttl));
+            }
+            // A CNAME: the name it leads to may own the addresses that follow.
+            (5, _) => {
+                if let Some((target, _)) = read_name(message, data)
+                    && owners.len() < MAX_ANSWERS
+                {
+                    owners.push(target);
+                }
+            }
+            _ => {}
+        }
+    }
+    Some(Response {
+        question,
+        addresses,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A response for `www.Example.com`: a CNAME to `edge.cdn.net`, its A and AAAA records, and an A
+    /// record for a name nobody asked for.
+    fn sample() -> Vec<u8> {
+        let mut m = vec![0x12, 0x34, 0x81, 0x80, 0, 1, 0, 4, 0, 0, 0, 0];
+        m.extend_from_slice(b"\x03www\x07Example\x03com\x00\x00\x01\x00\x01");
+        // CNAME, owner: pointer to the question at 12.
+        m.extend_from_slice(&[0xc0, 12, 0, 5, 0, 1, 0, 0, 0, 60, 0, 14]);
+        let target = m.len();
+        m.extend_from_slice(b"\x04edge\x03cdn\x03net\x00");
+        // A of the target, by pointer.
+        m.extend_from_slice(&[
+            0xc0,
+            u8::try_from(target).unwrap_or(0),
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            44,
+            0,
+            4,
+            93,
+            184,
+            216,
+            34,
+        ]);
+        // AAAA of the target.
+        m.extend_from_slice(&[
+            0xc0,
+            u8::try_from(target).unwrap_or(0),
+            0,
+            28,
+            0,
+            1,
+            0,
+            0,
+            0,
+            30,
+            0,
+            16,
+        ]);
+        m.extend_from_slice(&Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1).octets());
+        // An A record of an unrelated name.
+        m.extend_from_slice(
+            b"\x05other\x03net\x00\x00\x01\x00\x01\x00\x00\x00\x3c\x00\x04\x01\x02\x03\x04",
+        );
+        m
+    }
+
+    #[test]
+    fn names_the_addresses_after_the_question_through_a_cname() {
+        let parsed = response(&sample());
+        assert_eq!(
+            parsed,
+            Some(Response {
+                question: "www.example.com".into(),
+                addresses: vec![
+                    (IpAddr::V4(Ipv4Addr::new(93, 184, 216, 34)), 300),
+                    (
+                        IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1)),
+                        30
+                    ),
+                ],
+            })
+        );
+    }
+
+    #[test]
+    fn refuses_queries_loops_and_strange_bytes() {
+        let mut query = sample();
+        query[2] = 0x01;
+        assert_eq!(response(&query), None);
+
+        // A pointer that points to itself.
+        let mut looped = vec![
+            0x12, 0x34, 0x81, 0x80, 0, 1, 0, 0, 0, 0, 0, 0, 0xc0, 12, 0, 1, 0, 1,
+        ];
+        assert_eq!(response(&looped), None);
+        looped[13] = 0;
+        assert_eq!(response(&looped), None);
+
+        let mut control = sample();
+        control[13] = b'\n';
+        assert_eq!(response(&control), None);
+
+        let message = sample();
+        for cut in 0..40 {
+            assert_eq!(response(&message[..cut]), None, "cut at {cut}");
+        }
+    }
+}

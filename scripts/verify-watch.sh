@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# End-to-end check of Watch's packet engine, milestone W2 (docs/DESIGN.md, 13.2), on an emulator or a
-# phone: starts the test server (scripts/watch-lab/server.py) on this computer, starts Watch's tunnel
-# for every app through its debug entry, and plays the app with adb's own shell (UID 2000) and its nc.
+# End-to-end check of Watch's packet engine, milestones W2 and W3 (docs/DESIGN.md, 13.2), on an
+# emulator or a phone: starts the test server (scripts/watch-lab/server.py) on this computer, starts
+# Watch's tunnel for every app through its debug entry, and plays the app with adb's own shell (UID 2000) and its nc.
 # Through Watch it checks that TCP and UDP reach the server and come back; that a connection closed at
 # once, a refused one and an unreachable one each get their owner named; that the app sees the refusal
 # as "refused" and an unreachable IPv6 address as "no route", as without a VPN; that names resolve
-# through the tunnel's DNS; and that all of it still works after the network beneath switches from
-# Wi-Fi to mobile data. Nothing is left running: the tunnel and the server stop at the end.
+# through the tunnel's DNS, and flows are named after a DNS answer or a TLS server name (W3); and that
+# all of it still works after the network beneath switches from Wi-Fi to mobile data. Nothing is left
+# running: the tunnel and the server stop at the end.
 #
 # The emulator reaches this computer at 10.0.2.2. On a phone, set WATCH_TEST_HOST to the computer's
 # address on the same Wi-Fi; the network switch is then skipped, since it would cut the phone off.
@@ -25,7 +26,10 @@ if is_emulator; then HOST=${WATCH_TEST_HOST:-10.0.2.2}; else HOST=${WATCH_TEST_H
 PORT=${WATCH_TEST_PORT:-8790}
 
 SERVER=""
+# A TLS ClientHello for watch.test, which the test server answers as bad HTTP; only its name counts.
+HELLO_ON_DEVICE=/data/local/tmp/watch-hello.bin
 cleanup() {
+    adb shell rm -f "$HELLO_ON_DEVICE" >/dev/null 2>&1 || true
     adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
     if is_emulator; then adb shell svc wifi enable >/dev/null 2>&1 || true; fi
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
@@ -43,14 +47,19 @@ fail() {
     exit 1
 }
 
-# The flows the engine kept, one per line: protocol app destination uid outcome.
+# The flows the engine kept, one per line: protocol app destination uid outcome name named-by.
 flows() {
     adb shell dumpsys activity service "$PKG/.WatchVpnService" | tr -d '\r' | sed -n 's/^ *flow //p'
 }
 
 # Whether a flow of the shell matches: protocol, destination and outcome.
 has_flow() {
-    flows | grep -qE "^$1 [^ ]+ $(sed 's/[.[]/\\&/g; s/]/\\]/g' <<<"$2") $SHELL_UID $3\$"
+    flows | grep -qE "^$1 [^ ]+ $(sed 's/[.[]/\\&/g; s/]/\\]/g' <<<"$2") $SHELL_UID $3 "
+}
+
+# Whether a flow of the shell, by protocol $1 to any address on port $2, is named $3 by $4 (W3).
+has_named_flow() {
+    flows | grep -qE "^$1 [^ ]+ [^ ]+:$2 $SHELL_UID opened ${3//./\\.} $4\$"
 }
 
 vpn_up() {
@@ -76,7 +85,7 @@ traffic() {
     echo "ok: $round: TCP through Watch, owner named"
 
     device 10 "nc -w 2 $HOST $PORT </dev/null" >/dev/null
-    [ "$(flows | grep -cE "^tcp [^ ]+ ${HOST//./\\.}:$PORT $SHELL_UID opened\$")" -ge 2 ] ||
+    [ "$(flows | grep -cE "^tcp [^ ]+ ${HOST//./\\.}:$PORT $SHELL_UID opened ")" -ge 2 ] ||
         fail "$round: a connection closed at once has no owner"
     echo "ok: $round: a connection closed at once, owner named"
 
@@ -95,9 +104,18 @@ traffic() {
     # ping resolves the name first, through the tunnel's DNS; its ICMP itself is not forwarded yet.
     answer=$(device 15 "ping -c 1 -W 2 example.com")
     grep -q 'PING example.com (' <<<"$answer" || fail "$round: example.com did not resolve: $answer"
-    flows | grep -qE "^udp [^ ]+ (10\.215\.173\.3|\[fd7a:6470:7761::3\]):53 $SHELL_UID opened\$" ||
+    flows | grep -qE "^udp [^ ]+ (10\.215\.173\.3|\[fd7a:6470:7761::3\]):53 $SHELL_UID opened " ||
         fail "$round: no DNS flow of the shell to the tunnel's DNS address"
     echo "ok: $round: names resolve through the tunnel"
+
+    # W3: a flow to an address from a DNS answer is named after the name the app asked for (UDP opens
+    # at once, whether or not the address answers), and a TLS connection after its server name.
+    device 6 "echo watch | nc -u -w 1 example.com 9" >/dev/null
+    has_named_flow udp 9 example.com dns || fail "$round: a flow to example.com was not named after its DNS answer"
+    echo "ok: $round: a flow named from its DNS answer"
+    device 10 "nc -w 2 $HOST $PORT < $HELLO_ON_DEVICE" >/dev/null
+    has_named_flow tcp "$PORT" watch.test tls || fail "$round: a TLS connection was not named after its server name"
+    echo "ok: $round: a flow named from its TLS server name"
 }
 
 echo "== Watch's engine, end to end, on $(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
@@ -105,6 +123,18 @@ adb wait-for-device
 python3 -I "$ROOT/scripts/watch-lab/server.py" "$PORT" &
 SERVER=$!
 adb install -r "$APK" >/dev/null
+hello=$(mktemp)
+python3 -I - "$hello" <<'PY'
+import struct, sys
+name = b"watch.test"
+body = b"\x03\x03" + bytes(32) + b"\x00\x00\x02\x13\x01\x01\x00"
+extension = struct.pack("!HHHBH", 0, len(name) + 5, len(name) + 3, 0, len(name)) + name
+body += struct.pack("!H", len(extension)) + extension
+handshake = b"\x01\x00" + struct.pack("!H", len(body)) + body
+open(sys.argv[1], "wb").write(b"\x16\x03\x01" + struct.pack("!H", len(handshake)) + handshake)
+PY
+adb push "$hello" "$HELLO_ON_DEVICE" >/dev/null
+rm -f "$hello"
 is_emulator && adb shell appops set "$PKG" ACTIVATE_VPN allow
 # Android 17: the server is on the local network, which Watch reaches for every app (ADR 0034).
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK

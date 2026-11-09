@@ -6,9 +6,12 @@
 //! Like the rest of the engine, it holds no `unsafe` code (ADR 0006). The JNI bridge in
 //! `datapavan-watch-jni` hands it the tunnel's descriptor and answers its questions to Android.
 
+pub mod dns;
 pub mod engine;
+pub mod names;
 pub mod nat;
 pub mod packet;
+pub mod tls;
 pub mod tun;
 
-pub use engine::{Config, Engine, Flow, Outcome, Platform};
+pub use engine::{Config, Engine, Flow, NamedBy, Outcome, Platform};

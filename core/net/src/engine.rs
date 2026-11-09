@@ -21,11 +21,15 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
 use tokio::sync::watch;
 
+use crate::dns;
+use crate::names::Names;
 use crate::nat::{Lookup, Nat};
 use crate::packet::{self, ACK, Packet, RST, SYN, Skip, TCP, UDP, Unreachable};
+use crate::tls::{self, ServerName};
 use crate::tun::Tun;
 
 /// The tunnel's IPv4 address, a /32 (ADR 0034: a wider prefix would count as local network on
@@ -78,9 +82,22 @@ pub enum Outcome {
     Failed,
 }
 
-/// A flow the engine opened for an app.
+/// Where a flow's name came from, in the order W3 prefers them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NamedBy {
+    /// A DNS answer Watch passed to the app for the destination's address.
+    Dns,
+    /// The server name of the TLS connection.
+    Tls,
+    /// Not named.
+    Unknown,
+}
+
+/// A flow the engine opened for an app.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Flow {
+    /// A number of its own, counting from 1 since the engine started.
+    pub id: u64,
     /// [`TCP`] or [`UDP`].
     pub protocol: u8,
     /// The app's end inside the tunnel.
@@ -91,6 +108,10 @@ pub struct Flow {
     pub uid: Option<u32>,
     /// How it went.
     pub outcome: Outcome,
+    /// The destination's name, if Watch knows it.
+    pub name: Option<String>,
+    /// Where the name came from.
+    pub named_by: NamedBy,
 }
 
 /// The engine's settings.
@@ -153,6 +174,9 @@ struct Shared {
     flows: Mutex<VecDeque<Flow>>,
     /// The DNS server of the network beneath the tunnel.
     upstream_dns: Mutex<Option<IpAddr>>,
+    /// Names from the DNS answers Watch passed on, by address.
+    names: Mutex<Names>,
+    next_id: AtomicU64,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -160,6 +184,44 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl Shared {
+    /// A new flow's number, and its name from the DNS answers Watch passed on, if any.
+    fn begin(&self, destination: SocketAddr) -> (u64, Option<String>, NamedBy) {
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed) + 1;
+        let name = lock(&self.names)
+            .get(destination.ip(), Instant::now())
+            .map(str::to_owned);
+        let named_by = if name.is_some() {
+            NamedBy::Dns
+        } else {
+            NamedBy::Unknown
+        };
+        (id, name, named_by)
+    }
+
+    /// Names a recorded flow that had no name yet.
+    fn name(&self, id: u64, name: String, named_by: NamedBy) {
+        if self.keep_flows == 0 {
+            return;
+        }
+        if let Some(flow) = lock(&self.flows).iter_mut().rev().find(|f| f.id == id)
+            && flow.name.is_none()
+        {
+            flow.name = Some(name);
+            flow.named_by = named_by;
+        }
+    }
+
+    /// Learns the names in a DNS answer passed back to an app.
+    fn learn(&self, answer: &[u8]) {
+        if let Some(response) = dns::response(answer) {
+            let now = Instant::now();
+            let mut names = lock(&self.names);
+            for (address, ttl) in response.addresses {
+                names.insert(address, &response.question, ttl, now);
+            }
+        }
+    }
+
     fn record(&self, flow: Flow) {
         let counter = match flow.outcome {
             Outcome::Opened => None,
@@ -193,7 +255,7 @@ impl Shared {
     /// Where a flow to `destination` really goes: the network's DNS server for the tunnel's own DNS
     /// address, else the destination itself.
     fn target(&self, destination: SocketAddr) -> Option<SocketAddr> {
-        if destination.ip() == IpAddr::V4(DNS4) || destination.ip() == IpAddr::V6(DNS6) {
+        if is_tunnel_dns(destination.ip()) {
             return lock(&self.upstream_dns).map(|dns| SocketAddr::new(dns, destination.port()));
         }
         Some(destination)
@@ -220,6 +282,8 @@ impl Engine {
             keep_flows: config.keep_flows,
             flows: Mutex::new(VecDeque::new()),
             upstream_dns: Mutex::new(None),
+            names: Mutex::new(Names::default()),
+            next_id: AtomicU64::new(0),
         });
         let (stop, stopped) = watch::channel(false);
         let (network, changes) = watch::channel(0);
@@ -255,13 +319,17 @@ impl Engine {
         }
     }
 
-    /// The network beneath the tunnel changed: UDP flows are closed, so that their next datagram
-    /// goes out on the new network, and DNS goes to `dns`, the new network's server. TCP connections
-    /// on the old network end by themselves, as without a VPN.
-    pub fn network_changed(&self, dns: Option<IpAddr>) {
+    /// The network beneath the tunnel, or its DNS server, changed. DNS goes to `dns` from now on. When
+    /// the network itself is another one (`moved`), UDP flows are closed, so that their next datagram
+    /// goes out on the new network; TCP connections on the old network end by themselves, as without a
+    /// VPN. A change of the same network's properties closes nothing: Android reports several after
+    /// each switch.
+    pub fn network_changed(&self, dns: Option<IpAddr>, moved: bool) {
         *lock(&self.shared.upstream_dns) = dns;
-        self.network
-            .send_modify(|generation| *generation = generation.wrapping_add(1));
+        if moved {
+            self.network
+                .send_modify(|generation| *generation = generation.wrapping_add(1));
+        }
     }
 
     /// The counters, as [`Counters::snapshot`] orders them.
@@ -273,7 +341,7 @@ impl Engine {
     /// The latest flows kept, oldest first (only when [`Config::keep_flows`] is above 0).
     #[must_use]
     pub fn flows(&self) -> Vec<Flow> {
-        lock(&self.shared.flows).iter().copied().collect()
+        lock(&self.shared.flows).iter().cloned().collect()
     }
 }
 
@@ -283,7 +351,16 @@ impl Drop for Engine {
     }
 }
 
-type Pending = Arc<Mutex<HashMap<u16, TcpStream>>>;
+/// An upstream connection waiting for Android's TCP stack to hand over the app's end.
+struct Upstream {
+    stream: TcpStream,
+    /// The flow's number.
+    id: u64,
+    /// Whether the flow already has a name (from DNS); else the relay looks for the TLS server name.
+    named: bool,
+}
+
+type Pending = Arc<Mutex<HashMap<u16, Upstream>>>;
 type UdpFlows = Arc<Mutex<HashMap<(SocketAddr, SocketAddr), Arc<UdpSocket>>>>;
 
 /// The engine's state inside its event loop.
@@ -520,12 +597,16 @@ impl Loop {
     async fn open_udp(&self, packet: &[u8], parsed: &Packet) -> Option<Arc<UdpSocket>> {
         let (app, destination) = (parsed.source, parsed.destination);
         let uid = owner(&self.shared, UDP, app, destination).await;
+        let (id, name, named_by) = self.shared.begin(destination);
         let mut flow = Flow {
+            id,
             protocol: UDP,
             app,
             destination,
             uid,
             outcome: Outcome::Opened,
+            name,
+            named_by,
         };
         let Some(target) = self.shared.target(destination) else {
             flow.outcome = Outcome::Unreachable;
@@ -543,8 +624,9 @@ impl Loop {
                 } else {
                     Outcome::Failed
                 };
+                let unreachable = flow.outcome == Outcome::Unreachable;
                 self.shared.record(flow);
-                if flow.outcome == Outcome::Unreachable
+                if unreachable
                     && let Some(error) = packet::unreachable(packet, parsed, Unreachable::Host)
                 {
                     self.send(&error).await;
@@ -592,6 +674,11 @@ async fn protect(shared: &Arc<Shared>, fd: RawFd) -> io::Result<()> {
     } else {
         Err(io::Error::other("protect() refused"))
     }
+}
+
+/// Whether `address` is the tunnel's own DNS address, which leads to the network's resolver.
+fn is_tunnel_dns(address: IpAddr) -> bool {
+    address == IpAddr::V4(DNS4) || address == IpAddr::V6(DNS6)
 }
 
 fn is_unreachable(error: &io::Error) -> bool {
@@ -653,15 +740,20 @@ async fn open(
         Err(error) if is_unreachable(error) => Outcome::Unreachable,
         Err(_) => Outcome::Failed,
     };
+    let (id, name, named_by) = shared.begin(destination);
+    let named = name.is_some();
     shared.record(Flow {
+        id,
         protocol: TCP,
         app,
         destination,
         uid,
         outcome,
+        name,
+        named_by,
     });
     let answer = if let Ok(stream) = upstream {
-        lock(&pending).insert(held.port, stream);
+        lock(&pending).insert(held.port, Upstream { stream, id, named });
         lock(&nat).open(held.port);
         let (fake, tun_ip) = if app.is_ipv4() {
             (IpAddr::V4(FAKE4), IpAddr::V4(TUN4))
@@ -699,9 +791,9 @@ async fn accept(
     shared: Arc<Shared>,
     nat: Arc<Mutex<Nat>>,
 ) {
-    while let Ok((mut app, peer)) = listener.accept().await {
+    while let Ok((app, peer)) = listener.accept().await {
         let port = peer.port();
-        let Some(mut upstream) = lock(&pending).remove(&port) else {
+        let Some(upstream) = lock(&pending).remove(&port) else {
             continue;
         };
         let Some(entry) = lock(&nat).by_fake(port, Instant::now()) else {
@@ -709,17 +801,68 @@ async fn accept(
         };
         let (shared, nat) = (Arc::clone(&shared), Arc::clone(&nat));
         tokio::spawn(async move {
-            let _ = app.set_nodelay(true);
-            let _ = upstream.set_nodelay(true);
-            if let Ok((up, down)) = tokio::io::copy_bidirectional(&mut app, &mut upstream).await {
-                Counters::add(&shared.counters.bytes_up, up);
-                Counters::add(&shared.counters.bytes_down, down);
-            }
+            relay(app, upstream, &shared).await;
             // Android's last FIN and ACK still need rewriting for a while; then the port is free.
             tokio::time::sleep(CLOSE_LINGER).await;
             lock(&nat).remove_if(port, entry.app, entry.destination);
         });
     }
+}
+
+/// Relays one connection both ways, counting the bytes as they pass. Until the flow has a name, the
+/// app's first bytes are read for a TLS server name (at most [`tls::MAX_HELLO`]); nothing is held
+/// back for that, so a protocol in which the server speaks first is not delayed.
+async fn relay(app: TcpStream, upstream: Upstream, shared: &Arc<Shared>) {
+    let _ = app.set_nodelay(true);
+    let _ = upstream.stream.set_nodelay(true);
+    let (mut app_read, mut app_write) = app.into_split();
+    let (mut up_read, mut up_write) = upstream.stream.into_split();
+    let up = async {
+        let mut buffer = vec![0u8; 16 * 1024];
+        let mut start = if upstream.named {
+            None
+        } else {
+            Some(Vec::new())
+        };
+        loop {
+            let n = match app_read.read(&mut buffer).await {
+                Ok(0) | Err(_) => break,
+                Ok(n) => n,
+            };
+            if let Some(seen) = start.as_mut() {
+                seen.extend_from_slice(&buffer[..n]);
+                match tls::server_name(seen) {
+                    ServerName::Found(name) => {
+                        shared.name(upstream.id, name, NamedBy::Tls);
+                        start = None;
+                    }
+                    ServerName::None => start = None,
+                    ServerName::Incomplete if seen.len() >= tls::MAX_HELLO => start = None,
+                    ServerName::Incomplete => {}
+                }
+            }
+            if up_write.write_all(&buffer[..n]).await.is_err() {
+                break;
+            }
+            Counters::add(&shared.counters.bytes_up, n as u64);
+        }
+        let _ = up_write.shutdown().await;
+    };
+    let down = async {
+        let mut buffer = vec![0u8; 16 * 1024];
+        loop {
+            let n = match up_read.read(&mut buffer).await {
+                Ok(0) | Err(_) => break,
+                Ok(n) => n,
+            };
+            if app_write.write_all(&buffer[..n]).await.is_err() {
+                break;
+            }
+            Counters::add(&shared.counters.bytes_down, n as u64);
+        }
+        let _ = app_write.shutdown().await;
+    };
+    tokio::join!(up, down);
 }
 
 /// Wraps each answer of a UDP flow in an IP packet to the app, until the flow falls silent or the
@@ -744,6 +887,9 @@ async fn answers(
                 let answer = match received {
                     Ok(n) => {
                         Counters::add(&shared.counters.bytes_down, n as u64);
+                        if destination.port() == 53 && is_tunnel_dns(destination.ip()) {
+                            shared.learn(&buffer[..n]);
+                        }
                         packet::udp(destination, app, &buffer[..n])
                     }
                     // The server's host answered that no one listens there.

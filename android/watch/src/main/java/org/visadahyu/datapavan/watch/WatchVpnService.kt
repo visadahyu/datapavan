@@ -40,6 +40,10 @@ class WatchVpnService : VpnService() {
     private val network = object : ConnectivityManager.NetworkCallback() {
         private var current: Network? = null
 
+        /** The network and DNS server last given to the engine. */
+        private var told: Network? = null
+        private var toldDns: String? = null
+
         override fun onAvailable(network: Network) {
             current = network
             setUnderlyingNetworks(arrayOf(network))
@@ -48,15 +52,22 @@ class WatchVpnService : VpnService() {
         override fun onLinkPropertiesChanged(network: Network, properties: LinkProperties) {
             if (network != current) return
             // A link-local DNS server needs its interface's scope, which the engine does not take.
-            val dns = properties.dnsServers.firstOrNull { !it.isLinkLocalAddress }
-            Engine.nativeNetworkChanged(dns?.hostAddress ?: "")
+            val dns = properties.dnsServers.firstOrNull { !it.isLinkLocalAddress }?.hostAddress ?: ""
+            // Android reports a network's properties several times after a switch; only a new network
+            // closes the engine's UDP flows, and nothing the engine already knows is sent again.
+            if (network == told && dns == toldDns) return
+            Engine.nativeNetworkChanged(dns, network != told)
+            told = network
+            toldDns = dns
         }
 
         override fun onLost(network: Network) {
             if (network != current) return
             current = null
             setUnderlyingNetworks(null)
-            Engine.nativeNetworkChanged("")
+            Engine.nativeNetworkChanged("", true)
+            told = null
+            toldDns = null
         }
     }
 

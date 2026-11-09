@@ -8,7 +8,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use datapavan_net::{Config, Engine, Outcome, Platform};
+use datapavan_net::{Config, Engine, NamedBy, Outcome, Platform};
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
 use jni::objects::{JClass, JLongArray, JObject, JString};
 use jni::sys::{jboolean, jint};
@@ -147,20 +147,23 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStop<'cal
         .resolve::<ThrowRuntimeExAndDefault>();
 }
 
-/// `Engine.nativeNetworkChanged(dns)`: the network beneath the tunnel changed; `dns` is its DNS
-/// server's address, or empty when it has none.
-// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeNetworkChanged(dns: String)`.
+/// `Engine.nativeNetworkChanged(dns, moved)`: the network beneath the tunnel or its DNS server
+/// changed; `dns` is its DNS server's address, or empty when it has none, and `moved` says whether the
+/// network itself is another one.
+// SAFETY: exported under the JNI name of the Kotlin method
+// `external fun nativeNetworkChanged(dns: String, moved: Boolean)`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeNetworkChanged<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     dns: JString<'caller>,
+    moved: jboolean,
 ) {
     unowned_env
         .with_env(|env| -> Result<(), Error> {
             let dns: Option<IpAddr> = dns.try_to_string(env).ok().and_then(|s| s.parse().ok());
             if let Some(running) = engine().as_ref() {
-                running.network_changed(dns);
+                running.network_changed(dns, moved);
             }
             Ok(())
         })
@@ -191,8 +194,8 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeCounters<
 }
 
 /// `Engine.nativeFlows()`: the flows the engine kept, one per line as
-/// `protocol app destination uid outcome`, for debug builds and the end-to-end test. Empty when the
-/// engine keeps none, as in release builds.
+/// `protocol app destination uid outcome name named-by` (`-` for none), for debug builds and the
+/// end-to-end test. Empty when the engine keeps none, as in release builds.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlows(): String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlows<'caller>(
@@ -217,7 +220,16 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlows<'ca
                         Outcome::Unreachable => "unreachable",
                         Outcome::Failed => "failed",
                     };
-                    format!("{protocol} {} {} {uid} {outcome}", f.app, f.destination)
+                    let name = f.name.as_deref().unwrap_or("-");
+                    let named_by = match f.named_by {
+                        NamedBy::Dns => "dns",
+                        NamedBy::Tls => "tls",
+                        NamedBy::Unknown => "-",
+                    };
+                    format!(
+                        "{protocol} {} {} {uid} {outcome} {name} {named_by}",
+                        f.app, f.destination
+                    )
                 })
                 .collect();
             JString::from_str(env, lines.join("\n"))

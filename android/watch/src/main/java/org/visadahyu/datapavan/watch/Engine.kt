@@ -20,8 +20,11 @@ internal object Engine {
     /** Stops the engine and closes the tunnel's descriptor. */
     external fun nativeStop()
 
-    /** The network beneath the tunnel changed; [dns] is its DNS server's address, or "" for none. */
-    external fun nativeNetworkChanged(dns: String)
+    /**
+     * The network beneath the tunnel or its DNS server changed; [dns] is its DNS server's address, or
+     * "" for none, and [moved] says whether the network itself is another one, which closes UDP flows.
+     */
+    external fun nativeNetworkChanged(dns: String, moved: Boolean)
 
     /**
      * The counters: TCP flows, UDP flows, bytes up, bytes down, flows without an owner, refused,
@@ -29,6 +32,6 @@ internal object Engine {
      */
     external fun nativeCounters(): LongArray
 
-    /** The flows kept, one per line as `protocol app destination uid outcome`; debug builds only. */
+    /** The flows kept, one per line as `protocol app destination uid outcome name named-by`; debug builds only. */
     external fun nativeFlows(): String
 }
