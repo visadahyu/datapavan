@@ -40,6 +40,15 @@ impl Tun {
         }
     }
 
+    /// Reads one more packet if one is there at once, without waiting: after a wake-up, the engine
+    /// reads what has queued up before it waits again (docs/VPN.md, "batched reads").
+    ///
+    /// # Errors
+    /// `WouldBlock` when no packet is there, or when the descriptor fails.
+    pub fn try_recv(&self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.fd.get_ref().read(buffer)
+    }
+
     /// Writes one packet, waiting until the descriptor takes it.
     ///
     /// # Errors

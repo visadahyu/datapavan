@@ -49,6 +49,8 @@ const UDP_IDLE: Duration = Duration::from_secs(60);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(60);
 /// How long a closed connection's rewriting stays, for the last FIN and ACK packets.
 const CLOSE_LINGER: Duration = Duration::from_secs(30);
+/// The most packets read after one wake-up before the engine waits again.
+const BATCH: usize = 64;
 /// Stale TCP connections are swept at most this often, and only when packets come anyway: an idle
 /// tunnel must not wake the phone.
 const SWEEP_EVERY: Duration = Duration::from_secs(60);
@@ -327,20 +329,17 @@ async fn run(
                 if n == 0 {
                     return;
                 }
-                Counters::add(&state.shared.counters.packets_in, 1);
                 if swept.elapsed() > SWEEP_EVERY {
-                    let forgotten = lock(&state.nat).sweep(Instant::now());
-                    let mut pending = lock(&state.pending);
-                    for port in forgotten {
-                        pending.remove(&port);
-                    }
+                    state.sweep();
                     swept = Instant::now();
                 }
-                let packet = &mut buffer[..n];
-                match packet::parse(packet) {
-                    Ok(parsed) if parsed.protocol == TCP => state.tcp(&mut packet[..parsed.length], &parsed).await,
-                    Ok(parsed) => state.udp(&packet[..parsed.length], &parsed).await,
-                    Err(Skip::Malformed | Skip::Fragment | Skip::Other(_)) => Counters::add(&state.shared.counters.skipped, 1),
+                state.handle(&mut buffer[..n]).await;
+                // What queued up meanwhile, before waiting again.
+                for _ in 1..BATCH {
+                    match state.tun.try_recv(&mut buffer) {
+                        Ok(n) if n > 0 => state.handle(&mut buffer[..n]).await,
+                        _ => break,
+                    }
                 }
             }
         }
@@ -369,6 +368,29 @@ async fn listen(
 }
 
 impl Loop {
+    /// Forgets connections that fell silent, and the upstream connections still waiting for them.
+    fn sweep(&self) {
+        let forgotten = lock(&self.nat).sweep(Instant::now());
+        let mut pending = lock(&self.pending);
+        for port in forgotten {
+            pending.remove(&port);
+        }
+    }
+
+    /// One packet from the tunnel.
+    async fn handle(&self, packet: &mut [u8]) {
+        Counters::add(&self.shared.counters.packets_in, 1);
+        match packet::parse(packet) {
+            Ok(parsed) if parsed.protocol == TCP => {
+                self.tcp(&mut packet[..parsed.length], &parsed).await;
+            }
+            Ok(parsed) => self.udp(&packet[..parsed.length], &parsed).await,
+            Err(Skip::Malformed | Skip::Fragment | Skip::Other(_)) => {
+                Counters::add(&self.shared.counters.skipped, 1);
+            }
+        }
+    }
+
     async fn send(&self, packet: &[u8]) {
         if self.tun.send(packet).await.is_ok() {
             Counters::add(&self.shared.counters.packets_out, 1);

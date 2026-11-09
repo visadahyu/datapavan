@@ -212,6 +212,14 @@ pub fn udp_payload<'a>(packet: &'a [u8], parsed: &Packet) -> Option<&'a [u8]> {
     packet.get(parsed.transport + 8..end)
 }
 
+/// Writes an address into `slot`, which has its length.
+fn write_ip(slot: &mut [u8], address: IpAddr) {
+    match address {
+        IpAddr::V4(a) => slot.copy_from_slice(&a.octets()),
+        IpAddr::V6(a) => slot.copy_from_slice(&a.octets()),
+    }
+}
+
 fn octets(address: IpAddr) -> Vec<u8> {
     match address {
         IpAddr::V4(a) => a.octets().to_vec(),
@@ -250,19 +258,18 @@ pub fn set_ends(
     }
     let (source_at, destination_at, size) = if v4 { (12, 16, 4) } else { (8, 24, 16) };
     let ports = parsed.transport;
-    let old = [
-        packet.get(source_at..source_at + size)?,
-        packet.get(destination_at..destination_at + size)?,
-        packet.get(ports..ports + 4)?,
-    ]
-    .concat();
-    let new = [
-        octets(source.ip()),
-        octets(destination.ip()),
-        source.port().to_be_bytes().to_vec(),
-        destination.port().to_be_bytes().to_vec(),
-    ]
-    .concat();
+    // On the stack, not the heap: this runs for every packet of every connection.
+    let mut old = [0u8; 36];
+    let mut new = [0u8; 36];
+    let used = 2 * size + 4;
+    old[..size].copy_from_slice(packet.get(source_at..source_at + size)?);
+    old[size..2 * size].copy_from_slice(packet.get(destination_at..destination_at + size)?);
+    old[2 * size..used].copy_from_slice(packet.get(ports..ports + 4)?);
+    write_ip(&mut new[..size], source.ip());
+    write_ip(&mut new[size..2 * size], destination.ip());
+    new[2 * size..2 * size + 2].copy_from_slice(&source.port().to_be_bytes());
+    new[2 * size + 2..used].copy_from_slice(&destination.port().to_be_bytes());
+    let (old, new) = (&old[..used], &new[..used]);
     let checksum_at = ports + if parsed.protocol == TCP { 16 } else { 6 };
     let checksum = u16_at(packet, checksum_at)?;
     // An IPv4 UDP checksum of 0 means "none" and stays so.
@@ -277,7 +284,7 @@ pub fn set_ends(
         .get_mut(ports..ports + 4)?
         .copy_from_slice(&new[2 * size..]);
     if !skip {
-        let mut adjusted = adjust(checksum, &old, &new);
+        let mut adjusted = adjust(checksum, old, new);
         if parsed.protocol == UDP && adjusted == 0 {
             adjusted = 0xffff;
         }

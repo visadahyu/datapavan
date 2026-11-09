@@ -80,9 +80,11 @@ traffic() {
         fail "$round: a connection closed at once has no owner"
     echo "ok: $round: a connection closed at once, owner named"
 
-    answer=$(device 15 "nc -w 5 $HOST 1 </dev/null")
+    # Nothing listens on TCP at the UDP echo's port, so the server's computer refuses it (a firewall
+    # that lets the test through, as on a phone's Wi-Fi, lets both ports through).
+    answer=$(device 15 "nc -w 5 $HOST $((PORT + 1)) </dev/null")
     grep -qi 'refused' <<<"$answer" || fail "$round: a refused connection looked like this to the app: $answer"
-    has_flow tcp "$HOST:1" refused || fail "$round: no refused flow of the shell"
+    has_flow tcp "$HOST:$((PORT + 1))" refused || fail "$round: no refused flow of the shell"
     echo "ok: $round: a refused connection, refused for the app"
 
     answer=$(device 8 "echo watch-$round | nc -u -w 3 $HOST $((PORT + 1))")
