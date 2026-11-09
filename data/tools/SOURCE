@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: CC0-1.0
+retrieved: 2026-11-09
+apps: 48
+evidence: 376
+method: read by hand from each app's own source code at a named tag or commit, its official documentation or
+  its store listing, one row of sources.tsv per value; a third-party report is used only where no primary
+  source exists, and says so. Every package of data/app-signers/apps.tsv has a row.
+not-settled: values marked 'unknown' or ending in '?' need a device test (W6): for v2rayNG, NekoBox,
+  Hiddify and Orbot in proxy mode, the SOCKS5 greeting, UDP ASSOCIATE and the port actually bound. Notes in
+  docs/spikes/2026-11-table-of-tools.md.

@@ -1,0 +1,380 @@
+# SPDX-License-Identifier: CC0-1.0
+# Where each value of tools.tsv comes from. One row per piece of evidence. Sources are the tools' own code at a named tag or
+# commit, their official docs or store listings; a third-party report is marked as such in the value.
+# Columns: package, field (a tools.tsv column), value (what the source shows), location (URL, with lines where it has them), retrieved.
+com.psiphon3	modes	vpn	https://github.com/Psiphon-Inc/psiphon-android/blob/c2c043da1208b34d28c3fdeef72b43dcd470dacb/app/src/main/java/com/psiphon3/VpnManager.java#L195-L202	2026-11-09
+com.psiphon3	proxy-in-vpn	yes (dynamic port)	https://github.com/Psiphon-Inc/psiphon-android/blob/c2c043da1208b34d28c3fdeef72b43dcd470dacb/app/src/main/java/com/psiphon3/psiphonlibrary/TunnelManager.java#L176-L177	2026-11-09
+com.psiphon3	proxy-in-vpn	yes (dynamic port)	https://github.com/Psiphon-Inc/psiphon-android/blob/c2c043da1208b34d28c3fdeef72b43dcd470dacb/app/src/main/java/com/psiphon3/psiphonlibrary/TunnelManager.java#L340	2026-11-09
+com.psiphon3	per-app	yes	https://github.com/Psiphon-Inc/psiphon-android/blob/c2c043da1208b34d28c3fdeef72b43dcd470dacb/app/src/main/java/com/psiphon3/psiphonlibrary/TunnelManager.java#L1176-L1192	2026-11-09
+com.psiphon3	wireguard	no	not found in https://github.com/Psiphon-Inc/psiphon-android/tree/c2c043da1208b34d28c3fdeef72b43dcd470dacb/app/src/main	2026-11-09
+org.torproject.torbrowser	modes	none	https://gitlab.torproject.org/tpo/applications/tor-browser/-/blob/tor-browser-153.7.0esr-16.0-1-build2/mobile/android/geckoview/src/main/java/org/mozilla/geckoview/TorAndroidIntegration.java#L304-315	2026-11-09
+org.torproject.torbrowser	modes	none (TCP SOCKS off by default)	https://gitlab.torproject.org/tpo/applications/tor-browser/-/blob/tor-browser-153.7.0esr-16.0-1-build2/toolkit/components/tor-launcher/TorProcessAndroid.sys.mjs#L89-92	2026-11-09
+org.torproject.torbrowser_alpha	modes	none	https://gitlab.torproject.org/tpo/applications/tor-browser/-/blob/tor-browser-155.0a1-17.0-1-build2/mobile/android/geckoview/src/main/java/org/mozilla/geckoview/TorAndroidIntegration.java#L304-315	2026-11-09
+org.torproject.torbrowser_alpha	modes	none (TCP SOCKS off by default)	https://gitlab.torproject.org/tpo/applications/tor-browser/-/blob/tor-browser-153.7.0esr-16.0-1-build2/toolkit/components/tor-launcher/TorProcessAndroid.sys.mjs#L89-92	2026-11-09
+org.torproject.android	modes	vpn,proxy	https://github.com/guardianproject/orbot-android/blob/db8148517935646fa11af90bae4590fe0e1e0664/app/src/main/res/values/strings.xml#L180-L181	2026-11-09
+org.torproject.android	proxy-label	Power User Mode	https://github.com/guardianproject/orbot-android/blob/db8148517935646fa11af90bae4590fe0e1e0664/app/src/main/res/values/strings.xml#L180	2026-11-09
+org.torproject.android	proxy	socks5 9050, http 8118	https://github.com/guardianproject/orbot-android/blob/db8148517935646fa11af90bae4590fe0e1e0664/app/src/main/java/org/torproject/android/service/OrbotConstants.kt#L13-L17	2026-11-09
+org.torproject.android	proxy	SOCKSPort <port> (tor binds 127.0.0.1); 0.0.0.0 only with the all-interfaces setting; HTTPTunnelPort	https://github.com/guardianproject/orbot-android/blob/db8148517935646fa11af90bae4590fe0e1e0664/app/src/main/java/org/torproject/android/service/tor/TorConfig.kt#L21-L39	2026-11-09
+org.torproject.android	port-configurable	yes	https://github.com/guardianproject/orbot-android/blob/db8148517935646fa11af90bae4590fe0e1e0664/app/src/main/java/org/torproject/android/service/tor/TorConfig.kt#L21-L22	2026-11-09
+org.torproject.android	port-configurable	next free port if taken	https://github.com/guardianproject/orbot-android/blob/db8148517935646fa11af90bae4590fe0e1e0664/app/src/main/java/org/torproject/android/util/NetworkUtils.kt#L147-L159	2026-11-09
+org.torproject.android	auth	none (credentials accepted, never required)	https://gitlab.torproject.org/tpo/core/tor/-/blob/tor-0.4.9.14/src/core/proto/proto_socks.c#L727	2026-11-09
+org.torproject.android	udp	no	https://gitlab.torproject.org/tpo/core/tor/-/blob/tor-0.4.9.14/src/core/proto/proto_socks.c#L643-648	2026-11-09
+org.torproject.android	domain-names	yes	https://gitlab.torproject.org/tpo/core/tor/-/blob/tor-0.4.9.14/src/core/proto/proto_socks.c#L599	2026-11-09
+org.torproject.android	proxy-in-vpn	yes (same torrc in both modes)	https://github.com/guardianproject/orbot-android/blob/db8148517935646fa11af90bae4590fe0e1e0664/app/src/main/java/org/torproject/android/service/tor/TorConfig.kt#L15-L39	2026-11-09
+org.torproject.android	per-app	yes	https://github.com/guardianproject/orbot-android/blob/db8148517935646fa11af90bae4590fe0e1e0664/app/src/main/java/org/torproject/android/service/vpn/OrbotVpnManager.java#L218	2026-11-09
+org.torproject.android	wireguard	no	not found in https://github.com/guardianproject/orbot-android/tree/db8148517935646fa11af90bae4590fe0e1e0664/app/src/main	2026-11-09
+org.torproject.vpn	modes	vpn	https://gitlab.torproject.org/tpo/applications/vpn/-/blob/916c70395738a82489ff9b2ceed920e96bdc8c7d/app/src/main/java/org/torproject/vpn/vpn/TorVpnService.kt#L493-523	2026-11-09
+org.torproject.vpn	per-app	yes	https://gitlab.torproject.org/tpo/applications/vpn/-/blob/916c70395738a82489ff9b2ceed920e96bdc8c7d/app/src/main/java/org/torproject/vpn/vpn/TorVpnService.kt#L505-523	2026-11-09
+org.torproject.vpn	proxy-in-vpn	no? (no socks listener in app/src/main)	https://gitlab.torproject.org/tpo/applications/vpn/-/tree/916c70395738a82489ff9b2ceed920e96bdc8c7d/app/src/main	2026-11-09
+org.torproject.vpn	package	org.torproject.vpn	https://gitlab.torproject.org/tpo/applications/vpn/-/blob/916c70395738a82489ff9b2ceed920e96bdc8c7d/app/build.gradle.kts#L36	2026-11-09
+ch.protonvpn.android	modes	vpn	no local proxy listener found in https://github.com/ProtonVPN/android-app/tree/deb11fef4092a1ecfcf51a7d40bdece9eb4c3e5e/app/src/main	2026-11-09
+ch.protonvpn.android	per-app	yes	https://github.com/ProtonVPN/android-app/blob/deb11fef4092a1ecfcf51a7d40bdece9eb4c3e5e/app/src/main/java/com/protonvpn/android/models/vpn/ConnectionParamsWireguard.kt#L140	2026-11-09
+ch.protonvpn.android	wireguard	provider	https://protonvpn.com/support/wireguard-configurations/	2026-11-09
+ch.protonvpn.android.reproducible	modes	vpn	no local proxy listener found in https://github.com/ProtonVPN/android-app/tree/deb11fef4092a1ecfcf51a7d40bdece9eb4c3e5e/app/src/main	2026-11-09
+ch.protonvpn.android.reproducible	per-app	yes	https://github.com/ProtonVPN/android-app/blob/deb11fef4092a1ecfcf51a7d40bdece9eb4c3e5e/app/src/main/java/com/protonvpn/android/models/vpn/ConnectionParamsWireguard.kt#L140	2026-11-09
+ch.protonvpn.android.reproducible	wireguard	provider	https://protonvpn.com/support/wireguard-configurations/	2026-11-09
+org.thoughtcrime.securesms	modes	none (no VpnService in manifest)	https://github.com/signalapp/Signal-Android/blob/a74583b01e260944f699c4da03ba4e8ce04de32b/app/src/main/AndroidManifest.xml	2026-11-09
+org.thoughtcrime.securesms	note	in-app proxy client	https://github.com/signalapp/Signal-Android/blob/a74583b01e260944f699c4da03ba4e8ce04de32b/app/src/main/java/org/thoughtcrime/securesms/preferences/EditProxyFragment.java	2026-11-09
+org.briarproject.briar.android	modes	none	https://code.briarproject.org/briar/briar/-/blob/fbfebc4242f09e996a867de7988683628d426534/bramble-api/src/main/java/org/briarproject/bramble/api/plugin/TorConstants.java#L12-13	2026-11-09
+org.briarproject.briar.android	note	SOCKS 59050, debug 59052	https://code.briarproject.org/briar/briar/-/blob/fbfebc4242f09e996a867de7988683628d426534/briar-android/src/main/java/org/briarproject/briar/android/AppModule.java#L175-184	2026-11-09
+io.nekohasekai.sfa	modes	vpn,proxy	https://github.com/SagerNet/sing-box-for-android/blob/a548a7903e96266a0046018562c73b192edbfc18/app/src/main/java/io/nekohasekai/sfa/database/Settings.kt#L150-L165	2026-11-09
+io.nekohasekai.sfa	proxy	profile	https://github.com/SagerNet/sing-box-for-android/blob/a548a7903e96266a0046018562c73b192edbfc18/app/src/main/java/io/nekohasekai/sfa/database/Settings.kt#L160-L165	2026-11-09
+io.nekohasekai.sfa	udp	yes (socks/mixed inbound)	https://github.com/SagerNet/sing/blob/03a6cce64bf744023af9e2691fb11afd405b9061/protocol/socks/handshake.go#L230	2026-11-09
+io.nekohasekai.sfa	domain-names	yes	https://github.com/SagerNet/sing/blob/03a6cce64bf744023af9e2691fb11afd405b9061/common/metadata/socksaddr.go#L6	2026-11-09
+io.nekohasekai.sfa	per-app	yes	https://github.com/SagerNet/sing-box-for-android/blob/a548a7903e96266a0046018562c73b192edbfc18/app/src/main/res/values/strings.xml#L224-L226	2026-11-09
+io.nekohasekai.sfa	wireguard	no	no WireGuard .conf parsing in https://github.com/SagerNet/sing-box-for-android/tree/a548a7903e96266a0046018562c73b192edbfc18/app/src/main	2026-11-09
+com.github.dyhkwong.sagernet	modes	vpn,proxy	https://github.com/dyhkwong/Exclave/blob/d0ec3f2d6212ee20dca2301b206b86710784a409/app/src/main/res/values/strings.xml#L45-L46	2026-11-09
+com.github.dyhkwong.sagernet	modes	default VPN	https://github.com/dyhkwong/Exclave/blob/d0ec3f2d6212ee20dca2301b206b86710784a409/app/src/main/java/io/nekohasekai/sagernet/database/DataStore.kt#L135	2026-11-09
+com.github.dyhkwong.sagernet	proxy	socks5 2080 + user index; http 9080 off	https://github.com/dyhkwong/Exclave/blob/d0ec3f2d6212ee20dca2301b206b86710784a409/app/src/main/java/io/nekohasekai/sagernet/database/DataStore.kt#L201-L211	2026-11-09
+com.github.dyhkwong.sagernet	proxy	127.0.0.1 unless allowAccess	https://github.com/dyhkwong/Exclave/blob/d0ec3f2d6212ee20dca2301b206b86710784a409/app/src/main/java/io/nekohasekai/sagernet/fmt/ConfigBuilder.kt#L272	2026-11-09
+com.github.dyhkwong.sagernet	proxy	http off by default	https://github.com/dyhkwong/Exclave/blob/d0ec3f2d6212ee20dca2301b206b86710784a409/app/src/main/java/io/nekohasekai/sagernet/database/DataStore.kt#L268	2026-11-09
+com.github.dyhkwong.sagernet	auth	optional	https://github.com/dyhkwong/Exclave/blob/d0ec3f2d6212ee20dca2301b206b86710784a409/app/src/main/java/io/nekohasekai/sagernet/fmt/ConfigBuilder.kt#L383-L403	2026-11-09
+com.github.dyhkwong.sagernet	auth	username/password settings	https://github.com/dyhkwong/Exclave/blob/d0ec3f2d6212ee20dca2301b206b86710784a409/app/src/main/java/io/nekohasekai/sagernet/database/DataStore.kt#L264-L265	2026-11-09
+com.github.dyhkwong.sagernet	udp	yes (default true)	https://github.com/dyhkwong/Exclave/blob/d0ec3f2d6212ee20dca2301b206b86710784a409/app/src/main/java/io/nekohasekai/sagernet/database/DataStore.kt#L266	2026-11-09
+com.github.dyhkwong.sagernet	udp	yes	https://github.com/ExclaveNetwork/exclave-core/blob/115cedfb4582119f12d3daf51f6c94b829aff57e/proxy/socks/protocol.go#L176	2026-11-09
+com.github.dyhkwong.sagernet	domain-names	yes	https://github.com/ExclaveNetwork/exclave-core/blob/115cedfb4582119f12d3daf51f6c94b829aff57e/proxy/socks/protocol.go#L40	2026-11-09
+com.github.dyhkwong.sagernet	proxy-in-vpn	yes (inbound added in every mode)	https://github.com/dyhkwong/Exclave/blob/d0ec3f2d6212ee20dca2301b206b86710784a409/app/src/main/java/io/nekohasekai/sagernet/fmt/ConfigBuilder.kt#L383-L388	2026-11-09
+com.github.dyhkwong.sagernet	per-app	yes	https://github.com/dyhkwong/Exclave/blob/d0ec3f2d6212ee20dca2301b206b86710784a409/app/src/main/res/values/strings.xml#L155	2026-11-09
+com.github.dyhkwong.sagernet	wireguard	import,export	https://github.com/dyhkwong/Exclave/blob/d0ec3f2d6212ee20dca2301b206b86710784a409/app/src/main/java/io/nekohasekai/sagernet/fmt/wireguard/WireGuardFmt.kt#L92	2026-11-09
+com.github.dyhkwong.sagernet	wireguard	export	https://github.com/dyhkwong/Exclave/blob/d0ec3f2d6212ee20dca2301b206b86710784a409/app/src/main/java/io/nekohasekai/sagernet/fmt/wireguard/WireGuardFmt.kt#L125	2026-11-09
+com.github.dyhkwong.sagernet	note	core version	https://github.com/ExclaveNetwork/LibExclaveCore/blob/a00645dcb7fb/go.mod#L7	2026-11-09
+com.follow.clash	modes	vpn,proxy	https://github.com/chen08209/FlClash/blob/be84736605527034689c95bf27828ff27d912c5e/android/app/src/main/kotlin/com/follow/clash/ServiceController.kt#L73-L79	2026-11-09
+com.follow.clash	modes	VPN on by default	https://github.com/chen08209/FlClash/blob/be84736605527034689c95bf27828ff27d912c5e/lib/models/config.dart#L351-L354	2026-11-09
+com.follow.clash	proxy	mixed-port 7890	https://github.com/chen08209/FlClash/blob/be84736605527034689c95bf27828ff27d912c5e/lib/models/clash_config.dart#L44	2026-11-09
+com.follow.clash	proxy	allow-lan false	https://github.com/chen08209/FlClash/blob/be84736605527034689c95bf27828ff27d912c5e/lib/models/clash_config.dart#L2139	2026-11-09
+com.follow.clash	proxy	127.0.0.1 unless allow-lan	https://github.com/chen08209/Clash.Meta/blob/024245dc72bc92f48237f865119afe0cd53ac9e6/listener/listener.go#L707-L716	2026-11-09
+com.follow.clash	port-configurable	yes	https://github.com/chen08209/FlClash/blob/be84736605527034689c95bf27828ff27d912c5e/lib/common/task.dart#L197	2026-11-09
+com.follow.clash	auth	optional, off by default	https://github.com/chen08209/FlClash/blob/be84736605527034689c95bf27828ff27d912c5e/lib/models/config.dart#L365-L382	2026-11-09
+com.follow.clash	auth	skip-auth-prefixes emptied	https://github.com/chen08209/FlClash/blob/be84736605527034689c95bf27828ff27d912c5e/lib/common/task.dart#L204-L207	2026-11-09
+com.follow.clash	udp	yes (mixed port also listens for SOCKS UDP)	https://github.com/chen08209/Clash.Meta/blob/024245dc72bc92f48237f865119afe0cd53ac9e6/listener/listener.go#L484-L489	2026-11-09
+com.follow.clash	domain-names	yes	https://github.com/chen08209/Clash.Meta/blob/024245dc72bc92f48237f865119afe0cd53ac9e6/transport/socks5/socks5.go#L37	2026-11-09
+com.follow.clash	proxy-in-vpn	yes (mixed-port set in every mode)	https://github.com/chen08209/FlClash/blob/be84736605527034689c95bf27828ff27d912c5e/lib/common/task.dart#L197	2026-11-09
+com.follow.clash	per-app	yes	https://github.com/chen08209/FlClash/blob/be84736605527034689c95bf27828ff27d912c5e/lib/models/config.dart#L358	2026-11-09
+com.follow.clash	wireguard	no	no WireGuard .conf parsing in https://github.com/chen08209/FlClash/tree/be84736605527034689c95bf27828ff27d912c5e/lib	2026-11-09
+io.github.romanvht.byedpi	modes	vpn,proxy	https://github.com/romanvht/ByeByeDPI/blob/96a3c1ff555043d915af814aa4f0e9a572c89aba/app/src/main/res/values/arrays.xml#L31-L34	2026-11-09
+io.github.romanvht.byedpi	proxy	127.0.0.1:1080	https://github.com/romanvht/ByeByeDPI/blob/96a3c1ff555043d915af814aa4f0e9a572c89aba/app/src/main/java/io/github/romanvht/byedpi/data/UISettings.kt#L6-L7	2026-11-09
+io.github.romanvht.byedpi	port-configurable	yes	https://github.com/romanvht/ByeByeDPI/blob/96a3c1ff555043d915af814aa4f0e9a572c89aba/app/src/main/java/io/github/romanvht/byedpi/data/UISettings.kt#L74-L75	2026-11-09
+io.github.romanvht.byedpi	auth	none (no-auth method only)	https://github.com/hufrea/byedpi/blob/ba532298de7b28cfe854aea83d061369d13ca290/proxy.c#L154-L170	2026-11-09
+io.github.romanvht.byedpi	udp	yes (default)	https://github.com/hufrea/byedpi/blob/ba532298de7b28cfe854aea83d061369d13ca290/main.c#L49-L50	2026-11-09
+io.github.romanvht.byedpi	udp	yes	https://github.com/hufrea/byedpi/blob/ba532298de7b28cfe854aea83d061369d13ca290/proxy.c#L878-L882	2026-11-09
+io.github.romanvht.byedpi	domain-names	yes (resolved locally)	https://github.com/hufrea/byedpi/blob/ba532298de7b28cfe854aea83d061369d13ca290/proxy.c#L292-L297	2026-11-09
+io.github.romanvht.byedpi	domain-names	no-domain setting	https://github.com/romanvht/ByeByeDPI/blob/96a3c1ff555043d915af814aa4f0e9a572c89aba/app/src/main/java/io/github/romanvht/byedpi/data/UISettings.kt#L79	2026-11-09
+io.github.romanvht.byedpi	proxy-in-vpn	yes (VPN mode tunnels into the same SOCKS port)	https://github.com/romanvht/ByeByeDPI/blob/96a3c1ff555043d915af814aa4f0e9a572c89aba/app/src/main/java/io/github/romanvht/byedpi/services/NativeSession.kt#L216-L221	2026-11-09
+io.github.romanvht.byedpi	per-app	yes	https://github.com/romanvht/ByeByeDPI/blob/96a3c1ff555043d915af814aa4f0e9a572c89aba/app/src/main/java/io/github/romanvht/byedpi/services/ByeDpiVpnService.kt#L131-L143	2026-11-09
+com.zaneschepke.wireguardautotunnel	modes	vpn,proxy	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/app/src/main/java/com/zaneschepke/wireguardautotunnel/domain/enums/TunnelMode.kt#L3-L6	2026-11-09
+com.zaneschepke.wireguardautotunnel	proxy-label	Proxy	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/app/src/main/res/values/strings.xml#L269	2026-11-09
+com.zaneschepke.wireguardautotunnel	proxy	socks5 127.0.0.1:25344, http 127.0.0.1:25345, both on	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/app/src/main/java/com/zaneschepke/wireguardautotunnel/domain/model/ProxySettings.kt#L6-L14	2026-11-09
+com.zaneschepke.wireguardautotunnel	proxy	defaults	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/app/src/main/java/com/zaneschepke/wireguardautotunnel/domain/model/ProxySettings.kt#L55-L56	2026-11-09
+com.zaneschepke.wireguardautotunnel	port-configurable	yes (bind address setting)	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/app/src/main/java/com/zaneschepke/wireguardautotunnel/domain/model/ProxySettings.kt#L9-L11	2026-11-09
+com.zaneschepke.wireguardautotunnel	auth	optional	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/app/src/main/java/com/zaneschepke/wireguardautotunnel/domain/model/ProxySettings.kt#L12-L13	2026-11-09
+com.zaneschepke.wireguardautotunnel	auth	optional	https://github.com/wgtunnel/wireproxy-awg/blob/6f0546300c21b5d6458bad4859bfee07e633523d/routine.go#L199-L208	2026-11-09
+com.zaneschepke.wireguardautotunnel	udp	yes	https://github.com/things-go/go-socks5/blob/v0.1.0/handle.go#L102	2026-11-09
+com.zaneschepke.wireguardautotunnel	udp	yes	https://github.com/wgtunnel/wireproxy-awg/blob/6f0546300c21b5d6458bad4859bfee07e633523d/pool.go#L24-L26	2026-11-09
+com.zaneschepke.wireguardautotunnel	domain-names	yes (resolved by the tunnel dialer)	https://github.com/wgtunnel/wireproxy-awg/blob/6f0546300c21b5d6458bad4859bfee07e633523d/routine.go#L212-L215	2026-11-09
+com.zaneschepke.wireguardautotunnel	proxy-in-vpn	no? (proxy is a separate tunnel mode)	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/app/src/main/java/com/zaneschepke/wireguardautotunnel/domain/enums/TunnelMode.kt#L3-L6	2026-11-09
+com.zaneschepke.wireguardautotunnel	per-app	yes	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/app/src/main/res/values/strings.xml#L443-L444	2026-11-09
+com.zaneschepke.wireguardautotunnel	wireguard	export (zip)	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/app/src/main/java/com/zaneschepke/wireguardautotunnel/util/extensions/UiExtensions.kt#L244	2026-11-09
+com.zaneschepke.wireguardautotunnel	note	core version	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/gradle/libs.versions.toml#L54	2026-11-09
+moe.nb4a	modes	vpn,proxy	https://github.com/MatsuriDayo/NekoBoxForAndroid/blob/5768494d8ae3c74a057bb6d46c0f8dc071b0d821/app/src/main/res/values/strings.xml#L52-L54	2026-11-09
+moe.nb4a	modes	default VPN	https://github.com/MatsuriDayo/NekoBoxForAndroid/blob/5768494d8ae3c74a057bb6d46c0f8dc071b0d821/app/src/main/java/io/nekohasekai/sagernet/database/DataStore.kt#L100	2026-11-09
+moe.nb4a	proxy	mixed 2080 + user index	https://github.com/MatsuriDayo/NekoBoxForAndroid/blob/5768494d8ae3c74a057bb6d46c0f8dc071b0d821/app/src/main/java/io/nekohasekai/sagernet/database/DataStore.kt#L126-L140	2026-11-09
+moe.nb4a	proxy	mixed inbound, 127.0.0.1 unless allowAccess	https://github.com/MatsuriDayo/NekoBoxForAndroid/blob/5768494d8ae3c74a057bb6d46c0f8dc071b0d821/app/src/main/java/io/nekohasekai/sagernet/fmt/ConfigBuilder.kt#L136	2026-11-09
+moe.nb4a	auth	none (no users set)	https://github.com/MatsuriDayo/NekoBoxForAndroid/blob/5768494d8ae3c74a057bb6d46c0f8dc071b0d821/app/src/main/java/io/nekohasekai/sagernet/fmt/ConfigBuilder.kt#L226-L234	2026-11-09
+moe.nb4a	udp	yes	https://github.com/MatsuriDayo/sing-box/blob/aed32ee3066cdbc7d471e3e0415c5134088962df/protocol/mixed/inbound.go#L114-L116	2026-11-09
+moe.nb4a	udp	yes	https://github.com/SagerNet/sing/blob/03a6cce64bf744023af9e2691fb11afd405b9061/protocol/socks/handshake.go#L230	2026-11-09
+moe.nb4a	domain-names	yes	https://github.com/SagerNet/sing/blob/03a6cce64bf744023af9e2691fb11afd405b9061/common/metadata/socksaddr.go#L6	2026-11-09
+moe.nb4a	proxy-in-vpn	yes (mixed inbound added in every mode)	https://github.com/MatsuriDayo/NekoBoxForAndroid/blob/5768494d8ae3c74a057bb6d46c0f8dc071b0d821/app/src/main/java/io/nekohasekai/sagernet/fmt/ConfigBuilder.kt#L198-L234	2026-11-09
+moe.nb4a	per-app	yes	https://github.com/MatsuriDayo/NekoBoxForAndroid/blob/5768494d8ae3c74a057bb6d46c0f8dc071b0d821/app/src/main/res/values/strings.xml#L175	2026-11-09
+moe.nb4a	wireguard	import	https://github.com/MatsuriDayo/NekoBoxForAndroid/blob/5768494d8ae3c74a057bb6d46c0f8dc071b0d821/app/src/main/java/io/nekohasekai/sagernet/group/RawUpdater.kt#L679-L682	2026-11-09
+moe.nb4a	note	sing-box fork commit	https://github.com/MatsuriDayo/NekoBoxForAndroid/blob/5768494d8ae3c74a057bb6d46c0f8dc071b0d821/buildScript/lib/core/get_source_env.sh#L1	2026-11-09
+com.v2ray.ang	modes	vpn,proxy	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/res/values/strings.xml#L477-L480	2026-11-09
+com.v2ray.ang	proxy	10808	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/AppConfig.kt#L165	2026-11-09
+com.v2ray.ang	proxy	127.0.0.1 unless proxy sharing	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreConfigManager.kt#L531-L534	2026-11-09
+com.v2ray.ang	proxy	http on the same port for Xray builds	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/handler/SettingsManager.kt#L290-L291	2026-11-09
+com.v2ray.ang	proxy	isXray() true for com.v2ray.ang*	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/util/Utils.kt#L461	2026-11-09
+com.v2ray.ang	proxy	mixed: Xray SOCKS inbound falls back to HTTP	https://github.com/XTLS/Xray-core/blob/a4a3dff5b20c2faae567b742c172c7b95e75c083/proxy/socks/server.go#L88	2026-11-09
+com.v2ray.ang	port-configurable	yes; random port option off by default	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/handler/SettingsManager.kt#L259-L300	2026-11-09
+com.v2ray.ang	auth	optional	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreConfigManager.kt#L535-L546	2026-11-09
+com.v2ray.ang	udp	yes (default true)	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/AppConfig.kt#L173	2026-11-09
+com.v2ray.ang	udp	yes	https://github.com/XTLS/Xray-core/blob/a4a3dff5b20c2faae567b742c172c7b95e75c083/proxy/socks/protocol.go#L171	2026-11-09
+com.v2ray.ang	domain-names	yes	https://github.com/XTLS/Xray-core/blob/a4a3dff5b20c2faae567b742c172c7b95e75c083/proxy/socks/protocol.go#L42	2026-11-09
+com.v2ray.ang	proxy-in-vpn	yes (local proxy on by default)	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreConfigManager.kt#L521	2026-11-09
+com.v2ray.ang	per-app	yes	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/res/values/strings.xml#L178-L179	2026-11-09
+com.v2ray.ang	wireguard	import (.conf)	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/fmt/WireguardFmt.kt#L48	2026-11-09
+com.v2ray.ang	wireguard	export (wireguard:// link)	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/fmt/WireguardFmt.kt#L111	2026-11-09
+com.v2ray.ang	note	Xray-core version	https://github.com/2dust/AndroidLibXrayLite/blob/2ffe5f794a32ba15b122e177b5acffc6f11c4959/go.mod	2026-11-09
+com.v2ray.ang.fdroid	modes	vpn,proxy	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/res/values/strings.xml#L477-L480	2026-11-09
+com.v2ray.ang.fdroid	proxy	10808	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/AppConfig.kt#L165	2026-11-09
+com.v2ray.ang.fdroid	proxy	127.0.0.1 unless proxy sharing	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreConfigManager.kt#L531-L534	2026-11-09
+com.v2ray.ang.fdroid	proxy	http on the same port for Xray builds	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/handler/SettingsManager.kt#L290-L291	2026-11-09
+com.v2ray.ang.fdroid	proxy	isXray() true for com.v2ray.ang*	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/util/Utils.kt#L461	2026-11-09
+com.v2ray.ang.fdroid	proxy	mixed: Xray SOCKS inbound falls back to HTTP	https://github.com/XTLS/Xray-core/blob/a4a3dff5b20c2faae567b742c172c7b95e75c083/proxy/socks/server.go#L88	2026-11-09
+com.v2ray.ang.fdroid	port-configurable	yes; random port option off by default	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/handler/SettingsManager.kt#L259-L300	2026-11-09
+com.v2ray.ang.fdroid	auth	optional	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreConfigManager.kt#L535-L546	2026-11-09
+com.v2ray.ang.fdroid	udp	yes (default true)	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/AppConfig.kt#L173	2026-11-09
+com.v2ray.ang.fdroid	udp	yes	https://github.com/XTLS/Xray-core/blob/a4a3dff5b20c2faae567b742c172c7b95e75c083/proxy/socks/protocol.go#L171	2026-11-09
+com.v2ray.ang.fdroid	domain-names	yes	https://github.com/XTLS/Xray-core/blob/a4a3dff5b20c2faae567b742c172c7b95e75c083/proxy/socks/protocol.go#L42	2026-11-09
+com.v2ray.ang.fdroid	proxy-in-vpn	yes (local proxy on by default)	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreConfigManager.kt#L521	2026-11-09
+com.v2ray.ang.fdroid	per-app	yes	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/res/values/strings.xml#L178-L179	2026-11-09
+com.v2ray.ang.fdroid	wireguard	import (.conf)	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/fmt/WireguardFmt.kt#L48	2026-11-09
+com.v2ray.ang.fdroid	wireguard	export (wireguard:// link)	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/java/com/v2ray/ang/fmt/WireguardFmt.kt#L111	2026-11-09
+com.v2ray.ang.fdroid	note	Xray-core version	https://github.com/2dust/AndroidLibXrayLite/blob/2ffe5f794a32ba15b122e177b5acffc6f11c4959/go.mod	2026-11-09
+com.v2ray.ang.fdroid	package	applicationIdSuffix .fdroid	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/build.gradle.kts#L52-L56	2026-11-09
+org.getlantern.lantern	modes	vpn	https://github.com/getlantern/lantern/blob/617abf15629bb10539bca81cc77ac607e63ec031/android/app/src/main/kotlin/org/getlantern/lantern/service/LanternVpnService.kt#L623	2026-11-09
+org.getlantern.lantern	modes	stealth-novpn builds under other packages	https://github.com/getlantern/lantern/blob/617abf15629bb10539bca81cc77ac607e63ec031/android/app/build.gradle#L194-L196	2026-11-09
+org.getlantern.lantern	modes	STEALTH_NO_VPN off by default	https://github.com/getlantern/lantern/blob/617abf15629bb10539bca81cc77ac607e63ec031/lib/core/common/app_build_info.dart#L35-L38	2026-11-09
+org.getlantern.lantern	per-app	yes	https://github.com/getlantern/lantern/blob/617abf15629bb10539bca81cc77ac607e63ec031/lib/features/setting/vpn_setting.dart#L73	2026-11-09
+org.getlantern.lantern	wireguard	no	no WireGuard .conf parsing in https://github.com/getlantern/lantern/tree/617abf15629bb10539bca81cc77ac607e63ec031/lib	2026-11-09
+app.hiddify.com	modes	vpn,proxy (mobile: proxy, tun)	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/lib/singbox/model/singbox_config_enum.dart#L28-L38	2026-11-09
+app.hiddify.com	modes	default tun on mobile	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/lib/singbox/model/singbox_config_enum.dart#L26	2026-11-09
+app.hiddify.com	proxy-label	Proxy service only	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/en.i18n.json#L607-L611	2026-11-09
+app.hiddify.com	proxy	mixed 12334	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/lib/features/settings/data/config_option_repository.dart#L120-L123	2026-11-09
+app.hiddify.com	proxy	127.0.0.1 and ::1	https://github.com/hiddify/hiddify-core/blob/ad83d7570c06c012ad0589896138e5c1bf299c50/v2/config/inbound_ports.go#L71-L87	2026-11-09
+app.hiddify.com	port-configurable	yes	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/lib/features/settings/data/config_option_repository.dart#L120-L123	2026-11-09
+app.hiddify.com	auth	optional, off by default; user hiddify	https://github.com/hiddify/hiddify-core/blob/ad83d7570c06c012ad0589896138e5c1bf299c50/v2/config/inbound_ports.go#L12-L13	2026-11-09
+app.hiddify.com	auth	optional, off by default	https://github.com/hiddify/hiddify-core/blob/ad83d7570c06c012ad0589896138e5c1bf299c50/v2/config/inbound_ports.go#L36-L43	2026-11-09
+app.hiddify.com	auth	local-proxy-auth false	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/lib/features/settings/data/config_option_repository.dart#L220-L222	2026-11-09
+app.hiddify.com	udp	yes (sing-box mixed inbound)	https://github.com/SagerNet/sing/blob/03a6cce64bf744023af9e2691fb11afd405b9061/protocol/socks/handshake.go#L230	2026-11-09
+app.hiddify.com	domain-names	yes	https://github.com/SagerNet/sing/blob/03a6cce64bf744023af9e2691fb11afd405b9061/common/metadata/socksaddr.go#L6	2026-11-09
+app.hiddify.com	proxy-in-vpn	no (local-proxy-in-vpn false)	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/lib/features/settings/data/config_option_repository.dart#L224-L225	2026-11-09
+app.hiddify.com	proxy-in-vpn	no	https://github.com/hiddify/hiddify-core/blob/ad83d7570c06c012ad0589896138e5c1bf299c50/v2/config/inbound_ports.go#L30-L34	2026-11-09
+app.hiddify.com	per-app	yes	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/lib/core/preferences/general_preferences.dart#L98	2026-11-09
+app.hiddify.com	wireguard	import	https://github.com/hiddify/hiddify-core/blob/ad83d7570c06c012ad0589896138e5c1bf299c50/v2/config/parser.go#L105	2026-11-09
+app.hiddify.com	note	Clash API 16756 on by default	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/lib/features/settings/data/config_option_repository.dart#L198-L203	2026-11-09
+app.hiddify.com	note	LAN sharing port 12338	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/lib/features/settings/data/config_option_repository.dart#L208-L218	2026-11-09
+app.hiddify.com	note	core version	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/dependencies.properties#L1	2026-11-09
+org.amnezia.vpn	modes	vpn (local proxy desktop only)	https://github.com/amnezia-vpn/amnezia-client/blob/ac175c8a8147cfe56f98c8372ec17ea2ba00bb02/client/core/controllers/localProxyController.cpp#L509-L514	2026-11-09
+org.amnezia.vpn	modes	AMNEZIA_DESKTOP excludes Android	https://github.com/amnezia-vpn/amnezia-client/blob/ac175c8a8147cfe56f98c8372ec17ea2ba00bb02/client/CMakeLists.txt#L222-L224	2026-11-09
+org.amnezia.vpn	note	desktop local proxy 10808	https://github.com/amnezia-vpn/amnezia-client/blob/ac175c8a8147cfe56f98c8372ec17ea2ba00bb02/client/core/utils/localProxy/localProxyConstants.h#L8	2026-11-09
+org.amnezia.vpn	per-app	yes (windows and android)	https://github.com/amnezia-vpn/amnezia-client/blob/ac175c8a8147cfe56f98c8372ec17ea2ba00bb02/client/ui/qml/Pages2/PageSettingsConnection.qml#L15	2026-11-09
+org.amnezia.vpn	wireguard	import	https://github.com/amnezia-vpn/amnezia-client/blob/ac175c8a8147cfe56f98c8372ec17ea2ba00bb02/client/core/controllers/selfhosted/importController.cpp#L54	2026-11-09
+org.amnezia.vpn	wireguard	export (WireGuard native format)	https://github.com/amnezia-vpn/amnezia-client/blob/ac175c8a8147cfe56f98c8372ec17ea2ba00bb02/client/ui/qml/Pages2/PageShare.qml#L104	2026-11-09
+org.amnezia.awg	package	org.amnezia.awg	https://github.com/amnezia-vpn/amneziawg-android/blob/5c16489e2cd9ed3a0a7a27c7445bba5238132f86/gradle.properties#L3	2026-11-09
+org.amnezia.awg	per-app	yes (ExcludedApplications)	https://github.com/amnezia-vpn/amneziawg-android/blob/5c16489e2cd9ed3a0a7a27c7445bba5238132f86/tunnel/src/main/java/org/amnezia/awg/config/Interface.java#L134	2026-11-09
+org.amnezia.awg	wireguard	import	https://github.com/amnezia-vpn/amneziawg-android/blob/5c16489e2cd9ed3a0a7a27c7445bba5238132f86/ui/src/main/java/org/amnezia/awg/util/TunnelImporter.kt	2026-11-09
+org.amnezia.awg	wireguard	export	https://github.com/amnezia-vpn/amneziawg-android/blob/5c16489e2cd9ed3a0a7a27c7445bba5238132f86/ui/src/main/java/org/amnezia/awg/preference/ZipExporterPreference.kt	2026-11-09
+com.github.metacubex.clash.meta	package	.meta suffix	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/043a6072225405b285a73e3d7b7e53431ccfc04c/build.gradle.kts#L50-L132	2026-11-09
+com.github.metacubex.clash.meta	modes	vpn,proxy	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/043a6072225405b285a73e3d7b7e53431ccfc04c/app/src/main/java/com/github/kr328/clash/util/Clash.kt#L14-L24	2026-11-09
+com.github.metacubex.clash.meta	modes	enableVpn default true	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/043a6072225405b285a73e3d7b7e53431ccfc04c/design/src/main/java/com/github/kr328/clash/design/store/UiStore.kt#L19-L22	2026-11-09
+com.github.metacubex.clash.meta	proxy-label	Route System Traffic	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/043a6072225405b285a73e3d7b7e53431ccfc04c/design/src/main/res/values/strings.xml#L132	2026-11-09
+com.github.metacubex.clash.meta	proxy	profile (override mixedPort null)	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/043a6072225405b285a73e3d7b7e53431ccfc04c/core/src/main/java/com/github/kr328/clash/core/model/ConfigurationOverride.kt#L24-L33	2026-11-09
+com.github.metacubex.clash.meta	proxy	127.0.0.1 unless allow-lan	https://github.com/MetaCubeX/mihomo/blob/3f27ef39f8c96bbfbc8b0b9bb10f5c9ef60149d8/listener/listener.go#L709-L717	2026-11-09
+com.github.metacubex.clash.meta	auth	optional (authentication list)	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/043a6072225405b285a73e3d7b7e53431ccfc04c/core/src/main/java/com/github/kr328/clash/core/model/ConfigurationOverride.kt#L26-L27	2026-11-09
+com.github.metacubex.clash.meta	udp	yes	https://github.com/MetaCubeX/mihomo/blob/3f27ef39f8c96bbfbc8b0b9bb10f5c9ef60149d8/listener/listener.go#L484-L489	2026-11-09
+com.github.metacubex.clash.meta	domain-names	yes	https://github.com/chen08209/Clash.Meta/blob/024245dc72bc92f48237f865119afe0cd53ac9e6/transport/socks5/socks5.go#L37	2026-11-09
+com.github.metacubex.clash.meta	per-app	yes	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/043a6072225405b285a73e3d7b7e53431ccfc04c/design/src/main/res/values/strings.xml#L148	2026-11-09
+com.github.metacubex.clash.meta	note	external controller blanked	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/043a6072225405b285a73e3d7b7e53431ccfc04c/core/src/main/golang/native/config/process.go#L44-L48	2026-11-09
+com.github.shadowsocks	modes	vpn,proxy (default VPN)	https://github.com/shadowsocks/shadowsocks-android/blob/970eb2bf127fe68463d90c2b4d4a06f76d451160/core/src/main/res/values/strings.xml#L9-L12	2026-11-09
+com.github.shadowsocks	proxy	127.0.0.1:1080 + user index	https://github.com/shadowsocks/shadowsocks-android/blob/970eb2bf127fe68463d90c2b4d4a06f76d451160/core/src/main/java/com/github/shadowsocks/preference/DataStore.kt#L51-L71	2026-11-09
+com.github.shadowsocks	proxy	SOCKS5 local in sslocal config	https://github.com/shadowsocks/shadowsocks-android/blob/970eb2bf127fe68463d90c2b4d4a06f76d451160/core/src/main/java/com/github/shadowsocks/bg/ProxyInstance.kt#L89-L97	2026-11-09
+com.github.shadowsocks	auth	none (no credentials in local config)	https://github.com/shadowsocks/shadowsocks-android/blob/970eb2bf127fe68463d90c2b4d4a06f76d451160/core/src/main/java/com/github/shadowsocks/bg/ProxyInstance.kt#L89-L97	2026-11-09
+com.github.shadowsocks	udp	yes unless plugin	https://github.com/shadowsocks/shadowsocks-android/blob/970eb2bf127fe68463d90c2b4d4a06f76d451160/core/src/main/java/com/github/shadowsocks/bg/BaseService.kt#L239-L242	2026-11-09
+com.github.shadowsocks	udp	yes	https://github.com/shadowsocks/shadowsocks-rust/blob/c341c899080e9eb0f636d96b30f18376ab3183d4/crates/shadowsocks/src/relay/socks5.rs#L33	2026-11-09
+com.github.shadowsocks	domain-names	yes	https://github.com/shadowsocks/shadowsocks-rust/blob/c341c899080e9eb0f636d96b30f18376ab3183d4/crates/shadowsocks/src/relay/socks5.rs#L36	2026-11-09
+com.github.shadowsocks	proxy-in-vpn	yes (SOCKS local in every mode)	https://github.com/shadowsocks/shadowsocks-android/blob/970eb2bf127fe68463d90c2b4d4a06f76d451160/core/src/main/java/com/github/shadowsocks/bg/ProxyInstance.kt#L89-L97	2026-11-09
+com.github.shadowsocks	per-app	yes	https://github.com/shadowsocks/shadowsocks-android/blob/970eb2bf127fe68463d90c2b4d4a06f76d451160/core/src/main/res/values/strings.xml#L48	2026-11-09
+com.nebula.karing	modes	TUN switch on every platform	https://github.com/KaringX/karing/blob/accbdfc05a999eaa3526aadb0aea994b3eafb7f5/lib/screens/home_screen_widgets.dart#L1064-L1066	2026-11-09
+com.nebula.karing	modes	vpn_service plugin is a local path, not public	https://github.com/KaringX/karing/blob/accbdfc05a999eaa3526aadb0aea994b3eafb7f5/pubspec.yaml#L177-L181	2026-11-09
+com.nebula.karing	proxy	3067 rules, 3066 proxy, 3065 direct; mixed	https://github.com/KaringX/karing-docu/blob/2a13e8eea3a15a0efc6b76d76902f40e25ced3e7/i18n/en/docusaurus-plugin-content-docs/current/tutorial/lan.md#L36-L47	2026-11-09
+com.nebula.karing	proxy	defaults and 127.0.0.1 host	https://github.com/KaringX/karing/blob/accbdfc05a999eaa3526aadb0aea994b3eafb7f5/lib/app/modules/setting_manager.dart#L1245-L1260	2026-11-09
+com.nebula.karing	port-configurable	yes	https://github.com/KaringX/karing/blob/accbdfc05a999eaa3526aadb0aea994b3eafb7f5/lib/screens/settings_screen.dart#L1817	2026-11-09
+com.nebula.karing	auth	optional (socks local username/password)	https://github.com/KaringX/karing/blob/accbdfc05a999eaa3526aadb0aea994b3eafb7f5/lib/app/modules/setting_manager.dart#L1275-L1285	2026-11-09
+com.nebula.karing	per-app	yes (Android only)	https://github.com/KaringX/karing-docu/blob/2a13e8eea3a15a0efc6b76d76902f40e25ced3e7/i18n/en/docusaurus-plugin-content-docs/current/app-manual/settings.md#L33-L35	2026-11-09
+com.happproxy	modes	vpn (proxy-enable is desktop only)	https://www.happ.su/main/dev-docs/app-management	2026-11-09
+com.happproxy	note	socks-auth-mode auto/manual/from-json/disable; platform not stated	https://www.happ.su/main/dev-docs/app-management	2026-11-09
+com.happproxy	per-app	yes (per-app-proxy-mode, Android)	https://www.happ.su/main/dev-docs/app-management	2026-11-09
+com.happproxy	note	closed source; release-only repository	https://github.com/Happ-proxy/happ-android	2026-11-09
+su.happ.proxyutility	modes	vpn (proxy-enable is desktop only)	https://www.happ.su/main/dev-docs/app-management	2026-11-09
+su.happ.proxyutility	note	socks-auth-mode auto/manual/from-json/disable; platform not stated	https://www.happ.su/main/dev-docs/app-management	2026-11-09
+su.happ.proxyutility	per-app	yes (per-app-proxy-mode, Android)	https://www.happ.su/main/dev-docs/app-management	2026-11-09
+su.happ.proxyutility	note	closed source; release-only repository	https://github.com/Happ-proxy/happ-android	2026-11-09
+org.bepass.oblivion	modes	vpn,proxy	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/android/aether-vpn/src/main/kotlin/org/bepass/oblivion/vpn/AetherVpnService.kt#L269-L271	2026-11-09
+org.bepass.oblivion	modes	RoutingMode socksOnly/systemProxy/fullTunnel, default fullTunnel	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/lib/data/models/tunnel_settings.dart#L185-L197	2026-11-09
+org.bepass.oblivion	proxy-label	Proxy only mode	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/lib/l10n/app_en.arb#L126-L127	2026-11-09
+org.bepass.oblivion	proxy	1819, 127.0.0.1 unless allowLan, http = socks + 1	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/android/aether-vpn/src/main/kotlin/org/bepass/oblivion/vpn/TunnelConfig.kt#L41-L43	2026-11-09
+org.bepass.oblivion	proxy	default socksPort 1819	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/lib/data/models/tunnel_settings.dart#L233-L235	2026-11-09
+org.bepass.oblivion	proxy	AETHER_SOCKS and AETHER_HTTP_PROXY	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/android/aether-vpn/src/main/kotlin/org/bepass/oblivion/vpn/AetherVpnService.kt#L141-L142	2026-11-09
+org.bepass.oblivion	port-configurable	yes	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/lib/l10n/app_en.arb#L122	2026-11-09
+org.bepass.oblivion	auth	none	https://github.com/CluvexStudio/Aether/blob/311b573352bb67e494895ff67d20b002d075116a/aether/src/socks.rs#L121-L125	2026-11-09
+org.bepass.oblivion	udp	yes	https://github.com/CluvexStudio/Aether/blob/311b573352bb67e494895ff67d20b002d075116a/aether/src/socks.rs#L204	2026-11-09
+org.bepass.oblivion	domain-names	yes	https://github.com/CluvexStudio/Aether/blob/311b573352bb67e494895ff67d20b002d075116a/aether/src/socks.rs#L239-L244	2026-11-09
+org.bepass.oblivion	proxy-in-vpn	yes (tun goes through the SOCKS port)	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/android/aether-vpn/src/main/kotlin/org/bepass/oblivion/vpn/TunnelConfig.kt#L100	2026-11-09
+org.bepass.oblivion	per-app	yes	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/android/aether-vpn/src/main/kotlin/org/bepass/oblivion/vpn/AetherVpnService.kt#L303-L309	2026-11-09
+org.bepass.oblivion	note	chain port shift	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/android/aether-vpn/src/main/kotlin/org/bepass/oblivion/vpn/TunnelConfig.kt#L55-L63	2026-11-09
+de.unboundtech.defyxvpn	modes	vpn	https://github.com/UnboundTechCo/defyxVPN/blob/1008ea8308b38f7ae31e73f26e6f019bb9af7331/android/app/src/main/kotlin/com/defyx/defyx/VpnService.kt#L176-L211	2026-11-09
+de.unboundtech.defyxvpn	per-app	yes	https://github.com/UnboundTechCo/defyxVPN/blob/1008ea8308b38f7ae31e73f26e6f019bb9af7331/android/app/src/main/kotlin/com/defyx/defyx/VpnService.kt#L249-L262	2026-11-09
+de.unboundtech.defyxvpn	proxy-in-vpn	unknown (core private)	https://github.com/UnboundTechCo/defyxVPN/blob/1008ea8308b38f7ae31e73f26e6f019bb9af7331/scripts/build-and-run.sh#L14	2026-11-09
+de.unboundtech.defyxvpn	note	core library	https://github.com/UnboundTechCo/defyxVPN/blob/1008ea8308b38f7ae31e73f26e6f019bb9af7331/android/app/build.gradle.kts#L85	2026-11-09
+com.MahsaNet.MahsaNG	note	stale tree: applicationId com.MahsaNG.EMS, version 1.8.5	https://github.com/GFW-knocker/MahsaNG/blob/ecfef2c5c002aa613ee04fbfd1037eda728d9d7b/V2rayNG/app/build.gradle#L16-L21	2026-11-09
+com.MahsaNet.MahsaNG	modes	Proxy only (stale)	https://github.com/GFW-knocker/MahsaNG/blob/ecfef2c5c002aa613ee04fbfd1037eda728d9d7b/V2rayNG/app/src/main/res/values/arrays.xml#L145	2026-11-09
+com.MahsaNet.MahsaNG	proxy	10808 socks, 10809 http (stale)	https://github.com/GFW-knocker/MahsaNG/blob/ecfef2c5c002aa613ee04fbfd1037eda728d9d7b/V2rayNG/app/src/main/kotlin/com/v2ray/ang/AppConfig.kt#L72-L73	2026-11-09
+com.MahsaNet.MahsaNG	proxy	127.0.0.1 unless proxy sharing (stale)	https://github.com/GFW-knocker/MahsaNG/blob/ecfef2c5c002aa613ee04fbfd1037eda728d9d7b/V2rayNG/app/src/main/kotlin/com/v2ray/ang/util/V2rayConfigUtil.kt#L98-L100	2026-11-09
+com.MahsaNet.MahsaNG	auth	noauth (stale)	https://github.com/GFW-knocker/MahsaNG/blob/ecfef2c5c002aa613ee04fbfd1037eda728d9d7b/V2rayNG/app/src/main/assets/v2ray_config.json#L22-L26	2026-11-09
+com.MahsaNet.MahsaNG	udp	true (stale)	https://github.com/GFW-knocker/MahsaNG/blob/ecfef2c5c002aa613ee04fbfd1037eda728d9d7b/V2rayNG/app/src/main/assets/v2ray_config.json#L26	2026-11-09
+com.MahsaNet.MahsaNG	per-app	Per-app proxy (stale)	https://github.com/GFW-knocker/MahsaNG/blob/ecfef2c5c002aa613ee04fbfd1037eda728d9d7b/V2rayNG/app/src/main/res/values/strings.xml#L124-L125	2026-11-09
+com.MahsaNet.MahsaNG	note	closed parts, not buildable from source	https://github.com/GFW-knocker/MahsaNG/blob/ecfef2c5c002aa613ee04fbfd1037eda728d9d7b/README.md	2026-11-09
+de.blinkt.openvpn	modes	vpn	https://github.com/schwabe/ics-openvpn/blob/f669267e2547fddca04d0bc699739137085eb633/main/src/main/java/de/blinkt/openvpn/core/OpenVPNService.java#L1143-L1152	2026-11-09
+de.blinkt.openvpn	per-app	yes	https://github.com/schwabe/ics-openvpn/blob/f669267e2547fddca04d0bc699739137085eb633/main/src/main/res/values/strings.xml#L336	2026-11-09
+de.blinkt.openvpn	note	Orbot excluded	https://github.com/schwabe/ics-openvpn/blob/f669267e2547fddca04d0bc699739137085eb633/main/src/main/java/de/blinkt/openvpn/core/OpenVPNService.java#L1143	2026-11-09
+net.mullvad.mullvadvpn	modes	vpn	https://github.com/mullvad/mullvadvpn-app/blob/aa47f606b1a159214c7279344128119fa91be5fd/android/lib/talpid/src/main/kotlin/net/mullvad/talpid/TalpidVpnService.kt#L119	2026-11-09
+net.mullvad.mullvadvpn	per-app	yes	https://github.com/mullvad/mullvadvpn-app/blob/aa47f606b1a159214c7279344128119fa91be5fd/android/lib/talpid/src/main/kotlin/net/mullvad/talpid/TalpidVpnService.kt#L119	2026-11-09
+net.mullvad.mullvadvpn	wireguard	provider	https://mullvad.net/en/help/wireguard-app-windows	2026-11-09
+org.outline.android.client	modes	vpn	https://github.com/Jigsaw-Code/outline-apps/blob/99cdcdc4c0431ec1e71a8e8fa96e6022ed5e67de/client/src/cordova/android/OutlineAndroidLib/outline/src/main/java/org/outline/vpn/VpnTunnelService.java#L65	2026-11-09
+org.outline.android.client	proxy-in-vpn	no (tun fd relayed in process)	https://github.com/Jigsaw-Code/outline-apps/blob/99cdcdc4c0431ec1e71a8e8fa96e6022ed5e67de/client/src/cordova/android/OutlineAndroidLib/outline/src/main/java/org/outline/vpn/VpnTunnelService.java#L291-L311	2026-11-09
+org.outline.android.client	per-app	no (only itself excluded)	https://github.com/Jigsaw-Code/outline-apps/blob/99cdcdc4c0431ec1e71a8e8fa96e6022ed5e67de/client/src/cordova/android/OutlineAndroidLib/outline/src/main/java/org/outline/vpn/VpnTunnelService.java#L267	2026-11-09
+com.windscribe.vpn	modes	vpn	no local proxy listener found in https://github.com/Windscribe/Android-App/tree/2c585dd5979ba93655853d56d849ed8ad2c964cb/base/src/main	2026-11-09
+com.windscribe.vpn	per-app	yes	https://github.com/Windscribe/Android-App/blob/2c585dd5979ba93655853d56d849ed8ad2c964cb/base/src/main/res/values/strings.xml#L233-L236	2026-11-09
+com.windscribe.vpn	wireguard	provider (paid)	https://windscribe.com/knowledge-base/articles/where-do-i-access-my-wireguard-configs	2026-11-09
+pan.alexander.tordnscrypt	modes	ROOT_MODE, PROXY_MODE, VPN_MODE	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/java/pan/alexander/tordnscrypt/utils/enums/OperationMode.java#L22	2026-11-09
+pan.alexander.tordnscrypt	proxy-label	Proxy Mode	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/res/values/strings.xml#L88	2026-11-09
+pan.alexander.tordnscrypt	proxy	SOCKS on by default, 9050; HTTPTunnel off, 8118	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/res/xml/preferences_tor.xml#L170-L194	2026-11-09
+pan.alexander.tordnscrypt	proxy	tor.conf in this zip: SOCKSPort 127.0.0.1:9050 and [::1]:9050, HTTPTunnelPort 8118	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/assets/tor.mp3	2026-11-09
+pan.alexander.tordnscrypt	port-configurable	yes	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/java/pan/alexander/tordnscrypt/settings/PathVars.java#L302-L309	2026-11-09
+pan.alexander.tordnscrypt	auth	none (Tor never requires one)	https://gitlab.torproject.org/tpo/core/tor/-/blob/tor-0.4.9.14/src/core/proto/proto_socks.c#L727	2026-11-09
+pan.alexander.tordnscrypt	udp	no	https://gitlab.torproject.org/tpo/core/tor/-/blob/tor-0.4.9.14/src/core/proto/proto_socks.c#L643-648	2026-11-09
+pan.alexander.tordnscrypt	domain-names	yes	https://gitlab.torproject.org/tpo/core/tor/-/blob/tor-0.4.9.14/src/core/proto/proto_socks.c#L599	2026-11-09
+pan.alexander.tordnscrypt	per-app	yes	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/res/values/strings.xml#L107-L108	2026-11-09
+pan.alexander.tordnscrypt.stable	modes	ROOT_MODE, PROXY_MODE, VPN_MODE	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/java/pan/alexander/tordnscrypt/utils/enums/OperationMode.java#L22	2026-11-09
+pan.alexander.tordnscrypt.stable	proxy-label	Proxy Mode	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/res/values/strings.xml#L88	2026-11-09
+pan.alexander.tordnscrypt.stable	proxy	SOCKS on by default, 9050; HTTPTunnel off, 8118	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/res/xml/preferences_tor.xml#L170-L194	2026-11-09
+pan.alexander.tordnscrypt.stable	proxy	tor.conf in this zip: SOCKSPort 127.0.0.1:9050 and [::1]:9050, HTTPTunnelPort 8118	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/assets/tor.mp3	2026-11-09
+pan.alexander.tordnscrypt.stable	port-configurable	yes	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/java/pan/alexander/tordnscrypt/settings/PathVars.java#L302-L309	2026-11-09
+pan.alexander.tordnscrypt.stable	auth	none (Tor never requires one)	https://gitlab.torproject.org/tpo/core/tor/-/blob/tor-0.4.9.14/src/core/proto/proto_socks.c#L727	2026-11-09
+pan.alexander.tordnscrypt.stable	udp	no	https://gitlab.torproject.org/tpo/core/tor/-/blob/tor-0.4.9.14/src/core/proto/proto_socks.c#L643-648	2026-11-09
+pan.alexander.tordnscrypt.stable	domain-names	yes	https://gitlab.torproject.org/tpo/core/tor/-/blob/tor-0.4.9.14/src/core/proto/proto_socks.c#L599	2026-11-09
+pan.alexander.tordnscrypt.stable	per-app	yes	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/res/values/strings.xml#L107-L108	2026-11-09
+pan.alexander.tordnscrypt.gp	modes	ROOT_MODE, PROXY_MODE, VPN_MODE	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/java/pan/alexander/tordnscrypt/utils/enums/OperationMode.java#L22	2026-11-09
+pan.alexander.tordnscrypt.gp	proxy-label	Proxy Mode	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/res/values/strings.xml#L88	2026-11-09
+pan.alexander.tordnscrypt.gp	proxy	SOCKS on by default, 9050; HTTPTunnel off, 8118	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/res/xml/preferences_tor.xml#L170-L194	2026-11-09
+pan.alexander.tordnscrypt.gp	proxy	tor.conf in this zip: SOCKSPort 127.0.0.1:9050 and [::1]:9050, HTTPTunnelPort 8118	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/assets/tor.mp3	2026-11-09
+pan.alexander.tordnscrypt.gp	port-configurable	yes	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/java/pan/alexander/tordnscrypt/settings/PathVars.java#L302-L309	2026-11-09
+pan.alexander.tordnscrypt.gp	auth	none (Tor never requires one)	https://gitlab.torproject.org/tpo/core/tor/-/blob/tor-0.4.9.14/src/core/proto/proto_socks.c#L727	2026-11-09
+pan.alexander.tordnscrypt.gp	udp	no	https://gitlab.torproject.org/tpo/core/tor/-/blob/tor-0.4.9.14/src/core/proto/proto_socks.c#L643-648	2026-11-09
+pan.alexander.tordnscrypt.gp	domain-names	yes	https://gitlab.torproject.org/tpo/core/tor/-/blob/tor-0.4.9.14/src/core/proto/proto_socks.c#L599	2026-11-09
+pan.alexander.tordnscrypt.gp	per-app	yes	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/res/values/strings.xml#L107-L108	2026-11-09
+pan.alexander.tordnscrypt.stable	package	fdroid flavour applicationId	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/build.gradle#L19-L20	2026-11-09
+com.wireguard.android	package	com.wireguard.android	https://github.com/WireGuard/wireguard-android/blob/0856e2ecf7f3cce0e9c9014db3ad7665669adce5/gradle.properties#L3	2026-11-09
+com.wireguard.android	per-app	yes	https://github.com/WireGuard/wireguard-android/blob/0856e2ecf7f3cce0e9c9014db3ad7665669adce5/tunnel/src/main/java/com/wireguard/config/Interface.java#L84-L87	2026-11-09
+com.wireguard.android	wireguard	import	https://github.com/WireGuard/wireguard-android/blob/0856e2ecf7f3cce0e9c9014db3ad7665669adce5/ui/src/main/java/com/wireguard/android/util/TunnelImporter.kt#L51-L59	2026-11-09
+com.wireguard.android	wireguard	export	https://github.com/WireGuard/wireguard-android/blob/0856e2ecf7f3cce0e9c9014db3ad7665669adce5/ui/src/main/java/com/wireguard/android/preference/ZipExporterPreference.kt	2026-11-09
+org.telegram.messenger.web	modes	none (no VpnService in manifest)	https://github.com/DrKLO/Telegram/blob/7be672ead283d022812d75c729d3a04dd4c2a2c6/TMessagesProj/src/main/AndroidManifest.xml	2026-11-09
+org.telegram.messenger.web	note	in-app proxy client	https://github.com/DrKLO/Telegram/blob/7be672ead283d022812d75c729d3a04dd4c2a2c6/TMessagesProj/src/main/java/org/telegram/ui/ProxySettingsActivity.java	2026-11-09
+org.telegram.messenger	modes	none (no VpnService in manifest)	https://github.com/DrKLO/Telegram/blob/7be672ead283d022812d75c729d3a04dd4c2a2c6/TMessagesProj/src/main/AndroidManifest.xml	2026-11-09
+org.telegram.messenger	note	in-app proxy client	https://github.com/DrKLO/Telegram/blob/7be672ead283d022812d75c729d3a04dd4c2a2c6/TMessagesProj/src/main/java/org/telegram/ui/ProxySettingsActivity.java	2026-11-09
+org.thunderdog.challegram	modes	none (no VpnService in manifest)	https://github.com/TGX-Android/Telegram-X/blob/bf82021249e358337b8e4d3f219e0d2c9561eb79/app/src/main/AndroidManifest.xml	2026-11-09
+org.thunderdog.challegram	note	in-app proxy client	https://github.com/TGX-Android/Telegram-X/blob/bf82021249e358337b8e4d3f219e0d2c9561eb79/app/src/main/java/org/thunderdog/challegram/ui/SettingsProxyController.java	2026-11-09
+org.visadahyu.datapavan	modes	none (no INTERNET)	https://github.com/visadahyu/datapavan/blob/2f081b098694b56632bf29c72e51a79bd9001b9c/docs/decisions/0029-network-access-for-v0.2.md#L10	2026-11-09
+org.visadahyu.datapavan	note	Watch opens no port of its own	https://github.com/visadahyu/datapavan/blob/2f081b098694b56632bf29c72e51a79bd9001b9c/docs/DESIGN.md#L347	2026-11-09
+fr.husi	package	namespace fr.husi	https://github.com/xchacha20-poly1305/husi/blob/0822cc7b34ae3c57ee2840d553ca8cf31cf64867/androidApp/build.gradle.kts#L35	2026-11-09
+fr.husi	modes	vpn,proxy (default VPN)	https://github.com/xchacha20-poly1305/husi/blob/0822cc7b34ae3c57ee2840d553ca8cf31cf64867/composeApp/src/commonMain/kotlin/fr/husi/database/DataStore.kt#L155	2026-11-09
+fr.husi	proxy-label	Proxy only	https://github.com/xchacha20-poly1305/husi/blob/0822cc7b34ae3c57ee2840d553ca8cf31cf64867/composeApp/src/commonMain/composeResources/values/strings.xml#L70	2026-11-09
+fr.husi	proxy	mixed 2080 + user index	https://github.com/xchacha20-poly1305/husi/blob/0822cc7b34ae3c57ee2840d553ca8cf31cf64867/composeApp/src/commonMain/kotlin/fr/husi/database/preference/PreferenceProxy.kt#L109-L122	2026-11-09
+fr.husi	proxy	127.0.0.1 unless allowAccess	https://github.com/xchacha20-poly1305/husi/blob/0822cc7b34ae3c57ee2840d553ca8cf31cf64867/composeApp/src/commonMain/kotlin/fr/husi/fmt/ConfigBuilder.kt#L527-L531	2026-11-09
+fr.husi	auth	optional	https://github.com/xchacha20-poly1305/husi/blob/0822cc7b34ae3c57ee2840d553ca8cf31cf64867/composeApp/src/commonMain/kotlin/fr/husi/fmt/ConfigBuilder.kt#L734-L748	2026-11-09
+fr.husi	auth	inbound username/password settings	https://github.com/xchacha20-poly1305/husi/blob/0822cc7b34ae3c57ee2840d553ca8cf31cf64867/composeApp/src/commonMain/kotlin/fr/husi/database/DataStore.kt#L177-L178	2026-11-09
+fr.husi	udp	yes	https://github.com/SagerNet/sing/blob/03a6cce64bf744023af9e2691fb11afd405b9061/protocol/socks/handshake.go#L230	2026-11-09
+fr.husi	domain-names	yes	https://github.com/SagerNet/sing/blob/03a6cce64bf744023af9e2691fb11afd405b9061/common/metadata/socksaddr.go#L6	2026-11-09
+fr.husi	proxy-in-vpn	yes (mixed inbound added in every mode)	https://github.com/xchacha20-poly1305/husi/blob/0822cc7b34ae3c57ee2840d553ca8cf31cf64867/composeApp/src/commonMain/kotlin/fr/husi/fmt/ConfigBuilder.kt#L734-L748	2026-11-09
+fr.husi	per-app	yes	https://github.com/xchacha20-poly1305/husi/blob/0822cc7b34ae3c57ee2840d553ca8cf31cf64867/composeApp/src/commonMain/composeResources/values/strings.xml#L175	2026-11-09
+fr.husi	wireguard	import	https://github.com/xchacha20-poly1305/husi/blob/0822cc7b34ae3c57ee2840d553ca8cf31cf64867/composeApp/src/commonMain/kotlin/fr/husi/group/RawUpdater.kt#L113	2026-11-09
+io.nekohasekai.sagernet	modes	vpn,proxy (default VPN)	https://github.com/SagerNet/SagerNet/blob/3593fc10b6889367774f37b32c2e5f89fedb5226/app/src/main/java/io/nekohasekai/sagernet/database/DataStore.kt#L100	2026-11-09
+io.nekohasekai.sagernet	proxy-label	Proxy only	https://github.com/SagerNet/SagerNet/blob/3593fc10b6889367774f37b32c2e5f89fedb5226/app/src/main/res/values/strings.xml#L45	2026-11-09
+io.nekohasekai.sagernet	proxy	socks 2080, http 9080 + user index	https://github.com/SagerNet/SagerNet/blob/3593fc10b6889367774f37b32c2e5f89fedb5226/app/src/main/java/io/nekohasekai/sagernet/database/DataStore.kt#L132-L141	2026-11-09
+io.nekohasekai.sagernet	proxy	127.0.0.1 unless allowAccess	https://github.com/SagerNet/SagerNet/blob/3593fc10b6889367774f37b32c2e5f89fedb5226/app/src/main/java/io/nekohasekai/sagernet/fmt/ConfigBuilder.kt#L156	2026-11-09
+io.nekohasekai.sagernet	auth	none (noauth hard-coded)	https://github.com/SagerNet/SagerNet/blob/3593fc10b6889367774f37b32c2e5f89fedb5226/app/src/main/java/io/nekohasekai/sagernet/fmt/ConfigBuilder.kt#L252-L253	2026-11-09
+io.nekohasekai.sagernet	udp	yes	https://github.com/SagerNet/SagerNet/blob/3593fc10b6889367774f37b32c2e5f89fedb5226/app/src/main/java/io/nekohasekai/sagernet/fmt/ConfigBuilder.kt#L253	2026-11-09
+io.nekohasekai.sagernet	per-app	yes	https://github.com/SagerNet/SagerNet/blob/3593fc10b6889367774f37b32c2e5f89fedb5226/app/src/main/res/values/strings.xml#L167	2026-11-09
+io.nekohasekai.sagernet	wireguard	import	https://github.com/SagerNet/SagerNet/blob/3593fc10b6889367774f37b32c2e5f89fedb5226/app/src/main/java/io/nekohasekai/sagernet/group/RawUpdater.kt#L391	2026-11-09
+dev.hexasoftware.v2box	modes	vpn	https://play.google.com/store/apps/details?id=dev.hexasoftware.v2box&hl=en&gl=US	2026-11-09
+dev.hexasoftware.v2box	proxy-in-vpn	yes? (third-party report)	https://habr.com/ru/articles/1020080/	2026-11-09
+com.napsternetlabs.napsternetv	modes	vpn	https://play.google.com/store/apps/details?id=com.napsternetlabs.napsternetv&hl=en&gl=US	2026-11-09
+com.napsternetlabs.napsternetv	per-app	yes (per-app proxy controls)	https://play.google.com/store/apps/details?id=com.napsternetlabs.napsternetv&hl=en&gl=US	2026-11-09
+com.napsternetlabs.napsternetv	wireguard	import (WireGuard configurations)	https://play.google.com/store/apps/details?id=com.napsternetlabs.napsternetv&hl=en&gl=US	2026-11-09
+com.napsternetlabs.napsternetv	proxy-in-vpn	yes? (third-party report)	https://habr.com/ru/articles/1020080/	2026-11-09
+com.netmod.syna	modes	vpn; proxy tethering named	https://play.google.com/store/apps/details?id=com.netmod.syna&hl=en&gl=US	2026-11-09
+com.netmod.syna	per-app	yes (app-specific connection filtering)	https://play.google.com/store/apps/details?id=com.netmod.syna&hl=en&gl=US	2026-11-09
+com.evozi.injector	modes	VPN Service mode; root iptables mode	https://apps.evozi.com/httpinjector/	2026-11-09
+com.evozi.injector	proxy-in-vpn	yes? 127.0.0.1:8989 fixed (old manual)	https://apps.evozi.com/httpinjector/	2026-11-09
+com.evozi.injector	note	listing: SSH, V2Ray/Xray, WireGuard clients	https://play.google.com/store/apps/details?id=com.evozi.injector&hl=en&gl=US	2026-11-09
+com.cloudflare.onedotonedotonedotone	modes	vpn (local proxy desktop only)	https://developers.cloudflare.com/warp-client/warp-modes/	2026-11-09
+com.cloudflare.onedotonedotonedotone	package	com.cloudflare.onedotonedotonedotone	https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotonedotone&hl=en&gl=US	2026-11-09
+org.torproject.torbrowser	wireguard	no (a browser)	https://gitlab.torproject.org/tpo/applications/tor-browser/-/blob/tor-browser-153.7.0esr-16.0-1-build2/mobile/android/geckoview/src/main/java/org/mozilla/geckoview/TorAndroidIntegration.java	2026-11-09
+org.torproject.torbrowser_alpha	wireguard	no (a browser)	https://gitlab.torproject.org/tpo/applications/tor-browser/-/blob/tor-browser-153.7.0esr-16.0-1-build2/mobile/android/geckoview/src/main/java/org/mozilla/geckoview/TorAndroidIntegration.java	2026-11-09
+org.torproject.vpn	wireguard	no	searched, not found: https://gitlab.torproject.org/tpo/applications/vpn/-/tree/916c70395738a82489ff9b2ceed920e96bdc8c7d/app/src/main	2026-11-09
+ch.protonvpn.android	proxy-in-vpn	no (no local listener)	searched, not found: https://github.com/ProtonVPN/android-app/tree/deb11fef4092a1ecfcf51a7d40bdece9eb4c3e5e/app/src/main	2026-11-09
+ch.protonvpn.android.reproducible	proxy-in-vpn	no (no local listener)	searched, not found: https://github.com/ProtonVPN/android-app/tree/deb11fef4092a1ecfcf51a7d40bdece9eb4c3e5e/app/src/main	2026-11-09
+org.thoughtcrime.securesms	wireguard	no (not a VPN)	https://github.com/signalapp/Signal-Android/blob/a74583b01e260944f699c4da03ba4e8ce04de32b/app/src/main/AndroidManifest.xml	2026-11-09
+org.briarproject.briar.android	wireguard	no (not a VPN)	https://code.briarproject.org/briar/briar/-/blob/fbfebc4242f09e996a867de7988683628d426534/bramble-api/src/main/java/org/briarproject/bramble/api/plugin/TorConstants.java	2026-11-09
+io.nekohasekai.sfa	proxy-label	no switch; mode follows the profile	https://github.com/SagerNet/sing-box-for-android/blob/a548a7903e96266a0046018562c73b192edbfc18/app/src/main/java/io/nekohasekai/sfa/database/Settings.kt#L150-L165	2026-11-09
+io.nekohasekai.sfa	port-configurable	yes (ports are in the profile)	https://github.com/SagerNet/sing-box-for-android/blob/a548a7903e96266a0046018562c73b192edbfc18/app/src/main/java/io/nekohasekai/sfa/database/Settings.kt#L160-L165	2026-11-09
+io.nekohasekai.sfa	auth	optional (profile users; no-auth when none)	https://github.com/SagerNet/sing/blob/03a6cce64bf744023af9e2691fb11afd405b9061/protocol/socks/handshake.go#L186-L193	2026-11-09
+io.nekohasekai.sfa	proxy-in-vpn	profile	https://github.com/SagerNet/sing-box-for-android/blob/a548a7903e96266a0046018562c73b192edbfc18/app/src/main/java/io/nekohasekai/sfa/database/Settings.kt#L160-L165	2026-11-09
+com.github.dyhkwong.sagernet	proxy-label	Proxy only	https://github.com/dyhkwong/Exclave/blob/d0ec3f2d6212ee20dca2301b206b86710784a409/app/src/main/res/values/strings.xml#L45	2026-11-09
+com.github.dyhkwong.sagernet	port-configurable	yes	https://github.com/dyhkwong/Exclave/blob/d0ec3f2d6212ee20dca2301b206b86710784a409/app/src/main/java/io/nekohasekai/sagernet/database/DataStore.kt#L202-L211	2026-11-09
+com.follow.clash	proxy-label	VPN switch off starts ProxyService	https://github.com/chen08209/FlClash/blob/be84736605527034689c95bf27828ff27d912c5e/android/app/src/main/kotlin/com/follow/clash/ServiceController.kt#L73-L79	2026-11-09
+io.github.romanvht.byedpi	proxy-label	Proxy	https://github.com/romanvht/ByeByeDPI/blob/96a3c1ff555043d915af814aa4f0e9a572c89aba/app/src/main/res/values/arrays.xml#L31-L34	2026-11-09
+io.github.romanvht.byedpi	wireguard	no (not a tunnel)	searched, not found: https://github.com/romanvht/ByeByeDPI/tree/96a3c1ff555043d915af814aa4f0e9a572c89aba/app/src/main	2026-11-09
+moe.nb4a	proxy-label	Proxy only	https://github.com/MatsuriDayo/NekoBoxForAndroid/blob/5768494d8ae3c74a057bb6d46c0f8dc071b0d821/app/src/main/res/values/strings.xml#L53	2026-11-09
+moe.nb4a	port-configurable	yes	https://github.com/MatsuriDayo/NekoBoxForAndroid/blob/5768494d8ae3c74a057bb6d46c0f8dc071b0d821/app/src/main/java/io/nekohasekai/sagernet/database/DataStore.kt#L127-L129	2026-11-09
+com.v2ray.ang	proxy-label	Proxy only	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/res/values/strings.xml#L479	2026-11-09
+com.v2ray.ang.fdroid	proxy-label	Proxy only	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/res/values/strings.xml#L479	2026-11-09
+org.amnezia.vpn	proxy-in-vpn	no (local proxy not supported on Android)	https://github.com/amnezia-vpn/amnezia-client/blob/ac175c8a8147cfe56f98c8372ec17ea2ba00bb02/client/core/controllers/localProxyController.cpp#L509-L514	2026-11-09
+org.amnezia.awg	modes	vpn (GoBackend VpnService)	https://github.com/amnezia-vpn/amneziawg-android/blob/5c16489e2cd9ed3a0a7a27c7445bba5238132f86/tunnel/src/main/java/org/amnezia/awg/backend/GoBackend.java#L492	2026-11-09
+org.amnezia.awg	proxy-in-vpn	no (tun goes to amneziawg-go)	https://github.com/amnezia-vpn/amneziawg-android/blob/5c16489e2cd9ed3a0a7a27c7445bba5238132f86/tunnel/src/main/java/org/amnezia/awg/backend/GoBackend.java#L417	2026-11-09
+com.github.metacubex.clash.meta	port-configurable	yes (profile or override)	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/043a6072225405b285a73e3d7b7e53431ccfc04c/core/src/main/java/com/github/kr328/clash/core/model/ConfigurationOverride.kt#L24	2026-11-09
+com.github.metacubex.clash.meta	proxy-in-vpn	profile (both services load the profile)	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/043a6072225405b285a73e3d7b7e53431ccfc04c/app/src/main/java/com/github/kr328/clash/util/Clash.kt#L14-L24	2026-11-09
+com.github.metacubex.clash.meta	wireguard	no (.conf not parsed)	searched, not found: https://github.com/MetaCubeX/ClashMetaForAndroid/tree/043a6072225405b285a73e3d7b7e53431ccfc04c/core/src/main	2026-11-09
+com.github.shadowsocks	proxy-label	Proxy only	https://github.com/shadowsocks/shadowsocks-android/blob/970eb2bf127fe68463d90c2b4d4a06f76d451160/core/src/main/res/values/strings.xml#L10	2026-11-09
+com.github.shadowsocks	port-configurable	yes	https://github.com/shadowsocks/shadowsocks-android/blob/970eb2bf127fe68463d90c2b4d4a06f76d451160/core/src/main/java/com/github/shadowsocks/preference/DataStore.kt#L68-L70	2026-11-09
+com.github.shadowsocks	wireguard	no	searched, not found: https://github.com/shadowsocks/shadowsocks-android/tree/970eb2bf127fe68463d90c2b4d4a06f76d451160/core/src/main	2026-11-09
+com.nebula.karing	proxy-label	TUN switch (inferred)	https://github.com/KaringX/karing/blob/accbdfc05a999eaa3526aadb0aea994b3eafb7f5/lib/screens/home_screen_widgets.dart#L1064-L1069	2026-11-09
+com.nebula.karing	udp	yes? (upstream sing; Karing's fork not read)	https://github.com/SagerNet/sing/blob/03a6cce64bf744023af9e2691fb11afd405b9061/protocol/socks/handshake.go#L230	2026-11-09
+com.nebula.karing	domain-names	yes? (upstream sing; Karing's fork not read)	https://github.com/SagerNet/sing/blob/03a6cce64bf744023af9e2691fb11afd405b9061/common/metadata/socksaddr.go#L6	2026-11-09
+org.bepass.oblivion	wireguard	no (.conf not parsed in the app)	searched, not found: https://github.com/bepass-org/oblivion/tree/739da893a20e61289f09904045bedfd284727d8b/lib	2026-11-09
+de.unboundtech.defyxvpn	wireguard	no (.conf not parsed in the app)	searched, not found: https://github.com/UnboundTechCo/defyxVPN/tree/1008ea8308b38f7ae31e73f26e6f019bb9af7331/lib	2026-11-09
+com.MahsaNet.MahsaNG	proxy-label	Proxy only (stale)	https://github.com/GFW-knocker/MahsaNG/blob/ecfef2c5c002aa613ee04fbfd1037eda728d9d7b/V2rayNG/app/src/main/res/values/arrays.xml#L145	2026-11-09
+com.MahsaNet.MahsaNG	port-configurable	yes (stale)	https://github.com/GFW-knocker/MahsaNG/blob/ecfef2c5c002aa613ee04fbfd1037eda728d9d7b/V2rayNG/app/src/main/kotlin/com/v2ray/ang/service/V2RayVpnService.kt#L224	2026-11-09
+com.MahsaNet.MahsaNG	domain-names	yes? (Xray SOCKS inbound)	https://github.com/XTLS/Xray-core/blob/a4a3dff5b20c2faae567b742c172c7b95e75c083/proxy/socks/protocol.go#L42	2026-11-09
+com.MahsaNet.MahsaNG	proxy-in-vpn	yes (stale: tun2socks to the SOCKS port)	https://github.com/GFW-knocker/MahsaNG/blob/ecfef2c5c002aa613ee04fbfd1037eda728d9d7b/V2rayNG/app/src/main/kotlin/com/v2ray/ang/service/V2RayVpnService.kt#L228	2026-11-09
+de.blinkt.openvpn	proxy-in-vpn	no (only a Unix management socket)	https://github.com/schwabe/ics-openvpn/blob/f669267e2547fddca04d0bc699739137085eb633/main/src/main/java/de/blinkt/openvpn/core/OpenVpnManagementThread.java#L148	2026-11-09
+de.blinkt.openvpn	wireguard	no	searched, not found: https://github.com/schwabe/ics-openvpn/tree/f669267e2547fddca04d0bc699739137085eb633/main/src/main	2026-11-09
+net.mullvad.mullvadvpn	proxy-in-vpn	no	searched, not found: https://github.com/mullvad/mullvadvpn-app/tree/aa47f606b1a159214c7279344128119fa91be5fd/android	2026-11-09
+org.outline.android.client	wireguard	no (Shadowsocks access keys)	searched, not found: https://github.com/Jigsaw-Code/outline-apps/tree/99cdcdc4c0431ec1e71a8e8fa96e6022ed5e67de/client/src	2026-11-09
+com.windscribe.vpn	proxy-in-vpn	no	searched, not found: https://github.com/Windscribe/Android-App/tree/2c585dd5979ba93655853d56d849ed8ad2c964cb/base/src/main	2026-11-09
+pan.alexander.tordnscrypt	proxy-in-vpn	yes (one tor.conf for every mode)	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/assets/tor.mp3	2026-11-09
+pan.alexander.tordnscrypt	wireguard	no	searched, not found: https://github.com/Gedsh/InviZible/tree/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main	2026-11-09
+pan.alexander.tordnscrypt.stable	proxy-in-vpn	yes (one tor.conf for every mode)	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/assets/tor.mp3	2026-11-09
+pan.alexander.tordnscrypt.stable	wireguard	no	searched, not found: https://github.com/Gedsh/InviZible/tree/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main	2026-11-09
+pan.alexander.tordnscrypt.gp	proxy-in-vpn	yes (one tor.conf for every mode)	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/assets/tor.mp3	2026-11-09
+pan.alexander.tordnscrypt.gp	wireguard	no	searched, not found: https://github.com/Gedsh/InviZible/tree/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main	2026-11-09
+com.wireguard.android	modes	vpn (GoBackend VpnService)	https://github.com/WireGuard/wireguard-android/blob/0856e2ecf7f3cce0e9c9014db3ad7665669adce5/tunnel/src/main/java/com/wireguard/android/backend/GoBackend.java#L380	2026-11-09
+com.wireguard.android	proxy-in-vpn	no (tun goes to wireguard-go)	https://github.com/WireGuard/wireguard-android/blob/0856e2ecf7f3cce0e9c9014db3ad7665669adce5/tunnel/src/main/java/com/wireguard/android/backend/GoBackend.java#L337	2026-11-09
+org.telegram.messenger.web	wireguard	no (not a VPN)	https://github.com/DrKLO/Telegram/blob/7be672ead283d022812d75c729d3a04dd4c2a2c6/TMessagesProj/src/main/AndroidManifest.xml	2026-11-09
+org.telegram.messenger	wireguard	no (not a VPN)	https://github.com/DrKLO/Telegram/blob/7be672ead283d022812d75c729d3a04dd4c2a2c6/TMessagesProj/src/main/AndroidManifest.xml	2026-11-09
+org.thunderdog.challegram	wireguard	no (not a VPN)	https://github.com/TGX-Android/Telegram-X/blob/bf82021249e358337b8e4d3f219e0d2c9561eb79/app/src/main/AndroidManifest.xml	2026-11-09
+org.visadahyu.datapavan	wireguard	no (no network access)	https://github.com/visadahyu/datapavan/blob/2f081b098694b56632bf29c72e51a79bd9001b9c/docs/decisions/0029-network-access-for-v0.2.md#L10	2026-11-09
+fr.husi	port-configurable	yes	https://github.com/xchacha20-poly1305/husi/blob/0822cc7b34ae3c57ee2840d553ca8cf31cf64867/composeApp/src/commonMain/kotlin/fr/husi/database/preference/PreferenceProxy.kt#L109-L122	2026-11-09
+io.nekohasekai.sagernet	port-configurable	yes	https://github.com/SagerNet/SagerNet/blob/3593fc10b6889367774f37b32c2e5f89fedb5226/app/src/main/java/io/nekohasekai/sagernet/database/DataStore.kt#L132-L141	2026-11-09
+io.nekohasekai.sagernet	domain-names	yes (SagerNet v2ray-core)	https://github.com/SagerNet/v2ray-core/blob/26e36b1cb46f387cacd65c1a5900be592913f842/proxy/socks/protocol.go#L39	2026-11-09
+io.nekohasekai.sagernet	proxy-in-vpn	yes (SOCKS inbound added in every mode)	https://github.com/SagerNet/SagerNet/blob/3593fc10b6889367774f37b32c2e5f89fedb5226/app/src/main/java/io/nekohasekai/sagernet/fmt/ConfigBuilder.kt#L245	2026-11-09
+com.cloudflare.onedotonedotonedotone	wireguard	no? (docs offer no export)	https://developers.cloudflare.com/warp-client/warp-modes/	2026-11-09

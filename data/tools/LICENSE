@@ -1,0 +1,6 @@
+SPDX-License-Identifier: CC0-1.0
+
+How known VPN, proxy and circumvention apps run on Android (their modes, local proxy ports, password
+options and UDP support), collected by the Datapavan project from each app's own source code and
+documentation, and dedicated to the public domain under CC0 1.0
+(https://creativecommons.org/publicdomain/zero/1.0/). Recorded in ADR 0015 and DESIGN.md 13.2.
