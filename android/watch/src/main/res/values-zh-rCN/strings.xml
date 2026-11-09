@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tagline">查看您手机上的每个应用连接到哪里。</string>
+    <string name="status_on">Watch 已开启。</string>
+    <string name="status_off">Watch 已关闭。</string>
+    <string name="turn_on">开启</string>
+    <string name="turn_off">关闭</string>
+    <string name="consent_refused">Android 未允许 Watch 启动。如果另一个 VPN 应用设置为始终开启，请先关闭该设置。</string>
+</resources>

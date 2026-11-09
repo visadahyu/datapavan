@@ -60,7 +60,11 @@ rust_gates() {
 android_gates() {
     echo "== Android: plain English strings (scripts/plain-language.py)"
     python3 -I "$ROOT/scripts/plain-language.py" "$ROOT/android/app/src/main/res/values/strings.xml"
-    echo "== Android: lint, unit tests, APK and bundle builds, permission guard, native-library check"
+    python3 -I "$ROOT/scripts/plain-language.py" "$ROOT/android/watch/src/main/res/values/strings.xml"
+    echo "== Android: Watch's colours are the audit app's (watch/.../ui/Theme.kt)"
+    diff <(grep -o 'Color(0x[0-9A-F]*)' "$ROOT/android/app/src/main/java/org/visadahyu/datapavan/ui/Theme.kt") \
+        <(grep -o 'Color(0x[0-9A-F]*)' "$ROOT/android/watch/src/main/java/org/visadahyu/datapavan/watch/ui/Theme.kt")
+    echo "== Android: lint, unit tests, APK and bundle builds of both apps, permission guards, native-library check"
     cd "$ROOT/android"
     ./gradlew --no-daemon --stacktrace \
         lintDebug lintRelease testDebugUnitTest \

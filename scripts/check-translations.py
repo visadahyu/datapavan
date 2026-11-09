@@ -15,7 +15,8 @@ from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-RES = ROOT / "android/app/src/main/res"
+# The resources of both apps: the audit app and Watch (ADR 0029).
+RESOURCES = [ROOT / "android/app/src/main/res", ROOT / "android/watch/src/main/res"]
 META = ROOT / "fastlane/metadata/android"
 SITE = ROOT / "site/data/text"
 
@@ -58,12 +59,15 @@ def read_resources(path):
     return strings, plurals
 
 
-def check_resources(code, directory, forms, problems):
-    path = RES / directory / "strings.xml"
+def check_resources(code, res, directory, forms, problems):
+    path = res / directory / "strings.xml"
     if not path.exists():
         problems.append(f"{code}: {path.relative_to(ROOT)} is missing")
         return
-    base_strings, base_plurals = read_resources(RES / "values/strings.xml")
+    # Problems name the app when it is not the audit app.
+    if res != RESOURCES[0]:
+        code = f"{code} ({res.relative_to(ROOT / 'android').parts[0]})"
+    base_strings, base_plurals = read_resources(res / "values/strings.xml")
     try:
         strings, plurals = read_resources(path)
     except ET.ParseError as error:
@@ -157,7 +161,8 @@ def main():
     problems = []
     for code in wanted:
         directory, store, stem, forms = LANGUAGES[code]
-        check_resources(code, directory, forms, problems)
+        for res in RESOURCES:
+            check_resources(code, res, directory, forms, problems)
         check_store(code, store, problems)
         check_site(code, stem, problems)
     for problem in problems:

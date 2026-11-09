@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tagline">ببینید هر برنامه روی گوشی شما به کجا وصل می‌شود.</string>
+    <string name="status_on">برنامه Watch روشن است.</string>
+    <string name="status_off">برنامه Watch خاموش است.</string>
+    <string name="turn_on">روشن کردن</string>
+    <string name="turn_off">خاموش کردن</string>
+    <string name="consent_refused">اندروید اجازه نداد Watch شروع به کار کند. اگر برنامه وی‌پی‌ان دیگری طوری تنظیم شده که همیشه روشن بماند، اول آن تنظیم را خاموش کنید.</string>
+</resources>

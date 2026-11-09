@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tagline">Mira a dónde se conecta cada app de tu teléfono.</string>
+    <string name="status_on">Watch está activado.</string>
+    <string name="status_off">Watch está desactivado.</string>
+    <string name="turn_on">Activar</string>
+    <string name="turn_off">Desactivar</string>
+    <string name="consent_refused">Android no dejó que Watch se iniciara. Si otra app de VPN está configurada para estar siempre activa, desactiva primero ese ajuste.</string>
+</resources>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The product's name, the same in every language (docs/NAMES.md). -->
+    <string name="app_name" translatable="false">Datapavan Watch</string>
+    <string name="tagline">See where each app on your phone connects.</string>
+    <!-- Whether Watch's VPN is running. -->
+    <string name="status_on">Watch is on.</string>
+    <string name="status_off">Watch is off.</string>
+    <string name="turn_on">Turn on</string>
+    <string name="turn_off">Turn off</string>
+    <!-- After Android refused the VPN consent, or another app's always-on VPN kept Watch from starting. -->
+    <string name="consent_refused">Android did not let Watch start. If another VPN app is set to stay always on, turn that setting off first.</string>
+</resources>

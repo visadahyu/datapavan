@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tagline">Sehen Sie, wohin sich jede App auf Ihrem Telefon verbindet.</string>
+    <string name="status_on">Watch ist an.</string>
+    <string name="status_off">Watch ist aus.</string>
+    <string name="turn_on">Einschalten</string>
+    <string name="turn_off">Ausschalten</string>
+    <string name="consent_refused">Android hat Watch nicht starten lassen. Wenn eine andere VPN-App immer aktiv bleiben soll, schalten Sie diese Einstellung zuerst aus.</string>
+</resources>

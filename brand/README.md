@@ -22,6 +22,11 @@ The Android launcher icon (`android/app/src/main/res/drawable/ic_launcher_foregr
 same DA outline, 54 dp tall inside the 108 dp adaptive-icon canvas, so it stays within the safe zone
 under every launcher mask.
 
+Datapavan Watch, the separate VPN app (ADR 0029), uses the shield instead, so that the two icons differ
+on a home screen: the shield in clay on lapis with DA in lapis
+(`android/watch/src/main/res/drawable/ic_launcher_foreground.xml`), 60 dp tall, its top corners 31.3 dp
+from the centre, inside the 33 dp safe zone. Its themed icon is the shield with DA cut out.
+
 ## Colours
 
 | Name | Hex | Use |

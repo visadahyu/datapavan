@@ -120,7 +120,9 @@ jobs:
       - name: Quality gates
         run: scripts/check.sh all
 
-      # On a real Android system: the smoke test (overview shown, no INTERNET permission, no crash),
+      # On a real Android system: Watch's smoke test (every language, its tunnel on and off, nothing
+      # but Watch inside it, scripts/smoke-watch.sh), then the audit app's smoke test (overview shown,
+      # no INTERNET permission, no crash),
       # then the audit verification, which gives a test fixture app risky access and checks that the
       # audit reports it, the remediation plan's hand-off, journal and undo with the same fixture, the
       # launcher shortcuts as Android hands them to the launcher, then screenshots in every language with
@@ -153,6 +155,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: |
+            scripts/smoke-watch.sh
             scripts/smoke.sh
             scripts/verify-audit.sh
             scripts/verify-plan.sh

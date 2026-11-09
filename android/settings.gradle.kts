@@ -33,3 +33,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "datapavan"
 include(":app")
+// Datapavan Watch, the separate app that holds the VPN and the network access (ADR 0029).
+include(":watch")

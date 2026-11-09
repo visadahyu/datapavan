@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        Datapavan Watch (ADR 0029): the VPN, and the only part of Datapavan with network access.
+        Its permissions are those of ADR 0034; build.gradle.kts fails the build if the merged manifest
+        holds any other. (AndroidX adds one app-internal signature permission for non-exported
+        receivers.)
+        allowBackup=false disables cloud backup; data_extraction_rules also excludes device-to-device
+        transfer on Android 12+, and backup_rules everything on Android 10-11.
+    -->
+    <!-- Sockets, to pass each app's traffic on to where it was going (from W2). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Which network is beneath the tunnel, and when it changes (from W2). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <application
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Watch">
+
+        <!--
+            EmojiCompat would look up a downloadable emoji font through the Google Play services font
+            provider on every start. Datapavan never talks to Google, so it is disabled, as in the
+            audit app.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+                tools:node="remove" />
+        </provider>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Only Android may bind to it (BIND_VPN_SERVICE). -->
+        <service
+            android:name=".WatchVpnService"
+            android:exported="false"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <!-- Watch may be the always-on VPN (docs/VPN.md, "Connectivity and fail mode"). -->
+            <meta-data
+                android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON"
+                android:value="true" />
+        </service>
+    </application>
+</manifest>
