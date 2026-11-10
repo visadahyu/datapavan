@@ -66,6 +66,9 @@ trap cleanup EXIT
 fail() {
     echo "WATCH CHECK FAILED: $*" >&2
     adb logcat -d -b crash 2>/dev/null | tail -40 >&2 || true
+    # A process Android ended leaves no crash: how Watch's last ones ended, with no destination.
+    echo "How Watch's process last ended:" >&2
+    adb shell dumpsys activity exit-info "$PKG" 2>/dev/null | tr -d '\r' | grep -E 'timestamp=|reason=' | head -6 >&2 || true
     # On a phone the flows name other apps' destinations, which stay on the phone: counters only.
     local filter=.
     is_emulator || filter='^(running|counters)'

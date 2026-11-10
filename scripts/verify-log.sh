@@ -44,6 +44,9 @@ trap cleanup EXIT
 fail() {
     echo "LOG CHECK FAILED: $*" >&2
     adb logcat -d -b crash 2>/dev/null | tail -40 >&2 || true
+    # A process Android ended leaves no crash: how Watch's last ones ended, with no destination.
+    echo "How Watch's process last ended:" >&2
+    adb shell dumpsys activity exit-info "$PKG" 2>/dev/null | tr -d '\r' | grep -E 'timestamp=|reason=' | head -6 >&2 || true
     exit 1
 }
 
