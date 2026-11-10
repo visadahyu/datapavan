@@ -538,6 +538,17 @@ it: `naming` (what names a flow), `logbook` (each flow's bytes, the segments and
 `udp` (the two paths), and `upstream` (the engine's own connections, the one place W6 and W7 extend). A
 line-by-line comparison of the code before and after finds only imports, visibility within the engine and
 line wrapping changed.
+The end-to-end check after a network switch failed on CI in four runs of five that day, and the reasons lay
+in the check, not in the engine. CI's emulator has Wi-Fi as its default network and brought mobile data up
+only once Wi-Fi was gone, at times not within 40 s, so Android had no network ("Active default network:
+none") and nothing could pass, with Watch or without; the emulators on this computer had no Wi-Fi at all, so
+their switch had changed nothing. And seven checks ran `flows | grep -qE` under `pipefail`: a `grep -q` that
+found its line early stopped reading, the command before it failed on SIGPIPE, and a flow in the list looked
+missing. `scripts/verify-watch.sh` now keeps mobile data up beside Wi-Fi during the switch, as most phones
+do, waits for Android to have another default network, prints Android's networks before and after, and reads
+lists whole before searching them, again for a few seconds while Android names a flow's app. On this
+computer's Android 15 emulator with Wi-Fi as its default, the switch now really happens, and the check
+passes in full.
 
 | # | Milestone | Done when |
 |---|---|---|
