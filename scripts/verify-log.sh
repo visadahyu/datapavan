@@ -137,11 +137,12 @@ grep -q '^pong$' <<<"$answer" || fail "no answer over TCP from the test server"
 answer=$(timeout 8 adb shell "echo watch-log | nc -u -w 3 $HOST $((PORT + 1))" | tr -d '\r' || true)
 grep -q '^watch-log$' <<<"$answer" || fail "no UDP echo"
 
-# The TCP flow has ended; the UDP flow stays open for a minute, so the log gets its segment so far.
+# The TCP flow has ended, but its rewriting stays for half a minute, for what Android's stack still
+# sends, and the UDP flow stays open for a minute: the log gets each one's segment so far.
 watch_dump log-flush | grep -q '^log-flushed$' || fail "the log did not take the engine's records"
 today=$(watch_dump log-today | sed -n 's/^log-record //p')
-grep -qE "^tcp $SHELL_UID $HOST:$PORT up=22 down=[1-9][0-9]* ended " <<<"$today" ||
-    fail "the log has no ended TCP flow of the shell with its 22 bytes up: $(grep -c . <<<"$today") records"
+grep -qE "^tcp $SHELL_UID $HOST:$PORT up=22 down=[1-9][0-9]* (continues|ended) " <<<"$today" ||
+    fail "the log has no TCP flow of the shell with its 22 bytes up: $(grep -c . <<<"$today") records"
 # A network change, as on a freshly started emulator, ends UDP flows: then the segment is the whole flow.
 grep -qE "^udp $SHELL_UID $HOST:$((PORT + 1)) up=10 down=10 (continues|ended) " <<<"$today" ||
     fail "the log has no segment of the shell's UDP flow with 10 bytes each way; the shell's records: $(grep "^[a-z]* $SHELL_UID " <<<"$today" | tr '\n' ';')"
@@ -190,6 +191,24 @@ for way, android, log in (("up", android_up, log_up), ("down", android_down, log
 sys.exit(0 if ok else 1)
 PY
 echo "ok: over a scripted session the log's bytes are within 5 % of Android's own count"
+# Each download's packets on the tunnel hold at least its payload: none of them was counted after the
+# flow's last segment was written (as before 2026-11-10, when a download lost up to a quarter).
+watch_dump log-flush >/dev/null
+watch_dump log-today | sed -n 's/^log-record //p' | python3 -I -c '
+import collections, re, sys
+down, wire = collections.Counter(), collections.Counter()
+for line in sys.stdin:
+    fields = line.split()
+    flow = re.search(r" flow=(\d+)", line)
+    if fields[:3] == ["tcp", sys.argv[1], sys.argv[2]] and flow:
+        down[flow.group(1)] += int(re.search(r" down=(\d+)", line).group(1))
+        wire[flow.group(1)] += int(re.search(r" wire=\d+/(\d+)", line).group(1))
+short = [f"flow {f}: {wire[f]} on the tunnel for {down[f]} received" for f in down if down[f] >= 1_000_000 and wire[f] < down[f]]
+if short:
+    print("\n".join(short))
+sys.exit(1 if short or len([f for f in down if down[f] >= 1_000_000]) < 3 else 0)' "$SHELL_UID" "$HOST:$PORT" ||
+    fail "a download's packets on the tunnel are fewer than its payload"
+echo "ok: each download's packets on the tunnel hold its whole payload"
 
 # The database and its journal, read as Watch itself could, hold no destination in the clear.
 files=$(mktemp -d)

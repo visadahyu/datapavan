@@ -328,7 +328,7 @@ class WatchVpnService : VpnService() {
         is LogRecord.Segment -> listOf(
             if (record.protocol == 6) "tcp" else "udp", record.uid ?: "-", "${record.address.hostAddress}:${record.port}",
             "up=${record.up}", "down=${record.down}", if (record.continues) "continues" else "ended",
-            "wire=${record.wireUp}/${record.wireDown}", record.name.ifEmpty { "-" },
+            "wire=${record.wireUp}/${record.wireDown}", record.name.ifEmpty { "-" }, "flow=${record.flow}",
         ).joinToString(" ")
         is LogRecord.Lookups -> "lookups ${record.uid ?: "-"} ${record.count} wire=${record.wireUp}/${record.wireDown}"
     }

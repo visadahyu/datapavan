@@ -203,6 +203,8 @@ pub(crate) struct FlowBytes {
     down: AtomicU64,
     wire_up: AtomicU64,
     wire_down: AtomicU64,
+    /// When the tunnel last carried a packet of the flow, in milliseconds since 1970; 0 for never.
+    last: AtomicU64,
 }
 
 impl FlowBytes {
@@ -216,10 +218,12 @@ impl FlowBytes {
 
     fn add_wire_up(&self, n: usize) {
         self.wire_up.fetch_add(n as u64, Ordering::Relaxed);
+        self.last.store(now_ms(), Ordering::Relaxed);
     }
 
     fn add_wire_down(&self, n: usize) {
         self.wire_down.fetch_add(n as u64, Ordering::Relaxed);
+        self.last.store(now_ms(), Ordering::Relaxed);
     }
 
     /// Up, down, and the tunnel's up and down.
@@ -571,6 +575,17 @@ impl Shared {
             return;
         };
         let end = now_ms().max(live.start);
+        self.write(segment(live, end, false));
+    }
+
+    /// A TCP flow whose rewriting is gone: its last segment holds every packet the tunnel carried for
+    /// it, and ends at the last of them.
+    fn finish_closed(&self, id: u64) {
+        let Some(live) = lock(&self.live).remove(&id) else {
+            return;
+        };
+        let last = live.bytes.last.load(Ordering::Relaxed);
+        let end = if last == 0 { now_ms() } else { last }.max(live.start);
         self.write(segment(live, end, false));
     }
 
@@ -1428,19 +1443,25 @@ async fn accept(
             continue;
         };
         let (shared, nat) = (Arc::clone(&shared), Arc::clone(&nat));
+        let id = upstream.opened.id;
         tokio::spawn(async move {
             relay(app, upstream, &shared).await;
-            // Android's last FIN and ACK still need rewriting for a while; then the port is free.
+            // What Android's stack still holds for the app, then its last FIN and ACK, still pass the
+            // tunnel and need rewriting for a while; then the port is free. Only then is the flow's last
+            // segment written: earlier, the packets of that while were counted after it, and missing
+            // from the log (up to a socket's send buffer on each download).
             tokio::time::sleep(CLOSE_LINGER).await;
             lock(&nat).remove_if(port, entry.app, entry.destination);
+            shared.finish_closed(id);
         });
     }
 }
 
-/// Relays one connection both ways, counting the bytes as they pass. The app's first bytes are read
-/// for a TLS hello (at most [`tls::MAX_HELLO`]), even when DNS named the flow, since only the hello
-/// tells whether ECH hid the name; nothing is held back for that, so a protocol in which the server
-/// speaks first is not delayed.
+/// Relays one connection both ways, counting the bytes as they pass, until both directions end; the
+/// caller writes the flow's last segment once the tunnel is done with it. The app's first bytes are
+/// read for a TLS hello (at most [`tls::MAX_HELLO`]), even when DNS named the flow, since only the
+/// hello tells whether ECH hid the name; nothing is held back for that, so a protocol in which the
+/// server speaks first is not delayed.
 async fn relay(app: TcpStream, upstream: Upstream, shared: &Arc<Shared>) {
     let _ = app.set_nodelay(true);
     let _ = upstream.stream.set_nodelay(true);
@@ -1494,7 +1515,6 @@ async fn relay(app: TcpStream, upstream: Upstream, shared: &Arc<Shared>) {
         let _ = app_write.shutdown().await;
     };
     tokio::join!(up, down);
-    shared.finish(upstream.opened.id);
 }
 
 /// Wraps each answer of a UDP flow in an IP packet to the app, until the flow falls silent or the
@@ -1831,6 +1851,54 @@ mod tests {
         assert_eq!(wire, vec![[140, 5_200], [0, 0]]);
         assert!(lock(&shared.live).is_empty());
         assert!(shared.take_log().is_none());
+    }
+
+    /// What Android's stack sends after the relay ended (the rest of a download, the last FIN and ACK)
+    /// reaches the flow's last segment, which ends at the last packet, not when the rewriting went.
+    #[test]
+    fn a_closed_flows_last_segment_holds_what_the_tunnel_carried_after_its_relay() {
+        let shared = shared();
+        let Some(bytes) = shared.record(Flow {
+            id: 1,
+            protocol: TCP,
+            app: SocketAddr::from(([10, 215, 173, 1], 40_000)),
+            destination: SocketAddr::from(([198, 51, 100, 9], 443)),
+            uid: Some(UID),
+            outcome: Outcome::Opened,
+            name: None,
+            named_by: NamedBy::Unknown,
+            ech: Ech::Absent,
+            dns: DnsUse::None,
+            resolver: None,
+            network: None,
+        }) else {
+            unreachable!("an open flow is live")
+        };
+        bytes.add_down(2_000_000);
+        bytes.add_wire_down(1_500_000);
+        // The relay is done; the rest of the download is still on its way to the app.
+        bytes.add_wire_down(570_000);
+        bytes.add_wire_up(19_000);
+        let last = bytes.last.load(Ordering::Relaxed);
+        assert!(last > 0);
+        // The rewriting lingers on, silent, before it goes.
+        std::thread::sleep(Duration::from_millis(20));
+        shared.finish_closed(1);
+        shared.finish_closed(1);
+        let records = std::mem::take(&mut *lock(&shared.pending_log));
+        let [
+            Record::Segment {
+                bytes,
+                end,
+                continues: false,
+                ..
+            },
+        ] = records.as_slice()
+        else {
+            unreachable!("one last segment: {records:?}")
+        };
+        assert_eq!(*bytes, [0, 2_000_000, 19_000, 2_070_000]);
+        assert_eq!(*end, last);
     }
 
     /// A DNS response for `name` with one A record, `address`.
