@@ -486,6 +486,17 @@ meet the old connection in Android's TIME_WAIT. A connection whose rewriting was
 handed it over now ends its flow in the log at once. A unit test plays both connections on the loopback, and
 `scripts/verify-watch.sh` connects the shell straight to the listener, found in `/proc/net/tcp`, and sees it
 closed and counted. Both scripts pass in full with it on Android 11, 15 and 17.
+Watch's screen, the same day, says of earlier days only what holds on the phone. It said always that they
+open only while the phone is unlocked, which is false on a phone with no screen lock, and on one that
+refused a key tied to the lock. Now it says that once the log's key pair exists, tied to the lock, on a
+phone with a screen lock; on a phone with none, that they can be opened at any time and would open only
+while it is unlocked with one; where the phone refused, that they can be opened at any time; before the key
+pair exists, nothing; and with retention none, only that Watch keeps no record. The screen lock is read each
+time the screen opens; adding one later also shuts records already kept, which verify-log.sh shows on
+Android 11, 15 and 17. "Screen lock" is Android's own term in each language, from the Settings app of the
+Android 17 emulator. The three new sentences were translated into seven languages, reviewed alone by two
+models and settled by a third. `scripts/verify-log.sh` reads the screen: without a PIN it must not say "only
+while the phone is unlocked", and with one it must.
 
 | # | Milestone | Done when |
 |---|---|---|
