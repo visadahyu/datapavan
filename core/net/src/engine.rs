@@ -54,6 +54,9 @@ pub const DNS6: Ipv6Addr = Ipv6Addr::new(0xfd7a, 0x6470, 0x7761, 0, 0, 0, 0, 3);
 
 /// A UDP flow silent for this long is closed.
 const UDP_IDLE: Duration = Duration::from_secs(60);
+/// At most this many datagrams of a new UDP flow wait for its socket; more are dropped, as by a full
+/// queue. A lookup sends one, a QUIC handshake two or three.
+const UDP_WAITING: usize = 32;
 /// How long a connection to a server may take before the app is told it is unreachable.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(60);
 /// How long a closed connection's rewriting stays, for the last FIN and ACK packets.
@@ -838,13 +841,49 @@ type Pending = Arc<Mutex<HashMap<u16, Upstream>>>;
 /// Initial packets read so far, with the flow's number.
 struct UdpFlow {
     socket: Arc<UdpSocket>,
-    quic: Option<(Opened, quic::Initial)>,
+    quic: Option<(Opened, Box<quic::Initial>)>,
     /// The app's UID, and the flow's bytes for the log (none for Watch's own DNS address).
     uid: Option<u32>,
     bytes: Option<Arc<FlowBytes>>,
 }
 
-type UdpFlows = Arc<Mutex<HashMap<(SocketAddr, SocketAddr), UdpFlow>>>;
+/// What a flow's QUIC Initial packets gave once they were read to the end, to be noted outside the
+/// table's lock.
+struct QuicRead {
+    opened: Opened,
+    read: ServerName,
+    was_quic: bool,
+}
+
+impl UdpFlow {
+    /// Reads a datagram that may still name the flow by its QUIC Initial packets.
+    fn read_quic(&mut self, payload: &[u8]) -> Option<QuicRead> {
+        let (opened, initial) = self.quic.as_mut()?;
+        let opened = *opened;
+        let read = initial.push(payload);
+        if read == ServerName::Incomplete {
+            return None;
+        }
+        let was_quic = initial.is_quic();
+        self.quic = None;
+        Some(QuicRead {
+            opened,
+            read,
+            was_quic,
+        })
+    }
+}
+
+/// A UDP flow in the engine's table: opening while Android names its app and its protected socket is
+/// made, off the event loop so that no other packet waits for that; then open.
+enum UdpEntry {
+    /// The flow's first datagrams, whole packets in the order the app sent them, at most
+    /// [`UDP_WAITING`]: they leave once the socket is there, and the app is known before the first does.
+    Opening(Vec<Vec<u8>>),
+    Open(UdpFlow),
+}
+
+type UdpFlows = Arc<Mutex<HashMap<(SocketAddr, SocketAddr), UdpEntry>>>;
 
 /// A UDP flow's two ends and its app's UID, for the task that relays its answers.
 struct UdpEnds {
@@ -1122,150 +1161,249 @@ impl Loop {
             return;
         };
         let key = (parsed.source, parsed.destination);
-        let existing = lock(&self.udp)
-            .get(&key)
-            .map(|flow| Arc::clone(&flow.socket));
-        let socket = if let Some(socket) = existing {
-            socket
-        } else {
-            let Some(socket) = self.open_udp(packet, parsed).await else {
-                return;
-            };
-            socket
+        let (socket, uid, bytes, quic) = {
+            let mut flows = lock(&self.udp);
+            match flows.get_mut(&key) {
+                Some(UdpEntry::Open(flow)) => (
+                    Arc::clone(&flow.socket),
+                    flow.uid,
+                    flow.bytes.clone(),
+                    flow.read_quic(payload),
+                ),
+                Some(UdpEntry::Opening(waiting)) => {
+                    if waiting.len() < UDP_WAITING {
+                        waiting.push(packet.to_vec());
+                    } else {
+                        Counters::add(&self.shared.counters.skipped, 1);
+                    }
+                    return;
+                }
+                None => {
+                    flows.insert(key, UdpEntry::Opening(vec![packet.to_vec()]));
+                    drop(flows);
+                    tokio::spawn(open_udp(
+                        key,
+                        Arc::clone(&self.tun),
+                        Arc::clone(&self.shared),
+                        Arc::clone(&self.udp),
+                        self.changes.clone(),
+                    ));
+                    return;
+                }
+            }
         };
-        self.read_quic(key, payload);
-        let (uid, bytes) = lock(&self.udp)
-            .get(&key)
-            .map_or((None, None), |flow| (flow.uid, flow.bytes.clone()));
+        note_quic(&self.shared, quic);
         if is_tunnel_dns(key.1.ip()) {
             self.shared.lookup(uid, packet.len());
         }
-        match socket.send(payload).await {
-            Ok(n) => {
-                Counters::add(&self.shared.counters.bytes_up, n as u64);
-                if let Some(bytes) = bytes {
-                    bytes.add_up(n);
-                    bytes.add_wire_up(packet.len());
-                }
-            }
-            Err(_) => {
-                if let Some(error) = packet::unreachable(packet, parsed, Unreachable::Host) {
-                    self.send(&error).await;
-                }
-            }
+        let sent = socket.send(payload).await;
+        if let Some(error) = count_sent(&self.shared, bytes.as_deref(), packet, parsed, sent) {
+            self.send(&error).await;
         }
     }
+}
 
-    /// Reads a datagram of a UDP flow that may still be named by its QUIC Initial packets.
-    fn read_quic(&self, key: (SocketAddr, SocketAddr), payload: &[u8]) {
-        let mut flows = lock(&self.udp);
-        let Some(flow) = flows.get_mut(&key) else {
-            return;
-        };
-        let Some((opened, initial)) = flow.quic.as_mut() else {
-            return;
-        };
-        let opened = *opened;
-        let read = initial.push(payload);
-        if read == ServerName::Incomplete {
-            return;
+/// Notes what a flow's QUIC Initial packets gave: the name of its hello, or that it could not be read.
+fn note_quic(shared: &Shared, quic: Option<QuicRead>) {
+    match quic {
+        Some(QuicRead {
+            opened,
+            read: ServerName::Found(hello),
+            ..
+        }) => shared.hello(opened, &hello, NamedBy::Quic),
+        Some(QuicRead { was_quic: true, .. }) => {
+            Counters::add(&shared.counters.quic_unread, 1);
         }
-        let was_quic = initial.is_quic();
-        flow.quic = None;
-        drop(flows);
-        match read {
-            ServerName::Found(hello) => self.shared.hello(opened, &hello, NamedBy::Quic),
-            _ if was_quic => Counters::add(&self.shared.counters.quic_unread, 1),
-            _ => {}
-        }
+        _ => {}
     }
+}
 
-    /// Opens a UDP flow's protected socket, asks Android whose the flow is, and starts relaying the
-    /// answers. The app gets an ICMP error when the destination cannot be reached.
-    async fn open_udp(&self, packet: &[u8], parsed: &Packet) -> Option<Arc<UdpSocket>> {
-        let (app, destination) = (parsed.source, parsed.destination);
-        let uid = owner(&self.shared, UDP, app, destination).await;
-        let Begun {
-            id,
-            name,
-            named_by,
-            network,
-        } = self.shared.begin(destination, uid);
-        let by_dns = (named_by == NamedBy::Dns)
-            .then_some(name.as_deref())
-            .flatten();
-        let (dns, resolver) = self.shared.dns_use(destination, by_dns);
-        let opened = Opened {
-            id,
-            port: destination.port(),
-            dns,
+/// Counts a datagram that left, or gives the ICMP error that tells the app its destination cannot be
+/// reached. One that found the socket's buffer full is dropped, as a full queue drops it.
+fn count_sent(
+    shared: &Shared,
+    bytes: Option<&FlowBytes>,
+    packet: &[u8],
+    parsed: &Packet,
+    sent: io::Result<usize>,
+) -> Option<Vec<u8>> {
+    match sent {
+        Ok(n) => {
+            Counters::add(&shared.counters.bytes_up, n as u64);
+            if let Some(bytes) = bytes {
+                bytes.add_up(n);
+                bytes.add_wire_up(packet.len());
+            }
+            None
+        }
+        Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+            Counters::add(&shared.counters.skipped, 1);
+            None
+        }
+        Err(_) => packet::unreachable(packet, parsed, Unreachable::Host),
+    }
+}
+
+/// Opens a UDP flow, off the event loop: asks Android whose it is, opens its protected socket, sends
+/// the datagrams that waited for it, and starts relaying the answers. The app gets an ICMP error when
+/// the destination cannot be reached.
+async fn open_udp(
+    key: (SocketAddr, SocketAddr),
+    tun: Arc<Tun>,
+    shared: Arc<Shared>,
+    flows: UdpFlows,
+    changes: watch::Receiver<u64>,
+) {
+    let (app, destination) = key;
+    let uid = owner(&shared, UDP, app, destination).await;
+    let (opened, mut flow) = begin_udp(&shared, app, destination, uid);
+    let id = opened.id;
+    let connected = match shared.target(destination) {
+        Some(target) => connect_udp(&shared, target).await,
+        None => Err(io::ErrorKind::NetworkUnreachable.into()),
+    };
+    let socket = match connected {
+        Ok(socket) => Arc::new(socket),
+        Err(error) => {
+            flow.outcome = if is_unreachable(&error) {
+                Outcome::Unreachable
+            } else {
+                Outcome::Failed
+            };
+            udp_failed(key, flow, &tun, &shared, &flows).await;
+            return;
+        }
+    };
+    let bytes = shared.record(flow);
+    // The tunnel's own DNS address is never QUIC.
+    let quic = (!is_tunnel_dns(destination.ip())).then(|| (opened, Box::new(quic::Initial::new())));
+    let mut open = UdpFlow {
+        socket: Arc::clone(&socket),
+        quic,
+        uid,
+        bytes: bytes.clone(),
+    };
+    // The waiting datagrams leave at once, under the table's lock, so that none that comes meanwhile
+    // overtakes them: the socket must first be known to take them.
+    let _ = socket.writable().await;
+    let mut reads = Vec::new();
+    let mut lookups = Vec::new();
+    let mut errors = Vec::new();
+    {
+        let mut table = lock(&flows);
+        let waiting = match table.remove(&key) {
+            Some(UdpEntry::Opening(waiting)) => waiting,
+            _ => Vec::new(),
         };
-        let mut flow = Flow {
-            id,
-            protocol: UDP,
+        for packet in &waiting {
+            let Ok(parsed) = packet::parse(packet) else {
+                continue;
+            };
+            let Some(payload) = packet::udp_payload(packet, &parsed) else {
+                continue;
+            };
+            reads.push(open.read_quic(payload));
+            if is_tunnel_dns(destination.ip()) {
+                lookups.push(packet.len());
+            }
+            let sent = socket.try_send(payload);
+            errors.extend(count_sent(&shared, bytes.as_deref(), packet, &parsed, sent));
+        }
+        table.insert(key, UdpEntry::Open(open));
+    }
+    for read in reads {
+        note_quic(&shared, read);
+    }
+    // Counted before the answers can be: an answer is counted only for a lookup already counted.
+    for length in lookups {
+        shared.lookup(uid, length);
+    }
+    for error in errors {
+        send_to_app(&tun, &shared, &error).await;
+    }
+    tokio::spawn(answers(
+        socket,
+        UdpEnds {
             app,
             destination,
             uid,
-            outcome: Outcome::Opened,
-            name,
-            named_by,
-            ech: Ech::Absent,
-            dns,
-            resolver,
-            network,
-        };
-        let Some(target) = self.shared.target(destination) else {
-            flow.outcome = Outcome::Unreachable;
-            self.shared.record(flow);
-            if let Some(error) = packet::unreachable(packet, parsed, Unreachable::Host) {
-                self.send(&error).await;
-            }
-            return None;
-        };
-        let socket = match connect_udp(&self.shared, target).await {
-            Ok(socket) => Arc::new(socket),
-            Err(error) => {
-                flow.outcome = if is_unreachable(&error) {
-                    Outcome::Unreachable
-                } else {
-                    Outcome::Failed
-                };
-                let unreachable = flow.outcome == Outcome::Unreachable;
-                self.shared.record(flow);
-                if unreachable
-                    && let Some(error) = packet::unreachable(packet, parsed, Unreachable::Host)
-                {
-                    self.send(&error).await;
-                }
-                return None;
-            }
-        };
-        let bytes = self.shared.record(flow);
-        // The tunnel's own DNS address is never QUIC.
-        let quic = (!is_tunnel_dns(destination.ip())).then(|| (opened, quic::Initial::new()));
-        lock(&self.udp).insert(
-            (app, destination),
-            UdpFlow {
-                socket: Arc::clone(&socket),
-                quic,
-                uid,
-                bytes: bytes.clone(),
-            },
-        );
-        tokio::spawn(answers(
-            Arc::clone(&socket),
-            UdpEnds {
-                app,
-                destination,
-                uid,
-                logged: bytes.map(|b| (id, b)),
-            },
-            Arc::clone(&self.tun),
-            Arc::clone(&self.shared),
-            Arc::clone(&self.udp),
-            self.changes.clone(),
-        ));
-        Some(socket)
+            logged: bytes.map(|b| (id, b)),
+        },
+        tun,
+        shared,
+        flows,
+        changes,
+    ));
+}
+
+/// What the engine knows of a new UDP flow once Android named its app: its number, name and DNS use.
+fn begin_udp(
+    shared: &Shared,
+    app: SocketAddr,
+    destination: SocketAddr,
+    uid: Option<u32>,
+) -> (Opened, Flow) {
+    let Begun {
+        id,
+        name,
+        named_by,
+        network,
+    } = shared.begin(destination, uid);
+    let by_dns = (named_by == NamedBy::Dns)
+        .then_some(name.as_deref())
+        .flatten();
+    let (dns, resolver) = shared.dns_use(destination, by_dns);
+    let opened = Opened {
+        id,
+        port: destination.port(),
+        dns,
+    };
+    let flow = Flow {
+        id,
+        protocol: UDP,
+        app,
+        destination,
+        uid,
+        outcome: Outcome::Opened,
+        name,
+        named_by,
+        ech: Ech::Absent,
+        dns,
+        resolver,
+        network,
+    };
+    (opened, flow)
+}
+
+/// A UDP flow whose socket could not be opened: it is recorded, its waiting datagrams are dropped, and
+/// an unreachable destination gets the app one ICMP error, quoting its first datagram.
+async fn udp_failed(
+    key: (SocketAddr, SocketAddr),
+    flow: Flow,
+    tun: &Tun,
+    shared: &Shared,
+    flows: &UdpFlows,
+) {
+    let unreachable = flow.outcome == Outcome::Unreachable;
+    shared.record(flow);
+    let waiting = match lock(flows).remove(&key) {
+        Some(UdpEntry::Opening(waiting)) => waiting,
+        _ => Vec::new(),
+    };
+    let error = waiting.first().filter(|_| unreachable).and_then(|first| {
+        packet::parse(first)
+            .ok()
+            .and_then(|parsed| packet::unreachable(first, &parsed, Unreachable::Host))
+    });
+    if let Some(error) = error {
+        send_to_app(tun, shared, &error).await;
+    }
+}
+
+/// Gives the app one packet through the tunnel.
+async fn send_to_app(tun: &Tun, shared: &Shared, packet: &[u8]) {
+    if tun.send(packet).await.is_ok() {
+        Counters::add(&shared.counters.packets_out, 1);
     }
 }
 
@@ -1624,8 +1762,12 @@ mod tests {
     }
 
     fn shared() -> Shared {
+        shared_with(Arc::new(NoPlatform))
+    }
+
+    fn shared_with(platform: Arc<dyn Platform>) -> Shared {
         Shared {
-            platform: Arc::new(NoPlatform),
+            platform,
             counters: Counters::default(),
             keep_flows: 8,
             flows: Mutex::default(),
@@ -1870,6 +2012,106 @@ mod tests {
         assert_eq!(wire, vec![[140, 5_200], [0, 0]]);
         assert!(lock(&shared.live).is_empty());
         assert!(shared.take_log().is_none());
+    }
+
+    /// Android names the app of flows to one port only after `delay`, as in deep idle.
+    struct SlowOwner {
+        port: u16,
+        delay: Duration,
+    }
+
+    impl Platform for SlowOwner {
+        fn owner(&self, _: u8, _: SocketAddr, remote: SocketAddr) -> Option<u32> {
+            if remote.port() == self.port {
+                std::thread::sleep(self.delay);
+            }
+            Some(UID)
+        }
+
+        fn protect(&self, _: RawFd) -> bool {
+            true
+        }
+
+        fn log(&self, _: &[u8]) {}
+    }
+
+    /// One packet from the fake tunnel's app side, as (source port, payload).
+    async fn answer(app: &tokio::net::UnixDatagram) -> io::Result<(u16, Vec<u8>)> {
+        let mut buffer = vec![0u8; 2048];
+        let n = tokio::time::timeout(Duration::from_secs(3), app.recv(&mut buffer))
+            .await
+            .map_err(|_| io::Error::from(io::ErrorKind::TimedOut))??;
+        let parsed =
+            packet::parse(&buffer[..n]).map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+        let payload =
+            packet::udp_payload(&buffer[..n], &parsed).ok_or(io::ErrorKind::InvalidData)?;
+        Ok((parsed.source.port(), payload.to_vec()))
+    }
+
+    /// A new UDP flow opens off the event loop: while Android takes half a second to name one flow's
+    /// app, another flow's datagram goes out and its answer comes back at once, and the slow flow's
+    /// datagrams wait for its socket, then leave in the order the app sent them.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_udp_flow_that_opens_slowly_holds_up_no_other() -> io::Result<()> {
+        let slow = Arc::new(UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await?);
+        let fast = Arc::new(UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await?);
+        let (to_slow, to_fast) = (slow.local_addr()?, fast.local_addr()?);
+        for server in [Arc::clone(&slow), Arc::clone(&fast)] {
+            tokio::spawn(async move {
+                let mut buffer = [0u8; 512];
+                while let Ok((n, from)) = server.recv_from(&mut buffer).await {
+                    let _ = server.send_to(&buffer[..n], from).await;
+                }
+            });
+        }
+        let delay = Duration::from_millis(600);
+        let shared = Arc::new(shared_with(Arc::new(SlowOwner {
+            port: to_slow.port(),
+            delay,
+        })));
+        // A pair of datagram sockets stands in for the tunnel: one read is one packet.
+        let (engine_end, app_end) = std::os::unix::net::UnixDatagram::pair()?;
+        engine_end.set_nonblocking(true)?;
+        app_end.set_nonblocking(true)?;
+        let app = tokio::net::UnixDatagram::from_std(app_end)?;
+        let (_stop, stop) = watch::channel(false);
+        let (_network, network) = watch::channel(0);
+        tokio::spawn(run(
+            Tun::new(OwnedFd::from(engine_end))?,
+            1500,
+            Arc::clone(&shared),
+            stop,
+            network,
+        ));
+
+        let me = SocketAddr::from(([10, 215, 173, 1], 40_000));
+        let other = SocketAddr::from(([10, 215, 173, 1], 40_001));
+        let started = Instant::now();
+        for (from, to, payload) in [
+            (me, to_slow, &b"slow 1"[..]),
+            (me, to_slow, b"slow 2"),
+            (other, to_fast, b"fast"),
+        ] {
+            let Some(packet) = packet::udp(from, to, payload) else {
+                unreachable!("a small datagram")
+            };
+            app.send(&packet).await?;
+        }
+        let (port, payload) = answer(&app).await?;
+        assert_eq!((port, payload.as_slice()), (to_fast.port(), &b"fast"[..]));
+        assert!(
+            started.elapsed() < delay / 2,
+            "the fast flow waited {:?}",
+            started.elapsed()
+        );
+        let (_, first) = answer(&app).await?;
+        let (_, second) = answer(&app).await?;
+        assert_eq!(
+            (first.as_slice(), second.as_slice()),
+            (&b"slow 1"[..], &b"slow 2"[..])
+        );
+        assert!(started.elapsed() >= delay);
+        Ok(())
     }
 
     /// The listener hands a waiting upstream connection only to a connection from the fake address.
