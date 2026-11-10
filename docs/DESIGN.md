@@ -497,6 +497,19 @@ Android 11, 15 and 17. "Screen lock" is Android's own term in each language, fro
 Android 17 emulator. The three new sentences were translated into seven languages, reviewed alone by two
 models and settled by a third. `scripts/verify-log.sh` reads the screen: without a PIN it must not say "only
 while the phone is unlocked", and with one it must.
+Watch's memory, the same day. The 96 MB of W2 was the debug build with its screen: its code is not shrunk,
+its Rust library not optimised, and it runs under the JIT. On the Android 15 emulator the debug build used
+69 to 70 MB PSS, and the release build 23 MB, with its screen open and with the service alone (24 and 22 MB
+on Android 17, 30 and 28 MB on Android 11); the emulator draws in software, so a phone adds its screen's
+buffers while the screen is open. After 500 TCP connections through the release build, with 510 records in
+the log, its native heap had not grown (8.7 MB before, 5.1 MB after). Measuring the release build found that
+it did not work at all: R8 had renamed the three methods the Rust library calls back by name (to protect a
+socket, to ask a flow's app, to hand the log its records), so no connection passed, no flow had its app, and
+the log stayed empty. Every check until then ran the debug build, and none ran the release build.
+`proguard-rules.pro` now keeps them, the build fails if the APK's code lacks any of them (verifyApkRelease),
+and `scripts/verify-watch-release.sh`, in CI, signs the release build with a key made for the run, turns
+Watch on from its screen, and checks traffic, each flow's app, the log and a memory budget of 48 MB; it
+passes on Android 11, 15 and 17. Still to do: the release build's memory on the A40, with a real screen.
 
 | # | Milestone | Done when |
 |---|---|---|
