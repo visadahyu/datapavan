@@ -474,6 +474,19 @@ apart on Android 11, and equal to the byte on 15 and 17. On the first run after 
 17 emulator, verify-watch.sh once found Watch's engine started over, with no crash logged; two runs after it
 passed, and both scripts now print how Watch's process last ended when they fail.
 
+The engine, the same day: its listener, on the tunnel's own address, took any connection that reached it and
+matched it to a waiting upstream connection by the source port alone. Any app can reach that address
+directly and pick its port, so one that hit the next fake port in the few milliseconds before the real
+connection arrived would have taken another app's connection, with its bytes in the log under that app; once
+Watch blocks or routes by app (W6 to W8), it would have been a way around the rule. Now the listener takes
+only a connection from the fake address the engine rewrites the apps' connections to come from, which no app
+can bind; anything else is closed at once and counted (a 19th counter). Fake ports are drawn at random
+instead of in order, and a freed port waits 60 s before it is handed out again, so that a new SYN does not
+meet the old connection in Android's TIME_WAIT. A connection whose rewriting was forgotten before Android
+handed it over now ends its flow in the log at once. A unit test plays both connections on the loopback, and
+`scripts/verify-watch.sh` connects the shell straight to the listener, found in `/proc/net/tcp`, and sees it
+closed and counted. Both scripts pass in full with it on Android 11, 15 and 17.
+
 | # | Milestone | Done when |
 |---|---|---|
 | W1 | Watch's skeleton | A second Gradle module, `:watch`, package `org.visadahyu.datapavan.watch`, signed with the same key. Both APKs come from one build, CI is green, and each is reproducible on its own. The build fails if the audit app gains `INTERNET`, as now, or if Watch's manifest holds anything outside its permissions ADR. Watch opens on the emulator and the A40 with strings in all eight languages, RTL and pseudo-locales from the start, and an icon from the brand marks. Its tunnel starts and stops. |
