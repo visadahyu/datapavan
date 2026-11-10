@@ -138,7 +138,14 @@ adb install -r "$APK" >/dev/null
 adb shell appops set "$PKG" ACTIVATE_VPN allow
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 adb shell am force-stop "$PKG"
-adb shell cmd locale set-app-locales "$PKG" --locales en-US >/dev/null
+# The screen checks read English. Android 13 and later can set Watch's language alone; before, the
+# phone's own language must be English, or the screen checks are skipped.
+english=""
+if adb shell cmd locale set-app-locales "$PKG" --locales en-US >/dev/null 2>&1; then
+    english=1
+else
+    case "$(adb shell getprop persist.sys.locale | tr -d '\r')$(adb shell getprop ro.product.locale | tr -d '\r')" in en*) english=1 ;; esac
+fi
 adb logcat -c
 adb shell am start -W -n "$PKG/.MainActivity" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
@@ -166,10 +173,14 @@ echo "ok: the log holds the shell's TCP flow and its UDP flow so far, with their
 
 # The screen says of earlier days only what holds: this emulator has no screen lock, so they can be
 # opened at any time, and the screen does not say "only while the phone is unlocked".
-adb shell wm dismiss-keyguard
-said=$(lock_sentence)
-case "$said" in "This phone has no screen lock"*) ;; *) fail "with no screen lock, the screen said: $said" ;; esac
-echo "ok: with no screen lock, the screen says that earlier days can be opened at any time"
+if [ -n "$english" ]; then
+    adb shell wm dismiss-keyguard
+    said=$(lock_sentence)
+    case "$said" in "This phone has no screen lock"*) ;; *) fail "with no screen lock, the screen said: $said" ;; esac
+    echo "ok: with no screen lock, the screen says that earlier days can be opened at any time"
+else
+    echo "skipped: the screen checks, as the phone's language is not English"
+fi
 
 # A flow open when the tunnel stops still reaches the log: the engine hands over its last records.
 timeout 20 adb shell "sleep 8 | nc -w 10 $HOST $PORT" >/dev/null 2>&1 &
@@ -274,9 +285,11 @@ sleep 2
 result=$(watch_dump log-day "$earlier" | sed -n "s/^log-day $earlier //p")
 [ "$result" = "open 1" ] || fail "the earlier day was '$result' once the phone was unlocked"
 # Watch's screen, back in front after the unlock, reads the screen lock again.
-said=$(lock_sentence)
-case "$said" in "Records of earlier days can be opened only while the phone is unlocked."*) ;; *) fail "with a PIN, the screen said: $said" ;; esac
-echo "ok: with a PIN, the screen says that earlier days open only while the phone is unlocked"
+if [ -n "$english" ]; then
+    said=$(lock_sentence)
+    case "$said" in "Records of earlier days can be opened only while the phone is unlocked."*) ;; *) fail "with a PIN, the screen said: $said" ;; esac
+    echo "ok: with a PIN, the screen says that earlier days open only while the phone is unlocked"
+fi
 adb shell locksettings clear --old "$PIN" >/dev/null
 PIN_SET=""
 echo "ok: an earlier day is locked with the phone, and opens once it is unlocked"
