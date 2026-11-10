@@ -511,6 +511,17 @@ and `scripts/verify-watch-release.sh`, in CI, signs the release build with a key
 Watch on from its screen, and checks traffic, each flow's app, the log and a memory budget of 48 MB; it
 passes on Android 11, 15 and 17. Still to do: the release build's memory on the A40, with a real screen.
 
+Before W6, 2026-11-10, after W3 and W4 were merged into `main`: each new UDP flow, so each lookup, was
+opened inside the engine's packet loop, which waited for Android to name the flow's app and for the
+protected socket, about 3 ms in the day and 11 ms in deep idle by the spike's numbers; meanwhile no packet
+of any app moved. A new UDP flow is now opened in a task of its own, as TCP's are: its first datagrams wait
+in its entry of the table, at most 32, and leave in the order the app sent them once the socket is there, so
+the app is still known before the first one leaves, as the rules of W6 to W8 need. A test plays two flows
+through a fake tunnel while Android takes 600 ms to name one: the other flow's answer comes back at once,
+and the slow flow's two datagrams then leave in order. Before the change the same test failed, the answer of
+the other flow coming only after the slow flow's. verify-watch.sh, verify-log.sh and verify-watch-release.sh
+pass with it on Android 11, 15 and 17.
+
 | # | Milestone | Done when |
 |---|---|---|
 | W1 | Watch's skeleton | A second Gradle module, `:watch`, package `org.visadahyu.datapavan.watch`, signed with the same key. Both APKs come from one build, CI is green, and each is reproducible on its own. The build fails if the audit app gains `INTERNET`, as now, or if Watch's manifest holds anything outside its permissions ADR. Watch opens on the emulator and the A40 with strings in all eight languages, RTL and pseudo-locales from the start, and an icon from the brand marks. Its tunnel starts and stops. |

@@ -33,7 +33,7 @@ Watch, the part of Datapavan planned for v0.2, is an app of its own beside the a
    4. an offline IP → ASN/organisation database.
    When none applies, the UI says "unknown" plainly.
 5. **Decision.** The rule engine returns allow, block or log-only.
-6. **Forwarding.** Android's own TCP stack, reached through rewritten addresses, terminates each connection locally ([ADR 0012](decisions/0012-packet-engine.md)). The app's SYN is held until the owner lookup and the real, `protect()`-ed connection to the destination are done, then bytes are relayed. UDP flows go through a NAT table with idle timeouts.
+6. **Forwarding.** Android's own TCP stack, reached through rewritten addresses, terminates each connection locally ([ADR 0012](decisions/0012-packet-engine.md)). The app's SYN is held until the owner lookup and the real, `protect()`-ed connection to the destination are done, then bytes are relayed. UDP flows go through a NAT table with idle timeouts; a new flow's first datagrams wait in it, in order, while its owner is found and its socket opened off the event loop.
 7. **Recording.** Per-flow statistics go to app-private, encrypted SQLite (key in the Android Keystore). Retention is the user's choice: none, 1 day, 7 days or 30 days, with a one-tap wipe. Flows chained through a circumvention proxy are counted but their destinations are **not** recorded by default, because a log of them is evidence in a phone search.
 
 ## Policies
