@@ -310,6 +310,7 @@ pub struct Counters {
     ech_hidden: AtomicU64,
     dns_plain: AtomicU64,
     dns_encrypted: AtomicU64,
+    strangers: AtomicU64,
 }
 
 impl Counters {
@@ -320,10 +321,11 @@ impl Counters {
     /// TCP flows, UDP flows, bytes up, bytes down, flows without an owner, refused, unreachable,
     /// failed, packets skipped, packets in, packets out, server names read from TLS and from QUIC, QUIC
     /// flows whose name could not be read, hellos that offered ECH, hellos whose name was an ECH public
-    /// name, and flows of an app's own plain and encrypted DNS. None names a destination: they can be
-    /// read on any phone.
+    /// name, flows of an app's own plain and encrypted DNS, and connections to the engine's listener
+    /// that did not come from the fake address, refused. None names a destination: they can be read on
+    /// any phone.
     #[must_use]
-    pub fn snapshot(&self) -> [u64; 18] {
+    pub fn snapshot(&self) -> [u64; 19] {
         [
             &self.tcp_flows,
             &self.udp_flows,
@@ -343,6 +345,7 @@ impl Counters {
             &self.ech_hidden,
             &self.dns_plain,
             &self.dns_encrypted,
+            &self.strangers,
         ]
         .map(|c| c.load(Ordering::Relaxed))
     }
@@ -795,7 +798,7 @@ impl Engine {
 
     /// The counters, as [`Counters::snapshot`] orders them.
     #[must_use]
-    pub fn counters(&self) -> [u64; 18] {
+    pub fn counters(&self) -> [u64; 19] {
         self.shared.counters.snapshot()
     }
 
@@ -873,8 +876,8 @@ async fn run(
 ) {
     let pending: Pending = Arc::default();
     let nat: Arc<Mutex<Nat>> = Arc::default();
-    let listener4 = listen(IpAddr::V4(TUN4), &pending, &shared, &nat).await;
-    let listener6 = listen(IpAddr::V6(TUN6), &pending, &shared, &nat).await;
+    let listener4 = listen(IpAddr::V4(TUN4), IpAddr::V4(FAKE4), &pending, &shared, &nat).await;
+    let listener6 = listen(IpAddr::V6(TUN6), IpAddr::V6(FAKE6), &pending, &shared, &nat).await;
     let state = Loop {
         tun: Arc::new(tun),
         shared,
@@ -960,6 +963,7 @@ async fn sleep_for(duration: Option<Duration>) {
 /// a task of its own; returns its port, or 0 when the tunnel has no address of that version.
 async fn listen(
     address: IpAddr,
+    fake: IpAddr,
     pending: &Pending,
     shared: &Arc<Shared>,
     nat: &Arc<Mutex<Nat>>,
@@ -970,6 +974,7 @@ async fn listen(
     let port = listener.local_addr().map_or(0, |a| a.port());
     tokio::spawn(accept(
         listener,
+        fake,
         Arc::clone(pending),
         Arc::clone(shared),
         Arc::clone(nat),
@@ -1412,7 +1417,7 @@ async fn open(
         )
         .map(|()| held.packet)
     } else {
-        lock(&nat).remove(held.port);
+        lock(&nat).remove(held.port, Instant::now());
         if outcome == Outcome::Refused {
             let sequence = packet::tcp_sequence(&held.packet, &held.parsed);
             packet::tcp_reset(destination, app, 0, Some(sequence.wrapping_add(1)))
@@ -1428,18 +1433,32 @@ async fn open(
 }
 
 /// Accepts the rewritten connections and relays each over the upstream connection opened for it.
+///
+/// Only a connection from `fake`, the address the engine rewrites the apps' connections to come from,
+/// is one of them. The listener is on the tunnel's own address, which any app can reach directly, from
+/// a source port it picks: matched by port alone, such a connection could take the upstream connection
+/// waiting for another app's, and be counted in the log under that app. Anything else is closed at once
+/// and counted.
 async fn accept(
     listener: TcpListener,
+    fake: IpAddr,
     pending: Pending,
     shared: Arc<Shared>,
     nat: Arc<Mutex<Nat>>,
 ) {
     while let Ok((app, peer)) = listener.accept().await {
+        if peer.ip() != fake {
+            Counters::add(&shared.counters.strangers, 1);
+            drop(app);
+            continue;
+        }
         let port = peer.port();
         let Some(upstream) = lock(&pending).remove(&port) else {
             continue;
         };
         let Some(entry) = lock(&nat).by_fake(port, Instant::now()) else {
+            // The rewriting was forgotten meanwhile: the flow ends here, and in the log too.
+            shared.finish(upstream.opened.id);
             continue;
         };
         let (shared, nat) = (Arc::clone(&shared), Arc::clone(&nat));
@@ -1451,7 +1470,7 @@ async fn accept(
             // segment written: earlier, the packets of that while were counted after it, and missing
             // from the log (up to a socket's send buffer on each download).
             tokio::time::sleep(CLOSE_LINGER).await;
-            lock(&nat).remove_if(port, entry.app, entry.destination);
+            lock(&nat).remove_if(port, entry.app, entry.destination, Instant::now());
             shared.finish_closed(id);
         });
     }
@@ -1754,7 +1773,7 @@ mod tests {
         assert_eq!(flows[1].named_by, NamedBy::Dns);
         drop(flows);
         // Plain, encrypted.
-        assert_eq!(shared.counters.snapshot()[16..], [1, 3]);
+        assert_eq!(shared.counters.snapshot()[16..18], [1, 3]);
         // Another app's flow to the same address is not named by that answer.
         assert_eq!(
             lock(&shared.names).get(
@@ -1851,6 +1870,93 @@ mod tests {
         assert_eq!(wire, vec![[140, 5_200], [0, 0]]);
         assert!(lock(&shared.live).is_empty());
         assert!(shared.take_log().is_none());
+    }
+
+    /// The listener hands a waiting upstream connection only to a connection from the fake address.
+    /// Another app can reach the listener directly, from a port it picks: such a connection is closed
+    /// at once and counted, and the upstream still waits for the rewritten one. A rewritten connection
+    /// whose rewriting was forgotten meanwhile ends its flow in the log.
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_listener_takes_only_connections_from_the_fake_address() -> io::Result<()> {
+        let shared = Arc::new(shared());
+        let pending: Pending = Arc::default();
+        // In the test, the fake address is another local one.
+        let fake = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2));
+        let server = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+        let destination = SocketAddr::from(([198, 51, 100, 9], 443));
+
+        // A connection the engine rewrote, its upstream waiting under its fake port.
+        let real = TcpSocket::new_v4()?;
+        real.bind(SocketAddr::new(fake, 0))?;
+        let port = real.local_addr()?.port();
+        let nat = Arc::new(Mutex::new(Nat::with_ports(port, port)));
+        let app = SocketAddr::from(([10, 215, 173, 1], 40_000));
+        assert_eq!(
+            lock(&nat).lookup(app, destination, true, Instant::now()),
+            Lookup::New(port)
+        );
+        lock(&nat).open(port);
+        let upstream = TcpStream::connect(server.local_addr()?).await?;
+        let (mut server_end, _) = server.accept().await?;
+        let opened = open_flow(&shared, destination);
+        lock(&pending).insert(
+            port,
+            Upstream {
+                stream: upstream,
+                opened,
+                bytes: None,
+            },
+        );
+
+        // A second one, whose rewriting is gone.
+        let late = TcpSocket::new_v4()?;
+        late.bind(SocketAddr::new(fake, 0))?;
+        let late_port = late.local_addr()?.port();
+        let late_opened = open_flow(&shared, destination);
+        let late_upstream = TcpStream::connect(server.local_addr()?).await?;
+        lock(&pending).insert(
+            late_port,
+            Upstream {
+                stream: late_upstream,
+                opened: late_opened,
+                bytes: None,
+            },
+        );
+
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+        let address = listener.local_addr()?;
+        tokio::spawn(accept(
+            listener,
+            fake,
+            Arc::clone(&pending),
+            Arc::clone(&shared),
+            Arc::clone(&nat),
+        ));
+
+        // Another app, straight to the listener, from the waiting connection's port.
+        let stranger = TcpSocket::new_v4()?;
+        stranger.bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port)))?;
+        let mut stranger = stranger.connect(address).await?;
+        let mut byte = [0u8; 1];
+        assert_eq!(stranger.read(&mut byte).await?, 0, "closed at once");
+        assert!(lock(&pending).contains_key(&port));
+        assert_eq!(shared.counters.snapshot()[18], 1);
+
+        // The rewritten connection gets its upstream.
+        let mut real = real.connect(address).await?;
+        real.write_all(b"hello").await?;
+        let mut got = [0u8; 5];
+        server_end.read_exact(&mut got).await?;
+        assert_eq!(&got, b"hello");
+        assert!(!lock(&pending).contains_key(&port));
+
+        // The one whose rewriting is gone is closed, and its flow ends.
+        let mut late = late.connect(address).await?;
+        assert_eq!(late.read(&mut byte).await?, 0);
+        assert!(lock(&pending).is_empty());
+        assert!(!lock(&shared.live).contains_key(&late_opened.id));
+        assert!(lock(&shared.live).contains_key(&opened.id));
+        Ok(())
     }
 
     /// What Android's stack sends after the relay ended (the rest of a download, the last FIN and ACK)

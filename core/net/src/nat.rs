@@ -2,7 +2,9 @@
 //! tunnel gets a fake port, so that Android's own TCP stack can terminate it at the engine's
 //! listener as if it came from the fake peer `FAKE:port`, and the answers can be rewritten back.
 
-use std::collections::HashMap;
+use std::collections::hash_map::RandomState;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::hash::BuildHasher;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
@@ -12,6 +14,13 @@ const LAST_PORT: u16 = 60_000;
 
 /// A connection silent for this long is forgotten. TCP keepalives from apps come far more often.
 pub const TCP_IDLE: Duration = Duration::from_secs(600);
+
+/// A fake port freed is not handed out again for this long: Android's stack may still hold the old
+/// connection from it in `TIME_WAIT` (60 s on Linux), which a new SYN from the same port would meet.
+pub const PORT_COOLING: Duration = Duration::from_secs(60);
+
+/// Ports drawn at random before the table is searched in order: only a crowded table gets that far.
+const DRAWS: usize = 32;
 
 /// One rewritten TCP connection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,14 +52,47 @@ pub enum Lookup {
 }
 
 /// The table, by fake port and by the app's side.
-#[derive(Debug, Default)]
+///
+/// Fake ports are drawn at random, so that the next one cannot be guessed: an app that could guess it
+/// might race the real connection to the engine's listener (which now also refuses any connection that
+/// does not come from the fake address).
+#[derive(Debug)]
 pub struct Nat {
     by_fake: HashMap<u16, Entry>,
     by_app: HashMap<(SocketAddr, SocketAddr), u16>,
-    next: u16,
+    /// The ports handed out, `first..=last`.
+    first: u16,
+    last: u16,
+    /// Ports freed lately, oldest first, each with when it may be handed out again.
+    cooling: VecDeque<(Instant, u16)>,
+    cooling_set: HashSet<u16>,
+    /// A keyed hash with keys drawn from the system, and how many draws it made.
+    random: RandomState,
+    draws: u64,
+}
+
+impl Default for Nat {
+    fn default() -> Self {
+        Self::with_ports(FIRST_PORT, LAST_PORT)
+    }
 }
 
 impl Nat {
+    /// A table that hands out the fake ports `first..=last`.
+    #[must_use]
+    pub fn with_ports(first: u16, last: u16) -> Self {
+        Self {
+            by_fake: HashMap::new(),
+            by_app: HashMap::new(),
+            first,
+            last: last.max(first),
+            cooling: VecDeque::new(),
+            cooling_set: HashSet::new(),
+            random: RandomState::new(),
+            draws: 0,
+        }
+    }
+
     /// Finds the connection of a packet from `app` to `destination`, or makes one for a SYN.
     pub fn lookup(
         &mut self,
@@ -73,24 +115,65 @@ impl Nat {
         if !syn {
             return Lookup::Unknown;
         }
-        for _ in FIRST_PORT..=LAST_PORT {
-            self.next = if (FIRST_PORT..LAST_PORT).contains(&self.next) {
-                self.next + 1
-            } else {
-                FIRST_PORT
-            };
-            if let std::collections::hash_map::Entry::Vacant(free) = self.by_fake.entry(self.next) {
-                free.insert(Entry {
-                    app,
-                    destination,
-                    seen: now,
-                    open: false,
-                });
-                self.by_app.insert((app, destination), self.next);
-                return Lookup::New(self.next);
+        self.cool(now);
+        let span = u32::from(self.last - self.first) + 1;
+        // Ports drawn at random; in a crowded table, then every port in order from the last one drawn.
+        let mut start = 0;
+        for _ in 0..DRAWS {
+            start = self.draw() % span;
+            if let Some(port) = self.free(start) {
+                return self.hand_out(port, app, destination, now);
+            }
+        }
+        for offset in 1..span {
+            if let Some(port) = self.free((start + offset) % span) {
+                return self.hand_out(port, app, destination, now);
             }
         }
         Lookup::Full
+    }
+
+    /// The port at `offset` from the first, if it is neither taken nor cooling.
+    fn free(&self, offset: u32) -> Option<u16> {
+        let port = self.first.checked_add(u16::try_from(offset).ok()?)?;
+        (!self.by_fake.contains_key(&port) && !self.cooling_set.contains(&port)).then_some(port)
+    }
+
+    fn hand_out(
+        &mut self,
+        port: u16,
+        app: SocketAddr,
+        destination: SocketAddr,
+        now: Instant,
+    ) -> Lookup {
+        self.by_fake.insert(
+            port,
+            Entry {
+                app,
+                destination,
+                seen: now,
+                open: false,
+            },
+        );
+        self.by_app.insert((app, destination), port);
+        Lookup::New(port)
+    }
+
+    /// A number no one outside the engine can foresee: the keyed hash of a counter.
+    fn draw(&mut self) -> u32 {
+        self.draws = self.draws.wrapping_add(1);
+        u32::try_from(self.random.hash_one(self.draws) >> 32).unwrap_or(0)
+    }
+
+    /// Lets the ports whose cooling is over be handed out again.
+    fn cool(&mut self, now: Instant) {
+        while let Some(&(until, port)) = self.cooling.front() {
+            if until > now {
+                break;
+            }
+            self.cooling.pop_front();
+            self.cooling_set.remove(&port);
+        }
     }
 
     /// The connection behind a fake port, marking it as just seen.
@@ -107,21 +190,23 @@ impl Nat {
         }
     }
 
-    /// Forgets a connection.
-    pub fn remove(&mut self, port: u16) {
+    /// Forgets a connection; its port cools for [`PORT_COOLING`] before it is handed out again.
+    pub fn remove(&mut self, port: u16, now: Instant) {
         if let Some(entry) = self.by_fake.remove(&port) {
             self.by_app.remove(&(entry.app, entry.destination));
+            self.cooling.push_back((now + PORT_COOLING, port));
+            self.cooling_set.insert(port);
         }
     }
 
     /// Forgets the connection behind `port` if it is still the one from `app` to `destination`.
-    pub fn remove_if(&mut self, port: u16, app: SocketAddr, destination: SocketAddr) {
+    pub fn remove_if(&mut self, port: u16, app: SocketAddr, destination: SocketAddr, now: Instant) {
         if self
             .by_fake
             .get(&port)
             .is_some_and(|e| e.app == app && e.destination == destination)
         {
-            self.remove(port);
+            self.remove(port, now);
         }
     }
 
@@ -134,7 +219,7 @@ impl Nat {
             .map(|(&p, _)| p)
             .collect();
         for &port in &stale {
-            self.remove(port);
+            self.remove(port, now);
         }
         stale
     }
@@ -181,8 +266,56 @@ mod tests {
         );
         let (other, _) = ends(40_001);
         assert!(matches!(nat.lookup(other, server, true, now), Lookup::New(p) if p != port));
-        nat.remove(port);
+        nat.remove(port, now);
         assert_eq!(nat.lookup(app, server, false, now), Lookup::Unknown);
+    }
+
+    /// The next port cannot be told from the last: of 200 ports handed out in a row, far fewer than
+    /// half follow the one before (in order, all would).
+    #[test]
+    fn hands_out_ports_at_random() {
+        let mut nat = Nat::default();
+        let now = Instant::now();
+        let server = ends(0).1;
+        let ports: Vec<u16> = (0..200)
+            .filter_map(
+                |i| match nat.lookup(ends(30_000 + i).0, server, true, now) {
+                    Lookup::New(port) => Some(port),
+                    _ => None,
+                },
+            )
+            .collect();
+        assert_eq!(ports.len(), 200);
+        assert!(ports.iter().all(|p| (FIRST_PORT..=LAST_PORT).contains(p)));
+        let next = ports
+            .windows(2)
+            .filter(|w| w[1] == w[0].wrapping_add(1))
+            .count();
+        assert!(next < 10, "{next} of 199 ports followed the one before");
+    }
+
+    /// A freed port is not handed out again until it has cooled, so that a new SYN does not meet the
+    /// old connection's `TIME_WAIT` in Android's stack.
+    #[test]
+    fn a_freed_port_cools_before_it_is_handed_out_again() {
+        let mut nat = Nat::with_ports(20_000, 20_001);
+        let then = Instant::now();
+        let server = ends(0).1;
+        let Lookup::New(first) = nat.lookup(ends(40_000).0, server, true, then) else {
+            unreachable!("no port")
+        };
+        let Lookup::New(second) = nat.lookup(ends(40_001).0, server, true, then) else {
+            unreachable!("no port")
+        };
+        assert_ne!(first, second);
+        nat.remove(first, then);
+        let soon = then + Duration::from_secs(1);
+        assert_eq!(nat.lookup(ends(40_002).0, server, true, soon), Lookup::Full);
+        let later = then + PORT_COOLING;
+        assert_eq!(
+            nat.lookup(ends(40_002).0, server, true, later),
+            Lookup::New(first)
+        );
     }
 
     #[test]
@@ -201,27 +334,21 @@ mod tests {
         assert!(nat.is_empty());
     }
 
+    /// Every port of the range is handed out, the last ones found in order once draws fail, and then
+    /// the table says it is full.
     #[test]
     fn says_when_every_port_is_taken() {
-        let mut nat = Nat::default();
+        let mut nat = Nat::with_ports(30_000, 30_499);
         let now = Instant::now();
         let server = ends(0).1;
-        let count = usize::from(LAST_PORT - FIRST_PORT) + 1;
-        for i in 0..count {
-            let app = SocketAddr::from(([10, 215, 173, 1], u16::try_from(i % 60_000).unwrap_or(0)));
-            let app = SocketAddr::new(
-                if i < 60_000 {
-                    app.ip()
-                } else {
-                    [10, 215, 173, 3].into()
-                },
-                app.port(),
-            );
-            assert!(
-                matches!(nat.lookup(app, server, true, now), Lookup::New(_)),
-                "connection {i}"
-            );
+        let mut ports = HashSet::new();
+        for i in 0..500 {
+            let Lookup::New(port) = nat.lookup(ends(40_000 + i).0, server, true, now) else {
+                unreachable!("connection {i} got no port")
+            };
+            ports.insert(port);
         }
+        assert_eq!(ports.len(), 500);
         assert_eq!(
             nat.lookup(ends(1).0, SocketAddr::from(([1, 1, 1, 1], 443)), true, now),
             Lookup::Full

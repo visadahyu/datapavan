@@ -7,7 +7,7 @@
 # as "refused" and an unreachable IPv6 address as "no route", as without a VPN; that names resolve
 # through the tunnel's DNS, and flows are named after a DNS answer, a TLS server name or a QUIC one,
 # with the ECH a hello offers noted, an app's own DNS is recognised, and strict Private DNS is
-# detected (W3); and that
+# detected (W3); that a connection straight to Watch's own listener is closed and counted; and that
 # all of it still works after the network beneath switches from Wi-Fi to mobile data. Nothing is left
 # running: the tunnel and the server stop at the end.
 #
@@ -331,6 +331,35 @@ answer=$(device 15 "nc -6 -w 5 2001:db8::1 80 </dev/null")
 grep -qiE 'no route|unreachable' <<<"$answer" || fail "an unreachable IPv6 address looked like this to the app: $answer"
 has_flow tcp "[2001:db8::1]:80" unreachable || fail "no unreachable flow of the shell"
 echo "ok: an unreachable IPv6 address gets the app an ICMPv6 error"
+
+# Watch's listener is on the tunnel's own address, which any app can reach directly, from a port it
+# picks. A connection that does not come from the address the engine rewrites the apps' connections to
+# come from is closed at once and counted (the 19th counter): it never takes another app's waiting
+# upstream connection. The listener's port is in /proc/net/tcp: listening (0A), Watch's UID, on
+# 10.215.173.1 (01ADD70A, as the kernel prints it).
+strangers() {
+    adb shell dumpsys activity service "$PKG/.WatchVpnService" | tr -d '\r' | sed -n 's/^ *counters //p' | awk '{print $19}'
+}
+watch_uid=$(adb shell cmd package list packages -U "$PKG" | tr -d '\r' | sed -n "s/^package:$PKG uid:\([0-9]*\)$/\1/p")
+listener=$(adb shell cat /proc/net/tcp 2>/dev/null | tr -d '\r' | python3 -I -c '
+import sys
+for line in sys.stdin:
+    f = line.split()
+    if len(f) > 7 and f[3] == "0A" and f[7] == sys.argv[1] and f[1].startswith("01ADD70A:"):
+        print(int(f[1].split(":")[1], 16))
+        break' "$watch_uid")
+if [ -n "$listener" ]; then
+    before=$(strangers)
+    answer=$(device 8 "echo hello | nc -w 5 10.215.173.1 $listener")
+    [ -z "$answer" ] || fail "a connection straight to Watch's listener got an answer: $answer"
+    after=$(strangers)
+    [ "$after" = $((before + 1)) ] || fail "a connection straight to Watch's listener was not counted: $before, then $after"
+    echo "ok: a connection straight to Watch's listener is closed at once and counted"
+elif is_emulator; then
+    fail "Watch's listener is not in /proc/net/tcp"
+else
+    echo "skipped: the listener check, as this phone does not show /proc/net/tcp"
+fi
 
 if is_emulator; then
     # The emulator has Wi-Fi and mobile data: switching Wi-Fi off moves the tunnel to mobile data.
