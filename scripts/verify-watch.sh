@@ -69,11 +69,20 @@ fail() {
     # A process Android ended leaves no crash: how Watch's last ones ended, with no destination.
     echo "How Watch's process last ended:" >&2
     adb shell dumpsys activity exit-info "$PKG" 2>/dev/null | tr -d '\r' | grep -E 'timestamp=|reason=' | head -6 >&2 || true
-    # On a phone the flows name other apps' destinations, which stay on the phone: counters only.
-    local filter=.
-    is_emulator || filter='^(running|counters)'
+    # On a phone the flows name other apps' destinations, which stay on the phone: counters only. On an
+    # emulator, every flow of the shell (the test's own), then the last of the others.
+    local account
+    account=$(adb shell dumpsys activity service "$PKG/.WatchVpnService" 2>/dev/null | tr -d '\r' | sed -n 's/^ *//p' || true)
     echo "Watch's own account:" >&2
-    adb shell dumpsys activity service "$PKG/.WatchVpnService" 2>/dev/null | tr -d '\r' | sed -n 's/^ *//p' | grep -E "$filter" | tail -40 >&2 || true
+    grep -E '^(running|counters)' <<<"$account" >&2 || true
+    if is_emulator; then
+        echo "The shell's flows:" >&2
+        grep -E "^flow [a-z]+ [^ ]+ [^ ]+ $SHELL_UID " <<<"$account" >&2 || echo "  none" >&2
+        echo "The last of the others:" >&2
+        grep -E '^flow ' <<<"$account" | grep -vE "^flow [a-z]+ [^ ]+ [^ ]+ $SHELL_UID " | tail -20 >&2 || true
+        echo "Android's networks:" >&2
+        adb shell dumpsys connectivity 2>/dev/null | tr -d '\r' | grep -E 'Active default network|^ *NetworkAgentInfo\{' | cut -c1-160 | head -6 >&2 || true
+    fi
     exit 1
 }
 
@@ -366,6 +375,13 @@ if is_emulator; then
     adb shell svc wifi disable
     sleep 8
     vpn_up || fail "the tunnel went down when the network beneath switched"
+    # As without a VPN, a connection during the switch may fail (ADR 0012); the next ones must pass. On
+    # CI the mobile network has taken more than 8 s to carry traffic, so wait up to 30 s for a first one.
+    for _ in $(seq 1 15); do
+        timeout 8 adb shell "printf 'GET /ping HTTP/1.0\r\n\r\n' | nc -w 5 $HOST $PORT" 2>/dev/null | tr -d '\r' | grep -q '^pong$' && break
+        sleep 2
+    done
+    sleep 2
     traffic "after a network switch"
     adb shell svc wifi enable
 else
