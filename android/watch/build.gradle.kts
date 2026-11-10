@@ -27,6 +27,9 @@ val allowedPermissions = mapOf(
 )
 // The JNI symbol every packaged libdatapavan_watch.so must export (see core/watch-jni and Engine.kt).
 val requiredJniSymbol = "Java_org_visadahyu_datapavan_watch_Engine_nativeStart"
+// The methods of WatchVpnService that the Rust library calls back by name (core/watch-jni/src/lib.rs),
+// which R8 must neither remove nor rename (proguard-rules.pro).
+val jniCallbacks = listOf("ownerUid", "protectSocket", "logRecords")
 
 val allowedPermissionDefinitions = listOf("$watchApplicationId.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
 // Exported components, each with the permission that guards it ("" for none: the launcher, and the log
@@ -260,7 +263,11 @@ abstract class CargoNdkTask : DefaultTask() {
     }
 }
 
-/** Fails if a built APK lacks Watch's library for a shipped ABI, or if it does not export the JNI symbol. */
+/**
+ * Fails if a built APK lacks Watch's library for a shipped ABI, if the library does not export the JNI
+ * symbol, or if the APK's code lacks a method the library calls back by name: R8 would have removed or
+ * renamed it, and the engine would fail at run time without a word.
+ */
 abstract class ApkNativeLibraryCheck : DefaultTask() {
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.NONE)
@@ -277,6 +284,9 @@ abstract class ApkNativeLibraryCheck : DefaultTask() {
 
     @get:Input
     abstract val symbol: Property<String>
+
+    @get:Input
+    abstract val callbacks: ListProperty<String>
 
     @get:OutputFile
     abstract val report: RegularFileProperty
@@ -296,6 +306,15 @@ abstract class ApkNativeLibraryCheck : DefaultTask() {
                         throw GradleException("${element.outputFile}: lib/$abi/${library.get()} does not export ${symbol.get()}")
                     }
                     lines += "OK ${File(element.outputFile).name} lib/$abi/${library.get()} (${bytes.size} bytes)"
+                }
+                // A method name the code keeps is in some dex file's string table.
+                val code = zip.entries().asSequence().filter { it.name.matches(Regex("classes\\d*\\.dex")) }
+                    .joinToString("") { entry -> String(zip.getInputStream(entry).use { it.readBytes() }, Charsets.ISO_8859_1) }
+                callbacks.get().forEach { name ->
+                    if (!code.contains(name)) {
+                        throw GradleException("${element.outputFile}: no method $name in its code; the Rust library calls it by name (proguard-rules.pro)")
+                    }
+                    lines += "OK ${File(element.outputFile).name} keeps $name"
                 }
             }
         }
@@ -381,6 +400,7 @@ androidComponents {
             abis.set(shippedAbis)
             library.set("libdatapavan_watch.so")
             symbol.set(requiredJniSymbol)
+            callbacks.set(jniCallbacks)
             report.set(layout.buildDirectory.file("reports/apk-native/${variant.name}.txt"))
         }
         val manifestCheck = tasks.register<ManifestAllowlistCheck>("checkManifest$suffix") {
