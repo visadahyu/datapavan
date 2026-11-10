@@ -444,6 +444,36 @@ before; the audit app must say so or read the VPN's network too. Still to do in 
 (verify-log.sh sets a PIN, so it runs on emulators only) and on an Android 10 emulator, whose system
 image is not on this computer; Watch's memory (96 MB PSS with its screen).
 
+W4, 2026-11-10: expiry no longer waits for traffic. It ran only when a record was written or retention
+changed, so a log kept for 7 days by someone who then turned Watch off kept its old days in the file for as
+long as Watch stayed off. Now it also runs when Watch's process starts, when the tunnel starts, when the
+screen opens, before every read and count, and from a job about every six hours, and a day past retention is
+never read back or written, even before expiry has run. Android limits the job: it decides when the job
+runs, and the job does not survive a restart of the phone, since that would need the permission to start at
+boot, which ADR 0034 does not give Watch; the next start of Watch's process then expires the log. Three more
+defects of the same store are fixed. A batch that failed after its day key was made left that key's number
+in memory without its row, so the rest of the day failed to write. A failure on the log's thread could end
+Watch's process, and the tunnel with it; each one is now counted, without any destination. And yesterday's
+key stayed in memory until the next write, not only until midnight. A model-based test (`LogModel`, debug
+builds) runs inside Watch on the emulator, against Android's own SQLite and the Keystore. It draws random
+sequences of writes, reads, the clock moving on and back, time zones, restarts, locking, changes of
+retention, wipes, the expiry job, a full or failing database and a failing Keystore, and after each step
+checks what must and must not be read back; `scripts/verify-log.sh` runs 300 steps of it, with a fresh seed
+that it prints. On the code as it is, 50 seeds of 1500 steps each pass on Android 15; with each of the four
+defects above put back in turn, it fails for 20, 18, 20 and 20 of 20 seeds. It also found a fifth defect:
+with retention none and a failing Keystore, a read answered "cannot be opened" instead of "nothing". While
+checking this, verify-log.sh's byte comparison failed on Android 15 (8.9 % apart). The engine wrote a TCP
+flow's last segment as soon as its relay ended, but Android's stack still sends what it holds for the app
+through the tunnel in the 30 s the rewriting stays, and those packets were counted after that segment: 10 of
+20 downloads of 2 MB lost 5 to 26 % of their packets in the log. The last segment is now written when the
+rewriting goes, and ends at the flow's last packet. All 20 downloads then carry 1.037 times their payload on
+the tunnel, and over the scripted session the log and Android's count match to the byte. The 0.03 % of the
+day before came from runs in which that loss did not happen; verify-log.sh now checks each download on its
+own. Both scripts pass in full on Android 11, 15 and 17; the log and Android's count were 0.05 % and 0.01 %
+apart on Android 11, and equal to the byte on 15 and 17. On the first run after a fresh boot of the Android
+17 emulator, verify-watch.sh once found Watch's engine started over, with no crash logged; two runs after it
+passed, and both scripts now print how Watch's process last ended when they fail.
+
 | # | Milestone | Done when |
 |---|---|---|
 | W1 | Watch's skeleton | A second Gradle module, `:watch`, package `org.visadahyu.datapavan.watch`, signed with the same key. Both APKs come from one build, CI is green, and each is reproducible on its own. The build fails if the audit app gains `INTERNET`, as now, or if Watch's manifest holds anything outside its permissions ADR. Watch opens on the emulator and the A40 with strings in all eight languages, RTL and pseudo-locales from the start, and an icon from the brand marks. Its tunnel starts and stops. |

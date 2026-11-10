@@ -20,8 +20,8 @@ import kotlin.random.Random
  *
  * From a seed it draws a sequence of what can happen to the log: writes, reads, the clock moving on,
  * back and past midnight, a change of time zone, the process starting again, the phone locked and
- * unlocked, a change of retention, the wipe, Android's expiry job, a database that is full and a
- * Keystore that fails. It applies each to a log of its own (its own file, preferences and Keystore key,
+ * unlocked, a change of retention, the wipe, Android's expiry job, a database that is full, a batch that
+ * fails once after its key rows, and a Keystore that fails. It applies each to a log of its own (its own file, preferences and Keystore key,
  * never the user's) and checks the log against a small model of what it must give back and what it must
  * not:
  *
