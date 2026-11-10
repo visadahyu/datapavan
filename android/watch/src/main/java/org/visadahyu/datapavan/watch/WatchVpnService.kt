@@ -134,6 +134,7 @@ class WatchVpnService : VpnService() {
         }
         active = true
         state.value = true
+        ConnectionLog.of(this).expire()
         val request = NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
@@ -236,6 +237,13 @@ class WatchVpnService : VpnService() {
      * destination and no provider.
      */
     override fun dump(fd: FileDescriptor?, writer: PrintWriter, args: Array<out String>?) {
+        // Debug builds: the file as it is, before the status line below runs expiry.
+        if (debuggable && args.orEmpty().contains("log-raw")) {
+            val (records, keys) = ConnectionLog.of(this).stored()
+            fun days(counts: Map<Long, Int>) = counts.entries.sortedBy { it.key }.joinToString(",") { "${it.key}:${it.value}" }.ifEmpty { "-" }
+            writer.println("log-raw records ${days(records)} keys ${days(keys)}")
+            return
+        }
         writer.println("running ${state.value}")
         val dns = when (val mode = dnsState.value) {
             null -> "-"
@@ -247,8 +255,11 @@ class WatchVpnService : VpnService() {
         writer.println("counters ${Engine.nativeCounters().joinToString(" ")}")
         writer.println("organisations ${Engine.nativeOrganisations().ifEmpty { "none" }}")
         val log = ConnectionLog.of(this)
-        val (days, rows) = log.counts()
-        writer.println("log retention ${log.retentionDays} days $days records $rows key ${log.hasKey} unlocked-only ${log.unlockedOnly}")
+        val counts = log.counts()
+        writer.println(
+            "log retention ${log.retentionDays} days ${counts.days} records ${counts.records} key-rows ${counts.keys} " +
+                "key ${log.hasKey} unlocked-only ${log.unlockedOnly} failures ${log.failures}",
+        )
         if (debuggable) {
             Engine.nativeFlows().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("flow $it") }
             debugLog(log, args.orEmpty().toList(), writer)
@@ -259,36 +270,56 @@ class WatchVpnService : VpnService() {
      * Debug builds only, for scripts/verify-log.sh: `log-flush` hands the log every waiting record and
      * each open flow's segment so far, and waits until they are written, `log-today`
      * prints today's records, `log-day N` says whether day N (days since 1970) opens now, `log-test-day N`
-     * writes a test record dated day N, and `log-wipe` wipes the log.
+     * writes a test record dated day N, `log-put-day N` writes one even past retention (as if put back by
+     * hand), `log-retention N` sets retention, `log-raw` (in [dump]) prints the rows by day as the file
+     * holds them, `log-wipe` wipes the log, and `log-model SEED STEPS` starts the log's model test
+     * ([org.visadahyu.datapavan.watch.log.LogModel]), whose result `log-model-result` prints.
      */
     private fun debugLog(log: ConnectionLog, args: List<String>, writer: PrintWriter) {
-        val day = args.getOrNull(args.indexOf("log-day") + 1)?.toLongOrNull()
-        val testDay = args.getOrNull(args.indexOf("log-test-day") + 1)?.toLongOrNull()
+        fun after(command: String) = args.indexOf(command).takeIf { it >= 0 }?.let { args.getOrNull(it + 1)?.toLongOrNull() }
+        val day = after("log-day")
+        val testDay = after("log-test-day") ?: after("log-put-day")
+        val retention = after("log-retention")?.toInt()
         when {
             "log-wipe" in args -> {
                 val done = java.util.concurrent.CountDownLatch(1)
-                log.wipe { done.countDown() }
-                writer.println("log-wiped ${done.await(10, java.util.concurrent.TimeUnit.SECONDS)}")
+                var gone = false
+                log.wipe {
+                    gone = it
+                    done.countDown()
+                }
+                writer.println("log-wiped ${done.await(10, java.util.concurrent.TimeUnit.SECONDS) && gone}")
             }
+            "log-retention" in args && retention in ConnectionLog.RETENTION_CHOICES -> {
+                log.retentionDays = retention ?: return
+                log.settle()
+                writer.println("log-retention $retention set")
+            }
+            "log-model" in args -> {
+                val seed = after("log-model") ?: System.nanoTime()
+                val steps = args.getOrNull(args.indexOf("log-model") + 2)?.toIntOrNull() ?: 300
+                writer.println(org.visadahyu.datapavan.watch.log.LogModel.start(this, seed, steps))
+            }
+            "log-model-result" in args -> writer.println(org.visadahyu.datapavan.watch.log.LogModel.result())
             "log-flush" in args -> {
                 Engine.nativeFlushLog()
                 log.settle()
                 writer.println("log-flushed")
             }
-            "log-today" in args -> log.read(ConnectionLog.today())?.forEach { writer.println("log-record ${describe(it)}") }
+            "log-today" in args -> log.read(log.today())?.forEach { writer.println("log-record ${describe(it)}") }
             "log-day" in args && day != null -> {
                 val records = log.read(day)
                 writer.println(if (records == null) "log-day $day locked" else "log-day $day open ${records.size}")
             }
-            "log-test-day" in args && testDay != null -> {
+            testDay != null -> {
                 val noon = java.time.LocalDate.ofEpochDay(testDay).atTime(12, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
                 val record = java.nio.ByteBuffer.allocate(1 + 1 + 4 + 8 + 8 + 4 + 8 + 8).order(java.nio.ByteOrder.LITTLE_ENDIAN)
                     .put(1).put(2).putInt(-1).putLong(noon).putLong(noon).putInt(1).putLong(0).putLong(0).array()
                 val batch = java.nio.ByteBuffer.allocate(4 + 2 + record.size).order(java.nio.ByteOrder.LITTLE_ENDIAN)
                     .putInt(1).putShort(record.size.toShort()).put(record).array()
-                log.write(batch)
+                log.write(batch, pastRetention = "log-put-day" in args)
                 log.settle()
-                writer.println("log-test-day $testDay written")
+                writer.println("${if ("log-put-day" in args) "log-put-day" else "log-test-day"} $testDay written")
             }
         }
     }

@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
                         retention.intValue = days
                         deleted.value = false
                     },
-                    onDelete = { log.wipe { runOnUiThread { deleted.value = true } } },
+                    onDelete = { log.wipe { gone -> runOnUiThread { deleted.value = gone } } },
                 )
             }
         }
@@ -71,6 +71,12 @@ class MainActivity : ComponentActivity() {
             requestStart()
         }
         if (debuggable && intent.getBooleanExtra(EXTRA_STOP, false)) stopTunnel()
+    }
+
+    /** The screen opens: the log deletes what retention no longer keeps, whether or not traffic flows. */
+    override fun onStart() {
+        super.onStart()
+        ConnectionLog.of(this).expire()
     }
 
     /** The activity is single-top: a debug start or stop sent while it is open comes here. */

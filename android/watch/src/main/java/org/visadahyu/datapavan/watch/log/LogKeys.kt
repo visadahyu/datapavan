@@ -36,7 +36,7 @@ interface KeyWrap {
  * while the phone is unlocked; the public key wraps each day key with RSA-OAEP. RSA-2048 in StrongBox
  * where the phone has one (StrongBox's largest RSA key), otherwise RSA-3072 in the trusted environment.
  */
-class KeystoreWrap(private val prefs: SharedPreferences) : KeyWrap {
+class KeystoreWrap(private val prefs: SharedPreferences, private val alias: String) : KeyWrap {
     private val keyStore: KeyStore = KeyStore.getInstance(PROVIDER).apply { load(null) }
 
     /** Whether the key pair works only on an unlocked phone; false where the phone refused that. */
@@ -49,7 +49,7 @@ class KeystoreWrap(private val prefs: SharedPreferences) : KeyWrap {
     }
 
     override fun unwrap(wrapped: ByteArray): ByteArray? = try {
-        val key = keyStore.getKey(ALIAS, null) as? PrivateKey
+        val key = keyStore.getKey(alias, null) as? PrivateKey
         key?.let {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, it, OAEP)
@@ -61,25 +61,25 @@ class KeystoreWrap(private val prefs: SharedPreferences) : KeyWrap {
     }
 
     override fun exists(): Boolean = try {
-        keyStore.containsAlias(ALIAS)
+        keyStore.containsAlias(alias)
     } catch (e: GeneralSecurityException) {
         false
     }
 
     override fun destroy() {
         try {
-            keyStore.deleteEntry(ALIAS)
+            keyStore.deleteEntry(alias)
         } catch (e: GeneralSecurityException) {
             Log.w(TAG, "The log's key could not be deleted", e)
         }
     }
 
-    private fun publicKey() = (keyStore.getCertificate(ALIAS) ?: generate().let { keyStore.getCertificate(ALIAS) }).publicKey
+    private fun publicKey() = (keyStore.getCertificate(alias) ?: generate().let { keyStore.getCertificate(alias) }).publicKey
 
     private fun generate() {
         for ((strongBox, bits, unlocked) in listOf(Triple(true, 2048, true), Triple(false, 3072, true), Triple(false, 3072, false))) {
             try {
-                val spec = KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                val spec = KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                     .setAlgorithmParameterSpec(RSAKeyGenParameterSpec(bits, RSAKeyGenParameterSpec.F4))
                     .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_OAEP)
                     .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA1)
@@ -104,7 +104,6 @@ class KeystoreWrap(private val prefs: SharedPreferences) : KeyWrap {
     private companion object {
         const val TAG = "WatchLog"
         const val PROVIDER = "AndroidKeyStore"
-        const val ALIAS = "watch-log"
         const val UNLOCKED_ONLY = "log_key_unlocked_only"
         const val TRANSFORMATION = "RSA/ECB/OAEPWithSHA-256AndMGF1Padding"
 

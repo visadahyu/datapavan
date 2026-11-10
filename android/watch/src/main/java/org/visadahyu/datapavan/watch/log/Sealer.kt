@@ -14,7 +14,7 @@ import javax.crypto.spec.SecretKeySpec
  * associated data. The token is an HMAC of the UID under a second derived key, so that it links one
  * app's rows under that key and nothing else.
  */
-class Sealer(dayKey: ByteArray, private val day: Long, private val keyId: Long) {
+class Sealer(dayKey: ByteArray, private val day: Long, val keyId: Long) {
     private val sealKey = SecretKeySpec(derive(dayKey, "datapavan-watch log seal"), "AES")
     private val tokenKey = SecretKeySpec(derive(dayKey, "datapavan-watch log token"), "HmacSHA256")
 

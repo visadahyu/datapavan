@@ -74,5 +74,11 @@
                 android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON"
                 android:value="true" />
         </service>
+
+        <!-- The connection log's expiry, on days nothing else starts Watch (ADR 0037). Only Android may bind to it. -->
+        <service
+            android:name=".log.LogExpiryJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 </manifest>

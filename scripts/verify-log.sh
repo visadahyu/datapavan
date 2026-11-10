@@ -5,11 +5,16 @@
 # (UID 2000) through Watch, has the engine hand over its records at once (a debug command), and checks:
 # that the log holds both flows with their bytes; that the database files hold no destination in the
 # clear; that Watch's log output names no destination; that an earlier day cannot be opened while the
-# phone is locked and can once it is unlocked; that the wipe leaves no file and no key; and that over a
+# phone is locked and can once it is unlocked; that the wipe leaves no file and no key; that over a
 # scripted session the shell's bytes in the log are within 5 % of Android's own count (M4's bar), both
-# counted as IP packets on the tunnel.
+# counted as IP packets on the tunnel; that expiry does not wait for traffic (a day past retention is
+# never read, and leaves the file when Watch starts again; a shorter retention deletes at once; "none"
+# leaves no file and no key); and then runs the log's model test (LogModel, debug builds) inside Watch.
 #
 #   scripts/verify-log.sh [path/to/watch-debug.apk]
+#
+# LOG_MODEL_SEED repeats a model run that failed (each run draws a seed and prints it); LOG_MODEL_STEPS
+# sets its length (300).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -49,6 +54,22 @@ watch_dump() {
 
 log_line() {
     watch_dump | sed -n 's/^log retention //p'
+}
+
+# The days of the log's rows ("records") or key rows ("keys") as the file holds them, one per line,
+# read before anything runs expiry.
+raw_days() {
+    watch_dump log-raw | sed -n 's/^log-raw //p' | python3 -I -c '
+import sys
+fields = sys.stdin.read().split()
+table = fields[fields.index(sys.argv[1]) + 1] if sys.argv[1] in fields else "-"
+print("\n".join(day.split(":")[0] for day in table.split(",") if day != "-"))' "$1"
+}
+
+start_watch() {
+    adb shell am start -W -n "$PKG/.MainActivity" --ez start true >/dev/null
+    for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
+    vpn_up || fail "Watch's tunnel did not come up"
 }
 
 vpn_up() {
@@ -192,7 +213,7 @@ if adb logcat -d --uid="$uid" 2>/dev/null | grep -qE "10\.0\.2\.2|watch\.test|ex
 fi
 echo "ok: no destination in Watch's logcat"
 
-# An earlier day opens only on an unlocked phone. Day keys stay in memory for the newest two days.
+# An earlier day opens only on an unlocked phone. Only today's day key stays in memory.
 earlier=$(($(local_day) - 3))
 watch_dump log-test-day "$earlier" | grep -q "^log-test-day $earlier written$" || fail "no test record for an earlier day"
 watch_dump log-day "$earlier" | grep -q "^log-day $earlier open 1$" || fail "the earlier day did not open on an unlocked phone"
@@ -217,8 +238,53 @@ echo "ok: an earlier day is locked with the phone, and opens once it is unlocked
 watch_dump log-wipe | grep -q '^log-wiped true$' || fail "the wipe did not finish"
 left=$(adb shell run-as "$PKG" ls databases 2>/dev/null | tr -d '\r' | grep -E '^log\.db' || true)
 [ -z "$left" ] || fail "the wipe left files: $left"
-log_line | grep -qE ' records 0 key false ' || fail "the wipe left records or the key: $(log_line)"
+log_line | grep -qE ' records 0 key-rows 0 key false ' || fail "the wipe left records or the key: $(log_line)"
 echo "ok: the wipe leaves no file and no key"
+
+# Expiry does not wait for traffic (ADR 0037). A record put back past retention (30
+# days) is never read, and leaves the file, with its key row, when Watch's process starts again.
+now=$(local_day)
+past=$((now - 40))
+watch_dump log-put-day "$past" | grep -q "^log-put-day $past written$" || fail "no record put back for day $past"
+raw_days records | grep -qx "$past" && raw_days keys | grep -qx "$past" || fail "the record put back for day $past is not in the file"
+result=$(watch_dump log-day "$past" | sed -n "s/^log-day $past //p")
+[ "$result" = "open 0" ] || fail "day $past, past retention, gave '$result'"
+raw_days records | grep -qx "$past" || fail "reading day $past deleted it: the read alone must not be what keeps it out"
+adb shell am force-stop "$PKG"
+start_watch
+! raw_days records | grep -qx "$past" && ! raw_days keys | grep -qx "$past" || fail "day $past, past retention, is still in the file after Watch started again"
+echo "ok: a day past retention is never read, and leaves the file when Watch starts again"
+
+# A shorter retention deletes at once what it no longer keeps; "none" leaves no file and no key.
+earlier=$((now - 3))
+for day in "$earlier" "$now"; do
+    watch_dump log-test-day "$day" | grep -q "^log-test-day $day written$" || fail "no test record for day $day"
+done
+watch_dump log-retention 1 | grep -q '^log-retention 1 set$' || fail "retention could not be set to 1 day"
+days=$(raw_days records; raw_days keys)
+grep -qx "$now" <<<"$days" || fail "retention 1 deleted today's records"
+! grep -qvx "$now" <<<"$days" || fail "retention 1 left earlier days in the file: $(sort -u <<<"$days" | tr '\n' ' ')"
+watch_dump log-retention 0 | grep -q '^log-retention 0 set$' || fail "retention could not be set to none"
+left=$(adb shell run-as "$PKG" ls databases 2>/dev/null | tr -d '\r' | grep -E '^log\.db' || true)
+[ -z "$left" ] || fail "retention none left files: $left"
+log_line | grep -qE '^0 days 0 records 0 key-rows 0 key false ' || fail "retention none left records or the key: $(log_line)"
+watch_dump log-retention 30 | grep -q '^log-retention 30 set$' || fail "retention could not be set back to 30 days"
+echo "ok: a shorter retention deletes at once, and none leaves no file and no key"
+
+# The log's model test (LogModel): random sequences of writes, reads, clock and time-zone changes,
+# restarts, locking, retention changes, wipes, the expiry job, a full database and a failing Keystore,
+# each checked against a model of what the log must and must not give back.
+seed=${LOG_MODEL_SEED:-$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')}
+steps=${LOG_MODEL_STEPS:-300}
+watch_dump log-model "$seed" "$steps" | grep -q "^log-model started seed $seed steps $steps$" || fail "the model test did not start"
+result=""
+for _ in $(seq 1 360); do
+    result=$(watch_dump log-model-result | grep '^log-model ' || true)
+    case "$result" in "log-model running"*) sleep 5 ;; *) break ;; esac
+done
+echo "  $result"
+grep -q '^log-model passed ' <<<"$result" || fail "the log's model test did not pass (repeat it with LOG_MODEL_SEED=$seed)"
+echo "ok: the log's model test passed $steps steps"
 
 if adb logcat -d -b crash 2>/dev/null | grep -q "$PKG"; then
     fail "Watch crashed"
