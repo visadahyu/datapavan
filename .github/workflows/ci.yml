@@ -124,7 +124,8 @@ jobs:
       # app inside it, scripts/smoke-watch.sh) and its engine end to end (TCP, UDP, DNS, refused and
       # unreachable destinations, each flow's owner, a network switch, scripts/verify-watch.sh), its
       # connection log (flows with their bytes, no destination in the clear or in logcat, an earlier day
-      # shut while the screen is locked, the wipe, scripts/verify-log.sh), then
+      # shut while the screen is locked, the wipe, scripts/verify-log.sh), its release build as users get
+      # it (traffic through it, each flow's app, the log, its memory budget, scripts/verify-watch-release.sh), then
       # the audit app's smoke test (overview shown,
       # no INTERNET permission, no crash),
       # then the audit verification, which gives a test fixture app risky access and checks that the
@@ -162,6 +163,7 @@ jobs:
             scripts/smoke-watch.sh
             scripts/verify-watch.sh
             scripts/verify-log.sh
+            scripts/verify-watch-release.sh
             scripts/smoke.sh
             scripts/verify-audit.sh
             scripts/verify-plan.sh
