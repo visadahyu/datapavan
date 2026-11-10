@@ -521,6 +521,17 @@ through a fake tunnel while Android takes 600 ms to name one: the other flow's a
 and the slow flow's two datagrams then leave in order. Before the change the same test failed, the answer of
 the other flow coming only after the slow flow's. verify-watch.sh, verify-log.sh and verify-watch-release.sh
 pass with it on Android 11, 15 and 17.
+The same day: the engine forgot a TCP connection after 600 s without a packet, open or not, while its relay
+lived on, so the next line from the server was dropped and the app's own was answered with a reset. Apps
+keep push connections open with heartbeats many minutes apart, and RFC 5382 asks a NAT to keep an
+established connection at least 2 h 4 min. Seen on the A40 on 2026-11-09: a line after 684 silent seconds
+never arrived. Now a connection that Android's stack handed to the relay is forgotten only by the relay,
+when the connection ends; the sweep keeps to those never handed over. Since Android's stack answers the
+app's own keepalives inside the phone, the upstream socket has the kernel's keepalive on, so that a server
+gone without a word still ends the connection (after about 2 h 11 min by Linux's defaults). The same run on
+the Android 15 emulator after the change: the line after 690 silent seconds arrived, the app's own line
+reached the server, and the server held nothing unacknowledged. Unit tests check that a relayed connection
+outlives three hours of silence while one never relayed is forgotten.
 
 | # | Milestone | Done when |
 |---|---|---|
