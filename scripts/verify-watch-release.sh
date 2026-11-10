@@ -50,7 +50,9 @@ fail() {
 vpn_up() {
     local uid
     uid=$(adb shell cmd package list packages -U "$PKG" | tr -d '\r' | sed -n "s/^package:$PKG uid:\([0-9]*\)$/\1/p")
-    [ -n "$uid" ] && adb shell dumpsys connectivity | tr -d '\r' | grep -E 'ni\{(VPN |\[type: VPN)' | grep -q "OwnerUid: $uid "
+    local vpns
+    vpns=$(adb shell dumpsys connectivity | tr -d '\r' | grep -E 'ni\{(VPN |\[type: VPN)' || true)
+    [ -n "$uid" ] && grep -q "OwnerUid: $uid " <<<"$vpns"
 }
 
 # Watch's counters (Counters::snapshot in core/net/src/engine.rs), and its log's status line.

@@ -90,7 +90,9 @@ start_watch() {
 vpn_up() {
     local uid
     uid=$(adb shell cmd package list packages -U "$PKG" | tr -d '\r' | sed -n "s/^package:$PKG uid:\([0-9]*\)$/\1/p")
-    adb shell dumpsys connectivity | tr -d '\r' | grep -E 'ni\{(VPN |\[type: VPN)' | grep -q "OwnerUid: $uid "
+    local vpns
+    vpns=$(adb shell dumpsys connectivity | tr -d '\r' | grep -E 'ni\{(VPN |\[type: VPN)' || true)
+    [ -n "$uid" ] && grep -q "OwnerUid: $uid " <<<"$vpns"
 }
 
 # Android's own count of the shell's traffic through the VPN, as "up down": the entries of the VPN's

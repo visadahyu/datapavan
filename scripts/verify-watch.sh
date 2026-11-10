@@ -100,15 +100,29 @@ flows() {
     adb shell dumpsys activity service "$PKG/.WatchVpnService" | tr -d '\r' | sed -n 's/^ *flow //p'
 }
 
+# Whether a flow matching the pattern is listed, read again for up to 5 s: a flow is listed once Android
+# has named its app, which on CI after a network switch took a few seconds. The list is read whole, then
+# searched: under pipefail, a grep -q that stops reading early fails the pipe, so a flow that was there
+# could look missing.
+flow_listed() {
+    local list
+    for _ in 1 2 3 4 5; do
+        list=$(flows)
+        grep -qE "$1" <<<"$list" && return 0
+        sleep 1
+    done
+    return 1
+}
+
 # Whether a flow of the shell matches: protocol, destination and outcome.
 has_flow() {
-    flows | grep -qE "^$1 [^ ]+ $(sed 's/[.[]/\\&/g; s/]/\\]/g' <<<"$2") $SHELL_UID $3 "
+    flow_listed "^$1 [^ ]+ $(sed 's/[.[]/\\&/g; s/]/\\]/g' <<<"$2") $SHELL_UID $3 "
 }
 
 # Whether a flow of the shell, by protocol $1 to any address on port $2, is named $3 by $4 (W3), with
 # the ECH column $5 (any if not given).
 has_named_flow() {
-    flows | grep -qE "^$1 [^ ]+ [^ ]+:$2 $SHELL_UID opened $4 ${5:-[^ ]+} [^ ]+ [^ ]+ ${3//./\\.}\$"
+    flow_listed "^$1 [^ ]+ [^ ]+:$2 $SHELL_UID opened $4 ${5:-[^ ]+} [^ ]+ [^ ]+ ${3//./\\.}\$"
 }
 
 # What Watch says of Private DNS on its network: plain, network, or strict and the provider (debug).
@@ -134,7 +148,9 @@ android_private_dns() {
 vpn_up() {
     local uid
     uid=$(adb shell cmd package list packages -U "$PKG" | tr -d '\r' | sed -n "s/^package:$PKG uid:\([0-9]*\)$/\1/p")
-    adb shell dumpsys connectivity | tr -d '\r' | grep -E 'ni\{(VPN |\[type: VPN)' | grep -q "OwnerUid: $uid "
+    local vpns
+    vpns=$(adb shell dumpsys connectivity | tr -d '\r' | grep -E 'ni\{(VPN |\[type: VPN)' || true)
+    [ -n "$uid" ] && grep -q "OwnerUid: $uid " <<<"$vpns"
 }
 
 # Runs a shell command on the device, killing it after $1 seconds: nc -u waits for more answers.
@@ -173,7 +189,7 @@ traffic() {
     # ping resolves the name first, through the tunnel's DNS; its ICMP itself is not forwarded yet.
     answer=$(device 15 "ping -c 1 -W 2 example.com")
     grep -q 'PING example.com (' <<<"$answer" || fail "$round: example.com did not resolve: $answer"
-    flows | grep -qE "^udp [^ ]+ (10\.215\.173\.3|\[fd7a:6470:7761::3\]):53 $SHELL_UID opened " ||
+    flow_listed "^udp [^ ]+ (10\.215\.173\.3|\[fd7a:6470:7761::3\]):53 $SHELL_UID opened " ||
         fail "$round: no DNS flow of the shell to the tunnel's DNS address"
     echo "ok: $round: names resolve through the tunnel"
 
@@ -194,7 +210,7 @@ traffic() {
     # TLS hello for its DNS-over-HTTPS name. Neither needs an answer to be recognised. nc quits 3 s after
     # its input ends (-q), so that od sees the end of the answer.
     answer=$(device 10 "nc -u -q 3 8.8.8.8 53 < $DNS_ON_DEVICE | od -An -tx1")
-    flows | grep -qE "^udp [^ ]+ 8\.8\.8\.8:53 $SHELL_UID [a-z]+ [^ ]+ [^ ]+ plain:google " ||
+    flow_listed "^udp [^ ]+ 8\.8\.8\.8:53 $SHELL_UID [a-z]+ [^ ]+ [^ ]+ plain:google " ||
         fail "$round: plain DNS to 8.8.8.8 was not recognised as the app's own"
     echo "ok: $round: an app's own plain DNS, to a known resolver"
     # The answer of a resolver the app asked itself names that app's next flow, and only its flows. Where
@@ -227,7 +243,7 @@ PY
         echo "skipped: $round: no answer from a resolver the app asked itself"
     fi
     device 10 "nc -w 3 8.8.8.8 443 < $DOH_ON_DEVICE" >/dev/null
-    flows | grep -qE "^tcp [^ ]+ 8\.8\.8\.8:443 $SHELL_UID [a-z]+ [^ ]+ [^ ]+ encrypted:google " ||
+    flow_listed "^tcp [^ ]+ 8\.8\.8\.8:443 $SHELL_UID [a-z]+ [^ ]+ [^ ]+ encrypted:google " ||
         fail "$round: a TLS hello for dns.google was not recognised as encrypted DNS"
     echo "ok: $round: an app's own encrypted DNS, to a known resolver"
 
@@ -238,12 +254,12 @@ PY
         # would come first (Android or an app may look up dns.google, which names 8.8.8.8).
         device 6 "echo watch | nc -u -w 1 216.239.32.10 9" >/dev/null
         has_named_flow udp 9 'Google LLC' org || fail "$round: a flow to 216.239.32.10 was not named after Google's network"
-        flows | grep -qE "^udp [^ ]+ 216\.239\.32\.10:9 $SHELL_UID opened org [^ ]+ [^ ]+ as15169:hosting Google LLC$" ||
+        flow_listed "^udp [^ ]+ 216\.239\.32\.10:9 $SHELL_UID opened org [^ ]+ [^ ]+ as15169:hosting Google LLC$" ||
             fail "$round: Google's network was not marked as one that hosts other companies' servers"
         echo "ok: $round: a flow named from the organisation table"
         # The owners' table names the company people know, not the registry's "Facebook, Inc.".
         device 6 "echo watch | nc -u -w 1 157.240.1.35 9" >/dev/null
-        flows | grep -qE "^udp [^ ]+ 157\.240\.1\.35:9 $SHELL_UID opened org [^ ]+ [^ ]+ as32934:own Meta Platforms, Inc\.$" ||
+        flow_listed "^udp [^ ]+ 157\.240\.1\.35:9 $SHELL_UID opened org [^ ]+ [^ ]+ as32934:own Meta Platforms, Inc\.$" ||
             fail "$round: a flow to Meta's network was not named after Meta"
         echo "ok: $round: a network named after the company that owns it"
     else
