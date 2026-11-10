@@ -532,6 +532,12 @@ gone without a word still ends the connection (after about 2 h 11 min by Linux's
 the Android 15 emulator after the change: the line after 690 silent seconds arrived, the app's own line
 reached the server, and the server held nothing unacknowledged. Unit tests check that a relayed connection
 outlives three hours of silence while one never relayed is forgotten.
+Also before W6: `core/net/src/engine.rs`, 2,285 lines, is split by moves only into `engine.rs` (the public
+types, `Engine`, `Config`, `Platform`, `Counters`, the packet loop and the tests) and five modules beside
+it: `naming` (what names a flow), `logbook` (each flow's bytes, the segments and the logger), `tcp` and
+`udp` (the two paths), and `upstream` (the engine's own connections, the one place W6 and W7 extend). A
+line-by-line comparison of the code before and after finds only imports, visibility within the engine and
+line wrapping changed.
 
 | # | Milestone | Done when |
 |---|---|---|
