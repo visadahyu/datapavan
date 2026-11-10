@@ -52,11 +52,19 @@ QUIC_ON_DEVICE=/data/local/tmp/watch-quic
 # An app's own DNS (ADR 0029): a plain query for example.org, and a TLS hello for dns.google.
 DNS_ON_DEVICE=/data/local/tmp/watch-dns.bin
 DOH_ON_DEVICE=/data/local/tmp/watch-doh.bin
+# The emulator's setting to keep mobile data up while Wi-Fi is on, before the test changed it.
+DATA_ALWAYS_ON=""
+
 cleanup() {
     adb shell rm -f "$HELLO_ON_DEVICE" "$QUIC_ON_DEVICE-1.bin" "$QUIC_ON_DEVICE-2.bin" "$DNS_ON_DEVICE" "$DOH_ON_DEVICE" >/dev/null 2>&1 || true
     adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
     if is_emulator; then
         adb shell svc wifi enable >/dev/null 2>&1 || true
+        case "$DATA_ALWAYS_ON" in
+            "") ;;
+            null) adb shell settings delete global mobile_data_always_on >/dev/null 2>&1 || true ;;
+            *) adb shell settings put global mobile_data_always_on "$DATA_ALWAYS_ON" >/dev/null 2>&1 || true ;;
+        esac
         restore_private_dns
     fi
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
@@ -372,11 +380,26 @@ fi
 
 if is_emulator; then
     # The emulator has Wi-Fi and mobile data: switching Wi-Fi off moves the tunnel to mobile data.
+    # Mobile data stays up beside Wi-Fi, as on most phones, so that the switch has a network to go to: on
+    # CI, mobile data brought up only after Wi-Fi went off was not there 40 s later ("Active default
+    # network: none"), and nothing could pass, with Watch or without.
+    DATA_ALWAYS_ON=$(adb shell settings get global mobile_data_always_on | tr -d '\r')
+    adb shell settings put global mobile_data_always_on 1
+    sleep 5
     adb shell svc wifi disable
-    sleep 8
+    # Read whole: under pipefail, a grep -q that stops reading early fails the pipe.
+    default_network() {
+        adb shell dumpsys connectivity | tr -d '\r' | sed -n 's/^Active default network: //p'
+    }
+    for _ in $(seq 1 30); do
+        [[ "$(default_network)" =~ ^[0-9]+$ ]] && break
+        sleep 2
+    done
+    [[ "$(default_network)" =~ ^[0-9]+$ ]] ||
+        fail "Android had no network 60 s after Wi-Fi went off, so nothing could pass, with Watch or without"
+    sleep 3
     vpn_up || fail "the tunnel went down when the network beneath switched"
-    # As without a VPN, a connection during the switch may fail (ADR 0012); the next ones must pass. On
-    # CI the mobile network has taken more than 8 s to carry traffic, so wait up to 30 s for a first one.
+    # As without a VPN, a connection during the switch may fail (ADR 0012); the next ones must pass.
     for _ in $(seq 1 15); do
         timeout 8 adb shell "printf 'GET /ping HTTP/1.0\r\n\r\n' | nc -w 5 $HOST $PORT" 2>/dev/null | tr -d '\r' | grep -q '^pong$' && break
         sleep 2
