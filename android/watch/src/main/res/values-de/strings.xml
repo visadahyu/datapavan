@@ -11,7 +11,11 @@
     <string name="private_dns_network">Der DNS-Server Ihres Netzwerks unterstützt Verschlüsselung, und Android nutzt sie für die Namen, die Apps nachschlagen. So bleiben sie geschützt, aber Watch kann sie nicht lesen.</string>
     <string name="private_dns_still_named">Watch benennt die meisten Verbindungen trotzdem: nach dem, was jede App sendet, oder nach dem Betreiber des Netzwerks, das sie erreichen.</string>
     <string name="log_title">Verbindungsprotokoll</string>
-    <string name="log_explained">Watch speichert für jede Verbindung auf diesem Telefon einen verschlüsselten Eintrag. Einträge früherer Tage lassen sich nur öffnen, solange das Telefon entsperrt ist.</string>
+    <string name="log_encrypted">Watch speichert für jede Verbindung auf diesem Telefon einen verschlüsselten Eintrag.</string>
+    <string name="log_locked">Einträge früherer Tage lassen sich nur öffnen, solange das Telefon entsperrt ist.</string>
+    <string name="log_no_screen_lock">Dieses Telefon hat keine Displaysperre, daher lassen sich Einträge früherer Tage jederzeit öffnen. Mit einer Displaysperre lassen sie sich nur öffnen, solange das Telefon entsperrt ist.</string>
+    <string name="log_lock_refused">Dieses Telefon hat Watch nicht erlaubt, die Einträge an seine Displaysperre zu binden, daher lassen sich Einträge früherer Tage jederzeit öffnen.</string>
+    <string name="log_not_kept">Watch speichert keine Einträge zu Verbindungen.</string>
     <string name="log_keep">Einträge behalten für</string>
     <string name="log_keep_none">Nichts behalten</string>
     <plurals name="log_keep_days">

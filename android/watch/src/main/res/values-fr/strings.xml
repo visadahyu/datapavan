@@ -11,7 +11,11 @@
     <string name="private_dns_network">Le serveur DNS de votre réseau prend en charge le chiffrement, et Android l\'utilise pour les noms que les applis recherchent. Ils restent ainsi privés, mais Watch ne peut pas les lire.</string>
     <string name="private_dns_still_named">Watch nomme quand même la plupart des connexions d\'après ce que chaque appli envoie, ou d\'après qui gère le réseau qu\'elles atteignent.</string>
     <string name="log_title">Journal des connexions</string>
-    <string name="log_explained">Watch tient un journal de chaque connexion sur ce téléphone, sous forme chiffrée. Le journal des jours précédents ne s\'ouvre que lorsque le téléphone est déverrouillé.</string>
+    <string name="log_encrypted">Watch tient un journal de chaque connexion sur ce téléphone, sous forme chiffrée.</string>
+    <string name="log_locked">Le journal des jours précédents ne s\'ouvre que lorsque le téléphone est déverrouillé.</string>
+    <string name="log_no_screen_lock">Ce téléphone n\'a pas de verrouillage de l\'écran, donc le journal des jours précédents peut s\'ouvrir à tout moment. Avec un verrouillage de l\'écran, il ne s\'ouvre que lorsque le téléphone est déverrouillé.</string>
+    <string name="log_lock_refused">Ce téléphone n\'a pas permis à Watch de lier le journal à son verrouillage de l\'écran, donc le journal des jours précédents peut s\'ouvrir à tout moment.</string>
+    <string name="log_not_kept">Watch ne tient aucun journal des connexions.</string>
     <string name="log_keep">Conserver le journal</string>
     <string name="log_keep_none">Ne rien conserver</string>
     <plurals name="log_keep_days">

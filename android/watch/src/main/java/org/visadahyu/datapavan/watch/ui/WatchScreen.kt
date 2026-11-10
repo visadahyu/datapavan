@@ -44,6 +44,8 @@ internal fun WatchScreen(
     refused: Boolean,
     retentionDays: Int,
     deleted: Boolean,
+    logLock: ConnectionLog.Lock,
+    screenLock: Boolean,
     onStart: () -> Unit,
     onStop: () -> Unit,
     onRetention: (Int) -> Unit,
@@ -85,7 +87,7 @@ internal fun WatchScreen(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            LogSettings(retentionDays, deleted, onRetention, onDelete)
+            LogSettings(retentionDays, deleted, logLock, screenLock, onRetention, onDelete)
         }
     }
 }
@@ -111,16 +113,39 @@ private fun PrivateDnsNote(privateDns: PrivateDns) {
     }
 }
 
-/** How long the connection log keeps its records, and its wipe, one tap away (ADR 0037). */
+/**
+ * How long the connection log keeps its records, and its wipe, one tap away (ADR 0037). What it says
+ * of earlier days is only what holds on this phone: shut while it is locked once the log's key pair is
+ * tied to the lock and the phone has a screen lock; open at any time if the phone has none, or refused
+ * that key pair ([screenLock] is whether it has one); nothing before the key pair exists.
+ */
 @Composable
-private fun LogSettings(retentionDays: Int, deleted: Boolean, onRetention: (Int) -> Unit, onDelete: () -> Unit) {
+private fun LogSettings(
+    retentionDays: Int,
+    deleted: Boolean,
+    logLock: ConnectionLog.Lock,
+    screenLock: Boolean,
+    onRetention: (Int) -> Unit,
+    onDelete: () -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             stringResource(R.string.log_title),
             style = MaterialTheme.typography.titleSmall,
             modifier = Modifier.semantics { heading() },
         )
-        Text(stringResource(R.string.log_explained), style = MaterialTheme.typography.bodyMedium)
+        if (retentionDays == 0) {
+            Text(stringResource(R.string.log_not_kept), style = MaterialTheme.typography.bodyMedium)
+        } else {
+            Text(stringResource(R.string.log_encrypted), style = MaterialTheme.typography.bodyMedium)
+            val shut = when {
+                logLock == ConnectionLog.Lock.ANY_TIME -> R.string.log_lock_refused
+                !screenLock -> R.string.log_no_screen_lock
+                logLock == ConnectionLog.Lock.UNLOCKED_ONLY -> R.string.log_locked
+                else -> null
+            }
+            shut?.let { Text(stringResource(it), style = MaterialTheme.typography.bodyMedium) }
+        }
         Text(stringResource(R.string.log_keep), style = MaterialTheme.typography.bodyMedium)
         Column(Modifier.selectableGroup()) {
             for (days in ConnectionLog.RETENTION_CHOICES) {

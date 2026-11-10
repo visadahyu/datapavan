@@ -258,7 +258,7 @@ class WatchVpnService : VpnService() {
         val counts = log.counts()
         writer.println(
             "log retention ${log.retentionDays} days ${counts.days} records ${counts.records} key-rows ${counts.keys} " +
-                "key ${log.hasKey} unlocked-only ${log.unlockedOnly} failures ${log.failures}",
+                "key ${log.hasKey} lock ${log.lockNow().name.lowercase().replace('_', '-')} failures ${log.failures}",
         )
         if (debuggable) {
             Engine.nativeFlows().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("flow $it") }

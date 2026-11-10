@@ -20,7 +20,16 @@
     <string name="private_dns_still_named">Watch still names most connections from what each app sends, or by who runs the network they reach.</string>
     <!-- The heading of the connection log's settings (W4). -->
     <string name="log_title">Connection log</string>
-    <string name="log_explained">Watch keeps a record of each connection on this phone, in encrypted form. Records of earlier days can be opened only while the phone is unlocked.</string>
+    <!-- Under the heading, while the log keeps records. One of the three sentences after it follows, whichever holds on this phone. -->
+    <string name="log_encrypted">Watch keeps a record of each connection on this phone, in encrypted form.</string>
+    <!-- The phone has a screen lock (a PIN, pattern or password), and the log's key works only while the phone is unlocked. -->
+    <string name="log_locked">Records of earlier days can be opened only while the phone is unlocked.</string>
+    <!-- The phone has no screen lock. "Screen lock" is Android's own name for the setting (Settings, Security). -->
+    <string name="log_no_screen_lock">This phone has no screen lock, so records of earlier days can be opened at any time. With a screen lock, they open only while the phone is unlocked.</string>
+    <!-- The phone did not allow a key that works only while it is unlocked, so the log's key works at any time. -->
+    <string name="log_lock_refused">This phone did not let Watch tie the records to its screen lock, so records of earlier days can be opened at any time.</string>
+    <!-- Under the heading, instead of the sentences above, when the user chose to keep no records. -->
+    <string name="log_not_kept">Watch keeps no record of connections.</string>
     <!-- The heading of the choice of how long the log keeps its records. -->
     <string name="log_keep">Keep records for</string>
     <string name="log_keep_none">Don\'t keep any</string>

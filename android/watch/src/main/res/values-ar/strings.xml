@@ -11,7 +11,11 @@
     <string name="private_dns_network">يدعم خادم DNS في شبكتك التشفير، ويستخدمه Android للأسماء التي تبحث عنها التطبيقات. هذا يحميها، لكن Watch لا يستطيع قراءتها.</string>
     <string name="private_dns_still_named">مع ذلك، يسمّي Watch معظم الاتصالات بحسب ما يرسله كل تطبيق، أو بحسب الجهة التي تدير الشبكة التي تصل إليها.</string>
     <string name="log_title">سجل الاتصالات</string>
-    <string name="log_explained">يحتفظ Watch بسجل مشفّر لكل اتصال على هذا الهاتف. لا يمكن فتح سجلات الأيام السابقة إلا والهاتف غير مقفل.</string>
+    <string name="log_encrypted">يحتفظ Watch بسجل مشفّر لكل اتصال على هذا الهاتف.</string>
+    <string name="log_locked">لا يمكن فتح سجلات الأيام السابقة إلا والهاتف غير مقفل.</string>
+    <string name="log_no_screen_lock">لا يوجد قفل شاشة على هذا الهاتف، لذا يمكن فتح سجلات الأيام السابقة في أي وقت. مع قفل الشاشة، لا تُفتح إلا والهاتف غير مقفل.</string>
+    <string name="log_lock_refused">لم يسمح هذا الهاتف لـ Watch بربط السجلات بقفل الشاشة، لذا يمكن فتح سجلات الأيام السابقة في أي وقت.</string>
+    <string name="log_not_kept">لا يحتفظ Watch بأي سجل للاتصالات.</string>
     <string name="log_keep">الاحتفاظ بالسجلات لمدة</string>
     <string name="log_keep_none">عدم الاحتفاظ بأي سجل</string>
     <plurals name="log_keep_days">

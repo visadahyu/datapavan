@@ -16,6 +16,9 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Watch's connection log (W4, ADR 0037): the engine's records, each sealed under a key for its day,
@@ -53,10 +56,16 @@ class ConnectionLog internal constructor(
     private var jobAsked = false
     private val failed = AtomicInteger()
 
+    private val lockFlow = MutableStateFlow(Lock.NO_KEY_YET)
+
+    /** The log's [Lock], kept current as its key pair is made and destroyed, for the screen. */
+    val lock: StateFlow<Lock> = lockFlow.asStateFlow()
+
     init {
         submit(
             guarded {
                 tidy()
+                lockFlow.value = lockNow()
                 if (hasFile && retentionDays > 0) {
                     expiryJob(true)
                     jobAsked = true
@@ -137,8 +146,24 @@ class ConnectionLog internal constructor(
     /** Whether the log's key pair exists: not before the first record, nor after a wipe. */
     val hasKey: Boolean get() = wrap.exists()
 
-    /** Whether the key pair works only on an unlocked phone (ADR 0037). */
-    val unlockedOnly: Boolean get() = (wrap as? KeystoreWrap)?.unlockedOnly ?: true
+    /** How the log keeps earlier days shut, as far as its key pair goes (ADR 0037). */
+    enum class Lock {
+        /** No key pair yet: nothing has been written since the log began or was wiped. */
+        NO_KEY_YET,
+
+        /** The key pair works only while the phone is unlocked (on a phone with no screen lock, always). */
+        UNLOCKED_ONLY,
+
+        /** The phone refused a key pair tied to its lock, so the log's works at any time. */
+        ANY_TIME,
+    }
+
+    /** The log's [Lock] now, asked of the Keystore from the calling thread. */
+    fun lockNow(): Lock = when {
+        !wrap.exists() -> Lock.NO_KEY_YET
+        (wrap as? KeystoreWrap)?.unlockedOnly != false -> Lock.UNLOCKED_ONLY
+        else -> Lock.ANY_TIME
+    }
 
     /** Whether the database file exists. */
     internal val hasFile: Boolean get() = context.getDatabasePath(name).exists()
@@ -239,6 +264,8 @@ class ConnectionLog internal constructor(
         val key = Sealer.newDayKey()
         try {
             val id = db.insertOrThrow("day_keys", null, ContentValues().apply { put("day", day); put("wrapped", wrap.wrap(key)) })
+            // The first day key also made the key pair.
+            if (lockFlow.value == Lock.NO_KEY_YET) lockFlow.value = lockNow()
             keys[day] = id to key
             return Sealer(key, day, id).also { sealers[day] = it }
         } catch (e: Exception) {
@@ -299,6 +326,7 @@ class ConnectionLog internal constructor(
         context.deleteDatabase(name)
         expiredBefore = null
         wrap.destroy()
+        lockFlow.value = lockNow()
         val gone = !hasFile && !wrap.exists()
         if (!gone) failure("The wipe left something")
         if (retentionDays == 0) {

@@ -1,5 +1,6 @@
 package org.visadahyu.datapavan.watch
 
+import android.app.KeyguardManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -28,6 +29,9 @@ class MainActivity : ComponentActivity() {
     private val retention = mutableIntStateOf(30)
     private val deleted = mutableStateOf(false)
 
+    /** Whether the phone has a screen lock (a PIN, pattern or password), read again each time the screen opens. */
+    private val screenLock = mutableStateOf(false)
+
     /** Debug builds: the only apps the end-to-end test sends through the tunnel, comma-separated. */
     private var onlyApps: String? = null
 
@@ -45,6 +49,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val running by WatchVpnService.running.collectAsState()
             val privateDns by WatchVpnService.privateDns.collectAsState()
+            val logLock by log.lock.collectAsState()
             WatchTheme {
                 WatchScreen(
                     running = running,
@@ -52,6 +57,8 @@ class MainActivity : ComponentActivity() {
                     refused = refused.value,
                     retentionDays = retention.intValue,
                     deleted = deleted.value,
+                    logLock = logLock,
+                    screenLock = screenLock.value,
                     onStart = ::requestStart,
                     onStop = ::stopTunnel,
                     onRetention = { days ->
@@ -77,6 +84,8 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         ConnectionLog.of(this).expire()
+        // The screen lock is set in Settings, so it can only have changed while this screen was away.
+        screenLock.value = getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true
     }
 
     /** The activity is single-top: a debug start or stop sent while it is open comes here. */

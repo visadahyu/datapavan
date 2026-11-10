@@ -36,6 +36,7 @@ SERVER=""
 PIN_SET=""
 cleanup() {
     [ -z "$PIN_SET" ] || adb shell locksettings clear --old "$PIN" >/dev/null 2>&1 || true
+    adb shell cmd locale set-app-locales "$PKG" --locales "" >/dev/null 2>&1 || true
     adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
 }
@@ -67,6 +68,17 @@ import sys
 fields = sys.stdin.read().split()
 table = fields[fields.index(sys.argv[1]) + 1] if sys.argv[1] in fields else "-"
 print("\n".join(day.split(":")[0] for day in table.split(",") if day != "-"))' "$1"
+}
+
+# What Watch's screen says of the log's earlier days now: the sentence after "Watch keeps a record of
+# each connection", or "none". The screen is in English for the test (set below).
+lock_sentence() {
+    adb shell input keyevent KEYCODE_WAKEUP
+    scroll_to "Watch keeps a record of each connection" >/dev/null || true
+    swipe_up
+    dump_screen >/dev/null
+    adb shell cat "$DUMP" | grep -o 'text="[^"]*"' | sed 's/^text="//; s/"$//' |
+        grep -E '^(Records of earlier days|This phone has no screen lock|This phone did not let Watch)' | head -1 | grep . || echo none
 }
 
 start_watch() {
@@ -126,6 +138,7 @@ adb install -r "$APK" >/dev/null
 adb shell appops set "$PKG" ACTIVATE_VPN allow
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 adb shell am force-stop "$PKG"
+adb shell cmd locale set-app-locales "$PKG" --locales en-US >/dev/null
 adb logcat -c
 adb shell am start -W -n "$PKG/.MainActivity" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
@@ -150,6 +163,13 @@ grep -qE "^tcp $SHELL_UID $HOST:$PORT up=22 down=[1-9][0-9]* (continues|ended) "
 grep -qE "^udp $SHELL_UID $HOST:$((PORT + 1)) up=10 down=10 (continues|ended) " <<<"$today" ||
     fail "the log has no segment of the shell's UDP flow with 10 bytes each way; the shell's records: $(grep "^[a-z]* $SHELL_UID " <<<"$today" | tr '\n' ';')"
 echo "ok: the log holds the shell's TCP flow and its UDP flow so far, with their bytes"
+
+# The screen says of earlier days only what holds: this emulator has no screen lock, so they can be
+# opened at any time, and the screen does not say "only while the phone is unlocked".
+adb shell wm dismiss-keyguard
+said=$(lock_sentence)
+case "$said" in "This phone has no screen lock"*) ;; *) fail "with no screen lock, the screen said: $said" ;; esac
+echo "ok: with no screen lock, the screen says that earlier days can be opened at any time"
 
 # A flow open when the tunnel stops still reaches the log: the engine hands over its last records.
 timeout 20 adb shell "sleep 8 | nc -w 10 $HOST $PORT" >/dev/null 2>&1 &
@@ -253,6 +273,10 @@ adb shell input keyevent KEYCODE_ENTER
 sleep 2
 result=$(watch_dump log-day "$earlier" | sed -n "s/^log-day $earlier //p")
 [ "$result" = "open 1" ] || fail "the earlier day was '$result' once the phone was unlocked"
+# Watch's screen, back in front after the unlock, reads the screen lock again.
+said=$(lock_sentence)
+case "$said" in "Records of earlier days can be opened only while the phone is unlocked."*) ;; *) fail "with a PIN, the screen said: $said" ;; esac
+echo "ok: with a PIN, the screen says that earlier days open only while the phone is unlocked"
 adb shell locksettings clear --old "$PIN" >/dev/null
 PIN_SET=""
 echo "ok: an earlier day is locked with the phone, and opens once it is unlocked"
