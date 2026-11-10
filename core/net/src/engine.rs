@@ -1456,6 +1456,11 @@ async fn connect_tcp(shared: &Arc<Shared>, target: SocketAddr) -> io::Result<Tcp
         TcpSocket::new_v6()?
     };
     protect(shared, socket.as_raw_fd()).await?;
+    // Android's stack answers the app's own keepalives inside the phone, so through Watch an app cannot
+    // tell that the server is gone: the kernel's keepalive on the upstream socket does (after about two
+    // hours and eleven minutes by Linux's defaults, beyond RFC 5382's two hours and four), and the relay
+    // ends both sides.
+    socket.set_keepalive(true)?;
     match tokio::time::timeout(CONNECT_TIMEOUT, socket.connect(target)).await {
         Ok(connected) => connected,
         Err(_) => Err(io::ErrorKind::TimedOut.into()),
@@ -1599,6 +1604,8 @@ async fn accept(
             shared.finish(upstream.opened.id);
             continue;
         };
+        // From now on the relay alone ends the connection, and its rewriting with it.
+        lock(&nat).relayed(port);
         let (shared, nat) = (Arc::clone(&shared), Arc::clone(&nat));
         let id = upstream.opened.id;
         tokio::spawn(async move {
@@ -2191,6 +2198,10 @@ mod tests {
         server_end.read_exact(&mut got).await?;
         assert_eq!(&got, b"hello");
         assert!(!lock(&pending).contains_key(&port));
+        // The relay holds it now: no silence makes the sweep forget it.
+        let hours = Instant::now() + Duration::from_hours(3);
+        assert_eq!(lock(&nat).sweep(hours), Vec::<u16>::new());
+        assert!(lock(&nat).by_fake(port, hours).is_some_and(|e| e.relayed));
 
         // The one whose rewriting is gone is closed, and its flow ends.
         let mut late = late.connect(address).await?;

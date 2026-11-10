@@ -12,7 +12,11 @@ use std::time::{Duration, Instant};
 const FIRST_PORT: u16 = 10_000;
 const LAST_PORT: u16 = 60_000;
 
-/// A connection silent for this long is forgotten. TCP keepalives from apps come far more often.
+/// A connection that Android's stack never handed to the engine's relay, silent this long, is forgotten.
+/// One it handed over is the relay's: only the relay forgets it, when the connection ends (an app's push
+/// connection can be silent for half an hour, and RFC 5382 asks a NAT to keep an established one for
+/// at least two hours and four minutes). The clock is time awake (`Instant`), as for every limit about
+/// the network.
 pub const TCP_IDLE: Duration = Duration::from_secs(600);
 
 /// A fake port freed is not handed out again for this long: Android's stack may still hold the old
@@ -34,6 +38,8 @@ pub struct Entry {
     /// Whether the real server accepted. Until then the app's SYN is held: the app's socket must
     /// still exist when Android is asked whose it is, and a refused server must look refused.
     pub open: bool,
+    /// Whether Android's stack handed the connection to the relay, which then alone forgets it.
+    pub relayed: bool,
 }
 
 /// How a packet from an app fits the table.
@@ -153,6 +159,7 @@ impl Nat {
                 destination,
                 seen: now,
                 open: false,
+                relayed: false,
             },
         );
         self.by_app.insert((app, destination), port);
@@ -190,6 +197,13 @@ impl Nat {
         }
     }
 
+    /// Marks a connection as the relay's: the sweep leaves it alone from then on.
+    pub fn relayed(&mut self, port: u16) {
+        if let Some(entry) = self.by_fake.get_mut(&port) {
+            entry.relayed = true;
+        }
+    }
+
     /// Forgets a connection; its port cools for [`PORT_COOLING`] before it is handed out again.
     pub fn remove(&mut self, port: u16, now: Instant) {
         if let Some(entry) = self.by_fake.remove(&port) {
@@ -210,12 +224,13 @@ impl Nat {
         }
     }
 
-    /// Forgets connections silent for longer than [`TCP_IDLE`]; returns their fake ports.
+    /// Forgets connections not yet relayed and silent for longer than [`TCP_IDLE`]; returns their
+    /// fake ports.
     pub fn sweep(&mut self, now: Instant) -> Vec<u16> {
         let stale: Vec<u16> = self
             .by_fake
             .iter()
-            .filter(|(_, e)| now.duration_since(e.seen) > TCP_IDLE)
+            .filter(|(_, e)| !e.relayed && now.duration_since(e.seen) > TCP_IDLE)
             .map(|(&p, _)| p)
             .collect();
         for &port in &stale {
@@ -316,6 +331,28 @@ mod tests {
             nat.lookup(ends(40_002).0, server, true, later),
             Lookup::New(first)
         );
+    }
+
+    /// A connection the relay holds outlives any silence: a push connection's next message, half an
+    /// hour later, must still reach the app. One never relayed is forgotten after [`TCP_IDLE`].
+    #[test]
+    fn keeps_a_relayed_connection_through_silence() {
+        let mut nat = Nat::default();
+        let then = Instant::now();
+        let server = ends(0).1;
+        let Lookup::New(relayed) = nat.lookup(ends(40_000).0, server, true, then) else {
+            unreachable!("no port")
+        };
+        let Lookup::New(waiting) = nat.lookup(ends(40_001).0, server, true, then) else {
+            unreachable!("no port")
+        };
+        nat.open(relayed);
+        nat.relayed(relayed);
+        let hours = then + Duration::from_hours(3);
+        assert_eq!(nat.sweep(hours), vec![waiting]);
+        assert!(nat.by_fake(relayed, hours).is_some());
+        nat.remove_if(relayed, ends(40_000).0, server, hours);
+        assert!(nat.is_empty());
     }
 
     #[test]
