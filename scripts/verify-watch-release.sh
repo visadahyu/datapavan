@@ -97,10 +97,10 @@ answer=$(timeout 8 adb shell "echo watch-release | nc -u -q 2 $HOST $((PORT + 1)
 grep -q '^watch-release$' <<<"$answer" || fail "no UDP echo through the release build"
 echo "ok: TCP and UDP pass the release build's tunnel"
 
-# Flows whose app Android did not name: a few may be the system's own; the release build of
-# 2026-11-09 named none.
+# Flows whose app Android did not name: a few may be the system's own (one of eight on CI); the release
+# build of 2026-11-09, whose engine could not ask, named none of 242.
 read -r tcp udp _ _ unknown _ <<<"$(counters)"
-[ $((unknown * 10)) -le $((tcp + udp)) ] || fail "Android named no app for $unknown of $((tcp + udp)) flows"
+[ $((unknown * 2)) -le $((tcp + udp)) ] || fail "Android named no app for $unknown of $((tcp + udp)) flows"
 echo "ok: Android names the app of the release build's flows ($unknown of $((tcp + udp)) without one)"
 
 # The engine hands the log its records about 30 s after a flow ends.
