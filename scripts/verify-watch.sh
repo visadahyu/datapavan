@@ -383,20 +383,30 @@ if is_emulator; then
     # Mobile data stays up beside Wi-Fi, as on most phones, so that the switch has a network to go to: on
     # CI, mobile data brought up only after Wi-Fi went off was not there 40 s later ("Active default
     # network: none"), and nothing could pass, with Watch or without.
-    DATA_ALWAYS_ON=$(adb shell settings get global mobile_data_always_on | tr -d '\r')
-    adb shell settings put global mobile_data_always_on 1
-    sleep 5
-    adb shell svc wifi disable
     # Read whole: under pipefail, a grep -q that stops reading early fails the pipe.
     default_network() {
         adb shell dumpsys connectivity | tr -d '\r' | sed -n 's/^Active default network: //p'
     }
+    networks() {
+        adb shell dumpsys connectivity | tr -d '\r' |
+            sed -n 's/^ *NetworkAgentInfo{network{\([0-9]*\)}.*ni{\([^ ]*\) \([A-Z]*\).*/\1 \2 \3/p' | paste -sd ';'
+    }
+    DATA_ALWAYS_ON=$(adb shell settings get global mobile_data_always_on | tr -d '\r')
+    adb shell settings put global mobile_data_always_on 1
+    sleep 5
+    before=$(default_network)
+    echo "  networks before the switch: $(networks); default $before"
+    adb shell svc wifi disable
+    # Right after, Android may still name Wi-Fi as the default: wait for another one.
     for _ in $(seq 1 30); do
-        [[ "$(default_network)" =~ ^[0-9]+$ ]] && break
+        now=$(default_network)
+        [[ "$now" =~ ^[0-9]+$ && "$now" != "$before" ]] && break
         sleep 2
     done
-    [[ "$(default_network)" =~ ^[0-9]+$ ]] ||
-        fail "Android had no network 60 s after Wi-Fi went off, so nothing could pass, with Watch or without"
+    echo "  networks after the switch: $(networks); default $(default_network)"
+    now=$(default_network)
+    [[ "$now" =~ ^[0-9]+$ && "$now" != "$before" ]] ||
+        fail "Android had no other network 60 s after Wi-Fi went off, so nothing could pass, with Watch or without"
     sleep 3
     vpn_up || fail "the tunnel went down when the network beneath switched"
     # As without a VPN, a connection during the switch may fail (ADR 0012); the next ones must pass.
