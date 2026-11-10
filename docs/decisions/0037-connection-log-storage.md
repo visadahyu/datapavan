@@ -1,6 +1,6 @@
 # 0037. The connection log: records sealed one by one, a key for each day, readable only on an unlocked phone
 
-- Status: Accepted (by the maintainer on 2026-11-09)
+- Status: Accepted (by the maintainer on 2026-11-09; its amendments of 2026-11-10 on 2026-11-10)
 - Date: 2026-11-09
 
 ## Context
@@ -52,9 +52,24 @@ Option 3.
    memory (best effort: the JVM may hold copies). The private key is generated in the Keystore and never
    leaves it: RSA-2048 in StrongBox where the phone has one (StrongBox's largest RSA key), otherwise RSA-3072
    in the trusted environment; it requires an unlocked device.
+   (Amended while building it, 2026-11-10: a process that sleeps through midnight clears the old key at
+   its first activity after it, which is any read, write or count, or the expiry job of decision 3. A late
+   record of an earlier day draws a key of its own, which does not stay in memory. A day also has a key for
+   each run of Watch's process, since a key from an earlier run cannot be unwrapped on a locked phone, so
+   the token links an app's rows under one key: a query for one app on one day computes a token for each
+   key of that day.)
 3. **Expiry and wipe.** Retention deletes a day's rows and its wrapped key together. "Delete everything now"
    deletes the database and the Keystore key pair, so nothing left in flash can be read. Retention "none"
    writes nothing: flows stay in memory for the screen and are gone when Watch stops.
+   (Amended while building it, 2026-11-10: expiry does not wait for traffic. It runs when Watch's process
+   makes the log, when the tunnel starts, when the screen opens, before every read, count and write, and
+   from a job about every six hours (Android's JobScheduler); a day past retention is never read back nor
+   written, even before expiry has run. Android decides when the job runs; some makers' phones seldom run
+   one for an app the user has not opened in a long time; and the job does not survive a restart of the
+   phone, which would need the permission to start at boot, which ADR 0034 does not give Watch. After a
+   restart, the next start of Watch's process expires the log. Retention "none" also deletes, at each of
+   those moments, whatever is left, until nothing is. A failure on the log's thread is counted and never
+   reaches the tunnel.)
 4. **What is not a row.** Lookups that apps send to Watch's own DNS address are counted per app and day, not
    stored one by one; their names live in the flows they named. Flows chained through a tool (W6) keep their
    destination only when the user turns that on.
@@ -64,6 +79,12 @@ Option 3.
    destination reaches logcat, that the wipe leaves no file and no key, and that an earlier day cannot be read
    while the phone is locked. Over a scripted emulator session, each app's bytes in the log are compared with
    Android's own count (ADR 0022's open check) against the 5 % bar of M4.
+   (Amended 2026-11-10: and that a day past retention is never read and leaves the file when Watch starts
+   again, that a shorter retention deletes at once, and that "none" leaves no file and no key; and a
+   model-based test, run inside Watch on the emulator with its own SQLite and Keystore, draws random
+   sequences of writes, reads, the clock moving on and back, changes of time zone, restarts, locking,
+   changes of retention, wipes, the expiry job, a full or failing database and a failing Keystore, and
+   checks after each what must and must not be read back.)
 
 ## Left open
 
@@ -76,8 +97,13 @@ Option 3.
 ## Consequences
 
 - No new dependency and no change in APK size; all cryptography is Android's own.
-- Beyond the field's tools and Signal's store on two counts: expired and wiped records cannot be read even from
-  flash, and a locked phone in someone else's hands does not open earlier days to anyone acting as Watch.
+- Beyond the field's tools and Signal's store on two counts: wiped records cannot be read even from flash, and
+  a locked phone in someone else's hands does not open earlier days to anyone acting as Watch. (Amended
+  2026-11-10: the first count said "expired and wiped". It holds for the wipe, which destroys the key pair.
+  Expiry deletes a day's rows and wrapped keys and overwrites them in the file (`secure_delete`), but the key
+  pair stays, so what flash memory may keep of an expired day could still be opened with it on an unlocked
+  phone, by someone who can run code as Watch and recover those remnants. A key pair for each period,
+  destroyed at its expiry, would close that; it needs a spike first.)
 - **Accepted limits.**
   - The day being written is readable by anyone who can run code as Watch while it runs (a root exploit).
   - The file shows how many rows each day and each app token has, and their sizes, not what they say.
