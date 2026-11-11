@@ -7,7 +7,10 @@
 # tool can resolve (the shell gets a stand-in address for it), UDP goes through the tool's relay, the
 # tool's own connections go directly and are counted under the tool, and a wrong password is refused.
 # Then the tool stops: the shell's connections fail, and a sentinel on this computer, outside Android,
-# sees none of them reach it directly, while it does see a control's direct connection. Nothing is left running: the tunnel, the tool and the
+# sees none of them reach it directly, while it does see a control's direct connection. Last, the user's
+# own path on the chain screen: Watch offers its password, which is set in the tool; one installed app
+# (scripts/workload-app) is picked and the chain turned on; that app's lookup, TCP and UDP go through the
+# tool under its own UID, and adb's shell, not picked, goes directly. Nothing is left running: the tunnel, the tool and the
 # server stop at the end, and the tool is uninstalled.
 #
 #   scripts/verify-chain.sh [path/to/watch-debug.apk]
@@ -17,6 +20,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/watch/build/outputs/apk/debug/watch-debug.apk}"
 PKG=org.visadahyu.datapavan.watch
 TOOL=org.visadahyu.datapavan.testtool
+WORKLOAD=org.visadahyu.datapavan.workload
 TOOL_PORT=10870
 SHELL_UID=2000
 # shellcheck source=scripts/adb-ui.sh
@@ -33,6 +37,7 @@ cleanup() {
     adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
     adb shell am force-stop "$TOOL" >/dev/null 2>&1 || true
     adb uninstall "$TOOL" >/dev/null 2>&1 || true
+    adb uninstall "$WORKLOAD" >/dev/null 2>&1 || true
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
     rm -rf "$WORK"
 }
@@ -41,6 +46,7 @@ trap cleanup EXIT
 dump() { adb shell dumpsys activity service "$PKG/.WatchVpnService" "$@" | tr -d '\r'; }
 flows() { dump | sed -n 's/^ *flow //p'; }
 tool_log() { adb logcat -d -s DatapavanTestTool | tr -d '\r' | sed -n 's/.*DatapavanTestTool: //p'; }
+workload_log() { adb logcat -d -s DatapavanWorkload | tr -d '\r' | sed -n 's/.*DatapavanWorkload: //p'; }
 # Runs a shell command on the device, killing it after $1 seconds: nc -u waits for more answers.
 device() {
     local seconds=$1
@@ -67,7 +73,14 @@ vpn_up() {
 }
 
 "$ROOT/scripts/test-tool/build.sh" >/dev/null
+"$ROOT/scripts/workload-app/build.sh" >/dev/null
 adb install -r "$APK" >/dev/null
+# A fresh start: the chain's settings of an earlier run would change what the screen offers.
+adb shell pm clear "$PKG" >/dev/null
+adb uninstall "$WORKLOAD" >/dev/null 2>&1 || true
+adb install "$ROOT/build/workload-app/workload-app.apk" >/dev/null
+WORKLOAD_UID=$(adb shell cmd package list packages -U "$WORKLOAD" | tr -d '\r' | sed -n "s/^package:$WORKLOAD uid:\([0-9]*\)$/\1/p")
+[ -n "$WORKLOAD_UID" ] || fail "the workload app did not install"
 adb uninstall "$TOOL" >/dev/null 2>&1 || true
 adb install "$ROOT/build/test-tool/test-tool.apk" >/dev/null
 TOOL_UID=$(adb shell cmd package list packages -U "$TOOL" | tr -d '\r' | sed -n "s/^package:$TOOL uid:\([0-9]*\)$/\1/p")
@@ -89,9 +102,14 @@ for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
 vpn_up || fail "Watch's tunnel did not come up"
 echo "ok: the tunnel is up for every app"
 
-found=$(dump find-tool | grep -E '^ *tool ' | sed 's/^ *//')
-[ "$found" = "tool answering $TOOL 127.0.0.1:$TOOL_PORT uid $TOOL_UID password yes owner yes" ] ||
-    fail "Watch did not find the tool as expected: $found"
+expected="tool answering $TOOL 127.0.0.1:$TOOL_PORT uid $TOOL_UID password yes owner yes"
+for attempt in 1 2 3 4 5; do
+    found=$(dump find-tool | grep -E '^ *tool ' | sed 's/^ *//')
+    [ "$found" = "$expected" ] && break
+    echo "  search $attempt: $found" >&2
+    sleep 2
+done
+[ "$found" = "$expected" ] || fail "Watch did not find the tool as expected: $found"
 echo "ok: Watch found the tool, its port, its owner and that it wants a password"
 
 dump chain 127.0.0.1 "$TOOL_PORT" "$TOOL_UID" udp "$SHELL_UID" watch "$PASSWORD" | grep -q "chain on" ||
@@ -170,4 +188,55 @@ grep -q '^tcp$' "$WORK/sentinel.log" || fail "the sentinel did not see the contr
 echo "ok: with the tool stopped, the shell's TCP and UDP failed, and a sentinel on this computer saw none of them, only the control's direct connection"
 
 dump unchain | grep -q "chain off" || fail "the chain did not turn off"
+
+# The user's own path, on the chain screen in English. The tool starts without a password; Watch finds it
+# and offers its own user name and password, which go into the tool as a user would set them.
+adb shell cmd locale set-app-locales "$PKG" --locales en-US >/dev/null 2>&1 || true
+listening=$(tool_log | grep -c "^listening")
+adb shell am start-foreground-service -n "$TOOL/.ToolService" --ei port "$TOOL_PORT" --es map "watch.test=$HOST" >/dev/null
+for _ in $(seq 1 10); do [ "$(tool_log | grep -c "^listening")" -gt "$listening" ] && break; sleep 1; done
+# Back to Watch as a user comes back to it, which makes it look for the tool again.
+adb shell input keyevent KEYCODE_HOME
+sleep 1
+adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+SWITCH="Send apps through Datapavan test tool"
+# The search, and the first password after a fresh start (a new Keystore key), take a few seconds: wait
+# for them before scrolling, or the scroll moves the section off the screen before it is drawn.
+for _ in $(seq 1 30); do screen_has "$SWITCH" && break; sleep 1; done
+scroll_to "$SWITCH" || fail "the chain screen did not offer the test tool"
+dump_screen || true
+screen=$(adb shell cat "$DUMP" | tr -d '\r')
+user=$(grep -o 'text="User name: [^"]*"' <<<"$screen" | sed 's/^text="User name: //; s/"$//')
+password=$(grep -o 'text="Password: [^"]*"' <<<"$screen" | sed 's/^text="Password: //; s/"$//')
+[ -n "$user" ] && [ -n "$password" ] || fail "the chain screen offered no user name and password for the tool"
+listening=$(tool_log | grep -c "^listening")
+adb shell am force-stop "$TOOL"
+adb shell am start-foreground-service -n "$TOOL/.ToolService" --ei port "$TOOL_PORT" \
+    --es user "$user" --es password "$password" --es map "watch.test=$HOST" >/dev/null
+for _ in $(seq 1 10); do [ "$(tool_log | grep -c "^listening")" -gt "$listening" ] && break; sleep 1; done
+tap_text "Only the apps I choose" || fail "no choice of apps on the chain screen"
+# The list of apps loads in the background.
+for _ in $(seq 1 15); do screen_has "Datapavan workload" && break; sleep 1; done
+tap_text "Datapavan workload" || fail "the workload app is not among the apps to choose"
+# The list of apps pushed the switch up, off the screen.
+scroll_to_top
+tap_text "$SWITCH" || fail "the chain's switch is not on the screen"
+sleep 2
+through=$(tool_log | grep -c "^connect watch.test $PORT$")
+adb shell am start -W -n "$WORKLOAD/.WorkActivity" --es name watch.test --es tcp "watch.test:$PORT" \
+    --es udp "watch.test:$((PORT + 1))" >/dev/null
+for _ in $(seq 1 30); do workload_log | grep -q "^done$" && break; sleep 1; done
+log=$(workload_log)
+grep -qE "^resolved watch\.test 198\.1[89]\." <<<"$log" || fail "the workload app's lookup got no stand-in: $log"
+grep -q "^tcp watch.test:$PORT pong$" <<<"$log" || fail "the workload app's TCP did not get through: $log"
+grep -q "^udp watch.test:$((PORT + 1)) echo$" <<<"$log" || fail "the workload app's UDP did not get through: $log"
+[ "$(tool_log | grep -c "^connect watch.test $PORT$")" -gt "$through" ] || fail "the workload app's TCP did not go through the tool"
+grep -qE "^tcp [^ ]+ 198\.1[89]\.[0-9]+\.[0-9]+:$PORT $WORKLOAD_UID opened" <<<"$(flows)" ||
+    fail "the workload app's flow is not listed under its own UID"
+through=$(tool_log | grep -c "^connect $HOST $PORT$")
+grep -q pong <<<"$(ping_from_shell "$HOST")" || fail "adb's shell, not picked, did not reach the server"
+[ "$(tool_log | grep -c "^connect $HOST $PORT$")" = "$through" ] || fail "adb's shell, not picked, went through the tool"
+echo "ok: on the chain screen: Watch's password set in the tool, one picked app's lookup, TCP and UDP through the tool, the shell directly"
+scroll_to_top
+tap_text "$SWITCH" || fail "the chain's switch could not be turned off"
 echo "== chain check passed"
