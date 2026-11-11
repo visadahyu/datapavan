@@ -14,7 +14,7 @@ emulator's 10.0.2.2; through Tor, the address Android itself checks connectivity
 | v2rayNG | 2.3.15 | 127.0.0.1:10808, owner confirmed, no password | yes, by address | yes | Sniffing replaces the destination with the HTTP Host header's name; private addresses go out directly from v2rayNG |
 | NekoBox | 1.4.2 | 127.0.0.1:2080, owner confirmed, no password | yes, by address | yes | Drops the answer when the app closes its sending side first (half-close) |
 | Orbot | 17.9.7-BETA-1 | 127.0.0.1:9050, owner confirmed, no password | yes, by a stand-in name, through Tor (HTTP 204) | refused, as Tor carries none | Proxy mode is "Power User Mode"; it asks for the alarms permission and a battery exemption |
-| Hiddify | 5.5.5 | not reached | | | Its core did not start on the emulator (below) |
+| Hiddify | 5.5.5 | not reached on Android 15 | | | Its core did not start on this emulator; on Android 17 it was found and chained (below) |
 
 In every case Watch found the tool by itself, from the table of tools, and Android named the tool as the owner of
 its port; the chain was turned on from Watch's screen, with no port typed. The tool's own connections went
@@ -109,11 +109,38 @@ offers analytics, off by default and left off. Its proxy mode is "Proxy service 
 with 127.0.0.1 and port 12334, as the table of tools says. A `socks5://` link was refused as a profile; a sing-box
 JSON with one SOCKS outbound to the test tool was taken. Connecting then failed with "background core is not
 started yet" and stayed at "Connecting…", and port 12334 never opened, after a restart of the app too; the
-emulator itself ended during Hiddify's first connection. Watch was never reached. It is to try again on the A40,
-with an arm64 build, and with a profile of the kind Hiddify expects.
+emulator itself ended during Hiddify's first connection. Watch was never reached.
+
+Later that day, at the maintainer's word, Hiddify's terms were accepted on the emulators with Android 17 and 11, with
+analytics left off. The same sing-box profile was used, and the same proxy mode.
+
+- **Android 17** (`dp-api37-16k`): Hiddify connected, and 12334 opened on 127.0.0.1 and `[::1]`. Watch found it,
+  owner confirmed, no password. The shell reached the check address by a stand-in name (HTTP 204), and Quad9 over
+  UDP (61 bytes).
+  - **Its password.** With "Require password" on, Watch saw at once that the port wants one. Chained with no
+    password, the shell got "no route to host" and nothing went out directly. Chained with the user `hiddify` and
+    the "Proxy secret", TCP and UDP went through. The same secret with the user `watch` was refused. So Hiddify
+    checks the user name, and Watch's `hiddify` for this tool is right.
+  - **Its own requests** went through its outbound, so through the test tool. These were DNS over TCP to 8.8.8.8,
+    `captive.apple.com` (a connectivity check, likely the source of its "Delay" line), and ip-api.com and ipapi.co (IP
+address services, likely behind its "Country" and "IP address" lines).
+    Directly, it made only lookups to Watch's DNS address. Hiddify targets SDK 36, so Android gave it
+    `ACCESS_LOCAL_NETWORK` without asking.
+  - **A review prompt.** Right after the first connection, Hiddify opened Google Play's in-app review dialog,
+    under the Google account on that emulator. Nothing was submitted ("Not now").
+- **Android 11** (`dp-api30`): the emulator ended at Hiddify's first connection, as on Android 15. The host kernel
+  logged a segfault in the emulator's RenderThread. It ended again with software rendering
+  (`-gpu swiftshader_indirect`), with nothing in the logs, and again after Hiddify's data was cleared. Between those
+  runs, Hiddify's own log said why it stayed at "Connecting…": its screen could not reach its background core over
+  gRPC, failing with "CERTIFICATE_VERIFY_FAILED: self signed certificate". That is most likely what was left of a run
+  cut short. Watch was not involved: Hiddify had not opened its port, and Watch's tunnel was not running.
+
+So Hiddify in proxy mode is found and chained, with or without its password, on Android 17. On the x86_64 images of
+Android 11 and 15 the emulator itself stops at its first connection. The A40 (Android 11, arm64) will show whether
+that is the emulator's matter. Hiddify was uninstalled from both emulators afterwards.
 
 ## Still to do
 
-- Hiddify, on the A40 or with another profile, and then on both emulators.
+- Hiddify on the A40 (its arm64 build), for Android 11 on a real phone.
 - The rest of ADR 0038's lab ([notes](2026-11-chain-lab.md)): ECH in a browser that offers it, the ten apps of W3,
   and the delay of other record types through each real tool, Tor most of all.

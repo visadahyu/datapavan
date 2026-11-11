@@ -636,7 +636,9 @@ Access prompt; the HTTPS record a chained app gets keeps its ECH key. On the emu
 v2rayNG, NekoBox and Orbot were each found and chained as on the A40. On Android 17, v2rayNG asked for
 `ACCESS_LOCAL_NETWORK`; it was refused, and the chain still worked, since a proxy on loopback does not need it.
 Android named no owner of NekoBox's port once, at the first search after the tunnel started, and named NekoBox at
-every later search. Still to come: Hiddify again, ECH in a browser that offers it, and the ten apps of W3.
+every later search. Hiddify 5.5.5 was found and chained on Android 17, also with its password, which takes the user
+`hiddify`. On the x86_64 emulators with Android 11 and 15, the emulator itself stopped at Hiddify's first
+connection. Still to come: Hiddify on the A40, ECH in a browser that offers it, and the ten apps of W3.
 
 | # | Milestone | Done when |
 |---|---|---|
