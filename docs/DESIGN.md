@@ -623,8 +623,9 @@ W6's real tools, the same day, on the emulator with Android 15 ([notes](spikes/2
 the chain was turned on from Watch's screen with no port typed; TCP went through each, UDP through v2rayNG and
 NekoBox and nowhere with Orbot, which carries none; a lookup through Orbot got a stand-in and Tor resolved the name.
 The log kept the chained flows without destination. Found on the way: v2rayNG's sniffing and its direct route for
-private addresses, and NekoBox dropping an answer after the app's half-close. Still to come: Hiddify (its first
-screen asks to accept its terms), the A40, Android 11 and 17, and the rest of ADR 0038's lab.
+private addresses, and NekoBox dropping an answer after the app's half-close. Hiddify 5.5.5 did not start its
+core on the emulator, before Watch was involved. Still to come: Hiddify again, the A40, Android 11 and 17, and the
+rest of ADR 0038's lab.
 
 | # | Milestone | Done when |
 |---|---|---|

@@ -14,7 +14,7 @@ emulator's 10.0.2.2; through Tor, the address Android itself checks connectivity
 | v2rayNG | 2.3.15 | 127.0.0.1:10808, owner confirmed, no password | yes, by address | yes | Sniffing replaces the destination with the HTTP Host header's name; private addresses go out directly from v2rayNG |
 | NekoBox | 1.4.2 | 127.0.0.1:2080, owner confirmed, no password | yes, by address | yes | Drops the answer when the app closes its sending side first (half-close) |
 | Orbot | 17.9.7-BETA-1 | 127.0.0.1:9050, owner confirmed, no password | yes, by a stand-in name, through Tor (HTTP 204) | refused, as Tor carries none | Proxy mode is "Power User Mode"; it asks for the alarms permission and a battery exemption |
-| Hiddify | 5.5.5 | not run | | | Its first screen asks to accept its terms; waiting on the maintainer |
+| Hiddify | 5.5.5 | not reached | | | Its core did not start on the emulator (below) |
 
 In every case Watch found the tool by itself, from the table of tools, and Android named the tool as the owner of
 its port; the chain was turned on from Watch's screen, with no port typed. The tool's own connections went
@@ -38,9 +38,19 @@ chained app got "no route to host", not a direct connection.
   Orbot is not a system-wide VPN") and offers a battery exemption; the guides of W8 must say so. Its Connect button
   sat below the bottom bar on the 320 x 640 emulator screen.
 
+## Hiddify
+
+Its first screen asks the user to accept its terms (accepted for the test emulator at the maintainer's word) and
+offers analytics, off by default and left off. Its proxy mode is "Proxy service only", and it shows a guide for it
+with 127.0.0.1 and port 12334, as the table of tools says. A `socks5://` link was refused as a profile; a sing-box
+JSON with one SOCKS outbound to the test tool was taken. Connecting then failed with "background core is not
+started yet" and stayed at "Connecting…", and port 12334 never opened, after a restart of the app too; the
+emulator itself ended during Hiddify's first connection. Watch was never reached. It is to try again on the A40,
+with an arm64 build, and with a profile of the kind Hiddify expects.
+
 ## Still to do
 
-- Hiddify, once the maintainer decides about accepting its terms on a test emulator.
+- Hiddify, on the A40 or with another profile.
 - The same on the A40 (arm64 builds), which waits on the ufw rules, and on Android 11 and 17.
 - The rest of ADR 0038's lab: Chrome and Local Network Access with stand-ins, ECH through a tool, the ten apps of
   W3, strict Private DNS, and the delay of other record types through each tool.
