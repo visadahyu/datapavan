@@ -27,6 +27,11 @@ or a recorded run shows it. The last section lists what is left to the maintaine
 
 ## Left to the maintainer
 
+Both points below were settled by the maintainer on 2026-11-11, who accepted W6 with them
+(«بله، ادغام کن»): Watch keeps warning about strict Private DNS, and Hiddify's test on the A40 stands for the
+two emulators that stopped.
+
+
 1. **Strict Private DNS.** Watch warns and still chains (ADR 0038's open question 4, measured in the lab).
    Refusing to chain would leave the app no way through the tool. The warning now names the provider and
    says what leaves past the tool, what the network sees and what the provider sees, and a button opens

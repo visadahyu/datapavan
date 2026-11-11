@@ -124,7 +124,8 @@ Option 1, from W6 on, with these rules:
 4. Strict Private DNS: whose socket carries Android's TLS lookups, and whether a chain should refuse to
    start in that mode rather than warn. *Measured on 2026-11-11 ([lab](../spikes/2026-11-chain-lab.md)): Android's
    resolver (UID 1051) asks the provider itself, so the lookups go directly, encrypted; the app's connections still
-   go through the tool by address. Watch warns and does not refuse.*
+   go through the tool by address. Watch warns and does not refuse; decided by the maintainer on 2026-11-11, with
+   W6's acceptance. The warning names the provider and opens the network settings.*
 5. The delay of other record types through each tool of W6 (v2rayNG, NekoBox, Hiddify, Orbot), and
    whether Tor's exits carry DNS over TCP to the resolver. *Measured through the test tool on 2026-11-11 (same
    notes): about half a second for each question, until Watch kept the tool route's answers as this record says;

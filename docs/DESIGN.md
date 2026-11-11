@@ -645,7 +645,8 @@ every later search. Hiddify 5.5.5 was found and chained on Android 17, also with
 `hiddify`, and on the A40. On the x86_64 emulators with Android 11 and 15, the emulator itself stopped at Hiddify's
 first connection. So each of the four tools has been found and chained without a port typed, on the A40 and on an
 emulator. Still to come: ECH in a browser that offers it, and the ten apps of W3. W6's "done when", clause
-by clause, with what is left to the maintainer: [acceptance](spikes/2026-11-w6-acceptance.md).
+by clause: [acceptance](spikes/2026-11-w6-acceptance.md). W6 was accepted by the maintainer on 2026-11-11 and
+merged into `main`.
 
 | # | Milestone | Done when |
 |---|---|---|
