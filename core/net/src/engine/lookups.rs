@@ -114,6 +114,7 @@ mod tests {
             tool: 10_200,
             apps: None,
             udp: true,
+            log_destinations: false,
         })
     }
 

@@ -1,9 +1,12 @@
 //! The connection log's bookkeeping inside the engine (ADR 0037): each open flow's bytes, the segments
 //! of open flows at each quarter hour, each app's lookups, and the task that hands the records to Watch.
 
-use super::{Flow, LOG_DELAY, Outcome, SEGMENT_MS, Shared, is_tunnel_dns, lock};
+use super::{
+    DnsUse, Ech, Flow, LOG_DELAY, NamedBy, Outcome, SEGMENT_MS, Shared, is_tunnel_dns, lock,
+};
 use crate::log;
 use crate::log::Record;
+use crate::packet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -53,6 +56,9 @@ pub(super) struct Live {
     pub(super) start: u64,
     /// The counts at the segment's start.
     pub(super) base: [u64; 4],
+    /// Whether its destination stays out of the log (a chained app's flow, [`Shared::hides`]): its
+    /// record holds no address, port or name, and no hello names it later.
+    pub(super) hidden: bool,
 }
 
 /// An app's lookups to Watch's own DNS address: since when, how many, and the tunnel's bytes for them.
@@ -98,6 +104,23 @@ impl Shared {
         if is_tunnel_dns(flow.destination.ip()) {
             return None;
         }
+        let hidden = self.hides(flow.uid, flow.destination);
+        let without_destination;
+        let flow = if hidden {
+            without_destination = Flow {
+                destination: packet::unspecified_like(&flow.destination),
+                name: None,
+                named_by: NamedBy::Unknown,
+                ech: Ech::Absent,
+                dns: DnsUse::None,
+                resolver: None,
+                network: None,
+                ..flow.clone()
+            };
+            &without_destination
+        } else {
+            flow
+        };
         let now = now_ms();
         if flow.outcome != Outcome::Opened {
             self.write(Record::Segment {
@@ -117,6 +140,7 @@ impl Shared {
                 bytes: Arc::clone(&bytes),
                 start: now,
                 base: [0; 4],
+                hidden,
             },
         );
         self.log_ready.notify_one();

@@ -71,6 +71,7 @@ fn chain(proxy: SocketAddr) -> Chain {
         tool: TOOL,
         apps: Some(HashSet::from([CHAINED])),
         udp: true,
+        log_destinations: false,
     }
 }
 

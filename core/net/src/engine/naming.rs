@@ -137,7 +137,9 @@ impl Shared {
                 flow.named_by = by;
             }
         };
-        if let Some(live) = lock(&self.live).get_mut(&id) {
+        if let Some(live) = lock(&self.live).get_mut(&id)
+            && !live.hidden
+        {
             apply(&mut live.flow);
         }
         if self.keep_flows > 0

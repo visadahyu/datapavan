@@ -6,8 +6,9 @@
 //! that it does not loop back into its proxy. A flow whose app Android cannot name goes nowhere while
 //! a chain is on: directly it could be a chained app's, and through the tool it could be the tool's own.
 
+use super::lookups::RESOLVERS;
 use super::upstream::protect;
-use super::{CONNECT_TIMEOUT, Shared, lock};
+use super::{CONNECT_TIMEOUT, Shared, is_tunnel_dns, lock};
 use crate::socks5::{self, Command, Credentials, Target};
 use crate::standins::is_stand_in;
 use std::collections::HashSet;
@@ -30,6 +31,9 @@ pub struct Chain {
     pub apps: Option<HashSet<u32>>,
     /// Whether the tool carries UDP (`UDP ASSOCIATE`); without it, chained apps' UDP goes nowhere.
     pub udp: bool,
+    /// Whether chained flows' destinations go to the connection log. Off unless the user turns it on:
+    /// such a log is evidence in a phone search (docs/VPN.md, "Data path").
+    pub log_destinations: bool,
 }
 
 /// Where a new flow goes.
@@ -76,9 +80,20 @@ impl Shared {
         }
     }
 
+    /// Whether the log leaves out where a flow of `uid` to `destination` went: a chained app's flow,
+    /// unless the user asked for chained destinations. The flow is still counted, with its app and bytes.
+    pub(super) fn hides(&self, uid: Option<u32>, destination: SocketAddr) -> bool {
+        matches!(self.route(uid, destination), Route::Tool(chain) if !chain.log_destinations)
+    }
+
     /// What to ask the tool for: the name behind a stand-in address, or the address itself. `None` for
     /// a stand-in the map no longer holds.
     pub(super) fn tool_target(&self, destination: SocketAddr) -> Option<Target> {
+        // DNS over TCP to Watch's own address, which Android's resolver uses when an answer was cut
+        // short, goes to the resolver of chained apps (ADR 0038). Its answers are not rebuilt.
+        if is_tunnel_dns(destination.ip()) {
+            return Some(Target::Address(RESOLVERS[0]));
+        }
         if !is_stand_in(destination.ip()) {
             return Some(Target::Address(destination));
         }
@@ -164,6 +179,7 @@ mod tests {
             tool: TOOL,
             apps: apps.map(|a| a.iter().copied().collect()),
             udp: true,
+            log_destinations: false,
         }
     }
 
@@ -214,6 +230,53 @@ mod tests {
         assert_eq!(shared.tool_target(forgotten), None);
         let server = SocketAddr::from(([93, 184, 216, 34], 443));
         assert_eq!(shared.tool_target(server), Some(Target::Address(server)));
+        let watch_dns = SocketAddr::from((super::super::DNS4, 53));
+        assert_eq!(
+            shared.tool_target(watch_dns),
+            Some(Target::Address(RESOLVERS[0]))
+        );
+    }
+
+    #[test]
+    fn the_log_gets_a_chained_flow_without_its_destination() {
+        use super::super::{DnsUse, Ech, Flow, NamedBy, Outcome};
+        let shared = shared();
+        *lock(&shared.chain) = Some(Arc::new(chain(Some(&[CHAINED]))));
+        let server = SocketAddr::from(([93, 184, 216, 34], 443));
+        let flow = |id, uid| Flow {
+            id,
+            protocol: crate::packet::TCP,
+            app: SocketAddr::from(([10, 215, 173, 1], 40_000)),
+            destination: server,
+            uid: Some(uid),
+            outcome: Outcome::Opened,
+            name: Some("example.com".into()),
+            named_by: NamedBy::Dns,
+            ech: Ech::Absent,
+            dns: DnsUse::None,
+            resolver: None,
+            network: None,
+        };
+        assert!(shared.record(flow(1, CHAINED)).is_some(), "still counted");
+        assert!(shared.record(flow(2, DIRECT)).is_some());
+        let live = lock(&shared.live);
+        let chained = &live[&1];
+        assert!(chained.hidden);
+        assert_eq!(
+            chained.flow.destination,
+            SocketAddr::from(([0, 0, 0, 0], 0))
+        );
+        assert_eq!(chained.flow.name, None);
+        assert_eq!(chained.flow.uid, Some(CHAINED));
+        assert!(!live[&2].hidden);
+        assert_eq!(live[&2].flow.destination, server);
+        drop(live);
+        // Asked for, the destinations are kept.
+        let mut kept = chain(Some(&[CHAINED]));
+        kept.log_destinations = true;
+        *lock(&shared.chain) = Some(Arc::new(kept));
+        assert!(shared.record(flow(3, CHAINED)).is_some());
+        assert_eq!(lock(&shared.live)[&3].flow.destination, server);
     }
 
     #[test]
