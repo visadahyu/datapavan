@@ -16,7 +16,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::os::fd::{OwnedFd, RawFd};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -314,6 +314,9 @@ struct Shared {
     pending_log: Mutex<Vec<Record>>,
     /// Woken when a record waits or a flow opens.
     log_ready: Notify,
+    /// Whether the answers of Watch's own DNS address go to the apps with a time to live of 0
+    /// ([`crate::dns::uncache`]), so that Android's resolver keeps none of them.
+    uncached_answers: AtomicBool,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -392,6 +395,7 @@ impl Engine {
             wire: Mutex::default(),
             pending_log: Mutex::default(),
             log_ready: Notify::new(),
+            uncached_answers: AtomicBool::new(false),
         });
         let (stop, stopped) = watch::channel(false);
         let (network, changes) = watch::channel(0);
@@ -438,6 +442,13 @@ impl Engine {
             self.network
                 .send_modify(|generation| *generation = generation.wrapping_add(1));
         }
+    }
+
+    /// Whether the answers of Watch's own DNS address reach the apps with a time to live of 0, so that
+    /// Android's resolver, which keeps one cache for all the apps of a network, keeps none of them:
+    /// each app's lookup then reaches Watch with that app as its owner. Off by default.
+    pub fn uncache_answers(&self, on: bool) {
+        self.shared.uncached_answers.store(on, Ordering::Relaxed);
     }
 
     /// The release month of the organisation table the engine reads, if it has one.
@@ -637,6 +648,7 @@ mod tests {
             wire: Mutex::default(),
             pending_log: Mutex::default(),
             log_ready: Notify::new(),
+            uncached_answers: AtomicBool::new(false),
         }
     }
 

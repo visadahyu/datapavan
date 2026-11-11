@@ -237,6 +237,25 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlushLog<
         .resolve::<ThrowRuntimeExAndDefault>();
 }
 
+/// `Engine.nativeUncacheAnswers(on)`: whether the answers of Watch's own DNS address reach the apps
+/// with a time to live of 0, so that Android's resolver keeps none of them.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeUncacheAnswers(on: Boolean)`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeUncacheAnswers<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    on: jboolean,
+) {
+    unowned_env
+        .with_env(|_env| -> Result<_, Error> {
+            if let Some(engine) = engine().as_ref() {
+                engine.uncache_answers(on);
+            }
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>();
+}
+
 /// `Engine.nativeCounters()`: the running engine's counters, in the order of
 /// `datapavan_net::engine::Counters::snapshot`, or an empty array when none runs.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeCounters(): LongArray`.

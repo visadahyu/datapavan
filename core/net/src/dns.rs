@@ -32,6 +32,8 @@ const ECH_VERSION: u16 = 0xfe0d;
 /// Public names read from one message.
 const MAX_PUBLIC_NAMES: usize = 8;
 const CLASS_IN: u16 = 1;
+/// The OPT pseudo-record of EDNS (RFC 6891), whose TTL field holds flags, not a time.
+const TYPE_OPT: u16 = 41;
 
 /// What one DNS response says.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -177,6 +179,73 @@ pub fn response(message: &[u8]) -> Option<Response> {
         addresses,
         public_names,
     })
+}
+
+/// Sets the time to live of every record of a DNS response to 0, the OPT record's flags left alone,
+/// so that Android's resolver, which keeps one cache for all the apps of a network, keeps none of it:
+/// each app's next lookup of the name then reaches Watch again, with that app as its owner. Negative
+/// answers are covered too, since Android keeps them for the SOA record's TTL at most (RFC 2308).
+/// Returns `false`, the message left as it was, when it is not a well-formed response.
+pub fn uncache(message: &mut [u8]) -> bool {
+    let Some(offsets) = ttl_offsets(message) else {
+        return false;
+    };
+    for at in offsets {
+        message[at..at + 4].fill(0);
+    }
+    true
+}
+
+/// Where the TTL of each record of a response is, OPT records left out; `None` when the response is
+/// not well formed. Names are skipped, not read, so a name of any bytes still counts.
+fn ttl_offsets(message: &[u8]) -> Option<Vec<usize>> {
+    if u16_at(message, 2)? & 0x8000 == 0 {
+        return None;
+    }
+    let questions = u16_at(message, 4)?;
+    let records = [6, 8, 10]
+        .iter()
+        .map(|&at| u16_at(message, at).map(usize::from))
+        .sum::<Option<usize>>()?;
+    let mut at = 12;
+    for _ in 0..questions {
+        at = skip_name(message, at)?.checked_add(4)?;
+    }
+    if at > message.len() {
+        return None;
+    }
+    let mut offsets = Vec::new();
+    for _ in 0..records {
+        let after = skip_name(message, at)?;
+        let kind = u16_at(message, after)?;
+        let length = usize::from(u16_at(message, after.checked_add(8)?)?);
+        let end = after.checked_add(10)?.checked_add(length)?;
+        if end > message.len() {
+            return None;
+        }
+        if kind != TYPE_OPT {
+            offsets.push(after + 4);
+        }
+        at = end;
+    }
+    Some(offsets)
+}
+
+/// Where a record continues after the name at `at`, which ends with a zero length or a compression
+/// pointer; `None` past the message's end or for a label type that does not exist.
+fn skip_name(message: &[u8], mut at: usize) -> Option<usize> {
+    loop {
+        let length = *message.get(at)?;
+        match length >> 6 {
+            0 if length == 0 => return Some(at + 1),
+            0 => at = at.checked_add(1 + usize::from(length))?,
+            3 => {
+                message.get(at + 1)?;
+                return Some(at + 2);
+            }
+            _ => return None,
+        }
+    }
 }
 
 /// Adds the public names of the `ECHConfig`s in an SVCB or HTTPS record's data to `names`: the record's
@@ -368,6 +437,54 @@ mod tests {
         let message = sample();
         for cut in 0..40 {
             assert_eq!(response(&message[..cut]), None, "cut at {cut}");
+        }
+    }
+
+    #[test]
+    fn uncache_sets_every_time_to_live_to_zero_but_the_opt_flags() {
+        let mut message = sample();
+        // An OPT record in the additional section, its TTL field holding the DO flag.
+        message[11] = 1;
+        message.extend_from_slice(&[0, 0, 41, 0x04, 0xd0, 0, 0, 0x80, 0, 0, 0]);
+        assert!(uncache(&mut message));
+        let Some(parsed) = response(&message) else {
+            unreachable!("a response")
+        };
+        assert!(parsed.addresses.iter().all(|&(_, ttl)| ttl == 0));
+        assert_eq!(
+            message[message.len() - 6..message.len() - 2],
+            [0, 0, 0x80, 0],
+            "the OPT flags"
+        );
+        let Some(offsets) = ttl_offsets(&message) else {
+            unreachable!("well formed")
+        };
+        assert_eq!(
+            offsets.len(),
+            4,
+            "CNAME, A, AAAA and the unrelated A; not OPT"
+        );
+        assert!(offsets.iter().all(|&at| message[at..at + 4] == [0; 4]));
+
+        // A name of bytes the reader refuses is still skipped, and its record still uncached.
+        let mut strange = sample();
+        strange[13] = b'\n';
+        assert!(uncache(&mut strange));
+        assert_eq!(strange[strange.len() - 10..strange.len() - 6], [0; 4]);
+    }
+
+    #[test]
+    fn uncache_leaves_a_query_or_a_cut_response_as_it_was() {
+        let mut query = sample();
+        query[2] = 0x01;
+        let before = query.clone();
+        assert!(!uncache(&mut query));
+        assert_eq!(query, before);
+        let message = sample();
+        for cut in 0..message.len() {
+            let mut part = message[..cut].to_vec();
+            assert!(!uncache(&mut part), "cut at {cut}");
+            assert_eq!(part, message[..cut], "cut at {cut}");
         }
     }
 }

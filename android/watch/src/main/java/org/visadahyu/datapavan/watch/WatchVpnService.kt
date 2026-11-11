@@ -261,6 +261,12 @@ class WatchVpnService : VpnService() {
                 "key ${log.hasKey} lock ${log.lockNow().name.lowercase().replace('_', '-')} failures ${log.failures}",
         )
         if (debuggable) {
+            // W6's DNS spike (docs/spikes/2026-11-shared-dns-cache.md): answers with a time to live of 0.
+            val uncached = args.orEmpty().indexOf("dns-uncached").takeIf { it >= 0 }?.let { args?.getOrNull(it + 1) }
+            when (uncached) {
+                "on" -> Engine.nativeUncacheAnswers(true).also { writer.println("dns-uncached on") }
+                "off" -> Engine.nativeUncacheAnswers(false).also { writer.println("dns-uncached off") }
+            }
             Engine.nativeFlows().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("flow $it") }
             debugLog(log, args.orEmpty().toList(), writer)
         }

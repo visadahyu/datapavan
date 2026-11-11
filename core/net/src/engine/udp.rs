@@ -11,10 +11,11 @@ use super::{
 use crate::packet::{Packet, UDP, Unreachable};
 use crate::tls::ServerName;
 use crate::tun::Tun;
-use crate::{packet, quic};
+use crate::{dns, packet, quic};
 use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use tokio::net::UdpSocket;
 use tokio::sync::watch;
@@ -356,6 +357,9 @@ async fn answers(
                         if destination.port() == 53 {
                             if is_tunnel_dns(destination.ip()) {
                                 shared.learn(&buffer[..n], None);
+                                if shared.uncached_answers.load(Ordering::Relaxed) {
+                                    dns::uncache(&mut buffer[..n]);
+                                }
                             } else if uid.is_some() {
                                 shared.learn(&buffer[..n], uid);
                             }

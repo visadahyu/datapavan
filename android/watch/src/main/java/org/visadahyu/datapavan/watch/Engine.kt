@@ -51,6 +51,13 @@ internal object Engine {
     /** Hands the connection log every waiting record now, with each open flow's segment so far; debug builds' test only. */
     external fun nativeFlushLog()
 
+    /**
+     * Whether the answers of the tunnel's DNS address reach the apps with a time to live of 0, so that
+     * Android's resolver, which keeps one cache for all apps of a network, keeps none of them; debug
+     * builds' DNS spike only, for now (W6).
+     */
+    external fun nativeUncacheAnswers(on: Boolean)
+
     /** The flows kept, one per line as `protocol app destination uid outcome named-by ech dns network name`; debug builds only. */
     external fun nativeFlows(): String
 }
