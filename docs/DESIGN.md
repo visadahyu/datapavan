@@ -555,6 +555,17 @@ lists whole before searching them, again for a few seconds while Android names a
 computer's Android 15 emulator with Wi-Fi as its default, the switch now really happens, and the check
 passes in full.
 
+W6, on `watch-w6`, 2026-11-11, after the maintainer kept 0.2.0's whole scope (W5 to W9). First the DNS
+spike above: the apps' shared cache is kept out of the way with answers whose time to live is 0. Then the
+SOCKS5 client, `core/net/src/socks5.rs` (RFC 1928, with RFC 1929's password): `CONNECT` to an address or a
+name, which the tool then resolves, and `UDP ASSOCIATE` with its datagrams; `BIND` has no command at all.
+Watch offers the password method only when it has credentials, so a tool that takes no password still
+answers, and a password never shows in a `Debug` output. The parsers take any bytes and are fuzzed (target
+`socks5`); `core/net/tests/socks5.rs` runs the client against a small proxy in the same process, whose
+bytes are written by hand from the RFCs, for an address, a name, the password asked for, refused or not
+offered, the proxy's failures, something that is not a proxy, and a UDP relay, announced or as 0.0.0.0.
+The engine does not use it yet: routing by app comes next.
+
 | # | Milestone | Done when |
 |---|---|---|
 | W1 | Watch's skeleton | A second Gradle module, `:watch`, package `org.visadahyu.datapavan.watch`, signed with the same key. Both APKs come from one build, CI is green, and each is reproducible on its own. The build fails if the audit app gains `INTERNET`, as now, or if Watch's manifest holds anything outside its permissions ADR. Watch opens on the emulator and the A40 with strings in all eight languages, RTL and pseudo-locales from the start, and an icon from the brand marks. Its tunnel starts and stops. |

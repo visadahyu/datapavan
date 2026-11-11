@@ -80,3 +80,10 @@ path = "fuzz_targets/organisations.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "socks5"
+path = "fuzz_targets/socks5.rs"
+test = false
+doc = false
+bench = false
