@@ -569,6 +569,24 @@ The engine does not use it yet: routing by app comes next. How chained apps' loo
 198.18.0.0/15 for A questions, the name sent to the tool, no stand-in for AAAA, other record types through
 the tool to Quad9 without blocking, ECH kept.
 
+W6's routing by app, the same day, in the engine (`core/net/src/engine/chain.rs`, `lookups.rs`, `udp.rs`,
+`tcp.rs`): `Engine::chain` turns a chain on with the tool's proxy, its password, its UID and the chained
+apps (or every app but the tool), and off. While it is on, a flow's route waits for Android to name its app,
+so that a chained app's connection never starts directly. Chained apps' TCP goes through `CONNECT`, their
+UDP through a `UDP ASSOCIATE` whose connection stays open for the flow, by the name behind a stand-in
+(`core/net/src/standins.rs`) or by address; a tool without UDP sends their UDP nowhere. Their lookups are
+answered by Watch (`core/net/src/answers.rs`): a stand-in for A, no data for AAAA, the name for a reverse
+lookup of a stand-in, and any other question from Quad9 through the tool, rebuilt without address hints.
+The tool's own traffic and the other apps' go directly; a flow whose app Android cannot name goes nowhere,
+since it could be either. A stopped tool gets the app an ICMP error, and nothing leaves directly. Chained
+flows reach the log with their app and bytes but no destination, unless the user asks for them. Every
+answer has a time to live of 0 while a chain is on, and direct apps' repeated lookups are answered from
+Watch's own cache (`core/net/src/dnscache.rs`), so the network's resolver is asked no more often than
+before. `core/net/tests/chain.rs` runs the whole engine on a pair of datagram sockets with an in-process
+proxy for UDP and lookups; TCP through the tool needs Android's stack and is checked on the emulator
+(W6's CI test, next). Not yet: Watch's screens and the finding of the tool (Kotlin), and the lab's
+measurements of ADR 0038.
+
 | # | Milestone | Done when |
 |---|---|---|
 | W1 | Watch's skeleton | A second Gradle module, `:watch`, package `org.visadahyu.datapavan.watch`, signed with the same key. Both APKs come from one build, CI is green, and each is reproducible on its own. The build fails if the audit app gains `INTERNET`, as now, or if Watch's manifest holds anything outside its permissions ADR. Watch opens on the emulator and the A40 with strings in all eight languages, RTL and pseudo-locales from the start, and an icon from the brand marks. Its tunnel starts and stops. |
