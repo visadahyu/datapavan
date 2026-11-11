@@ -627,8 +627,13 @@ private addresses, and NekoBox dropping an answer after the app's half-close. Hi
 core on the emulator, before Watch was involved. On the A40 (Android 11), with only the test apps inside the
 tunnel, Watch found the test tool, Orbot, v2rayNG and NekoBox, each with its owner confirmed, and the shell
 reached Android's own check address through each by a stand-in name, and Quad9 over UDP through v2rayNG and
-NekoBox. NekoBox's own lookups went to Alibaba's public DNS over HTTPS, shown under its UID. Still to come: Hiddify
-again, Android 11 and 17 on the emulators, and the rest of ADR 0038's lab.
+NekoBox. NekoBox's own lookups went to Alibaba's public DNS over HTTPS, shown under its UID. ADR 0038's lab, the same day
+([notes](spikes/2026-11-chain-lab.md)): a stand-in answers in about 10 ms; other questions through the tool took
+half a second each until the tool's route got the cache the ADR promises (now about 10 ms after the first);
+strict Private DNS sends chained apps' lookups to the provider directly, encrypted, while their traffic still goes
+through the tool; Chrome loaded a page with resources from other hosts through the tool with no Local Network
+Access prompt; the HTTPS record a chained app gets keeps its ECH key. Still to come: Hiddify again, Android 11 and
+17 on the emulators, ECH in a browser that offers it, and the ten apps of W3.
 
 | # | Milestone | Done when |
 |---|---|---|

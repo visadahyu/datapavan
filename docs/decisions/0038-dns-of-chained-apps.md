@@ -115,8 +115,11 @@ Option 1, from W6 on, with these rules:
 
 1. Chrome on the emulators and the A40, chained: an ordinary site with resources on other hosts loads with
    no Local Network Access prompt and no blocked request; then the same with IPv6 stand-ins in Watch's
-   prefix and in 2001:2::/48, to confirm that one space is what matters.
-2. ECH through the tool: a site that offers ECH (Cloudflare's test page) reports that ECH was used.
+   prefix and in 2001:2::/48, to confirm that one space is what matters. *Run on 2026-11-11 on the Android 17 emulator
+   ([lab](../spikes/2026-11-chain-lab.md)): Wikipedia loaded whole through the tool with no prompt; the IPv6
+   comparison was not run, since Watch gives no IPv6 stand-ins.*
+2. ECH through the tool: a site that offers ECH (Cloudflare's test page) reports that ECH was used. *On 2026-11-11 Chrome offered no ECH on the emulator even without
+   the chain; the HTTPS record a chained app gets was checked instead: ECH kept, hints gone, TTL 0.*
 3. The ten apps of W3, chained: which work, which refuse a stand-in.
 4. Strict Private DNS: whose socket carries Android's TLS lookups, and whether a chain should refuse to
    start in that mode rather than warn. *Measured on 2026-11-11 ([lab](../spikes/2026-11-chain-lab.md)): Android's

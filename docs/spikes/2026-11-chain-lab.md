@@ -1,8 +1,8 @@
 # ADR 0038's lab (W6)
 
 The measurements [ADR 0038](../decisions/0038-dns-of-chained-apps.md) asks for before W6 is done, as far as they were
-run on 2026-11-11, on the emulator with Android 17 (Play image), with adb's shell chained through W6's test tool
-(`scripts/test-tool`), which connects directly.
+run on 2026-11-11, on the emulator with Android 17 (Play image), with adb's shell or Chrome chained through W6's
+test tool (`scripts/test-tool`), which connects directly.
 
 ## 5. The delay of lookups
 
@@ -40,9 +40,26 @@ can see that DNS over TLS is used and can block it.
 Watch keeps warning, as its chain screen does, rather than refusing to chain: refusing would leave the app with no
 way through the tool, while the warning lets the user choose "Automatic" or "Off".
 
+## 1. Chrome and Local Network Access
+
+Chrome 156, past its first run at the maintainer's word (signed out, usage and crash reports off), with only
+Chrome chained through the test tool. Wikipedia's main page loaded whole, its images from upload.wikimedia.org and
+thumb.wikimedia.org included, with no prompt for access to the local network and no request blocked. Each of
+Chrome's destinations had a stand-in in 198.18.0.0/15 named after its lookup (en.wikipedia.org, thumb.wikimedia.org,
+www.google.com and the rest), and its HTTPS questions went to Quad9 through the tool. Stand-ins all in one space of
+Local Network Access, the loopback space, do what ADR 0038 expected. The comparison with IPv6 stand-ins in the
+local or public space was not run: Watch gives no IPv6 stand-ins, and building them only to show a failure was not
+worth it.
+
+## 2. ECH through the tool
+
+Cloudflare's trace page said `sni=plaintext` through the chain, and also without it: Chrome on this emulator did not
+offer ECH at all, so the page cannot tell whether ECH survives the chain. Watch's own part was checked instead: the
+HTTPS record for crypto.cloudflare.com that a chained app gets holds `alpn` and `ech`, with the address hints gone
+and a time to live of 0; the direct answer holds `alpn`, `ipv4hint`, `ech` and `ipv6hint` with its real time to
+live. Whether a browser then uses the key is the browser's matter; a browser that does ECH elsewhere (on a phone
+where it works directly) is the next check.
+
 ## Not run yet
 
-1. **Chrome and Local Network Access:** Chrome 156 on this emulator stops at its first-run screen, which asks to
-   accept its terms; waiting on the maintainer's word for the test emulator (signed out, usage reports off).
-2. **ECH through the tool:** the same.
 3. **The ten apps of W3:** they wait on the Google test account.
