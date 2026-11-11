@@ -337,6 +337,24 @@ val remappedRustFlags = cargoHome.map { home ->
     )
 }
 
+/** Copies the table of tools (data/tools, W6) into the assets, for Watch to find the user's tool. */
+abstract class ToolTable : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val table: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val out = outputDir.get().asFile
+        out.deleteRecursively()
+        out.mkdirs()
+        table.get().asFile.copyTo(out.resolve("tools.tsv"))
+    }
+}
+
 /** Copies the table from address to organisation into the assets, when there is one. */
 abstract class OrganisationTable : DefaultTask() {
     @get:InputFiles
@@ -393,6 +411,11 @@ androidComponents {
             table.from(repositoryRoot.file("data/dbip-asn/asn.bin"))
         }
         variant.sources.assets?.addGeneratedSourceDirectory(tableTask, OrganisationTable::outputDir)
+
+        val toolsTask = tasks.register<ToolTable>("toolTable$suffix") {
+            table.set(repositoryRoot.file("data/tools/tools.tsv"))
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(toolsTask, ToolTable::outputDir)
 
         tasks.register<ApkNativeLibraryCheck>("verifyApk$suffix") {
             apkDirectory.set(variant.artifacts.get(SingleArtifact.APK))

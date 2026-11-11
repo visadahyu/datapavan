@@ -268,6 +268,7 @@ class WatchVpnService : VpnService() {
                 "off" -> Engine.nativeUncacheAnswers(false).also { writer.println("dns-uncached off") }
             }
             debugChain(args.orEmpty().toList(), writer)
+            if ("find-tool" in args.orEmpty()) writer.println(describe(org.visadahyu.datapavan.watch.chain.Tools.search(this)))
             Engine.nativeFlows().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("flow $it") }
             debugLog(log, args.orEmpty().toList(), writer)
         }
@@ -357,6 +358,21 @@ class WatchVpnService : VpnService() {
                 log.settle()
                 writer.println("${if ("log-put-day" in args) "log-put-day" else "log-test-day"} $testDay written")
             }
+        }
+    }
+
+    /** Debug builds' `find-tool`: what Watch found of the user's tool, one line, for W6's checks. */
+    private fun describe(search: org.visadahyu.datapavan.watch.chain.ToolSearch): String = when (search) {
+        org.visadahyu.datapavan.watch.chain.ToolSearch.NoneInstalled -> "tool none"
+        is org.visadahyu.datapavan.watch.chain.ToolSearch.NotAnswering ->
+            "tool installed ${search.installed.joinToString(",") { it.packageName }} not-answering"
+        is org.visadahyu.datapavan.watch.chain.ToolSearch.Answering -> with(search.found) {
+            val owner = when (ownerConfirmed) {
+                true -> "yes"
+                false -> "no"
+                null -> "unknown"
+            }
+            "tool answering ${tool.packageName} $host:$port uid $uid password ${if (needsPassword) "yes" else "no"} owner $owner"
         }
     }
 

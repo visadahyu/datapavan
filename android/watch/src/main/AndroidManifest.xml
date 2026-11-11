@@ -27,6 +27,18 @@
     -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
+    <!--
+        Package visibility (ADR 0034): every app a user can open, so that Watch finds the user's tool of
+        the table (data/tools) and lists the apps the user may chain through it (W6). Not
+        QUERY_ALL_PACKAGES; Watch writes no list of apps anywhere.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
