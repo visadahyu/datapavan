@@ -6,14 +6,16 @@
 //! that it does not loop back into its proxy. A flow whose app Android cannot name goes nowhere while
 //! a chain is on: directly it could be a chained app's, and through the tool it could be the tool's own.
 
+use super::upstream::protect;
 use super::{CONNECT_TIMEOUT, Shared, lock};
 use crate::socks5::{self, Command, Credentials, Target};
 use crate::standins::is_stand_in;
 use std::collections::HashSet;
 use std::io;
 use std::net::SocketAddr;
+use std::os::fd::AsRawFd;
 use std::sync::Arc;
-use tokio::net::TcpStream;
+use tokio::net::{TcpSocket, TcpStream};
 
 /// The user's tool and the apps sent through it.
 #[derive(Clone, Debug)]
@@ -85,10 +87,31 @@ impl Shared {
     }
 }
 
-/// A TCP connection to `destination` through the tool: its proxy is on the phone's loopback, which
-/// Android never routes into a VPN, so the socket needs no protection.
+/// A TCP connection to the tool's proxy. One on the phone's loopback, which Android never routes into
+/// a VPN, needs no protection; one elsewhere (on the local network) does, or it would loop back into
+/// the tunnel. A proxy that does not answer means the tool stopped: the app is told its destination
+/// cannot be reached, not that it refused.
+pub(super) async fn connect_proxy(
+    shared: &Arc<Shared>,
+    proxy: SocketAddr,
+) -> io::Result<TcpStream> {
+    let socket = if proxy.is_ipv4() {
+        TcpSocket::new_v4()?
+    } else {
+        TcpSocket::new_v6()?
+    };
+    if !proxy.ip().is_loopback() {
+        protect(shared, socket.as_raw_fd()).await?;
+    }
+    socket
+        .connect(proxy)
+        .await
+        .map_err(|e| io::Error::new(io::ErrorKind::HostUnreachable, e))
+}
+
+/// A TCP connection to `destination` through the tool.
 pub(super) async fn connect_through(
-    shared: &Shared,
+    shared: &Arc<Shared>,
     chain: &Chain,
     destination: SocketAddr,
 ) -> io::Result<TcpStream> {
@@ -96,10 +119,7 @@ pub(super) async fn connect_through(
         .tool_target(destination)
         .ok_or(io::ErrorKind::ConnectionRefused)?;
     let handshake = async {
-        // The tool stopped: the app is told its destination cannot be reached, not that it refused.
-        let mut stream = TcpStream::connect(chain.proxy)
-            .await
-            .map_err(|e| io::Error::new(io::ErrorKind::HostUnreachable, e))?;
+        let mut stream = connect_proxy(shared, chain.proxy).await?;
         socks5::handshake(
             &mut stream,
             chain.credentials.as_ref(),

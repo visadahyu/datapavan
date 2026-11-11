@@ -43,6 +43,7 @@ use crate::tun::Tun;
 
 mod chain;
 mod logbook;
+mod lookups;
 mod naming;
 mod tcp;
 mod udp;
