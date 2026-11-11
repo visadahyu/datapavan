@@ -63,6 +63,45 @@ address Android itself checks connectivity with.
 
 All were uninstalled afterwards, and Watch's tunnel stopped.
 
+## On the emulators with Android 11 and 17
+
+Later the same day, at the maintainer's word, the same three tools (their x86_64 and universal builds) were tested
+the same way as on the A40, one at a time, first on the emulator with Android 17 (`dp-api37-16k`, 16 KB pages) and
+then on the one with Android 11 (`dp-api30`). Each was in proxy mode, with a SOCKS profile pointing at the test
+tool, or with Tor for Orbot. The tunnel covered only adb's shell, the test tool and the tool.
+
+| Tool | Android 17 | Android 11 |
+|---|---|---|
+| v2rayNG 2.3.15 | 10808, owner confirmed; TCP by a stand-in name (HTTP 204); UDP to Quad9 (61 bytes) | the same |
+| NekoBox 1.4.2 | 2080; owner unknown at the first search, confirmed at the next three; TCP and UDP (83 bytes) | 2080, owner confirmed; TCP and UDP |
+| Orbot 17.9.7 | 9050, owner confirmed; TCP through Tor; UDP refused | the same |
+
+In every case Watch found the tool with no port typed. Chaining took no password. The tool's own connections showed
+under its own UID. These were NekoBox's DNS over HTTPS to 223.5.5.5 and Orbot's connections to Tor relays.
+
+What Android 17 added:
+
+- **The local network permission.** v2rayNG (target SDK 37) asked for `ACCESS_LOCAL_NETWORK` when it started. The
+  dialog called it finding and connecting to nearby devices. It was declined, and v2rayNG worked anyway. Orbot
+  (target 37) declares the permission but did not ask for it, was not granted it, and worked too. NekoBox (target
+  35) got it without asking, as Android grants it to apps built for older versions. A tool's proxy on 127.0.0.1 is
+  on loopback, which the permission does not cover. A user who refuses it loses nothing that Watch needs.
+- **16 KB pages.** NekoBox's `libgojni.so` is not aligned to 16 KB pages, so Android 17 on a 16 KB device runs it
+  in its compatible mode and warns once with a dialog. It still worked. v2rayNG and Orbot gave no such warning.
+- **Orbot's power user mode** asked for the alarms permission there, as on Android 15, and offered the battery
+  exemption. It connected with "Connect anyway". On Android 11 it asked only for the battery exemption, as on
+  the A40.
+
+NekoBox's unknown owner happened once. The first search ran six seconds after the tunnel started, and Android named
+no owner of the port. The next three searches named NekoBox. It did not happen again when Orbot was searched one,
+three and six seconds after the tunnel started, and not on Android 11. Watch still offered the chain: an unknown
+owner does not block it, and only a port that Android names as another app's is skipped. Android returns no owner
+for a UID that the VPN does not cover. The tool was inside the tunnel here, so that is not the cause. It is to be
+watched for in W6's acceptance runs.
+
+The tools and the test tool were uninstalled from both emulators afterwards. Watch's debug build stays on both, as
+before.
+
 ## Hiddify
 
 Its first screen asks the user to accept its terms (accepted for the test emulator at the maintainer's word) and
@@ -75,7 +114,6 @@ with an arm64 build, and with a profile of the kind Hiddify expects.
 
 ## Still to do
 
-- Hiddify, on the A40 or with another profile.
-- The four tools on the emulators with Android 11 and 17.
-- The rest of ADR 0038's lab: Chrome and Local Network Access with stand-ins, ECH through a tool, the ten apps of
-  W3, strict Private DNS, and the delay of other record types through each tool.
+- Hiddify, on the A40 or with another profile, and then on both emulators.
+- The rest of ADR 0038's lab ([notes](2026-11-chain-lab.md)): ECH in a browser that offers it, the ten apps of W3,
+  and the delay of other record types through each real tool, Tor most of all.

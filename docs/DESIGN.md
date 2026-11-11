@@ -632,8 +632,11 @@ NekoBox. NekoBox's own lookups went to Alibaba's public DNS over HTTPS, shown un
 half a second each until the tool's route got the cache the ADR promises (now about 10 ms after the first);
 strict Private DNS sends chained apps' lookups to the provider directly, encrypted, while their traffic still goes
 through the tool; Chrome loaded a page with resources from other hosts through the tool with no Local Network
-Access prompt; the HTTPS record a chained app gets keeps its ECH key. Still to come: Hiddify again, Android 11 and
-17 on the emulators, ECH in a browser that offers it, and the ten apps of W3.
+Access prompt; the HTTPS record a chained app gets keeps its ECH key. On the emulators with Android 11 and 17,
+v2rayNG, NekoBox and Orbot were each found and chained as on the A40. On Android 17, v2rayNG asked for
+`ACCESS_LOCAL_NETWORK`; it was refused, and the chain still worked, since a proxy on loopback does not need it.
+Android named no owner of NekoBox's port once, at the first search after the tunnel started, and named NekoBox at
+every later search. Still to come: Hiddify again, ECH in a browser that offers it, and the ten apps of W3.
 
 | # | Milestone | Done when |
 |---|---|---|
