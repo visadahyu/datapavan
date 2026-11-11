@@ -262,7 +262,8 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeChain<'ca
 ) -> jboolean {
     unowned_env
         .with_env(|env| -> Result<jboolean, Error> {
-            let address: Option<IpAddr> = proxy.try_to_string(env).ok().and_then(|s| s.parse().ok());
+            let address: Option<IpAddr> =
+                proxy.try_to_string(env).ok().and_then(|s| s.parse().ok());
             let chain = match (address, u16::try_from(port), u32::try_from(tool_uid)) {
                 (Some(ip), Ok(port), Ok(tool)) => {
                     // A null array is no credentials; convert_byte_array refuses it.
@@ -278,7 +279,11 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeChain<'ca
                     } else {
                         let mut uids = vec![0; apps.len(env)?];
                         apps.get_region(env, 0, &mut uids)?;
-                        Some(uids.into_iter().filter_map(|u| u32::try_from(u).ok()).collect())
+                        Some(
+                            uids.into_iter()
+                                .filter_map(|u| u32::try_from(u).ok())
+                                .collect(),
+                        )
                     };
                     Some(Chain {
                         proxy: SocketAddr::new(ip, port),
