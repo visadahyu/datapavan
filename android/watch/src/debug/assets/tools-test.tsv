@@ -1,0 +1,3 @@
+# W6's test tool (scripts/test-tool), known to debug builds only, so that scripts/verify-chain.sh can check
+# finding a tool. Columns as data/tools/tools.tsv.
+org.visadahyu.datapavan.testtool	Datapavan test tool	proxy	-	socks5:127.0.0.1:10870	yes	optional	yes	yes	no	no	no	Debug builds only

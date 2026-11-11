@@ -73,7 +73,7 @@ class ToolFinder(
         for (listener in tool.socksListeners) {
             for (port in listOf(listener.port, listener.port + userId).distinct().filter { it in 1..65535 }) {
                 val answer = greet(listener.host, port) ?: continue
-                val owner = ownerOf(answer.proxy, answer.client)
+                val owner = answer.owner
                 // Another app holds the port: it is not this tool's proxy.
                 if (owner != null && owner != uid) continue
                 return FoundTool(
@@ -89,7 +89,7 @@ class ToolFinder(
         return null
     }
 
-    private class Greeting(val proxy: InetSocketAddress, val client: InetSocketAddress, val needsPassword: Boolean)
+    private class Greeting(val owner: Int?, val needsPassword: Boolean)
 
     /**
      * A SOCKS5 greeting offering no authentication (RFC 1928): a proxy answers version 5 and the method
@@ -98,6 +98,9 @@ class ToolFinder(
     private fun greet(host: String, port: Int): Greeting? = try {
         Socket().use { socket ->
             socket.connect(InetSocketAddress(host, port), CONNECT_MS)
+            // Asked at once, while the other end is surely open: a proxy that refuses the greeting
+            // closes it, and a closed connection has no owner left to name.
+            val owner = ownerOf(socket.remoteSocketAddress as InetSocketAddress, socket.localSocketAddress as InetSocketAddress)
             socket.soTimeout = READ_MS
             socket.getOutputStream().apply {
                 write(byteArrayOf(5, 1, 0))
@@ -107,11 +110,7 @@ class ToolFinder(
             val version = input.read()
             val method = input.read()
             if (version != 5 || method !in listOf(0, 0xff)) return null
-            Greeting(
-                proxy = socket.remoteSocketAddress as InetSocketAddress,
-                client = socket.localSocketAddress as InetSocketAddress,
-                needsPassword = method == 0xff,
-            )
+            Greeting(owner = owner, needsPassword = method == 0xff)
         }
     } catch (e: IOException) {
         null

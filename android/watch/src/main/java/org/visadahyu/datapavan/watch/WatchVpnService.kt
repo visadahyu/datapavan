@@ -328,7 +328,16 @@ class WatchVpnService : VpnService() {
                 "off" -> Engine.nativeUncacheAnswers(false).also { writer.println("dns-uncached off") }
             }
             debugChain(args.orEmpty().toList(), writer)
-            if ("find-tool" in args.orEmpty()) writer.println(describe(org.visadahyu.datapavan.watch.chain.Tools.search(this)))
+            if ("find-tool" in args.orEmpty()) {
+                // Android runs dump on the main thread, where sockets are not allowed: the search runs
+                // on a thread of its own, and this debug command waits for it.
+                var found: org.visadahyu.datapavan.watch.chain.ToolSearch? = null
+                Thread { found = org.visadahyu.datapavan.watch.chain.Tools.search(this) }.apply {
+                    start()
+                    join(SEARCH_WAIT_MS)
+                }
+                writer.println(found?.let(::describe) ?: "tool searching")
+            }
             Engine.nativeFlows().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("flow $it") }
             debugLog(log, args.orEmpty().toList(), writer)
         }
@@ -451,6 +460,9 @@ class WatchVpnService : VpnService() {
 
         /** The chain's settings changed: hand them to the engine (W6). */
         const val ACTION_APPLY_CHAIN = "org.visadahyu.datapavan.watch.APPLY_CHAIN"
+
+        /** How long the debug command `find-tool` waits for the search. */
+        private const val SEARCH_WAIT_MS = 10_000L
 
         /** The UID given for a tool that is not installed: no app has it. */
         private const val NO_UID = Int.MAX_VALUE

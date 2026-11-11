@@ -11,9 +11,21 @@ object Tools {
     /** Android numbers users by the hundred thousand UIDs (`UserHandle.PER_USER_RANGE`). */
     private const val PER_USER_RANGE = 100_000
 
-    /** The table of tools, as the build put it in the assets. */
-    fun table(context: Context): List<KnownTool> =
-        context.assets.open(ToolTable.ASSET).bufferedReader().use { ToolTable.parse(it.readText()) }
+    /**
+     * The table of tools, as the build put it in the assets, and in debug builds also W6's test tool
+     * (src/debug/assets/tools-test.tsv), which release builds do not carry.
+     */
+    fun table(context: Context): List<KnownTool> {
+        val table = context.assets.open(ToolTable.ASSET).bufferedReader().use { ToolTable.parse(it.readText()) }
+        val test = try {
+            context.assets.open(TEST_ASSET).bufferedReader().use { ToolTable.parse(it.readText()) }
+        } catch (e: java.io.FileNotFoundException) {
+            emptyList()
+        }
+        return table + test
+    }
+
+    private const val TEST_ASSET = "tools-test.tsv"
 
     /** Searches for the user's tool once. */
     fun search(context: Context): ToolSearch {
