@@ -16,7 +16,7 @@ class ToolTableTest {
     @Test
     fun readsTheProxyToolsOfTheTable() {
         val proxies = table.filter { it.proxyMode }
-        assertEquals(20, proxies.size)
+        assertEquals(24, proxies.size)
         assertTrue("every proxy tool takes names", proxies.all { it.names != false })
     }
 
@@ -37,6 +37,13 @@ class ToolTableTest {
         val mahsa = table.single { it.name == "MahsaNG" }
         assertEquals(10808, mahsa.socksListeners.single().port)
         assertEquals(true, mahsa.udp)
+        // SlipNet's SOCKS5 bridge: a password it can take, and no UDP ASSOCIATE.
+        val slipnet = tool("app.slipnet")
+        assertEquals(listOf(Listener("socks5", "127.0.0.1", 10880)), slipnet.socksListeners)
+        assertEquals("optional", slipnet.auth)
+        assertEquals(false, slipnet.udp)
+        // A VPN-only tool whose proxy runs only inside its own VPN is not greeted.
+        assertTrue(tool("io.geph.android").listeners.isEmpty())
         // Clash Meta's ports come from the profile: none to greet.
         assertTrue(table.single { it.name == "Clash Meta for Android" }.listeners.isEmpty())
     }

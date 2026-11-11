@@ -103,3 +103,39 @@ Karing with TUN off; the ports and passwords of Happ, V2Box, Npv Tunnel, NetMod 
 MahsaNG v18's real ports and modes; Oblivion v8's "Proxy only mode" in the Android UI; and that Amnezia,
 Tor VPN, Defyx and Lantern open no loopback listener on Android. For each listener found, Android's
 owner lookup should name the app, so that a shared port never names the wrong tool.
+
+## Additions of 2026-11-11
+
+Eight tools were added and three rows updated, from the tools' own code at named commits, their official
+docs, channels and store listings; 272 rows of evidence. Each row was researched by an AI agent, and the
+values that decide whether Watch can find a tool (SlipNet's port and password default, DNSTT's listener) were
+read again in the code.
+
+- **New, with a proxy mode:**
+  - **SlipNet** (`app.slipnet`) and **SlipNet Lite** (`app.slipnet.lite`), DNS-tunnel clients by anonvector.
+    "Proxy-only mode" serves a SOCKS5 bridge on 127.0.0.1:10880, password off by default (a first launch
+    makes credentials but leaves them off, though a code comment says otherwise). UDP ASSOCIATE is refused.
+  - **DNSTT.XYZ** (`xyz.dnstt.app`), a dnstt and Slipstream client. "Proxy Mode" listens on
+    127.0.0.1:1080, but that port is a raw pipe into the DNS tunnel: the SOCKS5 server is the one at the
+    far end. Watch's greeting crosses the tunnel, slowly. Its release builds use the debug signing key.
+  - **v2RayTun** (`com.v2raytun.android`), closed source: a proxy mode and a SOCKS5 password setting
+    appear only in third-party copies of its release notes; its port is unknown.
+- **New, VPN only:**
+  - **Geph** (`io.geph.android`). Its "Local proxy" switch adds SOCKS5 on 127.0.0.1:9909 and HTTP on
+    9910, off on fresh installs, and only while Geph's own VPN runs. Geph stops its engine when another
+    VPN takes over, so Watch cannot chain through it.
+  - **OpenVPN Connect** (`net.openvpn.openvpn`). Its "Proxies" are HTTP proxies it uses to reach the
+    server, not a local listener.
+  - **Surfboard** (`com.getsurfboard`). Listeners come only from a profile's `socks5-listen` and
+    `http-listen`.
+  - **AM TUNNEL LITE VPN** (`app.vpn.amtunnellite`). A one-tap free VPN with no docs or public code.
+- **Updated:**
+  - **Npv Tunnel:** its official channel (2021 and 2022) told users to point devices on the phone's
+    hotspot at the SOCKS proxy it opens when the VPN starts. So that build served its proxy beyond
+    loopback.
+  - **NetMod:** imports WireGuard, and has a "Proxy Tethering" feature whose port is not documented.
+  - **MahsaNG:** VPN mode, per-app and WireGuard import are settled by its listing and release notes.
+    A user's log from the v18 build shows tun2socks using 127.0.0.1:10808. The rest keeps its `?`.
+- **Not identified:** an app named "Master DNS". The MasterDnsVPN project publishes no Android app.
+  Several third-party builds carry similar names, and their clients default to SOCKS5 on 127.0.0.1:18000.
+  None was added until the app is known by its package and signer.
