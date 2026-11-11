@@ -57,6 +57,10 @@ ping_from_shell() { device 10 "printf 'GET /ping HTTP/1.1\r\nHost: x\r\nConnecti
 
 fail() {
     echo "CHAIN CHECK FAILED: $*" >&2
+    if dump_screen 2>/dev/null; then
+        echo "On the screen:" >&2
+        adb shell cat "$DUMP" 2>/dev/null | grep -o 'text="[^"]\+"' | head -20 >&2 || true
+    fi
     echo "The tool's requests:" >&2
     tool_log | tail -20 >&2 || true
     echo "The flows of the shell and the tool:" >&2
@@ -203,6 +207,14 @@ SWITCH="Send apps through Datapavan test tool"
 # The search, and the first password after a fresh start (a new Keystore key), take a few seconds: wait
 # for them before scrolling, or the scroll moves the section off the screen before it is drawn.
 for _ in $(seq 1 30); do screen_has "$SWITCH" && break; sleep 1; done
+# A search that missed the tool leaves "Look again" on the screen, which a user would tap.
+if ! screen_has "$SWITCH" && screen_has "Look again"; then
+    echo "  the chain screen's search missed the tool: looking again" >&2
+    adb shell cat "$DUMP" 2>/dev/null | grep -o 'text="[^"]\+"' | sed -n '5,9p' | sed 's/^/    screen: /' >&2 || true
+    echo "    the service's search now: $(dump find-tool | grep -E '^ *tool ' | sed 's/^ *//')" >&2
+    tap_text "Look again" || true
+    for _ in $(seq 1 30); do screen_has "$SWITCH" && break; sleep 1; done
+fi
 scroll_to "$SWITCH" || fail "the chain screen did not offer the test tool"
 dump_screen || true
 screen=$(adb shell cat "$DUMP" | tr -d '\r')

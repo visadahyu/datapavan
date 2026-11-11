@@ -4,6 +4,7 @@ import android.content.pm.PackageManager
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.net.SocketTimeoutException
 
 /** A tool whose SOCKS5 proxy answered on the phone. */
 data class FoundTool(
@@ -94,8 +95,28 @@ class ToolFinder(
     /**
      * A SOCKS5 greeting offering no authentication (RFC 1928): a proxy answers version 5 and the method
      * it chose, or "no acceptable method" when it wants a password. Anything else is not a SOCKS5 proxy.
+     * A phone busy starting apps can be slow to answer even on its own loopback (CI, 2026-11-11: the first
+     * search sometimes missed a proxy that the next one found), so a greeting that times out is tried
+     * once more. A refused connection is not: nothing listens there.
      */
-    private fun greet(host: String, port: Int): Greeting? = try {
+    private fun greet(host: String, port: Int): Greeting? {
+        repeat(ATTEMPTS - 1) {
+            try {
+                return greetOnce(host, port)
+            } catch (e: SocketTimeoutException) {
+                // Slow, not absent: once more.
+            } catch (e: IOException) {
+                return null
+            }
+        }
+        return try {
+            greetOnce(host, port)
+        } catch (e: IOException) {
+            null
+        }
+    }
+
+    private fun greetOnce(host: String, port: Int): Greeting? =
         Socket().use { socket ->
             socket.connect(InetSocketAddress(host, port), CONNECT_MS)
             // Asked at once, while the other end is surely open: a proxy that refuses the greeting
@@ -112,12 +133,10 @@ class ToolFinder(
             if (version != 5 || method !in listOf(0, 0xff)) return null
             Greeting(owner = owner, needsPassword = method == 0xff)
         }
-    } catch (e: IOException) {
-        null
-    }
 
     private companion object {
-        const val CONNECT_MS = 300
-        const val READ_MS = 500
+        const val CONNECT_MS = 1_000
+        const val READ_MS = 1_500
+        const val ATTEMPTS = 2
     }
 }
