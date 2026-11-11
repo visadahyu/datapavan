@@ -601,9 +601,22 @@ nothing of theirs goes out directly. The service hands the chain to the engine b
 proxy where the tool last answered, then looks again in the background. The 18 strings are in eight
 languages, with Android's own terms from the Settings app, reviewed under ADR 0030's process. Checked by
 hand on the Android 15 emulator with `scripts/watch-lab/socks5.py` on this computer standing in for the
-tool: TCP by address and by stand-in name, UDP through the relay, and a stopped proxy. Still to come: a test
-tool app on the phone for W6's CI test (a real tool's package listening on its port), that test, and the
-lab's measurements of ADR 0038.
+tool: TCP by address and by stand-in name, UDP through the relay, and a stopped proxy.
+
+W6's check in CI, the same day: `scripts/verify-chain.sh` with a test tool on the phone (`scripts/test-tool`,
+a SOCKS5 proxy with a password on the loopback, in a foreground service), which debug builds of Watch know
+from `src/debug/assets/tools-test.tsv`. Watch must find it by itself, with Android naming it as the port's
+owner and the password it wants; with adb's shell chained through it, TCP reaches the test server by address
+and by a name only the tool resolves, through a stand-in, UDP goes through its relay, the tool's own
+connections go directly under its own UID, and a wrong password is refused. Then the tool stops: the shell's
+TCP and UDP fail, and a sentinel on the computer, outside Android, sees none of them, while it does see a
+control connection from Watch's own UID, which goes directly. The emulator's own capture (`network capture`
+in its console) was the first idea, but it does not see what goes over the emulator's Wi-Fi. Passes on the
+emulators with Android 11, 15 and 17. Two faults the test found: Android's loopback address of choice is
+`::1`, so a tool listening "on the loopback" in Java may not be on 127.0.0.1 where the table says; and a
+proxy that refuses Watch's greeting closes the connection before Android can name its owner, so the owner is
+now asked as soon as the connection is made. Still to come: the lab's measurements of ADR 0038 and the real
+tools (step 6).
 
 | # | Milestone | Done when |
 |---|---|---|

@@ -123,6 +123,8 @@ jobs:
       # On a real Android system: Watch's smoke test (every language, its tunnel on and off with every
       # app inside it, scripts/smoke-watch.sh) and its engine end to end (TCP, UDP, DNS, refused and
       # unreachable destinations, each flow's owner, a network switch, scripts/verify-watch.sh), its
+      # chaining through a test tool's SOCKS5 proxy on the phone (the tool found, TCP, UDP and lookups
+      # through it, a wrong password refused, nothing direct once it stops, scripts/verify-chain.sh), its
       # connection log (flows with their bytes, no destination in the clear or in logcat, an earlier day
       # shut while the screen is locked, the wipe, scripts/verify-log.sh), its release build as users get
       # it (traffic through it, each flow's app, the log, its memory budget, scripts/verify-watch-release.sh), then
@@ -162,6 +164,7 @@ jobs:
           script: |
             scripts/smoke-watch.sh
             scripts/verify-watch.sh
+            scripts/verify-chain.sh
             scripts/verify-log.sh
             scripts/verify-watch-release.sh
             scripts/smoke.sh

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    W6's test tool (scripts/verify-chain.sh): stands in for the user's circumvention tool on the phone,
+    a SOCKS5 proxy on the loopback with CONNECT, UDP ASSOCIATE and an optional password, run by a
+    foreground service so that Android does not freeze it while Watch is on screen. Debug builds of
+    Watch know its package from src/debug/assets/tools-test.tsv. Emulators only; never shipped.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.visadahyu.datapavan.testtool">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <application android:label="Datapavan test tool" android:hasCode="true">
+        <!-- A launcher entry: Watch sees the apps a user can open (ADR 0034). -->
+        <activity android:name=".ToolActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <service android:name=".ToolService" android:exported="true" />
+    </application>
+</manifest>
