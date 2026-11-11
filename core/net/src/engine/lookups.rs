@@ -10,7 +10,7 @@ use crate::standins::is_stand_in;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Quad9's service without blocking, `quad9-unsecured` in `data/resolvers`: the resolver of chained
@@ -49,8 +49,17 @@ pub(super) async fn answer(shared: &Arc<Shared>, chain: &Chain, query: &[u8]) ->
             }
         }
     }
+    // Asked before: the answer Watch keeps for the tool's route, for its time to live, so that each name
+    // costs one trip through the tool, not one per lookup (ADR 0038).
+    let kept = lock(&shared.tool_answers).answer(query, Instant::now());
+    if let Some(kept) = kept {
+        return answers::rebuilt(&kept).or_else(|| answers::failure(query));
+    }
     match through_tool(shared, chain, query).await {
-        Ok(answer) => answers::rebuilt(&answer).or_else(|| answers::failure(query)),
+        Ok(answer) => {
+            lock(&shared.tool_answers).insert(&answer, Instant::now());
+            answers::rebuilt(&answer).or_else(|| answers::failure(query))
+        }
         Err(_) => answers::failure(query),
     }
 }

@@ -182,8 +182,11 @@ async fn other_questions_go_to_the_resolver_through_the_tool() -> Outcome {
     // A resolver here, reached when the tool is asked for Quad9.
     let resolver = TcpListener::bind("127.0.0.1:0").await?;
     let resolver_address = resolver.local_addr()?;
+    let asked = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counted = Arc::clone(&asked);
     tokio::spawn(async move {
         while let Ok((mut stream, _)) = resolver.accept().await {
+            counted.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let mut length = [0u8; 2];
             if stream.read_exact(&mut length).await.is_err() {
                 continue;
@@ -228,6 +231,25 @@ async fn other_questions_go_to_the_resolver_through_the_tool() -> Outcome {
         0, 16, 0, 1, 0, 0, 0, 0, 0, 6, 5, b'h', b'e', b'l', b'l', b'o'
     ]));
     assert_eq!(tool.commands(), [1], "one CONNECT, to the resolver");
+    // Asked again within the record's 300 s, from another port: Watch answers from what it kept.
+    send(
+        &tunnel,
+        app(CHAINED_PORT),
+        dns,
+        &query(b"\x07example\x03com\x00", 16),
+    )
+    .await?;
+    let (_, again) = receive(&tunnel).await?.ok_or("an answer")?;
+    assert_eq!(
+        again, answer,
+        "the same answer, again with a time to live of 0"
+    );
+    assert_eq!(
+        asked.load(std::sync::atomic::Ordering::Relaxed),
+        1,
+        "the resolver was asked once"
+    );
+    assert_eq!(tool.commands(), [1]);
     Ok(())
 }
 

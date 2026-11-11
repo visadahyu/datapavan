@@ -328,6 +328,8 @@ struct Shared {
     stand_ins: Mutex<StandIns>,
     /// The network resolver's answers, kept for the apps that go directly while a chain is on.
     direct_answers: Mutex<DnsCache>,
+    /// The answers of chained apps' other questions, from the resolver through the tool (ADR 0038).
+    tool_answers: Mutex<DnsCache>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -410,6 +412,7 @@ impl Engine {
             chain: Mutex::new(None),
             stand_ins: Mutex::default(),
             direct_answers: Mutex::default(),
+            tool_answers: Mutex::default(),
         });
         let (stop, stopped) = watch::channel(false);
         let (network, changes) = watch::channel(0);
@@ -468,6 +471,7 @@ impl Engine {
         *lock(&self.shared.chain) = chain.map(Arc::new);
         self.shared.uncached_answers.store(on, Ordering::Relaxed);
         lock(&self.shared.direct_answers).clear();
+        lock(&self.shared.tool_answers).clear();
     }
 
     /// Whether the answers of Watch's own DNS address reach the apps with a time to live of 0, so that
@@ -678,6 +682,7 @@ mod tests {
             chain: Mutex::new(None),
             stand_ins: Mutex::default(),
             direct_answers: Mutex::default(),
+            tool_answers: Mutex::default(),
         }
     }
 
