@@ -587,6 +587,24 @@ proxy for UDP and lookups; TCP through the tool needs Android's stack and is che
 (W6's CI test, next). Not yet: Watch's screens and the finding of the tool (Kotlin), and the lab's
 measurements of ADR 0038.
 
+W6's side in Watch, the same day (`android/watch/.../chain/`, `ui/ChainSection.kt`). The build copies the table
+of tools into Watch's assets, and Watch declares the one launcher `<queries>` entry of ADR 0034. Watch looks
+for the installed tools of the table that have a proxy mode, greets only their known SOCKS5 ports (also
+shifted by the Android user's number), and asks Android who owns each answering port; a port another app
+holds is not the tool's. Its screen says which tool it found and on which port, or that none is installed,
+or that the tools installed have their proxy off; it has the switch that sends every app, or the apps the
+user picks, through the tool; a user name and a password Watch made for the tool's proxy, kept encrypted
+under a Keystore key and copied as sensitive, so that other apps on the phone cannot use the proxy; notes
+when the tool carries no UDP or strict Private DNS sends lookups past Watch; and the switch for chained
+destinations in the log, off by default. With the chain on and the tool silent, it says the apps wait and
+nothing of theirs goes out directly. The service hands the chain to the engine before any traffic, from the
+proxy where the tool last answered, then looks again in the background. The 18 strings are in eight
+languages, with Android's own terms from the Settings app, reviewed under ADR 0030's process. Checked by
+hand on the Android 15 emulator with `scripts/watch-lab/socks5.py` on this computer standing in for the
+tool: TCP by address and by stand-in name, UDP through the relay, and a stopped proxy. Still to come: a test
+tool app on the phone for W6's CI test (a real tool's package listening on its port), that test, and the
+lab's measurements of ADR 0038.
+
 | # | Milestone | Done when |
 |---|---|---|
 | W1 | Watch's skeleton | A second Gradle module, `:watch`, package `org.visadahyu.datapavan.watch`, signed with the same key. Both APKs come from one build, CI is green, and each is reproducible on its own. The build fails if the audit app gains `INTERNET`, as now, or if Watch's manifest holds anything outside its permissions ADR. Watch opens on the emulator and the A40 with strings in all eight languages, RTL and pseudo-locales from the start, and an icon from the brand marks. Its tunnel starts and stops. |
