@@ -1,17 +1,16 @@
 //! The lookups of chained apps (ADR 0038): Watch answers A, AAAA and reverse lookups of stand-ins
 //! itself, and asks Quad9's service without blocking for every other question, as DNS over TCP through
-//! the tool, so that no lookup of a chained app reaches the network beneath.
+//! the tool on a connection it keeps ([`super::kept`]), so that no lookup of a chained app reaches the
+//! network beneath.
 
-use super::chain::{Chain, connect_proxy, io_error};
-use super::{Shared, lock};
+use super::chain::Chain;
+use super::{Shared, kept, lock};
 use crate::answers::{self, A, AAAA};
-use crate::socks5::{self, Command, Target};
 use crate::standins::is_stand_in;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Quad9's service without blocking, `quad9-unsecured` in `data/resolvers`: the resolver of chained
 /// apps' other questions until the user chooses one (ADR 0038, decided by the maintainer).
@@ -22,10 +21,14 @@ pub(super) const RESOLVERS: [SocketAddr; 2] = [
 
 /// How long a question through the tool may take, for each resolver address in turn. Android's
 /// resolver gives up on a lookup after about five seconds and asks again.
-const LOOKUP_TIMEOUT: Duration = Duration::from_secs(4);
+pub(super) const LOOKUP_TIMEOUT: Duration = Duration::from_secs(4);
 
 /// The answer to a chained app's `query`, or `None` when it is not even a DNS message with an ID.
-pub(super) async fn answer(shared: &Arc<Shared>, chain: &Chain, query: &[u8]) -> Option<Vec<u8>> {
+pub(super) async fn answer(
+    shared: &Arc<Shared>,
+    chain: &Arc<Chain>,
+    query: &[u8],
+) -> Option<Vec<u8>> {
     let Some(question) = answers::question(query) else {
         return answers::failure(query);
     };
@@ -65,47 +68,21 @@ pub(super) async fn answer(shared: &Arc<Shared>, chain: &Chain, query: &[u8]) ->
 }
 
 /// Asks the resolvers in turn, through the tool.
-async fn through_tool(shared: &Arc<Shared>, chain: &Chain, query: &[u8]) -> io::Result<Vec<u8>> {
+async fn through_tool(
+    shared: &Arc<Shared>,
+    chain: &Arc<Chain>,
+    query: &[u8],
+) -> io::Result<Vec<u8>> {
     let mut last = io::Error::from(io::ErrorKind::HostUnreachable);
     for resolver in RESOLVERS {
-        match tokio::time::timeout(LOOKUP_TIMEOUT, ask(shared, chain, resolver, query)).await {
+        match tokio::time::timeout(LOOKUP_TIMEOUT, kept::ask(shared, chain, resolver, query)).await
+        {
             Ok(Ok(answer)) => return Ok(answer),
             Ok(Err(error)) => last = error,
             Err(_) => last = io::ErrorKind::TimedOut.into(),
         }
     }
     Err(last)
-}
-
-/// One question as DNS over TCP (RFC 7766) to `resolver`, through the tool: the answer, if its ID is the
-/// question's.
-async fn ask(
-    shared: &Arc<Shared>,
-    chain: &Chain,
-    resolver: SocketAddr,
-    query: &[u8],
-) -> io::Result<Vec<u8>> {
-    let length = u16::try_from(query.len()).map_err(|_| io::ErrorKind::InvalidInput)?;
-    let mut stream = connect_proxy(shared, chain.proxy).await?;
-    socks5::handshake(
-        &mut stream,
-        chain.credentials.as_ref(),
-        Command::Connect,
-        &Target::Address(resolver),
-    )
-    .await
-    .map_err(io_error)?;
-    let mut framed = length.to_be_bytes().to_vec();
-    framed.extend_from_slice(query);
-    stream.write_all(&framed).await?;
-    let mut prefix = [0; 2];
-    stream.read_exact(&mut prefix).await?;
-    let mut answer = vec![0; usize::from(u16::from_be_bytes(prefix))];
-    stream.read_exact(&mut answer).await?;
-    if answer.get(..2) != query.get(..2) {
-        return Err(io::ErrorKind::InvalidData.into());
-    }
-    Ok(answer)
 }
 
 #[cfg(test)]

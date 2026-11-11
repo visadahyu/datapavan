@@ -2,7 +2,8 @@
 //! small proxy of `common` for the user's tool. Chained apps' UDP goes through the tool's relay, the
 //! other apps' directly; chained apps' lookups get stand-in addresses, and the name behind one goes to
 //! the tool; other questions go to the resolver through the tool and come back with a time to live of
-//! 0; a stopped tool gets the app an ICMP error and sends nothing directly.
+//! 0, sharing one kept connection, which is opened again when the resolver closes it; a stopped tool
+//! gets the app an ICMP error and sends nothing directly.
 
 mod common;
 
@@ -250,6 +251,163 @@ async fn other_questions_go_to_the_resolver_through_the_tool() -> Outcome {
         "the resolver was asked once"
     );
     assert_eq!(tool.commands(), [1]);
+    Ok(())
+}
+
+/// The next DNS message on a DNS over TCP connection.
+async fn read_message(stream: &mut tokio::net::TcpStream) -> io::Result<Vec<u8>> {
+    let mut length = [0u8; 2];
+    stream.read_exact(&mut length).await?;
+    let mut message = vec![0u8; usize::from(u16::from_be_bytes(length))];
+    stream.read_exact(&mut message).await?;
+    Ok(message)
+}
+
+/// The answer to a TXT question of one label and a domain: one record holding that label, framed.
+fn txt_answer(question: &[u8]) -> Vec<u8> {
+    let label = usize::from(question[12]);
+    let mut answer = question[..2].to_vec();
+    answer.extend_from_slice(&[0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0]);
+    answer.extend_from_slice(&question[12..]);
+    let size = |n: usize| u8::try_from(n).unwrap_or(0);
+    answer.extend_from_slice(&[0xc0, 12, 0, 16, 0, 1, 0, 0, 1, 44, 0, size(label + 1)]);
+    answer.push(size(label));
+    answer.extend_from_slice(&question[13..13 + label]);
+    let mut framed = u16::try_from(answer.len())
+        .unwrap_or(0)
+        .to_be_bytes()
+        .to_vec();
+    framed.extend_from_slice(&answer);
+    framed
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn questions_share_one_kept_connection_to_the_resolver() -> Outcome {
+    // A resolver here that holds the first two questions on a connection and answers them in reverse
+    // order, then answers each as it comes; it counts its connections and notes the IDs it is asked
+    // under.
+    let resolver = TcpListener::bind("127.0.0.1:0").await?;
+    let resolver_address = resolver.local_addr()?;
+    let connections = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let ids = Arc::new(std::sync::Mutex::new(Vec::<u16>::new()));
+    let (counted, noted) = (Arc::clone(&connections), Arc::clone(&ids));
+    tokio::spawn(async move {
+        while let Ok((mut stream, _)) = resolver.accept().await {
+            counted.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let noted = Arc::clone(&noted);
+            tokio::spawn(async move {
+                let mut held = Vec::new();
+                let mut answered = 0;
+                while let Ok(question) = read_message(&mut stream).await {
+                    noted
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .push(u16::from_be_bytes([question[0], question[1]]));
+                    held.push(question);
+                    if answered == 0 && held.len() < 2 {
+                        continue;
+                    }
+                    for question in held.drain(..).rev() {
+                        answered += 1;
+                        if stream.write_all(&txt_answer(&question)).await.is_err() {
+                            return;
+                        }
+                    }
+                }
+            });
+        }
+    });
+    let mut settings = Settings::default();
+    settings
+        .remap
+        .insert(SocketAddr::from(([9, 9, 9, 10], 53)), resolver_address);
+    let tool = proxy(settings).await?;
+    let (_engine, tunnel) = engine(chain(tool.address))?;
+    let dns = SocketAddr::from((DNS4, 53));
+
+    // Two questions at once, under the same ID, as two apps may ask.
+    send(
+        &tunnel,
+        app(CHAINED_PORT),
+        dns,
+        &query(b"\x01a\x04test\x00", 16),
+    )
+    .await?;
+    send(
+        &tunnel,
+        app(CHAINED_PORT),
+        dns,
+        &query(b"\x01b\x04test\x00", 16),
+    )
+    .await?;
+    let mut answers = Vec::new();
+    for _ in 0..2 {
+        let (_, answer) = receive(&tunnel).await?.ok_or("an answer")?;
+        answers.push(answer);
+    }
+    answers.sort_by_key(|answer| answer[13]);
+    for (answer, label) in answers.iter().zip(*b"ab") {
+        assert_eq!(answer[..4], [0x51, 0x52, 0x81, 0x80], "the app's own ID");
+        assert_eq!(answer[13], label, "the answer to its own question");
+        assert!(answer.ends_with(&[1, label]), "its own record");
+    }
+    // A third question, after the first two were answered: the same connection.
+    send(
+        &tunnel,
+        app(CHAINED_PORT),
+        dns,
+        &query(b"\x01c\x04test\x00", 16),
+    )
+    .await?;
+    let (_, third) = receive(&tunnel).await?.ok_or("an answer")?;
+    assert!(third.ends_with(&[1, b'c']));
+    assert_eq!(tool.commands(), [1], "one CONNECT, to the resolver");
+    assert_eq!(
+        connections.load(std::sync::atomic::Ordering::Relaxed),
+        1,
+        "one connection for the three questions"
+    );
+    let ids = ids
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
+    assert_eq!(ids.len(), 3);
+    assert!(
+        ids[0] != ids[1] && !ids.contains(&0x5152),
+        "each question under an ID of the connection's own: {ids:?}"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_connection_the_resolver_closed_is_opened_again() -> Outcome {
+    // A resolver here that answers one question on each connection and closes it.
+    let resolver = TcpListener::bind("127.0.0.1:0").await?;
+    let resolver_address = resolver.local_addr()?;
+    tokio::spawn(async move {
+        while let Ok((mut stream, _)) = resolver.accept().await {
+            if let Ok(question) = read_message(&mut stream).await {
+                let _ = stream.write_all(&txt_answer(&question)).await;
+            }
+        }
+    });
+    let mut settings = Settings::default();
+    settings
+        .remap
+        .insert(SocketAddr::from(([9, 9, 9, 10], 53)), resolver_address);
+    let tool = proxy(settings).await?;
+    let (_engine, tunnel) = engine(chain(tool.address))?;
+    let dns = SocketAddr::from((DNS4, 53));
+    for (name, label) in [
+        (&b"\x01a\x04test\x00"[..], b'a'),
+        (b"\x01b\x04test\x00", b'b'),
+    ] {
+        send(&tunnel, app(CHAINED_PORT), dns, &query(name, 16)).await?;
+        let (_, answer) = receive(&tunnel).await?.ok_or("an answer")?;
+        assert_eq!(answer[3] & 0x0f, 0, "an answer, not a failure");
+        assert!(answer.ends_with(&[1, label]));
+    }
+    assert_eq!(tool.commands(), [1, 1], "a new connection for the second");
     Ok(())
 }
 

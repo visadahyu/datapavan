@@ -629,7 +629,12 @@ tunnel, Watch found the test tool, Orbot, v2rayNG and NekoBox, each with its own
 reached Android's own check address through each by a stand-in name, and Quad9 over UDP through v2rayNG and
 NekoBox. NekoBox's own lookups went to Alibaba's public DNS over HTTPS, shown under its UID. ADR 0038's lab, the same day
 ([notes](spikes/2026-11-chain-lab.md)): a stand-in answers in about 10 ms; other questions through the tool took
-half a second each until the tool's route got the cache the ADR promises (now about 10 ms after the first);
+half a second each until the tool's route got the cache the ADR promises (now about 10 ms after the first), and
+a new name costs about 60 to 90 ms now that Watch keeps a connection to each resolver open through the tool.
+Questions share it without waiting for earlier answers, each under an ID of the connection's own, and each
+answer is matched by ID and by the question it repeats (RFC 7766). It closes after 10 s with no question, when
+the resolver or the tool ends it, or when the chain changes. So the resolver can tie together chained apps'
+questions within those seconds, as it already could by the tool's exit address. Also in the lab:
 strict Private DNS sends chained apps' lookups to the provider directly, encrypted, while their traffic still goes
 through the tool; Chrome loaded a page with resources from other hosts through the tool with no Local Network
 Access prompt; the HTTPS record a chained app gets keeps its ECH key. On the emulators with Android 11 and 17,

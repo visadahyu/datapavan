@@ -18,13 +18,20 @@ the device itself (a shell loop around `toybox nc -u`), in milliseconds.
 | TXT, example.com | the same | 565 | 111 to 456 |
 | HTTPS | chained, with the tool route's own cache | 562 | 10 to 11 |
 | TXT | the same | 560 | 9 to 14 |
+| HTTPS, six new names in a row | chained, on a kept connection to Quad9 through the tool | 416 | 56 to 63 |
+| HTTPS, three new names after 13 s with no question | the same | 566 | 70 and 92 |
+| HTTPS, four new names, 3, 6 and 9 s apart | the same | 563 | 67 to 91 |
 
 Each question through the tool opens a TCP connection to the tool, a SOCKS5 handshake and a TCP connection to Quad9
 before it is asked. Before the measurement, Watch kept no answers for the tool's route, though the ADR says it keeps a
 cache for each route: every lookup of a chained app paid that half second. Watch now keeps the resolver's answers for
 the tool's route too, for their time to live, and answers again from them, rebuilt with a time to live of 0; the
-second lookup of a name takes about 10 ms. The first one still costs a new connection; keeping one connection to the
-resolver open through the tool would save most of it, and is left for later. Through Tor the first lookup is slower
+second lookup of a name takes about 10 ms. A new name still cost a new connection, until Watch kept one
+connection to each resolver open through the tool and sent the questions on it (RFC 7766). Measured again with the
+new build, six new names asked in a row: the first opened the connection (416 ms), and each of the next five took
+56 to 63 ms, about one round trip to Quad9. After 13 s with no question, Watch had closed the connection, and the
+next name opened another (566 ms). Quad9 kept an idle connection for at least 9 s: four new names 3, 6 and 9 s apart
+used one connection. Nine questions cost two connections through the tool. Through Tor the first lookup is slower
 still; not measured.
 
 ## 4. Strict Private DNS

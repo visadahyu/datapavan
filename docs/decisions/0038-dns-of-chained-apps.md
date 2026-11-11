@@ -128,7 +128,8 @@ Option 1, from W6 on, with these rules:
 5. The delay of other record types through each tool of W6 (v2rayNG, NekoBox, Hiddify, Orbot), and
    whether Tor's exits carry DNS over TCP to the resolver. *Measured through the test tool on 2026-11-11 (same
    notes): about half a second for each question, until Watch kept the tool route's answers as this record says;
-   now the first costs that and the next about 10 ms. Through Tor: not measured yet.*
+   now the first costs that and the next about 10 ms. With the kept connection, a new name costs about 60 to
+   90 ms after the first question has opened it. Through Tor: not measured yet.*
 
 ## Open questions
 

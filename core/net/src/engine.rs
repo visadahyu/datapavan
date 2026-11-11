@@ -43,6 +43,7 @@ use crate::tls::Hello;
 use crate::tun::Tun;
 
 mod chain;
+mod kept;
 mod logbook;
 mod lookups;
 mod naming;
@@ -330,6 +331,8 @@ struct Shared {
     direct_answers: Mutex<DnsCache>,
     /// The answers of chained apps' other questions, from the resolver through the tool (ADR 0038).
     tool_answers: Mutex<DnsCache>,
+    /// The connections to those resolvers through the tool, kept open between questions.
+    kept: Mutex<Vec<kept::Kept>>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -413,6 +416,7 @@ impl Engine {
             stand_ins: Mutex::default(),
             direct_answers: Mutex::default(),
             tool_answers: Mutex::default(),
+            kept: Mutex::default(),
         });
         let (stop, stopped) = watch::channel(false);
         let (network, changes) = watch::channel(0);
@@ -472,6 +476,9 @@ impl Engine {
         self.shared.uncached_answers.store(on, Ordering::Relaxed);
         lock(&self.shared.direct_answers).clear();
         lock(&self.shared.tool_answers).clear();
+        // A kept connection goes through the tool it was opened through: those answer the questions
+        // already sent, then end.
+        lock(&self.shared.kept).clear();
     }
 
     /// Whether the answers of Watch's own DNS address reach the apps with a time to live of 0, so that
@@ -683,6 +690,7 @@ mod tests {
             stand_ins: Mutex::default(),
             direct_answers: Mutex::default(),
             tool_answers: Mutex::default(),
+            kept: Mutex::default(),
         }
     }
 
