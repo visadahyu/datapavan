@@ -22,5 +22,5 @@ pub mod standins;
 pub mod tls;
 pub mod tun;
 
-pub use engine::{Config, DnsUse, Ech, Engine, Flow, NamedBy, Network, Outcome, Platform};
+pub use engine::{Chain, Config, DnsUse, Ech, Engine, Flow, NamedBy, Network, Outcome, Platform};
 pub use owners::NetworkKind;

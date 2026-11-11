@@ -4,6 +4,7 @@
 use super::{Counters, DnsUse, Ech, Flow, NamedBy, Network, Opened, Shared, is_tunnel_dns, lock};
 use crate::dns;
 use crate::owners::NetworkKind;
+use crate::standins::is_stand_in;
 use crate::tls::Hello;
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
@@ -23,6 +24,21 @@ impl Shared {
     /// names it. A TLS or QUIC server name may come later.
     pub(super) fn begin(&self, destination: SocketAddr, uid: Option<u32>) -> Begun {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed) + 1;
+        // A stand-in is named by the lookup it answered (ADR 0038), and has no network of its own.
+        if is_stand_in(destination.ip()) {
+            let name = lock(&self.stand_ins).name(destination.ip());
+            let named_by = if name.is_some() {
+                NamedBy::Dns
+            } else {
+                NamedBy::Unknown
+            };
+            return Begun {
+                id,
+                name,
+                named_by,
+                network: None,
+            };
+        }
         if let Some(name) = lock(&self.names).get(destination.ip(), uid, Instant::now()) {
             return Begun {
                 id,

@@ -1,6 +1,7 @@
 //! TCP through the tunnel (ADR 0012): the app's SYN held until its owner and the server are known, the
 //! rewriting to the engine's listener, Android's own stack ending the connection, and the relay.
 
+use super::chain::{Route, connect_through};
 use super::logbook::FlowBytes;
 use super::naming::Begun;
 use super::upstream::{connect_tcp, owner};
@@ -10,6 +11,7 @@ use super::{
 };
 use crate::nat::{Lookup, Nat};
 use crate::packet::{ACK, Packet, RST, SYN, TCP, Unreachable};
+use crate::standins::is_stand_in;
 use crate::tls::ServerName;
 use crate::tun::Tun;
 use crate::{packet, tls};
@@ -178,13 +180,24 @@ async fn open(
     pending: Pending,
 ) {
     let (app, destination) = (held.parsed.source, held.parsed.destination);
-    let connect = async {
+    let direct = async {
         match shared.target(destination) {
             Some(target) => connect_tcp(&shared, target).await,
             None => Err(io::ErrorKind::NetworkUnreachable.into()),
         }
     };
-    let (uid, upstream) = tokio::join!(owner(&shared, TCP, app, destination), connect);
+    let (uid, upstream) = if shared.chain().is_some() || is_stand_in(destination.ip()) {
+        // The route waits for the app's name: a chained app's connection must not start directly.
+        let uid = owner(&shared, TCP, app, destination).await;
+        let upstream = match shared.route(uid, destination) {
+            Route::Direct => direct.await,
+            Route::Tool(chain) => connect_through(&shared, &chain, destination).await,
+            Route::Refused => Err(io::ErrorKind::ConnectionRefused.into()),
+        };
+        (uid, upstream)
+    } else {
+        tokio::join!(owner(&shared, TCP, app, destination), direct)
+    };
     let outcome = match &upstream {
         Ok(_) => Outcome::Opened,
         Err(error) if error.kind() == io::ErrorKind::ConnectionRefused => Outcome::Refused,

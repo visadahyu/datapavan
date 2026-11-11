@@ -36,16 +36,19 @@ use crate::organisations::Organisations;
 use crate::owners::{NetworkKind, Owners};
 use crate::packet::{self, Skip, TCP};
 use crate::resolvers::Resolvers;
+use crate::standins::StandIns;
 #[cfg(test)]
 use crate::tls::Hello;
 use crate::tun::Tun;
 
+mod chain;
 mod logbook;
 mod naming;
 mod tcp;
 mod udp;
 mod upstream;
 
+pub use chain::Chain;
 use logbook::{FlowBytes, Live, Lookups, logger, now_ms};
 #[cfg(test)]
 use naming::Begun;
@@ -317,6 +320,10 @@ struct Shared {
     /// Whether the answers of Watch's own DNS address go to the apps with a time to live of 0
     /// ([`crate::dns::uncache`]), so that Android's resolver keeps none of them.
     uncached_answers: AtomicBool,
+    /// The user's tool and the apps sent through it, while a chain is on (W6).
+    chain: Mutex<Option<Arc<Chain>>>,
+    /// The stand-in addresses of the names chained apps looked up (ADR 0038).
+    stand_ins: Mutex<StandIns>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -396,6 +403,8 @@ impl Engine {
             pending_log: Mutex::default(),
             log_ready: Notify::new(),
             uncached_answers: AtomicBool::new(false),
+            chain: Mutex::new(None),
+            stand_ins: Mutex::default(),
         });
         let (stop, stopped) = watch::channel(false);
         let (network, changes) = watch::channel(0);
@@ -442,6 +451,15 @@ impl Engine {
             self.network
                 .send_modify(|generation| *generation = generation.wrapping_add(1));
         }
+    }
+
+    /// Turns chaining on with `chain`, or off with `None` (W6). New flows follow it; flows already
+    /// open keep their way. While a chain is on, every answer of Watch's DNS address reaches the apps
+    /// with a time to live of 0 (ADR 0038).
+    pub fn chain(&self, chain: Option<Chain>) {
+        let on = chain.is_some();
+        *lock(&self.shared.chain) = chain.map(Arc::new);
+        self.shared.uncached_answers.store(on, Ordering::Relaxed);
     }
 
     /// Whether the answers of Watch's own DNS address reach the apps with a time to live of 0, so that
@@ -625,7 +643,7 @@ mod tests {
         fn log(&self, _: &[u8]) {}
     }
 
-    fn shared() -> Shared {
+    pub(super) fn shared() -> Shared {
         shared_with(Arc::new(NoPlatform))
     }
 
@@ -649,6 +667,8 @@ mod tests {
             pending_log: Mutex::default(),
             log_ready: Notify::new(),
             uncached_answers: AtomicBool::new(false),
+            chain: Mutex::new(None),
+            stand_ins: Mutex::default(),
         }
     }
 
