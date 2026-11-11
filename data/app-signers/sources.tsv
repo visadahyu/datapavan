@@ -69,3 +69,8 @@ com.wireguard.android	website	developer	apk	page:https://download.wireguard.com/
 org.telegram.messenger.web	website	developer	apk	https://telegram.org/dl/android/apk	
 org.thunderdog.challegram	fdroid	fdroid	index	https://f-droid.org/repo	fdroid
 org.visadahyu.datapavan	github	developer	published	https://github.com/visadahyu/datapavan#checking-a-copy	FA:6A:24:04:2A:BC:AC:8B:D0:09:01:10:F7:04:FF:EF:E7:DA:D3:AD:F5:DB:38:FB:07:38:90:AB:4C:B1:FA:84
+app.slipnet	github	developer	apk	github:anonvector/SlipNet	^SlipNet-v[0-9.]+-full-release-arm64-v8a\.apk$
+app.slipnet.lite	github	developer	apk	github:anonvector/SlipNet	^SlipNet-v[0-9.]+-lite-release-arm64-v8a\.apk$
+xyz.dnstt.app	github	developer	apk	github:dnstt-xyz/dnstt_xyz_app	^DNSTT-Client-v[0-9.]+-Android-arm64-v8a\.apk$
+com.getsurfboard	github	developer	apk	github:getsurfboard/surfboard	^mobile-arm64-v8a-release\.apk$
+io.geph.android	website	developer	apk	https://dl.geph.io/geph-releases/android-stable/5.9.1/geph-android.apk	

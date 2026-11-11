@@ -43,3 +43,8 @@ org.telegram.messenger.web	Telegram (website build)	no	The build telegram.org of
 org.telegram.messenger	Telegram	no	The Google Play build
 org.thunderdog.challegram	Telegram X	no	Google Play; F-Droid builds Telegram X FOSS under the same package with its own key
 org.visadahyu.datapavan	Datapavan	yes	One key on every channel: GitHub Releases, IzzyOnDroid and F-Droid carry the same signed APK (ADR 0024)
+app.slipnet	SlipNet	no	GitHub and Telegram only; the developer disowns store copies. The Telegram copies are not read
+app.slipnet.lite	SlipNet Lite	no	The lite flavour of SlipNet, from the same releases
+xyz.dnstt.app	DNSTT.XYZ	no	GitHub releases only. Release builds are signed with the build's debug configuration, so the key may change between releases
+com.getsurfboard	Surfboard	no	GitHub releases; the Google Play page was gone on 2026-11-11
+io.geph.android	Geph	no	The website build; the Google Play copy is not read yet
