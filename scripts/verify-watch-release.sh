@@ -86,10 +86,18 @@ adb shell appops set "$PKG" ACTIVATE_VPN allow
 adb shell cmd locale set-app-locales "$PKG" --locales en-US >/dev/null 2>&1 || true
 adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard
-adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
-sleep 2
-tap_text "Turn on" || fail "no \"Turn on\" button on Watch's screen"
-for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
+# On CI the tap once did not start the tunnel, with no crash and the service never started (2026-11-11):
+# a second tap, if the first did nothing.
+for attempt in 1 2; do
+    adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+    sleep 2
+    if ! tap_text "Turn on"; then
+        [ "$attempt" = 2 ] || fail "no \"Turn on\" button on Watch's screen"
+    fi
+    for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
+    vpn_up && break
+    [ "$attempt" = 2 ] || echo "  the tunnel was not up 20 s after \"Turn on\": once more"
+done
 vpn_up || fail "Watch's tunnel did not come up"
 echo "ok: the release build's tunnel is up, turned on from its screen"
 

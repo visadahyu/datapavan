@@ -407,9 +407,27 @@ if is_emulator; then
         adb shell dumpsys connectivity | tr -d '\r' |
             sed -n 's/^ *NetworkAgentInfo{network{\([0-9]*\)}.*ni{\([^ ]*\) \([A-Z]*\).*/\1 \2 \3/p' | paste -sd ';'
     }
+    mobile_up() {
+        grep -qE '(^|;)[0-9]+ MOBILE[^ ;]* CONNECTED' <<<"$(networks)"
+    }
     DATA_ALWAYS_ON=$(adb shell settings get global mobile_data_always_on | tr -d '\r')
     adb shell settings put global mobile_data_always_on 1
-    sleep 5
+    # Wait for mobile data before Wi-Fi goes off. On CI it was sometimes not up at all (2026-11-11, twice:
+    # Wi-Fi and the VPN only), and the switch then had nowhere to go. Turning data off and on once more
+    # brings it up.
+    for attempt in 1 2; do
+        for _ in $(seq 1 30); do
+            mobile_up && break
+            sleep 2
+        done
+        mobile_up && break
+        [ "$attempt" = 1 ] || break
+        echo "  no mobile data after 60 s ($(networks)): turning it off and on"
+        adb shell svc data disable
+        sleep 2
+        adb shell svc data enable
+    done
+    mobile_up || fail "the emulator's mobile data did not come up ($(networks)), so the switch has nowhere to go"
     before=$(default_network)
     echo "  networks before the switch: $(networks); default $before"
     adb shell svc wifi disable
