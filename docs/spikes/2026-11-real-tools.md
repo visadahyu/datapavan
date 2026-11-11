@@ -52,7 +52,16 @@ address Android itself checks connectivity with.
   offered the battery exemption and connected anyway. Watch found it on 127.0.0.1:9050, owner confirmed, no
   password. The shell reached the check address by a stand-in name through Tor (HTTP 204), and its UDP went nowhere.
 
-Both were uninstalled afterwards, and Watch's tunnel stopped.
+- **v2rayNG 2.3.15 and NekoBox 1.4.2** (their arm64 builds, each signed with the developer key in
+  `data/app-signers`), in proxy mode with a SOCKS profile pointing at the test tool: Watch found each (10808 and
+  2080), owner confirmed, no password. Through each, the shell reached the check address by a stand-in name (HTTP
+  204), and a DNS query over UDP to Quad9 came back (61 and 83 bytes) through the tool's relay.
+- **What the tools did on their own:** NekoBox's own connection went to 223.5.5.5 on port 443, Alibaba's public
+  DNS over HTTPS, which it uses by default for its own lookups; v2rayNG's settings show the same address as its
+  default "Direct DNS". Watch showed it under the tool's own UID, as it should: this is the kind of thing Watch is
+  for.
+
+All were uninstalled afterwards, and Watch's tunnel stopped.
 
 ## Hiddify
 
@@ -67,7 +76,6 @@ with an arm64 build, and with a profile of the kind Hiddify expects.
 ## Still to do
 
 - Hiddify, on the A40 or with another profile.
-- v2rayNG and NekoBox on the A40 (their arm64 builds are not downloaded yet), and the four tools on the emulators
-  with Android 11 and 17.
+- The four tools on the emulators with Android 11 and 17.
 - The rest of ADR 0038's lab: Chrome and Local Network Access with stand-ins, ECH through a tool, the ten apps of
   W3, strict Private DNS, and the delay of other record types through each tool.
