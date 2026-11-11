@@ -16,7 +16,7 @@ class ToolTableTest {
     @Test
     fun readsTheProxyToolsOfTheTable() {
         val proxies = table.filter { it.proxyMode }
-        assertEquals(24, proxies.size)
+        assertEquals(29, proxies.size)
         assertTrue("every proxy tool takes names", proxies.all { it.names != false })
     }
 
@@ -42,6 +42,11 @@ class ToolTableTest {
         assertEquals(listOf(Listener("socks5", "127.0.0.1", 10880)), slipnet.socksListeners)
         assertEquals("optional", slipnet.auth)
         assertEquals(false, slipnet.udp)
+        // MasterDnsVPN's clients share the desktop client's 18000 and carry only DNS over UDP.
+        val mdv = tool("com.masterdns.vpn")
+        assertEquals(18000, mdv.socksListeners.first().port)
+        assertEquals(false, mdv.udp)
+        assertEquals(listOf(Listener("http", "127.0.0.1", 10887)), tool("shop.whitedns.client").listeners.filter { !it.socks })
         // A VPN-only tool whose proxy runs only inside its own VPN is not greeted.
         assertTrue(tool("io.geph.android").listeners.isEmpty())
         // Clash Meta's ports come from the profile: none to greet.

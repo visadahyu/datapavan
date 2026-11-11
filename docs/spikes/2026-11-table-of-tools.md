@@ -139,3 +139,29 @@ read again in the code.
 - **Not identified:** an app named "Master DNS". The MasterDnsVPN project publishes no Android app.
   Several third-party builds carry similar names, and their clients default to SOCKS5 on 127.0.0.1:18000.
   None was added until the app is known by its package and signer.
+
+### MasterDnsVPN and the apps that carry it (later on 2026-11-11)
+
+MasterDnsVPN is a DNS tunnel whose own client, for computers and servers, serves SOCKS5 on 127.0.0.1:18000.
+On phones it reaches people through other apps. Seven rows were added and three updated, with 208 rows of
+evidence. An AI agent researched each row, and the ports of the MDV-HN client and ZedSecure were read again
+in the code.
+
+- **Clients of MasterDnsVPN itself:**
+  - MDV-HN Edition (`com.masterdns.vpn`) and MasterDnsVPN-GG (`com.masterdnsvpn`), both listed by the
+    project's README, have a proxy mode on 127.0.0.1 and `[::1]` at 18000, with a password possible but off.
+  - Two smaller clients, `com.masterdnsvpn.client` and `com.masterdnsvpn.android.scanner`, are VPN only. The
+    first resolves names through 77.88.8.8 directly, outside the tunnel, by default.
+  - Their UDP ASSOCIATE answers, but the cores relay only DNS, so `udp` is `no`.
+  - Sharing on the local network, off by default, opens a SOCKS5 proxy on 0.0.0.0:8090 with no password
+    unless one is set.
+- **WhiteDNS** (`shop.whitedns.client`) runs StormDNS, a fork of MasterDnsVPN, with "Proxy Mode" as its
+  default: SOCKS5 on 10886, HTTP on 10887 and local DNS on UDP 10888.
+- **ZedSecure** (`com.zedsecure.vpn`), open source since September 2026, carries Xray, Psiphon, Tor, SSH and
+  the DNS tunnels (DNSTT, VayDNS, MasterDNS). Its "Proxy only" mode uses 10808 with no password, the same port
+  as v2rayNG, so only Android's owner of the port tells them apart. Since 3.1.8 its VPN mode puts a random
+  password on that port.
+- **V2Box** gained a VPN or proxy mode in 6.0.7 and MasterDnsVPN in 6.1.4. Its port is still unknown.
+- **Shadowsocks** carries MasterDnsVPN through Mygod's plugin (`be.mygod.shadowsocks.plugin.masterdnsvpn`, a
+  raw TCP forward, not a SOCKS5 server).
+- **NetMod:** no official source shows MasterDnsVPN; its only DNS tunnel is DNSTT.
