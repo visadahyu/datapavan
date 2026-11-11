@@ -24,4 +24,22 @@
     </plurals>
     <string name="log_delete">پاک کردن سابقه همین حالا</string>
     <string name="log_deleted">سابقه پاک شد.</string>
+    <string name="chain_title">فیلترشکن شما</string>
+    <string name="chain_searching">در حال جست‌وجوی فیلترشکنی در حالت پروکسی…</string>
+    <string name="chain_none">هیچ فیلترشکنی که حالت پروکسی داشته باشد نصب نیست. اندروید هر بار فقط یک وی‌پی‌ان را اجرا می‌کند، پس Watch فقط از راه حالت پروکسی می‌تواند کنار چنین فیلترشکنی کار کند.</string>
+    <string name="chain_not_answering">فیلترشکن‌های نصب‌شده: %1$s. هیچ پروکسی‌ای پاسخ نمی‌دهد. فیلترشکن را به‌جای حالت وی‌پی‌ان در حالت پروکسی اجرا کنید، بعد دوباره جست‌وجو کنید.</string>
+    <string name="chain_waiting">فیلترشکن %1$s پاسخ نمی‌دهد. برنامه‌هایی که از آن عبور می‌دهید منتظر می‌مانند و هیچ داده‌ای از آن‌ها مستقیم بیرون نمی‌رود.</string>
+    <string name="chain_search_again">جست‌وجوی دوباره</string>
+    <string name="chain_found">فیلترشکن %1$s روی درگاه %2$d این گوشی پاسخ می‌دهد.</string>
+    <string name="chain_switch">عبور دادن برنامه‌ها از %1$s</string>
+    <string name="chain_all_apps">همه برنامه‌ها</string>
+    <string name="chain_some_apps">فقط برنامه‌هایی که انتخاب می‌کنم</string>
+    <string name="chain_no_udp">فیلترشکن %1$s نمی‌تواند ترافیک UDP را جابه‌جا کند. تماس‌ها و بعضی بازی‌ها در برنامه‌هایی که از آن عبور می‌دهید کار نمی‌کنند. صفحه‌های وب همچنان باز می‌شوند.</string>
+    <string name="chain_private_dns">تنظیم DNS خصوصی گوشی شما نام‌هایی را که برنامه‌ها جست‌وجو می‌کنند، بدون عبور از Watch و فیلترشکن شما می‌فرستد. برای برنامه‌هایی که از فیلترشکن عبور می‌دهید، تنظیم DNS خصوصی را روی «خودکار» یا «خاموش» بگذارید.</string>
+    <string name="chain_password">برای اینکه برنامه‌های دیگر این گوشی نتوانند از پروکسی %1$s استفاده کنند، این نام کاربری و رمز عبور را در %1$s وارد کنید.</string>
+    <string name="chain_user">نام کاربری: %1$s</string>
+    <string name="chain_password_value">رمز عبور: %1$s</string>
+    <string name="chain_copy">کپی کردن رمز عبور</string>
+    <string name="chain_log_destinations">ثبت مقصد اتصال این برنامه‌ها</string>
+    <string name="chain_log_destinations_note">تا آن را روشن نکنید، خاموش می‌ماند. برنامه Watch همچنان اتصال‌های آن‌ها را می‌شمارد. اگر کسی گوشی شما را بگردد، فهرست جاهایی که به آن‌ها وصل شده‌اند می‌تواند علیه شما به کار برود.</string>
 </resources>

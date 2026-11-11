@@ -25,4 +25,22 @@
     </plurals>
     <string name="log_delete">Supprimer le journal maintenant</string>
     <string name="log_deleted">Le journal est supprimé.</string>
+    <string name="chain_title">Votre outil de contournement</string>
+    <string name="chain_searching">Recherche d\'un outil de contournement en mode proxy…</string>
+    <string name="chain_none">Aucun outil de contournement avec un mode proxy n\'est installé. Android ne fait tourner qu\'un seul VPN à la fois, donc Watch ne peut fonctionner à côté d\'un tel outil que par son mode proxy.</string>
+    <string name="chain_not_answering">Outils installés : %1$s. Aucun proxy ne répond. Lancez l\'outil en mode proxy plutôt qu\'en mode VPN, puis cherchez à nouveau.</string>
+    <string name="chain_waiting">%1$s ne répond pas. Les applis que vous faites passer par cet outil attendent, et rien de ce qu\'elles envoient ne sort directement.</string>
+    <string name="chain_search_again">Chercher à nouveau</string>
+    <string name="chain_found">%1$s répond sur le port %2$d de ce téléphone.</string>
+    <string name="chain_switch">Faire passer les applis par %1$s</string>
+    <string name="chain_all_apps">Toutes les applis</string>
+    <string name="chain_some_apps">Seulement les applis que je choisis</string>
+    <string name="chain_no_udp">%1$s ne peut pas transporter le trafic UDP. Les appels et certains jeux ne fonctionneront pas dans les applis que vous faites passer par cet outil. Les pages web se chargent quand même.</string>
+    <string name="chain_private_dns">Le DNS privé de votre téléphone envoie les noms que les applis recherchent sans passer par Watch ni par votre outil. Pour les applis que vous faites passer par l\'outil, réglez le DNS privé sur « Automatique » ou « Désactivé ».</string>
+    <string name="chain_password">Pour empêcher les autres applis de ce téléphone d\'utiliser le proxy de l\'outil %1$s, saisissez ce nom d\'utilisateur et ce mot de passe dans %1$s.</string>
+    <string name="chain_user">Nom d\'utilisateur : %1$s</string>
+    <string name="chain_password_value">Mot de passe : %1$s</string>
+    <string name="chain_copy">Copier le mot de passe</string>
+    <string name="chain_log_destinations">Enregistrer où ces applis se connectent</string>
+    <string name="chain_log_destinations_note">Désactivé, sauf si vous l\'activez. Watch compte quand même leurs connexions. Une liste des endroits où elles se sont connectées peut être utilisée contre vous si quelqu\'un fouille votre téléphone.</string>
 </resources>

@@ -40,4 +40,39 @@
     <string name="log_delete">Delete the log now</string>
     <!-- Shown after the user deleted the log. -->
     <string name="log_deleted">The log is deleted.</string>
+    <!-- W6: Watch beside the user's circumvention tool (a VPN or proxy app used to get past network filtering). The heading. -->
+    <string name="chain_title">Your circumvention tool</string>
+    <!-- While Watch looks for an installed tool whose proxy answers. -->
+    <string name="chain_searching">Looking for a circumvention tool in proxy mode…</string>
+    <!-- No tool of Watch's list with a proxy mode is installed. Android runs one VPN at a time. -->
+    <string name="chain_none">No circumvention tool with a proxy mode is installed. Android runs only one VPN at a time, so Watch can work beside such a tool only through its proxy mode.</string>
+    <!-- %1$s: the names of the installed tools, comma separated. Their proxy does not answer. -->
+    <string name="chain_not_answering">Installed: %1$s. No proxy answers. Run the tool in proxy mode instead of VPN mode, then look again.</string>
+    <!-- The chain is on, but the tool's proxy does not answer. %1$s: the tool's name. -->
+    <string name="chain_waiting">%1$s does not answer. The apps you send through it wait, and nothing of theirs goes out directly.</string>
+    <!-- A button: look for the tool again. -->
+    <string name="chain_search_again">Look again</string>
+    <!-- %1$s: the tool's name; %2$d: the port of its proxy on this phone. -->
+    <string name="chain_found">%1$s answers on port %2$d of this phone.</string>
+    <!-- A switch. %1$s: the tool's name. -->
+    <string name="chain_switch">Send apps through %1$s</string>
+    <!-- Two choices: which apps go through the tool. -->
+    <string name="chain_all_apps">Every app</string>
+    <string name="chain_some_apps">Only the apps I choose</string>
+    <!-- %1$s: the tool's name. It cannot carry UDP (Tor, for example). -->
+    <string name="chain_no_udp">%1$s cannot carry UDP. Calls and some games in the apps you send through it will not work. Web pages still load.</string>
+    <!-- Shown when the phone's Private DNS is set to a provider's host name. -->
+    <string name="chain_private_dns">Your phone\'s Private DNS sends the names apps look up past Watch and past your tool. For the apps you send through the tool, set Private DNS to Automatic or Off.</string>
+    <!-- %1$s: the tool's name. Watch offers a password for the tool's proxy. -->
+    <string name="chain_password">To keep other apps on this phone off the proxy of %1$s, set this user name and password in %1$s.</string>
+    <!-- %1$s: the user name, such as watch. -->
+    <string name="chain_user">User name: %1$s</string>
+    <!-- %1$s: the password Watch made. -->
+    <string name="chain_password_value">Password: %1$s</string>
+    <!-- A button: copy the password, to paste it in the tool. -->
+    <string name="chain_copy">Copy the password</string>
+    <!-- A switch, off unless the user turns it on. -->
+    <string name="chain_log_destinations">Log where these apps connect</string>
+    <!-- Under the switch above. -->
+    <string name="chain_log_destinations_note">Off unless you turn it on. Watch still counts their connections. A list of where they went can be used against you if someone searches your phone.</string>
 </resources>

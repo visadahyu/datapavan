@@ -28,4 +28,22 @@
     </plurals>
     <string name="log_delete">حذف السجل الآن</string>
     <string name="log_deleted">تم حذف السجل.</string>
+    <string name="chain_title">أداتك لتجاوز الحجب</string>
+    <string name="chain_searching">جارٍ البحث عن أداة لتجاوز الحجب في وضع الخادم الوكيل…</string>
+    <string name="chain_none">لا توجد أداة مثبّتة لتجاوز الحجب تدعم وضع الخادم الوكيل. يشغّل Android شبكة VPN واحدة فقط في كل مرة، لذا لا يستطيع Watch العمل بجانب أداة كهذه إلا عبر وضع الخادم الوكيل فيها.</string>
+    <string name="chain_not_answering">الأدوات المثبّتة: %1$s. لا يستجيب أي خادم وكيل. شغّل الأداة في وضع الخادم الوكيل بدلًا من وضع VPN، ثم ابحث مرة أخرى.</string>
+    <string name="chain_waiting">لا يستجيب %1$s. التطبيقات التي تمرّرها عبره تنتظر، ولا يخرج منها أي شيء مباشرةً.</string>
+    <string name="chain_search_again">البحث مرة أخرى</string>
+    <string name="chain_found">يستجيب %1$s على المنفذ %2$d في هذا الهاتف.</string>
+    <string name="chain_switch">تمرير التطبيقات عبر %1$s</string>
+    <string name="chain_all_apps">كل التطبيقات</string>
+    <string name="chain_some_apps">التطبيقات التي أختارها فقط</string>
+    <string name="chain_no_udp">لا يستطيع %1$s نقل بيانات UDP. لن تعمل المكالمات وبعض الألعاب في التطبيقات التي تمرّرها عبره. لكن صفحات الويب تُفتح كالمعتاد.</string>
+    <string name="chain_private_dns">يرسل «نظام أسماء النطاقات الخاص» في هاتفك الأسماء التي تبحث عنها التطبيقات دون المرور عبر Watch أو أداتك. من أجل التطبيقات التي تمرّرها عبر الأداة، اضبط «نظام أسماء النطاقات الخاص» على «تلقائي» أو «غير مفعّل».</string>
+    <string name="chain_password">لمنع التطبيقات الأخرى على هذا الهاتف من استخدام الخادم الوكيل في %1$s، أدخل اسم المستخدم وكلمة المرور هذين في %1$s.</string>
+    <string name="chain_user">اسم المستخدم: %1$s</string>
+    <string name="chain_password_value">كلمة المرور: %1$s</string>
+    <string name="chain_copy">نسخ كلمة المرور</string>
+    <string name="chain_log_destinations">تسجيل الجهات التي تتصل بها هذه التطبيقات</string>
+    <string name="chain_log_destinations_note">متوقف ما لم تشغّله. يواصل Watch عدّ اتصالاتها. قائمة الجهات التي اتصلت بها يمكن أن تُستخدم ضدك إذا فتّش أحد هاتفك.</string>
 </resources>

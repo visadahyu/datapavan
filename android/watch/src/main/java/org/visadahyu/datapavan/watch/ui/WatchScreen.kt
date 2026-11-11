@@ -35,7 +35,8 @@ import org.visadahyu.datapavan.watch.log.ConnectionLog
 
 /**
  * Watch's one screen: what it is for, whether it is on, the switch, while it is on what Private DNS
- * hides from it (W3), and how long the connection log keeps its records, with its wipe (W4).
+ * hides from it (W3), the user's circumvention tool and the apps sent through it (W6), and how long the
+ * connection log keeps its records, with its wipe (W4).
  */
 @Composable
 internal fun WatchScreen(
@@ -46,6 +47,8 @@ internal fun WatchScreen(
     deleted: Boolean,
     logLock: ConnectionLog.Lock,
     screenLock: Boolean,
+    chain: ChainView,
+    chainActions: ChainActions,
     onStart: () -> Unit,
     onStop: () -> Unit,
     onRetention: (Int) -> Unit,
@@ -87,6 +90,7 @@ internal fun WatchScreen(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
+            ChainSection(chain, privateDns, chainActions)
             LogSettings(retentionDays, deleted, logLock, screenLock, onRetention, onDelete)
         }
     }

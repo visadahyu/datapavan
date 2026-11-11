@@ -85,8 +85,65 @@ class WatchVpnService : VpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) stop() else start(intent)
+        when (intent?.action) {
+            ACTION_STOP -> stop()
+            ACTION_APPLY_CHAIN -> if (active) applyChain()
+            else -> start(intent)
+        }
         return START_NOT_STICKY
+    }
+
+    /**
+     * Hands the user's chain (W6) to the engine: the tool's proxy where it last answered, its password
+     * where the tool takes one, the tool's UID, and the chained apps. It runs before any traffic, from
+     * what Watch remembers, so that chained apps never go directly while the tool is looked for again;
+     * a tool that is not there leaves them waiting, not going directly.
+     */
+    private fun applyChain() {
+        val settings = org.visadahyu.datapavan.watch.chain.ChainSettings.of(this)
+        val remembered = settings.lastTool
+        if (!settings.on || remembered == null) {
+            Engine.nativeChain("", 0, null, null, 0, null, udp = false, logDestinations = false)
+            return
+        }
+        fun uidOf(packageName: String): Int? = try {
+            @Suppress("DEPRECATION")
+            packageManager.getApplicationInfo(packageName, 0).uid
+        } catch (e: PackageManager.NameNotFoundException) {
+            null
+        }
+        val known = try {
+            org.visadahyu.datapavan.watch.chain.Tools.table(this).find { it.packageName == remembered.packageName }
+        } catch (e: java.io.IOException) {
+            null
+        }
+        val password = settings.password().takeIf { known?.auth != "none" }
+        val user = org.visadahyu.datapavan.watch.chain.ChainSettings.userFor(remembered.packageName)
+        val apps = if (settings.allApps) null else settings.apps.mapNotNull(::uidOf).toIntArray()
+        Engine.nativeChain(
+            remembered.host,
+            remembered.port,
+            password?.let { user.toByteArray() },
+            password?.toByteArray(),
+            // A tool no longer installed has no UID: no app is taken for it, and nothing goes directly.
+            uidOf(remembered.packageName) ?: NO_UID,
+            apps,
+            udp = remembered.udp,
+            logDestinations = settings.logDestinations,
+        )
+    }
+
+    /** Looks for the tool again off the main thread, and applies the chain again where its proxy moved. */
+    private fun refreshChain() {
+        if (!org.visadahyu.datapavan.watch.chain.ChainSettings.of(this).on) return
+        Thread {
+            val search = org.visadahyu.datapavan.watch.chain.Tools.search(this)
+            val found = (search as? org.visadahyu.datapavan.watch.chain.ToolSearch.Answering)?.found ?: return@Thread
+            val settings = org.visadahyu.datapavan.watch.chain.ChainSettings.of(this)
+            val before = settings.lastTool
+            settings.remember(found)
+            if (settings.lastTool != before && active) applyChain()
+        }.apply { name = "watch-chain" }.start()
     }
 
     private fun start(intent: Intent?) {
@@ -132,8 +189,11 @@ class WatchVpnService : VpnService() {
             stop()
             return
         }
+        // Before any app's traffic can go anywhere it should not (W6).
+        applyChain()
         active = true
         state.value = true
+        refreshChain()
         ConnectionLog.of(this).expire()
         val request = NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
@@ -388,6 +448,12 @@ class WatchVpnService : VpnService() {
     companion object {
         const val ACTION_START = "org.visadahyu.datapavan.watch.START"
         const val ACTION_STOP = "org.visadahyu.datapavan.watch.STOP"
+
+        /** The chain's settings changed: hand them to the engine (W6). */
+        const val ACTION_APPLY_CHAIN = "org.visadahyu.datapavan.watch.APPLY_CHAIN"
+
+        /** The UID given for a tool that is not installed: no app has it. */
+        private const val NO_UID = Int.MAX_VALUE
 
         /** Debug builds: a comma-separated list of the only apps to send through the tunnel. */
         const val EXTRA_ONLY_APPS = "only_apps"

@@ -24,4 +24,22 @@
     </plurals>
     <string name="log_delete">Protokoll jetzt löschen</string>
     <string name="log_deleted">Das Protokoll ist gelöscht.</string>
+    <string name="chain_title">Ihr Tool zum Umgehen von Netzsperren</string>
+    <string name="chain_searching">Suche nach einem Umgehungs-Tool im Proxy-Modus…</string>
+    <string name="chain_none">Es ist kein Umgehungs-Tool mit Proxy-Modus installiert. Android führt immer nur ein VPN gleichzeitig aus, daher kann Watch neben einem solchen Tool nur über dessen Proxy-Modus arbeiten.</string>
+    <string name="chain_not_answering">Installiert: %1$s. Kein Proxy antwortet. Starten Sie das Tool im Proxy-Modus statt im VPN-Modus und suchen Sie dann erneut.</string>
+    <string name="chain_waiting">%1$s antwortet nicht. Die Apps, die Sie darüber leiten, warten, und nichts von ihnen geht direkt nach außen.</string>
+    <string name="chain_search_again">Erneut suchen</string>
+    <string name="chain_found">%1$s antwortet auf Port %2$d dieses Telefons.</string>
+    <string name="chain_switch">Apps über %1$s leiten</string>
+    <string name="chain_all_apps">Alle Apps</string>
+    <string name="chain_some_apps">Nur die Apps, die ich auswähle</string>
+    <string name="chain_no_udp">%1$s kann kein UDP übertragen. Anrufe und manche Spiele funktionieren in den Apps, die Sie darüber leiten, nicht. Webseiten laden trotzdem.</string>
+    <string name="chain_private_dns">Privates DNS auf Ihrem Telefon sendet die Namen, die Apps nachschlagen, an Watch und an Ihrem Tool vorbei. Stellen Sie Privates DNS für die Apps, die Sie über das Tool leiten, auf „Automatisch“ oder „Aus“.</string>
+    <string name="chain_password">Damit andere Apps auf diesem Telefon den Proxy von %1$s nicht nutzen können, tragen Sie diesen Benutzernamen und dieses Passwort in %1$s ein.</string>
+    <string name="chain_user">Benutzername: %1$s</string>
+    <string name="chain_password_value">Passwort: %1$s</string>
+    <string name="chain_copy">Passwort kopieren</string>
+    <string name="chain_log_destinations">Protokollieren, wohin sich diese Apps verbinden</string>
+    <string name="chain_log_destinations_note">Aus, solange Sie es nicht einschalten. Watch zählt ihre Verbindungen trotzdem. Eine Liste, wohin sie sich verbunden haben, kann gegen Sie verwendet werden, wenn jemand Ihr Telefon durchsucht.</string>
 </resources>

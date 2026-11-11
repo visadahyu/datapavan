@@ -23,4 +23,22 @@
     </plurals>
     <string name="log_delete">立即删除日志</string>
     <string name="log_deleted">日志已删除。</string>
+    <string name="chain_title">您用来绕过网络限制的工具</string>
+    <string name="chain_searching">正在查找以代理模式运行的绕过网络限制工具…</string>
+    <string name="chain_none">未安装支持代理模式的绕过网络限制工具。Android 同一时间只能运行一个 VPN，因此 Watch 只能通过此类工具的代理模式与它配合工作。</string>
+    <string name="chain_not_answering">已安装：%1$s。没有代理响应。请以代理模式而不是 VPN 模式运行该工具，然后重新查找。</string>
+    <string name="chain_waiting">%1$s 没有响应。您设置为通过它连接的应用会等待，它们的任何数据都不会直接发出。</string>
+    <string name="chain_search_again">重新查找</string>
+    <string name="chain_found">%1$s 在这部手机的端口 %2$d 上响应。</string>
+    <string name="chain_switch">让应用通过 %1$s 连接</string>
+    <string name="chain_all_apps">所有应用</string>
+    <string name="chain_some_apps">仅限我选择的应用</string>
+    <string name="chain_no_udp">%1$s 无法传输 UDP 流量。在您设置为通过它连接的应用中，通话和部分游戏将无法使用。网页仍能正常加载。</string>
+    <string name="chain_private_dns">您手机的专用 DNS 会绕过 Watch 和您的工具，发送应用查询的名称。对于通过该工具连接的应用，请将专用 DNS 设置为“自动”或“关闭”。</string>
+    <string name="chain_password">为防止这部手机上的其他应用使用 %1$s 的代理，请在 %1$s 中设置这个用户名和密码。</string>
+    <string name="chain_user">用户名：%1$s</string>
+    <string name="chain_password_value">密码：%1$s</string>
+    <string name="chain_copy">复制密码</string>
+    <string name="chain_log_destinations">记录这些应用连接到哪里</string>
+    <string name="chain_log_destinations_note">除非您开启，否则保持关闭。Watch 仍会统计它们的连接。如果有人搜查您的手机，记录它们连接去向的列表可能会被用来对付您。</string>
 </resources>

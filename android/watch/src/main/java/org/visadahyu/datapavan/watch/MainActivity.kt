@@ -1,5 +1,14 @@
 package org.visadahyu.datapavan.watch
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.os.PersistableBundle
+import org.visadahyu.datapavan.watch.chain.ChainSettings
+import org.visadahyu.datapavan.watch.chain.ToolSearch
+import org.visadahyu.datapavan.watch.chain.Tools
+import org.visadahyu.datapavan.watch.ui.AppChoice
+import org.visadahyu.datapavan.watch.ui.ChainActions
+import org.visadahyu.datapavan.watch.ui.ChainView
 import android.app.KeyguardManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -32,6 +41,11 @@ class MainActivity : ComponentActivity() {
     /** Whether the phone has a screen lock (a PIN, pattern or password), read again each time the screen opens. */
     private val screenLock = mutableStateOf(false)
 
+    /** The user's circumvention tool and the chain through it (W6). */
+    private val chain = mutableStateOf(
+        ChainView(null, on = false, allApps = true, apps = emptySet(), logDestinations = false, user = null, password = null, choices = emptyList()),
+    )
+
     /** Debug builds: the only apps the end-to-end test sends through the tunnel, comma-separated. */
     private var onlyApps: String? = null
 
@@ -59,6 +73,8 @@ class MainActivity : ComponentActivity() {
                     deleted = deleted.value,
                     logLock = logLock,
                     screenLock = screenLock.value,
+                    chain = chain.value,
+                    chainActions = chainActions,
                     onStart = ::requestStart,
                     onStop = ::stopTunnel,
                     onRetention = { days ->
@@ -86,6 +102,93 @@ class MainActivity : ComponentActivity() {
         ConnectionLog.of(this).expire()
         // The screen lock is set in Settings, so it can only have changed while this screen was away.
         screenLock.value = getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true
+        // The tool may have been started, stopped or installed while this screen was away.
+        searchTool()
+    }
+
+    private val chainActions = ChainActions(
+        onSearch = ::searchTool,
+        onOn = { on -> changeChain { settings -> settings.on = on } },
+        onAllApps = { all ->
+            changeChain { settings -> settings.allApps = all }
+            if (!all && chain.value.choices.isEmpty()) loadChoices()
+        },
+        onApp = { packageName, chosen ->
+            changeChain { settings -> settings.apps = if (chosen) settings.apps + packageName else settings.apps - packageName }
+        },
+        onLogDestinations = { on -> changeChain { settings -> settings.logDestinations = on } },
+        onCopyPassword = ::copyPassword,
+    )
+
+    /** Looks for the user's tool off the main thread, and shows what it found. */
+    private fun searchTool() {
+        chain.value = chain.value.copy(search = null)
+        Thread {
+            val search = Tools.search(this)
+            val settings = ChainSettings.of(this)
+            val found = (search as? ToolSearch.Answering)?.found
+            found?.let(settings::remember)
+            // A tool that takes a password gets Watch's; one that cannot is not offered one.
+            val password = found?.takeIf { it.tool.auth != "none" }?.let { settings.password() }
+            runOnUiThread {
+                chain.value = chain.value.copy(
+                    search = search,
+                    user = password?.let { ChainSettings.userFor(found.tool.packageName) },
+                    password = password,
+                )
+                showSettings()
+                if (found != null) applyChain()
+            }
+        }.apply { name = "watch-tool" }.start()
+    }
+
+    /** Shows the chain's settings as stored. */
+    private fun showSettings() {
+        val settings = ChainSettings.of(this)
+        chain.value = chain.value.copy(
+            on = settings.on,
+            allApps = settings.allApps,
+            apps = settings.apps,
+            logDestinations = settings.logDestinations,
+        )
+        if (!settings.allApps && chain.value.choices.isEmpty()) loadChoices()
+    }
+
+    private fun changeChain(change: (ChainSettings) -> Unit) {
+        change(ChainSettings.of(this))
+        showSettings()
+        applyChain()
+    }
+
+    /** Hands the chain to the running tunnel; one that starts later reads it itself. */
+    private fun applyChain() {
+        if (WatchVpnService.running.value) {
+            startService(Intent(this, WatchVpnService::class.java).setAction(WatchVpnService.ACTION_APPLY_CHAIN))
+        }
+    }
+
+    /** The apps the user can open, by name, but Watch and the tool: the ones the user may chain. */
+    private fun loadChoices() {
+        Thread {
+            val tool = ChainSettings.of(this).lastTool?.packageName
+            val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            @Suppress("DEPRECATION")
+            val choices = packageManager.queryIntentActivities(launcher, 0)
+                .map { it.activityInfo.applicationInfo }
+                .distinctBy { it.packageName }
+                .filter { it.packageName != packageName && it.packageName != tool }
+                .map { AppChoice(it.packageName, packageManager.getApplicationLabel(it).toString()) }
+                .sortedBy { it.label.lowercase() }
+            runOnUiThread { chain.value = chain.value.copy(choices = choices) }
+        }.apply { name = "watch-apps" }.start()
+    }
+
+    /** Copies Watch's password for the tool, marked sensitive so that Android does not show it. */
+    private fun copyPassword() {
+        val password = chain.value.password ?: return
+        val clip = ClipData.newPlainText(getString(R.string.chain_copy), password)
+        clip.description.extras = PersistableBundle().apply { putBoolean(EXTRA_IS_SENSITIVE, true) }
+        getSystemService(ClipboardManager::class.java)?.setPrimaryClip(clip)
     }
 
     /** The activity is single-top: a debug start or stop sent while it is open comes here. */
@@ -123,6 +226,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
+        /** ClipDescription.EXTRA_IS_SENSITIVE, which Android 13 added; earlier versions ignore it. */
+        const val EXTRA_IS_SENSITIVE = "android.content.extra.IS_SENSITIVE"
+
         /** Debug builds: start the tunnel at once (scripts/verify-watch.sh). */
         const val EXTRA_START = "start"
 
