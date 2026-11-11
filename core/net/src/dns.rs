@@ -17,23 +17,23 @@ use crate::tls;
 /// The longest name DNS allows, in its text form.
 const MAX_NAME: usize = 253;
 /// Compression pointers followed in one name before it is refused.
-const MAX_JUMPS: usize = 32;
+pub(crate) const MAX_JUMPS: usize = 32;
 /// Answers read from one message.
 const MAX_ANSWERS: usize = 64;
 
-const TYPE_A: u16 = 1;
-const TYPE_AAAA: u16 = 28;
-const TYPE_SVCB: u16 = 64;
-const TYPE_HTTPS: u16 = 65;
+pub(crate) const TYPE_A: u16 = 1;
+pub(crate) const TYPE_AAAA: u16 = 28;
+pub(crate) const TYPE_SVCB: u16 = 64;
+pub(crate) const TYPE_HTTPS: u16 = 65;
 /// The `ech` parameter of an SVCB or HTTPS record (RFC 9460 14.3.2).
 const KEY_ECH: u16 = 5;
 /// The version of an `ECHConfig` the public name is read from (`draft-ietf-tls-esni`, RFC 9849).
 const ECH_VERSION: u16 = 0xfe0d;
 /// Public names read from one message.
 const MAX_PUBLIC_NAMES: usize = 8;
-const CLASS_IN: u16 = 1;
+pub(crate) const CLASS_IN: u16 = 1;
 /// The OPT pseudo-record of EDNS (RFC 6891), whose TTL field holds flags, not a time.
-const TYPE_OPT: u16 = 41;
+pub(crate) const TYPE_OPT: u16 = 41;
 
 /// What one DNS response says.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -46,7 +46,7 @@ pub struct Response {
     pub public_names: Vec<(String, u32)>,
 }
 
-fn u16_at(bytes: &[u8], at: usize) -> Option<u16> {
+pub(crate) fn u16_at(bytes: &[u8], at: usize) -> Option<u16> {
     Some(u16::from_be_bytes([
         *bytes.get(at)?,
         *bytes.get(at.checked_add(1)?)?,
@@ -61,7 +61,7 @@ fn u32_at(bytes: &[u8], at: usize) -> Option<u32> {
 /// Reads the name at `at`, following compression pointers. Returns the name in lower case and where
 /// the record continues after it, or `None` for a name that is malformed, too long, loops, or holds
 /// bytes outside printable ASCII (an app's log must not carry control characters).
-fn read_name(message: &[u8], mut at: usize) -> Option<(String, usize)> {
+pub(crate) fn read_name(message: &[u8], mut at: usize) -> Option<(String, usize)> {
     let mut name = String::new();
     let mut end = None;
     let mut jumps = 0;
