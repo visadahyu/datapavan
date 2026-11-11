@@ -1,0 +1,46 @@
+# Real tools in proxy mode, through Watch (W6)
+
+A lab run of 2026-11-11 on the emulator with Android 15, for W6's last measure
+([DESIGN.md §13.2](../DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools)): "v2rayNG, NekoBox,
+Hiddify and Orbot in proxy mode are each found and chained without the user typing a port." Each tool came from its
+developer's own GitHub release, and each signing key matched the developer's key recorded in `data/app-signers`.
+No tool was given a real circumvention server. v2rayNG and NekoBox got a SOCKS5 server profile pointing at W6's test
+tool on the same phone (`scripts/test-tool`, no password), so that their traffic left the phone from there or from
+the tool itself; Orbot used the Tor network, as it always does. The test server was on the computer, at the
+emulator's 10.0.2.2; through Tor, the address Android itself checks connectivity with.
+
+| Tool | Version | Found by Watch | Chained TCP | Chained UDP | Notes |
+|---|---|---|---|---|---|
+| v2rayNG | 2.3.15 | 127.0.0.1:10808, owner confirmed, no password | yes, by address | yes | Sniffing replaces the destination with the HTTP Host header's name; private addresses go out directly from v2rayNG |
+| NekoBox | 1.4.2 | 127.0.0.1:2080, owner confirmed, no password | yes, by address | yes | Drops the answer when the app closes its sending side first (half-close) |
+| Orbot | 17.9.7-BETA-1 | 127.0.0.1:9050, owner confirmed, no password | yes, by a stand-in name, through Tor (HTTP 204) | refused, as Tor carries none | Proxy mode is "Power User Mode"; it asks for the alarms permission and a battery exemption |
+| Hiddify | 5.5.5 | not run | | | Its first screen asks to accept its terms; waiting on the maintainer |
+
+In every case Watch found the tool by itself, from the table of tools, and Android named the tool as the owner of
+its port; the chain was turned on from Watch's screen, with no port typed. The tool's own connections went
+directly, under its own UID. The connection log held the chained app's flows with their bytes and no destination
+(`tcp 2000 0.0.0.0:0`), as `Chain::log_destinations` off asks. With v2rayNG stopped and the chain still on, the
+chained app got "no route to host", not a direct connection.
+
+## What the tools do on their own
+
+- **v2rayNG's sniffing** (on by default) reads the HTTP Host header or the TLS server name and sends the connection
+  to that name rather than to the address asked for. A request whose Host header names nothing real fails. Browsers
+  send honest headers, so this hurts tests more than users.
+- **v2rayNG's routing** sends private addresses (10.0.0.0/8 and the like) out directly, from v2rayNG itself, by
+  default: a chained app's traffic to a local server leaves the phone from the tool, not through its server.
+  Watch keeps its promise (nothing of the chained app goes directly from the app); where the tool sends it is the
+  tool's setting.
+- **NekoBox and half-close.** When the app closes its sending side before the answer (toybox `nc` does so at the end
+  of its input), NekoBox drops the answer. Watch passes the app's FIN on as TCP does; the same happens to any SOCKS
+  client of NekoBox. HTTP clients keep their side open, so most apps are not affected. Worth reporting upstream.
+- **Orbot's proxy mode** needs notifications, the alarms permission ("needed to keep OrbotService running when
+  Orbot is not a system-wide VPN") and offers a battery exemption; the guides of W8 must say so. Its Connect button
+  sat below the bottom bar on the 320 x 640 emulator screen.
+
+## Still to do
+
+- Hiddify, once the maintainer decides about accepting its terms on a test emulator.
+- The same on the A40 (arm64 builds), which waits on the ufw rules, and on Android 11 and 17.
+- The rest of ADR 0038's lab: Chrome and Local Network Access with stand-ins, ECH through a tool, the ten apps of
+  W3, strict Private DNS, and the delay of other record types through each tool.

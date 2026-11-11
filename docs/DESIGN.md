@@ -615,8 +615,16 @@ in its console) was the first idea, but it does not see what goes over the emula
 emulators with Android 11, 15 and 17. Two faults the test found: Android's loopback address of choice is
 `::1`, so a tool listening "on the loopback" in Java may not be on 127.0.0.1 where the table says; and a
 proxy that refuses Watch's greeting closes the connection before Android can name its owner, so the owner is
-now asked as soon as the connection is made. Still to come: the lab's measurements of ADR 0038 and the real
-tools (step 6).
+now asked as soon as the connection is made.
+
+W6's real tools, the same day, on the emulator with Android 15 ([notes](spikes/2026-11-real-tools.md)): v2rayNG
+2.3.15, NekoBox 1.4.2 and Orbot 17.9.7, each from its developer's release and signed with the key in
+`data/app-signers`, in proxy mode. Watch found each by itself, with Android naming it as the owner of its port, and
+the chain was turned on from Watch's screen with no port typed; TCP went through each, UDP through v2rayNG and
+NekoBox and nowhere with Orbot, which carries none; a lookup through Orbot got a stand-in and Tor resolved the name.
+The log kept the chained flows without destination. Found on the way: v2rayNG's sniffing and its direct route for
+private addresses, and NekoBox dropping an answer after the app's half-close. Still to come: Hiddify (its first
+screen asks to accept its terms), the A40, Android 11 and 17, and the rest of ADR 0038's lab.
 
 | # | Milestone | Done when |
 |---|---|---|
