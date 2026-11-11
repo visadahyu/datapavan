@@ -265,9 +265,14 @@ in one tunnel. No research is needed; the spike is.
    network's resolver can be served from the cache to a chosen app, and so can a censored one. Not a
    leak of the chosen app's question, but a wrong answer is possible. One idea: answers from the
    network's resolver get TTL 0 while any app is tunnelled or chained. Unverified that Android then
-   does not cache them. Shared with W6.
+   does not cache them. Shared with W6. *Answered on 2026-11-11 on the emulators with Android 11, 15
+   and 17 ([spike](../spikes/2026-11-shared-dns-cache.md)): the cache is shared, and an answer or a
+   negative answer with TTL 0 is not kept. Every answer gets TTL 0 while any app is chained or
+   tunnelled, and Watch keeps a cache of its own per route. The A40 and Android 10 to 16 are still to
+   run.*
 5. **Is the owner of the resolver's query socket the app** on Android 10 to 17 and on other vendors?
-   The AOSP source says so; to check on the A40 and the emulators. Shared with W3 and W6.
+   The AOSP source says so; to check on the A40 and the emulators. Shared with W3 and W6. *Yes on the
+   emulators with Android 11, 15 and 17 (same spike); the A40 and Android 10 to 16 are still to run.*
 6. **Strict Private DNS:** Android then sends queries over one DNS-over-TLS connection per network, not
    per app (inference, unverified). Chosen apps' names would then go to the user's Private DNS server,
    encrypted, not to the provider's. The UI should say so.

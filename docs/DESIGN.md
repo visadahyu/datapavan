@@ -343,7 +343,12 @@ WireGuard in [ADR 0035](decisions/0035-wireguard-upstream.md) and the dataset in
 2026-11-09; the table of tools in `data/tools/` ([notes](spikes/2026-11-table-of-tools.md)). Before W6,
 one question needs a closer look: Android keeps one DNS cache for all apps of a VPN network, so an app
 sent through the tool or WireGuard may be given an answer the network's resolver gave another app,
-possibly a censored one (ADR 0035, open question 4).
+possibly a censored one (ADR 0035, open question 4). A spike on 2026-11-11 settled it on the emulators
+with Android 11, 15 and 17 ([notes](spikes/2026-11-shared-dns-cache.md)): the cache is shared, for
+answers and negative answers alike; Android names the app that asked as the owner of each lookup; and an
+answer whose time to live Watch sets to 0 is not kept. While any app is chained, Watch therefore gives
+the apps every answer with a time to live of 0, answers each lookup from the app's own route, and keeps
+a cache of its own per route.
 
 Status of W1 and W2, 2026-11-09, on the branches `watch-w1` and `watch-w2`. W1 is built: its CI run
 passed. W2 is built and passes `scripts/smoke-watch.sh` and `scripts/verify-watch.sh` on the emulators
