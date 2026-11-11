@@ -45,7 +45,7 @@ in the Git history.
 | [0035](0035-wireguard-upstream.md) | WireGuard upstream: GotaTun's protocol core in the engine, raw packets forwarded | Accepted |
 | [0036](0036-ip-to-organisation-dataset.md) | The IP-to-organisation dataset: DB-IP Lite, checked against iptoasn | Accepted |
 | [0037](0037-connection-log-storage.md) | The connection log: records sealed one by one, a key for each day, readable only on an unlocked phone | Accepted |
-| [0038](0038-dns-of-chained-apps.md) | DNS of chained apps: stand-in addresses, names to the tool | Proposed |
+| [0038](0038-dns-of-chained-apps.md) | DNS of chained apps: stand-in addresses, names to the tool | Accepted |
 
 ## Template
 

@@ -1,6 +1,6 @@
 # 0038. DNS of chained apps: stand-in addresses, names to the tool
 
-- Status: Proposed
+- Status: Accepted (by the maintainer on 2026-11-11, with Quad9 as the resolver of open question 1)
 - Date: 2026-11-11
 
 ## Context
@@ -81,6 +81,7 @@ Option 1, from W6 on, with these rules:
   not at all (VPN.md).
 - **Other record types through the tool** (HTTPS and SVCB, TXT, MX, SRV and the rest), already in W6: Watch
   sends the app's question as DNS over TCP (RFC 7766) through the tool's `CONNECT` to a public resolver,
+  Quad9's service without blocking (`quad9-unsecured` in `data/resolvers`) until the user chooses one,
   and passes the answer on with a time to live of 0. From an HTTPS or SVCB answer it removes the address
   hints, so that every connection goes to a stand-in in one space, and keeps the ECH keys, so that ECH
   works through the tool as without it. Through the tool, the resolver sees the tool's exit, not the
@@ -127,8 +128,8 @@ Option 1, from W6 on, with these rules:
 1. **The resolver for other record types in W6,** until the user chooses one in W8: proposed, Quad9 (a
    Swiss foundation that does not log addresses), its service without blocking (`quad9-unsecured` in
    `data/resolvers`, 9.9.9.10 and 149.112.112.10), so that Watch filters nothing by default; the
-   alternative is to ask the user when the chain is set up, with no answer for those types until then.
-   The maintainer decides.
+   alternative was to ask the user when the chain is set up, with no answer for those types until then.
+   *Decided by the maintainer on 2026-11-11: Quad9 without blocking.*
 2. **Ranges taken by the network.** 198.18.0.0/15 is not routed on the internet, but a lab or a carrier
    may use it inside its network. Seen nowhere so far; the lab run and W4's runs on the A40 show it.
 3. **How long a name keeps its stand-in** once no flow uses it: the least recently used goes first; the

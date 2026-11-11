@@ -564,7 +564,10 @@ answers, and a password never shows in a `Debug` output. The parsers take any by
 `socks5`); `core/net/tests/socks5.rs` runs the client against a small proxy in the same process, whose
 bytes are written by hand from the RFCs, for an address, a name, the password asked for, refused or not
 offered, the proxy's failures, something that is not a proxy, and a UDP relay, announced or as 0.0.0.0.
-The engine does not use it yet: routing by app comes next.
+The engine does not use it yet: routing by app comes next. How chained apps' lookups are answered is
+[ADR 0038](decisions/0038-dns-of-chained-apps.md), accepted the same day: stand-in addresses from
+198.18.0.0/15 for A questions, the name sent to the tool, no stand-in for AAAA, other record types through
+the tool to Quad9 without blocking, ECH kept.
 
 | # | Milestone | Done when |
 |---|---|---|
