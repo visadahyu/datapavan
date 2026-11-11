@@ -624,8 +624,10 @@ the chain was turned on from Watch's screen with no port typed; TCP went through
 NekoBox and nowhere with Orbot, which carries none; a lookup through Orbot got a stand-in and Tor resolved the name.
 The log kept the chained flows without destination. Found on the way: v2rayNG's sniffing and its direct route for
 private addresses, and NekoBox dropping an answer after the app's half-close. Hiddify 5.5.5 did not start its
-core on the emulator, before Watch was involved. Still to come: Hiddify again, the A40, Android 11 and 17, and the
-rest of ADR 0038's lab.
+core on the emulator, before Watch was involved. On the A40 (Android 11), with only the test apps inside the
+tunnel, Watch found the test tool and Orbot, each with its owner confirmed, and the shell reached Android's own
+check address through each by a stand-in name. Still to come: Hiddify again, v2rayNG and NekoBox on the A40,
+Android 11 and 17 on the emulators, and the rest of ADR 0038's lab.
 
 | # | Milestone | Done when |
 |---|---|---|

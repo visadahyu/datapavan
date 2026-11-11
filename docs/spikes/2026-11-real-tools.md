@@ -38,6 +38,22 @@ chained app got "no route to host", not a direct connection.
   Orbot is not a system-wide VPN") and offers a battery exemption; the guides of W8 must say so. Its Connect button
   sat below the bottom bar on the 320 x 640 emulator screen.
 
+## On the A40
+
+The same day, on the Galaxy A40 (Samsung, Android 11), at the maintainer's word. Watch's tunnel covered only adb's
+shell, the test tool and Orbot (the debug start's list of apps), so none of the phone's own apps went through it, and
+nothing of theirs was read or printed. No computer on the phone's network was needed: the destination was the
+address Android itself checks connectivity with.
+
+- **The test tool,** with a password: Watch found it on 127.0.0.1:10870, Android confirmed it as the owner, and
+  Watch saw that it wants a password. The shell, chained with that password, reached the check address by a
+  stand-in name (HTTP 204); the tool's own connection went directly, under its UID.
+- **Orbot 17.9.7** (the universal build) in "Power User Mode": on Android 11 it asked for no alarms permission; it
+  offered the battery exemption and connected anyway. Watch found it on 127.0.0.1:9050, owner confirmed, no
+  password. The shell reached the check address by a stand-in name through Tor (HTTP 204), and its UDP went nowhere.
+
+Both were uninstalled afterwards, and Watch's tunnel stopped.
+
 ## Hiddify
 
 Its first screen asks the user to accept its terms (accepted for the test emulator at the maintainer's word) and
@@ -51,6 +67,7 @@ with an arm64 build, and with a profile of the kind Hiddify expects.
 ## Still to do
 
 - Hiddify, on the A40 or with another profile.
-- The same on the A40 (arm64 builds), which waits on the ufw rules, and on Android 11 and 17.
+- v2rayNG and NekoBox on the A40 (their arm64 builds are not downloaded yet), and the four tools on the emulators
+  with Android 11 and 17.
 - The rest of ADR 0038's lab: Chrome and Local Network Access with stand-ins, ECH through a tool, the ten apps of
   W3, strict Private DNS, and the delay of other record types through each tool.
