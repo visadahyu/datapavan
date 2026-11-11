@@ -8,6 +8,7 @@
 
 pub mod answers;
 pub mod dns;
+pub mod dnscache;
 pub mod engine;
 pub mod log;
 pub mod names;

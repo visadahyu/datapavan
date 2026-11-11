@@ -53,7 +53,7 @@ pub(crate) fn u16_at(bytes: &[u8], at: usize) -> Option<u16> {
     ]))
 }
 
-fn u32_at(bytes: &[u8], at: usize) -> Option<u32> {
+pub(crate) fn u32_at(bytes: &[u8], at: usize) -> Option<u32> {
     let b = bytes.get(at..at.checked_add(4)?)?;
     Some(u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
 }
@@ -198,7 +198,7 @@ pub fn uncache(message: &mut [u8]) -> bool {
 
 /// Where the TTL of each record of a response is, OPT records left out; `None` when the response is
 /// not well formed. Names are skipped, not read, so a name of any bytes still counts.
-fn ttl_offsets(message: &[u8]) -> Option<Vec<usize>> {
+pub(crate) fn ttl_offsets(message: &[u8]) -> Option<Vec<usize>> {
     if u16_at(message, 2)? & 0x8000 == 0 {
         return None;
     }

@@ -27,6 +27,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
 use tokio::sync::{Notify, watch};
 
+use crate::dnscache::DnsCache;
 use crate::log::Record;
 use crate::names::Names;
 #[cfg(test)]
@@ -325,6 +326,8 @@ struct Shared {
     chain: Mutex<Option<Arc<Chain>>>,
     /// The stand-in addresses of the names chained apps looked up (ADR 0038).
     stand_ins: Mutex<StandIns>,
+    /// The network resolver's answers, kept for the apps that go directly while a chain is on.
+    direct_answers: Mutex<DnsCache>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -406,6 +409,7 @@ impl Engine {
             uncached_answers: AtomicBool::new(false),
             chain: Mutex::new(None),
             stand_ins: Mutex::default(),
+            direct_answers: Mutex::default(),
         });
         let (stop, stopped) = watch::channel(false);
         let (network, changes) = watch::channel(0);
@@ -448,6 +452,8 @@ impl Engine {
     /// each switch.
     pub fn network_changed(&self, dns: Option<IpAddr>, moved: bool) {
         *lock(&self.shared.upstream_dns) = dns;
+        // Another resolver, or another network, may answer otherwise.
+        lock(&self.shared.direct_answers).clear();
         if moved {
             self.network
                 .send_modify(|generation| *generation = generation.wrapping_add(1));
@@ -461,6 +467,7 @@ impl Engine {
         let on = chain.is_some();
         *lock(&self.shared.chain) = chain.map(Arc::new);
         self.shared.uncached_answers.store(on, Ordering::Relaxed);
+        lock(&self.shared.direct_answers).clear();
     }
 
     /// Whether the answers of Watch's own DNS address reach the apps with a time to live of 0, so that
@@ -670,6 +677,7 @@ mod tests {
             uncached_answers: AtomicBool::new(false),
             chain: Mutex::new(None),
             stand_ins: Mutex::default(),
+            direct_answers: Mutex::default(),
         }
     }
 

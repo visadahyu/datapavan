@@ -6,7 +6,8 @@
 //! and a query read as one gets an answer.
 #![no_main]
 
-use datapavan_net::{answers, dns};
+use datapavan_net::{answers, dns, dnscache::DnsCache};
+use std::time::Instant;
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
@@ -15,6 +16,12 @@ fuzz_target!(|data: &[u8]| {
         let mut uncached = out.clone();
         assert!(dns::uncache(&mut uncached));
         assert_eq!(uncached, out);
+    }
+    // Watch's cache of direct answers takes any answer, and answers a query only with its own ID.
+    let mut cache = DnsCache::default();
+    cache.insert(data, Instant::now());
+    if let Some(out) = cache.answer(data, Instant::now()) {
+        assert_eq!(out.get(..2), data.get(..2));
     }
     if let Some(question) = answers::question(data) {
         assert!(answers::no_data(data, &question).is_some());

@@ -21,6 +21,7 @@ use std::net::SocketAddr;
 use std::os::fd::AsRawFd;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpStream, UdpSocket};
 use tokio::sync::watch;
@@ -179,6 +180,13 @@ impl Loop {
             ));
             return;
         }
+        if let Some(answer) = cached_answer(&self.shared, key.1, payload) {
+            if let Some(packet) = packet::udp(key.1, key.0, &answer) {
+                self.shared.lookup_answered(uid, packet.len());
+                self.send(&packet).await;
+            }
+            return;
+        }
         let sent = way.send(payload).await;
         if let Some(error) = count_sent(&self.shared, bytes.as_deref(), packet, parsed, sent) {
             self.send(&error).await;
@@ -269,6 +277,7 @@ async fn open_udp(
     let mut lookups = Vec::new();
     let mut errors = Vec::new();
     let mut questions = Vec::new();
+    let mut cached = Vec::new();
     {
         let mut table = lock(&flows);
         let waiting = match table.remove(&key) {
@@ -290,6 +299,10 @@ async fn open_udp(
                 questions.push(payload.to_vec());
                 continue;
             }
+            if let Some(answer) = cached_answer(&shared, destination, payload) {
+                cached.extend(packet::udp(destination, app, &answer));
+                continue;
+            }
             let sent = way.try_send(payload);
             errors.extend(count_sent(&shared, bytes.as_deref(), packet, &parsed, sent));
         }
@@ -304,6 +317,10 @@ async fn open_udp(
     }
     for error in errors {
         send_to_app(&tun, &shared, &error).await;
+    }
+    for answer in cached {
+        shared.lookup_answered(uid, answer.len());
+        send_to_app(&tun, &shared, &answer).await;
     }
     if let UdpWay::Lookups(chain) = way {
         answer_waiting(questions, key, uid, &chain, &shared, &tun, flows);
@@ -323,6 +340,17 @@ async fn open_udp(
         flows,
         changes,
     ));
+}
+
+/// While a chain is on, the answer Watch's cache holds for a direct app's lookup, with a time to live
+/// of 0 like every answer then, so that the network's resolver is asked no more often than before.
+fn cached_answer(shared: &Shared, destination: SocketAddr, query: &[u8]) -> Option<Vec<u8>> {
+    if !is_tunnel_dns(destination.ip()) || !shared.uncached_answers.load(Ordering::Relaxed) {
+        return None;
+    }
+    let mut answer = lock(&shared.direct_answers).answer(query, Instant::now())?;
+    dns::uncache(&mut answer);
+    Some(answer)
 }
 
 /// How a new flow's datagrams go, by its route: a protected socket, the tool's relay with the
@@ -564,6 +592,7 @@ async fn answers(
                             if is_tunnel_dns(destination.ip()) {
                                 shared.learn(&buffer[..n], None);
                                 if shared.uncached_answers.load(Ordering::Relaxed) {
+                                    lock(&shared.direct_answers).insert(&buffer[..n], Instant::now());
                                     dns::uncache(&mut buffer[..n]);
                                 }
                             } else if uid.is_some() {
