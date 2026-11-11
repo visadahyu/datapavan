@@ -17,6 +17,7 @@ pub mod packet;
 pub mod quic;
 pub mod resolvers;
 pub mod socks5;
+pub mod standins;
 pub mod tls;
 pub mod tun;
 
