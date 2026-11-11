@@ -124,6 +124,13 @@ grep -q pong <<<"$(ping_from_shell "$HOST")" && fail "a wrong password was let t
 grep -q "^password refused$" <<<"$(tool_log)" || fail "the tool did not see the wrong password"
 echo "ok: a wrong password is refused, and nothing goes directly instead"
 
+# Watch never logs SOCKS credentials (DESIGN.md, 13.2): neither password is in Android's log or in
+# Watch's account of itself. (The passwords reached Watch only through the debug dump's command line.)
+seen=$( (adb logcat -d -b main -b system -b crash; dump) 2>/dev/null | tr -d '\r')
+grep -qF "$PASSWORD" <<<"$seen" && fail "the tool's password is in Android's log or Watch's dump"
+grep -qF "wrong-password" <<<"$seen" && fail "a password Watch was given is in Android's log or Watch's dump"
+echo "ok: no password in Android's log or in Watch's dump"
+
 # The tool stops. A sentinel on this computer, outside Android, notes every TCP connection and UDP
 # datagram that reaches its port: the emulator's own capture does not see what goes over its Wi-Fi.
 # A control from Watch's own UID, which goes directly, shows that the sentinel sees what leaves.
