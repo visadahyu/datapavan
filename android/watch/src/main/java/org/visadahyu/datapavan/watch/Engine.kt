@@ -52,6 +52,24 @@ internal object Engine {
     external fun nativeFlushLog()
 
     /**
+     * Turns chaining on (W6, ADR 0038): [proxy] and [port] are the address of the tool's SOCKS5 proxy,
+     * [user] and [password] its credentials or null, [toolUid] the tool's UID, [apps] the UIDs of the
+     * chained apps or null for every app but the tool, [udp] whether the tool carries UDP, and
+     * [logDestinations] whether chained flows' destinations go to the log. An empty [proxy] turns
+     * chaining off. Returns whether a chain is on; false when no engine runs.
+     */
+    external fun nativeChain(
+        proxy: String,
+        port: Int,
+        user: ByteArray?,
+        password: ByteArray?,
+        toolUid: Int,
+        apps: IntArray?,
+        udp: Boolean,
+        logDestinations: Boolean,
+    ): Boolean
+
+    /**
      * Whether the answers of the tunnel's DNS address reach the apps with a time to live of 0, so that
      * Android's resolver, which keeps one cache for all apps of a network, keeps none of them; debug
      * builds' DNS spike only, for now (W6).

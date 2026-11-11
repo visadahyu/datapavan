@@ -10,9 +10,10 @@ use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use datapavan_net::organisations::{FilePart, Organisations};
-use datapavan_net::{Config, DnsUse, Ech, Engine, NamedBy, NetworkKind, Outcome, Platform};
+use datapavan_net::socks5::Credentials;
+use datapavan_net::{Chain, Config, DnsUse, Ech, Engine, NamedBy, NetworkKind, Outcome, Platform};
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
-use jni::objects::{JClass, JLongArray, JObject, JString};
+use jni::objects::{JByteArray, JClass, JIntArray, JLongArray, JObject, JString};
 use jni::sys::{jboolean, jint, jlong};
 use jni::{EnvUnowned, JValue, JavaVM, jni_sig, jni_str};
 
@@ -235,6 +236,71 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlushLog<
             Ok(())
         })
         .resolve::<ThrowRuntimeExAndDefault>();
+}
+
+/// `Engine.nativeChain(proxy, port, user, password, toolUid, apps, udp, logDestinations)`: turns chaining
+/// on (W6). `proxy` and `port` are the address of the tool's SOCKS5 proxy, `user` and `password` its
+/// credentials or null, `toolUid` the tool's UID, `apps` the UIDs of the chained apps or null for every
+/// app but the tool, `udp` whether the tool carries UDP, `logDestinations` whether chained flows'
+/// destinations go to the log. An empty `proxy` turns chaining off. Returns whether a chain is on.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeChain(proxy: String,
+// port: Int, user: ByteArray?, password: ByteArray?, toolUid: Int, apps: IntArray?, udp: Boolean,
+// logDestinations: Boolean): Boolean`.
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeChain<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    proxy: JString<'caller>,
+    port: jint,
+    user: JByteArray<'caller>,
+    password: JByteArray<'caller>,
+    tool_uid: jint,
+    apps: JIntArray<'caller>,
+    udp: jboolean,
+    log_destinations: jboolean,
+) -> jboolean {
+    unowned_env
+        .with_env(|env| -> Result<jboolean, Error> {
+            let address: Option<IpAddr> = proxy.try_to_string(env).ok().and_then(|s| s.parse().ok());
+            let chain = match (address, u16::try_from(port), u32::try_from(tool_uid)) {
+                (Some(ip), Ok(port), Ok(tool)) => {
+                    // A null array is no credentials; convert_byte_array refuses it.
+                    let credentials = match (
+                        env.convert_byte_array(&user).ok(),
+                        env.convert_byte_array(&password).ok(),
+                    ) {
+                        (Some(user), Some(password)) => Credentials::new(&user, &password),
+                        _ => None,
+                    };
+                    let apps = if apps.as_raw().is_null() {
+                        None
+                    } else {
+                        let mut uids = vec![0; apps.len(env)?];
+                        apps.get_region(env, 0, &mut uids)?;
+                        Some(uids.into_iter().filter_map(|u| u32::try_from(u).ok()).collect())
+                    };
+                    Some(Chain {
+                        proxy: SocketAddr::new(ip, port),
+                        credentials,
+                        tool,
+                        apps,
+                        udp,
+                        log_destinations,
+                    })
+                }
+                _ => None,
+            };
+            let on = chain.is_some();
+            Ok(match engine().as_ref() {
+                Some(running) => {
+                    running.chain(chain);
+                    on
+                }
+                None => false,
+            })
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
 }
 
 /// `Engine.nativeUncacheAnswers(on)`: whether the answers of Watch's own DNS address reach the apps

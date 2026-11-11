@@ -267,9 +267,39 @@ class WatchVpnService : VpnService() {
                 "on" -> Engine.nativeUncacheAnswers(true).also { writer.println("dns-uncached on") }
                 "off" -> Engine.nativeUncacheAnswers(false).also { writer.println("dns-uncached off") }
             }
+            debugChain(args.orEmpty().toList(), writer)
             Engine.nativeFlows().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("flow $it") }
             debugLog(log, args.orEmpty().toList(), writer)
         }
+    }
+
+    /**
+     * Debug builds only, for W6's end-to-end test: `chain HOST PORT TOOL_UID udp|no-udp all|UID,UID
+     * [USER PASSWORD]` turns chaining on through the SOCKS5 proxy at HOST and PORT, and `unchain` turns
+     * it off. Each prints `chain on` or `chain off`; credentials are never printed.
+     */
+    private fun debugChain(args: List<String>, writer: PrintWriter) {
+        if ("unchain" in args) {
+            Engine.nativeChain("", 0, null, null, 0, null, udp = false, logDestinations = false)
+            writer.println("chain off")
+            return
+        }
+        val at = args.indexOf("chain").takeIf { it >= 0 } ?: return
+        val (host, port, tool, udp, apps) = args.drop(at + 1).take(5).takeIf { it.size == 5 } ?: return
+        val user = args.getOrNull(at + 6)?.toByteArray()
+        val password = args.getOrNull(at + 7)?.toByteArray()
+        val uids = if (apps == "all") null else apps.split(',').mapNotNull { it.toIntOrNull() }.toIntArray()
+        val on = Engine.nativeChain(
+            host,
+            port.toIntOrNull() ?: 0,
+            user,
+            password,
+            tool.toIntOrNull() ?: -1,
+            uids,
+            udp = udp == "udp",
+            logDestinations = false,
+        )
+        writer.println(if (on) "chain on" else "chain off")
     }
 
     /**
