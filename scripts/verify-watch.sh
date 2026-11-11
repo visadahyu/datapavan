@@ -352,6 +352,17 @@ is_emulator && adb shell appops set "$PKG" ACTIVATE_VPN allow
 # Android 17: the server is on the local network, which Watch reaches for every app (ADR 0034).
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 adb shell am force-stop "$PKG"
+# The device's network or the test server may not be ready yet: on CI the first check below once found
+# no answer (2026-11-11). Wait until the device reaches the server without Watch, so that a failure below
+# is Watch's.
+direct() {
+    grep -q '^pong$' <<<"$(device 8 "printf 'GET /ping HTTP/1.0\r\n\r\n' | nc -w 3 $HOST $PORT")"
+}
+for _ in $(seq 1 30); do
+    direct && break
+    sleep 2
+done
+direct || fail "the device does not reach the test server at $HOST:$PORT even without Watch"
 adb logcat -c
 adb shell am start -W -n "$PKG/.MainActivity" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
