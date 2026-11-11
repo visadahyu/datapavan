@@ -61,8 +61,12 @@
     <string name="chain_some_apps">Only the apps I choose</string>
     <!-- %1$s: the tool's name. It cannot carry UDP (Tor, for example). -->
     <string name="chain_no_udp">%1$s cannot carry UDP. Calls and some games in the apps you send through it will not work. Web pages still load.</string>
-    <!-- Shown when the phone's Private DNS is set to a provider's host name. -->
-    <string name="chain_private_dns">Your phone\'s Private DNS sends the names apps look up past Watch and past your tool. For the apps you send through the tool, set Private DNS to Automatic or Off.</string>
+    <!-- Shown when the phone's Private DNS is set to a provider's host name. %1$s: that host name, such as dns.google. %2$s: the tool's name. -->
+    <string name="chain_private_dns">Private DNS is set to %1$s. Android then sends the names that apps look up to %1$s itself, encrypted, past Watch and past %2$s. Your network cannot read those names, but it can see that this phone uses %1$s. And %1$s sees the names and your real address on the internet. For the apps you send through %2$s, set Private DNS to Automatic or Off.</string>
+    <!-- Under it, before a button that opens Android's network settings, which differ between phone makers. -->
+    <string name="chain_private_dns_where">Look for Private DNS in the settings that open. On some phones it is one step further in.</string>
+    <!-- The button. -->
+    <string name="chain_private_dns_open">Open network settings</string>
     <!-- %1$s: the tool's name. Watch offers a password for the tool's proxy. -->
     <string name="chain_password">To keep other apps on this phone off the proxy of %1$s, set this user name and password in %1$s.</string>
     <!-- %1$s: the user name, such as watch. -->
@@ -75,4 +79,12 @@
     <string name="chain_log_destinations">Log where these apps connect</string>
     <!-- Under the switch above. -->
     <string name="chain_log_destinations_note">Off unless you turn it on. Watch still counts their connections. A list of where they went can be used against you if someone searches your phone.</string>
+    <!-- The found tool's signing key (W6), the audit app's own words (ADR 0018). -->
+    <string name="signature_genuine_developer">Genuine copy of %1$s, signed by its developer.</string>
+    <string name="signature_genuine_google">Genuine copy of %1$s, signed by Google Play for its developer.</string>
+    <string name="signature_genuine_fdroid">Genuine copy of %1$s, built and signed by F-Droid.</string>
+    <string name="signature_past_key">It is signed with an earlier key of the developer, which the app has since replaced.</string>
+    <string name="signature_unknown">Datapavan knows %1$s, but not yet the key of this copy. Copies from app stores often carry the store\'s key. Compare this fingerprint with the one the developer publishes:</string>
+    <string name="signature_modified">This copy of %1$s is not signed by its developer. Someone changed it, and it can see everything that passes through it. Remove it and install %1$s from its official website or store.</string>
+    <string name="signature_modified_debug">This copy of %1$s carries a debug key, which the developer\'s own builds never use: someone else rebuilt it. Remove it and install %1$s from its official website or store.</string>
 </resources>

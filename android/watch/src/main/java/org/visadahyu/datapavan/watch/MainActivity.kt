@@ -1,22 +1,17 @@
 package org.visadahyu.datapavan.watch
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.os.PersistableBundle
-import org.visadahyu.datapavan.watch.chain.ChainSettings
-import org.visadahyu.datapavan.watch.chain.ToolSearch
-import org.visadahyu.datapavan.watch.chain.Tools
-import org.visadahyu.datapavan.watch.ui.AppChoice
-import org.visadahyu.datapavan.watch.ui.ChainActions
-import org.visadahyu.datapavan.watch.ui.ChainView
 import android.app.KeyguardManager
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.graphics.Color
 import android.net.VpnService
 import android.os.Bundle
+import android.os.PersistableBundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -26,7 +21,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import org.visadahyu.datapavan.watch.chain.ChainSettings
+import org.visadahyu.datapavan.watch.chain.ToolKeys
+import org.visadahyu.datapavan.watch.chain.ToolSearch
+import org.visadahyu.datapavan.watch.chain.Tools
 import org.visadahyu.datapavan.watch.log.ConnectionLog
+import org.visadahyu.datapavan.watch.ui.AppChoice
+import org.visadahyu.datapavan.watch.ui.ChainActions
+import org.visadahyu.datapavan.watch.ui.ChainView
 import org.visadahyu.datapavan.watch.ui.WatchScreen
 import org.visadahyu.datapavan.watch.ui.WatchTheme
 
@@ -118,7 +120,25 @@ class MainActivity : ComponentActivity() {
         },
         onLogDestinations = { on -> changeChain { settings -> settings.logDestinations = on } },
         onCopyPassword = ::copyPassword,
+        onPrivateDnsSettings = ::openPrivateDnsSettings,
     )
+
+    /**
+     * Opens the network settings, where Android keeps Private DNS. Android's own Settings app marks the
+     * Private DNS row when asked by its key; other makers' Settings apps ignore the request, and the
+     * screen tells the user where to look. A phone without that page gets the main settings.
+     */
+    private fun openPrivateDnsSettings() {
+        val row = "private_dns_settings"
+        val network = Intent(Settings.ACTION_WIRELESS_SETTINGS)
+            .putExtra(":settings:fragment_args_key", row)
+            .putExtra(":settings:show_fragment_args", Bundle().apply { putString(":settings:fragment_args_key", row) })
+        try {
+            startActivity(network)
+        } catch (e: ActivityNotFoundException) {
+            startActivity(Intent(Settings.ACTION_SETTINGS))
+        }
+    }
 
     /** Looks for the user's tool off the main thread, and shows what it found. */
     private fun searchTool() {
@@ -130,9 +150,11 @@ class MainActivity : ComponentActivity() {
             found?.let(settings::remember)
             // A tool that takes a password gets Watch's; one that cannot is not offered one.
             val password = found?.takeIf { it.tool.auth != "none" }?.let { settings.password() }
+            val key = found?.let { ToolKeys.verdict(this, it.tool.packageName) }
             runOnUiThread {
                 chain.value = chain.value.copy(
                     search = search,
+                    key = key,
                     user = password?.let { ChainSettings.userFor(found.tool.packageName) },
                     password = password,
                 )

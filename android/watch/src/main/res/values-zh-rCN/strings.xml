@@ -34,11 +34,21 @@
     <string name="chain_all_apps">所有应用</string>
     <string name="chain_some_apps">仅限我选择的应用</string>
     <string name="chain_no_udp">%1$s 无法传输 UDP 流量。在您设置为通过它连接的应用中，通话和部分游戏将无法使用。网页仍能正常加载。</string>
-    <string name="chain_private_dns">您手机的专用 DNS 会绕过 Watch 和您的工具，发送应用查询的名称。对于通过该工具连接的应用，请将专用 DNS 设置为“自动”或“关闭”。</string>
+    <string name="chain_private_dns">专用 DNS 已设置为 %1$s。这时，Android 会自行将应用查询的名称加密后发送到 %1$s，绕过 Watch 和 %2$s。您的网络无法读取这些名称，但可以看到这部手机在使用 %1$s。而 %1$s 会看到这些名称，以及您在互联网上的真实地址。对于您设置为通过 %2$s 连接的应用，请将专用 DNS 设置为“自动”或“关闭”。</string>
+    <string name="chain_private_dns_where">请在打开的设置中查找“专用 DNS”。在某些手机上，需要再进入一层才能找到。</string>
+    <string name="chain_private_dns_open">打开网络设置</string>
     <string name="chain_password">为防止这部手机上的其他应用使用 %1$s 的代理，请在 %1$s 中设置这个用户名和密码。</string>
     <string name="chain_user">用户名：%1$s</string>
     <string name="chain_password_value">密码：%1$s</string>
     <string name="chain_copy">复制密码</string>
     <string name="chain_log_destinations">记录这些应用连接到哪里</string>
     <string name="chain_log_destinations_note">除非您开启，否则保持关闭。Watch 仍会统计它们的连接。如果有人搜查您的手机，记录它们连接去向的列表可能会被用来对付您。</string>
+    <!-- The found tool's signing key (W6), the audit app's own words (ADR 0018). -->
+    <string name="signature_genuine_developer">%1$s 的正版副本，由其开发者签名。</string>
+    <string name="signature_genuine_google">%1$s 的正版副本，由 Google Play 代其开发者签名。</string>
+    <string name="signature_genuine_fdroid">%1$s 的正版副本，由 F-Droid 构建并签名。</string>
+    <string name="signature_past_key">它使用开发者以前的密钥签名，此应用后来已更换该密钥。</string>
+    <string name="signature_unknown">Datapavan 知道 %1$s，但还不知道此副本的密钥。来自应用商店的副本往往带有商店的密钥。请将此指纹与开发者公布的指纹比较：</string>
+    <string name="signature_modified">此 %1$s 副本不是由其开发者签名的。有人修改过它，而且它可以看到经过它的所有内容。请移除它，并从其官方网站或应用商店安装 %1$s。</string>
+    <string name="signature_modified_debug">此 %1$s 副本带有调试密钥，而开发者自己的版本从不使用这种密钥：是其他人重新构建了它。请移除它，并从其官方网站或应用商店安装 %1$s。</string>
 </resources>

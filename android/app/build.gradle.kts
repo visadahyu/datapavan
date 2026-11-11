@@ -357,6 +357,9 @@ androidComponents {
     onVariants { variant ->
         val suffix = variant.name.replaceFirstChar(Char::uppercase)
 
+        // Code both apps share: the rules that judge a copy's signing key (ADR 0018), in android/shared.
+        variant.sources.java?.addStaticSourceDirectory(rootProject.layout.projectDirectory.dir("shared/src/main/java").asFile.absolutePath)
+
         val cargoTask = tasks.register<CargoNdkTask>("cargoNdk$suffix") {
             sources.from(fileTree(rustWorkspace) { exclude("target/**", "fuzz/**") })
             sources.from(rootProject.layout.projectDirectory.file("../rust-toolchain.toml"))

@@ -36,11 +36,21 @@
     <string name="chain_all_apps">Toutes les applis</string>
     <string name="chain_some_apps">Seulement les applis que je choisis</string>
     <string name="chain_no_udp">%1$s ne peut pas transporter le trafic UDP. Les appels et certains jeux ne fonctionneront pas dans les applis que vous faites passer par cet outil. Les pages web se chargent quand même.</string>
-    <string name="chain_private_dns">Le DNS privé de votre téléphone envoie les noms que les applis recherchent sans passer par Watch ni par votre outil. Pour les applis que vous faites passer par l\'outil, réglez le DNS privé sur « Automatique » ou « Désactivé ».</string>
+    <string name="chain_private_dns">Le DNS privé est réglé sur %1$s. Android envoie alors lui-même à %1$s, chiffrés, les noms que les applis recherchent, sans passer par Watch ni par %2$s. Votre réseau ne peut pas lire ces noms, mais il peut voir que ce téléphone utilise %1$s. Et %1$s voit ces noms et votre vraie adresse sur Internet. Pour les applis que vous faites passer par %2$s, réglez le DNS privé sur « Automatique » ou « Désactivé ».</string>
+    <string name="chain_private_dns_where">Cherchez « DNS privé » dans les paramètres qui s\'ouvrent. Sur certains téléphones, ce réglage se trouve un écran plus loin.</string>
+    <string name="chain_private_dns_open">Ouvrir les paramètres réseau</string>
     <string name="chain_password">Pour empêcher les autres applis de ce téléphone d\'utiliser le proxy de l\'outil %1$s, saisissez ce nom d\'utilisateur et ce mot de passe dans %1$s.</string>
     <string name="chain_user">Nom d\'utilisateur : %1$s</string>
     <string name="chain_password_value">Mot de passe : %1$s</string>
     <string name="chain_copy">Copier le mot de passe</string>
     <string name="chain_log_destinations">Enregistrer où ces applis se connectent</string>
     <string name="chain_log_destinations_note">Désactivé, sauf si vous l\'activez. Watch compte quand même leurs connexions. Une liste des endroits où elles se sont connectées peut être utilisée contre vous si quelqu\'un fouille votre téléphone.</string>
+    <!-- The found tool's signing key (W6), the audit app's own words (ADR 0018). -->
+    <string name="signature_genuine_developer">Copie authentique de l\'appli %1$s, signée par son développeur.</string>
+    <string name="signature_genuine_google">Copie authentique de l\'appli %1$s, signée par Google Play pour son développeur.</string>
+    <string name="signature_genuine_fdroid">Copie authentique de l\'appli %1$s, compilée et signée par F-Droid.</string>
+    <string name="signature_past_key">Elle est signée avec une ancienne clé du développeur, que l\'appli a remplacée depuis.</string>
+    <string name="signature_unknown">Datapavan connaît %1$s, mais pas encore la clé de cette copie. Les copies des boutiques d\'applis portent souvent la clé de la boutique. Comparez cette empreinte avec celle que publie le développeur :</string>
+    <string name="signature_modified">Cette copie de l\'appli %1$s n\'est pas signée par son développeur. Quelqu\'un l\'a modifiée, et elle peut voir tout ce qui passe par elle. Supprimez-la et installez %1$s depuis son site officiel ou sa boutique officielle.</string>
+    <string name="signature_modified_debug">Cette copie de l\'appli %1$s porte une clé de débogage, que les versions du développeur n\'utilisent jamais : quelqu\'un d\'autre l\'a recompilée. Supprimez-la et installez %1$s depuis son site officiel ou sa boutique officielle.</string>
 </resources>

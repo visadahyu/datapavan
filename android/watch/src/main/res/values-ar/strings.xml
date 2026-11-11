@@ -39,11 +39,21 @@
     <string name="chain_all_apps">كل التطبيقات</string>
     <string name="chain_some_apps">التطبيقات التي أختارها فقط</string>
     <string name="chain_no_udp">لا يستطيع %1$s نقل بيانات UDP. لن تعمل المكالمات وبعض الألعاب في التطبيقات التي تمرّرها عبره. لكن صفحات الويب تُفتح كالمعتاد.</string>
-    <string name="chain_private_dns">يرسل «نظام أسماء النطاقات الخاص» في هاتفك الأسماء التي تبحث عنها التطبيقات دون المرور عبر Watch أو أداتك. من أجل التطبيقات التي تمرّرها عبر الأداة، اضبط «نظام أسماء النطاقات الخاص» على «تلقائي» أو «غير مفعّل».</string>
+    <string name="chain_private_dns">تم ضبط «نظام أسماء النطاقات الخاص» على %1$s. عندها يرسل Android بنفسه الأسماء التي تبحث عنها التطبيقات إلى %1$s مشفّرةً، دون المرور عبر Watch أو %2$s. لا تستطيع شبكتك قراءة هذه الأسماء، لكنها تستطيع أن ترى أن هذا الهاتف يستخدم %1$s. أما %1$s فيرى الأسماء وعنوانك الحقيقي على الإنترنت. من أجل التطبيقات التي تمرّرها عبر %2$s، اضبط «نظام أسماء النطاقات الخاص» على «تلقائي» أو «غير مفعّل».</string>
+    <string name="chain_private_dns_where">ابحث عن «نظام أسماء النطاقات الخاص» في الإعدادات التي ستُفتح. في بعض الهواتف ستجده بعد خطوة واحدة إضافية.</string>
+    <string name="chain_private_dns_open">فتح إعدادات الشبكة</string>
     <string name="chain_password">لمنع التطبيقات الأخرى على هذا الهاتف من استخدام الخادم الوكيل في %1$s، أدخل اسم المستخدم وكلمة المرور هذين في %1$s.</string>
     <string name="chain_user">اسم المستخدم: %1$s</string>
     <string name="chain_password_value">كلمة المرور: %1$s</string>
     <string name="chain_copy">نسخ كلمة المرور</string>
     <string name="chain_log_destinations">تسجيل الجهات التي تتصل بها هذه التطبيقات</string>
     <string name="chain_log_destinations_note">متوقف ما لم تشغّله. يواصل Watch عدّ اتصالاتها. قائمة الجهات التي اتصلت بها يمكن أن تُستخدم ضدك إذا فتّش أحد هاتفك.</string>
+    <!-- The found tool's signing key (W6), the audit app's own words (ADR 0018). -->
+    <string name="signature_genuine_developer">نسخة أصلية من %1$s، موقَّعة من مطوّرها.</string>
+    <string name="signature_genuine_google">نسخة أصلية من %1$s، موقَّعة من Google Play نيابةً عن مطوّرها.</string>
+    <string name="signature_genuine_fdroid">نسخة أصلية من %1$s، تم إنشاؤها وتوقيعها بواسطة F-Droid.</string>
+    <string name="signature_past_key">موقَّع بمفتاح سابق للمطوّر، استبدله التطبيق منذ ذلك الحين.</string>
+    <string name="signature_unknown">يعرف Datapavan %1$s، لكنه لا يعرف بعد مفتاح هذه النسخة. غالبًا ما تحمل النسخ القادمة من متاجر التطبيقات مفتاح المتجر. قارن هذه البصمة بالبصمة التي ينشرها المطوّر:</string>
+    <string name="signature_modified">هذه النسخة من %1$s غير موقَّعة من مطوّرها. لقد غيّرها شخص ما، ويمكنها رؤية كل ما يمر عبرها. أزِلها وثبّت %1$s من موقعه الرسمي أو متجره الرسمي.</string>
+    <string name="signature_modified_debug">تحمل هذه النسخة من %1$s مفتاح تصحيح أخطاء، وهو مفتاح لا تستخدمه إصدارات المطوّر نفسه أبدًا: فقد أعاد شخص آخر إنشاءها. أزِلها وثبّت %1$s من موقعه الرسمي أو متجره الرسمي.</string>
 </resources>

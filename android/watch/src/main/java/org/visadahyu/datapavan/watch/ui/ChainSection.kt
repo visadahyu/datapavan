@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -24,10 +25,14 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
+import org.visadahyu.datapavan.audit.SignatureVerdict
 import org.visadahyu.datapavan.watch.PrivateDns
 import org.visadahyu.datapavan.watch.R
 import org.visadahyu.datapavan.watch.chain.ToolSearch
+import java.util.Locale
 
 /** An app the user may send through the tool: its package name and the name the user knows. */
 internal data class AppChoice(val packageName: String, val label: String)
@@ -45,6 +50,8 @@ internal data class ChainView(
     val password: String?,
     /** The apps the user can choose from, loaded once the user asks to choose. */
     val choices: List<AppChoice>,
+    /** What the found tool's signing key says about this copy (ADR 0018), when anything can be said. */
+    val key: SignatureVerdict? = null,
 )
 
 /** What the user can change in the chain. */
@@ -55,6 +62,7 @@ internal class ChainActions(
     val onApp: (String, Boolean) -> Unit,
     val onLogDestinations: (Boolean) -> Unit,
     val onCopyPassword: () -> Unit,
+    val onPrivateDnsSettings: () -> Unit,
 )
 
 /**
@@ -96,16 +104,20 @@ internal fun ChainSection(view: ChainView, privateDns: PrivateDns?, actions: Cha
 private fun Answering(search: ToolSearch.Answering, view: ChainView, privateDns: PrivateDns?, actions: ChainActions) {
     val tool = BidiFormatter.getInstance().unicodeWrap(search.found.tool.name)
     Text(stringResource(R.string.chain_found, tool, search.found.port), style = MaterialTheme.typography.bodyMedium)
+    view.key?.let { KeyVerdict(it) }
     LabelledSwitch(stringResource(R.string.chain_switch, tool), view.on, actions.onOn)
     if (search.found.tool.udp == false) {
         Text(stringResource(R.string.chain_no_udp, tool), style = MaterialTheme.typography.bodyMedium)
     }
     if (privateDns is PrivateDns.Strict) {
+        // What leaves past the tool, to whom, and what the network sees; then where to change it.
         Text(
-            stringResource(R.string.chain_private_dns),
+            stringResource(R.string.chain_private_dns, BidiFormatter.getInstance().unicodeWrap(privateDns.host), tool),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.error,
         )
+        Text(stringResource(R.string.chain_private_dns_where), style = MaterialTheme.typography.bodyMedium)
+        OutlinedButton(onClick = actions.onPrivateDnsSettings) { Text(stringResource(R.string.chain_private_dns_open)) }
     }
     Column(Modifier.selectableGroup()) {
         for ((all, label) in listOf(true to R.string.chain_all_apps, false to R.string.chain_some_apps)) {
@@ -143,6 +155,50 @@ private fun Answering(search: ToolSearch.Answering, view: ChainView, privateDns:
     }
     LabelledSwitch(stringResource(R.string.chain_log_destinations), view.logDestinations, actions.onLogDestinations)
     Text(stringResource(R.string.chain_log_destinations_note), style = MaterialTheme.typography.bodyMedium)
+}
+
+/**
+ * What the tool's signing key says about this copy, in the audit app's words (ADR 0018): a modified
+ * copy carries everything the chained apps send, so it is said plainly, with its fingerprint.
+ */
+@Composable
+private fun KeyVerdict(verdict: SignatureVerdict) {
+    val body = MaterialTheme.typography.bodyMedium
+    val app = BidiFormatter.getInstance().unicodeWrap(verdict.app)
+    when (verdict) {
+        is SignatureVerdict.Genuine -> {
+            val text = when (verdict.controller) {
+                "google" -> R.string.signature_genuine_google
+                "fdroid" -> R.string.signature_genuine_fdroid
+                else -> R.string.signature_genuine_developer
+            }
+            Text(stringResource(text, app), style = body)
+            if (verdict.pastKeyOnly) Text(stringResource(R.string.signature_past_key), style = body)
+        }
+        is SignatureVerdict.UnknownKey -> {
+            Text(stringResource(R.string.signature_unknown, app), style = body)
+            Fingerprint(verdict.fingerprint)
+        }
+        is SignatureVerdict.Modified -> {
+            val text = if (verdict.debugKey) R.string.signature_modified_debug else R.string.signature_modified
+            Text(stringResource(text, app), style = body, color = MaterialTheme.colorScheme.error)
+            Fingerprint(verdict.fingerprint)
+        }
+        // Watch looks for the table's package names only, so a build under another name is never the tool.
+        is SignatureVerdict.Disguised -> Unit
+    }
+}
+
+/** A SHA-256 fingerprint as developers usually print it: colon-separated uppercase pairs. */
+@Composable
+private fun Fingerprint(hex: String) {
+    SelectionContainer {
+        Text(
+            hex.split(' ').joinToString("\n") { digest -> digest.uppercase(Locale.ROOT).chunked(2).joinToString(":") },
+            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, textDirection = TextDirection.Ltr),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 /** A switch whose whole row is the control, with its label. */

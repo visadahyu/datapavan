@@ -343,6 +343,11 @@ abstract class ToolTable : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val table: RegularFileProperty
 
+    /** data/app-signers' apps.tsv, signers.tsv and SOURCE: the official keys of the tools (ADR 0018). */
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val signers: ConfigurableFileCollection
+
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
 
@@ -352,6 +357,7 @@ abstract class ToolTable : DefaultTask() {
         out.deleteRecursively()
         out.mkdirs()
         table.get().asFile.copyTo(out.resolve("tools.tsv"))
+        signers.files.forEach { it.copyTo(out.resolve("app-signers/${it.name}")) }
     }
 }
 
@@ -382,6 +388,9 @@ androidComponents {
 
     onVariants { variant ->
         val suffix = variant.name.replaceFirstChar(Char::uppercase)
+
+        // Code both apps share: the rules that judge a copy's signing key (ADR 0018), in android/shared.
+        variant.sources.java?.addStaticSourceDirectory(rootProject.layout.projectDirectory.dir("shared/src/main/java").asFile.absolutePath)
 
         val cargoTask = tasks.register<CargoNdkTask>("cargoNdk$suffix") {
             sources.from(fileTree(rustWorkspace) { exclude("target/**", "fuzz/**") })
@@ -414,6 +423,7 @@ androidComponents {
 
         val toolsTask = tasks.register<ToolTable>("toolTable$suffix") {
             table.set(repositoryRoot.file("data/tools/tools.tsv"))
+            signers.from(listOf("apps.tsv", "signers.tsv", "SOURCE").map { repositoryRoot.file("data/app-signers/$it") })
         }
         variant.sources.assets?.addGeneratedSourceDirectory(toolsTask, ToolTable::outputDir)
 

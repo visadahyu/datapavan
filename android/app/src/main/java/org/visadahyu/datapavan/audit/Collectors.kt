@@ -37,12 +37,8 @@ import org.visadahyu.datapavan.datapack.DataPackStore
 import java.io.IOException
 import java.security.KeyPairGenerator
 import java.security.KeyStore
-import java.security.MessageDigest
 import java.security.SecureRandom
-import java.security.cert.CertificateException
-import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
-import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 /** The sensor that a runtime permission gives access to, if any. */
@@ -199,7 +195,7 @@ class AppCollector(private val context: Context) {
             special = special,
             isVpnApp = info.services.orEmpty().any { it.permission == Manifest.permission.BIND_VPN_SERVICE },
             vpnAuthorised = opMode(OP_ACTIVATE_VPN, app.uid, info.packageName) == AppOpsManager.MODE_ALLOWED,
-            signing = signing(info),
+            signing = appSigning(info),
             uid = app.uid,
         )
     }
@@ -259,27 +255,6 @@ class AppCollector(private val context: Context) {
             @Suppress("DEPRECATION")
             pm.queryIntentServices(intent, 0)
         }
-
-    /** SHA-256 of each signing certificate, as apksigner prints it, for matching against ADR 0018's list. */
-    private fun signing(info: PackageInfo): AppSigning? {
-        val signing = info.signingInfo ?: return null
-        val current = signing.apkContentsSigners.orEmpty().toList()
-        val history = if (signing.hasMultipleSigners()) current else signing.signingCertificateHistory.orEmpty().toList()
-        val debug = current.any { signature ->
-            try {
-                // A factory per call: facts() runs on several threads at once.
-                val certificate = CertificateFactory.getInstance("X.509")
-                    .generateCertificate(signature.toByteArray().inputStream()) as X509Certificate
-                certificate.subjectX500Principal.name.contains("CN=Android Debug")
-            } catch (_: CertificateException) {
-                false
-            }
-        }
-        return AppSigning(current.map { sha256(it.toByteArray()) }, history.map { sha256(it.toByteArray()) }, debug)
-    }
-
-    private fun sha256(bytes: ByteArray): String =
-        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(Locale.ROOT, it) }
 
     /** System label of a permission in the user's language, e.g. "Microphone" for `RECORD_AUDIO`. */
     fun permissionLabel(permission: String): String = try {

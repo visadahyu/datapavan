@@ -35,11 +35,21 @@
     <string name="chain_all_apps">Alle Apps</string>
     <string name="chain_some_apps">Nur die Apps, die ich auswähle</string>
     <string name="chain_no_udp">%1$s kann kein UDP übertragen. Anrufe und manche Spiele funktionieren in den Apps, die Sie darüber leiten, nicht. Webseiten laden trotzdem.</string>
-    <string name="chain_private_dns">Privates DNS auf Ihrem Telefon sendet die Namen, die Apps nachschlagen, an Watch und an Ihrem Tool vorbei. Stellen Sie Privates DNS für die Apps, die Sie über das Tool leiten, auf „Automatisch“ oder „Aus“.</string>
+    <string name="chain_private_dns">Privates DNS ist auf %1$s eingestellt. Android selbst sendet dann die Namen, die Apps nachschlagen, verschlüsselt an %1$s, vorbei an Watch und an %2$s. Ihr Netzwerk kann diese Namen nicht lesen, aber es kann sehen, dass dieses Telefon %1$s nutzt. Und %1$s sieht die Namen und Ihre echte Adresse im Internet. Stellen Sie Privates DNS für die Apps, die Sie über %2$s leiten, auf „Automatisch“ oder „Aus“.</string>
+    <string name="chain_private_dns_where">Suchen Sie in den Einstellungen, die sich öffnen, nach „Privates DNS“. Auf manchen Telefonen liegt es eine Ebene tiefer.</string>
+    <string name="chain_private_dns_open">Netzwerkeinstellungen öffnen</string>
     <string name="chain_password">Damit andere Apps auf diesem Telefon den Proxy von %1$s nicht nutzen können, tragen Sie diesen Benutzernamen und dieses Passwort in %1$s ein.</string>
     <string name="chain_user">Benutzername: %1$s</string>
     <string name="chain_password_value">Passwort: %1$s</string>
     <string name="chain_copy">Passwort kopieren</string>
     <string name="chain_log_destinations">Protokollieren, wohin sich diese Apps verbinden</string>
     <string name="chain_log_destinations_note">Aus, solange Sie es nicht einschalten. Watch zählt ihre Verbindungen trotzdem. Eine Liste, wohin sie sich verbunden haben, kann gegen Sie verwendet werden, wenn jemand Ihr Telefon durchsucht.</string>
+    <!-- The found tool's signing key (W6), the audit app's own words (ADR 0018). -->
+    <string name="signature_genuine_developer">Echte Kopie von %1$s, von ihrem Entwickler signiert.</string>
+    <string name="signature_genuine_google">Echte Kopie von %1$s, von Google Play für ihren Entwickler signiert.</string>
+    <string name="signature_genuine_fdroid">Echte Kopie von %1$s, von F-Droid gebaut und signiert.</string>
+    <string name="signature_past_key">Sie ist mit einem früheren Schlüssel des Entwicklers signiert, den die App inzwischen ersetzt hat.</string>
+    <string name="signature_unknown">Datapavan kennt %1$s, aber noch nicht den Schlüssel dieser Kopie. Kopien aus App-Stores tragen oft den Schlüssel des Stores. Vergleichen Sie diesen Fingerabdruck mit dem, den der Entwickler veröffentlicht:</string>
+    <string name="signature_modified">Diese Kopie von %1$s ist nicht von ihrem Entwickler signiert. Jemand hat sie verändert, und sie kann alles sehen, was durch sie läuft. Entfernen Sie sie und installieren Sie %1$s von der offiziellen Website oder aus dem offiziellen Store.</string>
+    <string name="signature_modified_debug">Diese Kopie von %1$s trägt einen Debug-Schlüssel, den die Builds des Entwicklers nie verwenden: Jemand anderes hat sie neu gebaut. Entfernen Sie sie und installieren Sie %1$s von der offiziellen Website oder aus dem offiziellen Store.</string>
 </resources>
