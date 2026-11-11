@@ -48,3 +48,8 @@ app.slipnet.lite	SlipNet Lite	no	The lite flavour of SlipNet, from the same rele
 xyz.dnstt.app	DNSTT.XYZ	no	GitHub releases only. Release builds are signed with the build's debug configuration, so the key may change between releases
 com.getsurfboard	Surfboard	no	GitHub releases; the Google Play page was gone on 2026-11-11
 io.geph.android	Geph	no	The website build; the Google Play copy is not read yet
+com.napsternetlabs.napsternetv	Npv Tunnel	no	Google Play only (and the App Store)
+com.netmod.syna	NetMod	no	Google Play only for Android; SourceForge carries the Windows build
+app.vpn.amtunnellite	AM TUNNEL LITE VPN	no	Google Play only
+com.v2raytun.android	v2RayTun	no	Google Play only; a GitHub repository that calls itself the release repository is not linked from the official site, so it is not read
+net.openvpn.openvpn	OpenVPN Connect	no	Google Play only

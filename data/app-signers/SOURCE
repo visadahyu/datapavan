@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: CC0-1.0
 retrieved: 2026-11-11
-apps: 46
-packages-with-certificates: 46
-certificates: 59
-play-readings: 25
-by-grade: 1: 8, 2: 17, 3: 5, 4: 7, 5: 22
+apps: 51
+packages-with-certificates: 51
+certificates: 64
+play-readings: 30
+by-grade: 1: 8, 2: 17, 3: 5, 4: 7, 5: 27
 method: data/app-signers/update.py, from the sources in sources.tsv and the Play readings in play.tsv
