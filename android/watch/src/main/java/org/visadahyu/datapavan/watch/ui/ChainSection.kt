@@ -52,6 +52,8 @@ internal data class ChainView(
     val choices: List<AppChoice>,
     /** What the found tool's signing key says about this copy (ADR 0018), when anything can be said. */
     val key: SignatureVerdict? = null,
+    /** The name of the tool the chain last went through, for its switch while that tool does not answer. */
+    val chainedName: String? = null,
 )
 
 /** What the user can change in the chain. */
@@ -96,6 +98,13 @@ internal fun ChainSection(view: ChainView, privateDns: PrivateDns?, actions: Cha
                 OutlinedButton(onClick = actions.onSearch) { Text(stringResource(R.string.chain_search_again)) }
             }
             is ToolSearch.Answering -> Answering(search, view, privateDns, actions)
+        }
+        // A chain that is on stays one tap from off, whatever the search says now: while the tool does
+        // not answer, the apps sent through it wait, and the user must be able to let them go directly
+        // (CI, 2026-11-12: without this switch, only turning Watch off could end the wait).
+        if (view.on && view.search !is ToolSearch.Answering) {
+            val tool = bidi.unicodeWrap(view.chainedName ?: "")
+            LabelledSwitch(stringResource(R.string.chain_switch, tool), checked = true, onChange = actions.onOn)
         }
     }
 }

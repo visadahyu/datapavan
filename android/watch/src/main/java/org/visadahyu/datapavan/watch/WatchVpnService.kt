@@ -137,7 +137,7 @@ class WatchVpnService : VpnService() {
     private fun refreshChain() {
         if (!org.visadahyu.datapavan.watch.chain.ChainSettings.of(this).on) return
         Thread {
-            val search = org.visadahyu.datapavan.watch.chain.Tools.search(this)
+            val search = org.visadahyu.datapavan.watch.chain.Tools.search(this, "service")
             val found = (search as? org.visadahyu.datapavan.watch.chain.ToolSearch.Answering)?.found ?: return@Thread
             val settings = org.visadahyu.datapavan.watch.chain.ChainSettings.of(this)
             val before = settings.lastTool
@@ -332,7 +332,7 @@ class WatchVpnService : VpnService() {
                 // Android runs dump on the main thread, where sockets are not allowed: the search runs
                 // on a thread of its own, and this debug command waits for it.
                 var found: org.visadahyu.datapavan.watch.chain.ToolSearch? = null
-                Thread { found = org.visadahyu.datapavan.watch.chain.Tools.search(this) }.apply {
+                Thread { found = org.visadahyu.datapavan.watch.chain.Tools.search(this, "dump") }.apply {
                     start()
                     join(SEARCH_WAIT_MS)
                 }

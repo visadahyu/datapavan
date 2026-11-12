@@ -144,19 +144,25 @@ class MainActivity : ComponentActivity() {
     private fun searchTool() {
         chain.value = chain.value.copy(search = null)
         Thread {
-            val search = Tools.search(this)
+            val search = Tools.search(this, "screen")
             val settings = ChainSettings.of(this)
             val found = (search as? ToolSearch.Answering)?.found
             found?.let(settings::remember)
             // A tool that takes a password gets Watch's; one that cannot is not offered one.
             val password = found?.takeIf { it.tool.auth != "none" }?.let { settings.password() }
             val key = found?.let { ToolKeys.verdict(this, it.tool.packageName) }
+            // The tool the chain went through last names the switch that turns the chain off while
+            // that tool does not answer, or is no longer installed.
+            val chainedName = settings.lastTool?.packageName?.let { chained ->
+                Tools.table(this).firstOrNull { it.packageName == chained }?.name ?: chained
+            }
             runOnUiThread {
                 chain.value = chain.value.copy(
                     search = search,
                     key = key,
                     user = password?.let { ChainSettings.userFor(found.tool.packageName) },
                     password = password,
+                    chainedName = chainedName,
                 )
                 showSettings()
                 if (found != null) applyChain()

@@ -10,8 +10,10 @@
 # sees none of them reach it directly, while it does see a control's direct connection. Last, the user's
 # own path on the chain screen: Watch offers its password, which is set in the tool; one installed app
 # (scripts/workload-app) is picked and the chain turned on; that app's lookup, TCP and UDP go through the
-# tool under its own UID, and adb's shell, not picked, goes directly. Nothing is left running: the tunnel, the tool and the
-# server stop at the end, and the tool is uninstalled.
+# tool under its own UID, and adb's shell, not picked, goes directly. Then the tool stops with the chain
+# on: the screen says the apps wait, its switch still turns the chain off, and the picked app then goes
+# directly. Nothing is left running: the tunnel, the tool and the server stop at the end, and the tool
+# is uninstalled.
 #
 #   scripts/verify-chain.sh [path/to/watch-debug.apk]
 set -euo pipefail
@@ -65,9 +67,14 @@ fail() {
     tool_log | tail -20 >&2 || true
     echo "The flows of the shell and the tool:" >&2
     flows | grep -E " ($SHELL_UID|${TOOL_UID:-x}) " | tail -20 >&2 || true
+    echo "Watch's searches for the tool (debug log):" >&2
+    search_log | tail -20 >&2 || true
     adb logcat -d -b crash 2>/dev/null | tail -30 >&2 || true
     exit 1
 }
+
+# The steps of Watch's searches for the tool, which a debug build logs (Tools.search).
+search_log() { adb logcat -d -s WatchChain | tr -d '\r' | sed -n 's/.*WatchChain: //p'; }
 
 vpn_up() {
     local uid vpns
@@ -249,6 +256,31 @@ through=$(tool_log | grep -c "^connect $HOST $PORT$")
 grep -q pong <<<"$(ping_from_shell "$HOST")" || fail "adb's shell, not picked, did not reach the server"
 [ "$(tool_log | grep -c "^connect $HOST $PORT$")" = "$through" ] || fail "adb's shell, not picked, went through the tool"
 echo "ok: on the chain screen: Watch's password set in the tool, one picked app's lookup, TCP and UDP through the tool, the shell directly"
+
+# The screen looked for the tool again when the workload app left it. A search that says a listening
+# tool does not answer is W6's open finding (CI, 2026-11-12): not a failure yet, but its steps are shown.
+WAITING="Datapavan test tool does not answer"
+if screen_has "$WAITING"; then
+    echo "  note: the chain screen's search says the test tool does not answer" >&2
+    echo "    the tool's process: $(adb shell pidof "$TOOL" | tr -d '\r' || true)" >&2
+    search_log | tail -12 | sed 's/^/    search: /' >&2 || true
+fi
+
+# The tool stops while the chain is on: the screen says the apps wait, and its switch still turns the
+# chain off, after which the picked app goes directly.
+adb shell am force-stop "$TOOL"
+adb shell input keyevent KEYCODE_HOME
+sleep 1
+adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+for _ in $(seq 1 30); do screen_has "$WAITING" && break; sleep 1; done
+screen_has "$WAITING" || fail "with the tool stopped and the chain on, the screen did not say that the tool does not answer"
 scroll_to_top
-tap_text "$SWITCH" || fail "the chain's switch could not be turned off"
+tap_text "$SWITCH" || fail "with the tool stopped, the chain's switch was not on the screen to turn it off"
+sleep 2
+direct=$(workload_log | grep -c "^tcp $HOST:$PORT pong$" || true)
+adb shell am start -W -n "$WORKLOAD/.WorkActivity" --es tcp "$HOST:$PORT" >/dev/null
+for _ in $(seq 1 20); do [ "$(workload_log | grep -c "^tcp $HOST:$PORT pong$" || true)" -gt "$direct" ] && break; sleep 1; done
+[ "$(workload_log | grep -c "^tcp $HOST:$PORT pong$" || true)" -gt "$direct" ] ||
+    fail "after the chain was turned off with the tool stopped, the picked app did not reach the server: $(workload_log | tail -3 | tr '\n' ' ')"
+echo "ok: with the tool stopped, the screen says the apps wait, and its switch turns the chain off; the picked app then goes directly"
 echo "== chain check passed"

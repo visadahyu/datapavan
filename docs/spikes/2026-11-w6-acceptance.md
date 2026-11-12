@@ -50,3 +50,26 @@ workload app picked on the screen.
 
 Settled after the first reading, at the maintainer's word: the found tool's signing key is now judged
 (above), and CI chains an installed app picked on the chain screen rather than adb's shell alone.
+
+## After the acceptance (2026-11-12)
+
+CI on `main` failed twice at the chain screen's last step, after the merge of `w6-search`. The workload app
+had just gone through the test tool. When it left, Watch's screen looked for the tool again and said that it
+did not answer, although the tool was listening. With the chain on and the tool not answering, the screen
+showed no switch. Watch did what it promises: the chained apps waited, and nothing of theirs went out
+directly. But the user had no way to end that wait from Watch, short of turning Watch off.
+
+Fixed on `chain-off`:
+- **The switch stays.** While the chain is on, its switch stays on the screen whatever the search says,
+  named after the tool the chain last went through. `verify-chain.sh` now stops the tool with the chain on.
+  It checks that the screen says the apps wait and that the switch turns the chain off. It then checks
+  that the picked app reaches the server directly.
+- **Watch's searches are logged.** A debuggable build logs each search for the tool under the tag
+  `WatchChain`, naming the part of Watch that searched (the screen, the service, the dump command). Each
+  line says why a port was passed over: a timeout, a refused or reset connection, an answer that is not
+  SOCKS5, or another app's UID as its owner. A release build logs none of it, since the lines name the
+  user's tool. `verify-chain.sh` prints these lines when the screen misses a listening tool, and in any
+  failure.
+
+Still open: why the screen's search misses a tool that answers the service's. The logged lines should say
+which step fails in the next CI run.

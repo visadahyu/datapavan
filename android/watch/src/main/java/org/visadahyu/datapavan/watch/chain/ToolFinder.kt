@@ -47,18 +47,26 @@ class ToolFinder(
     private val ownerOf: (local: InetSocketAddress, remote: InetSocketAddress) -> Int?,
     /** The Android user Watch runs in: some tools add its number to their port (0 in the main user). */
     private val userId: Int,
+    /**
+     * Why a port was passed over, and what the search found, for debug builds' log (Tools.search):
+     * the screen's search sometimes missed a tool that answered the service's (CI, 2026-11-11 and 12),
+     * and these lines say which step failed. They name tools, ports and UIDs, never a password.
+     */
+    private val note: (String) -> Unit = {},
 ) {
     /** Searches once. */
     fun search(): ToolSearch {
         val installed = table.filter { it.proxyMode && it.socksListeners.isNotEmpty() }.mapNotNull { tool ->
             uidOf(tool.packageName)?.let { tool to it }
         }
-        if (installed.isEmpty()) return ToolSearch.NoneInstalled
+        if (installed.isEmpty()) return ToolSearch.NoneInstalled.also { note("none installed") }
         val tools = installed.map { it.first }
         for ((tool, uid) in installed) {
             val found = probe(tool, uid) ?: continue
+            note("answering ${tool.packageName} ${found.host}:${found.port} owner ${found.ownerConfirmed}")
             return ToolSearch.Answering(found, tools)
         }
+        note("not answering: ${tools.joinToString(" ") { it.packageName }}")
         return ToolSearch.NotAnswering(tools)
     }
 
@@ -76,7 +84,10 @@ class ToolFinder(
                 val answer = greet(listener.host, port) ?: continue
                 val owner = answer.owner
                 // Another app holds the port: it is not this tool's proxy.
-                if (owner != null && owner != uid) continue
+                if (owner != null && owner != uid) {
+                    note("${tool.packageName} ${listener.host}:$port: held by UID $owner, not the tool's $uid")
+                    continue
+                }
                 return FoundTool(
                     tool = tool,
                     uid = uid,
@@ -100,18 +111,21 @@ class ToolFinder(
      * once more. A refused connection is not: nothing listens there.
      */
     private fun greet(host: String, port: Int): Greeting? {
-        repeat(ATTEMPTS - 1) {
+        repeat(ATTEMPTS - 1) { attempt ->
             try {
                 return greetOnce(host, port)
             } catch (e: SocketTimeoutException) {
                 // Slow, not absent: once more.
+                note("$host:$port: timed out, attempt ${attempt + 1}")
             } catch (e: IOException) {
+                note("$host:$port: ${e.javaClass.simpleName}")
                 return null
             }
         }
         return try {
             greetOnce(host, port)
         } catch (e: IOException) {
+            note("$host:$port: ${e.javaClass.simpleName}, attempt $ATTEMPTS")
             null
         }
     }
@@ -130,7 +144,10 @@ class ToolFinder(
             val input = socket.getInputStream()
             val version = input.read()
             val method = input.read()
-            if (version != 5 || method !in listOf(0, 0xff)) return null
+            if (version != 5 || method !in listOf(0, 0xff)) {
+                note("$host:$port: not a SOCKS5 answer ($version $method)")
+                return null
+            }
             Greeting(owner = owner, needsPassword = method == 0xff)
         }
 
