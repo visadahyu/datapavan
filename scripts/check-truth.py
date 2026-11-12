@@ -14,8 +14,8 @@ script checks the statements that a machine can read against their single source
 - dated status lines: the roadmap's and DESIGN.md's dates, against the newest decision and release;
 - build facts: the minimum Android version and the UI languages, against the Gradle files and the
   translated resources;
-- datasets: the counts in each data/*/SOURCE, and the README's count of known signing keys, against
-  the rows of the data files;
+- datasets: the counts in each data/*/SOURCE, the README's count of known signing keys and the
+  changelog's size of the table of tools, against the rows of the data files;
 - milestones: the README's status, against the roadmap's table.
 
 Statements a machine cannot read (mirrors, backups, what a screen shows) are checked by a reviewer at
@@ -226,7 +226,7 @@ def check_build(readme, adr_0003, contributing, gradles, languages):
     return problems
 
 
-def check_datasets(sources, readme):
+def check_datasets(sources, readme, changelog):
     """sources: {dataset: (SOURCE text, {count name: rows in its file})}."""
     problems = []
     for dataset, (source, counted) in sources.items():
@@ -240,6 +240,11 @@ def check_datasets(sources, readme):
     said = re.search(r"official signing certificates of (\d+) apps", readme)
     if apps is not None and (not said or int(said.group(1)) != apps):
         problems.append(f"README.md does not say that the official signing certificates of {apps} apps are known")
+    # The changelog's entry for the table of tools gives its size.
+    tools = sources.get("data/tools", (None, {}))[1].get("apps")
+    said = re.search(r"table of tools \(`data/tools/`\).*?It holds (\d+) apps", changelog, re.S)
+    if tools is not None and said and int(said.group(1)) != tools:
+        problems.append(f"CHANGELOG.md says the table of tools holds {said.group(1)} apps; data/tools has {tools}")
     return problems
 
 
@@ -321,7 +326,7 @@ def main():
         ),
         "datasets": check_datasets(
             {d: (read(f"{d}/SOURCE"), {n: len(rows(read(f"{d}/{f}"))) for n, f in c.items()}) for d, c in DATASET_COUNTS.items()},
-            read("README.md"),
+            read("README.md"), read("CHANGELOG.md"),
         ),
         "milestones": check_milestones(read("README.md"), read("ROADMAP.md")),
     }

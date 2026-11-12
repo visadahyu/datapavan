@@ -101,12 +101,16 @@ expect("a language CONTRIBUTING.md names that the apps lack",
 # Datasets.
 sources = {d: (read(f"{d}/SOURCE"), {n: len(truth.rows(read(f"{d}/{f}"))) for n, f in c.items()})
            for d, c in truth.DATASET_COUNTS.items()}
-expect("datasets as they are", truth.check_datasets(sources, readme), False)
+changelog_now = read("CHANGELOG.md")
+expect("datasets as they are", truth.check_datasets(sources, readme, changelog_now), False)
 signers_source, signers_counts = sources["data/app-signers"]
 expect("a SOURCE count one off",
-       truth.check_datasets({**sources, "data/app-signers": (signers_source, {**signers_counts, "apps": signers_counts["apps"] + 1})}, readme), True)
+       truth.check_datasets({**sources, "data/app-signers": (signers_source, {**signers_counts, "apps": signers_counts["apps"] + 1})}, readme, changelog_now), True)
 expect("the README's count of known apps one off",
-       truth.check_datasets(sources, readme.replace(f"certificates of {signers_counts['apps']} apps", f"certificates of {signers_counts['apps'] - 1} apps")), True)
+       truth.check_datasets(sources, readme.replace(f"certificates of {signers_counts['apps']} apps", f"certificates of {signers_counts['apps'] - 1} apps"), changelog_now), True)
+tools_count = sources["data/tools"][1]["apps"]
+expect("the changelog's size of the table of tools one off",
+       truth.check_datasets(sources, readme, swap(changelog_now, f"It holds {tools_count} apps", f"It holds {tools_count - 7} apps")), True)
 
 # Milestones.
 expect("milestones as they are", truth.check_milestones(readme, roadmap), False)
