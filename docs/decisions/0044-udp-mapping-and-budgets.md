@@ -1,0 +1,115 @@
+# 0044. UDP mapping, budgets for each app, and the engine's smaller gaps
+
+- Status: Proposed
+- Date: 2026-11-12
+
+## Context
+
+The independent review of 2026-11-09 rated the engine's design and parsers above the field, and its forwarding
+path at the field's standard. Its findings 18 to 21 say why. The maintainer made them gates of Watch 0.2.0, with
+an ADR (D25).
+- **18. No app has a budget.** A UDP flow costs:
+  - a task;
+  - a socket;
+  - a 64 KiB buffer for 60 seconds, even for one DNS answer.
+
+  A waiting TCP connection holds a socket and a fake port for up to 60 seconds. Nothing caps either. One app that
+  sends to tens of thousands of ports, or to addresses that never answer, uses up the process's descriptors or
+  the ports, and then no app can connect. Without a VPN the kernel charges each app for its own sockets, so this
+  weakness comes with the tunnel.
+- **19. One socket per destination.** ADR 0012 chose one connected UDP socket per flow, keyed by the app's
+  address and the destination. An app's one socket that asks a STUN server for its address and then talks to a
+  peer leaves through two sockets with two ports. The peer's packets, sent to the port STUN saw, reach nothing. RFC
+  4787 (REQ-1) asks the opposite of a NAT: the same mapping whatever the destination. Calls and peer-to-peer apps
+  still work through relays, but lose their direct path.
+- **20. One name per flow.** A name learned from a DNS answer, tied to the flow only by its address, outranks the
+  server name the connection itself sent. On addresses that serve many names, a flow can be logged under a name
+  another lookup asked for. Either name can be wrong: a server name can be a front.
+- **21. Smaller gaps:**
+  - a server's reset reaches the app as a clean close;
+  - ping and other ICMP echo are dropped;
+  - fragments are counted with malformed packets;
+  - a datagram too large for the network beneath becomes "host unreachable";
+  - `nativeStop` held a lock while joining the engine's thread;
+  - no test can drive the forwarding path's timing.
+
+## Decision
+
+1. **UDP: one mapping per app socket.**
+   - **Mapping:** a datagram from an app's address and port leaves through one upstream socket, whatever its
+     destination: endpoint-independent mapping, RFC 4787 REQ-1. The socket is protected and not connected.
+   - **Filtering:** an answer comes in only from an address the app has already sent to from that socket:
+     address-dependent filtering. An answer from another port of such an address is let in and logged as a flow
+     that came in.
+   - **Logging:** each destination stays its own flow in the log, with its own name, organisation, bytes and
+     QUIC reading.
+   - **Lifetime:** a mapping ends after 120 seconds with no datagram either way (REQ-5 and REQ-6; today 60
+     seconds, refreshed only by answers), when its app's owner changes, or when the network or the chain
+     changes.
+   - **What stays as it is:** lookups to the tunnel's DNS address keep one connected socket per flow.
+   - **What is lost:** a mapped socket no longer reports ICMP "port unreachable" to the app. Linux gives that to
+     unconnected sockets only through `IP_RECVERR`, which the engine's libraries do not offer. Apps then wait for
+     their own timeouts, as they do behind most NATs.
+2. **Chained UDP: one UDP ASSOCIATE per mapping,** not per destination.
+   - Each answer is matched to its destination by its SOCKS5 header. Today that header is thrown away, so anything
+     the relay sends on an association reaches the app as if from the flow's destination.
+   - A stand-in name is bound to the first answer from the port the app asked.
+   - Chained apps get the same address-dependent filtering. W6's done-when, "nothing comes in that a local app did
+     not start", becomes "nothing comes in from an address a local app did not send to".
+   - Whether the tool itself keeps one upstream socket per association is the tool's own choice. Watch cannot
+     change it.
+3. **A budget for the engine and for each app.**
+   - **The caps:** they come from the process's descriptor limit N, read from `/proc/self/limits`, less a
+     reserve of max(128, N/16) for Watch itself (B). UDP mappings are capped at B/4. Waiting TCP connections are
+     capped at min(B/8, 4,096).
+   - **The share:** each app may use a quarter of each cap, with at least 64 mappings and 32 waiting connections.
+     Flows whose app Android cannot name share one share. So four apps must misbehave before any other is
+     touched.
+   - **At the TCP cap:** a SYN is dropped, as by a full queue, so the app's own stack tries again. Its fake port is
+     freed at once, since it never reached Android's stack.
+   - **At the UDP cap, what makes room, in order:**
+     1. an answered lookup;
+     2. the requesting app's least recently active mapping idle at least 5 seconds;
+     3. any app's.
+
+     A mapping with traffic in the last 5 seconds is never evicted, so a call is never cut. If nothing qualifies,
+     the datagram is dropped.
+   - **What each part costs:** one 64 KiB receive buffer per engine thread replaces one per flow. A lookup to the
+     tunnel's DNS address ends with its answer.
+   - **Counters:** each refusal and eviction is counted. None of them names a destination.
+4. **Two names.**
+   - The name the connection itself sent (TLS or QUIC) names the flow. The DNS name is kept beside it when the two
+     differ.
+   - An ECH public name keeps today's rule: it never names a flow.
+   - The log's record format moves to version 2, with a flag where the names differ, a flag for a flow that came
+     in, and the DNS name. Watch's Kotlin side reads versions 1 and 2, so sealed records stay readable.
+   - ADR 0037 is amended to match. Counters measure how often the names differ before the format changes.
+5. **The smaller gaps:**
+   - **Resets:** an upstream that ends in an error ends the other side with a reset (linger zero), both ways.
+   - **ICMP echo:** carried through unprivileged ICMP sockets, protected, at most 32. Its owner cannot be asked of
+     Android, so pings are refused while a chain is on. Where Android refuses such sockets, echo is dropped as
+     today, and counted.
+   - **Fragments:** counted apart. They are reassembled only if the count shows a need.
+   - **Too large:** a datagram larger than the network beneath can carry is answered with ICMP "fragmentation
+     needed" or "packet too big", with the network's MTU, which Kotlin passes from `LinkProperties`. The app's
+     "do not fragment" bit is not copied onto the engine's sockets.
+   - **The lock:** Watch's native side never holds the engine's lock while joining its thread.
+6. **Tests that drive time.**
+   - The engine takes its limits and timings from its `Config`, so tests can use seconds.
+   - On Linux, a harness runs it in an unprivileged user and network namespace with a real tun device. Kernel
+     TCP, resets, ICMP sockets, caps and timeouts are then tested in an ordinary `cargo test`, on every change,
+     without an emulator.
+   - Where namespaces are not available, those tests say plainly that they did not run. They never pass silently.
+   - CI allows the namespaces.
+
+## Consequences
+
+- **Calls and peer-to-peer apps keep their direct paths,** as without Watch. Port scanning by one app no longer
+  costs other apps their connections.
+- **Two filters differ by design:** address-dependent for answers, endpoint-independent for mappings. These are
+  the defaults RFC 4787 recommends, and what most home routers do.
+- **ADR 0012's "one socket per flow" for UDP is superseded** by decision 1. W6's done-when changes its wording,
+  not its meaning: an answer still needs a datagram the app sent first.
+- **The log format changes once,** before W5 reads it.
+- **This is a set of units:** each lands on its own, with its tests. The harness comes first, so the later units
+  are tested by it.
