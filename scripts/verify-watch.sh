@@ -470,18 +470,22 @@ if is_emulator; then
     done
     mobile_up || fail "the emulator's mobile data did not come up ($(networks)), so the switch has nowhere to go"
     before=$(default_network)
+    wifi=$(sed -n 's/\(^\|.*;\)\([0-9]*\) WIFI[^ ;]* CONNECTED.*/\2/p' <<<"$(networks)")
     echo "  networks before the switch: $(networks); default $before"
+    # Android may already use mobile data as the default while Wi-Fi is up (CI, 2026-11-12, twice): then
+    # Wi-Fi going off moves nothing, and the default must simply be a network other than Wi-Fi.
+    [ "$before" = "$wifi" ] || echo "  the default was not Wi-Fi before the switch"
     adb shell svc wifi disable
     # Right after, Android may still name Wi-Fi as the default: wait for another one.
     for _ in $(seq 1 30); do
         now=$(default_network)
-        [[ "$now" =~ ^[0-9]+$ && "$now" != "$before" ]] && break
+        [[ "$now" =~ ^[0-9]+$ && "$now" != "$wifi" ]] && break
         sleep 2
     done
     echo "  networks after the switch: $(networks); default $(default_network)"
     now=$(default_network)
-    [[ "$now" =~ ^[0-9]+$ && "$now" != "$before" ]] ||
-        fail "Android had no other network 60 s after Wi-Fi went off, so nothing could pass, with Watch or without"
+    [[ "$now" =~ ^[0-9]+$ && "$now" != "$wifi" ]] ||
+        fail "Android had no network but Wi-Fi 60 s after Wi-Fi went off, so nothing could pass, with Watch or without"
     sleep 3
     vpn_up || fail "the tunnel went down when the network beneath switched"
     # As without a VPN, a connection during the switch may fail (ADR 0012); the next ones must pass.
