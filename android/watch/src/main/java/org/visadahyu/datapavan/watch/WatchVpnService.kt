@@ -47,13 +47,18 @@ class WatchVpnService : VpnService() {
     private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
     private val debuggable by lazy { applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 }
 
+    /** The network beneath that [network] follows. */
+    private var current: Network? = null
+
+    /**
+     * The network and DNS server last given to the engine. An engine set up again, for other addresses or
+     * apps left out, starts knowing neither, so [close] forgets them and the next callback tells it again.
+     */
+    private var told: Network? = null
+    private var toldDns: String? = null
+
     /** Follows the network beneath the tunnel: Wi-Fi, mobile data, or none. */
     private val network = object : ConnectivityManager.NetworkCallback() {
-        private var current: Network? = null
-
-        /** The network and DNS server last given to the engine. */
-        private var told: Network? = null
-        private var toldDns: String? = null
 
         override fun onAvailable(network: Network) {
             current = network
@@ -302,6 +307,9 @@ class WatchVpnService : VpnService() {
             }
         }
         Engine.nativeStop()
+        current = null
+        told = null
+        toldDns = null
         active = false
         state.value = false
         dnsState.value = null
