@@ -61,4 +61,18 @@
     <string name="screenshots_allow">Разрешить скриншоты на одну минуту</string>
     <string name="screenshots_allowed">Скриншоты сейчас разрешены. Они снова будут запрещены через минуту или как только вы выйдете из приложения.</string>
     <string name="screenshots_block">Запретить скриншоты сейчас</string>
+
+    <!-- Apps and the VPN (ADR 0041) -->
+    <string name="left_out_title">Приложения и VPN</string>
+    <string name="vpn_seen">Android сообщает каждому приложению, что VPN включён, и Watch не может это скрыть. Некоторые приложения сообщают об этом, а некоторые отказываются работать, пока включён VPN.</string>
+    <string name="left_out_body">Если приложение не работает с Watch, исключите его. Тогда оно выходит в интернет без Watch: Watch не видит и не записывает его подключения, и оно не идёт через ваш инструмент обхода. Android больше не сообщает этому приложению, что его сеть — это VPN, но приложение всё равно может увидеть, что на телефоне есть VPN-интерфейс. Пока Watch включён, изменение занимает немного времени, потому что Watch заново настраивает свой туннель.</string>
+    <string name="left_out_none">Ни одно приложение не исключено.</string>
+    <plurals name="left_out_count">
+        <item quantity="one">Исключено %d приложение.</item>
+        <item quantity="few">Исключено %d приложения.</item>
+        <item quantity="many">Исключено %d приложений.</item>
+        <item quantity="other">Исключено %d приложения.</item>
+    </plurals>
+    <string name="left_out_choose">Выбрать приложения для исключения</string>
+    <string name="left_out_done">Готово</string>
 </resources>

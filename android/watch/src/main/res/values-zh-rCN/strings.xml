@@ -58,4 +58,15 @@
     <string name="screenshots_allow">允许截图一分钟</string>
     <string name="screenshots_allowed">现在允许截图。一分钟后，或者您一离开此应用，截图就会再次被阻止。</string>
     <string name="screenshots_block">立即阻止截图</string>
+
+    <!-- Apps and the VPN (ADR 0041) -->
+    <string name="left_out_title">应用与 VPN</string>
+    <string name="vpn_seen">Android 会告诉每个应用 VPN 已开启，Watch 无法隐藏这一点。有些应用会报告此事，有些应用在 VPN 开启时会拒绝运行。</string>
+    <string name="left_out_body">如果某个应用无法与 Watch 一起使用，请将它排除在外。这样它会不经过 Watch 直接连接互联网：Watch 不会看到它的连接，也不会保留连接记录，它也不会经过您用来绕过网络限制的工具。Android 不会再告诉该应用它的网络是 VPN，但该应用仍可能发现手机上有一个 VPN 接口。Watch 开启时，更改需要一点时间，因为 Watch 要重新设置它的隧道。</string>
+    <string name="left_out_none">没有排除任何应用。</string>
+    <plurals name="left_out_count">
+        <item quantity="other">已排除 %d 个应用。</item>
+    </plurals>
+    <string name="left_out_choose">选择要排除的应用</string>
+    <string name="left_out_done">完成</string>
 </resources>

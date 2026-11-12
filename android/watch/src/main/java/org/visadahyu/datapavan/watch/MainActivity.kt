@@ -38,7 +38,7 @@ class MainActivity : ComponentActivity() {
     private val refused = mutableStateOf(false)
 
     /** How long the connection log keeps its records, and whether the user just deleted it. */
-    private val retention = mutableIntStateOf(30)
+    private val retention = mutableIntStateOf(0)
     private val deleted = mutableStateOf(false)
 
     /** Whether the phone has a screen lock (a PIN, pattern or password), read again each time the screen opens. */
@@ -48,6 +48,9 @@ class MainActivity : ComponentActivity() {
     private val chain = mutableStateOf(
         ChainView(null, on = false, allApps = true, apps = emptySet(), logDestinations = false, user = null, password = null, choices = emptyList()),
     )
+
+    /** The apps the user left out of the tunnel (ADR 0041). */
+    private val leftOut = mutableStateOf(emptySet<String>())
 
     /** Debug builds: the only apps the end-to-end test sends through the tunnel, comma-separated. */
     private var onlyApps: String? = null
@@ -67,6 +70,7 @@ class MainActivity : ComponentActivity() {
         ScreenProtection.attach(this, screenshotsForTests = testBuild && intent.getBooleanExtra(EXTRA_SCREENSHOTS, false))
         val log = ConnectionLog.of(this)
         retention.intValue = log.retentionDays
+        leftOut.value = LeftOut.of(this).apps
         setContent {
             val running by WatchVpnService.running.collectAsState()
             val privateDns by WatchVpnService.privateDns.collectAsState()
@@ -80,7 +84,8 @@ class MainActivity : ComponentActivity() {
                     deleted = deleted.value,
                     logLock = logLock,
                     screenLock = screenLock.value,
-                    chain = chain.value,
+                    // An app left out does not pass through Watch, so it cannot be chained either.
+                    chain = chain.value.copy(choices = chain.value.choices.filter { it.packageName !in leftOut.value }),
                     chainActions = chainActions,
                     onStart = ::requestStart,
                     onStop = ::stopTunnel,
@@ -90,6 +95,10 @@ class MainActivity : ComponentActivity() {
                         deleted.value = false
                     },
                     onDelete = { log.wipe { gone -> runOnUiThread { deleted.value = gone } } },
+                    leftOut = leftOut.value,
+                    choices = chain.value.choices,
+                    onLoadApps = { if (chain.value.choices.isEmpty()) loadChoices() },
+                    onLeaveOut = ::leaveOut,
                 )
             }
         }
@@ -185,6 +194,20 @@ class MainActivity : ComponentActivity() {
             logDestinations = settings.logDestinations,
         )
         if (!settings.allApps && chain.value.choices.isEmpty()) loadChoices()
+    }
+
+    /**
+     * Leaves an app out of the tunnel, or takes it back (ADR 0041). An app left out leaves the chain too,
+     * since it no longer passes through Watch. A tunnel that is up is set up again for the change.
+     */
+    private fun leaveOut(packageName: String, out: Boolean) {
+        val store = LeftOut.of(this)
+        store.apps = if (out) store.apps + packageName else store.apps - packageName
+        leftOut.value = store.apps
+        if (out && packageName in ChainSettings.of(this).apps) changeChain { it.apps = it.apps - packageName }
+        if (WatchVpnService.running.value) {
+            startService(Intent(this, WatchVpnService::class.java).setAction(WatchVpnService.ACTION_APPLY_LEFT_OUT))
+        }
     }
 
     private fun changeChain(change: (ChainSettings) -> Unit) {

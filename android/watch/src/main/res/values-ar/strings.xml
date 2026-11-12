@@ -63,4 +63,20 @@
     <string name="screenshots_allow">السماح بلقطات الشاشة لمدة دقيقة</string>
     <string name="screenshots_allowed">لقطات الشاشة مسموح بها الآن. ستُمنع مجددًا بعد دقيقة، أو بمجرد أن تغادر التطبيق.</string>
     <string name="screenshots_block">منع لقطات الشاشة الآن</string>
+
+    <!-- Apps and the VPN (ADR 0041) -->
+    <string name="left_out_title">التطبيقات وشبكة VPN</string>
+    <string name="vpn_seen">يُعلم Android كل تطبيق بأن شبكة VPN تعمل، ولا يستطيع Watch إخفاء ذلك. بعض التطبيقات تبلّغ عن ذلك، وبعضها يرفض العمل ما دامت شبكة VPN تعمل.</string>
+    <string name="left_out_body">إذا لم يعمل تطبيق مع Watch، فاستثنِه. عندها يتصل بالإنترنت دون المرور بـ Watch: لا يرى Watch اتصالاته ولا يحتفظ بسجل لها، ولا يمر التطبيق عبر أداتك لتجاوز الحجب. لن يُعلم Android هذا التطبيق بعد ذلك بأن شبكته هي VPN، لكنه قد يكتشف أن في الهاتف واجهة VPN. ما دام Watch يعمل، يستغرق التغيير لحظة، لأن Watch يعيد إعداد نفقه.</string>
+    <string name="left_out_none">لم يُستثنَ أي تطبيق.</string>
+    <plurals name="left_out_count">
+        <item quantity="zero">لم يُستثنَ أي تطبيق.</item>
+        <item quantity="one">استُثني تطبيق واحد.</item>
+        <item quantity="two">استُثني تطبيقان.</item>
+        <item quantity="few">استُثنيت %d تطبيقات.</item>
+        <item quantity="many">استُثني %d تطبيقًا.</item>
+        <item quantity="other">استُثني %d تطبيق.</item>
+    </plurals>
+    <string name="left_out_choose">اختر التطبيقات التي تريد استثناءها</string>
+    <string name="left_out_done">تم</string>
 </resources>

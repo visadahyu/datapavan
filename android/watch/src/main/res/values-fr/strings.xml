@@ -60,4 +60,17 @@
     <string name="screenshots_allow">Autoriser les captures d\'écran pendant une minute</string>
     <string name="screenshots_allowed">Les captures d\'écran sont autorisées. Elles seront de nouveau bloquées après une minute, ou dès que vous quitterez l\'appli.</string>
     <string name="screenshots_block">Bloquer les captures d\'écran maintenant</string>
+
+    <!-- Apps and the VPN (ADR 0041) -->
+    <string name="left_out_title">Les applis et le VPN</string>
+    <string name="vpn_seen">Android indique à chaque appli qu\'un VPN est activé, et Watch ne peut pas le cacher. Certaines applis le signalent, et certaines refusent de fonctionner tant qu\'un VPN est activé.</string>
+    <string name="left_out_body">Si une appli ne fonctionne pas avec Watch, laissez-la de côté. Elle accède alors à Internet sans passer par Watch : Watch ne voit pas ses connexions et n\'en tient aucun journal, et elle ne passe pas par votre outil de contournement. Android n\'indique plus à cette appli que son réseau est un VPN, mais elle peut encore voir que le téléphone a une interface VPN. Quand Watch est activé, une modification prend un instant, car Watch reconfigure son tunnel.</string>
+    <string name="left_out_none">Aucune appli n\'est laissée de côté.</string>
+    <plurals name="left_out_count">
+        <item quantity="one">%d appli est laissée de côté.</item>
+        <item quantity="many">%d applis sont laissées de côté.</item>
+        <item quantity="other">%d applis sont laissées de côté.</item>
+    </plurals>
+    <string name="left_out_choose">Choisir les applis à laisser de côté</string>
+    <string name="left_out_done">Terminé</string>
 </resources>

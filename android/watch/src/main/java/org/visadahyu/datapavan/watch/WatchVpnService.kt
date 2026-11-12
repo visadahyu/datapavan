@@ -88,6 +88,11 @@ class WatchVpnService : VpnService() {
         when (intent?.action) {
             ACTION_STOP -> stop()
             ACTION_APPLY_CHAIN -> if (active) applyChain()
+            // The apps left out are part of the tunnel's own setup: it is set up again, for a moment.
+            ACTION_APPLY_LEFT_OUT -> if (active) {
+                close()
+                start(null)
+            }
             else -> start(intent)
         }
         return START_NOT_STICKY
@@ -172,6 +177,17 @@ class WatchVpnService : VpnService() {
                     builder.addAllowedApplication(app)
                 } catch (e: PackageManager.NameNotFoundException) {
                     Log.w(TAG, "Not installed: an app named for the test", e)
+                }
+            }
+        } else {
+            // The apps the user left out go to the internet directly, and Android does not give them the
+            // VPN as their network (ADR 0041). Android allows either a list of apps inside or one of apps
+            // outside, so the test's list above replaces this one.
+            for (app in LeftOut.of(this).apps) {
+                try {
+                    builder.addDisallowedApplication(app)
+                } catch (e: PackageManager.NameNotFoundException) {
+                    Log.i(TAG, "An app left out is no longer installed", e)
                 }
             }
         }
@@ -460,6 +476,9 @@ class WatchVpnService : VpnService() {
 
         /** The chain's settings changed: hand them to the engine (W6). */
         const val ACTION_APPLY_CHAIN = "org.visadahyu.datapavan.watch.APPLY_CHAIN"
+
+        /** From Watch's screen: the apps left out changed, so the tunnel is set up again if it is up. */
+        const val ACTION_APPLY_LEFT_OUT = "org.visadahyu.datapavan.watch.APPLY_LEFT_OUT"
 
         /** How long the debug command `find-tool` waits for the search. */
         private const val SEARCH_WAIT_MS = 10_000L

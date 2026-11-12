@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
@@ -21,6 +23,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -38,8 +43,9 @@ import org.visadahyu.datapavan.watch.log.ConnectionLog
 
 /**
  * Watch's one screen: what it is for, whether it is on, the switch, while it is on what Private DNS
- * hides from it (W3), the user's circumvention tool and the apps sent through it (W6), and how long the
- * connection log keeps its records, with its wipe (W4).
+ * hides from it (W3), the user's circumvention tool and the apps sent through it (W6), what other apps see
+ * of a VPN and the apps left out (ADR 0041), how long the connection log keeps its records, with its wipe
+ * (W4), and screenshots (ADR 0040).
  */
 @Composable
 internal fun WatchScreen(
@@ -56,6 +62,10 @@ internal fun WatchScreen(
     onStop: () -> Unit,
     onRetention: (Int) -> Unit,
     onDelete: () -> Unit,
+    leftOut: Set<String>,
+    choices: List<AppChoice>,
+    onLoadApps: () -> Unit,
+    onLeaveOut: (String, Boolean) -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -94,6 +104,7 @@ internal fun WatchScreen(
                 )
             }
             ChainSection(chain, privateDns, chainActions)
+            LeftOutSection(leftOut, choices, onLoadApps, onLeaveOut)
             LogSettings(retentionDays, deleted, logLock, screenLock, onRetention, onDelete)
             ScreenshotSetting()
         }
@@ -208,6 +219,54 @@ private fun ScreenshotSetting() {
             OutlinedButton(onClick = ScreenProtection::protect) { Text(stringResource(R.string.screenshots_block)) }
         } else {
             OutlinedButton(onClick = ScreenProtection::lift) { Text(stringResource(R.string.screenshots_allow)) }
+        }
+    }
+}
+
+/**
+ * Every app can tell that a VPN is on, and Watch cannot hide that (ADR 0041): this section says so, and
+ * lets the user leave out an app that does not work with Watch. The list of apps opens on request.
+ */
+@Composable
+private fun LeftOutSection(leftOut: Set<String>, choices: List<AppChoice>, onLoadApps: () -> Unit, onLeaveOut: (String, Boolean) -> Unit) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            stringResource(R.string.left_out_title),
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.semantics { heading() },
+        )
+        Text(stringResource(R.string.vpn_seen), style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.left_out_body), style = MaterialTheme.typography.bodyMedium)
+        Text(
+            if (leftOut.isEmpty()) {
+                stringResource(R.string.left_out_none)
+            } else {
+                pluralStringResource(R.plurals.left_out_count, leftOut.size, leftOut.size)
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        )
+        OutlinedButton(
+            onClick = {
+                open = !open
+                if (open) onLoadApps()
+            },
+        ) { Text(stringResource(if (open) R.string.left_out_done else R.string.left_out_choose)) }
+        if (open) {
+            for (app in choices) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .toggleable(value = app.packageName in leftOut, role = Role.Checkbox) { onLeaveOut(app.packageName, it) }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // The row is the control; the box only shows the choice.
+                    Checkbox(checked = app.packageName in leftOut, onCheckedChange = null)
+                    Text(app.label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp))
+                }
+            }
         }
     }
 }

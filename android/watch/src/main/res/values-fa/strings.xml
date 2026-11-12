@@ -59,4 +59,16 @@
     <string name="screenshots_allow">مجاز کردن نماگرفت برای یک دقیقه</string>
     <string name="screenshots_allowed">نماگرفت اکنون مجاز است. پس از یک دقیقه، یا به محض اینکه از برنامه خارج شوید، دوباره مسدود می‌شود.</string>
     <string name="screenshots_block">مسدود کردن نماگرفت همین حالا</string>
+
+    <!-- Apps and the VPN (ADR 0041) -->
+    <string name="left_out_title">برنامه‌ها و وی‌پی‌ان</string>
+    <string name="vpn_seen">اندروید به هر برنامه می‌گوید که وی‌پی‌ان روشن است، و Watch نمی‌تواند این را پنهان کند. بعضی برنامه‌ها آن را گزارش می‌دهند و بعضی تا وقتی وی‌پی‌ان روشن است از کار کردن خودداری می‌کنند.</string>
+    <string name="left_out_body">اگر برنامه‌ای با Watch کار نمی‌کند، آن را کنار بگذارید. آن برنامه بدون Watch به اینترنت وصل می‌شود: Watch اتصال‌هایش را نمی‌بیند و سابقه‌ای از آن‌ها نگه نمی‌دارد، و آن برنامه از فیلترشکن شما هم نمی‌گذرد. اندروید دیگر به آن برنامه نمی‌گوید که شبکه‌اش وی‌پی‌ان است، ولی آن برنامه هنوز ممکن است بفهمد که گوشی یک رابط وی‌پی‌ان دارد. وقتی Watch روشن است، هر تغییر کمی طول می‌کشد، چون Watch تونلش را دوباره راه می‌اندازد.</string>
+    <string name="left_out_none">هیچ برنامه‌ای کنار گذاشته نشده است.</string>
+    <plurals name="left_out_count">
+        <item quantity="one">%d برنامه کنار گذاشته شده است.</item>
+        <item quantity="other">%d برنامه کنار گذاشته شده است.</item>
+    </plurals>
+    <string name="left_out_choose">انتخاب برنامه‌هایی که کنار گذاشته می‌شوند</string>
+    <string name="left_out_done">تمام</string>
 </resources>

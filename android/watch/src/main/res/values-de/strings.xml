@@ -59,4 +59,16 @@
     <string name="screenshots_allow">Screenshots für eine Minute erlauben</string>
     <string name="screenshots_allowed">Screenshots sind jetzt erlaubt. Nach einer Minute oder sobald Sie die App verlassen, werden sie wieder blockiert.</string>
     <string name="screenshots_block">Screenshots jetzt blockieren</string>
+
+    <!-- Apps and the VPN (ADR 0041) -->
+    <string name="left_out_title">Apps und das VPN</string>
+    <string name="vpn_seen">Android teilt jeder App mit, dass ein VPN an ist, und Watch kann das nicht verbergen. Manche Apps melden es, und manche verweigern den Dienst, solange ein VPN an ist.</string>
+    <string name="left_out_body">Wenn eine App mit Watch nicht funktioniert, schließen Sie sie aus. Sie geht dann ohne Watch ins Internet: Watch sieht ihre Verbindungen nicht und speichert keine Einträge dazu, und sie läuft nicht über Ihr Umgehungs-Tool. Android teilt dieser App nicht mehr mit, dass ihr Netzwerk ein VPN ist, aber sie kann trotzdem erkennen, dass das Telefon eine VPN-Schnittstelle hat. Wenn Watch an ist, dauert eine Änderung einen Moment, weil Watch seinen Tunnel neu einrichtet.</string>
+    <string name="left_out_none">Keine App ist ausgeschlossen.</string>
+    <plurals name="left_out_count">
+        <item quantity="one">%d App ist ausgeschlossen.</item>
+        <item quantity="other">%d Apps sind ausgeschlossen.</item>
+    </plurals>
+    <string name="left_out_choose">Apps zum Ausschließen auswählen</string>
+    <string name="left_out_done">Fertig</string>
 </resources>

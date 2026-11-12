@@ -12,8 +12,9 @@
 # (scripts/workload-app) is picked and the chain turned on; that app's lookup, TCP and UDP go through the
 # tool under its own UID, and adb's shell, not picked, goes directly. Then the tool stops with the chain
 # on: the screen says the apps wait, its switch still turns the chain off, and the picked app then goes
-# directly. Nothing is left running: the tunnel, the tool and the server stop at the end, and the tool
-# is uninstalled.
+# directly. Last, that app is left out of the tunnel on the screen (ADR 0041): Watch sets its tunnel up
+# again, the app reaches the server and Watch no longer sees it; taken back, Watch sees it again. Nothing
+# is left running: the tunnel, the tool and the server stop at the end, and the tool is uninstalled.
 #
 #   scripts/verify-chain.sh [path/to/watch-debug.apk]
 set -euo pipefail
@@ -283,4 +284,37 @@ for _ in $(seq 1 20); do [ "$(workload_log | grep -c "^tcp $HOST:$PORT pong$" ||
 [ "$(workload_log | grep -c "^tcp $HOST:$PORT pong$" || true)" -gt "$direct" ] ||
     fail "after the chain was turned off with the tool stopped, the picked app did not reach the server: $(workload_log | tail -3 | tr '\n' ' ')"
 echo "ok: with the tool stopped, the screen says the apps wait, and its switch turns the chain off; the picked app then goes directly"
+
+# An app left out of the tunnel (ADR 0041), chosen on the screen as a user would: Watch sets its tunnel up
+# again, the app still reaches the server, and Watch no longer sees its traffic. Taken back, Watch sees it
+# again.
+workload_flows() { flows | grep -c " $WORKLOAD_UID " || true; }
+workload_reaches() {
+    local before
+    before=$(workload_log | grep -c "^tcp $HOST:$PORT pong$" || true)
+    adb shell am start -W -n "$WORKLOAD/.WorkActivity" --es tcp "$HOST:$PORT" >/dev/null
+    for _ in $(seq 1 20); do [ "$(workload_log | grep -c "^tcp $HOST:$PORT pong$" || true)" -gt "$before" ] && return 0; sleep 1; done
+    return 1
+}
+adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+tap_text "Choose apps to leave out" || fail "the screen has no button to leave apps out"
+tap_text "Datapavan workload" || fail "the workload app is not in the list of apps to leave out"
+sleep 2
+for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
+vpn_up || fail "Watch's tunnel did not come back after an app was left out"
+scroll_to_top
+scroll_to "1 app is left out." || fail "the screen does not say that one app is left out"
+workload_reaches || fail "the app left out did not reach the server"
+[ "$(workload_flows)" = 0 ] || fail "Watch still saw the left-out app's traffic: $(flows | grep " $WORKLOAD_UID " | head -3 | tr '\n' ';')"
+echo "ok: an app left out on the screen reaches the server without Watch seeing it"
+tap_text "Datapavan workload" || fail "the workload app could not be taken back"
+sleep 2
+for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
+vpn_up || fail "Watch's tunnel did not come back after the app was taken back"
+scroll_to_top
+scroll_to "No app is left out." || fail "the screen does not say that no app is left out"
+workload_reaches || fail "the app taken back did not reach the server"
+for _ in $(seq 1 10); do [ "$(workload_flows)" -gt 0 ] && break; sleep 1; done
+[ "$(workload_flows)" -gt 0 ] || fail "Watch did not see the app's traffic after it was taken back"
+echo "ok: taken back, the app passes through Watch again"
 echo "== chain check passed"

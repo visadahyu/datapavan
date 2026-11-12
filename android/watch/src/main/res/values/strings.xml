@@ -94,4 +94,16 @@
     <string name="screenshots_allow">Allow screenshots for one minute</string>
     <string name="screenshots_allowed">Screenshots are allowed now. They are blocked again after one minute, or as soon as you leave the app.</string>
     <string name="screenshots_block">Block screenshots now</string>
+
+    <!-- Apps and the VPN (ADR 0041): every app can tell that a VPN is on; an app that does not work with Watch can be left out of the tunnel. -->
+    <string name="left_out_title">Apps and the VPN</string>
+    <string name="vpn_seen">Android tells every app that a VPN is on, and Watch cannot hide that. Some apps report it, and some refuse to work while a VPN is on.</string>
+    <string name="left_out_body">If an app does not work with Watch, leave it out. It then goes to the internet without Watch: Watch does not see or record its connections, and it does not go through your circumvention tool. Android no longer tells that app its network is a VPN, but the app may still find that the phone has a VPN interface. While Watch is on, a change takes a moment, because Watch sets up its tunnel again.</string>
+    <string name="left_out_none">No app is left out.</string>
+    <plurals name="left_out_count">
+        <item quantity="one">%d app is left out.</item>
+        <item quantity="other">%d apps are left out.</item>
+    </plurals>
+    <string name="left_out_choose">Choose apps to leave out</string>
+    <string name="left_out_done">Done</string>
 </resources>
