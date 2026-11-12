@@ -1,6 +1,7 @@
 # 0034. Permissions for Watch
 
-- Status: Accepted (by the maintainer on 2026-11-09)
+- Status: Accepted (by the maintainer on 2026-11-09); [ADR 0040](0040-own-safety-in-an-untrusted-environment.md)
+  adds `HIDE_OVERLAY_WINDOWS` (item 6)
 - Date: 2026-11-09
 
 ## Context
@@ -106,6 +107,12 @@ not checked.
    - **Android 16** had an opt-in test mode, switched on over adb and gated by `NEARBY_WIFI_DEVICES`;
      it is deprecated [doc]. Watch does not request that permission. On 10 to 16 the LAN stays open as
      before.
+
+6. **`HIDE_OVERLAY_WINDOWS`** (normal, granted at install, Android 12 and later; added by
+   [ADR 0040](0040-own-safety-in-an-untrusted-environment.md)). While Watch's window is shown, Android hides
+   other apps' overlays, so that no app drawn over Watch can dress its screen or read it. It allows no
+   connection and acts only on Watch's own windows. On Android 10 and 11 there is no such permission, and
+   overlays stay possible.
 
 ### Package visibility: one `<queries>` entry, not `QUERY_ALL_PACKAGES`
 
@@ -267,6 +274,7 @@ traffic only for apps holding their own grant goes beyond what these apps were s
 | `CHANGE_NETWORK_STATE` (max 30) | install: `requestNetwork` | install: `requestNetwork` | not granted: best-matching callback | not granted | not granted | not granted | not granted | not granted |
 | `POST_NOTIFICATIONS` | no such permission; notifications on | same | same | runtime, asked in context | runtime | runtime | runtime | runtime |
 | `ACCESS_LOCAL_NETWORK` | unknown, ignored; LAN open | same | same | same | same | same | ignored; LAN open (adb test mode only) | runtime; without it LAN through Watch fails, DNS at port 53 works |
+| `HIDE_OVERLAY_WINDOWS` | no such permission; overlays stay | same | install: overlays hidden over Watch | same | same | same | same | same |
 | `<queries>` MAIN/LAUNCHER | no effect: every app visible | launchable apps visible | same | same | same | same | same | same |
 | Not requested: `QUERY_ALL_PACKAGES` | would change nothing | would add apps without a launcher | same | same | same | same | same | same |
 | Not requested: foreground service | system binding keeps Watch | same | same | same (and not in Task Manager) | fallback would be `systemExempted` | same | same | same |

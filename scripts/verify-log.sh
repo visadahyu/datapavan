@@ -137,6 +137,8 @@ adb wait-for-device
 python3 -I "$ROOT/scripts/watch-lab/server.py" "$PORT" &
 SERVER=$!
 adb install -r "$APK" >/dev/null
+# As a new install: the log's default is then what a new user gets (ADR 0040).
+adb shell pm clear "$PKG" >/dev/null
 adb shell appops set "$PKG" ACTIVATE_VPN allow
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 adb shell am force-stop "$PKG"
@@ -155,6 +157,12 @@ vpn_up || fail "Watch's tunnel did not come up"
 echo "ok: the tunnel is up"
 # Watch's debug commands need its service running; the test starts from an empty log.
 watch_dump log-wipe | grep -q '^log-wiped true$' || fail "the log could not be wiped before the test"
+# The log keeps nothing until the user chooses (ADR 0040). The checks below keep 30 days.
+log_line | grep -qE '^0 days ' || fail "a new install's log keeps records: $(log_line)"
+watch_dump log-retention 30 | grep -q '^log-retention 30 set$' || fail "retention could not be set to 30 days"
+# The screen reads the retention when it opens: it opens afresh, as after the user chose 30 days there.
+adb shell am start -W -n "$PKG/.MainActivity" -f 0x10008000 >/dev/null
+echo "ok: a new install's log keeps nothing until the user chooses"
 
 request='GET /ping HTTP/1.0\r\n\r\n'
 answer=$(timeout 15 adb shell "printf '$request' | nc -w 5 $HOST $PORT" | tr -d '\r' || true)

@@ -594,4 +594,11 @@
         <item quantity="one">%1$d ردیاب: %2$s</item>
         <item quantity="other">%1$d ردیاب: %2$s</item>
     </plurals>
+
+    <!-- Screenshots (ADR 0040) -->
+    <string name="screenshots_title">نماگرفت</string>
+    <string name="screenshots_blocked">این برنامه نماگرفت و ضبط صفحه را مسدود می‌کند تا هیچ تصویری از آنچه نشان می‌دهد ذخیره یا به اشتراک گذاشته نشود. اگر برای کمک گرفتن به نماگرفت نیاز دارید، می‌توانید آن را برای یک دقیقه مجاز کنید.</string>
+    <string name="screenshots_allow">مجاز کردن نماگرفت برای یک دقیقه</string>
+    <string name="screenshots_allowed">نماگرفت اکنون مجاز است. پس از یک دقیقه، یا به محض اینکه از برنامه خارج شوید، دوباره مسدود می‌شود.</string>
+    <string name="screenshots_block">مسدود کردن نماگرفت همین حالا</string>
 </resources>

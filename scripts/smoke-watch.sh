@@ -145,6 +145,23 @@ done
 [ -z "$(vpn_line)" ] || fail "Android still lists Watch's VPN after it was turned off"
 echo "ok: the tunnel is down"
 
+# Every screen is protected (ADR 0040): Android lists Watch's window as secure; the setting allows
+# screenshots, and leaving the screen protects it again at once, without waiting for the minute.
+window_secure "$PKG" || fail "Watch's window is not protected from screenshots"
+if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 31 ]; then
+    window_hides_overlays "$PKG" || fail "Android does not hide other apps' overlays over Watch's window"
+fi
+tap_text "$(string values screenshots_allow)" || fail "no button to allow screenshots"
+sleep 1
+! window_secure "$PKG" || fail "Watch's window stayed protected after screenshots were allowed"
+screen_has "$(string values screenshots_block)" || fail "Watch does not offer to block screenshots again"
+adb shell input keyevent KEYCODE_HOME
+for _ in 1 2 3 4 5; do window_secure "$PKG" && break; sleep 1; done
+adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+sleep 1
+window_secure "$PKG" || fail "Watch's window was not protected again after it left the screen"
+echo "ok: the screen is protected, screenshots can be allowed, and leaving the screen protects it again"
+
 adb shell pidof "$PKG" >/dev/null || fail "Watch is no longer running"
 if adb logcat -d -b crash 2>/dev/null | grep -q "$PKG"; then
     fail "Watch crashed"

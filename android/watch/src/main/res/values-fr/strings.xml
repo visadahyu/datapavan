@@ -53,4 +53,11 @@
     <string name="signature_unknown">Datapavan connaît %1$s, mais pas encore la clé de cette copie. Les copies des boutiques d\'applis portent souvent la clé de la boutique. Comparez cette empreinte avec celle que publie le développeur :</string>
     <string name="signature_modified">Cette copie de l\'appli %1$s n\'est pas signée par son développeur. Quelqu\'un l\'a modifiée, et elle peut voir tout ce qui passe par elle. Supprimez-la et installez %1$s depuis son site officiel ou sa boutique officielle.</string>
     <string name="signature_modified_debug">Cette copie de l\'appli %1$s porte une clé de débogage, que les versions du développeur n\'utilisent jamais : quelqu\'un d\'autre l\'a recompilée. Supprimez-la et installez %1$s depuis son site officiel ou sa boutique officielle.</string>
+
+    <!-- Screenshots (ADR 0040) -->
+    <string name="screenshots_title">Captures d\'écran</string>
+    <string name="screenshots_blocked">Cette appli bloque les captures d\'écran et les enregistrements de l\'écran, pour qu\'aucune image de ce qu\'elle affiche ne soit enregistrée ni partagée. Si vous avez besoin d\'une capture d\'écran pour demander de l\'aide, vous pouvez l\'autoriser pendant une minute.</string>
+    <string name="screenshots_allow">Autoriser les captures d\'écran pendant une minute</string>
+    <string name="screenshots_allowed">Les captures d\'écran sont autorisées. Elles seront de nouveau bloquées après une minute, ou dès que vous quitterez l\'appli.</string>
+    <string name="screenshots_block">Bloquer les captures d\'écran maintenant</string>
 </resources>

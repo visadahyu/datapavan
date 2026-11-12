@@ -631,4 +631,11 @@
         <item quantity="many">%1$d أداة تتبّع: %2$s</item>
         <item quantity="other">%1$d أداة تتبّع: %2$s</item>
     </plurals>
+
+    <!-- Screenshots (ADR 0040) -->
+    <string name="screenshots_title">لقطات الشاشة</string>
+    <string name="screenshots_blocked">يمنع هذا التطبيق لقطات الشاشة وتسجيل الشاشة، حتى لا تُحفظ أي صورة لما يعرضه ولا تُشارك. إذا احتجت إلى لقطة شاشة لتطلب المساعدة، يمكنك السماح بها لمدة دقيقة واحدة.</string>
+    <string name="screenshots_allow">السماح بلقطات الشاشة لمدة دقيقة</string>
+    <string name="screenshots_allowed">لقطات الشاشة مسموح بها الآن. ستُمنع مجددًا بعد دقيقة، أو بمجرد أن تغادر التطبيق.</string>
+    <string name="screenshots_block">منع لقطات الشاشة الآن</string>
 </resources>

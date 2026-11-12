@@ -93,6 +93,10 @@ checked on Android 11 and 17 emulators and on Galaxy A40 and A56 phones.
   use, each one tap away; a plain-language card on each app's page; appearance and language settings on
   every Android version (ADR 0027). A long press on the app's icon goes straight to the plan, the apps
   or network use. *Why:* the findings only help if people can reach them.
+- **Screen protection.** Every screen of both apps blocks screenshots and screen recordings, and from
+  Android 12 other apps' overlays. To ask for help with a screenshot, the settings allow it for one minute.
+  *Why:* what Datapavan shows about a phone should not end up in a gallery, a backup or someone else's
+  recording ([ADR 0040](docs/decisions/0040-own-safety-in-an-untrusted-environment.md)).
 - **Is this copy genuine?** The app shows its own signing key, checks it against its own list, and says
   plainly that the real check is to compare the key with the one published with each release (ADR
   0024). *Why:* a privacy tool is a tempting thing to fake.

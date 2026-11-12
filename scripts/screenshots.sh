@@ -28,6 +28,8 @@ min_px=$((48 * density / 160))
 failed=0
 trap 'adb shell cmd uimode night no >/dev/null 2>&1 || true; adb shell cmd locale set-app-locales "$PKG" --locales en >/dev/null 2>&1 || true; adb shell rm -f "$DUMP" >/dev/null 2>&1 || true' EXIT
 
+# The app protects every screen from screenshots (ADR 0040); a debug build started with
+# screenshots_for_tests keeps it off, so that these pictures are not black.
 # One screen: its picture, its UI dump and the accessibility check of the dump.
 capture() {
     local dumped=""
@@ -59,7 +61,7 @@ for mode in light dark; do
     for locale in $locales; do
         adb shell cmd locale set-app-locales "$PKG" --locales "$locale"
         adb shell am force-stop "$PKG"
-        adb shell am start -n "$PKG/.MainActivity" >/dev/null
+        adb shell am start -n "$PKG/.MainActivity" --ez screenshots_for_tests true >/dev/null
         if ! wait_for_overview; then
             echo "SCREENSHOTS FAILED: the summary did not appear in $locale ($mode)" >&2
             exit 1
@@ -77,7 +79,7 @@ for mode in light dark; do
         tap_id app-row || { echo "SCREENSHOTS FAILED: no app in the list in $locale" >&2; exit 1; }
         capture app
         # The plan, opened as its launcher shortcut opens it (xml/shortcuts.xml).
-        adb shell am start -W -a org.visadahyu.datapavan.action.OPEN_PLAN -f 0x1000c000 -n "$PKG/.MainActivity" >/dev/null
+        adb shell am start -W -a org.visadahyu.datapavan.action.OPEN_PLAN -f 0x1000c000 -n "$PKG/.MainActivity" --ez screenshots_for_tests true >/dev/null
         for _ in $(seq 1 60); do has_id plan && break; sleep 1; done
         has_id plan || { echo "SCREENSHOTS FAILED: the plan did not open in $locale" >&2; exit 1; }
         capture plan

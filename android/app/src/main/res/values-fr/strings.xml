@@ -603,4 +603,11 @@
         <item quantity="many">%1$d traceurs : %2$s</item>
         <item quantity="other">%1$d traceurs : %2$s</item>
     </plurals>
+
+    <!-- Screenshots (ADR 0040) -->
+    <string name="screenshots_title">Captures d\'écran</string>
+    <string name="screenshots_blocked">Cette appli bloque les captures d\'écran et les enregistrements de l\'écran, pour qu\'aucune image de ce qu\'elle affiche ne soit enregistrée ni partagée. Si vous avez besoin d\'une capture d\'écran pour demander de l\'aide, vous pouvez l\'autoriser pendant une minute.</string>
+    <string name="screenshots_allow">Autoriser les captures d\'écran pendant une minute</string>
+    <string name="screenshots_allowed">Les captures d\'écran sont autorisées. Elles seront de nouveau bloquées après une minute, ou dès que vous quitterez l\'appli.</string>
+    <string name="screenshots_block">Bloquer les captures d\'écran maintenant</string>
 </resources>

@@ -4,13 +4,13 @@ import android.text.BidiFormatter
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -19,16 +19,19 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import org.visadahyu.datapavan.safety.ScreenProtection
 import org.visadahyu.datapavan.watch.PrivateDns
 import org.visadahyu.datapavan.watch.R
 import org.visadahyu.datapavan.watch.log.ConnectionLog
@@ -92,6 +95,7 @@ internal fun WatchScreen(
             }
             ChainSection(chain, privateDns, chainActions)
             LogSettings(retentionDays, deleted, logLock, screenLock, onRetention, onDelete)
+            ScreenshotSetting()
         }
     }
 }
@@ -178,6 +182,32 @@ private fun LogSettings(
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
+        }
+    }
+}
+
+/**
+ * Every screen blocks screenshots and screen recordings (ADR 0040). A person who needs a screenshot to ask
+ * for help allows it here for one minute; it is blocked again then, or when Watch leaves the screen.
+ */
+@Composable
+private fun ScreenshotSetting() {
+    val lifted by ScreenProtection.lifted.collectAsState()
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            stringResource(R.string.screenshots_title),
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.semantics { heading() },
+        )
+        Text(
+            stringResource(if (lifted) R.string.screenshots_allowed else R.string.screenshots_blocked),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        )
+        if (lifted) {
+            OutlinedButton(onClick = ScreenProtection::protect) { Text(stringResource(R.string.screenshots_block)) }
+        } else {
+            OutlinedButton(onClick = ScreenProtection::lift) { Text(stringResource(R.string.screenshots_allow)) }
         }
     }
 }

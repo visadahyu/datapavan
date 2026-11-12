@@ -599,4 +599,11 @@
         <item quantity="many">%1$d трекеров: %2$s</item>
         <item quantity="other">%1$d трекера: %2$s</item>
     </plurals>
+
+    <!-- Screenshots (ADR 0040) -->
+    <string name="screenshots_title">Скриншоты</string>
+    <string name="screenshots_blocked">Это приложение запрещает скриншоты и запись экрана, чтобы снимки того, что оно показывает, не сохранялись и не передавались. Если вам нужен скриншот, чтобы попросить о помощи, вы можете разрешить его на одну минуту.</string>
+    <string name="screenshots_allow">Разрешить скриншоты на одну минуту</string>
+    <string name="screenshots_allowed">Скриншоты сейчас разрешены. Они снова будут запрещены через минуту или как только вы выйдете из приложения.</string>
+    <string name="screenshots_block">Запретить скриншоты сейчас</string>
 </resources>

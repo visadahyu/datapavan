@@ -21,6 +21,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import org.visadahyu.datapavan.safety.ScreenProtection
 import org.visadahyu.datapavan.watch.chain.ChainSettings
 import org.visadahyu.datapavan.watch.chain.ToolKeys
 import org.visadahyu.datapavan.watch.chain.ToolSearch
@@ -60,6 +61,10 @@ class MainActivity : ComponentActivity() {
         val dark = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         val style = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
         enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+        // Every screen is protected (ADR 0040). Debug builds may keep it off for screenshots taken by a
+        // script, never release builds.
+        val testBuild = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        ScreenProtection.attach(this, screenshotsForTests = testBuild && intent.getBooleanExtra(EXTRA_SCREENSHOTS, false))
         val log = ConnectionLog.of(this)
         retention.intValue = log.retentionDays
         setContent {
@@ -259,6 +264,9 @@ class MainActivity : ComponentActivity() {
 
         /** Debug builds: start the tunnel at once (scripts/verify-watch.sh). */
         const val EXTRA_START = "start"
+
+        /** Debug builds: keep the screen unprotected, for screenshots taken by a script. */
+        const val EXTRA_SCREENSHOTS = "screenshots_for_tests"
 
         /** Debug builds: stop the tunnel, so that the engine hands its last records to the log (scripts/verify-log.sh). */
         const val EXTRA_STOP = "stop"

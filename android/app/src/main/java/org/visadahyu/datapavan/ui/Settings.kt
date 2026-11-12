@@ -1,11 +1,11 @@
 package org.visadahyu.datapavan.ui
 
 import android.app.Activity
-import android.content.ActivityNotFoundException
-import android.content.Intent
 import android.app.LocaleManager
 import android.app.UiModeManager
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
 import android.os.Build
 import android.os.LocaleList
@@ -26,29 +26,36 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import androidx.core.net.toUri
-import org.visadahyu.datapavan.BuildConfig
-import org.visadahyu.datapavan.R
-import org.visadahyu.datapavan.Release
 import java.text.DateFormat
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeParseException
 import java.util.Date
 import java.util.Locale
+import org.visadahyu.datapavan.BuildConfig
+import org.visadahyu.datapavan.R
+import org.visadahyu.datapavan.Release
+import org.visadahyu.datapavan.safety.ScreenProtection
 
 /** The appearance the user picked (ADR 0027, point 3). */
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
@@ -155,6 +162,10 @@ internal fun SettingsScreen(theme: ThemeMode, insets: PaddingValues, onTheme: (T
             Choices(AppLanguage.entries, language, { languageName(it) }) { choice ->
                 if (choice != language) (context as? Activity)?.let { Languages.set(it, choice) }
             }
+        }
+        item {
+            SectionTitle(R.string.screenshots_title)
+            ScreenshotSetting()
         }
         item { HorizontalDivider() }
         items(SettingsPage.entries) { page ->
@@ -334,5 +345,24 @@ internal fun LicencesScreen(insets: PaddingValues, onBack: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/**
+ * Every screen blocks screenshots and screen recordings (ADR 0040). A person who needs a screenshot to ask
+ * for help allows it here for one minute; it is blocked again then, or when the app leaves the screen.
+ */
+@Composable
+private fun ScreenshotSetting() {
+    val lifted by ScreenProtection.lifted.collectAsState()
+    Text(
+        stringResource(if (lifted) R.string.screenshots_allowed else R.string.screenshots_blocked),
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+    )
+    if (lifted) {
+        OutlinedButton(onClick = ScreenProtection::protect) { Text(stringResource(R.string.screenshots_block)) }
+    } else {
+        OutlinedButton(onClick = ScreenProtection::lift) { Text(stringResource(R.string.screenshots_allow)) }
     }
 }

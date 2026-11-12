@@ -141,6 +141,8 @@ private class Run(private val context: Context, private val seed: Long, private 
     fun go(): String {
         clean()
         log = newLog()
+        // The model starts from 30 days, whatever the log's own default (none, ADR 0040).
+        log.retentionDays = retention
         try {
             for (step in 1..steps) {
                 if (step % 10 == 0) state.set("log-model running seed $seed step $step/$steps")

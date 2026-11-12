@@ -87,4 +87,11 @@
     <string name="signature_unknown">Datapavan knows %1$s, but not yet the key of this copy. Copies from app stores often carry the store\'s key. Compare this fingerprint with the one the developer publishes:</string>
     <string name="signature_modified">This copy of %1$s is not signed by its developer. Someone changed it, and it can see everything that passes through it. Remove it and install %1$s from its official website or store.</string>
     <string name="signature_modified_debug">This copy of %1$s carries a debug key, which the developer\'s own builds never use: someone else rebuilt it. Remove it and install %1$s from its official website or store.</string>
+
+    <!-- Screenshots, in the settings (ADR 0040): every screen blocks them; the user can allow them for one minute to ask for help. -->
+    <string name="screenshots_title">Screenshots</string>
+    <string name="screenshots_blocked">This app blocks screenshots and screen recordings, so that no picture of what it shows is saved or shared. If you need a screenshot to ask for help, you can allow it for one minute.</string>
+    <string name="screenshots_allow">Allow screenshots for one minute</string>
+    <string name="screenshots_allowed">Screenshots are allowed now. They are blocked again after one minute, or as soon as you leave the app.</string>
+    <string name="screenshots_block">Block screenshots now</string>
 </resources>

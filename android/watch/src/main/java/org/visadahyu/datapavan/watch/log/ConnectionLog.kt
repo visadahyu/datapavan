@@ -421,7 +421,9 @@ class ConnectionLog internal constructor(
         private const val PREFS = "log"
         private const val ALIAS = "watch-log"
         private const val RETENTION = "retention_days"
-        private const val DEFAULT_RETENTION = 30
+        // No log becomes evidence by default (ADR 0040): it keeps nothing until the user chooses, at
+        // onboarding once W9 brings it, and in the log's settings until then.
+        private const val DEFAULT_RETENTION = 0
         private const val NOTHING_KEPT = Long.MIN_VALUE
         val RETENTION_CHOICES = listOf(0, 1, 7, 30)
 

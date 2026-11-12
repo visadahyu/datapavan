@@ -63,6 +63,27 @@ echo "ok: About says where newer versions are"
 adb shell input keyevent KEYCODE_BACK
 adb shell input keyevent KEYCODE_BACK
 
+# Every screen is protected (ADR 0040): Android lists the app's window as secure; the settings allow
+# screenshots, and leaving the screen protects it again at once, without waiting for the minute.
+window_secure "$PKG" || fail "the app's window is not protected from screenshots"
+if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 31 ]; then
+    window_hides_overlays "$PKG" || fail "Android does not hide other apps' overlays over the app's window"
+fi
+scroll_to_top
+tap_id settings || fail "no settings button"
+sleep 1
+tap_text "Allow screenshots for one minute" || fail "the settings have no button to allow screenshots"
+sleep 1
+! window_secure "$PKG" || fail "the app's window stayed protected after screenshots were allowed"
+screen_has "Block screenshots now" || fail "the settings do not offer to block screenshots again"
+adb shell input keyevent KEYCODE_HOME
+for _ in 1 2 3 4 5; do window_secure "$PKG" && break; sleep 1; done
+adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+sleep 1
+window_secure "$PKG" || fail "the app's window was not protected again after it left the screen"
+echo "ok: the screen is protected, screenshots can be allowed, and leaving the screen protects it again"
+adb shell input keyevent KEYCODE_BACK
+
 adb shell pidof "$PKG" >/dev/null || fail "the app is no longer running"
 if adb logcat -d -b crash 2>/dev/null | grep -q "$PKG"; then
     fail "the app crashed"

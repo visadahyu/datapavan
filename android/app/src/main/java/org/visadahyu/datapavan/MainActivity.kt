@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import org.visadahyu.datapavan.core.NativeCore
+import org.visadahyu.datapavan.safety.ScreenProtection
 import org.visadahyu.datapavan.ui.AppPreferences
 import org.visadahyu.datapavan.ui.DatapavanApp
 import org.visadahyu.datapavan.ui.DatapavanTheme
@@ -44,6 +45,9 @@ class MainActivity : ComponentActivity() {
         val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
         val usageUntil = intent.getLongExtra(EXTRA_USAGE_UNTIL, 0).takeIf { debuggable && it > 0 }
         val usageDays = intent.getIntExtra(EXTRA_USAGE_DAYS, 0).takeIf { debuggable && it > 0 }
+        // Every screen is protected (ADR 0040). Debug builds may keep it off for the screenshots of
+        // scripts/screenshots.sh, never release builds.
+        ScreenProtection.attach(this, screenshotsForTests = debuggable && intent.getBooleanExtra(EXTRA_SCREENSHOTS, false))
         // An activity restored after a rotation or a language change keeps the screen it showed.
         if (savedInstanceState == null) launch.value = LaunchTarget.of(intent.action)
         setContent {
@@ -83,5 +87,6 @@ class MainActivity : ComponentActivity() {
     private companion object {
         const val EXTRA_USAGE_UNTIL = "usage_until"
         const val EXTRA_USAGE_DAYS = "usage_days"
+        const val EXTRA_SCREENSHOTS = "screenshots_for_tests"
     }
 }

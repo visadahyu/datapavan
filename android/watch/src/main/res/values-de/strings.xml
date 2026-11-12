@@ -52,4 +52,11 @@
     <string name="signature_unknown">Datapavan kennt %1$s, aber noch nicht den Schlüssel dieser Kopie. Kopien aus App-Stores tragen oft den Schlüssel des Stores. Vergleichen Sie diesen Fingerabdruck mit dem, den der Entwickler veröffentlicht:</string>
     <string name="signature_modified">Diese Kopie von %1$s ist nicht von ihrem Entwickler signiert. Jemand hat sie verändert, und sie kann alles sehen, was durch sie läuft. Entfernen Sie sie und installieren Sie %1$s von der offiziellen Website oder aus dem offiziellen Store.</string>
     <string name="signature_modified_debug">Diese Kopie von %1$s trägt einen Debug-Schlüssel, den die Builds des Entwicklers nie verwenden: Jemand anderes hat sie neu gebaut. Entfernen Sie sie und installieren Sie %1$s von der offiziellen Website oder aus dem offiziellen Store.</string>
+
+    <!-- Screenshots (ADR 0040) -->
+    <string name="screenshots_title">Screenshots</string>
+    <string name="screenshots_blocked">Diese App blockiert Screenshots und Bildschirmaufzeichnungen, damit kein Bild von dem, was sie zeigt, gespeichert oder geteilt wird. Wenn Sie einen Screenshot brauchen, um Hilfe zu bekommen, können Sie ihn für eine Minute erlauben.</string>
+    <string name="screenshots_allow">Screenshots für eine Minute erlauben</string>
+    <string name="screenshots_allowed">Screenshots sind jetzt erlaubt. Nach einer Minute oder sobald Sie die App verlassen, werden sie wieder blockiert.</string>
+    <string name="screenshots_block">Screenshots jetzt blockieren</string>
 </resources>

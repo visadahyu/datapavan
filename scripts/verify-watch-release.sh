@@ -2,8 +2,9 @@
 # Runs Watch's release build, as users get it, on an emulator: R8 has shrunk and renamed its code, and
 # its Rust library is optimised. The other checks run the debug build, which has test entries; this one
 # has none, so it turns Watch on from its screen. It checks that traffic passes the tunnel (a TCP request
-# and a UDP echo to the test server), that Android names each flow's app, that the log gets records (the
-# three calls the Rust library makes into Watch's code, which R8 renamed until 2026-11-10), and that
+# and a UDP echo to the test server), that Android names each flow's app, that the log keeps nothing
+# until a retention is chosen on the screen (ADR 0040) and then gets records (the three calls the Rust
+# library makes into Watch's code, which R8 renamed until 2026-11-10), and that
 # Watch's memory stays within its budget, with its screen open and with the service alone.
 #
 # The release APK is signed here with a key made for this run and thrown away, never the project's.
@@ -118,6 +119,14 @@ for attempt in 1 2; do
 done
 vpn_up || fail "Watch's tunnel did not come up"
 echo "ok: the release build's tunnel is up, turned on from its screen"
+
+# The log keeps nothing until the user chooses (ADR 0040); the user then chooses 30 days on the screen,
+# before any traffic, so that the records below are kept.
+log_line | grep -qE '^0 days ' || fail "the release build's log keeps records before the user chose: $(log_line)"
+tap_text "30 days" || fail "no choice of 30 days for the log on Watch's screen"
+for _ in $(seq 1 10); do log_line | grep -qE '^30 days ' && break; sleep 1; done
+log_line | grep -qE '^30 days ' || fail "choosing 30 days on the screen did not set the log's retention: $(log_line)"
+echo "ok: the release build's log keeps nothing until the user chooses, and keeps 30 days once chosen"
 
 answer=$(timeout 15 adb shell "printf 'GET /ping HTTP/1.0\r\n\r\n' | nc -w 5 $HOST $PORT" | tr -d '\r' || true)
 grep -q '^pong$' <<<"$answer" || fail "no answer over TCP through the release build"

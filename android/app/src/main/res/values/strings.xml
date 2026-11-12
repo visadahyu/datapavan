@@ -624,4 +624,11 @@
         <item quantity="one">%1$d tracker: %2$s</item>
         <item quantity="other">%1$d trackers: %2$s</item>
     </plurals>
+
+    <!-- Screenshots, in the settings (ADR 0040): every screen blocks them; the user can allow them for one minute to ask for help. -->
+    <string name="screenshots_title">Screenshots</string>
+    <string name="screenshots_blocked">This app blocks screenshots and screen recordings, so that no picture of what it shows is saved or shared. If you need a screenshot to ask for help, you can allow it for one minute.</string>
+    <string name="screenshots_allow">Allow screenshots for one minute</string>
+    <string name="screenshots_allowed">Screenshots are allowed now. They are blocked again after one minute, or as soon as you leave the app.</string>
+    <string name="screenshots_block">Block screenshots now</string>
 </resources>

@@ -592,4 +592,11 @@
         <item quantity="many">%1$d rastreadores: %2$s</item>
         <item quantity="other">%1$d rastreadores: %2$s</item>
     </plurals>
+
+    <!-- Screenshots (ADR 0040) -->
+    <string name="screenshots_title">Capturas de pantalla</string>
+    <string name="screenshots_blocked">Esta app bloquea las capturas y las grabaciones de pantalla, para que no se guarde ni se comparta ninguna imagen de lo que muestra. Si necesitas una captura de pantalla para pedir ayuda, puedes permitirla durante un minuto.</string>
+    <string name="screenshots_allow">Permitir capturas de pantalla durante un minuto</string>
+    <string name="screenshots_allowed">Ahora se permiten las capturas de pantalla. Se volverán a bloquear después de un minuto o en cuanto salgas de la app.</string>
+    <string name="screenshots_block">Bloquear capturas de pantalla ahora</string>
 </resources>

@@ -53,4 +53,11 @@
     <string name="signature_unknown">Datapavan conoce %1$s, pero aún no la clave de esta copia. Las copias de tiendas de apps suelen llevar la clave de la tienda. Compara esta huella digital con la que publica el desarrollador:</string>
     <string name="signature_modified">Esta copia de %1$s no está firmada por su desarrollador. Alguien la modificó, y puede ver todo lo que pasa por ella. Elimínala e instala %1$s desde su sitio web o tienda oficial.</string>
     <string name="signature_modified_debug">Esta copia de %1$s lleva una clave de depuración, que las compilaciones del propio desarrollador nunca usan: otra persona la recompiló. Elimínala e instala %1$s desde su sitio web o tienda oficial.</string>
+
+    <!-- Screenshots (ADR 0040) -->
+    <string name="screenshots_title">Capturas de pantalla</string>
+    <string name="screenshots_blocked">Esta app bloquea las capturas y las grabaciones de pantalla, para que no se guarde ni se comparta ninguna imagen de lo que muestra. Si necesitas una captura de pantalla para pedir ayuda, puedes permitirla durante un minuto.</string>
+    <string name="screenshots_allow">Permitir capturas de pantalla durante un minuto</string>
+    <string name="screenshots_allowed">Ahora se permiten las capturas de pantalla. Se volverán a bloquear después de un minuto o en cuanto salgas de la app.</string>
+    <string name="screenshots_block">Bloquear capturas de pantalla ahora</string>
 </resources>

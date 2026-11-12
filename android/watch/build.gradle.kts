@@ -22,6 +22,8 @@ val allowedPermissions = mapOf(
     "android.permission.CHANGE_NETWORK_STATE" to "30",
     "android.permission.POST_NOTIFICATIONS" to null,
     "android.permission.ACCESS_LOCAL_NETWORK" to null,
+    // Hides other apps' overlays from Watch's windows, Android 12 and later (ADR 0040).
+    "android.permission.HIDE_OVERLAY_WINDOWS" to null,
     // androidx.core defines it, app-internal, for its non-exported receivers.
     "$watchApplicationId.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" to null,
 )

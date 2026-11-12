@@ -39,6 +39,27 @@ dump_screen() {
     adb shell uiautomator dump "$DUMP" >/dev/null 2>&1
 }
 
+# The attributes of the package $1's window, as Android's window manager lists them: from "mAttrs={" to
+# its closing brace, over several lines on recent versions.
+window_attrs() {
+    adb shell dumpsys window windows 2>/dev/null | tr -d '\r' |
+        awk -v app="$1/" 'index($0, "Window{") { inside = index($0, app) > 0 }
+            inside && /mAttrs=/ { attrs = 1 }
+            inside && attrs { print; if (/}$/) exit }'
+}
+
+# True when the package $1's window is protected from screenshots and screen recording (FLAG_SECURE,
+# ADR 0040): SECURE among the window's flags (fl=).
+window_secure() {
+    window_attrs "$1" | grep -o -E '(^|[^p])fl=[A-Z_ ]+' | grep -qw SECURE
+}
+
+# True when Android hides other apps' overlays over the package $1's window (Android 12 and later,
+# ADR 0040): HIDE_NON_SYSTEM_OVERLAY_WINDOWS among its private flags (pfl=).
+window_hides_overlays() {
+    window_attrs "$1" | grep -o -E 'pfl=[A-Z_ ]+' | grep -qw HIDE_NON_SYSTEM_OVERLAY_WINDOWS
+}
+
 # True when an element whose text starts with $1 is on screen.
 screen_has() {
     dump_screen || return 1

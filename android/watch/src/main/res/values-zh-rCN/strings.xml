@@ -51,4 +51,11 @@
     <string name="signature_unknown">Datapavan 知道 %1$s，但还不知道此副本的密钥。来自应用商店的副本往往带有商店的密钥。请将此指纹与开发者公布的指纹比较：</string>
     <string name="signature_modified">此 %1$s 副本不是由其开发者签名的。有人修改过它，而且它可以看到经过它的所有内容。请移除它，并从其官方网站或应用商店安装 %1$s。</string>
     <string name="signature_modified_debug">此 %1$s 副本带有调试密钥，而开发者自己的版本从不使用这种密钥：是其他人重新构建了它。请移除它，并从其官方网站或应用商店安装 %1$s。</string>
+
+    <!-- Screenshots (ADR 0040) -->
+    <string name="screenshots_title">屏幕截图</string>
+    <string name="screenshots_blocked">此应用会阻止屏幕截图和屏幕录制，这样它显示的内容就不会被保存或共享为图片。如果您需要截图来寻求帮助，可以允许截图一分钟。</string>
+    <string name="screenshots_allow">允许截图一分钟</string>
+    <string name="screenshots_allowed">现在允许截图。一分钟后，或者您一离开此应用，截图就会再次被阻止。</string>
+    <string name="screenshots_block">立即阻止截图</string>
 </resources>

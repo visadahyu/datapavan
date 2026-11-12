@@ -43,6 +43,7 @@ What Android itself does is outside Datapavan's control. On phones with Google's
 | See installed apps | Listing apps and their permissions | v0.1 |
 | Usage access (granted by you in Settings; optional) | Showing how much data each app has sent and received, and which apps you have not opened for a long time. Datapavan reads only totals and the date each app was last used, never which app you opened when, and keeps none of it. When you check one activity in an app, it also reads the phone's total traffic counters, which need no permission, to see whether Android's count is up to date; these numbers stay in memory while the check is on screen | v0.1 |
 | Network state | Telling whether a VPN is active. It does not allow any connection | v0.1 |
+| Hide other apps' overlays | From Android 12: while Datapavan is on the screen, other apps cannot draw over it. It does not allow any connection | The version after 0.1.2, and Datapavan Watch |
 | VPN (granted by you) | The **local** firewall. Traffic is filtered on the phone and never sent to us | Datapavan Watch, a separate app, from v0.2 |
 | Internet | Forwarding the traffic of other apps through the local firewall. Datapavan itself never asks for it | Datapavan Watch, a separate app, from v0.2 |
 

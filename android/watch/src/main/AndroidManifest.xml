@@ -26,6 +26,12 @@
         through Watch's sockets, which Android checks as Watch's (ADR 0034).
     -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+    <!--
+        Android 12 and later: other apps' overlays are hidden while this app's windows are shown, so that
+        no app drawn over it can dress or read its screens (ADR 0040). A normal permission that allows no
+        connection and nothing outside this app's own windows.
+    -->
+    <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
 
     <!--
         Package visibility (ADR 0034): every app a user can open, so that Watch finds the user's tool of
