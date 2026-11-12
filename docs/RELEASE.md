@@ -72,6 +72,14 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    then `verify-audit.sh`, `verify-plan.sh` and `verify-shortcuts.sh`. The data pack scripts stay on
    CI's image: Android 11's file picker there would not pick a file that adb had put in Downloads
    (2026-11-07, with the 64-bit build too). CI must be green on the release commit.
+
+   **The documents match the code** ([ADR 0039](decisions/0039-release-gates.md)). `scripts/check-truth.py`,
+   part of `check.sh`, checks what a machine can read (below). Everything else that states how things
+   stand is read against the code and the record by a reviewer other than its author, an independent
+   model at least and a person when one is available. That covers versions, channels, mirrors, backups
+   and what is built, in SECURITY.md, RESTRICTED-REGIONS.md, DATA-PACKS.md, REMEDIATION.md, CHANNELS.md,
+   the datasets' LICENSE files, the roadmap's status and the website. A statement that is not true yet
+   is changed or dated before signing, never left for the next release.
 3. **Data pack.** If `data/` changed, raise the sequence in `data/PACK`, set its date, and sign the
    pack offline ([DATA-PACKS.md](DATA-PACKS.md#publishing-a-pack)).
 4. **Signing, offline.** `scripts/prepare-signing.sh <directory>` gathers what goes to the offline system,
@@ -119,6 +127,17 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
 - `scripts/reproducible.sh` compares two builds of the same commit.
 - `scripts/check-keys.py` fails if the fingerprint or a key in the README, the website, the F-Droid
   recipe, `data/PACK` or `data/app-signers` differs from the files in `keys/`.
+- `scripts/check-truth.py` fails if a public document disagrees with its source:
+  - the release tags against the changelog, the status lines of the README, SECURITY.md, CHANNELS.md and
+    this file, the app's version and build date, and the website's download button;
+  - the ADR files against their index and DESIGN.md's table;
+  - the roadmap's and DESIGN.md's dates against the newest decision and release;
+  - the minimum Android version and the UI languages against the build;
+  - the datasets' counts against their rows;
+  - the README's milestones against the roadmap.
+
+  `scripts/check-truth-test.py` plants one false statement for each check and fails if it goes unseen.
+  CI runs both on every push, documents only included.
 - `scripts/release-rehearsal.sh` signs a release build and its notes with throwaway keys and checks
   the schemes, the certificate, the version, the permissions and the notes' signature.
 - `ThemeTest`, `scripts/plain-language.py` and `scripts/screenshots.sh` keep the interface's contrast,
