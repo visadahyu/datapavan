@@ -15,6 +15,25 @@ Status legend: ✅ done · 🔄 in progress · ⏳ planned.
 
 ## Stage 1: the layer app
 
+**Release gates** ([ADR 0039](docs/decisions/0039-release-gates.md), decided on 2026-11-12 after a re-audit of
+the project against the field's best). Every release passes:
+- a truth check of the public documents against the code;
+- matching builds from CI and from F-Droid's build image before signing ([ADR 0043](docs/decisions/0043-release-integrity-and-repository-controls.md));
+- a green CI matrix from Android 10 up;
+- native review of care and safety texts;
+- licence statements and an SBOM that match what ships.
+
+Watch 0.2.0 adds its own gates:
+- saying what other apps see of it, and leaving an app out of the tunnel ([ADR 0041](docs/decisions/0041-watch-visibility-and-coexistence.md));
+- the local-network rule;
+- the forwarding path's known gaps closed;
+- its own safety ([ADR 0040](docs/decisions/0040-own-safety-in-an-untrusted-environment.md));
+- a compatibility matrix kept current;
+- a second way to get the apps.
+
+A build of Watch that has not had an independent security review goes only to identified testers. 1.0 is
+reached by the gates, not by a count of features.
+
 ### v0.1 "Audit": no VPN, no INTERNET permission
 
 The app cannot open a network connection. That is the strongest trust signal we can give.
@@ -154,6 +173,14 @@ The items, in order:
 - A weekly plain-language report, exportable as PDF or JSON.
 - A GDPR Article 15 helper: for each company whose trackers were observed, a ready-to-send data-access request.
 - Declared against observed: each app's data-safety label on Google Play compared with what Datapavan saw. The labels come from the lab, cited by hand, until researcher access under DSA Article 40(12) or Google's permission allows more (ADR 0015).
+
+### Datapavan Verifier, the check from a second phone
+
+⏳ Planned, decided on 2026-11-12 ([ADR 0040](docs/decisions/0040-own-safety-in-an-untrusted-environment.md)). A
+third small app of the project, signed with the same key, checks a phone's hardware attestation from a second
+phone by scanning QR codes both ways, as GrapheneOS's Auditor does. It holds the camera permission, so the
+audit app and Watch never need it. A copy of Datapavan cannot prove its own environment from inside (ADR 0024);
+this is the check from outside.
 
 ### The expert tool, for preinstalled apps
 

@@ -43,6 +43,22 @@ AI tools may be used, under the same conditions for contributors and maintainers
 - **You are the author.** You have read, understood and tested every line, and you can explain and defend it in review.
 - **People decide.** Architecture decisions and ADRs are made and approved by a named maintainer. Drafting them may be AI-assisted, and that is disclosed.
 - Work funded by a grant follows that funder's rules on AI use.
+- **Outside review of security-critical code.** Code that parses hostile input or guards secrets gets a human
+  reviewer from outside the project before a stable release ([ADR 0043](docs/decisions/0043-release-integrity-and-repository-controls.md)).
+
+## What may be public
+
+This repository is public, and so is every branch pushed to it, with its CI logs. Three rules follow, for
+contributors and maintainers alike, and for AI agents working here:
+
+- **A branch is a publication.** A draft finding that names a company, a bank or a state stays out of every
+  public branch until it meets [ADR 0015](docs/decisions/0015-dataset-licences.md)'s standard of evidence. Only
+  the finished version is pushed.
+- **No live circumvention endpoints.** No server, bridge, relay or resolver that works in a given country now
+  goes into the repository, its issues or its CI logs: a censor would block it at once. Public tools and their
+  public defaults are fine.
+- **Findings on state-linked tools appear under the project's name.** People who work on them are not named in
+  the finding, for their safety.
 
 ## Translations
 

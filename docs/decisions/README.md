@@ -46,6 +46,11 @@ in the Git history.
 | [0036](0036-ip-to-organisation-dataset.md) | The IP-to-organisation dataset: DB-IP Lite, checked against iptoasn | Accepted |
 | [0037](0037-connection-log-storage.md) | The connection log: records sealed one by one, a key for each day, readable only on an unlocked phone | Accepted |
 | [0038](0038-dns-of-chained-apps.md) | DNS of chained apps: stand-in addresses, names to the tool | Accepted |
+| [0039](0039-release-gates.md) | Release gates, a preview for identified testers, and what 1.0 means | Accepted |
+| [0040](0040-own-safety-in-an-untrusted-environment.md) | Datapavan's own safety in an untrusted environment | Accepted |
+| [0041](0041-watch-visibility-and-coexistence.md) | What other apps see of Watch, and working beside every app | Accepted |
+| [0042](0042-dns-of-apps-that-go-directly.md) | DNS of apps that go directly: Oblivious DoH, several jurisdictions | Accepted, with open questions |
+| [0043](0043-release-integrity-and-repository-controls.md) | Release integrity, repository controls and continuous fuzzing | Accepted |
 
 ## Template
 
