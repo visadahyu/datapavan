@@ -122,6 +122,19 @@ impl Shared {
         if hidden {
             Counters::add(&counters.ech_hidden, 1);
         }
+        // Finding 20's first step: how often the name a DNS answer gave the flow's address differs from
+        // the one the connection itself sent. Only counted, never logged: it names no destination. An
+        // ECH public name differs by design and is left out.
+        if !hidden
+            && let Some(live) = lock(&self.live).get(&id)
+            && live.flow.named_by == NamedBy::Dns
+            && let Some(dns) = &live.flow.name
+        {
+            Counters::add(&counters.hellos_on_dns_names, 1);
+            if !same_name(dns, &hello.name) {
+                Counters::add(&counters.hello_names_differ, 1);
+            }
+        }
         let apply = |flow: &mut Flow| {
             flow.ech = match (hello.ech, hidden) {
                 (_, true) => Ech::Hidden,
@@ -166,4 +179,11 @@ impl Shared {
             }
         }
     }
+}
+
+/// Whether two host names are the same name: DNS names ignore case, and a trailing dot only marks a name
+/// as fully qualified.
+fn same_name(a: &str, b: &str) -> bool {
+    a.trim_end_matches('.')
+        .eq_ignore_ascii_case(b.trim_end_matches('.'))
 }

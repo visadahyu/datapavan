@@ -6,7 +6,7 @@ use super::{CONNECT_TIMEOUT, Shared, lock};
 use crate::packet;
 use std::io;
 use std::net::SocketAddr;
-use std::os::fd::{AsRawFd, RawFd};
+use std::os::fd::{AsFd, AsRawFd, BorrowedFd};
 use std::sync::Arc;
 use tokio::net::{TcpSocket, TcpStream, UdpSocket};
 
@@ -35,10 +35,14 @@ pub(super) async fn owner(
         .flatten()
 }
 
-/// Protects a socket of the engine's own, off the event loop: the answer comes over Binder.
-pub(super) async fn protect(shared: &Arc<Shared>, fd: RawFd) -> io::Result<()> {
+/// Protects a socket of the engine's own, off the event loop: the answer comes over Binder. The
+/// blocking task gets a duplicate of the descriptor, which it owns: a caller that gives up waiting (a
+/// timeout around it) and drops its socket must not leave a bare number that the kernel could hand to
+/// another socket before Kotlin protects it. Protecting the duplicate protects the socket itself.
+pub(super) async fn protect(shared: &Arc<Shared>, fd: BorrowedFd<'_>) -> io::Result<()> {
     let platform = Arc::clone(&shared.platform);
-    if tokio::task::spawn_blocking(move || platform.protect(fd))
+    let owned = fd.try_clone_to_owned()?;
+    if tokio::task::spawn_blocking(move || platform.protect(owned.as_raw_fd()))
         .await
         .unwrap_or(false)
     {
@@ -54,7 +58,7 @@ pub(super) async fn connect_tcp(shared: &Arc<Shared>, target: SocketAddr) -> io:
     } else {
         TcpSocket::new_v6()?
     };
-    protect(shared, socket.as_raw_fd()).await?;
+    protect(shared, socket.as_fd()).await?;
     // Android's stack answers the app's own keepalives inside the phone, so through Watch an app cannot
     // tell that the server is gone: the kernel's keepalive on the upstream socket does (after about two
     // hours and eleven minutes by Linux's defaults, beyond RFC 5382's two hours and four), and the relay
@@ -68,7 +72,7 @@ pub(super) async fn connect_tcp(shared: &Arc<Shared>, target: SocketAddr) -> io:
 
 pub(super) async fn connect_udp(shared: &Arc<Shared>, target: SocketAddr) -> io::Result<UdpSocket> {
     let socket = UdpSocket::bind(packet::unspecified_like(&target)).await?;
-    protect(shared, socket.as_raw_fd()).await?;
+    protect(shared, socket.as_fd()).await?;
     socket.connect(target).await?;
     Ok(socket)
 }

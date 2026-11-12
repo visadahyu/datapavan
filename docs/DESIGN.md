@@ -649,6 +649,19 @@ emulator. Still to come: ECH in a browser that offers it, and the ten apps of W3
 by clause: [acceptance](spikes/2026-11-w6-acceptance.md). W6 was accepted by the maintainer on 2026-11-11 and
 merged into `main`.
 
+Gate 2 of 0.2.0, the review's findings 18 to 21 (D25), began on 2026-11-12 with the small parts:
+- **Counters, appended after the nineteen before them:**
+  - IP fragments, now counted apart from the other skipped packets;
+  - hellos read on flows a DNS answer had named, and of those, how many named another server. A day on the phone
+    tells how much finding 20 matters before the log carries both names.
+- **The lock:** `nativeStop` and `nativeStart` take the engine out of its lock before joining its thread.
+- **Protect:** `protect()` hands Kotlin an owned duplicate of the socket's descriptor, so a caller that times out
+  cannot leave a number the kernel gives to another socket.
+
+The rest follows a plan of thirteen units: a test harness in an unprivileged network namespace, reset
+propagation, both names in the log, budgets per engine and per app, endpoint-independent UDP mapping, ICMP echo and
+the network's MTU.
+
 | # | Milestone | Done when |
 |---|---|---|
 | W1 | Watch's skeleton | A second Gradle module, `:watch`, package `org.visadahyu.datapavan.watch`, signed with the same key. Both APKs come from one build, CI is green, and each is reproducible on its own. The build fails if the audit app gains `INTERNET`, as now, or if Watch's manifest holds anything outside its permissions ADR. Watch opens on the emulator and the A40 with strings in all eight languages, RTL and pseudo-locales from the start, and an icon from the brand marks. Its tunnel starts and stops. |

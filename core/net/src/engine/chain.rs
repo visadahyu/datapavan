@@ -14,7 +14,7 @@ use crate::standins::is_stand_in;
 use std::collections::HashSet;
 use std::io;
 use std::net::SocketAddr;
-use std::os::fd::AsRawFd;
+use std::os::fd::AsFd;
 use std::sync::Arc;
 use tokio::net::{TcpSocket, TcpStream};
 
@@ -116,7 +116,7 @@ pub(super) async fn connect_proxy(
         TcpSocket::new_v6()?
     };
     if !proxy.ip().is_loopback() {
-        protect(shared, socket.as_raw_fd()).await?;
+        protect(shared, socket.as_fd()).await?;
     }
     socket
         .connect(proxy)

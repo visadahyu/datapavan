@@ -272,6 +272,9 @@ pub struct Config {
     pub addresses: Addresses,
 }
 
+/// How many counters [`Counters::snapshot`] gives.
+pub const COUNTERS: usize = 22;
+
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
 pub struct Counters {
@@ -294,6 +297,9 @@ pub struct Counters {
     dns_plain: AtomicU64,
     dns_encrypted: AtomicU64,
     strangers: AtomicU64,
+    fragments: AtomicU64,
+    hellos_on_dns_names: AtomicU64,
+    hello_names_differ: AtomicU64,
 }
 
 impl Counters {
@@ -304,11 +310,14 @@ impl Counters {
     /// TCP flows, UDP flows, bytes up, bytes down, flows without an owner, refused, unreachable,
     /// failed, packets skipped, packets in, packets out, server names read from TLS and from QUIC, QUIC
     /// flows whose name could not be read, hellos that offered ECH, hellos whose name was an ECH public
-    /// name, flows of an app's own plain and encrypted DNS, and connections to the engine's listener
-    /// that did not come from the fake address, refused. None names a destination: they can be read on
-    /// any phone.
+    /// name, flows of an app's own plain and encrypted DNS, connections to the engine's listener that
+    /// did not come from the fake address, refused, IP fragments dropped (counted apart from the other
+    /// skipped packets, review finding 21), and hellos read on flows a DNS answer had named, and of
+    /// those, how many named another server (finding 20: how often a shared address gives a flow the
+    /// wrong name). None names a destination: they can be read on any phone. New counters are only
+    /// ever appended, so that scripts reading a column by its place keep reading the same one.
     #[must_use]
-    pub fn snapshot(&self) -> [u64; 19] {
+    pub fn snapshot(&self) -> [u64; COUNTERS] {
         [
             &self.tcp_flows,
             &self.udp_flows,
@@ -329,6 +338,9 @@ impl Counters {
             &self.dns_plain,
             &self.dns_encrypted,
             &self.strangers,
+            &self.fragments,
+            &self.hellos_on_dns_names,
+            &self.hello_names_differ,
         ]
         .map(|c| c.load(Ordering::Relaxed))
     }
@@ -543,7 +555,7 @@ impl Engine {
 
     /// The counters, as [`Counters::snapshot`] orders them.
     #[must_use]
-    pub fn counters(&self) -> [u64; 19] {
+    pub fn counters(&self) -> [u64; COUNTERS] {
         self.shared.counters.snapshot()
     }
 
@@ -660,7 +672,8 @@ impl Loop {
                 self.tcp(&mut packet[..parsed.length], &parsed).await;
             }
             Ok(parsed) => self.udp(&packet[..parsed.length], &parsed).await,
-            Err(Skip::Malformed | Skip::Fragment | Skip::Other(_)) => {
+            Err(Skip::Fragment) => Counters::add(&self.shared.counters.fragments, 1),
+            Err(Skip::Malformed | Skip::Other(_)) => {
                 Counters::add(&self.shared.counters.skipped, 1);
             }
         }
@@ -821,6 +834,29 @@ mod tests {
             name: name.into(),
             ech,
         }
+    }
+
+    #[test]
+    fn hellos_on_dns_named_flows_are_counted_with_how_many_name_another_server() {
+        let shared = shared();
+        let now = Instant::now();
+        let asked = SocketAddr::from(([93, 184, 216, 34], 443));
+        lock(&shared.names).insert(asked.ip(), None, "www.example.com", 60, now);
+        lock(&shared.names).insert_public("cover.example", 60, now);
+        let same = open_flow(&shared, asked);
+        let other = open_flow(&shared, asked);
+        let hidden = open_flow(&shared, asked);
+        let unnamed = open_flow(&shared, SocketAddr::from(([203, 0, 113, 9], 443)));
+
+        // Case and a trailing dot do not make another name.
+        shared.hello(same, &hello("WWW.Example.com.", false), NamedBy::Tls);
+        shared.hello(other, &hello("cdn-tenant.example", false), NamedBy::Tls);
+        // An ECH public name differs by design: left out.
+        shared.hello(hidden, &hello("cover.example", true), NamedBy::Tls);
+        // A flow no DNS answer named is not counted.
+        shared.hello(unnamed, &hello("quic.example", false), NamedBy::Quic);
+
+        assert_eq!(shared.counters.snapshot()[20..22], [2, 1]);
     }
 
     #[test]

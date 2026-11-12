@@ -20,6 +20,12 @@ use jni::sys::{jboolean, jint, jlong};
 use jni::{EnvUnowned, JValue, JavaVM, jni_sig, jni_str};
 
 /// The running engine, if any.
+///
+/// Never held while the engine's thread is joined (take the engine out, then stop it), and never held
+/// across a call into Kotlin that could call back into this file: `ownerUid`, `protectSocket` and
+/// `logRecords`, reached from the engine, must not call a native method of `Engine` while they run.
+/// One exception is kept on purpose: `nativeFlushLog` hands records to `logRecords` under the lock,
+/// which writes them and returns.
 static ENGINE: Mutex<Option<Engine>> = Mutex::new(None);
 
 fn engine() -> std::sync::MutexGuard<'static, Option<Engine>> {
@@ -128,7 +134,9 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStart<'ca
 ) -> jboolean {
     unowned_env
         .with_env(|env| -> Result<jboolean, Error> {
-            if let Some(mut running) = engine().take() {
+            // Taken out first: the lock is not held while the engine's thread is joined.
+            let previous = engine().take();
+            if let Some(mut running) = previous {
                 running.stop();
             }
             if fd < 0 {
@@ -180,7 +188,9 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStop<'cal
 ) {
     unowned_env
         .with_env(|_env| -> Result<(), Error> {
-            if let Some(mut running) = engine().take() {
+            // Taken out first: the lock is not held while the engine's thread is joined.
+            let previous = engine().take();
+            if let Some(mut running) = previous {
                 running.stop();
             }
             Ok(())

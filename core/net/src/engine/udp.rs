@@ -18,7 +18,7 @@ use crate::{dns, packet, quic};
 use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
-use std::os::fd::AsRawFd;
+use std::os::fd::AsFd;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -434,7 +434,7 @@ async fn associate(
             socks5::relay_address(&bound, chain.proxy).ok_or(io::ErrorKind::HostUnreachable)?;
         let socket = UdpSocket::bind(packet::unspecified_like(&relay)).await?;
         if !relay.ip().is_loopback() {
-            protect(shared, socket.as_raw_fd()).await?;
+            protect(shared, socket.as_fd()).await?;
         }
         socket.connect(relay).await?;
         let way = UdpWay::Tool {
