@@ -2,8 +2,8 @@
 
 Datapavan is a security product. Reports of vulnerabilities are welcome and taken seriously.
 
-> **Pre-release.** No version has been released yet. Private reports go through GitHub's private
-> vulnerability reporting. An e-mail address with a published OpenPGP key is planned for 1.0.
+> **Releases.** The audit app's current release is 0.1.2, of 2026-11-07. Datapavan Watch, the second
+> app, has not been released yet. Private reports go through GitHub's private vulnerability reporting. An e-mail address with a published OpenPGP key is planned for 1.0.
 
 ## Reporting a vulnerability
 

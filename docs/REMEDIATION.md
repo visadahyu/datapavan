@@ -128,8 +128,8 @@ ADR 0015's rules on evidence and disputes.
   it skips.
 - **Google Play Protect, where present.** Many phones in restricted regions have no Google services, so
   nothing may depend on it.
-- **Android 16 Advanced Protection** can be read with a normal permission, and Datapavan shows it as a
-  strength. Datapavan never depends on an accessibility service, which Advanced Protection restricts.
+- **Android 16 Advanced Protection** can be read with a normal permission, and Datapavan is to show it
+  as a strength; this is not built yet. Datapavan never depends on an accessibility service, which Advanced Protection restricts.
 - **Vendor protections are respected,** never permanently switched off. Examples are Samsung's Auto
   Blocker and Xiaomi's separate security switch for USB debugging. When a step needs one of them off for
   a moment, the guide turns it back on.

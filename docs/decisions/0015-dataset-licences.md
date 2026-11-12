@@ -101,6 +101,8 @@ project's own channels.
 12. **A lawyer reviews this record before the first public release.** It was drafted with AI help and
     is not legal advice. The review is part of the release checklist, next to the other actions
     deferred to the public v0.1 release.
+    *Note of 2026-11-12:* the review did not happen before the first public release (0.1.0, of
+    2026-11-06), and RELEASE.md's checklist did not carry it. It is still open.
 
 ## Consequences
 - M3 can start. Everything it needs is either εxodus data under ODbL or our own lists under CC0.

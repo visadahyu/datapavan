@@ -64,7 +64,7 @@ From the measurements, three parts of [VPN.md](../VPN.md) move earlier:
 
 ## Consequences
 
-- **Two packages:** two listings on F-Droid and IzzyOnDroid, two rows in `data/app-signers`, two
+- **Two packages:** two listings on F-Droid (IzzyOnDroid is not asked: see CHANNELS.md, 2026-11-12), two rows in `data/app-signers`, two
   fingerprints. Each is a Gradle module of the same build, reproducible on its own.
 - **The interface between them:** small and versioned. Watch answers queries for flows and never
   receives anything from Datapavan, so a fault in Watch cannot leak the audit.

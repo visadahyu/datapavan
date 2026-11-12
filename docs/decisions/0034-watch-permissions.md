@@ -326,12 +326,16 @@ amendment.
 - **What users read.** The privacy policy, the store texts and F-Droid's listing name Watch's five
   permissions (one only on Android 10 and 11, one only on 17) plus AndroidX's internal one, and say
   that Watch can see the apps that
-  have an icon, to name the user's tool and the apps the user picks, and keeps no list of them. ADR
+  have an icon, to name the user's tool and the apps the user picks, and keeps no list of them beyond
+  the chain's own settings: the tool it last went through and the apps the user picked. ADR
   0029's sentence stays true as written.
 - **Requirements this ADR puts on the engine (W2, W3):** call `establish()` at once; give the tunnel a
   /32 and a /128 address with the rewritten address and the in-tunnel DNS address outside them; send
   upstream queries for the network's resolver through `DnsResolver` on the network under the tunnel;
   forward local-network flows only for apps that hold their own grant, and record refusals.
+  *Note of 2026-11-12:* the last two are not built yet. Watch sends upstream queries as plain UDP from
+  a protected socket, as DESIGN.md's W3 says, and forwards local-network flows for every app. Both
+  remain open.
 - **Onboarding (W9)** asks for the local-network permission on Android 17 and says that each app still
   needs its own; asks for notifications in context; recommends always-on with "Block connections
   without VPN"; opens the battery settings and the vendor guides.

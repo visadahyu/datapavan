@@ -103,7 +103,7 @@ and runs build tools and AI agents, so a key there would be only as safe as the 
 
 No second computer is needed. The development computer can start a live USB system, for example Debian
 Live, with networking off and with the `signify-openbsd` package copied onto the stick. The key is made
-there and kept, with a backup, on encrypted USB media that never goes into an online computer. Signing a
+there and kept on encrypted USB media that never goes into an online computer. Signing a
 pack works the same way: start the live system, bring the payload in on a USB stick, sign it, and take
 the pack out.
 

@@ -23,7 +23,7 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    ```
 
    RSA 4096 is accepted by every Android version Datapavan supports and by every store. The keystore
-   and its backup stay on encrypted offline media. Prove the backup before relying on it: close the media, open it again
+   stays on encrypted offline media. A backup copy is proven before it is relied on: close the media, open it again
    read-only, compare every file, and sign something with the copy on it. A check of a copy in memory passes with no media at
    all, which is how the first set of keys was lost on 2026-11-05, before anything was signed with them. The key's certificate is what users and other apps
    compare, so it must outlive the project's releases: 18,250 days is 50 years. If the key is ever lost,

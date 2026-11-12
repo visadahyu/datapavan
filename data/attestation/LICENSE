@@ -15,8 +15,9 @@ revoked-serials.txt
     The serial numbers listed in Google's attestation certificate revocation status list
     (https://android.googleapis.com/attestation/status). Google publishes the list for anyone who
     verifies key attestation and states no licence for it. Only the serial numbers are kept: facts,
-    used for the purpose the list is published for. The legal review before the first public
-    release confirms this use (ADR 0015, decision 12); until then the list is not part of a release.
+    used for the purpose the list is published for. ADR 0015's decision 12 asks for a legal review
+    of this use before the first public release. That review has not happened yet: the list shipped
+    in 0.1.0 to 0.1.2 without it, and the review is still open.
 
 update.py
     The converter that produces both files: Apache-2.0, like the rest of this repository.
