@@ -243,6 +243,8 @@ adb shell am force-stop "$TOOL"
 adb shell am start-foreground-service -n "$TOOL/.ToolService" --ei port "$TOOL_PORT" \
     --es user "$user" --es password "$password" --es map "watch.test=$HOST" >/dev/null
 for _ in $(seq 1 10); do [ "$(tool_log | grep -c "^listening")" -gt "$listening" ] && break; sleep 1; done
+# The password is below the choice of apps, and scroll_to only looks further down: back to the top first.
+scroll_to_top
 tap_text "Only the apps I choose" || fail "no choice of apps on the chain screen"
 # The list of apps loads in the background.
 for _ in $(seq 1 15); do screen_has "Datapavan workload" && break; sleep 1; done
