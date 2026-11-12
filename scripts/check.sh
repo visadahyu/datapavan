@@ -76,6 +76,9 @@ rust_gates() {
         cargo clippy --workspace --all-targets --locked --target "$target" -- -D warnings
     done
     cargo test --workspace --locked
+    # The fuzz crate has a lockfile of its own, which a new dependency of the engine must reach too
+    # (CI's fuzz run, 2026-11-12: nix came in and only the workspace's lockfile had it).
+    (cd "$ROOT/core/fuzz" && cargo metadata --locked --format-version 1 >/dev/null)
     netlab_gate
     # Needs network access to fetch the RustSec advisory database.
     cargo deny --locked check
