@@ -2,6 +2,7 @@
 
 - Status: Proposed (the direction agreed by the maintainer on 2026-11-07; details open)
 - Date: 2026-11-08
+- Amended by [ADR 0045](0045-three-editions-of-one-app.md) on 2026-11-13: the project ships as three editions of one app.
 
 ## Context
 

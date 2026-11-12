@@ -2,6 +2,7 @@
 
 - Status: Accepted; the build is in progress (2026-11-08)
 - Date: 2026-11-06
+- Amended by [ADR 0045](0045-three-editions-of-one-app.md) on 2026-11-13: the project ships as three editions of one app.
 
 ## Context
 Datapavan's promise is that every genuine copy, on every channel, is signed with one key, kept offline. By default, Google Play signs a new app with a key

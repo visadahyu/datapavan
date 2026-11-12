@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-31
+- Amended by [ADR 0045](0045-three-editions-of-one-app.md) on 2026-11-13: the project ships as three editions of one app.
 - Decided by: mehdashti
 
 ## Context

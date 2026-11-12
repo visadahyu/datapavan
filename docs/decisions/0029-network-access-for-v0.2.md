@@ -1,6 +1,6 @@
 # 0029. Where network access lives in v0.2
 
-- Status: Accepted (by the maintainer on 2026-11-05)
+- Status: Superseded by [ADR 0045](0045-three-editions-of-one-app.md) (three editions of one app, 2026-11-13); accepted by the maintainer on 2026-11-05
 - Date: 2026-11-05
 
 (0028 is kept for the ranges of kinds of app from the lab, ADR 0025 point 5.)

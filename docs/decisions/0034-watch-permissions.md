@@ -3,6 +3,7 @@
 - Status: Accepted (by the maintainer on 2026-11-09); [ADR 0040](0040-own-safety-in-an-untrusted-environment.md)
   adds `HIDE_OVERLAY_WINDOWS` (item 6)
 - Date: 2026-11-09
+- Amended by [ADR 0045](0045-three-editions-of-one-app.md) on 2026-11-13: the project ships as three editions of one app.
 
 ## Context
 

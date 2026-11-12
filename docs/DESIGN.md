@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version | 0.2 (draft, revised 2026-11-12) |
+| Version | 0.2 (draft, revised 2026-11-13: three editions, ADR 0045) |
 | Date | 2026-10-28 |
 | Scope | Stage 1: the layer app for stock Android, with no root |
 | Status | The whole design, much of it not built yet. The [README](../README.md) says what exists today |
@@ -771,7 +771,7 @@ Each decision is recorded in full, with context and consequences, as an ADR in
 | [0026](decisions/0026-remediation-plan-v0.1.md) | The remediation plan's part for v0.1 | Accepted |
 | [0027](decisions/0027-app-structure-and-settings.md) | The app's structure and settings | Accepted |
 | 0028 | This number was not used | – |
-| [0029](decisions/0029-network-access-for-v0.2.md) | v0.2's VPN in a separate app, Datapavan Watch, so that Datapavan never holds INTERNET | Accepted |
+| [0029](decisions/0029-network-access-for-v0.2.md) | v0.2's VPN in a separate app, Datapavan Watch, so that Datapavan never holds INTERNET | Superseded by 0045 |
 | [0030](decisions/0030-more-languages-reviewed-by-independent-models.md) | Spanish, Russian, Chinese and Arabic at launch, reviewed by independent models | Accepted |
 | [0031](decisions/0031-datapavan-lite-on-google-play.md) | Datapavan Lite on Google Play: its own name, package and key | Accepted, being built |
 | [0032](decisions/0032-expert-tool-for-preinstalled-apps.md) | An expert tool of Datapavan's own for preinstalled apps | Proposed |
@@ -787,6 +787,7 @@ Each decision is recorded in full, with context and consequences, as an ADR in
 | [0042](decisions/0042-dns-of-apps-that-go-directly.md) | DNS of apps that go directly: Oblivious DoH, several jurisdictions | Accepted, with open questions |
 | [0043](decisions/0043-release-integrity-and-repository-controls.md) | Release integrity, repository controls and continuous fuzzing | Accepted |
 | [0044](decisions/0044-udp-mapping-and-budgets.md) | UDP mapping, budgets for each app, and the engine's smaller gaps | Accepted |
+| [0045](decisions/0045-three-editions-of-one-app.md) | Three editions of one app: Basic, Advanced and Enterprise | Accepted |
 
 ## 15. Names
 

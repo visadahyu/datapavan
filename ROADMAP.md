@@ -6,10 +6,21 @@ Technical details for stage 1 are in [docs/DESIGN.md](docs/DESIGN.md).
 | Stage | What | Who it serves | Control over the phone |
 |---|---|---|---|
 | 1 | Layer app for stock Android, no root | Individuals | What a normal app may do |
-| 2 | Enterprise flavour in Device Owner mode | Organisations | Fleet policies, system apps disabled, VPN enforced |
+| 2 | Datapavan Enterprise, for organisations (its path is reviewed afresh when stage 2 begins) | Organisations | Fleet policies, system apps disabled, VPN enforced |
 | 3 | Hardened Android-based OS on partner hardware | High-security organisations and users | The whole software stack |
 
 Status legend: ✅ done · 🔄 in progress · ⏳ planned.
+
+**Three editions of one app** ([ADR 0045](docs/decisions/0045-three-editions-of-one-app.md), the maintainer,
+2026-11-13), so that each person installs one app:
+- **Datapavan Basic:** the audit, with no internet, ever. It is today's app, and gains every later feature that needs
+  no network.
+- **Datapavan Advanced:** all that stage 1 adds, with internet only for the user's own traffic: Watch's tunnel (v0.2),
+  blocking (v0.3), reports (v0.4) and the expert tool.
+- **Datapavan Enterprise:** stage 2.
+
+Basic and Advanced are free for everyone. A person at risk can keep Basic alone, or beside Advanced, which Basic
+checks from outside.
 
 ---
 
@@ -104,8 +115,9 @@ Checks left from M4 (ADR 0022):
 ### v0.2 "Watch": local VPN, observe only
 
 A **local** VPN: no server is involved and the user's IP address does not change. [ADR 0029](docs/decisions/0029-network-access-for-v0.2.md)
-(accepted on 2026-11-05) makes it an app of its own within Datapavan, Watch, so that the audit app never holds the INTERNET
-permission, and moves the QUIC server name and apps' own encrypted DNS into v0.2. Before this version
+(accepted on 2026-11-05) made it an app of its own, Watch, so that the audit app never holds the INTERNET permission,
+and moved the QUIC server name and apps' own encrypted DNS into v0.2. [ADR 0045](docs/decisions/0045-three-editions-of-one-app.md)
+(2026-11-13) makes Watch part of Datapavan Advanced instead, while Datapavan Basic keeps the audit with no internet. Before this version
 starts, a spike picked the packet engine on 2026-11-07: Android's own TCP stack reached through rewritten addresses, in Rust ([ADR 0012](docs/decisions/0012-packet-engine.md)). Design: [docs/VPN.md](docs/VPN.md).
 
 Two releases, each of use on its own (the maintainer, 2026-11-09, in place of the three agreed on
@@ -132,7 +144,7 @@ signing session and texts reviewed in eight languages):
 The milestones of 0.2.0, W1 to W9, with what each must show before it counts as done, are in
 [DESIGN.md §13.2](docs/DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools).
 
-Where it stands on 2026-11-12: the four items before W1 are drafted (ADRs
+Where it stands on 2026-11-13: the four items before W1 are drafted (ADRs
 [0034](docs/decisions/0034-watch-permissions.md), [0035](docs/decisions/0035-wireguard-upstream.md) and
 [0036](docs/decisions/0036-ip-to-organisation-dataset.md), accepted; the table of tools in `data/tools/`).
 W1, Watch's skeleton, and W2, the packet engine in the product, are in `main`: every app's traffic passes
