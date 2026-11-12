@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Checks the built website in docs/site (site/README.md): no script, nothing from another server, about
 200 KB or less on a first load before images, and every link inside the site leads somewhere."""
+import datetime
 import gzip
 import re
 import sys
@@ -50,8 +51,20 @@ def main():
     home = pages and (SITE / "index.html").read_text(encoding="utf-8")
     if not home or FP not in home:
         bad.append("index.html: no signing fingerprint")
-    if not (SITE / ".well-known/security.txt").exists():
+    security = SITE / ".well-known/security.txt"
+    if not security.exists():
         bad.append(".well-known/security.txt is missing")
+    else:
+        # RFC 9116: Expires is required, and a stale file tells reporters the contacts may be dead. Renew it a
+        # month ahead, at most a year out (site/static/.well-known/security.txt).
+        expires = [line.split(":", 1)[1].strip() for line in security.read_text(encoding="utf-8").splitlines()
+                   if line.startswith("Expires:")]
+        if len(expires) != 1:
+            bad.append(".well-known/security.txt: needs exactly one Expires line")
+        else:
+            when = datetime.datetime.fromisoformat(expires[0].replace("Z", "+00:00"))
+            if when - datetime.datetime.now(datetime.timezone.utc) < datetime.timedelta(days=30):
+                bad.append(f".well-known/security.txt: Expires {expires[0]} is less than 30 days away; renew it")
     for problem in bad:
         print(problem)
     print(f"site: {len(pages)} pages, {len(bad)} problems")

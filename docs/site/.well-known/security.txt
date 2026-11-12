@@ -1,4 +1,5 @@
 Contact: https://github.com/visadahyu/datapavan/security/advisories/new
+Contact: mailto:security@datapavan.org
 Expires: 2027-11-01T00:00:00.000Z
 Preferred-Languages: en, fa, fr, de
 Canonical: https://datapavan.org/.well-known/security.txt
