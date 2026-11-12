@@ -232,11 +232,16 @@ scroll_to "The proxy of Datapavan test tool asks for no password, so any app on 
     fail "the chain screen did not say that any app on the phone can use the tool's open proxy"
 screen_has "Datapavan test tool has no setting for a password" && fail "the chain screen said the test tool takes no password"
 echo "ok: the screen says that any app can use the tool's proxy while it asks for no password"
-scroll_to "Password: " || fail "the chain screen offered no password for the tool"
-dump_screen || true
-screen=$(adb shell cat "$DUMP" | tr -d '\r')
-user=$(grep -o 'text="User name: [^"]*"' <<<"$screen" | sed 's/^text="User name: //; s/"$//')
-password=$(grep -o 'text="Password: [^"]*"' <<<"$screen" | sed 's/^text="Password: //; s/"$//')
+# The user name sits just above the password, and either can be at the screen's edge: each is read from
+# a dump taken once it is on the screen. A text not found leaves its value empty, for the check below,
+# instead of ending the script without a word under pipefail (CI, 2026-11-12).
+read_shown() {
+    scroll_to "$1" || return 0
+    dump_screen || true
+    { adb shell cat "$DUMP" | tr -d '\r' | grep -o "text=\"$1[^\"]*\"" | sed "s/^text=\"$1//; s/\"\$//" | head -1; } || true
+}
+user=$(read_shown "User name: ")
+password=$(read_shown "Password: ")
 [ -n "$user" ] && [ -n "$password" ] || fail "the chain screen offered no user name and password for the tool"
 listening=$(tool_log | grep -c "^listening")
 adb shell am force-stop "$TOOL"
