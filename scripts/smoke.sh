@@ -65,7 +65,7 @@ adb shell input keyevent KEYCODE_BACK
 
 # Every screen is protected (ADR 0040): Android lists the app's window as secure; the settings allow
 # screenshots, and leaving the screen protects it again at once, without waiting for the minute.
-window_secure "$PKG" || fail "the app's window is not protected from screenshots"
+window_secure "$PKG" || fail "the app's window is not protected from screenshots: $(window_attrs "$PKG" | tr -s ' ' | head -4 | tr '\n' ' ')"
 if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 31 ]; then
     window_hides_overlays "$PKG" || fail "Android does not hide other apps' overlays over the app's window"
 fi

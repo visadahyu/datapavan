@@ -40,24 +40,32 @@ dump_screen() {
 }
 
 # The attributes of the package $1's window, as Android's window manager lists them: from "mAttrs={" to
-# its closing brace, over several lines on recent versions.
+# its closing brace, over several lines on recent versions. The dump is read whole, and nothing below stops
+# reading early: under pipefail, a command cut off by SIGPIPE would fail the check while the flag is there
+# (CI, 2026-11-12, where the dump outgrows a pipe's buffer).
 window_attrs() {
-    adb shell dumpsys window windows 2>/dev/null | tr -d '\r' |
-        awk -v app="$1/" 'index($0, "Window{") { inside = index($0, app) > 0 }
-            inside && /mAttrs=/ { attrs = 1 }
-            inside && attrs { print; if (/}$/) exit }'
+    local dump
+    dump=$(adb shell dumpsys window windows 2>/dev/null | tr -d '\r') || return 1
+    awk -v app="$1/" 'done { next }
+        index($0, "Window{") { inside = index($0, app) > 0 }
+        inside && /mAttrs=/ { attrs = 1 }
+        inside && attrs { print; if (/}$/) done = 1 }' <<<"$dump"
 }
 
 # True when the package $1's window is protected from screenshots and screen recording (FLAG_SECURE,
 # ADR 0040): SECURE among the window's flags (fl=).
 window_secure() {
-    window_attrs "$1" | grep -o -E '(^|[^p])fl=[A-Z_ ]+' | grep -qw SECURE
+    local attrs
+    attrs=$(window_attrs "$1") || return 1
+    grep -o -E '(^|[^p])fl=[A-Z_ ]+' <<<"$attrs" | grep -w SECURE >/dev/null
 }
 
 # True when Android hides other apps' overlays over the package $1's window (Android 12 and later,
 # ADR 0040): HIDE_NON_SYSTEM_OVERLAY_WINDOWS among its private flags (pfl=).
 window_hides_overlays() {
-    window_attrs "$1" | grep -o -E 'pfl=[A-Z_ ]+' | grep -qw HIDE_NON_SYSTEM_OVERLAY_WINDOWS
+    local attrs
+    attrs=$(window_attrs "$1") || return 1
+    grep -o -E 'pfl=[A-Z_ ]+' <<<"$attrs" | grep -w HIDE_NON_SYSTEM_OVERLAY_WINDOWS >/dev/null
 }
 
 # True when an element whose text starts with $1 is on screen.

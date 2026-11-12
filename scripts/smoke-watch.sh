@@ -147,7 +147,7 @@ echo "ok: the tunnel is down"
 
 # Every screen is protected (ADR 0040): Android lists Watch's window as secure; the setting allows
 # screenshots, and leaving the screen protects it again at once, without waiting for the minute.
-window_secure "$PKG" || fail "Watch's window is not protected from screenshots"
+window_secure "$PKG" || fail "Watch's window is not protected from screenshots: $(window_attrs "$PKG" | tr -s ' ' | head -4 | tr '\n' ' ')"
 if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 31 ]; then
     window_hides_overlays "$PKG" || fail "Android does not hide other apps' overlays over Watch's window"
 fi
