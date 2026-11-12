@@ -15,6 +15,7 @@ use crate::{packet, tls};
 use std::collections::HashMap;
 use std::io;
 use std::net::{IpAddr, SocketAddr};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -116,6 +117,14 @@ impl Loop {
                 }
             }
             Lookup::New(port) => {
+                // As many connections as allowed wait for their servers: this SYN is dropped, as by a
+                // full queue, and its port freed at once, since it never reached Android's stack. The
+                // app's stack sends it again, by then perhaps with room (ADR 0044, decision 3).
+                let Some(waiting) = Waiting::take(&self.shared) else {
+                    lock(&self.nat).release(port);
+                    Counters::add(&self.shared.counters.tcp_refused, 1);
+                    return;
+                };
                 let held = Held {
                     packet: packet.to_vec(),
                     parsed: *parsed,
@@ -124,6 +133,7 @@ impl Loop {
                 };
                 tokio::spawn(open(
                     held,
+                    waiting,
                     Arc::clone(&self.tun),
                     Arc::clone(&self.shared),
                     Arc::clone(&self.nat),
@@ -169,8 +179,34 @@ struct Held {
     listener: u16,
 }
 
+/// One of the places for a connection waiting for its server, given back when it is dropped.
+struct Waiting(Arc<Shared>);
+
+impl Waiting {
+    /// A place, if fewer than `Limits::tcp_waiting` connections wait now.
+    fn take(shared: &Arc<Shared>) -> Option<Self> {
+        let cap = shared.limits.tcp_waiting;
+        shared
+            .tcp_waiting
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |n| {
+                (n < cap).then_some(n + 1)
+            })
+            .ok()
+            .map(|_| Self(Arc::clone(shared)))
+    }
+}
+
+impl Drop for Waiting {
+    fn drop(&mut self) {
+        self.0.tcp_waiting.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+/// Opens the upstream connection for a held SYN; `_waiting` holds its place until the server has
+/// answered or failed.
 async fn open(
     mut held: Held,
+    _waiting: Waiting,
     tun: Arc<Tun>,
     shared: Arc<Shared>,
     nat: Arc<Mutex<Nat>>,
@@ -259,7 +295,8 @@ async fn open(
         )
         .map(|()| held.packet)
     } else {
-        lock(&nat).remove(held.port, Instant::now());
+        // The SYN never reached Android's stack, so no old connection can linger on the port.
+        lock(&nat).release(held.port);
         if outcome == Outcome::Refused {
             let sequence = packet::tcp_sequence(&held.packet, &held.parsed);
             packet::tcp_reset(destination, app, 0, Some(sequence.wrapping_add(1)))

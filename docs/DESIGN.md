@@ -678,8 +678,17 @@ resets it, now ends both sides with a reset, and is counted. Before, the app got
 a cut-off answer from a finished one. A clean close still closes with a FIN, direction by direction. Three lab tests
 cover it: the server's reset, the app's reset, and a clean close.
 
-Still to come, in units: both names in the log, budgets per engine and per app, endpoint-independent UDP mapping,
-ICMP echo and the network's MTU.
+The waiting cap, the same day (finding 18, first step). At most so many TCP connections wait for their servers at
+once, for every app together: an eighth of what the process may open after a reserve for Watch, at most 4,096 (112
+for a process limited to 1,024 files). A SYN beyond the cap is dropped, as by a full queue, and counted. Its port is
+freed at once, as is the port of a connection that failed, since neither reached Android's stack. A lab test sends
+six connections to a server that never answers, with a cap of four: two are dropped while four wait, all fail, and
+another app's connection then opens at once.
+
+Two names in the log wait for the phone's counters to say how often the names differ (ADR 0044, decision 4). The
+UDP side of the budget, its shared receive buffer, early-closing lookups and two-way refresh, comes with the
+mapping, which rewrites the UDP table. Still to come: the mapping, shares for each app, ICMP echo and the network's
+MTU.
 
 | # | Milestone | Done when |
 |---|---|---|

@@ -34,6 +34,9 @@ const TCP_FLOWS: usize = 0;
 const UDP_FLOWS: usize = 1;
 const STRANGERS: usize = 18;
 const RESETS: usize = 22;
+const TCP_REFUSED: usize = 23;
+/// A server that never answers (scripts/netlab-enter.py routes it into a tunnel no one reads).
+const SILENT: Ipv4Addr = Ipv4Addr::new(203, 0, 113, 1);
 /// How long any one step may take before the test fails.
 const STEP: Duration = Duration::from_secs(5);
 
@@ -394,6 +397,58 @@ fn a_clean_close_stays_clean() -> Outcome {
             let (read, end) = read_to_end_or_error(&mut app).await?;
             assert_eq!((read.as_slice(), end), (&b"bye"[..], None));
             assert_eq!(engine.counters()[RESETS], 0);
+            Ok(())
+        },
+    )
+}
+
+/// Review finding 18: connections waiting for servers that never answer are capped for the engine as a
+/// whole. A SYN beyond the cap is dropped and counted, and its app tries again; once the waiting ones
+/// give up, another app's connection opens at once.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn connections_waiting_for_silent_servers_are_capped() -> Outcome {
+    let limits = Limits {
+        tcp_waiting: 4,
+        connect_timeout: Duration::from_secs(2),
+        ..Limits::default()
+    };
+    lab(
+        "connections_waiting_for_silent_servers_are_capped",
+        limits,
+        |engine| async move {
+            let mut attempts = Vec::new();
+            for port in 1..=6 {
+                attempts.push(tokio::spawn(async move {
+                    let socket = TcpSocket::new_v4()?;
+                    socket.bind(SocketAddr::from((Addresses::COMMON.tun4, 0)))?;
+                    match timeout(
+                        Duration::from_secs(12),
+                        socket.connect(SocketAddr::from((SILENT, port))),
+                    )
+                    .await
+                    {
+                        Ok(result) => result.map(|_| ()),
+                        Err(_) => Err(io::ErrorKind::TimedOut.into()),
+                    }
+                }));
+            }
+            // While four wait, the others' SYNs are dropped.
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            assert!(
+                engine.counters()[TCP_REFUSED] >= 2,
+                "counters {:?}",
+                engine.counters()
+            );
+            for attempt in attempts {
+                assert!(
+                    attempt.await?.is_err(),
+                    "a connection to a silent server opened"
+                );
+            }
+            let server = echo_server().await?;
+            let mut after = app_connect(server).await?;
+            assert_eq!(exchange(&mut after, b"room again").await?, b"room again");
             Ok(())
         },
     )

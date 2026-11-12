@@ -16,7 +16,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::os::fd::{OwnedFd, RawFd};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -139,15 +139,49 @@ pub struct Limits {
     pub tcp_idle: Duration,
     /// A freed fake port is not handed out again for this long ([`nat::PORT_COOLING`]).
     pub port_cooling: Duration,
+    /// At most this many TCP connections wait for their server at once, for every app together (ADR
+    /// 0044, decision 3). A SYN beyond it is dropped, as by a full queue, and the app's stack sends it
+    /// again; each waiting connection holds a socket and a fake port for up to `connect_timeout`.
+    pub tcp_waiting: usize,
     /// The first of the fake ports handed out, `first_port..=last_port`.
     pub first_port: u16,
     /// The last of them.
     pub last_port: u16,
 }
 
+impl Limits {
+    /// The product's limits for a process that may open `descriptors` files (its soft limit): a
+    /// reserve of a sixteenth, at least 128, stays for Watch itself; waiting TCP connections may use an
+    /// eighth of the rest, at most 4,096.
+    #[must_use]
+    pub fn for_descriptors(descriptors: usize) -> Self {
+        let budget = descriptors.saturating_sub((descriptors / 16).max(128));
+        Self {
+            tcp_waiting: (budget / 8).clamp(1, 4_096),
+            ..Self::default()
+        }
+    }
+
+    /// The product's limits for this process, from its soft limit on open files in
+    /// `/proc/self/limits`, or 1,024 where that cannot be read.
+    #[must_use]
+    pub fn for_this_process() -> Self {
+        Self::for_descriptors(descriptor_limit().unwrap_or(1_024))
+    }
+}
+
+/// The soft limit on open files, from `/proc/self/limits` ("Max open files  SOFT  HARD  files").
+fn descriptor_limit() -> Option<usize> {
+    let limits = std::fs::read_to_string("/proc/self/limits").ok()?;
+    let line = limits.lines().find(|l| l.starts_with("Max open files"))?;
+    line.split_whitespace().nth(3)?.parse().ok()
+}
+
 impl Default for Limits {
+    /// Today's timings, with the caps of a process that may open 1,024 files.
     fn default() -> Self {
         Self {
+            tcp_waiting: 112,
             udp_idle: Duration::from_secs(60),
             udp_waiting: 32,
             connect_timeout: Duration::from_secs(60),
@@ -307,7 +341,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 23;
+pub const COUNTERS: usize = 24;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -335,6 +369,7 @@ pub struct Counters {
     hellos_on_dns_names: AtomicU64,
     hello_names_differ: AtomicU64,
     resets: AtomicU64,
+    tcp_refused: AtomicU64,
 }
 
 impl Counters {
@@ -349,8 +384,9 @@ impl Counters {
     /// did not come from the fake address, refused, IP fragments dropped (counted apart from the other
     /// skipped packets, review finding 21), and hellos read on flows a DNS answer had named, and of
     /// those, how many named another server (finding 20: how often a shared address gives a flow the
-    /// wrong name), and relayed connections that ended in an error and were reset on both sides
-    /// (finding 21). None names a destination: they can be read on any phone. New counters are only
+    /// wrong name), relayed connections that ended in an error and were reset on both sides (finding
+    /// 21), and SYNs dropped because as many connections as allowed were waiting for their servers
+    /// (finding 18). None names a destination: they can be read on any phone. New counters are only
     /// ever appended, so that scripts reading a column by its place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
@@ -378,6 +414,7 @@ impl Counters {
             &self.hellos_on_dns_names,
             &self.hello_names_differ,
             &self.resets,
+            &self.tcp_refused,
         ]
         .map(|c| c.load(Ordering::Relaxed))
     }
@@ -389,6 +426,8 @@ struct Shared {
     /// The tunnel's addresses for this run.
     addresses: Addresses,
     limits: Limits,
+    /// TCP connections waiting for their servers now (`Limits::tcp_waiting`).
+    tcp_waiting: AtomicUsize,
     counters: Counters,
     keep_flows: usize,
     flows: Mutex<VecDeque<Flow>>,
@@ -492,6 +531,7 @@ impl Engine {
             platform,
             addresses: config.addresses,
             limits: config.limits,
+            tcp_waiting: AtomicUsize::new(0),
             counters: Counters::default(),
             keep_flows: config.keep_flows,
             flows: Mutex::new(VecDeque::new()),
@@ -810,6 +850,7 @@ mod tests {
             platform,
             addresses: Addresses::COMMON,
             limits: Limits::default(),
+            tcp_waiting: AtomicUsize::new(0),
             counters: Counters::default(),
             keep_flows: 8,
             flows: Mutex::default(),

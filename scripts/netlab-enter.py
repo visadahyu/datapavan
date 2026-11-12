@@ -14,6 +14,8 @@
 # - Packets the engine writes come from addresses that are local in the namespace, so reverse-path
 #   filtering is off and tun0 accepts local sources.
 # - Only GID 0 exists in the namespace, so it may open ICMP sockets.
+# - 203.0.113.0/24 (RFC 5737) is routed into tun1, which no one reads: a server there never answers,
+#   as one behind a firewall that drops packets.
 #
 #   netlab-enter.py -- PROGRAM [ARGUMENTS...]
 #
@@ -32,6 +34,7 @@ TUN4 = "10.1.10.1"
 FAKE4 = "10.1.10.2"
 DNS4 = "10.1.10.3"
 SERVER4 = "198.51.100.9"
+SILENT4 = "203.0.113.0/24"
 APPS_TABLE = "100"
 
 
@@ -70,6 +73,12 @@ def main():
     ip("rule", "add", "pref", "100", "from", TUN4, "lookup", APPS_TABLE)
     ip("rule", "add", "pref", "200", "lookup", "local")
     ip("rule", "del", "pref", "0")
+
+    # Its descriptor stays open in the test, unread, for as long as the namespace lives.
+    silent = tun("tun1")
+    os.set_inheritable(silent, True)
+    ip("link", "set", "tun1", "up")
+    ip("route", "add", SILENT4, "dev", "tun1")
 
     sysctl("net.ipv4.conf.all.rp_filter", "0")
     sysctl("net.ipv4.conf.tun0.rp_filter", "0")

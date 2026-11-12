@@ -230,6 +230,14 @@ impl Nat {
         }
     }
 
+    /// Forgets a connection that never reached Android's stack, whose port can be handed out again at
+    /// once: no `TIME_WAIT` can hold it.
+    pub fn release(&mut self, port: u16) {
+        if let Some(entry) = self.by_fake.remove(&port) {
+            self.by_app.remove(&(entry.app, entry.destination));
+        }
+    }
+
     /// Forgets the connection behind `port` if it is still the one from `app` to `destination`.
     pub fn remove_if(&mut self, port: u16, app: SocketAddr, destination: SocketAddr, now: Instant) {
         if self

@@ -151,7 +151,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStart<'ca
                 service: env.new_global_ref(&service)?,
             });
             let config = Config {
-                limits: Limits::default(),
+                limits: Limits::for_this_process(),
                 mtu: u16::try_from(mtu).unwrap_or(1500),
                 keep_flows: usize::try_from(keep_flows).unwrap_or(0),
                 // The common addresses, unless the network beneath uses them itself (ADR 0041).
