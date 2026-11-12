@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use datapavan_net::organisations::{FilePart, Organisations};
 use datapavan_net::socks5::Credentials;
 use datapavan_net::{
-    Addresses, Chain, Config, DnsUse, Ech, Engine, NamedBy, NetworkKind, Outcome, Platform,
+    Addresses, Chain, Config, DnsUse, Ech, Engine, Limits, NamedBy, NetworkKind, Outcome, Platform,
 };
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
 use jni::objects::{JByteArray, JClass, JIntArray, JLongArray, JObject, JString};
@@ -151,6 +151,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStart<'ca
                 service: env.new_global_ref(&service)?,
             });
             let config = Config {
+                limits: Limits::default(),
                 mtu: u16::try_from(mtu).unwrap_or(1500),
                 keep_flows: usize::try_from(keep_flows).unwrap_or(0),
                 // The common addresses, unless the network beneath uses them itself (ADR 0041).

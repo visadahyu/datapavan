@@ -32,7 +32,7 @@ use crate::log::Record;
 use crate::names::Names;
 #[cfg(test)]
 use crate::nat::Lookup;
-use crate::nat::Nat;
+use crate::nat::{self, Nat};
 use crate::organisations::Organisations;
 use crate::owners::{NetworkKind, Owners};
 use crate::packet::{self, Skip, TCP};
@@ -114,20 +114,52 @@ impl Addresses {
     }
 }
 
-/// A UDP flow silent for this long is closed.
-const UDP_IDLE: Duration = Duration::from_secs(60);
-/// At most this many datagrams of a new UDP flow wait for its socket; more are dropped, as by a full
-/// queue. A lookup sends one, a QUIC handshake two or three.
-const UDP_WAITING: usize = 32;
-/// How long a connection to a server may take before the app is told it is unreachable.
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(60);
-/// How long a closed connection's rewriting stays, for the last FIN and ACK packets.
-const CLOSE_LINGER: Duration = Duration::from_secs(30);
 /// The most packets read after one wake-up before the engine waits again.
 const BATCH: usize = 64;
-/// Stale TCP connections are swept at most this often, and only when packets come anyway: an idle
-/// tunnel must not wake the phone.
-const SWEEP_EVERY: Duration = Duration::from_secs(60);
+
+/// How long the engine waits and keeps things, and which fake ports it hands out. The defaults are the
+/// product's. Tests pass smaller ones, so that timing can be driven in seconds (review finding 21).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Limits {
+    /// A UDP flow silent for this long is closed.
+    pub udp_idle: Duration,
+    /// At most this many datagrams of a new UDP flow wait for its socket; more are dropped, as by a
+    /// full queue. A lookup sends one, a QUIC handshake two or three.
+    pub udp_waiting: usize,
+    /// How long a connection to a server, or a tool's handshake, may take before the app is told the
+    /// server is unreachable.
+    pub connect_timeout: Duration,
+    /// How long a closed connection's rewriting stays, for the last FIN and ACK packets.
+    pub close_linger: Duration,
+    /// Stale TCP connections are swept at most this often, and only when packets come anyway: an idle
+    /// tunnel must not wake the phone.
+    pub sweep_every: Duration,
+    /// A connection Android's stack never handed to the relay, silent this long, is forgotten
+    /// ([`nat::TCP_IDLE`]).
+    pub tcp_idle: Duration,
+    /// A freed fake port is not handed out again for this long ([`nat::PORT_COOLING`]).
+    pub port_cooling: Duration,
+    /// The first of the fake ports handed out, `first_port..=last_port`.
+    pub first_port: u16,
+    /// The last of them.
+    pub last_port: u16,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            udp_idle: Duration::from_secs(60),
+            udp_waiting: 32,
+            connect_timeout: Duration::from_secs(60),
+            close_linger: Duration::from_secs(30),
+            sweep_every: Duration::from_secs(60),
+            tcp_idle: nat::TCP_IDLE,
+            port_cooling: nat::PORT_COOLING,
+            first_port: nat::FIRST_PORT,
+            last_port: nat::LAST_PORT,
+        }
+    }
+}
 /// How long finished records gather before they go to Watch's log together (ADR 0037).
 const LOG_DELAY: Duration = Duration::from_secs(30);
 /// A flow still open is written as a segment at every quarter of an hour, UTC. Every time zone is a
@@ -270,6 +302,8 @@ pub struct Config {
     pub keep_flows: usize,
     /// The tunnel's addresses, as given to `Builder.addAddress` and `addDnsServer`.
     pub addresses: Addresses,
+    /// How long the engine waits and keeps things; the product uses [`Limits::default`].
+    pub limits: Limits,
 }
 
 /// How many counters [`Counters::snapshot`] gives.
@@ -351,6 +385,7 @@ struct Shared {
     platform: Arc<dyn Platform>,
     /// The tunnel's addresses for this run.
     addresses: Addresses,
+    limits: Limits,
     counters: Counters,
     keep_flows: usize,
     flows: Mutex<VecDeque<Flow>>,
@@ -453,6 +488,7 @@ impl Engine {
         let shared = Arc::new(Shared {
             platform,
             addresses: config.addresses,
+            limits: config.limits,
             counters: Counters::default(),
             keep_flows: config.keep_flows,
             flows: Mutex::new(VecDeque::new()),
@@ -601,7 +637,7 @@ async fn run(
     changes: watch::Receiver<u64>,
 ) {
     let pending: Pending = Arc::default();
-    let nat: Arc<Mutex<Nat>> = Arc::default();
+    let nat = Arc::new(Mutex::new(Nat::with_limits(&shared.limits)));
     let at = shared.addresses;
     let listener4 = listen(
         IpAddr::V4(at.tun4),
@@ -640,7 +676,7 @@ async fn run(
                 if n == 0 {
                     break;
                 }
-                if swept.elapsed() > SWEEP_EVERY {
+                if swept.elapsed() > state.shared.limits.sweep_every {
                     state.sweep();
                     swept = Instant::now();
                 }
@@ -770,6 +806,7 @@ mod tests {
         Shared {
             platform,
             addresses: Addresses::COMMON,
+            limits: Limits::default(),
             counters: Counters::default(),
             keep_flows: 8,
             flows: Mutex::default(),

@@ -8,7 +8,7 @@
 mod common;
 
 use common::{Settings, proxy, udp_echo};
-use datapavan_net::engine::Addresses;
+use datapavan_net::engine::{Addresses, Limits};
 use datapavan_net::{Chain, Config, Engine, Platform, dns, packet};
 use std::collections::HashSet;
 use std::io;
@@ -60,6 +60,7 @@ fn engine_at(chain: Chain, addresses: Addresses) -> io::Result<(Engine, UnixData
     let engine = Engine::start(
         OwnedFd::from(engine_end),
         Config {
+            limits: Limits::default(),
             mtu: 1500,
             keep_flows: 64,
             addresses,

@@ -7,8 +7,7 @@ use super::lookups;
 use super::naming::Begun;
 use super::upstream::{connect_udp, owner, protect};
 use super::{
-    CONNECT_TIMEOUT, Counters, Ech, Flow, Loop, NamedBy, Opened, Outcome, Shared, UDP_IDLE,
-    UDP_WAITING, is_unreachable, lock, send_to_app,
+    Counters, Ech, Flow, Loop, NamedBy, Opened, Outcome, Shared, is_unreachable, lock, send_to_app,
 };
 use crate::packet::{Packet, UDP, Unreachable};
 use crate::socks5::{self, Command, Target};
@@ -144,7 +143,7 @@ impl Loop {
                     flow.read_quic(payload),
                 ),
                 Some(UdpEntry::Opening(waiting)) => {
-                    if waiting.len() < UDP_WAITING {
+                    if waiting.len() < self.shared.limits.udp_waiting {
                         waiting.push(packet.to_vec());
                     } else {
                         Counters::add(&self.shared.counters.skipped, 1);
@@ -401,8 +400,9 @@ fn answer_waiting(
             Arc::clone(tun),
         ));
     }
+    let idle = shared.limits.udp_idle;
     tokio::spawn(async move {
-        tokio::time::sleep(UDP_IDLE).await;
+        tokio::time::sleep(idle).await;
         lock(&flows).remove(&key);
     });
 }
@@ -443,7 +443,7 @@ async fn associate(
         };
         Ok((way, control))
     };
-    match tokio::time::timeout(CONNECT_TIMEOUT, opening).await {
+    match tokio::time::timeout(shared.limits.connect_timeout, opening).await {
         Ok(opened) => opened,
         Err(_) => Err(io::ErrorKind::TimedOut.into()),
     }
@@ -570,7 +570,7 @@ async fn answers(
         tokio::select! {
             _ = changes.changed() => break,
             () = &mut closed => break,
-            received = tokio::time::timeout(UDP_IDLE, socket.recv(&mut buffer)) => {
+            received = tokio::time::timeout(shared.limits.udp_idle, socket.recv(&mut buffer)) => {
                 let Ok(received) = received else { break };
                 // From the tool's relay, the datagram's header goes; one that is not well formed, or a
                 // fragment, is dropped.

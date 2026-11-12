@@ -2,7 +2,7 @@
 //! owner lookup and the protection that keep them out of the tunnel. W6 and W7 extend this, to go
 //! through a tool's proxy or a `WireGuard` upstream.
 
-use super::{CONNECT_TIMEOUT, Shared, lock};
+use super::{Shared, lock};
 use crate::packet;
 use std::io;
 use std::net::SocketAddr;
@@ -64,7 +64,7 @@ pub(super) async fn connect_tcp(shared: &Arc<Shared>, target: SocketAddr) -> io:
     // hours and eleven minutes by Linux's defaults, beyond RFC 5382's two hours and four), and the relay
     // ends both sides.
     socket.set_keepalive(true)?;
-    match tokio::time::timeout(CONNECT_TIMEOUT, socket.connect(target)).await {
+    match tokio::time::timeout(shared.limits.connect_timeout, socket.connect(target)).await {
         Ok(connected) => connected,
         Err(_) => Err(io::ErrorKind::TimedOut.into()),
     }

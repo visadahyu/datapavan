@@ -8,9 +8,10 @@ use std::hash::BuildHasher;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
-/// The fake ports handed out.
-const FIRST_PORT: u16 = 10_000;
-const LAST_PORT: u16 = 60_000;
+/// The first fake port handed out by default.
+pub const FIRST_PORT: u16 = 10_000;
+/// The last fake port handed out by default.
+pub const LAST_PORT: u16 = 60_000;
 
 /// A connection that Android's stack never handed to the engine's relay, silent this long, is forgotten.
 /// One it handed over is the relay's: only the relay forgets it, when the connection ends (an app's push
@@ -72,6 +73,9 @@ pub struct Nat {
     /// Ports freed lately, oldest first, each with when it may be handed out again.
     cooling: VecDeque<(Instant, u16)>,
     cooling_set: HashSet<u16>,
+    /// [`TCP_IDLE`] and [`PORT_COOLING`] unless the engine's limits say otherwise.
+    idle: Duration,
+    cooling_for: Duration,
     /// A keyed hash with keys drawn from the system, and how many draws it made.
     random: RandomState,
     draws: u64,
@@ -84,6 +88,17 @@ impl Default for Nat {
 }
 
 impl Nat {
+    /// A table with the engine's limits: its fake ports, how long an unrelayed connection may be
+    /// silent, and how long a freed port cools.
+    #[must_use]
+    pub fn with_limits(limits: &crate::engine::Limits) -> Self {
+        Self {
+            idle: limits.tcp_idle,
+            cooling_for: limits.port_cooling,
+            ..Self::with_ports(limits.first_port, limits.last_port)
+        }
+    }
+
     /// A table that hands out the fake ports `first..=last`.
     #[must_use]
     pub fn with_ports(first: u16, last: u16) -> Self {
@@ -94,6 +109,8 @@ impl Nat {
             last: last.max(first),
             cooling: VecDeque::new(),
             cooling_set: HashSet::new(),
+            idle: TCP_IDLE,
+            cooling_for: PORT_COOLING,
             random: RandomState::new(),
             draws: 0,
         }
@@ -204,11 +221,11 @@ impl Nat {
         }
     }
 
-    /// Forgets a connection; its port cools for [`PORT_COOLING`] before it is handed out again.
+    /// Forgets a connection; its port cools ([`PORT_COOLING`] by default) before it is handed out again.
     pub fn remove(&mut self, port: u16, now: Instant) {
         if let Some(entry) = self.by_fake.remove(&port) {
             self.by_app.remove(&(entry.app, entry.destination));
-            self.cooling.push_back((now + PORT_COOLING, port));
+            self.cooling.push_back((now + self.cooling_for, port));
             self.cooling_set.insert(port);
         }
     }
@@ -224,13 +241,13 @@ impl Nat {
         }
     }
 
-    /// Forgets connections not yet relayed and silent for longer than [`TCP_IDLE`]; returns their
+    /// Forgets connections not yet relayed and silent for longer than [`TCP_IDLE`] (by default); returns their
     /// fake ports.
     pub fn sweep(&mut self, now: Instant) -> Vec<u16> {
         let stale: Vec<u16> = self
             .by_fake
             .iter()
-            .filter(|(_, e)| !e.relayed && now.duration_since(e.seen) > TCP_IDLE)
+            .filter(|(_, e)| !e.relayed && now.duration_since(e.seen) > self.idle)
             .map(|(&p, _)| p)
             .collect();
         for &port in &stale {

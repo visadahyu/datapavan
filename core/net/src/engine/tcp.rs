@@ -5,9 +5,7 @@ use super::chain::{Route, connect_through};
 use super::logbook::FlowBytes;
 use super::naming::Begun;
 use super::upstream::{connect_tcp, owner};
-use super::{
-    CLOSE_LINGER, Counters, Ech, Flow, Loop, NamedBy, Opened, Outcome, Shared, is_unreachable, lock,
-};
+use super::{Counters, Ech, Flow, Loop, NamedBy, Opened, Outcome, Shared, is_unreachable, lock};
 use crate::nat::{Lookup, Nat};
 use crate::packet::{ACK, Packet, RST, SYN, TCP, Unreachable};
 use crate::standins::is_stand_in;
@@ -315,7 +313,7 @@ pub(super) async fn accept(
             // tunnel and need rewriting for a while; then the port is free. Only then is the flow's last
             // segment written: earlier, the packets of that while were counted after it, and missing
             // from the log (up to a socket's send buffer on each download).
-            tokio::time::sleep(CLOSE_LINGER).await;
+            tokio::time::sleep(shared.limits.close_linger).await;
             lock(&nat).remove_if(port, entry.app, entry.destination, Instant::now());
             shared.finish_closed(id);
         });

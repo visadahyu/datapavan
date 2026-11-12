@@ -8,7 +8,7 @@
 
 use super::lookups::RESOLVERS;
 use super::upstream::protect;
-use super::{CONNECT_TIMEOUT, Shared, lock};
+use super::{Shared, lock};
 use crate::socks5::{self, Command, Credentials, Target};
 use crate::standins::is_stand_in;
 use std::collections::HashSet;
@@ -145,7 +145,7 @@ pub(super) async fn connect_through(
         .map_err(io_error)?;
         Ok(stream)
     };
-    match tokio::time::timeout(CONNECT_TIMEOUT, handshake).await {
+    match tokio::time::timeout(shared.limits.connect_timeout, handshake).await {
         Ok(connected) => connected,
         Err(_) => Err(io::ErrorKind::TimedOut.into()),
     }
