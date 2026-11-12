@@ -1,6 +1,6 @@
 # 0044. UDP mapping, budgets for each app, and the engine's smaller gaps
 
-- Status: Proposed
+- Status: Accepted (by the maintainer on 2026-11-12)
 - Date: 2026-11-12
 
 ## Context
@@ -47,9 +47,16 @@ an ADR (D25).
      seconds, refreshed only by answers), when its app's owner changes, or when the network or the chain
      changes.
    - **What stays as it is:** lookups to the tunnel's DNS address keep one connected socket per flow.
-   - **What is lost:** a mapped socket no longer reports ICMP "port unreachable" to the app. Linux gives that to
-     unconnected sockets only through `IP_RECVERR`, which the engine's libraries do not offer. Apps then wait for
-     their own timeouts, as they do behind most NATs.
+   - **ICMP errors are kept.** A connected socket learns of an ICMP error such as "port unreachable" by itself;
+     an unconnected one only with `IP_RECVERR` (and `IPV6_RECVERR`), which queues each error with the datagram's
+     destination. The mapped sockets turn it on. The engine reads each error from the socket's error queue and
+     tells the app, from that destination, as it does today. Most userspace NATs lose these errors, and apps then
+     wait for their own timeouts.
+   - **Through a safe library only (ADR 0006).** rustix 1.1.4, already in the lockfile, offers neither the option
+     nor the extended error. nix (MIT) offers both, `sockopt::Ipv4RecvErr` and `Ipv6RecvErr` and the
+     `Ipv4RecvErr` and `Ipv6RecvErr` control messages, behind safe functions. It comes in with this unit, if its
+     review for size, licence and advisories passes. If it does not, the errors are lost for mapped sockets, and
+     this ADR says so in its amendment.
 2. **Chained UDP: one UDP ASSOCIATE per mapping,** not per destination.
    - Each answer is matched to its destination by its SOCKS5 header. Today that header is thrown away, so anything
      the relay sends on an association reaches the app as if from the flow's destination.
@@ -106,6 +113,15 @@ an ADR (D25).
 
 - **Calls and peer-to-peer apps keep their direct paths,** as without Watch. Port scanning by one app no longer
   costs other apps their connections.
+- **The maintainer's questions on the bar (2026-11-12):** budgets for each app, two names and the namespace
+  harness are above the open tools; endpoint-independent mapping by default, also through the chain, is at the
+  top of the field; resets, echo and the MTU are the field's standard; keeping ICMP errors with unconnected
+  sockets is above most userspace NATs. Building it needs no frontier research. Measuring it does need lab work:
+  - descriptor limits and ICMP sockets across phone makers;
+  - each tool's relay;
+  - how often names differ.
+
+  An outside review of the engine (WATCH-07) is still needed before 0.2.0 is called stable.
 - **Two filters differ by design:** address-dependent for answers, endpoint-independent for mappings. These are
   the defaults RFC 4787 recommends, and what most home routers do.
 - **ADR 0012's "one socket per flow" for UDP is superseded** by decision 1. W6's done-when changes its wording,

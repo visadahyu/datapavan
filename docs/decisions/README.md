@@ -51,7 +51,7 @@ in the Git history.
 | [0041](0041-watch-visibility-and-coexistence.md) | What other apps see of Watch, and working beside every app | Accepted |
 | [0042](0042-dns-of-apps-that-go-directly.md) | DNS of apps that go directly: Oblivious DoH, several jurisdictions | Accepted, with open questions |
 | [0043](0043-release-integrity-and-repository-controls.md) | Release integrity, repository controls and continuous fuzzing | Accepted |
-| [0044](0044-udp-mapping-and-budgets.md) | UDP mapping, budgets for each app, and the engine's smaller gaps | Proposed |
+| [0044](0044-udp-mapping-and-budgets.md) | UDP mapping, budgets for each app, and the engine's smaller gaps | Accepted |
 
 ## Template
 

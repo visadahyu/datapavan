@@ -25,7 +25,8 @@ three engines behind one surface, on the Android 17 and 15 emulators and on a Ga
 **The system stack, in Rust.** Each new TCP connection's first SYN is held until Android has named
 the app (`getConnectionOwnerUid`) and the real server has accepted, or the app gets a reset. Watch
 runs inside its own tunnel and protects its upstream sockets, which this design requires. UDP is
-relayed in Rust, one socket per flow.
+relayed in Rust, one socket per flow. (Amended by [ADR 0044](0044-udp-mapping-and-budgets.md), decision 1:
+one socket per app socket, whatever the destination, with answers only from addresses the app sent to.)
 
 Why, from the spike:
 
