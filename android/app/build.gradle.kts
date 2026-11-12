@@ -271,6 +271,11 @@ abstract class ForbiddenPermissionsCheck : DefaultTask() {
         if (found.isNotEmpty()) {
             throw GradleException("Forbidden permission(s) in the merged manifest: $found")
         }
+        // Packages that share a UID share their permissions: a shared UID with an app that holds INTERNET
+        // would give it to this one, whatever this manifest requests (ADR 0045, decision 9).
+        if (Regex("""android:sharedUserId\s*=""").containsMatchIn(text)) {
+            throw GradleException("android:sharedUserId in the merged manifest: packages that share a UID share their permissions")
+        }
         source.copyTo(checkedManifest.get().asFile, overwrite = true)
     }
 }

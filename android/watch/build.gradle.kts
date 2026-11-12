@@ -150,6 +150,10 @@ abstract class ManifestAllowlistCheck : DefaultTask() {
         }
         fun org.w3c.dom.Element.android(name: String) = getAttributeNS(androidNs, name)
         val problems = mutableListOf<String>()
+        // Packages that share a UID share their permissions (ADR 0045, decision 9).
+        if (document.documentElement.getAttributeNS(androidNs, "sharedUserId").isNotEmpty()) {
+            problems += "shares a UID with other packages (android:sharedUserId)"
+        }
 
         for (element in elements("uses-permission") + elements("uses-permission-sdk-23")) {
             val name = element.android("name")
