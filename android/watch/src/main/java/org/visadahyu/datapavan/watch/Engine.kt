@@ -25,6 +25,8 @@ internal object Engine {
         tableFd: Int,
         tableStart: Long,
         tableLength: Long,
+        /** The tunnel's spare addresses, for a network that uses the common ones itself (ADR 0041). */
+        spareAddresses: Boolean,
     ): Boolean
 
     /** Stops the engine and closes the tunnel's descriptor. */

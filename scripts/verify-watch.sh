@@ -104,6 +104,13 @@ flows() {
 # has named its app, which on CI after a network switch took a few seconds. The list is read whole, then
 # searched: under pipefail, a grep -q that stops reading early fails the pipe, so a flow that was there
 # could look missing.
+# The tunnel's addresses that Watch chose (ADR 0041), from its dump: "<set> <tun4> <dns4> <tun6> <dns6>".
+# adb reads nothing from stdin here: called inside a pipeline, it would swallow the pipe's input.
+addresses_line() { adb shell dumpsys activity service "$PKG/.WatchVpnService" </dev/null | tr -d '\r' | sed -n 's/^ *addresses //p'; }
+tunnel_address() { addresses_line | awk '{print $2}'; }
+# The tunnel's DNS server, IPv4 or IPv6 as the flows list them, as an extended regular expression.
+tunnel_dns_pattern() { addresses_line | awk '{gsub(/\./, "\\.", $3); print $3 "|\\[" $5 "\\]"}'; }
+
 flow_listed() {
     local list
     for _ in 1 2 3 4 5; do
@@ -189,7 +196,7 @@ traffic() {
     # ping resolves the name first, through the tunnel's DNS; its ICMP itself is not forwarded yet.
     answer=$(device 15 "ping -c 1 -W 2 example.com")
     grep -q 'PING example.com (' <<<"$answer" || fail "$round: example.com did not resolve: $answer"
-    flow_listed "^udp [^ ]+ (10\.215\.173\.3|\[fd7a:6470:7761::3\]):53 $SHELL_UID opened " ||
+    flow_listed "^udp [^ ]+ ($(tunnel_dns_pattern)):53 $SHELL_UID opened " ||
         fail "$round: no DNS flow of the shell to the tunnel's DNS address"
     echo "ok: $round: names resolve through the tunnel"
 
@@ -368,6 +375,28 @@ adb shell am start -W -n "$PKG/.MainActivity" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
 vpn_up || fail "Watch's tunnel did not come up (on a phone, allow the VPN request on its screen first)"
 echo "ok: the tunnel is up for every app"
+# The tunnel's addresses are the common ones (ADR 0041): the emulator's network, 10.0.2.0/24, does not
+# use them.
+case "$(addresses_line)" in
+    "common 10.1.10.1 10.1.10.3 "*) echo "ok: the tunnel has the addresses common to other firewalls" ;;
+    *) fail "the tunnel's addresses are not the common ones: $(addresses_line)" ;;
+esac
+# A network that uses the common addresses gets the spare ones (ADR 0041). The emulator's network cannot
+# be made to clash, so a debug command takes the same path: the tunnel is set up again, traffic passes
+# with the spare addresses, and it comes back to the common ones.
+adb shell dumpsys activity service "$PKG/.WatchVpnService" addresses-force spare </dev/null | grep -q '^ *addresses-forced spare' ||
+    fail "the debug command to force the spare addresses failed"
+for _ in $(seq 1 20); do addresses_line | grep -q '^spare ' && vpn_up && break; sleep 1; done
+case "$(addresses_line)" in
+    "spare 10.215.173.1 10.215.173.3 "*) ;;
+    *) fail "the tunnel did not take the spare addresses: $(addresses_line)" ;;
+esac
+answer=$(timeout 15 adb shell "printf 'GET /ping HTTP/1.0\r\n\r\n' | nc -w 5 $HOST $PORT" | tr -d '\r' || true)
+grep -q '^pong$' <<<"$answer" || fail "no answer over TCP with the spare addresses"
+adb shell dumpsys activity service "$PKG/.WatchVpnService" addresses-force auto </dev/null >/dev/null
+for _ in $(seq 1 20); do addresses_line | grep -q '^common ' && vpn_up && break; sleep 1; done
+addresses_line | grep -q '^common ' || fail "the tunnel did not come back to the common addresses: $(addresses_line)"
+echo "ok: with a clashing network the tunnel takes the spare addresses, traffic passes, and it comes back"
 
 traffic first
 
@@ -379,22 +408,23 @@ echo "ok: an unreachable IPv6 address gets the app an ICMPv6 error"
 # Watch's listener is on the tunnel's own address, which any app can reach directly, from a port it
 # picks. A connection that does not come from the address the engine rewrites the apps' connections to
 # come from is closed at once and counted (the 19th counter): it never takes another app's waiting
-# upstream connection. The listener's port is in /proc/net/tcp: listening (0A), Watch's UID, on
-# 10.215.173.1 (01ADD70A, as the kernel prints it).
+# upstream connection. The listener's port is in /proc/net/tcp: listening (0A), Watch's UID, on the
+# tunnel's IPv4 address, which the kernel prints as hex in reverse byte order.
 strangers() {
     adb shell dumpsys activity service "$PKG/.WatchVpnService" | tr -d '\r' | sed -n 's/^ *counters //p' | awk '{print $19}'
 }
 watch_uid=$(adb shell cmd package list packages -U "$PKG" | tr -d '\r' | sed -n "s/^package:$PKG uid:\([0-9]*\)$/\1/p")
+listener_hex=$(python3 -I -c 'import sys; print("".join(f"{int(b):02X}" for b in reversed(sys.argv[1].split("."))))' "$(tunnel_address)")
 listener=$(adb shell cat /proc/net/tcp 2>/dev/null | tr -d '\r' | python3 -I -c '
 import sys
 for line in sys.stdin:
     f = line.split()
-    if len(f) > 7 and f[3] == "0A" and f[7] == sys.argv[1] and f[1].startswith("01ADD70A:"):
+    if len(f) > 7 and f[3] == "0A" and f[7] == sys.argv[1] and f[1].startswith(sys.argv[2] + ":"):
         print(int(f[1].split(":")[1], 16))
-        break' "$watch_uid")
+        break' "$watch_uid" "$listener_hex")
 if [ -n "$listener" ]; then
     before=$(strangers)
-    answer=$(device 8 "echo hello | nc -w 5 10.215.173.1 $listener")
+    answer=$(device 8 "echo hello | nc -w 5 $(tunnel_address) $listener")
     [ -z "$answer" ] || fail "a connection straight to Watch's listener got an answer: $answer"
     after=$(strangers)
     [ "$after" = $((before + 1)) ] || fail "a connection straight to Watch's listener was not counted: $before, then $after"

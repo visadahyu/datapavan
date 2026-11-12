@@ -36,6 +36,14 @@ import org.visadahyu.datapavan.watch.log.LogRecord
  */
 class WatchVpnService : VpnService() {
     private var active = false
+
+    /** The tunnel's addresses for this run (ADR 0041): the common ones, unless a network beneath uses them. */
+    @Volatile
+    private var addresses = TunnelAddresses.COMMON
+
+    /** Debug builds: a set to take whatever the networks beneath, for scripts/verify-watch.sh, which cannot make its network clash. */
+    @Volatile
+    private var forced: TunnelAddresses.Set? = null
     private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
     private val debuggable by lazy { applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 }
 
@@ -53,6 +61,16 @@ class WatchVpnService : VpnService() {
         }
 
         override fun onLinkPropertiesChanged(network: Network, properties: LinkProperties) {
+            // A network that now uses the tunnel's addresses itself would lose its router and resolver
+            // to the tunnel: the tunnel is set up again with the other set (ADR 0041).
+            if ((forced ?: TunnelAddresses.choose(networksBeneath())) !== addresses) {
+                main.post {
+                    if (active) {
+                        close()
+                        start(null)
+                    }
+                }
+            }
             if (network != current) return
             // A link-local DNS server needs its interface's scope, which the engine does not take.
             val dns = properties.dnsServers.firstOrNull { !it.isLinkLocalAddress }?.hostAddress ?: ""
@@ -82,6 +100,20 @@ class WatchVpnService : VpnService() {
         override fun onLinkPropertiesChanged(network: Network, properties: LinkProperties) {
             dnsState.value = PrivateDns.of(properties)
         }
+    }
+
+    private val main = Handler(Looper.getMainLooper())
+
+    /** Every network beneath the tunnel, VPNs aside, with what it uses of the address space. */
+    @Suppress("DEPRECATION") // allNetworks: the choice must see every network, not only the one followed.
+    private fun networksBeneath(): List<TunnelAddresses.Network> = connectivity.allNetworks.mapNotNull { network ->
+        val capabilities = connectivity.getNetworkCapabilities(network) ?: return@mapNotNull null
+        if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return@mapNotNull null
+        val properties = connectivity.getLinkProperties(network) ?: return@mapNotNull null
+        TunnelAddresses.Network(
+            addresses = properties.linkAddresses.map { it.address to it.prefixLength },
+            others = properties.dnsServers + properties.routes.mapNotNull { it.gateway }.filterNot { it.isAnyLocalAddress },
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -153,17 +185,18 @@ class WatchVpnService : VpnService() {
 
     private fun start(intent: Intent?) {
         if (active) return
+        addresses = forced ?: TunnelAddresses.choose(networksBeneath())
         val builder = Builder()
             .setSession(getString(R.string.app_name))
             .setMtu(MTU)
             // A /32 and a /128: a wider prefix would count as local network on Android 17 (ADR 0034).
-            .addAddress(ADDRESS_V4, 32)
-            .addAddress(ADDRESS_V6, 128)
+            .addAddress(addresses.tun4, 32)
+            .addAddress(addresses.tun6, 128)
             .addRoute("0.0.0.0", 0)
             .addRoute("::", 0)
             // The engine passes queries to this address on to the DNS server of the network beneath.
-            .addDnsServer(DNS_V4)
-            .addDnsServer(DNS_V6)
+            .addDnsServer(addresses.dns4)
+            .addDnsServer(addresses.dns6)
             // The engine reads until "would block" (spike, finding 8).
             .setBlocking(false)
             // A VPN that targets Android 10 or later is metered unless it says otherwise. Watch is
@@ -247,7 +280,10 @@ class WatchVpnService : VpnService() {
             // This build has no table: flows that nothing else names stay unnamed.
             Log.i(TAG, "No table from address to organisation in this build")
         }
-        return Engine.nativeStart(this, fd, MTU, if (debuggable) KEPT_FLOWS else 0, tableFd, tableStart, tableLength)
+        return Engine.nativeStart(
+            this, fd, MTU, if (debuggable) KEPT_FLOWS else 0, tableFd, tableStart, tableLength,
+            spareAddresses = addresses === TunnelAddresses.SPARE,
+        )
     }
 
     private fun stop() {
@@ -328,6 +364,7 @@ class WatchVpnService : VpnService() {
             is PrivateDns.Strict -> if (debuggable) "strict ${mode.host}" else "strict"
         }
         writer.println("private-dns $dns")
+        writer.println("addresses ${addresses.name} ${addresses.tun4} ${addresses.dns4} ${addresses.tun6} ${addresses.dns6}")
         writer.println("counters ${Engine.nativeCounters().joinToString(" ")}")
         writer.println("organisations ${Engine.nativeOrganisations().ifEmpty { "none" }}")
         val log = ConnectionLog.of(this)
@@ -342,6 +379,23 @@ class WatchVpnService : VpnService() {
             when (uncached) {
                 "on" -> Engine.nativeUncacheAnswers(true).also { writer.println("dns-uncached on") }
                 "off" -> Engine.nativeUncacheAnswers(false).also { writer.println("dns-uncached off") }
+            }
+            // The tunnel set up again with the spare or the common addresses, or as the networks choose,
+            // by the same path as a network that comes to clash (ADR 0041).
+            val force = args.orEmpty().indexOf("addresses-force").takeIf { it >= 0 }?.let { args?.getOrNull(it + 1) }
+            if (force != null) {
+                forced = when (force) {
+                    "spare" -> TunnelAddresses.SPARE
+                    "common" -> TunnelAddresses.COMMON
+                    else -> null
+                }
+                main.post {
+                    if (active) {
+                        close()
+                        start(null)
+                    }
+                }
+                writer.println("addresses-forced $force")
             }
             debugChain(args.orEmpty().toList(), writer)
             if ("find-tool" in args.orEmpty()) {
@@ -495,13 +549,6 @@ class WatchVpnService : VpnService() {
         /** The asset of the table from address to organisation, stored uncompressed (build.gradle.kts). */
         private const val ORGANISATIONS = "asn.bin"
 
-        // The tunnel's own addresses and its DNS server, the same as the engine's (core/net,
-        // engine.rs): from the ranges for private networks (RFC 1918) and unique local addresses
-        // (RFC 4193), picked so that they are unlikely to meet a home or office network.
-        private const val ADDRESS_V4 = "10.215.173.1"
-        private const val ADDRESS_V6 = "fd7a:6470:7761::1"
-        private const val DNS_V4 = "10.215.173.3"
-        private const val DNS_V6 = "fd7a:6470:7761::3"
 
         private val state = MutableStateFlow(false)
 

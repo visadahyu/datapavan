@@ -1,7 +1,7 @@
 //! What names a flow: the DNS answers Watch passed on, the TLS or QUIC server name of its first bytes,
 //! the organisation behind the destination's network, and whether it is an app's own DNS.
 
-use super::{Counters, DnsUse, Ech, Flow, NamedBy, Network, Opened, Shared, is_tunnel_dns, lock};
+use super::{Counters, DnsUse, Ech, Flow, NamedBy, Network, Opened, Shared, lock};
 use crate::dns;
 use crate::owners::NetworkKind;
 use crate::standins::is_stand_in;
@@ -87,7 +87,7 @@ impl Shared {
             .or_else(|| name.and_then(|n| self.resolvers.named(n)))
             .map(str::to_owned);
         match destination.port() {
-            53 if !is_tunnel_dns(destination.ip()) => (DnsUse::Plain, known),
+            53 if !self.is_tunnel_dns(destination.ip()) => (DnsUse::Plain, known),
             853 => (DnsUse::Encrypted, known),
             443 if known.is_some() => (DnsUse::Encrypted, known),
             _ => (DnsUse::None, None),

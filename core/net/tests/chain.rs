@@ -8,7 +8,7 @@
 mod common;
 
 use common::{Settings, proxy, udp_echo};
-use datapavan_net::engine::{DNS4, TUN4};
+use datapavan_net::engine::Addresses;
 use datapavan_net::{Chain, Config, Engine, Platform, dns, packet};
 use std::collections::HashSet;
 use std::io;
@@ -49,6 +49,11 @@ impl Platform for ByPort {
 
 /// The engine on a datagram pair, with `chain` on, and the app's end of the pair.
 fn engine(chain: Chain) -> io::Result<(Engine, UnixDatagram)> {
+    engine_at(chain, Addresses::COMMON)
+}
+
+/// As [`engine`], with the tunnel's addresses `addresses`.
+fn engine_at(chain: Chain, addresses: Addresses) -> io::Result<(Engine, UnixDatagram)> {
     let (engine_end, app_end) = std::os::unix::net::UnixDatagram::pair()?;
     engine_end.set_nonblocking(true)?;
     app_end.set_nonblocking(true)?;
@@ -57,6 +62,7 @@ fn engine(chain: Chain) -> io::Result<(Engine, UnixDatagram)> {
         Config {
             mtu: 1500,
             keep_flows: 64,
+            addresses,
         },
         Arc::new(ByPort),
         None,
@@ -77,7 +83,7 @@ fn chain(proxy: SocketAddr) -> Chain {
 }
 
 fn app(port: u16) -> SocketAddr {
-    SocketAddr::from((TUN4, port))
+    SocketAddr::from((Addresses::COMMON.tun4, port))
 }
 
 async fn send(tunnel: &UnixDatagram, from: SocketAddr, to: SocketAddr, payload: &[u8]) -> Outcome {
@@ -132,7 +138,7 @@ async fn a_chained_lookup_gets_a_stand_in_whose_name_goes_to_the_tool() -> Outco
     let tool = proxy(settings).await?;
     let (_engine, tunnel) = engine(chain(tool.address))?;
 
-    let dns = SocketAddr::from((DNS4, 53));
+    let dns = SocketAddr::from((Addresses::COMMON.dns4, 53));
     send(
         &tunnel,
         app(CHAINED_PORT),
@@ -178,6 +184,26 @@ async fn a_chained_lookup_gets_a_stand_in_whose_name_goes_to_the_tool() -> Outco
     Ok(())
 }
 
+/// With the spare addresses (ADR 0041), the tunnel's DNS server is the spare one: a chained app's lookup
+/// to it gets its stand-in, answered from that address.
+#[tokio::test(flavor = "current_thread")]
+async fn the_spare_addresses_carry_the_tunnels_lookups() -> Outcome {
+    let tool = proxy(Settings::default()).await?;
+    let (_engine, tunnel) = engine_at(chain(tool.address), Addresses::SPARE)?;
+    let dns = SocketAddr::from((Addresses::SPARE.dns4, 53));
+    let from_app = SocketAddr::from((Addresses::SPARE.tun4, CHAINED_PORT));
+    send(&tunnel, from_app, dns, &query(b"\x04echo\x04test\x00", 1)).await?;
+    let (from, answer) = receive(&tunnel).await?.ok_or("an answer")?;
+    assert_eq!(from, dns);
+    let read = dns::response(&answer).ok_or("a response")?;
+    assert!(
+        matches!(read.addresses[..], [(IpAddr::V4(_), 0)]),
+        "not one stand-in: {:?}",
+        read.addresses
+    );
+    Ok(())
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn other_questions_go_to_the_resolver_through_the_tool() -> Outcome {
     // A resolver here, reached when the tool is asked for Quad9.
@@ -217,7 +243,7 @@ async fn other_questions_go_to_the_resolver_through_the_tool() -> Outcome {
     let tool = proxy(settings).await?;
     let (_engine, tunnel) = engine(chain(tool.address))?;
 
-    let dns = SocketAddr::from((DNS4, 53));
+    let dns = SocketAddr::from((Addresses::COMMON.dns4, 53));
     send(
         &tunnel,
         app(CHAINED_PORT),
@@ -323,7 +349,7 @@ async fn questions_share_one_kept_connection_to_the_resolver() -> Outcome {
         .insert(SocketAddr::from(([9, 9, 9, 10], 53)), resolver_address);
     let tool = proxy(settings).await?;
     let (_engine, tunnel) = engine(chain(tool.address))?;
-    let dns = SocketAddr::from((DNS4, 53));
+    let dns = SocketAddr::from((Addresses::COMMON.dns4, 53));
 
     // Two questions at once, under the same ID, as two apps may ask.
     send(
@@ -397,7 +423,7 @@ async fn a_connection_the_resolver_closed_is_opened_again() -> Outcome {
         .insert(SocketAddr::from(([9, 9, 9, 10], 53)), resolver_address);
     let tool = proxy(settings).await?;
     let (_engine, tunnel) = engine(chain(tool.address))?;
-    let dns = SocketAddr::from((DNS4, 53));
+    let dns = SocketAddr::from((Addresses::COMMON.dns4, 53));
     for (name, label) in [
         (&b"\x01a\x04test\x00"[..], b'a'),
         (b"\x01b\x04test\x00", b'b'),

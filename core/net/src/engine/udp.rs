@@ -8,7 +8,7 @@ use super::naming::Begun;
 use super::upstream::{connect_udp, owner, protect};
 use super::{
     CONNECT_TIMEOUT, Counters, Ech, Flow, Loop, NamedBy, Opened, Outcome, Shared, UDP_IDLE,
-    UDP_WAITING, is_tunnel_dns, is_unreachable, lock, send_to_app,
+    UDP_WAITING, is_unreachable, lock, send_to_app,
 };
 use crate::packet::{Packet, UDP, Unreachable};
 use crate::socks5::{self, Command, Target};
@@ -166,7 +166,7 @@ impl Loop {
             }
         };
         note_quic(&self.shared, quic);
-        if is_tunnel_dns(key.1.ip()) {
+        if self.shared.is_tunnel_dns(key.1.ip()) {
             self.shared.lookup(uid, packet.len());
         }
         if let UdpWay::Lookups(chain) = &way {
@@ -263,7 +263,8 @@ async fn open_udp(
     };
     let bytes = shared.record(flow);
     // The tunnel's own DNS address is never QUIC.
-    let quic = (!is_tunnel_dns(destination.ip())).then(|| (opened, Box::new(quic::Initial::new())));
+    let quic =
+        (!shared.is_tunnel_dns(destination.ip())).then(|| (opened, Box::new(quic::Initial::new())));
     let mut open = UdpFlow {
         way: way.clone(),
         quic,
@@ -292,7 +293,7 @@ async fn open_udp(
                 continue;
             };
             reads.push(open.read_quic(payload));
-            if is_tunnel_dns(destination.ip()) {
+            if shared.is_tunnel_dns(destination.ip()) {
                 lookups.push(packet.len());
             }
             if let UdpWay::Lookups(_) = way {
@@ -345,7 +346,7 @@ async fn open_udp(
 /// While a chain is on, the answer Watch's cache holds for a direct app's lookup, with a time to live
 /// of 0 like every answer then, so that the network's resolver is asked no more often than before.
 fn cached_answer(shared: &Shared, destination: SocketAddr, query: &[u8]) -> Option<Vec<u8>> {
-    if !is_tunnel_dns(destination.ip()) || !shared.uncached_answers.load(Ordering::Relaxed) {
+    if !shared.is_tunnel_dns(destination.ip()) || !shared.uncached_answers.load(Ordering::Relaxed) {
         return None;
     }
     let mut answer = lock(&shared.direct_answers).answer(query, Instant::now())?;
@@ -367,7 +368,9 @@ async fn way_for(
                 .map(|socket| (UdpWay::Direct(Arc::new(socket)), None)),
             None => Err(io::ErrorKind::NetworkUnreachable.into()),
         },
-        Route::Tool(chain) if is_tunnel_dns(destination.ip()) => Ok((UdpWay::Lookups(chain), None)),
+        Route::Tool(chain) if shared.is_tunnel_dns(destination.ip()) => {
+            Ok((UdpWay::Lookups(chain), None))
+        }
         // Without UDP in the tool, a chained app's UDP goes nowhere (VPN.md).
         Route::Tool(chain) if !chain.udp => Err(io::ErrorKind::HostUnreachable.into()),
         Route::Tool(chain) => associate(shared, &chain, destination)
@@ -589,7 +592,7 @@ async fn answers(
                         }
                         // Android's resolver names every app's flows; an app's own, only its own.
                         if destination.port() == 53 {
-                            if is_tunnel_dns(destination.ip()) {
+                            if shared.is_tunnel_dns(destination.ip()) {
                                 shared.learn(&buffer[..n], None);
                                 if shared.uncached_answers.load(Ordering::Relaxed) {
                                     lock(&shared.direct_answers).insert(&buffer[..n], Instant::now());
@@ -611,7 +614,7 @@ async fn answers(
                 if let Some(answer) = answer {
                     match &logged {
                         Some((_, bytes)) => bytes.add_wire_down(answer.len()),
-                        None if destination.port() == 53 && is_tunnel_dns(destination.ip()) => {
+                        None if destination.port() == 53 && shared.is_tunnel_dns(destination.ip()) => {
                             shared.lookup_answered(uid, answer.len());
                         }
                         None => {}

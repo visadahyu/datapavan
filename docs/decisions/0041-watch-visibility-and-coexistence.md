@@ -52,6 +52,40 @@ turn Watch off.
 7. **The lab tests apps that refuse a VPN.** Named apps are tested on real phones one by one, each test agreed
    first, and the results are published with evidence (ADR 0015).
 
+### How decision 3 is built (2026-11-12)
+
+**The principle: an open project, a quiet phone.** The maintainer asked whether a security tool should hide
+itself or be plainly seen. The project is open about what it is: its code, its name, its signing key, and what it
+tells its own user; Android also always shows that the VPN is Watch's. What the phone does not do is tell every
+other app, unasked, which tool its user chose. The tunnel's address is such a message: any app reads it without a
+permission, and an address of Watch's own would mark its user as a Watch user, and through the chain a likely user
+of a circumvention tool. So Watch takes addresses that other apps of its own kind use. It does not take the
+addresses of a different kind of app: it does not pass itself off as something it is not.
+
+**The addresses.** The tunnel addresses of 32 apps were read from their own source at a tag or commit. Three
+groups share them:
+- 172.19.0.1 and fdfe:dcba:9876::1 belong to proxy and circumvention clients: Shadowsocks, NekoBox, Exclave,
+  Clash Meta, Hiddify and others, with a /30 or /28 that Android 17 would count as local network.
+- 10.1.10.1/32 and fd00:1:fd00:1:fd00:1:fd00:1/128 belong to privacy firewalls: NetGuard, TrackerControl and
+  InviZible Pro.
+- 10.111.222.1/24 belongs to Intra, Outline and RethinkDNS.
+
+Watch takes the firewalls' pair. It has exactly the /32 and /128 that Watch needs, and an app that reads it finds
+a local firewall, which Watch is. The engine and the service hold the same two sets (`Addresses` in
+core/net/src/engine.rs, `TunnelAddresses` in Watch), and a unit test fails if they drift apart.
+
+**A network that uses them itself.** Comcast Business gateways answer at 10.1.10.1, and a tunnel that took the
+router's address would cut the phone off from its router and resolver. Before it sets up the tunnel, Watch reads
+every network beneath it: their addresses with their prefixes, their gateways and their DNS servers. If one of
+them uses an address of the common set, Watch takes its earlier, rarer addresses (10.215.173.1 and
+fd7a:6470:7761::1, shared only with PCAPdroid's IPv4 address). When a network changes to clash, or stops
+clashing, Watch sets the tunnel up again with the other set.
+
+**What still differs.** The tunnel's DNS server (10.1.10.3) and its MTU (1500, where NetGuard uses 10000) are
+Watch's own. An app that can list installed packages can still see that Watch is installed. Hiding that a VPN runs
+is not possible on stock Android. The probe app of decision 2 is to measure what an app outside the tunnel still
+sees. This decision narrows what the address alone says; it does not make Watch invisible.
+
 ## Consequences
 
 - **0.2.0 grows.** Exclusion, the notice, the local-network rule and the matrix are release gates (ADR 0039).

@@ -11,7 +11,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use datapavan_net::organisations::{FilePart, Organisations};
 use datapavan_net::socks5::Credentials;
-use datapavan_net::{Chain, Config, DnsUse, Ech, Engine, NamedBy, NetworkKind, Outcome, Platform};
+use datapavan_net::{
+    Addresses, Chain, Config, DnsUse, Ech, Engine, NamedBy, NetworkKind, Outcome, Platform,
+};
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
 use jni::objects::{JByteArray, JClass, JIntArray, JLongArray, JObject, JString};
 use jni::sys::{jboolean, jint, jlong};
@@ -122,6 +124,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStart<'ca
     table_fd: jint,
     table_start: jlong,
     table_length: jlong,
+    spare_addresses: jboolean,
 ) -> jboolean {
     unowned_env
         .with_env(|env| -> Result<jboolean, Error> {
@@ -142,6 +145,12 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStart<'ca
             let config = Config {
                 mtu: u16::try_from(mtu).unwrap_or(1500),
                 keep_flows: usize::try_from(keep_flows).unwrap_or(0),
+                // The common addresses, unless the network beneath uses them itself (ADR 0041).
+                addresses: if spare_addresses {
+                    Addresses::SPARE
+                } else {
+                    Addresses::COMMON
+                },
             };
             let organisations = (table_fd >= 0).then(|| {
                 // SAFETY: as for `fd`: Kotlin hands over a duplicate it detached, owned by nothing else.

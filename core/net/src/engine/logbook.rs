@@ -1,9 +1,7 @@
 //! The connection log's bookkeeping inside the engine (ADR 0037): each open flow's bytes, the segments
 //! of open flows at each quarter hour, each app's lookups, and the task that hands the records to Watch.
 
-use super::{
-    DnsUse, Ech, Flow, LOG_DELAY, NamedBy, Outcome, SEGMENT_MS, Shared, is_tunnel_dns, lock,
-};
+use super::{DnsUse, Ech, Flow, LOG_DELAY, NamedBy, Outcome, SEGMENT_MS, Shared, lock};
 use crate::log;
 use crate::log::Record;
 use crate::packet;
@@ -101,7 +99,7 @@ impl Shared {
     }
 
     pub(super) fn log_flow(&self, flow: &Flow) -> Option<Arc<FlowBytes>> {
-        if is_tunnel_dns(flow.destination.ip()) {
+        if self.is_tunnel_dns(flow.destination.ip()) {
             return None;
         }
         let hidden = self.hides(flow.uid, flow.destination);

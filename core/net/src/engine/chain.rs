@@ -8,7 +8,7 @@
 
 use super::lookups::RESOLVERS;
 use super::upstream::protect;
-use super::{CONNECT_TIMEOUT, Shared, is_tunnel_dns, lock};
+use super::{CONNECT_TIMEOUT, Shared, lock};
 use crate::socks5::{self, Command, Credentials, Target};
 use crate::standins::is_stand_in;
 use std::collections::HashSet;
@@ -91,7 +91,7 @@ impl Shared {
     pub(super) fn tool_target(&self, destination: SocketAddr) -> Option<Target> {
         // DNS over TCP to Watch's own address, which Android's resolver uses when an answer was cut
         // short, goes to the resolver of chained apps (ADR 0038). Its answers are not rebuilt.
-        if is_tunnel_dns(destination.ip()) {
+        if self.is_tunnel_dns(destination.ip()) {
             return Some(Target::Address(RESOLVERS[0]));
         }
         if !is_stand_in(destination.ip()) {
@@ -230,7 +230,7 @@ mod tests {
         assert_eq!(shared.tool_target(forgotten), None);
         let server = SocketAddr::from(([93, 184, 216, 34], 443));
         assert_eq!(shared.tool_target(server), Some(Target::Address(server)));
-        let watch_dns = SocketAddr::from((super::super::DNS4, 53));
+        let watch_dns = SocketAddr::from((super::super::Addresses::COMMON.dns4, 53));
         assert_eq!(
             shared.tool_target(watch_dns),
             Some(Target::Address(RESOLVERS[0]))

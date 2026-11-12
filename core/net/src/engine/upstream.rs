@@ -2,7 +2,7 @@
 //! owner lookup and the protection that keep them out of the tunnel. W6 and W7 extend this, to go
 //! through a tool's proxy or a `WireGuard` upstream.
 
-use super::{CONNECT_TIMEOUT, Shared, is_tunnel_dns, lock};
+use super::{CONNECT_TIMEOUT, Shared, lock};
 use crate::packet;
 use std::io;
 use std::net::SocketAddr;
@@ -14,7 +14,7 @@ impl Shared {
     /// Where a flow to `destination` really goes: the network's DNS server for the tunnel's own DNS
     /// address, else the destination itself.
     pub(super) fn target(&self, destination: SocketAddr) -> Option<SocketAddr> {
-        if is_tunnel_dns(destination.ip()) {
+        if self.is_tunnel_dns(destination.ip()) {
             return lock(&self.upstream_dns).map(|dns| SocketAddr::new(dns, destination.port()));
         }
         Some(destination)

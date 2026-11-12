@@ -27,7 +27,10 @@ dump() { adb shell dumpsys activity service "$PKG/.WatchVpnService" "$@" | tr -d
 lookups() {
     local flows
     flows=$(dump)
-    grep -cE "^ *flow udp [^ ]* (10\.215\.173\.3|\[fd7a:6470:7761::3\]):53 $1 " <<<"$flows" || true
+    # The tunnel's DNS server, as Watch's dump gives it (ADR 0041).
+    local dns
+    dns=$(sed -n 's/^ *addresses [a-z]* [^ ]* \([^ ]*\) [^ ]* \([^ ]*\)$/\1|\\[\2\\]/p' <<<"$flows" | sed 's/\./\\./g')
+    grep -cE "^ *flow udp [^ ]* ($dns):53 $1 " <<<"$flows" || true
 }
 from_shell() { adb shell ping -c 1 -W 1 "$1" >/dev/null 2>&1 || true; }
 from_watch() { adb shell run-as "$PKG" ping -c 1 -W 1 "$1" >/dev/null 2>&1 || true; }

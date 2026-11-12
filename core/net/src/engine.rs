@@ -60,20 +60,59 @@ use tcp::{Pending, listen};
 use tcp::{Upstream, accept};
 use udp::UdpFlows;
 
-/// The tunnel's IPv4 address, a /32 (ADR 0034: a wider prefix would count as local network on
-/// Android 17 and fail without its permission).
-pub const TUN4: Ipv4Addr = Ipv4Addr::new(10, 215, 173, 1);
-/// The fake peer the kernel sees for every rewritten IPv4 connection, outside the /32.
-pub const FAKE4: Ipv4Addr = Ipv4Addr::new(10, 215, 173, 2);
-/// The DNS server Android is given inside the tunnel; the engine passes its queries to the DNS
-/// server of the network beneath.
-pub const DNS4: Ipv4Addr = Ipv4Addr::new(10, 215, 173, 3);
-/// The tunnel's IPv6 address, a /128.
-pub const TUN6: Ipv6Addr = Ipv6Addr::new(0xfd7a, 0x6470, 0x7761, 0, 0, 0, 0, 1);
-/// The IPv6 fake peer.
-pub const FAKE6: Ipv6Addr = Ipv6Addr::new(0xfd7a, 0x6470, 0x7761, 0, 0, 0, 0, 2);
-/// The IPv6 DNS server inside the tunnel.
-pub const DNS6: Ipv6Addr = Ipv6Addr::new(0xfd7a, 0x6470, 0x7761, 0, 0, 0, 0, 3);
+/// The tunnel's addresses (ADR 0041, decision 3): its own address, a /32 or a /128 (ADR 0034: a wider
+/// prefix would count as local network on Android 17), the fake peer the kernel sees for every rewritten
+/// connection, outside it, and the DNS server Android is given inside the tunnel, whose queries the engine
+/// passes on to the network's resolver. Any app can read the tunnel's address and prefix, so Watch takes
+/// the ones other apps use and is not singled out by them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Addresses {
+    /// The tunnel's IPv4 address, a /32.
+    pub tun4: Ipv4Addr,
+    /// The IPv4 fake peer.
+    pub fake4: Ipv4Addr,
+    /// The IPv4 DNS server inside the tunnel.
+    pub dns4: Ipv4Addr,
+    /// The tunnel's IPv6 address, a /128.
+    pub tun6: Ipv6Addr,
+    /// The IPv6 fake peer.
+    pub fake6: Ipv6Addr,
+    /// The IPv6 DNS server inside the tunnel.
+    pub dns6: Ipv6Addr,
+}
+
+impl Addresses {
+    /// The tunnel addresses of `NetGuard`, `TrackerControl` and `InviZible` Pro, with the same /32 and /128:
+    /// an app that reads them finds a local firewall, the kind of app Watch is, not Watch itself. Read
+    /// from 32 apps' own source on 2026-11-12; the largest other group, 172.19.0.1, is that of proxy and
+    /// circumvention clients, and its /30 does not fit Android 17.
+    pub const COMMON: Self = Self {
+        tun4: Ipv4Addr::new(10, 1, 10, 1),
+        fake4: Ipv4Addr::new(10, 1, 10, 2),
+        dns4: Ipv4Addr::new(10, 1, 10, 3),
+        tun6: Ipv6Addr::new(0xfd00, 1, 0xfd00, 1, 0xfd00, 1, 0xfd00, 1),
+        fake6: Ipv6Addr::new(0xfd00, 1, 0xfd00, 1, 0xfd00, 1, 0xfd00, 2),
+        dns6: Ipv6Addr::new(0xfd00, 1, 0xfd00, 1, 0xfd00, 1, 0xfd00, 3),
+    };
+
+    /// Watch's earlier addresses, for a network that uses the common ones itself: Comcast Business
+    /// gateways answer at 10.1.10.1, and a tunnel that takes the router's address cuts the phone off
+    /// from it. Watch picks this set when the network beneath clashes with [`Addresses::COMMON`].
+    pub const SPARE: Self = Self {
+        tun4: Ipv4Addr::new(10, 215, 173, 1),
+        fake4: Ipv4Addr::new(10, 215, 173, 2),
+        dns4: Ipv4Addr::new(10, 215, 173, 3),
+        tun6: Ipv6Addr::new(0xfd7a, 0x6470, 0x7761, 0, 0, 0, 0, 1),
+        fake6: Ipv6Addr::new(0xfd7a, 0x6470, 0x7761, 0, 0, 0, 0, 2),
+        dns6: Ipv6Addr::new(0xfd7a, 0x6470, 0x7761, 0, 0, 0, 0, 3),
+    };
+
+    /// Whether `address` is the tunnel's own DNS address, which leads to the network's resolver.
+    #[must_use]
+    pub fn is_dns(&self, address: IpAddr) -> bool {
+        address == IpAddr::V4(self.dns4) || address == IpAddr::V6(self.dns6)
+    }
+}
 
 /// A UDP flow silent for this long is closed.
 const UDP_IDLE: Duration = Duration::from_secs(60);
@@ -229,6 +268,8 @@ pub struct Config {
     /// How many of the latest flows to keep in memory for Watch's debug builds and tests; 0 keeps
     /// none. Release builds keep none: the connection log (W4) decides what is recorded.
     pub keep_flows: usize,
+    /// The tunnel's addresses, as given to `Builder.addAddress` and `addDnsServer`.
+    pub addresses: Addresses,
 }
 
 /// The counters, in the order of [`Counters::snapshot`].
@@ -296,6 +337,8 @@ impl Counters {
 /// What the engine's thread and its controller share.
 struct Shared {
     platform: Arc<dyn Platform>,
+    /// The tunnel's addresses for this run.
+    addresses: Addresses,
     counters: Counters,
     keep_flows: usize,
     flows: Mutex<VecDeque<Flow>>,
@@ -397,6 +440,7 @@ impl Engine {
     ) -> io::Result<Self> {
         let shared = Arc::new(Shared {
             platform,
+            addresses: config.addresses,
             counters: Counters::default(),
             keep_flows: config.keep_flows,
             flows: Mutex::new(VecDeque::new()),
@@ -546,8 +590,23 @@ async fn run(
 ) {
     let pending: Pending = Arc::default();
     let nat: Arc<Mutex<Nat>> = Arc::default();
-    let listener4 = listen(IpAddr::V4(TUN4), IpAddr::V4(FAKE4), &pending, &shared, &nat).await;
-    let listener6 = listen(IpAddr::V6(TUN6), IpAddr::V6(FAKE6), &pending, &shared, &nat).await;
+    let at = shared.addresses;
+    let listener4 = listen(
+        IpAddr::V4(at.tun4),
+        IpAddr::V4(at.fake4),
+        &pending,
+        &shared,
+        &nat,
+    )
+    .await;
+    let listener6 = listen(
+        IpAddr::V6(at.tun6),
+        IpAddr::V6(at.fake6),
+        &pending,
+        &shared,
+        &nat,
+    )
+    .await;
     let state = Loop {
         tun: Arc::new(tun),
         shared,
@@ -614,10 +673,11 @@ impl Loop {
     }
 
     fn ends(&self, v4: bool) -> (IpAddr, IpAddr, u16) {
+        let at = self.shared.addresses;
         if v4 {
-            (IpAddr::V4(TUN4), IpAddr::V4(FAKE4), self.listener4)
+            (IpAddr::V4(at.tun4), IpAddr::V4(at.fake4), self.listener4)
         } else {
-            (IpAddr::V6(TUN6), IpAddr::V6(FAKE6), self.listener6)
+            (IpAddr::V6(at.tun6), IpAddr::V6(at.fake6), self.listener6)
         }
     }
 }
@@ -629,9 +689,11 @@ async fn send_to_app(tun: &Tun, shared: &Shared, packet: &[u8]) {
     }
 }
 
-/// Whether `address` is the tunnel's own DNS address, which leads to the network's resolver.
-fn is_tunnel_dns(address: IpAddr) -> bool {
-    address == IpAddr::V4(DNS4) || address == IpAddr::V6(DNS6)
+impl Shared {
+    /// Whether `address` is the tunnel's own DNS address, which leads to the network's resolver.
+    fn is_tunnel_dns(&self, address: IpAddr) -> bool {
+        self.addresses.is_dns(address)
+    }
 }
 
 fn is_unreachable(error: &io::Error) -> bool {
@@ -662,6 +724,31 @@ mod tests {
         fn log(&self, _: &[u8]) {}
     }
 
+    /// The tunnel's DNS server is the chosen set's, and the two sets share no address, so either can
+    /// stand in for the other (ADR 0041).
+    #[test]
+    fn the_tunnels_dns_is_the_chosen_sets() {
+        for (at, other) in [
+            (Addresses::COMMON, Addresses::SPARE),
+            (Addresses::SPARE, Addresses::COMMON),
+        ] {
+            let mut shared = shared();
+            shared.addresses = at;
+            assert!(shared.is_tunnel_dns(IpAddr::V4(at.dns4)));
+            assert!(shared.is_tunnel_dns(IpAddr::V6(at.dns6)));
+            assert!(!shared.is_tunnel_dns(IpAddr::V4(at.tun4)));
+            assert!(!shared.is_tunnel_dns(IpAddr::V4(other.dns4)));
+            assert!(!shared.is_tunnel_dns(IpAddr::V6(other.dns6)));
+        }
+        let (common, spare) = (Addresses::COMMON, Addresses::SPARE);
+        for address in [common.tun4, common.fake4, common.dns4] {
+            assert!(![spare.tun4, spare.fake4, spare.dns4].contains(&address));
+        }
+        for address in [common.tun6, common.fake6, common.dns6] {
+            assert!(![spare.tun6, spare.fake6, spare.dns6].contains(&address));
+        }
+    }
+
     pub(super) fn shared() -> Shared {
         shared_with(Arc::new(NoPlatform))
     }
@@ -669,6 +756,7 @@ mod tests {
     fn shared_with(platform: Arc<dyn Platform>) -> Shared {
         Shared {
             platform,
+            addresses: Addresses::COMMON,
             counters: Counters::default(),
             keep_flows: 8,
             flows: Mutex::default(),
@@ -787,7 +875,10 @@ mod tests {
         shared.learn(&dns_answer("own.example", [203, 0, 113, 20]), Some(UID));
         let named_by_own = open_flow(&shared, at([203, 0, 113, 20], 443));
         // Android's resolver through Watch: not the app's own.
-        let tunnel = open_flow(&shared, SocketAddr::new(IpAddr::V4(DNS4), 53));
+        let tunnel = open_flow(
+            &shared,
+            SocketAddr::new(IpAddr::V4(Addresses::COMMON.dns4), 53),
+        );
         // DNS over TLS anywhere, and DNS over HTTPS to a known address, or to a known name in the hello.
         let dot = open_flow(&shared, at([198, 51, 100, 1], 853));
         let doh = open_flow(&shared, at([192, 0, 2, 53], 443));
@@ -860,7 +951,7 @@ mod tests {
             shared
                 .record(flow(
                     3,
-                    SocketAddr::new(IpAddr::V4(DNS4), 53),
+                    SocketAddr::new(IpAddr::V4(Addresses::COMMON.dns4), 53),
                     Outcome::Opened
                 ))
                 .is_none()

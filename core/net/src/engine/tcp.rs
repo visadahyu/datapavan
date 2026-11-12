@@ -6,8 +6,7 @@ use super::logbook::FlowBytes;
 use super::naming::Begun;
 use super::upstream::{connect_tcp, owner};
 use super::{
-    CLOSE_LINGER, Counters, Ech, FAKE4, FAKE6, Flow, Loop, NamedBy, Opened, Outcome, Shared, TUN4,
-    TUN6, is_unreachable, lock,
+    CLOSE_LINGER, Counters, Ech, Flow, Loop, NamedBy, Opened, Outcome, Shared, is_unreachable, lock,
 };
 use crate::nat::{Lookup, Nat};
 use crate::packet::{ACK, Packet, RST, SYN, TCP, Unreachable};
@@ -247,10 +246,11 @@ async fn open(
             },
         );
         lock(&nat).open(held.port);
+        let at = shared.addresses;
         let (fake, tun_ip) = if app.is_ipv4() {
-            (IpAddr::V4(FAKE4), IpAddr::V4(TUN4))
+            (IpAddr::V4(at.fake4), IpAddr::V4(at.tun4))
         } else {
-            (IpAddr::V6(FAKE6), IpAddr::V6(TUN6))
+            (IpAddr::V6(at.fake6), IpAddr::V6(at.tun6))
         };
         let parsed = held.parsed;
         packet::set_ends(
