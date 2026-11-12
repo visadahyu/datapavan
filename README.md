@@ -62,8 +62,9 @@ checked on Android 11 and 17 emulators and on Galaxy A40 and A56 phones.
   publishes. Findings state what was found, what the code does when it is on, and what Datapavan cannot
   check. *Why:* traffic sent through someone's phone is traced back to that person, and it uses their
   data and battery.
-- **Genuine or modified VPN and circumvention apps.** The official signing certificates of 35 VPN, proxy
-  and circumvention packages, collected from the developers' own channels with a grade for the evidence.
+- **Genuine or modified VPN and circumvention apps.** The official signing certificates of 51 apps: VPN,
+  proxy and circumvention tools, the messengers often used with them, and Datapavan itself, collected
+  from the developers' own channels with a grade for the evidence.
   A copy that someone else signed is called modified only on positive evidence; an unknown key is shown
   with its fingerprint, without a warning. *Why:* a modified VPN app sees all of its user's traffic and
   looks exactly like the real one.

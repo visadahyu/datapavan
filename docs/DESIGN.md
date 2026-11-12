@@ -683,15 +683,15 @@ Each decision is recorded in full, with context and consequences, as an ADR in
 |---|---|---|
 | [0001](decisions/0001-apache-2-licence.md) | Apache-2.0 licence | Accepted |
 | [0002](decisions/0002-codeberg-with-github-mirror.md) | Codeberg as home, GitHub as read-only mirror | Superseded by 0013 |
-| [0003](decisions/0003-minimum-android-10.md) | Minimum Android 10 (API 29) | Accepted |
+| [0003](decisions/0003-minimum-android-10.md) | Minimum Android version 10 (API 29) | Accepted |
 | [0004](decisions/0004-ui-languages-and-rtl.md) | Languages at launch, changed by ADR 0030; RTL from the first commit | Accepted |
 | [0005](decisions/0005-english-documentation.md) | Documentation in English only | Accepted |
 | [0006](decisions/0006-rust-engine-unsafe-forbidden.md) | Rust engine with `unsafe` forbidden; separate JNI crate | Accepted |
 | [0007](decisions/0007-direct-jni-over-uniffi.md) | Direct JNI instead of UniFFI | Accepted |
-| [0008](decisions/0008-gradle-dependency-verification.md) | Gradle dependency verification from an empty Gradle home | Accepted |
+| [0008](decisions/0008-gradle-dependency-verification.md) | Gradle dependency verification, generated from an empty Gradle home | Accepted |
 | [0009](decisions/0009-no-automatic-jdk-download.md) | Gradle daemon pinned to JDK 21, no automatic JDK download | Accepted |
 | [0010](decisions/0010-cuneiform-brand-marks.md) | Old Persian cuneiform signs as brand marks | Accepted |
-| [0011](decisions/0011-m1-test-devices.md) | M1 tested on emulators and the Galaxy A40 | Accepted |
+| [0011](decisions/0011-m1-test-devices.md) | M1 tested on emulators and the Galaxy A40 only | Accepted |
 | [0012](decisions/0012-packet-engine.md) | Packet engine for the local VPN: Android's own TCP stack through rewritten addresses, in Rust | Accepted |
 | [0013](decisions/0013-github-as-home.md) | GitHub as the only home; Codeberg dropped | Accepted |
 | [0014](decisions/0014-v0.1-permissions.md) | Permissions for v0.1 "Audit" | Accepted |
