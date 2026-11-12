@@ -673,8 +673,13 @@ listener as Android's does, in an ordinary `cargo test`, without an emulator. Th
 `scripts/check.sh rust` runs them, and fails with the reason where no namespace can be made. `NETLAB=skip` says
 plainly that they did not run. CI lifts Ubuntu's AppArmor restriction on such namespaces for its runner.
 
-Still to come, in units: reset propagation, both names in the log, budgets per engine and per app,
-endpoint-independent UDP mapping, ICMP echo and the network's MTU.
+Resets, the same day (finding 21). A relayed connection whose one direction fails, as when the server or the app
+resets it, now ends both sides with a reset, and is counted. Before, the app got a clean close, and could not tell
+a cut-off answer from a finished one. A clean close still closes with a FIN, direction by direction. Three lab tests
+cover it: the server's reset, the app's reset, and a clean close.
+
+Still to come, in units: both names in the log, budgets per engine and per app, endpoint-independent UDP mapping,
+ICMP echo and the network's MTU.
 
 | # | Milestone | Done when |
 |---|---|---|

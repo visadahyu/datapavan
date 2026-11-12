@@ -307,7 +307,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 22;
+pub const COUNTERS: usize = 23;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -334,6 +334,7 @@ pub struct Counters {
     fragments: AtomicU64,
     hellos_on_dns_names: AtomicU64,
     hello_names_differ: AtomicU64,
+    resets: AtomicU64,
 }
 
 impl Counters {
@@ -348,7 +349,8 @@ impl Counters {
     /// did not come from the fake address, refused, IP fragments dropped (counted apart from the other
     /// skipped packets, review finding 21), and hellos read on flows a DNS answer had named, and of
     /// those, how many named another server (finding 20: how often a shared address gives a flow the
-    /// wrong name). None names a destination: they can be read on any phone. New counters are only
+    /// wrong name), and relayed connections that ended in an error and were reset on both sides
+    /// (finding 21). None names a destination: they can be read on any phone. New counters are only
     /// ever appended, so that scripts reading a column by its place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
@@ -375,6 +377,7 @@ impl Counters {
             &self.fragments,
             &self.hellos_on_dns_names,
             &self.hello_names_differ,
+            &self.resets,
         ]
         .map(|c| c.load(Ordering::Relaxed))
     }

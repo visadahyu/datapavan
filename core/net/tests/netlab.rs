@@ -33,6 +33,7 @@ const APP: u32 = 10_500;
 const TCP_FLOWS: usize = 0;
 const UDP_FLOWS: usize = 1;
 const STRANGERS: usize = 18;
+const RESETS: usize = 22;
 /// How long any one step may take before the test fails.
 const STEP: Duration = Duration::from_secs(5);
 
@@ -286,6 +287,113 @@ fn a_silent_relayed_connection_outlives_the_sweep() -> Outcome {
             let mut late = [0u8; 4];
             within("the late answer", quiet.read_exact(&mut late)).await?;
             assert_eq!(&late, b"late");
+            Ok(())
+        },
+    )
+}
+
+/// How a connection's reading ended: what it read, and the error that ended it (`None`: a clean close).
+async fn read_to_end_or_error(
+    connection: &mut TcpStream,
+) -> Result<(Vec<u8>, Option<io::ErrorKind>), String> {
+    let mut read = Vec::new();
+    let mut buffer = [0u8; 256];
+    loop {
+        match timeout(STEP, connection.read(&mut buffer)).await {
+            Err(_) => return Err(format!("no end after {read:?}")),
+            Ok(Ok(0)) => return Ok((read, None)),
+            Ok(Ok(n)) => read.extend_from_slice(&buffer[..n]),
+            Ok(Err(error)) => return Ok((read, Some(error.kind()))),
+        }
+    }
+}
+
+/// Review finding 21: a server that resets its connection after part of an answer leaves the app with
+/// that part and a reset, not a clean close it would take for a finished answer.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_servers_reset_reaches_the_app_as_a_reset() -> Outcome {
+    lab(
+        "a_servers_reset_reaches_the_app_as_a_reset",
+        Limits::default(),
+        |engine| async move {
+            let listener = TcpListener::bind((SERVER, 0)).await?;
+            let at = listener.local_addr()?;
+            tokio::spawn(async move {
+                if let Ok((mut connection, _)) = listener.accept().await {
+                    let mut buffer = [0u8; 16];
+                    let _ = connection.read(&mut buffer).await;
+                    let _ = connection.write_all(b"partial").await;
+                    // Long enough for the part to reach the app before the reset.
+                    tokio::time::sleep(Duration::from_millis(300)).await;
+                    let _ = connection.set_zero_linger();
+                }
+            });
+            let mut app = app_connect(at).await?;
+            app.write_all(b"ask").await?;
+            let (read, end) = read_to_end_or_error(&mut app).await?;
+            assert_eq!(read, b"partial");
+            assert_eq!(end, Some(io::ErrorKind::ConnectionReset));
+            assert_eq!(engine.counters()[RESETS], 1);
+            Ok(())
+        },
+    )
+}
+
+/// The other way: an app that resets its connection resets the server's too.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn an_apps_reset_reaches_the_server_as_a_reset() -> Outcome {
+    lab(
+        "an_apps_reset_reaches_the_server_as_a_reset",
+        Limits::default(),
+        |engine| async move {
+            let listener = TcpListener::bind((SERVER, 0)).await?;
+            let at = listener.local_addr()?;
+            let (tell, heard) = oneshot::channel();
+            tokio::spawn(async move {
+                if let Ok((mut connection, _)) = listener.accept().await {
+                    let _ = tell.send(read_to_end_or_error(&mut connection).await);
+                }
+            });
+            let app = app_connect(at).await?;
+            let mut app = app;
+            app.write_all(b"hello").await?;
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            app.set_zero_linger()?;
+            drop(app);
+            let (read, end) = timeout(STEP, heard).await???;
+            assert_eq!(read, b"hello");
+            assert_eq!(end, Some(io::ErrorKind::ConnectionReset));
+            assert_eq!(engine.counters()[RESETS], 1);
+            Ok(())
+        },
+    )
+}
+
+/// A clean close stays a clean close, both ways, and is not counted as a reset.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_clean_close_stays_clean() -> Outcome {
+    lab(
+        "a_clean_close_stays_clean",
+        Limits::default(),
+        |engine| async move {
+            let listener = TcpListener::bind((SERVER, 0)).await?;
+            let at = listener.local_addr()?;
+            tokio::spawn(async move {
+                if let Ok((mut connection, _)) = listener.accept().await
+                    && let Ok((read, None)) = read_to_end_or_error(&mut connection).await
+                {
+                    let _ = connection.write_all(&read).await;
+                }
+            });
+            let mut app = app_connect(at).await?;
+            app.write_all(b"bye").await?;
+            app.shutdown().await?;
+            let (read, end) = read_to_end_or_error(&mut app).await?;
+            assert_eq!((read.as_slice(), end), (&b"bye"[..], None));
+            assert_eq!(engine.counters()[RESETS], 0);
             Ok(())
         },
     )

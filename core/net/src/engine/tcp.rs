@@ -320,62 +320,102 @@ pub(super) async fn accept(
     }
 }
 
+/// How one direction of a relayed connection ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum End {
+    /// Its sender closed it cleanly: the other side gets a FIN.
+    Clean,
+    /// Reading or writing failed, as when either side reset the connection.
+    Failed,
+}
+
 /// Relays one connection both ways, counting the bytes as they pass, until both directions end; the
 /// caller writes the flow's last segment once the tunnel is done with it. The app's first bytes are
 /// read for a TLS hello (at most [`tls::MAX_HELLO`]), even when DNS named the flow, since only the
 /// hello tells whether ECH hid the name; nothing is held back for that, so a protocol in which the
 /// server speaks first is not delayed.
-async fn relay(app: TcpStream, upstream: Upstream, shared: &Arc<Shared>) {
+///
+/// A direction that ends cleanly closes the other side's writing with a FIN, and the other direction
+/// goes on. One that fails, as when the server or the app resets the connection, ends both sides with
+/// a reset (no linger), so that the app can tell a cut-off answer from a finished one (review finding
+/// 21). What the engine's listener still held for the app is discarded then, as a reset discards it.
+async fn relay(mut app: TcpStream, mut upstream: Upstream, shared: &Arc<Shared>) {
     let _ = app.set_nodelay(true);
     let _ = upstream.stream.set_nodelay(true);
-    let (mut app_read, mut app_write) = app.into_split();
-    let (mut up_read, mut up_write) = upstream.stream.into_split();
-    let up = async {
-        let mut buffer = vec![0u8; 16 * 1024];
-        let mut start = Some(Vec::new());
-        loop {
-            let n = match app_read.read(&mut buffer).await {
-                Ok(0) | Err(_) => break,
-                Ok(n) => n,
-            };
-            if let Some(seen) = start.as_mut() {
-                seen.extend_from_slice(&buffer[..n]);
-                match tls::server_name(seen) {
-                    ServerName::Found(hello) => {
-                        shared.hello(upstream.opened, &hello, NamedBy::Tls);
-                        start = None;
+    let failed = {
+        let (mut app_read, mut app_write) = app.split();
+        let (mut up_read, mut up_write) = upstream.stream.split();
+        let opened = upstream.opened;
+        let bytes = upstream.bytes.as_ref();
+        let up = async {
+            let mut buffer = vec![0u8; 16 * 1024];
+            let mut start = Some(Vec::new());
+            loop {
+                let n = match app_read.read(&mut buffer).await {
+                    Ok(0) => break,
+                    Ok(n) => n,
+                    Err(_) => return End::Failed,
+                };
+                if let Some(seen) = start.as_mut() {
+                    seen.extend_from_slice(&buffer[..n]);
+                    match tls::server_name(seen) {
+                        ServerName::Found(hello) => {
+                            shared.hello(opened, &hello, NamedBy::Tls);
+                            start = None;
+                        }
+                        ServerName::None => start = None,
+                        ServerName::Incomplete if seen.len() >= tls::MAX_HELLO => start = None,
+                        ServerName::Incomplete => {}
                     }
-                    ServerName::None => start = None,
-                    ServerName::Incomplete if seen.len() >= tls::MAX_HELLO => start = None,
-                    ServerName::Incomplete => {}
+                }
+                if up_write.write_all(&buffer[..n]).await.is_err() {
+                    return End::Failed;
+                }
+                Counters::add(&shared.counters.bytes_up, n as u64);
+                if let Some(bytes) = bytes {
+                    bytes.add_up(n);
                 }
             }
-            if up_write.write_all(&buffer[..n]).await.is_err() {
-                break;
+            let _ = up_write.shutdown().await;
+            End::Clean
+        };
+        let down = async {
+            let mut buffer = vec![0u8; 16 * 1024];
+            loop {
+                let n = match up_read.read(&mut buffer).await {
+                    Ok(0) => break,
+                    Ok(n) => n,
+                    Err(_) => return End::Failed,
+                };
+                if app_write.write_all(&buffer[..n]).await.is_err() {
+                    return End::Failed;
+                }
+                Counters::add(&shared.counters.bytes_down, n as u64);
+                if let Some(bytes) = bytes {
+                    bytes.add_down(n);
+                }
             }
-            Counters::add(&shared.counters.bytes_up, n as u64);
-            if let Some(bytes) = &upstream.bytes {
-                bytes.add_up(n);
-            }
-        }
-        let _ = up_write.shutdown().await;
-    };
-    let down = async {
-        let mut buffer = vec![0u8; 16 * 1024];
+            let _ = app_write.shutdown().await;
+            End::Clean
+        };
+        tokio::pin!(up, down);
+        let (mut up_end, mut down_end) = (None, None);
         loop {
-            let n = match up_read.read(&mut buffer).await {
-                Ok(0) | Err(_) => break,
-                Ok(n) => n,
-            };
-            if app_write.write_all(&buffer[..n]).await.is_err() {
-                break;
+            tokio::select! {
+                end = &mut up, if up_end.is_none() => up_end = Some(end),
+                end = &mut down, if down_end.is_none() => down_end = Some(end),
             }
-            Counters::add(&shared.counters.bytes_down, n as u64);
-            if let Some(bytes) = &upstream.bytes {
-                bytes.add_down(n);
+            if up_end == Some(End::Failed) || down_end == Some(End::Failed) {
+                break true;
+            }
+            if up_end.is_some() && down_end.is_some() {
+                break false;
             }
         }
-        let _ = app_write.shutdown().await;
     };
-    tokio::join!(up, down);
+    if failed {
+        Counters::add(&shared.counters.resets, 1);
+        let _ = app.set_zero_linger();
+        let _ = upstream.stream.set_zero_linger();
+    }
 }
