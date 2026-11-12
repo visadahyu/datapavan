@@ -24,7 +24,10 @@ sha2 = { version = "0.11.1", default-features = false }
 # The ICMP errors that answer a mapping's datagrams (ADR 0044, decision 1): `IP_RECVERR` and
 # `IPV6_RECVERR`, and the socket's error queue read with `recvmsg`, behind safe functions. MIT. Only the
 # socket functions ("net"), and the scatter-gather reads `recvmsg` sits behind ("uio").
-nix = { version = "0.31.3", default-features = false, features = ["net", "uio"] }
+nix = { version = "0.31.3", default-features = false, features = ["net", "poll", "uio"] }
+# Already in the lockfile through tokio; `all` gives TCP_NOTSENT_LOWAT, with which a reset waits for the bytes
+# already given to a side (engine/tcp.rs, `drain`).
+socket2 = { version = "0.6.5", features = ["all"] }
 
 [dev-dependencies]
 # Checks the packets the engine builds against an independent implementation, in tests only.

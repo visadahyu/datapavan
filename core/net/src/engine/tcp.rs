@@ -12,12 +12,14 @@ use crate::standins::is_stand_in;
 use crate::tls::ServerName;
 use crate::tun::Tun;
 use crate::{packet, tls};
+use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
 use std::collections::HashMap;
 use std::io;
 use std::net::{IpAddr, SocketAddr};
+use std::os::fd::AsFd;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -452,7 +454,38 @@ async fn relay(mut app: TcpStream, mut upstream: Upstream, shared: &Arc<Shared>)
     };
     if failed {
         Counters::add(&shared.counters.resets, 1);
+        // On a real network the bytes a side was already given reach it before the reset that follows
+        // them; here they may still wait in the socket toward it, which a reset would discard (CI,
+        // 2026-11-12: a download lost its last 8 %). So the reset waits for them first.
+        drain(&app).await;
+        drain(&upstream.stream).await;
         let _ = app.set_zero_linger();
         let _ = upstream.stream.set_zero_linger();
+    }
+}
+
+/// How long a reset waits for the bytes already given to a side to leave its socket.
+const DRAIN: Duration = Duration::from_secs(2);
+
+/// Waits until `stream` holds no unsent bytes, or its peer is gone, or [`DRAIN`] passes. With
+/// `TCP_NOTSENT_LOWAT` at 1, the kernel reports the socket writable only once nothing waits to be sent.
+async fn drain(stream: &TcpStream) {
+    if socket2::SockRef::from(stream)
+        .set_tcp_notsent_lowat(1)
+        .is_err()
+    {
+        return;
+    }
+    let until = tokio::time::Instant::now() + DRAIN;
+    while tokio::time::Instant::now() < until {
+        let mut fds = [PollFd::new(stream.as_fd(), PollFlags::POLLOUT)];
+        if poll(&mut fds, PollTimeout::ZERO).is_ok_and(|n| n > 0)
+            && fds[0].revents().is_some_and(|events| {
+                events.intersects(PollFlags::POLLOUT | PollFlags::POLLERR | PollFlags::POLLHUP)
+            })
+        {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }

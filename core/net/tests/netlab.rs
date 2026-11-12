@@ -708,3 +708,42 @@ fn sending_keeps_a_mapping_open() -> Outcome {
         },
     )
 }
+
+/// A server that sends a long answer and resets at once: the app still gets the whole answer before
+/// the reset, as it would on a real network, where the bytes travel ahead of the reset that follows
+/// them (CI, 2026-11-12: the engine's reset discarded the tail it still held for the app).
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_reset_after_a_long_answer_keeps_the_answer() -> Outcome {
+    const ANSWER: usize = 400_000;
+    lab(
+        "a_reset_after_a_long_answer_keeps_the_answer",
+        Limits::default(),
+        |engine| async move {
+            let listener = TcpListener::bind((SERVER, 0)).await?;
+            let at = listener.local_addr()?;
+            tokio::spawn(async move {
+                if let Ok((mut connection, _)) = listener.accept().await {
+                    let mut buffer = [0u8; 16];
+                    let _ = connection.read(&mut buffer).await;
+                    let _ = connection.write_all(&vec![7u8; ANSWER]).await;
+                    // Long enough for the engine to have read it all from the server, not to have
+                    // passed it all to the app. The answer fits in the sockets' buffers, so none of it
+                    // waits in the server, whose own reset would discard it, as on a real network.
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    let _ = connection.set_zero_linger();
+                }
+            });
+            let mut app = app_connect(at).await?;
+            app.write_all(b"ask").await?;
+            // The app reads late, so that much of the answer still waits in the engine's socket toward
+            // it when the server's reset comes.
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            let (read, end) = read_to_end_or_error(&mut app).await?;
+            assert_eq!(read.len(), ANSWER);
+            assert_eq!(end, Some(io::ErrorKind::ConnectionReset));
+            assert_eq!(engine.counters()[RESETS], 1);
+            Ok(())
+        },
+    )
+}

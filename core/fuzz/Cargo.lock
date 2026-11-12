@@ -134,6 +134,7 @@ dependencies = [
  "miniz_oxide",
  "nix",
  "sha2",
+ "socket2",
  "tokio",
 ]
 
