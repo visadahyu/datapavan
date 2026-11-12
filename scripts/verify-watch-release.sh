@@ -37,8 +37,22 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# What a tap on "Turn on" met, when the tunnel did not come up (CI, 2026-11-11 and 12: no crash, and the
+# service never started): the screen's texts, the window in front, and Android's own lines about Watch
+# and the VPN. A release build writes nothing to the log itself.
+what_happened() {
+    if dump_screen 2>/dev/null; then
+        echo "On the screen:"
+        adb shell cat "$DUMP" 2>/dev/null | grep -o 'text="[^"]\+"' | head -20 || true
+    fi
+    echo "In front: $(adb shell dumpsys window 2>/dev/null | tr -d '\r' | sed -n 's/.*mCurrentFocus=//p' | head -1)"
+    echo "Android's log about Watch and the VPN:"
+    adb logcat -d -v brief 2>/dev/null | tr -d '\r' | grep -E "$PKG|^[VDIWEF]/Vpn[[:space:]]*\(" | tail -20 || true
+}
+
 fail() {
     echo "RELEASE CHECK FAILED: $*" >&2
+    what_happened >&2
     adb logcat -d -b crash 2>/dev/null | tail -40 >&2 || true
     echo "How Watch's process last ended:" >&2
     adb shell dumpsys activity exit-info "$PKG" 2>/dev/null | tr -d '\r' | grep -E 'timestamp=|reason=' | head -6 >&2 || true
@@ -93,10 +107,14 @@ for attempt in 1 2; do
     sleep 2
     if ! tap_text "Turn on"; then
         [ "$attempt" = 2 ] || fail "no \"Turn on\" button on Watch's screen"
+        echo "  no \"Turn on\" button the second time"
     fi
     for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
     vpn_up && break
-    [ "$attempt" = 2 ] || echo "  the tunnel was not up 20 s after \"Turn on\": once more"
+    if [ "$attempt" = 1 ]; then
+        echo "  the tunnel was not up 20 s after \"Turn on\": once more"
+        what_happened | sed 's/^/    /'
+    fi
 done
 vpn_up || fail "Watch's tunnel did not come up"
 echo "ok: the release build's tunnel is up, turned on from its screen"
