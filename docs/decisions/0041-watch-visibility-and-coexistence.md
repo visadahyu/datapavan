@@ -86,6 +86,36 @@ Watch's own. An app that can list installed packages can still see that Watch is
 is not possible on stock Android. The probe app of decision 2 is to measure what an app outside the tunnel still
 sees. This decision narrows what the address alone says; it does not make Watch invisible.
 
+### How decision 5 is built (2026-11-12)
+
+**What Watch already knows.** Watch finds the user's tool with a SOCKS5 greeting that offers no password (ADR
+0038). The proxy's answer says whether it wants one. The table of tools says whether the tool can take a password
+at all, and whether it carries UDP.
+
+**A proxy that asks no password.** Watch still chains through it, since refusing would leave the user without
+Watch. Its screen says, in the error colour, that any app on the phone can use the proxy, learn that the user runs
+this tool and the address of its server, and send its own traffic through it. For a tool that has no password
+setting, Watch says so, and that the proxy stays open while the tool runs in proxy mode. For a tool that takes
+one, Watch shows the user name and password it made, and where tools keep that setting: the settings of their
+local proxy, often named inbound, SOCKS or local port. Steps for each tool, with evidence, belong in the table of
+tools.
+
+**A proxy that asks a password.** Watch says that other apps cannot use it, and that they can still see that it is
+there: any SOCKS5 server answers a greeting.
+
+**UDP: TCP only by default.** No tool is known to tie its UDP relay to the app that opened it, and stock Android
+has no loopback firewall by app. While a relay carries Watch's datagrams, other apps on the phone may send through
+it too, even where the tool's proxy asks a password. A 2026 test found that the UDP of some Xray and sing-box
+clients works with no password at all ([Habr](https://habr.com/en/articles/1020080)). So for every tool, the
+chosen apps' UDP goes through the tool only once the user turns that on, under a switch that says why it is off
+and what is lost: calls and some games in the chained apps. Web pages still load: names go through the tool over
+TCP (ADR 0038), and browsers fall back from QUIC to TCP. Off, a chained app's UDP goes nowhere, never directly.
+For a tool that carries no UDP, the screen keeps saying so, with no switch.
+
+**Not yet.** Which tools' relays take datagrams from other apps, or with no password, is lab work: a check per
+tool, recorded in the table of tools with its evidence. A tool whose relay is shown to refuse other apps can then
+default to UDP on. Watch does not probe the relay itself: a probe from Watch cannot tell a relay that refuses
+another app from one that refuses the probe's destination.
 ## Consequences
 
 - **0.2.0 grows.** Exclusion, the notice, the local-network rule and the matrix are release gates (ADR 0039).

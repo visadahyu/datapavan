@@ -41,6 +41,18 @@ class ChainSettings private constructor(private val prefs: SharedPreferences) {
         get() = prefs.getBoolean(LOG_DESTINATIONS, false)
         set(value) = prefs.edit { putBoolean(LOG_DESTINATIONS, value) }
 
+    /**
+     * Whether the chosen apps' UDP goes through the tool too (ADR 0041, decision 5). Off unless the user turns it on:
+     * no tool is known to tie its UDP relay to the app that opened it, so while the relay carries Watch's
+     * datagrams, any app on the phone can send through it, password or not. Off, the chain is TCP only.
+     */
+    var udp: Boolean
+        get() = prefs.getBoolean(UDP_CHOSEN, false)
+        set(value) = prefs.edit { putBoolean(UDP_CHOSEN, value) }
+
+    /** Whether the chain carries UDP: the tool can, and the user chose it. */
+    fun carriesUdp(remembered: Remembered): Boolean = remembered.udp && udp
+
     /** The tool whose proxy answered last, and where. */
     val lastTool: Remembered?
         get() {
@@ -120,6 +132,7 @@ class ChainSettings private constructor(private val prefs: SharedPreferences) {
         private const val HOST = "host"
         private const val PORT = "port"
         private const val UDP = "udp"
+        private const val UDP_CHOSEN = "udp_chosen"
         private const val PASSWORD = "password"
         private const val KEYSTORE = "AndroidKeyStore"
         private const val KEY_ALIAS = "watch-chain"

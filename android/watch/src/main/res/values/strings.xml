@@ -61,6 +61,16 @@
     <string name="chain_some_apps">Only the apps I choose</string>
     <!-- %1$s: the tool's name. It cannot carry UDP (Tor, for example). -->
     <string name="chain_no_udp">%1$s cannot carry UDP. Calls and some games in the apps you send through it will not work. Web pages still load.</string>
+    <!-- ADR 0041, decision 5. %1$s: the tool's name. Shown when the tool's local proxy answered Watch without asking for a password. -->
+    <string name="chain_proxy_open">The proxy of %1$s asks for no password, so any app on this phone can use it. Such an app can learn that you use %1$s and where its server is, and send its own traffic through it.</string>
+    <!-- Under it, for a tool that has no password setting at all. %1$s: the tool's name. -->
+    <string name="chain_proxy_no_password">%1$s has no setting for a password, so its proxy stays open while it runs in proxy mode. Watch still sends the apps you choose through it.</string>
+    <!-- %1$s: the tool's name. Shown when the tool's proxy asked Watch for a password. -->
+    <string name="chain_proxy_closed">The proxy of %1$s asks for a password, so other apps on this phone cannot use it. They can still see that it is there.</string>
+    <!-- A switch, off unless the user turns it on. UDP: the kind of traffic calls and games use. %1$s: the tool's name. -->
+    <string name="chain_udp">Send UDP through %1$s too</string>
+    <!-- Under the switch above. %1$s: the tool's name. -->
+    <string name="chain_udp_note">Off unless you turn it on. No circumvention tool is known to check which app sends UDP to its proxy: while %1$s carries UDP for Watch, other apps on this phone may send UDP through it too, even with a password. While this is off, calls and some games in the apps you send through %1$s do not work. Web pages still load.</string>
     <!-- Shown when the phone's Private DNS is set to a provider's host name. %1$s: that host name, such as dns.google. %2$s: the tool's name. -->
     <string name="chain_private_dns">Private DNS is set to %1$s. Android then sends the names that apps look up to %1$s itself, encrypted, past Watch and past %2$s. Your network cannot read those names, but it can see that this phone uses %1$s. And %1$s sees the names and your real address on the internet. For the apps you send through %2$s, set Private DNS to Automatic or Off.</string>
     <!-- Under it, before a button that opens Android's network settings, which differ between phone makers. -->
@@ -69,6 +79,8 @@
     <string name="chain_private_dns_open">Open network settings</string>
     <!-- %1$s: the tool's name. Watch offers a password for the tool's proxy. -->
     <string name="chain_password">To keep other apps on this phone off the proxy of %1$s, set this user name and password in %1$s.</string>
+    <!-- Under it: where tools keep these. %1$s: the tool's name. Inbound, SOCKS and local port are what tools call their local proxy; keep them as tools in this language name them. -->
+    <string name="chain_password_where">In %1$s, look for them in the settings of its local proxy, often named inbound, SOCKS or local port.</string>
     <!-- %1$s: the user name, such as watch. -->
     <string name="chain_user">User name: %1$s</string>
     <!-- %1$s: the password Watch made. -->

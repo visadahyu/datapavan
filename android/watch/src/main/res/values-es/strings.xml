@@ -36,10 +36,16 @@
     <string name="chain_all_apps">Todas las apps</string>
     <string name="chain_some_apps">Solo las apps que yo elija</string>
     <string name="chain_no_udp">%1$s no puede transportar tráfico UDP. Las llamadas y algunos juegos no funcionarán en las apps que envías a través de esta herramienta. Las páginas web sí cargan.</string>
+    <string name="chain_proxy_open">El proxy de %1$s no pide contraseña, así que cualquier app de este teléfono puede usarlo. Esa app puede saber que usas %1$s y cuál es la dirección de su servidor, y enviar su propio tráfico a través de él.</string>
+    <string name="chain_proxy_no_password">%1$s no tiene ningún ajuste de contraseña, así que su proxy queda abierto mientras funciona en modo proxy. Watch sigue enviando a través de esta herramienta las apps que eliges.</string>
+    <string name="chain_proxy_closed">El proxy de %1$s pide contraseña, así que otras apps de este teléfono no pueden usarlo. Aun así, pueden ver que está ahí.</string>
+    <string name="chain_udp">Enviar también el tráfico UDP a través de %1$s</string>
+    <string name="chain_udp_note">Desactivado, salvo que lo actives. No se conoce ninguna herramienta para eludir bloqueos que compruebe qué app envía tráfico UDP a su proxy: mientras %1$s transporta UDP para Watch, otras apps de este teléfono también pueden enviar UDP a través de ella, incluso con contraseña. Mientras esté desactivado, las llamadas y algunos juegos no funcionan en las apps que envías a través de %1$s. Las páginas web sí cargan.</string>
     <string name="chain_private_dns">El DNS privado está configurado como %1$s. Entonces el propio Android envía a %1$s, cifrados, los nombres que buscan las apps, sin pasar por Watch ni por %2$s. Tu red no puede leer esos nombres, pero sí puede ver que este teléfono usa %1$s. Y %1$s ve esos nombres y tu dirección real en internet. Para las apps que envías a través de %2$s, configura el DNS privado como «Automático» o «Desactivado».</string>
     <string name="chain_private_dns_where">Busca «DNS privado» en los ajustes que se abren. En algunos teléfonos está una pantalla más adentro.</string>
     <string name="chain_private_dns_open">Abrir ajustes de red</string>
     <string name="chain_password">Para que otras apps de este teléfono no usen el proxy de %1$s, configura este nombre de usuario y esta contraseña en %1$s.</string>
+    <string name="chain_password_where">En %1$s, búscalos en los ajustes de su proxy local, que suele llamarse inbound, SOCKS o puerto local.</string>
     <string name="chain_user">Nombre de usuario: %1$s</string>
     <string name="chain_password_value">Contraseña: %1$s</string>
     <string name="chain_copy">Copiar la contraseña</string>

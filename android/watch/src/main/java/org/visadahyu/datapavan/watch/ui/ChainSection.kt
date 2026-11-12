@@ -45,6 +45,8 @@ internal data class ChainView(
     val allApps: Boolean,
     val apps: Set<String>,
     val logDestinations: Boolean,
+    /** Whether the user chose to send the apps' UDP through the tool too (ADR 0041, decision 5). */
+    val udp: Boolean,
     /** The user name and password Watch offers for the tool's proxy, when the tool takes one. */
     val user: String?,
     val password: String?,
@@ -63,14 +65,16 @@ internal class ChainActions(
     val onAllApps: (Boolean) -> Unit,
     val onApp: (String, Boolean) -> Unit,
     val onLogDestinations: (Boolean) -> Unit,
+    val onUdp: (Boolean) -> Unit,
     val onCopyPassword: () -> Unit,
     val onPrivateDnsSettings: () -> Unit,
 )
 
 /**
  * Watch beside the user's circumvention tool (W6, docs/VPN.md): which tool it found, the switch that
- * sends apps through it, which apps, the password that keeps other apps off its proxy, and whether
- * chained destinations are logged. A tool's name keeps its own direction inside a right-to-left sentence.
+ * sends apps through it, which apps, what its proxy lets other apps on the phone do and the password
+ * that keeps them off it (ADR 0041, decision 5), whether UDP goes through it too, and whether chained destinations
+ * are logged. A tool's name keeps its own direction inside a right-to-left sentence.
  */
 @Composable
 internal fun ChainSection(view: ChainView, privateDns: PrivateDns?, actions: ChainActions) {
@@ -115,8 +119,12 @@ private fun Answering(search: ToolSearch.Answering, view: ChainView, privateDns:
     Text(stringResource(R.string.chain_found, tool, search.found.port), style = MaterialTheme.typography.bodyMedium)
     view.key?.let { KeyVerdict(it) }
     LabelledSwitch(stringResource(R.string.chain_switch, tool), view.on, actions.onOn)
+    ProxyDoor(search, tool)
     if (search.found.tool.udp == false) {
         Text(stringResource(R.string.chain_no_udp, tool), style = MaterialTheme.typography.bodyMedium)
+    } else {
+        LabelledSwitch(stringResource(R.string.chain_udp, tool), view.udp, actions.onUdp)
+        Text(stringResource(R.string.chain_udp_note, tool), style = MaterialTheme.typography.bodyMedium)
     }
     if (privateDns is PrivateDns.Strict) {
         // What leaves past the tool, to whom, and what the network sees; then where to change it.
@@ -158,12 +166,29 @@ private fun Answering(search: ToolSearch.Answering, view: ChainView, privateDns:
     }
     if (view.user != null && view.password != null) {
         Text(stringResource(R.string.chain_password, tool), style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.chain_password_where, tool), style = MaterialTheme.typography.bodyMedium)
         Text(stringResource(R.string.chain_user, view.user), style = MaterialTheme.typography.bodyLarge)
         Text(stringResource(R.string.chain_password_value, view.password), style = MaterialTheme.typography.bodyLarge)
         OutlinedButton(onClick = actions.onCopyPassword) { Text(stringResource(R.string.chain_copy)) }
     }
     LabelledSwitch(stringResource(R.string.chain_log_destinations), view.logDestinations, actions.onLogDestinations)
     Text(stringResource(R.string.chain_log_destinations_note), style = MaterialTheme.typography.bodyMedium)
+}
+
+/**
+ * What the tool's proxy lets other apps on the phone do (ADR 0041, decision 5), from Watch's greeting: one that
+ * asks no password can be used by any of them, which is said plainly, with whether the tool can take one;
+ * one that asks a password keeps them out, though any app can still find it. Watch chains either way.
+ */
+@Composable
+private fun ProxyDoor(search: ToolSearch.Answering, tool: String) {
+    val body = MaterialTheme.typography.bodyMedium
+    if (search.found.needsPassword) {
+        Text(stringResource(R.string.chain_proxy_closed, tool), style = body)
+        return
+    }
+    Text(stringResource(R.string.chain_proxy_open, tool), style = body, color = MaterialTheme.colorScheme.error)
+    if (search.found.tool.auth == "none") Text(stringResource(R.string.chain_proxy_no_password, tool), style = body)
 }
 
 /**

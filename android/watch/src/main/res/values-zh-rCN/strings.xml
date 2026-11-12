@@ -34,10 +34,16 @@
     <string name="chain_all_apps">所有应用</string>
     <string name="chain_some_apps">仅限我选择的应用</string>
     <string name="chain_no_udp">%1$s 无法传输 UDP 流量。在您设置为通过它连接的应用中，通话和部分游戏将无法使用。网页仍能正常加载。</string>
+    <string name="chain_proxy_open">%1$s 的代理不需要密码，因此这部手机上的任何应用都能使用它。这样的应用可以得知您在使用 %1$s，也能得知其服务器的地址，还能通过它发送自己的流量。</string>
+    <string name="chain_proxy_no_password">%1$s 没有设置密码的选项，因此只要它以代理模式运行，它的代理就一直开放。Watch 仍会让您选择的应用通过它连接。</string>
+    <string name="chain_proxy_closed">%1$s 的代理需要密码，因此这部手机上的其他应用无法使用它。但它们仍能看到这个代理存在。</string>
+    <string name="chain_udp">也让 UDP 通过 %1$s 传输</string>
+    <string name="chain_udp_note">除非您开启，否则保持关闭。目前没有已知的绕过网络限制工具会检查是哪个应用向其代理发送 UDP：当 %1$s 为 Watch 传输 UDP 时，这部手机上的其他应用也可能通过它发送 UDP，即使设置了密码也是如此。关闭时，在您设置为通过 %1$s 连接的应用中，通话和部分游戏无法使用。网页仍能正常加载。</string>
     <string name="chain_private_dns">专用 DNS 已设置为 %1$s。这时，Android 会自行将应用查询的名称加密后发送到 %1$s，绕过 Watch 和 %2$s。您的网络无法读取这些名称，但可以看到这部手机在使用 %1$s。而 %1$s 会看到这些名称，以及您在互联网上的真实地址。对于您设置为通过 %2$s 连接的应用，请将专用 DNS 设置为“自动”或“关闭”。</string>
     <string name="chain_private_dns_where">请在打开的设置中查找“专用 DNS”。在某些手机上，需要再进入一层才能找到。</string>
     <string name="chain_private_dns_open">打开网络设置</string>
     <string name="chain_password">为防止这部手机上的其他应用使用 %1$s 的代理，请在 %1$s 中设置这个用户名和密码。</string>
+    <string name="chain_password_where">在 %1$s 中，请到其本地代理的设置里查找，这类设置常被称为 inbound、SOCKS 或本地端口。</string>
     <string name="chain_user">用户名：%1$s</string>
     <string name="chain_password_value">密码：%1$s</string>
     <string name="chain_copy">复制密码</string>

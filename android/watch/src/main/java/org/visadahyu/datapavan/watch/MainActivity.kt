@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
 
     /** The user's circumvention tool and the chain through it (W6). */
     private val chain = mutableStateOf(
-        ChainView(null, on = false, allApps = true, apps = emptySet(), logDestinations = false, user = null, password = null, choices = emptyList()),
+        ChainView(null, on = false, allApps = true, apps = emptySet(), logDestinations = false, udp = false, user = null, password = null, choices = emptyList()),
     )
 
     /** The apps the user left out of the tunnel (ADR 0041). */
@@ -133,6 +133,7 @@ class MainActivity : ComponentActivity() {
             changeChain { settings -> settings.apps = if (chosen) settings.apps + packageName else settings.apps - packageName }
         },
         onLogDestinations = { on -> changeChain { settings -> settings.logDestinations = on } },
+        onUdp = { on -> changeChain { settings -> settings.udp = on } },
         onCopyPassword = ::copyPassword,
         onPrivateDnsSettings = ::openPrivateDnsSettings,
     )
@@ -192,6 +193,7 @@ class MainActivity : ComponentActivity() {
             allApps = settings.allApps,
             apps = settings.apps,
             logDestinations = settings.logDestinations,
+            udp = settings.udp,
         )
         if (!settings.allApps && chain.value.choices.isEmpty()) loadChoices()
     }

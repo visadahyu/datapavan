@@ -170,7 +170,7 @@ class WatchVpnService : VpnService() {
             // A tool no longer installed has no UID: no app is taken for it, and nothing goes directly.
             uidOf(remembered.packageName) ?: NO_UID,
             apps,
-            udp = remembered.udp,
+            udp = settings.carriesUdp(remembered),
             logDestinations = settings.logDestinations,
         )
     }

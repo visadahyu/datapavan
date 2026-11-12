@@ -9,8 +9,10 @@
 # Then the tool stops: the shell's connections fail, and a sentinel on this computer, outside Android,
 # sees none of them reach it directly, while it does see a control's direct connection. Last, the user's
 # own path on the chain screen: Watch offers its password, which is set in the tool; one installed app
-# (scripts/workload-app) is picked and the chain turned on; that app's lookup, TCP and UDP go through the
-# tool under its own UID, and adb's shell, not picked, goes directly. Then the tool stops with the chain
+# (scripts/workload-app) is picked and the chain turned on; that app's lookup and TCP go through the
+# tool under its own UID, its UDP goes nowhere until the user allows UDP on the screen and then through
+# the tool, and adb's shell, not picked, goes directly. The screen says what the tool's proxy lets other
+# apps do, without a password and then with one (ADR 0041, decision 5). Then the tool stops with the chain
 # on: the screen says the apps wait, its switch still turns the chain off, and the picked app then goes
 # directly. Last, that app is left out of the tunnel on the screen (ADR 0041): Watch sets its tunnel up
 # again, the app reaches the server and Watch no longer sees it; taken back, Watch sees it again. Nothing
@@ -224,6 +226,13 @@ if ! screen_has "$SWITCH" && screen_has "Look again"; then
     for _ in $(seq 1 30); do screen_has "$SWITCH" && break; sleep 1; done
 fi
 scroll_to "$SWITCH" || fail "the chain screen did not offer the test tool"
+# The tool's proxy answered without asking for a password: the screen says what that lets other apps
+# do (ADR 0041, decision 5). The test tool can take a password, so the screen does not say it has none.
+scroll_to "The proxy of Datapavan test tool asks for no password, so any app on this phone can use it." ||
+    fail "the chain screen did not say that any app on the phone can use the tool's open proxy"
+screen_has "Datapavan test tool has no setting for a password" && fail "the chain screen said the test tool takes no password"
+echo "ok: the screen says that any app can use the tool's proxy while it asks for no password"
+scroll_to "Password: " || fail "the chain screen offered no password for the tool"
 dump_screen || true
 screen=$(adb shell cat "$DUMP" | tr -d '\r')
 user=$(grep -o 'text="User name: [^"]*"' <<<"$screen" | sed 's/^text="User name: //; s/"$//')
@@ -243,20 +252,43 @@ scroll_to_top
 tap_text "$SWITCH" || fail "the chain's switch is not on the screen"
 sleep 2
 through=$(tool_log | grep -c "^connect watch.test $PORT$")
-adb shell am start -W -n "$WORKLOAD/.WorkActivity" --es name watch.test --es tcp "watch.test:$PORT" \
-    --es udp "watch.test:$((PORT + 1))" >/dev/null
-for _ in $(seq 1 30); do workload_log | grep -q "^done$" && break; sleep 1; done
-log=$(workload_log)
+associations=$(tool_log | grep -c "^associate$" || true)
+# Runs the workload app once with the extras given, and prints its log lines of that run.
+work() {
+    local runs
+    runs=$(workload_log | grep -c "^done$" || true)
+    adb shell am start -W -n "$WORKLOAD/.WorkActivity" "$@" >/dev/null
+    for _ in $(seq 1 30); do [ "$(workload_log | grep -c "^done$")" -gt "$runs" ] && break; sleep 1; done
+    workload_log | awk -v runs="$runs" '$0 == "done" { done++; next } done == runs'
+}
+log=$(work --es name watch.test --es tcp "watch.test:$PORT" --es udp "watch.test:$((PORT + 1))")
 grep -qE "^resolved watch\.test 198\.1[89]\." <<<"$log" || fail "the workload app's lookup got no stand-in: $log"
 grep -q "^tcp watch.test:$PORT pong$" <<<"$log" || fail "the workload app's TCP did not get through: $log"
-grep -q "^udp watch.test:$((PORT + 1)) echo$" <<<"$log" || fail "the workload app's UDP did not get through: $log"
+# TCP only until the user allows UDP (ADR 0041, decision 5): the echo server on this computer would
+# answer a datagram that went through the tool or directly, so no echo means it went nowhere.
+grep -q "^udp watch.test:$((PORT + 1)) echo$" <<<"$log" && fail "the workload app's UDP got through before the user allowed it"
+[ "$(tool_log | grep -c "^associate$")" = "$associations" ] || fail "the tool was asked for a UDP relay before the user allowed it"
 [ "$(tool_log | grep -c "^connect watch.test $PORT$")" -gt "$through" ] || fail "the workload app's TCP did not go through the tool"
 grep -qE "^tcp [^ ]+ 198\.1[89]\.[0-9]+\.[0-9]+:$PORT $WORKLOAD_UID opened" <<<"$(flows)" ||
     fail "the workload app's flow is not listed under its own UID"
 through=$(tool_log | grep -c "^connect $HOST $PORT$")
 grep -q pong <<<"$(ping_from_shell "$HOST")" || fail "adb's shell, not picked, did not reach the server"
 [ "$(tool_log | grep -c "^connect $HOST $PORT$")" = "$through" ] || fail "adb's shell, not picked, went through the tool"
-echo "ok: on the chain screen: Watch's password set in the tool, one picked app's lookup, TCP and UDP through the tool, the shell directly"
+echo "ok: on the chain screen: Watch's password set in the tool, one picked app's lookup and TCP through the tool, its UDP nowhere until allowed, the shell directly"
+
+# Back on the screen, which looks for the tool again: its proxy now asks for a password. The user then
+# allows UDP, and the picked app's datagrams go through the tool's relay.
+adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+UDP_SWITCH="Send UDP through Datapavan test tool too"
+for _ in $(seq 1 30); do screen_has "$SWITCH" && break; sleep 1; done
+scroll_to "The proxy of Datapavan test tool asks for a password, so other apps on this phone cannot use it." ||
+    fail "the chain screen did not say that the tool's proxy now asks for a password"
+tap_text "$UDP_SWITCH" || fail "the chain screen has no switch for UDP"
+sleep 2
+log=$(work --es udp "watch.test:$((PORT + 1))")
+grep -q "^udp watch.test:$((PORT + 1)) echo$" <<<"$log" || fail "the workload app's UDP did not get through once allowed: $log"
+[ "$(tool_log | grep -c "^associate$")" -gt "$associations" ] || fail "the tool was not asked for a UDP relay once UDP was allowed"
+echo "ok: the screen says the proxy asks for a password; with UDP allowed, the picked app's UDP goes through the tool"
 
 # The screen looked for the tool again when the workload app left it. A search that says a listening
 # tool does not answer is W6's open finding (CI, 2026-11-12): not a failure yet, but its steps are shown.
