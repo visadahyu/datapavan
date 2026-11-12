@@ -43,8 +43,9 @@ the code is written with AI coding agents, to the maintainer's design and under 
 
    With one maintainer this is the independent review of ADR 0039. A second maintainer adds a review of every
    change to these paths.
-7. **Reports by e-mail too.** Security reports can also go to `security@datapavan.org`. An OpenPGP key for it
-   is published in SECURITY.md, so reports can be encrypted.
+7. **Reports by e-mail too.** Security reports can also go to `security@datapavan.org`. The address has no
+   OpenPGP key for now (the maintainer, 2026-11-12), so SECURITY.md asks for a first contact without details
+   and a private channel agreed after it.
 
 ## Consequences
 
