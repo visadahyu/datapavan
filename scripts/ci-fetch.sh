@@ -4,21 +4,30 @@
 # token CI does not stop. Each file is still checked against the SHA-256 pinned in the repository, and
 # put where the Gradle wrapper and scripts/build-site.sh look first, so neither downloads it again.
 # Anything already there (from the CI cache) is left alone. Locally there is no need to run this.
+#
+#   scripts/ci-fetch.sh        both
+#   scripts/ci-fetch.sh hugo   Hugo only, for CI's repository checks (scripts/check.sh data)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WHAT="${1:-all}"
 : "${GH_TOKEN:?GH_TOKEN must be set}"
+case "$WHAT" in
+    all | hugo) ;;
+    *) echo "usage: $0 [all|hugo]" >&2; exit 2 ;;
+esac
 
-# The Gradle distribution, in the folder the wrapper derives from distributionUrl (PathAssembler:
-# the zip's name, then the URL's MD5 in base 36). With the zip there, the wrapper checks its
-# distributionSha256Sum, unpacks it and downloads nothing.
-props="$ROOT/android/gradle/wrapper/gradle-wrapper.properties"
-url=$(sed -n 's/^distributionUrl=//p' "$props" | sed 's/\\:/:/g')
-sum=$(sed -n 's/^distributionSha256Sum=//p' "$props")
-zip=${url##*/}
-version=$(sed -n 's/^gradle-\(.*\)-bin\.zip$/\1/p' <<<"$zip")
-[ -n "$version" ] && [ -n "$sum" ] || { echo "cannot read $props" >&2; exit 1; }
-hash=$(python3 -I -c '
+if [ "$WHAT" = all ]; then
+    # The Gradle distribution, in the folder the wrapper derives from distributionUrl (PathAssembler:
+    # the zip's name, then the URL's MD5 in base 36). With the zip there, the wrapper checks its
+    # distributionSha256Sum, unpacks it and downloads nothing.
+    props="$ROOT/android/gradle/wrapper/gradle-wrapper.properties"
+    url=$(sed -n 's/^distributionUrl=//p' "$props" | sed 's/\\:/:/g')
+    sum=$(sed -n 's/^distributionSha256Sum=//p' "$props")
+    zip=${url##*/}
+    version=$(sed -n 's/^gradle-\(.*\)-bin\.zip$/\1/p' <<<"$zip")
+    [ -n "$version" ] && [ -n "$sum" ] || { echo "cannot read $props" >&2; exit 1; }
+    hash=$(python3 -I -c '
 import hashlib, sys
 n = int(hashlib.md5(sys.argv[1].encode()).hexdigest(), 16)
 digits, out = "0123456789abcdefghijklmnopqrstuvwxyz", ""
@@ -26,15 +35,16 @@ while n:
     n, r = divmod(n, 36)
     out = digits[r] + out
 print(out)' "$url")
-dist="${GRADLE_USER_HOME:-$HOME/.gradle}/wrapper/dists/${zip%.zip}/$hash"
-if [ -f "$dist/$zip.ok" ] || [ -f "$dist/$zip" ]; then
-    echo "Gradle $version: already there"
-else
-    mkdir -p "$dist"
-    gh release download "v$version" -R gradle/gradle-distributions -p "$zip" -O "$dist/$zip.part"
-    echo "$sum  $dist/$zip.part" | sha256sum -c --quiet -
-    mv "$dist/$zip.part" "$dist/$zip"
-    echo "Gradle $version: fetched and checked"
+    dist="${GRADLE_USER_HOME:-$HOME/.gradle}/wrapper/dists/${zip%.zip}/$hash"
+    if [ -f "$dist/$zip.ok" ] || [ -f "$dist/$zip" ]; then
+        echo "Gradle $version: already there"
+    else
+        mkdir -p "$dist"
+        gh release download "v$version" -R gradle/gradle-distributions -p "$zip" -O "$dist/$zip.part"
+        echo "$sum  $dist/$zip.part" | sha256sum -c --quiet -
+        mv "$dist/$zip.part" "$dist/$zip"
+        echo "Gradle $version: fetched and checked"
+    fi
 fi
 
 # Hugo, where scripts/build-site.sh keeps it; its version and hash are pinned there.

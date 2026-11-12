@@ -4,20 +4,15 @@
 # Fuzzing has its own workflow (fuzz.yml).
 name: CI
 
-# A push that changes only documentation or brand files has nothing for CI to check. A tag points at a
-# commit that CI has already checked on its branch, so a tag runs nothing.
+# Every push and pull request runs CI, so that every commit gets a result that the ruleset on main can
+# require (ADR 0043). A change of documents or brand files only runs the repository checks, which need no
+# build: the documents against the code, the published keys, the translations and the website
+# (scripts/check.sh data). A tag points at a commit that CI has already checked on its branch, so a tag
+# runs nothing.
 on:
   push:
     branches: ["**"]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - "brand/**"
   pull_request:
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - "brand/**"
 
 permissions:
   contents: read
@@ -27,16 +22,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # main moves only by fast-forward to a commit that already passed CI on its working branch. The
-  # same commit would then be checked twice; this job finds the earlier run, and the checks are
-  # skipped. A commit pushed to main directly, or a pull request, is always checked.
-  already-passed:
+  # What this push needs. main moves only by fast-forward to a commit that already passed CI on its
+  # working branch: that run counts, and nothing runs twice. A commit pushed to main directly, or a pull
+  # request, is always checked. Documents and brand files alone need only the repository checks; any
+  # other file, or a history that cannot be compared, needs the build and the emulator too.
+  scope:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       actions: read
+      contents: read
     outputs:
       passed: ${{ steps.lookup.outputs.passed }}
+      code: ${{ steps.diff.outputs.code }}
     steps:
       - id: lookup
         env:
@@ -51,9 +49,68 @@ jobs:
           echo "passed=$passed" >>"$GITHUB_OUTPUT"
           echo "This commit already passed CI on a working branch: $passed"
 
+      - if: steps.lookup.outputs.passed != 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - id: diff
+        if: steps.lookup.outputs.passed != 'true'
+        env:
+          BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          base=${PR_BASE:-$BEFORE}
+          # A new branch, or a history that was rewritten: compare with main.
+          if [ -z "$base" ] || [ "$base" = 0000000000000000000000000000000000000000 ] ||
+            ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            base=$(git merge-base origin/main HEAD 2>/dev/null || true)
+          fi
+          code=true
+          if [ -n "$base" ]; then
+            code=false
+            while IFS= read -r file; do
+              case $file in
+                *.md | docs/* | brand/*) ;;
+                *) code=true ;;
+              esac
+            done < <(git diff --name-only "$base" "$GITHUB_SHA")
+          fi
+          echo "code=$code" >>"$GITHUB_OUTPUT"
+          echo "Changed beyond documents and brand files (against ${base:-nothing}): $code"
+
+  # Checks that need no build, on every push: the bundled datasets' licences, the published keys, the
+  # documents against the code and the record (scripts/check-truth.py, which reads the release tags), the
+  # translations and the website.
+  repository:
+    needs: scope
+    if: needs.scope.outputs.passed != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Cache Hugo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/tools
+          key: hugo-${{ runner.os }}-${{ hashFiles('scripts/build-site.sh') }}
+
+      - name: Fetch Hugo with the workflow's token
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/ci-fetch.sh hugo
+
+      - name: Repository checks
+        run: scripts/check.sh data
+
   checks:
-    needs: already-passed
-    if: needs.already-passed.outputs.passed != 'true'
+    needs: scope
+    if: needs.scope.outputs.passed != 'true' && needs.scope.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     env:
@@ -117,8 +174,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: scripts/ci-fetch.sh
 
+      # The repository checks (scripts/check.sh data) run in their own job, above.
       - name: Quality gates
-        run: scripts/check.sh all
+        run: |
+          scripts/check.sh rust
+          scripts/check.sh android
 
       # On a real Android system: Watch's smoke test (every language, its tunnel on and off with every
       # app inside it, scripts/smoke-watch.sh) and its engine end to end (TCP, UDP, DNS, refused and
@@ -181,3 +241,25 @@ jobs:
           name: screenshots
           path: build/screenshots/
           if-no-files-found: ignore
+
+  # The one result the ruleset on main requires (ADR 0043): it passes when everything this push needed
+  # passed, and fails when anything failed, was cancelled or did not run when it had to.
+  gate:
+    needs: [scope, repository, checks]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - env:
+          SCOPE: ${{ needs.scope.result }}
+          PASSED: ${{ needs.scope.outputs.passed }}
+          CODE: ${{ needs.scope.outputs.code }}
+          REPOSITORY: ${{ needs.repository.result }}
+          CHECKS: ${{ needs.checks.result }}
+        run: |
+          echo "scope: $SCOPE (passed before: $PASSED, beyond documents: $CODE); repository: $REPOSITORY; checks: $CHECKS"
+          [ "$SCOPE" = success ] || exit 1
+          [ "$PASSED" != true ] || exit 0
+          [ "$REPOSITORY" = success ] || exit 1
+          [ "$CODE" != true ] || [ "$CHECKS" = success ] || exit 1
+          echo "Everything this push needed passed."
