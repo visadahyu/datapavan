@@ -1,6 +1,6 @@
 //! The forwarder (ADR 0012): Android's own TCP stack terminates every app's connection, reached by
 //! rewriting addresses, and the engine relays each one over a protected socket of its own to the
-//! real destination. UDP is relayed in userspace through a table of flows.
+//! real destination. UDP is relayed in userspace, each destination a flow of its own in the log.
 //!
 //! A TCP packet from an app to `D:dp` is rewritten to come from the fake peer `FAKE:fp` and go to the
 //! engine's listener on the tunnel's address. Android's TCP stack answers it, and the answer is
@@ -11,6 +11,9 @@
 //! The app's first SYN is held until Android has named the app and the real server has accepted, so
 //! that a connection closed at once still has an owner, and a refused or unreachable server looks so
 //! to the app: it gets a reset or an ICMP error, as without a VPN.
+//!
+//! UDP on the direct path leaves through one mapping for each app socket (ADR 0044): one protected
+//! socket, whatever the destination, which lets in only what comes from addresses the app sent to.
 
 use std::collections::{HashMap, VecDeque};
 use std::io;
@@ -43,6 +46,7 @@ use crate::tls::Hello;
 use crate::tun::Tun;
 
 mod chain;
+mod errors;
 mod kept;
 mod logbook;
 mod lookups;
@@ -121,10 +125,11 @@ const BATCH: usize = 64;
 /// product's. Tests pass smaller ones, so that timing can be driven in seconds (review finding 21).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
-    /// A UDP flow silent for this long is closed.
+    /// A UDP mapping with no datagram either way for this long ends (RFC 4787, REQ-5 and REQ-6), and
+    /// so does a peer of a mapping silent as long, or a chained app's flow with no answer as long.
     pub udp_idle: Duration,
-    /// At most this many datagrams of a new UDP flow wait for its socket; more are dropped, as by a
-    /// full queue. A lookup sends one, a QUIC handshake two or three.
+    /// At most this many datagrams to a new UDP destination wait for its way; more are dropped, as by
+    /// a full queue. A lookup sends one, a QUIC handshake two or three.
     pub udp_waiting: usize,
     /// How long a connection to a server, or a tool's handshake, may take before the app is told the
     /// server is unreachable.
@@ -182,7 +187,7 @@ impl Default for Limits {
     fn default() -> Self {
         Self {
             tcp_waiting: 112,
-            udp_idle: Duration::from_secs(60),
+            udp_idle: Duration::from_secs(120),
             udp_waiting: 32,
             connect_timeout: Duration::from_secs(60),
             close_linger: Duration::from_secs(30),
@@ -341,7 +346,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 24;
+pub const COUNTERS: usize = 26;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -370,6 +375,8 @@ pub struct Counters {
     hello_names_differ: AtomicU64,
     resets: AtomicU64,
     tcp_refused: AtomicU64,
+    udp_mappings: AtomicU64,
+    udp_filtered: AtomicU64,
 }
 
 impl Counters {
@@ -385,9 +392,11 @@ impl Counters {
     /// skipped packets, review finding 21), and hellos read on flows a DNS answer had named, and of
     /// those, how many named another server (finding 20: how often a shared address gives a flow the
     /// wrong name), relayed connections that ended in an error and were reset on both sides (finding
-    /// 21), and SYNs dropped because as many connections as allowed were waiting for their servers
-    /// (finding 18). None names a destination: they can be read on any phone. New counters are only
-    /// ever appended, so that scripts reading a column by its place keep reading the same one.
+    /// 21), SYNs dropped because as many connections as allowed were waiting for their servers
+    /// (finding 18), UDP mappings opened (finding 19: one for each app socket on the direct path), and
+    /// datagrams a mapping dropped because they came from an address its app had not sent to. None
+    /// names a destination: they can be read on any phone. New counters are only ever appended, so
+    /// that scripts reading a column by its place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
         [
@@ -415,6 +424,8 @@ impl Counters {
             &self.hello_names_differ,
             &self.resets,
             &self.tcp_refused,
+            &self.udp_mappings,
+            &self.udp_filtered,
         ]
         .map(|c| c.load(Ordering::Relaxed))
     }
@@ -588,10 +599,10 @@ impl Engine {
     }
 
     /// The network beneath the tunnel, or its DNS server, changed. DNS goes to `dns` from now on. When
-    /// the network itself is another one (`moved`), UDP flows are closed, so that their next datagram
-    /// goes out on the new network; TCP connections on the old network end by themselves, as without a
-    /// VPN. A change of the same network's properties closes nothing: Android reports several after
-    /// each switch.
+    /// the network itself is another one (`moved`), UDP mappings and flows are closed, so that their
+    /// next datagram goes out on the new network; TCP connections on the old network end by
+    /// themselves, as without a VPN. A change of the same network's properties closes nothing: Android
+    /// reports several after each switch.
     pub fn network_changed(&self, dns: Option<IpAddr>, moved: bool) {
         *lock(&self.shared.upstream_dns) = dns;
         // Another resolver, or another network, may answer otherwise.

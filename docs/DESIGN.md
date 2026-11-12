@@ -685,10 +685,30 @@ freed at once, as is the port of a connection that failed, since neither reached
 six connections to a server that never answers, with a cap of four: two are dropped while four wait, all fail, and
 another app's connection then opens at once.
 
-Two names in the log wait for the phone's counters to say how often the names differ (ADR 0044, decision 4). The
-UDP side of the budget, its shared receive buffer, early-closing lookups and two-way refresh, comes with the
-mapping, which rewrites the UDP table. Still to come: the mapping, shares for each app, ICMP echo and the network's
-MTU.
+Two names in the log wait for the phone's counters to say how often the names differ (ADR 0044, decision 4).
+
+The mapping, the same day (findings 18 and 19), built by a fresh agent from a written brief and reviewed before it
+was committed.
+- **The direct path:** an app's UDP socket now leaves through one protected, unconnected socket, whatever the
+  destination. Each destination is a peer with its own flow, name, bytes and QUIC reading. Answers come in only
+  from addresses the app sent to; another port of such an address becomes a peer of its own.
+- **Lifetime:** a mapping ends after two minutes with no datagram either way.
+- **ICMP errors:** they come back through `IP_RECVERR`, read with nix's safe functions.
+- **Lookups:** a lookup to the tunnel's DNS address ends with its last answer.
+- **Memory:** one 64 KiB buffer per engine thread replaces one per flow.
+- **Found on the way:** tokio wakes a reader only for readable data, not for an error. So the connected sockets'
+  "port unreachable" fired only when a later datagram came. Both kinds of socket now also wake on errors.
+- **Tests:** six lab tests cover it:
+  - a STUN-like check that two servers see the same port;
+  - the filter;
+  - ICMP "refused";
+  - a 4,000-byte answer;
+  - a lookup that ends;
+  - a mapping kept open by sending alone.
+
+  Each was made to fail by breaking the code it guards.
+
+Still to come: the chain's mappings, shares for each app, ICMP echo and the network's MTU.
 
 | # | Milestone | Done when |
 |---|---|---|

@@ -122,6 +122,9 @@ an ADR (D25).
   - how often names differ.
 
   An outside review of the engine (WATCH-07) is still needed before 0.2.0 is called stable.
+- **nix's review (2026-11-12):** nix 0.31.3 (MIT), with the features `net` and `uio`, passed `cargo deny` and
+  builds for the three Android targets. It brings memoffset, cfg_aliases, bitflags and autocfg (build only). With
+  the new UDP code, the arm64 library grew from 775,976 to 812,312 bytes, about 2.8 KB of it nix's own.
 - **Two filters differ by design:** address-dependent for answers, endpoint-independent for mappings. These are
   the defaults RFC 4787 recommends, and what most home routers do.
 - **ADR 0012's "one socket per flow" for UDP is superseded** by decision 1. W6's done-when changes its wording,

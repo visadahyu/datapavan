@@ -27,6 +27,8 @@ type Outcome = Result<(), Box<dyn std::error::Error>>;
 const INSIDE: &str = "NETLAB_INSIDE";
 /// The "internet": an address on the namespace's loopback (scripts/netlab-enter.py).
 const SERVER: Ipv4Addr = Ipv4Addr::new(198, 51, 100, 9);
+/// A second address beside it: another server, or a stranger to the apps.
+const OTHER: Ipv4Addr = Ipv4Addr::new(198, 51, 100, 10);
 /// The UID the lab's Android names for every app in the tunnel.
 const APP: u32 = 10_500;
 /// The places of counters in `Engine::counters`.
@@ -35,6 +37,8 @@ const UDP_FLOWS: usize = 1;
 const STRANGERS: usize = 18;
 const RESETS: usize = 22;
 const TCP_REFUSED: usize = 23;
+const UDP_MAPPINGS: usize = 24;
+const UDP_FILTERED: usize = 25;
 /// A server that never answers (scripts/netlab-enter.py routes it into a tunnel no one reads).
 const SILENT: Ipv4Addr = Ipv4Addr::new(203, 0, 113, 1);
 /// How long any one step may take before the test fails.
@@ -449,6 +453,257 @@ fn connections_waiting_for_silent_servers_are_capped() -> Outcome {
             let server = echo_server().await?;
             let mut after = app_connect(server).await?;
             assert_eq!(exchange(&mut after, b"room again").await?, b"room again");
+            Ok(())
+        },
+    )
+}
+
+/// A server that answers each datagram with the port it came from, in two bytes, as a STUN server
+/// tells a client the port its NAT mapped it to.
+async fn port_reporter(ip: Ipv4Addr) -> io::Result<SocketAddr> {
+    let socket = UdpSocket::bind((ip, 0)).await?;
+    let at = socket.local_addr()?;
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 64];
+        while let Ok((_, from)) = socket.recv_from(&mut buffer).await {
+            let _ = socket.send_to(&from.port().to_be_bytes(), from).await;
+        }
+    });
+    Ok(at)
+}
+
+/// An app's UDP socket: on the tunnel's address, so the namespace sends what it sends into the tunnel.
+async fn app_socket() -> io::Result<UdpSocket> {
+    UdpSocket::bind((Addresses::COMMON.tun4, 0)).await
+}
+
+/// The next datagram to the app: what it holds, and where it came from.
+async fn app_receive(app: &UdpSocket) -> Result<(Vec<u8>, SocketAddr), Box<dyn std::error::Error>> {
+    let mut buffer = vec![0u8; 65_535];
+    let (n, from) = within("a datagram to the app", app.recv_from(&mut buffer)).await?;
+    buffer.truncate(n);
+    Ok((buffer, from))
+}
+
+/// The port a [`port_reporter`] saw.
+fn reported(answer: &[u8]) -> Result<u16, String> {
+    match *answer {
+        [high, low] => Ok(u16::from_be_bytes([high, low])),
+        _ => Err(format!("not a port: {answer:?}")),
+    }
+}
+
+/// Review finding 19: one app socket leaves through one port, whatever the destination (RFC 4787,
+/// REQ-1). Two servers, at two addresses, see the same port, as two STUN servers would; each server is
+/// a flow of its own.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn one_app_socket_leaves_through_one_port_whatever_the_destination() -> Outcome {
+    lab(
+        "one_app_socket_leaves_through_one_port_whatever_the_destination",
+        Limits::default(),
+        |engine| async move {
+            let app = app_socket().await?;
+            let mut seen = Vec::new();
+            for server in [port_reporter(SERVER).await?, port_reporter(OTHER).await?] {
+                app.send_to(b"which port?", server).await?;
+                let (answer, from) = app_receive(&app).await?;
+                assert_eq!(from, server);
+                seen.push(reported(&answer)?);
+            }
+            assert_eq!(seen[0], seen[1], "two ports for one app socket");
+            let counters = engine.counters();
+            assert_eq!(
+                (counters[UDP_MAPPINGS], counters[UDP_FLOWS]),
+                (1, 2),
+                "one mapping, two flows"
+            );
+            Ok(())
+        },
+    )
+}
+
+/// Address-dependent filtering (RFC 4787, REQ-8): what comes to a mapping's port from an address its
+/// app never sent to is dropped and counted; another port of an address it sent to gets through.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_mapping_lets_in_only_the_addresses_its_app_sent_to() -> Outcome {
+    lab(
+        "a_mapping_lets_in_only_the_addresses_its_app_sent_to",
+        Limits::default(),
+        |engine| async move {
+            let app = app_socket().await?;
+            let server = port_reporter(SERVER).await?;
+            app.send_to(b"hello", server).await?;
+            let (answer, _) = app_receive(&app).await?;
+            let mapped = SocketAddr::from((SERVER, reported(&answer)?));
+
+            // Sent first: had it got through, the app would read it first.
+            let stranger = UdpSocket::bind((OTHER, 0)).await?;
+            stranger.send_to(b"from a stranger", mapped).await?;
+            let same_address = UdpSocket::bind((SERVER, 0)).await?;
+            same_address
+                .send_to(b"from the server's address", mapped)
+                .await?;
+
+            let (heard, from) = app_receive(&app).await?;
+            assert_eq!(
+                (heard.as_slice(), from),
+                (
+                    &b"from the server's address"[..],
+                    same_address.local_addr()?
+                )
+            );
+            assert_eq!(engine.counters()[UDP_FILTERED], 1);
+            Ok(())
+        },
+    )
+}
+
+/// ADR 0044, decision 1: a mapping's socket is not connected, yet the ICMP error a closed port sends
+/// back reaches the app (through `IP_RECVERR`), and a connected app socket reports it.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_closed_port_refuses_an_apps_datagram() -> Outcome {
+    lab(
+        "a_closed_port_refuses_an_apps_datagram",
+        Limits::default(),
+        |_engine| async move {
+            let closed = std::net::UdpSocket::bind((SERVER, 0))?.local_addr()?;
+            // A blocking socket: its read wakes for the error, which Tokio's does not.
+            let app = std::net::UdpSocket::bind((Addresses::COMMON.tun4, 0))?;
+            app.connect(closed)?;
+            app.set_read_timeout(Some(STEP))?;
+            app.send(b"anyone there?")?;
+            let mut buffer = [0u8; 64];
+            let read = app.recv(&mut buffer);
+            assert!(
+                matches!(&read, Err(e) if e.kind() == io::ErrorKind::ConnectionRefused),
+                "not refused: {read:?}"
+            );
+            Ok(())
+        },
+    )
+}
+
+/// An answer much larger than the tunnel's MTU reaches the app whole, from the engine's one receive
+/// buffer.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_large_answer_arrives_whole() -> Outcome {
+    lab(
+        "a_large_answer_arrives_whole",
+        Limits::default(),
+        |_engine| async move {
+            let large: Vec<u8> = (0..=250u8).cycle().take(4_000).collect();
+            let server = UdpSocket::bind((SERVER, 0)).await?;
+            let at = server.local_addr()?;
+            let answer = large.clone();
+            tokio::spawn(async move {
+                let mut buffer = [0u8; 64];
+                if let Ok((_, from)) = server.recv_from(&mut buffer).await {
+                    let _ = server.send_to(&answer, from).await;
+                }
+            });
+            let app = app_socket().await?;
+            app.send_to(b"a large one, please", at).await?;
+            let (heard, from) = app_receive(&app).await?;
+            assert_eq!(from, at);
+            assert!(heard == large, "{} bytes of 4,000", heard.len());
+            Ok(())
+        },
+    )
+}
+
+/// ADR 0044, decision 3: a lookup to the tunnel's DNS address ends its flow with its answer, so the
+/// same app socket's next lookup is a flow of its own.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_lookups_flow_ends_with_its_answer() -> Outcome {
+    lab(
+        "a_lookups_flow_ends_with_its_answer",
+        Limits::default(),
+        |engine| async move {
+            // The network's resolver, which sends each lookup back.
+            let resolver = UdpSocket::bind((SERVER, 53)).await?;
+            tokio::spawn(async move {
+                let mut buffer = [0u8; 512];
+                while let Ok((n, from)) = resolver.recv_from(&mut buffer).await {
+                    let _ = resolver.send_to(&buffer[..n], from).await;
+                }
+            });
+            engine.network_changed(Some(IpAddr::V4(SERVER)), false);
+            let dns = SocketAddr::from((Addresses::COMMON.dns4, 53));
+            let app = app_socket().await?;
+            for lookup in [&b"first lookup"[..], b"second lookup"] {
+                app.send_to(lookup, dns).await?;
+                let (heard, from) = app_receive(&app).await?;
+                assert_eq!((heard.as_slice(), from), (lookup, dns));
+            }
+            let lookups = engine
+                .flows()
+                .iter()
+                .filter(|flow| flow.destination == dns)
+                .count();
+            assert_eq!(lookups, 2, "the first lookup's flow outlived its answer");
+            assert_eq!(engine.counters()[UDP_MAPPINGS], 0);
+            Ok(())
+        },
+    )
+}
+
+/// RFC 4787, REQ-6: what the app sends keeps its mapping open, not only what comes back. With a
+/// two-second limit, a mapping that only sends, once a second, still gets its answer after three
+/// seconds, on the same port; once silent both ways for longer, it ends.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn sending_keeps_a_mapping_open() -> Outcome {
+    let limits = Limits {
+        udp_idle: Duration::from_secs(2),
+        ..Limits::default()
+    };
+    lab(
+        "sending_keeps_a_mapping_open",
+        limits,
+        |engine| async move {
+            let server = UdpSocket::bind((SERVER, 0)).await?;
+            let at = server.local_addr()?;
+            let (tell, told) = oneshot::channel();
+            tokio::spawn(async move {
+                let mut seen = Vec::new();
+                let mut buffer = [0u8; 64];
+                while seen.len() < 4 {
+                    match server.recv_from(&mut buffer).await {
+                        Ok((_, from)) => seen.push(from),
+                        Err(_) => return,
+                    }
+                }
+                if let Some(&last) = seen.last() {
+                    let _ = server.send_to(b"late", last).await;
+                }
+                let _ = tell.send(seen);
+            });
+            let app = app_socket().await?;
+            for tick in 0..4 {
+                if tick > 0 {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+                app.send_to(b"tick", at).await?;
+            }
+            let (heard, from) = app_receive(&app).await?;
+            assert_eq!((heard.as_slice(), from), (&b"late"[..], at));
+            let seen = timeout(STEP, told).await??;
+            assert!(
+                seen.windows(2).all(|pair| pair[0] == pair[1]),
+                "the mapping changed: {seen:?}"
+            );
+            assert_eq!(engine.counters()[UDP_MAPPINGS], 1);
+
+            tokio::time::sleep(Duration::from_secs(3)).await;
+            let reporter = port_reporter(SERVER).await?;
+            app.send_to(b"after the silence", reporter).await?;
+            app_receive(&app).await?;
+            assert_eq!(engine.counters()[UDP_MAPPINGS], 2, "a silent mapping ended");
             Ok(())
         },
     )

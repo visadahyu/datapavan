@@ -5,7 +5,8 @@
 #
 # - tun0 holds the tunnel's common addresses (10.1.10.1/32), as Watch's tunnel does; the fake peer
 #   (10.1.10.2) and the tunnel's DNS address (10.1.10.3) are routed into it.
-# - The "internet" is 198.51.100.9 on the loopback (a documentation address, RFC 5737).
+# - The "internet" is 198.51.100.9 on the loopback (a documentation address, RFC 5737), and
+#   198.51.100.10 beside it: a second server, or a stranger to the apps, for the UDP mapping's tests.
 # - Test apps bind 10.1.10.1, and a rule sends what they send into tun0, as Android sends an app's
 #   traffic into the VPN. The engine's own sockets are unbound and take the ordinary routes, as
 #   protected sockets do on Android. The rule comes before the local table, so that an app's packets to
@@ -34,6 +35,7 @@ TUN4 = "10.1.10.1"
 FAKE4 = "10.1.10.2"
 DNS4 = "10.1.10.3"
 SERVER4 = "198.51.100.9"
+OTHER4 = "198.51.100.10"
 SILENT4 = "203.0.113.0/24"
 APPS_TABLE = "100"
 
@@ -60,6 +62,7 @@ def main():
 
     ip("link", "set", "lo", "up")
     ip("addr", "add", SERVER4 + "/32", "dev", "lo")
+    ip("addr", "add", OTHER4 + "/32", "dev", "lo")
 
     tunnel = tun("tun0")
     ip("link", "set", "tun0", "mtu", "1500", "up")

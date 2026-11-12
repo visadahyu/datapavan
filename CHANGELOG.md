@@ -19,6 +19,13 @@ All notable changes to this project are documented here. The format follows
 - Watch's tunnel takes the addresses that NetGuard, TrackerControl and InviZible Pro give theirs, 10.1.10.1/32 and fd00:1:fd00:1:fd00:1:fd00:1/128, so that an app reading them finds a local firewall rather than Watch itself (ADR 0041). On a network that uses them, such as one behind a Comcast Business gateway, it takes its earlier addresses, and it switches when the network does.
 - Watch says on its screen what the circumvention tool's local proxy lets other apps on the phone do (ADR 0041, decision 5). A proxy that asks no password can be used by any of them, to learn that the user runs the tool and its server's address and to send their own traffic through it; Watch still chains through it, says so plainly, and shows its password and where tools keep that setting, or that the tool has none. A proxy that asks a password keeps other apps out, though they can still find it.
 - The chained apps' UDP goes through the tool only once the user turns it on (ADR 0041, decision 5): no tool is known to keep other apps off its UDP relay, password or not. Until then the chain is TCP only: calls and some games in the chained apps do not work, and web pages still load.
+- Watch's engine against the field's best (ADR 0044, the independent review's findings 18 to 21):
+  - **Calls and peer-to-peer apps keep their direct paths.** An app's UDP socket leaves through one port, whatever the destination, so a peer reaches it at the port a STUN server saw. Answers come in only from addresses the app sent to.
+  - **ICMP errors are kept.** "Port unreachable" still reaches the app, through `IP_RECVERR`.
+  - **A server's reset reaches the app as a reset,** not as a clean close that would make a cut-off answer look finished.
+  - **No one app can use up every connection.** The connections waiting for a server are capped for the engine as a whole, by what the phone allows the process.
+  - **Less held.** A lookup ends with its answer, and one buffer serves every answer.
+  - **Tests drive the engine in seconds.** They run it on a real tun device in an unprivileged network namespace, in every CI run, without an emulator.
 - Watch's connection log keeps nothing until the user chooses how long it keeps records (ADR 0040), so that no log becomes evidence by default; it kept 30 days before. The choice moves to onboarding with W9.
 
 
