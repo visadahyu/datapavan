@@ -71,5 +71,17 @@ Fixed on `chain-off`:
   user's tool. `verify-chain.sh` prints these lines when the screen misses a listening tool, and in any
   failure.
 
-Still open: why the screen's search misses a tool that answers the service's. The logged lines should say
-which step fails in the next CI run.
+The next CI run said which step failed: "held by UID 0, not the tool's". Watch asked Android who owned the
+tool's end of the connection right after `connect()` returned. On a busy phone that end can still be half-open
+in the kernel. The kernel's socket lookup (inet_diag) gives a half-open end, and a closing one, UID 0, root's,
+since it has no socket of its own yet. Watch read root as another app holding the port, and passed the tool
+over. Fixed on `chain-owner`:
+- **Root is not an owner.** No app runs as root, so UID 0 means that Android cannot say, as when it gives no
+  answer. Watch then asks again once the tool has answered the greeting, when its end is surely its own.
+  Another app's UID still means it is not the tool's port, at once or later.
+- **A unit test plays the race.** `ToolFinderTest` greets a SOCKS5 server on the loopback, while Android's
+  lookup answers root first, then the tool, root twice, another app, or nothing.
+- **The release check says what the tap met.** The release build's tunnel twice failed to come up after
+  "Turn on" (CI, 2026-11-11 and 12), with no crash, and the service never started. `verify-watch-release.sh`
+  now prints the screen's texts, the window in front, and Android's own log lines about Watch and the VPN.
+  That cause is still open.

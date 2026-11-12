@@ -2,6 +2,7 @@ package org.visadahyu.datapavan.watch.chain
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.os.Process
 import android.system.OsConstants
@@ -38,7 +39,7 @@ object Tools {
         val connectivity = context.getSystemService(ConnectivityManager::class.java)
         val debuggable = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
         return ToolFinder(
-            packages = context.packageManager,
+            uidOf = { uidOf(context.packageManager, it) },
             table = table(context),
             ownerOf = { local, remote -> ownerOf(connectivity, local, remote) },
             userId = Process.myUid() / PER_USER_RANGE,
@@ -48,6 +49,13 @@ object Tools {
 
     /** The tag of the search's lines in a debug build's log. */
     const val TAG = "WatchChain"
+
+    @Suppress("DEPRECATION")
+    private fun uidOf(packages: PackageManager, packageName: String): Int? = try {
+        packages.getApplicationInfo(packageName, 0).uid
+    } catch (e: PackageManager.NameNotFoundException) {
+        null
+    }
 
     /**
      * Android's owner of the TCP connection from [local] to [remote]. Only the active VPN may ask;

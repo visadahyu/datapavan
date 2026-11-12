@@ -1,6 +1,5 @@
 package org.visadahyu.datapavan.watch.chain
 
-import android.content.pm.PackageManager
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -41,7 +40,8 @@ sealed interface ToolSearch {
  * off the main thread.
  */
 class ToolFinder(
-    private val packages: PackageManager,
+    /** An installed app's UID, or null when it is not installed (Tools.search asks the PackageManager). */
+    private val uidOf: (packageName: String) -> Int?,
     private val table: List<KnownTool>,
     /** Android's owner of the TCP connection from `local` to `remote`, or null when it cannot say. */
     private val ownerOf: (local: InetSocketAddress, remote: InetSocketAddress) -> Int?,
@@ -68,13 +68,6 @@ class ToolFinder(
         }
         note("not answering: ${tools.joinToString(" ") { it.packageName }}")
         return ToolSearch.NotAnswering(tools)
-    }
-
-    @Suppress("DEPRECATION")
-    private fun uidOf(packageName: String): Int? = try {
-        packages.getApplicationInfo(packageName, 0).uid
-    } catch (e: PackageManager.NameNotFoundException) {
-        null
     }
 
     /** Greets the tool's known ports, in the main user's numbering and shifted by the user's number. */
@@ -133,9 +126,11 @@ class ToolFinder(
     private fun greetOnce(host: String, port: Int): Greeting? =
         Socket().use { socket ->
             socket.connect(InetSocketAddress(host, port), CONNECT_MS)
+            val tool = socket.remoteSocketAddress as InetSocketAddress
+            val watch = socket.localSocketAddress as InetSocketAddress
             // Asked at once, while the other end is surely open: a proxy that refuses the greeting
             // closes it, and a closed connection has no owner left to name.
-            val owner = ownerOf(socket.remoteSocketAddress as InetSocketAddress, socket.localSocketAddress as InetSocketAddress)
+            val early = ownerOf(tool, watch)
             socket.soTimeout = READ_MS
             socket.getOutputStream().apply {
                 write(byteArrayOf(5, 1, 0))
@@ -148,6 +143,12 @@ class ToolFinder(
                 note("$host:$port: not a SOCKS5 answer ($version $method)")
                 return null
             }
+            // Just after connect() returns, the tool's end may still be half-open in the kernel, and a
+            // half-open or closing end names no owner: Android then says root (CI, 2026-11-12: "held by
+            // UID 0" for the test tool). Once the tool has answered, its end is surely its own: asked again.
+            val owner = known(early) ?: known(ownerOf(tool, watch)).also {
+                if (early == ROOT) note("$host:$port: no owner at once (UID 0), then ${it ?: "none"}")
+            }
             Greeting(owner = owner, needsPassword = method == 0xff)
         }
 
@@ -155,5 +156,14 @@ class ToolFinder(
         const val CONNECT_MS = 1_000
         const val READ_MS = 1_500
         const val ATTEMPTS = 2
+
+        /** The UID the kernel's socket lookup (inet_diag) gives a half-open or TIME_WAIT end: root's. */
+        const val ROOT = 0
+
+        /**
+         * An owner Android named, or null when it could not say. Root is not an owner: no app runs as
+         * root, and the lookup gives root for an end that is not, or no longer, a socket of its own.
+         */
+        fun known(owner: Int?): Int? = owner?.takeIf { it != ROOT }
     }
 }
