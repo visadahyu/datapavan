@@ -658,9 +658,23 @@ Gate 2 of 0.2.0, the review's findings 18 to 21 (D25), began on 2026-11-12 with 
 - **Protect:** `protect()` hands Kotlin an owned duplicate of the socket's descriptor, so a caller that times out
   cannot leave a number the kernel gives to another socket.
 
-The rest follows a plan of thirteen units: a test harness in an unprivileged network namespace, reset
-propagation, both names in the log, budgets per engine and per app, endpoint-independent UDP mapping, ICMP echo and
-the network's MTU.
+The engine's limits moved into `Config` (`Limits`), so tests can drive time in seconds. ADR 0044 was accepted the
+same day.
+
+The engine's network lab, the same day (`core/net/tests/netlab.rs`, `scripts/netlab-enter.py`). Each test re-runs
+itself inside an unprivileged user and network namespace, where a real tun0 holds the tunnel's common addresses.
+Test apps bind the tunnel's address and a routing rule sends them into tun0, while the engine's own sockets take
+the ordinary routes, as protected sockets do. So Linux's own TCP stack terminates connections at the engine's
+listener as Android's does, in an ordinary `cargo test`, without an emulator. The first tests:
+- TCP and UDP pass;
+- a stranger at the listener is turned away and counted (finding 15);
+- a relayed connection silent past the sweep's limit still gets its late answer (finding 16).
+
+`scripts/check.sh rust` runs them, and fails with the reason where no namespace can be made. `NETLAB=skip` says
+plainly that they did not run. CI lifts Ubuntu's AppArmor restriction on such namespaces for its runner.
+
+Still to come, in units: reset propagation, both names in the log, budgets per engine and per app,
+endpoint-independent UDP mapping, ICMP echo and the network's MTU.
 
 | # | Milestone | Done when |
 |---|---|---|

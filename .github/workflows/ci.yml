@@ -174,6 +174,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: scripts/ci-fetch.sh
 
+      # The engine's network lab (core/net/tests/netlab.rs, ADR 0044) needs unprivileged user namespaces
+      # with a tun device. Ubuntu 24.04 restricts them through AppArmor by default; on this throwaway
+      # runner the restriction is lifted, and the tun module loaded if it is not.
+      - name: Allow the network lab
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          [ -c /dev/net/tun ] || sudo modprobe tun
+
       # The repository checks (scripts/check.sh data) run in their own job, above.
       - name: Quality gates
         run: |

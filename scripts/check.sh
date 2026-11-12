@@ -48,6 +48,25 @@ data_gates() {
     [ "$failed" -eq 0 ]
 }
 
+# The engine in its network lab (core/net/tests/netlab.rs, ADR 0044): a real tun device in an
+# unprivileged user and network namespace. A machine that cannot make one fails here, with the reason,
+# rather than passing without the tests; NETLAB=skip runs the other gates and says plainly that these
+# did not run.
+netlab_gate() {
+    echo "== Rust: the engine in its network lab"
+    if [ "${NETLAB:-}" = skip ]; then
+        echo "!! NETLAB=skip: the network lab tests were NOT RUN" >&2
+        return 0
+    fi
+    local probe
+    if ! probe=$(unshare --user --map-root-user --net sh -c 'ip link set lo up && ip tuntap add mode tun dev probe0' 2>&1); then
+        echo "no network lab here (a user namespace with a tun device): $probe" >&2
+        echo "set NETLAB=skip to run the other gates without it" >&2
+        return 1
+    fi
+    cargo test -p datapavan-net --test netlab --locked -- --ignored
+}
+
 rust_gates() {
     echo "== Rust: format, lint, test, dependency policy"
     cd "$ROOT/core"
@@ -57,6 +76,7 @@ rust_gates() {
         cargo clippy --workspace --all-targets --locked --target "$target" -- -D warnings
     done
     cargo test --workspace --locked
+    netlab_gate
     # Needs network access to fetch the RustSec advisory database.
     cargo deny --locked check
 }
