@@ -250,38 +250,49 @@ adb shell am force-stop "$TOOL"
 adb shell am start-foreground-service -n "$TOOL/.ToolService" --ei port "$TOOL_PORT" \
     --es user "$user" --es password "$password" --es map "watch.test=$HOST" >/dev/null
 for _ in $(seq 1 10); do [ "$(tool_log | grep -c "^listening")" -gt "$listening" ] && break; sleep 1; done
-# True when the row showing exactly the text $1, a radio, checkbox or switch, is chosen: the element with
-# that text, or the nearest one around it that can be checked or selected, says so.
-marked() {
-    dump_screen || return 1
+# The state of the row showing exactly the text $1 in the last dump: "chosen", "not chosen" or "absent".
+# The row is the element with that text, or the nearest one around it that can be checked or selected.
+row_state() {
     adb shell cat "$DUMP" | python3 -I -c '
 import sys, xml.etree.ElementTree as ET
 text = sys.argv[1]
 root = ET.fromstring(sys.stdin.read())
 parents = {child: parent for parent in root.iter() for child in parent}
+state = "absent"
 for node in root.iter("node"):
     if node.get("text") != text:
         continue
+    state = "not chosen"
     while node is not None:
         if node.get("checked") == "true" or node.get("selected") == "true":
+            print("chosen")
             sys.exit(0)
         if node.get("checkable") == "true":
             break
         node = parents.get(node)
-sys.exit(1)' "$1"
+print(state)' "$1"
 }
-# Taps the row showing $1 until it shows as chosen, and leaves it chosen if it already was. A tap can be
-# lost while the screen moves (CI, 2026-11-13: the choice of apps stayed on every app, "Datapavan workload"
-# was then found in the list of apps to leave out, and the shell went through the tool).
+# True when the row showing $1 is on the screen and chosen.
+marked() {
+    dump_screen || return 1
+    [ "$(row_state "$1")" = chosen ]
+}
+# Taps the row showing $1 until it shows as chosen, and leaves it chosen if it already was. Each try
+# looks for the row from the top of the screen, since scroll_to only looks further down and a tapped row
+# may move up as the list around it changes. A tap can be lost while the screen moves (CI, 2026-11-13:
+# the choice of apps stayed on every app, and the shell, not picked, went through the tool).
 choose() {
     local try
     for try in 1 2 3; do
+        scroll_to_top
+        scroll_to "$1" || { echo "    \"$1\" not found on try $try" >&2; continue; }
         marked "$1" && return 0
-        tap_text "$1" || return 1
+        tap_text "$1" || { echo "    \"$1\" could not be tapped on try $try" >&2; continue; }
         for _ in 1 2 3; do
             sleep 1
             marked "$1" && return 0
         done
+        echo "    \"$1\" was $(row_state "$1") after the tap of try $try" >&2
     done
     return 1
 }
@@ -296,7 +307,9 @@ choose "Datapavan workload" || fail "the workload app could not be chosen"
 # The list of apps pushed the switch up, off the screen.
 scroll_to_top
 choose "$SWITCH" || fail "the chain's switch did not turn on"
-marked "Only the apps I choose" || fail "the choice of apps changed when the chain turned on"
+scroll_to_top
+scroll_to "Only the apps I choose" && marked "Only the apps I choose" || fail "the choice of apps changed when the chain turned on"
+scroll_to_top
 sleep 2
 through=$(tool_log | grep -c "^connect watch.test $PORT$")
 associations=$(tool_log | grep -c "^associate$" || true)
