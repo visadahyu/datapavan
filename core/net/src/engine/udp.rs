@@ -649,13 +649,15 @@ impl Mapping {
     }
 
     /// A new peer that came in, which the app knows as `shown`: dropped beyond [`CAME_IN`], or when the
-    /// app already knows another peer by that address.
+    /// app already knows another peer by that address. Its way is made only then, so that a sender
+    /// spraying ports beyond the cap costs no search of the mapping's names (ninth review of unit 9,
+    /// finding 6).
     fn come_in(
         &mut self,
         shared: &Shared,
         (app, shown): (SocketAddr, SocketAddr),
         now: Instant,
-        way: PeerWay,
+        way: impl FnOnce(&Sources) -> PeerWay,
     ) -> LetIn {
         if self.peers.contains_key(&shown) {
             return LetIn::Unmatched;
@@ -663,6 +665,7 @@ impl Mapping {
         if self.came_in >= CAME_IN {
             return LetIn::Capped;
         }
+        let way = way(&self.sources);
         // A flow the app did not start, logged as any other: the log's flag for a flow that came in
         // waits for its new record format (ADR 0044, decision 4).
         let peer = self.peer(shared, (app, shown), now, (true, way));
@@ -746,7 +749,7 @@ impl Mapping {
         (target, answer): (&Target, &[u8]),
         now: Instant,
     ) -> LetIn {
-        let (shown, way) = match target {
+        let (shown, from) = match target {
             Target::Address(address) => {
                 // An IPv4 address the relay gives as IPv6 is still the address the app sent to.
                 let from = SocketAddr::new(address.ip().to_canonical(), address.port());
@@ -798,8 +801,7 @@ impl Mapping {
                         return LetIn::Unmatched;
                     }
                 }
-                let shown = SocketAddr::new(ip, from.port());
-                (shown, self.sources.way_from(shown, from))
+                (SocketAddr::new(ip, from.port()), Some(from))
             }
             // A relay that gives back the name it was asked for answers for that name's stand-in;
             // another port of the name is another port of the stand-in.
@@ -816,10 +818,13 @@ impl Mapping {
                     self.sources.stop_waiting(shown);
                     return self.answered_by(shown, answer, now);
                 }
-                (shown, PeerWay::through_tool(target.clone()))
+                (shown, None)
             }
         };
-        self.come_in(shared, (app, shown), now, way)
+        self.come_in(shared, (app, shown), now, |sources| match from {
+            Some(from) => sources.way_from(shown, from),
+            None => PeerWay::through_tool(target.clone()),
+        })
     }
 
     /// Whether a stand-in other than `except` waits on `port` and still contests the answers from an
@@ -1330,7 +1335,7 @@ impl UdpTable {
         if mapping.sources.shown(from.ip()).is_none() {
             return LetIn::Filtered;
         }
-        mapping.come_in(shared, (app, from), now, PeerWay::direct(from))
+        mapping.come_in(shared, (app, from), now, |_| PeerWay::direct(from))
     }
 
     /// Which peer of the mapping `id` of `app` an `answer` from the tool's relay is for, by its
