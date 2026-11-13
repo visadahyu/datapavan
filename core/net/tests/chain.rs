@@ -1121,3 +1121,110 @@ async fn another_port_comes_in_from_the_address_the_app_sent_to() -> Outcome {
     assert_eq!(answer, (other_port, b"another port".to_vec()));
     Ok(())
 }
+
+/// A resolver on this computer that hears every lookup and answers none, and the tunnel's DNS address
+/// at its port: any port of that address leads to the same port of the network's resolver, so the
+/// tests need not bind port 53.
+async fn deaf_resolver(engine: &Engine) -> Result<(SocketAddr, Heard), Box<dyn std::error::Error>> {
+    let resolver = UdpSocket::bind("127.0.0.1:0").await?;
+    let port = resolver.local_addr()?.port();
+    engine.network_changed(Some(IpAddr::V4(Ipv4Addr::LOCALHOST)), false);
+    let heard: Heard = Arc::default();
+    let noted = Arc::clone(&heard);
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 512];
+        while let Ok((n, from)) = resolver.recv_from(&mut buffer).await {
+            noted
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push((from, buffer[..n].to_vec()));
+        }
+    });
+    Ok((SocketAddr::from((Addresses::COMMON.dns4, port)), heard))
+}
+
+/// Whether the resolver heard a lookup of the name `private.test`.
+fn heard_private(heard: &Heard) -> bool {
+    heard_so_far(heard)
+        .iter()
+        .any(|(_, query)| query.windows(7).any(|w| w == b"private"))
+}
+
+/// A direct app's lookup still waits for its answer when the chain takes the app: the app's next lookup
+/// from that socket goes through the tool, not to the network's resolver (second review of unit 9,
+/// finding 2).
+#[tokio::test(flavor = "current_thread")]
+async fn a_lookup_sent_once_the_chain_takes_the_app_stays_off_the_network() -> Outcome {
+    let tool = proxy(Settings::default()).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    let (dns, heard) = deaf_resolver(&engine).await?;
+    send(
+        &tunnel,
+        app(DIRECT_PORT),
+        dns,
+        &query(b"\x06before\x04test\x00", 1),
+    )
+    .await?;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let mut both = chain(tool.address);
+    both.apps = Some(HashSet::from([CHAINED, DIRECT]));
+    engine.chain(Some(both));
+    send(
+        &tunnel,
+        app(DIRECT_PORT),
+        dns,
+        &query(b"\x07private\x04test\x00", 1),
+    )
+    .await?;
+    let (from, answer) = receive(&tunnel).await?.ok_or("an answer")?;
+    assert_eq!(from, dns);
+    let read = dns::response(&answer).ok_or("a response")?;
+    assert!(
+        matches!(read.addresses[..], [(IpAddr::V4(_), 0)]),
+        "not Watch's stand-in: {:?}",
+        read.addresses
+    );
+    assert!(
+        !heard_private(&heard),
+        "the lookup reached the network's resolver"
+    );
+    Ok(())
+}
+
+/// The chain takes a direct app while its first lookup's socket is being protected: the lookups that
+/// waited, one sent once the chain took the app, go through the tool (second review of unit 9, finding
+/// 2).
+#[tokio::test(flavor = "current_thread")]
+async fn lookups_that_wait_while_the_chain_takes_the_app_stay_off_the_network() -> Outcome {
+    let tool = proxy(Settings::default()).await?;
+    let (engine, tunnel) = engine_with(
+        chain(tool.address),
+        Limits::default(),
+        Arc::new(SlowProtect),
+    )?;
+    let (dns, heard) = deaf_resolver(&engine).await?;
+    send(
+        &tunnel,
+        app(DIRECT_PORT),
+        dns,
+        &query(b"\x06before\x04test\x00", 1),
+    )
+    .await?;
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let mut both = chain(tool.address);
+    both.apps = Some(HashSet::from([CHAINED, DIRECT]));
+    engine.chain(Some(both));
+    send(
+        &tunnel,
+        app(DIRECT_PORT),
+        dns,
+        &query(b"\x07private\x04test\x00", 1),
+    )
+    .await?;
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    assert!(
+        !heard_private(&heard),
+        "the lookup reached the network's resolver"
+    );
+    Ok(())
+}

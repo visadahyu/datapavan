@@ -69,6 +69,26 @@ pub(super) struct UdpFlow {
     uid: Option<u32>,
     /// The lookups sent to the network's resolver that still wait for their answer.
     unanswered: u32,
+    /// How many times the chain had been set when the flow last made sure that its way still holds.
+    chains: u64,
+}
+
+impl UdpFlow {
+    /// Whether the flow may still carry its app's lookups to `destination`: once the chain was set
+    /// again, whether its app's route still leads the flow's way. One that may not ends at once, so that
+    /// a lookup an app sends once the chain takes it never reaches the network's resolver directly, and
+    /// one sent once the chain lets it go is not answered through the tool.
+    fn keeps_its_way(&mut self, shared: &Shared, destination: SocketAddr) -> bool {
+        let chains = shared.chains.load(Ordering::Acquire);
+        if chains == self.chains {
+            return true;
+        }
+        if !self.way.keeps(&shared.route(self.uid, destination)) {
+            return false;
+        }
+        self.chains = chains;
+        true
+    }
 }
 
 /// Where the lookups of a flow to Watch's own DNS address go.
@@ -99,6 +119,16 @@ impl UdpWay {
     async fn writable(&self) {
         if let Self::Direct(socket) = self {
             let _ = socket.writable().await;
+        }
+    }
+
+    /// Whether lookups on `route` may go this way: directly while the app goes directly, through the
+    /// same tool, reached the same way, while it is chained.
+    fn keeps(&self, route: &Route) -> bool {
+        match (self, route) {
+            (Self::Direct(_), Route::Direct) => true,
+            (Self::Lookups(one), Route::Tool(other)) => one.same_tool(other),
+            _ => false,
         }
     }
 }
@@ -839,35 +869,50 @@ impl Loop {
         let lookup = self.shared.is_tunnel_dns(key.1.ip());
         let next = {
             let mut table = lock(&self.udp);
-            match table.flows.get_mut(&key) {
-                Some(UdpEntry::Open(flow)) => {
-                    let cached = match flow.way {
-                        UdpWay::Lookups(_) => None,
-                        UdpWay::Direct(_) => cached_answer(&self.shared, key.1, payload),
-                    };
-                    // The flow ends once every lookup it sent has its answer.
-                    if lookup && cached.is_none() && matches!(flow.way, UdpWay::Direct(_)) {
-                        flow.unanswered = flow.unanswered.saturating_add(1);
+            let stale = match table.flows.get_mut(&key) {
+                Some(UdpEntry::Open(flow)) => !flow.keeps_its_way(&self.shared, key.1),
+                _ => false,
+            };
+            if stale {
+                // A flow of lookups that the chain, set again, sends another way gives way to one on
+                // the new route, which this lookup opens. The old flow's task still hands the app the
+                // answers to what it sent before.
+                table
+                    .flows
+                    .insert(key, UdpEntry::Opening(vec![packet.to_vec()]));
+                Next::Open
+            } else {
+                match table.flows.get_mut(&key) {
+                    Some(UdpEntry::Open(flow)) => {
+                        let cached = match flow.way {
+                            UdpWay::Lookups(_) => None,
+                            UdpWay::Direct(_) => cached_answer(&self.shared, key.1, payload),
+                        };
+                        // The flow ends once every lookup it sent has its answer.
+                        if lookup && cached.is_none() && matches!(flow.way, UdpWay::Direct(_)) {
+                            flow.unanswered = flow.unanswered.saturating_add(1);
+                        }
+                        Next::Flow(flow.way.clone(), flow.uid, cached)
                     }
-                    Next::Flow(flow.way.clone(), flow.uid, cached)
-                }
-                Some(UdpEntry::Opening(waiting)) => {
-                    if waiting.len() < self.shared.limits.udp_waiting {
-                        waiting.push(packet.to_vec());
-                    } else {
-                        Counters::add(&self.shared.counters.skipped, 1);
+                    Some(UdpEntry::Opening(waiting)) => {
+                        if waiting.len() < self.shared.limits.udp_waiting {
+                            waiting.push(packet.to_vec());
+                        } else {
+                            Counters::add(&self.shared.counters.skipped, 1);
+                        }
+                        return;
                     }
-                    return;
-                }
-                None => {
-                    if let Some(to) = table.toward_peer(key, payload, Instant::now(), &self.shared)
-                    {
-                        Next::Peer(to)
-                    } else {
-                        table
-                            .flows
-                            .insert(key, UdpEntry::Opening(vec![packet.to_vec()]));
-                        Next::Open
+                    None => {
+                        if let Some(to) =
+                            table.toward_peer(key, payload, Instant::now(), &self.shared)
+                        {
+                            Next::Peer(to)
+                        } else {
+                            table
+                                .flows
+                                .insert(key, UdpEntry::Opening(vec![packet.to_vec()]));
+                            Next::Open
+                        }
                     }
                 }
             }
@@ -1554,7 +1599,8 @@ fn unreachable_to(app: SocketAddr, destination: SocketAddr, told: Unreachable) -
 
 /// Opens a flow of lookups to Watch's own DNS address, off the event loop: opens its way, sends the
 /// lookups that waited for it, and starts relaying the answers. The app gets an ICMP error when the
-/// network's resolver cannot be reached.
+/// network's resolver cannot be reached. When the chain takes the app, or lets it go, while the way
+/// opens, the flow is opened again on the new route: what waited never leaves by the old.
 async fn open_flow(
     key: (SocketAddr, SocketAddr),
     uid: Option<u32>,
@@ -1563,10 +1609,22 @@ async fn open_flow(
     flows: UdpFlows,
     changes: watch::Receiver<u64>,
 ) {
+    while !open_lookups(key, uid, (&tun, &shared, &flows, &changes)).await {}
+}
+
+/// One try of [`open_flow`]: `false` when the chain changed the app's way meanwhile, and nothing that
+/// waited has left.
+async fn open_lookups(
+    key: (SocketAddr, SocketAddr),
+    uid: Option<u32>,
+    (tun, shared, flows, changes): Context<'_>,
+) -> bool {
     let (app, destination) = key;
-    let (opened, mut flow) = begin_udp(&shared, app, destination, uid);
+    // Read before the route, so that a chain set meanwhile is seen below.
+    let chains = shared.chains.load(Ordering::Acquire);
+    let (opened, mut flow) = begin_udp(shared, app, destination, uid);
     let id = opened.id;
-    let way = match way_for(&shared, uid, destination).await {
+    let way = match way_for(shared, shared.route(uid, destination), destination).await {
         Ok(way) => way,
         Err(error) => {
             flow.outcome = if is_unreachable(&error) {
@@ -1574,16 +1632,9 @@ async fn open_flow(
             } else {
                 Outcome::Failed
             };
-            udp_failed(key, flow, &tun, &shared, &flows).await;
-            return;
+            udp_failed(key, flow, tun, shared, flows).await;
+            return true;
         }
-    };
-    shared.record(flow);
-    let mut open = UdpFlow {
-        id,
-        way: way.clone(),
-        uid,
-        unanswered: 0,
     };
     // The waiting datagrams leave at once, under the table's lock, so that none that comes meanwhile
     // overtakes them: the socket must first be known to take them.
@@ -1593,7 +1644,21 @@ async fn open_flow(
     let mut questions = Vec::new();
     let mut cached = Vec::new();
     {
-        let mut table = lock(&flows);
+        let mut table = lock(flows);
+        // The chain may have taken the app, or let it go, while the socket was made: what waited,
+        // some of it sent since, goes by the new route.
+        let now = shared.chains.load(Ordering::Acquire);
+        if now != chains && !way.keeps(&shared.route(uid, destination)) {
+            return false;
+        }
+        shared.record(flow);
+        let mut open = UdpFlow {
+            id,
+            way: way.clone(),
+            uid,
+            unanswered: 0,
+            chains: now,
+        };
         let waiting = match table.flows.remove(&key) {
             Some(UdpEntry::Opening(waiting)) => waiting,
             _ => Vec::new(),
@@ -1610,7 +1675,7 @@ async fn open_flow(
                 questions.push(payload.to_vec());
                 continue;
             }
-            if let Some(answer) = cached_answer(&shared, destination, payload) {
+            if let Some(answer) = cached_answer(shared, destination, payload) {
                 cached.extend(packet::udp(destination, app, &answer));
                 continue;
             }
@@ -1618,7 +1683,7 @@ async fn open_flow(
             if sent.is_ok() {
                 open.unanswered += 1;
             }
-            errors.extend(count_sent(&shared, None, packet, &parsed, sent));
+            errors.extend(count_sent(shared, None, packet, &parsed, sent));
         }
         table.flows.insert(key, UdpEntry::Open(open));
     }
@@ -1627,15 +1692,43 @@ async fn open_flow(
         shared.lookup(uid, length);
     }
     for error in errors {
-        send_to_app(&tun, &shared, &error).await;
+        send_to_app(tun, shared, &error).await;
     }
     for answer in cached {
         shared.lookup_answered(uid, answer.len());
-        send_to_app(&tun, &shared, &answer).await;
+        send_to_app(tun, shared, &answer).await;
     }
+    start_answers(
+        way,
+        questions,
+        (key, id),
+        uid,
+        (tun, shared, flows, changes),
+    );
+    true
+}
+
+/// Starts answering a new flow of lookups: Watch answers a chained app's itself; the network's resolver
+/// answers the others, which a task hands the app.
+fn start_answers(
+    way: UdpWay,
+    questions: Vec<Vec<u8>>,
+    (key, id): ((SocketAddr, SocketAddr), u64),
+    uid: Option<u32>,
+    (tun, shared, flows, changes): Context<'_>,
+) {
+    let (app, destination) = key;
     match way {
         UdpWay::Lookups(chain) => {
-            answer_waiting(questions, (key, id), uid, &chain, &shared, &tun, flows);
+            answer_waiting(
+                questions,
+                (key, id),
+                uid,
+                &chain,
+                shared,
+                tun,
+                Arc::clone(flows),
+            );
         }
         UdpWay::Direct(socket) => {
             tokio::spawn(answers(
@@ -1646,10 +1739,10 @@ async fn open_flow(
                     id,
                     uid,
                 },
-                tun,
-                shared,
-                flows,
-                changes,
+                Arc::clone(tun),
+                Arc::clone(shared),
+                Arc::clone(flows),
+                changes.clone(),
             ));
         }
     }
@@ -1666,15 +1759,15 @@ fn cached_answer(shared: &Shared, destination: SocketAddr, query: &[u8]) -> Opti
     Some(answer)
 }
 
-/// How a new flow of lookups to Watch's own DNS address goes, by its app's route: a protected socket
+/// How a new flow of lookups to Watch's own DNS address goes, by its app's `route`: a protected socket
 /// to the network's resolver, or Watch's own answers to a chained app's lookups. A flow whose app
 /// Android cannot name while a chain is on goes nowhere.
 async fn way_for(
     shared: &Arc<Shared>,
-    uid: Option<u32>,
+    route: Route,
     destination: SocketAddr,
 ) -> io::Result<UdpWay> {
-    match shared.route(uid, destination) {
+    match route {
         Route::Direct => match shared.target(destination) {
             Some(target) => connect_udp(shared, target)
                 .await
