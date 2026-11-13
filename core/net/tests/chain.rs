@@ -1892,3 +1892,64 @@ async fn a_flow_of_lookups_that_gave_way_hands_over_every_answer_it_owes() -> Ou
     assert_eq!(seen.len(), 2, "answers to the two earlier lookups");
     Ok(())
 }
+
+/// The UIDs of the UDP flows the engine kept to `destination`, oldest first.
+fn uids_to(engine: &Engine, destination: SocketAddr) -> Vec<Option<u32>> {
+    engine
+        .flows()
+        .into_iter()
+        .filter(|flow| flow.protocol == packet::UDP && flow.destination == destination)
+        .map(|flow| flow.uid)
+        .collect()
+}
+
+/// Without a chain too, a port Android hands to another app, after a silence, to a destination the old
+/// app sent to: the new app's datagram asks Android again and leaves through a mapping of its own,
+/// logged under it (third review of unit 9, finding 5; ADR 0044, decision 1).
+#[tokio::test(flavor = "current_thread")]
+async fn a_port_handed_to_another_app_is_logged_under_it_without_a_chain() -> Outcome {
+    const PORT: u16 = 50_104;
+    const ANOTHER: u32 = 10_500;
+    let server = port_reporter().await?;
+    let tool = proxy(Settings::default()).await?;
+    let owners = Arc::new(Owners::default());
+    owners.set(PORT, Some(DIRECT));
+    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
+    engine.chain(None);
+    let mut seen = Vec::new();
+    for (uid, said) in [(DIRECT, &b"first app"[..]), (ANOTHER, b"second app")] {
+        owners.set(PORT, Some(uid));
+        send(&tunnel, app(PORT), server, said).await?;
+        let (_, answer) = receive(&tunnel).await?.ok_or("a datagram")?;
+        seen.push(u16::from_be_bytes([answer[0], answer[1]]));
+        tokio::time::sleep(Duration::from_millis(300)).await;
+    }
+    assert_ne!(
+        seen[0], seen[1],
+        "the second app left from the first app's port"
+    );
+    assert_eq!(uids_to(&engine, server), [Some(DIRECT), Some(ANOTHER)]);
+    Ok(())
+}
+
+/// An app socket whose app Android cannot name is logged as unknown, even when Android named it before,
+/// never under the app it had (third review of unit 9, finding 5). Without a chain, it still reaches its
+/// destination.
+#[tokio::test(flavor = "current_thread")]
+async fn an_app_android_cannot_name_is_logged_as_unknown() -> Outcome {
+    const PORT: u16 = 50_105;
+    let (first, second) = (udp_echo().await?, udp_echo().await?);
+    let tool = proxy(Settings::default()).await?;
+    let owners = Arc::new(Owners::default());
+    owners.set(PORT, Some(DIRECT));
+    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), owners.clone())?;
+    engine.chain(None);
+    send(&tunnel, app(PORT), first, b"named").await?;
+    receive(&tunnel).await?.ok_or("a datagram")?;
+    owners.set(PORT, None);
+    send(&tunnel, app(PORT), second, b"unnamed").await?;
+    let answer = receive(&tunnel).await?.ok_or("a datagram")?;
+    assert_eq!(answer, (second, b"unnamed".to_vec()));
+    assert_eq!(uids_to(&engine, second), [None]);
+    Ok(())
+}

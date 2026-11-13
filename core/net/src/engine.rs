@@ -132,13 +132,14 @@ pub struct Limits {
     /// At most this many datagrams to a new UDP destination wait for its way; more are dropped, as by
     /// a full queue. A lookup sends one, a QUIC handshake two or three.
     pub udp_waiting: usize,
-    /// While a chain is on, a UDP mapping's datagram to a destination it knows asks Android again whose
-    /// socket sent it when the app was silent this long, or when Android last named the app thirty times
-    /// this long ago: Android may have handed the port to another app, which the chain may send another
-    /// way. Linux hands out a free port at random among about 28,000, so a port rarely comes back to
-    /// another app within a second of its last datagram; an app that sends more often (calls, games,
-    /// streams) is asked about every thirty seconds, and one that pauses costs one question to Android,
-    /// off the event loop, which holds that datagram for about a millisecond.
+    /// A UDP mapping's datagram to a destination it knows, or a lookup on a flow of lookups, asks Android
+    /// again whose socket sent it when the app was silent this long, or when Android last named the app
+    /// thirty times this long ago: Android may have handed the port to another app, which the log must
+    /// name, and which the chain may send another way. Linux hands out a free port at random among about
+    /// 28,000, so a port rarely comes back to another app within a second of its last datagram. An app
+    /// that sends more often (calls, games, streams) is asked about every thirty seconds; one that pauses
+    /// costs one question to Android, off the event loop, which holds that datagram for as long as the
+    /// question takes: about 3 ms on the Galaxy A40, 11 ms in deep idle (the engine spike, 2026-11).
     pub udp_reask: Duration,
     /// How long a connection to a server, or a tool's handshake, may take before the app is told the
     /// server is unreachable.

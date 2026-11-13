@@ -836,13 +836,13 @@ impl UdpTable {
         if !mapping.peers.contains_key(&destination) {
             return None;
         }
-        // While a chain is on, the app decides the way: after a silence, or long after Android last
-        // named it, the datagram asks Android again whose socket this is, as a new destination's does,
-        // and waits for the answer. A port another app now holds then gets a mapping of its own.
+        // After a silence, or long after Android last named its app, the datagram asks Android again
+        // whose socket this is, as a new destination's does, and waits for the answer: the port may be
+        // another app's now, which the log must name and the chain may send another way. A port another
+        // app holds then gets a mapping of its own (ADR 0044, decision 1).
         let reask = shared.limits.udp_reask;
-        if (now.duration_since(mapping.sent) >= reask
-            || now.duration_since(mapping.named) >= reask.saturating_mul(30))
-            && shared.chain().is_some()
+        if now.duration_since(mapping.sent) >= reask
+            || now.duration_since(mapping.named) >= reask.saturating_mul(30)
         {
             return None;
         }
@@ -1145,16 +1145,10 @@ async fn open_udp(
     changes: watch::Receiver<u64>,
 ) {
     let (app, destination) = key;
-    let named = owner(&shared, UDP, app, destination).await;
-    // When Android cannot name the app of a socket it named before, the socket's mapping keeps its app;
-    // but not while a chain is on, where the app decides the way: there an app Android cannot name goes
-    // nowhere, never by a guess that may be another app's (the port may have been handed out again).
-    let uid = named.or_else(|| {
-        if shared.chain().is_some() {
-            return None;
-        }
-        lock(&flows).mappings.get(&app).and_then(|m| m.uid)
-    });
+    // An app Android cannot name is unknown, in the log and to the chain, even when Android named this
+    // socket's app before: the port may be another app's now, and a guess would log one app's traffic
+    // as another's. While a chain is on, such an app goes nowhere.
+    let uid = owner(&shared, UDP, app, destination).await;
     if shared.is_tunnel_dns(destination.ip()) {
         open_flow(key, uid, tun, shared, flows, changes).await;
         return;
