@@ -716,7 +716,11 @@ first answer from the port the app asked. A mapping now also ends when the chain
 another way. W6's done-when changes its wording to match. An independent review the same day found five faults, fixed
 before the merge: a second name at a bound address answered as the first; any sender on the port could take a
 waiting stand-in; forged headers could grow a mapping without end; a datagram sent just as the chain took its app
-could leave directly; and a relay elsewhere than on the phone was used. How it is built:
+could leave directly; and a relay elsewhere than on the phone was used. A second review found five more, also
+fixed: one name asked on two ports got no answer on the second; a newly chained app's lookups could still reach the
+network's resolver; a port Android handed to a chained app could leave the old app's direct way, and an unnamed
+app's way was guessed; a flow that came in from a port 53 could teach Watch names; and a relay at the phone's own
+Wi-Fi address was refused. How it is built:
 [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 Still to come: shares for each app, ICMP echo and the network's MTU.

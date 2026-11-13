@@ -145,7 +145,8 @@ an ADR (D25).
   - from the address a stand-in was bound to, to that stand-in, unless another stand-in waits on that port: the
     tool may have resolved both names to that one address, so the answer is dropped;
   - from another port of an address the app sent to, to a new flow, never as a stand-in's first answer. It is
-    shown from the address the app sent to itself, else from the stand-in bound to that address;
+    shown from the address the app sent to itself, else from the stand-in bound to that address. When that same
+    stand-in, alone, waits on that port, the one name asked on a second port, the answer binds it there too;
   - from an address the app never saw, to a stand-in that waits on that port, as below;
   - from anywhere else, nowhere, counted in `udp_filtered`.
 - **At most 64 flows that came in** for each mapping, on the direct path too. A STUN server's tests of the mapping
@@ -173,29 +174,49 @@ an ADR (D25).
     tools' relays put in the header (gate 4's check R, table B10): where they give back the name, nothing is
     ambiguous.
   - A relay that gives back the name it was asked for is matched by that name.
+- **Names learned:** from a flow the app started, as before; from a flow that came in, only from a DNS response to
+  a query the app sent it, by ID and question. A sender at port 53 of an address the app sent to cannot name the
+  app's later flows.
+- **Android is asked again.** While a chain is on, the app decides the way, and Android may hand a closed
+  socket's port to another app. So a mapping's datagram to a destination it knows asks Android again whose socket
+  sent it when the app was silent for a second (`Limits::udp_reask`), or thirty seconds after Android last named
+  it; the datagram waits for the answer, about a millisecond, off the event loop. Linux hands out a free port at
+  random among about 28,000, so a port rarely comes back to another app within a second. While a chain is on, an
+  app Android cannot name goes nowhere, even when it named that socket's app before: the old app is never taken for
+  it.
 - **Counters, appended:**
   - `udp_unmatched`, the 27th: answers that no one destination could be told for, such as one on a port several
     stand-ins wait on, a malformed header or a fragment. It measures how often the rule above costs an answer;
   - `udp_came_in_capped`, the 28th: what the cap of 64 dropped;
   - `udp_relay_elsewhere`, the 29th: relays a tool offered elsewhere than on the phone or at its proxy's own
     address. Such a relay would take the app's datagrams, each naming its destination, across the network
-    beneath, outside the tool, so that tool's UDP is refused, as a tool's without UDP.
+    beneath, outside the tool, so that tool's UDP is refused, as a tool's without UDP. On the phone means on its
+    loopback or at any address it holds, as a tool that shares its proxy on the local network announces its
+    Wi-Fi address: a UDP socket connected to the relay, which sends nothing, then sends from that very address. A
+    broadcast address refuses such a socket, though Linux lets one bind it.
 - **The chain changes:** a mapping ends at its next datagram either way when the chain is set again and sends its
   app another way: another tool, proxy address, user name or password, UDP turned off, or the chain off. The same
   tool set again keeps it. This holds for the direct path's mappings too, which until now kept their way. A chained
   mapping also ends when the tool closes its relay. When the chain changes while a destination's way opens, the
-  destination is routed again before anything that waited leaves: nothing an app sends once the chain takes it
-  leaves directly.
+  destination is routed again before anything that waited leaves. Lookups to the tunnel's DNS address follow
+  too: a flow of lookups that the chain sends another way gives way at the app's next lookup, and lookups that
+  waited while it opened are routed again. So nothing an app sends once the chain takes it leaves directly, but
+  for the port handed over below.
 - **Known limits:**
   - A bound stand-in keeps sending by name, so that the tool's own routing by name still applies. When the tool
     resolves the name again to another address, the answers from that address are dropped, or, on a port another
-    stand-in waits on, taken by that one.
+    stand-in waits on, taken by that one. When that new address is already bound to another stand-in, or is a
+    destination the app sent to itself, the answers go to that other peer, under its name, without a word: the
+    address alone cannot tell them apart.
+  - A port that Android hands to another app less than a second after the old app's last datagram, to a
+    destination the old app also sent to, leaves the old app's way until Android is next asked: at the new app's
+    first silence of a second, and at most thirty seconds after Android last named the old app.
   - The re-check just before what waited leaves covers the moment between opening the mapping and sending. No test
     reaches that moment without a hook in the engine; the check made as the mapping opens is tested.
-- **Unchanged:** lookups to the tunnel's DNS address, chained apps' TCP, the tool's own traffic, a stopped tool,
-  and a tool without UDP.
-- **Tests:** twenty in `core/net/tests/chain.rs`, and one in the network lab with a real tun. Each was made to fail
-  by breaking the code it guards, or, for the independent review's findings of the same day, by the engine before
-  their fixes.
+- **Unchanged:** chained apps' TCP, the tool's own traffic, a stopped tool, and a tool without UDP.
+- **Tests:** thirty-two in `core/net/tests/chain.rs`, and three in the network lab with a real tun. Each was made
+  to fail by breaking the code it guards, or, for the two independent reviews' findings of the same day, by the
+  engine before their fixes. Those that need port 53 use the test proxy's remapping, or any port of the tunnel's
+  DNS address, which leads to the same port of the network's resolver, so they run in every `cargo test`.
 - **Still open:** what real tools' relays put in the header, and whether they keep one upstream socket per
   association. The test tool and the lab's proxy name the real sender; v2rayNG and NekoBox are not yet checked.
