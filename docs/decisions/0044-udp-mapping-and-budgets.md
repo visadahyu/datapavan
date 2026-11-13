@@ -214,7 +214,7 @@ an ADR (D25).
   - The re-check just before what waited leaves covers the moment between opening the mapping and sending. No test
     reaches that moment without a hook in the engine; the check made as the mapping opens is tested.
 - **Unchanged:** chained apps' TCP, the tool's own traffic, a stopped tool, and a tool without UDP.
-- **Tests:** thirty-two in `core/net/tests/chain.rs`, and three in the network lab with a real tun. Each was made
+- **Tests:** thirty-three in `core/net/tests/chain.rs`, and three in the network lab with a real tun. Each was made
   to fail by breaking the code it guards, or, for the two independent reviews' findings of the same day, by the
   engine before their fixes. Those that need port 53 use the test proxy's remapping, or any port of the tunnel's
   DNS address, which leads to the same port of the network's resolver, so they run in every `cargo test`.

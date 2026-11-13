@@ -28,6 +28,8 @@ pub struct Settings {
     pub relay_at: Option<IpAddr>,
     /// How the relay names the sender of each answer.
     pub headers: Headers,
+    /// A name the relay gives every answer instead, as a tool might forge one.
+    pub answer_name: Option<String>,
     /// Whether the relay sends a fragment and a header cut short before the first answer it carries.
     pub bad_headers_first: bool,
 }
@@ -275,9 +277,10 @@ async fn relay(
                         .find(|&(_, &real)| real == from)
                         .map_or(from, |(&shown, _)| shown);
                     let by_name = asked.get(&from).filter(|_| settings.headers == Headers::Name);
-                    let mut out = match by_name {
-                        Some((name, port)) => name_header(name, *port),
-                        None => address_header(shown, settings.headers == Headers::Mapped),
+                    let mut out = match (&settings.answer_name, by_name) {
+                        (Some(name), _) => name_header(name, shown.port()),
+                        (None, Some((name, port))) => name_header(name, *port),
+                        (None, None) => address_header(shown, settings.headers == Headers::Mapped),
                     };
                     if settings.bad_headers_first && !answered {
                         let mut fragment = out.clone();

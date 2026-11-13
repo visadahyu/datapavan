@@ -1677,3 +1677,28 @@ async fn a_mapping_ends_when_its_port_is_another_apps() -> Outcome {
     assert_eq!(engine.counters()[UDP_MAPPINGS], 2);
     Ok(())
 }
+
+/// A relay that names an answer by a name the app never asked for: it is dropped and counted, not shown
+/// from another name's stand-in (the second review of unit 9's M21).
+#[tokio::test(flavor = "current_thread")]
+async fn an_answer_named_by_a_name_nobody_asked_for_is_dropped() -> Outcome {
+    let echo = udp_echo().await?;
+    let mut settings = Settings {
+        answer_name: Some("other.test".into()),
+        ..Settings::default()
+    };
+    settings.names.insert("echo.test".into(), echo.ip());
+    let tool = proxy(settings).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    let at = SocketAddr::from((
+        stand_in(&tunnel, b"\x04echo\x04test\x00").await?,
+        echo.port(),
+    ));
+    send(&tunnel, app(CHAINED_PORT), at, b"hello").await?;
+    assert!(
+        silent(&tunnel).await,
+        "an answer under another name reached the app"
+    );
+    assert_eq!(engine.counters()[UDP_FILTERED], 1);
+    Ok(())
+}
