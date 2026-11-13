@@ -75,7 +75,7 @@ app is then in one of three states:
 
 - **in use:** an activity of the app (or of any package sharing its UID) was resumed or visible, or the user
   interacted with it, at that moment or within a grace period before it. The grace covers an upload that finishes
-  after the user leaves the app. It starts at two minutes, and the lab run of decision 4 sets it;
+  after the user leaves the app. It starts at 30 seconds, and the lab run of decision 4 sets it;
 - **with its notification:** the app ran a foreground service, which Android shows the user (music, navigation,
   an upload it announced);
 - **in the background:** neither. Push syncs, jobs, widgets' updates and anything else the user did not start.
@@ -114,19 +114,21 @@ only when traffic runs. There is no timer that wakes the phone. The screen's sta
 
 ### 2. Where it shows
 
-**(a) A summary in a notification, off until the user chooses it.** Watch posts it while the tunnel runs, on a
+**(a) A summary in a notification, chosen at onboarding.** Watch posts it while the tunnel runs, on a
 channel of its own: low importance, silent, no badge, updated without alerting again. Examples of its text:
 - "In the last 10 minutes, 3 apps you were not using sent 2.1 MB."
 - "While the screen was off (2 h 10 min), 4 apps you were not using sent 6.3 MB." This form shows for a few
   minutes after the screen comes on, then the first returns.
 - "In the last 10 minutes, no app you were not using sent data."
 
-It counts the apps "in the background" that sent more than a floor set by the lab run (a messenger's keep-alive is
-not news). A tap opens the "Now" view, behind Watch's own lock when the user set one (ADR 0040). It is not a
+Its window starts at 10 minutes, and the lab run of decision 4 sets it. It counts the apps "in the background" that
+sent more than a floor set by the lab run (a messenger's keep-alive is not news). A tap opens the "Now" view, behind Watch's own lock when the user set one (ADR 0040). It is not a
 foreground service, so ADR 0034's choice stands. If ADR 0034's fallback (a `systemExempted` foreground service) is
 ever taken, the summary moves into that notification. The user can dismiss it (Android 14 lets users dismiss even
 ongoing notifications, except while the phone is locked [doc]); it comes back only when Watch starts again.
-Onboarding (W9) asks for it as it asks for retention, with what it shows and who can see it. It is off until then.
+Onboarding (W9) asks about it together with the question of the inspection profile (decision 3), with what it
+shows and who can see it. It is on for users who do not choose that profile and off for those who do. It is not
+shown before onboarding has asked.
 
 **(b) An optional home-screen widget** with the same counts and sizes, and Watch's state. No colour, no badge, no
 app name. It is drawn with `RemoteViews`, so no new library (Compose's Glance would be one). It is declared for the
@@ -195,9 +197,10 @@ behind the screen lock and Watch's own lock, as the log's records do (ADR 0037, 
 connect" (`chain_log_destinations`). Without it, their rows say only that they went through the user's tool, with
 their bytes and state. What the screen shows, a search of an unlocked phone shows too.
 
-**A profile for people whose phones may be searched.** A later ADR will define a profile that the user chooses:
-off for users who do not face searches, on for those who do, decided by the user's own answer and never by
-country. This ADR's surfaces must follow it. Under that profile the summary and the widget are off, the tile shows
+**A profile for people whose phones may be searched.** ADR 0047, drafted on the branch `inspection-profile`,
+defines this inspection profile, which the user chooses with one switch, "Keep nothing on this phone": off for users who do not
+face searches, on for those who do, decided by the user's own answer and never by country. This ADR's surfaces
+must follow it. Under that profile the summary and the widget are off, the tile shows
 only Watch's state, and nothing is kept: retention is none, so "Now" holds only memory and the flags of decision 4
 that need history do not run.
 
@@ -266,7 +269,8 @@ On the emulators with Android 10, 11, 15 and 17, by script, with debug builds' s
    while another app is on screen. "Now" names it "in the background" with its bytes within 5 % of what it sent; the
    app on screen is "in use"; a foreground service is "with its notification".
 2. The summary shows the right count and size; it shows nothing on the lock screen; it is marked local only; it does
-   not exist until the user turned it on, and is gone with `POST_NOTIFICATIONS` denied.
+   not exist before onboarding has asked, nor under the inspection profile, and is gone with `POST_NOTIFICATIONS`
+   denied.
 3. The widget shows the same numbers; the tile shows counts only while unlocked.
 4. Nothing outside the app names an app or a destination: the text of every notification, widget and tile is read
    over adb (`dumpsys notification`, the widget's views) and checked against every package and destination of the run.
@@ -341,11 +345,14 @@ All read on 2026-11-14.
 - Lumen: εxodus report 63789 (https://reports.exodus-privacy.eu.org/en/reports/63789) and APKMirror's listing of
   2.2.2, found by search; the app itself was not tested
 
+## Settled with the maintainer (2026-11-14)
+
+- **The summary's default:** asked at onboarding together with ADR 0047's profile question; on for users who do not
+  choose the profile, off for those who do; not shown before onboarding asks (decision 2).
+- **The windows:** the summary's starts at 10 minutes and the "in use" grace at 30 seconds; the lab run sets both.
+
 ## Questions for the maintainer
 
-1. **The summary's default.** Off until the user chooses it at onboarding, as retention is (proposed), or on by
-   default for users outside the search profile?
 2. **A flag outside the app.** May a flag raise a separate, silent notification that names nothing ("Something new
    in Now")? Proposed: no, until the lab run shows how often flags are wrong.
 3. **The widget in 0.2.0**, or after it?
-4. **The grace period's start** (two minutes) and the summary's window (ten minutes), until the lab run sets them.
