@@ -1606,3 +1606,74 @@ async fn a_flow_that_came_in_from_port_53_teaches_no_names() -> Outcome {
     assert_eq!(learned, [None, Some("good.test".into())]);
     Ok(())
 }
+
+/// A direct app's mapping, then a chain that takes the app: what its server sends afterwards no longer
+/// comes in on the direct path (the second review of unit 9's M12).
+#[tokio::test(flavor = "current_thread")]
+async fn nothing_comes_in_on_a_direct_mapping_once_the_chain_takes_its_app() -> Outcome {
+    let server = UdpSocket::bind("127.0.0.1:0").await?;
+    let at = server.local_addr()?;
+    let (go, later) = oneshot::channel::<()>();
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 64];
+        if let Ok((n, mapped)) = server.recv_from(&mut buffer).await {
+            let _ = server.send_to(&buffer[..n], mapped).await;
+            if later.await.is_ok() {
+                let _ = server.send_to(b"late", mapped).await;
+            }
+        }
+    });
+    let tool = proxy(Settings::default()).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    send(&tunnel, app(DIRECT_PORT), at, b"direct").await?;
+    receive(&tunnel).await?.ok_or("a datagram")?;
+    let mut both = chain(tool.address);
+    both.apps = Some(HashSet::from([CHAINED, DIRECT]));
+    engine.chain(Some(both));
+    go.send(()).map_err(|()| "the server is gone")?;
+    assert!(
+        silent(&tunnel).await,
+        "an answer came in on the direct path"
+    );
+    Ok(())
+}
+
+/// A server that answers each datagram with the port it came from, in two bytes, as a STUN server
+/// tells a client its mapped port.
+async fn port_reporter() -> io::Result<SocketAddr> {
+    let socket = UdpSocket::bind("127.0.0.1:0").await?;
+    let at = socket.local_addr()?;
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 64];
+        while let Ok((_, from)) = socket.recv_from(&mut buffer).await {
+            let _ = socket.send_to(&from.port().to_be_bytes(), from).await;
+        }
+    });
+    Ok(at)
+}
+
+/// A mapping ends when Android hands its port to another app: the new app's first new destination
+/// opens a mapping of its own, from another port (ADR 0044, decision 1; the second review's M19).
+#[tokio::test(flavor = "current_thread")]
+async fn a_mapping_ends_when_its_port_is_another_apps() -> Outcome {
+    const PORT: u16 = 50_003;
+    const ANOTHER: u32 = 10_500;
+    let (first, second) = (port_reporter().await?, port_reporter().await?);
+    let tool = proxy(Settings::default()).await?;
+    let owners = Arc::new(Owners::default());
+    owners.set(PORT, Some(DIRECT));
+    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), owners.clone())?;
+    let mut seen = Vec::new();
+    for (server, uid) in [(first, DIRECT), (second, ANOTHER)] {
+        owners.set(PORT, Some(uid));
+        send(&tunnel, app(PORT), server, b"which port?").await?;
+        let (_, answer) = receive(&tunnel).await?.ok_or("a datagram")?;
+        seen.push(u16::from_be_bytes([answer[0], answer[1]]));
+    }
+    assert_ne!(
+        seen[0], seen[1],
+        "the other app left from the first app's port"
+    );
+    assert_eq!(engine.counters()[UDP_MAPPINGS], 2);
+    Ok(())
+}
