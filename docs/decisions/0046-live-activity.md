@@ -108,9 +108,17 @@ only when traffic runs. There is no timer that wakes the phone. The screen's sta
   Advanced would become the kind of app it warns about, and ADR 0045's sentence against fakes would weaken.
 - **No overlay** (`SYSTEM_ALERT_WINDOW`). The audit flags it too, and a floating counter over other apps shows to
   anyone near the phone and in any screen recording.
-- **Nothing else would do.** `getRunningAppProcesses` returns only the caller's own processes, and `getRunningTasks`
-  only its own tasks, since Android 5 [unverified]. A trigger such as `registerAppUsageObserver` is system API only
-  [unverified]. Usage events are the public route, and the one the audit already uses (ADR 0022).
+- **Nothing else would do.**
+  - `getRunningTasks` has been "no longer available to third party applications" since Android 5; it still returns
+    "at least the caller's own tasks, and possibly some other tasks such as home that are known to not be
+    sensitive" [doc].
+  - `getRunningAppProcesses` is documented only as "intended for debugging". In AOSP it returns the caller's own
+    processes unless the caller holds `REAL_GET_TASKS` (signature or privileged) or is the recents component
+    [code: `ActivityManagerService`, `ProcessList`, `ActivityTaskManagerService.isGetTasksAllowed`].
+  - `registerAppUsageObserver` is `@SystemApi` and needs `OBSERVE_APP_USAGE`, whose protection level is
+    signature, privileged or role [code: `UsageStatsManager`, `core/res/AndroidManifest.xml`].
+
+  Usage events are the public route, and the one the audit already uses (ADR 0022).
 
 ### 2. Where it shows
 
@@ -368,8 +376,11 @@ the in-use state by the public usage events rather than an accessibility service
 outside the app, or keeps destinations off the lock screen and away from notification listeners. None flags only
 against the app's own history, with thresholds from a published lab run. None says on the view what it cannot see.
 Each piece exists somewhere; together, without decrypting and without new permissions, they are best in class for
-an app on stock Android. iOS's App Privacy Report, a system feature, shows domains per app over seven days but not
-live and not by state [unverified: not read now].
+an app on stock Android. iOS's App Privacy Report (iOS 15.2 and later), a system feature the user turns on, is the
+closest system reference. It is a record of the past seven days, not a live view: when each app accessed data
+and sensors such as location, photos, camera, microphone and contacts; the domains each app contacted, itself or
+through content in it; the domains contacted by websites in apps; and the most contacted domains. It is kept
+encrypted on the device. Apple's page states no sizes and no split by whether the app was in use.
 
 **Frontier research is not needed**, beyond the lab run for thresholds. The data are Android's own and the engine's;
 the open questions are measurements, not methods. Detecting what an app took, rather than that it sent, would need
@@ -397,6 +408,13 @@ All read on 2026-11-14.
 - `UsageEvents.Event`: https://developer.android.com/reference/android/app/usage/UsageEvents.Event
 - `UsageStatsManager`: https://developer.android.com/reference/android/app/usage/UsageStatsManager
 - Android 14 changes for all apps (dismissible ongoing notifications): https://developer.android.com/about/versions/14/behavior-changes-all
+- `ActivityManager` (`getRunningTasks`, `getRunningAppProcesses`): https://developer.android.com/reference/android/app/ActivityManager
+- AOSP `main`, read on android.googlesource.com: `services/core/java/com/android/server/am/ActivityManagerService.java`
+  (`getRunningAppProcesses`), `services/core/java/com/android/server/am/ProcessList.java`
+  (`getRunningAppProcessesLOSP`), `services/core/java/com/android/server/wm/ActivityTaskManagerService.java`
+  (`isGetTasksAllowed`), `core/java/android/app/usage/UsageStatsManager.java` (`registerAppUsageObserver`) and
+  `core/res/AndroidManifest.xml` (`REAL_GET_TASKS`, `OBSERVE_APP_USAGE`)
+- Apple, "About App Privacy Report": https://support.apple.com/en-us/102188
 - PCAPdroid quick start: https://emanuele-f.github.io/PCAPdroid/quick_start, and its manifest on GitHub
 - NetGuard README: https://github.com/M66B/NetGuard
 - RethinkDNS README and manifests: https://github.com/celzero/rethink-app (`app/src/main` and `app/src/full`)
@@ -418,3 +436,6 @@ All read on 2026-11-14.
 - **The widget:** not in 0.2.0; it follows in 0.2.1, after the lab run.
 - **Added at the maintainer's request:** the comprehension test with real users (decision 6, item 11) and the
   minimal baseline, so that flags work without a kept log (decision 4).
+- **Checked since the first draft:** the public routes to another app's state (decision 1) and iOS's App Privacy
+  Report (decision 7), against the sources below. Both held; `getRunningTasks` may also return the home screen's
+  task, which the text now says.
