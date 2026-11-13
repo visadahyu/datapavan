@@ -729,8 +729,13 @@ lookups early; each is fixed. A fifth found that a datagram to a new destination
 answer to a question about its socket asked before it came, which could name the port's previous app; only a
 destination the socket already knows shares a question now. It also found that a reply to a flow shown as a
 stand-in went to the tool by address, not by the stand-in's name, and that a stand-in answered by name kept its
-queries; both are fixed, and the tests it found racy or too lenient now fail when what they guard changes. How it
-is built:
+queries; both are fixed, and the tests it found racy or too lenient now fail when what they guard changes. A
+sixth found that datagrams held behind another, or joining a question, could take an answer asked well before
+they came, and that a slow answer widened the window by its own latency; an answer now holds only for what came
+less than `udp_reask` after it was asked. It also found that a lookup's answer naming a new app left the old
+app's mapping in place, that a port that came in counted as a destination the app knew, that an app answering
+every sender lifted the cap of 64, and that a live stand-in whose name left the map became unreachable at its
+next pause; each is fixed. How it is built:
 [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 Still to come: shares for each app, ICMP echo and the network's MTU.
