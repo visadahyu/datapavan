@@ -22,11 +22,11 @@ use crate::tls::ServerName;
 use crate::tun::Tun;
 use crate::{answers, dns, packet, quic};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::os::fd::AsFd;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, Interest};
@@ -60,6 +60,71 @@ fn with_buffer<T>(read: impl FnOnce(&mut [u8]) -> T) -> T {
     })
 }
 
+/// At most this many lookups of one flow wait for their answer; an older one is then given up, and its
+/// answer, should it come, still reaches the app but no longer keeps the flow open. Android's resolver
+/// asks one question from each socket, and a flow holds a lookup at most `LOOKUP_WAIT`, so 256 is far
+/// above any app's need, and bounds a flood: 256 questions of at most 255 bytes, about 64 KB.
+const OWED: usize = 256;
+
+/// The lookups a flow carried that still wait for their answer, each by its ID and question, so that an
+/// answer counts only for the lookup it answers: a resolver that sends one answer twice does not end
+/// the flow before a later lookup has its own.
+#[derive(Default)]
+pub(super) struct Owed(Mutex<VecDeque<(u16, String)>>);
+
+impl Owed {
+    /// The ID and question of `message`, a query or its answer; a message that is no DNS query or
+    /// response with one question has its ID alone, if it has one.
+    fn key(message: &[u8], answer: bool) -> (u16, String) {
+        let id = dns::u16_at(message, 0).unwrap_or(0);
+        let question = if answer {
+            dns::response(message).map(|response| response.question)
+        } else {
+            answers::question(message).map(|question| question.name)
+        };
+        (id, question.unwrap_or_default())
+    }
+
+    /// One more lookup, `query`, waits for its answer.
+    fn add(&self, query: &[u8]) {
+        let mut owed = lock(&self.0);
+        if owed.len() == OWED {
+            owed.pop_front();
+        }
+        owed.push_back(Self::key(query, false));
+    }
+
+    /// The lookup that `answer` answers, if one waits for it, has its answer.
+    fn answered(&self, answer: &[u8]) {
+        let (id, question) = Self::key(answer, true);
+        let mut owed = lock(&self.0);
+        let at = owed
+            .iter()
+            .position(|(asked, of)| *asked == id && (question.is_empty() || *of == question));
+        if let Some(at) = at {
+            owed.remove(at);
+        }
+    }
+
+    /// The lookup `query` will have no answer from here, as when Watch could not answer it.
+    fn given_up(&self, query: &[u8]) {
+        let key = Self::key(query, false);
+        let mut owed = lock(&self.0);
+        if let Some(at) = owed.iter().position(|asked| *asked == key) {
+            owed.remove(at);
+        }
+    }
+
+    /// None of them will have an answer: no one listens where they went.
+    fn clear(&self) {
+        lock(&self.0).clear();
+    }
+
+    fn is_empty(&self) -> bool {
+        lock(&self.0).is_empty()
+    }
+}
+
 /// A flow of lookups to Watch's own DNS address, with the flow's number.
 pub(super) struct UdpFlow {
     /// The flow's number, which tells its entry from a later flow's between the same two ends.
@@ -70,7 +135,7 @@ pub(super) struct UdpFlow {
     /// The lookups it carried that still wait for their answer. The flow's task, or the tasks that
     /// answer a chained app's lookups, count it down, also once a later flow took this one's place: the
     /// flow ends when none waits.
-    owed: Arc<AtomicU32>,
+    owed: Arc<Owed>,
     /// How many times the chain had been set when the flow last made sure that its way still holds.
     chains: u64,
     /// When the app last sent a lookup on it.
@@ -793,7 +858,7 @@ struct ToPeer {
 /// the answer Watch's cache holds for it, and the flow's number and lookups owed; its peer's way; or a
 /// way to be opened.
 enum Next {
-    Flow(UdpWay, Option<u32>, Option<Vec<u8>>, (u64, Arc<AtomicU32>)),
+    Flow(UdpWay, Option<u32>, Option<Vec<u8>>, (u64, Arc<Owed>)),
     Peer(ToPeer),
     Open,
 }
@@ -952,22 +1017,13 @@ impl UdpTable {
     }
 
     /// Whether no lookup of the flow `id` between `key`'s two ends waits for its answer any more, as
-    /// `owed` counts them; its entry, while it is still the table's, then goes.
-    fn settled(&mut self, key: (SocketAddr, SocketAddr), id: u64, owed: &AtomicU32) -> bool {
-        if owed.load(Ordering::Acquire) > 0 {
+    /// `owed` holds them; its entry, while it is still the table's, then goes.
+    fn settled(&mut self, key: (SocketAddr, SocketAddr), id: u64, owed: &Owed) -> bool {
+        if !owed.is_empty() {
             return false;
         }
         self.remove_flow(key, id);
         true
-    }
-
-    /// One more lookup of the flow `id` between `key`'s two ends has its answer, or will have none:
-    /// whether none waits any more, as [`UdpTable::settled`].
-    fn answered(&mut self, key: (SocketAddr, SocketAddr), id: u64, owed: &AtomicU32) -> bool {
-        let _ = owed.try_update(Ordering::AcqRel, Ordering::Acquire, |n| {
-            Some(n.saturating_sub(1))
-        });
-        self.settled(key, id, owed)
     }
 }
 
@@ -1003,7 +1059,7 @@ impl Loop {
                         };
                         // The flow ends once every lookup it carried has its answer.
                         if cached.is_none() {
-                            flow.owed.fetch_add(1, Ordering::AcqRel);
+                            flow.owed.add(payload);
                         }
                         Next::Flow(
                             flow.way.clone(),
@@ -1841,7 +1897,7 @@ async fn open_lookups(
     let mut errors = Vec::new();
     let mut questions = Vec::new();
     let mut cached = Vec::new();
-    let owed: Arc<AtomicU32> = Arc::default();
+    let owed: Arc<Owed> = Arc::default();
     {
         let mut table = lock(flows);
         // The chain may have taken the app, or let it go, while the socket was made: what waited,
@@ -1874,7 +1930,7 @@ async fn open_lookups(
             };
             lookups.push(packet.len());
             if let UdpWay::Lookups(_) = way {
-                owed.fetch_add(1, Ordering::AcqRel);
+                owed.add(payload);
                 questions.push(payload.to_vec());
                 continue;
             }
@@ -1884,7 +1940,7 @@ async fn open_lookups(
             }
             let sent = way.try_send(payload);
             if sent.is_ok() {
-                owed.fetch_add(1, Ordering::AcqRel);
+                owed.add(payload);
             }
             errors.extend(count_sent(shared, None, packet, &parsed, sent));
         }
@@ -1956,7 +2012,7 @@ fn start_answers(
 }
 
 /// A flow of lookups' two ends, its app, and its number with the lookups it owes answers to.
-type Ends = ((SocketAddr, SocketAddr), Option<u32>, (u64, Arc<AtomicU32>));
+type Ends = ((SocketAddr, SocketAddr), Option<u32>, (u64, Arc<Owed>));
 
 /// While a chain is on, the answer Watch's cache holds for a direct app's lookup, with a time to live
 /// of 0 like every answer then, so that the network's resolver is asked no more often than before.
@@ -1997,7 +2053,7 @@ async fn answer_lookup(
     query: Vec<u8>,
     (key, uid): ((SocketAddr, SocketAddr), Option<u32>),
     chain: Arc<Chain>,
-    ((id, owed), flows): ((u64, Arc<AtomicU32>), UdpFlows),
+    ((id, owed), flows): ((u64, Arc<Owed>), UdpFlows),
     shared: Arc<Shared>,
     tun: Arc<Tun>,
 ) {
@@ -2007,7 +2063,8 @@ async fn answer_lookup(
         shared.lookup_answered(uid, packet.len());
         send_to_app(&tun, &shared, &packet).await;
     }
-    lock(&flows).answered(key, id, &owed);
+    owed.given_up(&query);
+    lock(&flows).settled(key, id, &owed);
 }
 
 /// What the engine knows of a new UDP flow once Android named its app: its number, name and DNS use.
@@ -2082,7 +2139,7 @@ struct UdpEnds {
     id: u64,
     uid: Option<u32>,
     /// The lookups it carried that still wait for their answer.
-    owed: Arc<AtomicU32>,
+    owed: Arc<Owed>,
 }
 
 /// Wraps each answer of a flow of lookups to Watch's own DNS address in an IP packet to the app, until
@@ -2146,6 +2203,7 @@ fn relayed(
             Ok(n) => {
                 Counters::add(&shared.counters.bytes_down, n as u64);
                 let answer = &mut buffer[..n];
+                owed.answered(answer);
                 // Android's resolver names every app's flows.
                 if destination.port() == 53 {
                     shared.learn(answer, None);
@@ -2156,8 +2214,9 @@ fn relayed(
                 }
                 packet::udp(destination, app, answer)
             }
-            // The server's host answered that no one listens there.
+            // The server's host answered that no one listens there: no lookup will have an answer.
             Err(error) if error.kind() == io::ErrorKind::ConnectionRefused => {
+                owed.clear();
                 unreachable_to(app, destination, Unreachable::Port)
             }
             Err(_) => return (packets, true),
@@ -2167,7 +2226,7 @@ fn relayed(
             packets.push(packet);
         }
         // A flow of lookups ends with the answer to the last of them.
-        if lock(flows).answered((app, destination), id, owed) {
+        if lock(flows).settled((app, destination), id, owed) {
             return (packets, true);
         }
     }

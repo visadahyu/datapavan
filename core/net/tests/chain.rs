@@ -2537,3 +2537,106 @@ async fn a_flow_of_lookups_that_never_pauses_is_asked_about_seldom() -> Outcome 
     assert!((2..=4).contains(&asked), "Android was asked {asked} times");
     Ok(())
 }
+
+/// A resolver here that answers two lookups as `answer` scripts it, given both queries and where they
+/// came from; and the tunnel's DNS address that leads to it.
+async fn scripted_resolver<F, Fut>(
+    engine: &Engine,
+    answer: F,
+) -> Result<SocketAddr, Box<dyn std::error::Error>>
+where
+    F: FnOnce(Arc<UdpSocket>, Vec<(Vec<u8>, SocketAddr)>) -> Fut + Send + 'static,
+    Fut: std::future::Future<Output = ()> + Send,
+{
+    let resolver = Arc::new(UdpSocket::bind("127.0.0.1:0").await?);
+    let port = resolver.local_addr()?.port();
+    engine.network_changed(Some(IpAddr::V4(Ipv4Addr::LOCALHOST)), false);
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 512];
+        let mut asked = Vec::new();
+        while asked.len() < 2 {
+            match resolver.recv_from(&mut buffer).await {
+                Ok((n, from)) => asked.push((buffer[..n].to_vec(), from)),
+                Err(_) => return,
+            }
+        }
+        answer(resolver, asked).await;
+    });
+    Ok(SocketAddr::from((Addresses::COMMON.dns4, port)))
+}
+
+/// The questions of the answers that reached the app.
+fn answered_questions(seen: &[(SocketAddr, Vec<u8>)]) -> Vec<String> {
+    seen.iter()
+        .filter_map(|(_, answer)| dns::response(answer).map(|read| read.question))
+        .collect()
+}
+
+/// A flow of lookups owes two answers, and the resolver sends the first twice: the repeat does not
+/// count for the second lookup, and the second answer still reaches the app (fourth review of unit 9,
+/// finding 4).
+#[tokio::test(flavor = "current_thread")]
+async fn a_repeated_answer_does_not_end_a_flow_of_lookups() -> Outcome {
+    let tool = proxy(Settings::default()).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    let dns = scripted_resolver(&engine, |resolver, asked| async move {
+        let (first, from) = &asked[0];
+        for _ in 0..2 {
+            let _ = resolver.send_to(&dns_response(first, 0x5152), *from).await;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let (second, from) = &asked[1];
+        let _ = resolver.send_to(&dns_response(second, 0x5152), *from).await;
+    })
+    .await?;
+    send(
+        &tunnel,
+        app(DIRECT_PORT),
+        dns,
+        &query(b"\x03one\x04test\x00", 1),
+    )
+    .await?;
+    send(
+        &tunnel,
+        app(DIRECT_PORT),
+        dns,
+        &query(b"\x03two\x04test\x00", 1),
+    )
+    .await?;
+    let questions = answered_questions(&everything(&tunnel).await);
+    assert_eq!(questions, ["one.test", "one.test", "two.test"]);
+    Ok(())
+}
+
+/// A lookup sent on a flow that is already open waits for its answer too: the flow does not end with
+/// the first lookup's.
+#[tokio::test(flavor = "current_thread")]
+async fn a_later_lookup_on_an_open_flow_keeps_it_open() -> Outcome {
+    let tool = proxy(Settings::default()).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    let dns = scripted_resolver(&engine, |resolver, asked| async move {
+        for (query, from) in &asked {
+            let _ = resolver.send_to(&dns_response(query, 0x5152), *from).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await?;
+    send(
+        &tunnel,
+        app(DIRECT_PORT),
+        dns,
+        &query(b"\x03one\x04test\x00", 1),
+    )
+    .await?;
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    send(
+        &tunnel,
+        app(DIRECT_PORT),
+        dns,
+        &query(b"\x03two\x04test\x00", 1),
+    )
+    .await?;
+    let questions = answered_questions(&everything(&tunnel).await);
+    assert_eq!(questions, ["one.test", "two.test"]);
+    Ok(())
+}
