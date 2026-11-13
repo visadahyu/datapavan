@@ -203,8 +203,8 @@ their bytes and state. What the screen shows, a search of an unlocked phone show
 defines this inspection profile, which the user chooses with one switch, "Keep nothing on this phone": off for
 users who do not face searches, on for those who do, decided by the user's own answer and never by country. This
 ADR's surfaces must follow it. Under that profile the summary, the flag notice and the widget are off, the tile
-shows only Watch's state, and nothing is kept: retention is none, so "Now" holds only memory and the flags of
-decision 4 that need history do not run.
+shows only Watch's state, and nothing is kept: retention is none and the minimal baseline of decision 4 is not
+kept, so "Now" holds only memory and the flags do not run.
 
 ### 4. How it is framed, and what is flagged
 
@@ -219,13 +219,34 @@ follow ADR 0025's list in every language: absolute numbers first, no word that j
 2. **A volume far above the app's own usual:** "[App] sent [X] while you were not using it. On the other days Watch
    keeps, it sent at most [Y] in a day."
 
-Both compare the app only with itself, from the log. They need at least seven days of it, and the lab run may set
-more. With a shorter retention, or none, there are no flags, and the view says why. Alternatives that were set
-aside:
-- a baseline kept apart from the log, longer than retention: it would be a record of which apps send in the
-  background, kept past the user's choice;
-- comparing with other apps or with lab ranges per kind of app: those ranges need their own ADR first (ADR 0025,
-  point 5).
+Both compare the app only with itself. They need at least seven days of history, and the lab run may set more. The
+history comes from one of two places:
+
+- **The log,** when the user keeps it for seven days or more. Nothing else is kept for the flags.
+- **A minimal baseline, by the user's choice,** offered in the settings and off by default, so that flags work with
+  a shorter retention or with none. It holds one number per app: the most the app sent in the background in one
+  day, before today. It holds no time, no date for the app, no destination and no day-by-day series; the only date
+  is when the user turned it on, for the seven days of learning. Today's total stays in memory and replaces the
+  number at midnight if larger. With it, flag 2 reads "Before today, the most it sent in one day while you were
+  not using it was [Y]", and an app with no number yet, after the learning days, gives flag 1. It is kept apart
+  from the log, in Watch's private storage, sealed with a Keystore key that works only while the phone is unlocked
+  (as ADR 0037's private key does); what a locked period adds waits in memory and is written at the next unlock.
+  An app's number is deleted when the app is removed. The baseline is wiped with the log ("Delete the log now",
+  the panic wipe of ADR 0040), its key with it, is never kept under the inspection profile, and is deleted when the
+  user turns that profile on.
+
+**Why this baseline is acceptable where a full one was not.** The full baseline set aside earlier would have kept,
+past the user's retention and without asking, which apps sent in the background, when, and how much, day by day: a
+timeline of the phone's use. A search of a phone with the minimal baseline learns, for each installed app that has
+sent in the background since the user turned it on, the size of its largest day, and when the user turned it on.
+It learns no time, no destination and no pattern. The app list already shows which apps are installed, and
+Android's own data-usage screen already shows each app's background data for the last month to anyone who unlocks
+the phone (ADR 0022). So the baseline adds almost nothing that a search finds elsewhere, and only for users who
+chose it.
+
+Set aside: comparing with other apps or with lab ranges per kind of app. Those ranges need their own ADR first (ADR
+0025, point 5). With neither the log for seven days nor the baseline, there are no flags, and the view says why and
+how to have them.
 
 The thresholds (the floor of what counts as sending, the grace period, how many days, how far above) come from a
 lab run recorded in `docs/spikes/` before they ship: W3's ten-app session and an idle night on the A40 and the
@@ -294,14 +315,18 @@ On the emulators with Android 10, 11, 15 and 17, by script, with debug builds' s
 5. Chained apps' destinations do not appear in "Now" while the switch is off.
 6. Without usage access, and before the first unlock after a restart, flows show without a state and the summary is
    off.
-7. Battery: the paired A40 measurement of decision 2, and W9's window on the A56 with the summary on; the widget's
+7. The minimal baseline: off by default; with it on and retention "none", flags appear after the learning days;
+   its file holds one number per app and no destination or time; it cannot be read while the phone is locked; it is
+   gone after the log's wipe, after an app's removal (that app's number), and when the inspection profile is turned
+   on.
+8. Battery: the paired A40 measurement of decision 2, and W9's window on the A56 with the summary on; the widget's
    own paired measurement before 0.2.1.
-8. The new screens pass the accessibility check in all eight languages and both pseudo-locales
+9. The new screens pass the accessibility check in all eight languages and both pseudo-locales
    (`scripts/screenshots.sh`): labels, 48 dp targets, rows that keep their order, destinations isolated as
    left-to-right tokens in right-to-left text. The strings are translated and reviewed as ADR 0030 sets out, against
    ADR 0025's list of words.
-9. The lab run of decision 4 is recorded in `docs/spikes/`, with every flag explained, before the flags ship.
-10. **A test with real users gates the strings.** Before the words are final, a small comprehension test asks
+10. The lab run of decision 4 is recorded in `docs/spikes/`, with every flag explained, before the flags ship.
+11. **A test with real users gates the strings.** Before the words are final, a small comprehension test asks
     whether people understand "sent while you were not using it", the summary, the flags and the flag notice
     without fear, and without learning to ignore them. It is part of the redesign's test with real users that
     gates Advanced's first release (ADR 0045, decision 8). How it is run:
@@ -362,8 +387,8 @@ decryption (Lumen) or the operating system (stage 3), and both are out of scope 
 - **More strings,** in eight languages, held to ADR 0025's words, and a comprehension test with real users before
   they are final. More lab work: the threshold run.
 - **Accepted limits:** the summary can be read by any app with notification access, which is why it carries no
-  names; flags need days of the log, which is evidence, so users who keep less get fewer flags; traffic sent on an
-  app's behalf shows under the sender.
+  names; flags need history, either a week of the log or the minimal baseline, so users who keep nothing get no
+  flags; traffic sent on an app's behalf shows under the sender.
 
 ## Sources
 
@@ -391,3 +416,5 @@ All read on 2026-11-14.
   profile (decision 4). The maintainer's example said "1 unusual event"; the string avoids "unusual" because ADR
   0025's list rules it out.
 - **The widget:** not in 0.2.0; it follows in 0.2.1, after the lab run.
+- **Added at the maintainer's request:** the comprehension test with real users (decision 6, item 11) and the
+  minimal baseline, so that flags work without a kept log (decision 4).
