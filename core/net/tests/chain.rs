@@ -1539,13 +1539,15 @@ fn named_response(id: u16, name: &[u8], address: [u8; 4]) -> Vec<u8> {
 
 /// Port 53 of an address a stand-in was bound to, which the app never asked anything, sends a DNS
 /// response: it comes in as another port of that address, but Watch learns no name from it (second
-/// review of unit 9, finding 4). The answer to a query the app then sends it does name.
+/// review of unit 9, finding 4). The answer to a query the app then sends it does name; another unasked
+/// response after it, once the app has sent there, still does not (fifth review, finding 2).
 #[tokio::test(flavor = "current_thread")]
 async fn a_flow_that_came_in_from_port_53_teaches_no_names() -> Outcome {
     let named = UdpSocket::bind("127.0.0.1:0").await?;
     let port = named.local_addr()?.port();
     let resolver = UdpSocket::bind("127.0.0.1:0").await?;
     let (elsewhere, also_elsewhere) = (udp_echo().await?, udp_echo().await?);
+    let still_elsewhere = udp_echo().await?;
     let mut settings = Settings::default();
     settings
         .names
@@ -1558,8 +1560,10 @@ async fn a_flow_that_came_in_from_port_53_teaches_no_names() -> Outcome {
     );
     let forged = SocketAddr::from(([192, 0, 2, 77], 9));
     let answered = SocketAddr::from(([192, 0, 2, 88], 9));
+    let later = SocketAddr::from(([192, 0, 2, 99], 9));
     settings.remap.insert(forged, elsewhere);
     settings.remap.insert(answered, also_elsewhere);
+    settings.remap.insert(later, still_elsewhere);
     tokio::spawn(async move {
         let mut buffer = [0u8; 512];
         if let Ok((n, relay)) = named.recv_from(&mut buffer).await {
@@ -1575,6 +1579,8 @@ async fn a_flow_that_came_in_from_port_53_teaches_no_names() -> Outcome {
             let id = u16::from_be_bytes([buffer[0], buffer[1]]);
             let asked = named_response(id, b"\x04good\x04test\x00", [192, 0, 2, 88]);
             let _ = resolver.send_to(&asked, relay).await;
+            let unasked = named_response(id ^ 1, b"\x04late\x04test\x00", [192, 0, 2, 99]);
+            let _ = resolver.send_to(&unasked, relay).await;
         }
     });
     let tool = proxy(settings).await?;
@@ -1593,17 +1599,20 @@ async fn a_flow_that_came_in_from_port_53_teaches_no_names() -> Outcome {
         &query(b"\x04good\x04test\x00", 1),
     )
     .await?;
-    let (from, _) = receive(&tunnel).await?.ok_or("an answer")?;
-    assert_eq!(from, port_53);
+    for _ in 0..2 {
+        let (from, _) = receive(&tunnel).await?.ok_or("an answer")?;
+        assert_eq!(from, port_53);
+    }
     echoed(&tunnel, forged, b"to the address it named").await?;
     echoed(&tunnel, answered, b"to the address it was asked for").await?;
+    echoed(&tunnel, later, b"to the address named after").await?;
     let learned: Vec<_> = engine
         .flows()
         .into_iter()
-        .filter(|flow| [forged, answered].contains(&flow.destination))
+        .filter(|flow| [forged, answered, later].contains(&flow.destination))
         .map(|flow| flow.name)
         .collect();
-    assert_eq!(learned, [None, Some("good.test".into())]);
+    assert_eq!(learned, [None, Some("good.test".into()), None]);
     Ok(())
 }
 
@@ -2866,5 +2875,78 @@ async fn a_new_destinations_stream_never_leaves_directly() -> Outcome {
     let direct = from.iter().filter(|from| !relays.contains(from)).count();
     assert!(!from.is_empty(), "nothing reached the destination");
     assert_eq!(direct, 0, "{direct} of {} left directly", from.len());
+    Ok(())
+}
+
+/// Another port of a bound stand-in's address comes in, shown as the stand-in. The app's reply to it
+/// goes to the tool by the stand-in's name, as the stand-in's own datagrams do (fifth review of unit 9,
+/// finding 2).
+#[tokio::test(flavor = "current_thread")]
+async fn a_reply_to_a_flow_that_came_in_as_a_stand_in_goes_by_name() -> Outcome {
+    let (proxy, relay, mut script) = scripted().await?;
+    let (_engine, tunnel) = engine(chain(proxy))?;
+    let a = stand_in(&tunnel, b"\x01a\x04test\x00").await?;
+    send(
+        &tunnel,
+        app(CHAINED_PORT),
+        SocketAddr::from((a, 443)),
+        b"hello",
+    )
+    .await?;
+    let engine_at = heard_from_engine(&mut script).await?;
+    let server = SocketAddr::from(([198, 51, 100, 9], 443));
+    relay
+        .send_to(&relayed(header_by_address(server), b"bound"), engine_at)
+        .await?;
+    receive(&tunnel).await?.ok_or("a datagram")?;
+    let other = SocketAddr::from(([198, 51, 100, 9], 3_478));
+    relay
+        .send_to(&relayed(header_by_address(other), b"from 3478"), engine_at)
+        .await?;
+    let shown = SocketAddr::from((a, 3_478));
+    assert_eq!(
+        receive(&tunnel).await?,
+        Some((shown, b"from 3478".to_vec()))
+    );
+    send(&tunnel, app(CHAINED_PORT), shown, b"reply").await?;
+    let (_, datagram) = tokio::time::timeout(Duration::from_secs(5), script.recv())
+        .await?
+        .ok_or("the relay heard nothing")?;
+    assert_eq!(datagram, relayed(header_by_name("a.test", 3_478), b"reply"));
+    Ok(())
+}
+
+/// Once the app sends to a flow that came in, it is a peer of the app: it no longer counts under the cap
+/// of 64, and another port comes in in its place (fifth review of unit 9, finding 2).
+#[tokio::test(flavor = "current_thread")]
+async fn a_flow_that_came_in_and_was_answered_leaves_the_cap() -> Outcome {
+    let server = UdpSocket::bind("127.0.0.1:0").await?;
+    let at = server.local_addr()?;
+    let mut ports = Vec::new();
+    for _ in 0..65 {
+        ports.push(UdpSocket::bind("127.0.0.1:0").await?);
+    }
+    let answered = ports[0].local_addr()?;
+    let (go, later) = oneshot::channel::<()>();
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 64];
+        if let Ok((_, mapped)) = server.recv_from(&mut buffer).await {
+            for port in &ports[..64] {
+                let _ = port.send_to(b"came in", mapped).await;
+            }
+            if later.await.is_ok() {
+                let _ = ports[64].send_to(b"one more", mapped).await;
+            }
+        }
+    });
+    let tool = proxy(Settings::default()).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    send(&tunnel, app(DIRECT_PORT), at, b"hello").await?;
+    assert_eq!(everything(&tunnel).await.len(), 64);
+    send(&tunnel, app(DIRECT_PORT), answered, b"an answer").await?;
+    go.send(()).map_err(|()| "the server is gone")?;
+    let seen = everything(&tunnel).await;
+    assert_eq!(seen.len(), 1, "one more port came in");
+    assert_eq!(engine.counters()[UDP_CAME_IN_CAPPED], 0);
     Ok(())
 }

@@ -326,6 +326,8 @@ struct Mapping {
 
 /// A peer of a mapping: a flow in the log.
 struct Peer {
+    /// The flow's number, port and DNS use, for the QUIC Initial packets that may name it.
+    opened: Opened,
     /// The flow's number.
     id: u64,
     /// While the app's first datagrams to it may still name it, their QUIC Initial packets read so far.
@@ -336,11 +338,17 @@ struct Peer {
     /// When it was made: for a stand-in, when the app first sent to it (`Limits::udp_contest`).
     made: Instant,
     way: PeerWay,
-    /// Whether it came in: another port of an address the app sent to, not a destination of the app.
+    /// Whether it came in, another port of an address the app sent to, and the app has not sent to it
+    /// since: it counts under [`CAME_IN`], and its datagrams are not read for a QUIC name.
     came_in: bool,
-    /// For a stand-in on port 53 still waiting for its first answer, or a flow that came in from a port
-    /// 53, the ID and question of each DNS query the app sent it, the latest last: only an answer to one
-    /// of them binds the stand-in, or teaches Watch names from a flow the app did not start.
+    /// Whether it came in before the app sent to it: Watch learns names from it only from an answer to a
+    /// query the app sent it, even once the app answers it.
+    came_in_first: bool,
+    /// Whether it is a stand-in the app sent to, waiting for its first answer from an address.
+    waiting: bool,
+    /// For a stand-in on port 53 while it waits, or a flow from a port 53 that came in first, the ID and
+    /// question of each DNS query the app sent it, the latest last: only an answer to one of them binds
+    /// the stand-in, or teaches Watch names from a flow the app did not start.
     asked: Vec<(u16, String)>,
 }
 
@@ -407,22 +415,33 @@ impl Peer {
     ) -> Self {
         let (opened, flow) = begin_udp(shared, app, address, uid);
         Self {
+            opened,
             id: opened.id,
             quic: (!came_in).then(|| (opened, Box::new(quic::Initial::new()))),
             bytes: shared.record(flow),
             last: now,
             made: now,
-            way,
             came_in,
+            came_in_first: came_in,
+            waiting: !came_in && way.name.is_some() && way.from.is_none(),
+            way,
             asked: Vec::new(),
         }
     }
 
-    /// Notes a datagram the app sends it to `port`: for a stand-in on port 53 still waiting for its
-    /// first answer, or a flow from a port 53 that came in, the ID and question of a DNS query.
+    /// It waits no more for a first answer from an address: bound to one, or answered by name. The
+    /// queries it kept for that go.
+    fn answered(&mut self) {
+        self.waiting = false;
+        if !self.came_in_first {
+            self.asked = Vec::new();
+        }
+    }
+
+    /// Notes a datagram the app sends it to `port`: for a stand-in on port 53 while it waits, or a flow
+    /// from a port 53 that came in first, the ID and question of a DNS query.
     fn sent(&mut self, port: u16, payload: &[u8]) {
-        let waits = self.way.name.is_some() && self.way.from.is_none();
-        if port != 53 || !(waits || self.came_in) {
+        if port != 53 || !(self.waiting || self.came_in_first) {
             return;
         }
         let (Some(id), Some(question)) = (dns::u16_at(payload, 0), answers::question(payload))
@@ -468,6 +487,14 @@ struct Known {
     shown: IpAddr,
     /// How many peers' answers come from it.
     peers: usize,
+}
+
+/// The name a target names, if it names one.
+fn target_name(target: &Target) -> Option<String> {
+    match target {
+        Target::Name(name, _) => Some(name.clone()),
+        Target::Address(_) => None,
+    }
 }
 
 /// A name as DNS compares it: whatever its case, and with or without a final dot.
@@ -564,6 +591,28 @@ impl Sources {
     fn shown(&self, ip: IpAddr) -> Option<IpAddr> {
         self.addresses.get(&ip).map(|known| known.shown)
     }
+
+    /// The way of a peer that came in from `from` through the tool, which the app knows as `shown`.
+    /// Shown as a stand-in, it is that name's other port: the app's datagrams to it go to the tool by the
+    /// name, as the stand-in's own do, so that the tool's routing by name still applies.
+    fn way_from(&self, shown: SocketAddr, from: SocketAddr) -> PeerWay {
+        let name = (shown.ip() != from.ip())
+            .then(|| {
+                self.names
+                    .iter()
+                    .find(|(_, known)| known.shown == shown.ip())
+            })
+            .flatten()
+            .map(|(name, _)| name.clone());
+        match name.and_then(|name| Target::name(&name, shown.port())) {
+            Some(target) => PeerWay {
+                header: Some(socks5::datagram(&target, &[]).into()),
+                from: Some(from),
+                name: target_name(&target),
+            },
+            None => PeerWay::through_tool(Target::Address(from)),
+        }
+    }
 }
 
 impl Mapping {
@@ -649,6 +698,18 @@ impl Mapping {
         true
     }
 
+    /// The app sends to the peer it knows as `address`: one that came in is a peer of the app from now
+    /// on, read for a QUIC name and no longer counted under [`CAME_IN`].
+    fn answering(&mut self, address: SocketAddr) {
+        let Some(peer) = self.peers.get_mut(&address) else {
+            return;
+        };
+        if std::mem::take(&mut peer.came_in) {
+            peer.quic = Some((peer.opened, Box::new(quic::Initial::new())));
+            self.came_in = self.came_in.saturating_sub(1);
+        }
+    }
+
     /// The peer the app knows as `shown`, refreshed by `answer`. Watch learns names only from a peer the
     /// app sent to, or from an answer to a query the app sent one that came in.
     fn answered_by(&mut self, shown: SocketAddr, answer: &[u8], now: Instant) -> LetIn {
@@ -657,7 +718,7 @@ impl Mapping {
         };
         peer.last = now;
         self.last = now;
-        let learns = !peer.came_in || peer.asked_for(answer);
+        let learns = !peer.came_in_first || peer.asked_for(answer);
         LetIn::Peer(shown, peer.bytes.clone(), learns)
     }
 
@@ -725,7 +786,7 @@ impl Mapping {
                     }
                 }
                 let shown = SocketAddr::new(ip, from.port());
-                (shown, PeerWay::through_tool(Target::Address(from)))
+                (shown, self.sources.way_from(shown, from))
             }
             // A relay that gives back the name it was asked for answers for that name's stand-in;
             // another port of the name is another port of the stand-in.
@@ -735,9 +796,10 @@ impl Mapping {
                     return LetIn::Filtered;
                 };
                 let shown = SocketAddr::new(stand_in, *port);
-                if self.peers.contains_key(&shown) {
+                if let Some(peer) = self.peers.get_mut(&shown) {
                     // The stand-in's own answer: it no longer waits for a first answer from an address,
                     // which whoever reached the relay later from its port could otherwise send it.
+                    peer.answered();
                     self.sources.stop_waiting(shown);
                     return self.answered_by(shown, answer, now);
                 }
@@ -818,7 +880,7 @@ impl Mapping {
         self.sources.add(shown, from);
         if let Some(peer) = self.peers.get_mut(&shown) {
             peer.way.from = Some(from);
-            peer.asked = Vec::new();
+            peer.answered();
         }
         self.answered_by(shown, answer, now)
     }
@@ -953,6 +1015,7 @@ impl UdpTable {
             return None;
         }
         mapping.sent = now;
+        mapping.answering(destination);
         let peer = mapping.peers.get_mut(&destination)?;
         peer.last = now;
         peer.sent(destination.port(), payload);
@@ -1408,6 +1471,7 @@ async fn open_peer(
         let now = Instant::now();
         mapping.sent = now;
         mapping.named = now;
+        mapping.answering(destination);
         let peer = mapping.peer(shared, key, now, (false, way));
         let header = peer.way.header.clone();
         for packet in &waiting {
@@ -2287,6 +2351,52 @@ mod tests {
         }
     }
 
+    /// A mapping with no peer yet, last used `now`.
+    async fn mapping(now: Instant) -> io::Result<Mapping> {
+        Ok(Mapping {
+            id: 1,
+            socket: Arc::new(UdpSocket::bind("127.0.0.1:0").await?),
+            exit: Exit::Direct,
+            chains: 0,
+            uid: None,
+            peers: HashMap::new(),
+            sources: Sources::default(),
+            came_in: 0,
+            last: now,
+            sent: now,
+            named: now,
+            ended: Arc::new(Notify::new()),
+        })
+    }
+
+    /// A stand-in on port 53 that its relay answers by name waits no more: it drops the queries it kept
+    /// and records no more (fifth review of unit 9, finding 3).
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_stand_in_answered_by_name_keeps_no_queries() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let mut mapping = mapping(now).await?;
+        let stand_in = SocketAddr::from(([198, 18, 0, 1], 53));
+        let asked = query(0x1234, b"\x07example\x03com\x00");
+        mapping
+            .peer(&shared, (APP, stand_in), now, (false, waiting_stand_in()))
+            .sent(53, &asked);
+        let by_name = Target::Name("dns.test".into(), 53);
+        let answered = response(&asked);
+        assert!(matches!(
+            mapping.relayed_answer(&shared, APP, (&by_name, &answered), now),
+            LetIn::Peer(..)
+        ));
+        let peer = mapping
+            .peers
+            .get_mut(&stand_in)
+            .ok_or(io::ErrorKind::NotFound)?;
+        assert_eq!(peer.asked.len(), 0, "kept after its answer by name");
+        peer.sent(53, &query(0x4321, b"\x07example\x03org\x00"));
+        assert_eq!(peer.asked.len(), 0, "recorded after its answer by name");
+        Ok(())
+    }
+
     /// Only a stand-in on port 53 that waits for its first answer, or a flow from a port 53 that came
     /// in, keeps the queries the app sends it: no other peer holds them in memory.
     #[test]
@@ -2342,20 +2452,7 @@ mod tests {
     async fn a_bound_stand_in_forgets_the_queries_it_waited_on() -> io::Result<()> {
         let shared = shared();
         let now = Instant::now();
-        let mut mapping = Mapping {
-            id: 1,
-            socket: Arc::new(UdpSocket::bind("127.0.0.1:0").await?),
-            exit: Exit::Direct,
-            chains: 0,
-            uid: None,
-            peers: HashMap::new(),
-            sources: Sources::default(),
-            came_in: 0,
-            last: now,
-            sent: now,
-            named: now,
-            ended: Arc::new(Notify::new()),
-        };
+        let mut mapping = mapping(now).await?;
         let stand_in = SocketAddr::from(([198, 18, 0, 1], 53));
         let asked = query(0x1234, b"\x07example\x03com\x00");
         let peer = mapping.peer(&shared, (APP, stand_in), now, (false, waiting_stand_in()));
