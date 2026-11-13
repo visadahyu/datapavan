@@ -58,7 +58,11 @@ The first run of each edition asks the user about their own situation, never abo
 > - No
 > - I'm not sure
 
-"Yes" and "I'm not sure" turn the profile on; "No" leaves it off. The screen says, before the answer, what
+"Yes" and "I'm not sure" turn the profile on; "No" leaves it off. "I'm not sure" turns it on because that is the
+safer error (the maintainer, 2026-11-14): leaving it off by mistake leaves evidence on the phone, while turning it
+on by mistake costs conveniences. After "I'm not sure" the app says plainly what that costs: no history, so no undo
+across sessions and no flags that need history; ADR 0046's summary and widget off. It says how to turn the profile
+off: one switch in Settings. The screen says, before the answer, what
 the profile changes and what it costs (decision 8). The answer can be changed at any time in Settings. No
 screen, store text or document about the profile names a country or a region, and the apps never read the
 phone's location, SIM country or language to guess the answer.
@@ -336,8 +340,6 @@ No frontier research is needed. One piece of lab work is: measuring what Android
 
 ## Questions for the maintainer
 
-1. **"I'm not sure" turns the profile on.** The cost of leaving it off by mistake (evidence on the phone) is
-   greater than the cost of turning it on by mistake (a lost undo). Agreed?
 2. **The Verifier's pins** (ADR 0040, decision 6, not built yet) name a phone's attestation key, not an app.
    Proposed: kept under the profile and left out of the wipe, since losing a pin weakens the next check. Agreed?
 3. **The disguise** (decision 9): closed now, to be reopened only after the tests with real users. Agreed?
