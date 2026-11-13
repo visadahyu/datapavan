@@ -54,11 +54,14 @@ DNS_ON_DEVICE=/data/local/tmp/watch-dns.bin
 DOH_ON_DEVICE=/data/local/tmp/watch-doh.bin
 # The emulator's setting to keep mobile data up while Wi-Fi is on, before the test changed it.
 DATA_ALWAYS_ON=""
+# Set while airplane mode is on to restart the emulator's radios, so that a failure then turns it off.
+AIRPLANE=""
 
 cleanup() {
     adb shell rm -f "$HELLO_ON_DEVICE" "$QUIC_ON_DEVICE-1.bin" "$QUIC_ON_DEVICE-2.bin" "$DNS_ON_DEVICE" "$DOH_ON_DEVICE" >/dev/null 2>&1 || true
     adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
     if is_emulator; then
+        [ -z "$AIRPLANE" ] || adb shell cmd connectivity airplane-mode disable >/dev/null 2>&1 || true
         adb shell svc wifi enable >/dev/null 2>&1 || true
         case "$DATA_ALWAYS_ON" in
             "") ;;
@@ -359,6 +362,52 @@ is_emulator && adb shell appops set "$PKG" ACTIVATE_VPN allow
 # Android 17: the server is on the local network, which Watch reaches for every app (ADR 0034).
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 adb shell am force-stop "$PKG"
+if is_emulator; then
+    # The emulator has Wi-Fi and mobile data, and the network switch near the end moves the tunnel from one
+    # to the other. Read whole: under pipefail, a grep -q that stops reading early fails the pipe.
+    default_network() {
+        adb shell dumpsys connectivity | tr -d '\r' | sed -n 's/^Active default network: //p'
+    }
+    networks() {
+        adb shell dumpsys connectivity | tr -d '\r' |
+            sed -n 's/^ *NetworkAgentInfo{network{\([0-9]*\)}.*ni{\([^ ]*\) \([A-Z]*\).*/\1 \2 \3/p' | paste -sd ';'
+    }
+    up() {
+        grep -qE "(^|;)[0-9]+ $1[^ ;]* CONNECTED" <<<"$(networks)"
+    }
+    # Waits up to $1 seconds for mobile data, and for Wi-Fi too when $2 is "wifi".
+    wait_up() {
+        for _ in $(seq 1 $(($1 / 2))); do
+            up MOBILE && { [ "${2:-}" != wifi ] || up WIFI; } && return 0
+            sleep 2
+        done
+        up MOBILE && { [ "${2:-}" != wifi ] || up WIFI; }
+    }
+    # Mobile data stays up beside Wi-Fi, as on most phones, so that the switch has a network to go to: on
+    # CI, mobile data brought up only after Wi-Fi went off was not there 40 s later ("Active default
+    # network: none"). It is brought up here, before Watch starts, where restarting the radios touches no
+    # tunnel: on CI it was sometimes not up at all minutes later (2026-11-11, twice, and 2026-11-12, twice:
+    # Wi-Fi only), and turning data off and on did not always bring it.
+    DATA_ALWAYS_ON=$(adb shell settings get global mobile_data_always_on | tr -d '\r')
+    adb shell settings put global mobile_data_always_on 1
+    if ! wait_up 60; then
+        echo "  no mobile data after 60 s ($(networks)): turning it off and on"
+        adb shell svc data disable
+        sleep 2
+        adb shell svc data enable
+    fi
+    if ! wait_up 60; then
+        echo "  still no mobile data ($(networks)): restarting the radios with airplane mode"
+        AIRPLANE=1
+        adb shell cmd connectivity airplane-mode enable
+        sleep 5
+        adb shell cmd connectivity airplane-mode disable
+        AIRPLANE=""
+    fi
+    wait_up 90 wifi ||
+        fail "the emulator did not have both Wi-Fi and mobile data before Watch started ($(networks)), even after airplane mode, so the network switch would have nowhere to go; this is the emulator, not Watch"
+    echo "  networks before Watch starts: $(networks)"
+fi
 # The device's network or the test server may not be ready yet: on CI the first check below once found
 # no answer (2026-11-11). Wait until the device reaches the server without Watch, so that a failure below
 # is Watch's.
@@ -436,39 +485,15 @@ else
 fi
 
 if is_emulator; then
-    # The emulator has Wi-Fi and mobile data: switching Wi-Fi off moves the tunnel to mobile data.
-    # Mobile data stays up beside Wi-Fi, as on most phones, so that the switch has a network to go to: on
-    # CI, mobile data brought up only after Wi-Fi went off was not there 40 s later ("Active default
-    # network: none"), and nothing could pass, with Watch or without.
-    # Read whole: under pipefail, a grep -q that stops reading early fails the pipe.
-    default_network() {
-        adb shell dumpsys connectivity | tr -d '\r' | sed -n 's/^Active default network: //p'
-    }
-    networks() {
-        adb shell dumpsys connectivity | tr -d '\r' |
-            sed -n 's/^ *NetworkAgentInfo{network{\([0-9]*\)}.*ni{\([^ ]*\) \([A-Z]*\).*/\1 \2 \3/p' | paste -sd ';'
-    }
-    mobile_up() {
-        grep -qE '(^|;)[0-9]+ MOBILE[^ ;]* CONNECTED' <<<"$(networks)"
-    }
-    DATA_ALWAYS_ON=$(adb shell settings get global mobile_data_always_on | tr -d '\r')
-    adb shell settings put global mobile_data_always_on 1
-    # Wait for mobile data before Wi-Fi goes off. On CI it was sometimes not up at all (2026-11-11, twice:
-    # Wi-Fi and the VPN only), and the switch then had nowhere to go. Turning data off and on once more
-    # brings it up.
-    for attempt in 1 2; do
-        for _ in $(seq 1 30); do
-            mobile_up && break
-            sleep 2
-        done
-        mobile_up && break
-        [ "$attempt" = 1 ] || break
-        echo "  no mobile data after 60 s ($(networks)): turning it off and on"
+    # Switching Wi-Fi off moves the tunnel to mobile data, which came up before Watch started. If it went
+    # down since, turning it off and on once more.
+    if ! wait_up 30; then
+        echo "  no mobile data before the switch ($(networks)): turning it off and on"
         adb shell svc data disable
         sleep 2
         adb shell svc data enable
-    done
-    mobile_up || fail "the emulator's mobile data did not come up ($(networks)), so the switch has nowhere to go"
+    fi
+    wait_up 60 || fail "the emulator's mobile data went down after Watch started ($(networks)), so the switch has nowhere to go"
     before=$(default_network)
     wifi=$(sed -n 's/\(^\|.*;\)\([0-9]*\) WIFI[^ ;]* CONNECTED.*/\2/p' <<<"$(networks)")
     echo "  networks before the switch: $(networks); default $before"
