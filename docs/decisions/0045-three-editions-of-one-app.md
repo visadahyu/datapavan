@@ -117,7 +117,9 @@ Watch and the audit app, and the gap between Lite and Watch.
 - **Watch is a library.** `:watch` is an Android library that only Advanced depends on. Its manifest sets no icon,
   label, theme or backup rules of its own: the application's apply. Its screen is not exported; debug builds export
   it for the emulator checks (`watch/src/debug`). The audit opens it from its network page, by class name, only in
-  Advanced (`ui/WatchEntry.kt`). Watch's shield icon is Advanced's until study B's outline is drawn.
+  Advanced (`ui/WatchEntry.kt`).
+- **Advanced's icon is study B:** the shield drawn as one clay outline around DA, on lapis, and the same in one
+  colour for themed icons. Basic keeps DA alone.
 - **Watch runs in a process of its own,** `:watch`: its screen, its tunnel and its log's expiry. The part that
   faces the network shares no memory with the audit, a crash of either leaves the other running, and Watch keeps
   its own memory budget of 48 MB. The first release check of Advanced, with both in one process, measured 54 MB,
@@ -148,4 +150,6 @@ Watch and the audit app, and the gap between Lite and Watch.
   process dies, the audit binds again and loads the signatures again; an app it still cannot scan is reported
   unreadable and scanned again at the next audit. The build fails unless the service stays isolated and
   unexported, and the smoke test checks that Android ran it under an isolated UID.
-- **Still to build:** study B's icon, the data tables' rows for Advanced, and Advanced's release rehearsal.
+- **Open for the maintainer:** on the Android 15 emulator's launcher, both names show as "Datapavan …", cut where
+  the edition begins; there the icons' shapes alone tell the editions apart.
+- **Still to build:** the data tables' rows for Advanced, and Advanced's release rehearsal.

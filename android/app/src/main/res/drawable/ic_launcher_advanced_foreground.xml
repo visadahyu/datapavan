@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Datapavan Watch's mark: the product mark in its shield (brand/datapavan-shield.svg), clay on lapis,
-    with DA in lapis. Old Persian DA (U+103AD) from Noto Sans Old Persian (SIL Open Font License 1.1).
-    The shield is 60 dp tall, centred in the 108 dp adaptive-icon canvas; its farthest points, the top
-    corners, stay 31.3 dp from the centre, inside the 33 dp safe zone. See brand/README.md.
+    Datapavan Advanced's mark (ADR 0045, decision 6; study B of 2026-11-13): the product mark's shield
+    (brand/datapavan-shield.svg) drawn as one outline around DA, both in clay on the lapis background, where
+    Basic shows DA alone and Enterprise will show the shield with a double outline. Old Persian DA (U+103AD)
+    from Noto Sans Old Persian (SIL Open Font License 1.1). Placed as Watch's filled shield was: the shield
+    is 60 dp tall, centred in the 108 dp canvas; the outline, 2.5 dp wide with round joins, keeps its
+    farthest point, at the top corners, within the 33 dp safe zone. See brand/README.md.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -16,10 +18,12 @@
         android:translateX="31.557"
         android:translateY="24.0">
         <path
-            android:fillColor="@color/brand_clay"
-            android:pathData="M98,0 L196,36 L196,120 C196,194 152,240 98,262 C44,240 0,194 0,120 L0,36 Z" />
+            android:pathData="M98,0 L196,36 L196,120 C196,194 152,240 98,262 C44,240 0,194 0,120 L0,36 Z"
+            android:strokeColor="@color/brand_clay"
+            android:strokeLineJoin="round"
+            android:strokeWidth="10.9" />
         <path
-            android:fillColor="@color/brand_lapis"
+            android:fillColor="@color/brand_clay"
             android:pathData="M58.11,84.85 Q58.56,80.89 58.87,77.09 Q59.17,73.29 59.17,69.34 Q59.17,65.23 58.79,60.97 Q58.41,56.71 57.5,52.0 Q63.43,54.59 75.75,57.02 Q88.07,59.45 104.41,61.35 Q120.76,63.25 138.56,64.62 L138.56,68.12 Q109.66,71.92 88.68,75.95 Q67.69,79.98 58.11,84.85 Z M116.5,184.0 Q114.98,166.51 113.62,153.66 Q112.25,140.81 110.95,131.46 Q109.66,122.11 108.14,114.96 Q106.62,107.81 104.72,101.58 Q102.82,95.34 100.23,88.8 Q108.44,90.17 116.66,90.17 Q124.26,90.17 133.08,88.8 Q130.5,95.8 128.52,103.78 Q126.54,111.76 125.02,122.56 Q123.5,133.36 122.36,148.26 Q121.22,163.17 120.46,184.0 L116.5,184.0 Z M78.94,184.0 Q77.42,166.51 76.05,153.66 Q74.68,140.81 73.39,131.46 Q72.1,122.11 70.58,114.96 Q69.06,107.81 67.16,101.58 Q65.26,95.34 62.67,88.8 Q70.88,90.17 79.09,90.17 Q86.7,90.17 95.52,88.8 Q92.93,95.8 90.96,103.78 Q88.98,111.76 87.46,122.56 Q85.94,133.36 84.8,148.26 Q83.66,163.17 82.9,184.0 L78.94,184.0 Z" />
     </group>
 </vector>
