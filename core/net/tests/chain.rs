@@ -9,7 +9,7 @@
 
 mod common;
 
-use common::{Settings, proxy, udp_echo};
+use common::{Headers, Settings, proxy, udp_echo};
 use datapavan_net::engine::{Addresses, Limits};
 use datapavan_net::{Chain, Config, Engine, Platform, dns, packet};
 use std::collections::HashSet;
@@ -62,18 +62,36 @@ fn engine(chain: Chain) -> io::Result<(Engine, UnixDatagram)> {
 
 /// As [`engine`], with the tunnel's addresses `addresses`.
 fn engine_at(chain: Chain, addresses: Addresses) -> io::Result<(Engine, UnixDatagram)> {
+    started(chain, addresses, Limits::default(), Arc::new(ByPort))
+}
+
+/// As [`engine`], with `limits`, and `platform` for Android.
+fn engine_with(
+    chain: Chain,
+    limits: Limits,
+    platform: Arc<dyn Platform>,
+) -> io::Result<(Engine, UnixDatagram)> {
+    started(chain, Addresses::COMMON, limits, platform)
+}
+
+fn started(
+    chain: Chain,
+    addresses: Addresses,
+    limits: Limits,
+    platform: Arc<dyn Platform>,
+) -> io::Result<(Engine, UnixDatagram)> {
     let (engine_end, app_end) = std::os::unix::net::UnixDatagram::pair()?;
     engine_end.set_nonblocking(true)?;
     app_end.set_nonblocking(true)?;
     let engine = Engine::start(
         OwnedFd::from(engine_end),
         Config {
-            limits: Limits::default(),
+            limits,
             mtu: 1500,
             keep_flows: 64,
             addresses,
         },
-        Arc::new(ByPort),
+        platform,
         None,
     )?;
     engine.chain(Some(chain));
@@ -678,5 +696,135 @@ async fn a_new_chain_moves_a_mapping_only_when_its_way_changes() -> Outcome {
     echoed(&tunnel, echo, b"four").await?;
     assert_eq!(second.commands(), [3], "directly");
     assert_eq!(engine.counters()[UDP_MAPPINGS], 3);
+    Ok(())
+}
+
+/// A stand-in waits on the port the app asked: an answer from an address the app never saw, on another
+/// port, does not bind it.
+#[tokio::test(flavor = "current_thread")]
+async fn an_answer_on_another_port_does_not_bind_a_stand_in() -> Outcome {
+    let server = UdpSocket::bind("127.0.0.1:0").await?;
+    let port = server.local_addr()?.port();
+    let elsewhere = UdpSocket::bind("127.0.0.2:0").await?;
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 64];
+        if let Ok((n, relay)) = server.recv_from(&mut buffer).await {
+            let _ = elsewhere.send_to(b"another port", relay).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let _ = server.send_to(&buffer[..n], relay).await;
+        }
+    });
+    let mut settings = Settings::default();
+    settings
+        .names
+        .insert("echo.test".into(), IpAddr::V4(Ipv4Addr::LOCALHOST));
+    let tool = proxy(settings).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    let at = SocketAddr::from((stand_in(&tunnel, b"\x04echo\x04test\x00").await?, port));
+    send(&tunnel, app(CHAINED_PORT), at, b"hello").await?;
+    let answer = receive(&tunnel).await?.ok_or("a datagram")?;
+    assert_eq!(answer, (at, b"hello".to_vec()));
+    assert_eq!(engine.counters()[UDP_FILTERED], 1);
+    Ok(())
+}
+
+/// A relay that gives back the name each datagram was sent to: its answers reach the app from that
+/// name's stand-in.
+#[tokio::test(flavor = "current_thread")]
+async fn a_relay_that_names_the_name_is_matched_by_it() -> Outcome {
+    let echo = udp_echo().await?;
+    let mut settings = Settings::default();
+    settings.names.insert("echo.test".into(), echo.ip());
+    settings.headers = Headers::Name;
+    let tool = proxy(settings).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    let at = SocketAddr::from((
+        stand_in(&tunnel, b"\x04echo\x04test\x00").await?,
+        echo.port(),
+    ));
+    echoed(&tunnel, at, b"by name").await?;
+    echoed(&tunnel, at, b"by name again").await?;
+    let counters = engine.counters();
+    assert_eq!([counters[UDP_FILTERED], counters[UDP_UNMATCHED]], [0, 0]);
+    Ok(())
+}
+
+/// A relay that names an IPv4 sender as an IPv4-mapped IPv6 address names the address the app sent to.
+#[tokio::test(flavor = "current_thread")]
+async fn a_relay_that_names_ipv4_as_ipv6_is_understood() -> Outcome {
+    let echo = udp_echo().await?;
+    let settings = Settings {
+        headers: Headers::Mapped,
+        ..Settings::default()
+    };
+    let tool = proxy(settings).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    echoed(&tunnel, echo, b"as IPv6").await?;
+    assert_eq!(engine.counters()[UDP_FILTERED], 0);
+    Ok(())
+}
+
+/// Two destinations opened at once wait for one relay; when the tool never answers, the one waiting
+/// fails with the one that asked, at once, instead of asking the silent tool again.
+#[tokio::test(flavor = "current_thread")]
+async fn destinations_that_wait_for_a_relay_fail_with_it() -> Outcome {
+    let silent_tool = TcpListener::bind("127.0.0.1:0").await?;
+    let address = silent_tool.local_addr()?;
+    let accepted = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counted = Arc::clone(&accepted);
+    tokio::spawn(async move {
+        let mut held = Vec::new();
+        while let Ok((connection, _)) = silent_tool.accept().await {
+            counted.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            held.push(connection);
+        }
+    });
+    let limits = Limits {
+        connect_timeout: Duration::from_secs(1),
+        ..Limits::default()
+    };
+    let (_engine, tunnel) = engine_with(chain(address), limits, Arc::new(ByPort))?;
+    let (first, second) = (udp_echo().await?, udp_echo().await?);
+    let started = tokio::time::Instant::now();
+    send(&tunnel, app(CHAINED_PORT), first, b"one").await?;
+    send(&tunnel, app(CHAINED_PORT), second, b"two").await?;
+    assert_eq!(receive(&tunnel).await?, None, "an ICMP error");
+    assert_eq!(receive(&tunnel).await?, None, "another");
+    assert!(
+        started.elapsed() < Duration::from_millis(1_800),
+        "the second waited {:?}",
+        started.elapsed()
+    );
+    assert_eq!(accepted.load(std::sync::atomic::Ordering::Relaxed), 1);
+    Ok(())
+}
+
+/// A tool that ends its relay ends the mapping: the app's next datagram asks for another.
+#[tokio::test(flavor = "current_thread")]
+async fn a_tool_that_ends_its_relay_is_asked_for_another() -> Outcome {
+    let echo = udp_echo().await?;
+    let tool = proxy(Settings::default()).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    echoed(&tunnel, echo, b"one").await?;
+    tool.close_relays();
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    echoed(&tunnel, echo, b"two").await?;
+    assert_eq!(tool.commands(), [3, 3]);
+    assert_eq!(engine.counters()[UDP_MAPPINGS], 2);
+    Ok(())
+}
+
+/// A fragment and a header cut short, from the tool's relay, reach no destination and are counted.
+#[tokio::test(flavor = "current_thread")]
+async fn bad_headers_from_the_relay_are_dropped_and_counted() -> Outcome {
+    let echo = udp_echo().await?;
+    let settings = Settings {
+        bad_headers_first: true,
+        ..Settings::default()
+    };
+    let tool = proxy(settings).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    echoed(&tunnel, echo, b"after two bad ones").await?;
+    assert_eq!(engine.counters()[UDP_UNMATCHED], 2);
     Ok(())
 }

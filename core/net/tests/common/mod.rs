@@ -8,6 +8,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex, PoisonError};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
+use tokio::sync::watch;
 
 /// How the test proxy behaves.
 #[derive(Clone, Default)]
@@ -20,46 +21,95 @@ pub struct Settings {
     pub unspecified_relay: bool,
     /// The names it resolves, to an address on this computer.
     pub names: HashMap<String, IpAddr>,
-    /// Where a connection to an address goes instead, as a resolver's address to a server here.
+    /// Where a connection or a datagram to an address goes instead, as a resolver's address to a
+    /// server here; the relay names an answer from the server here by the address it stands for.
     pub remap: HashMap<SocketAddr, SocketAddr>,
+    /// An address a UDP relay is announced at instead of its own, as a relay on another host.
+    pub relay_at: Option<IpAddr>,
+    /// How the relay names the sender of each answer.
+    pub headers: Headers,
+    /// Whether the relay sends a fragment and a header cut short before the first answer it carries.
+    pub bad_headers_first: bool,
+}
+
+/// How a relay names the sender of an answer in its header.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub enum Headers {
+    /// By its address.
+    #[default]
+    Address,
+    /// By the name the datagram it answers was sent to, where it was sent to one, as some tools do.
+    Name,
+    /// By its address, an IPv4 one as an IPv4-mapped IPv6 address.
+    Mapped,
 }
 
 pub struct Proxy {
     pub address: SocketAddr,
-    /// The command byte of each request it received.
-    commands: Arc<Mutex<Vec<u8>>>,
+    seen: Arc<Seen>,
+    /// Counts up to end every UDP relay open now.
+    closing: watch::Sender<u64>,
+}
+
+/// What the proxy saw: the command byte of each request, and the address of each UDP relay it opened.
+#[derive(Default)]
+struct Seen {
+    commands: Mutex<Vec<u8>>,
+    relays: Mutex<Vec<SocketAddr>>,
 }
 
 impl Proxy {
     pub fn commands(&self) -> Vec<u8> {
-        self.commands
+        self.seen
+            .commands
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone()
+    }
+
+    /// The address of each UDP relay it opened, as its servers see the relay.
+    pub fn relays(&self) -> Vec<SocketAddr> {
+        self.seen
+            .relays
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Ends every UDP relay open now, and its request's connection, as a tool may.
+    pub fn close_relays(&self) {
+        self.closing.send_modify(|count| *count += 1);
     }
 }
 
 pub async fn proxy(settings: Settings) -> std::io::Result<Proxy> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
-    let commands = Arc::new(Mutex::new(Vec::new()));
-    let seen = Arc::clone(&commands);
+    let seen = Arc::new(Seen::default());
+    let (closing, close) = watch::channel(0);
+    let noted = Arc::clone(&seen);
     tokio::spawn(async move {
         while let Ok((client, _)) = listener.accept().await {
             let settings = settings.clone();
-            let seen = Arc::clone(&seen);
+            let noted = Arc::clone(&noted);
+            let close = close.clone();
             tokio::spawn(async move {
-                let _ = serve(client, settings, seen).await;
+                let _ = serve(client, settings, noted, close).await;
             });
         }
     });
-    Ok(Proxy { address, commands })
+    Ok(Proxy {
+        address,
+        seen,
+        closing,
+    })
 }
 
 async fn serve(
     mut client: TcpStream,
     settings: Settings,
-    seen: Arc<Mutex<Vec<u8>>>,
+    seen: Arc<Seen>,
+    close: watch::Receiver<u64>,
 ) -> std::io::Result<()> {
     // The greeting: version, count, methods.
     let mut head = [0; 2];
@@ -93,7 +143,8 @@ async fn serve(
     // The request: version, command, reserved, then the address.
     let mut request = [0; 4];
     client.read_exact(&mut request).await?;
-    seen.lock()
+    seen.commands
+        .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .push(request[1]);
     let ip = match request[3] {
@@ -139,7 +190,7 @@ async fn serve(
                 Err(_) => client.write_all(&failure(5)).await,
             }
         }
-        (3, Some(_)) => relay(client, &settings).await,
+        (3, Some(_)) => relay(client, &settings, &seen, close).await,
         _ => client.write_all(&failure(7)).await,
     }
 }
@@ -161,15 +212,30 @@ fn success(bound: SocketAddr) -> Vec<u8> {
     out
 }
 
-/// A UDP relay for as long as the client's connection stays open.
-async fn relay(mut client: TcpStream, settings: &Settings) -> std::io::Result<()> {
+/// A UDP relay for as long as the client's connection stays open, or until the proxy ends it.
+async fn relay(
+    mut client: TcpStream,
+    settings: &Settings,
+    seen: &Seen,
+    mut close: watch::Receiver<u64>,
+) -> std::io::Result<()> {
     let socket = UdpSocket::bind("127.0.0.1:0").await?;
     let mut bound = socket.local_addr()?;
-    if settings.unspecified_relay {
+    seen.relays
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .push(bound);
+    if let Some(ip) = settings.relay_at {
+        bound.set_ip(ip);
+    } else if settings.unspecified_relay {
         bound.set_ip(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
     }
     client.write_all(&success(bound)).await?;
+    close.borrow_and_update();
     let mut app = None;
+    // The name each server was asked by, where it was.
+    let mut asked: HashMap<SocketAddr, (String, u16)> = HashMap::new();
+    let mut answered = false;
     let mut buffer = vec![0; 65_535];
     let mut control = [0; 1];
     loop {
@@ -179,25 +245,67 @@ async fn relay(mut client: TcpStream, settings: &Settings) -> std::io::Result<()
                     return Ok(());
                 }
             }
+            _ = close.changed() => return Ok(()),
             received = socket.recv_from(&mut buffer) => {
                 let (n, from) = received?;
                 let datagram = &buffer[..n];
                 if app.is_none_or(|a| a == from) {
                     // From the client: a header naming the destination by address or by name.
                     app = Some(from);
-                    if let Some((target, payload)) = client_datagram(datagram, &settings.names) {
-                        socket.send_to(payload, target).await?;
+                    if let Some((target, name, payload)) = client_datagram(datagram, &settings.names) {
+                        let real = settings.remap.get(&target).copied().unwrap_or(target);
+                        if let Some(name) = name {
+                            asked.insert(real, (name, target.port()));
+                        }
+                        socket.send_to(payload, real).await?;
                     }
                 } else if let Some(app) = app {
-                    // From a server: the header names it.
-                    let mut out = success(from);
-                    out[..3].copy_from_slice(&[0, 0, 0]);
+                    // From a server: the header names it, as the client knows it.
+                    let shown = settings
+                        .remap
+                        .iter()
+                        .find(|&(_, &real)| real == from)
+                        .map_or(from, |(&shown, _)| shown);
+                    let by_name = asked.get(&from).filter(|_| settings.headers == Headers::Name);
+                    let mut out = match by_name {
+                        Some((name, port)) => name_header(name, *port),
+                        None => address_header(shown, settings.headers == Headers::Mapped),
+                    };
+                    if settings.bad_headers_first && !answered {
+                        let mut fragment = out.clone();
+                        fragment[2] = 1;
+                        fragment.extend_from_slice(datagram);
+                        socket.send_to(&fragment, app).await?;
+                        socket.send_to(&out[..out.len() - 1], app).await?;
+                    }
+                    answered = true;
                     out.extend_from_slice(datagram);
                     socket.send_to(&out, app).await?;
                 }
             }
         }
     }
+}
+
+/// A datagram's header naming `from`, an IPv4 address as IPv6 when `mapped`.
+fn address_header(from: SocketAddr, mapped: bool) -> Vec<u8> {
+    let from = match from {
+        SocketAddr::V4(v4) if mapped => {
+            SocketAddr::new(IpAddr::V6(v4.ip().to_ipv6_mapped()), v4.port())
+        }
+        other => other,
+    };
+    let mut out = success(from);
+    out[..3].copy_from_slice(&[0, 0, 0]);
+    out
+}
+
+/// A datagram's header naming `name` and `port`.
+fn name_header(name: &str, port: u16) -> Vec<u8> {
+    let mut out = vec![0, 0, 0, 3, u8::try_from(name.len()).unwrap_or(0)];
+    out.extend_from_slice(name.as_bytes());
+    out.extend_from_slice(&port.to_be_bytes());
+    out
 }
 
 pub async fn tcp_echo() -> std::io::Result<SocketAddr> {
@@ -226,30 +334,33 @@ pub async fn udp_echo() -> std::io::Result<SocketAddr> {
     Ok(address)
 }
 
-/// A datagram from the client: where it goes and its payload, the header read by hand.
+/// A datagram from the client: where it goes, the name it named that by if it did, and its payload,
+/// the header read by hand.
 fn client_datagram<'a>(
     datagram: &'a [u8],
     names: &HashMap<String, IpAddr>,
-) -> Option<(SocketAddr, &'a [u8])> {
+) -> Option<(SocketAddr, Option<String>, &'a [u8])> {
     if datagram.get(..3)? != [0, 0, 0] {
         return None;
     }
-    let (ip, at) = match *datagram.get(3)? {
+    let (ip, name, at) = match *datagram.get(3)? {
         1 => (
             IpAddr::from(<[u8; 4]>::try_from(datagram.get(4..8)?).ok()?),
+            None,
             8,
         ),
         4 => (
             IpAddr::from(<[u8; 16]>::try_from(datagram.get(4..20)?).ok()?),
+            None,
             20,
         ),
         3 => {
             let length = usize::from(*datagram.get(4)?);
             let name = String::from_utf8_lossy(datagram.get(5..5 + length)?).into_owned();
-            (*names.get(&name)?, 5 + length)
+            (*names.get(&name)?, Some(name), 5 + length)
         }
         _ => return None,
     };
     let port = u16::from_be_bytes(datagram.get(at..at + 2)?.try_into().ok()?);
-    Some((SocketAddr::new(ip, port), datagram.get(at + 2..)?))
+    Some((SocketAddr::new(ip, port), name, datagram.get(at + 2..)?))
 }
