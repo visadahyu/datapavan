@@ -683,6 +683,13 @@ impl Mapping {
         });
     }
 
+    /// Whether the app's datagrams to its peers may leave without asking Android again whose socket this
+    /// is: the app sent within `reask`, and Android named its app within thirty times that.
+    fn fresh(&self, now: Instant, reask: Duration) -> bool {
+        now.duration_since(self.sent) < reask
+            && now.duration_since(self.named) < reask.saturating_mul(30)
+    }
+
     /// Whether the mapping may still carry its app's datagrams: once the chain was set again, whether
     /// the app's datagrams still leave its way. A mapping that may not ends (ADR 0044, decision 1: when
     /// the chain changes), so that the app's next datagram opens one on the new route.
@@ -1008,10 +1015,7 @@ impl UdpTable {
         // whose socket this is, as a new destination's does, and waits for the answer: the port may be
         // another app's now, which the log must name and the chain may send another way. A port another
         // app holds then gets a mapping of its own (ADR 0044, decision 1).
-        let reask = shared.limits.udp_reask;
-        if now.duration_since(mapping.sent) >= reask
-            || now.duration_since(mapping.named) >= reask.saturating_mul(30)
-        {
+        if !mapping.fresh(now, shared.limits.udp_reask) {
             return None;
         }
         mapping.sent = now;
@@ -1339,6 +1343,18 @@ type Context<'a> = (
     &'a watch::Receiver<u64>,
 );
 
+/// What a destination's question to Android about its app socket comes to.
+enum Question {
+    /// Its mapping is fresh again: Android named the app since the datagram came, and that is the answer.
+    Fresh(Option<u32>),
+    /// It asks on its own.
+    Alone,
+    /// It asks, and tells the answer to the destinations that come while it waits.
+    Ask(watch::Sender<Asked>),
+    /// It waits for the answer to the question already out.
+    Join(watch::Receiver<Asked>),
+}
+
 /// Where a question to Android about an app socket's app stands.
 #[derive(Clone, Copy)]
 enum Asked {
@@ -1359,40 +1375,60 @@ enum Asked {
 /// new destination so costs a question of its own, as a burst of them from one socket does. A known
 /// destination joining an older question is no worse than the window ADR 0044 states: it would have
 /// left by its mapping without asking at all.
+///
+/// An answer that names the mapping's own app makes the mapping fresh as the question ends, under one
+/// lock: a datagram to a destination it knows that comes after the answer, before the datagrams that
+/// waited for it have left, then leaves by the mapping instead of asking again. So does one that came
+/// while the question was out but asks only once it is answered: the answer it would have joined is
+/// the mapping's app.
 async fn owner_of(
     (app, destination): (SocketAddr, SocketAddr),
     shared: &Arc<Shared>,
     flows: &UdpFlows,
 ) -> Option<u32> {
-    let asked = {
+    let question = {
         let mut table = lock(flows);
-        let known = !shared.is_tunnel_dns(destination.ip())
-            && table
-                .mappings
-                .get(&app)
-                .is_some_and(|mapping| mapping.peers.contains_key(&destination));
-        match table.asking.get(&app) {
-            _ if !known => None,
+        let mapping = table
+            .mappings
+            .get(&app)
+            .filter(|mapping| mapping.peers.contains_key(&destination))
+            .filter(|_| !shared.is_tunnel_dns(destination.ip()));
+        match (mapping, table.asking.get(&app)) {
+            (None, _) => Question::Alone,
+            (Some(mapping), _) if mapping.fresh(Instant::now(), shared.limits.udp_reask) => {
+                Question::Fresh(mapping.uid)
+            }
             // One whose asker is gone without a word (the engine stopping) holds no one up.
-            Some(waiting) if waiting.has_changed().is_ok() => Some(Err(waiting.clone())),
-            _ => {
+            (Some(_), Some(waiting)) if waiting.has_changed().is_ok() => {
+                Question::Join(waiting.clone())
+            }
+            (Some(_), _) => {
                 let (told, waiting) = watch::channel(Asked::Waiting);
                 table.asking.insert(app, waiting);
-                Some(Ok(told))
+                Question::Ask(told)
             }
         }
     };
-    let Some(asked) = asked else {
-        return owner(shared, UDP, app, destination).await;
-    };
-    match asked {
-        Ok(told) => {
+    match question {
+        Question::Fresh(uid) => uid,
+        Question::Alone => owner(shared, UDP, app, destination).await,
+        Question::Ask(told) => {
             let uid = owner(shared, UDP, app, destination).await;
-            lock(flows).asking.remove(&app);
+            {
+                let mut table = lock(flows);
+                table.asking.remove(&app);
+                if let Some(mapping) = table.mappings.get_mut(&app)
+                    && mapping.uid == uid
+                {
+                    let now = Instant::now();
+                    mapping.sent = now;
+                    mapping.named = now;
+                }
+            }
             let _ = told.send(Asked::Answered(uid));
             uid
         }
-        Err(mut waiting) => {
+        Question::Join(mut waiting) => {
             let _ = waiting.changed().await;
             let answer = *waiting.borrow();
             match answer {
@@ -2422,6 +2458,94 @@ mod tests {
             first.map(|at| at.duration_since(start)),
             Some(shared.limits.udp_reask * 30)
         );
+        Ok(())
+    }
+
+    /// The destination whose datagram asks Android about the app socket, and another the mapping knows.
+    const ASKER: SocketAddr =
+        SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::new(192, 0, 2, 1)), 443);
+    const OTHER: SocketAddr =
+        SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::new(192, 0, 2, 2)), 443);
+
+    /// A mapping of the app `uid` that knows [`ASKER`] and [`OTHER`], has been silent for twice
+    /// `udp_reask`, and whose app Android last named thirty-one times `udp_reask` ago.
+    async fn paused(shared: &Shared, uid: Option<u32>) -> io::Result<UdpFlows> {
+        let ago = |times| {
+            Instant::now()
+                .checked_sub(shared.limits.udp_reask * times)
+                .ok_or(io::ErrorKind::Other)
+        };
+        let paused = ago(2)?;
+        let mut mapping = mapping(paused).await?;
+        mapping.uid = uid;
+        mapping.named = ago(31)?;
+        for peer in [ASKER, OTHER] {
+            mapping.peer(shared, (APP, peer), paused, (false, PeerWay::direct(peer)));
+        }
+        let flows = UdpFlows::default();
+        lock(&flows).mappings.insert(APP, mapping);
+        Ok(flows)
+    }
+
+    /// Whether a datagram to [`OTHER`] now leaves by the mapping, without asking Android.
+    fn leaves_unasked(flows: &UdpFlows, shared: &Shared) -> bool {
+        lock(flows)
+            .toward_peer((APP, OTHER), b"after", Instant::now(), shared)
+            .is_some()
+    }
+
+    /// After a pause, Android's answer that names the mapping's own app makes the mapping fresh as the
+    /// question ends: a datagram to another destination it knows, coming before the asker's datagrams
+    /// leave, needs no question of its own (the fifth review's run under load).
+    #[tokio::test(flavor = "current_thread")]
+    async fn an_answer_naming_the_mappings_app_makes_it_fresh_at_once() -> io::Result<()> {
+        let shared = Arc::new(shared());
+        let flows = paused(&shared, None).await?;
+        assert!(!leaves_unasked(&flows, &shared), "a pause asks again");
+        assert_eq!(owner_of((APP, ASKER), &shared, &flows).await, None);
+        assert!(
+            leaves_unasked(&flows, &shared),
+            "asked again after the answer"
+        );
+        Ok(())
+    }
+
+    /// An answer that names another app leaves the mapping as it was: the next datagram asks again, and
+    /// the mapping ends once its asker's turn comes.
+    #[tokio::test(flavor = "current_thread")]
+    async fn an_answer_naming_another_app_leaves_the_mapping_stale() -> io::Result<()> {
+        let shared = Arc::new(shared());
+        let flows = paused(&shared, Some(10_077)).await?;
+        assert_eq!(owner_of((APP, ASKER), &shared, &flows).await, None);
+        assert!(!leaves_unasked(&flows, &shared));
+        Ok(())
+    }
+
+    /// A datagram to a destination the mapping knows that came while a question was out, but asks only
+    /// once its mapping is fresh again, takes the mapping's app without asking Android (the fifth
+    /// review's run under load). Android here names no app.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_known_destination_of_a_fresh_mapping_asks_no_more() -> io::Result<()> {
+        let shared = Arc::new(shared());
+        let flows = paused(&shared, Some(10_077)).await?;
+        if let Some(mapping) = lock(&flows).mappings.get_mut(&APP) {
+            (mapping.sent, mapping.named) = (Instant::now(), Instant::now());
+        }
+        assert_eq!(owner_of((APP, OTHER), &shared, &flows).await, Some(10_077));
+        Ok(())
+    }
+
+    /// A new destination asks Android on its own, even beside a fresh mapping (fifth review of unit 9,
+    /// finding 1).
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_new_destination_asks_beside_a_fresh_mapping() -> io::Result<()> {
+        let shared = Arc::new(shared());
+        let flows = paused(&shared, Some(10_077)).await?;
+        if let Some(mapping) = lock(&flows).mappings.get_mut(&APP) {
+            (mapping.sent, mapping.named) = (Instant::now(), Instant::now());
+        }
+        let new = SocketAddr::from(([192, 0, 2, 3], 443));
+        assert_eq!(owner_of((APP, new), &shared, &flows).await, None);
         Ok(())
     }
 
