@@ -676,7 +676,6 @@ impl Mapping {
             Target::Address(address) => {
                 // An IPv4 address the relay gives as IPv6 is still the address the app sent to.
                 let from = SocketAddr::new(address.ip().to_canonical(), address.port());
-                let waited_on = self.sources.waiting.contains_key(&from.port());
                 let contest = shared.limits.udp_contest;
                 // A destination's own address first, then the one a stand-in was bound to: such an
                 // answer never binds a stand-in. A bound stand-in's address, on a port another stand-in
@@ -703,7 +702,7 @@ impl Mapping {
                 let Some(ip) = self.sources.shown(from.ip()) else {
                     return self.first_answer(from, answer, now);
                 };
-                if ip != from.ip() && waited_on {
+                if ip != from.ip() {
                     let same = SocketAddr::new(ip, from.port());
                     if self.contested(from.port(), Some(same), (now, contest)) {
                         return LetIn::Unmatched;
