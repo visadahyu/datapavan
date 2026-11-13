@@ -144,7 +144,7 @@ signing session and texts reviewed in eight languages):
 The milestones of 0.2.0, W1 to W9, with what each must show before it counts as done, are in
 [DESIGN.md §13.2](docs/DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools).
 
-Where it stands on 2026-11-13: the four items before W1 are drafted (ADRs
+Where it stands on 2026-11-14: the four items before W1 are drafted (ADRs
 [0034](docs/decisions/0034-watch-permissions.md), [0035](docs/decisions/0035-wireguard-upstream.md) and
 [0036](docs/decisions/0036-ip-to-organisation-dataset.md), accepted; the table of tools in `data/tools/`).
 W1, Watch's skeleton, and W2, the packet engine in the product, are in `main`: every app's traffic passes
@@ -155,6 +155,8 @@ comparison, which needs a test account, and W4's runs on the A40 and an Android 
 through the user's tool ([ADR 0038](docs/decisions/0038-dns-of-chained-apps.md)), was accepted and merged on
 2026-11-11. W5, W7, W8 and W9 are not built yet
 ([DESIGN.md §13.2](docs/DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools) has what is left).
+A profile for people whose phone may be searched, which keeps nothing of use, is proposed in
+[ADR 0047](docs/decisions/0047-profile-for-phones-that-may-be-searched.md).
 
 The items, in order:
 
