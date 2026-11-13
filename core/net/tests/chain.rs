@@ -441,8 +441,11 @@ async fn a_connection_the_resolver_closed_is_opened_again() -> Outcome {
 #[tokio::test(flavor = "current_thread")]
 async fn a_stopped_tool_gets_the_app_an_error_and_sends_nothing_directly() -> Outcome {
     let echo = udp_echo().await?;
-    // A port nobody listens on: the tool stopped.
-    let stopped = TcpListener::bind("127.0.0.1:0").await?.local_addr()?;
+    // A port nobody listens on: the tool stopped. It stays bound, so that another test's proxy, in the
+    // same process, cannot take it meanwhile.
+    let held = tokio::net::TcpSocket::new_v4()?;
+    held.bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))?;
+    let stopped = held.local_addr()?;
     let (_engine, tunnel) = engine(chain(stopped))?;
     send(&tunnel, app(CHAINED_PORT), echo, b"waits").await?;
     assert_eq!(receive(&tunnel).await?, None, "an ICMP error, no echo");
