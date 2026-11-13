@@ -1719,10 +1719,17 @@ fn mapped_receive(
     for (destination, told) in queued {
         let bytes = match lock(flows).mapping(app, id) {
             None => return (packets, true),
-            Some(mapping) => match mapping.peers.get(&destination) {
-                Some(peer) => peer.bytes.clone(),
-                None => continue,
-            },
+            Some(mapping) => {
+                // While a chain sends the app elsewhere, nothing comes in on its direct path: its
+                // errors neither.
+                if !mapping.keeps_its_way(shared) {
+                    return (packets, true);
+                }
+                match mapping.peers.get(&destination) {
+                    Some(peer) => peer.bytes.clone(),
+                    None => continue,
+                }
+            }
         };
         if let Some(error) = unreachable_to(app, destination, told) {
             if let Some(bytes) = &bytes {
