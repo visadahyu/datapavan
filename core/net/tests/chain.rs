@@ -1979,3 +1979,46 @@ async fn a_stand_in_answered_by_name_waits_no_more() -> Outcome {
     assert_eq!(engine.counters()[UDP_FILTERED], 1);
     Ok(())
 }
+
+/// A stand-in on port 53 that the app sends ten queries before the first answer comes: the answer to
+/// the first of them still binds it (third review of unit 9, finding 6).
+#[tokio::test(flavor = "current_thread")]
+async fn a_burst_of_lookups_before_the_first_answer_still_binds() -> Outcome {
+    const BURST: usize = 10;
+    let resolver = UdpSocket::bind("127.0.0.1:0").await?;
+    let named = SocketAddr::from(([192, 0, 2, 53], 53));
+    let mut settings = Settings::default();
+    settings.names.insert("dns.test".into(), named.ip());
+    settings.remap.insert(named, resolver.local_addr()?);
+    // It answers the first query, once all of them came.
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 512];
+        let mut first = None;
+        for _ in 0..BURST {
+            match resolver.recv_from(&mut buffer).await {
+                Ok((n, relay)) => {
+                    first.get_or_insert((buffer[..n].to_vec(), relay));
+                }
+                Err(_) => return,
+            }
+        }
+        if let Some((query, relay)) = first {
+            let _ = resolver.send_to(&dns_response(&query, 0x5152), relay).await;
+        }
+    });
+    let tool = proxy(settings).await?;
+    let (_engine, tunnel) = engine(chain(tool.address))?;
+    let at = SocketAddr::from((stand_in(&tunnel, b"\x03dns\x04test\x00").await?, 53));
+    let mut queries = Vec::new();
+    for label in b'a'..b'a' + 10 {
+        let mut name = vec![1, label];
+        name.extend_from_slice(b"\x04test\x00");
+        queries.push(query(&name, 1));
+    }
+    for asked in &queries {
+        send(&tunnel, app(CHAINED_PORT), at, asked).await?;
+    }
+    let answer = receive(&tunnel).await?.ok_or("an answer")?;
+    assert_eq!(answer, (at, dns_response(&queries[0], 0x5152)));
+    Ok(())
+}

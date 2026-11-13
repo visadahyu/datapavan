@@ -222,8 +222,13 @@ impl Exit {
 /// table without end.
 const CAME_IN: usize = 64;
 
-/// At most this many DNS queries are kept for a stand-in on port 53 still waiting for its first answer.
-const ASKED: usize = 8;
+/// At most this many DNS queries are kept for a stand-in on port 53 still waiting for its first answer,
+/// or for a flow from a port 53 that came in: an answer to an older one binds nothing and teaches
+/// nothing. A resolver of an app's own may send many before the first answer comes, retrying, asking
+/// both A and AAAA, and asking several names at once; 64 holds 32 names asked both ways. It is bounded
+/// all the same: 64 questions of at most 255 bytes, about 17 KB, and only while the stand-in waits.
+/// Binding by any DNS response instead would let any sender at port 53 take the stand-in.
+const ASKED: usize = 64;
 
 /// An app socket's way out: one socket, whatever the destination, on the direct path or to the tool's
 /// relay.
