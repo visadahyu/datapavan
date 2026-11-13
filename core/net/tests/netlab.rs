@@ -7,8 +7,12 @@
 //! reason; `scripts/check.sh rust` runs them, and fails if the namespace cannot be made.
 #![cfg(target_os = "linux")]
 
+mod common;
+
+use common::{Settings, proxy};
 use datapavan_net::engine::{Addresses, Limits};
-use datapavan_net::{Config, Engine, Platform};
+use datapavan_net::{Chain, Config, Engine, Platform};
+use std::collections::HashSet;
 use std::future::Future;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -704,6 +708,41 @@ fn sending_keeps_a_mapping_open() -> Outcome {
             app.send_to(b"after the silence", reporter).await?;
             app_receive(&app).await?;
             assert_eq!(engine.counters()[UDP_MAPPINGS], 2, "a silent mapping ended");
+            Ok(())
+        },
+    )
+}
+
+/// ADR 0044, decision 2: a chained app's socket reaches two servers over one `UDP ASSOCIATE`, so both
+/// see the port of the tool's one relay, and each answer comes back from its own server.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_chained_app_socket_leaves_through_one_association() -> Outcome {
+    lab(
+        "a_chained_app_socket_leaves_through_one_association",
+        Limits::default(),
+        |engine| async move {
+            let tool = proxy(Settings::default()).await?;
+            engine.chain(Some(Chain {
+                proxy: tool.address,
+                credentials: None,
+                // Another app than the one the lab's Android names for every socket in the tunnel.
+                tool: APP + 1,
+                apps: Some(HashSet::from([APP])),
+                udp: true,
+                log_destinations: false,
+            }));
+            let app = app_socket().await?;
+            let mut seen = Vec::new();
+            for server in [port_reporter(SERVER).await?, port_reporter(OTHER).await?] {
+                app.send_to(b"which port?", server).await?;
+                let (answer, from) = app_receive(&app).await?;
+                assert_eq!(from, server);
+                seen.push(reported(&answer)?);
+            }
+            assert_eq!(seen[0], seen[1], "two relays for one app socket");
+            assert_eq!(tool.commands(), [3], "one UDP ASSOCIATE");
+            assert_eq!(engine.counters()[UDP_MAPPINGS], 1);
             Ok(())
         },
     )

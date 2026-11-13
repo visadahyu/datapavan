@@ -3,7 +3,9 @@
 //! other apps' directly; chained apps' lookups get stand-in addresses, and the name behind one goes to
 //! the tool; other questions go to the resolver through the tool and come back with a time to live of
 //! 0, sharing one kept connection, which is opened again when the resolver closes it; a stopped tool
-//! gets the app an ICMP error and sends nothing directly.
+//! gets the app an ICMP error and sends nothing directly. An app socket's datagrams to every
+//! destination share one `UDP ASSOCIATE`, and each answer is matched to its destination by the
+//! address its header gives, with the direct path's filtering (ADR 0044, decision 2).
 
 mod common;
 
@@ -17,7 +19,8 @@ use std::os::fd::{OwnedFd, RawFd};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, UnixDatagram};
+use tokio::net::{TcpListener, UdpSocket, UnixDatagram};
+use tokio::sync::{Barrier, oneshot};
 
 type Outcome = Result<(), Box<dyn std::error::Error>>;
 
@@ -27,6 +30,11 @@ const DIRECT: u32 = 10_400;
 /// The app's ports inside the tunnel: the chained app's, then the direct app's.
 const CHAINED_PORT: u16 = 40_000;
 const DIRECT_PORT: u16 = 40_001;
+/// The places of counters in `Engine::counters`.
+const UDP_FLOWS: usize = 1;
+const UDP_MAPPINGS: usize = 24;
+const UDP_FILTERED: usize = 25;
+const UDP_UNMATCHED: usize = 26;
 
 /// Android names the app by its port inside the tunnel.
 struct ByPort;
@@ -453,5 +461,222 @@ async fn a_stopped_tool_gets_the_app_an_error_and_sends_nothing_directly() -> Ou
     let mut buffer = [0u8; 2048];
     let later = tokio::time::timeout(Duration::from_millis(500), tunnel.recv(&mut buffer)).await;
     assert!(later.is_err(), "nothing more reaches the app");
+    Ok(())
+}
+
+/// The stand-in a chained app's lookup of `name` (in DNS's form) gets.
+async fn stand_in(
+    tunnel: &UnixDatagram,
+    name: &[u8],
+) -> Result<Ipv4Addr, Box<dyn std::error::Error>> {
+    let dns = SocketAddr::from((Addresses::COMMON.dns4, 53));
+    send(tunnel, app(CHAINED_PORT), dns, &query(name, 1)).await?;
+    let (_, answer) = receive(tunnel).await?.ok_or("an answer")?;
+    let read = dns::response(&answer).ok_or("a response")?;
+    match read.addresses[..] {
+        [(IpAddr::V4(stand_in), 0)] => Ok(stand_in),
+        _ => Err(format!("not one stand-in: {:?}", read.addresses).into()),
+    }
+}
+
+/// The chained app sends `said` to `to`, and its echo comes back from there.
+async fn echoed(tunnel: &UnixDatagram, to: SocketAddr, said: &[u8]) -> Outcome {
+    send(tunnel, app(CHAINED_PORT), to, said).await?;
+    let answer = receive(tunnel).await?.ok_or("a datagram")?;
+    assert_eq!(answer, (to, said.to_vec()));
+    Ok(())
+}
+
+/// ADR 0044, decision 2: one app socket's datagrams to two destinations go over one `UDP ASSOCIATE`,
+/// each with a header that names its own, and each answer comes back from its own destination.
+#[tokio::test(flavor = "current_thread")]
+async fn one_app_socket_reaches_two_destinations_over_one_association() -> Outcome {
+    let (first, second) = (udp_echo().await?, udp_echo().await?);
+    let tool = proxy(Settings::default()).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    echoed(&tunnel, first, b"to the first").await?;
+    echoed(&tunnel, second, b"to the second").await?;
+    echoed(&tunnel, first, b"to the first again").await?;
+    assert_eq!(tool.commands(), [3], "one UDP ASSOCIATE");
+    let counters = engine.counters();
+    assert_eq!(
+        (counters[UDP_MAPPINGS], counters[UDP_FLOWS]),
+        (1, 2),
+        "one mapping, two flows"
+    );
+    Ok(())
+}
+
+/// Address-dependent filtering through the tool: an answer whose header names an address the app never
+/// sent to is dropped and counted, not given to the app as if from its destination.
+#[tokio::test(flavor = "current_thread")]
+async fn an_answer_from_an_address_the_app_never_sent_to_is_dropped() -> Outcome {
+    let server = UdpSocket::bind("127.0.0.1:0").await?;
+    let stranger = UdpSocket::bind("127.0.0.2:0").await?;
+    let at = server.local_addr()?;
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 64];
+        if let Ok((_, relay)) = server.recv_from(&mut buffer).await {
+            // To the tool's relay, which names each sender in its header.
+            let _ = stranger.send_to(b"from a stranger", relay).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let _ = server.send_to(b"from the server", relay).await;
+        }
+    });
+    let tool = proxy(Settings::default()).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    send(&tunnel, app(CHAINED_PORT), at, b"hello").await?;
+    // Sent first: had it got through, the app would read it first.
+    let answer = receive(&tunnel).await?.ok_or("a datagram")?;
+    assert_eq!(answer, (at, b"from the server".to_vec()));
+    assert_eq!(engine.counters()[UDP_FILTERED], 1);
+    Ok(())
+}
+
+/// An answer from another port of an address the app sent to opens a flow of its own, that came in,
+/// from that port; what the app sends back goes there over the same association.
+#[tokio::test(flavor = "current_thread")]
+async fn another_port_of_a_destination_opens_a_flow_that_came_in() -> Outcome {
+    let server = UdpSocket::bind("127.0.0.1:0").await?;
+    let other_port = UdpSocket::bind("127.0.0.1:0").await?;
+    let (at, other) = (server.local_addr()?, other_port.local_addr()?);
+    let (tell, heard) = oneshot::channel();
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 64];
+        if let Ok((_, relay)) = server.recv_from(&mut buffer).await {
+            let _ = other_port.send_to(b"from another port", relay).await;
+            if let Ok((n, _)) = other_port.recv_from(&mut buffer).await {
+                let _ = tell.send(buffer[..n].to_vec());
+            }
+        }
+    });
+    let tool = proxy(Settings::default()).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    send(&tunnel, app(CHAINED_PORT), at, b"hello").await?;
+    let answer = receive(&tunnel).await?.ok_or("a datagram")?;
+    assert_eq!(answer, (other, b"from another port".to_vec()));
+    send(&tunnel, app(CHAINED_PORT), other, b"back").await?;
+    let back = tokio::time::timeout(Duration::from_secs(5), heard).await??;
+    assert_eq!(back, b"back");
+    assert_eq!(tool.commands(), [3], "one UDP ASSOCIATE");
+    let destinations: Vec<_> = engine
+        .flows()
+        .iter()
+        .filter(|flow| flow.protocol == packet::UDP)
+        .map(|flow| flow.destination)
+        .collect();
+    assert_eq!(destinations, [at, other], "the port that came in is a flow");
+    assert_eq!(engine.counters()[UDP_FILTERED], 0);
+    Ok(())
+}
+
+/// ADR 0044, decision 2: the tool resolves a stand-in's name itself, so its relay answers from the real
+/// address. The answer reaches the app from the stand-in, which is bound to that address, and the same
+/// socket's datagrams to an address share its association.
+#[tokio::test(flavor = "current_thread")]
+async fn a_stand_in_gets_the_answer_from_the_real_address() -> Outcome {
+    let (named, by_address) = (udp_echo().await?, udp_echo().await?);
+    let mut settings = Settings::default();
+    settings.names.insert("echo.test".into(), named.ip());
+    let tool = proxy(settings).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    let stand_in = SocketAddr::from((
+        stand_in(&tunnel, b"\x04echo\x04test\x00").await?,
+        named.port(),
+    ));
+    echoed(&tunnel, stand_in, b"by name").await?;
+    echoed(&tunnel, by_address, b"by address").await?;
+    echoed(&tunnel, stand_in, b"by name again").await?;
+    assert_eq!(tool.commands(), [3], "one UDP ASSOCIATE");
+    let counters = engine.counters();
+    assert_eq!(
+        [
+            counters[UDP_MAPPINGS],
+            counters[UDP_FILTERED],
+            counters[UDP_UNMATCHED]
+        ],
+        [1, 0, 0]
+    );
+    Ok(())
+}
+
+/// Two stand-ins waiting on one port: an answer from that port could be either name's, so it is
+/// dropped and counted rather than given to the app under the wrong name.
+#[tokio::test(flavor = "current_thread")]
+async fn an_answer_two_stand_ins_could_take_is_dropped() -> Outcome {
+    let first = UdpSocket::bind("127.0.0.1:0").await?;
+    let port = first.local_addr()?.port();
+    let second = UdpSocket::bind(("127.0.0.2", port)).await?;
+    // Each answers once both were asked, so that both stand-ins wait when the answers come.
+    let both = Arc::new(Barrier::new(2));
+    for server in [first, second] {
+        let both = Arc::clone(&both);
+        tokio::spawn(async move {
+            let mut buffer = [0u8; 64];
+            if let Ok((n, relay)) = server.recv_from(&mut buffer).await {
+                both.wait().await;
+                let _ = server.send_to(&buffer[..n], relay).await;
+            }
+        });
+    }
+    let mut settings = Settings::default();
+    settings
+        .names
+        .insert("a.test".into(), IpAddr::V4(Ipv4Addr::LOCALHOST));
+    settings
+        .names
+        .insert("b.test".into(), IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2)));
+    let tool = proxy(settings).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    let a = stand_in(&tunnel, b"\x01a\x04test\x00").await?;
+    let b = stand_in(&tunnel, b"\x01b\x04test\x00").await?;
+    send(
+        &tunnel,
+        app(CHAINED_PORT),
+        SocketAddr::from((a, port)),
+        b"to a",
+    )
+    .await?;
+    send(
+        &tunnel,
+        app(CHAINED_PORT),
+        SocketAddr::from((b, port)),
+        b"to b",
+    )
+    .await?;
+    let mut buffer = [0u8; 2048];
+    let later = tokio::time::timeout(Duration::from_millis(500), tunnel.recv(&mut buffer)).await;
+    assert!(later.is_err(), "an answer reached the app under a name");
+    assert_eq!(engine.counters()[UDP_UNMATCHED], 2);
+    assert_eq!(tool.commands(), [3]);
+    Ok(())
+}
+
+/// ADR 0044, decision 1: a mapping ends when the chain changes. Set again with the same tool, the chain
+/// keeps a chained app's relay; with another tool, the app's next datagram goes through that one; with
+/// none, directly.
+#[tokio::test(flavor = "current_thread")]
+async fn a_new_chain_moves_a_mapping_only_when_its_way_changes() -> Outcome {
+    let echo = udp_echo().await?;
+    let (first, second) = (
+        proxy(Settings::default()).await?,
+        proxy(Settings::default()).await?,
+    );
+    let (engine, tunnel) = engine(chain(first.address))?;
+    echoed(&tunnel, echo, b"one").await?;
+    engine.chain(Some(chain(first.address)));
+    echoed(&tunnel, echo, b"two").await?;
+    assert_eq!(first.commands(), [3], "the same tool kept its relay");
+    engine.chain(Some(chain(second.address)));
+    echoed(&tunnel, echo, b"three").await?;
+    assert_eq!(
+        (first.commands(), second.commands()),
+        (vec![3], vec![3]),
+        "the other tool's relay"
+    );
+    engine.chain(None);
+    echoed(&tunnel, echo, b"four").await?;
+    assert_eq!(second.commands(), [3], "directly");
+    assert_eq!(engine.counters()[UDP_MAPPINGS], 3);
     Ok(())
 }

@@ -36,6 +36,16 @@ pub struct Chain {
     pub log_destinations: bool,
 }
 
+impl Chain {
+    /// Whether `other` is the same tool reached the same way: its UID, its proxy's address and the
+    /// credentials it is given. A UDP relay asked of the one is the other's too.
+    pub(super) fn same_tool(&self, other: &Self) -> bool {
+        self.tool == other.tool
+            && self.proxy == other.proxy
+            && self.credentials == other.credentials
+    }
+}
+
 /// Where a new flow goes.
 #[derive(Clone, Debug)]
 pub(super) enum Route {
@@ -56,27 +66,24 @@ impl Shared {
     /// Where a flow of the app `uid` to `destination` goes. A stand-in address is reached only through
     /// the tool: from any other app, it can only be one left over from a chain that ended.
     pub(super) fn route(&self, uid: Option<u32>, destination: SocketAddr) -> Route {
-        let stand_in = is_stand_in(destination.ip());
+        match self.app_route(uid) {
+            Route::Direct if is_stand_in(destination.ip()) => Route::Refused,
+            route => route,
+        }
+    }
+
+    /// Where the flows of the app `uid` go, to any address but a stand-in.
+    pub(super) fn app_route(&self, uid: Option<u32>) -> Route {
         let Some(chain) = self.chain() else {
-            return if stand_in {
-                Route::Refused
-            } else {
-                Route::Direct
-            };
+            return Route::Direct;
         };
         match uid {
-            Some(uid) if uid == chain.tool => {
-                if stand_in {
-                    Route::Refused
-                } else {
-                    Route::Direct
-                }
-            }
+            Some(uid) if uid == chain.tool => Route::Direct,
             Some(uid) if chain.apps.as_ref().is_none_or(|apps| apps.contains(&uid)) => {
                 Route::Tool(chain)
             }
-            Some(_) if !stand_in => Route::Direct,
-            _ => Route::Refused,
+            Some(_) => Route::Direct,
+            None => Route::Refused,
         }
     }
 

@@ -12,8 +12,9 @@
 //! that a connection closed at once still has an owner, and a refused or unreachable server looks so
 //! to the app: it gets a reset or an ICMP error, as without a VPN.
 //!
-//! UDP on the direct path leaves through one mapping for each app socket (ADR 0044): one protected
-//! socket, whatever the destination, which lets in only what comes from addresses the app sent to.
+//! UDP leaves through one mapping for each app socket, whatever the destination (ADR 0044): on the
+//! direct path one protected socket, through the user's tool one `UDP ASSOCIATE`. Either lets in only
+//! what comes from addresses the app sent to.
 
 use std::collections::{HashMap, VecDeque};
 use std::io;
@@ -346,7 +347,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 26;
+pub const COUNTERS: usize = 27;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -377,6 +378,7 @@ pub struct Counters {
     tcp_refused: AtomicU64,
     udp_mappings: AtomicU64,
     udp_filtered: AtomicU64,
+    udp_unmatched: AtomicU64,
 }
 
 impl Counters {
@@ -393,10 +395,13 @@ impl Counters {
     /// those, how many named another server (finding 20: how often a shared address gives a flow the
     /// wrong name), relayed connections that ended in an error and were reset on both sides (finding
     /// 21), SYNs dropped because as many connections as allowed were waiting for their servers
-    /// (finding 18), UDP mappings opened (finding 19: one for each app socket on the direct path), and
-    /// datagrams a mapping dropped because they came from an address its app had not sent to. None
-    /// names a destination: they can be read on any phone. New counters are only ever appended, so
-    /// that scripts reading a column by its place keep reading the same one.
+    /// (finding 18), UDP mappings opened (finding 19: one for each app socket, on the direct path or
+    /// through the tool), datagrams a mapping dropped because they came from an address its app had not
+    /// sent to, and answers from the tool's relay that a mapping dropped because no one destination of
+    /// its app could be told for them (ADR 0044, decision 2: a header that is not well formed, a
+    /// fragment, or a port several stand-ins wait on). None names a destination: they can be read on
+    /// any phone. New counters are only ever appended, so that scripts reading a column by its place
+    /// keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
         [
@@ -426,6 +431,7 @@ impl Counters {
             &self.tcp_refused,
             &self.udp_mappings,
             &self.udp_filtered,
+            &self.udp_unmatched,
         ]
         .map(|c| c.load(Ordering::Relaxed))
     }
@@ -468,6 +474,9 @@ struct Shared {
     uncached_answers: AtomicBool,
     /// The user's tool and the apps sent through it, while a chain is on (W6).
     chain: Mutex<Option<Arc<Chain>>>,
+    /// How many times the chain was set, on or off: a UDP mapping asks again whether its way still
+    /// holds only when this changed.
+    chains: AtomicU64,
     /// The stand-in addresses of the names chained apps looked up (ADR 0038).
     stand_ins: Mutex<StandIns>,
     /// The network resolver's answers, kept for the apps that go directly while a chain is on.
@@ -559,6 +568,7 @@ impl Engine {
             log_ready: Notify::new(),
             uncached_answers: AtomicBool::new(false),
             chain: Mutex::new(None),
+            chains: AtomicU64::new(0),
             stand_ins: Mutex::default(),
             direct_answers: Mutex::default(),
             tool_answers: Mutex::default(),
@@ -613,12 +623,16 @@ impl Engine {
         }
     }
 
-    /// Turns chaining on with `chain`, or off with `None` (W6). New flows follow it; flows already
-    /// open keep their way. While a chain is on, every answer of Watch's DNS address reaches the apps
-    /// with a time to live of 0 (ADR 0038).
+    /// Turns chaining on with `chain`, or off with `None` (W6). New flows follow it, and TCP
+    /// connections already open keep their way. A UDP mapping that it sends another way ends at its
+    /// next datagram either way, so that the app's next one follows the new route (ADR 0044, decision
+    /// 1); one through the same tool, reached the same way, stays. While a chain is on, every answer
+    /// of Watch's DNS address reaches the apps with a time to live of 0 (ADR 0038).
     pub fn chain(&self, chain: Option<Chain>) {
         let on = chain.is_some();
         *lock(&self.shared.chain) = chain.map(Arc::new);
+        // After the chain itself: a mapping that reads the new count reads the new chain too.
+        self.shared.chains.fetch_add(1, Ordering::Release);
         self.shared.uncached_answers.store(on, Ordering::Relaxed);
         lock(&self.shared.direct_answers).clear();
         lock(&self.shared.tool_answers).clear();
@@ -880,6 +894,7 @@ mod tests {
             log_ready: Notify::new(),
             uncached_answers: AtomicBool::new(false),
             chain: Mutex::new(None),
+            chains: AtomicU64::new(0),
             stand_ins: Mutex::default(),
             direct_answers: Mutex::default(),
             tool_answers: Mutex::default(),
