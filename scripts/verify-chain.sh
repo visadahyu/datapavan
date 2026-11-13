@@ -203,7 +203,8 @@ kill "$SENTINEL"
 grep -q '^tcp$' "$WORK/sentinel.log" || fail "the sentinel did not see the control's direct connection: the check proves nothing"
 echo "ok: with the tool stopped, the shell's TCP and UDP failed, and a sentinel on this computer saw none of them, only the control's direct connection"
 
-dump unchain | grep -q "chain off" || fail "the chain did not turn off"
+unchained=$(dump unchain)
+grep -q "chain off" <<<"$unchained" || fail "the chain did not turn off; Watch's dump said: ${unchained:-nothing}"
 
 # The user's own path, on the chain screen in English. The tool starts without a password; Watch finds it
 # and offers its own user name and password, which go into the tool as a user would set them.
