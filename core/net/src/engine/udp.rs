@@ -1284,11 +1284,18 @@ enum Asked {
     Answered(Option<u32>),
 }
 
-/// Asks Android whose app socket `key`'s app is, once for every destination of it that opens meanwhile:
-/// those that come while the question is out wait for its answer instead of asking again, so that a
-/// pause in an app socket's sending costs one question to Android, not one for each destination it
-/// knows. Their datagrams wait meanwhile, as a new destination's do. An unconnected UDP socket has one
-/// app whatever the destination, so the answer is theirs too.
+/// Asks Android whose app socket `key`'s app is. A destination the socket's mapping already knows asks
+/// once for all of them: those that come while its question is out wait for its answer instead of
+/// asking again, so that a pause in an app socket's sending costs one question to Android, not one for
+/// each destination it knows. Their datagrams wait meanwhile, as a new destination's do. An unconnected
+/// UDP socket has one app whatever the destination, so the answer is theirs too.
+///
+/// A new destination, or a lookup to the tunnel's DNS address, asks on its own, never joining a
+/// question that began before its datagram came: that answer may name the app that held the port
+/// before, and a new destination of a chained app would then leave directly, under the old app. Each
+/// new destination so costs a question of its own, as a burst of them from one socket does. A known
+/// destination joining an older question is no worse than the window ADR 0044 states: it would have
+/// left by its mapping without asking at all.
 async fn owner_of(
     (app, destination): (SocketAddr, SocketAddr),
     shared: &Arc<Shared>,
@@ -1296,15 +1303,24 @@ async fn owner_of(
 ) -> Option<u32> {
     let asked = {
         let mut table = lock(flows);
+        let known = !shared.is_tunnel_dns(destination.ip())
+            && table
+                .mappings
+                .get(&app)
+                .is_some_and(|mapping| mapping.peers.contains_key(&destination));
         match table.asking.get(&app) {
+            _ if !known => None,
             // One whose asker is gone without a word (the engine stopping) holds no one up.
-            Some(waiting) if waiting.has_changed().is_ok() => Err(waiting.clone()),
+            Some(waiting) if waiting.has_changed().is_ok() => Some(Err(waiting.clone())),
             _ => {
                 let (told, waiting) = watch::channel(Asked::Waiting);
                 table.asking.insert(app, waiting);
-                Ok(told)
+                Some(Ok(told))
             }
         }
+    };
+    let Some(asked) = asked else {
+        return owner(shared, UDP, app, destination).await;
     };
     match asked {
         Ok(told) => {

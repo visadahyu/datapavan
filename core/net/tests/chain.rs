@@ -2758,3 +2758,113 @@ async fn a_stand_in_on_port_53_keeps_its_last_64_queries() -> Outcome {
     assert_eq!(seen, [(at, dns_response(&queries[10], 0x5152))]);
     Ok(())
 }
+
+/// Android, slow to answer, which names the app that held the port when the question began.
+#[derive(Default)]
+struct SlowOwners(std::sync::Mutex<std::collections::HashMap<u16, u32>>);
+
+impl SlowOwners {
+    fn set(&self, port: u16, uid: u32) {
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(port, uid);
+    }
+}
+
+impl Platform for SlowOwners {
+    fn owner(&self, _: u8, local: SocketAddr, _: SocketAddr) -> Option<u32> {
+        let uid = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&local.port())
+            .copied();
+        std::thread::sleep(Duration::from_millis(300));
+        uid
+    }
+
+    fn protect(&self, _: RawFd) -> bool {
+        true
+    }
+
+    fn log(&self, _: &[u8]) {}
+}
+
+/// A direct app's datagram after a pause asks Android again, slowly, and Android hands the port to a
+/// chained app meanwhile. Returns the engine, the tunnel, the tool, and the port.
+async fn handed_over_while_asked(
+    port: u16,
+) -> Result<(Engine, UnixDatagram, common::Proxy), Box<dyn std::error::Error>> {
+    let echo = udp_echo().await?;
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(SlowOwners::default());
+    android.set(port, DIRECT);
+    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    send(&tunnel, app(port), echo, b"direct app").await?;
+    receive(&tunnel).await?.ok_or("an echo")?;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    send(&tunnel, app(port), echo, b"direct app again").await?;
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    android.set(port, CHAINED);
+    Ok((engine, tunnel, tool))
+}
+
+/// A chained app's datagram to a new destination, sent while a question that began for the port's
+/// previous, direct app is still out, asks Android on its own and goes through the tool: it does not
+/// take the old app's answer (fifth review of unit 9, finding 1).
+#[tokio::test(flavor = "current_thread")]
+async fn a_new_destination_does_not_join_the_old_apps_question() -> Outcome {
+    let (at, heard) = listening().await?;
+    let (_engine, tunnel, tool) = handed_over_while_asked(50_200).await?;
+    send(&tunnel, app(50_200), at, b"chained app").await?;
+    tokio::time::sleep(Duration::from_millis(1_000)).await;
+    let from = heard_from(&heard, b"chained app");
+    assert_eq!(from.len(), 1, "heard {from:?}");
+    assert!(
+        tool.relays().contains(&from[0]),
+        "the chained app's datagram left directly, from {}",
+        from[0]
+    );
+    Ok(())
+}
+
+/// The same for a lookup to the tunnel's DNS address: the chained app's lookup does not take the old
+/// app's answer, and stays off the network's resolver (fifth review of unit 9, finding 1).
+#[tokio::test(flavor = "current_thread")]
+async fn a_lookup_does_not_join_the_old_apps_question() -> Outcome {
+    let (engine, tunnel, _tool) = handed_over_while_asked(50_201).await?;
+    let (dns, heard) = deaf_resolver(&engine).await?;
+    send(
+        &tunnel,
+        app(50_201),
+        dns,
+        &query(b"\x07private\x04test\x00", 1),
+    )
+    .await?;
+    tokio::time::sleep(Duration::from_millis(1_000)).await;
+    assert!(
+        !heard_private(&heard),
+        "the lookup reached the network's resolver"
+    );
+    Ok(())
+}
+
+/// Nor does a stream the chained app keeps sending to its new destination leave directly, for as long as
+/// it does not pause (fifth review of unit 9, finding 1).
+#[tokio::test(flavor = "current_thread")]
+async fn a_new_destinations_stream_never_leaves_directly() -> Outcome {
+    let (at, heard) = listening().await?;
+    let (_engine, tunnel, tool) = handed_over_while_asked(50_202).await?;
+    for _ in 0..40 {
+        send(&tunnel, app(50_202), at, b"chained").await?;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let from = heard_from(&heard, b"chained");
+    let relays = tool.relays();
+    let direct = from.iter().filter(|from| !relays.contains(from)).count();
+    assert!(!from.is_empty(), "nothing reached the destination");
+    assert_eq!(direct, 0, "{direct} of {} left directly", from.len());
+    Ok(())
+}
