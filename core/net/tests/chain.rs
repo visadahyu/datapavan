@@ -1953,3 +1953,29 @@ async fn an_app_android_cannot_name_is_logged_as_unknown() -> Outcome {
     assert_eq!(uids_to(&engine, second), [None]);
     Ok(())
 }
+
+/// Under a relay that gives back the name, a stand-in's answer by name stops it waiting: a stranger that
+/// later reaches the relay from its port, at an address the app never saw, does not take it (third review
+/// of unit 9, finding 3).
+#[tokio::test(flavor = "current_thread")]
+async fn a_stand_in_answered_by_name_waits_no_more() -> Outcome {
+    let echo = udp_echo().await?;
+    let stranger = UdpSocket::bind(("127.0.0.2", echo.port())).await?;
+    let mut settings = Settings {
+        headers: Headers::Name,
+        ..Settings::default()
+    };
+    settings.names.insert("echo.test".into(), echo.ip());
+    let tool = proxy(settings).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    let at = SocketAddr::from((
+        stand_in(&tunnel, b"\x04echo\x04test\x00").await?,
+        echo.port(),
+    ));
+    echoed(&tunnel, at, b"by name").await?;
+    let relay = *tool.relays().first().ok_or("a relay")?;
+    stranger.send_to(b"from a stranger", relay).await?;
+    assert!(silent(&tunnel).await, "the stranger took the stand-in");
+    assert_eq!(engine.counters()[UDP_FILTERED], 1);
+    Ok(())
+}

@@ -655,6 +655,9 @@ impl Mapping {
                 };
                 let shown = SocketAddr::new(stand_in, *port);
                 if self.peers.contains_key(&shown) {
+                    // The stand-in's own answer: it no longer waits for a first answer from an address,
+                    // which whoever reached the relay later from its port could otherwise send it.
+                    self.sources.stop_waiting(shown);
                     return self.answered_by(shown, answer, now);
                 }
                 (shown, PeerWay::through_tool(target.clone()))
