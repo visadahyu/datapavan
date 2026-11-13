@@ -2819,9 +2819,13 @@ async fn a_stand_in_on_port_53_keeps_its_last_64_queries() -> Outcome {
     Ok(())
 }
 
-/// Android, slow to answer, which names the app that held the port when the question began.
+/// Android, slow to answer (300 ms), which names the app that held the port when the question began,
+/// and notes when each question began.
 #[derive(Default)]
-struct SlowOwners(std::sync::Mutex<std::collections::HashMap<u16, u32>>);
+struct SlowOwners(
+    std::sync::Mutex<std::collections::HashMap<u16, u32>>,
+    std::sync::Mutex<Vec<std::time::Instant>>,
+);
 
 impl SlowOwners {
     fn set(&self, port: u16, uid: u32) {
@@ -2830,10 +2834,34 @@ impl SlowOwners {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(port, uid);
     }
+
+    /// When the `nth` question began (from 1), once it has: the engine asked it no later.
+    async fn asked(&self, nth: usize) -> Result<tokio::time::Instant, Box<dyn std::error::Error>> {
+        let until = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let asked = self
+                .1
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(nth - 1)
+                .copied();
+            if let Some(asked) = asked {
+                return Ok(tokio::time::Instant::from_std(asked));
+            }
+            if tokio::time::Instant::now() > until {
+                return Err(format!("Android was not asked {nth} times").into());
+            }
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        }
+    }
 }
 
 impl Platform for SlowOwners {
     fn owner(&self, _: u8, local: SocketAddr, _: SocketAddr) -> Option<u32> {
+        self.1
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(std::time::Instant::now());
         let uid = self
             .0
             .lock()
@@ -3090,5 +3118,152 @@ async fn a_port_that_came_in_and_was_answered_asks_android_once() -> Outcome {
             "questions to Android after {reply:?}"
         );
     }
+    Ok(())
+}
+
+/// The old app's lookup asks Android, slowly; the port is handed to a chained app 50 ms after the
+/// question began; the chained app's lookup, sent 150 ms after it, more than `udp_reask` (100 ms here),
+/// and held behind the old one's, does not take its answer: it asks again, and stays off the network's
+/// resolver (sixth review of unit 9, finding 1). The times count from when Android was asked, which
+/// the engine did no later, so that a slow start under load cannot narrow them.
+#[tokio::test(flavor = "current_thread")]
+async fn a_lookup_held_behind_the_old_apps_asks_again() -> Outcome {
+    const PORT: u16 = 50_304;
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(SlowOwners::default());
+    android.set(PORT, DIRECT);
+    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    let (dns, heard) = deaf_resolver(&engine).await?;
+    let public = query(b"\x06public\x04test\x00", 1);
+    send(&tunnel, app(PORT), dns, &public).await?;
+    let asked = android.asked(1).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(50)).await;
+    android.set(PORT, CHAINED);
+    tokio::time::sleep_until(asked + Duration::from_millis(150)).await;
+    let private = query(b"\x07private\x04test\x00", 1);
+    send(&tunnel, app(PORT), dns, &private).await?;
+    tokio::time::sleep(Duration::from_millis(700)).await;
+    assert!(
+        !heard_private(&heard),
+        "the chained app's lookup reached the network's resolver"
+    );
+    Ok(())
+}
+
+/// The same for datagrams to a new destination, held behind the old app's first one.
+#[tokio::test(flavor = "current_thread")]
+async fn a_datagram_held_behind_the_old_apps_asks_again() -> Outcome {
+    const PORT: u16 = 50_305;
+    let (c, heard) = listening().await?;
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(SlowOwners::default());
+    android.set(PORT, DIRECT);
+    let (_engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    send(&tunnel, app(PORT), c, b"x").await?;
+    let asked = android.asked(1).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(50)).await;
+    android.set(PORT, CHAINED);
+    tokio::time::sleep_until(asked + Duration::from_millis(150)).await;
+    for _ in 0..30 {
+        send(&tunnel, app(PORT), c, b"y").await?;
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let from = heard_from(&heard, b"y");
+    let relays = tool.relays();
+    let direct = from.iter().filter(|f| !relays.contains(f)).count();
+    assert_eq!(direct, 0, "{direct} of {} left directly", from.len());
+    assert_eq!(heard_from(&heard, b"x").len(), 1, "the old app's datagram");
+    Ok(())
+}
+
+/// The old app's last datagram to a destination it knows asks Android, slowly; the port is handed to a
+/// chained app 50 ms after the question began; the new app's datagrams to another destination the
+/// mapping knows, from 150 ms after it, more than `udp_reask` (100 ms here), neither join that question
+/// nor take its answer: they go through the tool (sixth review of unit 9, finding 1).
+#[tokio::test(flavor = "current_thread")]
+async fn a_known_destination_joins_no_question_older_than_the_window() -> Outcome {
+    const PORT: u16 = 50_301;
+    let (a, _) = listening().await?;
+    let (b, heard_b) = listening().await?;
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(SlowOwners::default());
+    android.set(PORT, DIRECT);
+    let (_engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    send(&tunnel, app(PORT), a, b"x to a").await?;
+    tokio::time::sleep_until(android.asked(1).await? + Duration::from_millis(500)).await;
+    send(&tunnel, app(PORT), b, b"x to b").await?;
+    tokio::time::sleep_until(android.asked(2).await? + Duration::from_millis(700)).await;
+    send(&tunnel, app(PORT), a, b"x again").await?;
+    let asked = android.asked(3).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(50)).await;
+    android.set(PORT, CHAINED);
+    tokio::time::sleep_until(asked + Duration::from_millis(150)).await;
+    for _ in 0..30 {
+        send(&tunnel, app(PORT), b, b"y to b").await?;
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let from = heard_from(&heard_b, b"y to b");
+    let relays = tool.relays();
+    let direct = from.iter().filter(|f| !relays.contains(f)).count();
+    assert_eq!(direct, 0, "{direct} of {} left directly", from.len());
+    Ok(())
+}
+
+/// After a pause, the old app's datagram to a destination it knows asks Android, slowly (300 ms); the
+/// port is handed to a chained app 50 ms after the question began. The new app's datagrams to that
+/// destination, sent once the answer is in, do not leave by the old app's mapping: the answer made it
+/// fresh from when Android was asked, not from when it answered (sixth review of unit 9, finding 1).
+#[tokio::test(flavor = "current_thread")]
+async fn a_slow_answer_makes_a_mapping_fresh_only_from_its_question() -> Outcome {
+    const PORT: u16 = 50_306;
+    let (a, heard) = listening().await?;
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(SlowOwners::default());
+    android.set(PORT, DIRECT);
+    let (_engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    send(&tunnel, app(PORT), a, b"x").await?;
+    tokio::time::sleep_until(android.asked(1).await? + Duration::from_millis(600)).await;
+    send(&tunnel, app(PORT), a, b"x again").await?;
+    let asked = android.asked(2).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(50)).await;
+    android.set(PORT, CHAINED);
+    tokio::time::sleep_until(asked + Duration::from_millis(350)).await;
+    for _ in 0..10 {
+        send(&tunnel, app(PORT), a, b"y").await?;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(700)).await;
+    let from = heard_from(&heard, b"y");
+    let relays = tool.relays();
+    let direct = from.iter().filter(|f| !relays.contains(f)).count();
+    assert_eq!(direct, 0, "{direct} of {} left directly", from.len());
+    Ok(())
+}
+
+/// The same for a flow of lookups: the chained app's lookup, sent once the old app's slow answer is in,
+/// does not leave by the old app's flow to the network's resolver.
+#[tokio::test(flavor = "current_thread")]
+async fn a_slow_answer_makes_a_flow_of_lookups_fresh_only_from_its_question() -> Outcome {
+    const PORT: u16 = 50_307;
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(SlowOwners::default());
+    android.set(PORT, DIRECT);
+    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    let (dns, heard) = deaf_resolver(&engine).await?;
+    let public = query(b"\x06public\x04test\x00", 1);
+    send(&tunnel, app(PORT), dns, &public).await?;
+    let asked = android.asked(1).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(50)).await;
+    android.set(PORT, CHAINED);
+    tokio::time::sleep_until(asked + Duration::from_millis(350)).await;
+    let private = query(b"\x07private\x04test\x00", 1);
+    send(&tunnel, app(PORT), dns, &private).await?;
+    tokio::time::sleep(Duration::from_millis(700)).await;
+    assert!(
+        !heard_private(&heard),
+        "the chained app's lookup reached the network's resolver"
+    );
     Ok(())
 }
