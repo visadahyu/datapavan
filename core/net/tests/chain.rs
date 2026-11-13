@@ -2493,3 +2493,47 @@ async fn one_pause_asks_android_once() -> Outcome {
     );
     Ok(())
 }
+
+/// An app socket that never pauses for `udp_reask` is asked about when it opens, then once each thirty
+/// times that, not at every datagram: what it sends keeps it fresh, and so does each answer from Android.
+#[tokio::test(flavor = "current_thread")]
+async fn a_mapping_that_never_pauses_is_asked_about_seldom() -> Outcome {
+    let echo = udp_echo().await?;
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(Counting::default());
+    let (_engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    // Every 20 ms, for longer than thirty times the 100 ms that asks again.
+    let started = tokio::time::Instant::now();
+    while started.elapsed() < Duration::from_millis(3_400) {
+        send(&tunnel, app(DIRECT_PORT), echo, b"tick").await?;
+        receive(&tunnel).await?.ok_or("a datagram")?;
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let asked = android.asked();
+    assert!((2..=4).contains(&asked), "Android was asked {asked} times");
+    Ok(())
+}
+
+/// The same for a flow of lookups to the tunnel's DNS address that never pauses: asked about when it
+/// opens, and again after thirty times `udp_reask`.
+#[tokio::test(flavor = "current_thread")]
+async fn a_flow_of_lookups_that_never_pauses_is_asked_about_seldom() -> Outcome {
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(Counting::default());
+    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    let (dns, _heard) = deaf_resolver(&engine).await?;
+    let started = tokio::time::Instant::now();
+    while started.elapsed() < Duration::from_millis(3_400) {
+        send(
+            &tunnel,
+            app(DIRECT_PORT),
+            dns,
+            &query(b"\x04tick\x04test\x00", 1),
+        )
+        .await?;
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let asked = android.asked();
+    assert!((2..=4).contains(&asked), "Android was asked {asked} times");
+    Ok(())
+}
