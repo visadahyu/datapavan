@@ -3008,3 +3008,58 @@ async fn an_app_that_answers_every_port_that_came_in_lets_in_64() -> Outcome {
     assert_eq!(engine.counters()[UDP_CAME_IN_CAPPED], 64 * 3);
     Ok(())
 }
+
+/// A server that answers the app's first datagram from another of its ports, which keeps what it hears:
+/// the server's address, the other port's, and what that heard.
+async fn answered_from_another_port()
+-> Result<(SocketAddr, SocketAddr, Heard), Box<dyn std::error::Error>> {
+    let first = UdpSocket::bind("127.0.0.1:0").await?;
+    let second = Arc::new(UdpSocket::bind("127.0.0.1:0").await?);
+    let (at, other) = (first.local_addr()?, second.local_addr()?);
+    let heard: Heard = Arc::default();
+    let noted = Arc::clone(&heard);
+    let answers = Arc::clone(&second);
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 256];
+        if let Ok((_, from)) = first.recv_from(&mut buffer).await {
+            let _ = answers.send_to(b"from another port", from).await;
+        }
+    });
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 256];
+        while let Ok((n, from)) = second.recv_from(&mut buffer).await {
+            noted
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push((from, buffer[..n].to_vec()));
+        }
+    });
+    Ok((at, other, heard))
+}
+
+/// A port that came in to the old app's mapping is no destination that app knew: the new app's first
+/// datagram to it, though the mapping is fresh, asks Android, and goes through the tool (sixth review of
+/// unit 9, finding 4).
+#[tokio::test(flavor = "current_thread")]
+async fn a_port_that_came_in_is_no_destination_the_app_knew() -> Outcome {
+    const PORT: u16 = 50_303;
+    let (at, other, heard) = answered_from_another_port().await?;
+    let tool = proxy(Settings::default()).await?;
+    let owners = Arc::new(Owners::default());
+    owners.set(PORT, Some(DIRECT));
+    let (_engine, tunnel) = engine_with(chain(tool.address), Limits::default(), owners.clone())?;
+    send(&tunnel, app(PORT), at, b"x").await?;
+    let (from, _) = receive(&tunnel).await?.ok_or("a datagram")?;
+    assert_eq!(from, other);
+    owners.set(PORT, Some(CHAINED));
+    send(&tunnel, app(PORT), other, b"y").await?;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let from = heard_from(&heard, b"y");
+    assert_eq!(from.len(), 1);
+    assert!(
+        tool.relays().contains(&from[0]),
+        "left directly from {}",
+        from[0]
+    );
+    Ok(())
+}

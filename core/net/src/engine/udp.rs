@@ -685,6 +685,14 @@ impl Mapping {
         });
     }
 
+    /// Whether the app sent to the peer it knows as `address`: a destination of its own, which may
+    /// share a question to Android, or leave without one while the mapping is fresh. A port that came in
+    /// and that the app has not answered is no such destination: the app that held the socket when it
+    /// came in may be gone, and the first datagram to it asks Android as a new destination's does.
+    fn knows(&self, address: SocketAddr) -> bool {
+        self.peers.get(&address).is_some_and(|peer| !peer.came_in)
+    }
+
     /// Whether the app's datagrams to its peers may leave without asking Android again whose socket this
     /// is: the app sent within `reask`, and Android named its app within thirty times that.
     fn fresh(&self, now: Instant, reask: Duration) -> bool {
@@ -1009,7 +1017,7 @@ impl UdpTable {
             self.end(app, id, shared);
             return None;
         }
-        if !mapping.peers.contains_key(&destination) {
+        if !mapping.knows(destination) {
             return None;
         }
         // After a silence, or long after Android last named its app, the datagram asks Android again
@@ -1020,7 +1028,6 @@ impl UdpTable {
             return None;
         }
         mapping.sent = now;
-        mapping.answering(destination);
         let peer = mapping.peers.get_mut(&destination)?;
         peer.last = now;
         peer.sent(destination.port(), payload);
@@ -1392,7 +1399,7 @@ async fn owner_of(
         let mapping = table
             .mappings
             .get(&app)
-            .filter(|mapping| mapping.peers.contains_key(&destination))
+            .filter(|mapping| mapping.knows(destination))
             .filter(|_| !shared.is_tunnel_dns(destination.ip()));
         match (mapping, table.asking.get(&app)) {
             (None, _) => Question::Alone,
