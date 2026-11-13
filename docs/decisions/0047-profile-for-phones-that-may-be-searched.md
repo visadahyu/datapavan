@@ -67,8 +67,9 @@ the profile changes and what it costs (decision 8). The answer can be changed at
 screen, store text or document about the profile names a country or a region, and the apps never read the
 phone's location, SIM country or language to guess the answer.
 
-In Advanced the question comes in W9's onboarding before the retention choice. With the profile on, the
-retention choice is not shown: the log keeps nothing.
+In Advanced the question comes in W9's onboarding before the retention choice. It comes together with ADR 0046's
+question about its summary notification, which is off under the profile. With the profile on, the retention choice
+is not shown: the log keeps nothing.
 
 ### 2. One switch, named for what it does
 
@@ -95,9 +96,11 @@ asks the question and keeps its own switch; each says that the other edition has
 | The chosen apps, the UDP choice and the proxy password (Advanced) | Kept | Kept, since the chain cannot work without them. Behind Watch's lock, and wiped by a wipe. "All apps through the tool" keeps no list |
 | The apps left out of the tunnel (Advanced) | Kept | Kept, and wiped by a wipe |
 | ADR 0046's widget | Offered | Its provider is disabled, so it cannot be added. One already placed shows only the app's mark, and the switch's screen asks the user to remove it, since no app can remove a widget from a launcher |
-| ADR 0046's ongoing notification | Its summary | No summary. If Watch still posts an ongoing notification, its text is a neutral "On": no count, no app, no tool and no word for VPN; hidden on the lock screen (`VISIBILITY_SECRET`); silent |
+| ADR 0046's summary notification | Asked at onboarding, with this profile's question | Off. If Watch still posts an ongoing notification, its text is a neutral "On": no count, no app, no tool and no word for VPN; hidden on the lock screen (`VISIBILITY_SECRET`); silent |
 | ADR 0046's Quick Settings tile | Its state and summary | On and off only, no count. Opening the "Now" view from it asks for the phone's unlock first (`unlockAndRun`) |
 | ADR 0046's "Now" view | As ADR 0046 decides | Shows only this screen-on session, behind Watch's lock |
+| ADR 0046's opt-in flag notice | Kept, if the user opted in | Never kept |
+| ADR 0046's optional baseline for each app: one number per app, the most it sent in the background in a day | Kept, if the user turned it on | Never kept, so flags that need it are not raised |
 | Watch's own lock (ADR 0040) | Offered, off | On, with a code of its own, so that a forced unlock of the phone does not open it; it locks as soon as Watch leaves the screen or the screen turns off |
 | The plan's journal (Basic, and the audit in Advanced) | Kept on disk | Held in memory only, and cleared when the screen turns off or the app's process ends. Leaving the app to make a change in Settings keeps it, so the plan still works within a session |
 | The strict sensor review | Kept on disk | In memory only, cleared in the same way |
@@ -281,6 +284,7 @@ On the Android 10, 15 and 17 emulators and the Galaxy A40, with debug builds whe
     no wrapped day key, no log key pair in the Keystore, no tool, host or port, and no key the user pinned or
     confirmed;
   - Watch's screen and the "Now" view show nothing from before the screen turned off;
+  - ADR 0046's flag notice and baseline for each app left nothing in storage;
   - no chained destination appears on any screen or in logcat;
   - `dumpsys notification` shows no ongoing notification but the neutral one, hidden on the lock screen;
   - the widget provider is disabled, and a widget placed before shows only the mark;
