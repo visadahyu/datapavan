@@ -132,3 +132,35 @@ an ADR (D25).
 - **The log format changes once,** before W5 reads it.
 - **This is a set of units:** each lands on its own, with its tests. The harness comes first, so the later units
   are tested by it.
+
+## How it is built
+
+**Unit 9, the chain's mappings (2026-11-13, decision 2).**
+- **One `UDP ASSOCIATE` per mapping.** A chained app socket sends to every destination over one relay of the tool,
+  each datagram with a header naming its destination: the address, or the name behind a stand-in. Destinations
+  that open at once wait for the first to open the mapping, so that a burst, as of an app asking several servers,
+  asks the tool for one relay, not one each.
+- **Each answer goes to the destination its header names,** with the direct path's filter:
+  - from a destination's address, to its flow;
+  - from another port of such an address, to a new flow;
+  - from anywhere else, nowhere, counted in `udp_filtered`.
+- **Stand-ins.** The relay answers from the address the tool reached, which the app never saw:
+  - A stand-in still waiting for its first answer is bound to the first answer from its port, when no other
+    stand-in of the mapping waits on that port. Later answers from that address reach the app from the stand-in.
+  - When several wait on one port, the answer could be any of their names'. It is dropped rather than handed to
+    one, for as long as more than one waits. An app that asks several names on one port at once, as some ask
+    several STUN servers, gets no answer from them through the tool.
+  - A relay that gives back the name it was asked for is matched by that name.
+- **A counter, appended:** `udp_unmatched`, the 27th, counts answers that no one destination could be told for: a
+  port several stand-ins wait on, a malformed header or a fragment. It measures how often the rule above costs an
+  answer.
+- **The chain changes:** a mapping ends at its next datagram either way when the chain is set again and sends its
+  app another way: another tool, proxy address, user name or password, UDP turned off, or the chain off. The same
+  tool set again keeps it. This holds for the direct path's mappings too, which until now kept their way. A chained
+  mapping also ends when the tool closes its relay.
+- **Unchanged:** lookups to the tunnel's DNS address, chained apps' TCP, the tool's own traffic, a stopped tool,
+  and a tool without UDP.
+- **Tests:** six in `core/net/tests/chain.rs`, and one in the network lab with a real tun. Each was made to fail by
+  breaking the code it guards.
+- **Still open:** what real tools' relays put in the header, and whether they keep one upstream socket per
+  association. The test tool and the lab's proxy name the real sender; v2rayNG and NekoBox are not yet checked.
