@@ -1013,7 +1013,9 @@ fn try_send_to(
 
 /// Opens a destination's way, off the event loop: asks Android whose it is, then makes it a peer of its
 /// app socket's mapping, or for Watch's own DNS address opens a flow of its own. Where the route sends
-/// the app's UDP nowhere, the app is told the destination cannot be reached.
+/// the app's UDP nowhere, the app is told the destination cannot be reached. When the chain takes the
+/// app, or lets it go, while its way opens, the destination is routed again: what waited leaves by the
+/// new route, never by the old.
 async fn open_udp(
     key: (SocketAddr, SocketAddr),
     tun: Arc<Tun>,
@@ -1029,69 +1031,97 @@ async fn open_udp(
         open_flow(key, uid, tun, shared, flows, changes).await;
         return;
     }
-    // Read before the route, so that a chain set meanwhile makes the mapping ask again.
-    let chains = shared.chains.load(Ordering::Acquire);
-    if let Some(exit) = Exit::of(shared.route(uid, destination)) {
+    loop {
+        // Read before the route, so that a chain set meanwhile makes the mapping ask again.
+        let chains = shared.chains.load(Ordering::Acquire);
+        let Some(exit) = Exit::of(shared.route(uid, destination)) else {
+            // A flow whose app Android cannot name while a chain is on, a stand-in outside the chain,
+            // or a chained app's UDP through a tool without UDP (VPN.md).
+            let (_, mut flow) = begin_udp(&shared, app, destination, uid);
+            flow.outcome = Outcome::Unreachable;
+            udp_failed(key, flow, &tun, &shared, &flows).await;
+            return;
+        };
         let wanted = Wanted { uid, exit, chains };
-        open_peer(key, wanted, tun, shared, flows, changes).await;
-    } else {
-        // A flow whose app Android cannot name while a chain is on, a stand-in outside the chain, or a
-        // chained app's UDP through a tool without UDP (VPN.md).
-        let (_, mut flow) = begin_udp(&shared, app, destination, uid);
-        flow.outcome = Outcome::Unreachable;
-        udp_failed(key, flow, &tun, &shared, &flows).await;
+        if open_peer(key, wanted, (&tun, &shared, &flows, &changes)).await {
+            return;
+        }
     }
 }
+
+/// What a mapping is opened with besides its destination and its way.
+type Context<'a> = (
+    &'a Arc<Tun>,
+    &'a Arc<Shared>,
+    &'a UdpFlows,
+    &'a watch::Receiver<u64>,
+);
 
 /// Makes a destination a peer of its app socket's mapping, opening the mapping first if the app has
 /// none, or if the one it has is another app's or leaves another way. The datagrams that waited leave
 /// under the table's lock, so that none that comes meanwhile overtakes them, and the peer is known
-/// before its answer can come.
+/// before its answer can come. `false` when the chain changed the app's way meanwhile: nothing that
+/// waited has left, and the destination is to be routed again.
 async fn open_peer(
     key: (SocketAddr, SocketAddr),
     wanted: Wanted,
-    tun: Arc<Tun>,
-    shared: Arc<Shared>,
-    flows: UdpFlows,
-    changes: watch::Receiver<u64>,
-) {
+    (tun, shared, flows, changes): Context<'_>,
+) -> bool {
     let (app, destination) = key;
-    let opened = match PeerWay::toward(&shared, &wanted.exit, destination) {
+    let opened = match PeerWay::toward(shared, &wanted.exit, destination) {
         // A stand-in the map no longer holds names nothing the tool could reach.
         None => Err(io::ErrorKind::HostUnreachable.into()),
-        Some(way) => mapping_for(key, &wanted, &tun, &shared, &flows, &changes)
+        Some(way) => mapping_for(key, &wanted, (tun, shared, flows, changes))
             .await
-            .map(|opened| (opened, way)),
+            .map(|opened| opened.map(|opened| (opened, way))),
     };
     let ((id, socket), way) = match opened {
-        Ok(opened) => opened,
+        Ok(Some(opened)) => opened,
+        Ok(None) => return false,
         Err(error) => {
-            let (_, mut flow) = begin_udp(&shared, app, destination, wanted.uid);
+            let (_, mut flow) = begin_udp(shared, app, destination, wanted.uid);
             flow.outcome = if is_unreachable(&error) {
                 Outcome::Unreachable
             } else {
                 Outcome::Failed
             };
-            udp_failed(key, flow, &tun, &shared, &flows).await;
-            return;
+            udp_failed(key, flow, tun, shared, flows).await;
+            return true;
         }
     };
     let _ = socket.writable().await;
     let mut reads = Vec::new();
     let mut errors = Vec::new();
     {
-        let mut table = lock(&flows);
+        let mut table = lock(flows);
+        match table
+            .mapping(app, id)
+            .map(|mapping| mapping.keeps_its_way(shared))
+        {
+            // The mapping ended meanwhile, as the network changed: the datagrams are dropped, as by a
+            // full queue.
+            None => {
+                if let Some(UdpEntry::Opening(waiting)) = table.flows.remove(&key) {
+                    Counters::add(&shared.counters.skipped, waiting.len() as u64);
+                }
+                return true;
+            }
+            // The chain took the app, or let it go, since its route was asked: what waited, some of it
+            // sent since, leaves by the new route.
+            Some(false) => {
+                table.end(app, id, shared);
+                return false;
+            }
+            Some(true) => {}
+        }
         let waiting = match table.flows.remove(&key) {
             Some(UdpEntry::Opening(waiting)) => waiting,
             _ => Vec::new(),
         };
         let Some(mapping) = table.mapping(app, id) else {
-            // The mapping ended meanwhile, as the network changed: the datagrams are dropped, as by a
-            // full queue.
-            Counters::add(&shared.counters.skipped, waiting.len() as u64);
-            return;
+            return true;
         };
-        let peer = mapping.peer(&shared, key, Instant::now(), (false, way));
+        let peer = mapping.peer(shared, key, Instant::now(), (false, way));
         let header = peer.way.header.clone();
         for packet in &waiting {
             let Ok(parsed) = packet::parse(packet) else {
@@ -1104,7 +1134,7 @@ async fn open_peer(
             peer.sent(destination.port(), payload);
             let sent = try_send_to(&socket, header.as_deref(), payload, destination);
             errors.extend(count_sent(
-                &shared,
+                shared,
                 peer.bytes.as_deref(),
                 packet,
                 &parsed,
@@ -1113,11 +1143,12 @@ async fn open_peer(
         }
     }
     for read in reads {
-        note_quic(&shared, read);
+        note_quic(shared, read);
     }
     for error in errors {
-        send_to_app(&tun, &shared, &error).await;
+        send_to_app(tun, shared, &error).await;
     }
+    true
 }
 
 /// The mapping of `key`'s app for its new destination, by its number, with its socket: the app's open
@@ -1128,20 +1159,17 @@ async fn open_peer(
 /// it, as when an app asks several servers at once: through the tool, each would otherwise ask for a
 /// relay of its own, a connection to the tool, only for all but one to be closed again. When the one
 /// that opens it fails, those that wait fail as it did, at once: the tool that refused it, or did not
-/// answer it, would do the same to them.
+/// answer it, would do the same to them. `None` when the chain changed the app's way meanwhile.
 async fn mapping_for(
     (app, destination): (SocketAddr, SocketAddr),
     wanted: &Wanted,
-    tun: &Arc<Tun>,
-    shared: &Arc<Shared>,
-    flows: &UdpFlows,
-    changes: &watch::Receiver<u64>,
-) -> io::Result<(u64, Arc<UdpSocket>)> {
+    (tun, shared, flows, changes): Context<'_>,
+) -> io::Result<Option<(u64, Arc<UdpSocket>)>> {
     let told = loop {
         let mut waiting = {
             let mut table = lock(flows);
             if let Some(open) = table.open_mapping(app, wanted, shared) {
-                return Ok(open);
+                return Ok(Some(open));
             }
             match table.opening.get(&app) {
                 // One whose opener is gone without a word (the engine stopping) holds no one up.
@@ -1177,9 +1205,18 @@ async fn mapping_for(
         }
     };
     let socket = Arc::new(socket);
+    // The chain may have taken the app, or let it go, while the socket was made, or while this
+    // destination waited for another's: a mapping that would leave the old way is not opened.
+    let chains = shared.chains.load(Ordering::Acquire);
+    if chains != wanted.chains
+        && !Exit::of(shared.route(wanted.uid, destination))
+            .is_some_and(|exit| exit.same(&wanted.exit))
+    {
+        return Ok(None);
+    }
     // Those that waited find this one once the lock is let go, and `told` goes with this function.
     if let Some(open) = table.open_mapping(app, wanted, shared) {
-        return Ok(open);
+        return Ok(Some(open));
     }
     table.opened += 1;
     let id = table.opened;
@@ -1190,7 +1227,7 @@ async fn mapping_for(
             id,
             socket: Arc::clone(&socket),
             exit: wanted.exit.clone(),
-            chains: wanted.chains,
+            chains,
             uid: wanted.uid,
             peers: HashMap::new(),
             sources: Sources::default(),
@@ -1215,7 +1252,7 @@ async fn mapping_for(
         Arc::clone(flows),
         changes.clone(),
     ));
-    Ok((id, socket))
+    Ok(Some((id, socket)))
 }
 
 /// A mapping's socket on the direct path: protected, on the unspecified address of the destination's
@@ -1230,10 +1267,12 @@ async fn mapped_socket(shared: &Arc<Shared>, destination: SocketAddr) -> io::Res
 }
 
 /// A UDP relay of the tool for a mapping: a socket connected to the relay, and the request's
-/// connection, which must stay open. The relay is on the phone's loopback, as the proxy is; one
-/// elsewhere gets a protected socket, so that its datagrams do not loop back into the tunnel. Whether
-/// the tool sends every destination's datagrams from one socket of its own is the tool's choice (ADR
-/// 0044, decision 2).
+/// connection, which must stay open. The relay is on the phone's loopback, as the proxy is, or at the
+/// proxy's own address on the local network, which gets a protected socket, so that its datagrams do not
+/// loop back into the tunnel. A relay anywhere else would take the app's datagrams, each with a header
+/// naming its destination, across the network beneath, outside the tool: such a tool's UDP is refused,
+/// as a tool's without UDP, and counted. Whether the tool sends every destination's datagrams from one
+/// socket of its own is the tool's choice (ADR 0044, decision 2).
 async fn associate(shared: &Arc<Shared>, chain: &Chain) -> io::Result<(UdpSocket, TcpStream)> {
     let opening = async {
         let mut control = connect_proxy(shared, chain.proxy).await?;
@@ -1249,6 +1288,11 @@ async fn associate(shared: &Arc<Shared>, chain: &Chain) -> io::Result<(UdpSocket
         .map_err(io_error)?;
         let relay =
             socks5::relay_address(&bound, chain.proxy).ok_or(io::ErrorKind::HostUnreachable)?;
+        let at = relay.ip().to_canonical();
+        if !at.is_loopback() && at != chain.proxy.ip().to_canonical() {
+            Counters::add(&shared.counters.udp_relay_elsewhere, 1);
+            return Err(io::ErrorKind::HostUnreachable.into());
+        }
         let socket = UdpSocket::bind(packet::unspecified_like(&relay)).await?;
         if !relay.ip().is_loopback() {
             protect(shared, socket.as_fd()).await?;

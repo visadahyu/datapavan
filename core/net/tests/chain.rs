@@ -36,6 +36,7 @@ const UDP_MAPPINGS: usize = 24;
 const UDP_FILTERED: usize = 25;
 const UDP_UNMATCHED: usize = 26;
 const UDP_CAME_IN_CAPPED: usize = 27;
+const UDP_RELAY_ELSEWHERE: usize = 28;
 
 /// Android names the app by its port inside the tunnel.
 struct ByPort;
@@ -700,6 +701,17 @@ async fn a_new_chain_moves_a_mapping_only_when_its_way_changes() -> Outcome {
     Ok(())
 }
 
+/// What the server at a socket heard: each sender and payload.
+type Heard = Arc<std::sync::Mutex<Vec<(SocketAddr, Vec<u8>)>>>;
+
+/// Everything heard, so far.
+fn heard_so_far(heard: &Heard) -> Vec<(SocketAddr, Vec<u8>)> {
+    heard
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone()
+}
+
 /// What reaches the app until the tunnel stays silent for half a second.
 async fn everything(tunnel: &UnixDatagram) -> Vec<(SocketAddr, Vec<u8>)> {
     let mut seen = Vec::new();
@@ -847,6 +859,105 @@ async fn a_mapping_lets_in_at_most_64_other_ports() -> Outcome {
         assert_eq!(seen.len(), 64, "round {round}: ports let in");
         assert_eq!(engine.counters()[UDP_CAME_IN_CAPPED], 6 * round);
     }
+    Ok(())
+}
+
+/// A direct app's mapping, then a chain that takes the app: its next datagram goes through the tool
+/// (the review of unit 9's experiment, kept).
+#[tokio::test(flavor = "current_thread")]
+async fn a_direct_mapping_moves_into_the_tool_when_the_chain_takes_its_app() -> Outcome {
+    let echo = udp_echo().await?;
+    let tool = proxy(Settings::default()).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    send(&tunnel, app(DIRECT_PORT), echo, b"one").await?;
+    receive(&tunnel).await?.ok_or("a datagram")?;
+    assert_eq!(tool.commands(), Vec::<u8>::new());
+    let mut both = chain(tool.address);
+    both.apps = Some(HashSet::from([CHAINED, DIRECT]));
+    engine.chain(Some(both));
+    send(&tunnel, app(DIRECT_PORT), echo, b"two").await?;
+    let answer = receive(&tunnel).await?.ok_or("a datagram")?;
+    assert_eq!(answer, (echo, b"two".to_vec()));
+    assert_eq!(tool.commands(), [3], "through the tool now");
+    Ok(())
+}
+
+/// As [`ByPort`], with a protect that takes 300 ms, as a busy Binder may.
+struct SlowProtect;
+
+impl Platform for SlowProtect {
+    fn owner(&self, protocol: u8, local: SocketAddr, remote: SocketAddr) -> Option<u32> {
+        ByPort.owner(protocol, local, remote)
+    }
+
+    fn protect(&self, _: RawFd) -> bool {
+        std::thread::sleep(Duration::from_millis(300));
+        true
+    }
+
+    fn log(&self, _: &[u8]) {}
+}
+
+/// The chain takes a direct app while its first mapping opens: what the app sent after that leaves
+/// through the tool, not directly (review of unit 9, finding 4).
+#[tokio::test(flavor = "current_thread")]
+async fn what_is_sent_once_the_chain_takes_an_app_goes_through_the_tool() -> Outcome {
+    let server = UdpSocket::bind("127.0.0.1:0").await?;
+    let at = server.local_addr()?;
+    let heard: Heard = Arc::default();
+    let noted = Arc::clone(&heard);
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 256];
+        while let Ok((n, from)) = server.recv_from(&mut buffer).await {
+            noted
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push((from, buffer[..n].to_vec()));
+        }
+    });
+    let tool = proxy(Settings::default()).await?;
+    let (engine, tunnel) = engine_with(
+        chain(tool.address),
+        Limits::default(),
+        Arc::new(SlowProtect),
+    )?;
+    send(&tunnel, app(DIRECT_PORT), at, b"before the chain").await?;
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let mut both = chain(tool.address);
+    both.apps = Some(HashSet::from([CHAINED, DIRECT]));
+    engine.chain(Some(both));
+    send(&tunnel, app(DIRECT_PORT), at, b"after the chain").await?;
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    let after: Vec<_> = heard_so_far(&heard)
+        .into_iter()
+        .filter(|(_, payload)| payload == b"after the chain")
+        .map(|(from, _)| from)
+        .collect();
+    assert_eq!(after.len(), 1, "heard {after:?}");
+    assert!(
+        tool.relays().contains(&after[0]),
+        "from {}, not the tool's relay {:?}",
+        after[0],
+        tool.relays()
+    );
+    Ok(())
+}
+
+/// A tool that offers its UDP relay elsewhere than on the phone or at its proxy's address would take
+/// the app's datagrams, with their destinations in the header, across the network beneath: its UDP is
+/// refused, as a tool's without UDP, and counted (review of unit 9, finding 5).
+#[tokio::test(flavor = "current_thread")]
+async fn a_relay_elsewhere_is_refused() -> Outcome {
+    let echo = udp_echo().await?;
+    let settings = Settings {
+        relay_at: Some(IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1))),
+        ..Settings::default()
+    };
+    let tool = proxy(settings).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    send(&tunnel, app(CHAINED_PORT), echo, b"stays").await?;
+    assert_eq!(receive(&tunnel).await?, None, "an ICMP error");
+    assert_eq!(engine.counters()[UDP_RELAY_ELSEWHERE], 1);
     Ok(())
 }
 
