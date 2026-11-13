@@ -252,8 +252,9 @@ struct Peer {
     way: PeerWay,
     /// Whether it came in: another port of an address the app sent to, not a destination of the app.
     came_in: bool,
-    /// For a stand-in on port 53 still waiting for its first answer, the ID and question of each DNS
-    /// query the app sent it, the latest last: only an answer to one of them binds it.
+    /// For a stand-in on port 53 still waiting for its first answer, or a flow that came in from a port
+    /// 53, the ID and question of each DNS query the app sent it, the latest last: only an answer to one
+    /// of them binds the stand-in, or teaches Watch names from a flow the app did not start.
     asked: Vec<(u16, String)>,
 }
 
@@ -331,9 +332,10 @@ impl Peer {
     }
 
     /// Notes a datagram the app sends it to `port`: for a stand-in on port 53 still waiting for its
-    /// first answer, the ID and question of a DNS query.
+    /// first answer, or a flow from a port 53 that came in, the ID and question of a DNS query.
     fn sent(&mut self, port: u16, payload: &[u8]) {
-        if port != 53 || self.way.name.is_none() || self.way.from.is_some() {
+        let waits = self.way.name.is_some() && self.way.from.is_none();
+        if port != 53 || !(waits || self.came_in) {
             return;
         }
         let (Some(id), Some(question)) = (dns::u16_at(payload, 0), answers::question(payload))
@@ -520,7 +522,7 @@ impl Mapping {
         // A flow the app did not start, logged as any other: the log's flag for a flow that came in
         // waits for its new record format (ADR 0044, decision 4).
         let peer = self.peer(shared, (app, shown), now, (true, way));
-        LetIn::Peer(shown, peer.bytes.clone())
+        LetIn::Peer(shown, peer.bytes.clone(), false)
     }
 
     /// Ends the flows of the peers silent since `since`; their addresses are let in no more, unless
@@ -558,14 +560,16 @@ impl Mapping {
         true
     }
 
-    /// The peer the app knows as `shown`, refreshed by an answer.
-    fn answered_by(&mut self, shown: SocketAddr, now: Instant) -> LetIn {
+    /// The peer the app knows as `shown`, refreshed by `answer`. Watch learns names only from a peer the
+    /// app sent to, or from an answer to a query the app sent one that came in.
+    fn answered_by(&mut self, shown: SocketAddr, answer: &[u8], now: Instant) -> LetIn {
         let Some(peer) = self.peers.get_mut(&shown) else {
             return LetIn::Unmatched;
         };
         peer.last = now;
         self.last = now;
-        LetIn::Peer(shown, peer.bytes.clone())
+        let learns = !peer.came_in || peer.asked_for(answer);
+        LetIn::Peer(shown, peer.bytes.clone(), learns)
     }
 
     /// Which peer an answer from the tool's relay is for, by the address or the name its header gives
@@ -592,13 +596,13 @@ impl Mapping {
                     .get(&from)
                     .is_some_and(|peer| peer.way.from == Some(from))
                 {
-                    return self.answered_by(from, now);
+                    return self.answered_by(from, answer, now);
                 }
                 if let Some(&shown) = self.sources.aliases.get(&from) {
                     if waited_on {
                         return LetIn::Unmatched;
                     }
-                    return self.answered_by(shown, now);
+                    return self.answered_by(shown, answer, now);
                 }
                 // Another port of an address the app sent to comes in as that address's, never as a
                 // stand-in's first answer. Of an address only a stand-in was bound to, on a port a
@@ -621,7 +625,7 @@ impl Mapping {
                             .get(&same)
                             .is_some_and(|peer| peer.asked_for(answer));
                     if alone && asked {
-                        return self.bind(same, from, now);
+                        return self.bind(same, (from, answer), now);
                     }
                     return LetIn::Unmatched;
                 }
@@ -637,7 +641,7 @@ impl Mapping {
                 };
                 let shown = SocketAddr::new(stand_in, *port);
                 if self.peers.contains_key(&shown) {
-                    return self.answered_by(shown, now);
+                    return self.answered_by(shown, answer, now);
                 }
                 (shown, PeerWay::through_tool(target.clone()))
             }
@@ -679,22 +683,27 @@ impl Mapping {
             (takers.next(), takers.next())
         };
         match takers {
-            (Some(shown), None) => self.bind(shown, from, now),
+            (Some(shown), None) => self.bind(shown, (from, answer), now),
             (Some(_), Some(_)) => LetIn::Unmatched,
             (None, _) => LetIn::Filtered,
         }
     }
 
     /// Binds the stand-in the app knows as `shown` to `from`, the address its first answer came from,
-    /// and gives it that answer.
-    fn bind(&mut self, shown: SocketAddr, from: SocketAddr, now: Instant) -> LetIn {
+    /// and gives it that `answer`.
+    fn bind(
+        &mut self,
+        shown: SocketAddr,
+        (from, answer): (SocketAddr, &[u8]),
+        now: Instant,
+    ) -> LetIn {
         self.sources.stop_waiting(shown);
         self.sources.add(shown, from);
         if let Some(peer) = self.peers.get_mut(&shown) {
             peer.way.from = Some(from);
             peer.asked = Vec::new();
         }
-        self.answered_by(shown, now)
+        self.answered_by(shown, answer, now)
     }
 }
 
@@ -742,8 +751,9 @@ enum LetIn {
     Unmatched,
     /// It came from another port of an address the app sent to, beyond [`CAME_IN`].
     Capped,
-    /// It came from the peer the app knows as this address, whose bytes these are.
-    Peer(SocketAddr, Option<Arc<FlowBytes>>),
+    /// It came from the peer the app knows as this address, whose bytes these are; and whether Watch may
+    /// learn names from it.
+    Peer(SocketAddr, Option<Arc<FlowBytes>>, bool),
 }
 
 /// What a new destination's mapping is opened with: the app, the way its route gives, and how many
@@ -837,7 +847,12 @@ impl UdpTable {
     /// Whether the mapping `id` of `app` lets in a datagram from `from` (address-dependent filtering,
     /// RFC 4787): one from a peer, or from another port of a peer's address, which becomes a peer of
     /// its own.
-    fn let_in(&mut self, app: SocketAddr, id: u64, from: SocketAddr, shared: &Shared) -> LetIn {
+    fn let_in(
+        &mut self,
+        (app, id): (SocketAddr, u64),
+        (from, answer): (SocketAddr, &[u8]),
+        shared: &Shared,
+    ) -> LetIn {
         let Some(mapping) = self.mapping(app, id) else {
             return LetIn::Gone;
         };
@@ -847,7 +862,7 @@ impl UdpTable {
         }
         let now = Instant::now();
         if mapping.peers.contains_key(&from) {
-            return mapping.answered_by(from, now);
+            return mapping.answered_by(from, answer, now);
         }
         if mapping.sources.shown(from.ip()).is_none() {
             return LetIn::Filtered;
@@ -1543,7 +1558,7 @@ fn mapped_receive(
             Err(error) if errors::from_icmp(&error) => continue,
             Err(_) => return (packets, true),
         };
-        let bytes = match lock(flows).let_in(app, id, from, shared) {
+        let (bytes, learns) = match lock(flows).let_in((app, id), (from, &buffer[..n]), shared) {
             LetIn::Gone => return (packets, true),
             LetIn::Filtered => {
                 Counters::add(&shared.counters.udp_filtered, 1);
@@ -1557,14 +1572,14 @@ fn mapped_receive(
                 Counters::add(&shared.counters.udp_came_in_capped, 1);
                 continue;
             }
-            LetIn::Peer(_, bytes) => bytes,
+            LetIn::Peer(_, bytes, learns) => (bytes, learns),
         };
         packets.extend(deliver(
             shared,
             (app, uid),
-            from,
-            &buffer[..n],
+            (from, &buffer[..n]),
             bytes.as_deref(),
+            learns,
         ));
     }
     (packets, false)
@@ -1595,42 +1610,49 @@ fn relayed_receive(
             Counters::add(&shared.counters.udp_unmatched, 1);
             continue;
         };
-        let (from, bytes) = match lock(flows).let_in_relayed((app, id), (&target, answer), shared) {
-            LetIn::Gone => return (packets, true),
-            LetIn::Filtered => {
-                Counters::add(&shared.counters.udp_filtered, 1);
-                continue;
-            }
-            LetIn::Unmatched => {
-                Counters::add(&shared.counters.udp_unmatched, 1);
-                continue;
-            }
-            LetIn::Capped => {
-                Counters::add(&shared.counters.udp_came_in_capped, 1);
-                continue;
-            }
-            LetIn::Peer(from, bytes) => (from, bytes),
-        };
-        packets.extend(deliver(shared, (app, uid), from, answer, bytes.as_deref()));
+        let (from, bytes, learns) =
+            match lock(flows).let_in_relayed((app, id), (&target, answer), shared) {
+                LetIn::Gone => return (packets, true),
+                LetIn::Filtered => {
+                    Counters::add(&shared.counters.udp_filtered, 1);
+                    continue;
+                }
+                LetIn::Unmatched => {
+                    Counters::add(&shared.counters.udp_unmatched, 1);
+                    continue;
+                }
+                LetIn::Capped => {
+                    Counters::add(&shared.counters.udp_came_in_capped, 1);
+                    continue;
+                }
+                LetIn::Peer(from, bytes, learns) => (from, bytes, learns),
+            };
+        packets.extend(deliver(
+            shared,
+            (app, uid),
+            (from, answer),
+            bytes.as_deref(),
+            learns,
+        ));
     }
     (packets, false)
 }
 
-/// An answer a mapping let in from the peer the app knows as `from`: counted, and wrapped in an IP
-/// packet to the app.
+/// An `answer` a mapping let in from the peer the app knows as `from`: counted, and wrapped in an IP
+/// packet to the app. Watch learns names from it when it `learns`.
 fn deliver(
     shared: &Shared,
     (app, uid): (SocketAddr, Option<u32>),
-    from: SocketAddr,
-    answer: &[u8],
+    (from, answer): (SocketAddr, &[u8]),
     bytes: Option<&FlowBytes>,
+    learns: bool,
 ) -> Option<Vec<u8>> {
     Counters::add(&shared.counters.bytes_down, answer.len() as u64);
     if let Some(bytes) = bytes {
         bytes.add_down(answer.len());
     }
     // An app's own resolver names only that app's flows.
-    if from.port() == 53 && uid.is_some() {
+    if learns && from.port() == 53 && uid.is_some() {
         shared.learn(answer, uid);
     }
     let packet = packet::udp(from, app, answer)?;

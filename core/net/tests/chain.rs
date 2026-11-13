@@ -1526,3 +1526,83 @@ async fn a_bound_name_on_port_53_takes_only_an_answer_to_its_query() -> Outcome 
     assert_eq!(engine.counters()[UDP_UNMATCHED], 1);
     Ok(())
 }
+
+/// A DNS response under the ID `id` that names `address` `name` (in DNS's form) for 300 s.
+fn named_response(id: u16, name: &[u8], address: [u8; 4]) -> Vec<u8> {
+    let mut response = id.to_be_bytes().to_vec();
+    response.extend_from_slice(&[0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0]);
+    response.extend_from_slice(name);
+    response.extend_from_slice(&[0, 1, 0, 1, 0xc0, 0x0c, 0, 1, 0, 1, 0, 0, 1, 0x2c, 0, 4]);
+    response.extend_from_slice(&address);
+    response
+}
+
+/// Port 53 of an address a stand-in was bound to, which the app never asked anything, sends a DNS
+/// response: it comes in as another port of that address, but Watch learns no name from it (second
+/// review of unit 9, finding 4). The answer to a query the app then sends it does name.
+#[tokio::test(flavor = "current_thread")]
+async fn a_flow_that_came_in_from_port_53_teaches_no_names() -> Outcome {
+    let named = UdpSocket::bind("127.0.0.1:0").await?;
+    let port = named.local_addr()?.port();
+    let resolver = UdpSocket::bind("127.0.0.1:0").await?;
+    let (elsewhere, also_elsewhere) = (udp_echo().await?, udp_echo().await?);
+    let mut settings = Settings::default();
+    settings
+        .names
+        .insert("a.test".into(), IpAddr::V4(Ipv4Addr::LOCALHOST));
+    // The relay reaches port 53 of the name's address here, and names it as port 53; and the address
+    // the forged answer names, here too, so that nothing leaves this computer.
+    settings.remap.insert(
+        SocketAddr::from(([127, 0, 0, 1], 53)),
+        resolver.local_addr()?,
+    );
+    let forged = SocketAddr::from(([192, 0, 2, 77], 9));
+    let answered = SocketAddr::from(([192, 0, 2, 88], 9));
+    settings.remap.insert(forged, elsewhere);
+    settings.remap.insert(answered, also_elsewhere);
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 512];
+        if let Ok((n, relay)) = named.recv_from(&mut buffer).await {
+            let _ = named.send_to(&buffer[..n], relay).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let unasked = named_response(0x1234, b"\x04evil\x04test\x00", [192, 0, 2, 77]);
+            // Twice: the first opens the flow that came in, the second is an answer on it.
+            for _ in 0..2 {
+                let _ = resolver.send_to(&unasked, relay).await;
+            }
+        }
+        if let Ok((_, relay)) = resolver.recv_from(&mut buffer).await {
+            let id = u16::from_be_bytes([buffer[0], buffer[1]]);
+            let asked = named_response(id, b"\x04good\x04test\x00", [192, 0, 2, 88]);
+            let _ = resolver.send_to(&asked, relay).await;
+        }
+    });
+    let tool = proxy(settings).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    let at = stand_in(&tunnel, b"\x01a\x04test\x00").await?;
+    echoed(&tunnel, SocketAddr::from((at, port)), b"hello").await?;
+    let port_53 = SocketAddr::from((at, 53));
+    for _ in 0..2 {
+        let (from, _) = receive(&tunnel).await?.ok_or("a datagram")?;
+        assert_eq!(from, port_53, "came in from port 53");
+    }
+    send(
+        &tunnel,
+        app(CHAINED_PORT),
+        port_53,
+        &query(b"\x04good\x04test\x00", 1),
+    )
+    .await?;
+    let (from, _) = receive(&tunnel).await?.ok_or("an answer")?;
+    assert_eq!(from, port_53);
+    echoed(&tunnel, forged, b"to the address it named").await?;
+    echoed(&tunnel, answered, b"to the address it was asked for").await?;
+    let learned: Vec<_> = engine
+        .flows()
+        .into_iter()
+        .filter(|flow| [forged, answered].contains(&flow.destination))
+        .map(|flow| flow.name)
+        .collect();
+    assert_eq!(learned, [None, Some("good.test".into())]);
+    Ok(())
+}
