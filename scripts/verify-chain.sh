@@ -128,8 +128,8 @@ done
 [ "$found" = "$expected" ] || fail "Watch did not find the tool as expected: $found"
 echo "ok: Watch found the tool, its port, its owner and that it wants a password"
 
-dump chain 127.0.0.1 "$TOOL_PORT" "$TOOL_UID" udp "$SHELL_UID" watch "$PASSWORD" | grep -q "chain on" ||
-    fail "the chain did not turn on"
+chained=$(dump chain 127.0.0.1 "$TOOL_PORT" "$TOOL_UID" udp "$SHELL_UID" watch "$PASSWORD")
+grep -q "chain on" <<<"$chained" || fail "the chain did not turn on; Watch's dump said: ${chained:-nothing}"
 
 answer=$(ping_from_shell "$HOST")
 grep -q pong <<<"$answer" || fail "TCP by address through the tool: no answer ($answer)"
@@ -152,8 +152,8 @@ grep -q chained-udp <<<"$echo" || fail "UDP through the tool's relay: no echo ($
 grep -q "^associate$" <<<"$(tool_log)" || fail "the tool was not asked for a UDP relay"
 echo "ok: UDP through the tool's relay, by name"
 
-dump chain 127.0.0.1 "$TOOL_PORT" "$TOOL_UID" udp "$SHELL_UID" watch wrong-password | grep -q "chain on" ||
-    fail "the chain with a wrong password did not turn on"
+chained=$(dump chain 127.0.0.1 "$TOOL_PORT" "$TOOL_UID" udp "$SHELL_UID" watch wrong-password)
+grep -q "chain on" <<<"$chained" || fail "the chain with a wrong password did not turn on; Watch's dump said: ${chained:-nothing}"
 grep -q pong <<<"$(ping_from_shell "$HOST")" && fail "a wrong password was let through"
 grep -q "^password refused$" <<<"$(tool_log)" || fail "the tool did not see the wrong password"
 echo "ok: a wrong password is refused, and nothing goes directly instead"
@@ -168,8 +168,8 @@ echo "ok: no password in Android's log or in Watch's dump"
 # The tool stops. A sentinel on this computer, outside Android, notes every TCP connection and UDP
 # datagram that reaches its port: the emulator's own capture does not see what goes over its Wi-Fi.
 # A control from Watch's own UID, which goes directly, shows that the sentinel sees what leaves.
-dump chain 127.0.0.1 "$TOOL_PORT" "$TOOL_UID" udp "$SHELL_UID" watch "$PASSWORD" | grep -q "chain on" ||
-    fail "the chain did not turn on again"
+chained=$(dump chain 127.0.0.1 "$TOOL_PORT" "$TOOL_UID" udp "$SHELL_UID" watch "$PASSWORD")
+grep -q "chain on" <<<"$chained" || fail "the chain did not turn on again; Watch's dump said: ${chained:-nothing}"
 adb shell am force-stop "$TOOL"
 SENTINEL_PORT=$((PORT + 3))
 python3 -I - "$SENTINEL_PORT" >"$WORK/sentinel.log" <<'PY' &
