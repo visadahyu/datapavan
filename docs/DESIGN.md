@@ -725,7 +725,12 @@ directly or through the chain, and a reused port was logged under its old app wi
 again for both, with or without a chain, and an app it cannot name is never guessed. A fourth found that a flow
 that came in by name could be taken as a stand-in, that one unanswered name could cut a bound one for minutes,
 that a pause cost one question to Android for each destination, and that a repeated answer could end a flow of
-lookups early; each is fixed. How it is built:
+lookups early; each is fixed. A fifth found that a datagram to a new destination, or a lookup, could take the
+answer to a question about its socket asked before it came, which could name the port's previous app; only a
+destination the socket already knows shares a question now. It also found that a reply to a flow shown as a
+stand-in went to the tool by address, not by the stand-in's name, and that a stand-in answered by name kept its
+queries; both are fixed, and the tests it found racy or too lenient now fail when what they guard changes. How it
+is built:
 [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 Still to come: shares for each app, ICMP echo and the network's MTU.
