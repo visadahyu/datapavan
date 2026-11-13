@@ -250,15 +250,53 @@ adb shell am force-stop "$TOOL"
 adb shell am start-foreground-service -n "$TOOL/.ToolService" --ei port "$TOOL_PORT" \
     --es user "$user" --es password "$password" --es map "watch.test=$HOST" >/dev/null
 for _ in $(seq 1 10); do [ "$(tool_log | grep -c "^listening")" -gt "$listening" ] && break; sleep 1; done
+# True when the row showing exactly the text $1, a radio, checkbox or switch, is chosen: the element with
+# that text, or the nearest one around it that can be checked or selected, says so.
+marked() {
+    dump_screen || return 1
+    adb shell cat "$DUMP" | python3 -I -c '
+import sys, xml.etree.ElementTree as ET
+text = sys.argv[1]
+root = ET.fromstring(sys.stdin.read())
+parents = {child: parent for parent in root.iter() for child in parent}
+for node in root.iter("node"):
+    if node.get("text") != text:
+        continue
+    while node is not None:
+        if node.get("checked") == "true" or node.get("selected") == "true":
+            sys.exit(0)
+        if node.get("checkable") == "true":
+            break
+        node = parents.get(node)
+sys.exit(1)' "$1"
+}
+# Taps the row showing $1 until it shows as chosen, and leaves it chosen if it already was. A tap can be
+# lost while the screen moves (CI, 2026-11-13: the choice of apps stayed on every app, "Datapavan workload"
+# was then found in the list of apps to leave out, and the shell went through the tool).
+choose() {
+    local try
+    for try in 1 2 3; do
+        marked "$1" && return 0
+        tap_text "$1" || return 1
+        for _ in 1 2 3; do
+            sleep 1
+            marked "$1" && return 0
+        done
+    done
+    return 1
+}
 # The password is below the choice of apps, and scroll_to only looks further down: back to the top first.
 scroll_to_top
-tap_text "Only the apps I choose" || fail "no choice of apps on the chain screen"
+choose "Only the apps I choose" || fail "the chain screen did not take the choice of apps"
+# The other choice is then not marked: this also shows that marked tells the two apart.
+marked "Every app" && fail "the chain screen shows both choices of apps as chosen"
 # The list of apps loads in the background.
 for _ in $(seq 1 15); do screen_has "Datapavan workload" && break; sleep 1; done
-tap_text "Datapavan workload" || fail "the workload app is not among the apps to choose"
+choose "Datapavan workload" || fail "the workload app could not be chosen"
 # The list of apps pushed the switch up, off the screen.
 scroll_to_top
-tap_text "$SWITCH" || fail "the chain's switch is not on the screen"
+choose "$SWITCH" || fail "the chain's switch did not turn on"
+marked "Only the apps I choose" || fail "the choice of apps changed when the chain turned on"
 sleep 2
 through=$(tool_log | grep -c "^connect watch.test $PORT$")
 associations=$(tool_log | grep -c "^associate$" || true)
