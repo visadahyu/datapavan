@@ -130,7 +130,8 @@ Onboarding (W9) asks about it together with the question of the inspection profi
 shows and who can see it. It is on for users who do not choose that profile and off for those who do. It is not
 shown before onboarding has asked.
 
-**(b) An optional home-screen widget** with the same counts and sizes, and Watch's state. No colour, no badge, no
+**(b) An optional home-screen widget, in 0.2.1,** after the lab run, with the same counts and sizes, and Watch's
+state. No colour, no badge, no
 app name. It is drawn with `RemoteViews`, so no new library (Compose's Glance would be one). It is declared for the
 home screen only, never for the lock screen. Its receiver is exported, as widget receivers are, accepts nothing from
 the intent and only redraws Watch's own numbers; ADR 0034's list of exported components and the build's allowlist
@@ -168,9 +169,9 @@ the user asks, so nothing moves under a finger or a screen reader's focus.
 | "Now" | every second while open | not open |
 
 Nothing here wakes the phone: work happens while traffic already runs or the screen is on. The budget is Watch's
-own, not an addition: Watch with the summary and the widget on still meets W9's bar of at most 3 % of a day's
-battery (DESIGN §7). A paired measurement on the A40, the same workload with them off and on, must show the
-difference below a tenth of Watch's own share.
+own, not an addition: Watch with the summary on still meets W9's bar of at most 3 % of a day's battery (DESIGN §7).
+A paired measurement on the A40, the same workload with the summary off and on, must show the difference below a
+tenth of Watch's own share. The widget is measured the same way before 0.2.1.
 
 ### 3. What may show where
 
@@ -199,11 +200,11 @@ connect" (`chain_log_destinations`). Without it, their rows say only that they w
 their bytes and state. What the screen shows, a search of an unlocked phone shows too.
 
 **A profile for people whose phones may be searched.** ADR 0047, drafted on the branch `inspection-profile`,
-defines this inspection profile, which the user chooses with one switch, "Keep nothing on this phone": off for users who do not
-face searches, on for those who do, decided by the user's own answer and never by country. This ADR's surfaces
-must follow it. Under that profile the summary and the widget are off, the tile shows
-only Watch's state, and nothing is kept: retention is none, so "Now" holds only memory and the flags of decision 4
-that need history do not run.
+defines this inspection profile, which the user chooses with one switch, "Keep nothing on this phone": off for
+users who do not face searches, on for those who do, decided by the user's own answer and never by country. This
+ADR's surfaces must follow it. Under that profile the summary, the flag notice and the widget are off, the tile
+shows only Watch's state, and nothing is kept: retention is none, so "Now" holds only memory and the flags of
+decision 4 that need history do not run.
 
 ### 4. How it is framed, and what is flagged
 
@@ -287,13 +288,14 @@ On the emulators with Android 10, 11, 15 and 17, by script, with debug builds' s
    not exist before onboarding has asked, nor under the inspection profile, and is gone with `POST_NOTIFICATIONS`
    denied. The flag notice does not exist until the user turns it on, never under the inspection profile, and
    carries only a count.
-3. The widget shows the same numbers; the tile shows counts only while unlocked.
+3. The tile shows counts only while unlocked; for 0.2.1, the widget shows the summary's numbers.
 4. Nothing outside the app names an app or a destination: the text of every notification, widget and tile is read
    over adb (`dumpsys notification`, the widget's views) and checked against every package and destination of the run.
 5. Chained apps' destinations do not appear in "Now" while the switch is off.
 6. Without usage access, and before the first unlock after a restart, flows show without a state and the summary is
    off.
-7. Battery: the paired A40 measurement of decision 2, and W9's window on the A56 with the summary and the widget on.
+7. Battery: the paired A40 measurement of decision 2, and W9's window on the A56 with the summary on; the widget's
+   own paired measurement before 0.2.1.
 8. The new screens pass the accessibility check in all eight languages and both pseudo-locales
    (`scripts/screenshots.sh`): labels, 48 dp targets, rows that keep their order, destinations isolated as
    left-to-right tokens in right-to-left text. The strings are translated and reviewed as ADR 0030 sets out, against
@@ -302,9 +304,9 @@ On the emulators with Android 10, 11, 15 and 17, by script, with debug builds' s
 
 On the A40 (Samsung, Android 11), the same as 1 to 3 with split screen and pop-up view.
 
-Done when all of these pass. "Now" and the per-app history meet W5's gate for 0.2.0; the summary and the tile's
-counts come with W9; the widget ships in 0.2.0 if its tests pass, and otherwise follows without holding the
-release.
+Done when all of these pass. 0.2.0 meets W5's gate with "Now", the per-app history, the summary and the tile's
+counts (the last two with W9). The widget is not in 0.2.0: it follows in 0.2.1, after the lab run, with its own
+tests.
 
 ### 7. Against the best in the field
 
@@ -336,10 +338,11 @@ decryption (Lumen) or the operating system (stage 3), and both are out of scope 
 
 - **The W5 gate is met in Advanced,** without the interface ADR 0045 dropped. DESIGN.md's W5 row links here.
 - **ADR 0025 changes for Advanced's live surfaces only,** as decision 4 sets out: a count across apps in the
-  summary and the widget, and a count of new flags in the opt-in flag notice, never an app's name. The roadmap's widget line ("only its state and the date of the last check") changes to "its
-  state and counts across apps, never an app's name or a count of flags", once accepted.
-- **ADR 0034 grows by one exported component,** the widget's receiver, and `POST_NOTIFICATIONS` gains a use it did
-  not list. No permission is added.
+  summary and the widget, and a count of new flags in the opt-in flag notice, never an app's name. The roadmap's
+  widget line ("only its state and the date of the last check") changes to "its state and counts across apps, never
+  an app's name or a count of flags", in 0.2.1, once accepted.
+- **ADR 0034 grows by one exported component in 0.2.1,** the widget's receiver, and `POST_NOTIFICATIONS` gains a use
+  it did not list. No permission is added.
 - **More strings,** in eight languages, held to ADR 0025's words. More lab work: the threshold run.
 - **Accepted limits:** the summary can be read by any app with notification access, which is why it carries no
   names; flags need days of the log, which is evidence, so users who keep less get fewer flags; traffic sent on an
@@ -370,7 +373,4 @@ All read on 2026-11-14.
 - **A flag notice:** yes, opt-in and off by default, a silent count with nothing named, never under the inspection
   profile (decision 4). The maintainer's example said "1 unusual event"; the string avoids "unusual" because ADR
   0025's list rules it out.
-
-## Questions for the maintainer
-
-3. **The widget in 0.2.0**, or after it?
+- **The widget:** not in 0.2.0; it follows in 0.2.1, after the lab run.
