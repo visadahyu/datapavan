@@ -150,6 +150,13 @@ an ADR (D25).
   - When several wait on one port, the answer could be any of their names'. It is dropped rather than handed to
     one, for as long as more than one waits. An app that asks several names on one port at once, as some ask
     several STUN servers, gets no answer from them through the tool.
+  - **The maintainer's decision (2026-11-13):** dropping is the safe floor, since handing an answer to the wrong
+    name would make the log wrong without a word. It is not the best the field allows, so unit 9b, before
+    Advanced's first release, removes the loss without guessing: an answer is told apart by the protocol's own
+    identifier where it has one (a STUN transaction ID, a QUIC connection ID, a DNS query ID), and a stand-in that
+    shares a waiting port in a protocol with none gets an association of its own. The lab first checks what real
+    tools' relays put in the header (gate 4's check R, table B10): where they give back the name, nothing is
+    ambiguous.
   - A relay that gives back the name it was asked for is matched by that name.
 - **A counter, appended:** `udp_unmatched`, the 27th, counts answers that no one destination could be told for: a
   port several stand-ins wait on, a malformed header or a fragment. It measures how often the rule above costs an
