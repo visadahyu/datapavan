@@ -2022,3 +2022,214 @@ async fn a_burst_of_lookups_before_the_first_answer_still_binds() -> Outcome {
     assert_eq!(answer, (at, dns_response(&queries[0], 0x5152)));
     Ok(())
 }
+
+/// Once the chain lets a chained app go, what its server sends afterwards no longer comes in through the
+/// old tool's relay: the tool's counterpart of the direct path's guard (the third review's r4).
+#[tokio::test(flavor = "current_thread")]
+async fn nothing_comes_in_through_the_old_relay_once_the_chain_lets_the_app_go() -> Outcome {
+    let server = UdpSocket::bind("127.0.0.1:0").await?;
+    let at = server.local_addr()?;
+    let (go, later) = oneshot::channel::<()>();
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 64];
+        if let Ok((n, relay)) = server.recv_from(&mut buffer).await {
+            let _ = server.send_to(&buffer[..n], relay).await;
+            if later.await.is_ok() {
+                let _ = server.send_to(b"late", relay).await;
+            }
+        }
+    });
+    let tool = proxy(Settings::default()).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    send(&tunnel, app(CHAINED_PORT), at, b"chained").await?;
+    receive(&tunnel).await?.ok_or("a datagram")?;
+    engine.chain(None);
+    go.send(()).map_err(|()| "the server is gone")?;
+    assert!(
+        silent(&tunnel).await,
+        "an answer came in through the old relay"
+    );
+    Ok(())
+}
+
+/// One name the tool reached at two addresses: the stand-in bound on one port to the first, on another
+/// to the second. The first address's answer on the second port could be the name's at either address:
+/// it is dropped and counted, not given to the stand-in bound there to the other (the guard in
+/// `Mapping::come_in`).
+#[tokio::test(flavor = "current_thread")]
+async fn an_answer_on_a_port_bound_to_another_address_is_dropped() -> Outcome {
+    let first = udp_echo().await?;
+    // The second port: asked at the first address, answered from the second.
+    let asked = UdpSocket::bind((first.ip(), 0)).await?;
+    let port = asked.local_addr()?.port();
+    let answering = UdpSocket::bind(("127.0.0.2", port)).await?;
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 64];
+        if let Ok((n, relay)) = asked.recv_from(&mut buffer).await {
+            let _ = answering.send_to(&buffer[..n], relay).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let _ = asked.send_to(b"from the first address", relay).await;
+        }
+    });
+    let mut settings = Settings::default();
+    settings.names.insert("echo.test".into(), first.ip());
+    let tool = proxy(settings).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    let at = stand_in(&tunnel, b"\x04echo\x04test\x00").await?;
+    echoed(&tunnel, SocketAddr::from((at, first.port())), b"first port").await?;
+    echoed(&tunnel, SocketAddr::from((at, port)), b"second port").await?;
+    assert!(
+        silent(&tunnel).await,
+        "an answer reached the app from the other address's port"
+    );
+    assert_eq!(engine.counters()[UDP_UNMATCHED], 1);
+    Ok(())
+}
+
+/// A mapping's flows that came in, silent for longer than `udp_idle` while the mapping lives on, end,
+/// and make room under the cap for others.
+#[tokio::test(flavor = "current_thread")]
+async fn flows_that_came_in_and_ended_make_room_for_others() -> Outcome {
+    let server = UdpSocket::bind("127.0.0.1:0").await?;
+    let at = server.local_addr()?;
+    let mut ports = Vec::new();
+    for _ in 0..70 {
+        ports.push(UdpSocket::bind("127.0.0.1:0").await?);
+    }
+    let (go, later) = oneshot::channel::<()>();
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 64];
+        if let Ok((_, mapped)) = server.recv_from(&mut buffer).await {
+            for port in &ports[..64] {
+                let _ = port.send_to(b"came in", mapped).await;
+            }
+            if later.await.is_ok() {
+                for port in &ports[64..] {
+                    let _ = port.send_to(b"came in later", mapped).await;
+                }
+            }
+        }
+    });
+    let tool = proxy(Settings::default()).await?;
+    let limits = Limits {
+        udp_idle: Duration::from_secs(1),
+        ..Limits::default()
+    };
+    let (engine, tunnel) = engine_with(chain(tool.address), limits, Arc::new(ByPort))?;
+    send(&tunnel, app(DIRECT_PORT), at, b"hello").await?;
+    assert_eq!(everything(&tunnel).await.len(), 64);
+    // The app keeps its mapping alive while the flows that came in fall silent and end.
+    for _ in 0..8 {
+        send(&tunnel, app(DIRECT_PORT), at, b"still here").await?;
+        tokio::time::sleep(Duration::from_millis(300)).await;
+    }
+    go.send(()).map_err(|()| "the server is gone")?;
+    assert_eq!(everything(&tunnel).await.len(), 6, "ports let in again");
+    assert_eq!(engine.counters()[UDP_CAME_IN_CAPPED], 0);
+    Ok(())
+}
+
+/// A stand-in that ended, silent, while its mapping lived on, and that the app asks again: its address is
+/// forgotten with it, so the answer binds it anew.
+#[tokio::test(flavor = "current_thread")]
+async fn a_stand_in_that_ended_is_bound_anew() -> Outcome {
+    let named = udp_echo().await?;
+    // Another destination at another address: one the app sent to itself would take the stand-in's
+    // answers as its own other port's.
+    let elsewhere = UdpSocket::bind("127.0.0.2:0").await?;
+    let other = elsewhere.local_addr()?;
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 64];
+        while let Ok((n, from)) = elsewhere.recv_from(&mut buffer).await {
+            let _ = elsewhere.send_to(&buffer[..n], from).await;
+        }
+    });
+    let mut settings = Settings::default();
+    settings.names.insert("echo.test".into(), named.ip());
+    let tool = proxy(settings).await?;
+    let limits = Limits {
+        udp_idle: Duration::from_secs(1),
+        ..Limits::default()
+    };
+    let (_engine, tunnel) = engine_with(chain(tool.address), limits, Arc::new(ByPort))?;
+    let at = SocketAddr::from((
+        stand_in(&tunnel, b"\x04echo\x04test\x00").await?,
+        named.port(),
+    ));
+    echoed(&tunnel, at, b"by name").await?;
+    for _ in 0..8 {
+        echoed(&tunnel, other, b"the mapping lives on").await?;
+        tokio::time::sleep(Duration::from_millis(300)).await;
+    }
+    echoed(&tunnel, at, b"by name again").await?;
+    Ok(())
+}
+
+/// A mapping that the chain, set again, sends another way ends at once, with its task: the old tool's
+/// relay is let go, not kept until the mapping falls silent.
+#[tokio::test(flavor = "current_thread")]
+async fn a_mapping_ended_by_a_new_chain_lets_the_old_relay_go() -> Outcome {
+    let echo = udp_echo().await?;
+    let (first, second) = (
+        proxy(Settings::default()).await?,
+        proxy(Settings::default()).await?,
+    );
+    let (engine, tunnel) = engine(chain(first.address))?;
+    echoed(&tunnel, echo, b"one").await?;
+    assert_eq!(first.open_relays(), 1);
+    engine.chain(Some(chain(second.address)));
+    echoed(&tunnel, echo, b"two").await?;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(first.open_relays(), 0, "the old tool's relay is still open");
+    Ok(())
+}
+
+/// The chain set again with other credentials for the same tool: a mapping through it ends, and the
+/// next datagram asks for a relay with the new ones, which this tool refuses.
+#[tokio::test(flavor = "current_thread")]
+async fn new_credentials_for_the_tool_move_a_mapping() -> Outcome {
+    let echo = udp_echo().await?;
+    let settings = Settings {
+        password: Some((b"watch".to_vec(), b"secret".to_vec())),
+        ..Settings::default()
+    };
+    let tool = proxy(settings).await?;
+    let with = |password: &[u8]| {
+        let mut chained = chain(tool.address);
+        chained.credentials = datapavan_net::socks5::Credentials::new(b"watch", password);
+        chained
+    };
+    let (engine, tunnel) = engine(with(b"secret"))?;
+    echoed(&tunnel, echo, b"right password").await?;
+    engine.chain(Some(with(b"wrong")));
+    send(&tunnel, app(CHAINED_PORT), echo, b"wrong password").await?;
+    assert_eq!(receive(&tunnel).await?, None, "an ICMP error, no echo");
+    Ok(())
+}
+
+/// A tool whose relay gives a stand-in's answer from an address that happens to be the stand-in itself,
+/// as a tool's own fake address from the same range can: the stand-in is bound to it, and waits no
+/// more, so a stranger on its port does not take it.
+#[tokio::test(flavor = "current_thread")]
+async fn a_stand_in_answered_from_its_own_address_waits_no_more() -> Outcome {
+    let echo = udp_echo().await?;
+    let stranger = UdpSocket::bind(("127.0.0.2", echo.port())).await?;
+    // The first stand-in an engine gives (the chain's lookup test checks it).
+    let own = SocketAddr::from(([198, 18, 0, 1], echo.port()));
+    let mut settings = Settings::default();
+    settings.names.insert("echo.test".into(), echo.ip());
+    settings.remap.insert(own, echo);
+    let tool = proxy(settings).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    let at = SocketAddr::from((
+        stand_in(&tunnel, b"\x04echo\x04test\x00").await?,
+        echo.port(),
+    ));
+    assert_eq!(at, own);
+    echoed(&tunnel, at, b"by name").await?;
+    let relay = *tool.relays().first().ok_or("a relay")?;
+    stranger.send_to(b"from a stranger", relay).await?;
+    assert!(silent(&tunnel).await, "the stranger took the stand-in");
+    assert_eq!(engine.counters()[UDP_FILTERED], 1);
+    Ok(())
+}

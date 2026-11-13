@@ -58,6 +58,17 @@ pub struct Proxy {
 struct Seen {
     commands: Mutex<Vec<u8>>,
     relays: Mutex<Vec<SocketAddr>>,
+    /// How many of its UDP relays are open now.
+    open: std::sync::atomic::AtomicUsize,
+}
+
+/// A relay open, counted until it ends, however it ends.
+struct Open<'a>(&'a std::sync::atomic::AtomicUsize);
+
+impl Drop for Open<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+    }
 }
 
 impl Proxy {
@@ -76,6 +87,11 @@ impl Proxy {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone()
+    }
+
+    /// How many of its UDP relays are open now.
+    pub fn open_relays(&self) -> usize {
+        self.seen.open.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Ends every UDP relay open now, and its request's connection, as a tool may.
@@ -221,6 +237,8 @@ async fn relay(
     seen: &Seen,
     mut close: watch::Receiver<u64>,
 ) -> std::io::Result<()> {
+    seen.open.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let _open = Open(&seen.open);
     // At the address it is announced at, where this computer holds it; else on the loopback.
     let here = match settings.relay_at {
         Some(ip) => UdpSocket::bind((ip, 0)).await.ok(),
