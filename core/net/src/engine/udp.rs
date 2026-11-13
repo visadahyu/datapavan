@@ -268,6 +268,8 @@ struct Peer {
     bytes: Option<Arc<FlowBytes>>,
     /// When the last datagram passed, either way.
     last: Instant,
+    /// When it was made: for a stand-in, when the app first sent to it (`Limits::udp_contest`).
+    made: Instant,
     way: PeerWay,
     /// Whether it came in: another port of an address the app sent to, not a destination of the app.
     came_in: bool,
@@ -344,6 +346,7 @@ impl Peer {
             quic: (!came_in).then(|| (opened, Box::new(quic::Initial::new()))),
             bytes: shared.record(flow),
             last: now,
+            made: now,
             way,
             came_in,
             asked: Vec::new(),
@@ -609,9 +612,11 @@ impl Mapping {
                 // An IPv4 address the relay gives as IPv6 is still the address the app sent to.
                 let from = SocketAddr::new(address.ip().to_canonical(), address.port());
                 let waited_on = self.sources.waiting.contains_key(&from.port());
+                let contest = shared.limits.udp_contest;
                 // A destination's own address first, then the one a stand-in was bound to: such an
                 // answer never binds a stand-in. A bound stand-in's address, on a port another stand-in
-                // waits on, could be answering either name: the tool may have resolved both to it.
+                // waits on, could be answering either name: the tool may have resolved both to it. So
+                // for `Limits::udp_contest` after the app first asked the other name.
                 if self
                     .peers
                     .get(&from)
@@ -620,7 +625,7 @@ impl Mapping {
                     return self.answered_by(from, answer, now);
                 }
                 if let Some(&shown) = self.sources.aliases.get(&from) {
-                    if waited_on {
+                    if self.contested(from.port(), None, (now, contest)) {
                         return LetIn::Unmatched;
                     }
                     return self.answered_by(shown, answer, now);
@@ -628,27 +633,32 @@ impl Mapping {
                 // Another port of an address the app sent to comes in as that address's, never as a
                 // stand-in's first answer. Of an address only a stand-in was bound to, on a port a
                 // stand-in waits on: when that is the same stand-in, the name the tool resolved to this
-                // address asked on another port, the answer binds it there too; when another waits,
-                // the answer could again be either name's.
+                // address asked on another port, the answer binds it there too; while another name's
+                // still contests the port, the answer could again be either name's.
                 let Some(ip) = self.sources.shown(from.ip()) else {
                     return self.first_answer(from, answer, now);
                 };
                 if ip != from.ip() && waited_on {
                     let same = SocketAddr::new(ip, from.port());
-                    let alone = self
+                    if self.contested(from.port(), Some(same), (now, contest)) {
+                        return LetIn::Unmatched;
+                    }
+                    let waits = self
                         .sources
                         .waiting
                         .get(&from.port())
-                        .is_some_and(|waiting| *waiting == [same]);
-                    let asked = from.port() != 53
-                        || self
-                            .peers
-                            .get(&same)
-                            .is_some_and(|peer| peer.asked_for(answer));
-                    if alone && asked {
-                        return self.bind(same, (from, answer), now);
+                        .is_some_and(|waiting| waiting.contains(&same));
+                    if waits {
+                        let asked = from.port() != 53
+                            || self
+                                .peers
+                                .get(&same)
+                                .is_some_and(|peer| peer.asked_for(answer));
+                        if asked {
+                            return self.bind(same, (from, answer), now);
+                        }
+                        return LetIn::Unmatched;
                     }
-                    return LetIn::Unmatched;
                 }
                 let shown = SocketAddr::new(ip, from.port());
                 (shown, PeerWay::through_tool(Target::Address(from)))
@@ -671,6 +681,25 @@ impl Mapping {
             }
         };
         self.come_in(shared, (app, shown), now, way)
+    }
+
+    /// Whether a stand-in other than `except` waits on `port` and still contests the answers from an
+    /// address another stand-in was bound to: for `contest` after the app first sent to it, `now`.
+    fn contested(
+        &self,
+        port: u16,
+        except: Option<SocketAddr>,
+        (now, contest): (Instant, Duration),
+    ) -> bool {
+        self.sources.waiting.get(&port).is_some_and(|waiting| {
+            waiting.iter().any(|shown| {
+                Some(*shown) != except
+                    && self
+                        .peers
+                        .get(shown)
+                        .is_some_and(|peer| now.duration_since(peer.made) < contest)
+            })
+        })
     }
 
     /// An answer from an address the app never saw, through the tool: the first answer of a stand-in

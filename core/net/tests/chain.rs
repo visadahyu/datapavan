@@ -2390,3 +2390,49 @@ async fn a_flow_that_came_in_by_name_does_not_block_an_asked_stand_in() -> Outco
     );
     Ok(())
 }
+
+/// One datagram to a second name on a bound stand-in's port, never answered: the bound stand-in's
+/// answers, which could be the second name's, are dropped while it contests the port, for
+/// `Limits::udp_contest`, and then reach the app again (fourth review of unit 9, finding 2).
+#[tokio::test(flavor = "current_thread")]
+async fn an_unanswered_name_cuts_a_bound_one_only_for_a_while() -> Outcome {
+    let echo = udp_echo().await?;
+    // The second name's server, which never answers.
+    let quiet = UdpSocket::bind(("127.0.0.2", echo.port())).await?;
+    let mut settings = Settings::default();
+    settings.names.insert("a.test".into(), echo.ip());
+    settings
+        .names
+        .insert("b.test".into(), IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2)));
+    let tool = proxy(settings).await?;
+    let contest = Duration::from_secs(1);
+    let limits = Limits {
+        udp_contest: contest,
+        ..Limits::default()
+    };
+    let (engine, tunnel) = engine_with(chain(tool.address), limits, Arc::new(ByPort))?;
+    let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, echo.port()));
+    let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, echo.port()));
+    echoed(&tunnel, a, b"bound").await?;
+    send(&tunnel, app(CHAINED_PORT), b, b"one try").await?;
+    let started = tokio::time::Instant::now();
+    let mut answered = Vec::new();
+    for tick in 0..15u8 {
+        send(&tunnel, app(CHAINED_PORT), a, &[tick]).await?;
+        let mut buffer = [0u8; 2048];
+        let got = tokio::time::timeout(Duration::from_millis(200), tunnel.recv(&mut buffer)).await;
+        if matches!(got, Ok(Ok(_))) {
+            answered.push(started.elapsed());
+        }
+    }
+    let first = *answered
+        .first()
+        .ok_or("the bound name never got its answers back")?;
+    assert!(
+        first >= contest * 3 / 4,
+        "an answer came while b contested: {first:?}"
+    );
+    assert!(engine.counters()[UDP_UNMATCHED] >= 1);
+    drop(quiet);
+    Ok(())
+}

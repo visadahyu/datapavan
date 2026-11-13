@@ -141,6 +141,15 @@ pub struct Limits {
     /// costs one question to Android, off the event loop, which holds that datagram for as long as the
     /// question takes: about 3 ms on the Galaxy A40, 11 ms in deep idle (the engine spike, 2026-11).
     pub udp_reask: Duration,
+    /// For this long after the app first sends to a stand-in through the tool, while it waits for its
+    /// first answer, an answer from an address another stand-in of the mapping was bound to, on that
+    /// port, could be its own: it is dropped rather than given to the other name. After that, such
+    /// answers go to the name bound to their address again, so that one unanswered name beside a
+    /// working one on the same port cuts the working one for this long, not for as long as the app
+    /// retries. A first answer through a tool comes within about a second; five leave room for a slow
+    /// one. The stand-in still waits, as long as it lives, for a first answer from an address no other
+    /// stand-in was bound to.
+    pub udp_contest: Duration,
     /// How long a connection to a server, or a tool's handshake, may take before the app is told the
     /// server is unreachable.
     pub connect_timeout: Duration,
@@ -200,6 +209,7 @@ impl Default for Limits {
             udp_idle: Duration::from_secs(120),
             udp_waiting: 32,
             udp_reask: Duration::from_secs(1),
+            udp_contest: Duration::from_secs(5),
             connect_timeout: Duration::from_secs(60),
             close_linger: Duration::from_secs(30),
             sweep_every: Duration::from_secs(60),
