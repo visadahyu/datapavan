@@ -3341,3 +3341,307 @@ async fn a_live_stand_in_keeps_its_way_once_its_name_leaves_the_map() -> Outcome
     tokio::time::sleep(Duration::from_millis(200)).await;
     echoed(&tunnel, a, b"after a pause").await
 }
+
+/// Android with a table of owners read when each question begins, each question slowed by the remote
+/// address it asks about if the test says so, and `protect` slowed as the test says: it notes when each
+/// question began, and for which remote (the seventh review's experiments).
+#[derive(Default)]
+struct Staged {
+    owners: std::sync::Mutex<std::collections::HashMap<u16, Option<u32>>>,
+    delays: std::sync::Mutex<std::collections::HashMap<SocketAddr, Duration>>,
+    asked: std::sync::Mutex<Vec<(SocketAddr, std::time::Instant)>>,
+    protect_delay: std::sync::Mutex<Duration>,
+}
+
+impl Staged {
+    /// The app that holds `port` from now on, or none that Android can name.
+    fn set(&self, port: u16, uid: Option<u32>) {
+        self.owners
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(port, uid);
+    }
+
+    /// Each question about `remote` takes `delay` from now on.
+    fn delay(&self, remote: SocketAddr, delay: Duration) {
+        self.delays
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(remote, delay);
+    }
+
+    /// Each socket's protection takes `delay` from now on.
+    fn protect_in(&self, delay: Duration) {
+        *self
+            .protect_delay
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = delay;
+    }
+
+    /// When the first question about `remote` began, once it has: the engine asked it no later.
+    async fn asked_about(
+        &self,
+        remote: SocketAddr,
+    ) -> Result<tokio::time::Instant, Box<dyn std::error::Error>> {
+        let until = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let asked = self
+                .asked
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .iter()
+                .find(|(about, _)| *about == remote)
+                .map(|(_, at)| *at);
+            if let Some(asked) = asked {
+                return Ok(tokio::time::Instant::from_std(asked));
+            }
+            if tokio::time::Instant::now() > until {
+                return Err(format!("Android was never asked about {remote}").into());
+            }
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        }
+    }
+}
+
+impl Platform for Staged {
+    fn owner(&self, _: u8, local: SocketAddr, remote: SocketAddr) -> Option<u32> {
+        self.asked
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push((remote, std::time::Instant::now()));
+        let uid = self
+            .owners
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&local.port())
+            .copied()
+            .flatten();
+        let delay = self
+            .delays
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&remote)
+            .copied();
+        if let Some(delay) = delay {
+            std::thread::sleep(delay);
+        }
+        uid
+    }
+
+    fn protect(&self, _: RawFd) -> bool {
+        let delay = *self
+            .protect_delay
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        std::thread::sleep(delay);
+        true
+    }
+
+    fn log(&self, _: &[u8]) {}
+}
+
+/// How many of the datagrams `heard` heard as `payload` left other than by the tool's relays.
+fn left_directly(heard: &Heard, payload: &[u8], tool: &common::Proxy) -> (usize, usize) {
+    let from = heard_from(heard, payload);
+    let relays = tool.relays();
+    let direct = from.iter().filter(|from| !relays.contains(from)).count();
+    (direct, from.len())
+}
+
+/// The direct app's question about a new destination is slow (300 ms); the port goes to a chained app
+/// 50 ms after it began, whose lookup Android answers at once, naming it, while no way of the socket is
+/// open yet. The old app's answer, which comes after, opens no way: the chained app's datagrams to that
+/// destination go through the tool (seventh review of unit 9, finding 1). So does the old app's
+/// datagram, asked about again.
+#[tokio::test(flavor = "current_thread")]
+async fn an_older_answer_opens_no_way_once_a_lookup_named_the_new_app() -> Outcome {
+    const PORT: u16 = 50_700;
+    let (a, heard) = listening().await?;
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(Staged::default());
+    android.set(PORT, Some(DIRECT));
+    android.delay(a, Duration::from_millis(300));
+    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    let (dns, dns_heard) = deaf_resolver(&engine).await?;
+    send(&tunnel, app(PORT), a, b"x").await?;
+    let asked = android.asked_about(a).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(50)).await;
+    android.set(PORT, Some(CHAINED));
+    let private = query(b"\x07private\x04test\x00", 1);
+    send(&tunnel, app(PORT), dns, &private).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(450)).await;
+    for _ in 0..10 {
+        send(&tunnel, app(PORT), a, b"y").await?;
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(!heard_private(&dns_heard), "the lookup went to the network");
+    assert_eq!(
+        left_directly(&heard, b"x", &tool),
+        (0, 1),
+        "the old app's datagram"
+    );
+    let (direct, all) = left_directly(&heard, b"y", &tool);
+    assert_eq!(direct, 0, "{direct} of {all} left directly");
+    Ok(())
+}
+
+/// The same when Android can name no app for the socket once the port is handed over: the old app's
+/// answer opens no way, and nothing the socket sends leaves while the chain is on, the old app's
+/// datagram included, since Android has since said that it can name no app for it.
+#[tokio::test(flavor = "current_thread")]
+async fn an_older_answer_opens_no_way_once_android_named_no_app() -> Outcome {
+    const PORT: u16 = 50_701;
+    let (a, heard) = listening().await?;
+    let (e, _) = listening().await?;
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(Staged::default());
+    android.set(PORT, Some(DIRECT));
+    android.delay(a, Duration::from_millis(300));
+    let (_engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    send(&tunnel, app(PORT), a, b"x").await?;
+    let asked = android.asked_about(a).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(50)).await;
+    android.set(PORT, None);
+    send(&tunnel, app(PORT), e, b"to e").await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(450)).await;
+    for _ in 0..10 {
+        send(&tunnel, app(PORT), a, b"y").await?;
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(
+        heard_from(&heard, b"y").len(),
+        0,
+        "the unnamed app's datagrams"
+    );
+    assert_eq!(heard_from(&heard, b"x").len(), 0, "the old app's datagram");
+    Ok(())
+}
+
+/// The direct app's lookup asks slowly (300 ms); the port goes to a chained app 50 ms after, whose
+/// datagram Android names at once. The old app's answer opens no flow of lookups: the chained app's
+/// lookup stays off the network's resolver.
+#[tokio::test(flavor = "current_thread")]
+async fn an_older_answer_opens_no_flow_of_lookups_once_a_datagram_named_the_new_app() -> Outcome {
+    const PORT: u16 = 50_702;
+    let (e, _) = listening().await?;
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(Staged::default());
+    android.set(PORT, Some(DIRECT));
+    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    let (dns, dns_heard) = deaf_resolver(&engine).await?;
+    android.delay(dns, Duration::from_millis(300));
+    send(
+        &tunnel,
+        app(PORT),
+        dns,
+        &query(b"\x06public\x04test\x00", 1),
+    )
+    .await?;
+    let asked = android.asked_about(dns).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(50)).await;
+    android.set(PORT, Some(CHAINED));
+    send(&tunnel, app(PORT), e, b"to e").await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(450)).await;
+    send(
+        &tunnel,
+        app(PORT),
+        dns,
+        &query(b"\x07private\x04test\x00", 1),
+    )
+    .await?;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(
+        !heard_private(&dns_heard),
+        "the chained app's lookup reached the network's resolver"
+    );
+    Ok(())
+}
+
+/// No answer comes late here: the direct app's question is answered at once, but its mapping's socket
+/// takes 300 ms to protect. The port goes to a chained app meanwhile, whose lookup Android names at once.
+/// The old app's mapping does not open: the chained app's datagrams to its destination, for three
+/// seconds without a pause of a second, go through the tool.
+#[tokio::test(flavor = "current_thread")]
+async fn a_mapping_still_opening_when_a_lookup_names_the_new_app_does_not_open() -> Outcome {
+    const PORT: u16 = 50_703;
+    let (a, heard) = listening().await?;
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(Staged::default());
+    android.set(PORT, Some(DIRECT));
+    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    let (dns, dns_heard) = deaf_resolver(&engine).await?;
+    android.protect_in(Duration::from_millis(300));
+    send(&tunnel, app(PORT), a, b"x").await?;
+    let asked = android.asked_about(a).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(50)).await;
+    android.set(PORT, Some(CHAINED));
+    send(
+        &tunnel,
+        app(PORT),
+        dns,
+        &query(b"\x07private\x04test\x00", 1),
+    )
+    .await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(450)).await;
+    android.protect_in(Duration::ZERO);
+    for _ in 0..15 {
+        send(&tunnel, app(PORT), a, b"y").await?;
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(!heard_private(&dns_heard), "the lookup went to the network");
+    assert_eq!(
+        left_directly(&heard, b"x", &tool),
+        (0, 1),
+        "the old app's datagram"
+    );
+    let (direct, all) = left_directly(&heard, b"y", &tool);
+    assert_eq!(
+        direct, 0,
+        "{direct} of {all} left directly over three seconds"
+    );
+    Ok(())
+}
+
+/// The same for a flow of lookups: the direct app's lookup is named at once, but its flow's socket
+/// takes 300 ms to protect; the port goes to a chained app meanwhile, whose datagram Android names at
+/// once. The old flow does not open: the chained app's lookup stays off the network's resolver.
+#[tokio::test(flavor = "current_thread")]
+async fn a_flow_of_lookups_still_opening_when_a_datagram_names_the_new_app_does_not_open() -> Outcome
+{
+    const PORT: u16 = 50_704;
+    let (e, _) = listening().await?;
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(Staged::default());
+    android.set(PORT, Some(DIRECT));
+    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    let (dns, dns_heard) = deaf_resolver(&engine).await?;
+    android.protect_in(Duration::from_millis(300));
+    send(
+        &tunnel,
+        app(PORT),
+        dns,
+        &query(b"\x06public\x04test\x00", 1),
+    )
+    .await?;
+    let asked = android.asked_about(dns).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(50)).await;
+    android.set(PORT, Some(CHAINED));
+    send(&tunnel, app(PORT), e, b"to e").await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(450)).await;
+    send(
+        &tunnel,
+        app(PORT),
+        dns,
+        &query(b"\x07private\x04test\x00", 1),
+    )
+    .await?;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(
+        !heard_private(&dns_heard),
+        "the chained app's lookup reached the network's resolver"
+    );
+    Ok(())
+}

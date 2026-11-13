@@ -22,7 +22,7 @@ use crate::tls::ServerName;
 use crate::tun::Tun;
 use crate::{answers, dns, packet, quic};
 use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::os::fd::AsFd;
@@ -946,10 +946,37 @@ pub(super) struct UdpTable {
     opening: HashMap<SocketAddr, watch::Receiver<Option<io::ErrorKind>>>,
     /// The app sockets whose app Android is asked for now, each with the question that is out.
     asking: HashMap<SocketAddr, Out>,
+    /// Each app socket with a way, opening or open: what the table knows of it beyond its mapping.
+    sockets: HashMap<SocketAddr, Socket>,
     /// The number of the last mapping opened.
     opened: u64,
     /// The number of the last question to Android shared among an app socket's destinations.
     questions: u64,
+}
+
+/// What the table knows of an app socket while it has a way, opening or open: the newest answer of
+/// Android's about it, and its flows of lookups. It goes with the socket's last way, and so is bounded
+/// by the ways: no way can open on an answer the record would have to judge once none is left, since
+/// each question is asked for a destination whose datagrams wait in `flows` until its way opens.
+#[derive(Default)]
+struct Socket {
+    /// The answer of Android's about the socket that was asked last, once one came.
+    named: Option<Named>,
+    /// How many of its destinations are in `flows`, opening or open.
+    entries: usize,
+    /// The destinations of its open flows of lookups, which an answer naming another app ends.
+    lookups: HashSet<SocketAddr>,
+}
+
+impl Socket {
+    /// Notes `named`, if no answer was asked after it: whether it is now the newest.
+    fn note(&mut self, named: Named) -> bool {
+        if self.named.is_some_and(|newest| newest.asked > named.asked) {
+            return false;
+        }
+        self.named = Some(named);
+        true
+    }
 }
 
 /// A question to Android about an app socket that is out: its number, when it was asked, and what tells
@@ -1044,12 +1071,67 @@ impl UdpTable {
             }
             mapping.ended.notify_one();
         }
+        self.forget(app);
+    }
+
+    /// Puts `entry` in `flows` for `key`, and notes it for the app socket.
+    fn put(&mut self, key: (SocketAddr, SocketAddr), entry: UdpEntry) {
+        let socket = self.sockets.entry(key.0).or_default();
+        if let UdpEntry::Open(_) = entry {
+            socket.lookups.insert(key.1);
+        } else {
+            socket.lookups.remove(&key.1);
+        }
+        if self.flows.insert(key, entry).is_none() {
+            socket.entries += 1;
+        }
+    }
+
+    /// Takes `key`'s entry out of `flows`, and forgets the app socket if it was its last way.
+    fn take(&mut self, key: (SocketAddr, SocketAddr)) -> Option<UdpEntry> {
+        let entry = self.flows.remove(&key)?;
+        if let Some(socket) = self.sockets.get_mut(&key.0) {
+            socket.entries = socket.entries.saturating_sub(1);
+            socket.lookups.remove(&key.1);
+        }
+        self.forget(key.0);
+        Some(entry)
+    }
+
+    /// Forgets `app`'s socket, with the newest answer about it, once it has no way left.
+    fn forget(&mut self, app: SocketAddr) {
+        if !self.mappings.contains_key(&app)
+            && self
+                .sockets
+                .get(&app)
+                .is_some_and(|socket| socket.entries == 0)
+        {
+            self.sockets.remove(&app);
+        }
+    }
+
+    /// Whether a way that rests on Android's answer `named` is stale: Android named another app, or
+    /// none, when asked after it. Such a way neither opens nor carries anything; its datagrams ask
+    /// again (seventh review of unit 9, finding 1).
+    fn stale(&self, app: SocketAddr, named: Named) -> bool {
+        self.sockets
+            .get(&app)
+            .and_then(|socket| socket.named)
+            .is_some_and(|newest| newest.asked > named.asked && newest.uid != named.uid)
     }
 
     /// The open mapping of `app`, by its number, with its socket, if it is the app `wanted.uid`'s and
     /// leaves the way wanted. Another ends: Android handed the port out again, or the chain changed.
-    /// Unless Android named its app when asked after the answer `wanted` rests on: that answer is stale.
+    /// Unless Android named another app when asked after the answer `wanted` rests on, whether a way of
+    /// the socket was open then or not: that answer is stale.
     fn open_mapping(&mut self, app: SocketAddr, wanted: &Wanted, shared: &Shared) -> Current {
+        let rests_on = Named {
+            uid: wanted.uid,
+            asked: wanted.asked,
+        };
+        if self.stale(app, rests_on) {
+            return Current::Newer;
+        }
         let Some(mapping) = self.mappings.get_mut(&app) else {
             return Current::Gone;
         };
@@ -1059,20 +1141,26 @@ impl UdpTable {
         {
             return Current::Same(mapping.id, Arc::clone(&mapping.socket));
         }
-        if mapping.uid != wanted.uid && mapping.named > wanted.asked {
-            return Current::Newer;
-        }
         let id = mapping.id;
         self.end(app, id, shared);
         Current::Gone
     }
 
-    /// Android named `named.uid` the app of `app`'s socket, whichever destination asked: the socket's
+    /// Android named `named.uid` the app of `app`'s socket, whichever destination asked: the newest
+    /// answer about the socket, unless one was asked after it, which then rules instead. The socket's
     /// mapping, if it is that app's, is fresh from when Android was asked. If it is another app's, it
     /// ends, unless it rests on a later answer, and so does a flow of lookups of the socket that is
     /// another app's: Android handed the port out again, and nothing more may leave the old app's way
-    /// (sixth review of unit 9, finding 2). The flow still hands the app what it owes.
+    /// (sixth review of unit 9, finding 2). The flow still hands the app what it owes. A way that opens
+    /// later on an older answer is stale ([`UdpTable::stale`]). The work is the socket's own: its
+    /// mapping and its flows of lookups, whatever else the table holds (seventh review, finding 2).
     fn answered(&mut self, app: SocketAddr, named: Named, shared: &Shared) {
+        let socket = self.sockets.entry(app).or_default();
+        if !socket.note(named) {
+            self.forget(app);
+            return;
+        }
+        let lookups: Vec<SocketAddr> = socket.lookups.iter().copied().collect();
         if let Some(mapping) = self.mappings.get_mut(&app) {
             if mapping.uid == named.uid {
                 mapping.sent = mapping.sent.max(named.asked);
@@ -1082,12 +1170,15 @@ impl UdpTable {
                 self.end(app, id, shared);
             }
         }
-        self.flows.retain(|&(from, _), entry| match entry {
-            UdpEntry::Open(flow) => {
-                from != app || flow.uid == named.uid || named.asked < flow.named
+        for destination in lookups {
+            let key = (app, destination);
+            if matches!(self.flows.get(&key), Some(UdpEntry::Open(flow))
+                if flow.uid != named.uid && named.asked >= flow.named)
+            {
+                self.take(key);
             }
-            UdpEntry::Opening(_) => true,
-        });
+        }
+        self.forget(app);
     }
 
     /// Takes the datagrams held for `key` that may leave now, those that came when `holds` held for
@@ -1098,14 +1189,14 @@ impl UdpTable {
         key: (SocketAddr, SocketAddr),
         holds: impl Fn(Instant) -> bool,
     ) -> (Vec<Held>, Option<Instant>) {
-        let held = match self.flows.remove(&key) {
+        let held = match self.take(key) {
             Some(UdpEntry::Opening(held)) => held,
             _ => Vec::new(),
         };
         let (leave, later): (Vec<_>, Vec<_>) = held.into_iter().partition(|(came, _)| holds(*came));
         let first = later.first().map(|(came, _)| *came);
         if first.is_some() {
-            self.flows.insert(key, UdpEntry::Opening(later));
+            self.put(key, UdpEntry::Opening(later));
         }
         (leave, first)
     }
@@ -1202,7 +1293,7 @@ impl UdpTable {
     /// The flow `id` between `key`'s two ends goes, if it is still there.
     fn remove_flow(&mut self, key: (SocketAddr, SocketAddr), id: u64) {
         if matches!(self.flows.get(&key), Some(UdpEntry::Open(flow)) if flow.id == id) {
-            self.flows.remove(&key);
+            self.take(key);
         }
     }
 
@@ -1236,9 +1327,7 @@ impl Loop {
                 // A flow of lookups that may not carry this one gives way to a new flow, which this
                 // lookup opens once Android has named its app and its route is asked. The old flow
                 // still hands the app every answer it owes for what it sent before.
-                table
-                    .flows
-                    .insert(key, UdpEntry::Opening(vec![(now, packet.to_vec())]));
+                table.put(key, UdpEntry::Opening(vec![(now, packet.to_vec())]));
                 Next::Open(now)
             } else {
                 match table.flows.get_mut(&key) {
@@ -1270,9 +1359,7 @@ impl Loop {
                         if let Some(to) = table.toward_peer(key, payload, now, &self.shared) {
                             Next::Peer(to)
                         } else {
-                            table
-                                .flows
-                                .insert(key, UdpEntry::Opening(vec![(now, packet.to_vec())]));
+                            table.put(key, UdpEntry::Opening(vec![(now, packet.to_vec())]));
                             Next::Open(now)
                         }
                     }
@@ -1668,7 +1755,7 @@ async fn open_peer(
             // The mapping ended meanwhile, as the network changed: the datagrams are dropped, as by a
             // full queue.
             None => {
-                if let Some(UdpEntry::Opening(waiting)) = table.flows.remove(&key) {
+                if let Some(UdpEntry::Opening(waiting)) = table.take(key) {
                     Counters::add(&shared.counters.skipped, waiting.len() as u64);
                 }
                 return Flushed::All;
@@ -1682,7 +1769,7 @@ async fn open_peer(
             Some(true) => {}
         }
         let Some(mapping) = table.mapping(app, id) else {
-            table.flows.remove(&key);
+            table.take(key);
             return Flushed::All;
         };
         // Android named the app when asked, before this destination's way was asked.
@@ -1802,6 +1889,7 @@ async fn mapping_for(
     table.opened += 1;
     let id = table.opened;
     let ended = Arc::new(Notify::new());
+    table.sockets.entry(app).or_default();
     table.mappings.insert(
         app,
         Mapping {
@@ -2238,6 +2326,11 @@ async fn open_lookups(
         if now != chains && !way.keeps(&shared.route(uid, destination)) {
             return Flushed::Reroute;
         }
+        // Android named another app, or none, when asked after this answer, while the way was made:
+        // the lookups ask again, and the flow does not open (seventh review of unit 9, finding 1).
+        if table.stale(app, named) {
+            return table.first_held(key).map_or(Flushed::All, Flushed::Held);
+        }
         shared.record(flow);
         let mut open = UdpFlow {
             id,
@@ -2279,7 +2372,7 @@ async fn open_lookups(
         }
         // What came too late waits for another question; this flow then gives way to the next.
         if held.is_none() {
-            table.flows.insert(key, UdpEntry::Open(open));
+            table.put(key, UdpEntry::Open(open));
         }
     }
     // Counted before the answers can be: an answer is counted only for a lookup already counted.
@@ -2453,7 +2546,7 @@ async fn udp_failed(
 ) {
     let unreachable = flow.outcome == Outcome::Unreachable;
     shared.record(flow);
-    let waiting = match lock(flows).flows.remove(&key) {
+    let waiting = match lock(flows).take(key) {
         Some(UdpEntry::Opening(waiting)) => waiting,
         _ => Vec::new(),
     };
@@ -2857,6 +2950,65 @@ mod tests {
         Ok(())
     }
 
+    /// With no way of the socket open, but a destination's datagrams waiting, an answer that names
+    /// another app than the newest answer about the socket, and was asked before it, opens no mapping:
+    /// it is stale (seventh review of unit 9, finding 1).
+    #[test]
+    fn an_older_answer_opens_no_mapping_once_a_newer_one_named_another_app() -> io::Result<()> {
+        let shared = shared();
+        let mut table = UdpTable::default();
+        let key = (APP, SocketAddr::from(([192, 0, 2, 9], 9)));
+        table.put(key, UdpEntry::Opening(vec![(Instant::now(), Vec::new())]));
+        let newest = Named {
+            uid: Some(10_078),
+            asked: Instant::now(),
+        };
+        table.answered(APP, newest, &shared);
+        // A late answer to a question asked before the newest changes nothing.
+        let late = Named {
+            uid: Some(10_077),
+            asked: ago(&shared, 0.25)?,
+        };
+        table.answered(APP, late, &shared);
+        let older = Wanted {
+            uid: Some(10_077),
+            exit: Exit::Direct,
+            chains: 0,
+            asked: ago(&shared, 0.5)?,
+        };
+        assert!(matches!(
+            table.open_mapping(APP, &older, &shared),
+            Current::Newer
+        ));
+        let rests_on = Named {
+            uid: older.uid,
+            asked: older.asked,
+        };
+        assert!(
+            table.stale(APP, rests_on),
+            "a flow of lookups would open on it"
+        );
+        let same_app = Wanted {
+            uid: newest.uid,
+            exit: Exit::Direct,
+            chains: 0,
+            asked: older.asked,
+        };
+        assert!(matches!(
+            table.open_mapping(APP, &same_app, &shared),
+            Current::Gone
+        ));
+        let as_new = Wanted {
+            asked: newest.asked,
+            ..older
+        };
+        assert!(matches!(
+            table.open_mapping(APP, &as_new, &shared),
+            Current::Gone
+        ));
+        Ok(())
+    }
+
     /// An answer that names another app than the mapping's, but was asked before the answer the
     /// mapping rests on, is stale: it does not end the mapping.
     #[tokio::test(flavor = "current_thread")]
@@ -2864,9 +3016,11 @@ mod tests {
         let shared = shared();
         let flows = paused(&shared, Some(10_077)).await?;
         let mut table = lock(&flows);
-        if let Some(mapping) = table.mappings.get_mut(&APP) {
-            mapping.named = Instant::now();
-        }
+        let named = Named {
+            uid: Some(10_077),
+            asked: Instant::now(),
+        };
+        table.answered(APP, named, &shared);
         let wanted = Wanted {
             uid: Some(10_078),
             exit: Exit::Direct,
@@ -2905,7 +3059,7 @@ mod tests {
             sent: rests_on,
             named: rests_on,
         };
-        table.flows.insert((APP, dns), UdpEntry::Open(flow));
+        table.put((APP, dns), UdpEntry::Open(flow));
         let older = ago(&shared, 0.5)?;
         for (uid, asked, ends) in [
             (Some(10_077), rests_on, false),
@@ -2920,6 +3074,59 @@ mod tests {
             assert_eq!(kept, (!ends, !ends), "after {uid:?} asked at {asked:?}");
         }
         Ok(())
+    }
+
+    /// One app socket's burst of new destinations: each answer about it costs the work of its own ways,
+    /// not of every destination the table holds, so that 20,000 answers among 20,000 waiting
+    /// destinations take well under a second, where a scan of the table at each took seconds (seventh
+    /// review of unit 9, finding 2).
+    #[test]
+    fn an_answer_costs_only_its_own_sockets_ways() {
+        let shared = shared();
+        let mut table = UdpTable::default();
+        let now = Instant::now();
+        for port in 0..20_000 {
+            let destination = SocketAddr::from(([192, 0, 2, 9], port));
+            table.put(
+                (APP, destination),
+                UdpEntry::Opening(vec![(now, Vec::new())]),
+            );
+        }
+        let started = Instant::now();
+        for _ in 0..20_000 {
+            let named = Named {
+                uid: Some(10_077),
+                asked: Instant::now(),
+            };
+            table.answered(APP, named, &shared);
+        }
+        let took = started.elapsed();
+        assert!(
+            took < Duration::from_secs(1),
+            "20,000 answers took {took:?}"
+        );
+    }
+
+    /// The record of the newest answer about an app socket goes with its last way.
+    #[test]
+    fn a_socket_is_forgotten_with_its_last_way() {
+        let shared = shared();
+        let mut table = UdpTable::default();
+        let key = (APP, SocketAddr::from(([192, 0, 2, 9], 9)));
+        table.put(key, UdpEntry::Opening(vec![(Instant::now(), Vec::new())]));
+        let named = Named {
+            uid: Some(10_077),
+            asked: Instant::now(),
+        };
+        table.answered(APP, named, &shared);
+        assert!(
+            table
+                .sockets
+                .get(&APP)
+                .is_some_and(|socket| socket.named.is_some())
+        );
+        table.take(key);
+        assert!(!table.sockets.contains_key(&APP));
     }
 
     /// A stand-in on port 53 that its relay answers by name waits no more: it drops the queries it kept
