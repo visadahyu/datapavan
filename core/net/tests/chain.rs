@@ -2450,12 +2450,13 @@ async fn a_bound_name_beside_a_silent_one(
     Ok((engine, tunnel, (a, b), (tool, quiet)))
 }
 
-/// Sends `a` a datagram every 200 ms, and `b` one too when `retry`, for 4 s: which ticks `a` answered.
+/// Sends `a` a datagram every 200 ms, and `b` one too when `retry`, for 4 s: which ticks `a` answered,
+/// each with the time from `since` to its answer.
 async fn ticks_answered(
     tunnel: &UnixDatagram,
     (a, b): (SocketAddr, SocketAddr),
-    retry: bool,
-) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    (retry, since): (bool, std::time::Instant),
+) -> Result<Vec<(u8, Duration)>, Box<dyn std::error::Error>> {
     let mut answered = Vec::new();
     for tick in 0..20u8 {
         if retry {
@@ -2465,31 +2466,43 @@ async fn ticks_answered(
         let mut buffer = [0u8; 2048];
         let got = tokio::time::timeout(Duration::from_millis(200), tunnel.recv(&mut buffer)).await;
         if matches!(got, Ok(Ok(_))) {
-            answered.push(tick);
+            answered.push((tick, since.elapsed()));
         }
     }
     Ok(answered)
 }
 
+/// Whether `answered`, from [`ticks_answered`], shows a cut of `contest` from `since`: no answer in the
+/// first tick, nor before `contest` had passed since the app first sent to the second name, which made
+/// its contest begin no earlier; some answer after it. Load can only make the first answer later.
+fn cut_for(answered: &[(u8, Duration)], contest: Duration) -> Outcome {
+    let &(tick, after) = answered
+        .first()
+        .ok_or("the bound name never got its answers back")?;
+    assert!(tick > 0, "an answer came while b contested: {answered:?}");
+    assert!(
+        after >= contest,
+        "the cut lasted only {after:?}: {answered:?}"
+    );
+    Ok(())
+}
+
 /// One datagram to a second name on a bound stand-in's port, never answered: the bound stand-in's
 /// answers, which could be the second name's, are dropped while it contests the port, for
 /// `Limits::udp_contest`, and then reach the app again (fourth review of unit 9, finding 2). The ticks
-/// start once the second name is a flow, so that its contest has surely begun (fifth review, finding 4).
+/// start once the second name is a flow, so that its contest has surely begun (fifth review, finding 4),
+/// and the first answer comes no sooner than the contest's length (sixth review, finding 5).
 #[tokio::test(flavor = "current_thread")]
 async fn an_unanswered_name_cuts_a_bound_one_only_for_a_while() -> Outcome {
-    let (engine, tunnel, (a, b), _kept) =
-        a_bound_name_beside_a_silent_one(Duration::from_secs(2)).await?;
+    let contest = Duration::from_secs(2);
+    let (engine, tunnel, (a, b), _kept) = a_bound_name_beside_a_silent_one(contest).await?;
+    let since = std::time::Instant::now();
     send(&tunnel, app(CHAINED_PORT), b, b"one try").await?;
     until_a_flow_to(&engine, b).await?;
-    let answered = ticks_answered(&tunnel, (a, b), false).await?;
-    assert!(
-        !answered.is_empty(),
-        "the bound name never got its answers back"
-    );
-    assert!(
-        answered[0] > 0,
-        "an answer came while b contested: ticks {answered:?}"
-    );
+    cut_for(
+        &ticks_answered(&tunnel, (a, b), (false, since)).await?,
+        contest,
+    )?;
     assert!(engine.counters()[UDP_UNMATCHED] >= 1);
     Ok(())
 }
@@ -2498,20 +2511,15 @@ async fn an_unanswered_name_cuts_a_bound_one_only_for_a_while() -> Outcome {
 /// the same, since the contest runs from the app's first datagram to it (the fifth review's experiment).
 #[tokio::test(flavor = "current_thread")]
 async fn a_retried_unanswered_name_cuts_a_bound_one_only_for_a_while() -> Outcome {
-    let (engine, tunnel, (a, b), _kept) =
-        a_bound_name_beside_a_silent_one(Duration::from_secs(2)).await?;
+    let contest = Duration::from_secs(2);
+    let (engine, tunnel, (a, b), _kept) = a_bound_name_beside_a_silent_one(contest).await?;
+    let since = std::time::Instant::now();
     send(&tunnel, app(CHAINED_PORT), b, b"first try").await?;
     until_a_flow_to(&engine, b).await?;
-    let answered = ticks_answered(&tunnel, (a, b), true).await?;
-    assert!(
-        !answered.is_empty(),
-        "the bound name never got its answers back"
-    );
-    assert!(
-        answered[0] > 0,
-        "an answer came while b contested: ticks {answered:?}"
-    );
-    Ok(())
+    cut_for(
+        &ticks_answered(&tunnel, (a, b), (true, since)).await?,
+        contest,
+    )
 }
 
 /// Android, which names every app socket the direct app's, and counts how often it is asked.
