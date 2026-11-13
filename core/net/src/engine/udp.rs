@@ -12,7 +12,7 @@ use super::logbook::FlowBytes;
 use super::lookups;
 use super::naming::Begun;
 use super::upstream::{connect_udp, owner, protect};
-use super::whose::{Named, Record, Settled, Step, Verdict};
+use super::whose::{Named, Record, Settled, Step, Verdict, Waiter};
 use super::{
     BATCH, Counters, Ech, Flow, Loop, NamedBy, Opened, Outcome, Shared, errors, is_unreachable,
     lock, send_to_app,
@@ -242,8 +242,9 @@ pub(super) struct Holding {
     held: Vec<Held>,
 }
 
-/// A datagram that waits for its way: when it came, and the whole packet.
-type Held = (Instant, Vec<u8>);
+/// A datagram that waits for its way: when it came, whose the answers said it was then, and the whole
+/// packet.
+type Held = Waiter<Vec<u8>>;
 
 /// How a mapping leaves.
 #[derive(Clone)]
@@ -1026,14 +1027,18 @@ enum Made {
 fn holding(packet: &[u8], now: Instant, floor: bool) -> UdpEntry {
     UdpEntry::Opening(Holding {
         floor: floor.then_some(now),
-        held: vec![(now, packet.to_vec())],
+        held: vec![Waiter {
+            came: now,
+            then: None,
+            item: packet.to_vec(),
+        }],
     })
 }
 
 /// Notes that the datagrams of `entry`, if it held any, wait no more.
 fn unwait(socket: &mut Socket, entry: &UdpEntry) {
     if let UdpEntry::Opening(holding) = entry
-        && let Some(&(came, _)) = holding.held.first()
+        && let Some(came) = holding.held.first().map(|waiter| waiter.came)
         && let Some(count) = socket.waiting.get_mut(&came)
     {
         *count -= 1;
@@ -1072,7 +1077,7 @@ impl UdpTable {
             }
             UdpEntry::Opening(holding) => {
                 socket.lookups.remove(&key.1);
-                if let Some(&(came, _)) = holding.held.first() {
+                if let Some(came) = holding.held.first().map(|waiter| waiter.came) {
                     *socket.waiting.entry(came).or_default() += 1;
                 }
             }
@@ -1106,6 +1111,49 @@ impl UdpTable {
         {
             self.sockets.remove(&app);
         }
+    }
+
+    /// The question out about `app`'s socket, if one is. One whose asker is gone without a word (the
+    /// engine stopping) holds no one up.
+    fn out(&self, app: SocketAddr) -> Option<&Out> {
+        self.asking
+            .get(&app)
+            .filter(|out| out.answer.has_changed().is_ok())
+    }
+
+    /// Puts out a question to Android about `app`'s socket, asked `now`, which datagrams of the socket
+    /// that come near it may join.
+    fn ask(&mut self, app: SocketAddr, now: Instant) -> Asking {
+        let (told, answer) = watch::channel(Asked::Waiting);
+        self.questions += 1;
+        let id = self.questions;
+        let out = Out {
+            id,
+            asked: now,
+            answer,
+        };
+        self.asking.insert(app, out);
+        Asking {
+            told,
+            id,
+            asked: now,
+        }
+    }
+
+    /// A question to put out now for a datagram of `app`'s socket that came at `came`, with `floor`, if
+    /// no answer decides it and no question out can ([`Record::step`]): so it asks as it comes, not
+    /// once its way opens, when a question could no longer decide it (ninth review of unit 9, finding
+    /// 1).
+    fn question_for(
+        &mut self,
+        app: SocketAddr,
+        (came, floor, then): (Instant, Option<Instant>, Option<Verdict>),
+        reask: Duration,
+    ) -> Option<Asking> {
+        let out = self.out(app).map(|out| out.asked);
+        let socket = self.sockets.get(&app)?;
+        (socket.record.step((came, floor, then), out, came, reask) == Step::Ask)
+            .then(|| self.ask(app, came))
     }
 
     /// Whether `key`'s app socket has a mapping that knows its destination: one the app sent to.
@@ -1211,16 +1259,22 @@ impl UdpTable {
         settled
     }
 
-    /// Drops the first datagram held for `key`: the rule cannot say whose it is.
-    fn drop_first(&mut self, key: (SocketAddr, SocketAddr)) {
+    /// Drops the first datagram held for `key` if it is the one decided, which came at `decided`: the
+    /// rule drops it. Another task, for a later queue of the same destination, may have taken it
+    /// already (ninth review of unit 9, finding 6).
+    fn drop_held(&mut self, key: (SocketAddr, SocketAddr), decided: Instant) -> bool {
         let Some(UdpEntry::Opening(holding)) = self.flows.get_mut(&key) else {
-            return;
+            return false;
         };
-        if holding.held.is_empty() {
-            return;
+        if holding
+            .held
+            .first()
+            .is_none_or(|waiter| waiter.came != decided)
+        {
+            return false;
         }
-        let (came, _) = holding.held.remove(0);
-        let next = holding.held.first().map(|(next, _)| *next);
+        let came = holding.held.remove(0).came;
+        let next = holding.held.first().map(|waiter| waiter.came);
         if let Some(socket) = self.sockets.get_mut(&key.0) {
             if let Some(count) = socket.waiting.get_mut(&came) {
                 *count -= 1;
@@ -1235,14 +1289,20 @@ impl UdpTable {
         if next.is_none() {
             self.take(key);
         }
+        true
     }
 
-    /// When the first datagram held for `key` came, with the floor of the answers that may stand for it.
-    fn first_held(&self, key: (SocketAddr, SocketAddr)) -> Option<(Instant, Option<Instant>)> {
+    /// When the first datagram held for `key` came, with the floor of the answers that may stand for it,
+    /// and whose they said it was when it came.
+    fn first_held(
+        &self,
+        key: (SocketAddr, SocketAddr),
+    ) -> Option<(Instant, Option<Instant>, Option<Verdict>)> {
         match self.flows.get(&key) {
-            Some(UdpEntry::Opening(holding)) => {
-                holding.held.first().map(|(came, _)| (*came, holding.floor))
-            }
+            Some(UdpEntry::Opening(holding)) => holding
+                .held
+                .first()
+                .map(|waiter| (waiter.came, holding.floor, waiter.then)),
             _ => None,
         }
     }
@@ -1412,8 +1472,12 @@ impl Loop {
                         )
                     }
                     Some(UdpEntry::Opening(holding)) => {
-                        if holding.held.len() < self.shared.limits.udp_waiting {
-                            holding.held.push((now, packet.to_vec()));
+                        let (floor, room) = (
+                            holding.floor,
+                            holding.held.len() < self.shared.limits.udp_waiting,
+                        );
+                        if room {
+                            self.hold_behind(&mut table, key, packet, (now, floor));
                         } else {
                             Counters::add(&self.shared.counters.skipped, 1);
                         }
@@ -1469,6 +1533,34 @@ impl Loop {
         let sent = way.send(payload).await;
         if let Some(error) = count_sent(&self.shared, None, packet, parsed, sent) {
             self.send(&error).await;
+        }
+    }
+
+    /// A datagram for a destination whose datagrams wait for its way goes behind them, with whose the
+    /// answers say it is as it comes, if they say; and it asks Android as it comes if no answer and no
+    /// question out can decide it, so that it never waits on with no answer near it (ninth review of
+    /// unit 9, finding 1).
+    fn hold_behind(
+        &self,
+        table: &mut UdpTable,
+        key: (SocketAddr, SocketAddr),
+        packet: &[u8],
+        (came, floor): (Instant, Option<Instant>),
+    ) {
+        let reask = self.shared.limits.udp_reask;
+        let then = table
+            .sockets
+            .get(&key.0)
+            .and_then(|socket| socket.record.presume(came, floor, reask));
+        if let Some(UdpEntry::Opening(holding)) = table.flows.get_mut(&key) {
+            holding.held.push(Waiter {
+                came,
+                then,
+                item: packet.to_vec(),
+            });
+        }
+        if let Some(asking) = table.question_for(key.0, (came, floor, then), reask) {
+            spawn_question(key, asking, &self.shared, &self.udp);
         }
     }
 
@@ -1588,20 +1680,29 @@ async fn open_udp(
     // An app Android cannot name is unknown, in the log and to the chain, even when Android named this
     // socket's app before: the port may be another app's now, and a guess would log one app's traffic
     // as another's. While a chain is on, such an app goes nowhere.
-    while let Some(verdict) = decide(key, &shared, &flows).await {
+    while let Some((verdict, came)) = decide(key, &shared, &flows).await {
         match verdict {
             Verdict::Owner(uid) if shared.is_tunnel_dns(key.1.ip()) => {
                 while let Made::Reroute = open_lookups(key, uid, context).await {}
             }
             Verdict::Owner(uid) => open_mapped(key, uid, context).await,
-            // Who sent it cannot be told: answers near it name different apps, or the app they name
-            // holds the socket no more, or no answer near enough can be had.
-            Verdict::Drop | Verdict::Unknown => {
-                lock(&flows).drop_first(key);
-                Counters::add(&shared.counters.udp_ambiguous, 1);
+            // Who sent it cannot be told, or its app holds the socket no more, or no answer near it can
+            // be had: the very datagram decided goes, counted by why.
+            why => {
+                if lock(&flows).drop_held(key, came) {
+                    let ambiguous = why == Verdict::Ambiguous;
+                    count_drops(&shared, (u64::from(ambiguous), u64::from(!ambiguous)));
+                }
             }
         }
     }
+}
+
+/// Counts datagrams the rule dropped: as ambiguous, answers near them naming different apps, or as
+/// late, their app having lost the socket before their way opened, or no answer near them to be had.
+fn count_drops(shared: &Shared, (ambiguous, late): (u64, u64)) {
+    Counters::add(&shared.counters.udp_ambiguous, ambiguous);
+    Counters::add(&shared.counters.udp_late, late);
 }
 
 /// Makes a destination a peer of the mapping of its app socket's app `uid`, routed again when the chain
@@ -1638,7 +1739,52 @@ type Context<'a> = (
 /// A question to Android that a datagram waits for: one out, which it joins, or its own.
 enum Pending {
     Join(watch::Receiver<Asked>),
-    Ask(watch::Sender<Asked>, u64, Instant),
+    Ask(Asking),
+}
+
+/// A question to Android about an app socket, put out: what tells those that join it that it was
+/// answered, its number, and when it was asked.
+struct Asking {
+    told: watch::Sender<Asked>,
+    id: u64,
+    asked: Instant,
+}
+
+/// Asks Android whose `app`'s socket is, for the question `asking` put out, with `remote` as the other
+/// end Android is told of, and notes the answer ([`UdpTable::answered`]): what waits is decided again.
+async fn put_question(
+    (app, remote): (SocketAddr, SocketAddr),
+    asking: Asking,
+    shared: &Arc<Shared>,
+    flows: &UdpFlows,
+) {
+    let named = Named {
+        uid: owner(shared, UDP, app, remote).await,
+        asked: asking.asked,
+    };
+    {
+        let mut table = lock(flows);
+        if table
+            .asking
+            .get(&app)
+            .is_some_and(|out| out.id == asking.id)
+        {
+            table.asking.remove(&app);
+        }
+        table.answered(app, (asking.id, named), shared);
+    }
+    let _ = asking.told.send(Asked::Answered);
+}
+
+/// As [`put_question`], in a task of its own.
+fn spawn_question(
+    key: (SocketAddr, SocketAddr),
+    asking: Asking,
+    shared: &Arc<Shared>,
+    flows: &UdpFlows,
+) {
+    let (shared, flows) = (Arc::clone(shared), Arc::clone(flows));
+    tokio::spawn(async move { put_question(key, asking, &shared, &flows).await });
 }
 /// Where a question to Android about an app socket's app stands.
 #[derive(Clone, Copy)]
@@ -1653,68 +1799,38 @@ enum Asked {
 /// answer is noted. A question asked for one destination serves the others that come near it, so that a
 /// pause in an app socket's sending costs one question to Android, not one for each destination it
 /// knows; one a destination the app had no way to, or a lookup, joins only if it was asked since its
-/// datagram came. `None` once nothing waits.
+/// datagram came. The verdict, with when the datagram it is for came; `None` once nothing waits.
 async fn decide(
-    (app, destination): (SocketAddr, SocketAddr),
+    key: (SocketAddr, SocketAddr),
     shared: &Arc<Shared>,
     flows: &UdpFlows,
-) -> Option<Verdict> {
+) -> Option<(Verdict, Instant)> {
     let reask = shared.limits.udp_reask;
     loop {
         let pending = {
             let mut table = lock(flows);
-            let held = table.first_held((app, destination))?;
-            // One whose asker is gone without a word (the engine stopping) holds no one up.
-            let out = table
-                .asking
-                .get(&app)
-                .filter(|out| out.answer.has_changed().is_ok());
+            let held = table.first_held(key)?;
+            let out = table.out(key.0);
             let now = Instant::now();
-            let step = table.sockets.get(&app).map_or(Step::Ask, |socket| {
+            let step = table.sockets.get(&key.0).map_or(Step::Ask, |socket| {
                 socket
                     .record
                     .step(held, out.map(|out| out.asked), now, reask)
             });
             match step {
-                Step::Decided(verdict) => return Some(verdict),
+                Step::Decided(verdict) => return Some((verdict, held.0)),
                 Step::Join => match out {
                     Some(out) => Pending::Join(out.answer.clone()),
                     None => continue,
                 },
-                Step::Ask => {
-                    let (told, answer) = watch::channel(Asked::Waiting);
-                    table.questions += 1;
-                    let id = table.questions;
-                    table.asking.insert(
-                        app,
-                        Out {
-                            id,
-                            asked: now,
-                            answer,
-                        },
-                    );
-                    Pending::Ask(told, id, now)
-                }
+                Step::Ask => Pending::Ask(table.ask(key.0, now)),
             }
         };
         match pending {
             Pending::Join(mut answer) => {
                 let _ = answer.changed().await;
             }
-            Pending::Ask(told, id, asked) => {
-                let named = Named {
-                    uid: owner(shared, UDP, app, destination).await,
-                    asked,
-                };
-                {
-                    let mut table = lock(flows);
-                    if table.asking.get(&app).is_some_and(|out| out.id == id) {
-                        table.asking.remove(&app);
-                    }
-                    table.answered(app, (id, named), shared);
-                }
-                let _ = told.send(Asked::Answered);
-            }
+            Pending::Ask(asking) => put_question(key, asking, shared, flows).await,
         }
     }
 }
@@ -1774,7 +1890,7 @@ async fn open_peer(
             Some(true) => {}
         }
         let settled = table.settle(key, wanted.uid, shared.limits.udp_reask);
-        Counters::add(&shared.counters.udp_ambiguous, settled.dropped.len() as u64);
+        count_drops(shared, settled.drops());
         let Some(mapping) = table.mapping(app, id).filter(|_| !settled.leave.is_empty()) else {
             return Made::Done;
         };
@@ -1782,7 +1898,7 @@ async fn open_peer(
         mapping.answering(destination);
         let peer = mapping.peer(shared, key, now, (false, way));
         let header = peer.way.header.clone();
-        for (_, packet) in &settled.leave {
+        for Waiter { item: packet, .. } in &settled.leave {
             let Ok(parsed) = packet::parse(packet) else {
                 continue;
             };
@@ -2339,7 +2455,7 @@ async fn open_lookups(
         // was made, nothing does, the flow does not open, and what waits is decided again (seventh and
         // eighth reviews of unit 9, finding 1).
         let settled = table.settle(key, uid, shared.limits.udp_reask);
-        Counters::add(&shared.counters.udp_ambiguous, settled.dropped.len() as u64);
+        count_drops(shared, settled.drops());
         if settled.leave.is_empty() {
             table.forget(app);
             return Made::Done;
@@ -2352,7 +2468,7 @@ async fn open_lookups(
             owed: Arc::clone(&owed),
             chains: now,
         };
-        for (_, packet) in &settled.leave {
+        for Waiter { item: packet, .. } in &settled.leave {
             let Ok(parsed) = packet::parse(packet) else {
                 continue;
             };
@@ -2557,16 +2673,18 @@ async fn udp_failed(
         let mut table = lock(flows);
         let settled = table.settle(key, uid, shared.limits.udp_reask);
         table.forget(key.0);
+        count_drops(shared, settled.drops());
         settled.leave
     };
-    let error = waiting
-        .first()
-        .filter(|_| unreachable)
-        .and_then(|(_, first)| {
-            packet::parse(first)
-                .ok()
-                .and_then(|parsed| packet::unreachable(first, &parsed, Unreachable::Host))
-        });
+    let error =
+        waiting
+            .first()
+            .filter(|_| unreachable)
+            .and_then(|Waiter { item: first, .. }| {
+                packet::parse(first)
+                    .ok()
+                    .and_then(|parsed| packet::unreachable(first, &parsed, Unreachable::Host))
+            });
     if let Some(error) = error {
         send_to_app(tun, shared, &error).await;
     }
@@ -2832,7 +2950,11 @@ mod tests {
             key,
             UdpEntry::Opening(Holding {
                 floor: None,
-                held: vec![(asked, Vec::new())],
+                held: vec![Waiter {
+                    came: asked,
+                    then: None,
+                    item: Vec::new(),
+                }],
             }),
         );
         table.answered(APP, (2, Named { uid: None, asked }), &shared);
@@ -2909,7 +3031,11 @@ mod tests {
         let key = (APP, SocketAddr::from(([192, 0, 2, 9], 9)));
         let holding = || Holding {
             floor: None,
-            held: vec![(Instant::now(), Vec::new())],
+            held: vec![Waiter {
+                came: Instant::now(),
+                then: None,
+                item: Vec::new(),
+            }],
         };
         table.put(key, UdpEntry::Opening(holding()));
         let named = Named {
@@ -2948,10 +3074,15 @@ mod tests {
         let after = |ms| base + Duration::from_millis(ms);
         let mut table = UdpTable::default();
         let key = (APP, OTHER);
+        let waiter = |came, item| Waiter {
+            came,
+            then: None,
+            item,
+        };
         let held = vec![
-            (base, vec![1]),
-            (after(70), vec![2]),
-            (after(3_000), vec![3]),
+            waiter(base, vec![1]),
+            waiter(after(70), vec![2]),
+            waiter(after(3_000), vec![3]),
         ];
         table.put(key, UdpEntry::Opening(Holding { floor: None, held }));
         table.answered(
@@ -2977,15 +3108,43 @@ mod tests {
             &shared,
         );
         let settled = table.settle(key, Some(10_078), reask);
-        let packets =
-            |items: &[(Instant, Vec<u8>)]| items.iter().map(|(_, p)| p[0]).collect::<Vec<_>>();
-        assert_eq!(packets(&settled.dropped), [1]);
+        let packets = |items: &[Held]| items.iter().map(|w| w.item[0]).collect::<Vec<_>>();
+        let dropped: Vec<_> = settled
+            .dropped
+            .iter()
+            .map(|(w, why)| (w.item[0], *why))
+            .collect();
+        assert_eq!(dropped, [(1, Verdict::Ambiguous)]);
         assert_eq!(packets(&settled.leave), [2]);
-        assert_eq!(table.first_held(key), Some((after(3_000), None)));
+        assert_eq!(table.first_held(key), Some((after(3_000), None, None)));
         assert_eq!(
             table.sockets.get(&APP).map(Socket::earliest),
             Some(Some(after(3_000)))
         );
+    }
+
+    /// The datagram the rule dropped is the one taken from the queue, by when it came: one another
+    /// task has taken already leaves the next in place (ninth review of unit 9, finding 6).
+    #[test]
+    fn only_the_datagram_decided_is_dropped() {
+        let base = Instant::now();
+        let after = |ms| base + Duration::from_millis(ms);
+        let mut table = UdpTable::default();
+        let key = (APP, OTHER);
+        let waiter = |came| Waiter {
+            came,
+            then: None,
+            item: Vec::new(),
+        };
+        let held = vec![waiter(base), waiter(after(70))];
+        table.put(key, UdpEntry::Opening(Holding { floor: None, held }));
+        assert!(!table.drop_held(key, after(5)));
+        assert_eq!(table.first_held(key), Some((base, None, None)));
+        assert!(table.drop_held(key, base));
+        assert!(!table.drop_held(key, base));
+        assert_eq!(table.first_held(key), Some((after(70), None, None)));
+        assert!(table.drop_held(key, after(70)));
+        assert_eq!(table.first_held(key), None);
     }
 
     /// A stand-in the map no longer holds keeps the way of the live peer that stands for it, but only

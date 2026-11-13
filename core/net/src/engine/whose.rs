@@ -27,11 +27,24 @@ pub(super) enum Verdict {
     /// The app that holds the socket now sent it, by Android's answers, or no app Android can name: it
     /// may leave by that app's way.
     Owner(Option<u32>),
-    /// Answers near it name different apps, or the app they name holds the socket no more, or no answer
-    /// near enough can be had: it is dropped and counted, never sent under any answer.
-    Drop,
+    /// Answers near it name different apps, or one names none: a handover fell near it, and who sent it
+    /// cannot be told. It is dropped and counted, never sent under any answer.
+    Ambiguous,
+    /// The answers near it agree on an app that holds the socket no more: its way would be another
+    /// app's now. It is dropped and counted apart.
+    Gone,
+    /// No answer near it can be had any more: its question could not be asked less than `udp_reask`
+    /// from it. It is dropped and counted apart.
+    Late,
     /// No answer decides it yet; one asked now would.
     Unknown,
+}
+
+impl Verdict {
+    /// Whether the datagram goes, never sent.
+    pub(super) fn drops(self) -> bool {
+        matches!(self, Self::Ambiguous | Self::Gone | Self::Late)
+    }
 }
 
 /// What a datagram that waits for its way does next.
@@ -45,12 +58,34 @@ pub(super) enum Step {
     Ask,
 }
 
-/// Datagrams that waited, sorted once their way is there: those that leave by it, those dropped, and
-/// those, from the first that neither leaves nor drops, that wait on in order.
+/// A datagram that waits for its way, as the rule sees it: when it came, whose the answers said it was
+/// then, if they said, and the datagram.
+#[derive(Debug)]
+pub(super) struct Waiter<T> {
+    pub(super) came: Instant,
+    pub(super) then: Option<Verdict>,
+    pub(super) item: T,
+}
+
+/// Datagrams that waited, sorted once their way is there: those that leave by it, those dropped with
+/// why, and those, from the first that neither leaves nor drops, that wait on in order.
 pub(super) struct Settled<T> {
-    pub(super) leave: Vec<(Instant, T)>,
-    pub(super) dropped: Vec<(Instant, T)>,
-    pub(super) rest: Vec<(Instant, T)>,
+    pub(super) leave: Vec<Waiter<T>>,
+    pub(super) dropped: Vec<(Waiter<T>, Verdict)>,
+    pub(super) rest: Vec<Waiter<T>>,
+}
+
+impl<T> Settled<T> {
+    /// How many were dropped as ambiguous, and how many for coming too late for their app or answer.
+    pub(super) fn drops(&self) -> (u64, u64) {
+        let ambiguous = self
+            .dropped
+            .iter()
+            .filter(|(_, why)| *why == Verdict::Ambiguous)
+            .count();
+        let late = self.dropped.len() - ambiguous;
+        (ambiguous as u64, late as u64)
+    }
 }
 
 /// The answers of Android's about one app socket that can still decide a datagram, and when a datagram
@@ -115,13 +150,15 @@ impl Record {
     /// long as the app sends without a pause of `reask`, up to thirty times that: the window ADR 0044
     /// states. One that came before it takes the app named by every answer asked less than `reask` from
     /// it, before or after, one of them since `floor`, if that app still holds the socket; if they name
-    /// different apps, a handover fell near it, and it is dropped.
+    /// different apps, a handover fell near it, and it is dropped as ambiguous. One whose answers agree
+    /// on an app that has lost the socket since, or that no answer near it can decide, is dropped too,
+    /// apart.
     pub(super) fn whose(&self, came: Instant, floor: Option<Instant>, reask: Duration) -> Verdict {
         let Some(newest) = self.newest() else {
             return Verdict::Unknown;
         };
         let since_floor = |asked: Instant| floor.is_none_or(|floor| asked >= floor);
-        if came >= newest.asked {
+        if came > newest.asked {
             if !since_floor(newest.asked) {
                 return Verdict::Unknown;
             }
@@ -141,15 +178,56 @@ impl Record {
         let high = Excluded((came + reask, 0));
         let mut near = self.answers.range((low, high));
         let (Some((&first, &uid)), last) = (near.next(), near.next_back()) else {
-            return Verdict::Drop;
+            return Verdict::Late;
         };
         let last = last.map_or(first, |(&last, _)| last);
-        let agree = self.changes.range(first..last).next().is_none();
-        if agree && since_floor(last.0) && uid == newest.uid {
+        if self.changes.range(first..last).next().is_some() {
+            Verdict::Ambiguous
+        } else if !since_floor(last.0) {
+            Verdict::Late
+        } else if uid == newest.uid {
             Verdict::Owner(uid)
         } else {
-            Verdict::Drop
+            Verdict::Gone
         }
+    }
+
+    /// Whose a datagram that waits is, which came at `came`: as [`Record::whose`], but one the answers
+    /// said was its app's when it came, by the newest answer or the stream since it, stays so for as long
+    /// as no answer near it says otherwise, the last answer before it still names that app, and that app
+    /// holds the socket, however many questions come after it while it waits (ninth review of unit 9,
+    /// finding 4: the model found both).
+    pub(super) fn whose_waiting(
+        &self,
+        (came, then): (Instant, Option<Verdict>),
+        floor: Option<Instant>,
+        reask: Duration,
+    ) -> Verdict {
+        match (self.whose(came, floor, reask), then) {
+            (Verdict::Late, Some(Verdict::Owner(uid))) => {
+                let before = self.answers.range(..=(came, u64::MAX)).next_back();
+                if before.is_none_or(|(_, &named)| named != uid) {
+                    Verdict::Late
+                } else if self.keeps(uid) {
+                    Verdict::Owner(uid)
+                } else {
+                    Verdict::Gone
+                }
+            }
+            (verdict, _) => verdict,
+        }
+    }
+
+    /// Whose the answers say a datagram that came `came`, and goes behind others that wait, is as it
+    /// comes, if they say: it keeps that while it waits.
+    pub(super) fn presume(
+        &self,
+        came: Instant,
+        floor: Option<Instant>,
+        reask: Duration,
+    ) -> Option<Verdict> {
+        let verdict = self.whose(came, floor, reask);
+        matches!(verdict, Verdict::Owner(_)).then_some(verdict)
     }
 
     /// Whether a datagram that came `now` may pass by an open way of the app `uid`, as the newest
@@ -170,17 +248,19 @@ impl Record {
         }
     }
 
-    /// What a datagram that came at `came`, the first that waits for its way, does `now`: the answers
-    /// decide it; it joins the question out, asked at `out`, if that can decide it; it asks, if a
-    /// question asked now still could; else no answer near enough can be had, and it is dropped.
+    /// What a datagram that came at `came` and waits for its way does `now`: the answers decide it; it
+    /// joins the question out, asked at `out`, if that can decide it; it asks, if a question asked now
+    /// still could; else no answer near enough can be had, and it is dropped as late. The engine asks
+    /// this as each datagram comes, and again for the first that waits as answers come, so that a
+    /// question is asked less than `reask` from each datagram no answer decides.
     pub(super) fn step(
         &self,
-        (came, floor): (Instant, Option<Instant>),
+        (came, floor, then): (Instant, Option<Instant>, Option<Verdict>),
         out: Option<Instant>,
         now: Instant,
         reask: Duration,
     ) -> Step {
-        match self.whose(came, floor, reask) {
+        match self.whose_waiting((came, then), floor, reask) {
             Verdict::Unknown => {
                 let decides = |asked: Instant| {
                     apart(asked, came) < reask && floor.is_none_or(|floor| asked >= floor)
@@ -190,7 +270,7 @@ impl Record {
                 } else if decides(now) {
                     Step::Ask
                 } else {
-                    Step::Decided(Verdict::Drop)
+                    Step::Decided(Verdict::Late)
                 }
             }
             verdict => Step::Decided(verdict),
@@ -198,11 +278,11 @@ impl Record {
     }
 
     /// Sorts datagrams that waited, in the order they came, once a way of the app `way` is there: each
-    /// that app owns leaves, each dropped is dropped, and from the first of another app's, or
-    /// undecided, all wait on.
+    /// that app owns leaves, each the rule drops is dropped with why, and from the first of another
+    /// app's, or undecided, all wait on.
     pub(super) fn settle<T>(
         &mut self,
-        held: Vec<(Instant, T)>,
+        held: Vec<Waiter<T>>,
         floor: Option<Instant>,
         way: Option<u32>,
         reask: Duration,
@@ -213,15 +293,15 @@ impl Record {
             rest: Vec::new(),
         };
         let mut held = held.into_iter();
-        for (came, item) in held.by_ref() {
-            match self.whose(came, floor, reask) {
+        for waiter in held.by_ref() {
+            match self.whose_waiting((waiter.came, waiter.then), floor, reask) {
                 Verdict::Owner(uid) if uid == way => {
-                    self.left(came);
-                    settled.leave.push((came, item));
+                    self.left(waiter.came);
+                    settled.leave.push(waiter);
                 }
-                Verdict::Drop => settled.dropped.push((came, item)),
+                why if why.drops() => settled.dropped.push((waiter, why)),
                 _ => {
-                    settled.rest.push((came, item));
+                    settled.rest.push(waiter);
                     break;
                 }
             }
@@ -230,19 +310,22 @@ impl Record {
         settled
     }
 
-    /// Forgets the answers no datagram needs any more: all but the newest asked `reask` or more before
-    /// `earliest`, the first datagram of the socket that still waits, or all but the newest when none
-    /// waits.
+    /// Forgets the answers no datagram needs any more. While a datagram of the socket waits, it keeps
+    /// every answer asked since `reask` before the first that does, `earliest`, near a waiting datagram
+    /// or not, since the later ones came later still; and the last answer before that, on which a
+    /// waiting datagram may have been taken for an app. When none waits, it keeps the newest alone.
     pub(super) fn keep_from(&mut self, earliest: Option<Instant>, reask: Duration) {
+        let cut = earliest.map(|earliest| earliest.checked_sub(reask).unwrap_or(earliest));
         while self.answers.len() > 1 {
-            let Some((&key, _)) = self.answers.first_key_value() else {
+            let mut first_two = self.answers.keys();
+            let (Some(&first), Some(&second)) = (first_two.next(), first_two.next()) else {
                 return;
             };
-            if earliest.is_some_and(|earliest| apart(key.0, earliest) < reask || key.0 > earliest) {
+            if cut.is_some_and(|cut| second.0 > cut) {
                 return;
             }
-            self.answers.remove(&key);
-            self.changes.remove(&key);
+            self.answers.remove(&first);
+            self.changes.remove(&first);
         }
     }
 
@@ -296,7 +379,7 @@ mod tests {
         let before = |gap: Duration| (base + REASK).checked_sub(gap);
         let just = before(REASK.saturating_sub(nano)).map(|came| later.whose(came, None, REASK));
         assert_eq!(just, Some(Verdict::Owner(CHAINED)));
-        assert_eq!(later.whose(base, None, REASK), Verdict::Drop);
+        assert_eq!(later.whose(base, None, REASK), Verdict::Late);
         // A stream that never pauses: until thirty times `udp_reask` after the question.
         let thirty = REASK * 30;
         record.left(under(thirty));
@@ -325,8 +408,8 @@ mod tests {
         let mut record = Record::default();
         record.note(1, named(CHAINED, at(base, 1)));
         record.note(2, named(DIRECT, at(base, 51)));
-        assert_eq!(record.whose(base, Some(base), REASK), Verdict::Drop);
-        assert_eq!(record.whose(at(base, 40), None, REASK), Verdict::Drop);
+        assert_eq!(record.whose(base, Some(base), REASK), Verdict::Ambiguous);
+        assert_eq!(record.whose(at(base, 40), None, REASK), Verdict::Ambiguous);
         assert_eq!(
             record.whose(at(base, 120), None, REASK),
             Verdict::Owner(DIRECT)
@@ -335,12 +418,12 @@ mod tests {
         let mut old = Record::default();
         old.note(1, named(CHAINED, at(base, 1)));
         old.note(2, named(DIRECT, at(base, 500)));
-        assert_eq!(old.whose(base, Some(base), REASK), Verdict::Drop);
+        assert_eq!(old.whose(base, Some(base), REASK), Verdict::Gone);
         // No app named is an answer too.
         let mut none = Record::default();
         none.note(1, named(CHAINED, at(base, 1)));
         none.note(2, named(None, at(base, 51)));
-        assert_eq!(none.whose(base, None, REASK), Verdict::Drop);
+        assert_eq!(none.whose(base, None, REASK), Verdict::Ambiguous);
         assert_eq!(none.whose(at(base, 60), None, REASK), Verdict::Owner(None));
     }
 
@@ -366,7 +449,7 @@ mod tests {
         record.note(2, named(CHAINED, at(base, 100)));
         record.note(3, named(DIRECT, at(base, 300)));
         record.note(1, named(DIRECT, at(base, 50)));
-        assert_eq!(record.whose(at(base, 120), None, REASK), Verdict::Drop);
+        assert_eq!(record.whose(at(base, 120), None, REASK), Verdict::Ambiguous);
     }
 
     /// What left under one app does not carry the stream on for the next: an answer naming another app,
@@ -382,6 +465,42 @@ mod tests {
         assert_eq!(record.whose(at(base, 170), None, REASK), Verdict::Unknown);
     }
 
+    /// A datagram taken for its app as it came, by the stream since the newest answer, that waits on
+    /// beyond `udp_reask` from every answer stays that app's while the last answer before it names that
+    /// app and that app holds the socket. An answer asked before it, but given after it came, that
+    /// names another app takes that away (found by the model, ninth review of unit 9).
+    #[test]
+    fn what_a_waiting_datagram_was_taken_for_holds_while_the_answer_before_it_agrees() {
+        let base = Instant::now();
+        let streaming = || {
+            let mut record = Record::default();
+            record.note(1, named(DIRECT, base));
+            record.left(at(base, 90));
+            record.left(at(base, 180));
+            record
+        };
+        let came = at(base, 250);
+        let then = streaming().presume(came, None, REASK);
+        assert_eq!(then, Some(Verdict::Owner(DIRECT)));
+        let mut agreeing = streaming();
+        agreeing.note(3, named(DIRECT, at(base, 600)));
+        assert_eq!(agreeing.whose(came, None, REASK), Verdict::Late);
+        assert_eq!(
+            agreeing.whose_waiting((came, then), None, REASK),
+            Verdict::Owner(DIRECT)
+        );
+        let mut gone = streaming();
+        gone.note(3, named(CHAINED, at(base, 600)));
+        assert_eq!(gone.whose_waiting((came, then), None, REASK), Verdict::Gone);
+        let mut contradicted = streaming();
+        contradicted.note(2, named(None, at(base, 120)));
+        contradicted.note(3, named(DIRECT, at(base, 600)));
+        assert_eq!(
+            contradicted.whose_waiting((came, then), None, REASK),
+            Verdict::Late
+        );
+    }
+
     /// A destination the app had no way to takes no answer asked before its first datagram came: it
     /// asks, or joins only a question asked since.
     #[test]
@@ -394,12 +513,12 @@ mod tests {
         assert_eq!(record.whose(came, None, REASK), Verdict::Owner(CHAINED));
         let now = at(base, 11);
         assert_eq!(
-            record.step((came, Some(came)), Some(base), now, REASK),
+            record.step((came, Some(came), None), Some(base), now, REASK),
             Step::Ask
         );
         let since = Some(at(base, 11));
         assert_eq!(
-            record.step((came, Some(came)), since, now, REASK),
+            record.step((came, Some(came), None), since, now, REASK),
             Step::Join
         );
     }
@@ -414,19 +533,28 @@ mod tests {
         let came = base + REASK;
         let inside = came.checked_sub(REASK.saturating_sub(nano));
         let outside = Some(base);
-        assert_eq!(record.step((came, None), inside, came, REASK), Step::Join);
-        assert_eq!(record.step((came, None), outside, came, REASK), Step::Ask);
+        assert_eq!(
+            record.step((came, None, None), inside, came, REASK),
+            Step::Join
+        );
+        assert_eq!(
+            record.step((came, None, None), outside, came, REASK),
+            Step::Ask
+        );
         let late = came + REASK;
         assert_eq!(
-            record.step((came, None), None, late, REASK),
-            Step::Decided(Verdict::Drop)
+            record.step((came, None, None), None, late, REASK),
+            Step::Decided(Verdict::Late)
         );
         let in_time = came + REASK.saturating_sub(nano);
-        assert_eq!(record.step((came, None), None, in_time, REASK), Step::Ask);
+        assert_eq!(
+            record.step((came, None, None), None, in_time, REASK),
+            Step::Ask
+        );
     }
 
-    /// The record keeps the newest answer, and the older ones less than `udp_reask` from a datagram that
-    /// still waits.
+    /// The record keeps the newest answer, and while a datagram waits, every answer since `udp_reask`
+    /// before the first that does and the last one before that.
     #[test]
     fn the_record_keeps_what_a_waiting_datagram_needs() {
         let base = Instant::now();
@@ -435,7 +563,11 @@ mod tests {
             record.note(id, named(CHAINED, at(base, ms)));
         }
         record.keep_from(Some(at(base, 500)), REASK);
-        assert_eq!(record.len(), 2, "the one at 450, and the newest");
+        assert_eq!(
+            record.len(),
+            3,
+            "the one at 300, the last before the window; the one at 450, and the newest"
+        );
         record.keep_from(None, REASK);
         assert_eq!(record.len(), 1);
     }
@@ -448,15 +580,25 @@ mod tests {
         let mut record = Record::default();
         record.note(1, named(CHAINED, at(base, 10)));
         record.note(2, named(DIRECT, at(base, 60)));
+        let waiter = |ms, item| Waiter {
+            came: at(base, ms),
+            then: None,
+            item,
+        };
         let held = vec![
-            (at(base, 5), 'a'),
-            (at(base, 70), 'b'),
-            (at(base, 300), 'c'),
-            (at(base, 80), 'd'),
+            waiter(5, 'a'),
+            waiter(70, 'b'),
+            waiter(300, 'c'),
+            waiter(80, 'd'),
         ];
         let settled = record.settle(held, None, DIRECT, REASK);
-        let names = |items: &[(Instant, char)]| items.iter().map(|(_, c)| *c).collect::<String>();
-        assert_eq!(names(&settled.dropped), "a");
+        let names = |items: &[Waiter<char>]| items.iter().map(|w| w.item).collect::<String>();
+        let dropped: Vec<_> = settled
+            .dropped
+            .iter()
+            .map(|(w, why)| (w.item, *why))
+            .collect();
+        assert_eq!(dropped, [('a', Verdict::Ambiguous)]);
         assert_eq!(names(&settled.leave), "b");
         assert_eq!(names(&settled.rest), "cd");
     }
@@ -478,14 +620,17 @@ mod tests {
         }
     }
 
-    /// The tunnel's DNS address, as the model's last destination: lookups always ask on their own.
+    /// The tunnel's DNS address, as the model's last destination: lookups always ask on their own, and
+    /// a flow of lookups ends once answered.
     const LOOKUP: usize = 3;
 
-    /// A datagram of the model: when it came, and which app truly sent it.
+    /// A datagram of the model: when it came, which app truly sent it, and the floor of the answers that
+    /// may stand for it once it waited for its way.
     #[derive(Clone, Copy, Debug)]
     struct Sent {
         came: u64,
         by: Option<u32>,
+        floor: Option<u64>,
     }
 
     /// What happens next in a schedule, by the millisecond.
@@ -495,12 +640,16 @@ mod tests {
         Step(usize),
         Answer(u64),
         Opened(usize, Option<u32>),
+        Chain(bool),
+        FlowEnds(usize),
     }
 
-    /// A question of the model to Android: when it was asked and what it named.
+    /// A question of the model to Android: when it was asked, what it named, how long Android took, and
+    /// the destinations that wait for it.
     struct Question {
         asked: u64,
         uid: Option<u32>,
+        latency: u64,
         waiters: Vec<usize>,
     }
 
@@ -511,84 +660,99 @@ mod tests {
         Open(Option<u32>),
     }
 
-    /// A destination's datagrams that wait for its way: the floor of the answers that may stand for
-    /// them, the datagrams, and whether a step is under way for them.
+    /// A destination's datagrams that wait for its way, as the engine's `Holding`: the floor of the
+    /// answers that may stand for them, the datagrams, and whether a step is under way for them.
     #[derive(Default)]
     struct Waiting {
         floor: Option<Instant>,
-        held: Vec<(Instant, Sent)>,
+        held: Vec<Waiter<Sent>>,
         busy: bool,
     }
 
-    /// One random schedule: who holds the port when, what it sends, and how slowly Android answers and
-    /// ways open; run against the engine's own rule, checking every datagram that leaves.
+    /// One random schedule: who holds the port when, what it sends, whether the chain is on, and how
+    /// slowly Android answers and ways open, or fail; run against the engine's own rule and steps,
+    /// checking every datagram that leaves, and every one dropped.
     struct Schedule {
         base: Instant,
         rng: Rng,
         owners: Vec<(u64, Option<u32>)>,
         arrivals: Vec<(Sent, usize)>,
+        chain: bool,
+        /// Whether the socket has a way or a datagram that waits, as the engine's `Socket` does: the
+        /// record goes with its last way.
+        socket: bool,
         record: Record,
         ways: [Way; 4],
         held: [Waiting; 4],
         questions: BTreeMap<u64, Question>,
         out: Option<u64>,
         answered: Vec<(u64, Option<u32>, u64)>,
+        /// How many of `answered` the record had when it was last forgotten: what the engine no
+        /// longer knows.
+        forgotten: usize,
         leaves: Vec<(u64, Option<u32>)>,
         queue: std::collections::BinaryHeap<std::cmp::Reverse<(u64, u64, Event)>>,
         order: u64,
         steps: usize,
     }
 
+    /// A random pick among `choices`.
+    fn pick<T: Copy>(rng: &mut Rng, choices: &[T]) -> T {
+        choices[usize::try_from(rng.below(choices.len() as u64)).unwrap_or(0)]
+    }
+
     impl Schedule {
         fn new(seed: u64) -> Self {
             let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
             let apps = [CHAINED, DIRECT, None];
-            let mut owners = vec![(0, apps[usize::try_from(rng.below(3)).unwrap_or(0)])];
-            // A few handovers over three seconds; or, in one schedule of four, many over a few
-            // `udp_reask`, so that answers near one datagram name three apps in turn.
-            let (handovers, span) = if rng.below(4) == 0 {
-                (5 + rng.below(15), 400)
-            } else {
-                (rng.below(5), 3_000)
-            };
-            for _ in 0..handovers {
-                owners.push((
-                    rng.below(span),
-                    apps[usize::try_from(rng.below(3)).unwrap_or(0)],
-                ));
-            }
-            owners.sort_unstable_by_key(|(at, _)| *at);
             let mut arrivals = Vec::new();
             let mut time = 0;
             // Bursts and pauses alike, around `udp_reask`; or, in one schedule of three, a stream that
-            // never pauses for it, as a call's.
-            let (count, gaps): (u64, &[u64]) = if rng.below(3) == 0 {
-                (60 + rng.below(80), &[0, 1, 5, 30, 60, 90])
+            // never pauses for it, as a call's, at times for longer than thirty times `udp_reask`, and
+            // in half of those to destinations it knows alone, with no lookups to ask anew.
+            let (count, gaps, destinations): (u64, &[u64], u64) = if rng.below(3) == 0 {
+                let destinations = if rng.below(2) == 0 { 3 } else { 4 };
+                (60 + rng.below(240), &[0, 1, 5, 30, 60, 90], destinations)
             } else {
-                (10 + rng.below(50), &[0, 1, 5, 30, 90, 150, 400])
+                (10 + rng.below(50), &[0, 1, 5, 30, 90, 150, 400], 4)
             };
             for _ in 0..count {
-                time += gaps[usize::try_from(rng.below(gaps.len() as u64)).unwrap_or(0)];
-                let destination = usize::try_from(rng.below(4)).unwrap_or(0);
-                arrivals.push((
-                    Sent {
-                        came: time,
-                        by: None,
-                    },
-                    destination,
-                ));
+                time += pick(&mut rng, gaps);
+                let destination = usize::try_from(rng.below(destinations)).unwrap_or(0);
+                let sent = Sent {
+                    came: time,
+                    by: None,
+                    floor: None,
+                };
+                arrivals.push((sent, destination));
             }
+            let mut owners = vec![(0, pick(&mut rng, &apps))];
+            // A few handovers while the app sends; or, in one schedule of four, many over a few
+            // `udp_reask`, so that answers near one datagram name three apps in turn; or, in one of
+            // five, none at all, where nothing may be dropped.
+            let (handovers, span) = match rng.below(20) {
+                0..5 => (5 + rng.below(15), 400),
+                5..9 => (0, 1),
+                _ => (rng.below(5), time.max(1)),
+            };
+            for _ in 0..handovers {
+                owners.push((rng.below(span), pick(&mut rng, &apps)));
+            }
+            owners.sort_unstable_by_key(|(at, _)| *at);
             let mut schedule = Self {
                 base: Instant::now(),
                 rng,
                 owners,
                 arrivals,
+                chain: true,
+                socket: false,
                 record: Record::default(),
                 ways: [Way::Shut; 4],
                 held: Default::default(),
                 questions: BTreeMap::new(),
                 out: None,
                 answered: Vec::new(),
+                forgotten: 0,
                 leaves: Vec::new(),
                 queue: std::collections::BinaryHeap::new(),
                 order: 0,
@@ -598,6 +762,13 @@ mod tests {
                 let came = schedule.arrivals[index].0.came;
                 schedule.arrivals[index].0.by = schedule.owner(came);
                 schedule.at(came, Event::Arrive(index));
+            }
+            // In one schedule of three, the chain goes off and on again.
+            if schedule.rng.below(3) == 0 {
+                let off = schedule.rng.below(time.max(1));
+                let on = off + schedule.rng.below(1_000);
+                schedule.at(off, Event::Chain(false));
+                schedule.at(on, Event::Chain(true));
             }
             schedule
         }
@@ -613,6 +784,10 @@ mod tests {
 
         fn instant(&self, ms: u64) -> Instant {
             at(self.base, ms)
+        }
+
+        fn ms(&self, instant: Instant) -> u64 {
+            u64::try_from(instant.duration_since(self.base).as_millis()).unwrap_or(u64::MAX)
         }
 
         fn at(&mut self, ms: u64, event: Event) {
@@ -636,14 +811,48 @@ mod tests {
                     Event::Step(destination) => self.step(destination, now)?,
                     Event::Answer(id) => self.answer(id, now),
                     Event::Opened(destination, uid) => self.opened(destination, uid, now)?,
+                    Event::Chain(on) => {
+                        // A mapping ends when the chain sends its app another way, and a flow of
+                        // lookups gives way.
+                        self.chain = on;
+                        self.ways = [Way::Shut; 4];
+                        self.forget_if_idle();
+                    }
+                    Event::FlowEnds(destination) => {
+                        self.ways[destination] = Way::Shut;
+                        self.forget_if_idle();
+                    }
                 }
             }
-            Ok(())
+            match self.held.iter().find_map(|waiting| waiting.held.first()) {
+                Some(Waiter { item: sent, .. }) => Err(format!(
+                    "a datagram sent at {} ms was never decided",
+                    sent.came
+                )),
+                None => Ok(()),
+            }
         }
 
+        /// As the event loop: a datagram for a destination whose datagrams wait goes behind them, and
+        /// asks Android as it comes if no answer and no question out can decide it; else it passes by
+        /// an open way the rule lets it pass, or waits for its way.
         fn arrive(&mut self, index: usize, now: u64) -> Result<(), String> {
-            let (sent, destination) = self.arrivals[index];
+            let (mut sent, destination) = self.arrivals[index];
             let came = self.instant(sent.came);
+            if !self.held[destination].held.is_empty() {
+                let floor = self.held[destination].floor;
+                sent.floor = floor.map(|floor| self.ms(floor));
+                let then = self.record.presume(came, floor, REASK);
+                let item = sent;
+                self.held[destination]
+                    .held
+                    .push(Waiter { came, then, item });
+                let out = self.out_asked();
+                if self.record.step((came, floor, then), out, came, REASK) == Step::Ask {
+                    self.ask(now, None);
+                }
+                return Ok(());
+            }
             if let Way::Open(way) = self.ways[destination]
                 && self.record.passes(came, way, REASK)
             {
@@ -651,11 +860,16 @@ mod tests {
                 return self.leave(sent, way, now);
             }
             let known = self.ways[destination] != Way::Shut && destination != LOOKUP;
+            let floor = (!known).then_some(came);
+            sent.floor = (!known).then_some(sent.came);
+            self.socket = true;
             let waiting = &mut self.held[destination];
-            if waiting.held.is_empty() {
-                waiting.floor = (!known).then_some(came);
-            }
-            waiting.held.push((came, sent));
+            waiting.floor = floor;
+            waiting.held.push(Waiter {
+                came,
+                then: None,
+                item: sent,
+            });
             if !waiting.busy {
                 waiting.busy = true;
                 let when = self.soon(now);
@@ -664,19 +878,48 @@ mod tests {
             Ok(())
         }
 
+        /// When the question out was asked, if one is.
+        fn out_asked(&self) -> Option<Instant> {
+            self.out
+                .and_then(|id| self.questions.get(&id))
+                .map(|question| self.instant(question.asked))
+        }
+
+        /// Asks Android at `now`; Android reads the port's owner a moment later, and answers after a
+        /// random latency, some longer than `udp_reask`.
+        fn ask(&mut self, now: u64, waiter: Option<usize>) {
+            let id = u64::try_from(self.questions.len()).unwrap_or(0) + 1;
+            // Android looks the socket up a little after it was asked, never after it answers.
+            let latency = pick(&mut self.rng, &[0, 2, 20, 80, 150, 300]);
+            let read = now + self.rng.below(latency.min(2) + 1);
+            let uid = self.owner(read);
+            let waiters = waiter.into_iter().collect();
+            let question = Question {
+                asked: now,
+                uid,
+                latency,
+                waiters,
+            };
+            self.questions.insert(id, question);
+            self.out = Some(id);
+            self.at(now + latency, Event::Answer(id));
+        }
+
+        /// As `decide` and `open_udp`: the first datagram that waits is decided, asks, or joins.
         fn step(&mut self, destination: usize, now: u64) -> Result<(), String> {
             let floor = self.held[destination].floor;
-            let Some(first) = self.held[destination].held.first().map(|(came, _)| *came) else {
+            let Some((first, then)) = self.held[destination]
+                .held
+                .first()
+                .map(|waiter| (waiter.came, waiter.then))
+            else {
                 self.held[destination].busy = false;
                 return Ok(());
             };
-            let out = self
-                .out
-                .and_then(|id| self.questions.get(&id))
-                .map(|question| self.instant(question.asked));
+            let out = self.out_asked();
             match self
                 .record
-                .step((first, floor), out, self.instant(now), REASK)
+                .step((first, floor, then), out, self.instant(now), REASK)
             {
                 Step::Join => {
                     if let Some(id) = self.out
@@ -685,47 +928,35 @@ mod tests {
                         question.waiters.push(destination);
                     }
                 }
-                Step::Ask => {
-                    let id = u64::try_from(self.questions.len()).unwrap_or(0) + 1;
-                    let uid = self.owner(now);
-                    let latency =
-                        [0, 2, 20, 80, 150, 300][usize::try_from(self.rng.below(6)).unwrap_or(0)];
-                    let waiters = vec![destination];
-                    self.questions.insert(
-                        id,
-                        Question {
-                            asked: now,
-                            uid,
-                            waiters,
-                        },
-                    );
-                    self.out = Some(id);
-                    self.at(now + latency, Event::Answer(id));
-                }
-                Step::Decided(Verdict::Owner(Some(uid))) => {
-                    if self.ways[destination] == Way::Open(Some(uid)) {
-                        return self.flush(destination, Some(uid), now);
-                    }
-                    let delay =
-                        [0, 1, 10, 60, 200][usize::try_from(self.rng.below(5)).unwrap_or(0)];
-                    self.at(now + delay, Event::Opened(destination, Some(uid)));
-                }
+                Step::Ask => self.ask(now, Some(destination)),
                 Step::Decided(Verdict::Unknown) => return Err("an undecided step".into()),
                 // No app Android can name goes nowhere while a chain is on.
-                Step::Decided(Verdict::Owner(None)) => {
-                    let waiting = &mut self.held[destination];
-                    let held = std::mem::take(&mut waiting.held);
-                    waiting.held = self.record.settle(held, waiting.floor, None, REASK).rest;
+                Step::Decided(Verdict::Owner(None)) if self.chain => {
+                    return self.fail(destination, None, now);
+                }
+                // As `open_mapped`: a way opens only for the app the newest answer names; for another,
+                // what waits is decided again at once.
+                Step::Decided(Verdict::Owner(uid)) if !self.record.keeps(uid) => {
                     self.again(destination, now);
                 }
-                Step::Decided(Verdict::Drop) => {
-                    self.held[destination].held.remove(0);
+                Step::Decided(Verdict::Owner(uid)) => {
+                    if self.ways[destination] == Way::Open(uid) {
+                        return self.flush(destination, uid, now);
+                    }
+                    let delay = pick(&mut self.rng, &[0, 1, 10, 60, 200, 400]);
+                    self.at(now + delay, Event::Opened(destination, uid));
+                }
+                Step::Decided(why) => {
+                    let sent = self.held[destination].held.remove(0).item;
+                    self.dropped(sent, why, now)?;
                     self.again(destination, now);
                 }
             }
             Ok(())
         }
 
+        /// As `answered`: the answer is noted if the socket is still known, and a new owner ends every
+        /// way.
         fn answer(&mut self, id: u64, now: u64) {
             let Some(question) = self.questions.get_mut(&id) else {
                 return;
@@ -735,17 +966,19 @@ mod tests {
                 asked: at(self.base, question.asked),
             };
             let waiters = std::mem::take(&mut question.waiters);
-            self.answered.push((question.asked, question.uid, now));
-            if self.record.note(id, named) {
-                self.ways = [Way::Shut; 4];
+            if self.socket {
+                self.answered.push((question.asked, question.uid, now));
+                if self.record.note(id, named) {
+                    self.ways = [Way::Shut; 4];
+                }
+                let earliest = self
+                    .held
+                    .iter()
+                    .filter_map(|waiting| waiting.held.first())
+                    .map(|waiter| waiter.came)
+                    .min();
+                self.record.keep_from(earliest, REASK);
             }
-            let earliest = self
-                .held
-                .iter()
-                .filter_map(|waiting| waiting.held.first())
-                .map(|(came, _)| *came)
-                .min();
-            self.record.keep_from(earliest, REASK);
             if self.out == Some(id) {
                 self.out = None;
             }
@@ -753,15 +986,44 @@ mod tests {
                 let when = self.soon(now);
                 self.at(when, Event::Step(destination));
             }
+            self.forget_if_idle();
         }
 
+        /// A way opens, or fails (`udp_failed`), or is found another app's than the newest answer's.
         fn opened(&mut self, destination: usize, uid: Option<u32>, now: u64) -> Result<(), String> {
+            // The chain may have come on while a way for no app opened: it goes nowhere then, as the
+            // engine routes it again.
+            if self.rng.below(10) == 0 || (uid.is_none() && self.chain) {
+                return self.fail(destination, uid, now);
+            }
             if !self.record.keeps(uid) {
                 self.again(destination, now);
                 return Ok(());
             }
             self.ways[destination] = Way::Open(uid);
+            if destination == LOOKUP {
+                let ends = now + pick(&mut self.rng, &[0, 20, 150, 400]);
+                self.at(ends, Event::FlowEnds(destination));
+            }
             self.flush(destination, uid, now)
+        }
+
+        /// As `udp_failed`: what the rule says `uid` sent fails with its way, or goes nowhere. It was still
+        /// taken for that app's, so it is held to the same window as what leaves, and carries the app's
+        /// stream on.
+        fn fail(&mut self, destination: usize, uid: Option<u32>, now: u64) -> Result<(), String> {
+            let waiting = &mut self.held[destination];
+            let held = std::mem::take(&mut waiting.held);
+            let settled = self.record.settle(held, waiting.floor, uid, REASK);
+            waiting.held = settled.rest;
+            for waiter in settled.leave {
+                self.leave(waiter.item, uid, now)?;
+            }
+            for (waiter, why) in settled.dropped {
+                self.dropped(waiter.item, why, now)?;
+            }
+            self.again(destination, now);
+            Ok(())
         }
 
         fn flush(&mut self, destination: usize, uid: Option<u32>, now: u64) -> Result<(), String> {
@@ -769,8 +1031,11 @@ mod tests {
             let held = std::mem::take(&mut waiting.held);
             let settled = self.record.settle(held, waiting.floor, uid, REASK);
             waiting.held = settled.rest;
-            for (_, sent) in settled.leave {
-                self.leave(sent, uid, now)?;
+            for waiter in settled.leave {
+                self.leave(waiter.item, uid, now)?;
+            }
+            for (waiter, why) in settled.dropped {
+                self.dropped(waiter.item, why, now)?;
             }
             self.again(destination, now);
             Ok(())
@@ -780,21 +1045,74 @@ mod tests {
         fn again(&mut self, destination: usize, now: u64) {
             if self.held[destination].held.is_empty() {
                 self.held[destination].busy = false;
+                self.forget_if_idle();
             } else {
                 self.at(now, Event::Step(destination));
             }
         }
 
+        /// As `forget`: the record goes with the socket's last way.
+        fn forget_if_idle(&mut self) {
+            let idle = self.ways.iter().all(|way| *way == Way::Shut)
+                && self.held.iter().all(|waiting| waiting.held.is_empty());
+            if idle {
+                self.socket = false;
+                self.record = Record::default();
+                self.forgotten = self.answered.len();
+            }
+        }
+
+        /// A datagram the rule drops: only where a handover lies less than `udp_reask` before it, or
+        /// since the last answer before it, on which it may have been taken for an app, or since it
+        /// came; or where a question asked since then took Android `udp_reask` or more to answer. Else
+        /// the rule lost it for nothing.
+        fn dropped(&mut self, sent: Sent, why: Verdict, now: u64) -> Result<(), String> {
+            let reask = u64::try_from(REASK.as_millis()).unwrap_or(100);
+            let before = self.answered[self.forgotten..]
+                .iter()
+                .filter(|(asked, _, at)| *asked <= sent.came && *at <= now)
+                .map(|(asked, _, _)| *asked)
+                .max();
+            let from = sent
+                .came
+                .saturating_sub(reask)
+                .min(before.unwrap_or(u64::MAX));
+            let handover = self
+                .owners
+                .iter()
+                .skip(1)
+                .any(|(at, _)| *at >= from && *at <= now);
+            let slow = self.questions.values().any(|question| {
+                question.asked + reask > from && question.asked <= now && question.latency >= reask
+            });
+            if !handover && !slow {
+                return Err(format!(
+                    "a datagram sent at {} ms was dropped ({why:?}) at {now} ms with no handover near it, and \
+                     Android answering in time; owners {:?}; answers (asked, named, answered) {:?}; \
+                     questions (asked, latency) {:?}",
+                    sent.came,
+                    self.owners,
+                    self.answered,
+                    self.questions
+                        .values()
+                        .map(|question| (question.asked, question.latency))
+                        .collect::<Vec<_>>()
+                ));
+            }
+            Ok(())
+        }
+
         /// A datagram leaves under `uid` at `now`. It must be its sender's, or else lie within the window
-        /// ADR 0044 states: every answer Android gave by then less than `udp_reask` from it names `uid`,
-        /// and one does; or it came after an answer naming `uid`, less than thirty times `udp_reask` after
-        /// it, with what left under `uid` since never pausing for `udp_reask`, and no answer since naming
-        /// another app.
+        /// ADR 0044 states, by the answers the engine still knows (the record goes with the socket's last
+        /// way): every answer Android gave by then less than `udp_reask` from it names `uid`,
+        /// and one of them asked since its floor does; or it came after an answer naming `uid` asked
+        /// since its floor, less than thirty times `udp_reask` after it, with what left under `uid`
+        /// since never pausing for `udp_reask`, and no answer since naming another app.
         fn leave(&mut self, sent: Sent, uid: Option<u32>, now: u64) -> Result<(), String> {
             let reask = u64::try_from(REASK.as_millis()).unwrap_or(100);
+            let floor = sent.floor.unwrap_or(0);
             if sent.by != uid {
-                let known: Vec<_> = self
-                    .answered
+                let known: Vec<_> = self.answered[self.forgotten..]
                     .iter()
                     .filter(|(_, _, at)| *at <= now)
                     .collect();
@@ -802,10 +1120,12 @@ mod tests {
                     .iter()
                     .filter(|(asked, _, _)| asked.abs_diff(sent.came) < reask)
                     .collect();
-                let window = !near.is_empty() && near.iter().all(|(_, named, _)| *named == uid);
+                let window = near.iter().all(|(_, named, _)| *named == uid)
+                    && near.iter().any(|(asked, _, _)| *asked >= floor);
                 let stream = known.iter().any(|(asked, named, _)| {
                     *named == uid
-                        && *asked <= sent.came
+                        && *asked < sent.came
+                        && *asked >= floor
                         && sent.came - asked < reask * 30
                         && !known.iter().any(|(other, by, _)| {
                             *other > *asked && *other <= sent.came && *by != uid
@@ -828,11 +1148,14 @@ mod tests {
                 if !window && !stream {
                     return Err(format!(
                         "a datagram {} sent at {} ms left under {uid:?} at {now} ms; owners {:?}; answers \
-                         (asked, named, answered) {:?}",
+                         (asked, named, answered) {:?}, the first {} forgotten; what left (came, under) \
+                         {:?}",
                         sent.by.map_or("of no app".into(), |by| format!("of {by}")),
                         sent.came,
                         self.owners,
-                        self.answered
+                        self.answered,
+                        self.forgotten,
+                        self.leaves
                     ));
                 }
             }
@@ -842,17 +1165,25 @@ mod tests {
     }
 
     /// The model: thousands of random schedules of handovers between a chained app, a direct app and no
-    /// app, datagrams and lookups, Android answering with random latency and so out of order, and ways
-    /// opening slowly, at simulated instants. Nothing any app sent leaves under another app beyond the
-    /// window ADR 0044 states; in particular nothing a chained app sent leaves directly but within it
-    /// (eighth review of unit 9, "the rule in one place"). The failing seed is printed.
+    /// app; datagrams and lookups, queued behind those that wait as the engine queues them; Android
+    /// reading the owner a moment after it is asked and answering with random latency, so out of order;
+    /// ways opening slowly, or failing; the chain going off and on; flows of lookups ending and the
+    /// record going with the socket's last way; at simulated instants. Safety: nothing any app sent
+    /// leaves under another app beyond the window ADR 0044 states, a destination's floor included; in
+    /// particular nothing a chained app sent leaves directly but within it. Liveness: nothing is dropped
+    /// unless a handover lies less than `udp_reask` before it or since, or a question Android took
+    /// `udp_reask` or more to answer was asked then; and nothing waits for ever (eighth and ninth
+    /// reviews of unit 9). The failing seed is printed.
     #[test]
     fn no_schedule_sends_a_datagram_under_an_app_that_did_not_send_it() -> Result<(), String> {
         let schedules = std::env::var("WHOSE_SCHEDULES")
             .ok()
             .and_then(|n| n.parse().ok())
             .unwrap_or(10_000u64);
-        for seed in 1..=schedules {
+        let only: Option<u64> = std::env::var("WHOSE_SEED")
+            .ok()
+            .and_then(|seed| seed.parse().ok());
+        for seed in only.map_or(1..=schedules, |seed| seed..=seed) {
             Schedule::new(seed)
                 .run()
                 .map_err(|why| format!("seed {seed}: {why}"))?;

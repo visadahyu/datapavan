@@ -38,6 +38,7 @@ const UDP_UNMATCHED: usize = 26;
 const UDP_CAME_IN_CAPPED: usize = 27;
 const UDP_RELAY_ELSEWHERE: usize = 28;
 const UDP_AMBIGUOUS: usize = 29;
+const UDP_LATE: usize = 30;
 
 /// Android names the app by its port inside the tunnel.
 struct ByPort;
@@ -3859,5 +3860,121 @@ async fn a_direct_app_does_not_wait_for_the_old_apps_tool() -> Outcome {
     }
     let took = sent.elapsed();
     assert!(took < Duration::from_millis(1_000), "it waited {took:?}");
+    Ok(())
+}
+
+/// Waits until `heard` has heard `payload`, for up to `within`.
+async fn until_heard(heard: &Heard, payload: &[u8], within: Duration) -> Outcome {
+    let until = tokio::time::Instant::now() + within;
+    while heard_from(heard, payload).is_empty() {
+        if tokio::time::Instant::now() > until {
+            return Err(format!("{} never arrived", String::from_utf8_lossy(payload)).into());
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    Ok(())
+}
+
+/// The chained app's first datagram waits while the tool answers its handshake slowly (2.5 s); its
+/// retry comes 1.2 s later, beyond `udp_reask` from the only answer, and no other app ever holds the
+/// port. The retry asks Android as it comes, waits behind the first, and leaves through the tool with
+/// it: nothing is dropped, ambiguous or late (ninth review of unit 9, finding 1).
+#[tokio::test(flavor = "current_thread")]
+async fn a_retry_held_behind_a_slow_handshake_leaves_through_the_tool() -> Outcome {
+    const PORT: u16 = 50_900;
+    let (a, heard) = listening().await?;
+    let tool = proxy(Settings::default()).await?;
+    let front = slow_front(tool.address, Duration::from_millis(2_500)).await?;
+    let android = Arc::new(Staged::default());
+    android.set(PORT, Some(CHAINED));
+    let (engine, tunnel) = engine_with(chain(front), Limits::default(), android.clone())?;
+    send(&tunnel, app(PORT), a, b"first").await?;
+    let asked = android.asked_about(a).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(1_200)).await;
+    send(&tunnel, app(PORT), a, b"retry").await?;
+    until_heard(&heard, b"retry", Duration::from_secs(4)).await?;
+    assert_eq!(left_directly(&heard, b"first", &tool), (0, 1));
+    assert_eq!(left_directly(&heard, b"retry", &tool), (0, 1));
+    let counters = engine.counters();
+    assert_eq!((counters[UDP_AMBIGUOUS], counters[UDP_LATE]), (0, 0));
+    Ok(())
+}
+
+/// The same on the direct path, with the socket's protection slow (2.5 s) (ninth review of unit 9,
+/// finding 1).
+#[tokio::test(flavor = "current_thread")]
+async fn a_retry_held_behind_a_slow_protect_leaves_directly() -> Outcome {
+    const PORT: u16 = 50_901;
+    let (a, heard) = listening().await?;
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(Staged::default());
+    android.set(PORT, Some(DIRECT));
+    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    android.protect_in(Duration::from_millis(2_500));
+    send(&tunnel, app(PORT), a, b"first").await?;
+    let asked = android.asked_about(a).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(1_200)).await;
+    send(&tunnel, app(PORT), a, b"retry").await?;
+    until_heard(&heard, b"retry", Duration::from_secs(4)).await?;
+    assert_eq!(heard_from(&heard, b"first").len(), 1);
+    assert_eq!(heard_from(&heard, b"retry").len(), 1);
+    let counters = engine.counters();
+    assert_eq!((counters[UDP_AMBIGUOUS], counters[UDP_LATE]), (0, 0));
+    Ok(())
+}
+
+/// A front for the tool that takes each connection and closes it after `delay`, its handshake unanswered.
+async fn closing_front(delay: Duration) -> io::Result<SocketAddr> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let at = listener.local_addr()?;
+    tokio::spawn(async move {
+        while let Ok((inbound, _)) = listener.accept().await {
+            tokio::spawn(async move {
+                tokio::time::sleep(delay).await;
+                drop(inbound);
+            });
+        }
+    });
+    Ok(at)
+}
+
+/// The chained app's datagram waits while its way opens; the port goes to a direct app 1.2 s after the
+/// question, whose datagram elsewhere Android names; then the tool closes the chained app's connection.
+/// The chained app's datagram, whose app the socket is no more, is dropped with the way, and counted as
+/// late (ninth review of unit 9, finding 6).
+#[tokio::test(flavor = "current_thread")]
+async fn a_datagram_dropped_as_its_way_fails_is_counted() -> Outcome {
+    const PORT: u16 = 50_904;
+    let (a, heard) = listening().await?;
+    let (e, e_heard) = listening().await?;
+    let front = closing_front(Duration::from_millis(1_600)).await?;
+    let android = Arc::new(Staged::default());
+    android.set(PORT, Some(CHAINED));
+    let (engine, tunnel) = engine_with(chain(front), Limits::default(), android.clone())?;
+    send(&tunnel, app(PORT), a, b"x").await?;
+    let asked = android.asked_about(a).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(1_200)).await;
+    android.set(PORT, Some(DIRECT));
+    send(&tunnel, app(PORT), e, b"to e").await?;
+    until_heard(&e_heard, b"to e", Duration::from_secs(1)).await?;
+    let until = asked + Duration::from_secs(4);
+    loop {
+        let counters = engine.counters();
+        let dropped = counters[UDP_AMBIGUOUS] + counters.get(UDP_LATE).copied().unwrap_or(0);
+        if dropped > 0 {
+            break;
+        }
+        if tokio::time::Instant::now() > until {
+            return Err("the chained app's datagram was never counted".into());
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(
+        heard_from(&heard, b"x").len(),
+        0,
+        "the chained app's datagram left"
+    );
+    let counters = engine.counters();
+    assert_eq!((counters[UDP_AMBIGUOUS], counters[UDP_LATE]), (0, 1));
     Ok(())
 }
