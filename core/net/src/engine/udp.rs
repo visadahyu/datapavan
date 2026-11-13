@@ -907,9 +907,10 @@ pub(super) struct UdpTable {
     flows: HashMap<(SocketAddr, SocketAddr), UdpEntry>,
     /// By the app's address.
     mappings: HashMap<SocketAddr, Mapping>,
-    /// The app sockets whose mapping one destination opens now, each with what tells the others that
-    /// wait for it how it went: nothing while it opens and once it opened, else why it failed.
-    opening: HashMap<SocketAddr, watch::Receiver<Option<io::ErrorKind>>>,
+    /// The app sockets whose mapping one destination opens now, each with the app it opens it for and
+    /// what tells the others that wait for it how it went: nothing while it opens and once it opened,
+    /// else why it failed.
+    opening: HashMap<SocketAddr, (Option<u32>, watch::Receiver<Option<io::ErrorKind>>)>,
     /// The app sockets whose app Android is asked for now, each with the question that is out.
     asking: HashMap<SocketAddr, Out>,
     /// Each app socket with a way, opening or open: what the table knows of it beyond its mapping.
@@ -1847,11 +1848,19 @@ async fn mapping_for(
             }
             match table.opening.get(&app) {
                 // One whose opener is gone without a word (the engine stopping) holds no one up.
-                Some(waiting) if waiting.has_changed().is_ok() => waiting.clone(),
+                Some((uid, waiting)) if waiting.has_changed().is_ok() => {
+                    if *uid != wanted.uid {
+                        // Another app's opener, as the port was handed over: its tool's failure, or its
+                        // wait, is none of this app's, which opens its own (eighth review of unit 9,
+                        // finding 5).
+                        break None;
+                    }
+                    waiting.clone()
+                }
                 _ => {
                     let (told, waiting) = watch::channel(None);
-                    table.opening.insert(app, waiting);
-                    break told;
+                    table.opening.insert(app, (wanted.uid, waiting));
+                    break Some(told);
                 }
             }
         };
@@ -1870,11 +1879,15 @@ async fn mapping_for(
             .map(|(socket, control)| (socket, Some(control))),
     };
     let mut table = lock(flows);
-    table.opening.remove(&app);
+    if told.is_some() {
+        table.opening.remove(&app);
+    }
     let (socket, control) = match made {
         Ok(made) => made,
         Err(error) => {
-            let _ = told.send(Some(error.kind()));
+            if let Some(told) = &told {
+                let _ = told.send(Some(error.kind()));
+            }
             return Err(error);
         }
     };

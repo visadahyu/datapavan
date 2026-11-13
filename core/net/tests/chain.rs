@@ -3819,3 +3819,45 @@ async fn a_chained_apps_lookup_stays_off_the_network_once_a_direct_app_is_named(
     );
     Ok(())
 }
+
+/// The chained app's first datagram opens its mapping through a tool that accepts the connection and
+/// never answers its handshake; the port goes to a direct app 1.2 s later, beyond `udp_reask`, which
+/// sends to a new destination. The direct app's datagram neither waits for the old app's tool nor fails
+/// with it: another app's opener is none of its own (eighth review of unit 9, finding 5).
+#[tokio::test(flavor = "current_thread")]
+async fn a_direct_app_does_not_wait_for_the_old_apps_tool() -> Outcome {
+    const PORT: u16 = 50_713;
+    let hung = TcpListener::bind("127.0.0.1:0").await?;
+    let hung_at = hung.local_addr()?;
+    tokio::spawn(async move {
+        let mut kept = Vec::new();
+        while let Ok((stream, _)) = hung.accept().await {
+            kept.push(stream);
+        }
+    });
+    let (a, _) = listening().await?;
+    let (e, e_heard) = listening().await?;
+    let android = Arc::new(Staged::default());
+    android.set(PORT, Some(CHAINED));
+    let limits = Limits {
+        connect_timeout: Duration::from_secs(4),
+        ..Limits::default()
+    };
+    let (_engine, tunnel) = engine_with(chain(hung_at), limits, android.clone())?;
+    send(&tunnel, app(PORT), a, b"x").await?;
+    let asked = android.asked_about(a).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(1_200)).await;
+    android.set(PORT, Some(DIRECT));
+    let sent = std::time::Instant::now();
+    send(&tunnel, app(PORT), e, b"to e").await?;
+    let until = tokio::time::Instant::now() + Duration::from_secs(3);
+    while heard_from(&e_heard, b"to e").is_empty() {
+        if tokio::time::Instant::now() > until {
+            return Err("the direct app's datagram never arrived".into());
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    let took = sent.elapsed();
+    assert!(took < Duration::from_millis(1_000), "it waited {took:?}");
+    Ok(())
+}
