@@ -55,6 +55,7 @@ mod naming;
 mod tcp;
 mod udp;
 mod upstream;
+mod whose;
 
 pub use chain::Chain;
 use logbook::{FlowBytes, Live, Lookups, logger, now_ms};
@@ -371,7 +372,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 29;
+pub const COUNTERS: usize = 30;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -405,6 +406,7 @@ pub struct Counters {
     udp_unmatched: AtomicU64,
     udp_came_in_capped: AtomicU64,
     udp_relay_elsewhere: AtomicU64,
+    udp_ambiguous: AtomicU64,
 }
 
 impl Counters {
@@ -428,7 +430,9 @@ impl Counters {
     /// fragment, or a port several stand-ins wait on), datagrams from another port of an address the
     /// app sent to that a mapping dropped because as many such ports had come in as it lets in, and
     /// relays a tool offered for UDP elsewhere than on the phone or at its proxy's own address, which
-    /// Watch refused. None names a destination: they can be read on any phone. New counters are only
+    /// Watch refused, and datagrams and lookups dropped because who sent them could not be told: the
+    /// answers of Android's near them named different apps, or the app they named held the socket no
+    /// more (ADR 0044, unit 9, "Whose a datagram is"). None names a destination: they can be read on any phone. New counters are only
     /// ever appended, so that scripts reading a column by its place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
@@ -462,6 +466,7 @@ impl Counters {
             &self.udp_unmatched,
             &self.udp_came_in_capped,
             &self.udp_relay_elsewhere,
+            &self.udp_ambiguous,
         ]
         .map(|c| c.load(Ordering::Relaxed))
     }

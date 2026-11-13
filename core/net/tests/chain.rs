@@ -37,6 +37,7 @@ const UDP_FILTERED: usize = 25;
 const UDP_UNMATCHED: usize = 26;
 const UDP_CAME_IN_CAPPED: usize = 27;
 const UDP_RELAY_ELSEWHERE: usize = 28;
+const UDP_AMBIGUOUS: usize = 29;
 
 /// Android names the app by its port inside the tunnel.
 struct ByPort;
@@ -1379,9 +1380,12 @@ async fn an_app_android_cannot_name_goes_nowhere_while_a_chain_is_on() -> Outcom
     let tool = proxy(Settings::default()).await?;
     let owners = Arc::new(Owners::default());
     owners.set(PORT, Some(DIRECT));
-    let (_engine, tunnel) = engine_with(chain(tool.address), Limits::default(), owners.clone())?;
+    let (_engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
     send(&tunnel, app(PORT), first, b"named").await?;
     receive(&tunnel).await?.ok_or("a datagram")?;
+    // More than `udp_reask` after the answer naming the direct app: else who sent the next datagram
+    // could not be told, and it would be dropped (eighth review of unit 9, finding 1).
+    tokio::time::sleep(Duration::from_millis(150)).await;
     owners.set(PORT, None);
     send(&tunnel, app(PORT), second, b"unnamed").await?;
     assert_eq!(receive(&tunnel).await?, None, "an ICMP error, no echo");
@@ -1669,9 +1673,11 @@ async fn a_mapping_ends_when_its_port_is_another_apps() -> Outcome {
     let tool = proxy(Settings::default()).await?;
     let owners = Arc::new(Owners::default());
     owners.set(PORT, Some(DIRECT));
-    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), owners.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
     let mut seen = Vec::new();
     for (server, uid) in [(first, DIRECT), (second, ANOTHER)] {
+        // A handover less than `udp_reask` after an answer would drop what came near it.
+        tokio::time::sleep(Duration::from_millis(150)).await;
         owners.set(PORT, Some(uid));
         send(&tunnel, app(PORT), server, b"which port?").await?;
         let (_, answer) = receive(&tunnel).await?.ok_or("a datagram")?;
@@ -1949,10 +1955,11 @@ async fn an_app_android_cannot_name_is_logged_as_unknown() -> Outcome {
     let tool = proxy(Settings::default()).await?;
     let owners = Arc::new(Owners::default());
     owners.set(PORT, Some(DIRECT));
-    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), owners.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
     engine.chain(None);
     send(&tunnel, app(PORT), first, b"named").await?;
     receive(&tunnel).await?.ok_or("a datagram")?;
+    tokio::time::sleep(Duration::from_millis(150)).await;
     owners.set(PORT, None);
     send(&tunnel, app(PORT), second, b"unnamed").await?;
     let answer = receive(&tunnel).await?.ok_or("a datagram")?;
@@ -2893,21 +2900,18 @@ async fn handed_over_while_asked(
 }
 
 /// A chained app's datagram to a new destination, sent while a question that began for the port's
-/// previous, direct app is still out, asks Android on its own and goes through the tool: it does not
-/// take the old app's answer (fifth review of unit 9, finding 1).
+/// previous, direct app is still out, asks Android on its own: it does not take the old app's answer
+/// (fifth review of unit 9, finding 1). Both answers being near it, who sent it cannot be told: it is
+/// dropped and counted, never sent directly (eighth review, finding 1).
 #[tokio::test(flavor = "current_thread")]
 async fn a_new_destination_does_not_join_the_old_apps_question() -> Outcome {
     let (at, heard) = listening().await?;
-    let (_engine, tunnel, tool) = handed_over_while_asked(50_200).await?;
+    let (engine, tunnel, _tool) = handed_over_while_asked(50_200).await?;
     send(&tunnel, app(50_200), at, b"chained app").await?;
     tokio::time::sleep(Duration::from_millis(1_000)).await;
     let from = heard_from(&heard, b"chained app");
-    assert_eq!(from.len(), 1, "heard {from:?}");
-    assert!(
-        tool.relays().contains(&from[0]),
-        "the chained app's datagram left directly, from {}",
-        from[0]
-    );
+    assert!(from.is_empty(), "heard {from:?}");
+    assert!(engine.counters()[UDP_AMBIGUOUS] >= 1);
     Ok(())
 }
 
@@ -3060,8 +3064,9 @@ async fn answered_from_another_port()
 }
 
 /// A port that came in to the old app's mapping is no destination that app knew: the new app's first
-/// datagram to it, though the mapping is fresh, asks Android, and goes through the tool (sixth review of
-/// unit 9, finding 4).
+/// datagram to it, though the mapping is fresh, asks Android, and does not leave directly (sixth review
+/// of unit 9, finding 4); both answers being near it, it is dropped (eighth review, finding 1). The next
+/// goes through the tool.
 #[tokio::test(flavor = "current_thread")]
 async fn a_port_that_came_in_is_no_destination_the_app_knew() -> Outcome {
     const PORT: u16 = 50_303;
@@ -3069,20 +3074,38 @@ async fn a_port_that_came_in_is_no_destination_the_app_knew() -> Outcome {
     let tool = proxy(Settings::default()).await?;
     let owners = Arc::new(Owners::default());
     owners.set(PORT, Some(DIRECT));
-    let (_engine, tunnel) = engine_with(chain(tool.address), Limits::default(), owners.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), owners.clone())?;
     send(&tunnel, app(PORT), at, b"x").await?;
     let (from, _) = receive(&tunnel).await?.ok_or("a datagram")?;
     assert_eq!(from, other);
     owners.set(PORT, Some(CHAINED));
     send(&tunnel, app(PORT), other, b"y").await?;
+    until_dropped(&engine, 1).await?;
+    send(&tunnel, app(PORT), other, b"z").await?;
     tokio::time::sleep(Duration::from_millis(300)).await;
-    let from = heard_from(&heard, b"y");
+    assert!(
+        heard_from(&heard, b"y").is_empty(),
+        "the first after the handover"
+    );
+    let from = heard_from(&heard, b"z");
     assert_eq!(from.len(), 1);
     assert!(
         tool.relays().contains(&from[0]),
         "left directly from {}",
         from[0]
     );
+    Ok(())
+}
+
+/// Waits until the engine has dropped `count` datagrams or lookups whose sender could not be told.
+async fn until_dropped(engine: &Engine, count: u64) -> Outcome {
+    let until = tokio::time::Instant::now() + Duration::from_secs(5);
+    while engine.counters()[UDP_AMBIGUOUS] < count {
+        if tokio::time::Instant::now() > until {
+            return Err(format!("not {count} dropped").into());
+        }
+        tokio::time::sleep(Duration::from_millis(2)).await;
+    }
     Ok(())
 }
 
@@ -3279,7 +3302,9 @@ async fn a_lookup_that_names_a_new_app_ends_the_old_apps_mapping() -> Outcome {
     owners.set(PORT, Some(CHAINED));
     let private = query(b"\x07private\x04test\x00", 1);
     send(&tunnel, app(PORT), dns, &private).await?;
-    until_a_flow_to(&engine, dns).await?;
+    // The lookup came less than `udp_reask` after the answer naming the direct app: it is dropped,
+    // once its own answer, naming the chained app, ended the old mapping.
+    until_dropped(&engine, 1).await?;
     for _ in 0..5 {
         send(&tunnel, app(PORT), at, b"y").await?;
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -3310,7 +3335,8 @@ async fn a_datagram_that_names_a_new_app_ends_the_old_apps_flow_of_lookups() -> 
     until_a_flow_to(&engine, dns).await?;
     owners.set(PORT, Some(CHAINED));
     send(&tunnel, app(PORT), at, b"x").await?;
-    until_a_flow_to(&engine, at).await?;
+    // Dropped, as the lookup's answer is near it, once its own answer ended the old flow.
+    until_dropped(&engine, 1).await?;
     let private = query(b"\x07private\x04test\x00", 1);
     send(&tunnel, app(PORT), dns, &private).await?;
     tokio::time::sleep(Duration::from_millis(300)).await;
@@ -3451,8 +3477,9 @@ fn left_directly(heard: &Heard, payload: &[u8], tool: &common::Proxy) -> (usize,
 /// The direct app's question about a new destination is slow (300 ms); the port goes to a chained app
 /// 50 ms after it began, whose lookup Android answers at once, naming it, while no way of the socket is
 /// open yet. The old app's answer, which comes after, opens no way: the chained app's datagrams to that
-/// destination go through the tool (seventh review of unit 9, finding 1). So does the old app's
-/// datagram, asked about again.
+/// destination go through the tool (seventh review of unit 9, finding 1). The old app's datagram, and
+/// the new app's lookup, came less than `udp_reask` from both answers: who sent them cannot be told,
+/// and they are dropped (eighth review, finding 1).
 #[tokio::test(flavor = "current_thread")]
 async fn an_older_answer_opens_no_way_once_a_lookup_named_the_new_app() -> Outcome {
     const PORT: u16 = 50_700;
@@ -3476,11 +3503,7 @@ async fn an_older_answer_opens_no_way_once_a_lookup_named_the_new_app() -> Outco
     }
     tokio::time::sleep(Duration::from_millis(500)).await;
     assert!(!heard_private(&dns_heard), "the lookup went to the network");
-    assert_eq!(
-        left_directly(&heard, b"x", &tool),
-        (0, 1),
-        "the old app's datagram"
-    );
+    assert_eq!(heard_from(&heard, b"x").len(), 0, "the old app's datagram");
     let (direct, all) = left_directly(&heard, b"y", &tool);
     assert_eq!(direct, 0, "{direct} of {all} left directly");
     Ok(())
@@ -3562,7 +3585,8 @@ async fn an_older_answer_opens_no_flow_of_lookups_once_a_datagram_named_the_new_
 /// No answer comes late here: the direct app's question is answered at once, but its mapping's socket
 /// takes 300 ms to protect. The port goes to a chained app meanwhile, whose lookup Android names at once.
 /// The old app's mapping does not open: the chained app's datagrams to its destination, for three
-/// seconds without a pause of a second, go through the tool.
+/// seconds without a pause of a second, go through the tool. The old app's datagram is dropped, as
+/// both answers are near it (eighth review of unit 9, finding 1).
 #[tokio::test(flavor = "current_thread")]
 async fn a_mapping_still_opening_when_a_lookup_names_the_new_app_does_not_open() -> Outcome {
     const PORT: u16 = 50_703;
@@ -3592,11 +3616,7 @@ async fn a_mapping_still_opening_when_a_lookup_names_the_new_app_does_not_open()
     }
     tokio::time::sleep(Duration::from_millis(500)).await;
     assert!(!heard_private(&dns_heard), "the lookup went to the network");
-    assert_eq!(
-        left_directly(&heard, b"x", &tool),
-        (0, 1),
-        "the old app's datagram"
-    );
+    assert_eq!(heard_from(&heard, b"x").len(), 0, "the old app's datagram");
     let (direct, all) = left_directly(&heard, b"y", &tool);
     assert_eq!(
         direct, 0,
@@ -3649,7 +3669,10 @@ async fn a_flow_of_lookups_still_opening_when_a_datagram_names_the_new_app_does_
 /// A chained app's stand-in whose name gave way in the map (which holds one name here); the port is
 /// handed to another chained app, through the same tool, which sends to that stand-in after a pause. The
 /// new app gets no way from the old app's peer: the map names nothing there for it, so the stand-in is
-/// unreachable, and nothing reaches the old app's name (seventh review of unit 9, finding 4).
+/// unreachable, and nothing reaches the old app's name (seventh review of unit 9, finding 4). It passes on
+/// the engine before that fix as well: the answer naming the new app ends the old app's mapping before
+/// the way is looked for, so the fallback never meets another app's peer here; the engine's own test
+/// `only_the_same_app_keeps_a_live_stand_ins_way` reaches that case (eighth review, finding 4).
 #[tokio::test(flavor = "current_thread")]
 async fn another_app_gets_no_way_from_the_old_apps_stand_in() -> Outcome {
     const PORT: u16 = 50_309;
@@ -3687,5 +3710,112 @@ async fn another_app_gets_no_way_from_the_old_apps_stand_in() -> Outcome {
             && flow.outcome == datapavan_net::engine::Outcome::Opened
     });
     assert!(!unnamed, "a flow of the new app to the old app's name");
+    Ok(())
+}
+
+/// The reverse of `an_older_answer_opens_no_way_once_a_lookup_named_the_new_app`: the old app is the
+/// chained one. Its question about a new destination is slow (300 ms); the port goes to a direct app 50 ms
+/// after it began, whose lookup Android answers at once. The chained app's own datagram, which came
+/// less than `udp_reask` from both answers, does not leave directly: who sent it cannot be told, and it
+/// is dropped (eighth review of unit 9, finding 1).
+#[tokio::test(flavor = "current_thread")]
+async fn a_chained_apps_datagram_does_not_leave_directly_once_a_lookup_names_a_direct_app()
+-> Outcome {
+    const PORT: u16 = 50_710;
+    let (a, heard) = listening().await?;
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(Staged::default());
+    android.set(PORT, Some(CHAINED));
+    android.delay(a, Duration::from_millis(300));
+    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    let (dns, _) = deaf_resolver(&engine).await?;
+    send(&tunnel, app(PORT), a, b"x").await?;
+    let asked = android.asked_about(a).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(50)).await;
+    android.set(PORT, Some(DIRECT));
+    let public = query(b"\x06public\x04test\x00", 1);
+    send(&tunnel, app(PORT), dns, &public).await?;
+    tokio::time::sleep(Duration::from_millis(1_200)).await;
+    let (direct, _) = left_directly(&heard, b"x", &tool);
+    assert_eq!(direct, 0, "the chained app's datagram left directly");
+    assert!(engine.counters()[UDP_AMBIGUOUS] >= 1);
+    Ok(())
+}
+
+/// A front for the test proxy that lets each connection through only after `delay`, as a tool slow to
+/// answer its handshake.
+async fn slow_front(to: SocketAddr, delay: Duration) -> io::Result<SocketAddr> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let at = listener.local_addr()?;
+    tokio::spawn(async move {
+        while let Ok((mut inbound, _)) = listener.accept().await {
+            tokio::spawn(async move {
+                tokio::time::sleep(delay).await;
+                if let Ok(mut outbound) = tokio::net::TcpStream::connect(to).await {
+                    let _ = tokio::io::copy_bidirectional(&mut inbound, &mut outbound).await;
+                }
+            });
+        }
+    });
+    Ok(at)
+}
+
+/// The chained app's datagram waits while the tool answers its handshake slowly (3 s); the port goes to
+/// a direct app 1.5 s after the question, well beyond `udp_reask`, and the direct app's lookup names it.
+/// The chained app's datagram does not leave directly, however long its way took to open: the newest
+/// answer opens no way for the old app either, and so it is dropped (eighth review of unit 9, finding
+/// 1).
+#[tokio::test(flavor = "current_thread")]
+async fn a_chained_apps_datagram_does_not_leave_directly_after_a_slow_handshake() -> Outcome {
+    const PORT: u16 = 50_711;
+    let (a, heard) = listening().await?;
+    let tool = proxy(Settings::default()).await?;
+    let front = slow_front(tool.address, Duration::from_secs(3)).await?;
+    let android = Arc::new(Staged::default());
+    android.set(PORT, Some(CHAINED));
+    let (engine, tunnel) = engine_with(chain(front), Limits::default(), android.clone())?;
+    let (dns, _) = deaf_resolver(&engine).await?;
+    send(&tunnel, app(PORT), a, b"x").await?;
+    let asked = android.asked_about(a).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(1_500)).await;
+    android.set(PORT, Some(DIRECT));
+    let public = query(b"\x06public\x04test\x00", 1);
+    send(&tunnel, app(PORT), dns, &public).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(4_000)).await;
+    let (direct, _) = left_directly(&heard, b"x", &tool);
+    assert_eq!(direct, 0, "the chained app's datagram left directly");
+    assert_eq!(
+        engine.counters()[UDP_MAPPINGS],
+        0,
+        "a mapping for an app that lost the socket"
+    );
+    Ok(())
+}
+
+/// The chained app's lookup of `private.test` asks slowly (300 ms); the port goes to a direct app 50 ms
+/// after, whose datagram Android names at once. The chained app's lookup stays off the network's
+/// resolver: it came less than `udp_reask` from both answers, and is dropped (eighth review of unit 9,
+/// finding 1).
+#[tokio::test(flavor = "current_thread")]
+async fn a_chained_apps_lookup_stays_off_the_network_once_a_direct_app_is_named() -> Outcome {
+    const PORT: u16 = 50_712;
+    let (e, _) = listening().await?;
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(Staged::default());
+    android.set(PORT, Some(CHAINED));
+    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    let (dns, dns_heard) = deaf_resolver(&engine).await?;
+    android.delay(dns, Duration::from_millis(300));
+    let private = query(b"\x07private\x04test\x00", 16);
+    send(&tunnel, app(PORT), dns, &private).await?;
+    let asked = android.asked_about(dns).await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(50)).await;
+    android.set(PORT, Some(DIRECT));
+    send(&tunnel, app(PORT), e, b"to e").await?;
+    tokio::time::sleep_until(asked + Duration::from_millis(1_200)).await;
+    assert!(
+        !heard_private(&dns_heard),
+        "the chained app's lookup reached the network's resolver"
+    );
     Ok(())
 }
