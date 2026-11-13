@@ -735,7 +735,11 @@ they came, and that a slow answer widened the window by its own latency; an answ
 less than `udp_reask` after it was asked. It also found that a lookup's answer naming a new app left the old
 app's mapping in place, that a port that came in counted as a destination the app knew, that an app answering
 every sender lifted the cap of 64, and that a live stand-in whose name left the map became unreachable at its
-next pause; each is fixed. How it is built:
+next pause; each is fixed. A seventh found that an answer naming the new app was forgotten when no way of the
+socket was open yet, so that a way opened afterwards on the old app's older answer; the table now keeps the
+newest answer about each socket, for as long as it has a way, and opens no way on an older one that names
+another app. It also found that each answer scanned the whole table, that the windows were tested from one
+side only, and that a live stand-in's way could pass to another app; each is fixed. How it is built:
 [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 Still to come: shares for each app, ICMP echo and the network's MTU.

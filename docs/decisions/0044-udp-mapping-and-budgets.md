@@ -197,7 +197,9 @@ an ADR (D25).
     Once bound, or answered by name, it drops them and keeps none after.
   - A stand-in's name can give way in the stand-in map (16,384 names, `Limits::stand_ins`) to newer names while
     the app still sends to it, since the mapping's own datagrams do not keep it in use there. A live peer then
-    keeps the way it had, also when a pause makes its way anew; only a new peer needs the map.
+    keeps the way it had, also when a pause makes its way anew, for its own app only: another app that took
+    the socket's port gets no name from the old app's peers. A peer made with such a way is logged under the
+    name its way names.
 - **Names learned:** from a flow the app started, as before; from a flow that came in, only from a DNS response to
   a query the app sent it, by ID and question, even once the app has sent to it. A sender at port 53 of an
   address the app sent to cannot name the app's later flows.
@@ -226,8 +228,17 @@ an ADR (D25).
     socket costs one question each.
   - Any answer about a socket, whichever destination or lookup asked, ends the socket's mapping and its flows of
     lookups when it names another app than theirs; a flow that ends so still hands the app the answers it owes.
-    An answer to a question asked before the one a mapping rests on is stale: it neither ends that mapping nor
-    opens another app's in its place, and its datagrams ask again.
+    The work is the socket's own: its mapping and its flows of lookups, whatever else the table holds, so one
+    app's burst of new destinations costs each answer no more than its own ways.
+  - **The newest answer.** For each app socket with a way, opening or open, the table keeps the answer of
+    Android's about it that was asked last: its app, or none, and when it was asked. A way about to open,
+    mapping or flow of lookups, on an older answer that names another app does not open, whether a way of the
+    socket was open when the newer answer came or not: its datagrams ask again, and no owner is guessed. A late
+    answer to an older question changes nothing. So a lookup that names the new app while the old app's way
+    still opens (its socket being protected, the tool's handshake) keeps that way shut. The record goes with
+    the socket's last way, and so is bounded by them: each question is asked for a destination whose datagrams
+    wait in the table until its way opens. A datagram of the old app that waits for such a way asks again,
+    and leaves under the new answer, or nowhere when Android names no app.
   - The cost: when Android answers more slowly than `udp_reask`, a pause costs a question for each `udp_reask`
     the answers take, and a datagram may wait for two answers. At 3 or 11 ms against a second, a pause costs one
     question.
@@ -273,11 +284,13 @@ an ADR (D25).
   - The re-check just before what waited leaves covers the moment between opening the mapping and sending. No test
     reaches that moment without a hook in the engine; the check made as the mapping opens is tested.
 - **Unchanged:** chained apps' TCP, the tool's own traffic, a stopped tool, and a tool without UDP.
-- **Tests:** seventy-four in `core/net/tests/chain.rs`, fourteen in the engine's own tests (what a stand-in keeps
-  of its queries, which only memory shows; the thirty-times rule at simulated instants, to the exact one; and
-  which answers of Android's a datagram may take, and which ways they end, which depend on the order tasks run
-  in), and three in the network lab with a real tun. Each was made to fail by breaking the code it guards, or,
-  for the six independent reviews' findings of the same day, by the engine before their fixes. Those that time a
+- **Tests:** eighty in `core/net/tests/chain.rs`, twenty-one in the engine's own tests (what a stand-in keeps of
+  its queries, which only memory shows; the windows this paragraph states, the thirty-times rule, an answer's
+  hold, a join and a stand-in's contest, at simulated instants a nanosecond before their end and at it; which
+  answers of Android's a datagram may take, and which ways they end or keep shut, which depend on the order
+  tasks run in; and what an answer costs), and three in the network lab with a real tun. Each was made to fail
+  by breaking the code it guards, or, for the seven independent reviews' findings of the same day, by the
+  engine before their fixes. Those that time a
   handover count from when the test's Android was asked, which the engine did no later, so that load cannot
   narrow their margins. Those that need port 53
   use the test proxy's remapping, or any port of the tunnel's DNS address, which leads to the same port of the
