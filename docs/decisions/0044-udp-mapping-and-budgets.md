@@ -205,8 +205,9 @@ an ADR (D25).
   one Binder call for each pause of an app socket, and one every thirty seconds for one that never pauses: a socket
   that keeps a connection alive every 30 s adds about 1,400 a night, beside the 984 lookups of a whole night in
   that spike. One question at a time for what a socket already knows: a datagram to a destination its mapping
-  has, sent while Android is asked about that socket, waits for that answer, held, so a pause costs one call
-  however many such destinations the socket has. A new destination, and a lookup to the tunnel's DNS address,
+  has, sent while Android is asked about that socket, waits for that answer, held, and one that asks only once
+  an answer naming the mapping's app is in takes that answer, so a pause costs one call however many such
+  destinations the socket has. A new destination, and a lookup to the tunnel's DNS address,
   ask on their own: the question out began before their datagram came, and its answer may name the port's
   previous app, whose way a new destination would then take, and keep for up to thirty seconds. A known
   destination that joins is no worse than the window under the known limits below: without the pause, it would
@@ -252,9 +253,10 @@ an ADR (D25).
   - The re-check just before what waited leaves covers the moment between opening the mapping and sending. No test
     reaches that moment without a hook in the engine; the check made as the mapping opens is tested.
 - **Unchanged:** chained apps' TCP, the tool's own traffic, a stopped tool, and a tool without UDP.
-- **Tests:** sixty-four in `core/net/tests/chain.rs`, five in the engine's own tests (what a stand-in keeps of
-  its queries, which only memory shows, and the thirty-times rule at simulated instants, to the exact one), and
-  three in the network lab with a real tun. Each was made to fail by breaking the code it guards, or, for the
+- **Tests:** sixty-four in `core/net/tests/chain.rs`, nine in the engine's own tests (what a stand-in keeps of
+  its queries, which only memory shows; the thirty-times rule at simulated instants, to the exact one; and which
+  datagrams share a question to Android, which depends on the order tasks run in), and three in the network lab
+  with a real tun. Each was made to fail by breaking the code it guards, or, for the
   five independent reviews' findings of the same day, by the engine before their fixes. Those that need port 53
   use the test proxy's remapping, or any port of the tunnel's DNS address, which leads to the same port of the
   network's resolver, so they run in every `cargo test`. ICMP errors on a direct mapping once the chain takes its
