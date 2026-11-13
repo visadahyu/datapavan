@@ -722,7 +722,10 @@ network's resolver; a port Android handed to a chained app could leave the old a
 app's way was guessed; a flow that came in from a port 53 could teach Watch names; and a relay at the phone's own
 Wi-Fi address was refused. A third found the lookups to the tunnel's DNS address still kept a port's old app,
 directly or through the chain, and a reused port was logged under its old app without a chain; Android is now asked
-again for both, with or without a chain, and an app it cannot name is never guessed. How it is built:
+again for both, with or without a chain, and an app it cannot name is never guessed. A fourth found that a flow
+that came in by name could be taken as a stand-in, that one unanswered name could cut a bound one for minutes,
+that a pause cost one question to Android for each destination, and that a repeated answer could end a flow of
+lookups early; each is fixed. How it is built:
 [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 Still to come: shares for each app, ICMP echo and the network's MTU.

@@ -142,8 +142,9 @@ an ADR (D25).
   asks the tool for one relay, not one each.
 - **Each answer goes to the destination its header names,** with the direct path's filter, in this order:
   - from a destination's own address, to its flow;
-  - from the address a stand-in was bound to, to that stand-in, unless another stand-in waits on that port: the
-    tool may have resolved both names to that one address, so the answer is dropped;
+  - from the address a stand-in was bound to, to that stand-in, unless another stand-in that the app asked
+    within the last 5 s (`Limits::udp_contest`) still waits on that port: the tool may have resolved both names
+    to that one address, so the answer is then dropped;
   - from another port of an address the app sent to, to a new flow, never as a stand-in's first answer. It is
     shown from the address the app sent to itself, else from the stand-in bound to that address. When that same
     stand-in, alone, waits on that port, the one name asked on a second port, the answer binds it there too;
@@ -156,7 +157,15 @@ an ADR (D25).
 - **Stand-ins.** The relay answers from the address the tool reached, which the app never saw:
   - A stand-in still waiting for its first answer is bound to the first answer from its port, from an address the
     app never saw, when no other stand-in of the mapping could take it. Later answers from that address reach the
-    app from the stand-in.
+    app from the stand-in. Only a stand-in the app sent to waits: a flow that came in, as another port of a name
+    a relay gave back, never does, since the app asked it nothing.
+  - **A bounded cut.** A second name asked on a bound name's port contests the bound address's answers for
+    `Limits::udp_contest`, 5 s after the app first asked it, and they are dropped meanwhile: one unanswered
+    datagram to a silent STUN name beside a working TURN server on 3478 cuts the TURN server for those seconds,
+    not for minutes. A first answer through a tool comes within about a second; five leave room for a slow one.
+    The trade-off: if the second name does resolve to the bound name's very address and port, its later answers
+    reach the app under the first name, and the log counts them there. The second name still waits, as long as
+    it lives, for a first answer from an address no other stand-in was bound to.
   - On port 53, that answer must also be a DNS response to a query the app sent that stand-in, by its ID and its
     question. A sender that guesses neither cannot take the stand-in, nor feed Watch the names it learns.
   - **The risk left until unit 9b:** on other ports, whoever reaches the tool's relay first, from the port the app
@@ -174,7 +183,10 @@ an ADR (D25).
     tools' relays put in the header (gate 4's check R, table B10): where they give back the name, nothing is
     ambiguous.
   - A relay that gives back the name it was asked for is matched by that name, and the stand-in then waits no
-    more for a first answer from an address, which a stranger could otherwise send it later.
+    more for a first answer from an address, which a stranger could otherwise send it later. A second stand-in
+    still waiting on that port is then the only one that could take an answer from an address there, and the
+    first such answer binds it. That is right under the rule that a relay naming one answer names the next; a
+    relay that names some answers and not others could give the first stand-in's answer to the second.
   - A stand-in on port 53 keeps the last 64 queries the app sent it while it waits, so that a burst before the
     first answer (retries, A and AAAA, several names) still binds it; at most about 17 KB, only while it waits.
 - **Names learned:** from a flow the app started, as before; from a flow that came in, only from a DNS response to
@@ -189,14 +201,16 @@ an ADR (D25).
   free port at random among about 28,000, so a port rarely comes back to another app within a second. The cost is
   one Binder call for each pause of an app socket, and one every thirty seconds for one that never pauses: a socket
   that keeps a connection alive every 30 s adds about 1,400 a night, beside the 984 lookups of a whole night in
-  that spike.
+  that spike. One question at a time for an app socket: the destinations that need its app while Android is asked
+  wait for that answer, their datagrams held, so a pause costs one call however many peers the socket has.
 - **No guess.** An app Android cannot name is unknown, in the log (decision 3's shared bucket) and to the chain,
   even when Android named that socket's app before: the old app is never taken for it. While a chain is on, it goes
   nowhere. A socket Android fails to name for a moment so gets a new mapping, and so another port.
 - **Flows of lookups** to the tunnel's DNS address end once each lookup they carried has its answer: a direct one
-  when the network's resolver answers, a chained app's when Watch has answered it, within a few seconds. One that
-  gives way to a new flow, when Android is asked again or the chain changes, still hands the app every answer it
-  owes.
+  when the network's resolver answers, a chained app's when Watch has answered it, within a few seconds. Each
+  lookup is kept by its ID and question, and an answer settles only the lookup it answers, so a repeated answer
+  does not end the flow before a later lookup has its own; at most 256 wait on one flow. One that gives way to a
+  new flow, when Android is asked again or the chain changes, still hands the app every answer it owes.
 - **Counters, appended:**
   - `udp_unmatched`, the 27th: answers that no one destination could be told for, such as one on a port several
     stand-ins wait on, a malformed header or a fragment. It measures how often the rule above costs an answer;
@@ -213,8 +227,9 @@ an ADR (D25).
   mapping also ends when the tool closes its relay. When the chain changes while a destination's way opens, the
   destination is routed again before anything that waited leaves. Lookups to the tunnel's DNS address follow
   too: a flow of lookups that the chain sends another way gives way at the app's next lookup, and lookups that
-  waited while it opened are routed again. So nothing an app sends once the chain takes it leaves directly, but
-  for the port handed over below.
+  waited while it opened are routed again. Nor does anything come in on a direct mapping once the chain takes
+  its app, ICMP errors included. So nothing an app sends once the chain takes it leaves directly, but for the
+  port handed over below.
 - **Known limits:**
   - A bound stand-in keeps sending by name, so that the tool's own routing by name still applies. When the tool
     resolves the name again to another address, the answers from that address are dropped, or, on a port another
@@ -228,9 +243,12 @@ an ADR (D25).
   - The re-check just before what waited leaves covers the moment between opening the mapping and sending. No test
     reaches that moment without a hook in the engine; the check made as the mapping opens is tested.
 - **Unchanged:** chained apps' TCP, the tool's own traffic, a stopped tool, and a tool without UDP.
-- **Tests:** forty-eight in `core/net/tests/chain.rs`, and three in the network lab with a real tun. Each was made
-  to fail by breaking the code it guards, or, for the three independent reviews' findings of the same day, by the
-  engine before their fixes. Those that need port 53 use the test proxy's remapping, or any port of the tunnel's
-  DNS address, which leads to the same port of the network's resolver, so they run in every `cargo test`.
+- **Tests:** fifty-seven in `core/net/tests/chain.rs`, two in the engine's own tests (what a stand-in keeps of its
+  queries, which only memory shows), and three in the network lab with a real tun. Each was made to fail by
+  breaking the code it guards, or, for the four independent reviews' findings of the same day, by the engine
+  before their fixes. Those that need port 53 use the test proxy's remapping, or any port of the tunnel's DNS
+  address, which leads to the same port of the network's resolver, so they run in every `cargo test`. ICMP errors
+  on a direct mapping once the chain takes its app have no test: they answer a datagram sent before, and arrive at
+  once on a test's loopback.
 - **Still open:** what real tools' relays put in the header, and whether they keep one upstream socket per
   association. The test tool and the lab's proxy name the real sender; v2rayNG and NekoBox are not yet checked.
