@@ -53,6 +53,7 @@ in the Git history.
 | [0043](0043-release-integrity-and-repository-controls.md) | Release integrity, repository controls and continuous fuzzing | Accepted |
 | [0044](0044-udp-mapping-and-budgets.md) | UDP mapping, budgets for each app, and the engine's smaller gaps | Accepted |
 | [0045](0045-three-editions-of-one-app.md) | Three editions of one app: Basic, Advanced and Enterprise | Accepted |
+| [0046](0046-live-activity.md) | What apps sent while the user was not using them, shown live | Proposed |
 
 ## Template
 
