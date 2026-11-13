@@ -186,6 +186,7 @@ by:
 |---|---|---|
 | Summary notification | Anyone who unlocks the phone, notification listeners, the notification history | Counts and sizes only. Hidden on the lock screen (`VISIBILITY_SECRET`), local only (not sent to a watch) |
 | Widget | Anyone at the home screen, the launcher | Counts, sizes and Watch's state |
+| Flag notice (opt-in) | As the summary | A count of new flags only. Hidden on the lock screen, local only |
 | Tile | Anyone who pulls down Quick Settings, locked or not | Watch's state; counts only while unlocked |
 | "Now" and the history | Whoever unlocks the phone and passes Watch's own lock, if set | Apps, destinations, sizes, times and flags; blocked from screenshots |
 
@@ -210,7 +211,7 @@ that need history do not run.
 words say what ran without the user ("sent while you were not using it"), never "stole", "spied" or "leaked", and
 follow ADR 0025's list in every language: absolute numbers first, no word that judges.
 
-**Two flags, stated as facts, inside the app only:**
+**Two flags, stated as facts, whose words show only inside the app:**
 
 1. **An app's first background send:** "First time in the 30 days Watch keeps: [app] sent [X] while you were not
    using it."
@@ -231,8 +232,22 @@ emulators, the same lab W8 plans for proxy-like behaviour. Every flag on that se
 
 **No flag reaches the summary, the widget or the tile.** They show neutral counts, never a count of flags, in no
 warning colour. This keeps ADR 0025's reason: a notification about one app, mostly wrong, teaches people to ignore
-it or to remove what they need. ADR 0025 decision 1 is amended only so far as this: a count across all apps, with no
-app named, may appear in a notification and a widget that the user turned on.
+it or to remove what they need.
+
+**A flag notice, only if the user turns it on.** A separate setting, off by default, lets a new flag raise a silent
+notification on a channel of its own: a count only, with no app and no destination named, for example "1 event to
+look at. Tap to see it." It follows the summary's rules (hidden on the lock screen, local only, no colour, no
+badge), opens "Now" behind Watch's own lock, and never exists under the inspection profile. The words avoid
+"unusual", which ADR 0025's list rules out.
+
+**What this changes in ADR 0025.** Decision 1 is amended for Advanced's live surfaces, and only so far as this:
+- a count across all apps of those that sent while not in use, with sizes and no app named, may appear in the
+  summary notification and the widget;
+- a count of new flags, with no app or destination named, may appear in the flag notice, once the user turned it
+  on.
+
+Nothing about one app becomes a notification, a badge, a colour, a score or a rank, and decision 4's words hold
+everywhere.
 
 **Destinations.** No destination is ever called malicious. Trackers are named only from the εxodus network
 signatures, as W5 planned, and an organisation only from the dataset of ADR 0036.
@@ -270,7 +285,8 @@ On the emulators with Android 10, 11, 15 and 17, by script, with debug builds' s
    app on screen is "in use"; a foreground service is "with its notification".
 2. The summary shows the right count and size; it shows nothing on the lock screen; it is marked local only; it does
    not exist before onboarding has asked, nor under the inspection profile, and is gone with `POST_NOTIFICATIONS`
-   denied.
+   denied. The flag notice does not exist until the user turns it on, never under the inspection profile, and
+   carries only a count.
 3. The widget shows the same numbers; the tile shows counts only while unlocked.
 4. Nothing outside the app names an app or a destination: the text of every notification, widget and tile is read
    over adb (`dumpsys notification`, the widget's views) and checked against every package and destination of the run.
@@ -319,8 +335,8 @@ decryption (Lumen) or the operating system (stage 3), and both are out of scope 
 ## Consequences
 
 - **The W5 gate is met in Advanced,** without the interface ADR 0045 dropped. DESIGN.md's W5 row links here.
-- **ADR 0025 changes for Advanced's live surfaces:** a count across apps, with no app named, may appear where the
-  user turned it on. The roadmap's widget line ("only its state and the date of the last check") changes to "its
+- **ADR 0025 changes for Advanced's live surfaces only,** as decision 4 sets out: a count across apps in the
+  summary and the widget, and a count of new flags in the opt-in flag notice, never an app's name. The roadmap's widget line ("only its state and the date of the last check") changes to "its
   state and counts across apps, never an app's name or a count of flags", once accepted.
 - **ADR 0034 grows by one exported component,** the widget's receiver, and `POST_NOTIFICATIONS` gains a use it did
   not list. No permission is added.
@@ -351,8 +367,10 @@ All read on 2026-11-14.
   choose the profile, off for those who do; not shown before onboarding asks (decision 2).
 - **The windows:** the summary's starts at 10 minutes and the "in use" grace at 30 seconds; the lab run sets both.
 
+- **A flag notice:** yes, opt-in and off by default, a silent count with nothing named, never under the inspection
+  profile (decision 4). The maintainer's example said "1 unusual event"; the string avoids "unusual" because ADR
+  0025's list rules it out.
+
 ## Questions for the maintainer
 
-2. **A flag outside the app.** May a flag raise a separate, silent notification that names nothing ("Something new
-   in Now")? Proposed: no, until the lab run shows how often flags are wrong.
 3. **The widget in 0.2.0**, or after it?
