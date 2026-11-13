@@ -745,7 +745,12 @@ came before its question; a chained app's datagrams could so leave directly. The
 now lives in one function every path asks: answers less than `udp_reask` from a datagram that disagree drop it,
 and a model drives that rule through 10,000 random schedules of handovers. It also found that an answer still
 looked at every flow of lookups of its socket, a lookup flow's window that no test pinned, and a destination
-that took on another app's tool failure; each is fixed. How it is built:
+that took on another app's tool failure; each is fixed. A ninth found that only the first datagram waiting for a
+way asked Android, so that a retry behind a slow handshake was dropped as ambiguous: each datagram now asks as it
+comes and keeps whose it was taken for, and drops are counted as ambiguous or late apart. It also found that what
+only comes in to a mapping kept the old app's way without asking, that the model checked no liveness and left
+out the chain, failing ways and the record's end, and that a peer's way was looked up before the cap of 64;
+each is fixed, and the stream's window and the cost of lookups are stated. How it is built:
 [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 Still to come: shares for each app, ICMP echo and the network's MTU.
