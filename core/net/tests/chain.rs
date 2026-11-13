@@ -2640,3 +2640,53 @@ async fn a_later_lookup_on_an_open_flow_keeps_it_open() -> Outcome {
     assert_eq!(questions, ["one.test", "two.test"]);
     Ok(())
 }
+
+/// A stand-in on port 53 keeps the last 64 queries the app sent it while it waits: of 70, the answer to
+/// the first, given up, does not bind it; the answer to the eleventh, among the last 64, does. A cap
+/// lower than 60, or none, fails this (the fourth review's finding 6).
+#[tokio::test(flavor = "current_thread")]
+async fn a_stand_in_on_port_53_keeps_its_last_64_queries() -> Outcome {
+    const QUERIES: usize = 70;
+    let resolver = UdpSocket::bind("127.0.0.1:0").await?;
+    let named = SocketAddr::from(([192, 0, 2, 53], 53));
+    let mut settings = Settings::default();
+    settings.names.insert("dns.test".into(), named.ip());
+    settings.remap.insert(named, resolver.local_addr()?);
+    // It answers the first query, then the eleventh, once all of them came.
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 512];
+        let mut asked = Vec::new();
+        while asked.len() < QUERIES {
+            match resolver.recv_from(&mut buffer).await {
+                Ok((n, relay)) => asked.push((buffer[..n].to_vec(), relay)),
+                Err(_) => return,
+            }
+        }
+        for at in [0, 10] {
+            let (query, relay) = &asked[at];
+            let _ = resolver.send_to(&dns_response(query, 0x5152), *relay).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    });
+    let tool = proxy(settings).await?;
+    let (_engine, tunnel) = engine(chain(tool.address))?;
+    let at = SocketAddr::from((stand_in(&tunnel, b"\x03dns\x04test\x00").await?, 53));
+    let queries: Vec<_> = (0..QUERIES)
+        .map(|i| {
+            let label = format!("q{i}");
+            let mut name = vec![u8::try_from(label.len()).unwrap_or(0)];
+            name.extend_from_slice(label.as_bytes());
+            name.extend_from_slice(b"\x04test\x00");
+            query(&name, 1)
+        })
+        .collect();
+    // The first opens the mapping; the others follow on it, more than wait for a new way.
+    send(&tunnel, app(CHAINED_PORT), at, &queries[0]).await?;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    for asked in &queries[1..] {
+        send(&tunnel, app(CHAINED_PORT), at, asked).await?;
+    }
+    let seen = everything(&tunnel).await;
+    assert_eq!(seen, [(at, dns_response(&queries[10], 0x5152))]);
+    Ok(())
+}

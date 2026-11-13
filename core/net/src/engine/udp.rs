@@ -2239,3 +2239,121 @@ fn relayed(
     }
     (packets, false)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::shared;
+    use super::*;
+
+    /// A standard query for the A record of `name`, in DNS's form, under the ID `id`.
+    fn query(id: u16, name: &[u8]) -> Vec<u8> {
+        let mut query = id.to_be_bytes().to_vec();
+        query.extend_from_slice(&[0x01, 0x00, 0, 1, 0, 0, 0, 0, 0, 0]);
+        query.extend_from_slice(name);
+        query.extend_from_slice(&[0, 1, 0, 1]);
+        query
+    }
+
+    /// The answer to `query`, with no records.
+    fn response(query: &[u8]) -> Vec<u8> {
+        let mut response = query.to_vec();
+        response[2..4].copy_from_slice(&[0x81, 0x80]);
+        response
+    }
+
+    const APP: SocketAddr =
+        SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::new(10, 1, 10, 1)), 40_000);
+
+    fn waiting_stand_in() -> PeerWay {
+        PeerWay {
+            header: None,
+            from: None,
+            name: Some("dns.test".into()),
+        }
+    }
+
+    /// Only a stand-in on port 53 that waits for its first answer, or a flow from a port 53 that came
+    /// in, keeps the queries the app sends it: no other peer holds them in memory.
+    #[test]
+    fn only_a_waiting_stand_in_or_a_flow_that_came_in_keeps_queries() {
+        let shared = shared();
+        let now = Instant::now();
+        let stand_in = SocketAddr::from(([198, 18, 0, 1], 53));
+        let server = SocketAddr::from(([192, 0, 2, 53], 53));
+        let other = SocketAddr::from(([192, 0, 2, 53], 5_353));
+        let mut waiting = Peer::new(
+            &shared,
+            APP,
+            stand_in,
+            None,
+            now,
+            (false, waiting_stand_in()),
+        );
+        let mut direct = Peer::new(
+            &shared,
+            APP,
+            server,
+            None,
+            now,
+            (false, PeerWay::direct(server)),
+        );
+        let mut came_in = Peer::new(
+            &shared,
+            APP,
+            server,
+            None,
+            now,
+            (true, PeerWay::direct(server)),
+        );
+        let mut elsewhere = Peer::new(
+            &shared,
+            APP,
+            other,
+            None,
+            now,
+            (true, PeerWay::direct(other)),
+        );
+        let asked = query(0x1234, b"\x07example\x03com\x00");
+        waiting.sent(53, &asked);
+        direct.sent(53, &asked);
+        came_in.sent(53, &asked);
+        elsewhere.sent(other.port(), &asked);
+        let kept = [&waiting, &direct, &came_in, &elsewhere].map(|peer| peer.asked.len());
+        assert_eq!(kept, [1, 0, 1, 0]);
+    }
+
+    /// A stand-in bound to the address of its first answer keeps none of the queries it waited on.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_bound_stand_in_forgets_the_queries_it_waited_on() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let mut mapping = Mapping {
+            id: 1,
+            socket: Arc::new(UdpSocket::bind("127.0.0.1:0").await?),
+            exit: Exit::Direct,
+            chains: 0,
+            uid: None,
+            peers: HashMap::new(),
+            sources: Sources::default(),
+            came_in: 0,
+            last: now,
+            sent: now,
+            named: now,
+            ended: Arc::new(Notify::new()),
+        };
+        let stand_in = SocketAddr::from(([198, 18, 0, 1], 53));
+        let asked = query(0x1234, b"\x07example\x03com\x00");
+        let peer = mapping.peer(&shared, (APP, stand_in), now, (false, waiting_stand_in()));
+        peer.sent(53, &asked);
+        peer.sent(53, &query(0x4321, b"\x07example\x03org\x00"));
+        assert_eq!(peer.asked.len(), 2);
+        let answered = response(&asked);
+        let from = SocketAddr::from(([192, 0, 2, 53], 53));
+        assert!(matches!(
+            mapping.bind(stand_in, (from, &answered), now),
+            LetIn::Peer(..)
+        ));
+        assert_eq!(mapping.peers[&stand_in].asked.len(), 0);
+        Ok(())
+    }
+}
