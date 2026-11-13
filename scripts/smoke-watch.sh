@@ -116,7 +116,7 @@ fi
 if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 33 ]; then open_in en; fi
 wait_for "$(string values status_off)" 15 || fail "Watch does not say it is off"
 [ -z "$(vpn_line)" ] || fail "Android lists Watch's VPN before it was turned on"
-is_emulator && adb shell appops set "$PKG" ACTIVATE_VPN allow
+if is_emulator; then allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"; fi
 tap_now "$(string values turn_on)" || fail "no button to turn Watch on"
 if ! wait_for "$(string values status_on)" 5; then
     echo "Waiting three minutes for the VPN request to be allowed on the phone's screen"

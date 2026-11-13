@@ -197,6 +197,20 @@ open_sections() {
     scroll_to_top
 }
 
+# Gives package $1 the VPN consent through appops, as an emulator allows, and waits until Android holds
+# it. Right after an install, appops can still know the package under its earlier UID and refuse the
+# change ("Specified package ... under uid ... but it is not", CI and the emulator, 2026-11-13); the
+# consent dialog then stays over every screen. Read whole: under pipefail, a grep -q that stops reading
+# early fails the pipe.
+allow_vpn() {
+    for _ in $(seq 1 10); do
+        adb shell appops set "$1" ACTIVATE_VPN allow >/dev/null 2>&1 || true
+        grep -q 'ACTIVATE_VPN: allow' <<<"$(adb shell appops get "$1" ACTIVATE_VPN 2>/dev/null | tr -d '\r')" && return 0
+        sleep 1
+    done
+    return 1
+}
+
 # Wakes the screen, starts Datapavan in English and waits for the summary's navigation bar: Basic, or the
 # edition whose package is $1. The audit's screen keeps its class name in every edition (ADR 0045).
 start_audit() {

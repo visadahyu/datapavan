@@ -110,7 +110,7 @@ adb shell am start-foreground-service -n "$TOOL/.ToolService" --ei port "$TOOL_P
 for _ in $(seq 1 10); do tool_log | grep -q "^listening" && break; sleep 1; done
 tool_log | grep -q "^listening $TOOL_PORT" || fail "the test tool does not listen"
 
-adb shell appops set "$PKG" ACTIVATE_VPN allow
+allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 adb shell am force-stop "$PKG"
 adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null

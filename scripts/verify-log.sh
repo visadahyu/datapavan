@@ -141,7 +141,7 @@ SERVER=$!
 adb install -r "$APK" >/dev/null
 # As a new install: the log's default is then what a new user gets (ADR 0040).
 adb shell pm clear "$PKG" >/dev/null
-adb shell appops set "$PKG" ACTIVATE_VPN allow
+allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 adb shell am force-stop "$PKG"
 # The screen checks read English. Android 13 and later can set Watch's language alone; before, the

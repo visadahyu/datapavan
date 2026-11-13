@@ -95,7 +95,7 @@ python3 -I "$ROOT/scripts/watch-lab/server.py" "$PORT" &
 SERVER=$!
 adb uninstall "$PKG" >/dev/null 2>&1 || true
 adb install "$WORK/watch-release.apk" >/dev/null
-adb shell appops set "$PKG" ACTIVATE_VPN allow
+allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 # In a release build Watch's screen is not exported (ADR 0045): it is reached as users reach it, from
 # the audit's network page. start_audit sets the app's language to English, so that buttons are found by

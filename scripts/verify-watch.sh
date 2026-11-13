@@ -360,7 +360,7 @@ PY
 adb push "$hello-dns.bin" "$DNS_ON_DEVICE" >/dev/null 2>&1
 adb push "$hello-doh.bin" "$DOH_ON_DEVICE" >/dev/null 2>&1
 rm -f "$hello" "$hello-1.bin" "$hello-2.bin" "$hello-dns.bin" "$hello-doh.bin"
-is_emulator && adb shell appops set "$PKG" ACTIVATE_VPN allow
+if is_emulator; then allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"; fi
 # Android 17: the server is on the local network, which Watch reaches for every app (ADR 0034).
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 adb shell am force-stop "$PKG"
