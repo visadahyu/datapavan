@@ -1228,3 +1228,164 @@ async fn lookups_that_wait_while_the_chain_takes_the_app_stay_off_the_network() 
     );
     Ok(())
 }
+
+/// Android as a table of the tunnel's ports and their apps, which a test changes as Android hands a
+/// port to another app.
+#[derive(Default)]
+struct Owners(std::sync::Mutex<std::collections::HashMap<u16, u32>>);
+
+impl Owners {
+    /// The app that holds `port` from now on, or none that Android can name.
+    fn set(&self, port: u16, uid: Option<u32>) {
+        let mut owners = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match uid {
+            Some(uid) => owners.insert(port, uid),
+            None => owners.remove(&port),
+        };
+    }
+}
+
+impl Platform for Owners {
+    fn owner(&self, _: u8, local: SocketAddr, _: SocketAddr) -> Option<u32> {
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&local.port())
+            .copied()
+    }
+
+    fn protect(&self, _: RawFd) -> bool {
+        true
+    }
+
+    fn log(&self, _: &[u8]) {}
+}
+
+/// A server that notes what it hears, and from where.
+async fn listening() -> Result<(SocketAddr, Heard), Box<dyn std::error::Error>> {
+    let server = UdpSocket::bind("127.0.0.1:0").await?;
+    let at = server.local_addr()?;
+    let heard: Heard = Arc::default();
+    let noted = Arc::clone(&heard);
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 256];
+        while let Ok((n, from)) = server.recv_from(&mut buffer).await {
+            noted
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push((from, buffer[..n].to_vec()));
+        }
+    });
+    Ok((at, heard))
+}
+
+/// The ports `payload` reached the server from.
+fn heard_from(heard: &Heard, payload: &[u8]) -> Vec<SocketAddr> {
+    heard_so_far(heard)
+        .into_iter()
+        .filter(|(_, said)| said == payload)
+        .map(|(from, _)| from)
+        .collect()
+}
+
+/// A short silence before Android is asked again, so that the tests take little time.
+fn quick_reask() -> Limits {
+    Limits {
+        udp_reask: Duration::from_millis(100),
+        ..Limits::default()
+    }
+}
+
+/// A direct app's port, which Android hands to a chained app after a silence, to the same destination:
+/// the chained app's datagram goes through the tool, not out of the direct app's mapping (second review
+/// of unit 9, finding 3).
+#[tokio::test(flavor = "current_thread")]
+async fn a_port_handed_to_a_chained_app_leaves_through_the_tool() -> Outcome {
+    const PORT: u16 = 50_000;
+    let (at, heard) = listening().await?;
+    let tool = proxy(Settings::default()).await?;
+    let owners = Arc::new(Owners::default());
+    owners.set(PORT, Some(DIRECT));
+    let (_engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
+    send(&tunnel, app(PORT), at, b"direct app").await?;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    owners.set(PORT, Some(CHAINED));
+    send(&tunnel, app(PORT), at, b"chained app").await?;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let from = heard_from(&heard, b"chained app");
+    assert_eq!(from.len(), 1, "heard {from:?}");
+    assert!(
+        tool.relays().contains(&from[0]),
+        "the chained app's datagram left directly, from {}",
+        from[0]
+    );
+    Ok(())
+}
+
+/// An app that sends without a pause is asked about again thirty silences after Android last named it:
+/// a port handed over without a pause reaches the tool in time, not never.
+#[tokio::test(flavor = "current_thread")]
+async fn a_port_handed_over_without_a_pause_is_noticed_in_time() -> Outcome {
+    const PORT: u16 = 50_001;
+    // A server that answers the first datagram only, and notes everything.
+    let server = UdpSocket::bind("127.0.0.1:0").await?;
+    let at = server.local_addr()?;
+    let heard: Heard = Arc::default();
+    let noted = Arc::clone(&heard);
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 256];
+        let mut answered = false;
+        while let Ok((n, from)) = server.recv_from(&mut buffer).await {
+            if !answered {
+                answered = true;
+                let _ = server.send_to(&buffer[..n], from).await;
+            }
+            noted
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push((from, buffer[..n].to_vec()));
+        }
+    });
+    let tool = proxy(Settings::default()).await?;
+    let owners = Arc::new(Owners::default());
+    owners.set(PORT, Some(DIRECT));
+    let (_engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
+    // The direct app's mapping is open once its answer comes; the port is the chained app's at once.
+    send(&tunnel, app(PORT), at, b"direct app").await?;
+    receive(&tunnel).await?.ok_or("a datagram")?;
+    owners.set(PORT, Some(CHAINED));
+    // Every 10 ms, never silent for the 100 ms that asks again, for longer than thirty of them.
+    for _ in 0..400 {
+        send(&tunnel, app(PORT), at, b"chained app").await?;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let from = heard_from(&heard, b"chained app");
+    assert!(
+        from.iter().any(|from| tool.relays().contains(from)),
+        "none of {} datagrams reached the tool",
+        from.len()
+    );
+    Ok(())
+}
+
+/// While a chain is on, an app socket whose app Android cannot name goes nowhere, even when Android
+/// named it before: the port may be another app's now (second review of unit 9, finding 3).
+#[tokio::test(flavor = "current_thread")]
+async fn an_app_android_cannot_name_goes_nowhere_while_a_chain_is_on() -> Outcome {
+    const PORT: u16 = 50_002;
+    let (first, second) = (udp_echo().await?, udp_echo().await?);
+    let tool = proxy(Settings::default()).await?;
+    let owners = Arc::new(Owners::default());
+    owners.set(PORT, Some(DIRECT));
+    let (_engine, tunnel) = engine_with(chain(tool.address), Limits::default(), owners.clone())?;
+    send(&tunnel, app(PORT), first, b"named").await?;
+    receive(&tunnel).await?.ok_or("a datagram")?;
+    owners.set(PORT, None);
+    send(&tunnel, app(PORT), second, b"unnamed").await?;
+    assert_eq!(receive(&tunnel).await?, None, "an ICMP error, no echo");
+    Ok(())
+}

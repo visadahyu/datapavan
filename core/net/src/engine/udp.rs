@@ -232,6 +232,10 @@ struct Mapping {
     came_in: usize,
     /// When the last datagram passed, either way.
     last: Instant,
+    /// When the app last sent a datagram on it.
+    sent: Instant,
+    /// When Android last named its app (`Limits::udp_reask`).
+    named: Instant,
     /// Wakes the mapping's task when the mapping is ended from elsewhere.
     ended: Arc<Notify>,
 }
@@ -784,6 +788,20 @@ impl UdpTable {
             self.end(app, id, shared);
             return None;
         }
+        if !mapping.peers.contains_key(&destination) {
+            return None;
+        }
+        // While a chain is on, the app decides the way: after a silence, or long after Android last
+        // named it, the datagram asks Android again whose socket this is, as a new destination's does,
+        // and waits for the answer. A port another app now holds then gets a mapping of its own.
+        let reask = shared.limits.udp_reask;
+        if (now.duration_since(mapping.sent) >= reask
+            || now.duration_since(mapping.named) >= reask.saturating_mul(30))
+            && shared.chain().is_some()
+        {
+            return None;
+        }
+        mapping.sent = now;
         let peer = mapping.peers.get_mut(&destination)?;
         peer.last = now;
         peer.sent(destination.port(), payload);
@@ -1070,8 +1088,15 @@ async fn open_udp(
 ) {
     let (app, destination) = key;
     let named = owner(&shared, UDP, app, destination).await;
-    // When Android cannot name the app of a socket it named before, the socket's mapping keeps its app.
-    let uid = named.or_else(|| lock(&flows).mappings.get(&app).and_then(|m| m.uid));
+    // When Android cannot name the app of a socket it named before, the socket's mapping keeps its app;
+    // but not while a chain is on, where the app decides the way: there an app Android cannot name goes
+    // nowhere, never by a guess that may be another app's (the port may have been handed out again).
+    let uid = named.or_else(|| {
+        if shared.chain().is_some() {
+            return None;
+        }
+        lock(&flows).mappings.get(&app).and_then(|m| m.uid)
+    });
     if shared.is_tunnel_dns(destination.ip()) {
         open_flow(key, uid, tun, shared, flows, changes).await;
         return;
@@ -1166,7 +1191,11 @@ async fn open_peer(
         let Some(mapping) = table.mapping(app, id) else {
             return true;
         };
-        let peer = mapping.peer(shared, key, Instant::now(), (false, way));
+        // Android named the app just now, before this destination's way was asked.
+        let now = Instant::now();
+        mapping.sent = now;
+        mapping.named = now;
+        let peer = mapping.peer(shared, key, now, (false, way));
         let header = peer.way.header.clone();
         for packet in &waiting {
             let Ok(parsed) = packet::parse(packet) else {
@@ -1278,6 +1307,8 @@ async fn mapping_for(
             sources: Sources::default(),
             came_in: 0,
             last: Instant::now(),
+            sent: Instant::now(),
+            named: Instant::now(),
             ended: Arc::clone(&ended),
         },
     );
