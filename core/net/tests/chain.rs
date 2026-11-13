@@ -2573,6 +2573,8 @@ async fn one_pause_asks_android_once() -> Outcome {
 
 /// An app socket that never pauses for `udp_reask` is asked about when it opens, then once each thirty
 /// times that, not at every datagram: what it sends keeps it fresh, and so does each answer from Android.
+/// The count allows for a pause the test's own load may cause; the engine's own tests hold the rule to
+/// its instant.
 #[tokio::test(flavor = "current_thread")]
 async fn a_mapping_that_never_pauses_is_asked_about_seldom() -> Outcome {
     let echo = udp_echo().await?;
@@ -2682,6 +2684,42 @@ async fn a_repeated_answer_does_not_end_a_flow_of_lookups() -> Outcome {
     .await?;
     let questions = answered_questions(&everything(&tunnel).await);
     assert_eq!(questions, ["one.test", "one.test", "two.test"]);
+    Ok(())
+}
+
+/// The same when the two lookups ask one question under two IDs: the repeated answer to the first does
+/// not count for the second, which is told apart by its ID (fifth review of unit 9, finding 5c).
+#[tokio::test(flavor = "current_thread")]
+async fn a_repeated_answer_does_not_count_for_another_id_of_its_question() -> Outcome {
+    let tool = proxy(Settings::default()).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    let dns = scripted_resolver(&engine, |resolver, asked| async move {
+        let own_id = |query: &[u8]| u16::from_be_bytes([query[0], query[1]]);
+        let (first, from) = &asked[0];
+        for _ in 0..2 {
+            let _ = resolver
+                .send_to(&dns_response(first, own_id(first)), *from)
+                .await;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let (second, from) = &asked[1];
+        let _ = resolver
+            .send_to(&dns_response(second, own_id(second)), *from)
+            .await;
+    })
+    .await?;
+    let first = query(b"\x03one\x04test\x00", 1);
+    let mut second = first.clone();
+    second[..2].copy_from_slice(&0x6162u16.to_be_bytes());
+    for lookup in [&first, &second] {
+        send(&tunnel, app(DIRECT_PORT), dns, lookup).await?;
+    }
+    let ids: Vec<u16> = everything(&tunnel)
+        .await
+        .iter()
+        .map(|(_, answer)| u16::from_be_bytes([answer[0], answer[1]]))
+        .collect();
+    assert_eq!(ids, [0x5152, 0x5152, 0x6162]);
     Ok(())
 }
 

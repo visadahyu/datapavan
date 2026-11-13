@@ -2369,6 +2369,62 @@ mod tests {
         })
     }
 
+    /// How a datagram is spaced from the one before in the tests of the thirty-times rule: a twentieth of
+    /// `udp_reask`, so that the app never pauses for it.
+    fn ticks(shared: &Shared, start: Instant) -> impl Iterator<Item = Instant> {
+        let step = shared.limits.udp_reask / 20;
+        (1..=20 * 40).map(move |tick| start + step * tick)
+    }
+
+    /// An app socket whose datagrams to a peer never pause is asked about again, its mapping refusing
+    /// the datagram, exactly when thirty times `udp_reask` have passed since Android last named its app,
+    /// not before (fifth review of unit 9, finding 5b).
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_mapping_that_never_pauses_is_asked_about_after_thirty_times_the_pause()
+    -> io::Result<()> {
+        let shared = shared();
+        let start = Instant::now();
+        let mut mapping = mapping(start).await?;
+        let peer = SocketAddr::from(([192, 0, 2, 1], 443));
+        mapping.peer(&shared, (APP, peer), start, (false, PeerWay::direct(peer)));
+        let mut table = UdpTable::default();
+        table.mappings.insert(APP, mapping);
+        let first = ticks(&shared, start).find(|&at| {
+            table
+                .toward_peer((APP, peer), b"tick", at, &shared)
+                .is_none()
+        });
+        assert_eq!(
+            first.map(|at| at.duration_since(start)),
+            Some(shared.limits.udp_reask * 30)
+        );
+        Ok(())
+    }
+
+    /// The same for a flow of lookups whose app never pauses (fifth review of unit 9, finding 5b).
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_flow_of_lookups_that_never_pauses_is_asked_about_after_thirty_times_the_pause()
+    -> io::Result<()> {
+        let shared = shared();
+        let start = Instant::now();
+        let mut flow = UdpFlow {
+            id: 1,
+            way: UdpWay::Direct(Arc::new(UdpSocket::bind("127.0.0.1:0").await?)),
+            uid: None,
+            owed: Arc::default(),
+            chains: 0,
+            sent: start,
+            named: start,
+        };
+        let dns = SocketAddr::from(([192, 0, 2, 53], 53));
+        let first = ticks(&shared, start).find(|&at| !flow.keeps_its_way(&shared, dns, at));
+        assert_eq!(
+            first.map(|at| at.duration_since(start)),
+            Some(shared.limits.udp_reask * 30)
+        );
+        Ok(())
+    }
+
     /// A stand-in on port 53 that its relay answers by name waits no more: it drops the queries it kept
     /// and records no more (fifth review of unit 9, finding 3).
     #[tokio::test(flavor = "current_thread")]
