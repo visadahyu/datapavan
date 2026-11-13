@@ -1702,3 +1702,193 @@ async fn an_answer_named_by_a_name_nobody_asked_for_is_dropped() -> Outcome {
     assert_eq!(engine.counters()[UDP_FILTERED], 1);
     Ok(())
 }
+
+/// A direct app's lookup still waits for its answer when Android hands its port to a chained app: after
+/// a silence, the chained app's lookup from that port asks Android again, and goes through the tool,
+/// not to the network's resolver (third review of unit 9, finding 1).
+#[tokio::test(flavor = "current_thread")]
+async fn a_lookup_on_a_port_handed_to_a_chained_app_stays_off_the_network() -> Outcome {
+    const PORT: u16 = 50_100;
+    let tool = proxy(Settings::default()).await?;
+    let owners = Arc::new(Owners::default());
+    owners.set(PORT, Some(DIRECT));
+    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
+    let (dns, heard) = deaf_resolver(&engine).await?;
+    send(
+        &tunnel,
+        app(PORT),
+        dns,
+        &query(b"\x06before\x04test\x00", 1),
+    )
+    .await?;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    owners.set(PORT, Some(CHAINED));
+    send(
+        &tunnel,
+        app(PORT),
+        dns,
+        &query(b"\x07private\x04test\x00", 1),
+    )
+    .await?;
+    let (from, answer) = receive(&tunnel).await?.ok_or("an answer")?;
+    assert_eq!(from, dns);
+    let read = dns::response(&answer).ok_or("a response")?;
+    assert!(
+        matches!(read.addresses[..], [(IpAddr::V4(_), 0)]),
+        "not Watch's stand-in: {:?}",
+        read.addresses
+    );
+    assert!(
+        !heard_private(&heard),
+        "the lookup reached the network's resolver"
+    );
+    Ok(())
+}
+
+/// A chained app's flow of lookups still owes an answer, from a resolver through the tool that takes its
+/// time, when Android hands its port to the tool itself: after a silence, the tool's lookup asks Android
+/// again and goes to the network's resolver, not answered through the chain under the chained app (third
+/// review of unit 9, finding 2).
+#[tokio::test(flavor = "current_thread")]
+async fn a_lookup_on_a_port_handed_from_a_chained_app_leaves_its_way() -> Outcome {
+    const PORT: u16 = 50_101;
+    // The resolver the tool reaches for a chained app's other questions holds them unanswered.
+    let slow = TcpListener::bind("127.0.0.1:0").await?;
+    let mut settings = Settings::default();
+    settings
+        .remap
+        .insert(SocketAddr::from(([9, 9, 9, 10], 53)), slow.local_addr()?);
+    tokio::spawn(async move {
+        let mut held = Vec::new();
+        while let Ok((connection, _)) = slow.accept().await {
+            held.push(connection);
+        }
+    });
+    let tool = proxy(settings).await?;
+    let owners = Arc::new(Owners::default());
+    owners.set(PORT, Some(CHAINED));
+    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
+    let (dns, heard) = deaf_resolver(&engine).await?;
+    send(
+        &tunnel,
+        app(PORT),
+        dns,
+        &query(b"\x07chained\x04test\x00", 16),
+    )
+    .await?;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    owners.set(PORT, Some(TOOL));
+    send(
+        &tunnel,
+        app(PORT),
+        dns,
+        &query(b"\x07private\x04test\x00", 1),
+    )
+    .await?;
+    assert!(
+        silent(&tunnel).await,
+        "the tool's lookup was answered through the chain"
+    );
+    assert!(
+        heard_private(&heard),
+        "the tool's lookup did not reach the resolver"
+    );
+    Ok(())
+}
+
+/// A chained app's flow of lookups ends once its last lookup has its answer, as a direct one does: the
+/// next lookup from that port, at once and from the tool now, asks Android again (third review of unit 9,
+/// finding 2).
+#[tokio::test(flavor = "current_thread")]
+async fn a_chained_apps_flow_of_lookups_ends_with_its_last_answer() -> Outcome {
+    const PORT: u16 = 50_102;
+    let tool = proxy(Settings::default()).await?;
+    let owners = Arc::new(Owners::default());
+    owners.set(PORT, Some(CHAINED));
+    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), owners.clone())?;
+    let (dns, heard) = deaf_resolver(&engine).await?;
+    send(
+        &tunnel,
+        app(PORT),
+        dns,
+        &query(b"\x07chained\x04test\x00", 1),
+    )
+    .await?;
+    receive(&tunnel).await?.ok_or("the chained app's answer")?;
+    owners.set(PORT, Some(TOOL));
+    send(
+        &tunnel,
+        app(PORT),
+        dns,
+        &query(b"\x07private\x04test\x00", 1),
+    )
+    .await?;
+    assert!(
+        silent(&tunnel).await,
+        "the tool's lookup was answered through the chain"
+    );
+    assert!(
+        heard_private(&heard),
+        "the tool's lookup did not reach the resolver"
+    );
+    Ok(())
+}
+
+/// A direct app's two lookups still wait when the chain takes it, and its next lookup opens a flow on
+/// the new route: the old flow still hands the app both answers it owes (third review of unit 9,
+/// finding 4).
+#[tokio::test(flavor = "current_thread")]
+async fn a_flow_of_lookups_that_gave_way_hands_over_every_answer_it_owes() -> Outcome {
+    let tool = proxy(Settings::default()).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    let resolver = UdpSocket::bind("127.0.0.1:0").await?;
+    let port = resolver.local_addr()?.port();
+    engine.network_changed(Some(IpAddr::V4(Ipv4Addr::LOCALHOST)), false);
+    let dns = SocketAddr::from((Addresses::COMMON.dns4, port));
+    let (go, later) = oneshot::channel::<()>();
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 512];
+        let mut asked = Vec::new();
+        while asked.len() < 2 {
+            match resolver.recv_from(&mut buffer).await {
+                Ok((n, from)) => asked.push((buffer[..n].to_vec(), from)),
+                Err(_) => return,
+            }
+        }
+        if later.await.is_ok() {
+            for (query, from) in asked {
+                let _ = resolver.send_to(&dns_response(&query, 0x5152), from).await;
+            }
+        }
+    });
+    send(
+        &tunnel,
+        app(DIRECT_PORT),
+        dns,
+        &query(b"\x03one\x04test\x00", 16),
+    )
+    .await?;
+    send(
+        &tunnel,
+        app(DIRECT_PORT),
+        dns,
+        &query(b"\x03two\x04test\x00", 16),
+    )
+    .await?;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let mut both = chain(tool.address);
+    both.apps = Some(HashSet::from([CHAINED, DIRECT]));
+    engine.chain(Some(both));
+    send(
+        &tunnel,
+        app(DIRECT_PORT),
+        dns,
+        &query(b"\x05three\x04test\x00", 1),
+    )
+    .await?;
+    receive(&tunnel).await?.ok_or("the chained answer")?;
+    go.send(()).map_err(|()| "the resolver is gone")?;
+    let seen = everything(&tunnel).await;
+    assert_eq!(seen.len(), 2, "answers to the two earlier lookups");
+    Ok(())
+}

@@ -26,7 +26,7 @@ use std::collections::HashMap;
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::os::fd::AsFd;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, Interest};
@@ -67,26 +67,40 @@ pub(super) struct UdpFlow {
     way: UdpWay,
     /// The app's UID.
     uid: Option<u32>,
-    /// The lookups sent to the network's resolver that still wait for their answer.
-    unanswered: u32,
+    /// The lookups it carried that still wait for their answer. The flow's task, or the tasks that
+    /// answer a chained app's lookups, count it down, also once a later flow took this one's place: the
+    /// flow ends when none waits.
+    owed: Arc<AtomicU32>,
     /// How many times the chain had been set when the flow last made sure that its way still holds.
     chains: u64,
+    /// When the app last sent a lookup on it.
+    sent: Instant,
+    /// When Android last named its app (`Limits::udp_reask`).
+    named: Instant,
 }
 
 impl UdpFlow {
-    /// Whether the flow may still carry its app's lookups to `destination`: once the chain was set
-    /// again, whether its app's route still leads the flow's way. One that may not ends at once, so that
-    /// a lookup an app sends once the chain takes it never reaches the network's resolver directly, and
-    /// one sent once the chain lets it go is not answered through the tool.
-    fn keeps_its_way(&mut self, shared: &Shared, destination: SocketAddr) -> bool {
-        let chains = shared.chains.load(Ordering::Acquire);
-        if chains == self.chains {
-            return true;
-        }
-        if !self.way.keeps(&shared.route(self.uid, destination)) {
+    /// Whether the flow may still carry its app's next lookup to `destination`, sent `now`. After a
+    /// silence, or long after Android last named its app, it may not: the lookup asks Android again whose
+    /// socket this is, as a mapping's datagram does, since the port may be another app's now. Nor may it
+    /// once the chain, set again, sends its app another way, so that a lookup an app sends once the chain
+    /// takes it never reaches the network's resolver directly, and one sent once the chain lets it go is
+    /// not answered through the tool. A flow that may not gives way to a new one at once.
+    fn keeps_its_way(&mut self, shared: &Shared, destination: SocketAddr, now: Instant) -> bool {
+        let reask = shared.limits.udp_reask;
+        if now.duration_since(self.sent) >= reask
+            || now.duration_since(self.named) >= reask.saturating_mul(30)
+        {
             return false;
         }
-        self.chains = chains;
+        let chains = shared.chains.load(Ordering::Acquire);
+        if chains != self.chains {
+            if !self.way.keeps(&shared.route(self.uid, destination)) {
+                return false;
+            }
+            self.chains = chains;
+        }
+        self.sent = now;
         true
     }
 }
@@ -733,10 +747,11 @@ struct ToPeer {
     quic: Option<QuicRead>,
 }
 
-/// What a datagram of the app needs once the table has been read: its flow of lookups' way, its app
-/// and the answer Watch's cache holds for it; its peer's way; or a way to be opened.
+/// What a datagram of the app needs once the table has been read: its flow of lookups' way, its app,
+/// the answer Watch's cache holds for it, and the flow's number and lookups owed; its peer's way; or a
+/// way to be opened.
 enum Next {
-    Flow(UdpWay, Option<u32>, Option<Vec<u8>>),
+    Flow(UdpWay, Option<u32>, Option<Vec<u8>>, (u64, Arc<AtomicU32>)),
     Peer(ToPeer),
     Open,
 }
@@ -894,21 +909,23 @@ impl UdpTable {
         }
     }
 
-    /// `answers` more lookups of the flow `id` have their answer: `true` when none waits any more, and
-    /// the flow went.
-    fn answered(&mut self, key: (SocketAddr, SocketAddr), id: u64, answers: u32) -> bool {
-        let Some(UdpEntry::Open(flow)) = self.flows.get_mut(&key) else {
-            return true;
-        };
-        if flow.id != id {
-            return true;
-        }
-        flow.unanswered = flow.unanswered.saturating_sub(answers);
-        if flow.unanswered > 0 {
+    /// Whether no lookup of the flow `id` between `key`'s two ends waits for its answer any more, as
+    /// `owed` counts them; its entry, while it is still the table's, then goes.
+    fn settled(&mut self, key: (SocketAddr, SocketAddr), id: u64, owed: &AtomicU32) -> bool {
+        if owed.load(Ordering::Acquire) > 0 {
             return false;
         }
-        self.flows.remove(&key);
+        self.remove_flow(key, id);
         true
+    }
+
+    /// One more lookup of the flow `id` between `key`'s two ends has its answer, or will have none:
+    /// whether none waits any more, as [`UdpTable::settled`].
+    fn answered(&mut self, key: (SocketAddr, SocketAddr), id: u64, owed: &AtomicU32) -> bool {
+        let _ = owed.try_update(Ordering::AcqRel, Ordering::Acquire, |n| {
+            Some(n.saturating_sub(1))
+        });
+        self.settled(key, id, owed)
     }
 }
 
@@ -922,14 +939,15 @@ impl Loop {
         let lookup = self.shared.is_tunnel_dns(key.1.ip());
         let next = {
             let mut table = lock(&self.udp);
+            let now = Instant::now();
             let stale = match table.flows.get_mut(&key) {
-                Some(UdpEntry::Open(flow)) => !flow.keeps_its_way(&self.shared, key.1),
+                Some(UdpEntry::Open(flow)) => !flow.keeps_its_way(&self.shared, key.1, now),
                 _ => false,
             };
             if stale {
-                // A flow of lookups that the chain, set again, sends another way gives way to one on
-                // the new route, which this lookup opens. The old flow's task still hands the app the
-                // answers to what it sent before.
+                // A flow of lookups that may not carry this one gives way to a new flow, which this
+                // lookup opens once Android has named its app and its route is asked. The old flow
+                // still hands the app every answer it owes for what it sent before.
                 table
                     .flows
                     .insert(key, UdpEntry::Opening(vec![packet.to_vec()]));
@@ -941,11 +959,16 @@ impl Loop {
                             UdpWay::Lookups(_) => None,
                             UdpWay::Direct(_) => cached_answer(&self.shared, key.1, payload),
                         };
-                        // The flow ends once every lookup it sent has its answer.
-                        if lookup && cached.is_none() && matches!(flow.way, UdpWay::Direct(_)) {
-                            flow.unanswered = flow.unanswered.saturating_add(1);
+                        // The flow ends once every lookup it carried has its answer.
+                        if cached.is_none() {
+                            flow.owed.fetch_add(1, Ordering::AcqRel);
                         }
-                        Next::Flow(flow.way.clone(), flow.uid, cached)
+                        Next::Flow(
+                            flow.way.clone(),
+                            flow.uid,
+                            cached,
+                            (flow.id, Arc::clone(&flow.owed)),
+                        )
                     }
                     Some(UdpEntry::Opening(waiting)) => {
                         if waiting.len() < self.shared.limits.udp_waiting {
@@ -970,8 +993,8 @@ impl Loop {
                 }
             }
         };
-        let (way, uid, cached) = match next {
-            Next::Flow(way, uid, cached) => (way, uid, cached),
+        let (way, uid, cached, owed) = match next {
+            Next::Flow(way, uid, cached, owed) => (way, uid, cached, owed),
             Next::Peer(to) => return self.send_to_peer(to, packet, parsed, payload).await,
             Next::Open => {
                 tokio::spawn(open_udp(
@@ -990,9 +1013,9 @@ impl Loop {
         if let UdpWay::Lookups(chain) = &way {
             tokio::spawn(answer_lookup(
                 payload.to_vec(),
-                key,
-                uid,
+                (key, uid),
                 Arc::clone(chain),
+                (owed, Arc::clone(&self.udp)),
                 Arc::clone(&self.shared),
                 Arc::clone(&self.tun),
             ));
@@ -1734,6 +1757,7 @@ async fn open_lookups(
     let mut errors = Vec::new();
     let mut questions = Vec::new();
     let mut cached = Vec::new();
+    let owed: Arc<AtomicU32> = Arc::default();
     {
         let mut table = lock(flows);
         // The chain may have taken the app, or let it go, while the socket was made: what waited,
@@ -1743,12 +1767,15 @@ async fn open_lookups(
             return false;
         }
         shared.record(flow);
-        let mut open = UdpFlow {
+        let at = Instant::now();
+        let open = UdpFlow {
             id,
             way: way.clone(),
             uid,
-            unanswered: 0,
+            owed: Arc::clone(&owed),
             chains: now,
+            sent: at,
+            named: at,
         };
         let waiting = match table.flows.remove(&key) {
             Some(UdpEntry::Opening(waiting)) => waiting,
@@ -1763,6 +1790,7 @@ async fn open_lookups(
             };
             lookups.push(packet.len());
             if let UdpWay::Lookups(_) = way {
+                owed.fetch_add(1, Ordering::AcqRel);
                 questions.push(payload.to_vec());
                 continue;
             }
@@ -1772,7 +1800,7 @@ async fn open_lookups(
             }
             let sent = way.try_send(payload);
             if sent.is_ok() {
-                open.unanswered += 1;
+                owed.fetch_add(1, Ordering::AcqRel);
             }
             errors.extend(count_sent(shared, None, packet, &parsed, sent));
         }
@@ -1792,34 +1820,37 @@ async fn open_lookups(
     start_answers(
         way,
         questions,
-        (key, id),
-        uid,
+        (key, uid, (id, owed)),
         (tun, shared, flows, changes),
     );
     true
 }
 
-/// Starts answering a new flow of lookups: Watch answers a chained app's itself; the network's resolver
-/// answers the others, which a task hands the app.
+/// Starts answering a new flow of lookups: Watch answers a chained app's itself, each in a task of its
+/// own; the network's resolver answers the others, which a task hands the app. The flow ends when none
+/// of its lookups waits any more.
 fn start_answers(
     way: UdpWay,
     questions: Vec<Vec<u8>>,
-    (key, id): ((SocketAddr, SocketAddr), u64),
-    uid: Option<u32>,
+    (key, uid, (id, owed)): Ends,
     (tun, shared, flows, changes): Context<'_>,
 ) {
     let (app, destination) = key;
     match way {
         UdpWay::Lookups(chain) => {
-            answer_waiting(
-                questions,
-                (key, id),
-                uid,
-                &chain,
-                shared,
-                tun,
-                Arc::clone(flows),
-            );
+            if lock(flows).settled(key, id, &owed) {
+                return;
+            }
+            for query in questions {
+                tokio::spawn(answer_lookup(
+                    query,
+                    (key, uid),
+                    Arc::clone(&chain),
+                    ((id, Arc::clone(&owed)), Arc::clone(flows)),
+                    Arc::clone(shared),
+                    Arc::clone(tun),
+                ));
+            }
         }
         UdpWay::Direct(socket) => {
             tokio::spawn(answers(
@@ -1829,6 +1860,7 @@ fn start_answers(
                     destination,
                     id,
                     uid,
+                    owed,
                 },
                 Arc::clone(tun),
                 Arc::clone(shared),
@@ -1838,6 +1870,9 @@ fn start_answers(
         }
     }
 }
+
+/// A flow of lookups' two ends, its app, and its number with the lookups it owes answers to.
+type Ends = ((SocketAddr, SocketAddr), Option<u32>, (u64, Arc<AtomicU32>));
 
 /// While a chain is on, the answer Watch's cache holds for a direct app's lookup, with a time to live
 /// of 0 like every answer then, so that the network's resolver is asked no more often than before.
@@ -1870,51 +1905,25 @@ async fn way_for(
     }
 }
 
-/// Answers the lookups that waited for a chained app's flow to open. Android's resolver asks each
-/// question from a socket of its own, so the flow's entry goes after a while, with no relay to end it.
-fn answer_waiting(
-    questions: Vec<Vec<u8>>,
-    (key, id): ((SocketAddr, SocketAddr), u64),
-    uid: Option<u32>,
-    chain: &Arc<Chain>,
-    shared: &Arc<Shared>,
-    tun: &Arc<Tun>,
-    flows: UdpFlows,
-) {
-    for query in questions {
-        tokio::spawn(answer_lookup(
-            query,
-            key,
-            uid,
-            Arc::clone(chain),
-            Arc::clone(shared),
-            Arc::clone(tun),
-        ));
-    }
-    let idle = shared.limits.udp_idle;
-    tokio::spawn(async move {
-        tokio::time::sleep(idle).await;
-        lock(&flows).remove_flow(key, id);
-    });
-}
-
-/// Answers one lookup of a chained app (ADR 0038) and sends the answer to the app.
+/// Answers one lookup of a chained app (ADR 0038) and sends the answer to the app; then one lookup
+/// fewer of its flow `id` waits. Watch's answer comes within a few seconds (`lookups::LOOKUP_TIMEOUT`
+/// for each resolver), so the flow ends once its last lookup has its answer, as a direct one does: a
+/// later lookup from the same socket asks Android again whose socket it is.
 async fn answer_lookup(
     query: Vec<u8>,
-    key: (SocketAddr, SocketAddr),
-    uid: Option<u32>,
+    (key, uid): ((SocketAddr, SocketAddr), Option<u32>),
     chain: Arc<Chain>,
+    ((id, owed), flows): ((u64, Arc<AtomicU32>), UdpFlows),
     shared: Arc<Shared>,
     tun: Arc<Tun>,
 ) {
     let (app, destination) = key;
-    let Some(answer) = lookups::answer(&shared, &chain, &query).await else {
-        return;
-    };
-    if let Some(packet) = packet::udp(destination, app, &answer) {
+    let answer = lookups::answer(&shared, &chain, &query).await;
+    if let Some(packet) = answer.and_then(|answer| packet::udp(destination, app, &answer)) {
         shared.lookup_answered(uid, packet.len());
         send_to_app(&tun, &shared, &packet).await;
     }
+    lock(&flows).answered(key, id, &owed);
 }
 
 /// What the engine knows of a new UDP flow once Android named its app: its number, name and DNS use.
@@ -1988,11 +1997,13 @@ struct UdpEnds {
     /// The flow's number.
     id: u64,
     uid: Option<u32>,
+    /// The lookups it carried that still wait for their answer.
+    owed: Arc<AtomicU32>,
 }
 
 /// Wraps each answer of a flow of lookups to Watch's own DNS address in an IP packet to the app, until
 /// every lookup it carried has its answer, one waited [`LOOKUP_WAIT`] (ADR 0044, decision 3), or the
-/// network beneath changes.
+/// network beneath changes. A flow that gave way to a later one still hands the app what it owes.
 async fn answers(
     socket: Arc<UdpSocket>,
     ends: UdpEnds,
@@ -2005,7 +2016,7 @@ async fn answers(
     // Only a change after the flow opened ends it: a clone starts with the loop's last-seen version.
     changes.borrow_and_update();
     // Lookups all answered from Watch's cache leave nothing to wait for.
-    let mut done = lock(&flows).answered(key, ends.id, 0);
+    let mut done = lock(&flows).settled(key, ends.id, &ends.owed);
     while !done {
         tokio::select! {
             _ = changes.changed() => break,
@@ -2042,6 +2053,7 @@ fn relayed(
         destination,
         id,
         uid,
+        ref owed,
     } = ends;
     let mut packets = Vec::new();
     for _ in 0..BATCH {
@@ -2071,7 +2083,7 @@ fn relayed(
             packets.push(packet);
         }
         // A flow of lookups ends with the answer to the last of them.
-        if lock(flows).answered((app, destination), id, 1) {
+        if lock(flows).answered((app, destination), id, owed) {
             return (packets, true);
         }
     }
