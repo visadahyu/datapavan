@@ -140,13 +140,28 @@ an ADR (D25).
   each datagram with a header naming its destination: the address, or the name behind a stand-in. Destinations
   that open at once wait for the first to open the mapping, so that a burst, as of an app asking several servers,
   asks the tool for one relay, not one each.
-- **Each answer goes to the destination its header names,** with the direct path's filter:
-  - from a destination's address, to its flow;
-  - from another port of such an address, to a new flow;
+- **Each answer goes to the destination its header names,** with the direct path's filter, in this order:
+  - from a destination's own address, to its flow;
+  - from the address a stand-in was bound to, to that stand-in, unless another stand-in waits on that port: the
+    tool may have resolved both names to that one address, so the answer is dropped;
+  - from another port of an address the app sent to, to a new flow, never as a stand-in's first answer. It is
+    shown from the address the app sent to itself, else from the stand-in bound to that address;
+  - from an address the app never saw, to a stand-in that waits on that port, as below;
   - from anywhere else, nowhere, counted in `udp_filtered`.
+- **At most 64 flows that came in** for each mapping, on the direct path too. A STUN server's tests of the mapping
+  and a peer's new NAT bindings bring a few such ports, and 64 is the floor decision 3 gives each app's mappings.
+  More are dropped and counted, so that neither a sender at such an address nor a tool that forges headers can
+  grow the table without end.
 - **Stand-ins.** The relay answers from the address the tool reached, which the app never saw:
-  - A stand-in still waiting for its first answer is bound to the first answer from its port, when no other
-    stand-in of the mapping waits on that port. Later answers from that address reach the app from the stand-in.
+  - A stand-in still waiting for its first answer is bound to the first answer from its port, from an address the
+    app never saw, when no other stand-in of the mapping could take it. Later answers from that address reach the
+    app from the stand-in.
+  - On port 53, that answer must also be a DNS response to a query the app sent that stand-in, by its ID and its
+    question. A sender that guesses neither cannot take the stand-in, nor feed Watch the names it learns.
+  - **The risk left until unit 9b:** on other ports, whoever reaches the tool's relay first, from the port the app
+    asked and an address the app never saw, takes a waiting stand-in, and the real answer is then dropped. Such a
+    sender must know where the tool's relay sends from, and when; the tool's own filtering, if it has any, comes
+    first. A destination the app sent to, or a stand-in already bound, never takes another stand-in this way.
   - When several wait on one port, the answer could be any of their names'. It is dropped rather than handed to
     one, for as long as more than one waits. An app that asks several names on one port at once, as some ask
     several STUN servers, gets no answer from them through the tool.
@@ -158,16 +173,29 @@ an ADR (D25).
     tools' relays put in the header (gate 4's check R, table B10): where they give back the name, nothing is
     ambiguous.
   - A relay that gives back the name it was asked for is matched by that name.
-- **A counter, appended:** `udp_unmatched`, the 27th, counts answers that no one destination could be told for: a
-  port several stand-ins wait on, a malformed header or a fragment. It measures how often the rule above costs an
-  answer.
+- **Counters, appended:**
+  - `udp_unmatched`, the 27th: answers that no one destination could be told for, such as one on a port several
+    stand-ins wait on, a malformed header or a fragment. It measures how often the rule above costs an answer;
+  - `udp_came_in_capped`, the 28th: what the cap of 64 dropped;
+  - `udp_relay_elsewhere`, the 29th: relays a tool offered elsewhere than on the phone or at its proxy's own
+    address. Such a relay would take the app's datagrams, each naming its destination, across the network
+    beneath, outside the tool, so that tool's UDP is refused, as a tool's without UDP.
 - **The chain changes:** a mapping ends at its next datagram either way when the chain is set again and sends its
   app another way: another tool, proxy address, user name or password, UDP turned off, or the chain off. The same
   tool set again keeps it. This holds for the direct path's mappings too, which until now kept their way. A chained
-  mapping also ends when the tool closes its relay.
+  mapping also ends when the tool closes its relay. When the chain changes while a destination's way opens, the
+  destination is routed again before anything that waited leaves: nothing an app sends once the chain takes it
+  leaves directly.
+- **Known limits:**
+  - A bound stand-in keeps sending by name, so that the tool's own routing by name still applies. When the tool
+    resolves the name again to another address, the answers from that address are dropped, or, on a port another
+    stand-in waits on, taken by that one.
+  - The re-check just before what waited leaves covers the moment between opening the mapping and sending. No test
+    reaches that moment without a hook in the engine; the check made as the mapping opens is tested.
 - **Unchanged:** lookups to the tunnel's DNS address, chained apps' TCP, the tool's own traffic, a stopped tool,
   and a tool without UDP.
-- **Tests:** six in `core/net/tests/chain.rs`, and one in the network lab with a real tun. Each was made to fail by
-  breaking the code it guards.
+- **Tests:** twenty in `core/net/tests/chain.rs`, and one in the network lab with a real tun. Each was made to fail
+  by breaking the code it guards, or, for the independent review's findings of the same day, by the engine before
+  their fixes.
 - **Still open:** what real tools' relays put in the header, and whether they keep one upstream socket per
   association. The test tool and the lab's proxy name the real sender; v2rayNG and NekoBox are not yet checked.
