@@ -284,7 +284,9 @@ impl Exit {
 /// mapping; what comes from more ports is dropped and counted. A STUN server's tests of the mapping and a
 /// peer's new NAT bindings bring a few such ports, and 64 is the floor ADR 0044 gives each app's
 /// mappings. Without a cap, a sender at such an address, or a tool that forges headers, could grow the
-/// table without end.
+/// table without end. A flow that came in counts for as long as it lives, even once the app answers it:
+/// an app that answers whoever reaches it, as a DHT node or a QUIC listener does, would otherwise lift
+/// the cap for every port it answers.
 const CAME_IN: usize = 64;
 
 /// At most this many DNS queries are kept for a stand-in on port 53 still waiting for its first answer,
@@ -312,7 +314,7 @@ struct Mapping {
     peers: HashMap<SocketAddr, Peer>,
     /// Where the peers' answers come from: what is let in.
     sources: Sources,
-    /// How many of the peers came in ([`CAME_IN`]).
+    /// How many of the peers came in before the app sent to them ([`CAME_IN`]).
     came_in: usize,
     /// When the last datagram passed, either way.
     last: Instant,
@@ -339,10 +341,10 @@ struct Peer {
     made: Instant,
     way: PeerWay,
     /// Whether it came in, another port of an address the app sent to, and the app has not sent to it
-    /// since: it counts under [`CAME_IN`], and its datagrams are not read for a QUIC name.
+    /// since: its datagrams are not read for a QUIC name.
     came_in: bool,
-    /// Whether it came in before the app sent to it: Watch learns names from it only from an answer to a
-    /// query the app sent it, even once the app answers it.
+    /// Whether it came in before the app sent to it: it counts under [`CAME_IN`], and Watch learns names
+    /// from it only from an answer to a query the app sent it, even once the app answers it.
     came_in_first: bool,
     /// Whether it is a stand-in the app sent to, waiting for its first answer from an address.
     waiting: bool,
@@ -678,7 +680,7 @@ impl Mapping {
             }
             shared.finish(peer.id);
             sources.remove_peer(address, &peer.way);
-            *came_in = came_in.saturating_sub(usize::from(peer.came_in));
+            *came_in = came_in.saturating_sub(usize::from(peer.came_in_first));
             false
         });
     }
@@ -706,14 +708,13 @@ impl Mapping {
     }
 
     /// The app sends to the peer it knows as `address`: one that came in is a peer of the app from now
-    /// on, read for a QUIC name and no longer counted under [`CAME_IN`].
+    /// on, read for a QUIC name. It still counts under [`CAME_IN`].
     fn answering(&mut self, address: SocketAddr) {
         let Some(peer) = self.peers.get_mut(&address) else {
             return;
         };
         if std::mem::take(&mut peer.came_in) {
             peer.quic = Some((peer.opened, Box::new(quic::Initial::new())));
-            self.came_in = self.came_in.saturating_sub(1);
         }
     }
 

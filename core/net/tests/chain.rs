@@ -2096,7 +2096,8 @@ async fn an_answer_on_a_port_bound_to_another_address_is_dropped() -> Outcome {
 }
 
 /// A mapping's flows that came in, silent for longer than `udp_idle` while the mapping lives on, end,
-/// and make room under the cap for others.
+/// and make room under the cap for others, also those the app answered (sixth review of unit 9, finding
+/// 3).
 #[tokio::test(flavor = "current_thread")]
 async fn flows_that_came_in_and_ended_make_room_for_others() -> Outcome {
     let server = UdpSocket::bind("127.0.0.1:0").await?;
@@ -2126,7 +2127,11 @@ async fn flows_that_came_in_and_ended_make_room_for_others() -> Outcome {
     };
     let (engine, tunnel) = engine_with(chain(tool.address), limits, Arc::new(ByPort))?;
     send(&tunnel, app(DIRECT_PORT), at, b"hello").await?;
-    assert_eq!(everything(&tunnel).await.len(), 64);
+    let seen = everything(&tunnel).await;
+    assert_eq!(seen.len(), 64);
+    for (from, _) in &seen {
+        send(&tunnel, app(DIRECT_PORT), *from, b"an answer").await?;
+    }
     // The app keeps its mapping alive while the flows that came in fall silent and end.
     for _ in 0..8 {
         send(&tunnel, app(DIRECT_PORT), at, b"still here").await?;
@@ -2962,37 +2967,44 @@ async fn a_reply_to_a_flow_that_came_in_as_a_stand_in_goes_by_name() -> Outcome 
     Ok(())
 }
 
-/// Once the app sends to a flow that came in, it is a peer of the app: it no longer counts under the cap
-/// of 64, and another port comes in in its place (fifth review of unit 9, finding 2).
+/// An app that answers every port that comes in, as a DHT node or a QUIC listener does, still lets in at
+/// most 64 of them: a flow that came in counts under the cap for as long as it lives, even once the app
+/// answers it (sixth review of unit 9, finding 3; the fifth review's finding 2 had let it leave the cap).
 #[tokio::test(flavor = "current_thread")]
-async fn a_flow_that_came_in_and_was_answered_leaves_the_cap() -> Outcome {
+async fn an_app_that_answers_every_port_that_came_in_lets_in_64() -> Outcome {
     let server = UdpSocket::bind("127.0.0.1:0").await?;
     let at = server.local_addr()?;
     let mut ports = Vec::new();
-    for _ in 0..65 {
+    for _ in 0..(64 * 4) {
         ports.push(UdpSocket::bind("127.0.0.1:0").await?);
     }
-    let answered = ports[0].local_addr()?;
-    let (go, later) = oneshot::channel::<()>();
+    let (go, mut next) = tokio::sync::mpsc::channel::<()>(4);
     tokio::spawn(async move {
         let mut buffer = [0u8; 64];
         if let Ok((_, mapped)) = server.recv_from(&mut buffer).await {
-            for port in &ports[..64] {
-                let _ = port.send_to(b"came in", mapped).await;
-            }
-            if later.await.is_ok() {
-                let _ = ports[64].send_to(b"one more", mapped).await;
+            for some in ports.chunks(64) {
+                for port in some {
+                    let _ = port.send_to(b"came in", mapped).await;
+                }
+                if next.recv().await.is_none() {
+                    return;
+                }
             }
         }
     });
     let tool = proxy(Settings::default()).await?;
     let (engine, tunnel) = engine(chain(tool.address))?;
     send(&tunnel, app(DIRECT_PORT), at, b"hello").await?;
-    assert_eq!(everything(&tunnel).await.len(), 64);
-    send(&tunnel, app(DIRECT_PORT), answered, b"an answer").await?;
-    go.send(()).map_err(|()| "the server is gone")?;
-    let seen = everything(&tunnel).await;
-    assert_eq!(seen.len(), 1, "one more port came in");
-    assert_eq!(engine.counters()[UDP_CAME_IN_CAPPED], 0);
+    let mut came_in = 0;
+    for _ in 0..4 {
+        let seen = everything(&tunnel).await;
+        came_in += seen.len();
+        for (from, _) in &seen {
+            send(&tunnel, app(DIRECT_PORT), *from, b"an answer").await?;
+        }
+        go.send(()).await?;
+    }
+    assert_eq!(came_in, 64, "ports that came in");
+    assert_eq!(engine.counters()[UDP_CAME_IN_CAPPED], 64 * 3);
     Ok(())
 }
