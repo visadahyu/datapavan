@@ -601,12 +601,28 @@ impl Mapping {
                     return self.answered_by(shown, now);
                 }
                 // Another port of an address the app sent to comes in as that address's, never as a
-                // stand-in's first answer. Of an address only a stand-in was bound to, on a port
-                // another stand-in waits on, it could again be either name's.
+                // stand-in's first answer. Of an address only a stand-in was bound to, on a port a
+                // stand-in waits on: when that is the same stand-in, the name the tool resolved to this
+                // address asked on another port, the answer binds it there too; when another waits,
+                // the answer could again be either name's.
                 let Some(ip) = self.sources.shown(from.ip()) else {
                     return self.first_answer(from, answer, now);
                 };
                 if ip != from.ip() && waited_on {
+                    let same = SocketAddr::new(ip, from.port());
+                    let alone = self
+                        .sources
+                        .waiting
+                        .get(&from.port())
+                        .is_some_and(|waiting| *waiting == [same]);
+                    let asked = from.port() != 53
+                        || self
+                            .peers
+                            .get(&same)
+                            .is_some_and(|peer| peer.asked_for(answer));
+                    if alone && asked {
+                        return self.bind(same, from, now);
+                    }
                     return LetIn::Unmatched;
                 }
                 let shown = SocketAddr::new(ip, from.port());
@@ -663,18 +679,22 @@ impl Mapping {
             (takers.next(), takers.next())
         };
         match takers {
-            (Some(shown), None) => {
-                self.sources.stop_waiting(shown);
-                self.sources.add(shown, from);
-                if let Some(peer) = self.peers.get_mut(&shown) {
-                    peer.way.from = Some(from);
-                    peer.asked = Vec::new();
-                }
-                self.answered_by(shown, now)
-            }
+            (Some(shown), None) => self.bind(shown, from, now),
             (Some(_), Some(_)) => LetIn::Unmatched,
             (None, _) => LetIn::Filtered,
         }
+    }
+
+    /// Binds the stand-in the app knows as `shown` to `from`, the address its first answer came from,
+    /// and gives it that answer.
+    fn bind(&mut self, shown: SocketAddr, from: SocketAddr, now: Instant) -> LetIn {
+        self.sources.stop_waiting(shown);
+        self.sources.add(shown, from);
+        if let Some(peer) = self.peers.get_mut(&shown) {
+            peer.way.from = Some(from);
+            peer.asked = Vec::new();
+        }
+        self.answered_by(shown, now)
     }
 }
 
