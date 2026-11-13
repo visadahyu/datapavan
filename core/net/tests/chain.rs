@@ -9,7 +9,7 @@
 
 mod common;
 
-use common::{Headers, Settings, proxy, udp_echo};
+use common::{Headers, Settings, proxy, same_port, udp_echo, udp_echo_beside};
 use datapavan_net::engine::{Addresses, Limits};
 use datapavan_net::{Chain, Config, Engine, Platform, dns, packet};
 use std::collections::HashSet;
@@ -624,9 +624,8 @@ async fn a_stand_in_gets_the_answer_from_the_real_address() -> Outcome {
 /// dropped and counted rather than given to the app under the wrong name.
 #[tokio::test(flavor = "current_thread")]
 async fn an_answer_two_stand_ins_could_take_is_dropped() -> Outcome {
-    let first = UdpSocket::bind("127.0.0.1:0").await?;
+    let (first, second) = same_port().await?;
     let port = first.local_addr()?.port();
-    let second = UdpSocket::bind(("127.0.0.2", port)).await?;
     // Each answers once both were asked, so that both stand-ins wait when the answers come.
     let both = Arc::new(Barrier::new(2));
     for server in [first, second] {
@@ -805,9 +804,8 @@ async fn a_stranger_cannot_take_a_stand_in_on_port_53() -> Outcome {
 #[tokio::test(flavor = "current_thread")]
 async fn another_port_of_a_destination_is_not_a_stand_ins_first_answer() -> Outcome {
     let destination = udp_echo().await?;
-    let named = UdpSocket::bind("127.0.0.2:0").await?;
+    let (beside, named) = same_port().await?;
     let port = named.local_addr()?.port();
-    let beside = UdpSocket::bind((destination.ip(), port)).await?;
     let other_port = beside.local_addr()?;
     tokio::spawn(async move {
         let mut buffer = [0u8; 64];
@@ -1968,8 +1966,7 @@ async fn an_app_android_cannot_name_is_logged_as_unknown() -> Outcome {
 /// of unit 9, finding 3).
 #[tokio::test(flavor = "current_thread")]
 async fn a_stand_in_answered_by_name_waits_no_more() -> Outcome {
-    let echo = udp_echo().await?;
-    let stranger = UdpSocket::bind(("127.0.0.2", echo.port())).await?;
+    let (echo, stranger) = udp_echo_beside().await?;
     let mut settings = Settings {
         headers: Headers::Name,
         ..Settings::default()
@@ -2069,9 +2066,8 @@ async fn nothing_comes_in_through_the_old_relay_once_the_chain_lets_the_app_go()
 async fn an_answer_on_a_port_bound_to_another_address_is_dropped() -> Outcome {
     let first = udp_echo().await?;
     // The second port: asked at the first address, answered from the second.
-    let asked = UdpSocket::bind((first.ip(), 0)).await?;
+    let (asked, answering) = same_port().await?;
     let port = asked.local_addr()?.port();
-    let answering = UdpSocket::bind(("127.0.0.2", port)).await?;
     tokio::spawn(async move {
         let mut buffer = [0u8; 64];
         if let Ok((n, relay)) = asked.recv_from(&mut buffer).await {
@@ -2226,8 +2222,7 @@ async fn new_credentials_for_the_tool_move_a_mapping() -> Outcome {
 /// more, so a stranger on its port does not take it.
 #[tokio::test(flavor = "current_thread")]
 async fn a_stand_in_answered_from_its_own_address_waits_no_more() -> Outcome {
-    let echo = udp_echo().await?;
-    let stranger = UdpSocket::bind(("127.0.0.2", echo.port())).await?;
+    let (echo, stranger) = udp_echo_beside().await?;
     // The first stand-in an engine gives (the chain's lookup test checks it).
     let own = SocketAddr::from(([198, 18, 0, 1], echo.port()));
     let mut settings = Settings::default();
@@ -2436,8 +2431,7 @@ type BesideASilentOne = (
 async fn a_bound_name_beside_a_silent_one(
     contest: Duration,
 ) -> Result<BesideASilentOne, Box<dyn std::error::Error>> {
-    let echo = udp_echo().await?;
-    let quiet = UdpSocket::bind(("127.0.0.2", echo.port())).await?;
+    let (echo, quiet) = udp_echo_beside().await?;
     let mut settings = Settings::default();
     settings.names.insert("a.test".into(), echo.ip());
     settings

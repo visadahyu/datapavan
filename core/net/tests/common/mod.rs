@@ -353,7 +353,11 @@ pub async fn tcp_echo() -> std::io::Result<SocketAddr> {
 }
 
 pub async fn udp_echo() -> std::io::Result<SocketAddr> {
-    let socket = UdpSocket::bind("127.0.0.1:0").await?;
+    echo_on(UdpSocket::bind("127.0.0.1:0").await?)
+}
+
+/// An echo server on `socket`.
+fn echo_on(socket: UdpSocket) -> std::io::Result<SocketAddr> {
     let address = socket.local_addr()?;
     tokio::spawn(async move {
         let mut buffer = vec![0; 65_535];
@@ -362,6 +366,25 @@ pub async fn udp_echo() -> std::io::Result<SocketAddr> {
         }
     });
     Ok(address)
+}
+
+/// A socket on 127.0.0.1 and one on 127.0.0.2 with the same port number. Another socket may hold that
+/// number on the second address, another test's or a mapping's of an engine, which binds every
+/// address: a few tries find one free on both.
+pub async fn same_port() -> std::io::Result<(UdpSocket, UdpSocket)> {
+    for _ in 0..50 {
+        let first = UdpSocket::bind("127.0.0.1:0").await?;
+        if let Ok(second) = UdpSocket::bind(("127.0.0.2", first.local_addr()?.port())).await {
+            return Ok((first, second));
+        }
+    }
+    Err(std::io::ErrorKind::AddrInUse.into())
+}
+
+/// An echo server on 127.0.0.1, as [`udp_echo`], and a socket on 127.0.0.2 at the same port.
+pub async fn udp_echo_beside() -> std::io::Result<(SocketAddr, UdpSocket)> {
+    let (echo, beside) = same_port().await?;
+    Ok((echo_on(echo)?, beside))
 }
 
 /// A datagram from the client: where it goes, the name it named that by if it did, and its payload,
