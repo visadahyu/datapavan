@@ -150,6 +150,9 @@ Watch and the audit app, and the gap between Lite and Watch.
   process dies, the audit binds again and loads the signatures again; an app it still cannot scan is reported
   unreadable and scanned again at the next audit. The build fails unless the service stays isolated and
   unexported, and the smoke test checks that Android ran it under an isolated UID.
-- **Open for the maintainer:** on the Android 15 emulator's launcher, both names show as "Datapavan …", cut where
-  the edition begins; there the icons' shapes alone tell the editions apart.
+- **The full names stay under the icons** (the maintainer, 2026-11-13). On the Android 15 emulator's launcher both
+  show as "Datapavan …", cut where the edition begins, and the icons' shapes alone tell the editions apart;
+  launchers that wrap names, such as Samsung's, show them whole. A shorter label under the icon alone ("Basic",
+  "Advanced"), as "Docs" stands for "Google Docs", was set aside for now: the redesign's test with real users
+  checks whether people tell the two apart, and decides.
 - **Still to build:** the data tables' rows for Advanced, and Advanced's release rehearsal.
