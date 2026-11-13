@@ -80,7 +80,7 @@ Most of them need no bug: someone tricks you into handing something over.
    [CYFIRMA](https://www.cyfirma.com/research/re-emerging-telegram-phishing-campaign-targeting-user-authorization-prompts/)).
    Type your login code only into the Telegram app itself, or into Telegram's own login page that you opened
    yourself, and never pass it on ([Telegram FAQ](https://telegram.org/faq)). Scan a login QR code only from Telegram
-   on your own computer, never from a page someone sent you. Never tap "This is me" or "Yes" on a login request you
+   on your own computer, never from a page someone sent you. Never tap "Yes, it’s me" on a login request you
    did not start. Set a two-step verification password and type it nowhere but in Telegram. If you already did one of
    these, go to Settings > Devices, end all other sessions and change that password.
 2. **A page that looks like a real service** asks you to log in, to pay a "deposit" before you can withdraw earnings
@@ -118,7 +118,7 @@ Most of them need no bug: someone tricks you into handing something over.
 
 **A business bot connected to your own account** can read the chats you choose and, with the rights you give it,
 answer them, delete messages, change your name, bio and photo, and move your gifts and Stars. Treat that like handing
-someone your phone, and check Settings > Telegram Business > Chatbots
+someone your phone, and check Settings > Telegram Business > Chat Automation
 ([Telegram Privacy Policy](https://telegram.org/privacy); [Telegram Bot API](https://core.telegram.org/bots/api)).
 
 **In a group,** a bot normally sees only commands meant for it, replies to it and messages sent through it. It sees
