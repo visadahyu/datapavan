@@ -739,7 +739,13 @@ next pause; each is fixed. A seventh found that an answer naming the new app was
 socket was open yet, so that a way opened afterwards on the old app's older answer; the table now keeps the
 newest answer about each socket, for as long as it has a way, and opens no way on an older one that names
 another app. It also found that each answer scanned the whole table, that the windows were tested from one
-side only, and that a live stand-in's way could pass to another app; each is fixed. How it is built:
+side only, and that a live stand-in's way could pass to another app; each is fixed. An eighth found that the
+seventh's fix sent an old app's datagrams under the new app's answer, since it took an answer to hold for what
+came before its question; a chained app's datagrams could so leave directly. The decision whose a datagram is
+now lives in one function every path asks: answers less than `udp_reask` from a datagram that disagree drop it,
+and a model drives that rule through 10,000 random schedules of handovers. It also found that an answer still
+looked at every flow of lookups of its socket, a lookup flow's window that no test pinned, and a destination
+that took on another app's tool failure; each is fixed. How it is built:
 [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 Still to come: shares for each app, ICMP echo and the network's MTU.

@@ -213,35 +213,45 @@ an ADR (D25).
   one Binder call for each pause of an app socket, and one every thirty seconds for one that never pauses: a socket
   that keeps a connection alive every 30 s adds about 1,400 a night, beside the 984 lookups of a whole night in
   that spike.
-- **When an answer holds.** Android's answer holds for a datagram that came before the question, or less than
-  `udp_reask` after it was asked, as a mapping's datagram leaves without a question less than `udp_reask` after
-  the last. Freshness counts from when Android was asked, not from when it answered, so a slow answer does not
-  widen the window. Each datagram held while its destination's way opens notes when it came: once the way is
-  there, only those the answer holds for leave, and the rest stay held, in order, and ask again.
-  - One question at a time for what a socket already knows: a datagram to a destination its mapping has, sent
-    less than `udp_reask` after a question about that socket was asked, waits for that answer, held, so a pause
-    costs one call however many such destinations the socket has. One that comes later asks again, and those
-    after it share that question.
-  - A new destination, a port that came in and that the app has not answered, and a lookup to the tunnel's DNS
-    address ask on their own: the question out began before their datagram came, and its answer may name the
-    port's previous app, whose way a new destination would then take. A burst of new destinations from one
-    socket costs one question each.
-  - Any answer about a socket, whichever destination or lookup asked, ends the socket's mapping and its flows of
-    lookups when it names another app than theirs; a flow that ends so still hands the app the answers it owes.
-    The work is the socket's own: its mapping and its flows of lookups, whatever else the table holds, so one
-    app's burst of new destinations costs each answer no more than its own ways.
-  - **The newest answer.** For each app socket with a way, opening or open, the table keeps the answer of
-    Android's about it that was asked last: its app, or none, and when it was asked. A way about to open,
-    mapping or flow of lookups, on an older answer that names another app does not open, whether a way of the
-    socket was open when the newer answer came or not: its datagrams ask again, and no owner is guessed. A late
-    answer to an older question changes nothing. So a lookup that names the new app while the old app's way
-    still opens (its socket being protected, the tool's handshake) keeps that way shut. The record goes with
-    the socket's last way, and so is bounded by them: each question is asked for a destination whose datagrams
-    wait in the table until its way opens. A datagram of the old app that waits for such a way asks again,
-    and leaves under the new answer, or nowhere when Android names no app.
-  - The cost: when Android answers more slowly than `udp_reask`, a pause costs a question for each `udp_reask`
-    the answers take, and a datagram may wait for two answers. At 3 or 11 ms against a second, a pause costs one
-    question.
+- **Whose a datagram is: the rule, in one place.** Every path of a UDP datagram asks one function,
+  `Record::whose` in `core/net/src/engine/whose.rs`: one passing by a mapping, a lookup by its flow, one held while
+  Android is asked, one joining a question out, one sorted when its way opens or is found stale. For each app
+  socket with a way, opening or open, the table keeps the answers of Android's that can still decide a datagram:
+  the app each named, or none, and when it was asked. For a datagram that came at `t`:
+  - if it came after the newest question, it is the app that answer names: less than `udp_reask` after it, or for
+    as long as the app sends without a pause of `udp_reask`, up to thirty times that after the question;
+  - if it came before, it is the app named by every answer whose question lies less than `udp_reask` from `t`,
+    before or after, if that app still holds the socket. If two such answers name different apps, or one names
+    none, a handover fell near it, and who sent it cannot be told: it is dropped and counted, never sent under
+    either answer, and never asked about again, since a later question could not tell either;
+  - a destination the app had no way to, and a lookup to the tunnel's DNS address, take only an answer asked since
+    their first datagram came: they never take an answer to a question asked before them;
+  - otherwise no answer decides it yet, and it asks Android, or waits for the question out about its socket when
+    that can decide it: one asked less than `udp_reask` from it, and, for a new destination or a lookup, since it
+    came. So a pause costs one question however many destinations the socket knows, and a burst of new
+    destinations shares the questions asked since they came. One that no question asked now could decide is
+    dropped.
+  A way, mapping or flow of lookups, opens only for the app the newest answer names, and an answer that names
+  another app ends every way of the socket; a flow that ends so still hands the app the answers it owes. An
+  answer looks at the socket's ways only then, since they are all of the newest answer's app, so a socket's many
+  flows of lookups cost an answer naming their own app nothing. A late answer to an older question changes no
+  newest answer. What left under one app carries no stream on for the next. The record keeps the newest answer
+  and those less than `udp_reask` from a datagram that still waits, and goes with the socket's last way. A
+  destination that waits for another of its socket to open the mapping waits only for one of its own app.
+  - **The cost.** A datagram that came less than `udp_reask` from answers that disagree is lost: the first
+    datagrams of each app after a handover, the old app's last ones and the new app's first, for up to
+    `udp_reask` around the questions. At the Galaxy A40's 3 ms an answer is asked within milliseconds of the
+    datagram that needs it, so this is the handover's own second. When Android answers more slowly than
+    `udp_reask`, a datagram that waits more than `udp_reask` for a question is dropped.
+  - **The windows**, each pinned to the nanosecond on both sides by the engine's own tests: `udp_reask` after the
+    newest question, and before or after any answer for one that came before it; thirty times `udp_reask` for a
+    stream; `udp_contest` for a waiting stand-in.
+  - **The model.** A test in `whose.rs` drives the rule through 10,000 seeded random schedules at simulated
+    instants: handovers between a chained app, a direct app and no app; datagrams and lookups; Android
+    answering after random delays, and so out of order; ways opening slowly. It checks every datagram that
+    leaves against who held the port when it was sent: one sent by another app than the one it leaves under
+    must lie within the window above, with every answer near it naming that app. It fails, naming its seed,
+    with the rule as it stood before this review, and with each of nine other bugs put back by mutation.
 - **No guess.** An app Android cannot name is unknown, in the log (decision 3's shared bucket) and to the chain,
   even when Android named that socket's app before: the old app is never taken for it. While a chain is on, it goes
   nowhere. A socket Android fails to name for a moment so gets a new mapping, and so another port.
@@ -259,7 +269,9 @@ an ADR (D25).
     beneath, outside the tool, so that tool's UDP is refused, as a tool's without UDP. On the phone means on its
     loopback or at any address it holds, as a tool that shares its proxy on the local network announces its
     Wi-Fi address: a UDP socket connected to the relay, which sends nothing, then sends from that very address. A
-    broadcast address refuses such a socket, though Linux lets one bind it.
+    broadcast address refuses such a socket, though Linux lets one bind it;
+  - `udp_ambiguous`, the 30th: datagrams and lookups dropped because who sent them could not be told, by the
+    rule above.
 - **The chain changes:** a mapping ends at its next datagram either way when the chain is set again and sends its
   app another way: another tool, proxy address, user name or password, UDP turned off, or the chain off. The same
   tool set again keeps it. This holds for the direct path's mappings too, which until now kept their way. A chained
@@ -275,22 +287,21 @@ an ADR (D25).
     stand-in waits on, taken by that one. When that new address is already bound to another stand-in, or is a
     destination the app sent to itself, the answers go to that other peer, under its name, without a word: the
     address alone cannot tell them apart.
-  - A port that Android hands to another app less than a second after the old app's last datagram or lookup, or
-    after Android was last asked about the socket, to a destination the old app also sent to, leaves the old
-    app's way, and is logged under it, until Android is next asked: at the new app's first silence of a second,
-    at most thirty seconds after Android last named the old app, or at any answer about the socket, which then
-    names the new app. Asking Android for every datagram would close the window at the cost of a Binder call
-    each.
+  - A port that Android hands to another app less than a second after the last answer naming the old app, to a
+    destination the old app also sent to, leaves the old app's way, and is logged under it, until Android is
+    next asked: at the new app's first silence of a second, at most thirty seconds after Android last named the
+    old app, or at any answer about the socket, which then names the new app. Likewise a datagram whose only
+    answers near it all came after a handover that fell between it and them: no answer can tell it. Asking
+    Android for every datagram would narrow the window at the cost of a Binder call each.
   - The re-check just before what waited leaves covers the moment between opening the mapping and sending. No test
     reaches that moment without a hook in the engine; the check made as the mapping opens is tested.
 - **Unchanged:** chained apps' TCP, the tool's own traffic, a stopped tool, and a tool without UDP.
-- **Tests:** eighty in `core/net/tests/chain.rs`, twenty-one in the engine's own tests (what a stand-in keeps of
-  its queries, which only memory shows; the windows this paragraph states, the thirty-times rule, an answer's
-  hold, a join and a stand-in's contest, at simulated instants a nanosecond before their end and at it; which
-  answers of Android's a datagram may take, and which ways they end or keep shut, which depend on the order
-  tasks run in; and what an answer costs), and three in the network lab with a real tun. Each was made to fail
-  by breaking the code it guards, or, for the seven independent reviews' findings of the same day, by the
-  engine before their fixes. Those that time a
+- **Tests:** eighty-four in `core/net/tests/chain.rs`, twenty-one in the engine's own tests (the rule and its
+  model in `whose.rs`; the windows, at simulated instants a nanosecond before their end and at it; what a
+  stand-in keeps of its queries, which only memory shows; what waits sorted by the rule; how many ways an answer
+  looks at; and the record released with the socket's last way), and three in the network lab with a real tun.
+  Each was made to fail by breaking the code it guards, or, for the eight independent reviews' findings of the
+  same day, by the engine before their fixes. Those that time a
   handover count from when the test's Android was asked, which the engine did no later, so that load cannot
   narrow their margins. Those that need port 53
   use the test proxy's remapping, or any port of the tunnel's DNS address, which leads to the same port of the
