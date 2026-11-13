@@ -219,7 +219,15 @@ async fn relay(
     seen: &Seen,
     mut close: watch::Receiver<u64>,
 ) -> std::io::Result<()> {
-    let socket = UdpSocket::bind("127.0.0.1:0").await?;
+    // At the address it is announced at, where this computer holds it; else on the loopback.
+    let here = match settings.relay_at {
+        Some(ip) => UdpSocket::bind((ip, 0)).await.ok(),
+        None => None,
+    };
+    let socket = match here {
+        Some(socket) => socket,
+        None => UdpSocket::bind("127.0.0.1:0").await?,
+    };
     let mut bound = socket.local_addr()?;
     seen.relays
         .lock()

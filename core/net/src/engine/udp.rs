@@ -1378,12 +1378,12 @@ async fn mapped_socket(shared: &Arc<Shared>, destination: SocketAddr) -> io::Res
 }
 
 /// A UDP relay of the tool for a mapping: a socket connected to the relay, and the request's
-/// connection, which must stay open. The relay is on the phone's loopback, as the proxy is, or at the
-/// proxy's own address on the local network, which gets a protected socket, so that its datagrams do not
-/// loop back into the tunnel. A relay anywhere else would take the app's datagrams, each with a header
-/// naming its destination, across the network beneath, outside the tool: such a tool's UDP is refused,
-/// as a tool's without UDP, and counted. Whether the tool sends every destination's datagrams from one
-/// socket of its own is the tool's choice (ADR 0044, decision 2).
+/// connection, which must stay open. The relay is on the phone ([`on_the_phone`]) or at the proxy's own
+/// address on the local network; one not on the loopback gets a protected socket, so that its datagrams
+/// do not loop back into the tunnel. A relay anywhere else would take the app's datagrams, each with a
+/// header naming its destination, across the network beneath, outside the tool: such a tool's UDP is
+/// refused, as a tool's without UDP, and counted. Whether the tool sends every destination's datagrams
+/// from one socket of its own is the tool's choice (ADR 0044, decision 2).
 async fn associate(shared: &Arc<Shared>, chain: &Chain) -> io::Result<(UdpSocket, TcpStream)> {
     let opening = async {
         let mut control = connect_proxy(shared, chain.proxy).await?;
@@ -1399,8 +1399,7 @@ async fn associate(shared: &Arc<Shared>, chain: &Chain) -> io::Result<(UdpSocket
         .map_err(io_error)?;
         let relay =
             socks5::relay_address(&bound, chain.proxy).ok_or(io::ErrorKind::HostUnreachable)?;
-        let at = relay.ip().to_canonical();
-        if !at.is_loopback() && at != chain.proxy.ip().to_canonical() {
+        if relay.ip().to_canonical() != chain.proxy.ip().to_canonical() && !on_the_phone(relay) {
             Counters::add(&shared.counters.udp_relay_elsewhere, 1);
             return Err(io::ErrorKind::HostUnreachable.into());
         }
@@ -1415,6 +1414,25 @@ async fn associate(shared: &Arc<Shared>, chain: &Chain) -> io::Result<(UdpSocket
         Ok(opened) => opened,
         Err(_) => Err(io::ErrorKind::TimedOut.into()),
     }
+}
+
+/// Whether `relay` is on the phone, so that datagrams to it never cross the network beneath: on its
+/// loopback, or at any other address the phone holds, as a tool that shares its proxy on the local
+/// network announces its Wi-Fi address. A UDP socket connected to an address the phone holds, which
+/// sends nothing, sends from that very address; one connected to any other gets the address of its way
+/// out, and a broadcast address refuses it. A socket merely bound to the address would not tell, since
+/// Linux lets a socket bind a broadcast address too.
+fn on_the_phone(relay: SocketAddr) -> bool {
+    let relay = SocketAddr::new(relay.ip().to_canonical(), relay.port());
+    if relay.ip().is_loopback() {
+        return true;
+    }
+    std::net::UdpSocket::bind(packet::unspecified_like(&relay))
+        .and_then(|probe| {
+            probe.connect(relay)?;
+            probe.local_addr()
+        })
+        .is_ok_and(|from| from.ip() == relay.ip())
 }
 
 /// What a mapping's task holds.

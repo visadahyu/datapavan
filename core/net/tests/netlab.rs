@@ -43,6 +43,7 @@ const RESETS: usize = 22;
 const TCP_REFUSED: usize = 23;
 const UDP_MAPPINGS: usize = 24;
 const UDP_FILTERED: usize = 25;
+const UDP_RELAY_ELSEWHERE: usize = 28;
 /// A server that never answers (scripts/netlab-enter.py routes it into a tunnel no one reads).
 const SILENT: Ipv4Addr = Ipv4Addr::new(203, 0, 113, 1);
 /// How long any one step may take before the test fails.
@@ -713,6 +714,19 @@ fn sending_keeps_a_mapping_open() -> Outcome {
     )
 }
 
+/// The lab's chain: the app the lab's Android names for every socket in the tunnel goes through the
+/// tool's proxy at `proxy`, the tool being another app.
+fn lab_chain(proxy: SocketAddr) -> Chain {
+    Chain {
+        proxy,
+        credentials: None,
+        tool: APP + 1,
+        apps: Some(HashSet::from([APP])),
+        udp: true,
+        log_destinations: false,
+    }
+}
+
 /// ADR 0044, decision 2: a chained app's socket reaches two servers over one `UDP ASSOCIATE`, so both
 /// see the port of the tool's one relay, and each answer comes back from its own server.
 #[test]
@@ -723,15 +737,7 @@ fn a_chained_app_socket_leaves_through_one_association() -> Outcome {
         Limits::default(),
         |engine| async move {
             let tool = proxy(Settings::default()).await?;
-            engine.chain(Some(Chain {
-                proxy: tool.address,
-                credentials: None,
-                // Another app than the one the lab's Android names for every socket in the tunnel.
-                tool: APP + 1,
-                apps: Some(HashSet::from([APP])),
-                udp: true,
-                log_destinations: false,
-            }));
+            engine.chain(Some(lab_chain(tool.address)));
             let app = app_socket().await?;
             let mut seen = Vec::new();
             for server in [port_reporter(SERVER).await?, port_reporter(OTHER).await?] {
@@ -782,6 +788,67 @@ fn a_reset_after_a_long_answer_keeps_the_answer() -> Outcome {
             assert_eq!(read.len(), ANSWER);
             assert_eq!(end, Some(io::ErrorKind::ConnectionReset));
             assert_eq!(engine.counters()[RESETS], 1);
+            Ok(())
+        },
+    )
+}
+
+/// A tool that shares its proxy on the local network announces its UDP relay at the phone's own address,
+/// not on the loopback: datagrams to it never leave the phone, so the relay is used (second review of
+/// unit 9, finding 5). The lab's "internet" address is one the namespace holds, as a phone holds its
+/// Wi-Fi address.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_relay_at_the_phones_own_address_is_used() -> Outcome {
+    lab(
+        "a_relay_at_the_phones_own_address_is_used",
+        Limits::default(),
+        |engine| async move {
+            let settings = Settings {
+                relay_at: Some(IpAddr::V4(SERVER)),
+                ..Settings::default()
+            };
+            let tool = proxy(settings).await?;
+            engine.chain(Some(lab_chain(tool.address)));
+            let server = port_reporter(OTHER).await?;
+            let app = app_socket().await?;
+            app.send_to(b"which port?", server).await?;
+            let (_, from) = app_receive(&app).await?;
+            assert_eq!(from, server);
+            let relays = tool.relays();
+            assert!(
+                relays.iter().all(|relay| relay.ip() == IpAddr::V4(SERVER)),
+                "relays {relays:?}"
+            );
+            assert_eq!(engine.counters()[UDP_RELAY_ELSEWHERE], 0);
+            Ok(())
+        },
+    )
+}
+
+/// A relay announced at the broadcast address would carry the app's datagrams onto the network beneath,
+/// to every host on it: refused and counted, though Linux would let a socket bind that address.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_relay_at_the_broadcast_address_is_refused() -> Outcome {
+    lab(
+        "a_relay_at_the_broadcast_address_is_refused",
+        Limits::default(),
+        |engine| async move {
+            let settings = Settings {
+                relay_at: Some(IpAddr::V4(Ipv4Addr::BROADCAST)),
+                ..Settings::default()
+            };
+            let tool = proxy(settings).await?;
+            engine.chain(Some(lab_chain(tool.address)));
+            let server = port_reporter(OTHER).await?;
+            let app = app_socket().await?;
+            app.send_to(b"which port?", server).await?;
+            let mut buffer = [0u8; 64];
+            let answer = timeout(Duration::from_secs(1), app.recv_from(&mut buffer)).await;
+            assert!(answer.is_err(), "an answer came: {answer:?}");
+            assert_eq!(tool.commands(), [3]);
+            assert_eq!(engine.counters()[UDP_RELAY_ELSEWHERE], 1);
             Ok(())
         },
     )
