@@ -3,6 +3,8 @@
 # Kotlin's own session and error files when it compiles in the Gradle process
 .kotlin/
 build/
+# Datapavan Advanced builds beside Basic (android/app/build.gradle.kts).
+build-advanced/
 local.properties
 captures/
 .externalNativeBuild/

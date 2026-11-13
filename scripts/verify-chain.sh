@@ -18,12 +18,14 @@
 # again, the app reaches the server and Watch no longer sees it; taken back, Watch sees it again. Nothing
 # is left running: the tunnel, the tool and the server stop at the end, and the tool is uninstalled.
 #
-#   scripts/verify-chain.sh [path/to/watch-debug.apk]
+#   scripts/verify-chain.sh [path/to/Datapavan-Advanced-debug.apk]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APK="${1:-$ROOT/android/watch/build/outputs/apk/debug/watch-debug.apk}"
-PKG=org.visadahyu.datapavan.watch
+APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
+PKG=org.visadahyu.datapavan.advanced
+# Watch's screen in Datapavan Advanced (ADR 0045); debug builds export it for these checks.
+WATCH_SCREEN=org.visadahyu.datapavan.watch.MainActivity
 TOOL=org.visadahyu.datapavan.testtool
 WORKLOAD=org.visadahyu.datapavan.workload
 TOOL_PORT=10870
@@ -48,7 +50,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-dump() { adb shell dumpsys activity service "$PKG/.WatchVpnService" "$@" | tr -d '\r'; }
+dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" "$@" | tr -d '\r'; }
 flows() { dump | sed -n 's/^ *flow //p'; }
 tool_log() { adb logcat -d -s DatapavanTestTool | tr -d '\r' | sed -n 's/.*DatapavanTestTool: //p'; }
 workload_log() { adb logcat -d -s DatapavanWorkload | tr -d '\r' | sed -n 's/.*DatapavanWorkload: //p'; }
@@ -111,7 +113,7 @@ tool_log | grep -q "^listening $TOOL_PORT" || fail "the test tool does not liste
 adb shell appops set "$PKG" ACTIVATE_VPN allow
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 adb shell am force-stop "$PKG"
-adb shell am start -W -n "$PKG/.MainActivity" --ez start true >/dev/null
+adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
 vpn_up || fail "Watch's tunnel did not come up"
 echo "ok: the tunnel is up for every app"
@@ -212,7 +214,7 @@ for _ in $(seq 1 10); do [ "$(tool_log | grep -c "^listening")" -gt "$listening"
 # Back to Watch as a user comes back to it, which makes it look for the tool again.
 adb shell input keyevent KEYCODE_HOME
 sleep 1
-adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
 SWITCH="Send apps through Datapavan test tool"
 # The search, and the first password after a fresh start (a new Keystore key), take a few seconds: wait
 # for them before scrolling, or the scroll moves the section off the screen before it is drawn.
@@ -285,7 +287,7 @@ echo "ok: on the chain screen: Watch's password set in the tool, one picked app'
 
 # Back on the screen, which looks for the tool again: its proxy now asks for a password. The user then
 # allows UDP, and the picked app's datagrams go through the tool's relay.
-adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
 UDP_SWITCH="Send UDP through Datapavan test tool too"
 for _ in $(seq 1 30); do screen_has "$SWITCH" && break; sleep 1; done
 scroll_to "The proxy of Datapavan test tool asks for a password, so other apps on this phone cannot use it." ||
@@ -311,7 +313,7 @@ fi
 adb shell am force-stop "$TOOL"
 adb shell input keyevent KEYCODE_HOME
 sleep 1
-adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
 for _ in $(seq 1 30); do screen_has "$WAITING" && break; sleep 1; done
 screen_has "$WAITING" || fail "with the tool stopped and the chain on, the screen did not say that the tool does not answer"
 scroll_to_top
@@ -335,7 +337,7 @@ workload_reaches() {
     for _ in $(seq 1 20); do [ "$(workload_log | grep -c "^tcp $HOST:$PORT pong$" || true)" -gt "$before" ] && return 0; sleep 1; done
     return 1
 }
-adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
 tap_text "Choose apps to leave out" || fail "the screen has no button to leave apps out"
 tap_text "Datapavan workload" || fail "the workload app is not in the list of apps to leave out"
 sleep 2

@@ -64,8 +64,15 @@ echo "ok: signed with schemes v2 and v3; the certificate's SHA-256 is the key's"
 badging=$("$TOOLS/aapt2" dump badging "$signed")
 grep -q "versionCode='$code' versionName='$version'" <<<"$badging" || fail "the APK's version is not $version ($code)"
 grep -q "application-debuggable" <<<"$badging" && fail "the release APK is debuggable"
-"$TOOLS/aapt2" dump permissions "$signed" | grep -q 'android.permission.INTERNET' && fail "the release APK asks for INTERNET"
-echo "ok: version $version ($code), not debuggable, no INTERNET permission"
+# Basic's allowlist (ADR 0045, decision 9), checked again on the signed APK, apart from the build's own
+# check (app/build.gradle.kts, basicPermissions), so that a change to one is caught by the other.
+allowed="android.permission.QUERY_ALL_PACKAGES android.permission.PACKAGE_USAGE_STATS android.permission.ACCESS_NETWORK_STATE android.permission.HIDE_OVERLAY_WINDOWS $PKG.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+permissions=$("$TOOLS/aapt2" dump permissions "$signed" | sed -n "s/^uses-permission: name='\([^']*\)'.*/\1/p")
+grep -qx 'android.permission.INTERNET' <<<"$permissions" && fail "the release APK asks for INTERNET"
+for permission in $permissions; do
+    [[ " $allowed " == *" $permission "* ]] || fail "the release APK asks for $permission, which Basic's allowlist does not hold"
+done
+echo "ok: version $version ($code), not debuggable, no INTERNET permission, nothing beyond Basic's allowlist"
 
 # 4. Release notes, signed in signify's embedded format with a throwaway Ed25519 key.
 apk_sha=$(sha256sum "$signed" | cut -d' ' -f1)

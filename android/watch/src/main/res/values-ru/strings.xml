@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="tagline">Смотрите, куда подключается каждое приложение на вашем телефоне.</string>
+    <string name="watch_tagline">Смотрите, куда подключается каждое приложение на вашем телефоне.</string>
     <string name="status_on">Watch включён.</string>
     <string name="status_off">Watch выключен.</string>
     <string name="turn_on">Включить</string>

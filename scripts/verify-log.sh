@@ -11,15 +11,17 @@
 # never read, and leaves the file when Watch starts again; a shorter retention deletes at once; "none"
 # leaves no file and no key); and then runs the log's model test (LogModel, debug builds) inside Watch.
 #
-#   scripts/verify-log.sh [path/to/watch-debug.apk]
+#   scripts/verify-log.sh [path/to/Datapavan-Advanced-debug.apk]
 #
 # LOG_MODEL_SEED repeats a model run that failed (each run draws a seed and prints it); LOG_MODEL_STEPS
 # sets its length (300).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APK="${1:-$ROOT/android/watch/build/outputs/apk/debug/watch-debug.apk}"
-PKG=org.visadahyu.datapavan.watch
+APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
+PKG=org.visadahyu.datapavan.advanced
+# Watch's screen in Datapavan Advanced (ADR 0045); debug builds export it for these checks.
+WATCH_SCREEN=org.visadahyu.datapavan.watch.MainActivity
 SHELL_UID=2000
 PIN=4826
 # shellcheck source=scripts/adb-ui.sh
@@ -53,7 +55,7 @@ fail() {
 
 # Watch's own account, with debug commands (WatchVpnService.debugLog).
 watch_dump() {
-    adb shell dumpsys activity service "$PKG/.WatchVpnService" "$@" | tr -d '\r' | sed 's/^ *//'
+    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" "$@" | tr -d '\r' | sed 's/^ *//'
 }
 
 log_line() {
@@ -82,7 +84,7 @@ lock_sentence() {
 }
 
 start_watch() {
-    adb shell am start -W -n "$PKG/.MainActivity" --ez start true >/dev/null
+    adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
     for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
     vpn_up || fail "Watch's tunnel did not come up"
 }
@@ -151,7 +153,7 @@ else
     case "$(adb shell getprop persist.sys.locale | tr -d '\r')$(adb shell getprop ro.product.locale | tr -d '\r')" in en*) english=1 ;; esac
 fi
 adb logcat -c
-adb shell am start -W -n "$PKG/.MainActivity" --ez start true >/dev/null
+adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
 vpn_up || fail "Watch's tunnel did not come up"
 echo "ok: the tunnel is up"
@@ -161,7 +163,7 @@ watch_dump log-wipe | grep -q '^log-wiped true$' || fail "the log could not be w
 log_line | grep -qE '^0 days ' || fail "a new install's log keeps records: $(log_line)"
 watch_dump log-retention 30 | grep -q '^log-retention 30 set$' || fail "retention could not be set to 30 days"
 # The screen reads the retention when it opens: it opens afresh, as after the user chose 30 days there.
-adb shell am start -W -n "$PKG/.MainActivity" -f 0x10008000 >/dev/null
+adb shell am start -W -n "$PKG/$WATCH_SCREEN" -f 0x10008000 >/dev/null
 echo "ok: a new install's log keeps nothing until the user chooses"
 
 request='GET /ping HTTP/1.0\r\n\r\n'
@@ -196,10 +198,10 @@ fi
 timeout 20 adb shell "sleep 8 | nc -w 10 $HOST $PORT" >/dev/null 2>&1 &
 talking=$!
 sleep 3
-adb shell am start -W -n "$PKG/.MainActivity" --ez stop true >/dev/null
+adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez stop true >/dev/null
 for _ in $(seq 1 20); do vpn_up || break; sleep 1; done
 wait "$talking" 2>/dev/null || true
-adb shell am start -W -n "$PKG/.MainActivity" --ez start true >/dev/null
+adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
 vpn_up || fail "Watch's tunnel did not come up again"
 watch_dump log-today | grep -qE "^log-record tcp $SHELL_UID $HOST:$PORT up=0 down=0 ended " ||

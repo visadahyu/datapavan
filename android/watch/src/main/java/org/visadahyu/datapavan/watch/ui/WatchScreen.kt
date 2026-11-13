@@ -81,7 +81,7 @@ internal fun WatchScreen(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.semantics { heading() },
             )
-            Text(stringResource(R.string.tagline), style = MaterialTheme.typography.bodyLarge)
+            Text(stringResource(R.string.watch_tagline), style = MaterialTheme.typography.bodyLarge)
             Text(
                 stringResource(if (running) R.string.status_on else R.string.status_off),
                 style = MaterialTheme.typography.titleMedium,

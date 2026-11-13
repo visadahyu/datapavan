@@ -261,11 +261,17 @@ internal fun AboutPage(engineVersion: String, insets: PaddingValues, onBack: () 
             Text(stringResource(R.string.about_title), style = MaterialTheme.typography.headlineSmall)
         }
         items(paragraphs) { Text(it, style = MaterialTheme.typography.bodyLarge) }
-        // The two editions (ADR 0031), in a few calm lines, with no prompt.
+        // The editions (ADR 0045), in a few calm lines, with no prompt.
         item {
             Text(stringResource(R.string.about_editions_title), style = MaterialTheme.typography.titleMedium)
             Text(
-                stringResource(if (BuildConfig.PLAY) R.string.about_editions_lite else R.string.about_editions_full),
+                stringResource(
+                    when {
+                        BuildConfig.PLAY -> R.string.about_editions_play
+                        BuildConfig.ADVANCED -> R.string.about_editions_advanced
+                        else -> R.string.about_editions_basic
+                    },
+                ),
                 style = MaterialTheme.typography.bodyLarge,
             )
         }

@@ -2,8 +2,4 @@
 <resources>
     <!-- The window's background before Compose draws, the same as the theme's (ui/Theme.kt). -->
     <color name="window_background">#FBF7F0</color>
-    <!-- Brand palette (brand/README.md). Lapis: lapis lazuli. Clay: the Persepolis tablets. -->
-    <color name="brand_lapis">#1F4E8C</color>
-    <color name="brand_clay">#F3EBDC</color>
-    <color name="ic_launcher_background">@color/brand_lapis</color>
 </resources>

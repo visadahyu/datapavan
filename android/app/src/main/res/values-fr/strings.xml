@@ -538,10 +538,11 @@
     <string name="about_updates">Datapavan ne peut pas vérifier lui-même s\'il existe une version plus récente, car il n\'a pas accès à Internet. La dernière version et ce qui a changé se trouvent sur son site web. Si le site ne s\'ouvre pas, les mêmes fichiers sont sur GitHub.</string>
     <string name="about_copy_hint">Pour ouvrir une adresse dans un autre navigateur, comme Tor Browser, copiez-la en appuyant dessus de manière prolongée.</string>
     <string name="about_open_website">Ouvrir le site web</string>
-    <!-- The two editions (ADR 0031). Datapavan Lite is on Google Play, which updates it. -->
+    <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->
     <string name="about_editions_title">Éditions</string>
-    <string name="about_editions_full">Il s\'agit de Datapavan, signé par son développeur avec une seule clé conservée hors ligne. Datapavan Lite, sur Google Play, fait les mêmes vérifications, et c\'est Google qui le signe.</string>
-    <string name="about_editions_lite">Il s\'agit de Datapavan Lite, qui vient de Google Play et que Google Play tient à jour. C\'est Google qui le signe. Datapavan lui-même, qui fait les mêmes vérifications et est signé par son développeur avec une seule clé conservée hors ligne, se trouve sur son site web.</string>
+    <string name="about_editions_basic">Il s\'agit de Datapavan Basic, signé par son développeur avec une seule clé conservée hors ligne. Il n\'a jamais accès à Internet. Sur Google Play, Datapavan Basic fait les mêmes vérifications, et c\'est Google qui le signe. Datapavan Advanced ajoute Watch, qui montre où se connecte chaque appli.</string>
+    <string name="about_editions_play">Il s\'agit de Datapavan Basic, qui vient de Google Play et que Google Play tient à jour. C\'est Google qui le signe. Il n\'a jamais accès à Internet. Sur le site web se trouvent Datapavan Basic signé par son développeur avec une seule clé conservée hors ligne, et Datapavan Advanced, qui ajoute Watch.</string>
+    <string name="about_editions_advanced">Il s\'agit de Datapavan Advanced, signé par son développeur avec une seule clé conservée hors ligne. Il n\'utilise Internet que pour le trafic de vos propres applis et pour les serveurs que vous choisissez. Datapavan Basic fait les mêmes vérifications sans Watch et n\'a jamais accès à Internet : il peut donc vérifier cette appli de l\'extérieur.</string>
     <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
     <string name="version_old">Cette version de Datapavan date du %1$s. Une version plus récente est peut-être sortie, et Datapavan ne peut pas le vérifier pour vous.</string>
     <string name="version_old_button">Où l\'obtenir</string>
@@ -610,4 +611,7 @@
     <string name="screenshots_allow">Autoriser les captures d\'écran pendant une minute</string>
     <string name="screenshots_allowed">Les captures d\'écran sont autorisées. Elles seront de nouveau bloquées après une minute, ou dès que vous quitterez l\'appli.</string>
     <string name="screenshots_block">Bloquer les captures d\'écran maintenant</string>
+    <!-- Datapavan Advanced only: the way from the network page to Watch (ui/WatchEntry.kt, ADR 0045). -->
+    <string name="watch_entry_body">Voyez où se connecte chaque appli de votre téléphone, en temps réel. Watch fonctionne en tant que VPN sur ce téléphone. Il n\'utilise Internet que pour acheminer le trafic de chaque appli, et n\'envoie rien à Datapavan.</string>
+    <string name="watch_entry_open">Ouvrir Watch</string>
 </resources>

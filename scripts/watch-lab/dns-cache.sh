@@ -15,13 +15,15 @@ set -euo pipefail
 : "${ANDROID_SERIAL:?set ANDROID_SERIAL to the emulator, never a phone}"
 case "$ANDROID_SERIAL" in emulator-*) ;; *) echo "only on an emulator" >&2; exit 2 ;; esac
 export ANDROID_SERIAL
-PKG=org.visadahyu.datapavan.watch
+PKG=org.visadahyu.datapavan.advanced
+# Watch's screen in Datapavan Advanced (ADR 0045); debug builds export it for these checks.
+WATCH_SCREEN=org.visadahyu.datapavan.watch.MainActivity
 SHELL_UID=2000
 
 cleanup() { adb shell am force-stop "$PKG" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
-dump() { adb shell dumpsys activity service "$PKG/.WatchVpnService" "$@" | tr -d '\r'; }
+dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" "$@" | tr -d '\r'; }
 # The lookups of one UID that reached Watch: its UDP flows to either of the tunnel's DNS addresses,
 # IPv4 or IPv6. The list is read whole, then counted.
 lookups() {
@@ -43,7 +45,7 @@ RESOLV=$(adb shell pm list packages --apex-only --show-versioncode 2>/dev/null |
 adb shell appops set "$PKG" ACTIVATE_VPN allow
 adb shell am force-stop "$PKG"
 # A new tunnel is a new network, with a cache of its own: names looked up before do not count.
-adb shell am start -W -n "$PKG/.MainActivity" --ez start true >/dev/null
+adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do
     vpns=$(adb shell dumpsys connectivity | tr -d '\r')
     grep -qE "OwnerUid: $WATCH_UID " <<<"$vpns" && break

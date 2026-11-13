@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# Checks that a commit builds into the same release APKs twice (docs/RELEASE.md, ADR 0024 point 6):
-# the audit app's and Watch's (ADR 0029). It clones the commit into two fresh directories with different
-# paths and builds the unsigned release APKs in each with no build cache, both apps in one Gradle run in
-# the first and each app in a run of its own in the second, as F-Droid builds each app on its own. It
-# fails unless each app's two files are identical. On a difference it lists the entries that differ;
+# Checks that a commit builds into the same release APKs twice (docs/RELEASE.md, ADR 0024 point 6): those
+# of Datapavan Basic and Datapavan Advanced (ADR 0045). It clones the commit into two fresh directories
+# with different paths and builds the unsigned release APKs in each with no build cache, each edition in
+# a Gradle run of its own, as F-Droid builds each on its own: Basic first in the first directory, and
+# Advanced first in the second, so that nothing one edition leaves behind can change the other. It fails
+# unless each edition's two files are identical. On a difference it lists the entries that differ;
 # diffoscope, where installed, shows how. F-Droid compares in the same way, so a difference here would
 # keep it from publishing the project's signed APKs.
 #
 # Needs what the normal build needs (ANDROID_HOME, the NDK, the pinned Rust toolchain). Builds each
-# app twice.
+# edition twice.
 #
-#   scripts/reproducible.sh [commit, default HEAD] [file to keep the audit app's APK in] [file to keep Watch's APK in]
+#   scripts/reproducible.sh [commit, default HEAD] [file to keep Basic's APK in] [file to keep Advanced's APK in]
 #
 # The files are kept only if every pair of builds agrees.
 set -euo pipefail
@@ -20,27 +21,25 @@ COMMIT="$(git -C "$ROOT" rev-parse "${1:-HEAD}")"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# Builds the release APKs into $WORK/<name>-app.apk and $WORK/<name>-watch.apk; "together" builds both
-# apps in one Gradle run, "apart" each in a run of its own.
+# Builds the release APKs into $WORK/<name>-basic.apk and $WORK/<name>-advanced.apk, in the order given
+# after the name.
 build() {
-    local name=$1 how=$2
+    local name=$1
+    shift
     local dir="$WORK/$name/datapavan"
     git clone -q --no-local "$ROOT" "$dir"
     git -C "$dir" checkout -q "$COMMIT"
     # Where the SDK is, if this checkout says so rather than ANDROID_HOME.
     [ ! -f "$ROOT/android/local.properties" ] || cp "$ROOT/android/local.properties" "$dir/android/"
     local gradle=(./gradlew -q --no-daemon --no-build-cache --no-configuration-cache)
-    if [ "$how" = together ]; then
-        (cd "$dir/android" && "${gradle[@]}" :app:assembleRelease :watch:assembleRelease)
-    else
-        (cd "$dir/android" && "${gradle[@]}" :app:assembleRelease)
-        (cd "$dir/android" && "${gradle[@]}" :watch:assembleRelease)
-    fi
-    cp "$dir/android/app/build/outputs/apk/release/app-release-unsigned.apk" "$WORK/$name-app.apk"
-    cp "$dir/android/watch/build/outputs/apk/release/watch-release-unsigned.apk" "$WORK/$name-watch.apk"
+    for edition in "$@"; do
+        (cd "$dir/android" && "${gradle[@]}" -Pdatapavan.edition="$edition" :app:assembleRelease)
+    done
+    cp "$dir/android/app/build/outputs/apk/release/app-release-unsigned.apk" "$WORK/$name-basic.apk"
+    cp "$dir/android/app/build-advanced/outputs/apk/release/app-release-unsigned.apk" "$WORK/$name-advanced.apk"
 }
 
-# Compares the two builds of one app ($1: app or watch); shows how they differ when they do.
+# Compares the two builds of one edition ($1: basic or advanced); shows how they differ when they do.
 compare() {
     local first="$WORK/first-$1.apk" second="$WORK/second-with-a-longer-path-$1.apk"
     local a b
@@ -63,12 +62,12 @@ compare() {
 }
 
 echo "== Building $COMMIT twice"
-build first together
-build second-with-a-longer-path apart
+build first basic advanced
+build second-with-a-longer-path advanced basic
 
 ok=0
-compare app || ok=1
-compare watch || ok=1
+compare basic || ok=1
+compare advanced || ok=1
 [ "$ok" = 0 ] || exit 1
-[ -z "${2:-}" ] || cp "$WORK/first-app.apk" "$2"
-[ -z "${3:-}" ] || cp "$WORK/first-watch.apk" "$3"
+[ -z "${2:-}" ] || cp "$WORK/first-basic.apk" "$2"
+[ -z "${3:-}" ] || cp "$WORK/first-advanced.apk" "$3"

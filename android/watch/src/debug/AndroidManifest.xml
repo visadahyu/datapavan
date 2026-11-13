@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        Debug builds only: the emulator checks (scripts/verify-watch.sh and the others) start Watch's
+        tunnel through its screen with adb, which can open only an exported activity. The screen honours
+        their extras only in a debuggable build (MainActivity.kt). Release builds keep it unexported, and
+        app/build.gradle.kts checks that.
+    -->
+    <application>
+        <activity
+            android:name="org.visadahyu.datapavan.watch.MainActivity"
+            android:exported="true"
+            tools:replace="android:exported" />
+    </application>
+</manifest>

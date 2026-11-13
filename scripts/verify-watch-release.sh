@@ -10,12 +10,12 @@
 # The release APK is signed here with a key made for this run and thrown away, never the project's.
 # Emulator only: it uninstalls Watch, with its log, before and after.
 #
-#   scripts/verify-watch-release.sh [path/to/watch-release-unsigned.apk]
+#   scripts/verify-watch-release.sh [path/to/Datapavan-Advanced-release-unsigned.apk]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-UNSIGNED="${1:-$ROOT/android/watch/build/outputs/apk/release/watch-release-unsigned.apk}"
-PKG=org.visadahyu.datapavan.watch
+UNSIGNED="${1:-$ROOT/android/app/build-advanced/outputs/apk/release/app-release-unsigned.apk}"
+PKG=org.visadahyu.datapavan.advanced
 HOST=10.0.2.2
 PORT=${WATCH_TEST_PORT:-8790}
 # Watch's memory budget, PSS in MB: about twice what it used on the Android 15 emulator on 2026-11-10
@@ -58,7 +58,7 @@ fail() {
     echo "How Watch's process last ended:" >&2
     adb shell dumpsys activity exit-info "$PKG" 2>/dev/null | tr -d '\r' | grep -E 'timestamp=|reason=' | head -6 >&2 || true
     echo "Watch's own account:" >&2
-    adb shell dumpsys activity service "$PKG/.WatchVpnService" 2>/dev/null | tr -d '\r' | sed -n 's/^ *//p' | tail -10 >&2 || true
+    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" 2>/dev/null | tr -d '\r' | sed -n 's/^ *//p' | tail -10 >&2 || true
     exit 1
 }
 
@@ -72,19 +72,19 @@ vpn_up() {
 
 # Watch's counters (Counters::snapshot in core/net/src/engine.rs), and its log's status line.
 counters() {
-    adb shell dumpsys activity service "$PKG/.WatchVpnService" | tr -d '\r' | sed -n 's/^ *counters //p'
+    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" | tr -d '\r' | sed -n 's/^ *counters //p'
 }
 log_line() {
-    adb shell dumpsys activity service "$PKG/.WatchVpnService" | tr -d '\r' | sed -n 's/^ *log retention //p'
+    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" | tr -d '\r' | sed -n 's/^ *log retention //p'
 }
 
 # Watch's memory, PSS in KB.
 pss() {
-    adb shell dumpsys meminfo "$PKG" | tr -d '\r' | sed -n 's/^ *TOTAL PSS: *\([0-9]*\).*/\1/p' | head -1
+    adb shell dumpsys meminfo "$PKG:watch" | tr -d '\r' | sed -n 's/^ *TOTAL PSS: *\([0-9]*\).*/\1/p' | head -1
 }
 
 echo "== Watch's release build, on $(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
-[ -f "$UNSIGNED" ] || fail "no release APK at $UNSIGNED (./gradlew :watch:assembleRelease)"
+[ -f "$UNSIGNED" ] || fail "no release APK at $UNSIGNED (./gradlew -Pdatapavan.edition=advanced :app:assembleRelease)"
 tools=$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1)
 keytool -genkeypair -keystore "$WORK/throwaway.jks" -storepass throwaway -keypass throwaway -alias throwaway \
     -keyalg RSA -keysize 2048 -validity 1 -dname "CN=Watch release check" >/dev/null 2>&1
@@ -97,14 +97,15 @@ adb uninstall "$PKG" >/dev/null 2>&1 || true
 adb install "$WORK/watch-release.apk" >/dev/null
 adb shell appops set "$PKG" ACTIVATE_VPN allow
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
-# The button is found by its English text: Android 13 and later set Watch's language alone.
-adb shell cmd locale set-app-locales "$PKG" --locales en-US >/dev/null 2>&1 || true
-adb shell input keyevent KEYCODE_WAKEUP
-adb shell wm dismiss-keyguard
+# In a release build Watch's screen is not exported (ADR 0045): it is reached as users reach it, from
+# the audit's network page. start_audit sets the app's language to English, so that buttons are found by
+# their English text.
 # On CI the tap once did not start the tunnel, with no crash and the service never started (2026-11-11):
 # a second tap, if the first did nothing.
 for attempt in 1 2; do
-    adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+    start_audit "$PKG" || fail "the audit of the release build did not show its summary"
+    open_tab network || fail "no network page in the release build's audit"
+    tap_id open-watch || fail "no way to Watch on the release build's network page"
     sleep 2
     if ! tap_text "Turn on"; then
         [ "$attempt" = 2 ] || fail "no \"Turn on\" button on Watch's screen"

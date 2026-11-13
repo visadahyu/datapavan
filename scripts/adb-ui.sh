@@ -197,15 +197,16 @@ open_sections() {
     scroll_to_top
 }
 
-# Wakes the screen, starts Datapavan in English and waits for the summary's navigation bar.
+# Wakes the screen, starts Datapavan in English and waits for the summary's navigation bar: Basic, or the
+# edition whose package is $1. The audit's screen keeps its class name in every edition (ADR 0045).
 start_audit() {
-    local pkg=org.visadahyu.datapavan
+    local pkg=${1:-org.visadahyu.datapavan}
     adb shell input keyevent KEYCODE_WAKEUP
     adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
     # App-specific locales exist from Android 13; older emulators default to English anyway.
     adb shell cmd locale set-app-locales "$pkg" --locales en >/dev/null 2>&1 || true
     adb shell am force-stop "$pkg"
-    adb shell am start -n "$pkg/.MainActivity" >/dev/null
+    adb shell am start -n "$pkg/org.visadahyu.datapavan.MainActivity" >/dev/null
     for _ in $(seq 1 60); do
         has_id nav-summary && return 0
         sleep 1

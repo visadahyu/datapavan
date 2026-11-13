@@ -9,12 +9,14 @@
 # On an emulator the VPN consent is given through appops. On a phone, the person holding it taps
 # Android's consent dialog the first time; the script waits three minutes for that.
 #
-#   scripts/smoke-watch.sh [path/to/watch-debug.apk]
+#   scripts/smoke-watch.sh [path/to/Datapavan-Advanced-debug.apk]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APK="${1:-$ROOT/android/watch/build/outputs/apk/debug/watch-debug.apk}"
-PKG=org.visadahyu.datapavan.watch
+APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
+PKG=org.visadahyu.datapavan.advanced
+# Watch's screen in Datapavan Advanced (ADR 0045); debug builds export it for these checks.
+WATCH_SCREEN=org.visadahyu.datapavan.watch.MainActivity
 RES="$ROOT/android/watch/src/main/res"
 # shellcheck source=scripts/adb-ui.sh
 . "$ROOT/scripts/adb-ui.sh"
@@ -40,7 +42,7 @@ string() {
 open_in() {
     adb shell am force-stop "$PKG"
     adb shell cmd locale set-app-locales "$PKG" --locales "$1" >/dev/null
-    adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+    adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
 }
 
 # Waits up to $2 seconds for text starting with $1.
@@ -87,7 +89,7 @@ if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 33 ]; then
         open_in "$tag"
         wait_for "$tagline" 15 || fail "Watch in $tag does not show its tagline"
         # Right to left: the heading ends at the right edge, not the left.
-        set -- $(text_bounds "Datapavan Watch")
+        set -- $(text_bounds "Datapavan Advanced")
         case $tag in
             ar | fa) [ "$3" -gt $((width * 3 / 4)) ] || fail "Watch in $tag is not laid out right to left" ;;
             *) [ "$1" -lt $((width / 4)) ] || fail "Watch in $tag is not laid out left to right" ;;
@@ -99,15 +101,15 @@ if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 33 ]; then
     wait_for "\\[Šéé" 15 || fail "Watch in en-XA does not show the pseudo-locale's text"
     echo "ok: en-XA"
     open_in ar-XB
-    wait_for "Datapavan Watch" 15 || fail "Watch in ar-XB does not open"
-    set -- $(text_bounds "Datapavan Watch")
+    wait_for "Datapavan Advanced" 15 || fail "Watch in ar-XB does not open"
+    set -- $(text_bounds "Datapavan Advanced")
     [ "$3" -gt $((width * 3 / 4)) ] || fail "Watch in ar-XB is not laid out right to left"
     echo "ok: ar-XB"
     adb shell cmd locale set-app-locales "$PKG" --locales "" >/dev/null
     open_in ""
 else
     echo "skipped: per-app languages need Android 13"
-    adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+    adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
 fi
 
 # The tunnel, in English from here on.
@@ -157,12 +159,12 @@ sleep 1
 screen_has "$(string values screenshots_block)" || fail "Watch does not offer to block screenshots again"
 adb shell input keyevent KEYCODE_HOME
 for _ in 1 2 3 4 5; do window_secure "$PKG" && break; sleep 1; done
-adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
 sleep 1
 window_secure "$PKG" || fail "Watch's window was not protected again after it left the screen"
 echo "ok: the screen is protected, screenshots can be allowed, and leaving the screen protects it again"
 
-adb shell pidof "$PKG" >/dev/null || fail "Watch is no longer running"
+adb shell pidof "$PKG:watch" >/dev/null || fail "Watch is no longer running"
 if adb logcat -d -b crash 2>/dev/null | grep -q "$PKG"; then
     fail "Watch crashed"
 fi

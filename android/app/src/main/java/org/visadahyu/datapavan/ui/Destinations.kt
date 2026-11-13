@@ -136,7 +136,11 @@ internal fun Destinations(
                 item { Note(stringResource(R.string.other_profiles)) }
             }
             Destination.PHONE -> phone(audit)
-            Destination.NETWORK -> item { network() }
+            Destination.NETWORK -> {
+                // Advanced: Watch, which shows where each app connects, above Android's counts.
+                if (BuildConfig.ADVANCED) item { WatchEntry() }
+                item { network() }
+            }
         }
     }
 }

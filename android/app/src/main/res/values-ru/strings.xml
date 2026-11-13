@@ -531,10 +531,11 @@
     <string name="about_updates">Datapavan не может сам проверить, есть ли более новая версия, потому что у него нет доступа к интернету. Последняя версия и список изменений есть на его сайте. Если сайт не открывается, те же файлы есть на GitHub.</string>
     <string name="about_copy_hint">Чтобы открыть адрес в другом браузере, например в Tor Browser, скопируйте его: нажмите на него и удерживайте.</string>
     <string name="about_open_website">Открыть сайт</string>
-    <!-- The two editions (ADR 0031). Datapavan Lite is on Google Play, which updates it. -->
+    <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->
     <string name="about_editions_title">Редакции</string>
-    <string name="about_editions_full">Это Datapavan, подписанный разработчиком одним ключом, который хранится офлайн. Datapavan Lite в Google Play выполняет те же проверки, и его подписывает Google.</string>
-    <string name="about_editions_lite">Это Datapavan Lite из Google Play, и Google Play его обновляет. Его подписывает Google. Сам Datapavan выполняет те же проверки и подписан разработчиком одним ключом, который хранится офлайн. Datapavan доступен на своём сайте.</string>
+    <string name="about_editions_basic">Это Datapavan Basic, подписанный разработчиком одним ключом, который хранится офлайн. У него никогда не бывает доступа к интернету. В Google Play Datapavan Basic выполняет те же проверки, и его подписывает Google. Datapavan Advanced добавляет Watch, который показывает, куда подключается каждое приложение.</string>
+    <string name="about_editions_play">Это Datapavan Basic из Google Play, и Google Play его обновляет. Его подписывает Google. У него никогда не бывает доступа к интернету. Datapavan Basic, подписанный разработчиком одним ключом, который хранится офлайн, и Datapavan Advanced, который добавляет Watch, доступны на сайте.</string>
+    <string name="about_editions_advanced">Это Datapavan Advanced, подписанный разработчиком одним ключом, который хранится офлайн. Он использует интернет только для трафика ваших собственных приложений и для связи с выбранными вами серверами. Datapavan Basic выполняет те же проверки без Watch, и у него никогда не бывает доступа к интернету, поэтому он может проверить это приложение извне.</string>
     <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
     <string name="version_old">Эта версия Datapavan от %1$s, и, возможно, уже вышла более новая. Datapavan не может проверить это за вас.</string>
     <string name="version_old_button">Где её получить</string>
@@ -606,4 +607,7 @@
     <string name="screenshots_allow">Разрешить скриншоты на одну минуту</string>
     <string name="screenshots_allowed">Скриншоты сейчас разрешены. Они снова будут запрещены через минуту или как только вы выйдете из приложения.</string>
     <string name="screenshots_block">Запретить скриншоты сейчас</string>
+    <!-- Datapavan Advanced only: the way from the network page to Watch (ui/WatchEntry.kt, ADR 0045). -->
+    <string name="watch_entry_body">Смотрите в реальном времени, куда подключается каждое приложение на вашем телефоне. Watch работает на этом телефоне как VPN. Он использует интернет только для того, чтобы передавать дальше трафик каждого приложения, и ничего не отправляет в Datapavan.</string>
+    <string name="watch_entry_open">Открыть Watch</string>
 </resources>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="tagline">Sehen Sie, wohin jede App auf Ihrem Telefon eine Verbindung aufbaut.</string>
+    <string name="watch_tagline">Sehen Sie, wohin jede App auf Ihrem Telefon eine Verbindung aufbaut.</string>
     <string name="status_on">Watch ist an.</string>
     <string name="status_off">Watch ist aus.</string>
     <string name="turn_on">Einschalten</string>

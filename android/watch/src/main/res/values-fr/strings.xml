@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="tagline">Voyez où se connecte chaque appli de votre téléphone.</string>
+    <string name="watch_tagline">Voyez où se connecte chaque appli de votre téléphone.</string>
     <string name="status_on">Watch est activé.</string>
     <string name="status_off">Watch est désactivé.</string>
     <string name="turn_on">Activer</string>

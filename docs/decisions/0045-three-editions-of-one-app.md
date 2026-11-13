@@ -105,3 +105,38 @@ Watch and the audit app, and the gap between Lite and Watch.
   - ADR 0033's organisational edition is named Enterprise. Its path stays open until stage 2's review.
 - **The loss:** someone with Advanced alone gets verdicts from the app that parses network input and holds ADB
   rights. The isolated parsers narrow that, and the advice in decision 2 says it plainly.
+
+## How decisions 9 and 10 are built (2026-11-13)
+
+- **One module, three editions.** `:app` takes `-Pdatapavan.edition`: `basic` (the default), `lite` (Basic for
+  Google Play) or `advanced`. Basic's tasks and output paths stay as they were, so its F-Droid recipe and
+  `scripts/reproducible.sh` build it unchanged. Advanced builds in `android/app/build-advanced`, so that switching
+  editions rebuilds nothing of the other's.
+- **Watch is a library.** `:watch` is an Android library that only Advanced depends on. Its manifest sets no icon,
+  label, theme or backup rules of its own: the application's apply. Its screen is not exported; debug builds export
+  it for the emulator checks (`watch/src/debug`). The audit opens it from its network page, by class name, only in
+  Advanced (`ui/WatchEntry.kt`). Watch's shield icon is Advanced's until study B's outline is drawn.
+- **Watch runs in a process of its own,** `:watch`: its screen, its tunnel and its log's expiry. The part that
+  faces the network shares no memory with the audit, a crash of either leaves the other running, and Watch keeps
+  its own memory budget of 48 MB. The first release check of Advanced, with both in one process, measured 54 MB,
+  most of it the audit's. Both still share one UID and so one sandbox; the isolated parsers below are the step
+  that separates more.
+- **The shared rules are a library too.** `android/shared` (the signing-key rules and the screen protection) is the
+  `:shared` module; adding its sources to each module would have compiled them twice in Advanced.
+- **The build checks the package, not the module** (`app/build.gradle.kts`):
+  - each edition's merged manifest against its own allowlist: permissions with their `maxSdkVersion`, permission
+    definitions, `<queries>`, exported components and their guards, and no `android:sharedUserId`;
+  - the permissions an edition never requests, by name: INTERNET in Basic; the camera, microphone, location,
+    contacts, messages and call log in Advanced. A wider allowlist cannot quietly break the sentence of decision 4;
+  - each APK's native libraries: Basic holds `libdatapavan.so` and never `libdatapavan_watch.so`; Advanced holds
+    both and keeps the methods Watch's library calls back by name;
+  - in the Rust gates (`scripts/check.sh`), that Basic's native library depends on no network crate;
+  - in the release rehearsal (`scripts/release-rehearsal.sh`), Basic's signed APK against a list of its own, kept
+    apart from the build's, so that a change to one is caught by the other.
+
+  Each check was made to fail once, by adding INTERNET to Basic, the camera to Advanced, and Watch's library to
+  what Basic must not carry.
+- **Words.** The About page says which edition this is and what the others are. The Persian and Arabic texts no
+  longer call Watch an app («سرویس Watch», «خدمة Watch»). Both were translated and reviewed as ADR 0030 sets out.
+- **Still to build:** the audit's parsers in an `isolatedProcess` service, study B's icon, the data tables' rows
+  for Advanced, and Advanced's release rehearsal.

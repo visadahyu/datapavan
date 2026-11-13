@@ -557,10 +557,11 @@
     <string name="about_updates">لا يستطيع Datapavan التحقق بنفسه من وجود إصدار أحدث، لأنه لا يملك وصولًا إلى الإنترنت. يوجد أحدث إصدار وما تغيّر فيه على موقعه الإلكتروني. وإذا لم يُفتح الموقع، فالملفات نفسها موجودة على GitHub.</string>
     <string name="about_copy_hint">لفتح عنوان في متصفّح آخر، مثل Tor Browser، انقر مع الاستمرار عليه لنسخه.</string>
     <string name="about_open_website">فتح الموقع الإلكتروني</string>
-    <!-- The two editions (ADR 0031). Datapavan Lite is on Google Play, which updates it. -->
+    <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->
     <string name="about_editions_title">الطبعات</string>
-    <string name="about_editions_full">هذا هو Datapavan، ويوقّعه مطوّره بمفتاح واحد يُحفَظ دون اتصال بالإنترنت. أما Datapavan Lite، الموجود على Google Play، فيُجري الفحوصات نفسها، وهو موقَّع من Google.</string>
-    <string name="about_editions_lite">هذا هو Datapavan Lite، من Google Play الذي يُبقيه محدَّثًا. وهو موقَّع من Google. أما Datapavan نفسه، الذي يُجري الفحوصات نفسها ويوقّعه مطوّره بمفتاح واحد يُحفَظ دون اتصال بالإنترنت، فموجود على موقعه الإلكتروني.</string>
+    <string name="about_editions_basic">هذا هو Datapavan Basic، ويوقّعه مطوّره بمفتاح واحد يُحفَظ دون اتصال بالإنترنت. وهو لا يملك وصولًا إلى الإنترنت أبدًا. ويُجري Datapavan Basic الموجود على Google Play الفحوصات نفسها، وهو موقَّع من Google. أما Datapavan Advanced فيضيف Watch، الذي يُظهر إلى أين يتصل كل تطبيق.</string>
+    <string name="about_editions_play">هذا هو Datapavan Basic، من Google Play الذي يُبقيه محدَّثًا. وهو موقَّع من Google. ولا يملك وصولًا إلى الإنترنت أبدًا. أما Datapavan Basic الذي يوقّعه مطوّره بمفتاح واحد يُحفَظ دون اتصال بالإنترنت، وكذلك Datapavan Advanced الذي يضيف Watch، فموجودان على الموقع الإلكتروني.</string>
+    <string name="about_editions_advanced">هذا هو Datapavan Advanced، ويوقّعه مطوّره بمفتاح واحد يُحفَظ دون اتصال بالإنترنت. ولا يستخدم الإنترنت إلا لحركة بيانات تطبيقاتك الخاصة وللخوادم التي تختارها. أما Datapavan Basic فيُجري الفحوصات نفسها دون Watch، ولا يملك وصولًا إلى الإنترنت أبدًا، لذا يمكنه فحص هذا التطبيق من الخارج.</string>
     <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
     <string name="version_old">يعود هذا الإصدار من Datapavan إلى %1$s. ربما صدر إصدار أحدث، ولا يستطيع Datapavan التحقق من ذلك نيابةً عنك.</string>
     <string name="version_old_button">من أين تحصل عليه</string>
@@ -638,4 +639,7 @@
     <string name="screenshots_allow">السماح بلقطات الشاشة لمدة دقيقة</string>
     <string name="screenshots_allowed">لقطات الشاشة مسموح بها الآن. ستُمنع مجددًا بعد دقيقة، أو بمجرد أن تغادر التطبيق.</string>
     <string name="screenshots_block">منع لقطات الشاشة الآن</string>
+    <!-- Datapavan Advanced only: the way from the network page to Watch (ui/WatchEntry.kt, ADR 0045). -->
+    <string name="watch_entry_body">اعرف إلى أين يتصل كل تطبيق على هاتفك، لحظة بلحظة. يعمل Watch كشبكة VPN على هذا الهاتف. ولا يستخدم الإنترنت إلا لتمرير حركة بيانات كل تطبيق إلى وجهتها، ولا يرسل أي شيء إلى Datapavan.</string>
+    <string name="watch_entry_open">فتح Watch</string>
 </resources>

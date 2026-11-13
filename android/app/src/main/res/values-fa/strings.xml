@@ -532,10 +532,11 @@
     <string name="about_updates">این برنامه خودش نمی‌تواند بررسی کند که نسخه تازه‌تری آمده است یا نه، چون به اینترنت دسترسی ندارد. تازه‌ترین نسخه و تغییراتش در وب‌سایت برنامه است. اگر وب‌سایت باز نشد، همین فایل‌ها در GitHub هم هست.</string>
     <string name="about_copy_hint">برای باز کردن یک نشانی در مرورگری دیگر، مثل Tor Browser، آن را لمس کنید و نگه دارید تا کپی شود.</string>
     <string name="about_open_website">باز کردن وب‌سایت</string>
-    <!-- The two editions (ADR 0031). Datapavan Lite is on Google Play, which updates it. -->
+    <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->
     <string name="about_editions_title">ویرایش‌ها</string>
-    <string name="about_editions_full">این Datapavan است. توسعه‌دهنده‌اش آن را با یک کلید امضا می‌کند که دور از اینترنت نگه داشته می‌شود. Datapavan Lite، که در گوگل پلی است، همین بررسی‌ها را انجام می‌دهد و گوگل آن را امضا می‌کند.</string>
-    <string name="about_editions_lite">این Datapavan Lite است که از گوگل پلی آمده و گوگل پلی آن را به‌روز نگه می‌دارد. گوگل آن را امضا می‌کند. خود Datapavan، با همین بررسی‌ها، در وب‌سایتش است و توسعه‌دهنده‌اش آن را با یک کلید امضا می‌کند که دور از اینترنت نگه داشته می‌شود.</string>
+    <string name="about_editions_basic">این Datapavan Basic است. توسعه‌دهنده‌اش آن را با یک کلید واحد امضا می‌کند که دور از اینترنت نگه داشته می‌شود. این برنامه هرگز به اینترنت دسترسی ندارد. Datapavan Basic در گوگل پلی هم همین بررسی‌ها را انجام می‌دهد و گوگل آن را امضا می‌کند. Datapavan Advanced قابلیت Watch را هم دارد که نشان می‌دهد هر برنامه به کجا وصل می‌شود.</string>
+    <string name="about_editions_play">این Datapavan Basic است که از گوگل پلی آمده و گوگل پلی آن را به‌روز نگه می‌دارد. گوگل آن را امضا می‌کند. این برنامه هرگز به اینترنت دسترسی ندارد. نسخه‌ای از Datapavan Basic که توسعه‌دهنده‌اش آن را با یک کلید واحد امضا می‌کند که دور از اینترنت نگه داشته می‌شود، و Datapavan Advanced که قابلیت Watch را هم دارد، در وب‌سایت هستند.</string>
+    <string name="about_editions_advanced">این Datapavan Advanced است. توسعه‌دهنده‌اش آن را با یک کلید واحد امضا می‌کند که دور از اینترنت نگه داشته می‌شود. این برنامه از اینترنت فقط برای ترافیک برنامه‌های خودتان و سرورهایی که انتخاب می‌کنید استفاده می‌کند. Datapavan Basic همین بررسی‌ها را بدون Watch انجام می‌دهد و هرگز به اینترنت دسترسی ندارد، پس می‌تواند این برنامه را از بیرون بررسی کند.</string>
     <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
     <string name="version_old">این نسخه از Datapavan مربوط به %1$s است. شاید نسخه تازه‌تری آمده باشد و Datapavan نمی‌تواند به جای شما بررسی کند.</string>
     <string name="version_old_button">محل دریافت</string>
@@ -601,4 +602,7 @@
     <string name="screenshots_allow">مجاز کردن نماگرفت برای یک دقیقه</string>
     <string name="screenshots_allowed">نماگرفت اکنون مجاز است. پس از یک دقیقه، یا به محض اینکه از برنامه خارج شوید، دوباره مسدود می‌شود.</string>
     <string name="screenshots_block">مسدود کردن نماگرفت همین حالا</string>
+    <!-- Datapavan Advanced only: the way from the network page to Watch (ui/WatchEntry.kt, ADR 0045). -->
+    <string name="watch_entry_body">ببینید هر برنامه روی گوشی شما لحظه‌به‌لحظه به کجا وصل می‌شود. روی این گوشی، Watch به‌عنوان یک وی‌پی‌ان کار می‌کند. از اینترنت فقط برای رساندن ترافیک هر برنامه به مقصدش استفاده می‌کند و هیچ چیزی به Datapavan نمی‌فرستد.</string>
+    <string name="watch_entry_open">باز کردن Watch</string>
 </resources>

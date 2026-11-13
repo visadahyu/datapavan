@@ -79,6 +79,14 @@ rust_gates() {
     # The fuzz crate has a lockfile of its own, which a new dependency of the engine must reach too
     # (CI's fuzz run, 2026-11-12: nix came in and only the workspace's lockfile had it).
     (cd "$ROOT/core/fuzz" && cargo metadata --locked --format-version 1 >/dev/null)
+    # Basic's native code (core/jni) holds no network crate (ADR 0045, decision 9): Android keeps an app
+    # without INTERNET off the network, and this keeps the code from even trying. Read whole: under
+    # pipefail, a grep that stops reading early fails the pipe.
+    echo "== Rust: Basic's native library holds no network crate"
+    local crates network
+    crates=$(cargo tree --locked -p datapavan-jni -e normal --prefix none --target all | sed 's/ .*//' | sort -u)
+    network=$(grep -xE 'datapavan-net|socket2|mio|tokio|nix|hyper|h2|reqwest|ureq|rustls|native-tls|openssl|quinn|smoltcp' <<<"$crates" || true)
+    [ -z "$network" ] || { echo "Basic's native library depends on network crates: $network" >&2; exit 1; }
     netlab_gate
     # Needs network access to fetch the RustSec advisory database.
     cargo deny --locked check
@@ -91,12 +99,18 @@ android_gates() {
     echo "== Android: Watch's colours are the audit app's (watch/.../ui/Theme.kt)"
     diff <(grep -o 'Color(0x[0-9A-F]*)' "$ROOT/android/app/src/main/java/org/visadahyu/datapavan/ui/Theme.kt") \
         <(grep -o 'Color(0x[0-9A-F]*)' "$ROOT/android/watch/src/main/java/org/visadahyu/datapavan/watch/ui/Theme.kt")
-    echo "== Android: lint, unit tests, APK and bundle builds of both apps, permission guards, native-library check"
+    echo "== Android: lint, unit tests, APK and bundle builds of Basic, its allowlist, native-library check"
     cd "$ROOT/android"
     ./gradlew --no-daemon --stacktrace \
         lintDebug lintRelease testDebugUnitTest \
         assembleDebug assembleRelease bundleRelease \
         verifyApkDebug verifyApkRelease
+    # Advanced builds in android/app/build-advanced; lint covers Watch's library through the app.
+    echo "== Android: lint, APK and bundle builds of Advanced, its allowlist, native-library check (ADR 0045)"
+    ./gradlew --no-daemon --stacktrace -Pdatapavan.edition=advanced \
+        :app:lintDebug :app:lintRelease :app:testDebugUnitTest \
+        :app:assembleDebug :app:assembleRelease :app:bundleRelease \
+        :app:verifyApkDebug :app:verifyApkRelease
 }
 
 case "$WHAT" in

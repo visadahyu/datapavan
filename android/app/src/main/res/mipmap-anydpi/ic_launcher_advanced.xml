@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Datapavan Advanced's launcher icon (ADR 0045, decision 6). The manifest names the edition's icon through
+    the appIcon placeholder (app/build.gradle.kts), so in Datapavan Basic's build lint sees no use of this
+    one; release builds shrink it away there.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="UnusedResources">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_advanced_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_advanced_monochrome" />
+</adaptive-icon>

@@ -14,12 +14,14 @@
 # The emulator reaches this computer at 10.0.2.2. On a phone, set WATCH_TEST_HOST to the computer's
 # address on the same Wi-Fi; the network switch is then skipped, since it would cut the phone off.
 #
-#   scripts/verify-watch.sh [path/to/watch-debug.apk]
+#   scripts/verify-watch.sh [path/to/Datapavan-Advanced-debug.apk]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APK="${1:-$ROOT/android/watch/build/outputs/apk/debug/watch-debug.apk}"
-PKG=org.visadahyu.datapavan.watch
+APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
+PKG=org.visadahyu.datapavan.advanced
+# Watch's screen in Datapavan Advanced (ADR 0045); debug builds export it for these checks.
+WATCH_SCREEN=org.visadahyu.datapavan.watch.MainActivity
 SHELL_UID=2000
 # shellcheck source=scripts/adb-ui.sh
 . "$ROOT/scripts/adb-ui.sh"
@@ -83,7 +85,7 @@ fail() {
     # On a phone the flows name other apps' destinations, which stay on the phone: counters only. On an
     # emulator, every flow of the shell (the test's own), then the last of the others.
     local account
-    account=$(adb shell dumpsys activity service "$PKG/.WatchVpnService" 2>/dev/null | tr -d '\r' | sed -n 's/^ *//p' || true)
+    account=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" 2>/dev/null | tr -d '\r' | sed -n 's/^ *//p' || true)
     echo "Watch's own account:" >&2
     grep -E '^(running|counters)' <<<"$account" >&2 || true
     if is_emulator; then
@@ -100,7 +102,7 @@ fail() {
 # The flows the engine kept, one per line: protocol app destination uid outcome named-by ech dns network
 # name.
 flows() {
-    adb shell dumpsys activity service "$PKG/.WatchVpnService" | tr -d '\r' | sed -n 's/^ *flow //p'
+    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" | tr -d '\r' | sed -n 's/^ *flow //p'
 }
 
 # Whether a flow matching the pattern is listed, read again for up to 5 s: a flow is listed once Android
@@ -109,7 +111,7 @@ flows() {
 # could look missing.
 # The tunnel's addresses that Watch chose (ADR 0041), from its dump: "<set> <tun4> <dns4> <tun6> <dns6>".
 # adb reads nothing from stdin here: called inside a pipeline, it would swallow the pipe's input.
-addresses_line() { adb shell dumpsys activity service "$PKG/.WatchVpnService" </dev/null | tr -d '\r' | sed -n 's/^ *addresses //p'; }
+addresses_line() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" </dev/null | tr -d '\r' | sed -n 's/^ *addresses //p'; }
 tunnel_address() { addresses_line | awk '{print $2}'; }
 # The tunnel's DNS server, IPv4 or IPv6 as the flows list them, as an extended regular expression.
 tunnel_dns_pattern() { addresses_line | awk '{gsub(/\./, "\\.", $3); print $3 "|\\[" $5 "\\]"}'; }
@@ -137,7 +139,7 @@ has_named_flow() {
 
 # What Watch says of Private DNS on its network: plain, network, or strict and the provider (debug).
 private_dns() {
-    adb shell dumpsys activity service "$PKG/.WatchVpnService" | tr -d '\r' | sed -n 's/^ *private-dns //p'
+    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" | tr -d '\r' | sed -n 's/^ *private-dns //p'
 }
 
 wait_private_dns() {
@@ -259,7 +261,7 @@ PY
 
     # A flow to an address no DNS answer gave is named after its network's organisation, when this
     # build carries the table (data/dbip-asn/update.py; a clean checkout has none, ADR 0036).
-    if adb shell dumpsys activity service "$PKG/.WatchVpnService" | grep -q 'organisations 20'; then
+    if adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" | grep -q 'organisations 20'; then
         # One of Google's name servers' addresses: apps rarely look its name up, and a name from DNS
         # would come first (Android or an app may look up dns.google, which names 8.8.8.8).
         device 6 "echo watch | nc -u -w 1 216.239.32.10 9" >/dev/null
@@ -420,7 +422,7 @@ for _ in $(seq 1 30); do
 done
 direct || fail "the device does not reach the test server at $HOST:$PORT even without Watch"
 adb logcat -c
-adb shell am start -W -n "$PKG/.MainActivity" --ez start true >/dev/null
+adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
 vpn_up || fail "Watch's tunnel did not come up (on a phone, allow the VPN request on its screen first)"
 echo "ok: the tunnel is up for every app"
@@ -433,7 +435,7 @@ esac
 # A network that uses the common addresses gets the spare ones (ADR 0041). The emulator's network cannot
 # be made to clash, so a debug command takes the same path: the tunnel is set up again, traffic passes
 # with the spare addresses, and it comes back to the common ones.
-adb shell dumpsys activity service "$PKG/.WatchVpnService" addresses-force spare </dev/null | grep -q '^ *addresses-forced spare' ||
+adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" addresses-force spare </dev/null | grep -q '^ *addresses-forced spare' ||
     fail "the debug command to force the spare addresses failed"
 for _ in $(seq 1 20); do addresses_line | grep -q '^spare ' && vpn_up && break; sleep 1; done
 case "$(addresses_line)" in
@@ -442,7 +444,7 @@ case "$(addresses_line)" in
 esac
 answer=$(timeout 15 adb shell "printf 'GET /ping HTTP/1.0\r\n\r\n' | nc -w 5 $HOST $PORT" | tr -d '\r' || true)
 grep -q '^pong$' <<<"$answer" || fail "no answer over TCP with the spare addresses"
-adb shell dumpsys activity service "$PKG/.WatchVpnService" addresses-force auto </dev/null >/dev/null
+adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" addresses-force auto </dev/null >/dev/null
 for _ in $(seq 1 20); do addresses_line | grep -q '^common ' && vpn_up && break; sleep 1; done
 addresses_line | grep -q '^common ' || fail "the tunnel did not come back to the common addresses: $(addresses_line)"
 echo "ok: with a clashing network the tunnel takes the spare addresses, traffic passes, and it comes back"
@@ -460,7 +462,7 @@ echo "ok: an unreachable IPv6 address gets the app an ICMPv6 error"
 # upstream connection. The listener's port is in /proc/net/tcp: listening (0A), Watch's UID, on the
 # tunnel's IPv4 address, which the kernel prints as hex in reverse byte order.
 strangers() {
-    adb shell dumpsys activity service "$PKG/.WatchVpnService" | tr -d '\r' | sed -n 's/^ *counters //p' | awk '{print $19}'
+    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" | tr -d '\r' | sed -n 's/^ *counters //p' | awk '{print $19}'
 }
 watch_uid=$(adb shell cmd package list packages -U "$PKG" | tr -d '\r' | sed -n "s/^package:$PKG uid:\([0-9]*\)$/\1/p")
 listener_hex=$(python3 -I -c 'import sys; print("".join(f"{int(b):02X}" for b in reversed(sys.argv[1].split("."))))' "$(tunnel_address)")

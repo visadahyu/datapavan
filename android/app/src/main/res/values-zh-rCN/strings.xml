@@ -524,10 +524,11 @@
     <string name="about_updates">Datapavan 无法自行检查是否有较新版本，因为它没有互联网访问权限。最新版本及更改内容都在其网站上。如果网站打不开，GitHub 上也有相同的文件。</string>
     <string name="about_copy_hint">若要在其他浏览器（例如 Tor Browser）中打开某个地址，请轻触并按住该地址以复制。</string>
     <string name="about_open_website">打开网站</string>
-    <!-- The two editions (ADR 0031). Datapavan Lite is on Google Play, which updates it. -->
-    <string name="about_editions_title">Datapavan 与 Datapavan Lite</string>
-    <string name="about_editions_full">这是 Datapavan，由其开发者使用一个离线保存的密钥签名。Google Play 上的 Datapavan Lite 进行相同的检查，由 Google 签名。</string>
-    <string name="about_editions_lite">这是来自 Google Play 的 Datapavan Lite，由 Google Play 保持更新。它由 Google 签名。Datapavan 本身进行相同的检查，由其开发者使用一个离线保存的密钥签名，发布在其网站上。</string>
+    <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->
+    <string name="about_editions_title">各版本</string>
+    <string name="about_editions_basic">这是 Datapavan Basic，由其开发者使用一个离线保存的密钥签名。它始终没有互联网访问权限。Google Play 上的 Datapavan Basic 进行相同的检查，由 Google 签名。Datapavan Advanced 增加了 Watch，可显示每个应用连接到哪里。</string>
+    <string name="about_editions_play">这是来自 Google Play 的 Datapavan Basic，由 Google Play 保持更新。它由 Google 签名。它始终没有互联网访问权限。由其开发者使用一个离线保存的密钥签名的 Datapavan Basic，以及增加了 Watch 的 Datapavan Advanced，都发布在网站上。</string>
+    <string name="about_editions_advanced">这是 Datapavan Advanced，由其开发者使用一个离线保存的密钥签名。它仅将互联网用于传输您自己的应用的流量，以及连接您选择的服务器。Datapavan Basic 进行相同的检查，只是不含 Watch；它始终没有互联网访问权限，因此可以从外部检查此应用。</string>
     <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
     <string name="version_old">此版本的 Datapavan 发布于 %1$s。可能已有较新的版本，而 Datapavan 无法替您检查。</string>
     <string name="version_old_button">在哪里获取</string>
@@ -590,4 +591,7 @@
     <string name="screenshots_allow">允许截图一分钟</string>
     <string name="screenshots_allowed">现在允许截图。一分钟后，或者您一离开此应用，截图就会再次被阻止。</string>
     <string name="screenshots_block">立即阻止截图</string>
+    <!-- Datapavan Advanced only: the way from the network page to Watch (ui/WatchEntry.kt, ADR 0045). -->
+    <string name="watch_entry_body">实时查看您手机上的每个应用连接到哪里。Watch 在这部手机上作为 VPN 运行。它使用互联网只是为了转发每个应用的流量，不会向 Datapavan 发送任何内容。</string>
+    <string name="watch_entry_open">打开 Watch</string>
 </resources>

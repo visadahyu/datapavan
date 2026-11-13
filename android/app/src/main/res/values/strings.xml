@@ -562,10 +562,11 @@
     <string name="about_updates">Datapavan cannot check for a newer version itself, because it has no internet access. The newest version and what changed are on its website. If the website does not open, the same files are on GitHub.</string>
     <string name="about_copy_hint">To open an address in another browser, such as Tor Browser, touch and hold it to copy it.</string>
     <string name="about_open_website">Open the website</string>
-    <!-- The two editions (ADR 0031). Datapavan Lite is on Google Play, which updates it. -->
+    <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->
     <string name="about_editions_title">Editions</string>
-    <string name="about_editions_full">This is Datapavan, signed by its developer with one key kept offline. Datapavan Lite, on Google Play, has the same checks, and Google signs it.</string>
-    <string name="about_editions_lite">This is Datapavan Lite, from Google Play, which keeps it up to date. Google signs it. Datapavan itself, with the same checks and signed by its developer with one key kept offline, is on its website.</string>
+    <string name="about_editions_basic">This is Datapavan Basic, signed by its developer with one key kept offline. It never has internet access. On Google Play, Datapavan Basic has the same checks, and Google signs it. Datapavan Advanced adds Watch, which shows where each app connects.</string>
+    <string name="about_editions_play">This is Datapavan Basic from Google Play, which keeps it up to date. Google signs it. It never has internet access. Datapavan Basic signed by its developer with one key kept offline, and Datapavan Advanced, which adds Watch, are on the website.</string>
+    <string name="about_editions_advanced">This is Datapavan Advanced, signed by its developer with one key kept offline. It uses the internet only for your own apps\' traffic and the servers you choose. Datapavan Basic has the same checks without Watch and never has internet access, so it can check this app from outside.</string>
     <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
     <string name="version_old">This version of Datapavan is from %1$s. A newer one may be out, and Datapavan cannot check for you.</string>
     <string name="version_old_button">Where to get it</string>
@@ -631,4 +632,8 @@
     <string name="screenshots_allow">Allow screenshots for one minute</string>
     <string name="screenshots_allowed">Screenshots are allowed now. They are blocked again after one minute, or as soon as you leave the app.</string>
     <string name="screenshots_block">Block screenshots now</string>
+    <!-- Datapavan Advanced only: the way from the network page to Watch (ui/WatchEntry.kt, ADR 0045). -->
+    <string name="watch_entry_title" translatable="false">Watch</string>
+    <string name="watch_entry_body">See where each app on your phone connects, as it happens. Watch works as a VPN on this phone. It uses the internet only to pass each app\'s traffic on, and sends nothing to Datapavan.</string>
+    <string name="watch_entry_open">Open Watch</string>
 </resources>

@@ -3,12 +3,11 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-        Datapavan Watch (ADR 0029): the VPN, and the only part of Datapavan with network access.
-        Its permissions are those of ADR 0034; build.gradle.kts fails the build if the merged manifest
-        holds any other. (AndroidX adds one app-internal signature permission for non-exported
-        receivers.)
-        allowBackup=false disables cloud backup; data_extraction_rules also excludes device-to-device
-        transfer on Android 12+, and backup_rules everything on Android 10-11.
+        Watch (ADR 0029, ADR 0045): the tunnel, its log and the chain, the part of Datapavan Advanced
+        that uses the network. Only Advanced includes this library. Its permissions are those of ADR
+        0034; app/build.gradle.kts fails the build if Advanced's merged manifest holds any other, and if
+        Basic's holds any of these that Basic does not allow. The application's own manifest sets the
+        backup rules, which exclude everything, the icon, the label and the theme.
     -->
     <!-- Sockets, to pass each app's traffic on to where it was going. -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -45,14 +44,7 @@
         </intent>
     </queries>
 
-    <application
-        android:allowBackup="false"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.Watch">
+    <application>
 
         <!--
             EmojiCompat would look up a downloadable emoji font through the Google Play services font
@@ -69,20 +61,27 @@
                 tools:node="remove" />
         </provider>
 
+        <!--
+            Watch runs in a process of its own, ":watch": its screen, its tunnel and its log's expiry. The
+            part that faces the network then shares no memory with the audit, a crash of either leaves the
+            other running, and Watch keeps its own memory budget (scripts/verify-watch-release.sh). They
+            talk only through the intent that opens Watch's screen.
+
+            Watch's screen, opened from the audit's network page. Not exported: Advanced has one launcher
+            entry, the audit's. Debug builds export it for the emulator checks (src/debug).
+        -->
         <activity
             android:name=".MainActivity"
-            android:exported="true"
-            android:launchMode="singleTop">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:exported="false"
+            android:process=":watch"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.Watch" />
 
         <!-- Only Android may bind to it (BIND_VPN_SERVICE). -->
         <service
             android:name=".WatchVpnService"
             android:exported="false"
+            android:process=":watch"
             android:permission="android.permission.BIND_VPN_SERVICE">
             <intent-filter>
                 <action android:name="android.net.VpnService" />
@@ -97,6 +96,7 @@
         <service
             android:name=".log.LogExpiryJob"
             android:exported="false"
+            android:process=":watch"
             android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 </manifest>

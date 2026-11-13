@@ -32,6 +32,9 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "datapavan"
+// The one application (ADR 0045): Datapavan Basic, or Datapavan Advanced with -Pdatapavan.edition=advanced.
 include(":app")
-// Datapavan Watch, the separate app that holds the VPN and the network access (ADR 0029).
+// Code every edition shares: the rules that judge a copy's signing key, and the screen protection.
+include(":shared")
+// Watch's tunnel, log and chain: a library that only Advanced includes, so Basic never carries it.
 include(":watch")

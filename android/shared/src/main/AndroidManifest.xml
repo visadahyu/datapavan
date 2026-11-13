@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        Android 12 and later: other apps' overlays are hidden while Datapavan's windows are shown, so that
+        no app drawn over it can dress or read its screens (ADR 0040, ScreenProtection.kt). A normal
+        permission that allows no connection and nothing outside the app's own windows. Every edition's
+        allowlist holds it (app/build.gradle.kts).
+    -->
+    <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
+</manifest>

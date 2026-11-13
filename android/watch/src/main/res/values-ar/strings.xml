@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="tagline">اعرف إلى أين يتصل كل تطبيق على هاتفك.</string>
-    <string name="status_on">تطبيق Watch يعمل.</string>
-    <string name="status_off">تطبيق Watch متوقف.</string>
+    <string name="watch_tagline">اعرف إلى أين يتصل كل تطبيق على هاتفك.</string>
+    <string name="status_on">خدمة Watch تعمل.</string>
+    <string name="status_off">خدمة Watch متوقفة.</string>
     <string name="turn_on">تشغيل</string>
     <string name="turn_off">إيقاف</string>
-    <string name="consent_refused">لم يسمح Android بتشغيل تطبيق Watch. إذا كان تطبيق VPN آخر مضبوطًا ليبقى قيد التشغيل دائمًا، فأوقف هذا الإعداد أولًا.</string>
+    <string name="consent_refused">لم يسمح Android بتشغيل Watch. إذا كان تطبيق VPN آخر مضبوطًا ليبقى قيد التشغيل دائمًا، فأوقف هذا الإعداد أولًا.</string>
     <string name="private_dns">نظام أسماء النطاقات الخاص</string>
     <string name="private_dns_strict">تم ضبط «نظام أسماء النطاقات الخاص» في هاتفك على %1$s. يرسل Android إليه الأسماء التي تبحث عنها التطبيقات مشفّرةً. هذا يحميها من شبكتك، لكن Watch لا يستطيع قراءتها.</string>
     <string name="private_dns_network">يدعم خادم DNS في شبكتك التشفير، ويستخدمه Android للأسماء التي تبحث عنها التطبيقات. هذا يحميها، لكن Watch لا يستطيع قراءتها.</string>

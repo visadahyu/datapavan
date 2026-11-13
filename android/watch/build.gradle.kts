@@ -1,70 +1,25 @@
-import com.android.build.api.artifact.SingleArtifact
-import com.android.build.api.variant.BuiltArtifactsLoader
-import java.util.zip.ZipFile
 import javax.inject.Inject
-import javax.xml.parsers.DocumentBuilderFactory
 
 plugins {
-    alias(libs.plugins.android.application)
+    alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
 }
 
-// Datapavan Watch (ADR 0029): the VPN, built from the same repository as the audit app and signed with
-// the same key. Its merged manifest may hold only what ADR 0034 allows, so that no library adds a
-// permission, an app query or an open door unnoticed: the permissions it requests, the permissions it
-// defines, its <queries> and its exported components. Fewer is fine; anything else fails the build.
-val watchApplicationId = "org.visadahyu.datapavan.watch"
-val allowedPermissions = mapOf(
-    // name to the android:maxSdkVersion it must carry, or null for none
-    "android.permission.INTERNET" to null,
-    "android.permission.ACCESS_NETWORK_STATE" to null,
-    // Only Android 10 and 11 need it, to follow the network under the tunnel (ADR 0034).
-    "android.permission.CHANGE_NETWORK_STATE" to "30",
-    "android.permission.POST_NOTIFICATIONS" to null,
-    "android.permission.ACCESS_LOCAL_NETWORK" to null,
-    // Hides other apps' overlays from Watch's windows, Android 12 and later (ADR 0040).
-    "android.permission.HIDE_OVERLAY_WINDOWS" to null,
-    // androidx.core defines it, app-internal, for its non-exported receivers.
-    "$watchApplicationId.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" to null,
-)
-// The JNI symbol every packaged libdatapavan_watch.so must export (see core/watch-jni and Engine.kt).
-val requiredJniSymbol = "Java_org_visadahyu_datapavan_watch_Engine_nativeStart"
-// The methods of WatchVpnService that the Rust library calls back by name (core/watch-jni/src/lib.rs),
-// which R8 must neither remove nor rename (proguard-rules.pro).
-val jniCallbacks = listOf("ownerUid", "protectSocket", "logRecords")
-
-val allowedPermissionDefinitions = listOf("$watchApplicationId.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
-// Exported components, each with the permission that guards it ("" for none: the launcher, and the log
-// interface of W5, which checks its caller's key at run time).
-val allowedExported = mapOf(
-    "$watchApplicationId.MainActivity" to "",
-    "androidx.profileinstaller.ProfileInstallReceiver" to "android.permission.DUMP",
-)
-
+// Watch (ADR 0029, ADR 0045): the tunnel, its log and the chain, as a library that only Datapavan Advanced
+// includes, so that Datapavan Basic never carries the Rust engine or a reason to hold INTERNET. The
+// application's build (app/build.gradle.kts) checks the merged manifest of each edition against its own
+// allowlist, and that Advanced's APK holds this library's native code and keeps the methods it calls back.
 android {
     namespace = "org.visadahyu.datapavan.watch"
     compileSdk = 37
     ndkVersion = "30.0.16248370"
 
     defaultConfig {
-        applicationId = watchApplicationId
         minSdk = 29
-        targetSdk = 37
-        versionCode = 1
-        versionName = "0.2.0"
-        // The audit app's ABIs (app/build.gradle.kts), read by the Rust build in finalizeDsl.
+        // The application's ABIs (app/build.gradle.kts), read by the Rust build in finalizeDsl.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
-    }
-
-    buildTypes {
-        debug {
-            isPseudoLocalesEnabled = true
-        }
-        release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-        }
+        // The methods the Rust library calls back by name, which R8 must keep in the application.
+        consumerProguardFiles("proguard-rules.pro")
     }
 
     compileOptions {
@@ -76,36 +31,16 @@ android {
         compose = true
     }
 
-    androidResources {
-        // The table from address to organisation (ADR 0036) is read in place, which needs it stored.
-        noCompress += "bin"
-        generateLocaleConfig = true
-        // The audit app's languages (ADR 0004, ADR 0030), and no library's others.
-        localeFilters += listOf("en", "fr", "de", "fa", "ru", "zh-rCN", "es", "ar")
-    }
-
-    bundle {
-        language {
-            enableSplit = false
-        }
-    }
-
-    // Google's encrypted dependency report is opaque to users and rejected by F-Droid.
-    dependenciesInfo {
-        includeInApk = false
-        includeInBundle = false
-    }
-
     lint {
         abortOnError = true
         warningsAsErrors = true
-        checkDependencies = true
         // These checks need network access and only say "a newer version exists".
         disable += setOf("GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion")
     }
 }
 
 dependencies {
+    implementation(project(":shared"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime)
@@ -113,86 +48,6 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
     testImplementation(libs.junit)
-}
-
-/**
- * Verifies the merged manifest against ADR 0034's allowlist and passes it on unchanged. Wired as a
- * transform of MERGED_MANIFEST, so every consumer (APK, bundle, install) depends on it and cannot
- * bypass it. It checks <uses-permission> and <uses-permission-sdk-23> (with their maxSdkVersion),
- * <permission> definitions (signature only), <queries> (the one launcher intent, nothing else) and
- * every exported component with the permission that guards it.
- */
-abstract class ManifestAllowlistCheck : DefaultTask() {
-    @get:InputFile
-    @get:PathSensitive(PathSensitivity.NONE)
-    abstract val mergedManifest: RegularFileProperty
-
-    @get:Input
-    abstract val permissions: MapProperty<String, String>
-
-    @get:Input
-    abstract val definitions: ListProperty<String>
-
-    @get:Input
-    abstract val exported: MapProperty<String, String>
-
-    @get:OutputFile
-    abstract val checkedManifest: RegularFileProperty
-
-    @TaskAction
-    fun verify() {
-        val androidNs = "http://schemas.android.com/apk/res/android"
-        val source = mergedManifest.get().asFile
-        val document = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
-            .newDocumentBuilder().parse(source)
-        fun elements(tag: String) = document.getElementsByTagName(tag).let { nodes ->
-            (0 until nodes.length).map { nodes.item(it) as org.w3c.dom.Element }
-        }
-        fun org.w3c.dom.Element.android(name: String) = getAttributeNS(androidNs, name)
-        val problems = mutableListOf<String>()
-        // Packages that share a UID share their permissions (ADR 0045, decision 9).
-        if (document.documentElement.getAttributeNS(androidNs, "sharedUserId").isNotEmpty()) {
-            problems += "shares a UID with other packages (android:sharedUserId)"
-        }
-
-        for (element in elements("uses-permission") + elements("uses-permission-sdk-23")) {
-            val name = element.android("name")
-            val maxSdk = element.android("maxSdkVersion")
-            when {
-                name !in permissions.get() -> problems += "requests $name"
-                // A map cannot hold null, so "" means "no maxSdkVersion".
-                maxSdk != permissions.get().getValue(name) -> problems += "requests $name with maxSdkVersion '$maxSdk'"
-            }
-        }
-        for (element in elements("permission")) {
-            val name = element.android("name")
-            if (name !in definitions.get() || element.android("protectionLevel") != "signature") {
-                problems += "defines $name (${element.android("protectionLevel")})"
-            }
-        }
-        for (queries in elements("queries")) {
-            val children = queries.childNodes.let { nodes -> (0 until nodes.length).map { nodes.item(it) } }
-                .filterIsInstance<org.w3c.dom.Element>()
-            for (child in children) {
-                val actions = child.getElementsByTagName("action").let { n -> (0 until n.length).map { (n.item(it) as org.w3c.dom.Element).android("name") } }
-                val categories = child.getElementsByTagName("category").let { n -> (0 until n.length).map { (n.item(it) as org.w3c.dom.Element).android("name") } }
-                val launcher = child.tagName == "intent" && actions == listOf("android.intent.action.MAIN") &&
-                    categories == listOf("android.intent.category.LAUNCHER") && child.getElementsByTagName("data").length == 0
-                if (!launcher) problems += "queries <${child.tagName}> ${actions + categories}"
-            }
-        }
-        for (tag in listOf("activity", "activity-alias", "service", "receiver", "provider")) {
-            for (element in elements(tag).filter { it.android("exported") == "true" }) {
-                val name = element.android("name")
-                val guard = element.android("permission")
-                if (exported.get()[name] != guard) problems += "exports $tag $name (permission '$guard')"
-            }
-        }
-        if (problems.isNotEmpty()) {
-            throw GradleException("Watch's merged manifest holds what ADR 0034 does not allow:\n  " + problems.joinToString("\n  "))
-        }
-        source.copyTo(checkedManifest.get().asFile, overwrite = true)
-    }
 }
 
 /**
@@ -269,65 +124,6 @@ abstract class CargoNdkTask : DefaultTask() {
     }
 }
 
-/**
- * Fails if a built APK lacks Watch's library for a shipped ABI, if the library does not export the JNI
- * symbol, or if the APK's code lacks a method the library calls back by name: R8 would have removed or
- * renamed it, and the engine would fail at run time without a word.
- */
-abstract class ApkNativeLibraryCheck : DefaultTask() {
-    @get:InputFiles
-    @get:PathSensitive(PathSensitivity.NONE)
-    abstract val apkDirectory: DirectoryProperty
-
-    @get:Internal
-    abstract val loader: Property<BuiltArtifactsLoader>
-
-    @get:Input
-    abstract val abis: ListProperty<String>
-
-    @get:Input
-    abstract val library: Property<String>
-
-    @get:Input
-    abstract val symbol: Property<String>
-
-    @get:Input
-    abstract val callbacks: ListProperty<String>
-
-    @get:OutputFile
-    abstract val report: RegularFileProperty
-
-    @TaskAction
-    fun verify() {
-        val artifacts = loader.get().load(apkDirectory.get())
-            ?: throw GradleException("No APK found in ${apkDirectory.get().asFile}")
-        val lines = mutableListOf<String>()
-        artifacts.elements.forEach { element ->
-            ZipFile(element.outputFile).use { zip ->
-                abis.get().forEach { abi ->
-                    val entry = zip.getEntry("lib/$abi/${library.get()}")
-                        ?: throw GradleException("${element.outputFile}: lib/$abi/${library.get()} is missing")
-                    val bytes = zip.getInputStream(entry).use { it.readBytes() }
-                    if (!String(bytes, Charsets.ISO_8859_1).contains(symbol.get())) {
-                        throw GradleException("${element.outputFile}: lib/$abi/${library.get()} does not export ${symbol.get()}")
-                    }
-                    lines += "OK ${File(element.outputFile).name} lib/$abi/${library.get()} (${bytes.size} bytes)"
-                }
-                // A method name the code keeps is in some dex file's string table.
-                val code = zip.entries().asSequence().filter { it.name.matches(Regex("classes\\d*\\.dex")) }
-                    .joinToString("") { entry -> String(zip.getInputStream(entry).use { it.readBytes() }, Charsets.ISO_8859_1) }
-                callbacks.get().forEach { name ->
-                    if (!code.contains(name)) {
-                        throw GradleException("${element.outputFile}: no method $name in its code; the Rust library calls it by name (proguard-rules.pro)")
-                    }
-                    lines += "OK ${File(element.outputFile).name} keeps $name"
-                }
-            }
-        }
-        report.get().asFile.writeText(lines.joinToString("\n", postfix = "\n"))
-    }
-}
-
 val repositoryRoot = rootProject.layout.projectDirectory.dir("..")
 val rustWorkspace = rootProject.layout.projectDirectory.dir("../core")
 val cargoHome = providers.environmentVariable("CARGO_HOME")
@@ -395,9 +191,6 @@ androidComponents {
     onVariants { variant ->
         val suffix = variant.name.replaceFirstChar(Char::uppercase)
 
-        // Code both apps share: the rules that judge a copy's signing key (ADR 0018), in android/shared.
-        variant.sources.java?.addStaticSourceDirectory(rootProject.layout.projectDirectory.dir("shared/src/main/java").asFile.absolutePath)
-
         val cargoTask = tasks.register<CargoNdkTask>("cargoNdk$suffix") {
             sources.from(fileTree(rustWorkspace) { exclude("target/**", "fuzz/**") })
             sources.from(rootProject.layout.projectDirectory.file("../rust-toolchain.toml"))
@@ -432,23 +225,5 @@ androidComponents {
             signers.from(listOf("apps.tsv", "signers.tsv", "SOURCE").map { repositoryRoot.file("data/app-signers/$it") })
         }
         variant.sources.assets?.addGeneratedSourceDirectory(toolsTask, ToolTable::outputDir)
-
-        tasks.register<ApkNativeLibraryCheck>("verifyApk$suffix") {
-            apkDirectory.set(variant.artifacts.get(SingleArtifact.APK))
-            loader.set(variant.artifacts.getBuiltArtifactsLoader())
-            abis.set(shippedAbis)
-            library.set("libdatapavan_watch.so")
-            symbol.set(requiredJniSymbol)
-            callbacks.set(jniCallbacks)
-            report.set(layout.buildDirectory.file("reports/apk-native/${variant.name}.txt"))
-        }
-        val manifestCheck = tasks.register<ManifestAllowlistCheck>("checkManifest$suffix") {
-            permissions.set(allowedPermissions.mapValues { it.value ?: "" })
-            definitions.set(allowedPermissionDefinitions)
-            exported.set(allowedExported)
-        }
-        variant.artifacts.use(manifestCheck)
-            .wiredWithFiles(ManifestAllowlistCheck::mergedManifest, ManifestAllowlistCheck::checkedManifest)
-            .toTransform(SingleArtifact.MERGED_MANIFEST)
     }
 }

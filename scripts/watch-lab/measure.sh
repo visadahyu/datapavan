@@ -11,7 +11,7 @@ set -uo pipefail
 : "${ANDROID_SERIAL:?set ANDROID_SERIAL: this script never guesses the device}"
 ROUNDS=${1:-3}
 HOST=${HOST:-10.0.2.2:8790}
-WATCH=org.visadahyu.datapavan.watch
+WATCH=org.visadahyu.datapavan.advanced
 LOAD=org.visadahyu.datapavan.watch.load
 DOWNLOAD_BYTES=${DOWNLOAD_BYTES:-50000000}
 UPLOAD_BYTES=${UPLOAD_BYTES:-20000000}
@@ -35,7 +35,7 @@ load() { # load TAG OP URL [extra am args...]: one workload run, prints its resu
 
 cpu_ticks() { # utime+stime of Watch, in clock ticks
     local pid
-    pid=$(adb shell pidof "$WATCH" | tr -d '\r')
+    pid=$(adb shell pidof "$WATCH:watch" | tr -d '\r')
     [ -n "$pid" ] || { echo 0; return; }
     adb shell cat "/proc/$pid/stat" | tr -d '\r' | awk '{print $14 + $15}'
 }
@@ -43,9 +43,9 @@ cpu_ticks() { # utime+stime of Watch, in clock ticks
 adb shell pm path "$LOAD" >/dev/null || { echo "the spike's workload app is not installed (spikes/packet-engine/README.md)"; exit 1; }
 SINCE="$(adb shell date +%s | tr -d '\r').000"
 adb shell am force-stop "$WATCH"
-adb shell am start -n "$WATCH/.MainActivity" --ez start true --es only_apps "$LOAD" >/dev/null
+adb shell am start -n "$WATCH/org.visadahyu.datapavan.watch.MainActivity" --ez start true --es only_apps "$LOAD" >/dev/null
 sleep 3
-adb shell dumpsys activity service "$WATCH/.WatchVpnService" | tr -d '\r' | grep -q 'running true' || { echo "Watch's tunnel did not start"; exit 1; }
+adb shell dumpsys activity service "$WATCH/org.visadahyu.datapavan.watch.WatchVpnService" | tr -d '\r' | grep -q 'running true' || { echo "Watch's tunnel did not start"; exit 1; }
 before=$(cpu_ticks)
 run=$(date +%s)
 for r in $(seq 1 "$ROUNDS"); do
@@ -57,6 +57,6 @@ for r in $(seq 1 "$ROUNDS"); do
 done
 after=$(cpu_ticks)
 echo "cpu_ticks=$((after - before)) engine=watch"
-adb shell dumpsys meminfo "$WATCH" | tr -d '\r' | grep -E 'TOTAL PSS|TOTAL RSS|^ *TOTAL' | head -2 | sed 's/^ */meminfo: /'
-adb shell dumpsys activity service "$WATCH/.WatchVpnService" | tr -d '\r' | grep -E '^ *counters' | sed 's/^ *//'
+adb shell dumpsys meminfo "$WATCH:watch" | tr -d '\r' | grep -E 'TOTAL PSS|TOTAL RSS|^ *TOTAL' | head -2 | sed 's/^ */meminfo: /'
+adb shell dumpsys activity service "$WATCH/org.visadahyu.datapavan.watch.WatchVpnService" | tr -d '\r' | grep -E '^ *counters' | sed 's/^ *//'
 adb shell am force-stop "$WATCH"
