@@ -35,6 +35,7 @@ const UDP_FLOWS: usize = 1;
 const UDP_MAPPINGS: usize = 24;
 const UDP_FILTERED: usize = 25;
 const UDP_UNMATCHED: usize = 26;
+const UDP_CAME_IN_CAPPED: usize = 27;
 
 /// Android names the app by its port inside the tunnel.
 struct ByPort;
@@ -699,6 +700,156 @@ async fn a_new_chain_moves_a_mapping_only_when_its_way_changes() -> Outcome {
     Ok(())
 }
 
+/// What reaches the app until the tunnel stays silent for half a second.
+async fn everything(tunnel: &UnixDatagram) -> Vec<(SocketAddr, Vec<u8>)> {
+    let mut seen = Vec::new();
+    let mut buffer = vec![0u8; 65_535];
+    while let Ok(Ok(n)) =
+        tokio::time::timeout(Duration::from_millis(500), tunnel.recv(&mut buffer)).await
+    {
+        if let Ok(parsed) = packet::parse(&buffer[..n])
+            && let Some(payload) = packet::udp_payload(&buffer[..n], &parsed)
+        {
+            seen.push((parsed.source, payload.to_vec()));
+        }
+    }
+    seen
+}
+
+/// Nothing more reaches the app for half a second.
+async fn silent(tunnel: &UnixDatagram) -> bool {
+    let mut buffer = [0u8; 2048];
+    tokio::time::timeout(Duration::from_millis(500), tunnel.recv(&mut buffer))
+        .await
+        .is_err()
+}
+
+/// A DNS response to `query` under the ID `id`, with no records.
+fn dns_response(query: &[u8], id: u16) -> Vec<u8> {
+    let mut response = query.to_vec();
+    response[..2].copy_from_slice(&id.to_be_bytes());
+    response[2..4].copy_from_slice(&[0x81, 0x80]);
+    response
+}
+
+/// Two names the tool resolves to one address and port, asked one after the other: once the first is
+/// bound to that address, an answer from it while the second waits could be either name's. It is
+/// dropped and counted, never given to the app under the first name (review of unit 9, finding 1).
+#[tokio::test(flavor = "current_thread")]
+async fn a_second_name_at_a_bound_address_is_not_answered_as_the_first() -> Outcome {
+    let echo = udp_echo().await?;
+    let mut settings = Settings::default();
+    settings.names.insert("a.test".into(), echo.ip());
+    settings.names.insert("b.test".into(), echo.ip());
+    let tool = proxy(settings).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, echo.port()));
+    let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, echo.port()));
+    echoed(&tunnel, a, b"to a").await?;
+    send(&tunnel, app(CHAINED_PORT), b, b"to b").await?;
+    assert!(silent(&tunnel).await, "b's answer reached the app as a's");
+    assert_eq!(engine.counters()[UDP_UNMATCHED], 1);
+    Ok(())
+}
+
+/// On port 53, a stand-in is bound only by a DNS response to a query the app sent it: a stranger that
+/// answers first, with something else or under another ID, takes nothing, and feeds Watch no names
+/// (review of unit 9, finding 2).
+#[tokio::test(flavor = "current_thread")]
+async fn a_stranger_cannot_take_a_stand_in_on_port_53() -> Outcome {
+    let resolver = UdpSocket::bind("127.0.0.1:0").await?;
+    let stranger = UdpSocket::bind("127.0.0.2:0").await?;
+    let named = SocketAddr::from(([192, 0, 2, 53], 53));
+    let elsewhere = SocketAddr::from(([198, 51, 100, 66], 53));
+    let mut settings = Settings::default();
+    settings.names.insert("dns.test".into(), named.ip());
+    // The relay reaches the resolver and the stranger here, and names them as if on port 53.
+    settings.remap.insert(named, resolver.local_addr()?);
+    settings.remap.insert(elsewhere, stranger.local_addr()?);
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 512];
+        if let Ok((n, relay)) = resolver.recv_from(&mut buffer).await {
+            let query = buffer[..n].to_vec();
+            let _ = stranger.send_to(b"not a response", relay).await;
+            let _ = stranger.send_to(&dns_response(&query, 0x9999), relay).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let _ = resolver.send_to(&dns_response(&query, 0x5152), relay).await;
+        }
+    });
+    let tool = proxy(settings).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    let at = SocketAddr::from((stand_in(&tunnel, b"\x03dns\x04test\x00").await?, 53));
+    let asked = query(b"\x07example\x03com\x00", 16);
+    send(&tunnel, app(CHAINED_PORT), at, &asked).await?;
+    let answer = receive(&tunnel).await?.ok_or("a datagram")?;
+    assert_eq!(answer, (at, dns_response(&asked, 0x5152)));
+    assert_eq!(engine.counters()[UDP_FILTERED], 2);
+    Ok(())
+}
+
+/// Another port of an address the app sent to comes in as that address's, even on the port a stand-in
+/// waits on: it does not take the stand-in, whose own answer then binds it (review of unit 9, finding
+/// 2).
+#[tokio::test(flavor = "current_thread")]
+async fn another_port_of_a_destination_is_not_a_stand_ins_first_answer() -> Outcome {
+    let destination = udp_echo().await?;
+    let named = UdpSocket::bind("127.0.0.2:0").await?;
+    let port = named.local_addr()?.port();
+    let beside = UdpSocket::bind((destination.ip(), port)).await?;
+    let other_port = beside.local_addr()?;
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 64];
+        if let Ok((n, relay)) = named.recv_from(&mut buffer).await {
+            let _ = beside.send_to(b"from the destination", relay).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let _ = named.send_to(&buffer[..n], relay).await;
+        }
+    });
+    let mut settings = Settings::default();
+    settings
+        .names
+        .insert("a.test".into(), IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2)));
+    let tool = proxy(settings).await?;
+    let (_engine, tunnel) = engine(chain(tool.address))?;
+    echoed(&tunnel, destination, b"to the destination").await?;
+    let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, port));
+    send(&tunnel, app(CHAINED_PORT), a, b"to a").await?;
+    let first = receive(&tunnel).await?.ok_or("a datagram")?;
+    assert_eq!(first, (other_port, b"from the destination".to_vec()));
+    let second = receive(&tunnel).await?.ok_or("a datagram")?;
+    assert_eq!(second, (a, b"to a".to_vec()));
+    Ok(())
+}
+
+/// Through the tool and directly alike, a mapping lets in at most 64 other ports of an address its app
+/// sent to: what comes from more is dropped and counted (review of unit 9, finding 3).
+#[tokio::test(flavor = "current_thread")]
+async fn a_mapping_lets_in_at_most_64_other_ports() -> Outcome {
+    let tool = proxy(Settings::default()).await?;
+    let (engine, tunnel) = engine(chain(tool.address))?;
+    for (round, from) in [(1, app(CHAINED_PORT)), (2, app(DIRECT_PORT))] {
+        let server = UdpSocket::bind("127.0.0.1:0").await?;
+        let at = server.local_addr()?;
+        let mut ports = Vec::new();
+        for _ in 0..70 {
+            ports.push(UdpSocket::bind("127.0.0.1:0").await?);
+        }
+        tokio::spawn(async move {
+            let mut buffer = [0u8; 64];
+            if let Ok((_, mapped)) = server.recv_from(&mut buffer).await {
+                for port in &ports {
+                    let _ = port.send_to(b"another port", mapped).await;
+                }
+            }
+        });
+        send(&tunnel, from, at, b"hello").await?;
+        let seen = everything(&tunnel).await;
+        assert_eq!(seen.len(), 64, "round {round}: ports let in");
+        assert_eq!(engine.counters()[UDP_CAME_IN_CAPPED], 6 * round);
+    }
+    Ok(())
+}
+
 /// A stand-in waits on the port the app asked: an answer from an address the app never saw, on another
 /// port, does not bind it.
 #[tokio::test(flavor = "current_thread")]
@@ -826,5 +977,36 @@ async fn bad_headers_from_the_relay_are_dropped_and_counted() -> Outcome {
     let (engine, tunnel) = engine(chain(tool.address))?;
     echoed(&tunnel, echo, b"after two bad ones").await?;
     assert_eq!(engine.counters()[UDP_UNMATCHED], 2);
+    Ok(())
+}
+
+/// Another port of an address that a stand-in was bound to and that the app then sent to itself comes
+/// in from that address, not from the stand-in (review of unit 9, finding 5).
+#[tokio::test(flavor = "current_thread")]
+async fn another_port_comes_in_from_the_address_the_app_sent_to() -> Outcome {
+    let named = udp_echo().await?;
+    let destination = UdpSocket::bind((named.ip(), 0)).await?;
+    let beside = UdpSocket::bind((named.ip(), 0)).await?;
+    let (at, other_port) = (destination.local_addr()?, beside.local_addr()?);
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 64];
+        if let Ok((n, relay)) = destination.recv_from(&mut buffer).await {
+            let _ = destination.send_to(&buffer[..n], relay).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let _ = beside.send_to(b"another port", relay).await;
+        }
+    });
+    let mut settings = Settings::default();
+    settings.names.insert("echo.test".into(), named.ip());
+    let tool = proxy(settings).await?;
+    let (_engine, tunnel) = engine(chain(tool.address))?;
+    let stand_in = SocketAddr::from((
+        stand_in(&tunnel, b"\x04echo\x04test\x00").await?,
+        named.port(),
+    ));
+    echoed(&tunnel, stand_in, b"by name").await?;
+    echoed(&tunnel, at, b"by address").await?;
+    let answer = receive(&tunnel).await?.ok_or("a datagram")?;
+    assert_eq!(answer, (other_port, b"another port".to_vec()));
     Ok(())
 }

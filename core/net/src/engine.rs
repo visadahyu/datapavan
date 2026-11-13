@@ -347,7 +347,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 27;
+pub const COUNTERS: usize = 28;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -379,6 +379,7 @@ pub struct Counters {
     udp_mappings: AtomicU64,
     udp_filtered: AtomicU64,
     udp_unmatched: AtomicU64,
+    udp_came_in_capped: AtomicU64,
 }
 
 impl Counters {
@@ -399,9 +400,10 @@ impl Counters {
     /// through the tool), datagrams a mapping dropped because they came from an address its app had not
     /// sent to, and answers from the tool's relay that a mapping dropped because no one destination of
     /// its app could be told for them (ADR 0044, decision 2: a header that is not well formed, a
-    /// fragment, or a port several stand-ins wait on). None names a destination: they can be read on
-    /// any phone. New counters are only ever appended, so that scripts reading a column by its place
-    /// keep reading the same one.
+    /// fragment, or a port several stand-ins wait on), and datagrams from another port of an address
+    /// the app sent to that a mapping dropped because as many such ports had come in as it lets in.
+    /// None names a destination: they can be read on any phone. New counters are only ever appended,
+    /// so that scripts reading a column by its place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
         [
@@ -432,6 +434,7 @@ impl Counters {
             &self.udp_mappings,
             &self.udp_filtered,
             &self.udp_unmatched,
+            &self.udp_came_in_capped,
         ]
         .map(|c| c.load(Ordering::Relaxed))
     }
