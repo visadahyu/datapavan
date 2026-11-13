@@ -3320,3 +3320,24 @@ async fn a_datagram_that_names_a_new_app_ends_the_old_apps_flow_of_lookups() -> 
     );
     Ok(())
 }
+
+/// A stand-in the app keeps sending to, whose name gives way in the map to a newer one, still reaches
+/// its name after a pause, when its datagram asks Android again and its way is made anew: the peer keeps
+/// the way it had (sixth review of unit 9, finding 7). The map here holds one name.
+#[tokio::test(flavor = "current_thread")]
+async fn a_live_stand_in_keeps_its_way_once_its_name_leaves_the_map() -> Outcome {
+    let echo = udp_echo().await?;
+    let mut settings = Settings::default();
+    settings.names.insert("a.test".into(), echo.ip());
+    let tool = proxy(settings).await?;
+    let limits = Limits {
+        stand_ins: 1,
+        ..quick_reask()
+    };
+    let (_engine, tunnel) = engine_with(chain(tool.address), limits, Arc::new(ByPort))?;
+    let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, echo.port()));
+    echoed(&tunnel, a, b"before").await?;
+    stand_in(&tunnel, b"\x01b\x04test\x00").await?;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    echoed(&tunnel, a, b"after a pause").await
+}

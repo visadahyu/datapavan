@@ -167,6 +167,9 @@ pub struct Limits {
     /// 0044, decision 3). A SYN beyond it is dropped, as by a full queue, and the app's stack sends it
     /// again; each waiting connection holds a socket and a fake port for up to `connect_timeout`.
     pub tcp_waiting: usize,
+    /// At most this many names hold a stand-in at once (ADR 0038, [`crate::standins::CAPACITY`]); the
+    /// least recently used gives way to a new one. The tests hold fewer.
+    pub stand_ins: usize,
     /// The first of the fake ports handed out, `first_port..=last_port`.
     pub first_port: u16,
     /// The last of them.
@@ -215,6 +218,7 @@ impl Default for Limits {
             sweep_every: Duration::from_secs(60),
             tcp_idle: nat::TCP_IDLE,
             port_cooling: nat::PORT_COOLING,
+            stand_ins: crate::standins::CAPACITY,
             first_port: nat::FIRST_PORT,
             last_port: nat::LAST_PORT,
         }
@@ -595,7 +599,7 @@ impl Engine {
             uncached_answers: AtomicBool::new(false),
             chain: Mutex::new(None),
             chains: AtomicU64::new(0),
-            stand_ins: Mutex::default(),
+            stand_ins: Mutex::new(StandIns::with_capacity(config.limits.stand_ins)),
             direct_answers: Mutex::default(),
             tool_answers: Mutex::default(),
             kept: Mutex::default(),

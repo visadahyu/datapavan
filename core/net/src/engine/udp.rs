@@ -386,6 +386,7 @@ struct Peer {
 }
 
 /// Where a peer's datagrams go and where its answers come from.
+#[derive(Clone)]
 struct PeerWay {
     /// Through the tool, the header that names where its datagrams go; none on the direct path, where
     /// they go to the peer itself.
@@ -1620,8 +1621,16 @@ async fn open_peer(
     (tun, shared, flows, changes): Context<'_>,
 ) -> Flushed {
     let (app, destination) = key;
-    let opened = match PeerWay::toward(shared, &wanted.exit, destination) {
-        // A stand-in the map no longer holds names nothing the tool could reach.
+    // A stand-in the map no longer holds names nothing the tool could reach, unless a peer of the app's
+    // mapping still stands for it: a live peer keeps its way when its name gives way in the map to
+    // newer ones, which the mapping's own datagrams do not keep in use (sixth review of unit 9,
+    // finding 7).
+    let way = PeerWay::toward(shared, &wanted.exit, destination).or_else(|| {
+        let table = lock(flows);
+        let peer = table.mappings.get(&app)?.peers.get(&destination)?;
+        Some(peer.way.clone())
+    });
+    let opened = match way {
         None => Err(io::ErrorKind::HostUnreachable.into()),
         Some(way) => mapping_for(key, &wanted, (tun, shared, flows, changes))
             .await
