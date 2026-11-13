@@ -1,0 +1,358 @@
+<!doctype html>
+
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="اعرف ما يمكن لتطبيقاتك الوصول إليه وكم ترسل من بيانات. ثم ضع لذلك حدًّا.">
+<title>ما يمكن للبوت أو التطبيق المصغّر رؤيته · داتاباوان · Datapavan</title>
+<link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+<link rel="alternate" hreflang="en" href="https://datapavan.org/bots/">
+<link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/bots/">
+<link rel="alternate" hreflang="de" href="https://datapavan.org/de/bots/">
+<link rel="alternate" hreflang="es" href="https://datapavan.org/es/bots/">
+<link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/bots/">
+<link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/bots/">
+<link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/bots/">
+<link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/bots/">
+<style>
+@font-face{font-family:"Vazirmatn";src:url(../../fonts/vazirmatn-arabic-wght-normal.woff2) format("woff2");font-weight:100 900;font-display:swap;unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC;}
+@font-face{font-family:"Vazirmatn";src:url(../../fonts/vazirmatn-latin-wght-normal.woff2) format("woff2");font-weight:100 900;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-200B,U+200F,U+2012-204E,U+2050-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+:root{--f-disp:"Vazirmatn",Tahoma,system-ui,sans-serif;--f-sub:"Vazirmatn",Tahoma,system-ui,sans-serif;--f-body:"Vazirmatn",Tahoma,system-ui,sans-serif;--h1w:900;--h1lh:1.14;--h2lh:1.2;--h1ls:0;--blh:1.85;--notlh:1.75;--big:clamp(4.5rem,19vw,17rem);--biglh:1.3}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+#verify{scroll-margin-top:1rem}
+body{margin:0}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+a{color:inherit}
+a:focus-visible,summary:focus-visible{outline:3px solid currentColor;outline-offset:3px}
+h1,h2,h3{text-wrap:balance;hyphens:auto}
+p{text-wrap:pretty}
+table{border-collapse:collapse;width:100%}
+.w{max-width:84rem;margin-inline:auto;padding-left:max(clamp(16px,4vw,48px),env(safe-area-inset-left,0px));padding-right:max(clamp(16px,4vw,48px),env(safe-area-inset-right,0px))}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.fp{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;direction:ltr;text-align:left;unicode-bidi:isolate}
+.ltr{direction:ltr;unicode-bidi:isolate}
+.phones{display:grid;grid-template-columns:repeat(3,minmax(0,19rem));justify-content:space-between;gap:clamp(1rem,3vw,2.5rem);align-items:start}
+.phones img{display:block;width:100%;height:auto;border-radius:1.6rem;border:.42rem solid #101114;box-shadow:0 1.2rem 2.4rem -1.2rem rgb(0 0 0/.45);background:var(--paper)}
+@media (max-width:760px){.phones{grid-template-columns:repeat(3,min(72vw,19rem));justify-content:start;overflow-x:auto;padding-bottom:1rem;scroll-snap-type:x mandatory}.phones img{scroll-snap-align:center}}
+
+/* Layout: one object, a facts label, set against big type; the page repeats its heavy bars as structure. */
+:root{--paper:#FBF7F0;--panel:#FFFDF9;--ink:#1D1B17;--mute:#4A4436;--lab:#1F4E8C;--rule:#CEC5B3;--band:#F3EBDC;--deep:#1F4E8C;--on-deep:#F3EBDC;--tag:#7A5212;--mk-b:#1F4E8C;--mk-f:#F3EBDC}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#14161C;--panel:#1D2026;--ink:#E4E2DC;--mute:#C4C6D0;--lab:#8DB0E6;--rule:#44474F;--band:#1D2026;--deep:#1F4E8C;--on-deep:#F3EBDC;--tag:#D9A54A;--mk-b:#8DB0E6;--mk-f:#14161C;color-scheme:dark}}
+:root[data-theme="dark"]{--paper:#14161C;--panel:#1D2026;--ink:#E4E2DC;--mute:#C4C6D0;--lab:#8DB0E6;--rule:#44474F;--band:#1D2026;--deep:#1F4E8C;--on-deep:#F3EBDC;--tag:#D9A54A;--mk-b:#8DB0E6;--mk-f:#14161C;color-scheme:dark}
+body{background:var(--paper);color:var(--ink);font:400 1.0625rem/var(--blh) var(--f-body);overflow-wrap:break-word}
+.mk-b{fill:var(--mk-b)}.mk-f{fill:var(--mk-f)}
+.top{display:flex;align-items:center;gap:1.5rem;padding-block:1.1rem;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:.6rem;text-decoration:none;font:800 1.3rem/1 var(--f-sub);font-stretch:88%;color:var(--lab)}
+.mark{width:2rem;height:2rem}
+.top nav{display:flex;gap:1.15rem;margin-inline-start:auto;flex-wrap:wrap;font-size:.95rem}
+.top nav a{text-decoration:none}.top nav a:hover{text-decoration:underline}
+.lng{position:relative;font-weight:600}
+.lng summary{cursor:pointer;list-style-position:inside}
+.lng ul{position:absolute;inset-inline-end:0;z-index:5;list-style:none;margin:.4rem 0 0;padding:.35rem 0;background:var(--panel);border:2px solid var(--lab);min-width:9.5rem}
+.lng li a{display:block;padding:.3rem .8rem;text-decoration:none;font-weight:500}
+.lng li a:hover,.lng li a[aria-current]{background:var(--band)}
+.hero{display:grid;grid-template-columns:minmax(0,1.32fr) minmax(19rem,1fr);gap:clamp(1.5rem,5vw,5rem);align-items:start;padding-block:clamp(1.25rem,4vw,3.5rem) 0}
+.status{display:inline-block;font:700 .92rem/1.2 var(--f-sub);border:2px solid var(--lab);color:var(--lab);padding:.4rem .65rem;margin:0 0 1.5rem}
+h1{font:var(--h1w) clamp(3rem,7.7vw,7.25rem)/var(--h1lh) var(--f-disp);font-stretch:74%;margin:0 0 1.5rem;letter-spacing:var(--h1ls);color:var(--lab)}
+.lead{font-size:clamp(1.25rem,2.1vw,1.625rem);line-height:1.4;margin:0 0 .75rem;max-width:34em}
+.lead2{color:var(--mute);margin:0 0 1.75rem;max-width:36em}
+.cta{display:flex;flex-wrap:wrap;gap:.75rem 1.5rem;align-items:center;margin:0}
+.btn{background:var(--lab);color:var(--paper);font:700 1.05rem/1 var(--f-sub);padding:.95rem 1.3rem;text-decoration:none;display:inline-block}
+.btn:hover{background:var(--ink)}
+.label{background:var(--panel);border:3px solid var(--lab);padding:.75rem .9rem .85rem;color:var(--ink);position:relative}
+.l-title{font:900 clamp(2.9rem,5.1vw,4.6rem)/.92 var(--f-disp);font-stretch:62%;color:var(--lab);margin:0;letter-spacing:var(--h1ls)}
+.l-name{display:flex;justify-content:space-between;align-items:baseline;gap:.75rem;flex-wrap:wrap;margin:.5rem 0 .55rem;font-weight:700}
+.l-tag{font:700 .78rem/1 var(--f-sub);text-transform:uppercase;letter-spacing:.06em;color:var(--tag);border:1.5px dashed var(--tag);padding:.25rem .4rem}
+.l-g{border-top:.62rem solid var(--lab)}
+.l-g h3{font:800 1.02rem/1.3 var(--f-sub);margin:.3rem 0;font-stretch:90%}
+.l-g dl{margin:0}
+.l-g dl div{display:flex;justify-content:space-between;gap:1rem;border-top:1px solid var(--lab);padding-block:.2rem}
+.l-g dt{font-weight:400}.l-g dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums;text-align:end}
+.fine{font-size:.82rem;line-height:1.4;margin:.6rem 0 0;border-top:.3rem solid var(--lab);padding-top:.45rem}
+section{padding-block:clamp(3rem,7vw,6rem)}
+h2{font:var(--h1w) clamp(2.1rem,4.6vw,4rem)/var(--h2lh) var(--f-disp);font-stretch:78%;margin:0 0 .75rem;letter-spacing:var(--h1ls);color:var(--lab)}
+.sub{color:var(--mute);margin:0 0 2rem;max-width:40em}
+.rows{border-top:.62rem solid var(--lab);border-bottom:.3rem solid var(--lab)}
+.rw{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,8fr) minmax(0,3fr);gap:.75rem clamp(1rem,3vw,3rem);padding-block:1.1rem;border-top:1px solid var(--lab)}
+.rw:first-child{border-top:0}
+.rw h3{font:800 clamp(1.25rem,2vw,1.6rem)/1.15 var(--f-sub);font-stretch:82%;margin:0}
+.rw p{margin:0}
+.need{font-size:.92rem;color:var(--mute)}.need b{display:block;font:700 .72rem/1.4 var(--f-sub);text-transform:uppercase;letter-spacing:.06em;color:var(--tag)}
+.band{background:var(--band)}
+.note{font-size:.92rem;color:var(--mute);margin:1.25rem 0 0;max-width:46em}
+.off{border:2px dashed var(--lab);padding:clamp(1rem,2.5vw,2rem);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.5rem clamp(1.5rem,4vw,3.5rem)}
+.off h3{font:800 1.2rem/1.2 var(--f-sub);font-stretch:85%;margin:0 0 .3rem}.off p{margin:0}
+.lvls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(1rem,3vw,2.5rem);margin-block:2rem 2.25rem}
+.lvl{display:flex;flex-direction:column;gap:.5rem}
+.bars{display:flex;flex-direction:column;gap:.22rem}.bars i{display:block;height:.62rem;background:var(--lab)}
+.lvl h3{font:800 1.6rem/1.1 var(--f-sub);font-stretch:80%;margin:.3rem 0 0}.lvl p{margin:0}
+.more{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(1rem,3vw,2.5rem);border-top:1px solid var(--lab);padding-top:1.1rem}
+.more h3{font:800 1.1rem/1.3 var(--f-sub);margin:0}.more p{margin:0}
+.own{background:var(--deep);color:var(--on-deep)}
+.own .wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(19rem,30rem);gap:clamp(2rem,5vw,5rem);align-items:start}
+.own h2{color:var(--on-deep)}.own .wrap>div>p{max-width:32em;font-size:1.15rem;margin:0}
+.own .label{--lab:var(--own-ink);background:var(--own-p);color:var(--own-t);border-color:var(--own-p)}
+:root{--own-ink:#1F4E8C;--own-p:#FBF7F0;--own-t:#1D1B17}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--own-ink:#8DB0E6;--own-p:#14161C;--own-t:#E4E2DC}}
+:root[data-theme="dark"]{--own-ink:#8DB0E6;--own-p:#14161C;--own-t:#E4E2DC}
+.own .ltr-t{direction:ltr;unicode-bidi:isolate;text-align:start}
+.cmp{font-size:.98rem;min-width:44rem}
+.cmp th,.cmp td{padding:.65rem .7rem;text-align:start;border-top:1px solid var(--lab);vertical-align:top}
+.cmp thead td,.cmp thead th{border-top:.62rem solid var(--lab);font:800 1rem/1.2 var(--f-sub);vertical-align:bottom}
+.cmp tbody th{font-weight:500}
+.cmp .us{background:var(--band);font-weight:700}
+.faq details{border-top:1px solid var(--lab)}.faq details:last-child{border-bottom:.3rem solid var(--lab)}
+.faq summary{cursor:pointer;font:700 clamp(1.1rem,1.6vw,1.3rem)/1.3 var(--f-sub);padding-block:.85rem}
+.faq p{margin:0 0 1.1rem;max-width:46em}
+.get{display:grid;grid-template-columns:minmax(0,1fr) minmax(19rem,1fr);gap:clamp(2rem,5vw,5rem);align-items:start}
+.chan{list-style:none;padding:0;margin:0}.chan li{border-top:1px solid var(--lab);padding-block:.75rem}
+.chan .cn{display:block;font:800 1.1rem/1.3 var(--f-sub)}
+.fpv{font-size:clamp(1.05rem,2vw,1.4rem);line-height:1.5;margin:.5rem 0 .75rem;font-weight:400;overflow-wrap:anywhere}
+.label p{margin:0 0 .5rem}
+footer{border-top:.62rem solid var(--lab);padding-block:1.5rem 2.5rem}
+.fl{display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;margin-bottom:.75rem}
+footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
+@media (max-width:860px){
+.hero,.own .wrap,.get{grid-template-columns:minmax(0,1fr)}
+.rw{grid-template-columns:minmax(0,1fr)}
+.lvls,.more,.off{grid-template-columns:minmax(0,1fr)}
+.top nav{display:none}.lng{margin-inline-start:auto}
+.lvl h3{margin-top:.15rem}
+}
+
+/* The drawing, in the label's ink on the page's paper. It opens as it scrolls into view where the browser can do that without script. */
+.seen{--bg:var(--paper);--ln:var(--lab);--fg:var(--ink);--f-sans:var(--f-body);--f-mono:ui-monospace,Menlo,Consolas,monospace;display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:clamp(1.5rem,4vw,4rem);align-items:start;margin-top:1.5rem}
+.dwg{display:block;width:100%;height:auto;max-width:44rem}
+.dwg path,.dwg ellipse,.dwg circle,.dwg rect{vector-effect:non-scaling-stroke}
+.dwg .tp{fill:var(--bg);stroke:var(--ln);stroke-width:1.6}
+.dwg .sd{fill:var(--bg);stroke:var(--ln);stroke-width:1}
+.dwg .pd .tp,.dwg .pd .sd{stroke-dasharray:6 5}
+.dwg .ln,.dwg .bar{fill:none;stroke:var(--ln);stroke-width:1.05;stroke-linejoin:round}
+.dwg .bar{fill:var(--bg)}
+.dwg .ds{stroke-dasharray:4 4}
+.dwg .hv{fill:none;stroke:var(--ln);stroke-width:3;stroke-linecap:round}
+.dwg .fl{fill:var(--ln);stroke:var(--ln);stroke-width:1}
+.dwg .ld path{fill:none;stroke:var(--ln);stroke-width:1}
+.dwg .ld circle{fill:var(--bg);stroke:var(--ln);stroke-width:1.3}
+.dwg .ldd path,.dwg .ldd circle{stroke-dasharray:4 3.4}
+.dwg text{fill:var(--fg);font:600 15px var(--f-sans);text-anchor:middle;dominant-baseline:central}
+.dwg .ncb{fill:var(--ln)}.dwg .mkf{fill:var(--bg)}
+.dwg .nct{font:600 18px var(--f-mono);fill:var(--fg)}
+@keyframes open{from{transform:translateY(var(--d))}to{transform:none}}
+@keyframes lead{from{opacity:0}to{opacity:1}}
+@supports (animation-timeline:view()){
+.dwg .pl{animation:open linear both;animation-timeline:view();animation-range:entry 15% cover 48%}
+.dwg .lds,.dwg .nc{animation:lead linear both;animation-timeline:view();animation-range:cover 30% cover 48%}
+}
+.seen-l h3{font:800 1.3rem/1.2 var(--f-sub);font-stretch:85%;color:var(--lab);margin:0 0 .5rem}
+.reads{list-style:none;margin:0 0 1.5rem;padding:0;border-top:.62rem solid var(--lab)}
+.reads li{display:grid;grid-template-columns:1.9rem minmax(0,1fr);gap:.5rem;align-items:center;padding-block:.32rem;border-bottom:1px solid var(--lab)}
+.num{width:1.6rem;height:1.6rem;border:1.4px solid var(--lab);border-radius:50%;display:grid;place-items:center;font-style:normal;font-weight:600;font-size:.84rem;font-variant-numeric:tabular-nums}
+.not{border:2px dashed var(--lab);padding:.9rem 1rem;display:grid;gap:.9rem}
+.not .row{display:grid;grid-template-columns:1.9rem minmax(0,1fr);gap:.5rem}
+.not .num{border-style:dashed}
+.not h4{font:800 1.08rem/1.25 var(--f-sub);font-stretch:88%;margin:.1rem 0 .15rem}
+.not p{margin:0;font-size:.98rem;line-height:var(--notlh)}
+.nc-line{margin:1rem 0 0;font-weight:600}
+.own-q{font:800 clamp(1.5rem,3.4vw,3rem)/1.15 var(--f-disp);font-stretch:80%;margin:0;color:var(--on-deep);letter-spacing:var(--h1ls)}
+.nothing{font:900 var(--big)/var(--biglh) var(--f-disp);font-stretch:62%;margin:0 0 clamp(1.5rem,4vw,3rem);color:var(--on-deep);letter-spacing:-.01em;white-space:nowrap}
+.own{overflow:hidden}
+@media (max-width:860px){.seen{grid-template-columns:minmax(0,1fr)}.dwg text{font-size:27px}.dwg .ld circle{r:23px}.dwg .nct{font-size:30px}}
+.news{list-style:none;margin:1.5rem 0 0;padding:0;border-top:.62rem solid var(--lab)}
+.news li{padding-block:1.15rem;border-bottom:1px solid var(--lab);display:grid;grid-template-columns:minmax(0,3fr) minmax(0,9fr);gap:.4rem clamp(1rem,3vw,2.5rem)}
+.news time{color:var(--mute);font-variant-numeric:tabular-nums;font-size:.95rem}
+.news h3{font:800 clamp(1.2rem,2vw,1.5rem)/1.25 var(--f-sub);font-stretch:88%;margin:0 0 .35rem}
+.news p{margin:0 0 .4rem;max-width:44em}
+.news .src{font-size:.95rem;color:var(--mute);margin:0}
+.prose{max-width:46em}.prose h1{font-size:clamp(2.2rem,5vw,4rem);margin-bottom:1rem}.prose h2{font-size:clamp(1.5rem,2.8vw,2.2rem);margin:2rem 0 .5rem}
+@media (max-width:760px){.news li{grid-template-columns:minmax(0,1fr)}}
+.lat2{font-weight:500;font-size:.8em;opacity:.75}
+.brand{flex-wrap:wrap}
+.names{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(1.5rem,4vw,4rem);margin-top:.5rem}
+.names article{min-width:0}
+.names .mark,.nm{width:3.4rem;height:3.4rem;display:block;margin-bottom:.7rem}
+.names h3{font:var(--h1w) clamp(2rem,4.2vw,3.4rem)/1.1 var(--f-disp);font-stretch:74%;color:var(--lab);margin:0 0 .3rem;letter-spacing:var(--h1ls)}
+.names .nat{font-weight:700;font-size:.62em;color:var(--ink);white-space:nowrap}
+.names p{margin:0 0 .6rem;max-width:40em}
+.names .say{color:var(--mute);font-size:.95rem}
+.names .parts{font-weight:600}.names .parts i{font-style:italic;font-weight:700}
+.names .mean{font:800 1.2rem/1.3 var(--f-sub);margin-bottom:.5rem}
+@media (max-width:860px){.names{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head>
+<body>
+<div class="w"><header class="top"><a class="brand" href="../index.html"><span><svg class="mark" viewBox="0 0 240 240" aria-hidden="true"><rect width="240" height="240" rx="52" class="mk-b"/><path class="mk-f" d="M62.58,72.28 Q63.23,66.59 63.67,61.12 Q64.11,55.65 64.11,49.95 Q64.11,44.04 63.56,37.91 Q63.01,31.79 61.7,25.0 Q70.24,28.72 87.97,32.22 Q105.7,35.73 129.23,38.46 Q152.76,41.2 178.37,43.17 L178.37,48.2 Q136.78,53.68 106.57,59.48 Q76.37,65.28 62.58,72.28 Z M146.63,215.0 Q144.44,189.83 142.47,171.33 Q140.5,152.83 138.64,139.37 Q136.78,125.91 134.59,115.62 Q132.4,105.33 129.67,96.36 Q126.93,87.38 123.21,77.97 Q135.03,79.94 146.85,79.94 Q157.79,79.94 170.49,77.97 Q166.77,88.04 163.92,99.53 Q161.08,111.03 158.89,126.57 Q156.7,142.11 155.06,163.56 Q153.42,185.01 152.32,215.0 L146.63,215.0 Z M92.56,215.0 Q90.38,189.83 88.41,171.33 Q86.44,152.83 84.57,139.37 Q82.71,125.91 80.52,115.62 Q78.34,105.33 75.6,96.36 Q72.86,87.38 69.14,77.97 Q80.96,79.94 92.78,79.94 Q103.73,79.94 116.42,77.97 Q112.7,88.04 109.86,99.53 Q107.01,111.03 104.82,126.57 Q102.63,142.11 100.99,163.56 Q99.35,185.01 98.26,215.0 L92.56,215.0 Z"/></svg></span><span>داتاباوان</span><span class="lat2 ltr">Datapavan</span></a><nav><a href="../index.html#checks">ما الذي يفحصه</a><a href="../index.html#limits">ما لا يمكنه رؤيته</a><a href="../index.html#plan">ما يمكنك فعله</a><a href="../index.html#faq">أسئلة</a><a href="../index.html#get">الحصول عليه</a><a href="../index.html#names">الاسمان</a><a href="../news/index.html">الأخبار</a><a href="https://github.com/visadahyu/datapavan" class="ltr">GitHub</a></nav>
+<details class="lng"><summary aria-label="اللغة">العربية</summary><ul><li><a href="../../bots/index.html" hreflang="en" lang="en">English</a></li><li><a href="../../fr/bots/index.html" hreflang="fr" lang="fr">Français</a></li><li><a href="../../de/bots/index.html" hreflang="de" lang="de">Deutsch</a></li><li><a href="../../es/bots/index.html" hreflang="es" lang="es">Español</a></li><li><a href="../../ru/bots/index.html" hreflang="ru" lang="ru">Русский</a></li><li><a href="../../zh/bots/index.html" hreflang="zh" lang="zh">简体中文</a></li><li><a href="../../ar/bots/index.html" hreflang="ar" lang="ar" aria-current="true">العربية</a></li><li><a href="../../fa/bots/index.html" hreflang="fa" lang="fa">فارسی</a></li></ul></details></header></div>
+<main><section><div class="w prose"><h1>ما يمكن للبوت أو التطبيق المصغّر رؤيته</h1><p>تتيح تطبيقات المراسلة تشغيل بوتات وتطبيقات صغيرة يملكها آخرون داخلها. لا يرى Android سوى تطبيق المراسلة، لذا لا شيء
+على هاتفك يخبرك بما يحصل عليه البوت أو التطبيق المصغّر عندما تستخدمه. تشرح هذه الصفحة ما يحصل عليه، وما المخاطر
+الحقيقية. تبدأ بـ Telegram وتنتهي بتطبيقات أخرى.</p>
+<p>جرى التحقق في ١٣ نوفمبر ٢٠٢٦. تتغير هذه التطبيقات كل بضعة أشهر؛ فإذا كان شيء هنا خاطئًا أو قديمًا،
+<a href="https://github.com/visadahyu/datapavan/issues">أخبرنا</a>.</p>
+<h2 id="عندما-تضغط-ابدأ-في-بوت-على-telegram">عندما تضغط «ابدأ» في بوت على Telegram</h2>
+<p>يحصل مالك البوت على رقم معرّفك في Telegram، واسمك، واسم المستخدم إن كان لديك واحد، واللغة التي يستخدمها تطبيقك،
+وما إذا كنت تدفع اشتراك Premium (<a href="https://core.telegram.org/bots/api">Telegram Bot API</a>؛
+<a href="https://telegram.org/privacy">سياسة الخصوصية في Telegram</a>). ويمكن للمالك أيضًا الاطلاع على صور ملفك الشخصي، ونبذتك
+التعريفية، وتاريخ ميلادك، ومنشورات القناة الشخصية المعروضة في ملفك الشخصي (<a href="https://core.telegram.org/bots/api">Bot API</a>).
+تصف سياسة الخصوصية في Telegram صورك بأنها علنية؛ أما الباقي، فلا تذكر صفحات Telegram ما إذا كانت إعدادات الخصوصية
+لديك تحدّ من هذا الاطلاع.</p>
+<p>لا يحصل البوت على رقم هاتفك، ولا جهات اتصالك، ولا محادثاتك الأخرى، ولا موقعك، ولا ملفاتك. فهو لا يحصل على رقمك أو
+موقعك أو عنوانك إلا عندما تشاركها: بزر مخصّص لذلك، أو بإرسالها بنفسك، أو بكتابتها عند الدفع عبر البوت، أو، بالنسبة
+إلى موقعك، بالسماح بذلك عندما تستخدم البوت بالوضع المضمَّن (inline)
+(<a href="https://core.telegram.org/bots/api">Bot API</a>؛ <a href="https://telegram.org/privacy">سياسة الخصوصية في Telegram</a>).</p>
+<p>لا يتصل هاتفك أبدًا بكمبيوتر البوت. ينقل Telegram الرسائل والملفات في الاتجاهين، ويُنشئ معاينات الروابط على خوادمه،
+لذا لا يرى البوت عنوان IP الخاص بك
+(<a href="https://core.telegram.org/bots/api">Bot API</a>؛
+<a href="https://github.com/DrKLO/Telegram/blob/master/TMessagesProj/src/main/res/values/strings.xml">Telegram لنظام Android</a>).
+لا يقول Telegram ذلك صراحةً؛ لكنه يُستنتج من طريقة عمل البوتات، والطريقة الوحيدة التي تذكرها سياسة الخصوصية في
+Telegram لحصول البوت على عنوان IP الخاص بك هي رابط أو زر يقود إلى موقع ويب يتحكم فيه مالك البوت
+(<a href="https://telegram.org/privacy">سياسة الخصوصية في Telegram</a>).</p>
+<p>كل ما ترسله إلى البوت يصل إلى مالكه، ويمكنه قراءته. لا يستطيع البوت أن يبدأ محادثة معك، لكن بمجرد أن تضغط «ابدأ»
+يمكنه أن يراسلك متى شاء، إلى أن تحظره
+(<a href="https://core.telegram.org/bots">بوتات Telegram</a>؛ <a href="https://core.telegram.org/bots/faq">الأسئلة الشائعة عن البوتات</a>).
+وقد تعني مراسلة حساب تجاري أيضًا مراسلة البوت الخاص به، فيحصل عندئذ على التفاصيل نفسها عنك
+(<a href="https://telegram.org/privacy">سياسة الخصوصية في Telegram</a>).</p>
+<h2 id="ما-الذي-يغير-ذلك">ما الذي يغيّر ذلك</h2>
+<p><strong>مشاركة بيانات اتصالك أو موقعك.</strong> إذا نقرت على زر لمشاركة بيانات اتصالك أو موقعك، يحصل البوت على رقم هاتفك أو على
+مكان وجودك.</p>
+<p><strong>فتح التطبيق المصغّر للبوت.</strong> التطبيق المصغّر هو موقع الويب الخاص بالمالك، يُفتح داخل Telegram. يرى الموقع عنوان IP
+الخاص بك، ومن ثَمّ مكان وجودك تقريبًا (<a href="https://telegram.org/tos/mini-apps">شروط التطبيقات المصغّرة في Telegram</a>).
+وعلى Android يرى أيضًا الشركة المصنّعة لهاتفك وطرازه وإصدار Android
+(<a href="https://github.com/DrKLO/Telegram/blob/master/TMessagesProj/src/main/java/org/telegram/ui/web/BotWebViewContainer.java">الرمز المصدري لـ Telegram لنظام Android</a>).
+وبحسب طريقة فتحك له، يعطيه Telegram أيضًا نسخة موقَّعة من هويتك على Telegram، وأحيانًا تفاصيل عن المحادثة التي فتحته
+منها (<a href="https://core.telegram.org/bots/webapps">التطبيقات المصغّرة في Telegram</a>؛
+<a href="https://telegram.org/tos/mini-apps">شروط التطبيقات المصغّرة</a>). وكل أداة تتبّع تحمّلها الصفحة ترى عنوانك أيضًا. اختبرت
+دراسة لم تخضع بعد لمراجعة الأقران ٢٧٨ تطبيقًا مصغّرًا من كتالوج واحد: أرسل ٥٩٪ منها بيانات إلى شركة خارجية واحدة على
+الأقل لا تشملها سياسة خصوصية التطبيق، وهي في الغالب شركات تحليلات أو إعلانات، ولم يكن لمعظم التطبيقات سياسة خاصة بها، بل
+سياسة Telegram القياسية فقط (<a href="https://arxiv.org/html/2608.13390">TeleGapper، ٢٠٢٦</a>).</p>
+<p>على Android، قبل أن يحصل تطبيق مصغّر على رقم هاتفك أو موقعك أو الكاميرا أو الميكروفون، يسألك Telegram في نافذة خاصة
+به تذكر اسم البوت، ويمكنك الرفض. والاستثناء الوحيد في الرمز البرمجي هو فحص العمر الخاص بـ Telegram نفسه، الذي يحصل
+على الكاميرا والميكروفون دون تلك النافذة (<a href="https://core.telegram.org/bots/webapps">التطبيقات المصغّرة في Telegram</a>؛
+<a href="https://github.com/DrKLO/Telegram/blob/master/TMessagesProj/src/main/java/org/telegram/ui/web/BotWebViewContainer.java">الرمز المصدري لـ Telegram لنظام Android</a>).
+لا تصف وثائق Telegram أي طلب موافقة قبل أن يستخدم تطبيق مصغّر مستشعرات الحركة في هاتفك، أو يحفظ ما يصل إلى ٥ ميغابايت
+من البيانات على هاتفك، أو يملأ الشاشة كلها (<a href="https://core.telegram.org/bots/webapps">التطبيقات المصغّرة في Telegram</a>).
+يمكن لصفحة بملء الشاشة أن تبدو تمامًا مثل Telegram، لذا اعتبر نموذج تسجيل الدخول داخل تطبيق مصغّر علامة تحذير
+(<a href="https://www.kaspersky.com/blog/telegram-mini-app-phishing/55041/">Kaspersky</a>).</p>
+<p><strong>النقر على رابط.</strong> يرى الموقع الذي يقود إليه الرابط عنوان IP الخاص بك
+(<a href="https://telegram.org/privacy">سياسة الخصوصية في Telegram</a>).</p>
+<p><strong>ربط محفظة أو توقيع معاملة.</strong> يمكن أن تخسر مالًا
+(<a href="https://cointelegraph.com/magazine/ethereum-phishing-drainers-ton-bitcoin/">Cointelegraph</a>).</p>
+<h2 id="المخاطر-الحقيقية">المخاطر الحقيقية</h2>
+<p>معظمها لا يحتاج إلى أي خلل برمجي: شخص ما يخدعك لتسلّمه شيئًا.</p>
+<ol>
+<li>
+<p><strong>يدخل شخص ما إلى حسابك.</strong> يرسلك بوت أو شخص غريب إلى تطبيق مصغّر أو صفحة: هدية مجانية، أو صفحة «صوِّت لي»، أو
+فحص أمني مزيّف. فتطلب منك رقم هاتفك ورمز تسجيل الدخول، أو تعرض رمز QR لتمسحه، أو تجعل Telegram يعرض عليك طلب
+تسجيل دخول حقيقيًا لتوافق عليه
+(<a href="https://www.kaspersky.com/blog/telegram-mini-app-phishing/55041/">Kaspersky</a>؛
+<a href="https://www.kaspersky.com/blog/telegram-takeover-contest/47195/">Kaspersky</a>؛
+<a href="https://www.cyfirma.com/research/re-emerging-telegram-phishing-campaign-targeting-user-authorization-prompts/">CYFIRMA</a>).
+لا تكتب رمز تسجيل الدخول إلا في تطبيق Telegram نفسه، أو في صفحة تسجيل الدخول الخاصة بـ Telegram التي فتحتها
+بنفسك، ولا تعطه لأحد أبدًا (<a href="https://telegram.org/faq">الأسئلة الشائعة في Telegram</a>). لا تمسح رمز QR لتسجيل
+الدخول إلا من شاشة Telegram على كمبيوترك أنت، وليس أبدًا من صفحة أرسلها إليك أحد. لا تنقر أبدًا على «نعم، أنا»
+في طلب تسجيل دخول لم تبدأه أنت. عيّن كلمة مرور للتحقق بخطوتين، ولا تكتبها في أي مكان سوى Telegram. وإذا كنت
+قد فعلت أحد هذه الأمور بالفعل، فانتقل إلى الإعدادات &gt; الأجهزة، وأنهِ جميع الجلسات الأخرى، وغيّر كلمة المرور تلك.</p>
+</li>
+<li>
+<p><strong>صفحة تبدو مثل خدمة حقيقية</strong> تطلب منك تسجيل الدخول، أو أن تدفع مبلغ «إيداع» قبل أن تتمكن من سحب أرباح لا وجود
+لها، أو أن تثبّت تطبيقًا
+(<a href="https://www.kaspersky.com/blog/telegram-mini-app-phishing/55041/">Kaspersky</a>؛
+<a href="https://www.bleepingcomputer.com/news/security/telegram-mini-apps-abused-for-crypto-scams-android-malware-delivery/">BleepingComputer</a>).</p>
+</li>
+<li>
+<p><strong>بوت «تحقّق» مزيّف</strong> يطلب منك لصق أمر في كمبيوترك، فيثبّت الأمر برامج ضارة
+(<a href="https://www.bitdefender.com/en-us/blog/hotforsecurity/criminals-exploit-telegram-captcha-to-trick-victims-into-installing-malware">Bitdefender</a>؛
+<a href="https://cointelegraph.com/news/telegram-verification-bots-carry-crypto-stealing-malware">Cointelegraph</a>).</p>
+</li>
+<li>
+<p><strong>تطبيق مصغّر يرسل بياناتك بصمت إلى أدوات التتبّع</strong> (<a href="https://arxiv.org/html/2608.13390">TeleGapper، ٢٠٢٦</a>).</p>
+</li>
+<li>
+<p><strong>ونادرًا، خلل برمجي في Telegram نفسه.</strong></p>
+<ul>
+<li>في عام ٢٠٢٤، سمحت ثغرة لمهاجم بإرسال تطبيق Android يبدو كأنه مقطع فيديو في محادثة؛ ولم يكن يُثبَّت شيء إلا إذا
+نقرت عليه ووافقت على التثبيت. أصلحها Telegram في الإصدار 10.14.5
+(<a href="https://www.welivesecurity.com/en/eset-research/cursed-tapes-exploiting-evilvideo-vulnerability-telegram-android/">ESET</a>).</li>
+<li>في أكتوبر ٢٠٢٦، كُشف عن ثغرة في المكالمات الصوتية في Telegram لنظام Android، وقد أُصلحت في الإصدار 12.10.4
+(<a href="https://securityonline.info/telegram-android-rce-v12/">SecurityOnline</a>).</li>
+<li>في نوفمبر ٢٠٢٦ أضاف Telegram الودجات (widgets)، وهي برامج صغيرة داخل الرسالة
+(<a href="https://core.telegram.org/bots/api-changelog">تغييرات Bot API</a>). وبعد يومين من الإعلان عنها، نشرت شركة الأمن
+V12 مقطع فيديو جعل فيه ردُّ بوت على «ابدأ» هاتفَ Android يفتح الآلة الحاسبة من تلقاء نفسه، ما يوحي بأن الرسالة
+شغّلت رمزًا برمجيًا على الهاتف. لم تنشر V12 أي تفاصيل. وأُفيد بأن Telegram أكّد الثغرة وقال إن الإصلاح «نُشر
+لجميع المستخدمين»؛ ولم تكن قد وردت تقارير عن أي هجمات
+(<a href="https://securityonline.info/telegram-android-rce-v12/">SecurityOnline</a>). ومنذ الإصدار 13.2.2، يشغّل Telegram
+لنظام Android الودجات في عملية منفصلة بلا أذونات ولا ملفات ولا شبكة
+(<a href="https://github.com/DrKLO/Telegram/commit/21f7d10">الرمز المصدري لـ Telegram لنظام Android</a>).</li>
+<li>كتب مؤسس Telegram أن المشكلة «غير موجودة»: «لم يكن من الممكن اختراق أي شخص لمجرد تلقّيه رسالة»، وأنه «كان عليك
+أولًا أن تشغّل بنفسك خدمة تابعة لجهة خارجية»، و«حتى هذا أُصلح بالكامل من جهة الخادم»
+(<a href="https://t.me/durov/560">منشوره</a>). وأيًّا كان ما تغيّر على الخوادم، فإن العملية المنفصلة للودجات لا تأتي إلا
+مع تحديث التطبيق.</li>
+</ul>
+<p>تحديث Telegram هو ما يُصلح أخطاء التطبيق. لم يذكر Telegram ما إذا كانت تطبيقاته على iPhone والكمبيوتر قد تأثرت،
+لذا حدّثه على كل جهاز تستخدمه عليه
+(<a href="https://securityonline.info/telegram-android-rce-v12/">SecurityOnline</a>).</p>
+</li>
+</ol>
+<h2 id="إعدادان-أهم-من-أي-بوت">إعدادان أهم من أي بوت</h2>
+<p><strong>بوت أعمال مربوط بحسابك أنت</strong> يمكنه قراءة المحادثات التي تختارها، ويمكنه، بالصلاحيات التي تمنحها له، الرد عليها،
+وحذف الرسائل، وتغيير اسمك ونبذتك التعريفية وصورتك، ونقل هداياك ونجومك (Stars). تعامل مع ذلك كأنك تسلّم هاتفك لشخص
+آخر، وتحقّق من الإعدادات &gt; تيليجرام الأعمال &gt; المحادثة الآلية
+(<a href="https://telegram.org/privacy">سياسة الخصوصية في Telegram</a>؛ <a href="https://core.telegram.org/bots/api">Telegram Bot API</a>).</p>
+<p><strong>في المجموعة،</strong> لا يرى البوت عادةً إلا الأوامر الموجّهة إليه، والردود عليه، والرسائل المرسلة عبره. ويرى كل شيء إذا
+كان مشرفًا أو إذا أوقف مالكه وضع الخصوصية الخاص به، وتُظهر قائمة الأعضاء أيّ البوتات كذلك
+(<a href="https://core.telegram.org/bots/features">ميزات بوتات Telegram</a>).</p>
+<h2 id="التطبيقات-الأخرى-تعمل-بطريقة-مشابهة-إلى-حد-كبير">التطبيقات الأخرى تعمل بطريقة مشابهة إلى حد كبير</h2>
+<p><strong>WhatsApp وMessenger وInstagram وViber وSlack وX:</strong> البوت هو كمبيوتر تابع لشركة. لا يتصل هاتفك إلا بالمنصة ما لم
+يفتح البوت صفحة ويب، لكن الشركة تقرأ ما ترسله، وقد يقرؤه أيضًا مزوّدو الخدمات لديها.</p>
+<ul>
+<li><strong>WhatsApp:</strong> عندما تستخدم شركة خدمة Meta نفسها، تفك Meta تشفير رسائلها وتحتفظ بها لمدة تصل إلى ٣٠ يومًا، وقد
+تستخدم الشركة ما ترسله لأغراض التسويق الخاصة بها، بما في ذلك الإعلانات
+(<a href="https://developers.facebook.com/documentation/business-messaging/whatsapp/data-privacy-and-security">Meta</a>).
+ويقول WhatsApp إنه يُظهر في المحادثة متى تستخدم الشركة خدمة Meta، ولا يَعُدّ تلك المحادثات مشفّرة تشفيرًا تامًّا بين
+الطرفين (<a href="https://faq.whatsapp.com/general/28030015">WhatsApp</a>).</li>
+<li><strong>Messenger:</strong> يمكن للشركة فتح صفحات ويب داخل Messenger، ويمكن لهذه الصفحات معرفة معرّف خاص بك والمحادثة التي جئت
+منها، على نحو يشبه كثيرًا التطبيق المصغّر في Telegram
+(<a href="https://developers.facebook.com/documentation/business-messaging/messenger-platform/webview">Meta</a>؛
+<a href="https://developers.facebook.com/documentation/business-messaging/messenger-platform/webview/context">Meta</a>).</li>
+<li><strong>Instagram:</strong> لا يستطيع بوت الشركة مراسلتك إلا بعد أن تراسله أنت
+(<a href="https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/messaging-api">Meta</a>).</li>
+<li><strong>Viber:</strong> يمكن للبوت أن يرى بلدك ولغتك وجهازك وشبكة الجوّال التي تستخدمها
+(<a href="https://creators.viber.com/docs/bots-api/resources/subscribers/get-subscriber-details">Viber</a>).</li>
+<li><strong>Slack:</strong> يقرأ التطبيق القنوات والمحادثات التي أُضيف إليها، في حدود ما تسمح به أذوناته
+(<a href="https://docs.slack.dev/reference/scopes/">Slack</a>).</li>
+<li><strong>X:</strong> في المحادثة المشفّرة مع بوت، يحتفظ برنامج البوت نفسه بالمفاتيح ويفك تشفير رسائلك، لذا يستطيع مالكه قراءتها
+(<a href="https://docs.x.com/xchat/introduction">X</a>؛ <a href="https://docs.x.com/xchat/bots">X</a>).</li>
+</ul>
+<p><strong>Discord:</strong> يقرأ البوت ما تسمح به أذوناته. والأنشطة داخل تطبيق Discord هي تطبيقات ويب يملكها آخرون، لكنها تتصل
+بمالكيها عبر Discord، ويقول Discord إن ذلك يُخفي عنهم عنوان IP الخاص بك
+(<a href="https://github.com/discord/discord-api-docs/blob/main/developers/activities/development-guides/networking.mdx">Discord</a>).</p>
+<p><strong>WeChat وAlipay وLINE وTikTok والتطبيقات المشابهة:</strong> تطبيقاتها المصغّرة تشبه تطبيقات Telegram، فهي برامج يملكها
+آخرون داخل التطبيق. ويمكنها التعرّف عليك بمعرّف دون أن تسألك
+(<a href="https://developers.weixin.qq.com/miniprogram/en/dev/framework/open-ability/union-id.html">WeChat</a>؛
+<a href="https://miniprogram.alipay.com/docs/miniprogram/mpdev/api_openapi_getauthcode">Alipay</a>؛
+<a href="https://developers.tiktok.com/docs/en/tiktok-minis-silent-login">TikTok</a>؛
+<a href="https://developers.line.biz/en/docs/line-mini-app/develop/channel-consent-simplification/">LINE</a>، للتطبيقات المصغّرة
+الموثَّقة)، وعادةً ما يتصل هاتفك بخوادم مالكيها
+(<a href="https://developers.weixin.qq.com/miniprogram/en/dev/framework/ability/network.html">WeChat</a>). ووجدت دراسة صدرت
+عام ٢٠٢٣ أن WeChat نفسه يتلقى سجلات مفصّلة عمّا تفعله في برامجه المصغّرة
+(<a href="https://citizenlab.ca/2023/06/privacy-in-the-wechat-ecosystem-full-report/">Citizen Lab</a>).</p>
+<p><strong>Signal</strong> لا توجد فيه منصة بوتات ولا تطبيقات مصغّرة. البوت هناك حساب عادي يديره برنامج
+(<a href="https://github.com/AsamK/signal-cli">signal-cli</a>)، ويقرأ ما ترسله إليه.</p>
+<h2 id="باختصار">باختصار</h2>
+<p>الضغط على «ابدأ» يُطلع البوت على هويتك في Telegram ويتيح له مراسلتك. وفتح تطبيق مصغّر يُطلع مالكه أيضًا، وكثيرًا ما
+يُطلع أدوات التتبّع، على المكان الذي تتصل منه. يبدأ معظم الضرر عندما تسلّم شيئًا (رمزًا، أو موافقة على تسجيل دخول،
+أو رقم هاتف، أو دفعة مالية، أو توقيعًا، أو تطبيقًا لتثبيته)، أو، نادرًا، بسبب خلل برمجي في التطبيق نفسه. حدّث التطبيق
+باستمرار، وعيّن كلمة مرور للتحقق بخطوتين، ولا تسلّم أبدًا رمزًا ولا توافق على تسجيل دخول لم تبدأه أنت، واحظر البوتات
+التي لم تعد تستخدمها.</p>
+</div></section></main>
+<div class="w"><footer><div class="fl"><a href="../news/index.html">الأخبار</a>
+<a href="../bots/index.html">ما يمكن للبوت رؤيته</a>
+<a href="../privacy/index.html">ملاحظات الخصوصية</a>
+<a href="https://github.com/visadahyu/datapavan/security/advisories/new">الإبلاغ عن ثغرة بسرّية</a>
+<a href="https://github.com/visadahyu/datapavan/blob/main/SECURITY.md">سياسة الأمان</a>
+<a href="https://github.com/visadahyu/datapavan">الرمز المصدري</a></div><p>برنامج حر بموجب Apache License 2.0.</p><p>لا تضع هذه الصفحة ملفات تعريف ارتباط ولا تحمّل شيئًا من خوادم أخرى.</p></footer></div>
+</body>
+</html>
