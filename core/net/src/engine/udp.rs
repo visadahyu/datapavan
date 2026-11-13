@@ -1156,6 +1156,25 @@ impl UdpTable {
             .then(|| self.ask(app, came))
     }
 
+    /// Something came in `now` to the mapping `id` of `app`, and was let in. Traffic that only comes in
+    /// keeps no app's claim to the socket fresh: once the answers no longer presume the mapping's app,
+    /// the app having sent nothing for `udp_reask` nor Android named it since, a question is put out,
+    /// unless one out can say, at most one each `udp_reask` of such traffic. An answer that names
+    /// another app, or none, then ends the mapping (ninth review of unit 9, finding 2).
+    fn came_in(
+        &mut self,
+        (app, id): (SocketAddr, u64),
+        now: Instant,
+        reask: Duration,
+    ) -> Option<Asking> {
+        let uid = self.mapping(app, id)?.uid;
+        let socket = self.sockets.get(&app)?;
+        if socket.record.passes(now, uid, reask) {
+            return None;
+        }
+        self.question_for(app, (now, None, None), reask)
+    }
+
     /// Whether `key`'s app socket has a mapping that knows its destination: one the app sent to.
     fn knows(&self, (app, destination): (SocketAddr, SocketAddr)) -> bool {
         self.mappings
@@ -2223,13 +2242,19 @@ async fn mapped(
                 }
                 let queued = take_errors(&socket);
                 let ends = (app, id, uid);
-                let (packets, end) = with_buffer(|buffer| {
+                let (packets, end, from) = with_buffer(|buffer| {
                     if through_tool {
                         relayed_receive(&socket, buffer, ends, &shared, &flows)
                     } else {
                         mapped_receive(&socket, buffer, ends, queued, &shared, &flows)
                     }
                 });
+                let reask = shared.limits.udp_reask;
+                if let Some(from) = from
+                    && let Some(asking) = lock(&flows).came_in((app, id), Instant::now(), reask)
+                {
+                    spawn_question((app, from), asking, &shared, &flows);
+                }
                 for packet in packets {
                     send_to_app(&tun, &shared, &packet).await;
                 }
@@ -2264,16 +2289,17 @@ fn mapped_receive(
     queued: Vec<(SocketAddr, Unreachable)>,
     shared: &Shared,
     flows: &UdpFlows,
-) -> (Vec<Vec<u8>>, bool) {
+) -> (Vec<Vec<u8>>, bool, Option<SocketAddr>) {
     let mut packets = Vec::new();
+    let mut from_last = None;
     for (destination, told) in queued {
         let bytes = match lock(flows).mapping(app, id) {
-            None => return (packets, true),
+            None => return (packets, true, from_last),
             Some(mapping) => {
                 // While a chain sends the app elsewhere, nothing comes in on its direct path: its
                 // errors neither.
                 if !mapping.keeps_its_way(shared) {
-                    return (packets, true);
+                    return (packets, true, from_last);
                 }
                 match mapping.peers.get(&destination) {
                     Some(peer) => peer.bytes.clone(),
@@ -2294,10 +2320,10 @@ fn mapped_receive(
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
             // An ICMP error, which this read took: the error queue says which destination it was for.
             Err(error) if errors::from_icmp(&error) => continue,
-            Err(_) => return (packets, true),
+            Err(_) => return (packets, true, from_last),
         };
         let (bytes, learns) = match lock(flows).let_in((app, id), (from, &buffer[..n]), shared) {
-            LetIn::Gone => return (packets, true),
+            LetIn::Gone => return (packets, true, from_last),
             LetIn::Filtered => {
                 Counters::add(&shared.counters.udp_filtered, 1);
                 continue;
@@ -2310,7 +2336,10 @@ fn mapped_receive(
                 Counters::add(&shared.counters.udp_came_in_capped, 1);
                 continue;
             }
-            LetIn::Peer(_, bytes, learns) => (bytes, learns),
+            LetIn::Peer(shown, bytes, learns) => {
+                from_last = Some(shown);
+                (bytes, learns)
+            }
         };
         packets.extend(deliver(
             shared,
@@ -2320,7 +2349,7 @@ fn mapped_receive(
             learns,
         ));
     }
-    (packets, false)
+    (packets, false, from_last)
 }
 
 /// What a mapping through the tool lets in now: each answer its relay holds, read into `buffer`, from
@@ -2334,13 +2363,14 @@ fn relayed_receive(
     (app, id, uid): (SocketAddr, u64, Option<u32>),
     shared: &Shared,
     flows: &UdpFlows,
-) -> (Vec<Vec<u8>>, bool) {
+) -> (Vec<Vec<u8>>, bool, Option<SocketAddr>) {
     let mut packets = Vec::new();
+    let mut from_last = None;
     for _ in 0..BATCH {
         let n = match socket.try_recv(buffer) {
             Ok(n) => n,
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
-            Err(_) => return (packets, true),
+            Err(_) => return (packets, true, from_last),
         };
         // A header that is not well formed, or a fragment, which Watch drops as RFC 1928 allows, names
         // no peer.
@@ -2350,7 +2380,7 @@ fn relayed_receive(
         };
         let (from, bytes, learns) =
             match lock(flows).let_in_relayed((app, id), (&target, answer), shared) {
-                LetIn::Gone => return (packets, true),
+                LetIn::Gone => return (packets, true, from_last),
                 LetIn::Filtered => {
                     Counters::add(&shared.counters.udp_filtered, 1);
                     continue;
@@ -2363,7 +2393,10 @@ fn relayed_receive(
                     Counters::add(&shared.counters.udp_came_in_capped, 1);
                     continue;
                 }
-                LetIn::Peer(from, bytes, learns) => (from, bytes, learns),
+                LetIn::Peer(from, bytes, learns) => {
+                    from_last = Some(from);
+                    (from, bytes, learns)
+                }
             };
         packets.extend(deliver(
             shared,
@@ -2373,7 +2406,7 @@ fn relayed_receive(
             learns,
         ));
     }
-    (packets, false)
+    (packets, false, from_last)
 }
 
 /// An `answer` a mapping let in from the peer the app knows as `from`: counted, and wrapped in an IP

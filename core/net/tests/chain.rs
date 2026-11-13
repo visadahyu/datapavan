@@ -3923,6 +3923,56 @@ async fn a_retry_held_behind_a_slow_protect_leaves_directly() -> Outcome {
     Ok(())
 }
 
+/// A chatty peer of the direct app's mapping sends every 50 ms, on and on, once Android hands the port
+/// to the chained app, which never sends. What only comes in asks Android again at most once in each
+/// `udp_reask` (100 ms here), and the mapping ends once the answer names another app: what the peer
+/// sends reaches the port's next app for no longer than that, not until the mapping idles out (ninth
+/// review of unit 9, finding 2).
+#[tokio::test(flavor = "current_thread")]
+async fn a_peer_of_the_old_apps_mapping_reaches_the_ports_next_app_only_briefly() -> Outcome {
+    const PORT: u16 = 50_903;
+    let peer = UdpSocket::bind("127.0.0.1:0").await?;
+    let at = peer.local_addr()?;
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 64];
+        if let Ok((_, from)) = peer.recv_from(&mut buffer).await {
+            loop {
+                let _ = peer.send_to(b"chatter", from).await;
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        }
+    });
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(Staged::default());
+    android.set(PORT, Some(DIRECT));
+    let limits = Limits {
+        udp_idle: Duration::from_secs(2),
+        ..quick_reask()
+    };
+    let (_engine, tunnel) = engine_with(chain(tool.address), limits, android.clone())?;
+    send(&tunnel, app(PORT), at, b"hello").await?;
+    receive(&tunnel).await?.ok_or("the peer's first datagram")?;
+    android.set(PORT, Some(CHAINED));
+    let handed = tokio::time::Instant::now();
+    let mut late = 0;
+    while handed.elapsed() < Duration::from_millis(1_500) {
+        if let Ok(Ok(Some(_))) =
+            tokio::time::timeout(Duration::from_millis(100), receive(&tunnel)).await
+            && handed.elapsed() > Duration::from_millis(400)
+        {
+            late += 1;
+        }
+    }
+    assert_eq!(late, 0, "the peer reached the port's next app {late} times");
+    let asked = android
+        .asked
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .len();
+    assert!(asked >= 2, "Android was asked {asked} times");
+    Ok(())
+}
+
 /// A front for the tool that takes each connection and closes it after `delay`, its handshake unanswered.
 async fn closing_front(delay: Duration) -> io::Result<SocketAddr> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
