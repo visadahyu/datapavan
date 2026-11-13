@@ -46,6 +46,7 @@ pub enum Headers {
     Mapped,
 }
 
+/// The test proxy. Dropping it ends its UDP relays, as [`Proxy::close_relays`] does.
 pub struct Proxy {
     pub address: SocketAddr,
     seen: Arc<Seen>,

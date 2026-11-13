@@ -2391,13 +2391,38 @@ async fn a_flow_that_came_in_by_name_does_not_block_an_asked_stand_in() -> Outco
     Ok(())
 }
 
-/// One datagram to a second name on a bound stand-in's port, never answered: the bound stand-in's
-/// answers, which could be the second name's, are dropped while it contests the port, for
-/// `Limits::udp_contest`, and then reach the app again (fourth review of unit 9, finding 2).
-#[tokio::test(flavor = "current_thread")]
-async fn an_unanswered_name_cuts_a_bound_one_only_for_a_while() -> Outcome {
+/// Waits until the engine keeps a UDP flow to `destination`: until Android named its app and its way
+/// opened.
+async fn until_a_flow_to(engine: &Engine, destination: SocketAddr) -> Outcome {
+    let until = tokio::time::Instant::now() + Duration::from_secs(5);
+    while !engine
+        .flows()
+        .iter()
+        .any(|flow| flow.protocol == packet::UDP && flow.destination == destination)
+    {
+        if tokio::time::Instant::now() > until {
+            return Err(format!("no flow to {destination}").into());
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    Ok(())
+}
+
+/// What [`a_bound_name_beside_a_silent_one`] sets up: the engine, the tunnel, both stand-ins, and the
+/// tool and the silent server, which must live as long as the test.
+type BesideASilentOne = (
+    Engine,
+    UnixDatagram,
+    (SocketAddr, SocketAddr),
+    (common::Proxy, UdpSocket),
+);
+
+/// A bound name `a` and a second name `b` on its port whose server never answers; `contest` is
+/// `Limits::udp_contest`.
+async fn a_bound_name_beside_a_silent_one(
+    contest: Duration,
+) -> Result<BesideASilentOne, Box<dyn std::error::Error>> {
     let echo = udp_echo().await?;
-    // The second name's server, which never answers.
     let quiet = UdpSocket::bind(("127.0.0.2", echo.port())).await?;
     let mut settings = Settings::default();
     settings.names.insert("a.test".into(), echo.ip());
@@ -2405,7 +2430,6 @@ async fn an_unanswered_name_cuts_a_bound_one_only_for_a_while() -> Outcome {
         .names
         .insert("b.test".into(), IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2)));
     let tool = proxy(settings).await?;
-    let contest = Duration::from_secs(1);
     let limits = Limits {
         udp_contest: contest,
         ..Limits::default()
@@ -2414,26 +2438,70 @@ async fn an_unanswered_name_cuts_a_bound_one_only_for_a_while() -> Outcome {
     let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, echo.port()));
     let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, echo.port()));
     echoed(&tunnel, a, b"bound").await?;
-    send(&tunnel, app(CHAINED_PORT), b, b"one try").await?;
-    let started = tokio::time::Instant::now();
+    Ok((engine, tunnel, (a, b), (tool, quiet)))
+}
+
+/// Sends `a` a datagram every 200 ms, and `b` one too when `retry`, for 4 s: which ticks `a` answered.
+async fn ticks_answered(
+    tunnel: &UnixDatagram,
+    (a, b): (SocketAddr, SocketAddr),
+    retry: bool,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let mut answered = Vec::new();
-    for tick in 0..15u8 {
-        send(&tunnel, app(CHAINED_PORT), a, &[tick]).await?;
+    for tick in 0..20u8 {
+        if retry {
+            send(tunnel, app(CHAINED_PORT), b, b"retry").await?;
+        }
+        send(tunnel, app(CHAINED_PORT), a, &[tick]).await?;
         let mut buffer = [0u8; 2048];
         let got = tokio::time::timeout(Duration::from_millis(200), tunnel.recv(&mut buffer)).await;
         if matches!(got, Ok(Ok(_))) {
-            answered.push(started.elapsed());
+            answered.push(tick);
         }
     }
-    let first = *answered
-        .first()
-        .ok_or("the bound name never got its answers back")?;
+    Ok(answered)
+}
+
+/// One datagram to a second name on a bound stand-in's port, never answered: the bound stand-in's
+/// answers, which could be the second name's, are dropped while it contests the port, for
+/// `Limits::udp_contest`, and then reach the app again (fourth review of unit 9, finding 2). The ticks
+/// start once the second name is a flow, so that its contest has surely begun (fifth review, finding 4).
+#[tokio::test(flavor = "current_thread")]
+async fn an_unanswered_name_cuts_a_bound_one_only_for_a_while() -> Outcome {
+    let (engine, tunnel, (a, b), _kept) =
+        a_bound_name_beside_a_silent_one(Duration::from_secs(2)).await?;
+    send(&tunnel, app(CHAINED_PORT), b, b"one try").await?;
+    until_a_flow_to(&engine, b).await?;
+    let answered = ticks_answered(&tunnel, (a, b), false).await?;
     assert!(
-        first >= contest * 3 / 4,
-        "an answer came while b contested: {first:?}"
+        !answered.is_empty(),
+        "the bound name never got its answers back"
+    );
+    assert!(
+        answered[0] > 0,
+        "an answer came while b contested: ticks {answered:?}"
     );
     assert!(engine.counters()[UDP_UNMATCHED] >= 1);
-    drop(quiet);
+    Ok(())
+}
+
+/// The same when the app retries the second name at every tick, as a STUN client does: the cut ends all
+/// the same, since the contest runs from the app's first datagram to it (the fifth review's experiment).
+#[tokio::test(flavor = "current_thread")]
+async fn a_retried_unanswered_name_cuts_a_bound_one_only_for_a_while() -> Outcome {
+    let (engine, tunnel, (a, b), _kept) =
+        a_bound_name_beside_a_silent_one(Duration::from_secs(2)).await?;
+    send(&tunnel, app(CHAINED_PORT), b, b"first try").await?;
+    until_a_flow_to(&engine, b).await?;
+    let answered = ticks_answered(&tunnel, (a, b), true).await?;
+    assert!(
+        !answered.is_empty(),
+        "the bound name never got its answers back"
+    );
+    assert!(
+        answered[0] > 0,
+        "an answer came while b contested: ticks {answered:?}"
+    );
     Ok(())
 }
 
