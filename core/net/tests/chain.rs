@@ -3645,3 +3645,47 @@ async fn a_flow_of_lookups_still_opening_when_a_datagram_names_the_new_app_does_
     );
     Ok(())
 }
+
+/// A chained app's stand-in whose name gave way in the map (which holds one name here); the port is
+/// handed to another chained app, through the same tool, which sends to that stand-in after a pause. The
+/// new app gets no way from the old app's peer: the map names nothing there for it, so the stand-in is
+/// unreachable, and nothing reaches the old app's name (seventh review of unit 9, finding 4).
+#[tokio::test(flavor = "current_thread")]
+async fn another_app_gets_no_way_from_the_old_apps_stand_in() -> Outcome {
+    const PORT: u16 = 50_309;
+    const ALSO_CHAINED: u32 = 10_301;
+    let echo = udp_echo().await?;
+    let mut settings = Settings::default();
+    settings.names.insert("a.test".into(), echo.ip());
+    let tool = proxy(settings).await?;
+    let mut both = chain(tool.address);
+    both.apps = Some(HashSet::from([CHAINED, ALSO_CHAINED]));
+    let owners = Arc::new(Owners::default());
+    owners.set(CHAINED_PORT, Some(CHAINED));
+    owners.set(PORT, Some(CHAINED));
+    let limits = Limits {
+        stand_ins: 1,
+        ..quick_reask()
+    };
+    let (engine, tunnel) = engine_with(both, limits, owners.clone())?;
+    let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, echo.port()));
+    send(&tunnel, app(PORT), a, b"x").await?;
+    assert_eq!(receive(&tunnel).await?, Some((a, b"x".to_vec())));
+    stand_in(&tunnel, b"\x01b\x04test\x00").await?;
+    owners.set(PORT, Some(ALSO_CHAINED));
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    send(&tunnel, app(PORT), a, b"y").await?;
+    let echoed: Vec<_> = everything(&tunnel)
+        .await
+        .into_iter()
+        .filter(|(_, payload)| payload == b"y")
+        .collect();
+    assert!(echoed.is_empty(), "the new app reached the old app's name");
+    let unnamed = engine.flows().into_iter().any(|flow| {
+        flow.destination == a
+            && flow.uid == Some(ALSO_CHAINED)
+            && flow.outcome == datapavan_net::engine::Outcome::Opened
+    });
+    assert!(!unnamed, "a flow of the new app to the old app's name");
+    Ok(())
+}

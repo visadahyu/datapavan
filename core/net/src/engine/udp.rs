@@ -447,7 +447,17 @@ impl Peer {
         now: Instant,
         (came_in, way): (bool, PeerWay),
     ) -> Self {
-        let (opened, flow) = begin_udp(shared, app, address, uid);
+        let (mut opened, mut flow) = begin_udp(shared, app, address, uid);
+        // A stand-in whose name gave way in the map keeps it in the log, as long as a peer of its app
+        // stands for it: its datagrams still go to that name (seventh review of unit 9, finding 4).
+        if flow.name.is_none()
+            && let Some(name) = &way.name
+        {
+            flow.name = Some(name.clone());
+            flow.named_by = NamedBy::Dns;
+            (flow.dns, flow.resolver) = shared.dns_use(address, Some(name));
+            opened.dns = flow.dns;
+        }
         Self {
             opened,
             id: opened.id,
@@ -1708,16 +1718,7 @@ async fn open_peer(
     (tun, shared, flows, changes): Context<'_>,
 ) -> Flushed {
     let (app, destination) = key;
-    // A stand-in the map no longer holds names nothing the tool could reach, unless a peer of the app's
-    // mapping still stands for it: a live peer keeps its way when its name gives way in the map to
-    // newer ones, which the mapping's own datagrams do not keep in use (sixth review of unit 9,
-    // finding 7).
-    let way = PeerWay::toward(shared, &wanted.exit, destination).or_else(|| {
-        let table = lock(flows);
-        let peer = table.mappings.get(&app)?.peers.get(&destination)?;
-        Some(peer.way.clone())
-    });
-    let opened = match way {
+    let opened = match way_toward(key, &wanted, shared, flows) {
         None => Err(io::ErrorKind::HostUnreachable.into()),
         Some(way) => mapping_for(key, &wanted, (tun, shared, flows, changes))
             .await
@@ -1813,6 +1814,27 @@ async fn open_peer(
         send_to_app(tun, shared, &error).await;
     }
     held.map_or(Flushed::All, Flushed::Held)
+}
+
+/// The way to `key`'s destination for a mapping that leaves as `wanted` says. A stand-in the map no
+/// longer holds names nothing the tool could reach, unless a peer of the same app's mapping still stands
+/// for it: a live peer keeps its way when its name gives way in the map to newer ones, which the
+/// mapping's own datagrams do not keep in use (sixth review of unit 9, finding 7). Another app that took
+/// the socket's port gets no name from the old app's peers (seventh review, finding 4).
+fn way_toward(
+    (app, destination): (SocketAddr, SocketAddr),
+    wanted: &Wanted,
+    shared: &Shared,
+    flows: &UdpFlows,
+) -> Option<PeerWay> {
+    PeerWay::toward(shared, &wanted.exit, destination).or_else(|| {
+        let table = lock(flows);
+        let mapping = table
+            .mappings
+            .get(&app)
+            .filter(|mapping| mapping.uid == wanted.uid)?;
+        Some(mapping.peers.get(&destination)?.way.clone())
+    })
 }
 
 /// The mapping of `key`'s app for its new destination, by its number, with its socket: the app's open
@@ -3180,6 +3202,57 @@ mod tests {
         );
         table.take(key);
         assert!(!table.sockets.contains_key(&APP));
+    }
+
+    /// A stand-in the map no longer holds keeps the way of the live peer that stands for it, but only
+    /// for that peer's own app: another app that took the socket's port gets none (seventh review of
+    /// unit 9, finding 4).
+    #[tokio::test(flavor = "current_thread")]
+    async fn only_the_same_app_keeps_a_live_stand_ins_way() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let mut mapping = mapping(now).await?;
+        mapping.uid = Some(10_077);
+        let stand_in = SocketAddr::from(([198, 18, 0, 1], 443));
+        mapping.peer(&shared, (APP, stand_in), now, (false, waiting_stand_in()));
+        let flows = UdpFlows::default();
+        lock(&flows).mappings.insert(APP, mapping);
+        let tool = Arc::new(Chain {
+            proxy: SocketAddr::from(([127, 0, 0, 1], 1080)),
+            credentials: None,
+            tool: 10_200,
+            apps: None,
+            udp: true,
+            log_destinations: false,
+        });
+        let wanted = |uid| Wanted {
+            uid: Some(uid),
+            exit: Exit::Tool(Arc::clone(&tool)),
+            chains: 0,
+            asked: now,
+        };
+        let name = |uid| way_toward((APP, stand_in), &wanted(uid), &shared, &flows)?.name;
+        assert_eq!(name(10_077), Some("dns.test".to_owned()));
+        assert_eq!(name(10_078), None);
+        Ok(())
+    }
+
+    /// A peer made with a way that names a name the stand-in map no longer holds is logged under that
+    /// name: its datagrams go to it (seventh review of unit 9, finding 4).
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_peer_keeps_the_name_its_way_names_in_the_log() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let mut mapping = mapping(now).await?;
+        let stand_in = SocketAddr::from(([198, 18, 0, 1], 443));
+        mapping.peer(&shared, (APP, stand_in), now, (false, waiting_stand_in()));
+        let named: Vec<_> = lock(&shared.flows)
+            .iter()
+            .filter(|flow| flow.destination == stand_in)
+            .map(|flow| (flow.name.clone(), flow.named_by))
+            .collect();
+        assert_eq!(named, [(Some("dns.test".to_owned()), NamedBy::Dns)]);
+        Ok(())
     }
 
     /// A stand-in on port 53 that its relay answers by name waits no more: it drops the queries it kept
