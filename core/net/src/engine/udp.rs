@@ -2902,25 +2902,29 @@ mod tests {
     }
 
     /// A datagram to a destination the mapping knows that comes while a question about its socket is
-    /// out, but `udp_reask` or more after it was asked, does not wait for that answer: it asks again
-    /// (sixth review of unit 9, finding 1). Android here names no app; the question out never answers.
+    /// out, but `udp_reask` after it was asked, to the nanosecond, does not wait for that answer: it asks
+    /// again (sixth review of unit 9, finding 1; pinned to the instant by the seventh, finding 3).
+    /// Android here names no app; the question out never answers.
     #[tokio::test(flavor = "current_thread")]
     async fn a_datagram_that_came_after_a_questions_window_asks_again() -> io::Result<()> {
         let shared = Arc::new(shared());
         let flows = paused(&shared, Some(10_077)).await?;
-        let _told = out(&flows, ago(&shared, 1.5)?);
-        let asked = owner_of(((APP, OTHER), Instant::now()), &shared, &flows);
-        let named = tokio::time::timeout(Duration::from_secs(1), asked).await?;
+        let asked = ago(&shared, 1.0)?;
+        let _told = out(&flows, asked);
+        let came = asked + shared.limits.udp_reask;
+        let question = owner_of(((APP, OTHER), came), &shared, &flows);
+        let named = tokio::time::timeout(Duration::from_secs(1), question).await?;
         assert_eq!(named.uid, None);
         Ok(())
     }
 
-    /// One that comes less than `udp_reask` after the question was asked waits for its answer.
+    /// One that comes a nanosecond before `udp_reask` after the question was asked waits for its
+    /// answer.
     #[tokio::test(flavor = "current_thread")]
     async fn a_datagram_that_came_within_a_questions_window_joins_it() -> io::Result<()> {
         let shared = Arc::new(shared());
         let flows = paused(&shared, Some(10_077)).await?;
-        let asked = ago(&shared, 0.5)?;
+        let asked = ago(&shared, 1.0)?;
         let told = out(&flows, asked);
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(20)).await;
@@ -2930,8 +2934,57 @@ mod tests {
             };
             let _ = told.send(Asked::Answered(named));
         });
-        let named = owner_of(((APP, OTHER), Instant::now()), &shared, &flows).await;
+        let came = asked
+            + shared
+                .limits
+                .udp_reask
+                .saturating_sub(Duration::from_nanos(1));
+        let named = owner_of(((APP, OTHER), came), &shared, &flows).await;
         assert_eq!(named.uid, Some(10_078));
+        Ok(())
+    }
+
+    /// The windows ADR 0044 states, to the nanosecond on both sides (seventh review of unit 9, finding
+    /// 3): a mapping is fresh until `udp_reask` after the app last sent and thirty times that after
+    /// Android last named its app; an answer holds until `udp_reask` after its question, and for what
+    /// came before it.
+    #[test]
+    fn the_windows_hold_to_the_nanosecond() {
+        let reask = shared().limits.udp_reask;
+        let at = Instant::now();
+        let under = |window: Duration| at + window.saturating_sub(Duration::from_nanos(1));
+        assert!(fresh((at, at), under(reask), reask));
+        assert!(!fresh((at, at), at + reask, reask));
+        let thirty = reask * 30;
+        assert!(fresh((under(thirty), at), under(thirty), reask));
+        assert!(!fresh((at + thirty, at), at + thirty, reask));
+        let named = Named {
+            uid: None,
+            asked: at,
+        };
+        assert!(named.holds_for(under(reask), reask));
+        assert!(!named.holds_for(at + reask, reask));
+        let later = Named {
+            uid: None,
+            asked: at + reask * 5,
+        };
+        assert!(later.holds_for(at, reask), "what came before the question");
+    }
+
+    /// A stand-in still waiting contests its port's answers until `udp_contest` after the app first
+    /// sent to it, to the nanosecond (seventh review of unit 9, finding 3).
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_waiting_stand_in_contests_its_port_for_udp_contest_exactly() -> io::Result<()> {
+        let shared = shared();
+        let made = Instant::now();
+        let mut mapping = mapping(made).await?;
+        let stand_in = SocketAddr::from(([198, 18, 0, 1], 53));
+        mapping.peer(&shared, (APP, stand_in), made, (false, waiting_stand_in()));
+        let contest = shared.limits.udp_contest;
+        let under = made + contest.saturating_sub(Duration::from_nanos(1));
+        assert!(mapping.contested(53, None, (under, contest)));
+        assert!(!mapping.contested(53, None, (made + contest, contest)));
+        assert!(!mapping.contested(53, Some(stand_in), (made, contest)));
         Ok(())
     }
 
