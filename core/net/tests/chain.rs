@@ -2436,3 +2436,60 @@ async fn an_unanswered_name_cuts_a_bound_one_only_for_a_while() -> Outcome {
     drop(quiet);
     Ok(())
 }
+
+/// Android, which names every app socket the direct app's, and counts how often it is asked.
+#[derive(Default)]
+struct Counting(std::sync::atomic::AtomicUsize);
+
+impl Counting {
+    fn asked(&self) -> usize {
+        self.0.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
+impl Platform for Counting {
+    fn owner(&self, _: u8, _: SocketAddr, _: SocketAddr) -> Option<u32> {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Some(DIRECT)
+    }
+
+    fn protect(&self, _: RawFd) -> bool {
+        true
+    }
+
+    fn log(&self, _: &[u8]) {}
+}
+
+/// After a pause, an app socket that sends to five destinations it knows asks Android once, not once
+/// for each, and every datagram still reaches its destination (fourth review of unit 9, finding 3).
+#[tokio::test(flavor = "current_thread")]
+async fn one_pause_asks_android_once() -> Outcome {
+    let mut echoes = Vec::new();
+    for _ in 0..5 {
+        echoes.push(udp_echo().await?);
+    }
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(Counting::default());
+    let (_engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    for &echo in &echoes {
+        echoed(&tunnel, echo, b"first").await?;
+    }
+    let before = android.asked();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    for &echo in &echoes {
+        send(&tunnel, app(CHAINED_PORT), echo, b"after a pause").await?;
+    }
+    let mut from = Vec::new();
+    for _ in 0..5 {
+        from.push(receive(&tunnel).await?.ok_or("a datagram")?.0);
+    }
+    from.sort_unstable();
+    echoes.sort_unstable();
+    assert_eq!(from, echoes);
+    assert_eq!(
+        android.asked() - before,
+        1,
+        "questions to Android for one pause"
+    );
+    Ok(())
+}

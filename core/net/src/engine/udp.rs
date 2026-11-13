@@ -771,6 +771,9 @@ pub(super) struct UdpTable {
     /// The app sockets whose mapping one destination opens now, each with what tells the others that
     /// wait for it how it went: nothing while it opens and once it opened, else why it failed.
     opening: HashMap<SocketAddr, watch::Receiver<Option<io::ErrorKind>>>,
+    /// The app sockets whose app Android is asked for now, each with what tells the destinations that
+    /// wait for the answer what it is.
+    asking: HashMap<SocketAddr, watch::Receiver<Asked>>,
     /// The number of the last mapping opened.
     opened: u64,
 }
@@ -1187,7 +1190,7 @@ async fn open_udp(
     // An app Android cannot name is unknown, in the log and to the chain, even when Android named this
     // socket's app before: the port may be another app's now, and a guess would log one app's traffic
     // as another's. While a chain is on, such an app goes nowhere.
-    let uid = owner(&shared, UDP, app, destination).await;
+    let uid = owner_of(key, &shared, &flows).await;
     if shared.is_tunnel_dns(destination.ip()) {
         open_flow(key, uid, tun, shared, flows, changes).await;
         return;
@@ -1217,6 +1220,54 @@ type Context<'a> = (
     &'a UdpFlows,
     &'a watch::Receiver<u64>,
 );
+
+/// Where a question to Android about an app socket's app stands.
+#[derive(Clone, Copy)]
+enum Asked {
+    Waiting,
+    /// The app Android named, if it named one.
+    Answered(Option<u32>),
+}
+
+/// Asks Android whose app socket `key`'s app is, once for every destination of it that opens meanwhile:
+/// those that come while the question is out wait for its answer instead of asking again, so that a
+/// pause in an app socket's sending costs one question to Android, not one for each destination it
+/// knows. Their datagrams wait meanwhile, as a new destination's do. An unconnected UDP socket has one
+/// app whatever the destination, so the answer is theirs too.
+async fn owner_of(
+    (app, destination): (SocketAddr, SocketAddr),
+    shared: &Arc<Shared>,
+    flows: &UdpFlows,
+) -> Option<u32> {
+    let asked = {
+        let mut table = lock(flows);
+        match table.asking.get(&app) {
+            // One whose asker is gone without a word (the engine stopping) holds no one up.
+            Some(waiting) if waiting.has_changed().is_ok() => Err(waiting.clone()),
+            _ => {
+                let (told, waiting) = watch::channel(Asked::Waiting);
+                table.asking.insert(app, waiting);
+                Ok(told)
+            }
+        }
+    };
+    match asked {
+        Ok(told) => {
+            let uid = owner(shared, UDP, app, destination).await;
+            lock(flows).asking.remove(&app);
+            let _ = told.send(Asked::Answered(uid));
+            uid
+        }
+        Err(mut waiting) => {
+            let _ = waiting.changed().await;
+            let answer = *waiting.borrow();
+            match answer {
+                Asked::Answered(uid) => uid,
+                Asked::Waiting => owner(shared, UDP, app, destination).await,
+            }
+        }
+    }
+}
 
 /// Makes a destination a peer of its app socket's mapping, opening the mapping first if the app has
 /// none, or if the one it has is another app's or leaves another way. The datagrams that waited leave
