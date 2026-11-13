@@ -102,7 +102,8 @@ asks the question and keeps its own switch; each says that the other edition has
 | The plan's journal (Basic, and the audit in Advanced) | Kept on disk | Held in memory only, and cleared when the screen turns off or the app's process ends. Leaving the app to make a change in Settings keeps it, so the plan still works within a session |
 | The strict sensor review | Kept on disk | In memory only, cleared in the same way |
 | The tracker scan's results | Kept on disk | In memory only: each audit scans every app again |
-| Data packs, appearance, language | Kept | Kept: they say nothing about the user |
+| Data packs, appearance, language | Kept | Kept: they say nothing about the user. This includes the signed public list of keys that ships with the app |
+| Keys specific to the user: those the user pinned or confirmed, such as the Verifier's pins (ADR 0040, decision 6) and a tool's key the user confirmed | Kept | Not kept, since they show which tools and phones the user has. Wiped by the panic answer and the in-app wipe (the maintainer, 2026-11-14) |
 | Recents | The app's card shows, blank (FLAG_SECURE) | The app's tasks are excluded from Recents (decision 5) |
 | Text fields | As the keyboard decides | `IME_FLAG_NO_PERSONALIZED_LEARNING` on every field, as Signal's "Incognito keyboard" does; keyboards may ignore it, and the apps say so |
 | Copying a value (a fingerprint, a password) | Plain copy | Marked sensitive (`ClipDescription.EXTRA_IS_SENSITIVE`, Android 13 and later), so the clipboard's preview does not show it |
@@ -155,7 +156,8 @@ in them, and the profile's tests check them (decision 11).
 
 - **In the app.** With the profile on, "Delete everything now" is in each app's main menu and on Watch's lock
   screen, one tap and one confirmation. It deletes everything the app keeps but the profile's switch, the
-  appearance, the language and the data packs.
+  appearance, the language and the data packs, with the public list of keys in them. Keys the user pinned or
+  confirmed are wiped.
 - **PanicKit.** Both editions answer [PanicKit](https://guardianproject.info/code/panickit/) triggers, as ADR
   0040 decided for Watch. PanicKit's rules hold: a trigger app may make an app destroy data only once the user
   has connected the two, and the connection is never made automatically. With the profile on:
@@ -274,7 +276,8 @@ On the Android 10, 15 and 17 emulators and the Galaxy A40, with debug builds whe
   Advanced the tunnel with a chain and traffic from several apps. Then the screen is turned off and on again.
   Afterwards:
   - app-private storage holds no journal, no sensor review, no scan results, no log database or write-ahead log,
-    no wrapped day key, no log key pair in the Keystore, and no tool, host or port;
+    no wrapped day key, no log key pair in the Keystore, no tool, host or port, and no key the user pinned or
+    confirmed;
   - Watch's screen and the "Now" view show nothing from before the screen turned off;
   - no chained destination appears on any screen or in logcat;
   - `dumpsys notification` shows no ongoing notification but the neutral one, hidden on the lock screen;
@@ -330,7 +333,8 @@ No frontier research is needed. One piece of lab work is: measuring what Android
 - **People at risk answer one question** and get everything this ADR lists. Ordinary users see one question at the
   first run and nothing else changes for them.
 - **Costs under the profile:** the plan's undo and its check that a change came back last only one session; each
-  audit is a full scan; Recents no longer brings the app back; after a wipe, the chained apps are chosen again.
+  audit is a full scan; Recents no longer brings the app back; after a wipe, the chained apps are chosen again;
+  with no pins kept, each check of a phone through the Verifier starts as a first check.
 - **Build:** a PanicKit responder in each edition, added to the allowlists of exported components; the switch read
   by the journal, the review, the scan, the log, the chain, ADR 0046's views and the activities' task setup.
 - **Documents to change when it is built:** PRIVACY.md (what each edition keeps, Advanced's items included), DESIGN.md
@@ -340,6 +344,4 @@ No frontier research is needed. One piece of lab work is: measuring what Android
 
 ## Questions for the maintainer
 
-2. **The Verifier's pins** (ADR 0040, decision 6, not built yet) name a phone's attestation key, not an app.
-   Proposed: kept under the profile and left out of the wipe, since losing a pin weakens the next check. Agreed?
 3. **The disguise** (decision 9): closed now, to be reopened only after the tests with real users. Agreed?
