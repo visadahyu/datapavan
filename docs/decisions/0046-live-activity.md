@@ -301,6 +301,22 @@ On the emulators with Android 10, 11, 15 and 17, by script, with debug builds' s
    left-to-right tokens in right-to-left text. The strings are translated and reviewed as ADR 0030 sets out, against
    ADR 0025's list of words.
 9. The lab run of decision 4 is recorded in `docs/spikes/`, with every flag explained, before the flags ship.
+10. **A test with real users gates the strings.** Before the words are final, a small comprehension test asks
+    whether people understand "sent while you were not using it", the summary, the flags and the flag notice
+    without fear, and without learning to ignore them. It is part of the redesign's test with real users that
+    gates Advanced's first release (ADR 0045, decision 8). How it is run:
+    - **Who:** a few people in each language tested, Persian first, among them people at risk, reached through
+      organisations that already work with them (digital-security trainers), never through the project's own
+      lists.
+    - **What:** on a test phone of the project's, with workload apps and never the participant's own phone, each
+      person sees the summary, "Now" and a flag, says in their own words what each means and what they would do,
+      and then what they would do if it showed every day.
+    - **Consent:** each person is told what the test is for, what is noted and that they can stop at any time,
+      and agrees before it starts. No name, contact, face, voice or phone data is kept; the notes hold only the
+      answers, under a number.
+    - **After it:** the English strings are changed where people misread them or were afraid, and the changed
+      strings go through ADR 0030's translation and review again. A summary of the findings, with nothing that
+      identifies anyone, is recorded in `docs/spikes/`.
 
 On the A40 (Samsung, Android 11), the same as 1 to 3 with split screen and pop-up view.
 
@@ -343,7 +359,8 @@ decryption (Lumen) or the operating system (stage 3), and both are out of scope 
   an app's name or a count of flags", in 0.2.1, once accepted.
 - **ADR 0034 grows by one exported component in 0.2.1,** the widget's receiver, and `POST_NOTIFICATIONS` gains a use
   it did not list. No permission is added.
-- **More strings,** in eight languages, held to ADR 0025's words. More lab work: the threshold run.
+- **More strings,** in eight languages, held to ADR 0025's words, and a comprehension test with real users before
+  they are final. More lab work: the threshold run.
 - **Accepted limits:** the summary can be read by any app with notification access, which is why it carries no
   names; flags need days of the log, which is evidence, so users who keep less get fewer flags; traffic sent on an
   app's behalf shows under the sender.
