@@ -173,17 +173,30 @@ an ADR (D25).
     shares a waiting port in a protocol with none gets an association of its own. The lab first checks what real
     tools' relays put in the header (gate 4's check R, table B10): where they give back the name, nothing is
     ambiguous.
-  - A relay that gives back the name it was asked for is matched by that name.
+  - A relay that gives back the name it was asked for is matched by that name, and the stand-in then waits no
+    more for a first answer from an address, which a stranger could otherwise send it later.
+  - A stand-in on port 53 keeps the last 64 queries the app sent it while it waits, so that a burst before the
+    first answer (retries, A and AAAA, several names) still binds it; at most about 17 KB, only while it waits.
 - **Names learned:** from a flow the app started, as before; from a flow that came in, only from a DNS response to
   a query the app sent it, by ID and question. A sender at port 53 of an address the app sent to cannot name the
   app's later flows.
-- **Android is asked again.** While a chain is on, the app decides the way, and Android may hand a closed
-  socket's port to another app. So a mapping's datagram to a destination it knows asks Android again whose socket
-  sent it when the app was silent for a second (`Limits::udp_reask`), or thirty seconds after Android last named
-  it; the datagram waits for the answer, about a millisecond, off the event loop. Linux hands out a free port at
-  random among about 28,000, so a port rarely comes back to another app within a second. While a chain is on, an
-  app Android cannot name goes nowhere, even when it named that socket's app before: the old app is never taken for
-  it.
+- **Android is asked again.** Android may hand a closed socket's port to another app, which the log must name
+  (decision 1: a mapping ends when its app's owner changes) and the chain may send another way. So, with or
+  without a chain, a mapping's datagram to a destination it knows, or a lookup on a flow of lookups to the
+  tunnel's DNS address, asks Android again whose socket sent it when the app was silent for a second
+  (`Limits::udp_reask`), or thirty seconds after Android last named it. The datagram waits for the answer, off the
+  event loop: about 3 ms on the Galaxy A40, 11 ms in deep idle (the engine spike of 2026-11). Linux hands out a
+  free port at random among about 28,000, so a port rarely comes back to another app within a second. The cost is
+  one Binder call for each pause of an app socket, and one every thirty seconds for one that never pauses: a socket
+  that keeps a connection alive every 30 s adds about 1,400 a night, beside the 984 lookups of a whole night in
+  that spike.
+- **No guess.** An app Android cannot name is unknown, in the log (decision 3's shared bucket) and to the chain,
+  even when Android named that socket's app before: the old app is never taken for it. While a chain is on, it goes
+  nowhere. A socket Android fails to name for a moment so gets a new mapping, and so another port.
+- **Flows of lookups** to the tunnel's DNS address end once each lookup they carried has its answer: a direct one
+  when the network's resolver answers, a chained app's when Watch has answered it, within a few seconds. One that
+  gives way to a new flow, when Android is asked again or the chain changes, still hands the app every answer it
+  owes.
 - **Counters, appended:**
   - `udp_unmatched`, the 27th: answers that no one destination could be told for, such as one on a port several
     stand-ins wait on, a malformed header or a fragment. It measures how often the rule above costs an answer;
@@ -208,14 +221,15 @@ an ADR (D25).
     stand-in waits on, taken by that one. When that new address is already bound to another stand-in, or is a
     destination the app sent to itself, the answers go to that other peer, under its name, without a word: the
     address alone cannot tell them apart.
-  - A port that Android hands to another app less than a second after the old app's last datagram, to a
-    destination the old app also sent to, leaves the old app's way until Android is next asked: at the new app's
-    first silence of a second, and at most thirty seconds after Android last named the old app.
+  - A port that Android hands to another app less than a second after the old app's last datagram or lookup,
+    to a destination the old app also sent to, leaves the old app's way, and is logged under it, until Android is
+    next asked: at the new app's first silence of a second, and at most thirty seconds after Android last named
+    the old app. Asking Android for every datagram would close the window at the cost of a Binder call each.
   - The re-check just before what waited leaves covers the moment between opening the mapping and sending. No test
     reaches that moment without a hook in the engine; the check made as the mapping opens is tested.
 - **Unchanged:** chained apps' TCP, the tool's own traffic, a stopped tool, and a tool without UDP.
-- **Tests:** thirty-three in `core/net/tests/chain.rs`, and three in the network lab with a real tun. Each was made
-  to fail by breaking the code it guards, or, for the two independent reviews' findings of the same day, by the
+- **Tests:** forty-eight in `core/net/tests/chain.rs`, and three in the network lab with a real tun. Each was made
+  to fail by breaking the code it guards, or, for the three independent reviews' findings of the same day, by the
   engine before their fixes. Those that need port 53 use the test proxy's remapping, or any port of the tunnel's
   DNS address, which leads to the same port of the network's resolver, so they run in every `cargo test`.
 - **Still open:** what real tools' relays put in the header, and whether they keep one upstream socket per
