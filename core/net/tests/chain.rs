@@ -3063,3 +3063,32 @@ async fn a_port_that_came_in_is_no_destination_the_app_knew() -> Outcome {
     );
     Ok(())
 }
+
+/// Once the app has answered a port that came in, that port is its destination: the next datagram to it
+/// leaves by the mapping, without another question to Android (sixth review of unit 9, finding 6).
+#[tokio::test(flavor = "current_thread")]
+async fn a_port_that_came_in_and_was_answered_asks_android_once() -> Outcome {
+    let (at, other, heard) = answered_from_another_port().await?;
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(Counting::default());
+    let (_engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    send(&tunnel, app(DIRECT_PORT), at, b"x").await?;
+    let (from, _) = receive(&tunnel).await?.ok_or("a datagram")?;
+    assert_eq!(from, other);
+    for (asked, reply) in [(2, &b"first reply"[..]), (2, b"second reply")] {
+        send(&tunnel, app(DIRECT_PORT), other, reply).await?;
+        let until = tokio::time::Instant::now() + Duration::from_secs(5);
+        while heard_from(&heard, reply).is_empty() {
+            if tokio::time::Instant::now() > until {
+                return Err("the reply never arrived".into());
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        assert_eq!(
+            android.asked(),
+            asked,
+            "questions to Android after {reply:?}"
+        );
+    }
+    Ok(())
+}
