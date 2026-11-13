@@ -3,9 +3,7 @@ package org.visadahyu.datapavan.audit
 import android.app.ActivityManager
 import android.content.Context
 import android.content.pm.PackageManager
-import android.system.ErrnoException
-import android.system.Os
-import android.system.OsConstants
+import android.os.RemoteException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -14,19 +12,14 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
-import org.visadahyu.datapavan.core.NativeCore
+import kotlinx.coroutines.withContext
 import org.visadahyu.datapavan.datapack.DataPackStore
-import java.io.DataInputStream
 import java.io.File
-import java.io.FileDescriptor
 import java.io.IOException
-import java.io.RandomAccessFile
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.zip.ZipEntry
-import java.util.zip.ZipFile
 
 /** One tracker from the εxodus database (`data/exodus/trackers.tsv`, ADR 0015). */
 data class TrackerInfo(val id: Int, val name: String, val categories: List<String>, val website: String)
@@ -97,17 +90,22 @@ class TrackerScanner(private val context: Context) {
      */
     val trackers: Map<Int, TrackerInfo> by lazy { TrackerData.parse(tsv) }
 
-    /** Scans [apps], calling [onProgress] with the number done after each one. */
-    suspend fun scan(apps: List<AppFacts>, onProgress: (done: Int, total: Int) -> Unit): Map<String, AppTrackers> = coroutineScope {
+    /**
+     * Scans [apps], calling [onProgress] with the number done after each one. The APKs are parsed in an
+     * isolated process (ParserService); this process only opens them and reads the answers.
+     */
+    suspend fun scan(apps: List<AppFacts>, onProgress: (done: Int, total: Int) -> Unit): Map<String, AppTrackers> =
+        withContext(Dispatchers.IO) { Parsers(context).use { parsers -> scan(parsers, apps, onProgress) } }
+
+    private suspend fun scan(parsers: Parsers, apps: List<AppFacts>, onProgress: (done: Int, total: Int) -> Unit): Map<String, AppTrackers> = coroutineScope {
         // Signature data the engine cannot read must not stop the audit: without the capabilities and
         // owners, then without the SDK list, and then without any signatures, the scan finds less
-        // instead of the app failing.
+        // instead of the app failing. Without the parsers' process, nothing can be scanned.
         val signatures = listOf(tsv, withSdks, exodus).firstOrNull { candidate ->
             try {
-                NativeCore.loadTrackers(candidate)
-                true
-            } catch (_: RuntimeException) {
-                false
+                parsers.loadSignatures(candidate)
+            } catch (_: RemoteException) {
+                return@coroutineScope apps.associate { it.packageName to UNREADABLE }
             }
         } ?: return@coroutineScope emptyMap()
         // Native-library names are part of the data a cached result was made with.
@@ -125,8 +123,9 @@ class TrackerScanner(private val context: Context) {
         apps.map { app ->
             async(Dispatchers.IO) {
                 val result = cached[app.packageName]?.takeIf { it.first == app.lastUpdate }?.second
-                    ?: permits.withPermit { scanApp(app.packageName) }
-                completed[app.packageName] = app.lastUpdate to result
+                    ?: permits.withPermit { scanApp(parsers, app.packageName) }
+                // A failure of the parsers' process is not kept, so that the next audit tries again.
+                if (result !== UNREADABLE_BY_PARSERS) completed[app.packageName] = app.lastUpdate to result
                 val count = done.incrementAndGet()
                 onProgress(count, apps.size)
                 if (count % SAVE_EVERY == 0) saveCache(cached + completed)
@@ -134,7 +133,8 @@ class TrackerScanner(private val context: Context) {
         }.awaitAll()
         // Only the apps installed now; uninstalled apps drop out of the cache.
         saveCache(completed)
-        completed.mapValues { (_, entry) -> entry.second }
+        completed.mapValues { (_, entry) -> entry.second } +
+            apps.filter { !completed.containsKey(it.packageName) }.associate { it.packageName to UNREADABLE }
     }
 
     private val cacheFile: File get() = File(context.noBackupFilesDir, "tracker-scan.tsv")
@@ -157,79 +157,33 @@ class TrackerScanner(private val context: Context) {
         return byMemory.coerceAtMost(Runtime.getRuntime().availableProcessors()).coerceAtLeast(1)
     }
 
-    private fun scanApp(packageName: String): AppTrackers {
+    private fun scanApp(parsers: Parsers, packageName: String): AppTrackers {
         val info = try {
             context.packageManager.getApplicationInfo(packageName, 0)
         } catch (_: PackageManager.NameNotFoundException) {
-            return AppTrackers(emptyList(), emptyList(), unreadable = true)
+            return UNREADABLE
         }
         val embedded = sortedSetOf<Int>()
         val referenced = sortedSetOf<Int>()
         val apks = listOfNotNull(info.sourceDir) + info.splitSourceDirs.orEmpty()
         return try {
             for (apk in apks) {
-                RandomAccessFile(apk, "r").use { file ->
-                    val stored = StoredDex.locate(file)
-                    ZipFile(apk).use { zip ->
-                        embedded += sdkList.nativeMatches(zip.entries().asSequence().map { it.name })
-                        for (entry in zip.entries()) {
-                            if (!DEX_ENTRY.matches(entry.name)) continue
-                            // The size comes from the APK's directory. A file far larger than any
-                            // real one could exhaust memory, so it makes the app unreadable instead.
-                            if (entry.size !in 0..MAX_DEX_BYTES) throw IOException("${entry.name}: ${entry.size} bytes")
-                            // Mapped only where ZipFile agrees that the entry is stored, with that size.
-                            val location = stored[entry.name]
-                                ?.takeIf { entry.method == ZipEntry.STORED && it.size.toLong() == entry.size }
-                            val found = location?.let { scanMapped(file.fd, it) } ?: scanRead(zip, entry)
-                            val count = found.firstOrNull() ?: 0
-                            embedded += found.drop(1).take(count)
-                            referenced += found.drop(1 + count)
-                        }
-                    }
-                }
+                val scan = parsers.scanApk(apk)
+                if (scan.getBoolean(ApkScan.UNREADABLE)) return UNREADABLE
+                embedded += sdkList.nativeMatches(scan.getStringArrayList(ApkScan.LIBRARIES).orEmpty().asSequence())
+                embedded += scan.getIntArray(ApkScan.EMBEDDED)?.toList().orEmpty()
+                referenced += scan.getIntArray(ApkScan.REFERENCED)?.toList().orEmpty()
             }
             AppTrackers(embedded.toList(), (referenced - embedded).toList())
         } catch (_: IOException) {
-            AppTrackers(emptyList(), emptyList(), unreadable = true)
+            UNREADABLE
         } catch (_: SecurityException) {
-            AppTrackers(emptyList(), emptyList(), unreadable = true)
-        } catch (_: RuntimeException) {
-            // A malformed DEX file, reported by the Rust parser.
-            AppTrackers(emptyList(), emptyList(), unreadable = true)
+            UNREADABLE
+        } catch (_: RemoteException) {
+            // The parsers' process died twice on this app, or could not be bound again.
+            UNREADABLE_BY_PARSERS
         }
     }
-
-    /**
-     * Scans a stored DEX file through a read-only mapping of its bytes in the APK, so that only the
-     * pages the parser needs are read. Null when the mapping fails; the file is then read instead.
-     */
-    private fun scanMapped(fd: FileDescriptor, location: StoredDex.Location): IntArray? {
-        val start = location.offset - location.offset % pageSize
-        val length = location.offset - start + location.size
-        val address = try {
-            Os.mmap(0, length, OsConstants.PROT_READ, OsConstants.MAP_PRIVATE, fd, start)
-        } catch (_: ErrnoException) {
-            return null
-        }
-        try {
-            return NativeCore.scanMappedDex(address + (location.offset - start), location.size)
-        } finally {
-            try {
-                Os.munmap(address, length)
-            } catch (_: ErrnoException) {
-                // Nothing to undo: the mapping is gone with the process at the latest.
-            }
-        }
-    }
-
-    /** Scans a compressed DEX file, which has to be inflated into memory first. */
-    private fun scanRead(zip: ZipFile, entry: ZipEntry): IntArray {
-        val dex = ByteArray(entry.size.toInt())
-        zip.getInputStream(entry).use { DataInputStream(it).readFully(dex) }
-        return NativeCore.scanDex(dex)
-    }
-
-    private val pageSize: Long by lazy { Os.sysconf(OsConstants._SC_PAGESIZE) }
 
     private fun sha256(text: String): String =
         MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(Locale.ROOT, it) }
@@ -237,8 +191,10 @@ class TrackerScanner(private val context: Context) {
     private companion object {
         const val SAVE_EVERY = 20
         const val MIB = 1024L * 1024
-        const val MAX_DEX_BYTES = 48L * MIB
-        val DEX_ENTRY = Regex("classes\\d*\\.dex")
+        val UNREADABLE = AppTrackers(emptyList(), emptyList(), unreadable = true)
+
+        /** The same answer, when the parsers' process failed rather than the app's code. */
+        val UNREADABLE_BY_PARSERS = AppTrackers(emptyList(), emptyList(), unreadable = true)
     }
 }
 

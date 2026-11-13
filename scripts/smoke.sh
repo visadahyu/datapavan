@@ -39,11 +39,32 @@ if [ -n "${INSTALL_ABI:-}" ]; then
     echo "ok: installed as $abi"
 fi
 adb logcat -c
+# The parsers of untrusted input run in an isolated process (ADR 0045, decision 9). Android records each
+# process's end with its real UID, which for an isolated one is 99000 to 99999 within its user. These
+# are the parser processes that ended before this run; the scan below must add one. Read whole: under
+# pipefail, a reader that stops early fails the pipe.
+parser_exits() {
+    adb shell dumpsys activity exit-info "$PKG" | tr -d '\r' | awk '
+        /realUid=/ { pid = ""; uid = ""; for (i = 1; i <= NF; i++) { if ($i ~ /^pid=/) pid = substr($i, 5); if ($i ~ /^realUid=/) uid = substr($i, 9) } }
+        /process=[^ ]*:parser/ { print pid, uid }' | sort
+}
+parsers_before=$(parser_exits)
 start_audit || fail "the audit overview did not appear within 60 seconds"
 scroll_to "Your plan" || fail "the summary has no plan"
 echo "ok: summary shown"
 wait_for_tracker_scan || fail "the tracker scan did not finish within 5 minutes"
 echo "ok: tracker scan finished"
+for _ in $(seq 1 15); do
+    parsers=$(comm -13 <(echo "$parsers_before") <(parser_exits))
+    [ -n "$parsers" ] && break
+    sleep 1
+done
+[ -n "$parsers" ] || fail "no parser process ended after the tracker scan: the APKs were not parsed apart"
+while read -r pid uid; do
+    [ $((uid % 100000)) -ge 99000 ] && [ $((uid % 100000)) -le 99999 ] ||
+        fail "the parser process $pid ran as UID $uid, not an isolated one"
+done <<<"$parsers"
+echo "ok: the APKs were parsed in an isolated process"
 
 if adb shell dumpsys package "$PKG" | grep -q "android.permission.INTERNET"; then
     fail "the installed app holds the INTERNET permission"

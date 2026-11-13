@@ -33,7 +33,10 @@ build() {
     [ ! -f "$ROOT/android/local.properties" ] || cp "$ROOT/android/local.properties" "$dir/android/"
     local gradle=(./gradlew -q --no-daemon --no-build-cache --no-configuration-cache)
     for edition in "$@"; do
-        (cd "$dir/android" && "${gradle[@]}" -Pdatapavan.edition="$edition" :app:assembleRelease)
+        local own=()
+        # Advanced keeps a task history of its own (android/app/build.gradle.kts).
+        [ "$edition" = basic ] || own=(--project-cache-dir .gradle-advanced)
+        (cd "$dir/android" && "${gradle[@]}" -Pdatapavan.edition="$edition" "${own[@]}" :app:assembleRelease)
     done
     cp "$dir/android/app/build/outputs/apk/release/app-release-unsigned.apk" "$WORK/$name-basic.apk"
     cp "$dir/android/app/build-advanced/outputs/apk/release/app-release-unsigned.apk" "$WORK/$name-advanced.apk"

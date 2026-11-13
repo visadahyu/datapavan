@@ -66,5 +66,17 @@
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
         </activity>
+
+        <!--
+            The parsers of untrusted input (ADR 0045, decision 9): other apps' DEX files and ZIP
+            directories, and the key-attestation extension, in an isolated process with no permissions,
+            no network and none of this app's files. It gets each APK as a file descriptor
+            (audit/ParserService.kt). build.gradle.kts fails the build unless it stays isolated.
+        -->
+        <service
+            android:name=".audit.ParserService"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":parser" />
     </application>
 </manifest>

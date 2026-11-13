@@ -32,7 +32,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import org.visadahyu.datapavan.core.NativeCore
 import org.visadahyu.datapavan.datapack.DataPackStore
 import java.io.IOException
 import java.security.KeyPairGenerator
@@ -424,7 +423,8 @@ class DeviceCollector(private val context: Context) {
             generator.generateKeyPair()
             val chain = store.getCertificateChain(ATTESTATION_ALIAS)?.filterIsInstance<X509Certificate>().orEmpty()
             val extension = chain.firstOrNull()?.getExtensionValue(KEY_DESCRIPTION_OID) ?: return null
-            val fields = NativeCore.parseAttestation(extension)
+            // Parsed in the parsers' isolated process (ParserService), like every untrusted input.
+            val fields = Parsers(context).use { it.parseAttestation(extension) } ?: return null
             Integrity(
                 securityLevel = fields[1].toInt(),
                 deviceLocked = fields[2].takeIf { it >= 0 }?.let { it == 1L },
@@ -437,8 +437,11 @@ class DeviceCollector(private val context: Context) {
         } catch (_: IOException) {
             // The data pack lacks the roots or the revocation list; the smoke test catches this.
             null
+        } catch (_: android.os.RemoteException) {
+            // The parsers' process could not be reached; the device is then reported as not checked.
+            null
         } catch (_: RuntimeException) {
-            // Malformed extension (thrown by the Rust parser) or a keystore without attestation.
+            // A keystore without attestation.
             null
         } finally {
             try {

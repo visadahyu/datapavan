@@ -111,7 +111,9 @@ Watch and the audit app, and the gap between Lite and Watch.
 - **One module, three editions.** `:app` takes `-Pdatapavan.edition`: `basic` (the default), `lite` (Basic for
   Google Play) or `advanced`. Basic's tasks and output paths stay as they were, so its F-Droid recipe and
   `scripts/reproducible.sh` build it unchanged. Advanced builds in `android/app/build-advanced`, so that switching
-  editions rebuilds nothing of the other's.
+  editions rebuilds nothing of the other's, and with `--project-cache-dir .gradle-advanced`, which the build
+  requires: with one task history, a task that ran again for one edition deleted the APK it had made for the
+  other (found on 2026-11-13, when Basic's release build deleted Advanced's).
 - **Watch is a library.** `:watch` is an Android library that only Advanced depends on. Its manifest sets no icon,
   label, theme or backup rules of its own: the application's apply. Its screen is not exported; debug builds export
   it for the emulator checks (`watch/src/debug`). The audit opens it from its network page, by class name, only in
@@ -138,5 +140,12 @@ Watch and the audit app, and the gap between Lite and Watch.
   what Basic must not carry.
 - **Words.** The About page says which edition this is and what the others are. The Persian and Arabic texts no
   longer call Watch an app («سرویس Watch», «خدمة Watch»). Both were translated and reviewed as ADR 0030 sets out.
-- **Still to build:** the audit's parsers in an `isolatedProcess` service, study B's icon, the data tables' rows
-  for Advanced, and Advanced's release rehearsal.
+- **The parsers of untrusted input run isolated,** in both editions (`audit/ParserService.kt`, process `:parser`):
+  other apps' DEX files and ZIP directories, and the key-attestation extension. The audit opens each APK and
+  passes it as a read-only file descriptor; the isolated process reads the ZIP directory itself, maps or inflates
+  each DEX file (checked against its size and CRC-32), and gives back only tracker ids and library names. A DEX
+  file stored in an unusual way now makes the app unreadable, where `java.util.zip.ZipFile` once read it. If the
+  process dies, the audit binds again and loads the signatures again; an app it still cannot scan is reported
+  unreadable and scanned again at the next audit. The build fails unless the service stays isolated and
+  unexported, and the smoke test checks that Android ran it under an isolated UID.
+- **Still to build:** study B's icon, the data tables' rows for Advanced, and Advanced's release rehearsal.

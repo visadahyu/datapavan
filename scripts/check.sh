@@ -105,9 +105,10 @@ android_gates() {
         lintDebug lintRelease testDebugUnitTest \
         assembleDebug assembleRelease bundleRelease \
         verifyApkDebug verifyApkRelease
-    # Advanced builds in android/app/build-advanced; lint covers Watch's library through the app.
+    # Advanced builds in android/app/build-advanced, with a task history of its own; lint covers Watch's
+    # library through the app.
     echo "== Android: lint, APK and bundle builds of Advanced, its allowlist, native-library check (ADR 0045)"
-    ./gradlew --no-daemon --stacktrace -Pdatapavan.edition=advanced \
+    ./gradlew --no-daemon --stacktrace -Pdatapavan.edition=advanced --project-cache-dir .gradle-advanced \
         :app:lintDebug :app:lintRelease :app:testDebugUnitTest \
         :app:assembleDebug :app:assembleRelease :app:bundleRelease \
         :app:verifyApkDebug :app:verifyApkRelease

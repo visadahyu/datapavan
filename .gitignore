@@ -5,6 +5,7 @@
 build/
 # Datapavan Advanced builds beside Basic (android/app/build.gradle.kts).
 build-advanced/
+.gradle-advanced/
 local.properties
 captures/
 .externalNativeBuild/

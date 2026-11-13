@@ -84,7 +84,7 @@ pss() {
 }
 
 echo "== Watch's release build, on $(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
-[ -f "$UNSIGNED" ] || fail "no release APK at $UNSIGNED (./gradlew -Pdatapavan.edition=advanced :app:assembleRelease)"
+[ -f "$UNSIGNED" ] || fail "no release APK at $UNSIGNED (./gradlew -Pdatapavan.edition=advanced --project-cache-dir .gradle-advanced :app:assembleRelease)"
 tools=$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1)
 keytool -genkeypair -keystore "$WORK/throwaway.jks" -storepass throwaway -keypass throwaway -alias throwaway \
     -keyalg RSA -keysize 2048 -validity 1 -dname "CN=Watch release check" >/dev/null 2>&1

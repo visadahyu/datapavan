@@ -27,8 +27,15 @@ val editionApplicationId = when (edition) {
 }
 
 // Advanced builds in a directory of its own, so that switching editions rebuilds nothing of the other's,
-// and Basic's outputs stay where every script and recipe looks for them.
+// and Basic's outputs stay where every script and recipe looks for them. Each edition also keeps a task
+// history of its own (Gradle's project cache): with one history, a task that runs again for one edition
+// deletes the outputs it made for the other, such as the other edition's APK.
 if (advanced) layout.buildDirectory.set(layout.projectDirectory.dir("build-advanced"))
+val advancedCache = ".gradle-advanced"
+check((gradle.startParameter.projectCacheDir?.name == advancedCache) == advanced) {
+    if (advanced) "Build Advanced with --project-cache-dir $advancedCache, so that it keeps a task history of its own"
+    else "--project-cache-dir $advancedCache is for Advanced only (-Pdatapavan.edition=advanced)"
+}
 
 // One allowlist per edition (ADR 0045, decision 9), checked on the merged manifest, so that no library adds
 // a permission, an app query or an open door unnoticed. Fewer is fine; anything else fails the build. Each
@@ -80,6 +87,9 @@ val allowedExported = mapOf(
     "androidx.profileinstaller.ProfileInstallReceiver" to "android.permission.DUMP",
 )
 val allowedExportedInDebug = if (advanced) mapOf("org.visadahyu.datapavan.watch.MainActivity" to "") else emptyMap()
+
+// The services that parse untrusted input, which must stay in an isolated process (ADR 0045, decision 9).
+val isolatedServices = listOf("org.visadahyu.datapavan.audit.ParserService")
 
 // The native libraries each APK must carry, with the JNI symbol each must export (core/jni and NativeCore.kt;
 // core/watch-jni and Engine.kt), and those it must not: Basic never carries Watch's engine.
@@ -144,6 +154,8 @@ android {
         buildConfig = true
         // app_name differs by edition (above).
         resValues = true
+        // The interface to the parsers' isolated process (src/main/aidl, audit/ParserService.kt).
+        aidl = true
     }
 
     androidResources {
@@ -358,6 +370,10 @@ abstract class ManifestAllowlistCheck : DefaultTask() {
     @get:Input
     abstract val exported: MapProperty<String, String>
 
+    /** Services that must run isolated and unexported: the parsers of untrusted input. */
+    @get:Input
+    abstract val isolated: ListProperty<String>
+
     @get:OutputFile
     abstract val checkedManifest: RegularFileProperty
 
@@ -409,6 +425,12 @@ abstract class ManifestAllowlistCheck : DefaultTask() {
                 val name = element.android("name")
                 val guard = element.android("permission")
                 if (exported.get()[name] != guard) problems += "exports $tag $name (permission '$guard')"
+            }
+        }
+        for (name in isolated.get()) {
+            val service = elements("service").firstOrNull { it.android("name") == name }
+            if (service == null || service.android("isolatedProcess") != "true" || service.android("exported") != "false") {
+                problems += "does not run $name isolated and unexported"
             }
         }
         if (problems.isNotEmpty()) {
@@ -556,6 +578,7 @@ androidComponents {
             never.set(neverRequested)
             definitions.set(allowedPermissionDefinitions)
             exported.set(if (variant.buildType == "debug") allowedExported + allowedExportedInDebug else allowedExported)
+            isolated.set(isolatedServices)
         }
         variant.artifacts.use(manifestCheck)
             .wiredWithFiles(ManifestAllowlistCheck::mergedManifest, ManifestAllowlistCheck::checkedManifest)
