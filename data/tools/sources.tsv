@@ -283,8 +283,9 @@ org.telegram.messenger	modes	none (no VpnService in manifest)	https://github.com
 org.telegram.messenger	note	in-app proxy client	https://github.com/DrKLO/Telegram/blob/7be672ead283d022812d75c729d3a04dd4c2a2c6/TMessagesProj/src/main/java/org/telegram/ui/ProxySettingsActivity.java	2026-11-09
 org.thunderdog.challegram	modes	none (no VpnService in manifest)	https://github.com/TGX-Android/Telegram-X/blob/bf82021249e358337b8e4d3f219e0d2c9561eb79/app/src/main/AndroidManifest.xml	2026-11-09
 org.thunderdog.challegram	note	in-app proxy client	https://github.com/TGX-Android/Telegram-X/blob/bf82021249e358337b8e4d3f219e0d2c9561eb79/app/src/main/java/org/thunderdog/challegram/ui/SettingsProxyController.java	2026-11-09
-org.visadahyu.datapavan	modes	none (no INTERNET)	https://github.com/visadahyu/datapavan/blob/2f081b098694b56632bf29c72e51a79bd9001b9c/docs/decisions/0029-network-access-for-v0.2.md#L10	2026-11-09
+org.visadahyu.datapavan	modes	none (Datapavan Basic: no INTERNET, ever)	https://github.com/visadahyu/datapavan/blob/870863941bc2981e9561ecffd3803d724c8a5467/docs/decisions/0045-three-editions-of-one-app.md#L42	2026-11-13
 org.visadahyu.datapavan	note	Watch opens no port of its own	https://github.com/visadahyu/datapavan/blob/2f081b098694b56632bf29c72e51a79bd9001b9c/docs/DESIGN.md#L347	2026-11-09
+org.visadahyu.datapavan	note	Watch is part of Datapavan Advanced, org.visadahyu.datapavan.advanced; its own package is dropped	https://github.com/visadahyu/datapavan/blob/870863941bc2981e9561ecffd3803d724c8a5467/docs/decisions/0045-three-editions-of-one-app.md#L43	2026-11-13
 fr.husi	package	namespace fr.husi	https://github.com/xchacha20-poly1305/husi/blob/0822cc7b34ae3c57ee2840d553ca8cf31cf64867/androidApp/build.gradle.kts#L35	2026-11-09
 fr.husi	modes	vpn,proxy (default VPN)	https://github.com/xchacha20-poly1305/husi/blob/0822cc7b34ae3c57ee2840d553ca8cf31cf64867/composeApp/src/commonMain/kotlin/fr/husi/database/DataStore.kt#L155	2026-11-09
 fr.husi	proxy-label	Proxy only	https://github.com/xchacha20-poly1305/husi/blob/0822cc7b34ae3c57ee2840d553ca8cf31cf64867/composeApp/src/commonMain/composeResources/values/strings.xml#L70	2026-11-09
@@ -372,7 +373,7 @@ com.wireguard.android	proxy-in-vpn	no (tun goes to wireguard-go)	https://github.
 org.telegram.messenger.web	wireguard	no (not a VPN)	https://github.com/DrKLO/Telegram/blob/7be672ead283d022812d75c729d3a04dd4c2a2c6/TMessagesProj/src/main/AndroidManifest.xml	2026-11-09
 org.telegram.messenger	wireguard	no (not a VPN)	https://github.com/DrKLO/Telegram/blob/7be672ead283d022812d75c729d3a04dd4c2a2c6/TMessagesProj/src/main/AndroidManifest.xml	2026-11-09
 org.thunderdog.challegram	wireguard	no (not a VPN)	https://github.com/TGX-Android/Telegram-X/blob/bf82021249e358337b8e4d3f219e0d2c9561eb79/app/src/main/AndroidManifest.xml	2026-11-09
-org.visadahyu.datapavan	wireguard	no (no network access)	https://github.com/visadahyu/datapavan/blob/2f081b098694b56632bf29c72e51a79bd9001b9c/docs/decisions/0029-network-access-for-v0.2.md#L10	2026-11-09
+org.visadahyu.datapavan	wireguard	no (no network access)	https://github.com/visadahyu/datapavan/blob/870863941bc2981e9561ecffd3803d724c8a5467/docs/decisions/0045-three-editions-of-one-app.md#L42	2026-11-13
 fr.husi	port-configurable	yes	https://github.com/xchacha20-poly1305/husi/blob/0822cc7b34ae3c57ee2840d553ca8cf31cf64867/composeApp/src/commonMain/kotlin/fr/husi/database/preference/PreferenceProxy.kt#L109-L122	2026-11-09
 io.nekohasekai.sagernet	port-configurable	yes	https://github.com/SagerNet/SagerNet/blob/3593fc10b6889367774f37b32c2e5f89fedb5226/app/src/main/java/io/nekohasekai/sagernet/database/DataStore.kt#L132-L141	2026-11-09
 io.nekohasekai.sagernet	domain-names	yes (SagerNet v2ray-core)	https://github.com/SagerNet/v2ray-core/blob/26e36b1cb46f387cacd65c1a5900be592913f842/proxy/socks/protocol.go#L39	2026-11-09

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: CC0-1.0
-retrieved: 2026-11-09; 15 rows added and 6 updated on 2026-11-11
+retrieved: 2026-11-09; 15 rows added and 6 updated on 2026-11-11; Datapavan's row updated for ADR 0045 on 2026-11-13
 apps: 63
-evidence: 856
+evidence: 857
 method: read by hand from each app's own source code at a named tag or commit, its official documentation or
   its store listing, one row of sources.tsv per value; a third-party report is used only where no primary
   source exists, and says so. Every package of data/app-signers/apps.tsv has a row.
