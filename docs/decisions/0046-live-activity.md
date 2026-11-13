@@ -207,7 +207,7 @@ behind the screen lock and Watch's own lock, as the log's records do (ADR 0037, 
 connect" (`chain_log_destinations`). Without it, their rows say only that they went through the user's tool, with
 their bytes and state. What the screen shows, a search of an unlocked phone shows too.
 
-**A profile for people whose phones may be searched.** ADR 0047, drafted on the branch `inspection-profile`,
+**A profile for people whose phones may be searched.** [ADR 0047](0047-profile-for-phones-that-may-be-searched.md)
 defines this inspection profile, which the user chooses with one switch, "Keep nothing on this phone": off for
 users who do not face searches, on for those who do, decided by the user's own answer and never by country. This
 ADR's surfaces must follow it. Under that profile the summary, the flag notice and the widget are off, the tile

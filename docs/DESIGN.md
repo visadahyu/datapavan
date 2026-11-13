@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version | 0.2 (draft, revised 2026-11-14: three editions, ADR 0045; what apps sent while not in use, shown live, ADR 0046, proposed) |
+| Version | 0.2 (draft, revised 2026-11-14: three editions, ADR 0045; what apps sent while not in use, shown live, ADR 0046, proposed; a profile for phones that may be searched, ADR 0047, proposed) |
 | Date | 2026-10-28 |
 | Scope | Stage 1: the layer app for stock Android, with no root |
 | Status | The whole design, much of it not built yet. The [README](../README.md) says what exists today |
@@ -789,6 +789,7 @@ Each decision is recorded in full, with context and consequences, as an ADR in
 | [0044](decisions/0044-udp-mapping-and-budgets.md) | UDP mapping, budgets for each app, and the engine's smaller gaps | Accepted |
 | [0045](decisions/0045-three-editions-of-one-app.md) | Three editions of one app: Basic, Advanced and Enterprise | Accepted |
 | [0046](decisions/0046-live-activity.md) | What apps sent while the user was not using them, shown live | Proposed |
+| [0047](decisions/0047-profile-for-phones-that-may-be-searched.md) | A profile for phones that may be searched: nothing of use kept | Proposed |
 
 ## 15. Names
 

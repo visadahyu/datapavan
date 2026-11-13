@@ -156,7 +156,8 @@ through the user's tool ([ADR 0038](docs/decisions/0038-dns-of-chained-apps.md))
 2026-11-11. W5, W7, W8 and W9 are not built yet
 ([DESIGN.md §13.2](docs/DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools) has what is left).
 How W5's per-app view is met, live, with which apps sent while the user was not using them, is proposed in
-[ADR 0046](docs/decisions/0046-live-activity.md) (2026-11-14).
+[ADR 0046](docs/decisions/0046-live-activity.md) (2026-11-14), and a profile for people whose phone may be searched,
+which keeps nothing of use, in [ADR 0047](docs/decisions/0047-profile-for-phones-that-may-be-searched.md).
 
 The items, in order:
 
