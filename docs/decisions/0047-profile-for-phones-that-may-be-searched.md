@@ -232,10 +232,12 @@ against it.
   space hides Basic completely where the phone has one, and uninstalling hides both editions. A disguise covers the
   launcher only, and may fail at the worst moment.
 
-**Decided:** no disguise is offered. This is below the field on the glance case, on purpose. To be revisited only
-if the redesign's tests with real users at risk (ADR 0045, decision 8) show that the glance is common where private
-space is missing. A later ADR could then offer, for Basic only, a neutral icon and name that imitate no real app.
-It would be off by default, outside the first run, with the risk stated beside it.
+**Decided:** no disguise is offered. This is below the field on the glance case, on purpose. The condition for
+reopening it (the maintainer, 2026-11-14): tests with real users, people at risk among them, such as the redesign's
+tests (ADR 0045, decision 8). Until then it stays closed. If those tests show that the glance is common where private
+space is missing, a later ADR could offer a neutral icon and name, for Basic only, that imitate no real app. It
+would be off by default, outside the first run, with the risk stated beside it. Google Play's policy would not be
+the reason either way, as said above.
 
 ### 10. No duress code and no decoy
 
@@ -342,6 +344,10 @@ No frontier research is needed. One piece of lab work is: measuring what Android
 - **RESTRICTED-REGIONS.md's row on phone inspection** points here.
 - **Strings in eight languages,** with the closest reading for the question and the limits, which carry real weight.
 
-## Questions for the maintainer
+## Settled by the maintainer on 2026-11-14
 
-3. **The disguise** (decision 9): closed now, to be reopened only after the tests with real users. Agreed?
+The draft's three open questions were answered while the ADR stays proposed:
+1. "I'm not sure" turns the profile on, and the app says what that costs and how to turn it off (decision 1).
+2. The public list of keys stays, and keys the user pinned or confirmed are not kept and are wiped (decisions 3
+   and 7).
+3. A disguise is reopened only after tests with real users, people at risk among them (decision 9).
