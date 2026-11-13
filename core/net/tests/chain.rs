@@ -2233,3 +2233,160 @@ async fn a_stand_in_answered_from_its_own_address_waits_no_more() -> Outcome {
     assert_eq!(engine.counters()[UDP_FILTERED], 1);
     Ok(())
 }
+
+/// What a scripted relay heard: the engine's address and each datagram, header and all.
+type Script = tokio::sync::mpsc::UnboundedReceiver<(SocketAddr, Vec<u8>)>;
+
+/// A tool whose proxy grants every `UDP ASSOCIATE` one relay, which hands the test what the engine sends
+/// it and sends the engine whatever header the test writes: the proxy's address, the relay, and what
+/// it heard.
+async fn scripted() -> io::Result<(SocketAddr, Arc<UdpSocket>, Script)> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let proxy = listener.local_addr()?;
+    let relay = Arc::new(UdpSocket::bind("127.0.0.1:0").await?);
+    let at = relay.local_addr()?;
+    tokio::spawn(async move {
+        while let Ok((mut client, _)) = listener.accept().await {
+            tokio::spawn(async move {
+                // The greeting, no password, then a request for an IPv4 or IPv6 address.
+                let mut head = [0u8; 2];
+                if client.read_exact(&mut head).await.is_err() {
+                    return;
+                }
+                let mut methods = vec![0u8; usize::from(head[1])];
+                let _ = client.read_exact(&mut methods).await;
+                let _ = client.write_all(&[5, 0]).await;
+                let mut request = [0u8; 4];
+                let _ = client.read_exact(&mut request).await;
+                let rest = match request[3] {
+                    1 => 6,
+                    4 => 18,
+                    _ => return,
+                };
+                let mut skip = vec![0u8; rest];
+                let _ = client.read_exact(&mut skip).await;
+                let mut reply = vec![5, 0, 0];
+                reply.extend_from_slice(&header_by_address(at)[3..]);
+                let _ = client.write_all(&reply).await;
+                let mut byte = [0u8; 1];
+                while matches!(client.read(&mut byte).await, Ok(n) if n > 0) {}
+            });
+        }
+    });
+    let (tell, heard) = tokio::sync::mpsc::unbounded_channel();
+    let reader = Arc::clone(&relay);
+    tokio::spawn(async move {
+        let mut buffer = vec![0u8; 65_535];
+        while let Ok((n, from)) = reader.recv_from(&mut buffer).await {
+            let _ = tell.send((from, buffer[..n].to_vec()));
+        }
+    });
+    Ok((proxy, relay, heard))
+}
+
+/// A relay's header naming `name` and `port`.
+fn header_by_name(name: &str, port: u16) -> Vec<u8> {
+    let mut out = vec![0, 0, 0, 3, u8::try_from(name.len()).unwrap_or(0)];
+    out.extend_from_slice(name.as_bytes());
+    out.extend_from_slice(&port.to_be_bytes());
+    out
+}
+
+/// A relay's header naming the address `from`.
+fn header_by_address(from: SocketAddr) -> Vec<u8> {
+    let mut out = vec![0, 0, 0];
+    match from {
+        SocketAddr::V4(v4) => {
+            out.push(1);
+            out.extend_from_slice(&v4.ip().octets());
+        }
+        SocketAddr::V6(v6) => {
+            out.push(4);
+            out.extend_from_slice(&v6.ip().octets());
+        }
+    }
+    out.extend_from_slice(&from.port().to_be_bytes());
+    out
+}
+
+/// A datagram from the relay: `header`, then `payload`.
+fn relayed(header: Vec<u8>, payload: &[u8]) -> Vec<u8> {
+    let mut out = header;
+    out.extend_from_slice(payload);
+    out
+}
+
+/// The next datagram the scripted relay heard: the engine's address.
+async fn heard_from_engine(script: &mut Script) -> Result<SocketAddr, Box<dyn std::error::Error>> {
+    let (engine_at, _) = tokio::time::timeout(Duration::from_secs(5), script.recv())
+        .await?
+        .ok_or("the relay heard nothing")?;
+    Ok(engine_at)
+}
+
+/// A relay that answers by name gives another port of a stand-in's name: a flow that came in. The app
+/// asked it nothing, so it waits for no first answer, and a stranger that later reaches the relay from
+/// that port does not take it (fourth review of unit 9, finding 1).
+#[tokio::test(flavor = "current_thread")]
+async fn a_flow_that_came_in_by_name_is_not_taken_by_a_stranger() -> Outcome {
+    let (proxy, relay, mut script) = scripted().await?;
+    let (engine, tunnel) = engine(chain(proxy))?;
+    let a = stand_in(&tunnel, b"\x01a\x04test\x00").await?;
+    send(
+        &tunnel,
+        app(CHAINED_PORT),
+        SocketAddr::from((a, 443)),
+        b"hello",
+    )
+    .await?;
+    let engine_at = heard_from_engine(&mut script).await?;
+    for (port, said) in [(443, &b"by name"[..]), (5_000, b"another port by name")] {
+        let answer = relayed(header_by_name("a.test", port), said);
+        relay.send_to(&answer, engine_at).await?;
+        let got = receive(&tunnel).await?;
+        assert_eq!(got, Some((SocketAddr::from((a, port)), said.to_vec())));
+    }
+    let stranger = SocketAddr::from(([203, 0, 113, 66], 5_000));
+    let forged = relayed(header_by_address(stranger), b"from a stranger");
+    relay.send_to(&forged, engine_at).await?;
+    assert!(
+        silent(&tunnel).await,
+        "the stranger took the flow that came in"
+    );
+    assert_eq!(engine.counters()[UDP_FILTERED], 1);
+    Ok(())
+}
+
+/// A flow that came in by name does not stand beside a stand-in the app did ask on that port: the
+/// stand-in alone takes its first answer (fourth review of unit 9, finding 1).
+#[tokio::test(flavor = "current_thread")]
+async fn a_flow_that_came_in_by_name_does_not_block_an_asked_stand_in() -> Outcome {
+    let (proxy, relay, mut script) = scripted().await?;
+    let (_engine, tunnel) = engine(chain(proxy))?;
+    let a = stand_in(&tunnel, b"\x01a\x04test\x00").await?;
+    let b = stand_in(&tunnel, b"\x01b\x04test\x00").await?;
+    send(
+        &tunnel,
+        app(CHAINED_PORT),
+        SocketAddr::from((a, 443)),
+        b"hello",
+    )
+    .await?;
+    let engine_at = heard_from_engine(&mut script).await?;
+    for (port, said) in [(443, &b"a by name"[..]), (3_478, b"a's other port")] {
+        let answer = relayed(header_by_name("a.test", port), said);
+        relay.send_to(&answer, engine_at).await?;
+        receive(&tunnel).await?.ok_or("a datagram")?;
+    }
+    let to_b = SocketAddr::from((b, 3_478));
+    send(&tunnel, app(CHAINED_PORT), to_b, b"to b").await?;
+    heard_from_engine(&mut script).await?;
+    let b_server = SocketAddr::from(([198, 51, 100, 7], 3_478));
+    let answer = relayed(header_by_address(b_server), b"b's answer");
+    relay.send_to(&answer, engine_at).await?;
+    assert_eq!(
+        receive(&tunnel).await?,
+        Some((to_b, b"b's answer".to_vec()))
+    );
+    Ok(())
+}

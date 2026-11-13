@@ -408,8 +408,10 @@ fn name_key(name: &str) -> String {
 }
 
 impl Sources {
-    /// A new peer, which the app knows as `shown`, that leaves by `way`.
-    fn add_peer(&mut self, shown: SocketAddr, way: &PeerWay) {
+    /// A new peer, which the app knows as `shown`, that leaves by `way`. Only a stand-in the app sent to
+    /// waits for a first answer from an address; one that came in, by a name its relay gave, never does:
+    /// the app asked it nothing, so no answer is its first.
+    fn add_peer(&mut self, shown: SocketAddr, way: &PeerWay, came_in: bool) {
         if let Some(from) = way.from {
             self.add(shown, from);
         }
@@ -421,7 +423,7 @@ impl Sources {
                     peers: 0,
                 })
                 .peers += 1;
-            if way.from.is_none() {
+            if way.from.is_none() && !came_in {
                 self.waiting.entry(shown.port()).or_default().push(shown);
             }
         }
@@ -515,7 +517,7 @@ impl Mapping {
             ..
         } = self;
         let peer = peers.entry(address).or_insert_with(|| {
-            sources.add_peer(address, &way);
+            sources.add_peer(address, &way, came_in);
             *count += usize::from(came_in);
             Peer::new(shared, app, address, *uid, now, (came_in, way))
         });
