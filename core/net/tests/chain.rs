@@ -3267,3 +3267,62 @@ async fn a_slow_answer_makes_a_flow_of_lookups_fresh_only_from_its_question() ->
     );
     Ok(())
 }
+
+/// A direct app's datagram opens its mapping; the port is handed to a chained app, whose lookup makes
+/// Android name it: the old app's mapping ends then, and the new app's datagrams to the old app's
+/// destination go through the tool (sixth review of unit 9, finding 2).
+#[tokio::test(flavor = "current_thread")]
+async fn a_lookup_that_names_a_new_app_ends_the_old_apps_mapping() -> Outcome {
+    const PORT: u16 = 50_300;
+    let (at, heard) = listening().await?;
+    let tool = proxy(Settings::default()).await?;
+    let owners = Arc::new(Owners::default());
+    owners.set(PORT, Some(DIRECT));
+    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
+    let (dns, dns_heard) = deaf_resolver(&engine).await?;
+    send(&tunnel, app(PORT), at, b"x").await?;
+    until_a_flow_to(&engine, at).await?;
+    owners.set(PORT, Some(CHAINED));
+    let private = query(b"\x07private\x04test\x00", 1);
+    send(&tunnel, app(PORT), dns, &private).await?;
+    until_a_flow_to(&engine, dns).await?;
+    for _ in 0..5 {
+        send(&tunnel, app(PORT), at, b"y").await?;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(!heard_private(&dns_heard), "the lookup went to the network");
+    let from = heard_from(&heard, b"y");
+    let relays = tool.relays();
+    let direct = from.iter().filter(|f| !relays.contains(f)).count();
+    assert_eq!(direct, 0, "{direct} of {} left directly", from.len());
+    Ok(())
+}
+
+/// The other way round: a direct app's lookup opens its flow of lookups, which waits for an answer that
+/// never comes; the port is handed to a chained app, whose datagram makes Android name it. The old
+/// app's flow of lookups gives way then, and the new app's lookup stays off the network's resolver.
+#[tokio::test(flavor = "current_thread")]
+async fn a_datagram_that_names_a_new_app_ends_the_old_apps_flow_of_lookups() -> Outcome {
+    const PORT: u16 = 50_308;
+    let (at, _) = listening().await?;
+    let tool = proxy(Settings::default()).await?;
+    let owners = Arc::new(Owners::default());
+    owners.set(PORT, Some(DIRECT));
+    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
+    let (dns, heard) = deaf_resolver(&engine).await?;
+    let public = query(b"\x06public\x04test\x00", 1);
+    send(&tunnel, app(PORT), dns, &public).await?;
+    until_a_flow_to(&engine, dns).await?;
+    owners.set(PORT, Some(CHAINED));
+    send(&tunnel, app(PORT), at, b"x").await?;
+    until_a_flow_to(&engine, at).await?;
+    let private = query(b"\x07private\x04test\x00", 1);
+    send(&tunnel, app(PORT), dns, &private).await?;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(
+        !heard_private(&heard),
+        "the chained app's lookup reached the network's resolver"
+    );
+    Ok(())
+}

@@ -1066,15 +1066,27 @@ impl UdpTable {
         Current::Gone
     }
 
-    /// Android named `named.uid` the app of `app`'s socket: the socket's mapping, if it is that app's,
-    /// is fresh from when Android was asked, unless it rests on a later answer.
-    fn answered(&mut self, app: SocketAddr, named: Named) {
-        if let Some(mapping) = self.mappings.get_mut(&app)
-            && mapping.uid == named.uid
-        {
-            mapping.sent = mapping.sent.max(named.asked);
-            mapping.named = mapping.named.max(named.asked);
+    /// Android named `named.uid` the app of `app`'s socket, whichever destination asked: the socket's
+    /// mapping, if it is that app's, is fresh from when Android was asked. If it is another app's, it
+    /// ends, unless it rests on a later answer, and so does a flow of lookups of the socket that is
+    /// another app's: Android handed the port out again, and nothing more may leave the old app's way
+    /// (sixth review of unit 9, finding 2). The flow still hands the app what it owes.
+    fn answered(&mut self, app: SocketAddr, named: Named, shared: &Shared) {
+        if let Some(mapping) = self.mappings.get_mut(&app) {
+            if mapping.uid == named.uid {
+                mapping.sent = mapping.sent.max(named.asked);
+                mapping.named = mapping.named.max(named.asked);
+            } else if named.asked >= mapping.named {
+                let id = mapping.id;
+                self.end(app, id, shared);
+            }
         }
+        self.flows.retain(|&(from, _), entry| match entry {
+            UdpEntry::Open(flow) => {
+                from != app || flow.uid == named.uid || named.asked < flow.named
+            }
+            UdpEntry::Opening(_) => true,
+        });
     }
 
     /// Takes the datagrams held for `key` that may leave now, those that came when `holds` held for
@@ -1567,7 +1579,7 @@ async fn owner_of(
                 if table.asking.get(&app).is_some_and(|out| out.id == id) {
                     table.asking.remove(&app);
                 }
-                table.answered(app, named);
+                table.answered(app, named, shared);
             }
             let _ = told.send(Asked::Answered(named));
             named
@@ -1594,7 +1606,7 @@ async fn ask(
         uid: owner(shared, UDP, app, destination).await,
         asked,
     };
-    lock(flows).answered(app, named);
+    lock(flows).answered(app, named, shared);
     named
 }
 
@@ -2711,10 +2723,10 @@ mod tests {
         Ok(())
     }
 
-    /// An answer that names another app leaves the mapping as it was: the next datagram asks again, and
-    /// the mapping ends once its asker's turn comes.
+    /// An answer that names another app ends the mapping at once: the next datagram asks again (sixth
+    /// review of unit 9, finding 2).
     #[tokio::test(flavor = "current_thread")]
-    async fn an_answer_naming_another_app_leaves_the_mapping_stale() -> io::Result<()> {
+    async fn an_answer_naming_another_app_ends_the_mapping() -> io::Result<()> {
         let shared = Arc::new(shared());
         let flows = paused(&shared, Some(10_077)).await?;
         assert_eq!(
@@ -2723,6 +2735,7 @@ mod tests {
                 .uid,
             None
         );
+        assert!(!lock(&flows).mappings.contains_key(&APP));
         assert!(!leaves_unasked(&flows, &shared));
         Ok(())
     }
@@ -2856,6 +2869,47 @@ mod tests {
             Current::Newer
         ));
         assert!(table.mappings.contains_key(&APP));
+        Ok(())
+    }
+
+    /// An answer naming another app ends the socket's mapping and its flow of lookups, but not when it
+    /// answers a question asked before the one they rest on: it is stale. One naming their own app
+    /// ends neither (sixth review of unit 9, finding 2).
+    #[tokio::test(flavor = "current_thread")]
+    async fn only_an_answer_as_new_as_a_ways_own_and_naming_another_app_ends_it() -> io::Result<()>
+    {
+        let shared = shared();
+        let flows = paused(&shared, Some(10_077)).await?;
+        let socket = Arc::new(UdpSocket::bind("127.0.0.1:0").await?);
+        let rests_on = Instant::now();
+        let dns = SocketAddr::from(([192, 0, 2, 53], 53));
+        let mut table = lock(&flows);
+        if let Some(mapping) = table.mappings.get_mut(&APP) {
+            mapping.named = rests_on;
+        }
+        let flow = UdpFlow {
+            id: 2,
+            way: UdpWay::Direct(socket),
+            uid: Some(10_077),
+            owed: Arc::default(),
+            chains: 0,
+            sent: rests_on,
+            named: rests_on,
+        };
+        table.flows.insert((APP, dns), UdpEntry::Open(flow));
+        let older = ago(&shared, 0.5)?;
+        for (uid, asked, ends) in [
+            (Some(10_077), rests_on, false),
+            (Some(10_078), older, false),
+            (Some(10_078), rests_on, true),
+        ] {
+            table.answered(APP, Named { uid, asked }, &shared);
+            let kept = (
+                table.mappings.contains_key(&APP),
+                table.flows.contains_key(&(APP, dns)),
+            );
+            assert_eq!(kept, (!ends, !ends), "after {uid:?} asked at {asked:?}");
+        }
         Ok(())
     }
 
