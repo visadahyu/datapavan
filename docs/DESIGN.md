@@ -774,8 +774,10 @@ one behind each query; then the app's own least recently active mapping quiet fo
 mapping with traffic in the last five seconds never ends so, and a call is never cut; if none may end, the new
 way's datagrams are dropped, as by a full queue. Each refusal and each mapping ended is counted, with no
 destination. Whose a datagram is stays decided by the one rule: a way refused fails at once, and a mapping ended to
-make room asks Android again at its app's next datagram; the model drives both. How it is built:
-[ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
+make room asks Android again at its app's next datagram; the model drives both. An independent review found no
+fault in UDP and one in TCP: a connection dropped for its app's share once its SYN had left the phone was never
+logged. Android is now asked first wherever the share could refuse a connection, and one begun beside Android is
+never dropped. How it is built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 Still to come: ICMP echo and the network's MTU.
 
