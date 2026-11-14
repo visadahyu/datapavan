@@ -254,6 +254,7 @@ scripts/check.sh                          # every quality gate CI runs
 scripts/smoke.sh                          # smoke test on a connected emulator or phone
 scripts/verify-audit.sh                   # end-to-end check of the audit's findings (emulator only)
 scripts/screenshots.sh                    # screenshots in every language, accessibility check (Android 13+)
+scripts/emulator-shards.sh                # CI's emulator checks on up to three local emulators at once
 scripts/fuzz.sh                           # fuzz every Rust parser (pinned nightly and cargo-fuzz)
 cd android && ./gradlew assembleDebug     # debug APK, including the Rust library
 ```
