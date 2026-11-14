@@ -2,7 +2,10 @@
 //! together, by what the process may open, and shared out among them, so that one app that misbehaves
 //! cannot use up what every other app needs. Each app may hold a share of the cap; the flows whose app
 //! Android cannot name are one app here, and share one share. So four apps must use their whole share
-//! before the cap touches any other.
+//! before the cap touches any other, or fewer where a floor lifts a share above a quarter of its cap.
+//! A place forced on what has already left the phone ([`Budget::force`], for a TCP connection begun
+//! beside Android when Android answers late) can lift an app up to twice its share for a while, and
+//! fewer apps then fill the cap (ADR 0044, unit 10).
 
 use super::lock;
 use std::collections::HashMap;

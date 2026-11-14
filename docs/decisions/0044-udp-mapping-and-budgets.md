@@ -71,7 +71,7 @@ an ADR (D25).
      capped at min(B/8, 4,096).
    - **The share:** each app may use a quarter of each cap, with at least 64 mappings and 32 waiting connections.
      Flows whose app Android cannot name share one share. So four apps must misbehave before any other is
-     touched.
+     touched; for TCP, where Android answers late, two and a half (as unit 10 builds it, below).
    - **At the TCP cap:** a SYN is dropped, as by a full queue, so the app's own stack tries again. Its fake port is
      freed at once, since it never reached Android's stack.
    - **At the UDP cap, what makes room, in order:**
@@ -391,11 +391,16 @@ an ADR (D25).
   connections min(B/8, 4,096) (`tcp_waiting`), UDP ways B/4 (`udp_mappings`); each app a quarter of each cap, at
   least 32 connections (`tcp_share`) and 64 ways (`udp_share`), never more than the cap. At N = 1,024, the
   defaults: 112 and 32, 224 and 64; at 32,768: 3,840 and 960, 7,680 and 1,920. The apps Android cannot name are one
-  app here, and share one share. So four apps must use their whole share before any other is touched, or three and
-  a half where a floor lifts the share above a quarter of its cap, as at 1,024. An app whose sockets Android names
-  at times and not at others holds its own share and, beside it, places in the share of the apps Android cannot
-  name, which every such app shares: at 1,024 files up to 128 of the 224 UDP ways and 64 of the 112 waiting
-  connections, so that with one other app at its share, and half another's, it fills either cap.
+  app here, and share one share. So four apps must use their whole UDP share before any other is touched, or three
+  and a half where a floor lifts the share above a quarter of its cap, as at 1,024. For TCP, where Android answers
+  late, an app may hold up to twice its share, as the next point says, by one share at most for every app
+  together, and for at most `connect_timeout`: then two and a half apps can fill the TCP cap at 1,024 files (in a
+  probe of the review of unit 10, with a cap of 6 and a share of 2, one app held 4, another 2, and a third was
+  refused). An app whose sockets Android names at times and not at others holds its own share and, beside it,
+  places in the share of the apps Android cannot name, which every such app shares: at 1,024 files up to 128 of
+  the 224 UDP ways, so that with one other app at its share, and half another's, it fills the UDP cap; and 64 of
+  the 112 waiting connections, or 96 while Android answers late, half another app's share then filling the TCP
+  cap.
 - **TCP.** A connection waiting for its server holds a place in its app's share from when Android names the app
   until the server answers or fails. Through the chain, to a stand-in, and whenever more than a share's worth of
   connections wait for their servers in all (`tcp_share`, this one counted), Android is asked first and the place
@@ -406,9 +411,10 @@ an ADR (D25).
   connection takes its place when Android answers, beyond the share if the app's later connections took places
   first, and is never dropped: whatever leaves the phone is logged under its app (independent review of unit 10,
   major: such a connection was dropped once its SYN had left, and never logged). Only connections begun so lift an
-  app above its share, never past twice it, and only while they wait; one whose server answered before Android
-  takes no place. So a question asked first costs its 3 ms only under pressure: past 32 waiting connections at
-  1,024 files, 960 at 32,768.
+  app above its share, never past twice it, by one share at most for every app together, since each began while at
+  most a share's worth waited in all, and only while they wait, for at most `connect_timeout`; one whose server
+  answered before Android takes no place. So a question asked first costs its 3 ms only under pressure: past 32
+  waiting connections at 1,024 files, 960 at 32,768.
 - **What takes a UDP place:** every UDP way that holds a socket of its own. A mapping, on the direct path or
   through the tool, holds its place until it ends; a flow of lookups to the tunnel's DNS address on the direct
   path, until each lookup it carried has its answer, or 10 s pass with none. A chained app's lookups, which Watch
@@ -473,6 +479,9 @@ an ADR (D25).
     its request's connection) for one place.
   - A mapping silent for five seconds may end under pressure, as a call on hold might be; it opens again from
     another port at its next datagram.
+  - Left for a later unit, older than this one (found by the review of unit 10): TCP to the tunnel's DNS address,
+    as DNS over TCP to the network's resolver, is neither logged as a flow, since the log leaves out every flow to
+    that address (`Shared::log_flow`), nor counted as a lookup, as UDP's lookups are.
   - A mapping that ends gives back its place at once, so that room is made under the table's lock, in one step,
     while its socket, and through the tool its request's connection, close a moment later, as its task next runs,
     and as a datagram that was leaving by it is sent. For that moment the engine holds one or two descriptors
