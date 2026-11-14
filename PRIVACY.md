@@ -30,7 +30,7 @@ your unlocked phone can see it, as they can see the rest of the app.
 
 ## Version 0.1 cannot open network connections
 
-Version 0.1 ("Audit") does not request the INTERNET permission, so Android itself prevents it from
+Datapavan Basic 0.1 does not request the INTERNET permission, so Android itself prevents it from
 opening network connections. The build fails if any component tries to add that permission. Like any
 app, it can still hand information to another app when you ask it to, for example when you open a link.
 

@@ -35,7 +35,7 @@ entsperrten Telefon öffnen kann, kann es sehen, genau wie den Rest der App.
 
 ## Version 0.1 kann keine Netzwerkverbindungen öffnen
 
-Version 0.1 („Audit“) fordert die Berechtigung INTERNET nicht an, daher verhindert Android selbst, dass sie
+Datapavan Basic 0.1 fordert die Berechtigung INTERNET nicht an, daher verhindert Android selbst, dass sie
 Netzwerkverbindungen öffnet. Der Build schlägt fehl, wenn eine Komponente versucht, diese Berechtigung hinzuzufügen.
 Wie jede App kann sie trotzdem Informationen an eine andere App übergeben, wenn Sie sie darum bitten, zum Beispiel
 wenn Sie einen Link öffnen.
@@ -49,7 +49,7 @@ Was Android selbst tut, liegt außerhalb der Kontrolle von Datapavan. Auf Telefo
 | Installierte Apps sehen | Apps und ihre Berechtigungen auflisten | v0.1 |
 | Zugriff auf Nutzungsdaten (von Ihnen in den Einstellungen erteilt; optional) | Zeigen, wie viele Daten jede App gesendet und empfangen hat und welche Apps Sie lange nicht geöffnet haben. Datapavan liest nur Summen und das Datum, an dem jede App zuletzt genutzt wurde, nie welche App Sie wann geöffnet haben, und behält nichts davon. Wenn Sie eine einzelne Aktivität in einer App prüfen, liest es außerdem die Gesamtzähler des Datenverkehrs des Telefons, für die keine Berechtigung nötig ist, um zu sehen, ob die Zählung von Android aktuell ist; diese Zahlen bleiben im Arbeitsspeicher, solange die Prüfung auf dem Bildschirm ist | v0.1 |
 | Netzwerkstatus | Erkennen, ob ein VPN aktiv ist. Diese Berechtigung erlaubt keine Verbindung | v0.1 |
-| Überlagerungen anderer Apps ausblenden | Ab Android 12: Solange Datapavan auf dem Bildschirm ist, können andere Apps nichts darüber anzeigen. Diese Berechtigung erlaubt keine Verbindung | Datapavan Basic nach 0.1.2 und Datapavan Advanced |
+| Überlagerungen anderer Apps ausblenden | Ab Android 12: Solange Datapavan auf dem Bildschirm ist, können andere Apps nichts darüber anzeigen. Diese Berechtigung erlaubt keine Verbindung | Datapavan Basic ab der Version nach 0.1.2 und Datapavan Advanced |
 | VPN (von Ihnen erteilt) | Die **lokale** Firewall. Der Datenverkehr wird auf dem Telefon gefiltert und nie an uns gesendet | Datapavan Advanced, ab 0.2.0 |
 | Internet | Den Datenverkehr anderer Apps durch die lokale Firewall weiterleiten. Datapavan Basic fragt nie danach | Datapavan Advanced, ab 0.2.0 |
 

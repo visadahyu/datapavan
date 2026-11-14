@@ -29,7 +29,7 @@ Tout cela reste dans le stockage privé de l’appli et n’est jamais sauvegard
 
 ## La version 0.1 ne peut pas ouvrir de connexions réseau
 
-La version 0.1 (« Audit ») ne demande pas l’autorisation INTERNET : Android lui-même l’empêche donc d’ouvrir des connexions réseau. La compilation échoue si un composant essaie d’ajouter cette autorisation. Comme toute appli, elle peut quand même transmettre des informations à une autre appli quand vous le lui demandez, par exemple quand vous ouvrez un lien.
+Datapavan Basic 0.1 ne demande pas l’autorisation INTERNET : Android lui-même l’empêche donc d’ouvrir des connexions réseau. La compilation échoue si un composant essaie d’ajouter cette autorisation. Comme toute appli, elle peut quand même transmettre des informations à une autre appli quand vous le lui demandez, par exemple quand vous ouvrez un lien.
 
 Ce que fait Android lui-même échappe à Datapavan. Sur les téléphones dotés des services de Google, Play Protect peut donner à Google des informations sur les applis que vous installez depuis n’importe quelle source, Datapavan compris, et peut lui envoyer une appli inconnue pour vérification. Vous pouvez désactiver une partie de cela dans les paramètres de Play Protect, sur le Play Store.
 
@@ -40,7 +40,7 @@ Ce que fait Android lui-même échappe à Datapavan. Sur les téléphones dotés
 | Voir les applis installées | Lister les applis et leurs autorisations | v0.1 |
 | Accès aux données d’utilisation (accordé par vous dans les Paramètres ; facultatif) | Montrer combien de données chaque appli a envoyées et reçues, et quelles applis vous n’avez pas ouvertes depuis longtemps. Datapavan ne lit que des totaux et la date de dernière utilisation de chaque appli, jamais quelle appli vous avez ouverte et quand, et n’en garde rien. Quand vous vérifiez une activité dans une appli, il lit aussi les compteurs de trafic totaux du téléphone, qui ne nécessitent aucune autorisation, pour voir si le décompte d’Android est à jour ; ces chiffres restent en mémoire pendant que la vérification est à l’écran | v0.1 |
 | État du réseau | Savoir si un VPN est actif. Elle ne permet aucune connexion | v0.1 |
-| Masquer les superpositions des autres applis | À partir d’Android 12 : tant que Datapavan est à l’écran, les autres applis ne peuvent pas s’afficher par-dessus. Elle ne permet aucune connexion | Datapavan Basic après la 0.1.2, et Datapavan Advanced |
+| Masquer les superpositions des autres applis | À partir d’Android 12 : tant que Datapavan est à l’écran, les autres applis ne peuvent pas s’afficher par-dessus. Elle ne permet aucune connexion | Datapavan Basic à partir de la version qui suit la 0.1.2, et Datapavan Advanced |
 | VPN (accordé par vous) | Le pare-feu **local**. Le trafic est filtré sur le téléphone et ne nous est jamais envoyé | Datapavan Advanced, à partir de la 0.2.0 |
 | Internet | Faire passer le trafic des autres applis par le pare-feu local. Datapavan Basic ne la demande jamais | Datapavan Advanced, à partir de la 0.2.0 |
 
