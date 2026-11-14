@@ -50,7 +50,7 @@ jobs:
         run: |
           passed=false
           if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]; then
-            earlier=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&status=success" \
+            earlier=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&event=push&status=success" \
               --jq '[.workflow_runs[] | select(.head_branch != "main")] | length')
             if [ "$earlier" -gt 0 ]; then passed=true; fi
           fi
