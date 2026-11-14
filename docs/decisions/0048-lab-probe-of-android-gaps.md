@@ -5,6 +5,8 @@
 - Fulfils, once accepted: the probe app of [ADR 0041](0041-watch-visibility-and-coexistence.md), decision 2.
   Amends its words "on every Android version in CI": the runs happen on the maintainer's machine, and CI only
   builds and unit-tests the probe (decision 7).
+- Amended on 2026-11-14, by the maintainer's rule for the machine: up to three emulators at once instead of one
+  (decisions 2 and 7).
 
 ## Context
 
@@ -24,13 +26,13 @@ must be checkable by anyone.
 | Id | The behaviour | Public source |
 |---|---|---|
 | `vpn-seen` | Any app that holds `ACCESS_NETWORK_STATE`, a normal permission, sees that its network has `TRANSPORT_VPN`, finds the VPN's network in `getAllNetworks`, and reads the tunnel's interface name and addresses through `NetworkInterface`. An app left out of the tunnel (`addDisallowedApplication`) gets a network that is not a VPN, and may still see the tunnel's interface (ADR 0041) | Android's references for `NetworkCapabilities`, `ConnectivityManager` and `VpnService.Builder` |
-| `appops-closed` | Android keeps a history of what each app did under each permission (AppOps), which its privacy dashboard and `dumpsys appops` read. Other apps cannot: `getHistoricalOps` is a system API behind `GET_APP_OPS_STATS`, which a user-installed app is not granted on the phone itself, and `startWatchingActive` (Android 11 and later) watches only the caller's own UID unless it holds `WATCH_APPOPS` | `AppOpsManager` reference; AOSP's `core/res/AndroidManifest.xml` |
+| `appops-closed` | Android keeps a history of what each app did under each permission (AppOps), which its privacy dashboard and `dumpsys appops` read. Other apps cannot: `getHistoricalOps` is a system API behind `GET_APP_OPS_STATS`, which a user-installed app is not granted on the phone itself, and AOSP's `AppOpsService` answers another app's history only to the system, an instrumented caller, the permission controller or a holder of `GET_HISTORICAL_APP_OPS_STATS`, with an empty answer to anyone else, `GET_APP_OPS_STATS` or not; `startWatchingActive` (Android 11 and later) watches only the caller's own UID unless it holds `WATCH_APPOPS` | `AppOpsManager` reference; AOSP's `core/res/AndroidManifest.xml` and `AppOpsService.getHistoricalOps` |
 | `proc-net` | "On devices that run Android 10 or higher, apps cannot access `/proc/net`." So no app can list the phone's sockets | Android 10's privacy changes |
 | `loopback` | Traffic to 127.0.0.1 and `::1` stays on the loopback interface and never enters a VPN's tunnel. With `/proc/net` closed, no app can see who listens on the phone; it can only try ports. Android 17's local-network permission does not gate loopback (ADR 0034). The "Local Mess" disclosure of June 2025 (KU Leuven, IMDEA Networks, Radboud University) showed scripts on web pages handing identifiers to native apps listening on localhost | [localmess.github.io](https://localmess.github.io/); ADR 0034 |
-| `indicators` | From Android 12, an icon shows in the status bar when an app uses the microphone or the camera, and the privacy dashboard leads with location, camera and microphone. A toast tells the user when an app reads a clip that another app put on the clipboard (Android 12 and later); from Android 10 only the focused app or the default keyboard can read the clipboard at all. No public document says that the user is told when an app reads contacts, the call log, SMS or a file | Android 12's behaviour changes for all apps and its features; Android 10's privacy changes |
-| `carried-by-system` | Traffic that a system service carries for an app has the service's UID: downloads through `DownloadManager` (`com.android.providers.downloads`), push messages through Google Play services, and pages opened in a Custom Tab, which the user's browser loads. Which UID a lookup made by Android's resolver carries, plain and over Private DNS, is measured, not assumed | NetGuard's FAQ, items 8 and 66; Custom Tabs' overview |
+| `indicators` | From Android 12, an icon shows in the status bar when an app uses the microphone or the camera, and the privacy dashboard leads with location, camera and microphone. A toast tells the user when an app reads a clip that another app put on the clipboard (Android 12 and later); from Android 10 only the focused app or the default keyboard can read the clipboard at all. Google's Help says the privacy dashboard manages permissions "for camera, microphone, calendar, and more", without naming contacts, the call log, SMS or files among them; no public document says that the user is told at the moment an app reads them | Android 12's behaviour changes for all apps and its features; Google's Help on the privacy dashboard; Android 10's privacy changes |
+| `carried-by-system` | Traffic that a system service carries for an app has the service's UID: downloads through `DownloadManager` (`com.android.providers.downloads`), push messages through Google Play services, and pages opened in a Custom Tab, which the user's browser loads. Which UID a lookup made by Android's resolver carries, plain and over Private DNS, is measured, not assumed; with Private DNS, the system "automatically secures the DNS queries from all apps" | NetGuard's FAQ, items 8 and 66; Custom Tabs' overview; the Android Developers blog on DNS over TLS in Android P |
 | `short-lived` | A VPN asks Android who owns a connection while the socket exists. A socket closed before it asks has no owner left to name | PCAPdroid's FAQ, on its "unknown" app; `getConnectionOwnerUid` reference |
-| `webview` | A WebView's requests carry the app's UID, whichever origin in the page asked | No source found yet; the row rests on the measurement until one is |
+| `webview` | A WebView's requests carry the app's UID, whichever origin in the page asked. "WebView's browser code runs in the app's process", its network service included | Chromium's WebView architecture document (it says nothing of UIDs, which follow from the process) |
 
 The table does not yet say what each Android version does; that is what the probe measures. Two of the rows are
 blind spots (`appops-closed`, `indicators`), one is an exposure of Watch (`vpn-seen`), and the rest are ways in
@@ -58,7 +60,9 @@ traffic; this probe measures the platform.
   release, and no signed build of them is published. The source is public; anyone builds it with the same script.
 - **A check in CI.** `scripts/check.sh` lists the classes of every release APK and bundle it builds, with the
   SDK's `dexdump`, and fails if one of them is under `org.visadahyu.lab.` or has the name of a class defined under
-  `lab/`. It also fails if a release manifest names a lab package.
+  `lab/`. It also fails if a release manifest names a lab package. Since R8 renames the classes it keeps, it also
+  reads each release's `mapping.txt`, R8's record of the original names, and every dex's strings for those only
+  the lab's code holds, and it looks inside archives nested in a release.
 - **The VPN under test** is Watch's debug build, with its exclusion list (ADR 0041, decision 2) and its debug
   counters. The probe changes nothing in Watch.
 - **It is ADR 0041's probe.** Decision 2 of that ADR is fulfilled when `vpn-seen` has a row for every version below.
@@ -66,7 +70,10 @@ traffic; this probe measures the platform.
 ### 2. What it publishes
 
 - **Where:** `docs/platform-gaps/`, with a README that holds the table and the method, and each run's raw output
-  beside it. The versions are Android 10, 12, 14, 15, 16 and 17 on the emulator, one emulator at a time.
+  beside it. The versions are Android 10, 12, 14, 15, 16 and 17 on the emulator, up to three emulators at once
+  on at most 12 of the machine's 24 threads and with at least 14 GB of memory left free; a row whose result
+  depends on timing runs alone, or with each emulator pinned to threads of its own and what ran beside it
+  recorded.
 - **One row per behaviour and version,** with:
   - **the image's identity:** the system image's SDK package and revision, the SHA-256 of its archive,
     `ro.build.fingerprint`, the Google Play system update month that Settings shows (or "none" on an image
@@ -209,7 +216,10 @@ time. A draft may be prepared with AI help; the maintainer files it.
   tests on the JVM: turning the probe's raw output into a row, and checking the table's format. It also runs
   decision 1's class check and decision 5's manifest check. No emulator runs the probe in CI: CI minutes are
   limited.
-- **Full runs on the maintainer's machine,** one emulator at a time, each stopped and its AVD deleted after its run.
+- **Full runs on the maintainer's machine,** up to three emulators at once, on at most 12 of the machine's 24
+  threads and with at least 14 GB of memory left free, each stopped and its AVD deleted after its run. A row
+  whose result depends on timing runs alone, or with each emulator pinned to threads of its own and what ran
+  beside it recorded.
 - **When rows are run again:** when a new image revision or Google Play system update month appears for a version
   in the table, and before a release of Datapavan Advanced whose texts cite the table (ADR 0039).
 
@@ -263,6 +273,15 @@ Also outside this ADR:
 - Android 12 behaviour changes for all apps (microphone and camera indicators, clipboard access notifications):
   https://developer.android.com/about/versions/12/behavior-changes-all (read on 2026-11-14)
 - Android 12 features (the privacy dashboard): https://developer.android.com/about/versions/12/features
+- Google's Help, "Manage permissions from the privacy dashboard": https://support.google.com/android/answer/13530434
+  (read on 2026-11-14)
+- AOSP's `AppOpsService.getHistoricalOps`:
+  https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/appop/AppOpsService.java
+  (read on 2026-11-14)
+- Android Developers blog, "DNS over TLS support in Android P Developer Preview", 2018:
+  https://android-developers.googleblog.com/2018/04/dns-over-tls-support-in-android-p.html (read on 2026-11-14)
+- Chromium, WebView's architecture: https://chromium.googlesource.com/chromium/src/+/main/android_webview/docs/architecture.md
+  (read on 2026-11-14)
 - `AppOpsManager` (`startWatchingActive`, added in API level 30, and its note on `WATCH_APPOPS`):
   https://developer.android.com/reference/android/app/AppOpsManager (read on 2026-11-14)
 - `NetworkCapabilities`: https://developer.android.com/reference/android/net/NetworkCapabilities
