@@ -78,6 +78,9 @@ for mode in light dark; do
         capture settings
         adb shell input keyevent KEYCODE_BACK
         open_tab apps
+        # On a fresh emulator the list fills only once the first scan ends: wait for a row (CI, 2026-11-14,
+        # docs/ci-flakes.md), then open it.
+        within 60 has_id app-row || { echo "SCREENSHOTS FAILED: no app in the list in $locale after 60 s" >&2; exit 1; }
         tap_id app-row || { echo "SCREENSHOTS FAILED: no app in the list in $locale" >&2; exit 1; }
         within 10 gone_id app-row || { echo "SCREENSHOTS FAILED: the app's page did not open in $locale" >&2; exit 1; }
         capture app
