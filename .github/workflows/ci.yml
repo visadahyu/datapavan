@@ -275,7 +275,8 @@ jobs:
           profile: pixel_7
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
-          script: scripts/emulator-shard.sh ${{ matrix.shard }}
+          # The runner's emulator listens on its default port: the shard runs only on a serial it is given.
+          script: ANDROID_SERIAL=emulator-5554 scripts/emulator-shard.sh ${{ matrix.shard }}
 
       - name: Keep the screenshots
         if: always()

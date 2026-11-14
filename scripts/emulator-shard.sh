@@ -6,8 +6,13 @@
 # 2026-11-14.
 #
 #   scripts/emulator-shard.sh list       the shards, one per line
-#   scripts/emulator-shard.sh <shard>    runs the shard's checks on the device in ANDROID_SERIAL (or the
-#                                        only one adb sees)
+#   scripts/emulator-shard.sh check      only says whether the device in ANDROID_SERIAL may run a shard,
+#                                        reading two of its properties and nothing else
+#   scripts/emulator-shard.sh <shard>    runs the shard's checks on the device in ANDROID_SERIAL
+#
+# A shard installs apps, changes settings, sets a PIN and taps: it runs only on an emulator, named by its
+# serial (ANDROID_SERIAL=emulator-NNNN) and saying so itself, never on a phone or on "the only device adb
+# sees", since a phone may be attached beside the emulators.
 #
 # The APKs come from the build (scripts/check.sh android, or CI's build job): Basic's and Advanced's debug
 # builds and Advanced's unsigned release build, at Gradle's output paths.
@@ -31,13 +36,39 @@ checks_of() {
     esac
 }
 
+# Whether ANDROID_SERIAL names an emulator, by its serial and by what the device says of itself. Only
+# getprop is run on the device.
+emulator_guard() {
+    local serial=${ANDROID_SERIAL:-} qemu kernel
+    if [ -z "$serial" ]; then
+        echo "refused: ANDROID_SERIAL is not set; a shard runs only on an emulator named by its serial" >&2
+        return 1
+    fi
+    qemu=$(adb -s "$serial" shell getprop ro.boot.qemu </dev/null 2>/dev/null | tr -d '\r') || qemu=""
+    kernel=$(adb -s "$serial" shell getprop ro.kernel.qemu </dev/null 2>/dev/null | tr -d '\r') || kernel=""
+    case $serial in
+        emulator-[0-9]*) ;;
+        *)
+            echo "refused: $serial is not an emulator's serial (ro.boot.qemu '${qemu}', ro.kernel.qemu '${kernel}')" >&2
+            return 1
+            ;;
+    esac
+    if [ "$qemu" != 1 ] && [ "$kernel" != 1 ]; then
+        echo "refused: $serial does not say it is an emulator (ro.boot.qemu '${qemu}', ro.kernel.qemu '${kernel}')" >&2
+        return 1
+    fi
+    echo "ok: $serial is an emulator"
+}
+
 case "${1:-}" in
     list) tr ' ' '\n' <<<"$SHARDS" ;;
+    check) emulator_guard ;;
     "") echo "usage: $0 list | $0 <shard>" >&2; exit 2 ;;
     *)
         shard=$1
         checks=$(checks_of "$shard") || { echo "no shard named $shard; the shards are: $SHARDS" >&2; exit 2; }
-        echo "== Emulator shard $shard on ${ANDROID_SERIAL:-the only device}: $checks"
+        emulator_guard >/dev/null || exit 2
+        echo "== Emulator shard $shard on $ANDROID_SERIAL: $checks"
         for check in $checks; do
             case $check in
                 screenshots.sh)
