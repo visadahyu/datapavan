@@ -163,6 +163,8 @@ How W5's per-app view is met, live, with which apps sent while the user was not 
 which keeps nothing of use, in [ADR 0047](docs/decisions/0047-profile-for-phones-that-may-be-searched.md).
 The probe app that ADR 0041 promised, which measures where stock Android leaves privacy tools blind or exposed on
 the Android 10 to 17 emulators, is proposed in [ADR 0048](docs/decisions/0048-lab-probe-of-android-gaps.md).
+Datapavan Advanced's own offline signing key, a rehearsed key rotation for both editions and a 2-of-3 split backup
+of each key, all needed before 0.2.0, are proposed in [ADR 0049](docs/decisions/0049-signing-keys-of-the-editions.md).
 
 The items, in order:
 
