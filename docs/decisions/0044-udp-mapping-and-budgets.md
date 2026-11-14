@@ -260,15 +260,15 @@ an ADR (D25).
   - **The windows**, each pinned to the nanosecond on both sides by the engine's own tests: `udp_reask` after the
     newest question, and before or after any answer for one that came before it; thirty times `udp_reask` for a
     stream; `udp_contest` for a waiting stand-in.
-  - **The model.** A test in `whose.rs` drives the rule through 10,000 seeded random schedules at simulated
-    instants, in 1.6 s; 1,000,000 pass in 20 s in a release build. It drives handovers between a chained app, a
-    direct app and no app, many within a few `udp_reask` or none at all; datagrams and lookups, queued as the
-    engine queues them, and streams that never pause for longer than thirty times `udp_reask`; Android reading
-    the socket a moment after it is asked and answering after random delays, so out of order; ways opening
-    slowly, or failing, and a way for no app refused once the chain is on; the chain going off and on; flows of
-    lookups ending, and the record going with the socket's last way. It checks every datagram that leaves, or
-    fails with its way, against who held the port when it was sent. One sent by another app than the one it is
-    taken for must lie within the windows above, by the answers given by then: every answer less than
+  - **The model.** A test in `whose/model.rs` drives the rule through 10,000 seeded random schedules at
+    simulated instants, in 1.6 s; 1,000,000 pass in 30 s with optimisation. It drives handovers between a
+    chained app, a direct app and no app, many within a few `udp_reask` or none at all; datagrams and lookups,
+    queued as the engine queues them, and streams that never pause for longer than thirty times `udp_reask`;
+    Android reading the socket a moment after it is asked and answering after random delays, so out of order;
+    ways opening slowly, or failing, and a way for no app refused once the chain is on; the chain going off and
+    on; flows of lookups ending, and the record going with the socket's last way. It checks every datagram that
+    leaves, or fails with its way, against who held the port when it was sent. One sent by another app than the
+    one it is taken for must lie within the windows above, by the answers given by then: every answer less than
     `udp_reask` from it names that app, and one of them was asked since its floor; or it came after an answer
     naming that app, asked since its floor, less than thirty times `udp_reask` after it, with what left under
     that app since never pausing for `udp_reask`, and no answer since naming another app. It checks liveness
@@ -278,6 +278,24 @@ an ADR (D25).
     mutation, those the eighth and ninth reviews found among them. A sixteenth, a datagram that keeps whose it
     was taken for though the answer before it names another app, it finds only beyond 10,000 schedules; a test
     of its own holds it.
+  - **The bounded search.** The model also walks every schedule within small bounds, depth first, with the same
+    checks, on a grid of time where `udp_reask` is two steps, so that each window's edge falls on a step: who
+    holds the port and when, when each datagram or lookup comes and where to, how slowly Android answers and
+    reads the socket, how slowly each way opens or whether it fails, when the chain turns, and the order of what
+    falls on one instant; paths that reach one state share what follows. Every `cargo test` walks one set, a
+    handover and two datagrams or lookups, in 3.6 s; nine larger ones, with two handovers, the chain turning,
+    streams behind ways three times `udp_reask` slow, or a stream past thirty times it, walk 229 million states
+    in three minutes on 24 cores with optimisation (`--ignored`; `WHOSE_BOUNDS` sets others). Of 23 mutations of
+    the rule, it finds 14, each with a schedule of two to seven datagrams; the random schedules find each of
+    those within 1,400 seeds, and one more within 10,000. It does not reach what needs long streams, slow
+    answers among them, or several answers kept while a datagram waits: three mutations the random schedules
+    find only beyond 10,000 (a join that takes an answer from before the floor, the presumption without the
+    answer before it, and the near window's lower edge taken in) lie beyond its bounds, and five survive both:
+    three the tenth review judged harmless, and two that drop more only where a handover lies near, which the
+    liveness check allows. It takes the port to change hands before what else falls on its step, Android to read
+    the socket at its question or a step after, and each delay to be one of the grid's; like the random
+    schedules, it drives the model's copy of the engine's steps, not the engine, and puts no question for what
+    only comes in.
 - **No guess.** An app Android cannot name is unknown, in the log (decision 3's shared bucket) and to the chain,
   even when Android named that socket's app before: the old app is never taken for it. While a chain is on, it goes
   nowhere. A socket Android fails to name for a moment so gets a new mapping, and so another port.
