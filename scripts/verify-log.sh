@@ -301,17 +301,30 @@ adb shell input keyevent KEYCODE_SLEEP
 earlier_day() { watch_dump log-day "$earlier" | sed -n "s/^log-day $earlier //p"; }
 earlier_is() { result=$(earlier_day); [ "$result" = "$1" ]; }
 within 15 earlier_is locked || fail "the earlier day was '$result' 15 s after the phone was locked"
-# The PIN is typed once Android shows its keyguard's PIN entry, and typed again if the phone stayed locked.
+# The PIN is typed once Android shows its keyguard's PIN entry, and typed again only while Android still
+# shows its keyguard 10 s later, up to three times. The earlier day must then open within 2 s of the
+# unlock, as before.
 pin_entry_shown() { has_id "com.android.systemui:id/pinEntry"; }
+keyguard_is() {
+    local activities
+    activities=$(adb shell dumpsys activity activities </dev/null | tr -d '\r') || return 1
+    grep -q "mKeyguardShowing=$1" <<<"$activities"
+}
 for try in 1 2 3; do
+    if [ "$try" -gt 1 ]; then
+        keyguard_is true || break
+        echo "  try $try: the phone was still locked 10 s after the PIN was typed: typing it again" >&2
+    fi
     adb shell input keyevent KEYCODE_WAKEUP
     adb shell wm dismiss-keyguard
     within 5 pin_entry_shown || true
     adb shell input text "$PIN"
     adb shell input keyevent KEYCODE_ENTER
-    within 10 earlier_is "open 1" && break
-    echo "  try $try: the earlier day was '$result' after the PIN was typed" >&2
+    within 10 keyguard_is false && break
 done
+keyguard_is false || fail "the phone stayed locked after its PIN was typed"
+sleep 2
+result=$(earlier_day)
 [ "$result" = "open 1" ] || fail "the earlier day was '$result' once the phone was unlocked"
 # Watch's screen, back in front after the unlock, reads the screen lock again.
 if [ -n "$english" ]; then
