@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The lab's probe of Android's platform gaps (ADR 0048): lab/run.sh starts it on an emulator it made, and
+    each behaviour it measures is one file under src/. It sends fixed payloads only to the lab's server on
+    the host (10.0.2.2) and looks up only names reserved for testing (RFC 2606). Never shipped.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.visadahyu.lab.gapsprobe">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- vpn-seen: the normal permission that any app may hold. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- appops-closed: a development permission, granted only on the emulator with pm grant. -->
+    <uses-permission android:name="android.permission.GET_APP_OPS_STATS" />
+    <!-- appops-closed: the probe's own use of the microphone, the control of its watcher. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- appops-closed: the watcher stays a foreground service while the fixture is on screen. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Android 17: the lab's server on the host is on the local network (ADR 0034). -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+
+    <queries>
+        <package android:name="org.visadahyu.lab.gapsfixture" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" />
+        </intent>
+    </queries>
+
+    <application android:label="Gaps probe (lab)" android:hasCode="true" android:usesCleartextTraffic="true">
+        <activity android:name="org.visadahyu.lab.gapsprobe.GapsProbe" android:exported="true" />
+        <service
+            android:name="org.visadahyu.lab.gapsprobe.AppOpsClosed$Watcher"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="A lab measurement: which apps' use of the microphone Android reports to this app" />
+        </service>
+    </application>
+</manifest>

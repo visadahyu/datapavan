@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The lab's gaps fixture (ADR 0048, decision 5): an app that reads the synthetic data a run puts on an
+    emulator, so that the run can record what Android tells the user of each read. It records only that
+    a read happened and how many items it returned. It holds no permission to open a network socket, and
+    lab/gaps-fixture/build.sh and scripts/check.sh fail if this manifest names one. Never shipped.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.visadahyu.lab.gapsfixture">
+
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <application android:label="Gaps fixture (lab)" android:hasCode="true">
+        <activity android:name="org.visadahyu.lab.gapsfixture.GapsFixture" android:exported="true" />
+    </application>
+</manifest>
