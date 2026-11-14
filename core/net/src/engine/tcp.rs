@@ -1,6 +1,7 @@
 //! TCP through the tunnel (ADR 0012): the app's SYN held until its owner and the server are known, the
 //! rewriting to the engine's listener, Android's own stack ending the connection, and the relay.
 
+use super::budget::Place;
 use super::chain::{Route, connect_through};
 use super::logbook::FlowBytes;
 use super::naming::Begun;
@@ -205,7 +206,7 @@ impl Drop for Waiting {
 }
 
 /// Opens the upstream connection for a held SYN; `_waiting` holds its place until the server has
-/// answered or failed.
+/// answered or failed, and so does its place in its app's share.
 async fn open(
     mut held: Held,
     _waiting: Waiting,
@@ -215,23 +216,8 @@ async fn open(
     pending: Pending,
 ) {
     let (app, destination) = (held.parsed.source, held.parsed.destination);
-    let direct = async {
-        match shared.target(destination) {
-            Some(target) => connect_tcp(&shared, target).await,
-            None => Err(io::ErrorKind::NetworkUnreachable.into()),
-        }
-    };
-    let (uid, upstream) = if shared.chain().is_some() || is_stand_in(destination.ip()) {
-        // The route waits for the app's name: a chained app's connection must not start directly.
-        let uid = owner(&shared, TCP, app, destination).await;
-        let upstream = match shared.route(uid, destination) {
-            Route::Direct => direct.await,
-            Route::Tool(chain) => connect_through(&shared, &chain, destination).await,
-            Route::Refused => Err(io::ErrorKind::ConnectionRefused.into()),
-        };
-        (uid, upstream)
-    } else {
-        tokio::join!(owner(&shared, TCP, app, destination), direct)
+    let Some((uid, upstream, _share)) = upstream(&shared, app, destination).await else {
+        return refused(&held, &shared, &nat);
     };
     let outcome = match &upstream {
         Ok(_) => Outcome::Opened,
@@ -311,6 +297,58 @@ async fn open(
     {
         Counters::add(&shared.counters.packets_out, 1);
     }
+}
+
+/// The app of a held SYN, as Android names it, and the connection to its server, with the place it
+/// took in its app's share of the waiting connections (ADR 0044, decision 3): a connection still
+/// waiting for its server once Android has named its app takes one, held until the server answered or
+/// failed. `None` when the app holds its whole share.
+async fn upstream(
+    shared: &Arc<Shared>,
+    app: SocketAddr,
+    destination: SocketAddr,
+) -> Option<(Option<u32>, io::Result<TcpStream>, Option<Place>)> {
+    let direct = async {
+        match shared.target(destination) {
+            Some(target) => connect_tcp(shared, target).await,
+            None => Err(io::ErrorKind::NetworkUnreachable.into()),
+        }
+    };
+    if shared.chain().is_some() || is_stand_in(destination.ip()) {
+        // The route waits for the app's name: a chained app's connection must not start directly.
+        let uid = owner(shared, TCP, app, destination).await;
+        let share = shared.tcp_shares.take(uid).ok()?;
+        let upstream = match shared.route(uid, destination) {
+            Route::Direct => direct.await,
+            Route::Tool(chain) => connect_through(shared, &chain, destination).await,
+            Route::Refused => Err(io::ErrorKind::ConnectionRefused.into()),
+        };
+        return Some((uid, upstream, Some(share)));
+    }
+    // The server is asked at once, beside Android. One that answered first leaves nothing waiting.
+    let mut direct = std::pin::pin!(direct);
+    let mut asked = std::pin::pin!(owner(shared, TCP, app, destination));
+    let first = tokio::select! {
+        biased;
+        upstream = &mut direct => Ok(upstream),
+        uid = &mut asked => Err(uid),
+    };
+    match first {
+        Ok(upstream) => Some((asked.await, upstream, None)),
+        Err(uid) => {
+            let share = shared.tcp_shares.take(uid).ok()?;
+            Some((uid, direct.await, Some(share)))
+        }
+    }
+}
+
+/// A held SYN whose app holds its whole share of the connections waiting for their servers: dropped,
+/// as by a full queue, and counted, and its port freed at once, since it never reached Android's
+/// stack. The app's stack sends it again, by then perhaps with room. A connection to the server, if one
+/// was being made, is given up with it.
+fn refused(held: &Held, shared: &Shared, nat: &Mutex<Nat>) {
+    lock(nat).release(held.port);
+    Counters::add(&shared.counters.tcp_refused, 1);
 }
 
 /// Accepts the rewritten connections and relays each over the upstream connection opened for it.

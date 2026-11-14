@@ -46,6 +46,7 @@ use crate::standins::StandIns;
 use crate::tls::Hello;
 use crate::tun::Tun;
 
+mod budget;
 mod chain;
 mod errors;
 mod kept;
@@ -57,6 +58,7 @@ mod udp;
 mod upstream;
 mod whose;
 
+use budget::Budget;
 pub use chain::Chain;
 use logbook::{FlowBytes, Live, Lookups, logger, now_ms};
 #[cfg(test)]
@@ -168,6 +170,21 @@ pub struct Limits {
     /// 0044, decision 3). A SYN beyond it is dropped, as by a full queue, and the app's stack sends it
     /// again; each waiting connection holds a socket and a fake port for up to `connect_timeout`.
     pub tcp_waiting: usize,
+    /// At most this many of them are one app's, once Android has named it, or are of apps Android
+    /// cannot name, which share one share: a quarter of `tcp_waiting`, at least 32. A SYN beyond it is
+    /// dropped too, and its port freed.
+    pub tcp_share: usize,
+    /// At most this many UDP ways that hold a socket of their own are open at once, for every app
+    /// together: mappings, on the direct path or through the tool, and flows of lookups to the
+    /// tunnel's DNS address on the direct path (ADR 0044, decision 3). A new one beyond it makes room by
+    /// ending a mapping, or its datagrams are dropped.
+    pub udp_mappings: usize,
+    /// At most this many of them are one app's, or of apps Android cannot name, which share one share:
+    /// a quarter of `udp_mappings`, at least 64. An app at its share makes room among its own.
+    pub udp_share: usize,
+    /// A mapping that passed a datagram either way less than this long ago is never ended to make room,
+    /// so that a call is never cut.
+    pub udp_quiet: Duration,
     /// At most this many names hold a stand-in at once (ADR 0038, [`crate::standins::CAPACITY`]); the
     /// least recently used gives way to a new one. The tests hold fewer.
     pub stand_ins: usize,
@@ -180,12 +197,19 @@ pub struct Limits {
 impl Limits {
     /// The product's limits for a process that may open `descriptors` files (its soft limit): a
     /// reserve of a sixteenth, at least 128, stays for Watch itself; waiting TCP connections may use an
-    /// eighth of the rest, at most 4,096.
+    /// eighth of the rest, at most 4,096, and UDP mappings a quarter. Each app may use a quarter of
+    /// each cap, at least 32 waiting connections and 64 mappings, and never more than the cap.
     #[must_use]
     pub fn for_descriptors(descriptors: usize) -> Self {
         let budget = descriptors.saturating_sub((descriptors / 16).max(128));
+        let share = |cap: usize, floor: usize| (cap / 4).max(floor).min(cap);
+        let tcp_waiting = (budget / 8).clamp(1, 4_096);
+        let udp_mappings = (budget / 4).max(1);
         Self {
-            tcp_waiting: (budget / 8).clamp(1, 4_096),
+            tcp_waiting,
+            tcp_share: share(tcp_waiting, 32),
+            udp_mappings,
+            udp_share: share(udp_mappings, 64),
             ..Self::default()
         }
     }
@@ -210,6 +234,10 @@ impl Default for Limits {
     fn default() -> Self {
         Self {
             tcp_waiting: 112,
+            tcp_share: 32,
+            udp_mappings: 224,
+            udp_share: 64,
+            udp_quiet: Duration::from_secs(5),
             udp_idle: Duration::from_secs(120),
             udp_waiting: 32,
             udp_reask: Duration::from_secs(1),
@@ -423,19 +451,20 @@ impl Counters {
     /// skipped packets, review finding 21), and hellos read on flows a DNS answer had named, and of
     /// those, how many named another server (finding 20: how often a shared address gives a flow the
     /// wrong name), relayed connections that ended in an error and were reset on both sides (finding
-    /// 21), SYNs dropped because as many connections as allowed were waiting for their servers
-    /// (finding 18), UDP mappings opened (finding 19: one for each app socket, on the direct path or
-    /// through the tool), datagrams a mapping dropped because they came from an address its app had not
-    /// sent to, and answers from the tool's relay that a mapping dropped because no one destination of
-    /// its app could be told for them (ADR 0044, decision 2: a header that is not well formed, a
-    /// fragment, or a port several stand-ins wait on), datagrams from another port of an address the
-    /// app sent to that a mapping dropped because as many such ports had come in as it lets in, and
-    /// relays a tool offered for UDP elsewhere than on the phone or at its proxy's own address, which
-    /// Watch refused, and datagrams and lookups dropped because who sent them could not be told: the
-    /// answers of Android's near them named different apps, and those dropped because they came too late
-    /// for their app, which lost the socket before their way opened, or for any answer near them (ADR
-    /// 0044, unit 9, "Whose a datagram is"). None names a destination: they can be read on any phone. New counters are only
-    /// ever appended, so that scripts reading a column by its place keep reading the same one.
+    /// 21), SYNs dropped because as many connections as allowed were waiting for their servers, for
+    /// every app together or for their app (finding 18), UDP mappings opened (finding 19: one for each
+    /// app socket, on the direct path or through the tool), datagrams a mapping dropped because they
+    /// came from an address its app had not sent to, and answers from the tool's relay that a mapping
+    /// dropped because no one destination of its app could be told for them (ADR 0044, decision 2: a
+    /// header that is not well formed, a fragment, or a port several stand-ins wait on), datagrams from
+    /// another port of an address the app sent to that a mapping dropped because as many such ports had
+    /// come in as it lets in, and relays a tool offered for UDP elsewhere than on the phone or at its
+    /// proxy's own address, which Watch refused, and datagrams and lookups dropped because who sent
+    /// them could not be told: the answers of Android's near them named different apps, and those
+    /// dropped because they came too late for their app, which lost the socket before their way opened,
+    /// or for any answer near them (ADR 0044, unit 9, "Whose a datagram is"). None names a destination:
+    /// they can be read on any phone. New counters are only ever appended, so that scripts reading a
+    /// column by its place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
         [
@@ -483,6 +512,8 @@ struct Shared {
     limits: Limits,
     /// TCP connections waiting for their servers now (`Limits::tcp_waiting`).
     tcp_waiting: AtomicUsize,
+    /// Each app's share of them, once Android has named it (`Limits::tcp_share`).
+    tcp_shares: Arc<Budget>,
     counters: Counters,
     keep_flows: usize,
     flows: Mutex<VecDeque<Flow>>,
@@ -590,6 +621,7 @@ impl Engine {
             addresses: config.addresses,
             limits: config.limits,
             tcp_waiting: AtomicUsize::new(0),
+            tcp_shares: Budget::new(config.limits.tcp_waiting, config.limits.tcp_share),
             counters: Counters::default(),
             keep_flows: config.keep_flows,
             flows: Mutex::new(VecDeque::new()),
@@ -904,6 +936,30 @@ mod tests {
         }
     }
 
+    /// The caps and shares follow the process's limit on open files (ADR 0044, decision 3): the
+    /// defaults are those of a limit of 1,024; a share keeps its floor, but never passes its cap.
+    #[test]
+    fn the_caps_and_shares_follow_the_descriptor_limit() {
+        assert_eq!(Limits::for_descriptors(1_024), Limits::default());
+        let caps = |limits: Limits| {
+            (
+                limits.tcp_waiting,
+                limits.tcp_share,
+                limits.udp_mappings,
+                limits.udp_share,
+            )
+        };
+        assert_eq!(
+            caps(Limits::for_descriptors(32_768)),
+            (3_840, 960, 7_680, 1_920)
+        );
+        assert_eq!(
+            caps(Limits::for_descriptors(100_000)),
+            (4_096, 1_024, 23_437, 5_859)
+        );
+        assert_eq!(caps(Limits::for_descriptors(200)), (9, 9, 18, 18));
+    }
+
     pub(super) fn shared() -> Shared {
         shared_with(Arc::new(NoPlatform))
     }
@@ -914,6 +970,7 @@ mod tests {
             addresses: Addresses::COMMON,
             limits: Limits::default(),
             tcp_waiting: AtomicUsize::new(0),
+            tcp_shares: Budget::new(Limits::default().tcp_waiting, Limits::default().tcp_share),
             counters: Counters::default(),
             keep_flows: 8,
             flows: Mutex::default(),

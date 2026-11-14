@@ -33,8 +33,12 @@ const INSIDE: &str = "NETLAB_INSIDE";
 const SERVER: Ipv4Addr = Ipv4Addr::new(198, 51, 100, 9);
 /// A second address beside it: another server, or a stranger to the apps.
 const OTHER: Ipv4Addr = Ipv4Addr::new(198, 51, 100, 10);
-/// The UID the lab's Android names for every app in the tunnel.
+/// The UID the lab's Android names for every app in the tunnel, but the second app.
 const APP: u32 = 10_500;
+/// A second app: the lab's Android names it for a socket bound to one of [`SECOND_PORTS`], below the
+/// ports the kernel hands out by itself.
+const SECOND_APP: u32 = 10_600;
+const SECOND_PORTS: std::ops::Range<u16> = 20_000..20_100;
 /// The places of counters in `Engine::counters`.
 const TCP_FLOWS: usize = 0;
 const UDP_FLOWS: usize = 1;
@@ -49,13 +53,19 @@ const SILENT: Ipv4Addr = Ipv4Addr::new(203, 0, 113, 1);
 /// How long any one step may take before the test fails.
 const STEP: Duration = Duration::from_secs(5);
 
-/// Android as the lab plays it: every app in the tunnel is one app, and protection is the namespace's
-/// routing (the engine's sockets are not bound to the tunnel's address, so they never enter it).
+/// Android as the lab plays it: every app in the tunnel is one app, but one whose socket is bound to
+/// one of [`SECOND_PORTS`]; protection is the namespace's routing (the engine's sockets are not bound
+/// to the tunnel's address, so they never enter it).
 struct Lab;
 
 impl Platform for Lab {
     fn owner(&self, _: u8, local: SocketAddr, _: SocketAddr) -> Option<u32> {
-        (local.ip() == IpAddr::V4(Addresses::COMMON.tun4)).then_some(APP)
+        let second = SECOND_PORTS.contains(&local.port());
+        (local.ip() == IpAddr::V4(Addresses::COMMON.tun4)).then_some(if second {
+            SECOND_APP
+        } else {
+            APP
+        })
     }
 
     fn protect(&self, _: RawFd) -> bool {
@@ -458,6 +468,68 @@ fn connections_waiting_for_silent_servers_are_capped() -> Outcome {
             let server = echo_server().await?;
             let mut after = app_connect(server).await?;
             assert_eq!(exchange(&mut after, b"room again").await?, b"room again");
+            Ok(())
+        },
+    )
+}
+
+/// ADR 0044, decision 3: each app may hold only its share of the connections waiting for their
+/// servers. One app's SYNs to a server that never answers, beyond its share, are dropped and counted,
+/// and their ports freed, though the cap for every app has room; so another app's connection opens at
+/// once, before any SYN of its own would be sent again. Without the share the first app would fill
+/// the cap, and the second's first SYN would be dropped.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn each_app_holds_only_its_share_of_waiting_connections() -> Outcome {
+    let limits = Limits {
+        tcp_waiting: 4,
+        tcp_share: 2,
+        connect_timeout: Duration::from_secs(3),
+        ..Limits::default()
+    };
+    lab(
+        "each_app_holds_only_its_share_of_waiting_connections",
+        limits,
+        |engine| async move {
+            let mut attempts = Vec::new();
+            for port in 1..=6 {
+                attempts.push(tokio::spawn(async move {
+                    let socket = TcpSocket::new_v4()?;
+                    socket.bind(SocketAddr::from((Addresses::COMMON.tun4, 0)))?;
+                    match timeout(
+                        Duration::from_secs(12),
+                        socket.connect(SocketAddr::from((SILENT, port))),
+                    )
+                    .await
+                    {
+                        Ok(result) => result.map(|_| ()),
+                        Err(_) => Err(io::ErrorKind::TimedOut.into()),
+                    }
+                }));
+            }
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            assert!(
+                engine.counters()[TCP_REFUSED] >= 4,
+                "the first app's SYNs beyond its share were not dropped: counters {:?}",
+                engine.counters()
+            );
+            // The second app's first SYN finds room: well within the second a SYN sent again waits.
+            let server = echo_server().await?;
+            let socket = TcpSocket::new_v4()?;
+            socket.bind(SocketAddr::from((
+                Addresses::COMMON.tun4,
+                SECOND_PORTS.start,
+            )))?;
+            let mut second = timeout(Duration::from_millis(700), socket.connect(server))
+                .await
+                .map_err(|_| "the second app's connection waited for a SYN sent again")??;
+            assert_eq!(exchange(&mut second, b"my share").await?, b"my share");
+            for attempt in attempts {
+                assert!(
+                    attempt.await?.is_err(),
+                    "a connection to a silent server opened"
+                );
+            }
             Ok(())
         },
     )
