@@ -19,7 +19,10 @@ scripts/check.sh
 This runs rustfmt, Clippy (pedantic, warnings as errors, for the host and both Android targets), the
 Rust tests, cargo-deny, Android Lint for debug and release (warnings as errors), the unit tests, APK and
 bundle builds, the forbidden-permission guard, and a check that every APK carries the Rust library.
-CI runs the same script.
+CI runs the same script, and then the emulator checks in parallel shards (`scripts/emulator-shard.sh`), when a
+change touches what they test (`scripts/ci-scope.sh`). `scripts/emulator-shards.sh` runs the same shards on
+local emulators before a push, and `scripts/batch-merge.sh` brings several approved branches into one branch
+for one CI run before main moves to it.
 
 ## Rules for code
 
