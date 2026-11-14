@@ -3230,6 +3230,33 @@ mod tests {
         Ok(())
     }
 
+    /// A stand-in that waits for its first answer contests a port's answers from an address another
+    /// stand-in was bound to for `udp_contest` after the app first sent to it, to the nanosecond on
+    /// both sides, and never its own (ADR 0044, the windows; tenth review of unit 9, minor 3).
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_waiting_stand_in_contests_its_port_for_udp_contest() -> io::Result<()> {
+        let shared = shared();
+        let contest = shared.limits.udp_contest;
+        let nano = Duration::from_nanos(1);
+        let now = Instant::now();
+        let mut mapping = mapping(now).await?;
+        let stand_in = SocketAddr::from(([198, 18, 0, 1], 443));
+        mapping.peer(&shared, (APP, stand_in), now, (false, waiting_stand_in()));
+        let port = stand_in.port();
+        let within = now + contest.saturating_sub(nano);
+        assert!(mapping.contested(port, None, (within, contest)));
+        assert!(!mapping.contested(port, None, (now + contest, contest)));
+        assert!(
+            !mapping.contested(port, Some(stand_in), (now, contest)),
+            "its own"
+        );
+        assert!(
+            !mapping.contested(port + 1, None, (now, contest)),
+            "another port"
+        );
+        Ok(())
+    }
+
     /// A stand-in on port 53 that its relay answers by name waits no more: it drops the queries it kept
     /// and records no more (fifth review of unit 9, finding 3).
     #[tokio::test(flavor = "current_thread")]

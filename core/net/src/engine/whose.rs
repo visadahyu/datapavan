@@ -387,6 +387,15 @@ mod tests {
         let just = before(REASK.saturating_sub(nano)).map(|came| later.whose(came, None, REASK));
         assert_eq!(just, Some(Verdict::Owner(CHAINED)));
         assert_eq!(later.whose(base, None, REASK), Verdict::Late);
+        // After an answer, for one that came at or before the newest question: `udp_reask` too (tenth
+        // review of unit 9, minor 3).
+        later.note(2, named(DIRECT, base + REASK * 2));
+        assert_eq!(
+            later.whose(base + REASK * 2, None, REASK),
+            Verdict::Owner(DIRECT)
+        );
+        let within = base + (REASK * 2).saturating_sub(nano);
+        assert_eq!(later.whose(within, None, REASK), Verdict::Ambiguous);
         // A stream that never pauses: until thirty times `udp_reask` after the question.
         let thirty = REASK * 30;
         record.left(under(thirty));

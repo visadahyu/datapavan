@@ -360,12 +360,13 @@ an ADR (D25).
   - The re-check just before what waited leaves covers the moment between opening the mapping and sending. No test
     reaches that moment without a hook in the engine; the check made as the mapping opens is tested.
 - **Unchanged:** chained apps' TCP, the tool's own traffic, a stopped tool, and a tool without UDP.
-- **Tests:** eighty-eight in `core/net/tests/chain.rs`, twenty-three in the engine's own tests (the rule and its
-  model in `whose.rs`; the windows, at simulated instants a nanosecond before their end and at it; what a
-  stand-in keeps of its queries, which only memory shows; what waits sorted by the rule; how many ways an answer
-  looks at; and the record released with the socket's last way), and three in the network lab with a real tun.
-  Each was made to fail by breaking the code it guards, or, for the nine independent reviews' findings of the
-  same day, by the engine before their fixes. Those that time a
+- **Tests:** ninety-two in `core/net/tests/chain.rs`, twenty-seven in the engine's own tests (the rule in
+  `whose.rs` and its model in `whose/model.rs`, the larger bounded search run on demand; the windows, at
+  simulated instants a nanosecond before their end and at it, `udp_contest`'s among them; what a stand-in keeps
+  of its queries, which only memory shows; what waits sorted by the rule; how many ways an answer looks at; and
+  the record released with the socket's last way), and three in the network lab with a real tun. Each was made
+  to fail by breaking the code it guards, or, for the ten independent reviews' findings, by the engine before
+  their fixes. Those that time a
   handover count from when the test's Android was asked, which the engine did no later, so that load cannot
   narrow their margins. Those that need port 53
   use the test proxy's remapping, or any port of the tunnel's DNS address, which leads to the same port of the
