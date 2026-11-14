@@ -217,6 +217,14 @@ adb shell input keyevent KEYCODE_HOME
 sleep 1
 adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
 SWITCH="Send apps through Datapavan test tool"
+# A search that missed the listening tool is a defect of Watch's, which a user sees as "not answering"
+# (docs/ci-flakes.md, "Defects found by flakes"): the check looks once more, so that the rest of the screen
+# is still checked, but every second look is a warning on the run and a line in its summary.
+searched_again() {
+    echo "::warning title=Watch's tool search::$1"
+    [ -z "${GITHUB_STEP_SUMMARY:-}" ] || echo "- verify-chain.sh: $1 (a known defect, docs/ci-flakes.md)" >>"$GITHUB_STEP_SUMMARY"
+    search_log | grep '^screen: ' | tail -3 | sed 's/^/    /' >&2 || true
+}
 # Waits for the chain screen's search to offer the tool. The search, and the first password after a fresh
 # start (a new Keystore key), take a few seconds: they are waited for before scrolling, or the scroll moves
 # the section off the screen before it is drawn. A search that missed the tool leaves "Look again" on the
@@ -228,7 +236,7 @@ search_offers_tool() {
     scroll_to_top
     within 30 screen_has "$SWITCH" && return 0
     screen_has "Look again" || return 1
-    echo "  the chain screen's search missed the tool: looking again" >&2
+    searched_again "the chain screen's search missed the listening tool; looking again"
     adb shell cat "$DUMP" 2>/dev/null | grep -o 'text="[^"]\+"' | sed -n '5,9p' | sed 's/^/    screen: /' >&2 || true
     echo "    the service's search now: $(dump find-tool | grep -E '^ *tool ' | sed 's/^ *//')" >&2
     tap_text "Look again" || true
@@ -241,15 +249,14 @@ reopen_screen() {
     sleep 1
     adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
 }
-# True once the screen shows the text $1 from the tool's section, after up to three searches.
+# True once the screen shows the text $1 from the tool's section, after at most one more search.
 screen_says() {
     local try
-    for try in 1 2 3; do
+    for try in 1 2; do
         search_offers_tool || true
         scroll_to "$1" && return 0
-        [ "$try" = 3 ] && break
-        echo "  try $try: the chain screen did not say \"$1\"; its last searches:" >&2
-        search_log | grep '^screen: ' | tail -3 | sed 's/^/    /' >&2 || true
+        [ "$try" = 2 ] && break
+        searched_again "the chain screen did not say \"$1\"; bringing it back to search once more"
         reopen_screen
     done
     return 1
@@ -270,15 +277,14 @@ read_shown() {
     { adb shell cat "$DUMP" | tr -d '\r' | grep -o "text=\"$1[^\"]*\"" | sed "s/^text=\"$1//; s/\"\$//" | head -1; } || true
 }
 # The user name and password show while the screen's last search found the tool: if they are missing, the
-# search is run again, as a user would by leaving the screen and coming back, up to three times. What the
-# screen must offer is unchanged.
-for try in 1 2 3; do
+# search is run once more, as a user would by leaving the screen and coming back. What the screen must
+# offer is unchanged.
+for try in 1 2; do
     user=$(read_shown "User name: ")
     password=$(read_shown "Password: ")
     [ -n "$user" ] && [ -n "$password" ] && break
-    [ "$try" = 3 ] && break
-    echo "  try $try: the chain screen showed no user name and password; its last searches:" >&2
-    search_log | grep '^screen: ' | tail -3 | sed 's/^/    /' >&2 || true
+    [ "$try" = 2 ] && break
+    searched_again "the chain screen showed no user name and password; bringing it back to search once more"
     reopen_screen
     search_offers_tool || true
 done
