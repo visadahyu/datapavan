@@ -257,10 +257,31 @@ async fn a_lookup_holds_a_place_until_its_answer() -> Outcome {
     resolver.send_to(&response(&lookup), asker).await?;
     let answer = receive(&tunnel).await?.ok_or("the lookup's answer")?;
     assert_eq!(answer, (dns, app(FIRST_PORTS), response(&lookup)));
-    // The flow of lookups ends with its answer, a moment after the app has it.
-    tokio::time::sleep(Duration::from_millis(200)).await;
-    echoed(&tunnel, app(FIRST_PORTS + 3), echo, b"room again").await?;
-    assert_eq!(engine.counters()[UDP_REFUSED], 1);
+    // The flow of lookups ends with its answer, a moment after the app has it: the app sends again
+    // until its datagram finds room, for five seconds at most.
+    let from = app(FIRST_PORTS + 3);
+    let mut tries = 0;
+    let echoed = loop {
+        tries += 1;
+        send(&tunnel, from, echo, b"room again").await?;
+        let mut buffer = vec![0u8; 2_048];
+        if let Ok(n) =
+            tokio::time::timeout(Duration::from_millis(100), tunnel.recv(&mut buffer)).await
+        {
+            let n = n?;
+            let parsed = packet::parse(&buffer[..n]).map_err(|_| "a packet")?;
+            let payload = packet::udp_payload(&buffer[..n], &parsed).ok_or("a datagram")?;
+            break (parsed.source, parsed.destination, payload.to_vec());
+        }
+        if tries == 50 {
+            return Err("no room again within five seconds".into());
+        }
+    };
+    assert_eq!(echoed, (echo, from, b"room again".to_vec()));
+    assert!(
+        engine.counters()[UDP_REFUSED] <= tries,
+        "refused more than tried"
+    );
     Ok(())
 }
 
