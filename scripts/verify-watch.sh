@@ -595,20 +595,23 @@ if is_emulator; then
     restore_private_dns
     # Right after the network switch, Watch has twice still read strict mode long after the restore (once
     # 20 s, and on CI on 2026-11-14 a minute, while Android itself still named the provider on the
-    # tunnel's network):
-    # Watch reads what Android says. If Android has not taken the restore after 20 s, the specifier is
-    # written once more and restored, which makes Android read the setting again; the mode stays restored
-    # throughout. A failure then shows whether Android itself still reports the provider.
+    # tunnel's network): Watch reads what Android says. If after 20 s Android itself still names the
+    # provider, the specifier is written once more and restored, which makes Android read the setting
+    # again; the mode stays restored throughout. If Android no longer names it and Watch still reads strict
+    # mode, that is Watch's failure, and nothing is written again.
     if ! wait_private_dns plain 20; then
-        echo "  Watch reads Private DNS as '$(private_dns)' 20 s after the restore; Android says: $(android_private_dns); writing the setting again"
+        said=$(android_private_dns)
+        grep -q 'PrivateDnsServerName: dns\.google' <<<"$said" ||
+            fail "Watch still reads Private DNS as '$(private_dns)' 20 s after the restore, while Android no longer names the provider: $said"
+        echo "  Watch reads Private DNS as '$(private_dns)' 20 s after the restore, and Android still names the provider: $said; writing the setting again"
         DNS_MODE=$mode
         DNS_HOST=$host
         adb shell settings put global private_dns_specifier restore.invalid
         sleep 1
         restore_private_dns
+        wait_private_dns plain 60 ||
+            fail "Watch still reads Private DNS as '$(private_dns)' once it was restored, also after the setting was written again; Android says: $(android_private_dns)"
     fi
-    wait_private_dns plain 60 ||
-        fail "Watch still reads Private DNS as '$(private_dns)' once it was restored, also after the setting was written again; Android says: $(android_private_dns)"
     echo "ok: strict Private DNS is detected, and its end"
 else
     echo "skipped: Private DNS, on a phone"
