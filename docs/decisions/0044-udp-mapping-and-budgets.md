@@ -242,8 +242,9 @@ an ADR (D25).
   - a datagram that waits keeps whose the answers said it was as it came, by the newest answer or the stream since
     it: it stays that app's while it waits, however many questions come after it, as long as no answer near it
     says otherwise, the last answer before it still names that app, and that app holds the socket. An answer near
-    it that names another app disagrees with it: a handover fell near it, and it is dropped and counted as
-    ambiguous (tenth review, minor 1).
+    it that names another app disagrees with it: a handover fell near it, and it is dropped, never sent under
+    that answer (tenth review, minor 1). It is counted as ambiguous; if by then a newer answer names yet another
+    app, or the first again, the socket has changed hands since, and it is counted as late (eleventh review).
   A way, mapping or flow of lookups, opens only for the app the newest answer names, and an answer that names
   another app ends every way of the socket; a flow that ends so still hands the app the answers it owes. An
   answer looks at the socket's ways only then, since they are all of the newest answer's app, so a socket's many
@@ -321,8 +322,8 @@ an ADR (D25).
     Wi-Fi address: a UDP socket connected to the relay, which sends nothing, then sends from that very address. A
     broadcast address refuses such a socket, though Linux lets one bind it;
   - `udp_ambiguous`, the 30th: datagrams and lookups dropped because answers near them name different apps, or
-    one names another app than a waiting one was taken for as it came, by the rule above, so that who sent them
-    could not be told;
+    one names another app than a waiting one was taken for as it came while that answer's app still holds the
+    socket, by the rule above, so that who sent them could not be told;
   - `udp_late`, the 31st: datagrams and lookups the rule dropped otherwise, their app having lost the socket
     before their way opened, or no answer near them to be had. Both count what is dropped as a way fails too.
 - **The chain changes:** a mapping ends at its next datagram either way when the chain is set again and sends its

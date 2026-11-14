@@ -750,8 +750,12 @@ way asked Android, so that a retry behind a slow handshake was dropped as ambigu
 comes and keeps whose it was taken for, and drops are counted as ambiguous or late apart. It also found that what
 only comes in to a mapping kept the old app's way without asking, that the model checked no liveness and left
 out the chain, failing ways and the record's end, and that a peer's way was looked up before the cap of 64;
-each is fixed, and the stream's window and the cost of lookups are stated. How it is built:
-[ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
+each is fixed, and the stream's window and the cost of lookups are stated. A tenth found nothing critical or
+major: a waiting datagram taken for one app as it came could leave under another that an answer near it named,
+where the rule's own principle says a handover fell near it; it is now dropped as ambiguous. Four paths it found
+untested and two window edges are now pinned, and the model also walks every schedule within small bounds. An
+eleventh, of that fix only, found no fault in safety, and one in the counter's words, now corrected. How it is
+built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 Still to come: shares for each app, ICMP echo and the network's MTU.
 
