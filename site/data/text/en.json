@@ -417,6 +417,7 @@
  "foot_report": "Report a vulnerability privately",
  "foot_security": "Security policy",
  "foot_privacy": "Privacy notes",
+ "foot_bots": "What a bot can see",
  "foot_source": "Source code",
  "foot_licence": "Free software under the Apache License 2.0.",
  "foot_clean": "This page sets no cookies and loads nothing from other servers.",
