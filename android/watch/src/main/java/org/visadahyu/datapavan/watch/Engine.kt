@@ -45,7 +45,9 @@ internal object Engine {
      * The counters: TCP flows, UDP flows, bytes up, bytes down, flows without an owner, refused,
      * unreachable, failed, packets skipped, packets in, packets out, server names read from TLS and
      * from QUIC, QUIC flows whose name could not be read, hellos that offered ECH, hellos whose name
-     * was an ECH public name, and flows of an app's own plain and encrypted DNS. None names a
+     * was an ECH public name, and flows of an app's own plain and encrypted DNS; then those that
+     * `Counters::snapshot` in core/net lists after them, the last the refusals and evictions of the
+     * budget for the engine and for each app (ADR 0044). New ones are only appended. None names a
      * destination. Empty when no engine runs.
      */
     external fun nativeCounters(): LongArray

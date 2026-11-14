@@ -763,7 +763,21 @@ untested and two window edges are now pinned, and the model also walks every sch
 eleventh, of that fix only, found no fault in safety, and one in the counter's words, now corrected. How it is
 built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
-Still to come: shares for each app, ICMP echo and the network's MTU.
+Shares for each app, 2026-11-14 (finding 18, ADR 0044 decision 3), built by a fresh agent from a written brief.
+Each app may now hold a quarter of what the engine allows, at least 32 connections waiting for their servers and 64
+UDP ways, and the apps Android cannot name share one share: one app that sends to tens of thousands of ports, or to
+addresses that never answer, uses up its own share, and four must do so before any other app is touched, or fewer
+where a floor lifts a share above a quarter of its cap, as at a limit of 1,024 files. A UDP way holds its place for
+as long as it holds a socket: a mapping until it ends, a lookup to the tunnel's DNS address until its answer. At
+the cap or an app's share, a mapping ends to make room: an answered lookup first, as an app's own resolver leaves
+one behind each query; then the app's own least recently active mapping quiet for five seconds; then any app's. A
+mapping with traffic in the last five seconds never ends so, and a call is never cut; if none may end, the new
+way's datagrams are dropped, as by a full queue. Each refusal and each mapping ended is counted, with no
+destination. Whose a datagram is stays decided by the one rule: a way refused fails at once, and a mapping ended to
+make room asks Android again at its app's next datagram; the model drives both. How it is built:
+[ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
+
+Still to come: ICMP echo and the network's MTU.
 
 | # | Milestone | Done when |
 |---|---|---|

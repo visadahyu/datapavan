@@ -347,8 +347,8 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeUncacheAn
         .resolve::<ThrowRuntimeExAndDefault>();
 }
 
-/// `Engine.nativeCounters()`: the running engine's counters, in the order of
-/// `datapavan_net::engine::Counters::snapshot`, or an empty array when none runs.
+/// `Engine.nativeCounters()`: the running engine's counters, all `datapavan_net::engine::COUNTERS` of
+/// them in the order of `datapavan_net::engine::Counters::snapshot`, or an empty array when none runs.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeCounters(): LongArray`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeCounters<'caller>(

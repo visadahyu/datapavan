@@ -291,7 +291,8 @@ an ADR (D25).
     falls on one instant; paths that reach one state share what follows. Every `cargo test` walks one set, a
     handover and two datagrams or lookups, in 3.7 s; nine larger ones, with two handovers, the chain turning,
     streams behind ways three times `udp_reask` slow, or a stream past thirty times it, walk 263 million states
-    in three minutes on 24 cores with optimisation (`--ignored`; `WHOSE_BOUNDS` sets others). Of 24 mutations of
+    in three minutes on 24 cores with optimisation (`--ignored`; `WHOSE_BOUNDS` sets others); unit 10 adds one
+    set to the first and two to the larger, with the mapping ended to make room (below). Of 24 mutations of
     the rule, it finds 15, each with a schedule of two to seven datagrams, among them the tenth review's minor 1
     put back, in 3 s; the random schedules find 14 of those within 10,000 seeds, but one, the presumption put
     over every verdict, only at seed 626,780. It does not reach what needs long streams, slow answers among
@@ -375,3 +376,87 @@ an ADR (D25).
   app have no test: they answer a datagram sent before, and arrive at once on a test's loopback.
 - **Still open:** what real tools' relays put in the header, and whether they keep one upstream socket per
   association. The test tool and the lab's proxy name the real sender; v2rayNG and NekoBox are not yet checked.
+
+**Unit 10, the budget for the engine and for each app (2026-11-14, decision 3).**
+- **What came before.** Unit 7 capped the TCP connections waiting for their servers for every app together
+  (`Limits::tcp_waiting`): a SYN beyond the cap is dropped, its fake port freed at once (`Nat::release`), and
+  counted (`tcp_refused`, the 24th counter). Unit 8 brought one receive buffer for each engine thread, lookups that
+  end with their answer, and the two-minute timer refreshed both ways. This unit builds the rest of decision 3.
+  Unit 9's two leftovers for it, a reused app port reaching a destination its mapping knew with no question to
+  Android, and an app Android could not name taken for the mapping's old app, were settled within unit 9 ("Android
+  is asked again", "No guess").
+- **The caps and the shares,** in `Limits::for_descriptors`, from the soft limit on open files N in
+  `/proc/self/limits` (1,024 where it cannot be read), less Watch's reserve of max(128, N/16), B: waiting TCP
+  connections min(B/8, 4,096) (`tcp_waiting`), UDP ways B/4 (`udp_mappings`); each app a quarter of each cap, at
+  least 32 connections (`tcp_share`) and 64 ways (`udp_share`), never more than the cap. At N = 1,024, the
+  defaults: 112 and 32, 224 and 64; at 32,768: 3,840 and 960, 7,680 and 1,920. The apps Android cannot name are one
+  app here, and share one share. So four apps must use their whole share before any other is touched, or three and
+  a half where a floor lifts the share above a quarter of its cap, as at 1,024.
+- **TCP.** Once Android has named a connection's app, a connection that still waits for its server takes a place in
+  that app's share until the server answers or fails. Without a chain the server is asked at once beside Android,
+  as before, and one that answered first takes no place. An app that holds its whole share has the SYN dropped, as
+  at the cap: its port is freed at once, no flow is logged, and `tcp_refused` counts it. So an app holds at most
+  its share, and beyond it, within the cap for every app, only the SYNs that came while Android was asked, about 3
+  ms.
+- **What takes a UDP place:** every UDP way that holds a socket of its own. A mapping, on the direct path or
+  through the tool, holds its place until it ends; a flow of lookups to the tunnel's DNS address on the direct
+  path, until each lookup it carried has its answer, or 10 s pass with none. A chained app's lookups, which Watch
+  answers itself, hold none. The place is taken before the socket is made, and before the destination becomes the
+  one its socket's other destinations wait for, so that none of them waits on a way refused.
+- **At the cap or the share, a mapping ends to make room,** the first there is of:
+  1. an answered lookup: a mapping of one destination on port 53 to which the app sent DNS queries only, each with
+     its answer by its ID. Since unit 8 a lookup to the tunnel's DNS address ends with its answer, so what this
+     finds is an app's own resolver, which sends each query from a socket of its own and leaves a mapping behind
+     each answer. It carries nothing more, so it ends however recent its answer: the five seconds below guard what
+     may still carry traffic. One the app sent anything else, or more than 64 queries waiting at once, is no
+     lookup; nor is one that came in;
+  2. the app's own least recently active mapping that passed nothing either way for `Limits::udp_quiet` (5 s);
+  3. any app's.
+
+  An app at its share makes room among its own only, steps 1 and 2, since another app's mapping would free nothing
+  of its share. A mapping with traffic in the last five seconds never ends so, nor does a flow of lookups, which
+  waits for its answer. Each mapping ended so is counted. It ends as one the chain ends: its flows end in the log,
+  and its app's next datagram asks Android again and opens a mapping anew, from another port.
+- **If nothing may end,** the way is refused: what the rule says its app sent is dropped, as by a full queue, with
+  nothing sent back, no flow logged, and counted; what another app sent waits on, as when a way fails. The app
+  sends again, as after a lost datagram.
+- **What it costs.** Nothing for each datagram. The table ranks the mappings by when it last saw each active, for
+  every app and for each, and a search for one to end puts a mapping active since in its place anew, once for all
+  its datagrams since: a search costs at most a step for each mapping active since the ranks last placed it, and
+  one more. An answered lookup is noted as its answer comes, and dropped from the note once a search finds it sent
+  on since. Both go with the mapping.
+- **Whose a datagram is** stays the one rule above. A refused way is one that fails at once: what waits is sorted
+  by the rule, and only what it says the app sent is dropped. A mapping ended to make room is a way that ends, as
+  when the chain changes, and what the app sends next asks Android as a new destination's does. The model drives
+  both: a way that fails at a delay of nothing stands for a refused one; and the mapping ends at any instant,
+  beside a flow of lookups that stays, in 10,000 random schedules of their own, each with the handovers, datagrams
+  and chain turns of the first test's schedule of the same seed, and in the bounded search, on the coarse grid in
+  every `cargo test` (110,764 states, about a second) and on the fine grid and in a stream with lookups among the
+  larger sets (1.6 and 56.8 million states, in 2 s and 95 s on eight cores with optimisation; the eleven larger
+  sets, 321 million states, in eight and a half minutes). Neither finds a fault; both find an eviction that forgets
+  the socket's record while a datagram of it still waits, put in by hand.
+- **Counters, appended:**
+  - `udp_refused`, the 32nd: datagrams and lookups dropped because their UDP way could have no socket, the cap or
+    their app's share being full with nothing that could end;
+  - `udp_evicted`, the 33rd: mappings ended to make room;
+  - `tcp_refused`, the 24th, counts too the SYNs dropped for their app's share.
+- **Tests:** nine in `core/net/tests/budget.rs`, with two apps named by their ports: an app at its share gets no
+  new mapping while another app does; the cap refuses whoever's way once full; the apps Android cannot name share
+  one share; a lookup holds a place until its answer; an app at its share ends its own quiet mapping, not a busy
+  one nor another app's, and is refused once only busy ones are left; at the cap, the app's own quiet mapping ends
+  before another app's, an app with none ends another app's, an answered lookup through the tool ends first, and
+  one that sent on after its answer does not. In the network lab: each app holds only its share of waiting
+  connections, so another app's first SYN finds room; and an answered lookup on the direct path ends first. Unit
+  tests hold the caps to the descriptor limit, the budget's places, and the ranks. Each fails when what it guards
+  is broken, on a copy of the code.
+- **Known limits:**
+  - Destinations that wait for their way, before Android names their app or while a tool's handshake takes its
+    time, hold no place: each holds up to `udp_waiting` datagrams and a task, for as long as that takes, up to
+    `connect_timeout`. Their number is not capped.
+  - The destinations an app sends to from one socket are each a flow of its mapping, in memory, and not capped;
+    only those that came in are (64).
+  - The budget bounds what waits for a server and what UDP holds, as decision 3 says, not every descriptor: a
+    relayed TCP connection holds two for as long as it lives, and a mapping through the tool two (its socket and
+    its request's connection) for one place.
+  - A mapping silent for five seconds may end under pressure, as a call on hold might be; it opens again from
+    another port at its next datagram.
