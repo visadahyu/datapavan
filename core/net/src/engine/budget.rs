@@ -67,6 +67,18 @@ impl Budget {
         })
     }
 
+    /// A place for the app `uid` whatever it and every app hold: for what has already left the phone,
+    /// which must not be dropped unlogged. It counts as any other, so that the app's next places see it.
+    pub(super) fn force(self: &Arc<Self>, uid: Option<u32>) -> Place {
+        let mut held = lock(&self.held);
+        held.all += 1;
+        *held.by_app.entry(uid).or_default() += 1;
+        Place {
+            budget: Arc::clone(self),
+            uid,
+        }
+    }
+
     /// How many places the app `uid` holds, and every app together.
     #[cfg(test)]
     pub(super) fn held(&self, uid: Option<u32>) -> (usize, usize) {
@@ -113,6 +125,19 @@ mod tests {
         assert_eq!(budget.held(ONE), (1, 2));
         assert!(budget.take(TWO).is_ok(), "the place ONE gave back");
         assert_eq!(budget.held(TWO), (1, 2), "given back as it was dropped");
+    }
+
+    /// A place forced on an app beyond its share counts as any other.
+    #[test]
+    fn a_forced_place_counts_as_any_other() {
+        let budget = Budget::new(2, 1);
+        let held = budget.take(ONE).ok();
+        assert!(held.is_some());
+        let forced = budget.force(ONE);
+        assert_eq!(budget.held(ONE), (2, 2));
+        assert_eq!(budget.take(TWO).err(), Some(Full::All));
+        drop(forced);
+        assert_eq!(budget.held(ONE), (1, 1));
     }
 
     /// The flows whose app Android cannot name share one share.

@@ -11,7 +11,7 @@ mod common;
 
 use common::{Settings, proxy};
 use datapavan_net::engine::{Addresses, Limits};
-use datapavan_net::{Chain, Config, Engine, Platform};
+use datapavan_net::{Chain, Config, Engine, Platform, packet};
 use std::collections::HashSet;
 use std::future::Future;
 use std::io;
@@ -39,6 +39,9 @@ const APP: u32 = 10_500;
 /// ports the kernel hands out by itself.
 const SECOND_APP: u32 = 10_600;
 const SECOND_PORTS: std::ops::Range<u16> = 20_000..20_100;
+/// Ports for which the lab's Android takes [`SLOW_ANSWER`] to name the app, still the first one.
+const SLOW_PORTS: std::ops::Range<u16> = 21_000..21_100;
+const SLOW_ANSWER: Duration = Duration::from_millis(300);
 /// The places of counters in `Engine::counters`.
 const TCP_FLOWS: usize = 0;
 const UDP_FLOWS: usize = 1;
@@ -56,12 +59,16 @@ const SILENT: Ipv4Addr = Ipv4Addr::new(203, 0, 113, 1);
 const STEP: Duration = Duration::from_secs(5);
 
 /// Android as the lab plays it: every app in the tunnel is one app, but one whose socket is bound to
-/// one of [`SECOND_PORTS`]; protection is the namespace's routing (the engine's sockets are not bound
-/// to the tunnel's address, so they never enter it).
+/// one of [`SECOND_PORTS`], and it answers slowly for one bound to one of [`SLOW_PORTS`]; protection is
+/// the namespace's routing (the engine's sockets are not bound to the tunnel's address, so they never
+/// enter it).
 struct Lab;
 
 impl Platform for Lab {
     fn owner(&self, _: u8, local: SocketAddr, _: SocketAddr) -> Option<u32> {
+        if SLOW_PORTS.contains(&local.port()) {
+            std::thread::sleep(SLOW_ANSWER);
+        }
         let second = SECOND_PORTS.contains(&local.port());
         (local.ip() == IpAddr::V4(Addresses::COMMON.tun4)).then_some(if second {
             SECOND_APP
@@ -479,7 +486,8 @@ fn connections_waiting_for_silent_servers_are_capped() -> Outcome {
 /// servers. One app's SYNs to a server that never answers, beyond its share, are dropped and counted,
 /// and their ports freed, though the cap for every app has room; so another app's connection opens at
 /// once, before any SYN of its own would be sent again. Without the share the first app would fill
-/// the cap, and the second's first SYN would be dropped.
+/// the cap, and the second's first SYN would be dropped. The SYNs come a little apart, so that Android
+/// has named the app of each before the next is decided.
 #[test]
 #[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
 fn each_app_holds_only_its_share_of_waiting_connections() -> Outcome {
@@ -508,8 +516,9 @@ fn each_app_holds_only_its_share_of_waiting_connections() -> Outcome {
                         Err(_) => Err(io::ErrorKind::TimedOut.into()),
                     }
                 }));
+                tokio::time::sleep(Duration::from_millis(50)).await;
             }
-            tokio::time::sleep(Duration::from_millis(300)).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
             assert!(
                 engine.counters()[TCP_REFUSED] >= 4,
                 "the first app's SYNs beyond its share were not dropped: counters {:?}",
@@ -532,6 +541,170 @@ fn each_app_holds_only_its_share_of_waiting_connections() -> Outcome {
                     "a connection to a silent server opened"
                 );
             }
+            Ok(())
+        },
+    )
+}
+
+/// How many TCP connections the namespace's sockets began, from its own count in `/proc/net/snmp`
+/// (`ActiveOpens`): the apps' and the engine's own.
+fn active_opens() -> Result<u64, Box<dyn std::error::Error>> {
+    let snmp = std::fs::read_to_string("/proc/net/snmp")?;
+    let mut tcp = snmp.lines().filter(|line| line.starts_with("Tcp:"));
+    let (names, values) = (
+        tcp.next().ok_or("no Tcp: names")?,
+        tcp.next().ok_or("no Tcp: values")?,
+    );
+    let at = names
+        .split_whitespace()
+        .position(|name| name == "ActiveOpens")
+        .ok_or("no ActiveOpens")?;
+    Ok(values
+        .split_whitespace()
+        .nth(at)
+        .ok_or("no value")?
+        .parse()?)
+}
+
+/// The independent review of unit 10, major: a SYN dropped for its app's share never left the phone,
+/// and every connection that did is logged under its app. Two of an app's connections to a server that
+/// never answers take its share of two; its third, once Android has named the app for those, is
+/// dropped before the engine opens a connection of its own for it. Counted from the namespace's own
+/// count of connections begun: the app's three, and the engine's, which must be the ones logged.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_syn_refused_for_its_share_never_leaves_the_phone() -> Outcome {
+    let limits = Limits {
+        tcp_waiting: 8,
+        tcp_share: 2,
+        connect_timeout: Duration::from_secs(1),
+        ..Limits::default()
+    };
+    lab(
+        "a_syn_refused_for_its_share_never_leaves_the_phone",
+        limits,
+        |engine| async move {
+            let before = active_opens()?;
+            let mut attempts = Vec::new();
+            for port in 1..=3 {
+                attempts.push(tokio::spawn(async move {
+                    let socket = TcpSocket::new_v4()?;
+                    socket.bind(SocketAddr::from((Addresses::COMMON.tun4, 0)))?;
+                    socket
+                        .connect(SocketAddr::from((SILENT, port)))
+                        .await
+                        .map(|_| ())
+                }));
+                // Android names each connection's app before the next comes.
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            assert_eq!(engine.counters()[TCP_REFUSED], 1, "the third SYN dropped");
+            // The app gives up before its stack sends a SYN again, a second after the first.
+            for attempt in &attempts {
+                attempt.abort();
+            }
+            // The engine's own connections end at its connect timeout, and are logged then.
+            let mut logged = Vec::new();
+            for _ in 0..100 {
+                logged = engine
+                    .flows()
+                    .into_iter()
+                    .filter(|flow| flow.protocol == packet::TCP)
+                    .collect();
+                if logged.len() >= 2 {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            let began = active_opens()? - before - 3;
+            assert_eq!(
+                began,
+                logged.len() as u64,
+                "connections the engine began against those logged: {logged:?}"
+            );
+            assert_eq!(logged.len(), 2);
+            assert!(logged.iter().all(|flow| flow.uid == Some(APP)));
+            Ok(())
+        },
+    )
+}
+
+/// The same, where Android is slow: two of an app's connections begin beside Android while few wait,
+/// and two more, once more than a share's worth wait, take the app's share of two before Android has
+/// named the first two. Those first two have left the phone already, so they take places beyond the
+/// share, twice it at most, and are logged under their app; a fifth, with the app at twice its share,
+/// is dropped before it leaves.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_connection_begun_beside_android_is_never_dropped_unlogged() -> Outcome {
+    let limits = Limits {
+        tcp_waiting: 8,
+        tcp_share: 2,
+        connect_timeout: Duration::from_secs(1),
+        ..Limits::default()
+    };
+    lab(
+        "a_connection_begun_beside_android_is_never_dropped_unlogged",
+        limits,
+        |engine| async move {
+            let before = active_opens()?;
+            let mut attempts = Vec::new();
+            for (port, bound) in [
+                (1, SLOW_PORTS.start),
+                (2, SLOW_PORTS.start + 1),
+                (3, 0),
+                (4, 0),
+            ] {
+                attempts.push(tokio::spawn(async move {
+                    let socket = TcpSocket::new_v4()?;
+                    socket.bind(SocketAddr::from((Addresses::COMMON.tun4, bound)))?;
+                    socket
+                        .connect(SocketAddr::from((SILENT, port)))
+                        .await
+                        .map(|_| ())
+                }));
+                tokio::time::sleep(Duration::from_millis(30)).await;
+            }
+            // Android has named the first two now.
+            tokio::time::sleep(SLOW_ANSWER).await;
+            assert_eq!(
+                engine.counters()[TCP_REFUSED],
+                0,
+                "nothing that left was dropped"
+            );
+            attempts.push(tokio::spawn(async move {
+                let socket = TcpSocket::new_v4()?;
+                socket.bind(SocketAddr::from((Addresses::COMMON.tun4, 0)))?;
+                socket
+                    .connect(SocketAddr::from((SILENT, 5)))
+                    .await
+                    .map(|_| ())
+            }));
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            assert_eq!(engine.counters()[TCP_REFUSED], 1, "the fifth SYN dropped");
+            for attempt in &attempts {
+                attempt.abort();
+            }
+            let mut logged = Vec::new();
+            for _ in 0..100 {
+                logged = engine
+                    .flows()
+                    .into_iter()
+                    .filter(|flow| flow.protocol == packet::TCP)
+                    .collect();
+                if logged.len() >= 4 {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            let began = active_opens()? - before - 5;
+            assert_eq!(
+                began,
+                logged.len() as u64,
+                "connections the engine began against those logged: {logged:?}"
+            );
+            assert_eq!(logged.len(), 4);
+            assert!(logged.iter().all(|flow| flow.uid == Some(APP)));
             Ok(())
         },
     )

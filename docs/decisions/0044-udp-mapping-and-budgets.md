@@ -392,12 +392,19 @@ an ADR (D25).
   defaults: 112 and 32, 224 and 64; at 32,768: 3,840 and 960, 7,680 and 1,920. The apps Android cannot name are one
   app here, and share one share. So four apps must use their whole share before any other is touched, or three and
   a half where a floor lifts the share above a quarter of its cap, as at 1,024.
-- **TCP.** Once Android has named a connection's app, a connection that still waits for its server takes a place in
-  that app's share until the server answers or fails. Without a chain the server is asked at once beside Android,
-  as before, and one that answered first takes no place. An app that holds its whole share has the SYN dropped, as
-  at the cap: its port is freed at once, no flow is logged, and `tcp_refused` counts it. So an app holds at most
-  its share, and beyond it, within the cap for every app, only the SYNs that came while Android was asked, about 3
-  ms.
+- **TCP.** A connection waiting for its server holds a place in its app's share from when Android names the app
+  until the server answers or fails. Through the chain, to a stand-in, and whenever more than a share's worth of
+  connections wait for their servers in all (`tcp_share`, this one counted), Android is asked first and the place
+  taken before anything leaves the phone: an app that holds its whole share then has the SYN dropped, as at the
+  cap, its port freed at once, nothing sent to the server, no flow logged, and `tcp_refused` counting it. While at
+  most a share's worth wait in all, no app can hold its whole share yet, so the server is asked at once beside
+  Android, as before the shares, which spares each connection the time a question takes, about 3 ms. Such a
+  connection takes its place when Android answers, beyond the share if the app's later connections took places
+  first, and is never dropped: whatever leaves the phone is logged under its app (independent review of unit 10,
+  major: such a connection was dropped once its SYN had left, and never logged). Only connections begun so lift an
+  app above its share, never past twice it, and only while they wait; one whose server answered before Android
+  takes no place. So a question asked first costs its 3 ms only under pressure: past 32 waiting connections at
+  1,024 files, 960 at 32,768.
 - **What takes a UDP place:** every UDP way that holds a socket of its own. A mapping, on the direct path or
   through the tool, holds its place until it ends; a flow of lookups to the tunnel's DNS address on the direct
   path, until each lookup it carried has its answer, or 10 s pass with none. A chained app's lookups, which Watch
@@ -446,9 +453,11 @@ an ADR (D25).
   one nor another app's, and is refused once only busy ones are left; at the cap, the app's own quiet mapping ends
   before another app's, an app with none ends another app's, an answered lookup through the tool ends first, and
   one that sent on after its answer does not. In the network lab: each app holds only its share of waiting
-  connections, so another app's first SYN finds room; and an answered lookup on the direct path ends first. Unit
-  tests hold the caps to the descriptor limit, the budget's places, and the ranks. Each fails when what it guards
-  is broken, on a copy of the code.
+  connections, so another app's first SYN finds room; a SYN dropped for its share never left the phone, and every
+  connection the engine began is logged under its app, counted from the namespace's own `ActiveOpens`, also where
+  Android answers slowly; and an answered lookup on the direct path ends first. Unit tests hold the caps to the
+  descriptor limit, the budget's places, and the ranks. Each fails when what it guards is broken, on a copy of the
+  code.
 - **Known limits:**
   - Destinations that wait for their way, before Android names their app or while a tool's handshake takes its
     time, hold no place: each holds up to `udp_waiting` datagrams and a task, for as long as that takes, up to

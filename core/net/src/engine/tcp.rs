@@ -302,7 +302,16 @@ async fn open(
 /// The app of a held SYN, as Android names it, and the connection to its server, with the place it
 /// took in its app's share of the waiting connections (ADR 0044, decision 3): a connection still
 /// waiting for its server once Android has named its app takes one, held until the server answered or
-/// failed. `None` when the app holds its whole share.
+/// failed. `None` when the app holds its whole share: then nothing of it has left the phone.
+///
+/// Android is asked first, and the place taken before anything leaves, wherever the app could hold its
+/// whole share: through the chain, to a stand-in, and once more than a share's worth of connections
+/// wait for their servers in all, this one counted. Below that no app can hold its whole share yet, so
+/// the server is asked at once beside Android, as before the shares, which spares each connection the
+/// time of a question asked first, about 3 ms; its place is taken when Android answers, beyond the share
+/// if others of the app took places meanwhile, since what has left the phone is never dropped unlogged
+/// (independent review of unit 10, major). Only such connections lift an app above its share, never
+/// past twice it: they began while at most a share's worth waited in all.
 async fn upstream(
     shared: &Arc<Shared>,
     app: SocketAddr,
@@ -314,8 +323,10 @@ async fn upstream(
             None => Err(io::ErrorKind::NetworkUnreachable.into()),
         }
     };
-    if shared.chain().is_some() || is_stand_in(destination.ip()) {
-        // The route waits for the app's name: a chained app's connection must not start directly.
+    let crowded = shared.tcp_waiting.load(Ordering::Acquire) > shared.limits.tcp_share;
+    if shared.chain().is_some() || is_stand_in(destination.ip()) || crowded {
+        // The route waits for the app's name: a chained app's connection must not start directly, nor
+        // one its app's share may refuse.
         let uid = owner(shared, TCP, app, destination).await;
         let share = shared.tcp_shares.take(uid).ok()?;
         let upstream = match shared.route(uid, destination) {
@@ -336,7 +347,7 @@ async fn upstream(
     match first {
         Ok(upstream) => Some((asked.await, upstream, None)),
         Err(uid) => {
-            let share = shared.tcp_shares.take(uid).ok()?;
+            let share = shared.tcp_shares.force(uid);
             Some((uid, direct.await, Some(share)))
         }
     }
