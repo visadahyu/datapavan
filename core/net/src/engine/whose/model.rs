@@ -8,8 +8,15 @@
 //! time where `udp_reask` is two steps, so that every window's edge falls on a step and on either side
 //! of it: each choice a schedule makes, whose the port is and when, when each datagram comes and where
 //! to, how slowly Android answers and reads the socket, how slowly a way opens or whether it fails,
-//! when the chain turns, and which of the events that fall on one instant runs first, is taken every
-//! way, depth first.
+//! when the chain turns, when the mapping ends to make room for another socket's way, and which of the
+//! events that fall on one instant runs first, is taken every way, depth first.
+//!
+//! The budget (ADR 0044, decision 3) touches the rule in two ways, both driven here. A way the budget
+//! refuses is one that fails at once, which the model drives already: the engine sorts what waits by
+//! the rule, as when a way fails, and drops what the rule says the app sent. A mapping ended to make
+//! room shuts the ways of its destinations, at any instant here, though the engine ends only one quiet
+//! for `udp_quiet` or an answered lookup, while a flow of lookups, which the engine never ends so,
+//! stays open.
 //!
 //! Beside its bounds ([`Bounds`]), the search takes as given what makes it finite: time moves in steps,
 //! and each delay is one of the grid's; Android reads the socket at its question or a step after; the
@@ -208,6 +215,8 @@ struct Bounds {
     questions: usize,
     /// Whether the chain may turn, on or off, once.
     chain_turns: bool,
+    /// Whether the mapping may end once to make room for another socket's way.
+    evicts: bool,
     /// A run: a datagram to the first destination at every step, from any instant, for at least and at
     /// most so many steps. A run never pauses, so it carries a stream: to thirty times `udp_reask`, or
     /// past an answer far enough back that only the stream decides what comes after.
@@ -235,6 +244,8 @@ struct World {
     handovers: usize,
     datagrams: usize,
     turn: bool,
+    /// Whether the mapping may still end to make room.
+    evict: bool,
     run: Run,
     /// How many destinations it has sent to, a run's first.
     used: usize,
@@ -274,6 +285,7 @@ enum Event {
     Opened(usize, Option<u32>),
     Chain(bool),
     FlowEnds(usize),
+    Evict,
 }
 
 /// A question of the model to Android: when it was asked, what it named once Android read the socket,
@@ -436,6 +448,25 @@ impl Schedule {
         schedule
     }
 
+    /// The random schedule of `seed`, with the mapping ended to make room once to four times, at random
+    /// instants, drawn apart from the rest so that the schedule is otherwise the one [`Schedule::new`]
+    /// makes.
+    fn with_evictions(seed: u64) -> Self {
+        let mut schedule = Self::new(seed);
+        let mut rng = Rng(seed.wrapping_mul(0xD1B5_4A32_D192_ED03) | 1);
+        let span = schedule
+            .arrivals
+            .iter()
+            .map(|(sent, _)| sent.came)
+            .max()
+            .unwrap_or(0);
+        for _ in 0..=rng.below(4) {
+            let at = rng.below(span + 1);
+            schedule.at(at, Event::Evict);
+        }
+        schedule
+    }
+
     /// The schedule `script` takes within `bounds`, on their grid: who holds the port at the start, the
     /// chained app or none, and whether the chain is on, where that matters; the world does the rest
     /// as it goes ([`World`]).
@@ -454,6 +485,7 @@ impl Schedule {
             handovers: bounds.handovers,
             datagrams: bounds.datagrams,
             turn: bounds.chain_turns,
+            evict: bounds.evicts,
             run: Run::Before,
             used: usize::from(bounds.run.is_some()),
             named: first.is_some(),
@@ -487,6 +519,10 @@ impl Schedule {
         if world.turn && self.choices.choose(2) == 1 {
             world.turn = false;
             self.at(tick, Event::Chain(!self.chain));
+        }
+        if world.evict && self.choices.choose(2) == 1 {
+            world.evict = false;
+            self.at(tick, Event::Evict);
         }
         let mut destinations = Vec::new();
         if let Some((least, most)) = bounds.run {
@@ -549,6 +585,7 @@ impl Schedule {
         let more = world.handovers > 0
             || world.datagrams > 0
             || world.turn
+            || world.evict
             || matches!(world.run, Run::Since(_))
             || (world.run == Run::Before
                 && bounds
@@ -810,6 +847,12 @@ impl Schedule {
                     self.ways[destination] = Way::Shut;
                     self.forget_if_idle();
                 }
+                Event::Evict => {
+                    // As `UdpTable::room`: the mapping ends, and with it its destinations' ways; a flow
+                    // of lookups, which waits for its answers, stays.
+                    self.ways[..LOOKUP].fill(Way::Shut);
+                    self.forget_if_idle();
+                }
             }
             if matches!(&self.choices, Choices::Script(script) if script.deep) {
                 self.stopped = Stopped::Deep;
@@ -1037,9 +1080,9 @@ impl Schedule {
         self.flush(destination, uid, now)
     }
 
-    /// As `udp_failed`: what the rule says `uid` sent fails with its way, or goes nowhere. It was still
-    /// taken for that app's, so it is held to the same window as what leaves, and carries the app's
-    /// stream on.
+    /// As `udp_failed`, or `refused` when the budget has no room for the way: what the rule says `uid`
+    /// sent fails with its way, or goes nowhere. It was still taken for that app's, so it is held to the
+    /// same window as what leaves, and carries the app's stream on.
     fn fail(&mut self, destination: usize, uid: Option<u32>, now: u64) -> Result<(), String> {
         self.flush(destination, uid, now)
     }
@@ -1420,8 +1463,28 @@ fn no_schedule_sends_a_datagram_under_an_app_that_did_not_send_it() -> Result<()
     Ok(())
 }
 
+/// The same, with the mapping ended to make room for another socket's way at random instants, as the
+/// budget may end it (ADR 0044, decision 3): what was the mapping's own then asks again.
+#[test]
+fn no_schedule_with_evictions_sends_a_datagram_under_an_app_that_did_not_send_it()
+-> Result<(), String> {
+    let schedules = std::env::var("WHOSE_SCHEDULES")
+        .ok()
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(10_000u64);
+    let only: Option<u64> = std::env::var("WHOSE_SEED")
+        .ok()
+        .and_then(|seed| seed.parse().ok());
+    for seed in only.map_or(1..=schedules, |seed| seed..=seed) {
+        Schedule::with_evictions(seed)
+            .run()
+            .map_err(|why| format!("seed {seed}, with evictions: {why}"))?;
+    }
+    Ok(())
+}
+
 /// Bounds as `horizon,handovers,datagrams,together,destinations,lookups,questions,chain,run,coarse`
-/// and, if given, `slow`: the flags as 0 or 1, and the run as `shortest-longest` or `-`.
+/// and, if given, `slow` and `evicts`: the flags as 0 or 1, and the run as `shortest-longest` or `-`.
 fn bounds(given: &str) -> Option<Bounds> {
     let parts: Vec<&str> = given.split(',').map(str::trim).collect();
     let number = |at: usize| parts.get(at).and_then(|part| part.parse::<u64>().ok());
@@ -1435,6 +1498,7 @@ fn bounds(given: &str) -> Option<Bounds> {
         lookups: number(5)? == 1,
         questions: count(6)?,
         chain_turns: number(7)? == 1,
+        evicts: number(11) == Some(1),
         run: parts.get(8).and_then(|run| {
             let (shortest, longest) = run.split_once('-')?;
             Some((shortest.parse().ok()?, longest.parse().ok()?))
@@ -1468,17 +1532,27 @@ fn slow(coarse: bool) -> Grid {
 /// The bounds every `cargo test` walks, on four threads, in a few seconds in a debug build: the fine
 /// grid, a handover to the direct app or to none, the chained app's first, and two datagrams to new
 /// destinations or lookups. It finds the bugs of the rule that a few datagrams show, each with a
-/// schedule of two or three, and keeps the search itself working.
-const SMALL: &[(&str, &str)] = &[("fine", "3,1,2,2,2,1,3,0,-,0")];
+/// schedule of two or three, and keeps the search itself working. The same on the coarse grid, with
+/// the mapping ending once to make room.
+const SMALL: &[(&str, &str)] = &[
+    ("fine", "3,1,2,2,2,1,3,0,-,0"),
+    ("coarse, the mapping ending", "3,1,2,2,2,1,3,0,-,1,0,1"),
+];
 
-/// The larger bounds, walked on demand on every core, in about three minutes in a build with
-/// optimisation: on the fine grid, more datagrams, two handovers, or the chain turning; on the coarse
-/// grid, streams, with two handovers among them, behind slow ways, or past thirty times `udp_reask`.
+/// The larger bounds, walked on demand on every core, in a few minutes in a build with optimisation:
+/// on the fine grid, more datagrams, two handovers, the chain turning, or the mapping ending to make
+/// room; on the coarse grid, streams, with two handovers among them, behind slow ways, past thirty
+/// times `udp_reask`, or with the mapping ending.
 const LARGE: &[(&str, &str)] = &[
     ("fine, two handovers", "4,2,2,2,2,1,3,0,-,0"),
     ("fine, the chain turning", "4,1,2,2,2,1,3,1,-,0"),
     ("fine, three datagrams", "4,1,3,2,2,1,3,0,-,0"),
+    ("fine, the mapping ending", "4,1,2,2,2,1,3,0,-,0,0,1"),
     ("a stream with lookups", "3,1,3,2,2,1,3,0,3-3,1"),
+    (
+        "a stream with lookups, the mapping ending",
+        "3,1,3,2,2,1,3,0,3-3,1,0,1",
+    ),
     ("two handovers in a stream", "4,2,1,1,2,1,3,0,3-4,1"),
     ("two handovers in a longer stream", "4,2,2,1,2,1,3,0,2-4,1"),
     ("a stream behind slow ways", "5,0,3,1,1,1,3,0,3-3,1,1"),
