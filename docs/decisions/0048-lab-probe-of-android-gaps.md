@@ -72,13 +72,26 @@ traffic; this probe measures the platform.
     `ro.build.fingerprint`, the Google Play system update month that Settings shows (or "none" on an image
     without Google's modules), the resolver module's version (`pm list packages --apex-only
     --show-versioncode`), and the emulator's version;
-  - **the result:** held, did not hold, or held in part, with the values measured;
+  - **the result:** held, did not hold, or held in part, with the values measured. A behaviour that depends on
+    timing (`short-lived`, the resolver's part of `carried-by-system`, and any row whose first runs disagree) is
+    run many times, at least 100 trials, and its row gives the count and the rate with a 95 % interval (Wilson's),
+    never one outcome;
   - **the public source,** with the date it was read;
   - **what Watch does and tells the user** (decision 3);
-  - **one command** that reproduces it on a fresh emulator: `lab/run.sh <behaviour> <api>`. It creates an AVD from
+  - **one command** that reproduces it on a fresh emulator: `lab/run.sh <behaviour> <api> [--trials N]`. It creates an AVD from
     the named image, boots it with `-no-snapshot -wipe-data -tcpdump`, installs the probe, the fixture and Watch's
     debug build, runs the behaviour's steps, writes the raw output, then stops the emulator and deletes the AVD;
-  - **the date and the probe's commit.**
+  - **the date and the probe's commit;**
+  - **who replicated it:** "not yet", or the person or organisation outside the project who ran the same command
+    and sent the raw output, the date and that output's SHA-256. A row is marked replicated only on raw output
+    that matches.
+- **A dataset, not only a page.** The rows live in `docs/platform-gaps/results.csv`, whose columns and values the
+  README defines; the table in the README is written from it by a script, never by hand, and CI checks that the two
+  agree.
+- **Dated snapshots that can be cited.** Before the table is cited outside the repository (a report, a filing, a
+  talk), its state is fixed by a signed tag `platform-gaps-YYYY-MM-DD`, and the README records the SHA-256 of
+  `results.csv` and of each raw output at that tag. A snapshot holds results and code, never a build of the lab
+  apps. A permanent identifier (a DOI) would need an account, and so the maintainer's word.
 - **The capture is the ground truth where traffic matters.** The emulator's own capture (`-tcpdump`) sees every
   packet that leaves the virtual phone, whoever sent it. A row that rests on what Watch logged or on what the probe
   saw is checked against it, and its SHA-256 is recorded with the run.
@@ -97,8 +110,14 @@ traffic; this probe measures the platform.
   - `carried-by-system`, `short-lived`, `webview`: each sends to the lab's own server on the host (10.0.2.2) or
     looks up names reserved for testing (RFC 2606), and records which UID Watch was given, against the capture.
 - **A result that differs from its source** is a finding, and goes by decision 4.
-- **The table holds for stock emulator images only.** Phone makers change Android; the table says so at its top.
-  Rows from a lab phone (decision 5) are marked as such.
+- **Stock images first, then other makers' builds.** Phone makers change Android, and Datapavan is designed for
+  every maker's phones, not one. The table says at its top which builds it covers.
+  - **The stock emulator images** come first: anyone can repeat them.
+  - **The lab's own phones** come next, under decision 5's consent. Their rows name the maker, the model, the build
+    fingerprint, the security patch level and the maker's own version (One UI, HyperOS and the like). Each run on a
+    phone is a session the maintainer agrees to.
+  - **A wider set of makers** (a device farm, or phones lent by allies) is a later decision, since it means an
+    account or spending. Until then the table names the makers it lacks, so no row is read as true for them.
 
 ### 3. It measures; it never packages evasion
 
@@ -197,8 +216,12 @@ time. A draft may be prepared with AI help; the maintainer files it.
 ### Against the field
 
 Tools of the field state their limits in prose (NetGuard's FAQ, PCAPdroid's FAQ), without the Android version or a
-way to check them. A table by version, with each image's identity, the capture as ground truth and one command per
-row, would be above that standard. No frontier research is needed; it is lab work.
+way to check them. Measurement research at its best publishes its artefacts so that others can repeat them,
+gives rates over many trials where behaviour varies, covers the builds people actually run, has results repeated
+by someone else, and fixes the version it cites. This ADR takes each of those: a table by version, with each
+image's identity, the capture as ground truth and one command per row; rates with intervals for timing; stock
+images, then makers' builds, with the makers it lacks named; a replication column; a dataset beside the page; and
+dated, signed snapshots. No frontier research is needed; it is lab work.
 
 ## Consequences
 
@@ -213,7 +236,11 @@ row, would be above that standard. No frontier research is needed; it is lab wor
   maintainer's machine time for them.
 - **A published route can be used.** The residual risk of decision 3 is accepted.
 - **Emulators are not phones.** Makers' builds may differ; rows from lab phones need consent each time, so they
-  will be few.
+  will be few, and the makers the table lacks are named until a wider set is decided.
+- **Timing rows take longer:** a hundred trials or more per version. The rate they give is worth it: one run of a
+  race says little.
+- **Others can check and reuse the results:** the dataset, the replication column and the dated snapshots let a
+  report, an ally or Google cite one exact state.
 - **Some rows need Google's modules:** push and the Google Play system update month exist only on images with
   them.
 - **The lab apps have no Gradle lint,** as `scripts/fixture-app` has none; their unit tests and review stand in.
@@ -224,7 +251,7 @@ Each of these needs the maintainer's word:
 - **outreach:** telling other tools' makers, writing to Google beyond the reports of decision 4, or the press;
 - **a report from the table:** whether one is published, where, and under whose names;
 - **accounts:** a Firebase project for a push test, an account on Google's issue tracker or reporting programme,
-  or any other.
+  a device farm, a permanent identifier (a DOI) for a snapshot, or any other.
 
 Also outside this ADR:
 - runs on phones of other makers beyond the lab's own;
