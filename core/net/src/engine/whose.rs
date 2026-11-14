@@ -27,7 +27,8 @@ pub(super) enum Verdict {
     /// The app that holds the socket now sent it, by Android's answers, or no app Android can name: it
     /// may leave by that app's way.
     Owner(Option<u32>),
-    /// Answers near it name different apps, or one names none: a handover fell near it, and who sent it
+    /// Answers near it name different apps, or one names none, or one names another app than the
+    /// answers took a datagram that waits for as it came: a handover fell near it, and who sent it
     /// cannot be told. It is dropped and counted, never sent under any answer.
     Ambiguous,
     /// The answers near it agree on an app that holds the socket no more: its way would be another
@@ -196,7 +197,9 @@ impl Record {
     /// said was its app's when it came, by the newest answer or the stream since it, stays so for as long
     /// as no answer near it says otherwise, the last answer before it still names that app, and that app
     /// holds the socket, however many questions come after it while it waits (ninth review of unit 9,
-    /// finding 4: the model found both).
+    /// finding 4: the model found both). An answer near it that names another app disagrees with what
+    /// it was taken for as it came: a handover fell near it, and it is dropped as ambiguous, never sent
+    /// under the later answer (tenth review, minor 1).
     pub(super) fn whose_waiting(
         &self,
         (came, then): (Instant, Option<Verdict>),
@@ -204,6 +207,7 @@ impl Record {
         reask: Duration,
     ) -> Verdict {
         match (self.whose(came, floor, reask), then) {
+            (Verdict::Owner(uid), Some(Verdict::Owner(was))) if uid != was => Verdict::Ambiguous,
             (Verdict::Late, Some(Verdict::Owner(uid))) => {
                 let before = self.answers.range(..=(came, u64::MAX)).next_back();
                 if before.is_none_or(|(_, &named)| named != uid) {
@@ -502,6 +506,39 @@ mod tests {
             contradicted.whose_waiting((came, then), None, REASK),
             Verdict::Late
         );
+    }
+
+    /// A datagram taken for its app as it came, by the stream since the newest answer, that waits while
+    /// an answer less than `udp_reask` after it names another app: the two disagree, so a handover fell
+    /// near it, and it is dropped as ambiguous, never sent under the later answer (tenth review of unit
+    /// 9, minor 1).
+    #[test]
+    fn a_waiting_datagram_taken_for_one_app_is_ambiguous_once_an_answer_near_it_names_another() {
+        let base = Instant::now();
+        let mut record = Record::default();
+        record.note(1, named(DIRECT, base));
+        record.left(at(base, 90));
+        let came = at(base, 150);
+        assert!(
+            record.passes(came, DIRECT, REASK),
+            "it would pass under the app"
+        );
+        let then = record.presume(came, None, REASK);
+        assert_eq!(then, Some(Verdict::Owner(DIRECT)));
+        record.note(2, named(CHAINED, at(base, 230)));
+        assert_eq!(record.whose(came, None, REASK), Verdict::Owner(CHAINED));
+        assert_eq!(
+            record.whose_waiting((came, then), None, REASK),
+            Verdict::Ambiguous
+        );
+        let held = vec![Waiter {
+            came,
+            then,
+            item: (),
+        }];
+        let settled = record.settle(held, None, CHAINED, REASK);
+        assert!(settled.leave.is_empty(), "it left under the later answer");
+        assert_eq!(settled.drops(), (1, 0));
     }
 
     /// A destination the app had no way to takes no answer asked before its first datagram came: it

@@ -248,13 +248,21 @@ struct World {
 const LOOKUP: usize = 3;
 
 /// A datagram of the model: when it came, which app truly sent it, and the floor of the answers that
-/// may stand for it once it waited for its way.
+/// may stand for it once it waited for its way; and, for one that went behind others, when the last
+/// answer before it as it came was asked, and the app the stream since an answer took it for then, if
+/// one did.
 #[derive(Clone, Copy, Debug)]
 struct Sent {
     came: u64,
     by: Option<u32>,
     floor: Option<u64>,
+    after: Option<u64>,
+    taken: Option<App>,
 }
+
+/// An app the model's reference took a datagram for: one Android names, or none.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct App(Option<u32>);
 
 /// What happens next in a schedule, by the millisecond.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -394,6 +402,8 @@ impl Schedule {
                 came: time,
                 by: None,
                 floor: None,
+                after: None,
+                taken: None,
             };
             arrivals.push((sent, destination));
         }
@@ -529,6 +539,8 @@ impl Schedule {
                 came: tick,
                 by: self.owner(tick),
                 floor: None,
+                after: None,
+                taken: None,
             };
             self.arrivals.push((sent, destination));
             let index = self.arrivals.len() - 1;
@@ -607,9 +619,8 @@ impl Schedule {
                         (
                             ms(waiter.came),
                             verdict(waiter.then),
-                            sent.came,
-                            sent.by,
-                            sent.floor,
+                            (sent.came, sent.by, sent.floor),
+                            (sent.after, sent.taken),
                         )
                     })
                     .collect();
@@ -829,6 +840,8 @@ impl Schedule {
         if !self.held[destination].held.is_empty() {
             let floor = self.held[destination].floor;
             sent.floor = floor.map(|floor| self.ms(floor));
+            sent.after = self.last_before(&sent, now);
+            sent.taken = self.taken(&sent, now);
             let then = self.record.presume(came, floor, reask);
             let item = sent;
             self.held[destination]
@@ -1082,20 +1095,15 @@ impl Schedule {
     }
 
     /// A datagram the rule drops: only where a handover lies less than `udp_reask` before it, or
-    /// since the last answer before it, on which it may have been taken for an app, or since it
-    /// came; or where a question asked since then took Android `udp_reask` or more to answer. Else
-    /// the rule lost it for nothing.
+    /// since the last answer before it, on which it may have been taken for an app, now or as it came
+    /// (tenth review of unit 9, minor 1), or since it came; or where a question asked since then took
+    /// Android `udp_reask` or more to answer. Else the rule lost it for nothing.
     fn dropped(&mut self, sent: Sent, why: Verdict, now: u64) -> Result<(), String> {
         let reask = self.grid.reask;
-        let before = self.answered[self.forgotten..]
-            .iter()
-            .filter(|(asked, _, at)| *asked <= sent.came && *at <= now)
-            .map(|(asked, _, _)| *asked)
-            .max();
-        let from = sent
-            .came
-            .saturating_sub(reask)
-            .min(before.unwrap_or(u64::MAX));
+        let from = [self.last_before(&sent, now), sent.after]
+            .into_iter()
+            .flatten()
+            .fold(sent.came.saturating_sub(reask), u64::min);
         let handover = self
             .owners
             .iter()
@@ -1115,47 +1123,102 @@ impl Schedule {
         Ok(())
     }
 
+    /// Whether the stream since an answer takes `sent` for `uid`'s, by the answers the engine knows at
+    /// `now`: it came after an answer naming `uid` asked since its floor, less than thirty times
+    /// `udp_reask` after it, with what left under `uid` since never pausing for `udp_reask`, and no
+    /// answer since naming another app.
+    fn streams(&self, sent: &Sent, uid: Option<u32>, now: u64) -> bool {
+        let reask = self.grid.reask;
+        let floor = sent.floor.unwrap_or(0);
+        let known: Vec<_> = self.answered[self.forgotten..]
+            .iter()
+            .filter(|(_, _, at)| *at <= now)
+            .collect();
+        known.iter().any(|(asked, named, _)| {
+            *named == uid
+                && *asked < sent.came
+                && *asked >= floor
+                && sent.came - asked < reask * 30
+                && !known
+                    .iter()
+                    .any(|(other, by, _)| *other > *asked && *other <= sent.came && *by != uid)
+                && {
+                    let mut links: Vec<u64> = self
+                        .leaves
+                        .iter()
+                        .filter(|(came, by)| *by == uid && came > asked && *came < sent.came)
+                        .map(|(came, _)| *came)
+                        .collect();
+                    links.push(*asked);
+                    links.push(sent.came);
+                    links.sort_unstable();
+                    links.windows(2).all(|pair| pair[1] - pair[0] < reask)
+                }
+        })
+    }
+
+    /// When the last answer the engine knows at `now`, of those asked when `sent` came or before, was
+    /// asked.
+    fn last_before(&self, sent: &Sent, now: u64) -> Option<u64> {
+        self.answered[self.forgotten..]
+            .iter()
+            .filter(|(asked, _, at)| *asked <= sent.came && *at <= now)
+            .map(|(asked, _, _)| *asked)
+            .max()
+    }
+
+    /// The app the stream since an answer takes `sent` for as it comes, `now`, if one app's does: only
+    /// that of the last answer before it can, since an answer since naming another app ends a stream.
+    /// Only a datagram that goes behind others needs it: the first of a destination with no way takes
+    /// no answer asked before it came, and one with an open way passes by it or asks.
+    fn taken(&self, sent: &Sent, now: u64) -> Option<App> {
+        let known = || {
+            self.answered[self.forgotten..]
+                .iter()
+                .filter(|(asked, _, at)| *at <= now && *asked < sent.came)
+        };
+        let last = known().map(|(asked, _, _)| *asked).max()?;
+        let mut apps: Vec<Option<u32>> = known()
+            .filter(|(asked, _, _)| *asked == last)
+            .map(|(_, uid, _)| *uid)
+            .collect();
+        apps.sort_unstable();
+        apps.dedup();
+        match apps[..] {
+            [uid] if self.streams(sent, uid, now) => Some(App(uid)),
+            _ => None,
+        }
+    }
+
     /// A datagram leaves under `uid` at `now`. It must be its sender's, or else lie within the window
     /// ADR 0044 states, by the answers the engine still knows (the record goes with the socket's last
-    /// way): every answer Android gave by then less than `udp_reask` from it names `uid`,
-    /// and one of them asked since its floor does; or it came after an answer naming `uid` asked
-    /// since its floor, less than thirty times `udp_reask` after it, with what left under `uid`
-    /// since never pausing for `udp_reask`, and no answer since naming another app.
+    /// way): every answer Android gave by then less than `udp_reask` from it names `uid`, and one of
+    /// them asked since its floor does; or the stream since an answer takes it for `uid`'s
+    /// ([`Schedule::streams`]). Nor may one the stream took for another app as it came leave under
+    /// `uid`: that and an answer near it that names `uid` disagree, so a handover fell near it (tenth
+    /// review of unit 9, minor 1).
     fn leave(&mut self, sent: Sent, uid: Option<u32>, now: u64) -> Result<(), String> {
         let reask = self.grid.reask;
         let floor = sent.floor.unwrap_or(0);
         if sent.by != uid {
-            let known: Vec<_> = self.answered[self.forgotten..]
+            let near: Vec<_> = self.answered[self.forgotten..]
                 .iter()
-                .filter(|(_, _, at)| *at <= now)
-                .collect();
-            let near: Vec<_> = known
-                .iter()
-                .filter(|(asked, _, _)| asked.abs_diff(sent.came) < reask)
+                .filter(|(asked, _, at)| *at <= now && asked.abs_diff(sent.came) < reask)
                 .collect();
             let window = near.iter().all(|(_, named, _)| *named == uid)
                 && near.iter().any(|(asked, _, _)| *asked >= floor);
-            let stream = known.iter().any(|(asked, named, _)| {
-                *named == uid
-                    && *asked < sent.came
-                    && *asked >= floor
-                    && sent.came - asked < reask * 30
-                    && !known
-                        .iter()
-                        .any(|(other, by, _)| *other > *asked && *other <= sent.came && *by != uid)
-                    && {
-                        let mut links: Vec<u64> = self
-                            .leaves
-                            .iter()
-                            .filter(|(came, by)| *by == uid && came > asked && *came < sent.came)
-                            .map(|(came, _)| *came)
-                            .collect();
-                        links.push(*asked);
-                        links.push(sent.came);
-                        links.sort_unstable();
-                        links.windows(2).all(|pair| pair[1] - pair[0] < reask)
-                    }
-            });
+            let stream = self.streams(&sent, uid, now);
+            if let Some(App(taken)) = sent.taken
+                && taken != uid
+            {
+                return Err(format!(
+                    "a datagram {} sent at {} ms, taken for {taken:?} as it came, left under {uid:?} at \
+                     {now} ms; {}",
+                    sent.by.map_or("of no app".into(), |by| format!("of {by}")),
+                    sent.came,
+                    self.story()
+                ));
+            }
             if !window && !stream {
                 return Err(format!(
                     "a datagram {} sent at {} ms left under {uid:?} at {now} ms; {}",
@@ -1408,7 +1471,7 @@ fn slow(coarse: bool) -> Grid {
 /// schedule of two or three, and keeps the search itself working.
 const SMALL: &[(&str, &str)] = &[("fine", "3,1,2,2,2,1,3,0,-,0")];
 
-/// The larger bounds, walked on demand on every core, in about four minutes in a build with
+/// The larger bounds, walked on demand on every core, in about three minutes in a build with
 /// optimisation: on the fine grid, more datagrams, two handovers, or the chain turning; on the coarse
 /// grid, streams, with two handovers among them, behind slow ways, or past thirty times `udp_reask`.
 const LARGE: &[(&str, &str)] = &[

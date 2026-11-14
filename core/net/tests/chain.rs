@@ -4028,3 +4028,77 @@ async fn a_datagram_dropped_as_its_way_fails_is_counted() -> Outcome {
     assert_eq!((counters[UDP_AMBIGUOUS], counters[UDP_LATE]), (0, 1));
     Ok(())
 }
+
+/// Sends `payload` from the app's `port` to `to` every 20 ms until `until`, a stream that never pauses
+/// for `udp_reask`; and among it each of `once`'s payloads to its destination, once its instant has come.
+async fn stream_until(
+    tunnel: &UnixDatagram,
+    (port, to, payload): (u16, SocketAddr, &[u8]),
+    until: tokio::time::Instant,
+    once: &[(tokio::time::Instant, SocketAddr, &[u8])],
+) -> Outcome {
+    let mut sent = vec![false; once.len()];
+    while tokio::time::Instant::now() < until {
+        for (index, &(at, other, said)) in once.iter().enumerate() {
+            if !sent[index] && tokio::time::Instant::now() >= at {
+                sent[index] = true;
+                send(tunnel, app(port), other, said).await?;
+            }
+        }
+        send(tunnel, app(port), to, payload).await?;
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    Ok(())
+}
+
+/// The direct app streams every 20 ms through its mapping. Its lookup asks Android, then waits for a
+/// slow protect (2 s); a second lookup from that socket, 600 ms after the first's question and so beyond
+/// `udp_reask` (300 ms here) from every answer, goes behind it, taken for the direct app's by the
+/// stream alone. 50 ms later the port goes to the chained app, whose datagram to a new destination
+/// asks Android, which names it, less than `udp_reask` after the second lookup. As it came, the
+/// answers took that lookup for the direct app; the answer near it names the chained app: a handover
+/// fell near it, and who sent it cannot be told. It is dropped as ambiguous, never answered under the
+/// chained app (tenth review of unit 9, minor 1). The first lookup, whose app holds the socket no
+/// more, is dropped as late.
+#[tokio::test(flavor = "current_thread")]
+async fn a_lookup_taken_for_one_app_is_dropped_once_an_answer_near_it_names_another() -> Outcome {
+    const PORT: u16 = 50_905;
+    let (a, a_heard) = listening().await?;
+    let (e, _) = listening().await?;
+    let tool = proxy(Settings::default()).await?;
+    let android = Arc::new(Staged::default());
+    android.set(PORT, Some(DIRECT));
+    let reask = Duration::from_millis(300);
+    let limits = Limits {
+        udp_reask: reask,
+        ..Limits::default()
+    };
+    let (engine, tunnel) = engine_with(chain(tool.address), limits, android.clone())?;
+    let (dns, heard) = deaf_resolver(&engine).await?;
+    send(&tunnel, app(PORT), a, b"tick").await?;
+    until_heard(&a_heard, b"tick", Duration::from_secs(2)).await?;
+    android.protect_in(Duration::from_secs(2));
+    send(&tunnel, app(PORT), dns, &query(b"\x05first\x04test\x00", 1)).await?;
+    let asked = android.asked_about(dns).await?;
+    let second = query(b"\x06second\x04test\x00", 1);
+    let once = [(asked + Duration::from_millis(600), dns, &second[..])];
+    let handed = asked + Duration::from_millis(650);
+    stream_until(&tunnel, (PORT, a, &b"tick"[..]), handed, &once).await?;
+    android.set(PORT, Some(CHAINED));
+    send(&tunnel, app(PORT), e, b"chained app").await?;
+    let near = android.asked_about(e).await?;
+    assert!(
+        near < asked + Duration::from_millis(600) + reask,
+        "the chained app's question came {:?} after the first lookup's: not near the second",
+        near.duration_since(asked)
+    );
+    tokio::time::sleep_until(asked + Duration::from_millis(3_500)).await;
+    assert!(
+        !uids_to(&engine, dns).contains(&Some(CHAINED)),
+        "the direct app's lookup went under the chained app"
+    );
+    assert!(heard_so_far(&heard).iter().all(|(_, said)| *said != second));
+    let counters = engine.counters();
+    assert_eq!((counters[UDP_AMBIGUOUS], counters[UDP_LATE]), (1, 1));
+    Ok(())
+}

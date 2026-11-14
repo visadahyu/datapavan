@@ -241,7 +241,9 @@ an ADR (D25).
     answer, is dropped, and counted as late;
   - a datagram that waits keeps whose the answers said it was as it came, by the newest answer or the stream since
     it: it stays that app's while it waits, however many questions come after it, as long as no answer near it
-    says otherwise, the last answer before it still names that app, and that app holds the socket.
+    says otherwise, the last answer before it still names that app, and that app holds the socket. An answer near
+    it that names another app disagrees with it: a handover fell near it, and it is dropped and counted as
+    ambiguous (tenth review, minor 1).
   A way, mapping or flow of lookups, opens only for the app the newest answer names, and an answer that names
   another app ends every way of the socket; a flow that ends so still hands the app the answers it owes. An
   answer looks at the socket's ways only then, since they are all of the newest answer's app, so a socket's many
@@ -252,11 +254,13 @@ an ADR (D25).
   open the mapping waits only for one of its own app. The datagram dropped is the one the rule decided, found by
   when it came.
   - **The cost.** A datagram that came less than `udp_reask` from answers that disagree is lost: the first
-    datagrams of each app after a handover, the old app's last ones and the new app's first, for up to
-    `udp_reask` around the questions. At the Galaxy A40's 3 ms an answer is asked within milliseconds of the
-    datagram that needs it, so this is the handover's own second. A datagram whose own question Android answers
-    `udp_reask` or more after it was asked, with no other answer near it, is dropped. A way that opens slowly, a
-    tool's slow handshake or a slow `protect`, drops nothing: each datagram behind it asked as it came.
+    datagrams of each app after a handover, the old app's last ones and the new app's first, for up to `udp_reask`
+    around the questions, and one taken for the old app as it came, by the stream since its answer, that waits
+    behind others until an answer near it names the new app. At the Galaxy A40's 3 ms an answer is asked within
+    milliseconds of the datagram that needs it, so this is the handover's own second. A datagram whose own question
+    Android answers `udp_reask` or more after it was asked, with no other answer near it, is dropped. A way that
+    opens slowly, a tool's slow handshake or a slow `protect`, drops nothing while the port stays with one app:
+    each datagram behind it asked as it came.
   - **The windows**, each pinned to the nanosecond on both sides by the engine's own tests: `udp_reask` after the
     newest question, and before or after any answer for one that came before it; thirty times `udp_reask` for a
     stream; `udp_contest` for a waiting stand-in.
@@ -271,29 +275,31 @@ an ADR (D25).
     one it is taken for must lie within the windows above, by the answers given by then: every answer less than
     `udp_reask` from it names that app, and one of them was asked since its floor; or it came after an answer
     naming that app, asked since its floor, less than thirty times `udp_reask` after it, with what left under
-    that app since never pausing for `udp_reask`, and no answer since naming another app. It checks liveness
-    too: nothing is dropped unless a handover fell near it, from `udp_reask` before it, or the answer before it
-    if earlier, until it was dropped, or a question asked then took Android `udp_reask` or more to answer; and
-    nothing waits for ever. It fails, naming its seed, with each of fifteen bugs of the rule put back by
-    mutation, those the eighth and ninth reviews found among them. A sixteenth, a datagram that keeps whose it
-    was taken for though the answer before it names another app, it finds only beyond 10,000 schedules; a test
-    of its own holds it.
+    that app since never pausing for `udp_reask`, and no answer since naming another app. Nor may one that
+    waited behind others leave under another app than the one the stream took it for as it came (tenth review,
+    minor 1). It checks liveness too: nothing is dropped unless a handover fell near it, from `udp_reask` before
+    it, or the answer before it, then or as it came, if earlier, until it was dropped, or a question asked then
+    took Android `udp_reask` or more to answer; and nothing waits for ever. It fails, naming its seed, with each
+    of fifteen bugs of the rule put back by mutation, those the eighth and ninth reviews found among them. A
+    sixteenth, a datagram that keeps whose it was taken for though the answer before it names another app, it
+    finds only beyond 10,000 schedules; a test of its own holds it.
   - **The bounded search.** The model also walks every schedule within small bounds, depth first, with the same
     checks, on a grid of time where `udp_reask` is two steps, so that each window's edge falls on a step: who
     holds the port and when, when each datagram or lookup comes and where to, how slowly Android answers and
     reads the socket, how slowly each way opens or whether it fails, when the chain turns, and the order of what
     falls on one instant; paths that reach one state share what follows. Every `cargo test` walks one set, a
-    handover and two datagrams or lookups, in 3.6 s; nine larger ones, with two handovers, the chain turning,
-    streams behind ways three times `udp_reask` slow, or a stream past thirty times it, walk 229 million states
-    in three minutes on 24 cores with optimisation (`--ignored`; `WHOSE_BOUNDS` sets others). Of 23 mutations of
-    the rule, it finds 14, each with a schedule of two to seven datagrams; the random schedules find each of
-    those within 1,400 seeds, and one more within 10,000. It does not reach what needs long streams, slow
-    answers among them, or several answers kept while a datagram waits: three mutations the random schedules
-    find only beyond 10,000 (a join that takes an answer from before the floor, the presumption without the
-    answer before it, and the near window's lower edge taken in) lie beyond its bounds, and five survive both:
-    three the tenth review judged harmless, and two that drop more only where a handover lies near, which the
-    liveness check allows. It takes the port to change hands before what else falls on its step, Android to read
-    the socket at its question or a step after, and each delay to be one of the grid's; like the random
+    handover and two datagrams or lookups, in 3.7 s; nine larger ones, with two handovers, the chain turning,
+    streams behind ways three times `udp_reask` slow, or a stream past thirty times it, walk 263 million states
+    in three minutes on 24 cores with optimisation (`--ignored`; `WHOSE_BOUNDS` sets others). Of 24 mutations of
+    the rule, it finds 15, each with a schedule of two to seven datagrams, among them the tenth review's minor 1
+    put back, in 3 s; the random schedules find 14 of those within 10,000 seeds, but one, the presumption put
+    over every verdict, only at seed 626,780. It does not reach what needs long streams, slow answers among
+    them, or several answers kept while a datagram waits: four mutations the random schedules find, three of
+    them only beyond 10,000 seeds (a join that takes an answer from before the floor, the presumption without
+    the answer before it, and the near window's lower edge taken in), lie beyond its bounds; and five survive
+    both: three the tenth review judged harmless, and two that drop more only where a handover lies near, which
+    the liveness check allows. It takes the port to change hands before what else falls on its step, Android to
+    read the socket at its question or a step after, and each delay to be one of the grid's; like the random
     schedules, it drives the model's copy of the engine's steps, not the engine, and puts no question for what
     only comes in.
 - **No guess.** An app Android cannot name is unknown, in the log (decision 3's shared bucket) and to the chain,
@@ -314,8 +320,9 @@ an ADR (D25).
     loopback or at any address it holds, as a tool that shares its proxy on the local network announces its
     Wi-Fi address: a UDP socket connected to the relay, which sends nothing, then sends from that very address. A
     broadcast address refuses such a socket, though Linux lets one bind it;
-  - `udp_ambiguous`, the 30th: datagrams and lookups dropped because answers near them name different apps, by
-    the rule above, so that who sent them could not be told;
+  - `udp_ambiguous`, the 30th: datagrams and lookups dropped because answers near them name different apps, or
+    one names another app than a waiting one was taken for as it came, by the rule above, so that who sent them
+    could not be told;
   - `udp_late`, the 31st: datagrams and lookups the rule dropped otherwise, their app having lost the socket
     before their way opened, or no answer near them to be had. Both count what is dropped as a way fails too.
 - **The chain changes:** a mapping ends at its next datagram either way when the chain is set again and sends its
@@ -343,8 +350,10 @@ an ADR (D25).
     such a handover needs the old app to close its socket and the new app to be given that very port, one of
     about 28,000 handed out at random, within a second of the old app's last datagram; and the only way to
     narrow it, asking Android for every datagram, costs a Binder call each, about 3 ms on the Galaxy A40: fifty a
-    second for a call's 20 ms packets. Likewise a datagram whose only answers near it all came after a handover
-    that fell between it and them: no answer can tell it.
+    second for a call's 20 ms packets. Likewise a datagram that no answer took for its app as it came, whose only
+    answers near it all came after a handover that fell between it and them: no answer can tell it. One that
+    waits, taken for its app as it came, by the newest answer or the stream since it, is told by that, and
+    dropped (tenth review, minor 1).
   - What a mapping's peers send reaches the port's next app, if it took the port without sending, until Android
     is next asked about what comes in: at most `udp_reask` after the old app last sent or was named, and then
     for as long as Android takes to answer.
