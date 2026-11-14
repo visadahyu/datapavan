@@ -72,7 +72,9 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    Android 11 emulator (`dp-api30`), which translates ARM code: `INSTALL_ABI=armeabi-v7a scripts/smoke.sh`,
    then `verify-audit.sh`, `verify-plan.sh` and `verify-shortcuts.sh`. The data pack scripts stay on
    CI's image: Android 11's file picker there would not pick a file that adb had put in Downloads
-   (2026-11-07, with the 64-bit build too). CI must be green on the release commit.
+   (2026-11-07, with the 64-bit build too). CI must be green on the release commit. A CI check that failed
+   while nothing it tests had changed goes into [ci-flakes.md](ci-flakes.md), with the run, the check, its
+   cause and its fix, before the run is repeated.
 
    **The documents match the code** ([ADR 0039](decisions/0039-release-gates.md)). `scripts/check-truth.py`,
    part of `check.sh`, checks what a machine can read (below). Everything else that states how things

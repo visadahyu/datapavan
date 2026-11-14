@@ -9,6 +9,9 @@ name: CI
 # build: the documents against the code, the published keys, the translations and the website
 # (scripts/check.sh data). A tag points at a commit that CI has already checked on its branch, so a tag
 # runs nothing.
+#
+# A check that fails without a change to what it tests is a flake: it goes into docs/ci-flakes.md, with
+# the run, the check, the cause and the fix, before the run is repeated.
 on:
   push:
     branches: ["**"]
