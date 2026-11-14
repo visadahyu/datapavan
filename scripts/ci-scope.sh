@@ -12,7 +12,8 @@
 # passed the build only in paths that need none; it needs the emulator checks unless its tree differs
 # from a tree that passed them only in paths that need no emulator. Paths are compared without rename
 # detection, so a file moved out of the app counts as removed from it. Anything this rule does not name
-# needs everything, and so does a change to the rule or to CI itself.
+# needs everything, and so does a change to the rule or to CI itself. A tree that holds a symbolic link or
+# a submodule needs everything too: a path the rule lets off could then be read under another name.
 #
 #   scripts/ci-scope.sh tier <path>...   each path's tier
 #   scripts/ci-scope.sh test             the rule against its table of paths, and the choice of the
@@ -111,7 +112,7 @@ jobs_of() {
 # Prints "build=<bool>", "emulator=<bool>", "build-base=<commit or none>" and "emulator-base=<...>" for
 # commit $1 in repository $2, from the proofs jobs_of finds among its ancestors, nearest first.
 decide_for() {
-    local head=$1 repo=$2 commit proof block line build_base="" emulator_base="" examined=0 build emulator
+    local head=$1 repo=$2 commit proof block line build_base="" emulator_base="" examined=0 build emulator links
     while IFS= read -r commit; do
         [ -n "$build_base" ] && [ -n "$emulator_base" ] && break
         # Only commits CI ran on are asked about, and only so many, to keep to the API's budget.
@@ -140,6 +141,12 @@ decide_for() {
     done < <(git -C "$repo" rev-list --max-count=300 "$head")
     build=true
     emulator=true
+    links=$(git -C "$repo" ls-tree -r "$head" | awk '$1 == "120000" || $1 == "160000" { print $4 }')
+    if [ -n "$links" ]; then
+        echo "a symbolic link or a submodule, so everything runs: $(echo $links)" >&2
+        emulator_base=""
+        build_base=""
+    fi
     if [ -n "$emulator_base" ] && [ "$(diff_tier "$emulator_base" "$head" "$repo")" != emulator ]; then emulator=false; fi
     if [ -n "$build_base" ] && [ "$(diff_tier "$build_base" "$head" "$repo")" = none ]; then build=false; fi
     # The emulator checks run on the build's APKs.
@@ -241,7 +248,7 @@ TABLE
         git -C "$work" -c user.name=test -c user.email=test@test -c commit.gpgsign=false commit -q -m "$message"
         git -C "$work" rev-parse HEAD
     }
-    local full app docs lab moved again failing fixed legacy legacy_docs build_only none_proved half unproved
+    local full app docs lab moved again failing fixed legacy legacy_docs build_only none_proved half unproved symlink submodule
     full=$(commit "a full pass" android/app/Main.kt=1 docs/a.md=1 lab/x=1 data/exodus/trackers.tsv=1)
     docs=$(commit "documents" docs/a.md=2 README.md=2 site/hugo.toml=2)
     lab=$(commit "the lab and unbundled data" lab/x=2 data/exodus/update.py=2)
@@ -255,6 +262,16 @@ TABLE
     git -C "$work" checkout -q "$full"
     build_only=$(commit "data whose build passed" data/exodus/update.py=5)
     none_proved=$(commit "documents after it" README.md=5)
+    git -C "$work" checkout -q "$full"
+    ln -s ../android/app/Main.kt "$work/docs/link.kt"
+    symlink=$(commit "a documents' link into the app" docs/b.md=1)
+    git -C "$work" checkout -q "$full"
+    printf '1\n' >"$work/docs/c.md"
+    git -C "$work" add -A
+    git -C "$work" update-index --add --cacheinfo "160000,$full,docs/module"
+    git -C "$work" -c user.name=test -c user.email=test@test -c commit.gpgsign=false commit -q -m "a submodule among the documents"
+    submodule=$(git -C "$work" rev-parse HEAD)
+    git -C "$work" rm -q --cached docs/module
     git -C "$work" checkout -q "$full"
     half=$(commit "an app change passed in two halves" android/app/Main.kt=6)
     git -C "$work" checkout -q --orphan unproved
@@ -300,6 +317,8 @@ fixed        build=true emulator=true
 build_only   build=false emulator=false
 none_proved  build=false emulator=false
 half         build=true emulator=true
+symlink      build=true emulator=true
+submodule    build=true emulator=true
 unproved     build=true emulator=true
 legacy       build=false emulator=false
 legacy_docs  build=false emulator=false
