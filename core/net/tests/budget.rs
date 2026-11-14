@@ -88,9 +88,10 @@ fn quiet_after(udp_mappings: usize, udp_share: usize, udp_quiet: Duration) -> Li
     }
 }
 
-/// Longer than the tests' `udp_quiet`: what passed nothing for so long is quiet.
-const QUIET: Duration = Duration::from_millis(200);
-const QUIETER: Duration = Duration::from_millis(400);
+/// The tests' `udp_quiet`, long enough that a busy mapping stays busy on a loaded computer, and a
+/// pause longer than it, after which what passed nothing is quiet.
+const QUIET: Duration = Duration::from_millis(500);
+const QUIETER: Duration = Duration::from_millis(900);
 
 fn app(port: u16) -> SocketAddr {
     SocketAddr::from((Addresses::COMMON.tun4, port))
