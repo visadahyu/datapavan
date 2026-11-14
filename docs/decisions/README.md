@@ -57,6 +57,7 @@ in the Git history.
 | [0047](0047-profile-for-phones-that-may-be-searched.md) | A profile for phones that may be searched: nothing of use kept | Proposed |
 | [0048](0048-lab-probe-of-android-gaps.md) | A lab probe of where stock Android leaves privacy tools blind or exposed | Proposed |
 | [0049](0049-signing-keys-of-the-editions.md) | A signing key for each edition, ready to rotate, backed up in shares | Proposed |
+| [0050](0050-operators-and-sim-cards.md) | Mobile operators and SIM cards: what the phone installed, what the SIM can do, what to tell users | Proposed |
 
 ## Template
 

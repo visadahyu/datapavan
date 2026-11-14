@@ -165,6 +165,9 @@ The probe app that ADR 0041 promised, which measures where stock Android leaves 
 the Android 10 to 17 emulators, is proposed in [ADR 0048](docs/decisions/0048-lab-probe-of-android-gaps.md).
 Datapavan Advanced's own offline signing key, a rehearsed key rotation for both editions and a 2-of-3 split backup
 of each key, all needed before 0.2.0, are proposed in [ADR 0049](docs/decisions/0049-signing-keys-of-the-editions.md).
+What the phone's own software installed, what the SIM and the operator can do, and guidance on SMS login codes,
+in Basic 0.2.0 and 0.2.1 and Advanced 0.2.0 and 0.2.1, are proposed in
+[ADR 0050](docs/decisions/0050-operators-and-sim-cards.md) (see "Mobile operators and SIM cards" below).
 
 The items, in order:
 
@@ -231,6 +234,31 @@ comes before any removal, since removing it at once can put the person at risk, 
 helplines. No record of the finding stays on the phone. Experts in this field review the wording
 before release. Spyware sold to governments (Pegasus and the like) is out of reach of an app and is
 referred to helplines that do forensic checks.
+
+### Mobile operators and SIM cards, in Datapavan Basic and Advanced
+
+⏳ Planned: the maintainer made operators' and SIMs' risks part of the plan on 2026-11-14; the design is in
+[ADR 0050](docs/decisions/0050-operators-and-sim-cards.md) (proposed).
+
+The SIM runs the operator's software, and the phone obeys it: by the standard, and in Android's own code, it can make
+the phone send messages, open data connections and web pages, and report its location and IMEI, mostly without the
+user seeing it. A SIM can also switch on preinstalled carrier apps, which Android gives phone, background-location
+and SMS permissions without asking, and makers and operators can install apps in the background. Whoever controls a
+phone number receives its SMS login codes. No app without system privileges can see a SIM's applets or what it
+does, and Datapavan says so.
+
+- **Datapavan Basic 0.2.0:** the apps installed by the phone's own software, with the installer, the package that
+  actually ran the install and the date, as their own finding, in place of today's "Not from a known app store",
+  which wrongly suggests a modified copy for them; the SIM's operator at the time of the audit; and a page, "Your
+  number and your SIM", in the app and on the website: passkeys, authenticator apps and each messenger's own second
+  step rather than SMS codes, a SIM PIN, and what a SIM and an operator can and cannot do. No new permission.
+- **Datapavan Advanced 0.2.0:** operator and maker apps' traffic shown like any app's, marked by how the app came.
+- **Datapavan Basic and Advanced 0.2.1:** the SIM Toolkit, with the name the SIM gave it, and the carrier apps a SIM
+  switched on, in plain words with their limits, once the lab has measured them.
+- **The lab:** with a lab SIM only, never a personal one, on lab phones under consent for each device and session:
+  install sources with and without a SIM, the carrier apps a SIM enables, the SIM Toolkit's label, type-0 messages
+  and, with a programmable SIM, which SIM commands run without a prompt on which Android versions. Results publish
+  under ADR 0048's rules.
 
 
 ### Other devices
