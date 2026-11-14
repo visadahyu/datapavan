@@ -20,7 +20,10 @@ Status legend: ✅ done · 🔄 in progress · ⏳ planned.
 - **Datapavan Enterprise:** stage 2.
 
 Basic and Advanced are free for everyone. A person at risk can keep Basic alone, or beside Advanced, which Basic
-checks from outside.
+checks from outside. The two share one version line (the maintainer, 2026-11-14): the release out is Datapavan
+Basic 0.1.2, and the first release of Advanced is Datapavan Advanced 0.2.0, built from the same commit as Datapavan
+Basic 0.2.0. The milestones keep their numbers: v0.1, the audit, is Basic; v0.2's network monitoring, v0.3's
+blocking and v0.4's reports land in Advanced, and what of them needs no network comes to Basic as well.
 
 ---
 
@@ -34,7 +37,7 @@ the project against the field's best). Every release passes:
 - native review of care and safety texts;
 - licence statements and an SBOM that match what ships.
 
-Watch 0.2.0 adds its own gates:
+Datapavan Advanced 0.2.0 adds its own gates:
 - saying what other apps see of it, and leaving an app out of the tunnel ([ADR 0041](docs/decisions/0041-watch-visibility-and-coexistence.md));
 - the local-network rule;
 - the forwarding path's known gaps closed;
@@ -42,10 +45,10 @@ Watch 0.2.0 adds its own gates:
 - a compatibility matrix kept current;
 - a second way to get the apps.
 
-A build of Watch that has not had an independent security review goes only to identified testers. 1.0 is
+A build of Datapavan Advanced that has not had an independent security review goes only to identified testers. 1.0 is
 reached by the gates, not by a count of features.
 
-### v0.1 "Audit": no VPN, no INTERNET permission
+### v0.1 "Audit", Datapavan Basic: no VPN, no INTERNET permission
 
 The app cannot open a network connection. That is the strongest trust signal we can give.
 
@@ -103,7 +106,7 @@ heard of an update only by chance: the first testers of 0.1.0 had no way to lear
 - **On the website:** the download section shows what changed in the current version, from the store
   changelog that is translated and reviewed in eight languages.
 
-The Google Play edition will leave out the reminder and the button, since Play updates it.
+Datapavan Basic on Google Play will leave out the reminder and the button, since Play updates it.
 
 Checks left from M4 (ADR 0022):
 
@@ -112,7 +115,7 @@ Checks left from M4 (ADR 0022):
   emulator and on a Galaxy A56, and the allowance survives an update installed the same way.
 - The units of other vendors' data-usage screens, Android 10, and mobile data on a Samsung phone.
 
-### v0.2 "Watch": local VPN, observe only
+### v0.2, network monitoring, in Datapavan Advanced: local VPN, observe only
 
 A **local** VPN: no server is involved and the user's IP address does not change. [ADR 0029](docs/decisions/0029-network-access-for-v0.2.md)
 (accepted on 2026-11-05) made it an app of its own, Watch, so that the audit app never holds the INTERNET permission,
@@ -125,24 +128,24 @@ Two releases, each of use on its own (the maintainer, 2026-11-09, in place of th
 circumvention tool, since Android allows one VPN at a time, and every release costs an offline
 signing session and texts reviewed in eight languages):
 
-1. **0.2.0, the connection log, next to circumvention tools:** Watch with its packet engine. It keeps
+1. **Datapavan Advanced 0.2.0, the connection log, next to circumvention tools:** the Watch service with its packet engine. It keeps
    a connection log per app: domain, IP, organisation, bytes, time, foreground or background. Names
    come from DNS, the TLS and QUIC server names, and apps' own encrypted DNS is recognised. The audit
-   app reads the log through the one-way interface of ADR 0029. Watch works beside every tool the
-   user has, as far as Android allows (one VPN at a time), since the tools themselves can take
+   reads the log inside Advanced, so ADR 0029's one-way interface between two apps is not built (ADR 0045).
+   Advanced works beside every tool the user has, as far as Android allows (one VPN at a time), since the tools themselves can take
    people's data ([RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md)). It brings SOCKS5 chaining
    with UDP, a WireGuard upstream for VPN providers that offer one (Proton VPN, Mullvad and others),
-   the user's tool and its proxy port found by Watch itself (asking Android who owns the port worked
+   the user's tool and its proxy port found by Advanced itself (asking Android who owns the port worked
    on 2026-11-08, [spike](docs/spikes/2026-11-packet-engine.md)), a password for the tool's proxy
    where the tool allows one, apps' own built-in proxies named (Telegram's, for example), proxy-like
    behaviour flagged, per-tool guides, a DNS resolver of the user's choice with a strict setting, and
    blocking of tracker domains, off until the user turns it on and undone in one tap. Fuller blocking
    stays in v0.3.
-2. **0.2.1, behaviour:** the sensor log, the cross-checks and the learned traffic shapes. Their
+2. **Datapavan Advanced 0.2.1, behaviour:** the sensor log, the cross-checks and the learned traffic shapes; what of them needs no network comes to Datapavan Basic 0.2.1 as well. Their
    feasibility spikes come first, so 0.2.0 does not wait for their results.
 
 The milestones of 0.2.0, W1 to W9, with what each must show before it counts as done, are in
-[DESIGN.md §13.2](docs/DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools).
+[DESIGN.md §13.2](docs/DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools).
 
 Where it stands on 2026-11-14: the four items before W1 are drafted (ADRs
 [0034](docs/decisions/0034-watch-permissions.md), [0035](docs/decisions/0035-wireguard-upstream.md) and
@@ -154,7 +157,7 @@ spike's engine. W3, a name for every flow, and W4, the connection log
 comparison, which needs a test account, and W4's runs on the A40 and an Android 10 emulator. W6, chaining
 through the user's tool ([ADR 0038](docs/decisions/0038-dns-of-chained-apps.md)), was accepted and merged on
 2026-11-11. W5, W7, W8 and W9 are not built yet
-([DESIGN.md §13.2](docs/DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools) has what is left).
+([DESIGN.md §13.2](docs/DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools) has what is left).
 How W5's per-app view is met, live, with which apps sent while the user was not using them, is proposed in
 [ADR 0046](docs/decisions/0046-live-activity.md) (2026-11-14), and a profile for people whose phone may be searched,
 which keeps nothing of use, in [ADR 0047](docs/decisions/0047-profile-for-phones-that-may-be-searched.md).
@@ -164,7 +167,7 @@ the Android 10 to 17 emulators, is proposed in [ADR 0048](docs/decisions/0048-la
 The items, in order:
 
 - A connection log per app: domain, IP, organisation, bytes, time, foreground or background.
-- Chaining through a local SOCKS5 proxy, so Watch can run next to circumvention tools (see
+- Chaining through a local SOCKS5 proxy, so Advanced can run next to circumvention tools (see
   [docs/RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md)). The tool becomes a pipe, not the owner of
   the phone's network: no inbound access from the VPN provider's network, and proxy-like behaviour,
   including the tool's own, is flagged. Per-tool guides for proxy mode.
@@ -178,25 +181,25 @@ The items, in order:
 - A Quick Settings tile that turns the local VPN on and off, and an optional widget that shows only its
   state and the date of the last check, never a count of problems.
 
-### v0.3 "Guard": blocking
+### v0.3 "Guard", in Datapavan Advanced: blocking
 
 - Network access per app (Wi-Fi, mobile, background), and tracker-domain blocking with per-app exceptions.
 - Blocking of proxy-like behaviour flagged in v0.2.
 - "Notifications yes, hidden uploads no": per app, network access only while the app is on screen. Push notifications still arrive through the system's push service. Some messengers then fetch the message text themselves, so their notifications may arrive without text or late; the choice is per app.
 - Safe defaults, one-tap undo, and a "this app broke" path.
 
-### v0.4 "Report"
+### v0.4 "Report", in Datapavan Advanced
 
 - A weekly plain-language report, exportable as PDF or JSON.
 - A GDPR Article 15 helper: for each company whose trackers were observed, a ready-to-send data-access request.
 - Declared against observed: each app's data-safety label on Google Play compared with what Datapavan saw. The labels come from the lab, cited by hand, until researcher access under DSA Article 40(12) or Google's permission allows more (ADR 0015).
 
-### Datapavan Verifier, the check from a second phone
+### The Verifier, the check from a second phone, in Datapavan Basic
 
-⏳ Planned, decided on 2026-11-12 ([ADR 0040](docs/decisions/0040-own-safety-in-an-untrusted-environment.md)). A
-third small app of the project, signed with the same key, checks a phone's hardware attestation from a second
-phone by scanning QR codes both ways, as GrapheneOS's Auditor does. It holds the camera permission, so the
-audit app and Watch never need it. A copy of Datapavan cannot prove its own environment from inside (ADR 0024);
+⏳ Planned, decided on 2026-11-12 ([ADR 0040](docs/decisions/0040-own-safety-in-an-untrusted-environment.md)), and a
+mode of Datapavan Basic since [ADR 0045](docs/decisions/0045-three-editions-of-one-app.md). It checks a phone's
+hardware attestation from a second phone by scanning QR codes both ways, as GrapheneOS's Auditor does. Only this
+mode uses the camera, so Datapavan Advanced never asks for it. A copy of Datapavan cannot prove its own environment from inside (ADR 0024);
 this is the check from outside.
 
 ### The expert tool, for preinstalled apps
@@ -206,16 +209,16 @@ this is the check from outside.
 
 Android's Settings cannot turn off many preinstalled apps, and the tools that can (debloaters that work
 through ADB or Shizuku) are made for experts and rank apps by the risk of breaking the phone, not by
-what they send. Datapavan builds its own expert tool rather than sending people to them: a third app
-within Datapavan, with the same key, that turns system apps off through Android's own wireless
+what they send. Datapavan builds its own expert tool rather than sending people to them, as a part of
+Datapavan Advanced (ADR 0045) that turns system apps off through Android's own wireless
 debugging on the phone, records every change in a journal with undo, and ranks apps by what the lab
-and Watch measured them sending. The audit app leads to it only for the apps that Settings cannot
+and Advanced's network monitoring measured them sending. The audit app leads to it only for the apps that Settings cannot
 handle, after what Settings can do (permissions, background data, special access) and, from v0.3,
-Watch's blocking.
+Advanced's blocking.
 
 ### Known stalkerware, in the audit app
 
-⏳ Planned, agreed with the maintainer on 2026-11-07, beside Watch's versions.
+⏳ Planned, agreed with the maintainer on 2026-11-07, beside Advanced's releases.
 
 The audit's check of special access already finds an unknown spyware app by what it holds. Known
 stalkerware adds a name: a separate data pack built from published indicators (package names and

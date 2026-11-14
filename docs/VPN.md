@@ -1,10 +1,10 @@
-# Local VPN design (v0.2 "Watch", v0.3 "Guard")
+# Local VPN design (v0.2 network monitoring, v0.3 "Guard", in Datapavan Advanced)
 
-> Status: **design draft.** The packet engine is chosen: the system stack in Rust, accepted on 2026-11-07 ([ADR 0012](decisions/0012-packet-engine.md), [findings](spikes/2026-11-packet-engine.md)). The milestones of the first release, 0.2.0, are in [DESIGN.md §13.2](DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools).
+> Status: **design draft.** The packet engine is chosen: the system stack in Rust, accepted on 2026-11-07 ([ADR 0012](decisions/0012-packet-engine.md), [findings](spikes/2026-11-packet-engine.md)). The milestones of the first release, Datapavan Advanced 0.2.0, are in [DESIGN.md §13.2](DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools).
 
 ## What "VPN" means here
 
-Watch, the part of Datapavan planned for v0.2, is an app of its own beside the audit app ([ADR 0029](decisions/0029-network-access-for-v0.2.md)). It uses Android's `VpnService` only to see and filter traffic on the device. It is a
+Watch, the part of Datapavan planned for v0.2, is a service of Datapavan Advanced, not an app of its own ([ADR 0045](decisions/0045-three-editions-of-one-app.md), in place of [ADR 0029](decisions/0029-network-access-for-v0.2.md)); Datapavan Basic never has it. It uses Android's `VpnService` only to see and filter traffic on the device. It is a
 **firewall**, not a tunnel:
 
 - No Datapavan server exists, and no traffic is sent to us.

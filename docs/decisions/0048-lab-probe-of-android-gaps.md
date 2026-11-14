@@ -211,7 +211,7 @@ time. A draft may be prepared with AI help; the maintainer files it.
   limited.
 - **Full runs on the maintainer's machine,** one emulator at a time, each stopped and its AVD deleted after its run.
 - **When rows are run again:** when a new image revision or Google Play system update month appears for a version
-  in the table, and before a Watch release whose texts cite the table (ADR 0039).
+  in the table, and before a release of Datapavan Advanced whose texts cite the table (ADR 0039).
 
 ### Against the field
 

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version | 0.2 (draft, revised 2026-11-14: three editions, ADR 0045; what apps sent while not in use, shown live, ADR 0046, proposed; a profile for phones that may be searched, ADR 0047, proposed; a lab probe of where stock Android leaves privacy tools blind or exposed, ADR 0048, proposed) |
+| Version | 0.2 (draft, revised 2026-11-14: three editions, ADR 0045; what apps sent while not in use, shown live, ADR 0046, proposed; a profile for phones that may be searched, ADR 0047, proposed; a lab probe of where stock Android leaves privacy tools blind or exposed, ADR 0048, proposed; the editions' names and one version line, the maintainer, 2026-11-14) |
 | Date | 2026-10-28 |
 | Scope | Stage 1: the layer app for stock Android, with no root |
 | Status | The whole design, much of it not built yet. The [README](../README.md) says what exists today |
@@ -70,9 +70,13 @@ Each limit is a reason for the next stage. Where each one is addressed:
 
 ## 5. Roadmap for stage 1
 
-Each release can ship on its own and is useful by itself.
+Each release can ship on its own and is useful by itself. v0.1 is Datapavan Basic, released as Datapavan Basic
+0.1.2. v0.2's network monitoring, v0.3's blocking and v0.4's reports land in Datapavan Advanced, and what of them
+needs no network comes to Basic as well ([ADR 0045](decisions/0045-three-editions-of-one-app.md)). The two editions
+share one version line: Datapavan Advanced 0.2.0, its first release, is built from the same commit as Datapavan
+Basic 0.2.0 (the maintainer, 2026-11-14).
 
-### v0.1 "Audit": no VPN, **no INTERNET permission**
+### v0.1 "Audit", Datapavan Basic: no VPN, **no INTERNET permission**
 
 Shipping without network permission at all is a strong trust signal: the app *cannot* open a network connection.
 
@@ -92,7 +96,7 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 - **Structure** ([ADR 0027](decisions/0027-app-structure-and-settings.md)): four destinations in a navigation bar (summary, apps, phone, network); the app list with search, filters and orders; sections on an app's page that open and close; settings for appearance and language on every supported Android version, and the pages about the app itself.
 - **Remediation plan:** findings become a short queue of actions ordered by how much risk each removes, at a light, medium or strict level, each previewed and confirmed in one tap, recorded in a journal and reversible. A safety floor protects the phone's core functions at every level. In v0.1 an action opens the right system screen; the Device Owner edition applies the same plan by itself. Design: [REMEDIATION.md](REMEDIATION.md). v0.1's part ([ADR 0026](decisions/0026-remediation-plan-v0.1.md)): items from the phone's debugging and certificate authorities, apps with access that can control the phone, doubtful copies, apps that install apps or contain a traffic-sharing SDK, apps not opened for 90 days that still hold something, and, at the strict level only, preinstalled apps; in three classes by what the action removes, then trackers' purpose, time not opened and name, with no score; sessions of five cards; a care step before control access and before preinstalled apps; a safety floor computed on the phone (default apps, keyboards, screen readers, device owners and preinstalled admins, the installer and permission controller) plus `data/remediation/floor.tsv` by function; and a journal that reads each item again when the user comes back, records what actually changed, says what has come back since, offers undo through the same screen and asks once, three days later, whether everything still works.
 
-### v0.2 "Watch": local VPN, observe only
+### v0.2, network monitoring, in Datapavan Advanced: local VPN, observe only
 
 - Connection log per app: destination domain, IP, organisation (from an offline IP-to-ASN database), bytes, time, and foreground/background state.
 - A timeline answering "who did this app talk to?", with tracker destinations flagged.
@@ -105,14 +109,14 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 - Apps that keep their own always-on connection instead of the system push service are flagged.
 - Nothing is blocked by default. Blocking of tracker domains comes in 0.2.0 only when the user turns it on, undone in one tap, and fuller blocking waits for v0.3 ([ROADMAP.md](../ROADMAP.md)). This lets us check accuracy and battery cost before we take control.
 
-### v0.3 "Guard": blocking
+### v0.3 "Guard", in Datapavan Advanced: blocking
 
 - Network access per app on or off, separately for Wi-Fi, mobile and background.
 - Tracker-domain blocking: global, with per-app exceptions.
 - Safe defaults, one-tap undo, and a "this app broke" path that guides the user to the rule responsible.
 - **"Notifications yes, hidden uploads no":** per app, network access only while the app is on screen. Push notifications arrive through the system's push service, which holds one connection for all apps and wakes an app briefly; in that window the app cannot use the microphone or camera, and with this rule it cannot upload either. Messengers that fetch the message text themselves may show notifications without text, or late, so the rule is chosen per app.
 
-### v0.4 "Report"
+### v0.4 "Report", in Datapavan Advanced
 
 - A weekly plain-language report, exportable as PDF or JSON.
 - **GDPR helper:** for each company whose trackers were observed, draft a GDPR Article 15 data-access request that the user can send. Each observation is a concrete, defensible reason to ask "what do you hold about me?"
@@ -140,9 +144,9 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 +---------------------------------------------------------------------------------------+
 ```
 
-The picture shows the parts, not the packages. Since [ADR 0029](decisions/0029-network-access-for-v0.2.md)
-the VPN host and the forwarder live in Watch, a separate app with `INTERNET`, and the audit app reads
-Watch's log through a one-way interface and never holds `INTERNET` itself.
+The picture shows the parts, not the packages. Since [ADR 0045](decisions/0045-three-editions-of-one-app.md)
+the VPN host and the forwarder live in the `:watch` library, which only Datapavan Advanced includes: Advanced
+holds `INTERNET` and reads its own log, and Datapavan Basic never holds `INTERNET`.
 
 ### 6.1 Why a Rust core
 
@@ -308,12 +312,14 @@ datapavan/
 | M4 | Network usage per app | Byte counts within 5 % of the Settings data-usage screen |
 | M5 | Plain-language UI and first release | v0.1 published on GitHub in eight languages, and submitted to F-Droid; manifest has **no INTERNET permission**; build is reproducible |
 
-### 13.2 v0.2.0 "Watch": the connection log, next to circumvention tools
+<a id="132-v020-watch-the-connection-log-next-to-circumvention-tools"></a>
 
-v0.2 comes in two releases ([ROADMAP.md](../ROADMAP.md)). This plan covers the first: Watch, the
-separate app of [ADR 0029](decisions/0029-network-access-for-v0.2.md), with its packet engine, a
-connection log per app that the audit app reads, and the ways Watch works beside the user's VPN or
-circumvention tool ([RESTRICTED-REGIONS.md](RESTRICTED-REGIONS.md)). 0.2.1 (behaviour) gets its own
+### 13.2 v0.2.0, Datapavan Advanced: the connection log, next to circumvention tools
+
+v0.2 comes in two releases ([ROADMAP.md](../ROADMAP.md)). This plan covers the first: Datapavan
+Advanced 0.2.0, with the Watch service and its packet engine (planned as a separate app in
+[ADR 0029](decisions/0029-network-access-for-v0.2.md), a library of Advanced since ADR 0045), a connection log per
+app that the audit reads, and the ways Advanced works beside the user's VPN or circumvention tool ([RESTRICTED-REGIONS.md](RESTRICTED-REGIONS.md)). 0.2.1 (behaviour) gets its own
 table once 0.2.0 is out. The milestones are named W1 to W9, so that they are not confused with v0.1's
 M1 to M5, which the ADRs cite.
 
@@ -771,7 +777,7 @@ Still to come: shares for each app, ICMP echo and the network's MTU.
 | W8 | DNS of the user's choice, flags and guides | Oblivious DoH by default for apps that go directly, with relays and targets in several jurisdictions, and the network's resolver only as a fallback outside the strict setting ([ADR 0042](decisions/0042-dns-of-apps-that-go-directly.md)). A DoH or DoT resolver of the user's choice, and a strict setting that never falls back to the network's resolver (VPN.md; recommended in restricted regions). Apps' built-in proxies are named, with their operator when it is not the app's maker, Telegram's MTProto and SOCKS5 proxies first. Proxy-like behaviour (many destinations in a short time, sustained upload, activity with the screen off) is flagged as what was seen, with thresholds from a lab run recorded in `docs/spikes/`, counted in memory so that chained destinations stay unrecorded. Tracker blocking stays off until the user turns it on, and is undone in one tap. Per-tool guides for proxy mode. Tests: strict DNS sends nothing to the network's resolver while the chosen one is down; a fixture app with a Telegram-style proxy setting is named; every flag on W3's ten-app session is explained in the lab notes; blocking and its undo work. The guides are translated and reviewed in eight languages (ADR 0030). |
 | W9 | Onboarding and the 0.2.0 release | Onboarding covers the VPN consent, Android 17's local-network permission, strict Private DNS, the always-on VPN with "block connections without VPN" ([VPN.md](VPN.md)), the kind of tool Watch found and the next step for it, and battery managers, Samsung's first, with guides for other vendors. A Quick Settings tile turns Watch on and off. Battery is tested on the Galaxy A56 with the signed release candidate (ADR 0011 allows only stable builds on it), in windows of six to seven hours of ordinary use at similar times of day: one without Watch or any VPN, one with Watch alone, one with Watch carrying a Proton VPN free configuration, and one with Proton VPN's own app alone. Each window is read over adb from Android's battery statistics: Watch's own share, and the total drain per hour with the screen on and off, scaled to 24 hours. Only Watch's line and the totals are read; no other app's name is recorded. Watch alone costs at most 3 % of a day's battery over the window without a VPN, and Watch with Proton's configuration at most 3 % over Proton's own app. If the candidate passes, the same APK is published. The sentence of ADR 0029 is taught in the self-check, the store texts, RELEASE.md and the website. Store texts and changelog are translated and reviewed in eight languages (ADR 0030); both apps are in `data/app-signers` with their fingerprints; a review against the threat model (§8) covers what Watch adds. 0.2.0 is published on GitHub with both APKs, on the website and through Obtainium. F-Droid follows [CHANNELS.md](CHANNELS.md); Google Play gets only the audit app for now (ADR 0029, ADR 0031). |
 
-Besides each milestone's "done when", 0.2.0 passes the release gates of [ADR 0039](decisions/0039-release-gates.md), among them what other apps see of Watch and the compatibility matrix ([ADR 0041](decisions/0041-watch-visibility-and-coexistence.md)) and Watch's own safety ([ADR 0040](decisions/0040-own-safety-in-an-untrusted-environment.md)). Before an independent review, a build of Watch goes only to identified testers.
+Besides each milestone's "done when", Datapavan Advanced 0.2.0 passes the release gates of [ADR 0039](decisions/0039-release-gates.md), among them what other apps see of Watch and the compatibility matrix ([ADR 0041](decisions/0041-watch-visibility-and-coexistence.md)) and Watch's own safety ([ADR 0040](decisions/0040-own-safety-in-an-untrusted-environment.md)). Before an independent review, a build of Datapavan Advanced goes only to identified testers.
 
 The order: W1 and W2 first. W3, W4 and W6 then run side by side, since each needs only the engine;
 W5 follows W4, W7 follows W6, and W8 follows W3 and W6. W9 comes last. Tests on the A40 use the
