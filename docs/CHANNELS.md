@@ -1,6 +1,6 @@
 # Distribution channels
 
-Status: version 0.1.2, the first release for everyone, is out on GitHub Releases and the website since 2026-11-07, after the pre-releases 0.1.0 and 0.1.1. F-Droid is asked in early 2027; IzzyOnDroid is not asked (below). [RELEASE.md](RELEASE.md) says how a
+Status: Datapavan Basic 0.1.2, the first release for everyone, is out on GitHub Releases and the website since 2026-11-07, after the pre-releases 0.1.0 and 0.1.1. F-Droid is asked in early 2027; IzzyOnDroid is not asked (below). [RELEASE.md](RELEASE.md) says how a
 release is made and signed; this file says where it goes and what each channel needs. Every channel
 carries the same APK, signed with the same offline key, so a user can move between them and every
 copy can be checked against the one published fingerprint (ADR 0024).
@@ -17,8 +17,9 @@ copy can be checked against the one published fingerprint (ADR 0024).
 4. **Obtainium**, which needs nothing from the project: users add the repository's URL and get the
    releases from GitHub. The README says how.
 
-Accrescent comes later, once it accepts new developers again. Google Play gets a separate app, Datapavan Lite, with its
-own name, package and key ([ADR 0031](decisions/0031-datapavan-lite-on-google-play.md)), after the first release here.
+Accrescent comes later, once it accepts new developers again. Google Play gets Datapavan Basic under a package
+of its own, `org.visadahyu.datapavan.lite`, signed by Google ([ADR 0031](decisions/0031-datapavan-lite-on-google-play.md),
+[ADR 0045](decisions/0045-three-editions-of-one-app.md)), after the first release here.
 
 ## GitHub Releases
 

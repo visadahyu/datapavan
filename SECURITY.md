@@ -2,8 +2,8 @@
 
 Datapavan is a security product. Reports of vulnerabilities are welcome and taken seriously.
 
-> **Releases.** The audit app's current release is 0.1.2, of 2026-11-07. Datapavan Watch, the second
-> app, has not been released yet. Private reports go through GitHub's private vulnerability reporting, or by
+> **Releases.** The current release is Datapavan Basic 0.1.2, of 2026-11-07. Datapavan Advanced, the
+> edition with the network monitoring (ADR 0045), has not been released yet; its first release is 0.2.0. Private reports go through GitHub's private vulnerability reporting, or by
 > e-mail to security@datapavan.org. That address has no OpenPGP key, so mail to it is not end-to-end
 > encrypted: send a first contact without the details, and we will agree on a private channel.
 
@@ -29,12 +29,12 @@ We credit reporters in the release notes, unless they prefer otherwise.
 
 ## Scope
 
-In scope: both Android apps (the audit app and Datapavan Watch), the Rust engine, the build and release
+In scope: both editions of the Android app (Datapavan Basic and Datapavan Advanced), the Rust engine, the build and release
 pipeline, and signed update payloads. Especially interesting: anything that lets another app read
-Datapavan's data or change its rules, any way to make either app send data off the device, traffic that
-escapes the user's circumvention tool when Watch chains through it, parser crashes on crafted packets or
+Datapavan's data or change its rules, any way to make either edition send data off the device, traffic that
+escapes the user's circumvention tool when Advanced chains through it, parser crashes on crafted packets or
 DEX files, and supply-chain weaknesses. Also in scope: what someone holding an unlocked phone can read of
-Watch's log or chain settings beyond what [ADR 0037](docs/decisions/0037-connection-log-storage.md) and
+Advanced's connection log or chain settings beyond what [ADR 0037](docs/decisions/0037-connection-log-storage.md) and
 [ADR 0040](docs/decisions/0040-own-safety-in-an-untrusted-environment.md) promise, since a phone check is a
 threat the design names.
 

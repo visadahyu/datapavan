@@ -6,11 +6,16 @@ Website: <https://datapavan.org>
 to the Android settings that limit it.** Who they send to, and blocking, are planned for v0.2 and v0.3. Everything runs on the device. It needs no root and no cloud service, and version
 0.1 does not even have permission to use the internet.
 
+It comes as editions of one app ([ADR 0045](docs/decisions/0045-three-editions-of-one-app.md)): **Datapavan
+Basic**, the released app, which never has internet access, and **Datapavan Advanced**, whose first release,
+0.2.0, adds the network monitoring. Both are free and share one version line. **Datapavan Enterprise** is the
+edition for organisations (stage 2).
+
 > Status: **pre-alpha.** Milestones M1 (the build skeleton), M2 (the app and permission audit), M3
 > (the code scanner and its data) and M4 (network use per app) are complete. M5, the first release, is
 > in progress: the guided check, the remediation plan, the app's structure and settings, the brand
 > theme, the genuine-copy check and the release steps are built, and the signing keys were made offline
-> on 2026-11-06. Version 0.1.2, the first release for everyone, is out since 2026-11-07. Nothing has been
+> on 2026-11-06. Datapavan Basic 0.1.2, the first release for everyone, is out since 2026-11-07. Nothing has been
 > independently audited; the project has one maintainer. It is built for phones with Android 10 or
 > newer, 64-bit and, since 0.1.1, 32-bit, and tested from Android 11. See the [roadmap](ROADMAP.md) and <https://datapavan.org>.
 
@@ -93,7 +98,7 @@ checked on Android 11 and 17 emulators and on Galaxy A40 and A56 phones.
   use, each one tap away; a plain-language card on each app's page; appearance and language settings on
   every Android version (ADR 0027). A long press on the app's icon goes straight to the plan, the apps
   or network use. *Why:* the findings only help if people can reach them.
-- **Screen protection.** Every screen of both apps blocks screenshots and screen recordings, and from
+- **Screen protection.** Every screen of both editions blocks screenshots and screen recordings, and from
   Android 12 other apps' overlays. To ask for help with a screenshot, the settings allow it for one minute.
   *Why:* what Datapavan shows about a phone should not end up in a gallery, a backup or someone else's
   recording ([ADR 0040](docs/decisions/0040-own-safety-in-an-untrusted-environment.md)).
@@ -104,7 +109,7 @@ checked on Android 11 and 17 emulators and on Galaxy A40 and A56 phones.
 ## What comes next
 
 Each item is designed in [docs/DESIGN.md](docs/DESIGN.md) and [docs/VPN.md](docs/VPN.md), but not built
-yet.
+yet. They land in Datapavan Advanced, from 0.2.0; what needs no network comes to Datapavan Basic as well.
 
 - **Connection log** (v0.2). A local VPN, with no server, records which domain and organisation each app
   talks to. *Why:* this is the question users actually ask, and only the phone itself can answer it.
@@ -118,7 +123,7 @@ yet.
   uploads while the user only scrolled. Datapavan never decrypts traffic. *Why:* content stays encrypted,
   but its shape does not. A baseline learned on the phone only detects change, so uploads are also split
   by destination and compared with the project's lab measurements.
-- **Chaining with circumvention tools** (v0.2). Datapavan Watch stays the phone's VPN and sends traffic
+- **Chaining with circumvention tools** (v0.2). Datapavan Advanced stays the phone's VPN and sends traffic
   through the tool's local proxy, so the tool becomes a pipe, not the owner of the network. *Why:* Android
   allows one VPN at a time, and people under censorship should not have to choose between access and
   safety. See [docs/RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md).
@@ -141,7 +146,7 @@ obfuscated or loaded later is missed. Finding nothing is not proof that nothing 
 
 ## Checking a copy
 
-Version 0.1.2 is on [GitHub Releases](https://github.com/visadahyu/datapavan/releases/tag/v0.1.2) and
+Datapavan Basic 0.1.2 is on [GitHub Releases](https://github.com/visadahyu/datapavan/releases/tag/v0.1.2) and
 [the website](https://datapavan.org/download/datapavan-0.1.2.apk). F-Droid is asked in early 2027, after the
 three months of development its policy asks for. [Obtainium](https://github.com/ImranR98/Obtainium) can follow this repository's URL. Every genuine copy,
 on every channel, is signed with one key. The SHA-256 fingerprint of its certificate is:
@@ -156,7 +161,9 @@ E7:DA:D3:AD:F5:DB:38:FB:
 Compare it at the first install, with a tool other than Datapavan itself, since a fake can show any
 text: for example [AppVerifier](https://github.com/soupslurpr/AppVerifier) on the phone, or
 `apksigner verify --print-certs` on a computer. After that, Android refuses updates signed with another
-key. **Genuine Datapavan has no internet access and never asks for it.**
+key. **Genuine Datapavan Basic never has internet access. Genuine Datapavan Advanced, from 0.2.0, uses it only
+for your own apps' traffic and the servers you choose, and never asks for your camera, microphone, location,
+contacts, messages or call log. No Datapavan app ever asks you for money.**
 
 Data packs are signed with the key `RWSw7mCAus7/cGyV88xK46P7J51/oMhXNl/V6+25UHD888smCReEQdRB`, and release notes with
 `RWQ/vFWwVJPevJW9d5d398A2Pp/MTT0TkpvR+7gsVitHUETHkb92YCvk`. The files, and the commands that check with them, are in
@@ -165,13 +172,13 @@ Data packs are signed with the key `RWSw7mCAus7/cGyV88xK46P7J51/oMhXNl/V6+25UHD8
 ## Three stages
 
 1. **A layer app** for individuals on stock Android, without root (this repository today).
-2. **An enterprise edition** for organisations, in Device Owner mode: system apps disabled, the VPN
-   enforced, permissions set by policy.
+2. **Datapavan Enterprise**, the edition for organisations, in Device Owner mode: system apps disabled, the VPN
+   enforced, permissions set by policy. Its path is reviewed afresh when stage 2 begins.
 3. **A hardened Android-based OS** on partner hardware, for users who need control of the whole stack.
 
 ## Principles
 
-- **No internet permission in v0.1.** The app cannot open a network connection, and the build fails if
+- **No internet permission in Datapavan Basic.** The app cannot open a network connection, and the build fails if
   anything adds the permission. Newer data arrives as signed packs that the user imports as files
   ([DATA-PACKS.md](docs/DATA-PACKS.md)), so the app itself contacts no server.
 - **Local-first.** All analysis happens on the device. Datapavan has no servers that receive user data.
