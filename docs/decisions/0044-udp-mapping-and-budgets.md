@@ -79,8 +79,9 @@ an ADR (D25).
      2. the requesting app's least recently active mapping idle at least 5 seconds;
      3. any app's.
 
-     A mapping with traffic in the last 5 seconds is never evicted, so a call is never cut. If nothing qualifies,
-     the datagram is dropped.
+     A mapping with traffic in the last 5 seconds is never evicted, so a call is never cut; an answered lookup,
+     which carries nothing more, ends however recent its answer (as unit 10 builds it, below). If nothing
+     qualifies, the datagram is dropped.
    - **What each part costs:** one 64 KiB receive buffer per engine thread replaces one per flow. A lookup to the
      tunnel's DNS address ends with its answer.
    - **Counters:** each refusal and eviction is counted. None of them names a destination.
@@ -391,7 +392,10 @@ an ADR (D25).
   least 32 connections (`tcp_share`) and 64 ways (`udp_share`), never more than the cap. At N = 1,024, the
   defaults: 112 and 32, 224 and 64; at 32,768: 3,840 and 960, 7,680 and 1,920. The apps Android cannot name are one
   app here, and share one share. So four apps must use their whole share before any other is touched, or three and
-  a half where a floor lifts the share above a quarter of its cap, as at 1,024.
+  a half where a floor lifts the share above a quarter of its cap, as at 1,024. An app whose sockets Android names
+  at times and not at others holds its own share and, beside it, places in the share of the apps Android cannot
+  name, which every such app shares: at 1,024 files up to 128 of the 224 UDP ways and 64 of the 112 waiting
+  connections, so that with one other app at its share, and half another's, it fills either cap.
 - **TCP.** A connection waiting for its server holds a place in its app's share from when Android names the app
   until the server answers or fails. Through the chain, to a stand-in, and whenever more than a share's worth of
   connections wait for their servers in all (`tcp_share`, this one counted), Android is asked first and the place
@@ -469,3 +473,7 @@ an ADR (D25).
     its request's connection) for one place.
   - A mapping silent for five seconds may end under pressure, as a call on hold might be; it opens again from
     another port at its next datagram.
+  - A mapping that ends gives back its place at once, so that room is made under the table's lock, in one step,
+    while its socket, and through the tool its request's connection, close a moment later, as its task next runs,
+    and as a datagram that was leaving by it is sent. For that moment the engine holds one or two descriptors
+    more than the cap counts for each mapping so ended.

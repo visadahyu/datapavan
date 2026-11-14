@@ -1157,7 +1157,10 @@ impl UdpTable {
         self.mappings.get_mut(&app).filter(|m| m.id == id)
     }
 
-    /// Ends the mapping `id` of `app`, if it is still open, and its peers' flows with it.
+    /// Ends the mapping `id` of `app`, if it is still open, and its peers' flows with it. Its place in the
+    /// budget is given back at once, so that [`UdpTable::room`] makes room in one step under the lock;
+    /// its socket, and through the tool its request's connection, close a moment later, as its task
+    /// next runs (ADR 0044, unit 10, "Known limits").
     fn end(&mut self, app: SocketAddr, id: u64, shared: &Shared) {
         if self.mapping(app, id).is_none() {
             return;
