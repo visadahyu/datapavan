@@ -5,11 +5,11 @@
 name: CI
 
 # Every push and pull request runs CI, so that every commit gets a result that the ruleset on main can
-# require (ADR 0043). A change of documents or brand files only runs the repository checks, which need no
-# build: the documents against the code, the published keys, the translations and the website
-# (scripts/check.sh data). The emulator checks run in parallel shards (scripts/emulator-shard.sh), each
-# on an emulator of its own. A tag points at a commit that CI has already checked on its branch, so a tag
-# runs nothing.
+# require (ADR 0043). The repository checks, which need no build, run on every push: the documents against
+# the code, the published keys, the translations and the website (scripts/check.sh data). The build and
+# the emulator checks run when the commit changes what they test, by the rule in scripts/ci-scope.sh. The
+# emulator checks run in parallel shards (scripts/emulator-shard.sh), each on an emulator of its own. A
+# tag points at a commit that CI has already checked on its branch, so a tag runs nothing.
 #
 # A check that fails without a change to what it tests is a flake: it goes into docs/ci-flakes.md, with
 # the run, the check, the cause and the fix, before the run is repeated.
@@ -27,9 +27,12 @@ concurrency:
 
 jobs:
   # What this push needs. main moves only by fast-forward to a commit that already passed CI on its
-  # working branch: that run counts, and nothing runs twice. A commit pushed to main directly, or a pull
-  # request, is always checked. Documents and brand files alone need only the repository checks; any
-  # other file, or a history that cannot be compared, needs the build and the emulator too.
+  # working branch: that run counts, and nothing runs twice. Otherwise the commit is compared with the
+  # nearest earlier commit whose tree passed the build, and with the nearest whose tree passed the emulator
+  # checks, in CI runs of pushes (scripts/ci-scope.sh): the build runs unless the trees differ only in
+  # documents, and the emulator checks run unless they differ only in what no emulator check reads. A
+  # change to the apps, the engine, the scripts or CI itself always runs both; so does a history with no
+  # earlier pass.
   scope:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -38,7 +41,8 @@ jobs:
       contents: read
     outputs:
       passed: ${{ steps.lookup.outputs.passed }}
-      code: ${{ steps.diff.outputs.code }}
+      build: ${{ steps.decide.outputs.build }}
+      emulator: ${{ steps.decide.outputs.emulator }}
     steps:
       - id: lookup
         env:
@@ -59,30 +63,16 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - id: diff
+      # The rule's table of paths and its choice of an earlier pass, before the rule decides anything.
+      - name: The scope rule's tests
+        if: steps.lookup.outputs.passed != 'true'
+        run: scripts/ci-scope.sh test
+
+      - id: decide
         if: steps.lookup.outputs.passed != 'true'
         env:
-          BEFORE: ${{ github.event.before }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          base=${PR_BASE:-$BEFORE}
-          # A new branch, or a history that was rewritten: compare with main.
-          if [ -z "$base" ] || [ "$base" = 0000000000000000000000000000000000000000 ] ||
-            ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            base=$(git merge-base origin/main HEAD 2>/dev/null || true)
-          fi
-          code=true
-          if [ -n "$base" ]; then
-            code=false
-            while IFS= read -r file; do
-              case $file in
-                *.md | docs/* | brand/*) ;;
-                *) code=true ;;
-              esac
-            done < <(git diff --name-only "$base" "$GITHUB_SHA")
-          fi
-          echo "code=$code" >>"$GITHUB_OUTPUT"
-          echo "Changed beyond documents and brand files (against ${base:-nothing}): $code"
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/ci-scope.sh decide
 
   # Checks that need no build, on every push: the bundled datasets' licences, the published keys, the
   # documents against the code and the record (scripts/check-truth.py, which reads the release tags), the
@@ -115,7 +105,7 @@ jobs:
   # The build and its gates (scripts/check.sh rust and android). It hands the APKs to the emulator shards.
   build:
     needs: scope
-    if: needs.scope.outputs.passed != 'true' && needs.scope.outputs.code == 'true'
+    if: needs.scope.outputs.passed != 'true' && needs.scope.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -196,7 +186,8 @@ jobs:
           scripts/check.sh android
 
       - name: Keep the APKs for the emulator shards
-                uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: needs.scope.outputs.emulator == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: apks
           path: |
@@ -231,7 +222,7 @@ jobs:
   emulator:
     name: emulator ${{ matrix.shard }}
     needs: [scope, build]
-    if: needs.scope.outputs.passed != 'true' && needs.scope.outputs.code == 'true'
+    if: needs.scope.outputs.passed != 'true' && needs.scope.outputs.emulator == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
@@ -296,7 +287,9 @@ jobs:
 
   # The one result the ruleset on main requires (ADR 0043): it passes when everything this push needed
   # passed, and fails when anything failed, was cancelled or did not run when it had to.
-  # The emulator job's result is its shards' together: success only if every shard passed.
+  # The build and the emulator checks are let off only when the scope job said "false" for them: an empty
+  # or missing answer needs them. The emulator job's result is its shards' together: success only if every
+  # shard passed.
   gate:
     needs: [scope, repository, build, emulator]
     if: always()
@@ -306,16 +299,17 @@ jobs:
       - env:
           SCOPE: ${{ needs.scope.result }}
           PASSED: ${{ needs.scope.outputs.passed }}
-          CODE: ${{ needs.scope.outputs.code }}
+          NEEDS_BUILD: ${{ needs.scope.outputs.build }}
+          NEEDS_EMULATOR: ${{ needs.scope.outputs.emulator }}
           REPOSITORY: ${{ needs.repository.result }}
           BUILD: ${{ needs.build.result }}
           EMULATOR: ${{ needs.emulator.result }}
         run: |
-          echo "scope: $SCOPE (passed before: $PASSED, beyond documents: $CODE)"
+          echo "scope: $SCOPE (passed before: $PASSED, needs the build: $NEEDS_BUILD, the emulator: $NEEDS_EMULATOR)"
           echo "repository: $REPOSITORY; build: $BUILD; emulator: $EMULATOR"
           [ "$SCOPE" = success ] || exit 1
           [ "$PASSED" != true ] || exit 0
           [ "$REPOSITORY" = success ] || exit 1
-          [ "$CODE" != true ] || [ "$BUILD" = success ] || exit 1
-          [ "$CODE" != true ] || [ "$EMULATOR" = success ] || exit 1
+          [ "$NEEDS_BUILD" = false ] || [ "$BUILD" = success ] || exit 1
+          [ "$NEEDS_EMULATOR" = false ] || [ "$EMULATOR" = success ] || exit 1
           echo "Everything this push needed passed."
