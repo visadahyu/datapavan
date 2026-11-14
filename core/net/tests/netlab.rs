@@ -48,6 +48,8 @@ const TCP_REFUSED: usize = 23;
 const UDP_MAPPINGS: usize = 24;
 const UDP_FILTERED: usize = 25;
 const UDP_RELAY_ELSEWHERE: usize = 28;
+const UDP_REFUSED: usize = 31;
+const UDP_EVICTED: usize = 32;
 /// A server that never answers (scripts/netlab-enter.py routes it into a tunnel no one reads).
 const SILENT: Ipv4Addr = Ipv4Addr::new(203, 0, 113, 1);
 /// How long any one step may take before the test fails.
@@ -530,6 +532,67 @@ fn each_app_holds_only_its_share_of_waiting_connections() -> Outcome {
                     "a connection to a silent server opened"
                 );
             }
+            Ok(())
+        },
+    )
+}
+
+/// ADR 0044, decision 3, on the direct path: at its share, an app's answered lookup ends first to make
+/// room for its new mapping, though it is its most recently active one; an app's own resolver leaves
+/// one behind each answer, from a socket of its own. A resolver on port 53, which the lab may bind,
+/// answers it.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn an_answered_lookup_ends_first_to_make_room() -> Outcome {
+    let limits = Limits {
+        udp_mappings: 8,
+        udp_share: 2,
+        udp_quiet: Duration::from_secs(60),
+        ..Limits::default()
+    };
+    lab(
+        "an_answered_lookup_ends_first_to_make_room",
+        limits,
+        |engine| async move {
+            let resolver = UdpSocket::bind((SERVER, 53)).await?;
+            let resolver_at = resolver.local_addr()?;
+            tokio::spawn(async move {
+                let mut buffer = [0u8; 512];
+                while let Ok((n, from)) = resolver.recv_from(&mut buffer).await {
+                    // The query's ID, then the flags of a response.
+                    let mut answer = buffer[..n].to_vec();
+                    if answer.len() > 3 {
+                        answer[2..4].copy_from_slice(&[0x81, 0x80]);
+                    }
+                    let _ = resolver.send_to(&answer, from).await;
+                }
+            });
+            let reporter = port_reporter(SERVER).await?;
+            let busy = app_socket().await?;
+            busy.send_to(b"busy", reporter).await?;
+            app_receive(&busy).await?;
+            let lookup = app_socket().await?;
+            let mut query = 0x6d6du16.to_be_bytes().to_vec();
+            query.extend_from_slice(&[0x01, 0x00, 0, 1, 0, 0, 0, 0, 0, 0]);
+            query.extend_from_slice(b"\x07example\x03com\x00\x00\x01\x00\x01");
+            lookup.send_to(&query, resolver_at).await?;
+            let (answer, from) = app_receive(&lookup).await?;
+            assert_eq!((answer.get(..2), from), (query.get(..2), resolver_at));
+            let new = app_socket().await?;
+            new.send_to(b"new", reporter).await?;
+            app_receive(&new).await?;
+            busy.send_to(b"kept", reporter).await?;
+            app_receive(&busy).await?;
+            let counters = engine.counters();
+            assert_eq!(
+                (
+                    counters[UDP_EVICTED],
+                    counters[UDP_REFUSED],
+                    counters[UDP_MAPPINGS]
+                ),
+                (1, 0, 3),
+                "evicted, refused and mapped"
+            );
             Ok(())
         },
     )

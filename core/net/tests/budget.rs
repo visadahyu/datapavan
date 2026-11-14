@@ -2,13 +2,17 @@
 //! sockets stands in for the tunnel, and echo servers on this computer for the internet. The UDP ways
 //! that hold a socket of their own, mappings and flows of lookups on the direct path, are capped for
 //! every app together, and each app may hold a share of the cap; the apps Android cannot name share
-//! one share. A new way beyond them is refused, and its datagrams dropped and counted.
+//! one share. A new way beyond them makes room by ending a mapping, in the order ADR 0044 gives: an
+//! answered lookup, the app's own least recently active mapping quiet for `udp_quiet`, any app's; an
+//! app at its share ends only its own. Where none may end, the new way is refused, and its datagrams
+//! dropped and counted.
 
 mod common;
 
-use common::udp_echo;
+use common::{Settings, proxy, udp_echo};
 use datapavan_net::engine::{Addresses, Limits};
-use datapavan_net::{Config, Engine, Platform, packet};
+use datapavan_net::{Chain, Config, Engine, Platform, packet};
+use std::collections::HashSet;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::os::fd::{OwnedFd, RawFd};
@@ -28,6 +32,7 @@ const UNNAMED_PORTS: u16 = 43_000;
 /// The places of counters in `Engine::counters`.
 const UDP_MAPPINGS: usize = 24;
 const UDP_REFUSED: usize = 31;
+const UDP_EVICTED: usize = 32;
 
 /// Android names the app by the range its port inside the tunnel is in.
 struct ByRange;
@@ -70,13 +75,22 @@ fn engine(limits: Limits) -> io::Result<(Engine, UnixDatagram)> {
 /// Small caps, which a test then sets: no mapping ends to make room, since every one passed a datagram
 /// less than `udp_quiet` ago.
 fn small(udp_mappings: usize, udp_share: usize) -> Limits {
+    quiet_after(udp_mappings, udp_share, Duration::from_secs(60))
+}
+
+/// Small caps, with mappings quiet once they passed nothing for `udp_quiet`.
+fn quiet_after(udp_mappings: usize, udp_share: usize, udp_quiet: Duration) -> Limits {
     Limits {
         udp_mappings,
         udp_share,
-        udp_quiet: Duration::from_secs(60),
+        udp_quiet,
         ..Limits::default()
     }
 }
+
+/// Longer than the tests' `udp_quiet`: what passed nothing for so long is quiet.
+const QUIET: Duration = Duration::from_millis(200);
+const QUIETER: Duration = Duration::from_millis(400);
 
 fn app(port: u16) -> SocketAddr {
     SocketAddr::from((Addresses::COMMON.tun4, port))
@@ -246,5 +260,174 @@ async fn a_lookup_holds_a_place_until_its_answer() -> Outcome {
     tokio::time::sleep(Duration::from_millis(200)).await;
     echoed(&tunnel, app(FIRST_PORTS + 3), echo, b"room again").await?;
     assert_eq!(engine.counters()[UDP_REFUSED], 1);
+    Ok(())
+}
+
+/// An app at its share makes room among its own: its least recently active mapping, quiet for
+/// `udp_quiet`, ends for its new one, and is counted. Another app's mapping, quieter still, is not
+/// touched, since it would make no room in this app's share; nor is the app's mapping that passed a
+/// datagram less than `udp_quiet` ago, so that once only such ones are left, the next is refused.
+#[tokio::test(flavor = "current_thread")]
+async fn an_app_at_its_share_ends_its_own_quiet_mapping_for_a_new_one() -> Outcome {
+    let echo = udp_echo().await?;
+    let (engine, tunnel) = engine(quiet_after(8, 2, QUIET))?;
+    echoed(&tunnel, app(SECOND_PORTS), echo, b"the other app's").await?;
+    echoed(&tunnel, app(FIRST_PORTS), echo, b"quiet soon").await?;
+    echoed(&tunnel, app(FIRST_PORTS + 1), echo, b"busy").await?;
+    for _ in 0..6 {
+        tokio::time::sleep(QUIET / 3).await;
+        echoed(&tunnel, app(FIRST_PORTS + 1), echo, b"still busy").await?;
+    }
+    echoed(&tunnel, app(FIRST_PORTS + 2), echo, b"new").await?;
+    assert_eq!(engine.counters()[UDP_EVICTED], 1);
+    assert_eq!(engine.counters()[UDP_REFUSED], 0);
+    // The busy one and the other app's kept their mappings.
+    echoed(&tunnel, app(FIRST_PORTS + 1), echo, b"kept").await?;
+    echoed(&tunnel, app(SECOND_PORTS), echo, b"kept too").await?;
+    assert_eq!(engine.counters()[UDP_MAPPINGS], 4);
+    // Both of the app's mappings passed a datagram just now: none ends.
+    send(&tunnel, app(FIRST_PORTS + 3), echo, b"no room").await?;
+    counted(&engine, UDP_REFUSED, 1).await?;
+    nothing_came(&tunnel)?;
+    assert_eq!(engine.counters()[UDP_EVICTED], 1);
+    Ok(())
+}
+
+/// At the cap for every app, the app's own least recently active quiet mapping ends first, before
+/// another app's quieter one.
+#[tokio::test(flavor = "current_thread")]
+async fn at_the_cap_the_apps_own_quiet_mapping_ends_before_another_apps() -> Outcome {
+    let echo = udp_echo().await?;
+    let (engine, tunnel) = engine(quiet_after(3, 3, QUIET))?;
+    echoed(
+        &tunnel,
+        app(SECOND_PORTS),
+        echo,
+        b"the other app's, quietest",
+    )
+    .await?;
+    echoed(&tunnel, app(FIRST_PORTS), echo, b"one").await?;
+    echoed(&tunnel, app(FIRST_PORTS + 1), echo, b"two").await?;
+    tokio::time::sleep(QUIETER).await;
+    echoed(&tunnel, app(FIRST_PORTS + 2), echo, b"three").await?;
+    assert_eq!(engine.counters()[UDP_EVICTED], 1);
+    echoed(&tunnel, app(SECOND_PORTS), echo, b"kept").await?;
+    echoed(&tunnel, app(FIRST_PORTS + 1), echo, b"kept too").await?;
+    assert_eq!(engine.counters()[UDP_MAPPINGS], 4);
+    Ok(())
+}
+
+/// At the cap for every app, an app with no mapping of its own that may end ends another app's least
+/// recently active quiet one.
+#[tokio::test(flavor = "current_thread")]
+async fn at_the_cap_an_app_without_one_of_its_own_ends_another_apps() -> Outcome {
+    let echo = udp_echo().await?;
+    let (engine, tunnel) = engine(quiet_after(2, 2, QUIET))?;
+    echoed(&tunnel, app(SECOND_PORTS), echo, b"quietest").await?;
+    echoed(&tunnel, app(SECOND_PORTS + 1), echo, b"quiet").await?;
+    tokio::time::sleep(QUIETER).await;
+    echoed(&tunnel, app(SECOND_PORTS + 1), echo, b"busy again").await?;
+    echoed(&tunnel, app(FIRST_PORTS), echo, b"new").await?;
+    assert_eq!(engine.counters()[UDP_EVICTED], 1);
+    echoed(&tunnel, app(SECOND_PORTS + 1), echo, b"kept").await?;
+    assert_eq!(engine.counters()[UDP_MAPPINGS], 3);
+    Ok(())
+}
+
+/// A server that answers each DNS query it gets with a response to it, with no records.
+async fn resolver() -> io::Result<SocketAddr> {
+    let socket = UdpSocket::bind("127.0.0.1:0").await?;
+    let at = socket.local_addr()?;
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 512];
+        while let Ok((n, from)) = socket.recv_from(&mut buffer).await {
+            let _ = socket.send_to(&response(&buffer[..n]), from).await;
+        }
+    });
+    Ok(at)
+}
+
+/// At the cap for every app, an answered lookup ends first, before any quiet mapping: an app's own
+/// resolver, which sends each query from a socket of its own, leaves one behind each answer. The
+/// second app here is chained, so that its lookup to port 53 reaches a resolver on this computer
+/// through the test proxy.
+#[tokio::test(flavor = "current_thread")]
+async fn at_the_cap_an_answered_lookup_ends_first() -> Outcome {
+    let echo = udp_echo().await?;
+    let public = SocketAddr::from(([9, 9, 9, 9], 53));
+    let mut settings = Settings::default();
+    settings.remap.insert(public, resolver().await?);
+    let tool = proxy(settings).await?;
+    let (engine, tunnel) = engine(quiet_after(3, 3, QUIET))?;
+    engine.chain(Some(Chain {
+        proxy: tool.address,
+        credentials: None,
+        tool: 10_200,
+        apps: Some(HashSet::from([SECOND])),
+        udp: true,
+        log_destinations: false,
+    }));
+    echoed(&tunnel, app(FIRST_PORTS), echo, b"one").await?;
+    echoed(&tunnel, app(FIRST_PORTS + 1), echo, b"two").await?;
+    tokio::time::sleep(QUIETER).await;
+    // The lookup is the most recently active of the three when the room is made.
+    let lookup = query(0x7a7a);
+    send(&tunnel, app(SECOND_PORTS), public, &lookup).await?;
+    let answer = receive(&tunnel).await?.ok_or("the lookup's answer")?;
+    assert_eq!(answer, (public, app(SECOND_PORTS), response(&lookup)));
+    echoed(&tunnel, app(FIRST_PORTS + 2), echo, b"three").await?;
+    assert_eq!(engine.counters()[UDP_EVICTED], 1);
+    echoed(&tunnel, app(FIRST_PORTS), echo, b"kept").await?;
+    echoed(&tunnel, app(FIRST_PORTS + 1), echo, b"kept too").await?;
+    assert_eq!(engine.counters()[UDP_MAPPINGS], 4);
+    Ok(())
+}
+
+/// A server that answers the first DNS query it gets, and nothing after.
+async fn resolver_once() -> io::Result<SocketAddr> {
+    let socket = UdpSocket::bind("127.0.0.1:0").await?;
+    let at = socket.local_addr()?;
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 512];
+        if let Ok((n, from)) = socket.recv_from(&mut buffer).await {
+            let _ = socket.send_to(&response(&buffer[..n]), from).await;
+        }
+        while socket.recv_from(&mut buffer).await.is_ok() {}
+    });
+    Ok(at)
+}
+
+/// A mapping on port 53 is an answered lookup only while every datagram the app sent it is a DNS query
+/// with its answer: once the app sends another query, or anything but a query, after an answer, it no
+/// longer ends first, and here, with nothing quiet, the new way is refused.
+#[tokio::test(flavor = "current_thread")]
+async fn a_lookup_sent_on_after_its_answer_is_not_ended_first() -> Outcome {
+    for after in [query(0x7c7c), b"not a query".to_vec()] {
+        let echo = udp_echo().await?;
+        let public = SocketAddr::from(([9, 9, 9, 9], 53));
+        let mut settings = Settings::default();
+        settings.remap.insert(public, resolver_once().await?);
+        let tool = proxy(settings).await?;
+        let (engine, tunnel) = engine(small(2, 2))?;
+        engine.chain(Some(Chain {
+            proxy: tool.address,
+            credentials: None,
+            tool: 10_200,
+            apps: Some(HashSet::from([SECOND])),
+            udp: true,
+            log_destinations: false,
+        }));
+        echoed(&tunnel, app(FIRST_PORTS), echo, b"one").await?;
+        let lookup = query(0x7b7b);
+        send(&tunnel, app(SECOND_PORTS), public, &lookup).await?;
+        let answer = receive(&tunnel).await?.ok_or("the lookup's answer")?;
+        assert_eq!(answer, (public, app(SECOND_PORTS), response(&lookup)));
+        send(&tunnel, app(SECOND_PORTS), public, &after).await?;
+        // The datagram after the answer has left before the room is asked for.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        send(&tunnel, app(FIRST_PORTS + 1), echo, b"no room").await?;
+        counted(&engine, UDP_REFUSED, 1).await?;
+        assert_eq!(engine.counters()[UDP_EVICTED], 0, "after {after:?}");
+    }
     Ok(())
 }

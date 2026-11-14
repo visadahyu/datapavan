@@ -7,7 +7,7 @@
 //! keep one socket for each flow. Sockets are opened off the packet loop, and answers are read into one
 //! buffer for each engine thread.
 
-use super::budget::Place;
+use super::budget::{Full, Place};
 use super::chain::{Chain, Route, connect_proxy, io_error};
 use super::logbook::FlowBytes;
 use super::lookups;
@@ -24,7 +24,7 @@ use crate::tls::ServerName;
 use crate::tun::Tun;
 use crate::{answers, dns, packet, quic};
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::os::fd::AsFd;
@@ -317,6 +317,8 @@ struct Mapping {
     came_in: usize,
     /// When the last datagram passed, either way.
     last: Instant,
+    /// When it was last seen active by the table's ranks ([`UdpTable::recent`]), which order it by that.
+    seen: Instant,
     /// Wakes the mapping's task when the mapping is ended from elsewhere.
     ended: Arc<Notify>,
     /// Its place in the budget for its app (ADR 0044, decision 3), given back as it ends.
@@ -349,6 +351,10 @@ struct Peer {
     /// question of each DNS query the app sent it, the latest last: only an answer to one of them binds
     /// the stand-in, or teaches Watch names from a flow the app did not start.
     asked: Vec<(u16, String)>,
+    /// For a peer on port 53 the app sent to, the IDs of the DNS queries it sent that have no answer
+    /// yet; none once the app sent it anything else, or more than [`ASKED`] wait at once, and for a
+    /// peer that came in. A mapping of one such peer, with none waiting, is an answered lookup.
+    lookups: Option<Vec<u16>>,
 }
 
 /// Where a peer's datagrams go and where its answers come from.
@@ -436,6 +442,7 @@ impl Peer {
             waiting: !came_in && way.name.is_some() && way.from.is_none(),
             way,
             asked: Vec::new(),
+            lookups: (!came_in && address.port() == 53).then(Vec::new),
         }
     }
 
@@ -448,20 +455,46 @@ impl Peer {
         }
     }
 
-    /// Notes a datagram the app sends it to `port`: for a stand-in on port 53 while it waits, or a flow
-    /// from a port 53 that came in first, the ID and question of a DNS query.
+    /// Notes a datagram the app sends it to `port`: for a peer on port 53 the app sent to, the ID of a
+    /// DNS query, which waits for its answer; for a stand-in on port 53 while it waits, or a flow from
+    /// a port 53 that came in first, its ID and question too.
     fn sent(&mut self, port: u16, payload: &[u8]) {
-        if port != 53 || !(self.waiting || self.came_in_first) {
+        if port != 53 || (self.lookups.is_none() && !(self.waiting || self.came_in_first)) {
             return;
         }
-        let (Some(id), Some(question)) = (dns::u16_at(payload, 0), answers::question(payload))
-        else {
+        let query = dns::u16_at(payload, 0).zip(answers::question(payload));
+        if let Some(waiting) = &mut self.lookups {
+            match &query {
+                Some((id, _)) if waiting.len() < ASKED => waiting.push(*id),
+                _ => self.lookups = None,
+            }
+        }
+        if !(self.waiting || self.came_in_first) {
+            return;
+        }
+        let Some((id, question)) = query else {
             return;
         };
         if self.asked.len() == ASKED {
             self.asked.remove(0);
         }
         self.asked.push((id, question.name));
+    }
+
+    /// Notes an `answer` that came from it: a DNS response to a query that waits for one answers it.
+    fn heard(&mut self, answer: &[u8]) {
+        let (Some(waiting), Some(flags), Some(id)) = (
+            self.lookups.as_mut(),
+            dns::u16_at(answer, 2),
+            dns::u16_at(answer, 0),
+        ) else {
+            return;
+        };
+        if flags & 0x8000 != 0
+            && let Some(at) = waiting.iter().position(|&asked| asked == id)
+        {
+            waiting.remove(at);
+        }
     }
 
     /// Whether `answer` is a DNS response to a query the app sent it: its ID and its question.
@@ -704,6 +737,17 @@ impl Mapping {
         self.peers.get(&address).is_some_and(|peer| !peer.came_in)
     }
 
+    /// Whether it is an answered lookup, as an app's own resolver leaves one for each query: one peer, on
+    /// port 53, to which the app sent DNS queries only, each with its answer. It carries nothing more,
+    /// and is the first to end to make room (ADR 0044, decision 3).
+    fn answered_lookup(&self) -> bool {
+        self.peers.len() == 1
+            && self
+                .peers
+                .values()
+                .all(|peer| peer.lookups.as_ref().is_some_and(Vec::is_empty))
+    }
+
     /// Whether the mapping may still carry its app's datagrams: once the chain was set again, whether
     /// the app's datagrams still leave its way. A mapping that may not ends (ADR 0044, decision 1: when
     /// the chain changes), so that the app's next datagram opens one on the new route.
@@ -737,6 +781,7 @@ impl Mapping {
             return LetIn::Unmatched;
         };
         peer.last = now;
+        peer.heard(answer);
         self.last = now;
         let learns = !peer.came_in_first || peer.asked_for(answer);
         LetIn::Peer(shown, peer.bytes.clone(), learns)
@@ -928,6 +973,61 @@ pub(super) struct UdpTable {
     opened: u64,
     /// The number of the last question to Android shared among an app socket's destinations.
     questions: u64,
+    /// The mappings by when each was last seen active, its number and app socket, with its app: the
+    /// least recently active first, for every app and for each. A mapping's own `last` moves on with
+    /// every datagram, and its place here only when a search for one to end finds it out of date, so
+    /// that a datagram costs this nothing (ADR 0044, decision 3).
+    recent: Ranks<(Instant, u64, SocketAddr, Option<u32>)>,
+    /// Mappings that were answered lookups when their last answer came, by their number and app
+    /// socket, with their app; one that is no longer one goes when a search finds it.
+    answered: Ranks<(u64, SocketAddr, Option<u32>)>,
+}
+
+/// Whose mappings a search looks at: every app's, or one app's.
+#[derive(Clone, Copy)]
+enum Of {
+    All,
+    App(Option<u32>),
+}
+
+/// Mappings in an order, for every app together and for each app apart.
+struct Ranks<K> {
+    all: BTreeSet<K>,
+    by_app: HashMap<Option<u32>, BTreeSet<K>>,
+}
+
+impl<K> Default for Ranks<K> {
+    fn default() -> Self {
+        Self {
+            all: BTreeSet::new(),
+            by_app: HashMap::new(),
+        }
+    }
+}
+
+impl<K: Ord + Copy> Ranks<K> {
+    fn insert(&mut self, uid: Option<u32>, key: K) {
+        self.all.insert(key);
+        self.by_app.entry(uid).or_default().insert(key);
+    }
+
+    fn remove(&mut self, uid: Option<u32>, key: &K) {
+        self.all.remove(key);
+        if let Some(keys) = self.by_app.get_mut(&uid) {
+            keys.remove(key);
+            if keys.is_empty() {
+                self.by_app.remove(&uid);
+            }
+        }
+    }
+
+    /// The first of those `of` says.
+    fn first(&self, of: Of) -> Option<K> {
+        match of {
+            Of::All => self.all.first().copied(),
+            Of::App(uid) => self.by_app.get(&uid)?.first().copied(),
+        }
+    }
 }
 
 /// What the table knows of an app socket while it has a way, opening or open: the answers of Android's
@@ -1067,8 +1167,103 @@ impl UdpTable {
                 shared.finish(peer.id);
             }
             mapping.ended.notify_one();
+            let (id, uid) = (mapping.id, mapping.uid);
+            self.recent.remove(uid, &(mapping.seen, id, app, uid));
+            self.answered.remove(uid, &(id, app, uid));
         }
         self.forget(app);
+    }
+
+    /// A place in the budget for a new UDP way of the app `uid` that holds a socket of its own. Where
+    /// the cap for every app, or the app's share, is full, a mapping ends to make room, and is counted
+    /// (ADR 0044, decision 3): the first there is of an answered lookup, which carries nothing more;
+    /// the app's own least recently active mapping, quiet for `Limits::udp_quiet`; and any app's. An
+    /// app at its share makes room among its own only. A mapping that passed a datagram less than
+    /// `udp_quiet` ago never ends so, and lookups to the tunnel's DNS address, which wait for their
+    /// answers, neither. `None` when nothing may end.
+    fn room(&mut self, uid: Option<u32>, shared: &Shared) -> Option<Place> {
+        loop {
+            let full = match shared.udp_budget.take(uid) {
+                Ok(place) => return Some(place),
+                Err(full) => full,
+            };
+            let (app, id) = self.one_to_end(uid, full, shared)?;
+            self.end(app, id, shared);
+            Counters::add(&shared.counters.udp_evicted, 1);
+        }
+    }
+
+    /// The mapping to end to make room for a new way of the app `uid`, in the order [`UdpTable::room`]
+    /// gives, if one may end.
+    fn one_to_end(
+        &mut self,
+        uid: Option<u32>,
+        full: Full,
+        shared: &Shared,
+    ) -> Option<(SocketAddr, u64)> {
+        let quiet = (Instant::now(), shared.limits.udp_quiet);
+        match full {
+            Full::App => self
+                .answered_lookup(Of::App(uid))
+                .or_else(|| self.least_recent(Of::App(uid), quiet)),
+            Full::All => self
+                .answered_lookup(Of::All)
+                .or_else(|| self.least_recent(Of::App(uid), quiet))
+                .or_else(|| self.least_recent(Of::All, quiet)),
+        }
+    }
+
+    /// An answered lookup among the mappings `of` says.
+    fn answered_lookup(&mut self, of: Of) -> Option<(SocketAddr, u64)> {
+        loop {
+            let key @ (id, app, uid) = self.answered.first(of)?;
+            let still = self
+                .mappings
+                .get(&app)
+                .is_some_and(|mapping| mapping.id == id && mapping.answered_lookup());
+            if still {
+                return Some((app, id));
+            }
+            self.answered.remove(uid, &key);
+        }
+    }
+
+    /// The least recently active mapping among those `of` says, if it has been quiet for `quiet.1` at
+    /// `quiet.0`. A mapping active since the ranks last saw it takes its place anew, once for all its
+    /// datagrams since, and the search goes on.
+    fn least_recent(
+        &mut self,
+        of: Of,
+        (now, quiet): (Instant, Duration),
+    ) -> Option<(SocketAddr, u64)> {
+        loop {
+            let key @ (seen, id, app, uid) = self.recent.first(of)?;
+            let Some(mapping) = self
+                .mappings
+                .get_mut(&app)
+                .filter(|mapping| mapping.id == id)
+            else {
+                self.recent.remove(uid, &key);
+                continue;
+            };
+            if mapping.last > seen {
+                mapping.seen = mapping.last;
+                self.recent.remove(uid, &key);
+                self.recent.insert(uid, (mapping.seen, id, app, uid));
+                continue;
+            }
+            return (now.saturating_duration_since(seen) >= quiet).then_some((app, id));
+        }
+    }
+
+    /// Notes that the mapping `id` of `app` let an answer in: it may now be an answered lookup.
+    fn heard(&mut self, (app, id): (SocketAddr, u64)) {
+        if let Some(mapping) = self.mapping(app, id)
+            && mapping.answered_lookup()
+        {
+            let uid = mapping.uid;
+            self.answered.insert(uid, (id, app, uid));
+        }
     }
 
     /// Puts `entry` in `flows` for `key`, and notes it for the app socket.
@@ -1412,7 +1607,9 @@ impl UdpTable {
         }
         let now = Instant::now();
         if mapping.peers.contains_key(&from) {
-            return mapping.answered_by(from, answer, now);
+            let let_in = mapping.answered_by(from, answer, now);
+            self.heard((app, id));
+            return let_in;
         }
         if mapping.sources.shown(from.ip()).is_none() {
             return LetIn::Filtered;
@@ -1434,7 +1631,11 @@ impl UdpTable {
         if !mapping.keeps_its_way(shared) {
             return LetIn::Gone;
         }
-        mapping.relayed_answer(shared, app, relayed, Instant::now())
+        let let_in = mapping.relayed_answer(shared, app, relayed, Instant::now());
+        if let LetIn::Peer(..) = let_in {
+            self.heard((app, id));
+        }
+        let_in
     }
 
     /// The flow `id` between `key`'s two ends goes, if it is still there.
@@ -2023,7 +2224,7 @@ async fn turn(app: SocketAddr, wanted: &Wanted, shared: &Shared, flows: &UdpFlow
             match first {
                 Err(waiting) => waiting,
                 Ok(first) => {
-                    let Ok(place) = shared.udp_budget.take(wanted.uid) else {
+                    let Some(place) = table.room(wanted.uid, shared) else {
                         return Turn::Done(Ok(Mapped::Refused));
                     };
                     let told = first.then(|| {
@@ -2104,6 +2305,8 @@ async fn mapping_for(
     table.opened += 1;
     let id = table.opened;
     let ended = Arc::new(Notify::new());
+    let now = Instant::now();
+    table.recent.insert(wanted.uid, (now, id, app, wanted.uid));
     table.sockets.entry(app).or_default();
     table.mappings.insert(
         app,
@@ -2116,7 +2319,8 @@ async fn mapping_for(
             peers: HashMap::new(),
             sources: Sources::default(),
             came_in: 0,
-            last: Instant::now(),
+            last: now,
+            seen: now,
             ended: Arc::clone(&ended),
             _place: place,
         },
@@ -2512,7 +2716,8 @@ async fn open_lookups(
     // On the direct path a flow of lookups holds a socket of its own, and so a place in the budget, for
     // as long as it waits for answers; a chained app's lookups, which Watch answers, hold none.
     let place = if let Route::Direct = route {
-        let Ok(place) = shared.udp_budget.take(uid) else {
+        let room = lock(flows).room(uid, shared);
+        let Some(place) = room else {
             refused(key, uid, shared, flows);
             return Made::Done;
         };
@@ -2939,6 +3144,7 @@ mod tests {
             sources: Sources::default(),
             came_in: 0,
             last: now,
+            seen: now,
             ended: Arc::new(Notify::new()),
             _place: super::super::budget::Budget::new(1, 1)
                 .take(None)
@@ -3125,6 +3331,39 @@ mod tests {
             table.flows.get(&(other, dns())),
             Some(UdpEntry::Open(_))
         ));
+        Ok(())
+    }
+
+    /// A mapping that ends leaves the ranks by which one is chosen to make room, so that they hold no
+    /// more than the mappings open; a search that finds one of them out of date puts it in its place.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_mapping_that_ends_leaves_the_ranks() -> io::Result<()> {
+        let shared = shared();
+        let asked = Instant::now();
+        let uid = Some(10_077);
+        let mut table = table_of(&shared, uid, asked).await?;
+        let (id, seen) = table
+            .mappings
+            .get(&APP)
+            .map(|mapping| (mapping.id, mapping.seen))
+            .ok_or(io::ErrorKind::NotFound)?;
+        table.recent.insert(uid, (seen, id, APP, uid));
+        table.answered.insert(uid, (id, APP, uid));
+        // Active since the ranks saw it: found out of date, and put in its place, but not quiet.
+        let later = asked + Duration::from_secs(1);
+        if let Some(mapping) = table.mappings.get_mut(&APP) {
+            mapping.last = later;
+        }
+        let quiet = shared.limits.udp_quiet;
+        assert_eq!(table.least_recent(Of::App(uid), (later, quiet)), None);
+        assert_eq!(table.recent.first(Of::All), Some((later, id, APP, uid)));
+        assert_eq!(
+            table.least_recent(Of::All, (later + quiet, quiet)),
+            Some((APP, id))
+        );
+        table.end(APP, id, &shared);
+        assert!(table.recent.all.is_empty() && table.recent.by_app.is_empty());
+        assert!(table.answered.all.is_empty() && table.answered.by_app.is_empty());
         Ok(())
     }
 

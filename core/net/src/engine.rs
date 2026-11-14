@@ -183,7 +183,7 @@ pub struct Limits {
     /// a quarter of `udp_mappings`, at least 64. An app at its share makes room among its own.
     pub udp_share: usize,
     /// A mapping that passed a datagram either way less than this long ago is never ended to make room,
-    /// so that a call is never cut.
+    /// so that a call is never cut, unless it is an answered lookup, which carries nothing more.
     pub udp_quiet: Duration,
     /// At most this many names hold a stand-in at once (ADR 0038, [`crate::standins::CAPACITY`]); the
     /// least recently used gives way to a new one. The tests hold fewer.
@@ -400,7 +400,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 32;
+pub const COUNTERS: usize = 33;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -437,6 +437,7 @@ pub struct Counters {
     udp_ambiguous: AtomicU64,
     udp_late: AtomicU64,
     udp_refused: AtomicU64,
+    udp_evicted: AtomicU64,
 }
 
 impl Counters {
@@ -465,9 +466,9 @@ impl Counters {
     /// dropped because they came too late for their app, which lost the socket before their way opened,
     /// or for any answer near them (ADR 0044, unit 9, "Whose a datagram is"), and datagrams and lookups
     /// dropped because their app's UDP way could have no socket: the cap for every app, or their app's
-    /// share, was full (ADR 0044, decision 3). None names a destination: they can be read on any phone.
-    /// New counters are only ever appended, so that scripts reading a column by its place keep reading
-    /// the same one.
+    /// share, was full (ADR 0044, decision 3), and UDP mappings ended to make room for a new way. None
+    /// names a destination: they can be read on any phone. New counters are only ever appended, so that
+    /// scripts reading a column by its place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
         [
@@ -503,6 +504,7 @@ impl Counters {
             &self.udp_ambiguous,
             &self.udp_late,
             &self.udp_refused,
+            &self.udp_evicted,
         ]
         .map(|c| c.load(Ordering::Relaxed))
     }
