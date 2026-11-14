@@ -49,14 +49,14 @@ Was Android selbst tut, liegt außerhalb der Kontrolle von Datapavan. Auf Telefo
 | Installierte Apps sehen | Apps und ihre Berechtigungen auflisten | v0.1 |
 | Zugriff auf Nutzungsdaten (von Ihnen in den Einstellungen erteilt; optional) | Zeigen, wie viele Daten jede App gesendet und empfangen hat und welche Apps Sie lange nicht geöffnet haben. Datapavan liest nur Summen und das Datum, an dem jede App zuletzt genutzt wurde, nie welche App Sie wann geöffnet haben, und behält nichts davon. Wenn Sie eine einzelne Aktivität in einer App prüfen, liest es außerdem die Gesamtzähler des Datenverkehrs des Telefons, für die keine Berechtigung nötig ist, um zu sehen, ob die Zählung von Android aktuell ist; diese Zahlen bleiben im Arbeitsspeicher, solange die Prüfung auf dem Bildschirm ist | v0.1 |
 | Netzwerkstatus | Erkennen, ob ein VPN aktiv ist. Diese Berechtigung erlaubt keine Verbindung | v0.1 |
-| Überlagerungen anderer Apps ausblenden | Ab Android 12: Solange Datapavan auf dem Bildschirm ist, können andere Apps nichts darüber anzeigen. Diese Berechtigung erlaubt keine Verbindung | Die Version nach 0.1.2 und Datapavan Watch |
-| VPN (von Ihnen erteilt) | Die **lokale** Firewall. Der Datenverkehr wird auf dem Telefon gefiltert und nie an uns gesendet | Datapavan Watch, eine eigene App, ab v0.2 |
-| Internet | Den Datenverkehr anderer Apps durch die lokale Firewall weiterleiten. Datapavan selbst fragt nie danach | Datapavan Watch, eine eigene App, ab v0.2 |
+| Überlagerungen anderer Apps ausblenden | Ab Android 12: Solange Datapavan auf dem Bildschirm ist, können andere Apps nichts darüber anzeigen. Diese Berechtigung erlaubt keine Verbindung | Datapavan Basic nach 0.1.2 und Datapavan Advanced |
+| VPN (von Ihnen erteilt) | Die **lokale** Firewall. Der Datenverkehr wird auf dem Telefon gefiltert und nie an uns gesendet | Datapavan Advanced, ab 0.2.0 |
+| Internet | Den Datenverkehr anderer Apps durch die lokale Firewall weiterleiten. Datapavan Basic fragt nie danach | Datapavan Advanced, ab 0.2.0 |
 
 ## Optionale Aktualisierungen der Tracker-Listen (geplant)
 
-Datapavan selbst importiert nur signierte Listendateien. Falls optionale Downloads kommen, wird Datapavan Watch sie
-von einem öffentlichen Spiegelserver laden, und nur, wenn Sie das einschalten. Wie bei jedem Download:
+Datapavan selbst importiert nur signierte Listendateien. Falls optionale Downloads kommen, werden sie
+von einem öffentlichen Spiegelserver geladen, und nur, wenn Sie das einschalten. Wie bei jedem Download:
 
 - sieht der Betreiber des Spiegelservers Ihre IP-Adresse und den Zeitpunkt der Anfrage;
 - können der Betreiber und jeder, der Ihr Netzwerk beobachtet, erkennen, dass das Gerät Datapavan nutzt.

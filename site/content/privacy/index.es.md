@@ -48,14 +48,14 @@ Lo que hace Android por sí mismo queda fuera del control de Datapavan. En los t
 | Ver las apps instaladas | Listar las apps y sus permisos | v0.1 |
 | Acceso a datos de uso (lo permites tú en Ajustes; opcional) | Mostrar cuántos datos ha enviado y recibido cada app, y qué apps llevas mucho tiempo sin abrir. Datapavan solo lee los totales y la fecha en que se usó cada app por última vez, nunca qué app abriste y cuándo, y no guarda nada de ello. Cuando compruebas una actividad en una app, también lee los contadores de tráfico totales del teléfono, que no necesitan ningún permiso, para ver si el recuento de Android está actualizado; estos números se quedan en memoria mientras la comprobación está en pantalla | v0.1 |
 | Estado de la red | Saber si hay una VPN activa. No permite ninguna conexión | v0.1 |
-| Ocultar las superposiciones de otras apps | Desde Android 12: mientras Datapavan está en la pantalla, otras apps no pueden mostrarse encima. No permite ninguna conexión | La versión posterior a la 0.1.2 y Datapavan Watch |
-| VPN (lo permites tú) | El firewall **local**. El tráfico se filtra en el teléfono y nunca se nos envía | Datapavan Watch, una app aparte, desde v0.2 |
-| Internet | Reenviar el tráfico de otras apps a través del firewall local. El propio Datapavan nunca lo pide | Datapavan Watch, una app aparte, desde v0.2 |
+| Ocultar las superposiciones de otras apps | Desde Android 12: mientras Datapavan está en la pantalla, otras apps no pueden mostrarse encima. No permite ninguna conexión | Datapavan Basic después de la 0.1.2 y Datapavan Advanced |
+| VPN (lo permites tú) | El firewall **local**. El tráfico se filtra en el teléfono y nunca se nos envía | Datapavan Advanced, desde la 0.2.0 |
+| Internet | Reenviar el tráfico de otras apps a través del firewall local. Datapavan Basic nunca lo pide | Datapavan Advanced, desde la 0.2.0 |
 
 ## Actualizaciones opcionales de las listas de rastreadores (previstas)
 
-El propio Datapavan solo importa archivos de listas firmados. Si llegan las descargas opcionales, Datapavan Watch
-las obtendrá de un sitio espejo público, y solo si activas esta opción. Como en cualquier descarga:
+El propio Datapavan solo importa archivos de listas firmados. Si llegan las descargas opcionales, se
+obtendrán de un sitio espejo público, y solo si activas esta opción. Como en cualquier descarga:
 
 - el operador del sitio espejo ve tu dirección IP y la hora de la solicitud;
 - el operador, y cualquiera que observe tu red, puede saber que el dispositivo usa Datapavan.
