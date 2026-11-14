@@ -6,6 +6,10 @@
 #   scripts/check.sh android  Android gates only (builds the Rust library as part of it)
 #   scripts/check.sh data     bundled datasets, published keys, the documents' truth, translations and
 #                             the website: no build, so CI runs it on every push, documents only included
+#   scripts/check.sh lab      the lab's gaps probe and fixture (ADR 0048): their build with the SDK's build
+#                             tools, the fixture's missing INTERNET permission, the tools' unit tests, the
+#                             README's tables against results.csv, and the published runs' privacy; seconds,
+#                             so CI runs it on every push too
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -67,6 +71,58 @@ netlab_gate() {
     cargo test -p datapavan-net --test netlab --locked -- --ignored
 }
 
+# The lab's probe of Android's platform gaps (ADR 0048, decision 7): both apps built with the SDK's build tools
+# alone, the fixture without the INTERNET permission (decision 5), the JVM tests of the tools that turn a run
+# into rows, and the README's tables, which only the tools write, against results.csv.
+lab_gates() {
+    echo "== Lab: the gaps probe, its peer and the fixture build with the SDK's tools alone"
+    "$ROOT/lab/gaps-probe/build.sh" >/dev/null
+    "$ROOT/lab/gaps-probe/build.sh" --peer >/dev/null
+    "$ROOT/lab/gaps-fixture/build.sh" >/dev/null
+    echo "== Lab: the fixture holds no INTERNET permission (ADR 0048, decision 5)"
+    fixture_no_internet
+    echo "== Lab: the gaps tools' unit tests, and the README's tables against results.csv"
+    "$ROOT/lab/gaps-tools/build.sh"
+    java -cp "$ROOT/build/gaps-tools/classes" org.visadahyu.lab.gapstools.GapsTable check \
+        "$ROOT/docs/platform-gaps/results.csv" "$ROOT/docs/platform-gaps/README.md"
+    echo "== Lab: no published run holds an address or a name of the network that ran it"
+    python3 -I "$ROOT/scripts/check-lab-privacy.py"
+    echo "== Lab: the release check's lab strings cover every lab app"
+    python3 -I "$ROOT/scripts/check-lab-classes.py" --self-test --lab "$ROOT/lab"
+}
+
+# The fixture's manifest, and the APK its build made, name no INTERNET permission. Its build script refuses the
+# same; this check holds even if the script is changed. Read whole: under pipefail, a grep -q that stops
+# reading early fails the pipe.
+fixture_no_internet() {
+    local manifest permissions
+    manifest=$(cat "$ROOT/lab/gaps-fixture/AndroidManifest.xml")
+    permissions=$("${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/sdk}}/build-tools/37.0.0/aapt2" dump permissions \
+        "$ROOT/build/gaps-fixture/gaps-fixture.apk")
+    if grep -q 'android.permission.INTERNET' <<<"$manifest$permissions"; then
+        echo "the lab's fixture names the INTERNET permission (ADR 0048, decision 5)" >&2
+        return 1
+    fi
+}
+
+# No release build holds anything of the lab (ADR 0048, decision 1): scripts/check-lab-classes.py reads every
+# release APK and bundle under $1's build outputs, every archive and dex inside them, and every release
+# mapping.txt, R8's record of the original names, paired with each dex by its pg-map-id, against the classes
+# compiled from lab/ and the strings of its sources. Each further argument is a release file the build must
+# have made.
+lab_class_check() {
+    local android=${1:-$ROOT/android} sdk work status=0
+    shift $(($# < 1 ? 0 : 1))
+    sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/sdk}}"
+    work=$(mktemp -d)
+    javac --release 17 -XDsuppressNotes -nowarn -cp "$sdk/platforms/android-37.0/android.jar" \
+        -d "$work/classes" $(find "$ROOT/lab" -name '*.java') >/dev/null
+    python3 -I "$ROOT/scripts/check-lab-classes.py" --android "$android" --lab "$ROOT/lab" --lab-classes "$work/classes" \
+        --dexdump "$sdk/build-tools/37.0.0/dexdump" "$@" || status=$?
+    rm -rf "$work"
+    return "$status"
+}
+
 rust_gates() {
     echo "== Rust: format, lint, test, dependency policy"
     cd "$ROOT/core"
@@ -112,14 +168,23 @@ android_gates() {
         :app:lintDebug :app:lintRelease :app:testDebugUnitTest \
         :app:assembleDebug :app:assembleRelease :app:bundleRelease \
         :app:verifyApkDebug :app:verifyApkRelease
+    echo "== Android: no release APK or bundle holds a class or a package of the lab (ADR 0048)"
+    local out
+    out="$ROOT/android/app"
+    lab_class_check "$ROOT/android" \
+        "$out/build/outputs/apk/release/app-release-unsigned.apk" "$out/build/outputs/bundle/release/app-release.aab" \
+        "$out/build/outputs/mapping/release/mapping.txt" \
+        "$out/build-advanced/outputs/apk/release/app-release-unsigned.apk" "$out/build-advanced/outputs/bundle/release/app-release.aab" \
+        "$out/build-advanced/outputs/mapping/release/mapping.txt"
 }
 
 case "$WHAT" in
     rust) rust_gates ;;
     android) android_gates ;;
     data) data_gates ;;
-    all) data_gates; rust_gates; android_gates ;;
-    *) echo "usage: $0 [all|rust|android|data]" >&2; exit 2 ;;
+    lab) lab_gates ;;
+    all) data_gates; lab_gates; rust_gates; android_gates ;;
+    *) echo "usage: $0 [all|rust|android|data|lab]" >&2; exit 2 ;;
 esac
 
 echo "== all requested gates passed"

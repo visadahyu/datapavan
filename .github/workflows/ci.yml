@@ -74,9 +74,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: scripts/ci-scope.sh decide
 
-  # Checks that need no build, on every push: the bundled datasets' licences, the published keys, the
-  # documents against the code and the record (scripts/check-truth.py, which reads the release tags), the
-  # translations and the website.
+  # Checks that need no build of the product, on every push: the bundled datasets' licences, the published
+  # keys, the documents against the code and the record (scripts/check-truth.py, which reads the release
+  # tags), the translations and the website; and the lab's gaps probe and fixture (ADR 0048), which build with
+  # the SDK's build tools in seconds, their tools' JVM tests and the platform-gaps tables against results.csv.
+  # No emulator runs the probe in CI.
   repository:
     needs: scope
     if: needs.scope.outputs.passed != 'true'
@@ -101,6 +103,18 @@ jobs:
 
       - name: Repository checks
         run: scripts/check.sh data
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Android SDK packages for the lab's apps
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.0" "build-tools;37.0.0"
+
+      - name: The lab's gaps probe and fixture (ADR 0048)
+        run: scripts/check.sh lab
 
   # The build and its gates (scripts/check.sh rust and android). It hands the APKs to the emulator shards.
   build:
