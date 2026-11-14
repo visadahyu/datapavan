@@ -59,12 +59,14 @@ for branch in "$@"; do
     echo "   $branch: $(git rev-list --count "HEAD^1..$branch") commits, merged as $(git rev-parse --short HEAD)"
 done
 [ ${#merged[@]} -gt 0 ] || { echo "nothing to merge: every branch is in main already" >&2; exit 1; }
-# Every commit that main would gain must be signed (the ruleset on main refuses the push otherwise): one
-# with no signature or a bad one stops here; one this computer cannot judge (no key for it here) is named.
+# Every commit that main would gain must be signed (the ruleset on main refuses the push otherwise). One
+# with no signature (N), a bad one (B), or one made with a key that has expired (X, Y) or was revoked (R)
+# stops here; one this computer cannot judge (E: no key for it here; U: a good signature of unknown trust)
+# is named.
 signatures=$(git log --format='%h %G?' "$base..HEAD")
-unsigned=$(awk '$2 == "N" || $2 == "B" { print $1 }' <<<"$signatures")
-[ -z "$unsigned" ] || { echo "!! commits with no signature or a bad one: $(echo $unsigned)" >&2; exit 1; }
-unknown=$(awk '$2 != "G" && $2 != "N" && $2 != "B" { print $1 "(" $2 ")" }' <<<"$signatures")
+refused=$(awk '$2 ~ /^[NBXYR]$/ { print $1 "(" $2 ")" }' <<<"$signatures")
+[ -z "$refused" ] || { echo "!! commits with no good signature: $(echo $refused)" >&2; exit 1; }
+unknown=$(awk '$2 != "G" && $2 !~ /^[NBXYR]$/ { print $1 "(" $2 ")" }' <<<"$signatures")
 [ -z "$unknown" ] || echo "   signatures this computer cannot check: $(echo $unknown); GitHub checks them on the push"
 echo "== $target is ready at $(git rev-parse --short HEAD), with ${#merged[@]} branches: ${merged[*]}"
 echo "   next: git push origin $target, then wait for its CI on $(git rev-parse HEAD) and read its conclusion,"
