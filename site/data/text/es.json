@@ -16,8 +16,8 @@
  "h1": "La etiqueta que tus apps no traen.",
  "tagline": "Mira a qué pueden acceder tus apps y cuánto envían. Luego, limítalo.",
  "lead": "En tu propio teléfono, con los ajustes del propio Android. Sin acceso a internet, sin cuenta, sin root.",
- "status": "La versión 0.1.2 ya está disponible.",
- "cta_get": "Descargar la versión 0.1.2",
+ "status": "Datapavan Basic 0.1.2 ya está disponible.",
+ "cta_get": "Descargar Datapavan Basic 0.1.2",
  "cta_how": "Cómo comprobar una copia",
  "nav": [
   [
@@ -209,7 +209,7 @@
   ],
   [
    "Adónde van los datos",
-   "Esta versión cuenta cuánto, no a quién. Eso está previsto para v0.2, en una app aparte llamada Datapavan Watch."
+   "Esta versión cuenta cuánto, no a quién. Eso está previsto para Datapavan Advanced 0.2.0, que añade Watch: muestra a dónde se conecta cada app."
   ],
   [
    "Qué hay dentro de tu tráfico",
@@ -220,7 +220,7 @@
    "Ninguna app puede controlarlos ni limpiar un teléfono ya comprometido. Encuentra el riesgo y te guía."
   ]
  ],
- "nc_label": "Sin conexión: Datapavan no tiene permiso de internet.",
+ "nc_label": "Sin conexión: Datapavan Basic no tiene permiso de internet.",
  "plan_title": "Qué puedes hacer con Datapavan",
  "plan_body": "Un plan breve, empezando por los cambios que más riesgo eliminan. Cada uno abre la pantalla correcta de Android, donde tú decides. Datapavan no cambia nada por sí mismo.",
  "levels": [
@@ -249,7 +249,7 @@
  ],
  "never_q": "¿Y qué envía Datapavan?",
  "never_a": "Nada.",
- "never_title": "La etiqueta de Datapavan",
+ "never_title": "La etiqueta de Datapavan Basic",
  "never_rows": [
   [
    "Acceso a internet",
@@ -284,11 +284,11 @@
    "No hacen falta"
   ]
  ],
- "never_body": "Android lo impone. Una app sin el permiso de internet no puede abrir una conexión de red. El Datapavan auténtico nunca lo pide, y una copia que lo pida no es auténtica.",
+ "never_body": "Android lo impone. Una app sin el permiso de internet no puede abrir una conexión de red. El Datapavan Basic auténtico nunca lo pide, y una copia que lo pida no es auténtica.",
  "compare_title": "Cómo se compara",
- "compare_note": "Por tipo de herramienta, ya que cada una hace un trabajo distinto. Datapavan 0.1 observa y guía; no bloquea. Comprobado en noviembre de 2026 con εxodus, AppCensus, TrackerControl, RethinkDNS, NetGuard, DuckDuckGo App Tracking Protection, AdGuard, AFWall+ y Android 15 y 16.",
+ "compare_note": "Por tipo de herramienta, ya que cada una hace un trabajo distinto. Datapavan Basic 0.1 observa y guía; no bloquea. Comprobado en noviembre de 2026 con εxodus, AppCensus, TrackerControl, RethinkDNS, NetGuard, DuckDuckGo App Tracking Protection, AdGuard, AFWall+ y Android 15 y 16.",
  "compare_cols": [
-  "Datapavan 0.1",
+  "Datapavan Basic 0.1",
   "Sitios de informes en línea",
   "Apps de firewall y bloqueo",
   "Ajustes del propio Android"
@@ -390,7 +390,7 @@
   ]
  ],
  "get_title": "Consíguelo",
- "get_body": "La versión 0.1.2 es la primera pensada para todos. A principios de 2027 pediremos a F-Droid que la incluya.",
+ "get_body": "Datapavan Basic 0.1.2 es la primera versión pensada para todos. A principios de 2027 pediremos a F-Droid que la incluya.",
  "get_changes": "Novedades de esta versión:",
  "get_button": "Descargar el APK",
  "get_install": "Android te pide que permitas instalar desde el navegador; después puedes volver a desactivarlo. Luego, en los ajustes de la app, «¿Es auténtica esta copia?» comprueba tu copia.",

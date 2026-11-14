@@ -16,8 +16,8 @@
  "h1": "Das Etikett, das Ihren Apps fehlte.",
  "tagline": "Sehen Sie, worauf Ihre Apps zugreifen können und wie viel sie senden. Dann begrenzen Sie es.",
  "lead": "Auf Ihrem eigenen Telefon, über die Einstellungen von Android selbst. Kein Internetzugriff, kein Konto, kein Root.",
- "status": "Version 0.1.2 ist erschienen.",
- "cta_get": "Version 0.1.2 herunterladen",
+ "status": "Datapavan Basic 0.1.2 ist erschienen.",
+ "cta_get": "Datapavan Basic 0.1.2 herunterladen",
  "cta_how": "So prüfen Sie eine Kopie",
  "nav": [
   [
@@ -209,7 +209,7 @@
   ],
   [
    "Wohin die Daten gehen",
-   "Diese Version zählt, wie viel, nicht an wen. Das ist für v0.2 geplant, in einer eigenen App namens Datapavan Watch."
+   "Diese Version zählt, wie viel, nicht an wen. Das ist für Datapavan Advanced 0.2.0 geplant, das zusätzlich Watch bietet: Watch zeigt, wohin jede App eine Verbindung aufbaut."
   ],
   [
    "Was Ihr Datenverkehr enthält",
@@ -220,7 +220,7 @@
    "Keine App kann sie steuern oder ein bereits kompromittiertes Telefon bereinigen. Es findet das Risiko und führt Sie."
   ]
  ],
- "nc_label": "Keine Verbindung: Datapavan hat keine Internetberechtigung.",
+ "nc_label": "Keine Verbindung: Datapavan Basic hat keine Internetberechtigung.",
  "plan_title": "Was Sie damit tun können",
  "plan_body": "Ein kurzer Plan, zuerst die Änderungen, die das meiste Risiko entfernen. Jede öffnet den passenden Bildschirm von Android, auf dem Sie entscheiden. Datapavan ändert selbst nichts.",
  "levels": [
@@ -249,7 +249,7 @@
  ],
  "never_q": "Und was sendet Datapavan?",
  "never_a": "Nichts.",
- "never_title": "Das Etikett von Datapavan selbst",
+ "never_title": "Das Etikett von Datapavan Basic selbst",
  "never_rows": [
   [
    "Internetzugriff",
@@ -284,11 +284,11 @@
    "Nicht nötig"
   ]
  ],
- "never_body": "Android setzt das durch. Eine App ohne Internetberechtigung kann keine Netzwerkverbindung öffnen. Echtes Datapavan fragt nie danach, und eine Kopie, die danach fragt, ist nicht echt.",
+ "never_body": "Android setzt das durch. Eine App ohne Internetberechtigung kann keine Netzwerkverbindung öffnen. Echtes Datapavan Basic fragt nie danach, und eine Kopie, die danach fragt, ist nicht echt.",
  "compare_title": "Im Vergleich",
- "compare_note": "Nach Art des Werkzeugs, denn jedes hat eine andere Aufgabe. Datapavan 0.1 schaut hin und führt Sie; es blockiert nicht. Geprüft im November 2026 anhand von εxodus, AppCensus, TrackerControl, RethinkDNS, NetGuard, DuckDuckGo App Tracking Protection, AdGuard, AFWall+ und Android 15 und 16.",
+ "compare_note": "Nach Art des Werkzeugs, denn jedes hat eine andere Aufgabe. Datapavan Basic 0.1 schaut hin und führt Sie; es blockiert nicht. Geprüft im November 2026 anhand von εxodus, AppCensus, TrackerControl, RethinkDNS, NetGuard, DuckDuckGo App Tracking Protection, AdGuard, AFWall+ und Android 15 und 16.",
  "compare_cols": [
-  "Datapavan 0.1",
+  "Datapavan Basic 0.1",
   "Online-Berichtsseiten",
   "Firewall- und Blocker-Apps",
   "Einstellungen von Android selbst"
@@ -390,7 +390,7 @@
   ]
  ],
  "get_title": "Download",
- "get_body": "Version 0.1.2 ist die erste Version, die sich an alle richtet. Anfang 2027 bitten wir F-Droid, sie aufzunehmen.",
+ "get_body": "Datapavan Basic 0.1.2 ist die erste Version, die sich an alle richtet. Anfang 2027 bitten wir F-Droid, sie aufzunehmen.",
  "get_changes": "Neu in dieser Version:",
  "get_button": "APK herunterladen",
  "get_install": "Android bittet Sie, die Installation aus Ihrem Browser zu erlauben; das können Sie danach wieder ausschalten. Danach prüft „Ist diese Kopie echt?“ in den Einstellungen der App Ihre Kopie.",

@@ -16,8 +16,8 @@
  "h1": "您的应用缺少的那张标签。",
  "tagline": "查看您的应用能访问什么、发送了多少数据。然后加以限制。",
  "lead": "就在您自己的手机上，通过 Android 自带的设置完成。不联网，不用账号，不用 root。",
- "status": "0.1.2 版已发布。",
- "cta_get": "下载 0.1.2 版",
+ "status": "Datapavan Basic 0.1.2 已发布。",
+ "cta_get": "下载 Datapavan Basic 0.1.2",
  "cta_how": "如何检查副本",
  "nav": [
   [
@@ -209,7 +209,7 @@
   ],
   [
    "数据的去向",
-   "此版本统计的是多少，而不是发给谁。这项功能计划在 v0.2 中提供，放在一个名为 Datapavan Watch 的单独应用中。"
+   "此版本统计的是多少，而不是发给谁。这项功能计划在 Datapavan Advanced 0.2.0 中提供，它增加了 Watch，可显示每个应用连接到哪里。"
   ],
   [
    "您的流量里有什么",
@@ -220,7 +220,7 @@
    "任何应用都无法控制它们，也无法清理已被入侵的手机。它能发现风险并为您提供指引。"
   ]
  ],
- "nc_label": "没有连接：Datapavan 没有互联网权限。",
+ "nc_label": "没有连接：Datapavan Basic 没有互联网权限。",
  "plan_title": "您可以用它做什么",
  "plan_body": "一份简短的计划，从最能消除风险的更改开始。每一项都会打开相应的 Android 界面，由您来决定。Datapavan 自己不会更改任何内容。",
  "levels": [
@@ -249,7 +249,7 @@
  ],
  "never_q": "那么，Datapavan 发送什么？",
  "never_a": "无。",
- "never_title": "Datapavan 自己的标签",
+ "never_title": "Datapavan Basic 自己的标签",
  "never_rows": [
   [
    "互联网访问权限",
@@ -284,11 +284,11 @@
    "不需要"
   ]
  ],
- "never_body": "这由 Android 强制执行。没有互联网权限的应用无法打开网络连接。正版 Datapavan 从不请求此权限，请求此权限的副本不是正版。",
+ "never_body": "这由 Android 强制执行。没有互联网权限的应用无法打开网络连接。正版 Datapavan Basic 从不请求此权限，请求此权限的副本不是正版。",
  "compare_title": "与其他工具的比较",
- "compare_note": "按工具类型比较，因为每种工具的用途不同。Datapavan 0.1 负责查看和指引，不负责拦截。已于 2026 年 11 月对照 εxodus、AppCensus、TrackerControl、RethinkDNS、NetGuard、DuckDuckGo App Tracking Protection、AdGuard、AFWall+ 以及 Android 15 和 16 进行核对。",
+ "compare_note": "按工具类型比较，因为每种工具的用途不同。Datapavan Basic 0.1 负责查看和指引，不负责拦截。已于 2026 年 11 月对照 εxodus、AppCensus、TrackerControl、RethinkDNS、NetGuard、DuckDuckGo App Tracking Protection、AdGuard、AFWall+ 以及 Android 15 和 16 进行核对。",
  "compare_cols": [
-  "Datapavan 0.1",
+  "Datapavan Basic 0.1",
   "在线报告网站",
   "防火墙和拦截应用",
   "Android 自带设置"
@@ -390,7 +390,7 @@
   ]
  ],
  "get_title": "获取",
- "get_body": "0.1.2 版是首个面向所有用户的正式版。我们将于 2027 年初向 F-Droid 申请上架。",
+ "get_body": "Datapavan Basic 0.1.2 是首个面向所有用户的正式版。我们将于 2027 年初向 F-Droid 申请上架。",
  "get_changes": "此版本的更新内容：",
  "get_button": "下载 APK",
  "get_install": "Android 会要求您允许从浏览器安装；之后可以再次关闭。然后在应用的设置中，“此副本是正版吗？”会检查您的副本。",

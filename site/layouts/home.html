@@ -33,7 +33,7 @@
 {{- range $i, $l := $t.levels }}<div class="lvl"><div class="bars" aria-hidden="true">{{ range seq (add $i 1) }}<i></i>{{ end }}</div><h3>{{ index $l 0 }}</h3><p>{{ index $l 1 }}</p></div>{{ end -}}
 </div><div class="more">{{ range $t.plan_more }}<div><h3>{{ index . 0 }}</h3><p>{{ index . 1 }}</p></div>{{ end }}</div></div></section>
 <section class="own"><div class="w"><p class="own-q">{{ $t.never_q }}</p><p class="nothing">{{ $t.never_a }}</p><div class="wrap"><div><h2>{{ $t.never_title }}</h2><p>{{ $t.never_body }}</p></div>
-<aside class="label" aria-label="{{ $t.never_title }}"><p class="l-title ltr-t">Datapavan</p><div class="l-g" style="margin-top:.5rem"><dl style="padding-top:.2rem">{{ range $t.never_rows }}<div><dt>{{ index . 0 }}</dt><dd>{{ index . 1 }}</dd></div>{{ end }}</dl></div><p class="fine" style="margin-bottom:0">{{ $t.foot_licence }}</p></aside></div></div></section>
+<aside class="label" aria-label="{{ $t.never_title }}"><p class="l-title ltr-t">Datapavan Basic</p><div class="l-g" style="margin-top:.5rem"><dl style="padding-top:.2rem">{{ range $t.never_rows }}<div><dt>{{ index . 0 }}</dt><dd>{{ index . 1 }}</dd></div>{{ end }}</dl></div><p class="fine" style="margin-bottom:0">{{ $t.foot_licence }}</p></aside></div></div></section>
 <section><div class="w"><h2>{{ $t.compare_title }}</h2><p class="sub">{{ $t.compare_note }}</p><div class="scroll" tabindex="0"><table class="cmp"><thead><tr><td></td>
 {{- range $i, $c := $t.compare_cols }}<th scope="col"{{ if eq $i 0 }} class="us"{{ end }}>{{ $c }}</th>{{ end -}}
 </tr></thead><tbody>
