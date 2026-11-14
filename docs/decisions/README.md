@@ -55,6 +55,7 @@ in the Git history.
 | [0045](0045-three-editions-of-one-app.md) | Three editions of one app: Basic, Advanced and Enterprise | Accepted |
 | [0046](0046-live-activity.md) | What apps sent while the user was not using them, shown live | Proposed |
 | [0047](0047-profile-for-phones-that-may-be-searched.md) | A profile for phones that may be searched: nothing of use kept | Proposed |
+| [0048](0048-lab-probe-of-android-gaps.md) | A lab probe of where stock Android leaves privacy tools blind or exposed | Proposed |
 
 ## Template
 

@@ -158,6 +158,8 @@ through the user's tool ([ADR 0038](docs/decisions/0038-dns-of-chained-apps.md))
 How W5's per-app view is met, live, with which apps sent while the user was not using them, is proposed in
 [ADR 0046](docs/decisions/0046-live-activity.md) (2026-11-14), and a profile for people whose phone may be searched,
 which keeps nothing of use, in [ADR 0047](docs/decisions/0047-profile-for-phones-that-may-be-searched.md).
+The probe app that ADR 0041 promised, which measures where stock Android leaves privacy tools blind or exposed on
+the Android 10 to 17 emulators, is proposed in [ADR 0048](docs/decisions/0048-lab-probe-of-android-gaps.md).
 
 The items, in order:
 
