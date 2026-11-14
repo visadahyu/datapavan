@@ -33,17 +33,18 @@ SERVER=""
 # The emulator's Private DNS setting before the test changed it, restored at the end.
 DNS_MODE=""
 DNS_HOST=""
+# Writes the global setting $1 back to $2, as "settings get" read it: "null" deletes it.
+put_setting() {
+    if [ "$2" = null ]; then
+        adb shell settings delete global "$1" >/dev/null 2>&1 || true
+    else
+        adb shell settings put global "$1" "$2" >/dev/null 2>&1 || true
+    fi
+}
 restore_private_dns() {
     [ -n "$DNS_MODE" ] || return 0
-    for key in mode specifier; do
-        value=$DNS_MODE
-        [ "$key" = mode ] || value=$DNS_HOST
-        if [ "$value" = null ]; then
-            adb shell settings delete global "private_dns_$key" >/dev/null 2>&1 || true
-        else
-            adb shell settings put global "private_dns_$key" "$value" >/dev/null 2>&1 || true
-        fi
-    done
+    put_setting private_dns_mode "$DNS_MODE"
+    put_setting private_dns_specifier "$DNS_HOST"
     DNS_MODE=""
 }
 # A TLS ClientHello for watch.test, which the test server answers as bad HTTP; only its name counts.
@@ -163,6 +164,30 @@ vpn_up() {
     local vpns
     vpns=$(adb shell dumpsys connectivity | tr -d '\r' | grep -E 'ni\{(VPN |\[type: VPN)' || true)
     [ -n "$uid" ] && grep -q "OwnerUid: $uid " <<<"$vpns"
+}
+
+# True when Watch says its tunnel runs with the address set $1 (common or spare) and Android lists its
+# VPN. Watch names the new set as it starts setting the tunnel up again, before its engine runs: the set
+# alone does not say that the tunnel carries traffic.
+tunnel_on() {
+    local dump
+    dump=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" </dev/null | tr -d '\r')
+    grep -q '^ *running true$' <<<"$dump" && grep -q "^ *addresses $1 " <<<"$dump" && vpn_up
+}
+
+# Waits up to $1 seconds until the tunnel records a flow of the shell from its present address: each try
+# sends a datagram to a documentation address (192.0.2.1, RFC 5737), which no network routes and no check
+# below looks at. Right after the tunnel was set up again, a connection once passed with no flow recorded
+# at all, and the first check failed on it (CI, 2026-11-14); the checks start once the engine records.
+tunnel_records() {
+    local deadline=$((SECONDS + $1)) from
+    from=$(tunnel_address)
+    while :; do
+        device 4 "echo watch-ready | nc -u -w 1 192.0.2.1 9" >/dev/null
+        grep -qE "^udp ${from//./\\.}:[0-9]+ 192\.0\.2\.1:9 $SHELL_UID " <<<"$(flows)" && return 0
+        [ "$SECONDS" -lt "$deadline" ] || return 1
+        sleep 1
+    done
 }
 
 # Runs a shell command on the device, killing it after $1 seconds: nc -u waits for more answers.
@@ -374,8 +399,9 @@ if is_emulator; then
         adb shell dumpsys connectivity | tr -d '\r' |
             sed -n 's/^ *NetworkAgentInfo{network{\([0-9]*\)}.*ni{\([^ ]*\) \([A-Z]*\).*/\1 \2 \3/p' | paste -sd ';'
     }
+    # Whether the network type $1 is connected, in the list $2 or in Android's list now.
     up() {
-        grep -qE "(^|;)[0-9]+ $1[^ ;]* CONNECTED" <<<"$(networks)"
+        grep -qE "(^|;)[0-9]+ $1[^ ;]* CONNECTED" <<<"${2:-$(networks)}"
     }
     # Waits up to $1 seconds for mobile data, and for Wi-Fi too when $2 is "wifi".
     wait_up() {
@@ -384,6 +410,25 @@ if is_emulator; then
             sleep 2
         done
         up MOBILE && { [ "${2:-}" != wifi ] || up WIFI; }
+    }
+    # Waits up to $1 seconds until mobile data and Wi-Fi are both up and Android's list of networks has
+    # stayed the same over four reads two seconds apart. After airplane mode the radios came back and then
+    # replaced their networks once more while Watch ran (CI, 2026-11-14); Watch starts over networks that
+    # have stopped changing.
+    wait_settled() {
+        local deadline=$((SECONDS + $1)) last="" now steady=0
+        while :; do
+            now=$(networks)
+            if up MOBILE "$now" && up WIFI "$now" && [ "$now" = "$last" ]; then
+                steady=$((steady + 1))
+                [ "$steady" -ge 3 ] && return 0
+            else
+                steady=0
+            fi
+            last=$now
+            [ "$SECONDS" -lt "$deadline" ] || return 1
+            sleep 2
+        done
     }
     # Mobile data stays up beside Wi-Fi, as on most phones, so that the switch has a network to go to: on
     # CI, mobile data brought up only after Wi-Fi went off was not there 40 s later ("Active default
@@ -408,6 +453,8 @@ if is_emulator; then
     fi
     wait_up 90 wifi ||
         fail "the emulator did not have both Wi-Fi and mobile data before Watch started ($(networks)), even after airplane mode, so the network switch would have nowhere to go; this is the emulator, not Watch"
+    wait_settled 60 ||
+        fail "the emulator's networks kept changing for 60 s before Watch started ($(networks)); this is the emulator, not Watch"
     echo "  networks before Watch starts: $(networks)"
 fi
 # The device's network or the test server may not be ready yet: on CI the first check below once found
@@ -437,16 +484,17 @@ esac
 # with the spare addresses, and it comes back to the common ones.
 adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" addresses-force spare </dev/null | grep -q '^ *addresses-forced spare' ||
     fail "the debug command to force the spare addresses failed"
-for _ in $(seq 1 20); do addresses_line | grep -q '^spare ' && vpn_up && break; sleep 1; done
+within 20 tunnel_on spare || fail "the tunnel did not run with the spare addresses within 20 s: $(addresses_line)"
 case "$(addresses_line)" in
     "spare 10.215.173.1 10.215.173.3 "*) ;;
     *) fail "the tunnel did not take the spare addresses: $(addresses_line)" ;;
 esac
+tunnel_records 30 || fail "with the spare addresses, the tunnel recorded no flow of the shell within 30 s"
 answer=$(timeout 15 adb shell "printf 'GET /ping HTTP/1.0\r\n\r\n' | nc -w 5 $HOST $PORT" | tr -d '\r' || true)
 grep -q '^pong$' <<<"$answer" || fail "no answer over TCP with the spare addresses"
 adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" addresses-force auto </dev/null >/dev/null
-for _ in $(seq 1 20); do addresses_line | grep -q '^common ' && vpn_up && break; sleep 1; done
-addresses_line | grep -q '^common ' || fail "the tunnel did not come back to the common addresses: $(addresses_line)"
+within 20 tunnel_on common || fail "the tunnel did not run with the common addresses again within 20 s: $(addresses_line)"
+tunnel_records 30 || fail "back on the common addresses, the tunnel recorded no flow of the shell within 30 s"
 echo "ok: with a clashing network the tunnel takes the spare addresses, traffic passes, and it comes back"
 
 traffic first
@@ -523,6 +571,10 @@ if is_emulator; then
     sleep 2
     traffic "after a network switch"
     adb shell svc wifi enable
+    # Wi-Fi comes back beneath the tunnel. The Private DNS check below once ran while it did, and Android
+    # kept the provider on the tunnel's network after the restore (CI, 2026-11-14): it waits until Wi-Fi
+    # is up again and the networks have settled.
+    wait_settled 90 || fail "Wi-Fi did not come back, or the networks did not settle, within 90 s ($(networks)); this is the emulator, not Watch"
 else
     echo "skipped: the network switch, on a phone"
 fi
@@ -538,12 +590,25 @@ if is_emulator; then
     adb shell settings put global private_dns_specifier dns.google
     adb shell settings put global private_dns_mode hostname
     wait_private_dns "strict dns.google" || fail "strict Private DNS was not detected: '$(private_dns)'"
+    mode=$DNS_MODE
+    host=$DNS_HOST
     restore_private_dns
-    # Once, right after the network switch, Watch still read strict mode 20 s after the restore; three
-    # tries could not repeat it. This waits longer, and a failure shows whether Android itself still
-    # reports the provider.
+    # Right after the network switch, Watch has twice still read strict mode long after the restore (once
+    # 20 s, and on CI on 2026-11-14 a minute, while Android itself still named the provider on the
+    # tunnel's network):
+    # Watch reads what Android says. If Android has not taken the restore after 20 s, the specifier is
+    # written once more and restored, which makes Android read the setting again; the mode stays restored
+    # throughout. A failure then shows whether Android itself still reports the provider.
+    if ! wait_private_dns plain 20; then
+        echo "  Watch reads Private DNS as '$(private_dns)' 20 s after the restore; Android says: $(android_private_dns); writing the setting again"
+        DNS_MODE=$mode
+        DNS_HOST=$host
+        adb shell settings put global private_dns_specifier restore.invalid
+        sleep 1
+        restore_private_dns
+    fi
     wait_private_dns plain 60 ||
-        fail "Watch still reads Private DNS as '$(private_dns)' once it was restored; Android says: $(android_private_dns)"
+        fail "Watch still reads Private DNS as '$(private_dns)' once it was restored, also after the setting was written again; Android says: $(android_private_dns)"
     echo "ok: strict Private DNS is detected, and its end"
 else
     echo "skipped: Private DNS, on a phone"

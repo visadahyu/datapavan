@@ -217,21 +217,47 @@ adb shell input keyevent KEYCODE_HOME
 sleep 1
 adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
 SWITCH="Send apps through Datapavan test tool"
-# The search, and the first password after a fresh start (a new Keystore key), take a few seconds: wait
-# for them before scrolling, or the scroll moves the section off the screen before it is drawn.
-for _ in $(seq 1 30); do screen_has "$SWITCH" && break; sleep 1; done
-# A search that missed the tool leaves "Look again" on the screen, which a user would tap.
-if ! screen_has "$SWITCH" && screen_has "Look again"; then
+# Waits for the chain screen's search to offer the tool. The search, and the first password after a fresh
+# start (a new Keystore key), take a few seconds: they are waited for before scrolling, or the scroll moves
+# the section off the screen before it is drawn. A search that missed the tool leaves "Look again" on the
+# screen, which a user would tap; then it is tapped. The search runs again each time the screen comes back
+# to the front, and it once missed the tool there, after the screen had first found it (CI, 2026-11-14:
+# "ConnectException", then the tool found again a moment later), which took the user name and password off
+# the screen.
+search_offers_tool() {
+    scroll_to_top
+    within 30 screen_has "$SWITCH" && return 0
+    screen_has "Look again" || return 1
     echo "  the chain screen's search missed the tool: looking again" >&2
     adb shell cat "$DUMP" 2>/dev/null | grep -o 'text="[^"]\+"' | sed -n '5,9p' | sed 's/^/    screen: /' >&2 || true
     echo "    the service's search now: $(dump find-tool | grep -E '^ *tool ' | sed 's/^ *//')" >&2
     tap_text "Look again" || true
-    for _ in $(seq 1 30); do screen_has "$SWITCH" && break; sleep 1; done
-fi
-scroll_to "$SWITCH" || fail "the chain screen did not offer the test tool"
+    scroll_to_top
+    within 30 screen_has "$SWITCH"
+}
+# The screen in front again, as a user brings it back: its search runs again.
+reopen_screen() {
+    adb shell input keyevent KEYCODE_HOME
+    sleep 1
+    adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
+}
+# True once the screen shows the text $1 from the tool's section, after up to three searches.
+screen_says() {
+    local try
+    for try in 1 2 3; do
+        search_offers_tool || true
+        scroll_to "$1" && return 0
+        [ "$try" = 3 ] && break
+        echo "  try $try: the chain screen did not say \"$1\"; its last searches:" >&2
+        search_log | grep '^screen: ' | tail -3 | sed 's/^/    /' >&2 || true
+        reopen_screen
+    done
+    return 1
+}
+screen_says "$SWITCH" || fail "the chain screen did not offer the test tool"
 # The tool's proxy answered without asking for a password: the screen says what that lets other apps
 # do (ADR 0041, decision 5). The test tool can take a password, so the screen does not say it has none.
-scroll_to "The proxy of Datapavan test tool asks for no password, so any app on this phone can use it." ||
+screen_says "The proxy of Datapavan test tool asks for no password, so any app on this phone can use it." ||
     fail "the chain screen did not say that any app on the phone can use the tool's open proxy"
 screen_has "Datapavan test tool has no setting for a password" && fail "the chain screen said the test tool takes no password"
 echo "ok: the screen says that any app can use the tool's proxy while it asks for no password"
@@ -243,8 +269,19 @@ read_shown() {
     dump_screen || true
     { adb shell cat "$DUMP" | tr -d '\r' | grep -o "text=\"$1[^\"]*\"" | sed "s/^text=\"$1//; s/\"\$//" | head -1; } || true
 }
-user=$(read_shown "User name: ")
-password=$(read_shown "Password: ")
+# The user name and password show while the screen's last search found the tool: if they are missing, the
+# search is run again, as a user would by leaving the screen and coming back, up to three times. What the
+# screen must offer is unchanged.
+for try in 1 2 3; do
+    user=$(read_shown "User name: ")
+    password=$(read_shown "Password: ")
+    [ -n "$user" ] && [ -n "$password" ] && break
+    [ "$try" = 3 ] && break
+    echo "  try $try: the chain screen showed no user name and password; its last searches:" >&2
+    search_log | grep '^screen: ' | tail -3 | sed 's/^/    /' >&2 || true
+    reopen_screen
+    search_offers_tool || true
+done
 [ -n "$user" ] && [ -n "$password" ] || fail "the chain screen offered no user name and password for the tool"
 listening=$(tool_log | grep -c "^listening")
 adb shell am force-stop "$TOOL"
@@ -341,8 +378,7 @@ echo "ok: on the chain screen: Watch's password set in the tool, one picked app'
 # allows UDP, and the picked app's datagrams go through the tool's relay.
 adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
 UDP_SWITCH="Send UDP through Datapavan test tool too"
-for _ in $(seq 1 30); do screen_has "$SWITCH" && break; sleep 1; done
-scroll_to "The proxy of Datapavan test tool asks for a password, so other apps on this phone cannot use it." ||
+screen_says "The proxy of Datapavan test tool asks for a password, so other apps on this phone cannot use it." ||
     fail "the chain screen did not say that the tool's proxy now asks for a password"
 tap_text "$UDP_SWITCH" || fail "the chain screen has no switch for UDP"
 sleep 2

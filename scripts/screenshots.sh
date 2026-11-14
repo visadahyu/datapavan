@@ -73,10 +73,13 @@ for mode in light dark; do
             capture "$tab"
         done
         tap_id settings || { echo "SCREENSHOTS FAILED: no settings button in $locale" >&2; exit 1; }
+        # Each picture is taken once its screen has replaced the one before.
+        within 10 gone_id settings || { echo "SCREENSHOTS FAILED: the settings did not open in $locale" >&2; exit 1; }
         capture settings
         adb shell input keyevent KEYCODE_BACK
         open_tab apps
         tap_id app-row || { echo "SCREENSHOTS FAILED: no app in the list in $locale" >&2; exit 1; }
+        within 10 gone_id app-row || { echo "SCREENSHOTS FAILED: the app's page did not open in $locale" >&2; exit 1; }
         capture app
         # The plan, opened as its launcher shortcut opens it (xml/shortcuts.xml).
         adb shell am start -W -a org.visadahyu.datapavan.action.OPEN_PLAN -f 0x1000c000 -n "$PKG/.MainActivity" --ez screenshots_for_tests true >/dev/null

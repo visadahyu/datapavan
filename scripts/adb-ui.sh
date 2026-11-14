@@ -8,6 +8,19 @@ is_emulator() {
     [ "$(adb shell getprop ro.boot.qemu | tr -d '\r')" = 1 ] || [ "$(adb shell getprop ro.kernel.qemu | tr -d '\r')" = 1 ]
 }
 
+# Runs the command after $1 until it succeeds, once a second for up to $1 seconds, and fails if it never
+# does: a check reads a state only once it has had time to arrive, instead of after a fixed sleep. The
+# caller's failure message names what was waited for. Only for what must become true: a check that
+# something must not happen keeps its fixed window.
+within() {
+    local deadline=$((SECONDS + $1))
+    shift
+    until "$@"; do
+        [ "$SECONDS" -lt "$deadline" ] || return 1
+        sleep 1
+    done
+}
+
 # Reads the screen into $DUMP. On a slow emulator Android can put an "isn't responding" dialog over
 # anything: on CI the launcher hangs behind the app in about half the runs. For another app's process
 # that says nothing about ours, so the dialog is answered and the screen read again. Wait only closes
@@ -58,6 +71,19 @@ window_secure() {
     local attrs
     attrs=$(window_attrs "$1") || return 1
     grep -o -E '(^|[^p])fl=[A-Z_ ]+' <<<"$attrs" | grep -w SECURE >/dev/null
+}
+
+# True when Android lists a window of the package $1: its flags can be read.
+window_listed() {
+    local attrs
+    attrs=$(window_attrs "$1") || return 1
+    [ -n "$attrs" ]
+}
+
+# True when the package $1's window is listed and not protected from screenshots. A window that is not
+# listed yet is not counted as unprotected.
+window_unprotected() {
+    window_listed "$1" && ! window_secure "$1"
 }
 
 # True when Android hides other apps' overlays over the package $1's window (Android 12 and later,
@@ -232,6 +258,17 @@ start_audit() {
 has_id() {
     dump_screen || return 1
     adb shell cat "$DUMP" 2>/dev/null | grep -q "resource-id=\"$1\""
+}
+
+# True when the screen was read and holds no element whose resource-id is $1: the screen that had it
+# has been left.
+gone_id() {
+    local screen
+    dump_screen || return 1
+    # Read whole: under pipefail, a grep -q that stops reading early fails the pipe, which the negation
+    # would turn into "gone".
+    screen=$(adb shell cat "$DUMP" 2>/dev/null) && [ -n "$screen" ] || return 1
+    ! grep -q "resource-id=\"$1\"" <<<"$screen"
 }
 
 # Waits until the audit overview shows, in any language: the loading screen has nothing to tap.

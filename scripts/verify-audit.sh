@@ -69,6 +69,10 @@ fail() {
     exit 1
 }
 
+# True when the fixture's own page shows, not another app's: its name above the plain-language card
+# (ADR 0027).
+fixture_page() { screen_has "In plain words" && screen_has "Datapavan test fixture"; }
+
 # Looks below the current position first, then once more from the top: on a tall screen an item can
 # already be above the place where the previous one was found.
 expect() {
@@ -146,9 +150,7 @@ wait_for_tracker_scan || fail "the tracker scan did not finish"
 
 open_tab apps || fail "no apps destination"
 tap_text "Datapavan test fixture" || fail "the fixture app is not listed"
-sleep 1
-# The fixture's own page, not another app's: its name above the plain-language card (ADR 0027).
-screen_has "In plain words" && screen_has "Datapavan test fixture" || fail "the fixture's page did not open"
+within 15 fixture_page || fail "the fixture's page did not open within 15 s"
 scroll_to_top
 expect "VPN app that can control the phone"
 expect "Can install other apps"
@@ -175,7 +177,7 @@ if adb shell pm list packages -e "$GMS" | tr -d '\r' | grep -q "^package:$GMS\$"
     wait_for_tracker_scan || fail "the tracker scan did not finish with Google Play services off"
     open_tab apps || fail "no apps destination with Google Play services off"
     tap_text "Datapavan test fixture" || fail "the fixture app is not listed with Google Play services off"
-    sleep 1
+    within 15 fixture_page || fail "the fixture's page did not open within 15 s with Google Play services off"
     open_sections
     expect "Needs a service this phone lacks"
     expect "Reading Google"
@@ -192,7 +194,7 @@ adb install -r "$impostor_apk" >/dev/null
 start_audit || fail "the audit overview did not appear with the impostor installed"
 open_tab apps || fail "no apps destination with the impostor installed"
 tap_text "Datapavan test fixture" || fail "the impostor is not listed"
-sleep 1
+within 15 fixture_page || fail "the impostor's page did not open within 15 s"
 open_sections
 expect "Modified copy"
 expect "This copy of Exclave is not signed by its developer."
@@ -204,7 +206,7 @@ adb install -r "$public_key_apk" >/dev/null
 start_audit || fail "the audit overview did not appear with the public-key fixture installed"
 open_tab apps || fail "no apps destination with the public-key fixture installed"
 tap_text "Datapavan test fixture" || fail "the public-key fixture is not listed"
-sleep 1
+within 15 fixture_page || fail "the public-key fixture's page did not open within 15 s"
 open_sections
 expect "Signed with a leaked or public system key"
 expect "Its key is one of Android"

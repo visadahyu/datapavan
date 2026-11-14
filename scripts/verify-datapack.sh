@@ -54,12 +54,11 @@ expect() {
 # data sources button can be many screens down.
 open_data_sources() {
     tap_id settings || fail "no settings button"
-    sleep 1
+    within 10 gone_id settings || fail "the settings did not open within 10 s"
     for _ in 1 2 3 4 5; do
         tap_text "Data sources" && break
     done
-    sleep 1
-    screen_has "Datapavan compares your apps" || fail "the data sources screen did not open"
+    within 10 screen_has "Datapavan compares your apps" || fail "the data sources screen did not open within 10 s"
 }
 
 # Imports $1 from Downloads through the system file picker. The picker opens where it was last used,
@@ -77,9 +76,9 @@ import_pack() {
     done
     if ! screen_has "$1"; then
         tap_desc "Show roots" || fail "the file picker has no list of places"
-        sleep 1
+        within 10 screen_has "Downloads" || fail "the file picker's list of places showed no Downloads within 10 s"
         tap_text "Downloads" || fail "the file picker shows no Downloads"
-        sleep 2
+        within 10 screen_has "$1" || echo "  the file picker did not show $1 within 10 s of opening Downloads"
     fi
     tap_text "$1" || fail "the file picker does not show $1"
     sleep 2

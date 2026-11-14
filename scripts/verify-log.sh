@@ -194,18 +194,22 @@ else
     echo "skipped: the screen checks, as the phone's language is not English"
 fi
 
-# A flow open when the tunnel stops still reaches the log: the engine hands over its last records.
-timeout 20 adb shell "sleep 8 | nc -w 10 $HOST $PORT" >/dev/null 2>&1 &
+# A flow open when the tunnel stops still reaches the log: the engine hands over its last records. The
+# tunnel stops once Watch lists the new connection, which stays open for 8 s.
+shell_tcp_flows() { watch_dump </dev/null | grep -cE "^flow tcp [^ ]+ ${HOST//./\\.}:$PORT $SHELL_UID opened " || true; }
+flows_before=$(shell_tcp_flows)
+more_tcp_flows() { [ "$(shell_tcp_flows)" -gt "$flows_before" ]; }
+timeout 20 adb shell "sleep 8 | nc -w 10 $HOST $PORT" </dev/null >/dev/null 2>&1 &
 talking=$!
-sleep 3
+within 6 more_tcp_flows || fail "Watch did not list the shell's open connection within 6 s, before the tunnel was to stop"
 adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez stop true >/dev/null
 for _ in $(seq 1 20); do vpn_up || break; sleep 1; done
 wait "$talking" 2>/dev/null || true
 adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
 vpn_up || fail "Watch's tunnel did not come up again"
-watch_dump log-today | grep -qE "^log-record tcp $SHELL_UID $HOST:$PORT up=0 down=0 ended " ||
-    fail "a flow open when the tunnel stopped did not reach the log"
+stopped_flow_logged() { grep -qE "^log-record tcp $SHELL_UID $HOST:$PORT up=0 down=0 ended " <<<"$(watch_dump log-today)"; }
+within 15 stopped_flow_logged || fail "a flow open when the tunnel stopped did not reach the log within 15 s"
 echo "ok: a flow open when the tunnel stops reaches the log"
 
 # Over a scripted session, the log's bytes for the shell match Android's own count within 5 %: downloads,
@@ -222,9 +226,18 @@ done
 for name in example.com example.org example.net; do
     timeout 10 adb shell "echo watch | nc -u -q 1 $name 9" >/dev/null 2>&1 || true
 done
-sleep 2
-read -r android_up1 android_down1 <<<"$(android_bytes)"
-read -r log_up1 log_down1 <<<"$(log_bytes)"
+# Both counts are read once they have stopped growing, two reads two seconds apart the same, for up to
+# 30 s: Android's statistics and the engine's last records both arrive a moment after the traffic.
+previous=""
+for _ in $(seq 1 15); do
+    sleep 2
+    read -r android_up1 android_down1 <<<"$(android_bytes)"
+    read -r log_up1 log_down1 <<<"$(log_bytes)"
+    counts="$android_up1 $android_down1 $log_up1 $log_down1"
+    [ "$counts" = "$previous" ] && break
+    previous=$counts
+done
+[ "$counts" = "$previous" ] || echo "  the counts were still growing after 30 s: compared as they stand"
 python3 -I - "$((android_up1 - android_up0))" "$((android_down1 - android_down0))" \
     "$((log_up1 - log_up0))" "$((log_down1 - log_down0))" <<'PY' || fail "the log's bytes are not within 5 % of Android's count"
 import sys
@@ -285,16 +298,20 @@ watch_dump log-day "$earlier" | grep -q "^log-day $earlier open 1$" || fail "the
 adb shell locksettings set-pin "$PIN" >/dev/null
 PIN_SET=1
 adb shell input keyevent KEYCODE_SLEEP
-sleep 3
-result=$(watch_dump log-day "$earlier" | sed -n "s/^log-day $earlier //p")
-[ "$result" = locked ] || fail "the earlier day was '$result' while the phone was locked"
-adb shell input keyevent KEYCODE_WAKEUP
-adb shell wm dismiss-keyguard
-sleep 1
-adb shell input text "$PIN"
-adb shell input keyevent KEYCODE_ENTER
-sleep 2
-result=$(watch_dump log-day "$earlier" | sed -n "s/^log-day $earlier //p")
+earlier_day() { watch_dump log-day "$earlier" | sed -n "s/^log-day $earlier //p"; }
+earlier_is() { result=$(earlier_day); [ "$result" = "$1" ]; }
+within 15 earlier_is locked || fail "the earlier day was '$result' 15 s after the phone was locked"
+# The PIN is typed once Android shows its keyguard's PIN entry, and typed again if the phone stayed locked.
+pin_entry_shown() { has_id "com.android.systemui:id/pinEntry"; }
+for try in 1 2 3; do
+    adb shell input keyevent KEYCODE_WAKEUP
+    adb shell wm dismiss-keyguard
+    within 5 pin_entry_shown || true
+    adb shell input text "$PIN"
+    adb shell input keyevent KEYCODE_ENTER
+    within 10 earlier_is "open 1" && break
+    echo "  try $try: the earlier day was '$result' after the PIN was typed" >&2
+done
 [ "$result" = "open 1" ] || fail "the earlier day was '$result' once the phone was unlocked"
 # Watch's screen, back in front after the unlock, reads the screen lock again.
 if [ -n "$english" ]; then

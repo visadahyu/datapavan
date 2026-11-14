@@ -154,13 +154,13 @@ if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 31 ]; then
     window_hides_overlays "$PKG" || fail "Android does not hide other apps' overlays over Watch's window"
 fi
 tap_text "$(string values screenshots_allow)" || fail "no button to allow screenshots"
-sleep 1
-! window_secure "$PKG" || fail "Watch's window stayed protected after screenshots were allowed"
-screen_has "$(string values screenshots_block)" || fail "Watch does not offer to block screenshots again"
+within 10 window_unprotected "$PKG" || fail "Watch's window stayed protected 10 s after screenshots were allowed"
+within 10 screen_has "$(string values screenshots_block)" || fail "Watch does not offer to block screenshots again"
 adb shell input keyevent KEYCODE_HOME
 for _ in 1 2 3 4 5; do window_secure "$PKG" && break; sleep 1; done
 adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
-sleep 1
+# Read once its window is listed again: from then on it must be protected, with no wait.
+within 10 window_listed "$PKG" || fail "Watch's window was not listed 10 s after it came back"
 window_secure "$PKG" || fail "Watch's window was not protected again after it left the screen"
 echo "ok: the screen is protected, screenshots can be allowed, and leaving the screen protects it again"
 

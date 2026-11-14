@@ -75,10 +75,9 @@ echo "ok: no INTERNET permission"
 # settings button scrolls away with the summary's top.
 scroll_to_top
 tap_id settings || fail "no settings button"
-sleep 1
+within 10 gone_id settings || fail "the settings did not open within 10 s"
 tap_text "About" || fail "settings have no About"
-sleep 1
-scroll_to "Newer versions" || fail "About does not say where newer versions are"
+within 5 screen_has "Newer versions" || scroll_to "Newer versions" || fail "About does not say where newer versions are"
 screen_has "datapavan.org" || fail "About does not show the website's address"
 echo "ok: About says where newer versions are"
 adb shell input keyevent KEYCODE_BACK
@@ -92,15 +91,15 @@ if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 31 ]; then
 fi
 scroll_to_top
 tap_id settings || fail "no settings button"
-sleep 1
+within 10 gone_id settings || fail "the settings did not open within 10 s"
 tap_text "Allow screenshots for one minute" || fail "the settings have no button to allow screenshots"
-sleep 1
-! window_secure "$PKG" || fail "the app's window stayed protected after screenshots were allowed"
-screen_has "Block screenshots now" || fail "the settings do not offer to block screenshots again"
+within 10 window_unprotected "$PKG" || fail "the app's window stayed protected 10 s after screenshots were allowed"
+within 10 screen_has "Block screenshots now" || fail "the settings do not offer to block screenshots again"
 adb shell input keyevent KEYCODE_HOME
 for _ in 1 2 3 4 5; do window_secure "$PKG" && break; sleep 1; done
 adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
-sleep 1
+# Read once its window is listed again: from then on it must be protected, with no wait.
+within 10 window_listed "$PKG" || fail "the app's window was not listed 10 s after it came back"
 window_secure "$PKG" || fail "the app's window was not protected again after it left the screen"
 echo "ok: the screen is protected, screenshots can be allowed, and leaving the screen protects it again"
 adb shell input keyevent KEYCODE_BACK

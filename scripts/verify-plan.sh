@@ -104,7 +104,13 @@ tap "Accessibility"
 # Settings is open; the service goes off as if the user had switched it there.
 adb shell settings delete secure enabled_accessibility_services
 adb shell settings put secure accessibility_enabled 0
-sleep 2
+# Back to the plan once Android reports the service off, which the plan then reads.
+fixture_service_off() {
+    local services
+    services=$(adb shell dumpsys accessibility </dev/null) && [ -n "$services" ] || return 1
+    ! grep -q "Enabled services:{.*$FIXTURE/" <<<"$services"
+}
+within 20 fixture_service_off || fail "Android still reported the fixture's accessibility service on 20 s after it was turned off"
 adb shell input keyevent KEYCODE_BACK
 expect "Changed: Accessibility service removed"
 tap "Finish"
