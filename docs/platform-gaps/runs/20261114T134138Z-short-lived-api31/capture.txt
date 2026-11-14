@@ -1,0 +1,6 @@
+packets 32777
+to tcp-syn 10.0.2.2:8792 200
+to udp 10.0.2.2:8796 200
+pattern gaps-loopback 0
+pattern gaps-short-lived 200
+pattern gaps.example 0

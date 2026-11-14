@@ -1,0 +1,13 @@
+behaviour short-lived
+android 12
+api 31
+date 2026-11-14T13:41:38Z
+probe_commit 9f8d187a0a9e
+trials 100
+serial emulator-5600
+cores 16-23
+alone yes
+run runs/20261114T134138Z-short-lived-api31
+beside_before load=11.17,12.87,11.31 mem_available_mb=41333 emulators=0 busy=python:99%,other:316%
+beside_after load=12.74,12.84,11.47 mem_available_mb=34200 emulators=1 busy=other:1127%
+capture_sha256 589b5278be116718fb59297943f941c08b2e505637b600f9036ac3f290c01d44

@@ -1,0 +1,22 @@
+vpn-seen none active transports=cellular not_vpn=true iface=eth0 addresses=fe80::5054:ff:fe12:3456/64,10.0.2.15/24,fec0::5054:ff:fe12:3456/64 routes=5 dns=10.0.2.3
+vpn-seen none network transports=cellular not_vpn=true iface=eth0 addresses=fe80::5054:ff:fe12:3456/64,10.0.2.15/24,fec0::5054:ff:fe12:3456/64 routes=5 dns=10.0.2.3
+vpn-seen none interface name=dummy0 up=true addresses=fe80::28de:5ff:fe03:ca98%dummy0/64
+vpn-seen none interface name=eth0 up=true addresses=fe80::5054:ff:fe12:3456%eth0/64,fec0::5054:ff:fe12:3456/64,10.0.2.15/24
+vpn-seen none interface name=lo up=true addresses=::1/128,127.0.0.1/8
+vpn-seen none done
+vpn-seen inside active transports=vpn,cellular not_vpn=false iface=tun0 addresses=10.1.10.1/32,fd00:1:fd00:1:fd00:1:fd00:1/128 routes=4 dns=10.1.10.3,fd00:1:fd00:1:fd00:1:fd00:3
+vpn-seen inside network transports=cellular not_vpn=true iface=eth0 addresses=fe80::5054:ff:fe12:3456/64,10.0.2.15/24,fec0::5054:ff:fe12:3456/64 routes=5 dns=10.0.2.3
+vpn-seen inside network transports=vpn,cellular not_vpn=false iface=tun0 addresses=10.1.10.1/32,fd00:1:fd00:1:fd00:1:fd00:1/128 routes=4 dns=10.1.10.3,fd00:1:fd00:1:fd00:1:fd00:3
+vpn-seen inside interface name=dummy0 up=true addresses=fe80::28de:5ff:fe03:ca98%dummy0/64
+vpn-seen inside interface name=eth0 up=true addresses=fe80::5054:ff:fe12:3456%eth0/64,fec0::5054:ff:fe12:3456/64,10.0.2.15/24
+vpn-seen inside interface name=lo up=true addresses=::1/128,127.0.0.1/8
+vpn-seen inside interface name=tun0 up=true addresses=fe80::e370:b620:26e:58f2%tun0/64,fd00:1:fd00:1:fd00:1:fd00:1/128,10.1.10.1/32
+vpn-seen inside done
+vpn-seen left-out active transports=cellular not_vpn=true iface=eth0 addresses=fe80::5054:ff:fe12:3456/64,10.0.2.15/24,fec0::5054:ff:fe12:3456/64 routes=5 dns=10.0.2.3
+vpn-seen left-out network transports=cellular not_vpn=true iface=eth0 addresses=fe80::5054:ff:fe12:3456/64,10.0.2.15/24,fec0::5054:ff:fe12:3456/64 routes=5 dns=10.0.2.3
+vpn-seen left-out network transports=vpn,cellular not_vpn=false iface=tun0 addresses=10.1.10.1/32,fd00:1:fd00:1:fd00:1:fd00:1/128 routes=4 dns=10.1.10.3,fd00:1:fd00:1:fd00:1:fd00:3
+vpn-seen left-out interface name=dummy0 up=true addresses=fe80::28de:5ff:fe03:ca98%dummy0/64
+vpn-seen left-out interface name=eth0 up=true addresses=fe80::5054:ff:fe12:3456%eth0/64,fec0::5054:ff:fe12:3456/64,10.0.2.15/24
+vpn-seen left-out interface name=lo up=true addresses=::1/128,127.0.0.1/8
+vpn-seen left-out interface name=tun0 up=true addresses=fe80::e6ff:94cd:e68e:8d27%tun0/64,fd00:1:fd00:1:fd00:1:fd00:1/128,10.1.10.1/32
+vpn-seen left-out done

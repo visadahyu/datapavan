@@ -1,0 +1,12 @@
+loopback listen ready
+loopback listen v4 accepted=yes ask=match
+loopback connect v4 answer=match
+loopback connect v6 answer=match
+loopback listen v6 accepted=yes ask=match
+loopback connect done
+loopback listen done
+fixture emulator hardware=ranchu qemu=true
+fixture waiting confirm
+fixture confirmed
+fixture socket v4 answer=refused error=SocketException:socket_failed:_EPERM_(Operation_not_permitted)
+fixture done

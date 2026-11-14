@@ -1,0 +1,14 @@
+behaviour carried-by-system
+android 11
+api 30
+date 2026-11-14T12:26:15Z
+probe_commit 2700d0812c48
+trials 100
+parts resolver
+serial emulator-5600
+cores 16-23
+alone yes
+run runs/20261114T122615Z-carried-by-system-api30-resolver
+beside_before load=9.03,10.94,10.95 mem_available_mb=39218 emulators=0 busy=python:593%,other:54%
+beside_after load=9.85,10.59,10.82 mem_available_mb=33164 emulators=1 busy=python:701%,other:53%
+capture_sha256 e0b3f901c395f18a702a5c4730ed1abaced0ff912b3446828aaa197951899ce0

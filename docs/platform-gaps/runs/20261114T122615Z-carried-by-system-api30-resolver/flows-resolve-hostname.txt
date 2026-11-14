@@ -1,0 +1,6 @@
+tcp - other:443 10122 - - - - - -
+tcp 10.1.10.1:44728 10.1.10.3:853 1051 unreachable - - encrypted - -
+tcp - other:443 10146 - - - - - -
+tcp - other:443 10146 - - - - - -
+tcp - other:443 10122 - - - - - -
+tcp [fd00:1:fd00:1:fd00:1:fd00:1]:47864 [fd00:1:fd00:1:fd00:1:fd00:3]:853 1051 unreachable - - encrypted - -

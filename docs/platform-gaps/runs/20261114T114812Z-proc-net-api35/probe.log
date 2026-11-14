@@ -1,0 +1,7 @@
+proc-net once file=tcp answer=refused error=/proc/net/tcp:_open_failed:_EACCES_(Permission_denied)
+proc-net once file=tcp6 answer=refused error=/proc/net/tcp6:_open_failed:_EACCES_(Permission_denied)
+proc-net once file=udp answer=refused error=/proc/net/udp:_open_failed:_EACCES_(Permission_denied)
+proc-net once file=udp6 answer=refused error=/proc/net/udp6:_open_failed:_EACCES_(Permission_denied)
+proc-net once file=unix answer=refused error=/proc/net/unix:_open_failed:_EACCES_(Permission_denied)
+proc-net once file=route answer=refused error=/proc/net/route:_open_failed:_EACCES_(Permission_denied)
+proc-net once done

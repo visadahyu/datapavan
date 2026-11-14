@@ -1,0 +1,13 @@
+behaviour loopback
+android 16
+api 36
+date 2026-11-14T13:00:39Z
+probe_commit 70da7f83476d
+trials 1
+serial emulator-5602
+cores 16-19
+alone no
+run runs/20261114T130039Z-loopback-api36
+beside_before load=12.14,16.44,14.62 mem_available_mb=40877 emulators=1 busy=qemu-system-x86:260%,python:296%,other:81%
+beside_after load=18.35,17.36,15.08 mem_available_mb=33611 emulators=2 busy=qemu-system-x86:521%,python:267%,other:23%
+capture_sha256 b230b485cdde4c0f7ff3148b72b70fef7f9e8e7dc119385bed71900788f8d057

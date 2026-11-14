@@ -1,0 +1,14 @@
+behaviour carried-by-system
+android 14
+api 34
+date 2026-11-14T13:15:15Z
+probe_commit 5a7d10828787
+trials 1
+parts download,tab,push
+serial emulator-5600
+cores 16-23
+alone yes
+run runs/20261114T131515Z-carried-by-system-api34-download-tab-push
+beside_before load=9.16,12.11,12.89 mem_available_mb=45022 emulators=0 busy=python:200%,other:42%
+beside_after load=8.94,11.58,12.66 mem_available_mb=39280 emulators=1 busy=qemu-system-x86:12%,python:297%,other:15%
+capture_sha256 6828a578c2231e98931f3c3bd66ad34fc0cd28777ec8b9b6e5388e3b66026b58

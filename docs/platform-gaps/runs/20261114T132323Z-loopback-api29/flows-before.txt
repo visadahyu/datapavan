@@ -1,0 +1,3 @@
+tcp 10.1.10.1:39018 10.1.10.3:853 0 unreachable - - encrypted - -
+tcp 10.1.10.1:39020 10.1.10.3:853 0 unreachable - - encrypted - -
+udp 10.1.10.1:18174 10.1.10.3:53 1051 unreachable - - - - -

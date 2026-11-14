@@ -1,0 +1,12 @@
+indicators clip clip=set
+indicators clip done
+fixture emulator hardware=ranchu qemu=true
+fixture waiting confirm
+fixture confirmed
+fixture read kind=clipboard answer=read count=1
+fixture read kind=contacts answer=read count=1
+fixture read kind=calllog answer=read count=1
+fixture read kind=sms answer=read count=1
+fixture read kind=media answer=read count=1
+fixture read kind=mic answer=read count=32000
+fixture done

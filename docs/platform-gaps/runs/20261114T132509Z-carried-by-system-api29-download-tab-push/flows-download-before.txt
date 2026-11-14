@@ -1,0 +1,7 @@
+tcp [fd00:1:fd00:1:fd00:1:fd00:1]:36172 [fd00:1:fd00:1:fd00:1:fd00:3]:853 0 unreachable - - encrypted - -
+tcp 10.1.10.1:48994 10.1.10.3:853 0 unreachable - - encrypted - -
+tcp [fd00:1:fd00:1:fd00:1:fd00:1]:36174 [fd00:1:fd00:1:fd00:1:fd00:3]:853 0 unreachable - - encrypted - -
+udp 10.1.10.1:60161 10.1.10.3:53 1051 unreachable - - - - -
+udp 10.1.10.1:53170 10.1.10.3:53 10122 unreachable - - - - -
+udp 10.1.10.1:56485 10.1.10.3:53 10122 unreachable - - - - -
+udp 10.1.10.1:4587 10.1.10.3:53 1051 unreachable - - - - -

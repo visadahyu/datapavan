@@ -1,0 +1,4 @@
+tcp - other:853 1051 - - - - - -
+tcp - other:443 10102 - - - - - -
+tcp 10.1.10.1:58082 10.1.10.3:853 1051 unreachable - - encrypted - -
+tcp - other:443 10109 - - - - - -

@@ -1,0 +1,6 @@
+packets 44011
+to tcp-syn 10.0.2.2:8792 2
+to tcp-syn 10.0.2.2:8793 2
+pattern gaps-loopback 0
+pattern gaps-short-lived 0
+pattern gaps.example 0

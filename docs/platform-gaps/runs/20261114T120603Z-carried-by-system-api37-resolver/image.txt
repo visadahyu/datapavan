@@ -1,0 +1,9 @@
+image system-images;android-37.0;google_apis_playstore_ps16k;x86_64
+image_revision 7
+archive_sha1 not-in-sdk-cache
+image_files_sha256 65d6ece91f26be1f5f56eb181c5c660375d7ed71fff2b2f16ee138093808692b
+fingerprint google/sdk_gphone16k_x86_64/emu64xa16k:17/CE2A.260420.051.A2/16418371:user/dev-keys
+security_patch 2026-08-05
+play_update 2026-03
+resolver com.google.android.resolv@370399999
+emulator 37.2.13.0

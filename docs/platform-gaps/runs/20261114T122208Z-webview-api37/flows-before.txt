@@ -1,0 +1,15 @@
+udp 10.1.10.1:27179 10.1.10.3:53 - unreachable - - - - -
+udp 10.1.10.1:3755 10.1.10.3:53 - unreachable - - - - -
+udp 10.1.10.1:36186 10.1.10.3:53 10228 unreachable - - - - -
+tcp 10.1.10.1:40760 10.1.10.3:853 1051 unreachable - - encrypted - -
+tcp [fd00:1:fd00:1:fd00:1:fd00:1]:33606 [fd00:1:fd00:1:fd00:1:fd00:3]:853 1051 unreachable - - encrypted - -
+udp 10.1.10.1:2272 10.1.10.3:53 10228 unreachable - - - - -
+udp 10.1.10.1:54818 10.1.10.3:53 10228 unreachable - - - - -
+udp 10.1.10.1:54988 10.1.10.3:53 10228 unreachable - - - - -
+udp - other:443 10156 - - - - - -
+udp - other:443 - - - - - - -
+udp 10.1.10.1:19280 10.1.10.3:53 10228 unreachable - - - - -
+udp 10.1.10.1:34777 10.1.10.3:53 10228 unreachable - - - - -
+tcp 10.1.10.1:40766 10.1.10.3:853 1051 unreachable - - encrypted - -
+tcp [fd00:1:fd00:1:fd00:1:fd00:1]:33616 [fd00:1:fd00:1:fd00:1:fd00:3]:853 1051 unreachable - - encrypted - -
+udp - other:443 10156 - - - - - -

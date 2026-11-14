@@ -1,0 +1,13 @@
+behaviour appops-closed
+android 14
+api 34
+date 2026-11-14T13:10:15Z
+probe_commit 70da7f83476d
+trials 1
+serial emulator-5602
+cores 16-19
+alone no
+run runs/20261114T131015Z-appops-closed-api34
+beside_before load=8.20,10.56,12.61 mem_available_mb=40505 emulators=1 busy=qemu-system-x86:356%,python:198%
+beside_after load=15.16,12.24,12.99 mem_available_mb=37052 emulators=1 busy=qemu-system-x86:43%,python:294%,other:243%
+capture_sha256 7d5650ffda7bcc6dad858fcf2a9833f275589d870ce8603a9257f80da5b2a082

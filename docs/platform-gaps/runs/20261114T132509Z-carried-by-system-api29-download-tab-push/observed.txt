@@ -1,0 +1,1 @@
+tab-screen com.android.chrome/org.chromium.chrome.browser.firstrun.FirstRunActivity

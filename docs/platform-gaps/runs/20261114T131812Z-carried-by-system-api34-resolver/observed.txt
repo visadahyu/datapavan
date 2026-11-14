@@ -1,0 +1,3 @@
+private-dns off watch=plain
+private-dns opportunistic watch=plain
+private-dns hostname watch=strict_dns.google

@@ -1,0 +1,2 @@
+tcp 10.1.10.1:41616 10.1.10.3:853 1051 unreachable - - encrypted - -
+tcp [fd00:1:fd00:1:fd00:1:fd00:1]:49844 [fd00:1:fd00:1:fd00:1:fd00:3]:853 1051 unreachable - - encrypted - -

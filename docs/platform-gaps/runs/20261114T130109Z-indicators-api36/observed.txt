@@ -1,0 +1,30 @@
+seeded contacts 1
+seeded calllog 1
+seeded sms 1
+seeded media 1
+chip "Applications are using your microphone."
+privacy-item TYPE_MICROPHONE org.visadahyu.lab.gapsfixture
+toast Gaps fixture (lab) pasted from your clipboard
+notification android DEVELOPER
+notification android PHYSICAL_KEYBOARD
+notification com.google.android.apps.messaging bugle_default_channel
+notification com.google.android.dialer phone_missed_call
+dashboard Past 24 hours
+dashboard Microphone
+dashboard Location: Not used in past 24 hours
+dashboard Camera: Not used in past 24 hours
+dashboard Microphone: Used by 1 app
+dashboard See other permissions
+dashboard Calendar, Call logs, and 9 more
+dashboard Other
+dashboard Calendar: Not used in past 24 hours
+dashboard Call logs: Used by 2 apps
+dashboard Contacts: Used by 4 apps
+dashboard Files: Not used in past 24 hours
+dashboard Health, fitness and wellness: Not used in past 24 hours
+dashboard Music and audio: Not used in past 24 hours
+dashboard Nearby devices: Used by 2 apps
+dashboard Phone: Used by 2 apps
+dashboard Photos and videos: Used by 1 app
+dashboard Physical activity: Not used in past 24 hours
+dashboard SMS: Used by 2 apps

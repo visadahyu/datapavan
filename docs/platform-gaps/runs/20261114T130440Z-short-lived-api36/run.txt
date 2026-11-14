@@ -1,0 +1,13 @@
+behaviour short-lived
+android 16
+api 36
+date 2026-11-14T13:04:40Z
+probe_commit 70da7f83476d
+trials 100
+serial emulator-5600
+cores 16-23
+alone yes
+run runs/20261114T130440Z-short-lived-api36
+beside_before load=10.03,14.18,14.25 mem_available_mb=44443 emulators=0 busy=python:199%,other:37%
+beside_after load=7.41,11.86,13.40 mem_available_mb=36950 emulators=1 busy=qemu-system-x86:13%,python:612%,other:13%
+capture_sha256 243b2208e27911d4fdcdf1a85d98331b8fe1a61c8265d246dc37ab7af83b750c

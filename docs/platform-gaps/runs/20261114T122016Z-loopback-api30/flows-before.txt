@@ -1,0 +1,5 @@
+tcp [fd00:1:fd00:1:fd00:1:fd00:1]:42484 [fd00:1:fd00:1:fd00:1:fd00:3]:853 1051 unreachable - - encrypted - -
+tcp 10.1.10.1:32780 10.1.10.3:853 1051 unreachable - - encrypted - -
+udp 10.1.10.1:58511 10.1.10.3:53 10145 unreachable - - - - -
+udp 10.1.10.1:18505 10.1.10.3:53 10118 unreachable - - - - -
+udp 10.1.10.1:47072 10.1.10.3:53 10143 unreachable - - - - -

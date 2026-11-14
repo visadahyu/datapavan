@@ -1,0 +1,13 @@
+tcp 10.1.10.1:33074 10.1.10.3:853 1051 unreachable - - encrypted - -
+tcp - other:853 1051 - - - - - -
+tcp - other:443 10147 - - - - - -
+tcp - other:443 10147 - - - - - -
+tcp - other:443 10147 - - - - - -
+tcp - other:443 10147 - - - - - -
+tcp - other:443 10147 - - - - - -
+tcp - other:443 10147 - - - - - -
+tcp [fd00:1:fd00:1:fd00:1:fd00:1]:49564 [fd00:1:fd00:1:fd00:1:fd00:3]:853 1051 unreachable - - encrypted - -
+tcp - other:443 10147 - - - - - -
+tcp - other:443 10147 - - - - - -
+tcp - other:443 10147 - - - - - -
+udp - other:443 10147 - - - - - -

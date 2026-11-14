@@ -1,0 +1,9 @@
+image system-images;android-35;google_apis;x86_64
+image_revision 9
+archive_sha1 0103e6dab21290c4b9d16550a3ce99476f884eef
+image_files_sha256 f742fb7051357d57776766b627d56cf9243a248bdf10de27d36446b8ace8b1f0
+fingerprint google/sdk_gphone64_x86_64/emu64xa:15/AE3A.240806.043/12960925:userdebug/dev-keys
+security_patch 2024-09-05
+play_update 2024-07
+resolver com.google.android.resolv@350820300
+emulator 37.2.13.0

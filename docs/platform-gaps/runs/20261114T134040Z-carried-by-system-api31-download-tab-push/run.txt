@@ -1,0 +1,14 @@
+behaviour carried-by-system
+android 12
+api 31
+date 2026-11-14T13:40:40Z
+probe_commit 7f1d6211f78f
+trials 1
+parts download,tab,push
+serial emulator-5600
+cores 16-23
+alone yes
+run runs/20261114T134040Z-carried-by-system-api31-download-tab-push
+beside_before load=12.65,13.34,11.35 mem_available_mb=41507 emulators=0 busy=python:99%,other:292%
+beside_after load=11.62,12.98,11.34 mem_available_mb=35781 emulators=1 busy=qemu-system-x86:69%,python:100%,other:366%
+capture_sha256 cb507b5f09753b867393b5d94c5bba051ddc7b65f475dbb06ee6f0281384f208

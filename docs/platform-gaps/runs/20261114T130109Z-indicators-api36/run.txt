@@ -1,0 +1,13 @@
+behaviour indicators
+android 16
+api 36
+date 2026-11-14T13:01:09Z
+probe_commit 70da7f83476d
+trials 1
+serial emulator-5604
+cores 20-23
+alone no
+run runs/20261114T130109Z-indicators-api36
+beside_before load=15.24,16.73,14.78 mem_available_mb=34664 emulators=2 busy=qemu-system-x86:495%,python:298%,other:48%
+beside_after load=9.83,15.17,14.55 mem_available_mb=40024 emulators=1 busy=python:199%,other:23%
+capture_sha256 43625d4ad70c682b831981b7c533b4ef6600edcc06baed9b96840f6795192550

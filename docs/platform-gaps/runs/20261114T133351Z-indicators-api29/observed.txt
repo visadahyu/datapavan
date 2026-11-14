@@ -1,0 +1,11 @@
+seeded contacts 1
+seeded calllog 0
+seeded sms 1
+seeded media 1
+notification android DEVELOPER
+notification android NETWORK_STATUS
+notification android USB
+notification com.android.dialer null
+notification com.android.dialer phone_missed_call
+notification com.google.android.apps.messaging bugle_default_channel
+dashboard none (Android 10 has no privacy dashboard)

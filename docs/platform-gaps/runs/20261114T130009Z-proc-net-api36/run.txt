@@ -1,0 +1,13 @@
+behaviour proc-net
+android 16
+api 36
+date 2026-11-14T13:00:09Z
+probe_commit 70da7f83476d
+trials 1
+serial emulator-5600
+cores 12-15
+alone yes
+run runs/20261114T130009Z-proc-net-api36
+beside_before load=14.27,17.24,14.81 mem_available_mb=43323 emulators=0 busy=python:399%,other:10%
+beside_after load=15.24,16.73,14.78 mem_available_mb=34569 emulators=2 busy=qemu-system-x86:538%,python:298%,java:10%,other:67%
+capture_sha256 feccbc3a1efa666122fcd27ea9d85be1ba2963b52e3aa8eab0f4a32dff3411df

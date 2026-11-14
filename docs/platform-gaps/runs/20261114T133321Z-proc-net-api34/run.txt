@@ -1,0 +1,13 @@
+behaviour proc-net
+android 14
+api 34
+date 2026-11-14T13:33:21Z
+probe_commit 367cb57cfd53
+trials 1
+serial emulator-5602
+cores 16-19
+alone no
+run runs/20261114T133321Z-proc-net-api34
+beside_before load=9.55,7.67,9.02 mem_available_mb=38742 emulators=1 busy=qemu-system-x86:259%,python:98%,other:345%
+beside_after load=17.86,10.20,9.80 mem_available_mb=29904 emulators=3 busy=qemu-system-x86:782%,python:98%,other:313%
+capture_sha256 b3104d2c7cdc8a5cc9e5269682669f12d5065158cc5f7e7fdf7f88fb47bd91b7

@@ -1,0 +1,13 @@
+behaviour webview
+android 14
+api 34
+date 2026-11-14T13:10:45Z
+probe_commit 5a7d10828787
+trials 1
+serial emulator-5600
+cores 20-23
+alone no
+run runs/20261114T131045Z-webview-api34
+beside_before load=8.71,10.49,12.52 mem_available_mb=40897 emulators=1 busy=qemu-system-x86:297%,python:200%,other:11%
+beside_after load=15.83,12.27,13.01 mem_available_mb=32069 emulators=2 busy=qemu-system-x86:48%,python:277%,other:132%
+capture_sha256 343433381d61384c2fc6c372ce9961a11d0ff655aa7ac3c22c7e3b30261c3298

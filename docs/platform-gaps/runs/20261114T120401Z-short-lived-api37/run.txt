@@ -1,0 +1,13 @@
+behaviour short-lived
+android 17
+api 37
+date 2026-11-14T12:04:01Z
+probe_commit 0dbb910fdc47
+trials 100
+serial emulator-5600
+cores 16-23
+alone yes
+run runs/20261114T120401Z-short-lived-api37
+beside_before load=11.80,12.70,9.21 mem_available_mb=45651 emulators=0 busy=python:14%,other:128%
+beside_after load=13.37,13.23,9.82 mem_available_mb=35411 emulators=1 busy=qemu-system-x86:26%,python:531%,other:111%
+capture_sha256 2957d6d6ac5f7e09384a08e6562811aa9bab16832f9cbc5a09071fa3cbe0694c

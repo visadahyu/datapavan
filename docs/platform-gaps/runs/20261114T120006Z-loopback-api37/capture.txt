@@ -1,0 +1,4 @@
+packets 32338
+pattern gaps-loopback 0
+pattern gaps-short-lived 0
+pattern gaps.example 0

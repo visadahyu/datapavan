@@ -1,0 +1,10 @@
+tcp 10.1.10.1:51844 10.1.10.3:853 1051 unreachable - - encrypted - -
+udp 10.1.10.1:15852 10.1.10.3:53 10219 unreachable - - - - -
+tcp [fd00:1:fd00:1:fd00:1:fd00:1]:41510 [fd00:1:fd00:1:fd00:1:fd00:3]:853 1051 unreachable - - encrypted - -
+udp 10.1.10.1:21092 10.1.10.3:53 10219 unreachable - - - - -
+udp 10.1.10.1:46733 10.1.10.3:53 10219 unreachable - - - - -
+udp 10.1.10.1:51541 10.1.10.3:53 10219 unreachable - - - - -
+tcp 10.1.10.1:51858 10.1.10.3:853 1051 unreachable - - encrypted - -
+tcp [fd00:1:fd00:1:fd00:1:fd00:1]:41518 [fd00:1:fd00:1:fd00:1:fd00:3]:853 1051 unreachable - - encrypted - -
+udp 10.1.10.1:47442 10.1.10.3:53 10219 unreachable - - - - -
+udp 10.1.10.1:17857 10.1.10.3:53 10219 unreachable - - - - -

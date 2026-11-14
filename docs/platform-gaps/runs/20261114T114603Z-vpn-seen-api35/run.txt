@@ -1,0 +1,13 @@
+behaviour vpn-seen
+android 15
+api 35
+date 2026-11-14T11:46:03Z
+probe_commit 6b8c3226072b
+trials 1
+serial emulator-5600
+cores 12-15
+alone yes
+run runs/20261114T114603Z-vpn-seen-api35
+beside_before load=10.43,5.79,2.38 mem_available_mb=45327 emulators=0 busy=python:93%,other:12%
+beside_after load=11.11,6.67,2.85 mem_available_mb=37542 emulators=2 busy=qemu-system-x86:518%,python:99%,other:67%
+capture_sha256 653f60a0e4b7d121b4a27e19229771f31f2d1f4f27896d846243d21ea3bf7d22

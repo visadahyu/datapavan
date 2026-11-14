@@ -1,0 +1,14 @@
+behaviour carried-by-system
+android 12
+api 31
+date 2026-11-14T13:43:35Z
+probe_commit 9f8d187a0a9e
+trials 100
+parts resolver
+serial emulator-5600
+cores 16-23
+alone yes
+run runs/20261114T134335Z-carried-by-system-api31-resolver
+beside_before load=12.70,12.83,11.48 mem_available_mb=39716 emulators=0 busy=other:1131%
+beside_after load=12.67,13.05,11.83 mem_available_mb=35328 emulators=1 busy=python:99%,other:871%
+capture_sha256 cd40f7de849b3eec47e497fe10d9cc691659072eeb8d082615d3cf4fdc732361

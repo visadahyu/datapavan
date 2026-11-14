@@ -1,0 +1,25 @@
+appops-closed watch done
+appops-closed watch ready
+fixture emulator hardware=ranchu qemu=true
+fixture waiting confirm
+fixture confirmed
+fixture read kind=mic answer=read count=32000
+fixture done
+appops-closed watch callback op=android:record_audio who=own active=true
+appops-closed watch callback op=android:record_audio who=own active=false
+appops-closed self-mic recorded bytes=32000
+appops-closed self-mic done
+appops-closed watch end own=2 fixture=0 other=0
+appops-closed watch done
+appops-closed history-default scope=all answer=empty stage=result
+appops-closed history-default scope=own answer=empty stage=result
+appops-closed history-default done
+appops-closed history-hidden-open scope=all answer=empty stage=result
+appops-closed history-hidden-open scope=own answer=empty stage=result
+appops-closed history-hidden-open done
+appops-closed history-granted scope=all answer=empty stage=result
+appops-closed history-granted scope=own answer=empty stage=result
+appops-closed history-granted done
+appops-closed history-granted-hidden-open scope=all answer=empty stage=result
+appops-closed history-granted-hidden-open scope=own answer=empty stage=result
+appops-closed history-granted-hidden-open done
