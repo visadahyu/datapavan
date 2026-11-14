@@ -15,7 +15,7 @@ from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-# The resources of both apps: the audit app and Watch (ADR 0029).
+# The resources of both modules: the app and Watch's library, which only Advanced includes (ADR 0045).
 RESOURCES = [ROOT / "android/app/src/main/res", ROOT / "android/watch/src/main/res"]
 META = ROOT / "fastlane/metadata/android"
 SITE = ROOT / "site/data/text"

@@ -24,9 +24,13 @@ of its own, `org.visadahyu.datapavan.lite`, signed by Google ([ADR 0031](decisio
 ## GitHub Releases
 
 - Tag `v<version>`, not signed: the signed `notes.txt` names its commit ([RELEASE.md](RELEASE.md)). The release
-  holds `datapavan-<version>.apk`, `notes.txt` and `notes.txt.sig`, and the README and website carry the
-  certificate's fingerprint.
-- The APK's file name is fixed, since F-Droid's `Binaries` line and Obtainium find it by name.
+  holds the APK, `notes.txt` and `notes.txt.sig`, and the README and website carry the certificate's
+  fingerprint.
+- The APK's file name carries the edition (ADR 0045; the maintainer, 2026-11-14): `datapavan-basic-<version>.apk`
+  and, from 0.2.0, `datapavan-advanced-<version>.apk`, built from the same commit at the same version. The
+  published 0.1.2 keeps `datapavan-0.1.2.apk`, which its signed notes and `SHA256SUMS` name.
+- The names are fixed, since F-Droid's `Binaries` line and Obtainium find the APK by name: the recipe's
+  `Binaries` names Basic's APK, and its 0.1.2 build names `datapavan-0.1.2.apk` in a `binary` line of its own.
 
 ## IzzyOnDroid
 
@@ -49,6 +53,8 @@ requests from GitLab to Codeberg.
     test DEX file. Neither is needed to build the app, so they are deleted from the build tree.
   - **`Binaries` and `AllowedAPKSigningKeys`:** F-Droid publishes the project's own signed APK when
     its build matches the one on GitHub Releases, so both channels carry the same key (ADR 0024).
+    `Binaries` names `datapavan-basic-%v.apk`; the 0.1.2 build's `binary` line names the file published
+    before the editions. Advanced gets a recipe of its own (ADR 0045).
 - **Checked on 2026-11-05:** `main` (`121ca38`) was built with this recipe and `fdroid build
   --on-server` in F-Droid's build server image (`registry.gitlab.com/fdroid/fdroidserver:buildserver`,
   Debian 13). Its unsigned APK was identical to `scripts/reproducible.sh`'s two builds on the

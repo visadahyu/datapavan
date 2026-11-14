@@ -2,10 +2,14 @@
 "Every release", step 6). It needs no secret and trusts nothing that came back from the offline system
 except through a signature or a hash that the notes name.
 
-    python3 -I scripts/verify-signed.py DIRECTORY [COMMIT]
+    python3 -I scripts/verify-signed.py DIRECTORY [COMMIT] [EDITION]
 
 DIRECTORY holds what the offline step wrote: notes.txt and notes.txt.sig, and the signed APK and data
-pack that the notes name. COMMIT, by default HEAD, is the release commit. Needs openssl and apksigner
+pack that the notes name. COMMIT, by default HEAD, is the release commit. EDITION is basic, the default,
+or advanced: the notes begin with the edition's name and version ("Datapavan Basic 0.2.0") and name its
+APK, datapavan-basic-<version>.apk or datapavan-advanced-<version>.apk (ADR 0045; the maintainer,
+2026-11-14). Releases up to 0.1.2, before the editions, began "Datapavan <version>" and named
+datapavan-<version>.apk. Needs openssl and apksigner
 (the newest build-tools under ANDROID_HOME), not signify, which the main system lacks: signify's
 signatures are Ed25519, which openssl checks.
 """
@@ -22,6 +26,7 @@ import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 KEYS = ROOT / "keys"
+EDITIONS = {"basic": "Datapavan Basic", "advanced": "Datapavan Advanced"}
 # The DER prefix of an Ed25519 public key (RFC 8410), followed by its 32 bytes.
 ED25519_DER_PREFIX = bytes.fromhex("302a300506032b6570032100")
 
@@ -80,10 +85,14 @@ def apksigner():
 
 
 def main():
-    if len(sys.argv) not in (2, 3):
-        fail("usage: python3 -I scripts/verify-signed.py DIRECTORY [COMMIT]")
+    extra = sys.argv[2:]
+    editions = [a for a in extra if a in EDITIONS]
+    commits = [a for a in extra if a not in EDITIONS]
+    if len(sys.argv) < 2 or len(editions) > 1 or len(commits) > 1:
+        fail("usage: python3 -I scripts/verify-signed.py DIRECTORY [COMMIT] [basic|advanced]")
+    edition = editions[0] if editions else "basic"
     out = pathlib.Path(sys.argv[1])
-    commit = subprocess.run(["git", "-C", ROOT, "rev-parse", sys.argv[2] if len(sys.argv) == 3 else "HEAD"],
+    commit = subprocess.run(["git", "-C", ROOT, "rev-parse", commits[0] if commits else "HEAD"],
                             capture_output=True, text=True, check=True).stdout.strip()
 
     notes = signify_verify(out / "notes.txt.sig", "notes")
@@ -106,14 +115,25 @@ def main():
 
     gradle = subprocess.run(["git", "-C", ROOT, "show", f"{commit}:android/app/build.gradle.kts"],
                             capture_output=True, text=True, check=True).stdout
-    version = re.search(r'^\s*versionName = "(.+)"$', gradle, re.M).group(1)
-    if text.splitlines()[0] != f"Datapavan {version}":
-        fail(f"the notes begin \"{text.splitlines()[0]}\", not \"Datapavan {version}\"")
-    ok(f"the notes are for version {version}, the commit's")
+    if edition == "basic":
+        version = re.search(r'^\s*versionName = "(.+)"$', gradle, re.M).group(1)
+    else:
+        # Advanced's version is on a line of its own (app/build.gradle.kts).
+        line = re.search(r'^\s*if \(advanced\) \{ versionCode = \d+; versionName = "(.+)" \}$', gradle, re.M)
+        if not line:
+            fail("the commit's android/app/build.gradle.kts gives Advanced no version")
+        version = line.group(1)
+    # Before the editions (ADR 0045), up to 0.1.2, the notes and the APK carried no edition.
+    before_editions = edition == "basic" and tuple(int(n) for n in version.split(".")) <= (0, 1, 2)
+    title = f"Datapavan {version}" if before_editions else f"{EDITIONS[edition]} {version}"
+    if text.splitlines()[0] != title:
+        fail(f"the notes begin \"{text.splitlines()[0]}\", not \"{title}\"")
+    ok(f"the notes are for {title}, the commit's version")
 
     apk = out / field("APK")
-    if apk.name != f"datapavan-{version}.apk" or not apk.is_file():
-        fail(f"no signed APK {apk.name} for version {version}")
+    expected = f"datapavan-{version}.apk" if before_editions else f"datapavan-{edition}-{version}.apk"
+    if apk.name != expected or not apk.is_file():
+        fail(f"no signed APK {expected} for {title}")
     if hashlib.sha256(apk.read_bytes()).hexdigest() != field("APK SHA-256"):
         fail(f"{apk.name}'s SHA-256 is not the one in the notes")
     ok(f"{apk.name}'s SHA-256 is the one in the notes")
@@ -162,7 +182,7 @@ def main():
             if (out / name).is_file() and hashlib.sha256((out / name).read_bytes()).hexdigest() != digest:
                 fail(f"SHA256SUMS: {name} differs")
         ok("SHA256SUMS agrees with the files it names that are here")
-    print(f"== the signed files of {version} check out")
+    print(f"== the signed files of {title} check out")
 
 
 if __name__ == "__main__":

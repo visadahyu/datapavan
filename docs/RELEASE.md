@@ -65,9 +65,10 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    `verify-plan.sh`, `verify-shortcuts.sh`, `verify-datapack.sh`, `screenshots.sh`) on the CI image
    `dp-api35-ci`, and `scripts/reproducible.sh`, which builds the release twice from clean checkouts in
    different directories and fails unless the two unsigned APKs are identical. Then
-   `scripts/release-rehearsal.sh --install` runs steps 4 and 5 with throwaway keys and puts the signed
+   `scripts/release-rehearsal.sh --install` runs steps 4 and 5 for Basic with throwaway keys and puts the signed
    release build, the only one R8 shrinks, through the smoke test and the shortcut check on the
-   emulator. CI's emulator cannot run 32-bit ARM code, so the 32-bit build is tried by hand on the
+   emulator; `scripts/release-rehearsal.sh advanced` runs steps 4 and 5 for Advanced, whose
+   release build `scripts/verify-watch-release.sh` runs on the emulator. CI's emulator cannot run 32-bit ARM code, so the 32-bit build is tried by hand on the
    Android 11 emulator (`dp-api30`), which translates ARM code: `INSTALL_ABI=armeabi-v7a scripts/smoke.sh`,
    then `verify-audit.sh`, `verify-plan.sh` and `verify-shortcuts.sh`. The data pack scripts stay on
    CI's image: Android 11's file picker there would not pick a file that adb had put in Downloads
@@ -82,16 +83,22 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    is changed or dated before signing, never left for the next release.
 3. **Data pack.** If `data/` changed, raise the sequence in `data/PACK`, set its date, and sign the
    pack offline ([DATA-PACKS.md](DATA-PACKS.md#publishing-a-pack)).
-4. **Signing, offline.** `scripts/prepare-signing.sh <directory>` gathers what goes to the offline system,
-   from a clean commit on `main`: the unsigned APK, once two builds agree, the data pack's payload, the notes
-   and their hashes. Copy them over and sign the APK:
+4. **Signing, offline.** `scripts/prepare-signing.sh <directory> [<edition>]` gathers what goes to the offline
+   system for one edition, `basic` unless `advanced` is given, from a clean commit on `main`: the unsigned APK,
+   once two builds agree, the data pack's payload, the notes and their hashes. Each edition is prepared in a
+   directory of its own. Copy them over and sign the APK:
 
    ```sh
    apksigner sign --ks datapavan-release.p12 --ks-key-alias datapavan \
        --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true \
-       --v4-signing-enabled false --out datapavan-<version>.apk app-release-unsigned.apk
-   apksigner verify --verbose --print-certs --min-sdk-version 24 datapavan-<version>.apk
+       --v4-signing-enabled false --out datapavan-<edition>-<version>.apk datapavan-<edition>-<version>-unsigned.apk
+   apksigner verify --verbose --print-certs --min-sdk-version 24 datapavan-<edition>-<version>.apk
    ```
+
+   The APK's name carries the edition from the release after 0.1.2 (ADR 0045; the maintainer, 2026-11-14):
+   `datapavan-basic-<version>.apk` and `datapavan-advanced-<version>.apk`. Basic and Advanced share one version
+   line, so Datapavan Advanced 0.2.0 comes from the same commit as Datapavan Basic 0.2.0, and the script
+   refuses Advanced at another version than Basic's. The published 0.1.2 keeps `datapavan-0.1.2.apk`.
 
    The printed SHA-256 must be the published fingerprint, and both v2 and v3 must say `true`. The
    schemes are named because apksigner's defaults depend on the APK: for minSdk 29 it signs with v3
@@ -99,15 +106,17 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    publishes (found by the rehearsal on 2026-11-05). `--min-sdk-version 24` makes `verify` report v2
    too, which it otherwise skips for this minSdk.
 5. **Release notes, signed.** The notes name the version, the commit, the APK's SHA-256, the certificate's
-   fingerprint and the sentence to teach ("Genuine Datapavan has no internet access and never
-   asks for it"). They are signed offline with the release notes key
+   fingerprint and the sentence to teach (ADR 0045, decision 4: "Genuine Datapavan Basic never has internet
+   access. Genuine Datapavan Advanced uses it only for your own apps' traffic and the servers you choose, …").
+   Their first line is the edition's name and the version, "Datapavan Basic <version>". They are signed offline with the release notes key
    (`signify-openbsd -S -e -s datapavan-notes-1.sec -m notes.txt`), so that users and channel
    operators can check them with `signify -V -e` (ADR 0024, point 3).
 6. **Check what came back** on the main system, from the published keys only:
-   `python3 -I scripts/verify-signed.py <directory>` checks the signatures of the notes and the data
+   `python3 -I scripts/verify-signed.py <directory> [<commit>] [<edition>]` checks the signatures of the notes and the data
    pack, that the notes name the release commit, its version, the APK's hash and certificate and the
    pack's fingerprint, and that the pack holds the data the APK carries. Then
-   `scripts/verify-signed-release.sh <directory>` runs the signed APK on CI's emulator image: it must
+   `scripts/verify-signed-release.sh <directory>` runs Basic's signed APK on CI's emulator image (Advanced's
+   check is still to build; `scripts/verify-watch-release.sh` runs its release build): it must
    know itself genuine and refuse a damaged copy of the pack. On `dp-api30`, put the signed APK
    through `INSTALL_ABI=armeabi-v7a scripts/smoke.sh <apk>` and `verify-shortcuts.sh`.
 7. **Publish** the signed APK, the notes and their signature on GitHub Releases and under `download/` on the

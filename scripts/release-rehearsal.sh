@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# A dry run of docs/RELEASE.md's "Every release" steps with throwaway keys, made in a temporary
-# directory and deleted at the end: it builds the release APK, signs it with a fresh RSA 4096 key as
+# A dry run of docs/RELEASE.md's "Every release" steps for one edition with throwaway keys, made in a
+# temporary directory and deleted at the end: it builds the edition's release APK, signs it with a fresh RSA 4096 key as
 # apksigner does on the offline system, checks the certificate, the signature schemes, the version and
 # the permissions, writes the release notes and signs them in signify's embedded format (with
 # OpenSSL, which makes the same bytes, as scripts/datapack-test.py does), and checks them.
@@ -10,11 +10,27 @@
 # shrunk by R8; afterwards the debug build is installed again. Nothing this script makes may be
 # published: its keys exist only for the run, and the real ones are made offline.
 #
-#   scripts/release-rehearsal.sh [--install]
+# The signed APK is named as a release's is, with the edition (ADR 0045; the maintainer, 2026-11-14):
+# datapavan-basic-<version>.apk or datapavan-advanced-<version>.apk. --install is for Basic only;
+# scripts/verify-watch-release.sh runs Advanced's release build on an emulator.
+#
+#   scripts/release-rehearsal.sh [--install] [EDITION]    EDITION: basic (the default) or advanced
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PKG=org.visadahyu.datapavan
+INSTALL=""
+EDITION=basic
+for arg in "$@"; do
+    case $arg in
+        --install) INSTALL=1 ;;
+        basic | advanced) EDITION=$arg ;;
+        *) echo "usage: scripts/release-rehearsal.sh [--install] [basic|advanced]" >&2; exit 2 ;;
+    esac
+done
+case $EDITION in
+    basic) PKG=org.visadahyu.datapavan; NAME="Datapavan Basic" ;;
+    advanced) PKG=org.visadahyu.datapavan.advanced; NAME="Datapavan Advanced" ;;
+esac
 SDK=$(sed -n 's/^sdk.dir=//p' "$ROOT/android/local.properties" 2>/dev/null || true)
 SDK=${ANDROID_HOME:-${SDK:-$HOME/Android/Sdk}}
 TOOLS="$SDK/build-tools/$(ls "$SDK/build-tools" | sort -V | tail -1)"
@@ -24,13 +40,27 @@ trap 'rm -rf "$WORK"' EXIT
 fail() { echo "REHEARSAL FAILED: $*" >&2; exit 1; }
 
 gradle="$ROOT/android/app/build.gradle.kts"
-version=$(sed -n 's/^ *versionName = "\(.*\)"$/\1/p' "$gradle")
-code=$(sed -n 's/^ *versionCode = \([0-9]*\)$/\1/p' "$gradle")
-echo "== Rehearsal of the release of $version (versionCode $code)"
+if [ "$EDITION" = basic ]; then
+    version=$(sed -n 's/^ *versionName = "\(.*\)"$/\1/p' "$gradle")
+    code=$(sed -n 's/^ *versionCode = \([0-9]*\)$/\1/p' "$gradle")
+else
+    # Advanced's version is on a line of its own (app/build.gradle.kts).
+    version=$(sed -n 's/^ *if (advanced) { versionCode = [0-9]*; versionName = "\(.*\)" }$/\1/p' "$gradle")
+    code=$(sed -n 's/^ *if (advanced) { versionCode = \([0-9]*\); versionName = ".*" }$/\1/p' "$gradle")
+fi
+[ -n "$version" ] && [ -n "$code" ] || fail "android/app/build.gradle.kts gives $NAME no version"
+[ -z "$INSTALL" ] || [ "$EDITION" = basic ] || fail "--install is for Basic; scripts/verify-watch-release.sh runs Advanced's release build"
+echo "== Rehearsal of the release of $NAME $version (versionCode $code)"
 
-# 1. The unsigned release APK, as RELEASE.md's checks build it.
-(cd "$ROOT/android" && ./gradlew --quiet :app:assembleRelease)
-unsigned="$ROOT/android/app/build/outputs/apk/release/app-release-unsigned.apk"
+# 1. The unsigned release APK, as RELEASE.md's checks build it. Advanced builds in build-advanced, with a
+# task history of its own (app/build.gradle.kts).
+if [ "$EDITION" = basic ]; then
+    (cd "$ROOT/android" && ./gradlew --quiet :app:assembleRelease)
+    unsigned="$ROOT/android/app/build/outputs/apk/release/app-release-unsigned.apk"
+else
+    (cd "$ROOT/android" && ./gradlew --quiet -Pdatapavan.edition=advanced --project-cache-dir .gradle-advanced :app:assembleRelease)
+    unsigned="$ROOT/android/app/build-advanced/outputs/apk/release/app-release-unsigned.apk"
+fi
 [ -f "$unsigned" ] || fail "no unsigned release APK"
 
 # 2. A throwaway key with the parameters of RELEASE.md: RSA 4096, 50 years.
@@ -43,7 +73,7 @@ expected=$(keytool -list -v -keystore "$WORK/rehearsal.p12" -alias datapavan -st
 [ ${#expected} = 64 ] || fail "keytool printed no SHA-256 fingerprint"
 
 # 3. Signing as on the offline system, then the checks the maintainer reads.
-signed="$WORK/datapavan-$version.apk"
+signed="$WORK/datapavan-$EDITION-$version.apk"
 # The schemes are named, not left to apksigner: for minSdk 29 it would sign with v3 alone, which tools
 # that read only v2 cannot check, and it would write a v4 file that no channel publishes.
 "$TOOLS/apksigner" sign --ks "$WORK/rehearsal.p12" --ks-key-alias datapavan --ks-pass "pass:$pass" \
@@ -64,27 +94,40 @@ echo "ok: signed with schemes v2 and v3; the certificate's SHA-256 is the key's"
 badging=$("$TOOLS/aapt2" dump badging "$signed")
 grep -q "versionCode='$code' versionName='$version'" <<<"$badging" || fail "the APK's version is not $version ($code)"
 grep -q "application-debuggable" <<<"$badging" && fail "the release APK is debuggable"
-# Basic's allowlist (ADR 0045, decision 9), checked again on the signed APK, apart from the build's own
-# check (app/build.gradle.kts, basicPermissions), so that a change to one is caught by the other.
+# The edition's allowlist (ADR 0045, decision 9), checked again on the signed APK, apart from the build's
+# own check (app/build.gradle.kts, basicPermissions and watchPermissions), so that a change to one is
+# caught by the other; and, by name, what the edition never requests (ADR 0045, decisions 1 and 3).
 allowed="android.permission.QUERY_ALL_PACKAGES android.permission.PACKAGE_USAGE_STATS android.permission.ACCESS_NETWORK_STATE android.permission.HIDE_OVERLAY_WINDOWS $PKG.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+if [ "$EDITION" = basic ]; then
+    never="INTERNET"
+else
+    allowed="$allowed android.permission.INTERNET android.permission.CHANGE_NETWORK_STATE android.permission.POST_NOTIFICATIONS android.permission.ACCESS_LOCAL_NETWORK"
+    never="CAMERA RECORD_AUDIO ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION ACCESS_BACKGROUND_LOCATION READ_CONTACTS WRITE_CONTACTS GET_ACCOUNTS READ_SMS SEND_SMS RECEIVE_SMS RECEIVE_MMS RECEIVE_WAP_PUSH READ_CALL_LOG WRITE_CALL_LOG PROCESS_OUTGOING_CALLS"
+fi
 permissions=$("$TOOLS/aapt2" dump permissions "$signed" | sed -n "s/^uses-permission: name='\([^']*\)'.*/\1/p")
-grep -qx 'android.permission.INTERNET' <<<"$permissions" && fail "the release APK asks for INTERNET"
-for permission in $permissions; do
-    [[ " $allowed " == *" $permission "* ]] || fail "the release APK asks for $permission, which Basic's allowlist does not hold"
+for permission in $never; do
+    if grep -qx "android.permission.$permission" <<<"$permissions"; then
+        fail "the release APK asks for $permission, which $NAME never requests"
+    fi
 done
-echo "ok: version $version ($code), not debuggable, no INTERNET permission, nothing beyond Basic's allowlist"
+for permission in $permissions; do
+    [[ " $allowed " == *" $permission "* ]] || fail "the release APK asks for $permission, which $NAME's allowlist does not hold"
+done
+echo "ok: version $version ($code), not debuggable, none of the permissions $NAME never requests, nothing beyond its allowlist"
 
 # 4. Release notes, signed in signify's embedded format with a throwaway Ed25519 key.
 apk_sha=$(sha256sum "$signed" | cut -d' ' -f1)
 cat >"$WORK/notes.txt" <<NOTES
-Datapavan $version (rehearsal, not a release)
+$NAME $version (rehearsal, not a release)
 
 Commit: $(git -C "$ROOT" rev-parse HEAD)
-APK: datapavan-$version.apk
+APK: datapavan-$EDITION-$version.apk
 APK SHA-256: $apk_sha
 Signing certificate SHA-256: $expected
 
-Genuine Datapavan has no internet access and never asks for it.
+Genuine Datapavan Basic never has internet access. Genuine Datapavan Advanced uses it only for your own
+apps' traffic and the servers you choose, and never asks for your camera, microphone, location, contacts,
+messages or call log. No Datapavan app ever asks you for money.
 NOTES
 # The same bytes as signify -G and signify -S -e: a key number, the raw Ed25519 public key, and a
 # signature over the whole message, which follows the signature line. The check after it is the one a
@@ -118,7 +161,7 @@ PY
 echo "ok: release notes signed and verified"
 
 # 5. Optionally, the signed release build on an emulator.
-if [ "${1:-}" = --install ]; then
+if [ -n "$INSTALL" ]; then
     if [ "$(adb shell getprop ro.kernel.qemu | tr -d '\r')" != "1" ] && [ "$(adb shell getprop ro.boot.qemu | tr -d '\r')" != "1" ]; then
         fail "--install replaces the installed Datapavan and runs on emulators only"
     fi

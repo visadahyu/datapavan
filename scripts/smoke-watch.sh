@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke test of Datapavan Watch (milestones W1 and W2, docs/DESIGN.md, 13.2) on a connected device or
+# Smoke test of the Watch service in Datapavan Advanced (milestones W1 and W2, docs/DESIGN.md, 13.2) on a connected device or
 # emulator: installs the debug APK, opens Watch in every UI language and two pseudo-locales, and checks
 # that its text is translated and laid out right to left where the language is; then turns the tunnel
 # on and off from Watch's screen and checks that Android lists Watch's VPN only while it is on, with

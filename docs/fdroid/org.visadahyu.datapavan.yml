@@ -11,7 +11,7 @@ AutoName: Datapavan
 
 RepoType: git
 Repo: https://github.com/visadahyu/datapavan.git
-Binaries: https://github.com/visadahyu/datapavan/releases/download/v%v/datapavan-%v.apk
+Binaries: https://github.com/visadahyu/datapavan/releases/download/v%v/datapavan-basic-%v.apk
 
 Builds:
   - versionName: 0.1.2
@@ -23,6 +23,7 @@ Builds:
       - apt-get install -y build-essential
     gradle:
       - yes
+    binary: https://github.com/visadahyu/datapavan/releases/download/v0.1.2/datapavan-0.1.2.apk
     srclibs:
       - rustup@1.28.2
     prebuild:

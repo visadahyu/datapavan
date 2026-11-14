@@ -7,11 +7,17 @@
 # Only for emulators: it uninstalls Datapavan before and after. Use CI's image (dp-api35-ci): on the
 # Android 11 emulator the file picker would not pick a file that adb put in Downloads.
 #
-#   scripts/verify-signed-release.sh DIRECTORY
+# The APK is the one the notes name, and its name carries the edition (ADR 0045; the maintainer,
+# 2026-11-14): datapavan-basic-<version>.apk, or for 0.1.2 and earlier datapavan-<version>.apk. The steps
+# below are Basic's: Advanced's signed release check is still to build, and scripts/verify-watch-release.sh
+# runs its release build meanwhile.
+#
+#   scripts/verify-signed-release.sh DIRECTORY [EDITION]    EDITION: basic, the default
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT=${1:?usage: scripts/verify-signed-release.sh DIRECTORY}
+OUT=${1:?usage: scripts/verify-signed-release.sh DIRECTORY [basic]}
+EDITION=${2:-basic}
 PKG=org.visadahyu.datapavan
 DOWNLOADS=/sdcard/Download
 # shellcheck source=scripts/adb-ui.sh
@@ -27,6 +33,15 @@ fail() {
 expect() { scroll_to "$1" || { scroll_to_top; scroll_to "$1"; } || fail "expected \"$1\""; echo "ok: $1"; }
 field() { sed -n "s/^$1: //p" "$OUT/notes.txt"; }
 
+case $EDITION in
+    basic) ;;
+    advanced) fail "Advanced's signed release check is still to build (ADR 0045); scripts/verify-watch-release.sh runs its release build" ;;
+    *) fail "the edition is basic or advanced, not \"$EDITION\"" ;;
+esac
+case $(field APK) in
+    datapavan-basic-*.apk | datapavan-0.1.[0-2].apk) ;;
+    *) fail "the notes name $(field APK), which is not an APK of Datapavan Basic" ;;
+esac
 is_emulator || fail "not an emulator: this script uninstalls Datapavan"
 apk="$OUT/$(field APK)"
 pack_name=$(field "Data pack")

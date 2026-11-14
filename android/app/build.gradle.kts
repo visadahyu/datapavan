@@ -111,15 +111,19 @@ android {
         applicationId = editionApplicationId
         minSdk = 29
         targetSdk = 37
-        // Basic's version, on lines of their own: docs/RELEASE.md and scripts/release-rehearsal.sh read them.
+        // Basic's version, on lines of their own: docs/RELEASE.md and the release scripts read them.
         versionCode = 3
         versionName = "0.1.2"
-        // Advanced's first release is 0.2.0, the version Watch had as an app of its own (ADR 0045).
+        // Advanced's version, on one line that the release scripts read as it is. Basic and Advanced share one
+        // version line: Datapavan Advanced 0.2.0, its first release, comes from the same commit as Datapavan
+        // Basic 0.2.0, and scripts/prepare-signing.sh refuses Advanced at another versionName (ADR 0045; the
+        // maintainer, 2026-11-14).
         if (advanced) { versionCode = 1; versionName = "0.2.0" }
         // The release's date, set with the version (docs/RELEASE.md, step 1). The app has no internet
         // access, so this date is all it knows of how old it is (Release.kt).
         buildConfigField("String", "RELEASE_DATE", "\"2026-11-08\"")
-        // Lite: Google Play updates it, so it says nothing of newer versions; About names both editions.
+        // Basic on Google Play ("lite"): Google Play updates it, so it says nothing of newer versions; About
+        // names both editions.
         buildConfigField("boolean", "PLAY", lite.toString())
         // Whether Watch is in this build: the audit then opens it from its network page.
         buildConfigField("boolean", "ADVANCED", advanced.toString())

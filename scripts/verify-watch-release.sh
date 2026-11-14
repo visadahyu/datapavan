@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs Watch's release build, as users get it, on an emulator: R8 has shrunk and renamed its code, and
+# Runs Datapavan Advanced's release build, with its Watch service, as users get it, on an emulator: R8 has shrunk and renamed its code, and
 # its Rust library is optimised. The other checks run the debug build, which has test entries; this one
 # has none, so it turns Watch on from its screen. It checks that traffic passes the tunnel (a TCP request
 # and a UDP echo to the test server), that Android names each flow's app, that the log keeps nothing
@@ -83,7 +83,7 @@ pss() {
     adb shell dumpsys meminfo "$PKG:watch" | tr -d '\r' | sed -n 's/^ *TOTAL PSS: *\([0-9]*\).*/\1/p' | head -1
 }
 
-echo "== Watch's release build, on $(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
+echo "== Datapavan Advanced's release build, on $(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
 [ -f "$UNSIGNED" ] || fail "no release APK at $UNSIGNED (./gradlew -Pdatapavan.edition=advanced --project-cache-dir .gradle-advanced :app:assembleRelease)"
 tools=$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1)
 keytool -genkeypair -keystore "$WORK/throwaway.jks" -storepass throwaway -keypass throwaway -alias throwaway \
@@ -164,4 +164,4 @@ if adb logcat -d -b crash 2>/dev/null | grep -q "$PKG"; then
     fail "Watch crashed"
 fi
 echo "ok: no crash"
-echo "== Watch's release build passed"
+echo "== Datapavan Advanced's release build passed"
