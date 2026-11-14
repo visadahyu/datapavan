@@ -7,7 +7,8 @@ name: CI
 # Every push and pull request runs CI, so that every commit gets a result that the ruleset on main can
 # require (ADR 0043). A change of documents or brand files only runs the repository checks, which need no
 # build: the documents against the code, the published keys, the translations and the website
-# (scripts/check.sh data). A tag points at a commit that CI has already checked on its branch, so a tag
+# (scripts/check.sh data). The emulator checks run in parallel shards (scripts/emulator-shard.sh), each
+# on an emulator of its own. A tag points at a commit that CI has already checked on its branch, so a tag
 # runs nothing.
 #
 # A check that fails without a change to what it tests is a flake: it goes into docs/ci-flakes.md, with
@@ -111,11 +112,12 @@ jobs:
       - name: Repository checks
         run: scripts/check.sh data
 
-  checks:
+  # The build and its gates (scripts/check.sh rust and android). It hands the APKs to the emulator shards.
+  build:
     needs: scope
     if: needs.scope.outputs.passed != 'true' && needs.scope.outputs.code == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 45
     env:
       CARGO_NDK_VERSION: "4.1.2"
       CARGO_DENY_VERSION: "0.20.2"
@@ -193,28 +195,76 @@ jobs:
           scripts/check.sh rust
           scripts/check.sh android
 
-      # On a real Android system: Watch's smoke test (every language, its tunnel on and off with every
-      # app inside it, scripts/smoke-watch.sh) and its engine end to end (TCP, UDP, DNS, refused and
-      # unreachable destinations, each flow's owner, a network switch, scripts/verify-watch.sh), its
-      # chaining through a test tool's SOCKS5 proxy on the phone (the tool found, TCP, UDP and lookups
-      # through it, a wrong password refused, nothing direct once it stops, scripts/verify-chain.sh), its
-      # connection log (flows with their bytes, no destination in the clear or in logcat, an earlier day
-      # shut while the screen is locked, the wipe, scripts/verify-log.sh), its release build as users get
-      # it (traffic through it, each flow's app, the log, its memory budget, scripts/verify-watch-release.sh), then
-      # the audit app's smoke test (overview shown,
-      # no INTERNET permission, no crash),
-      # then the audit verification, which gives a test fixture app risky access and checks that the
-      # audit reports it, the remediation plan's hand-off, journal and undo with the same fixture, the
-      # launcher shortcuts as Android hands them to the launcher, then screenshots in every language with
-      # an accessibility check (scripts/smoke.sh, scripts/verify-audit.sh, scripts/verify-plan.sh,
-      # scripts/verify-shortcuts.sh, scripts/verify-datapack.sh, scripts/screenshots.sh).
-      # The emulator needs 7.4 GB for its data partition; after the build only 5.8 GB are left. The
-      # Rust build directory is no longer needed (the APK already holds the library), nor are large
-      # preinstalled toolchains this project never uses.
+      - name: Keep the APKs for the emulator shards
+                uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: apks
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build-advanced/outputs/apk/debug/app-debug.apk
+            android/app/build-advanced/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  # On a real Android system, in shards that run side by side, each on a freshly booted emulator of its own
+  # (scripts/emulator-shard.sh says which check is in which):
+  # - watch: Watch's smoke test (every language, its tunnel on and off with every app inside it,
+  #   scripts/smoke-watch.sh) and its engine end to end (TCP, UDP, DNS, refused and unreachable
+  #   destinations, each flow's owner, a network switch, scripts/verify-watch.sh), its chaining through a
+  #   test tool's SOCKS5 proxy on the phone (the tool found, TCP, UDP and lookups through it, a wrong
+  #   password refused, nothing direct once it stops, scripts/verify-chain.sh), its connection log (flows
+  #   with their bytes, no destination in the clear or in logcat, an earlier day shut while the screen is
+  #   locked, the wipe, scripts/verify-log.sh), and its release build as users get it (traffic through it,
+  #   each flow's app, the log, its memory budget, scripts/verify-watch-release.sh);
+  # - audit: the audit app's smoke test (overview shown, no INTERNET permission, no crash), then the audit
+  #   verification, which gives a test fixture app risky access and checks that the audit reports it, the
+  #   remediation plan's hand-off, journal and undo with the same fixture, the launcher shortcuts as
+  #   Android hands them to the launcher, and the data pack import (scripts/smoke.sh,
+  #   scripts/verify-audit.sh, scripts/verify-plan.sh, scripts/verify-shortcuts.sh,
+  #   scripts/verify-datapack.sh);
+  # - screens: screenshots in every language with an accessibility check (scripts/screenshots.sh).
+  # A shard that fails leaves the others running (fail-fast off), so that a repeat runs only the shard that
+  # failed. The emulator boots cold each time: the runner can cache a booted snapshot, but it would save
+  # under half a minute a shard (the system image is fetched either way), take gigabytes of the
+  # repository's cache, and bring the radios back from a saved state, where the network checks' flakes
+  # were (docs/ci-flakes.md).
+  emulator:
+    name: emulator ${{ matrix.shard }}
+    needs: [scope, build]
+    if: needs.scope.outputs.passed != 'true' && needs.scope.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [watch, audit, screens]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # The test fixture, the test tool and the workload app build with the SDK's tools alone, and the
+      # release check signs with apksigner.
+      - name: Android SDK packages
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.0" "build-tools;37.0.0"
+
+      - name: Fetch the build's APKs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: apks
+          path: android/app
+
+      # The emulator needs 7.4 GB for its data partition; large preinstalled toolchains this project never
+      # uses make room.
       - name: Free disk space for the emulator
         run: |
           df -h / | tail -1
-          rm -rf core/target
           sudo rm -rf /usr/share/dotnet /usr/local/.ghcup /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
           df -h / | tail -1
 
@@ -224,7 +274,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Emulator smoke test
+      - name: Emulator checks
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 35
@@ -234,31 +284,21 @@ jobs:
           profile: pixel_7
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
-          script: |
-            scripts/smoke-watch.sh
-            scripts/verify-watch.sh
-            scripts/verify-chain.sh
-            scripts/verify-log.sh
-            scripts/verify-watch-release.sh
-            scripts/smoke.sh
-            scripts/verify-audit.sh
-            scripts/verify-plan.sh
-            scripts/verify-shortcuts.sh
-            scripts/verify-datapack.sh
-            scripts/screenshots.sh build/screenshots
+          script: scripts/emulator-shard.sh ${{ matrix.shard }}
 
       - name: Keep the screenshots
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: screenshots
+          name: screenshots-${{ matrix.shard }}
           path: build/screenshots/
           if-no-files-found: ignore
 
   # The one result the ruleset on main requires (ADR 0043): it passes when everything this push needed
   # passed, and fails when anything failed, was cancelled or did not run when it had to.
+  # The emulator job's result is its shards' together: success only if every shard passed.
   gate:
-    needs: [scope, repository, checks]
+    needs: [scope, repository, build, emulator]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -268,11 +308,14 @@ jobs:
           PASSED: ${{ needs.scope.outputs.passed }}
           CODE: ${{ needs.scope.outputs.code }}
           REPOSITORY: ${{ needs.repository.result }}
-          CHECKS: ${{ needs.checks.result }}
+          BUILD: ${{ needs.build.result }}
+          EMULATOR: ${{ needs.emulator.result }}
         run: |
-          echo "scope: $SCOPE (passed before: $PASSED, beyond documents: $CODE); repository: $REPOSITORY; checks: $CHECKS"
+          echo "scope: $SCOPE (passed before: $PASSED, beyond documents: $CODE)"
+          echo "repository: $REPOSITORY; build: $BUILD; emulator: $EMULATOR"
           [ "$SCOPE" = success ] || exit 1
           [ "$PASSED" != true ] || exit 0
           [ "$REPOSITORY" = success ] || exit 1
-          [ "$CODE" != true ] || [ "$CHECKS" = success ] || exit 1
+          [ "$CODE" != true ] || [ "$BUILD" = success ] || exit 1
+          [ "$CODE" != true ] || [ "$EMULATOR" = success ] || exit 1
           echo "Everything this push needed passed."
