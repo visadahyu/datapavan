@@ -400,7 +400,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 31;
+pub const COUNTERS: usize = 32;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -436,6 +436,7 @@ pub struct Counters {
     udp_relay_elsewhere: AtomicU64,
     udp_ambiguous: AtomicU64,
     udp_late: AtomicU64,
+    udp_refused: AtomicU64,
 }
 
 impl Counters {
@@ -462,9 +463,11 @@ impl Counters {
     /// proxy's own address, which Watch refused, and datagrams and lookups dropped because who sent
     /// them could not be told: the answers of Android's near them named different apps, and those
     /// dropped because they came too late for their app, which lost the socket before their way opened,
-    /// or for any answer near them (ADR 0044, unit 9, "Whose a datagram is"). None names a destination:
-    /// they can be read on any phone. New counters are only ever appended, so that scripts reading a
-    /// column by its place keep reading the same one.
+    /// or for any answer near them (ADR 0044, unit 9, "Whose a datagram is"), and datagrams and lookups
+    /// dropped because their app's UDP way could have no socket: the cap for every app, or their app's
+    /// share, was full (ADR 0044, decision 3). None names a destination: they can be read on any phone.
+    /// New counters are only ever appended, so that scripts reading a column by its place keep reading
+    /// the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
         [
@@ -499,6 +502,7 @@ impl Counters {
             &self.udp_relay_elsewhere,
             &self.udp_ambiguous,
             &self.udp_late,
+            &self.udp_refused,
         ]
         .map(|c| c.load(Ordering::Relaxed))
     }
@@ -514,6 +518,9 @@ struct Shared {
     tcp_waiting: AtomicUsize,
     /// Each app's share of them, once Android has named it (`Limits::tcp_share`).
     tcp_shares: Arc<Budget>,
+    /// The UDP ways that hold a socket of their own, for every app together and for each
+    /// (`Limits::udp_mappings`, `Limits::udp_share`).
+    udp_budget: Arc<Budget>,
     counters: Counters,
     keep_flows: usize,
     flows: Mutex<VecDeque<Flow>>,
@@ -622,6 +629,7 @@ impl Engine {
             limits: config.limits,
             tcp_waiting: AtomicUsize::new(0),
             tcp_shares: Budget::new(config.limits.tcp_waiting, config.limits.tcp_share),
+            udp_budget: Budget::new(config.limits.udp_mappings, config.limits.udp_share),
             counters: Counters::default(),
             keep_flows: config.keep_flows,
             flows: Mutex::new(VecDeque::new()),
@@ -971,6 +979,7 @@ mod tests {
             limits: Limits::default(),
             tcp_waiting: AtomicUsize::new(0),
             tcp_shares: Budget::new(Limits::default().tcp_waiting, Limits::default().tcp_share),
+            udp_budget: Budget::new(Limits::default().udp_mappings, Limits::default().udp_share),
             counters: Counters::default(),
             keep_flows: 8,
             flows: Mutex::default(),

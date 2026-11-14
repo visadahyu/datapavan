@@ -7,6 +7,7 @@
 //! keep one socket for each flow. Sockets are opened off the packet loop, and answers are read into one
 //! buffer for each engine thread.
 
+use super::budget::Place;
 use super::chain::{Chain, Route, connect_proxy, io_error};
 use super::logbook::FlowBytes;
 use super::lookups;
@@ -318,6 +319,8 @@ struct Mapping {
     last: Instant,
     /// Wakes the mapping's task when the mapping is ended from elsewhere.
     ended: Arc<Notify>,
+    /// Its place in the budget for its app (ADR 0044, decision 3), given back as it ends.
+    _place: Place,
 }
 
 /// A peer of a mapping: a flow in the log.
@@ -1724,6 +1727,18 @@ fn count_drops(shared: &Shared, (ambiguous, late): (u64, u64)) {
     Counters::add(&shared.counters.udp_late, late);
 }
 
+/// What the rule says the app `uid` sent to `key`'s destination, whose way could have no socket of its
+/// own: the cap for every app, or the app's share, is full (ADR 0044, decision 3). It is dropped, as by
+/// a full queue, and counted, and the app sends again, as after a lost datagram; nothing tells it. What
+/// another app sent waits on.
+fn refused(key: (SocketAddr, SocketAddr), uid: Option<u32>, shared: &Shared, flows: &UdpFlows) {
+    let mut table = lock(flows);
+    let settled = table.settle(key, uid, shared.limits.udp_reask);
+    table.forget(key.0);
+    count_drops(shared, settled.drops());
+    Counters::add(&shared.counters.udp_refused, settled.leave.len() as u64);
+}
+
 /// Makes a destination a peer of the mapping of its app socket's app `uid`, routed again when the chain
 /// changes meanwhile.
 async fn open_mapped(key: (SocketAddr, SocketAddr), uid: Option<u32>, context: Context<'_>) {
@@ -1858,7 +1873,8 @@ async fn decide(
 /// none, or if the one it has is another app's or leaves another way. The datagrams that waited leave
 /// under the table's lock, so that none that comes meanwhile overtakes them, and the peer is known
 /// before its answer can come: those the rule says the mapping's app sent; those it drops are dropped
-/// and counted, and from the first of another app's, or undecided, all wait on.
+/// and counted, and from the first of another app's, or undecided, all wait on. A new mapping that the
+/// budget refuses leaves nothing: what the app sent is dropped and counted ([`refused`]).
 async fn open_peer(
     key: (SocketAddr, SocketAddr),
     wanted: Wanted,
@@ -1876,6 +1892,10 @@ async fn open_peer(
         Ok((Mapped::Reroute, _)) => return Made::Reroute,
         // Another app holds the socket now: what waits is decided again.
         Ok((Mapped::Stale, _)) => return Made::Done,
+        Ok((Mapped::Refused, _)) => {
+            refused(key, wanted.uid, shared, flows);
+            return Made::Done;
+        }
         Err(error) => {
             let (_, mut flow) = begin_udp(shared, app, destination, wanted.uid);
             flow.outcome = if is_unreachable(&error) {
@@ -1966,6 +1986,63 @@ fn way_toward(
     })
 }
 
+/// What a new destination of an app socket does about the socket's mapping.
+enum Turn {
+    /// It found the mapping open, or failed as the destination that opened it did, or was refused.
+    Done(io::Result<Mapped>),
+    /// It opens one, with its place in the budget, telling those that wait for it how it went if it
+    /// is the first of its app to open one now.
+    Open(Option<watch::Sender<Option<io::ErrorKind>>>, Place),
+}
+
+/// Whether a new destination of `app`'s socket opens the socket's mapping, as [`mapping_for`] says, or
+/// waits for the one of its app that opens it now. A new mapping holds a socket of its own, and so a
+/// place in the budget, taken before the socket is made: where the cap for every app, or the app's
+/// share, is full, it is refused (ADR 0044, decision 3).
+async fn turn(app: SocketAddr, wanted: &Wanted, shared: &Shared, flows: &UdpFlows) -> Turn {
+    loop {
+        let mut waiting = {
+            let mut table = lock(flows);
+            if let Current::Same(id, socket) = table.open_mapping(app, wanted, shared) {
+                return Turn::Done(Ok(Mapped::Open(id, socket)));
+            }
+            let first = match table.opening.get(&app) {
+                // One whose opener is gone without a word (the engine stopping) holds no one up.
+                Some((uid, waiting)) if waiting.has_changed().is_ok() => {
+                    if *uid == wanted.uid {
+                        Err(waiting.clone())
+                    } else {
+                        // Another app's opener, as the port was handed over: its tool's failure, or its
+                        // wait, is none of this app's, which opens its own (eighth review of unit 9,
+                        // finding 5).
+                        Ok(false)
+                    }
+                }
+                _ => Ok(true),
+            };
+            match first {
+                Err(waiting) => waiting,
+                Ok(first) => {
+                    let Ok(place) = shared.udp_budget.take(wanted.uid) else {
+                        return Turn::Done(Ok(Mapped::Refused));
+                    };
+                    let told = first.then(|| {
+                        let (told, waiting) = watch::channel(None);
+                        table.opening.insert(app, (wanted.uid, waiting));
+                        told
+                    });
+                    return Turn::Open(told, place);
+                }
+            }
+        };
+        let _ = waiting.changed().await;
+        let failed = *waiting.borrow();
+        if let Some(kind) = failed {
+            return Turn::Done(Err(kind.into()));
+        }
+    }
+}
+
 /// The mapping of `key`'s app for its new destination, by its number, with its socket: the app's open
 /// one, or a new one when it has none, or when the one it has is another app's or leaves another way.
 /// Through the tool, a new one is a new `UDP ASSOCIATE`.
@@ -1980,35 +2057,9 @@ async fn mapping_for(
     wanted: &Wanted,
     (tun, shared, flows, changes): Context<'_>,
 ) -> io::Result<Mapped> {
-    let told = loop {
-        let mut waiting = {
-            let mut table = lock(flows);
-            if let Current::Same(id, socket) = table.open_mapping(app, wanted, shared) {
-                return Ok(Mapped::Open(id, socket));
-            }
-            match table.opening.get(&app) {
-                // One whose opener is gone without a word (the engine stopping) holds no one up.
-                Some((uid, waiting)) if waiting.has_changed().is_ok() => {
-                    if *uid != wanted.uid {
-                        // Another app's opener, as the port was handed over: its tool's failure, or its
-                        // wait, is none of this app's, which opens its own (eighth review of unit 9,
-                        // finding 5).
-                        break None;
-                    }
-                    waiting.clone()
-                }
-                _ => {
-                    let (told, waiting) = watch::channel(None);
-                    table.opening.insert(app, (wanted.uid, waiting));
-                    break Some(told);
-                }
-            }
-        };
-        let _ = waiting.changed().await;
-        let failed = *waiting.borrow();
-        if let Some(kind) = failed {
-            return Err(kind.into());
-        }
+    let (told, place) = match turn(app, wanted, shared, flows).await {
+        Turn::Done(done) => return done,
+        Turn::Open(told, place) => (told, place),
     };
     let made = match &wanted.exit {
         Exit::Direct => mapped_socket(shared, destination)
@@ -2067,6 +2118,7 @@ async fn mapping_for(
             came_in: 0,
             last: Instant::now(),
             ended: Arc::clone(&ended),
+            _place: place,
         },
     );
     drop(table);
@@ -2096,6 +2148,8 @@ enum Mapped {
     Reroute,
     /// None: the newest answer about the socket names another app than the destination's.
     Stale,
+    /// None: the cap for every app, or the app's share, is full.
+    Refused,
 }
 
 /// A mapping's socket on the direct path: protected, on the unspecified address of the destination's
@@ -2454,9 +2508,21 @@ async fn open_lookups(
     let (app, destination) = key;
     // Read before the route, so that a chain set meanwhile is seen below.
     let chains = shared.chains.load(Ordering::Acquire);
+    let route = shared.route(uid, destination);
+    // On the direct path a flow of lookups holds a socket of its own, and so a place in the budget, for
+    // as long as it waits for answers; a chained app's lookups, which Watch answers, hold none.
+    let place = if let Route::Direct = route {
+        let Ok(place) = shared.udp_budget.take(uid) else {
+            refused(key, uid, shared, flows);
+            return Made::Done;
+        };
+        Some(place)
+    } else {
+        None
+    };
     let (opened, mut flow) = begin_udp(shared, app, destination, uid);
     let id = opened.id;
-    let way = match way_for(shared, shared.route(uid, destination), destination).await {
+    let way = match way_for(shared, route, destination).await {
         Ok(way) => way,
         Err(error) => {
             flow.outcome = if is_unreachable(&error) {
@@ -2541,7 +2607,7 @@ async fn open_lookups(
         send_to_app(tun, shared, &answer).await;
     }
     start_answers(
-        way,
+        (way, place),
         questions,
         (key, uid, (id, owed)),
         (tun, shared, flows, changes),
@@ -2553,7 +2619,7 @@ async fn open_lookups(
 /// own; the network's resolver answers the others, which a task hands the app. The flow ends when none
 /// of its lookups waits any more.
 fn start_answers(
-    way: UdpWay,
+    (way, place): (UdpWay, Option<Place>),
     questions: Vec<Vec<u8>>,
     (key, uid, (id, owed)): Ends,
     (tun, shared, flows, changes): Context<'_>,
@@ -2584,6 +2650,7 @@ fn start_answers(
                     id,
                     uid,
                     owed,
+                    _place: place,
                 },
                 Arc::clone(tun),
                 Arc::clone(shared),
@@ -2732,6 +2799,8 @@ struct UdpEnds {
     uid: Option<u32>,
     /// The lookups it carried that still wait for their answer.
     owed: Arc<Owed>,
+    /// Its socket's place in the budget for its app, given back as its last answer comes.
+    _place: Option<Place>,
 }
 
 /// Wraps each answer of a flow of lookups to Watch's own DNS address in an IP packet to the app, until
@@ -2787,6 +2856,7 @@ fn relayed(
         id,
         uid,
         ref owed,
+        ..
     } = ends;
     let mut packets = Vec::new();
     for _ in 0..BATCH {
@@ -2870,6 +2940,9 @@ mod tests {
             came_in: 0,
             last: now,
             ended: Arc::new(Notify::new()),
+            _place: super::super::budget::Budget::new(1, 1)
+                .take(None)
+                .map_err(|_| io::ErrorKind::OutOfMemory)?,
         })
     }
 
