@@ -563,3 +563,93 @@ an ADR (D25).
     Accepted: a ping is small and brief, and no other traffic waits on these sockets;
   - phones of other makers, whose SELinux rules for ICMP sockets may differ, are not measured yet (the Galaxy A40
     next).
+
+**Unit 12, fragments and the MTU (2026-11-15, decision 5 as amended).**
+- **Fragments are put together** (`core/net/src/fragments.rs`, pure): the apps' IPv4 fragments (the "more
+  fragments" flag or an offset) and IPv6 ones (a fragment header with an offset or M), by source, destination and
+  identification, and IPv4's protocol. An IPv6 atomic fragment is read whole, as before (RFC 6946).
+  - **What drops a whole datagram,** with no ICMP error (RFC 8200 4.5): a fragment not a multiple of 8 but the last,
+    or an empty one; a datagram past 65,535 bytes; a first fragment without the whole upper-layer header (UDP's 8
+    bytes, TCP's to its data offset, ICMP's 8) or, in IPv6, without every extension header before it (RFC 1858,
+    RFC 7112); an overlap with a held fragment (RFC 5722); a fragment past the datagram's end, or a second end. An
+    exact duplicate, the same place and the same bytes, is dropped alone. A protocol the engine does not carry is
+    dropped as its fragments come (IPv4) or as its first fragment does (IPv6).
+  - **The rebuilt packet:** in IPv4, the first fragment's header with the flag and the offset cleared, the total
+    length and the checksum made anew; in IPv6, the headers before the fragment header, which goes, the Next
+    Header that named it naming what it named, and the payload length set. It is handled as any packet, from a
+    buffer of its own. One that `parse` still calls a fragment, with a fragment header inside the first, is dropped.
+  - **Bounds** (`Limits`, Android's defaults): 64 datagrams at once (`fragment_datagrams`), 1 MiB held
+    (`fragment_bytes`), counting 32 bytes for each fragment's place, so that a datagram cut into 8-byte fragments
+    holds no more memory than the bound counts, and 5 s from a datagram's first fragment to its last
+    (`fragment_wait`). A new datagram's fragment past a bound is dropped, and nothing held is evicted for it; a held
+    datagram whose next fragment would pass the bound on bytes is dropped, as it could never be whole. Expired
+    datagrams go at the next fragment and in the engine's sweep. A datagram's buffer grows to its furthest
+    fragment's end; nothing reserves 64 KiB ahead.
+  - **Shared by every app.** Every app sends from the tunnel's one address, so the bounds are not kept for each
+    app: one app that fills them makes the others' fragments dropped, as every fragment was before. Accepted, since
+    the bounds cap what fragments cost, for at most the wait.
+- **The first hop's MTU.** At start, and at every `network_changed`, moved or not, the engine makes a protected UDP
+  socket of each IP version, connects it toward `Config::mtu_probe` (on Android `MtuProbe::DOCUMENTATION`, 192.0.2.1
+  and 2001:db8::1, which only a default route covers; connecting sends nothing) and reads `IP_MTU` through nix's
+  safe `sockopt::IpMtu`. A version whose probe fails has no known MTU, and none of its datagrams is answered. With
+  `mtu_probe` at `None` the probe is off: the tests that do not need it keep their behaviour. Kotlin now also
+  reports a change of `LinkProperties.getMtu()`, as `nativeNetworkChanged(dns, false)`; no JNI signature changed.
+- **Beyond it.** `errors::told` passes on "fragmentation needed" (type 3 code 4) and "packet too big" (type 2) with
+  the MTU the kernel gives in `ee_info`; an MTU of 0, from a router older than RFC 1191, is left out. The MTU is
+  kept for `Limits::mtu_expires` (10 min, as Linux keeps it), for at most `Limits::mtu_learned` (256)
+  destinations, past which the one that expires first goes, and only where it lowers the first hop's; a network
+  that moves forgets them all. The app is told at once, as of an unreachable port: "fragmentation needed" or
+  "packet too big", as if from the destination, with that MTU, never below the least MTU.
+- **The answer.** On the direct path, before a datagram leaves a mapping (to a peer the mapping knows, or as it
+  leaves once its way opened) and before an echo request goes to its ping socket: when its outer packet, an IP
+  header of 20 bytes or 40 and the rest of the app's packet, exceeds the limit (the first hop's MTU, lowered by a
+  learned one), it may not be fragmented (IPv6, or IPv4 with "do not fragment"), and the app's packet is larger
+  than the least MTU (576 bytes, 1,280 for IPv6), it is dropped and answered "fragmentation needed" or "packet too
+  big", as if by its destination, quoting it, with the limit less the outer IP header plus the app's own, with its
+  options or extension headers, never below the least MTU. A datagram or request put together from the app's
+  fragments is never answered: it is sent whole, and the engine's kernel fragments it. An IPv4 one without "do
+  not fragment" is sent as before. One to a multicast or broadcast address is dropped with no answer (RFC 1812
+  4.3.2.7). A send that fails with `EMSGSIZE` is answered so where the rule allows, and dropped otherwise; it is
+  never "host unreachable" any more.
+- **Not changed, and said so in the code:** the chain, whose relay is on the phone, so that what the tool sends
+  further is its own; lookups to the tunnel's DNS address; TCP, whose segments Android's own stack sizes; writes
+  to the tunnel larger than its MTU, the answers the engine's kernel put together, which the network lab shows
+  Linux takes (phones in unit 11b).
+- **Counters:** `fragments`, the 20th, now counts the fragments dropped, those of a datagram given up included.
+  Appended: `reassembled`, the 39th, datagrams put together; `too_big`, the 40th, datagrams and echo requests
+  dropped as too large, answered or not, `EMSGSIZE` included; `path_mtu`, the 41st, routers' "fragmentation
+  needed" and "packet too big" passed on. `COUNTERS` is 41.
+- **The network lab's narrow network** (`scripts/netlab-enter.py`): a server at 198.51.100.20 and 2001:db8:1::20 on
+  `far`, one end of a veth pair whose other end, `near`, is in the same namespace; what the namespace itself sends
+  there takes a table whose routes leave `near` with an MTU of 1,280, by a rule for packets made locally, so the
+  apps' packets still go into the tunnel first. The engine's probe reads 1,280 there for both versions, its
+  datagrams leave `near` as fragments, and the server gets them whole. A test points the probe at it
+  (`lab_probing`).
+- **How the lab sends what an app's kernel would.** nix 0.31.3 offers no `IP_MTU_DISCOVER` on Linux, and the
+  workspace forbids unsafe code, so the IPv4 datagrams of an `IP_PMTUDISC_DO` or `IP_PMTUDISC_DONT` socket are
+  written whole, "do not fragment" set or clear, through a raw socket on the tunnel's address; IPv6's
+  `IPV6_DONTFRAG` is nix's own. A datagram with "do not fragment" past a path MTU its kernel keeps is refused by
+  that kernel, so where a test needs one past it, the lab first makes the kernel forget (IPv4's route cache
+  flushed, IPv6's tunnel route put anew), as when those entries expire or an app probes past them.
+- **Tests:** in the engine, 13 of the reassembler (in and out of order, both versions, IPv4 options and IPv6
+  headers before the fragment header, overlap, exact duplicate, a first fragment without its header, what is
+  malformed or too long, each bound with its cost, the wait to the nanosecond, the rebuilt headers byte for byte),
+  7 of the MTU (the rule at its edges, the app's own headers, a learned MTU and its expiry, the bound, the answer, a
+  router's MTU passed on, `EMSGSIZE`); and the fuzz target feeds the reassembler a sequence of fragments and holds
+  it to its bounds. In the network lab, 9: a 3,000-byte datagram both ways in IPv4 and IPv6; a datagram that may not
+  be fragmented answered with the MTU, in IPv4 with "do not fragment" and in IPv6 with `IPV6_DONTFRAG`, whose own
+  kernel then refuses the same datagram; the regression this unit exists for, a default socket's datagram answered,
+  then fragmented by its kernel, put together and received whole, in both versions; an IPv4 datagram without "do
+  not fragment" never answered; a router's "fragmentation needed" and "packet too big", sent with a raw socket,
+  passed on, learned, and forgotten at a move; an echo request answered; a chained app's datagram not answered; a
+  route's MTU changed taking effect at the next network change; a rebuilt datagram past the limit sent. Each was
+  made to fail by a mutation of the code it guards: 56 mutations, each caught; one, the cost of a fragment's place,
+  survived at first and has a test now.
+- **Not done, stated:**
+  - phones: what `IP_MTU` says on Wi-Fi and mobile networks, and whether Android's kernel takes writes to the
+    tunnel larger than its MTU, are measured in unit 11b; `scripts/verify-watch.sh` now sends a 2,000-byte ping,
+    which must be put together on an emulator, its reply reported, not required;
+  - the ping sockets still set no `IP_RECVERR` (unit 11), so a router's "fragmentation needed" for an echo
+    request is not passed on, and a request whose send fails with `EMSGSIZE` is counted as dropped echo;
+  - an app's TCP fragments are put together too and handled as any segment; Android's stack sizes its segments to
+    the tunnel, so they are rare.

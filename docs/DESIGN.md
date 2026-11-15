@@ -790,7 +790,17 @@ matter most had no test; a narrow review of the fixes found none left. On the An
 passed through Watch's own socket and its replies came back. How it is built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md),
 "How it is built".
 
-Still to come: the network's MTU.
+Fragments and the MTU, 2026-11-15 (finding 21b, ADR 0044 decision 5 as amended), built by a fresh agent from a
+written brief. The engine now puts the apps' IPv4 and IPv6 fragments together again, within bounds of 64 datagrams,
+1 MiB and five seconds that every app shares, and drops a datagram whose fragments overlap or whose first fragment
+lacks its header. It reads the first hop's MTU from its own kernel, through a protected socket connected toward the
+default route, at its start and at each network change, and learns each destination's path MTU from what routers
+send its sockets, passing it on to the app. On the direct path, a datagram or an echo request that may not be
+fragmented and is too large for that MTU is answered "fragmentation needed" or "packet too big" with the size the
+app's packet may have: the app's kernel then fragments its next datagrams, unless its socket asked never to, and the
+engine puts them together. A datagram put together so is never answered, and through the chain nothing is. Not yet
+run on the emulator, whose check now sends a ping larger than the tunnel's MTU, nor on a phone (unit 11b). How it
+is built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 | # | Milestone | Done when |
 |---|---|---|
