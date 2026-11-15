@@ -586,6 +586,19 @@ impl Counters {
     }
 }
 
+/// What Watch last set on its engines from outside: the chain, and whether answers go uncached, which
+/// goes with it ([`Engine::chain`]). Watch's native side keeps it whether or not an engine runs, so that
+/// a chain set while none does, as in the moment of a swap, is the next engine's from its first packet
+/// (fourth check of unit 12, minor 1); it wins over what the engine before handed over, which it may
+/// be newer than.
+#[derive(Clone, Debug)]
+pub struct ChainSetting {
+    /// The chain, or `None` for none.
+    pub chain: Option<Chain>,
+    /// Whether the answers of the tunnel's DNS address go to the apps with a time to live of 0.
+    pub uncached_answers: bool,
+}
+
 /// What an engine hands the next when the tunnel is set up again (ADR 0044, decision 5 as amended): what
 /// was set on it from outside, the chain, the network's resolver and whether answers go uncached, and
 /// what it learned that the apps' next flows need, the stand-in addresses chained apps were given and
@@ -717,12 +730,12 @@ impl Engine {
         platform: Arc<dyn Platform>,
         organisations: Option<Organisations>,
     ) -> io::Result<Self> {
-        Self::start_with(fd, config, platform, organisations, None)
+        Self::start_with(fd, config, platform, organisations, (None, None))
     }
 
     /// Starts as [`Engine::start`], on a tunnel set up again, with what the engine before it handed
-    /// over ([`Engine::hand_over`]): all of it is in place before the new engine's thread reads its
-    /// first packet.
+    /// over ([`Engine::hand_over`]), and with the chain Watch last set, which wins over the one handed
+    /// over: all of it is in place before the new engine's thread reads its first packet.
     ///
     /// # Errors
     /// When the thread or its event loop cannot be made.
@@ -731,12 +744,12 @@ impl Engine {
         config: Config,
         platform: Arc<dyn Platform>,
         organisations: Option<Organisations>,
-        handover: Option<Handover>,
+        (handover, setting): (Option<Handover>, Option<ChainSetting>),
     ) -> io::Result<Self> {
         let Handover {
-            chain,
+            mut chain,
             upstream_dns,
-            uncached_answers,
+            mut uncached_answers,
             stand_ins,
             names,
             counters,
@@ -748,6 +761,10 @@ impl Engine {
             names: Names::default(),
             counters: [0; COUNTERS],
         });
+        if let Some(setting) = setting {
+            chain = setting.chain.map(Arc::new);
+            uncached_answers = setting.uncached_answers;
+        }
         let shared = Arc::new(Shared {
             platform,
             addresses: config.addresses,
@@ -968,7 +985,8 @@ async fn run(
     };
     let mut buffer = vec![0u8; usize::from(mtu).max(1500) + 64];
     let mut swept = Instant::now();
-    let logging = tokio::spawn(logger(Arc::clone(&state.shared)));
+    let (end_logging, logging_ends) = watch::channel(false);
+    let logging = tokio::spawn(logger(Arc::clone(&state.shared), logging_ends));
     loop {
         tokio::select! {
             _ = stop.changed() => break,
@@ -994,8 +1012,10 @@ async fn run(
             }
         }
     }
-    // What is open ends with the tunnel; the log gets it before the engine's thread does.
-    logging.abort();
+    // What is open ends with the tunnel; the log gets it before the engine's thread does, after any
+    // batch the logger is handing over, so that the log gets them in order.
+    let _ = end_logging.send(true);
+    let _ = logging.await;
     state.shared.finish_all();
     if let Some(batch) = state.shared.take_log() {
         state.shared.platform.log(&batch);

@@ -25,7 +25,7 @@ pub mod tls;
 pub mod tun;
 
 pub use engine::{
-    Addresses, Chain, Config, DnsUse, Ech, Engine, Flow, Handover, Limits, NamedBy, Network,
-    Outcome, Platform,
+    Addresses, Chain, ChainSetting, Config, DnsUse, Ech, Engine, Flow, Handover, Limits, NamedBy,
+    Network, Outcome, Platform,
 };
 pub use owners::NetworkKind;

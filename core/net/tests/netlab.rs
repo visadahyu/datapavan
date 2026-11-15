@@ -178,7 +178,7 @@ impl Tunnels {
             lab_config(&self.limits),
             Arc::new(Lab),
             None,
-            handover,
+            (handover, None),
         )
     }
 }

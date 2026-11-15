@@ -11,7 +11,7 @@ mod common;
 
 use common::{Headers, Settings, proxy, same_port, udp_echo, udp_echo_beside};
 use datapavan_net::engine::{Addresses, Limits};
-use datapavan_net::{Chain, Config, Engine, Platform, dns, packet};
+use datapavan_net::{Chain, ChainSetting, Config, Engine, Platform, dns, packet};
 use std::collections::HashSet;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -106,6 +106,14 @@ fn started(
 /// the tunnel up again: the engine before stops and hands over ([`Engine::hand_over`]), with no chain
 /// set on the new one.
 fn set_up_again(previous: Engine) -> io::Result<(Engine, UnixDatagram)> {
+    set_up_again_with(previous, None)
+}
+
+/// As [`set_up_again`], with `setting`, the chain Watch set while no engine ran, as during the swap.
+fn set_up_again_with(
+    previous: Engine,
+    setting: Option<ChainSetting>,
+) -> io::Result<(Engine, UnixDatagram)> {
     let (engine_end, app_end) = std::os::unix::net::UnixDatagram::pair()?;
     engine_end.set_nonblocking(true)?;
     app_end.set_nonblocking(true)?;
@@ -119,7 +127,7 @@ fn set_up_again(previous: Engine) -> io::Result<(Engine, UnixDatagram)> {
         },
         Arc::new(ByPort),
         None,
-        Some(previous.hand_over()),
+        (Some(previous.hand_over()), setting),
     )?;
     Ok((engine, UnixDatagram::from_std(app_end)?))
 }
@@ -542,6 +550,28 @@ async fn a_stand_in_keeps_its_name_when_the_tunnel_is_set_up_again() -> Outcome 
     )
     .await?;
     assert_eq!(tool.commands(), [3], "one association, on the new tunnel");
+    Ok(())
+}
+
+/// ADR 0044, unit 12 (fourth check, minor 1): a chain Watch set while no engine ran, as when one lands
+/// during the swap, is the new engine's, over the older one the engine before handed over: the chained
+/// app's first datagram goes to the new tool's proxy, and the old one sees nothing more.
+#[tokio::test(flavor = "current_thread")]
+async fn a_chain_set_during_the_swap_is_the_new_engines() -> Outcome {
+    let echo = udp_echo().await?;
+    let old_tool = proxy(Settings::default()).await?;
+    let new_tool = proxy(Settings::default()).await?;
+    let (first, tunnel) = engine(chain(old_tool.address))?;
+    echoed(&tunnel, echo, b"before").await?;
+    assert_eq!(old_tool.commands(), [3]);
+    let setting = ChainSetting {
+        chain: Some(chain(new_tool.address)),
+        uncached_answers: true,
+    };
+    let (_second, tunnel) = set_up_again_with(first, Some(setting))?;
+    echoed(&tunnel, echo, b"after").await?;
+    assert_eq!(new_tool.commands(), [3], "not through the tool set last");
+    assert_eq!(old_tool.commands(), [3]);
     Ok(())
 }
 

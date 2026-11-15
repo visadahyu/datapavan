@@ -8,6 +8,7 @@ use crate::packet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::sync::watch;
 
 /// The bytes of one open flow, counted as they pass: what the app sent and received, and the IP
 /// packets the tunnel carried for it, headers included, which is what Android counts for the app.
@@ -257,8 +258,10 @@ pub(super) fn delta(now: [u64; 4], base: [u64; 4]) -> [u64; 4] {
 
 /// Hands finished records to Watch's log: gathered for [`LOG_DELAY`] after the first one, and at every
 /// quarter hour the segments of the flows still open. With nothing open and nothing waiting it sleeps
-/// without a timer, so an idle tunnel does not wake the phone.
-pub(super) async fn logger(shared: Arc<Shared>) {
+/// without a timer, so an idle tunnel does not wake the phone. It returns once `end` says the engine
+/// stops, but never while it hands a batch to the log: the engine then hands the last batch after it,
+/// so that the log gets them in order (fourth check of unit 12, a nit).
+pub(super) async fn logger(shared: Arc<Shared>, mut end: watch::Receiver<bool>) {
     let mut last = now_ms() / SEGMENT_MS * SEGMENT_MS;
     loop {
         let open = !lock(&shared.live).is_empty() || !lock(&shared.lookups).is_empty();
@@ -267,8 +270,13 @@ pub(super) async fn logger(shared: Arc<Shared>) {
             Duration::from_millis(SEGMENT_MS - now % SEGMENT_MS)
         });
         tokio::select! {
+            _ = end.changed() => return,
             () = shared.log_ready.notified() => {
-                tokio::time::sleep(next.map_or(LOG_DELAY, |n| n.min(LOG_DELAY))).await;
+                let gather = next.map_or(LOG_DELAY, |n| n.min(LOG_DELAY));
+                tokio::select! {
+                    _ = end.changed() => return,
+                    () = tokio::time::sleep(gather) => {}
+                }
             }
             () = sleep_for(next) => {}
         }

@@ -5,14 +5,16 @@
 //! unsafe code (ADR 0006).
 
 use std::fs::File;
+use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd, RawFd};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use datapavan_net::organisations::{FilePart, Organisations};
 use datapavan_net::socks5::Credentials;
 use datapavan_net::{
-    Addresses, Chain, Config, DnsUse, Ech, Engine, Limits, NamedBy, NetworkKind, Outcome, Platform,
+    Addresses, Chain, ChainSetting, Config, DnsUse, Ech, Engine, Handover, Limits, NamedBy,
+    NetworkKind, Outcome, Platform,
 };
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
 use jni::objects::{JByteArray, JClass, JIntArray, JLongArray, JObject, JString};
@@ -28,8 +30,76 @@ use jni::{EnvUnowned, JValue, JavaVM, jni_sig, jni_str};
 /// which writes them and returns.
 static ENGINE: Mutex<Option<Engine>> = Mutex::new(None);
 
-fn engine() -> std::sync::MutexGuard<'static, Option<Engine>> {
+fn engine() -> MutexGuard<'static, Option<Engine>> {
     ENGINE.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// The chain Watch last set, with whether answers go uncached, kept whether or not an engine ran then
+/// (ADR 0044, unit 12, fourth check, minor 1). While `nativeStart` swaps engines, none is in [`ENGINE`]:
+/// a `nativeChain` that lands then, as from `refreshChain`'s thread, is kept here, and the next engine
+/// starts with it, rather than with the older chain the engine before handed over. `nativeStop` clears
+/// it, so that no run of the tunnel starts with the chain of one before. Lock order: this, then
+/// [`ENGINE`]; neither is held while an engine's thread is joined.
+static SET: Mutex<Option<ChainSetting>> = Mutex::new(None);
+
+fn setting() -> MutexGuard<'static, Option<ChainSetting>> {
+    SET.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Keeps `chain` for the engines to come and sets it on the one that runs, if any: whether a chain is
+/// on now, false while no engine runs.
+fn set_chain(chain: Option<Chain>) -> bool {
+    let mut set = setting();
+    let on = chain.is_some();
+    *set = Some(ChainSetting {
+        chain: chain.clone(),
+        uncached_answers: on,
+    });
+    match engine().as_ref() {
+        Some(running) => {
+            running.chain(chain);
+            on
+        }
+        None => false,
+    }
+}
+
+/// Keeps whether answers go uncached, where a chain was set to keep it with, and sets it on the engine
+/// that runs. With no chain set yet, only the running engine has it, and hands it over.
+fn set_uncached(on: bool) {
+    let mut set = setting();
+    if let Some(set) = set.as_mut() {
+        set.uncached_answers = on;
+    }
+    if let Some(running) = engine().as_ref() {
+        running.uncache_answers(on);
+    }
+}
+
+/// Starts the next engine with `start`, given what the engine before handed over, if one ran, and the
+/// chain Watch last set: [`SET`] is held from reading it until the new engine is in [`ENGINE`], so that
+/// a chain set meanwhile waits, and then reaches the new engine. Whether it started.
+fn start_next(
+    handover: Option<Handover>,
+    start: impl FnOnce((Option<Handover>, Option<ChainSetting>)) -> io::Result<Engine>,
+) -> bool {
+    let set = setting();
+    let Ok(started) = start((handover, set.clone())) else {
+        return false;
+    };
+    *engine() = Some(started);
+    drop(set);
+    true
+}
+
+/// Stops the engine that runs, if any, and forgets the chain set: the tunnel is off.
+fn stop_running() {
+    // Taken out first: the lock is not held while the engine's thread is joined.
+    let previous = engine().take();
+    if let Some(mut running) = previous {
+        running.stop();
+    }
+    *setting() = None;
 }
 
 /// Answers the engine's questions through `WatchVpnService`.
@@ -172,13 +242,9 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStart<'ca
                 );
                 Organisations::open(Box::new(part)).ok()
             });
-            let Ok(started) =
-                Engine::start_with(fd, config, platform, organisations.flatten(), handover)
-            else {
-                return Ok(false);
-            };
-            *engine() = Some(started);
-            Ok(true)
+            Ok(start_next(handover, |carried| {
+                Engine::start_with(fd, config, platform, organisations.flatten(), carried)
+            }))
         })
         .resolve::<ThrowRuntimeExAndDefault>()
 }
@@ -192,11 +258,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStop<'cal
 ) {
     unowned_env
         .with_env(|_env| -> Result<(), Error> {
-            // Taken out first: the lock is not held while the engine's thread is joined.
-            let previous = engine().take();
-            if let Some(mut running) = previous {
-                running.stop();
-            }
+            stop_running();
             Ok(())
         })
         .resolve::<ThrowRuntimeExAndDefault>();
@@ -345,14 +407,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeChain<'ca
                 }
                 _ => None,
             };
-            let on = chain.is_some();
-            Ok(match engine().as_ref() {
-                Some(running) => {
-                    running.chain(chain);
-                    on
-                }
-                None => false,
-            })
+            Ok(set_chain(chain))
         })
         .resolve::<ThrowRuntimeExAndDefault>()
 }
@@ -368,9 +423,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeUncacheAn
 ) {
     unowned_env
         .with_env(|_env| -> Result<_, Error> {
-            if let Some(engine) = engine().as_ref() {
-                engine.uncache_answers(on);
-            }
+            set_uncached(on);
             Ok(())
         })
         .resolve::<ThrowRuntimeExAndDefault>();
@@ -468,4 +521,106 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlows<'ca
             JString::from_str(env, lines.join("\n"))
         })
         .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+    use std::os::unix::net::UnixDatagram;
+
+    struct NoPlatform;
+
+    impl Platform for NoPlatform {
+        fn owner(&self, _: u8, _: SocketAddr, _: SocketAddr) -> Option<u32> {
+            None
+        }
+
+        fn protect(&self, _: RawFd) -> bool {
+            true
+        }
+
+        fn log(&self, _: &[u8]) {}
+    }
+
+    fn a_chain(port: u16) -> Chain {
+        Chain {
+            proxy: SocketAddr::from(([127, 0, 0, 1], port)),
+            credentials: None,
+            tool: 10_200,
+            apps: Some(HashSet::from([10_300])),
+            udp: true,
+            log_destinations: false,
+        }
+    }
+
+    /// An engine on one end of a datagram pair, with what it is given: the chain set, which the test
+    /// notes in `seen`.
+    fn started(
+        seen: &mut Vec<Option<ChainSetting>>,
+        (handover, setting): (Option<Handover>, Option<ChainSetting>),
+    ) -> io::Result<Engine> {
+        seen.push(setting.clone());
+        let (end, _) = UnixDatagram::pair()?;
+        end.set_nonblocking(true)?;
+        let config = Config {
+            limits: Limits::default(),
+            mtu: 1500,
+            keep_flows: 0,
+            addresses: Addresses::COMMON,
+        };
+        Engine::start_with(
+            OwnedFd::from(end),
+            config,
+            Arc::new(NoPlatform),
+            None,
+            (handover, setting),
+        )
+    }
+
+    /// The port of the proxy of the chain the last engine started with.
+    fn port_of(seen: &[Option<ChainSetting>]) -> Option<u16> {
+        seen.last()?
+            .as_ref()?
+            .chain
+            .as_ref()
+            .map(|chain| chain.proxy.port())
+    }
+
+    /// Fourth check of unit 12, minor 1: a chain set while no engine runs, as between `hand_over` and
+    /// `start_with` in `nativeStart`, is kept, and the next engine starts with it; one set on a running
+    /// engine is the next one's too; and the tunnel's stop forgets it, so that the next run starts with
+    /// none. One test, since `ENGINE` and `SET` are the process's.
+    #[test]
+    fn a_chain_set_while_no_engine_runs_is_the_next_engines() {
+        stop_running();
+        let mut seen = Vec::new();
+        assert!(start_next(None, |given| started(&mut seen, given)));
+        assert_eq!(port_of(&seen), None, "a first start with nothing set");
+        assert!(
+            set_chain(Some(a_chain(10_808))),
+            "set on the running engine"
+        );
+
+        // As nativeStart does: the engine taken out and handed over, and a chain lands meanwhile.
+        let handover = engine().take().map(Engine::hand_over);
+        assert!(!set_chain(Some(a_chain(10_809))), "no engine runs");
+        assert!(start_next(handover, |given| started(&mut seen, given)));
+        assert_eq!(port_of(&seen), Some(10_809));
+        let uncached = seen
+            .last()
+            .and_then(Option::as_ref)
+            .is_some_and(|set| set.uncached_answers);
+        assert!(uncached, "answers uncached with the chain");
+
+        // A swap with nothing set meanwhile: the chain last set, on the engine that ran.
+        let handover = engine().take().map(Engine::hand_over);
+        assert!(start_next(handover, |given| started(&mut seen, given)));
+        assert_eq!(port_of(&seen), Some(10_809));
+
+        stop_running();
+        assert!(start_next(None, |given| started(&mut seen, given)));
+        assert_eq!(port_of(&seen), None, "a chain of the run before");
+        stop_running();
+    }
 }
