@@ -70,12 +70,18 @@ An agent cannot verify from inside a session which account it runs on. What it c
 - **Where the rule lives:**
   - in the agents' standing notes for this project, which sessions in its folders load whatever the account (they
     are context, not enforced configuration, and subagents keep memory of their own);
-  - proposed, for the maintainer's word: a `CLAUDE.md` in this repository and in the private notes' repository with
-    the lane rule, which every session and subagent loads and which the auto-mode classifier also reads (still
-    context, not enforcement); and a guard hook, which Claude Code's documentation names as the way to block an
-    action whatever the agent decides, that refuses, outside the machine, `adb install` of any file that is not one
-    of the project's own build outputs and any read of the sample inbox;
-  - in the maintainer's own settings, which are the maintainer's call (decision 11).
+  - in a `CLAUDE.md` in this repository and in the private notes' repository (added 2026-11-15 at the maintainer's
+    word), which every session and subagent loads and which the auto-mode classifier also reads (still context, not
+    enforcement);
+  - in a guard hook (added the same day), which Claude Code's documentation names as the way to block an action
+    whatever the agent decides. It runs from the maintainer's settings in every Claude Code configuration on the
+    workstation, only for sessions in this project or the private notes, and outside the machine it refuses:
+    installing or pushing an APK to a device unless it is one of the project's own build outputs, named literally;
+    `pm install` through `adb shell`; the lane-2 analysis tools (jadx, apktool, androguard, Frida and its helpers,
+    objection); and any tool call that names the lane-2 folders (`/srv/datapavan-lane-2/`). If the guard itself
+    fails, the call is refused. Its script and its tests are in the maintainer's private notes, at a path that does
+    not change with the branch checked out;
+  - in the auto-mode environment text of the maintainer's own settings (decision 11).
 
 ### 3. The analysis machine
 
@@ -173,7 +179,8 @@ where the machine cannot change it.
 - **Obtaining:** samples are obtained only by the maintainer in exit mode (decision 4), or from a source's archive
   and checked against the hash the source published; never by a browser or a tool on the workstation's home
   address.
-- **Keeping:** on the workstation, samples are kept encrypted, in a folder owned by a user of their own (mode 0700)
+- **Keeping:** on the workstation, samples are kept encrypted, under `/srv/datapavan-lane-2/`, in a folder owned by
+  a user of their own (mode 0700)
   that the lane-1 agents, the maintainer's own user and the desktop's file indexers cannot read. They enter the
   machine as a read-only disk image built for the job; the host enforces read-only, not the guest. A brief names each
   sample by SHA-256 and source; samples never enter git. A sample not kept for a later job is destroyed with the job.
@@ -311,7 +318,6 @@ incident); record what happened in the private notes and publish what users of t
 - **Personal data in captures:** in sinkhole mode a sample sees no one's real data; in exit mode it may fetch others'.
   Captures stay inside the job; results carry no personal data; what may be published about a capture follows the
   project's disclosure rule.
-- **The maintainer's own settings,** the proposed `CLAUDE.md` files and the guard hook (decisions 2 and 11).
 - **The build itself:** a unit of its own, after this ADR is accepted, with each download asked for by name, source
   and size.
 - **What happens to a finding:** ADR 0048's routes and the project's disclosure rule apply unchanged; lane 2 changes
