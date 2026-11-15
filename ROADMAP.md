@@ -147,7 +147,7 @@ signing session and texts reviewed in eight languages):
 The milestones of 0.2.0, W1 to W9, with what each must show before it counts as done, are in
 [DESIGN.md §13.2](docs/DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools).
 
-Where it stands on 2026-11-14: the four items before W1 are drafted (ADRs
+Where it stands on 2026-11-15: the four items before W1 are drafted (ADRs
 [0034](docs/decisions/0034-watch-permissions.md), [0035](docs/decisions/0035-wireguard-upstream.md) and
 [0036](docs/decisions/0036-ip-to-organisation-dataset.md), accepted; the table of tools in `data/tools/`).
 W1, Watch's skeleton, and W2, the packet engine in the product, are in `main`: every app's traffic passes
@@ -168,6 +168,9 @@ of each key, all needed before 0.2.0, are proposed in [ADR 0049](docs/decisions/
 What the phone's own software installed, what the SIM and the operator can do, and guidance on SMS login codes,
 in Basic 0.2.0 and 0.2.1 and Advanced 0.2.0 and 0.2.1, are proposed in
 [ADR 0050](docs/decisions/0050-operators-and-sim-cards.md) (see "Mobile operators and SIM cards" below).
+Where the work on suspect apps runs: normal work stays on the maintainer's workstation, and analysis of apps
+suspected of being hostile runs only in an isolated analysis machine with its network closed, proposed in
+[ADR 0051](docs/decisions/0051-two-lanes-and-an-analysis-machine.md).
 
 The items, in order:
 

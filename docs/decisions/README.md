@@ -58,6 +58,7 @@ in the Git history.
 | [0048](0048-lab-probe-of-android-gaps.md) | A lab probe of where stock Android leaves privacy tools blind or exposed | Proposed |
 | [0049](0049-signing-keys-of-the-editions.md) | A signing key for each edition, ready to rotate, backed up in shares | Proposed |
 | [0050](0050-operators-and-sim-cards.md) | Mobile operators and SIM cards: what the phone installed, what the SIM can do, what to tell users | Proposed |
+| [0051](0051-two-lanes-and-an-analysis-machine.md) | Two lanes of work, and an isolated machine for suspect apps | Proposed |
 
 ## Template
 
