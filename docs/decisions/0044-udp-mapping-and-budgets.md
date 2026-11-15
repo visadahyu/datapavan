@@ -132,7 +132,11 @@ an ADR (D25).
     advertisements set.
   - The tunnel takes the smaller of the two values, never below 1280 or above 1500. It takes 1500 when neither
     socket answers.
-  - When a network change brings another value, the tunnel is set up again, as for an address clash (ADR 0041).
+  - When a network change brings another value, the tunnel is set up again, as for an address clash (ADR 0041),
+    and make-before-break: the new tunnel is established while the old engine still runs, so that nothing leaves
+    outside the tunnel meanwhile. Within one network the MTU only goes down; a value that rises waits for the next
+    network, so that a flapping route cannot set the tunnel up again and again.
+  - Android's `Builder` takes one MTU for both IP versions, so the wider version meets the narrower one's MTU.
   - The app's own kernel then meets the first hop as it would without Watch: it fragments the datagram or refuses
     it, by its socket's own setting. `LinkProperties.getMtu()` is 0 on most networks, so it is not used.
 - **Fragments are reassembled.**
