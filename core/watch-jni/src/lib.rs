@@ -12,8 +12,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use datapavan_net::organisations::{FilePart, Organisations};
 use datapavan_net::socks5::Credentials;
 use datapavan_net::{
-    Addresses, Chain, Config, DnsUse, Ech, Engine, Limits, MtuProbe, NamedBy, NetworkKind, Outcome,
-    Platform,
+    Addresses, Chain, Config, DnsUse, Ech, Engine, Limits, NamedBy, NetworkKind, Outcome, Platform,
 };
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
 use jni::objects::{JByteArray, JClass, JIntArray, JLongArray, JObject, JString};
@@ -161,9 +160,6 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStart<'ca
                 } else {
                     Addresses::COMMON
                 },
-                // The first hop's MTU from the engine's own kernel (ADR 0044, decision 5 as amended):
-                // LinkProperties.getMtu() is 0 on most networks.
-                mtu_probe: Some(MtuProbe::DOCUMENTATION),
             };
             let organisations = (table_fd >= 0).then(|| {
                 // SAFETY: as for `fd`: Kotlin hands over a duplicate it detached, owned by nothing else.
@@ -203,10 +199,9 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStop<'cal
         .resolve::<ThrowRuntimeExAndDefault>();
 }
 
-/// `Engine.nativeNetworkChanged(dns, moved)`: the network beneath the tunnel, its DNS server or its MTU
+/// `Engine.nativeNetworkChanged(dns, moved)`: the network beneath the tunnel or its DNS server
 /// changed; `dns` is its DNS server's address, or empty when it has none, and `moved` says whether the
-/// network itself is another one. The engine asks its kernel for the first hop's MTU again at each
-/// call (ADR 0044, decision 5 as amended).
+/// network itself is another one.
 // SAFETY: exported under the JNI name of the Kotlin method
 // `external fun nativeNetworkChanged(dns: String, moved: Boolean)`.
 #[unsafe(no_mangle)]

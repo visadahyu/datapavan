@@ -94,7 +94,6 @@ fn started(
             mtu: 1500,
             keep_flows: 64,
             addresses,
-            mtu_probe: None,
         },
         platform,
         None,

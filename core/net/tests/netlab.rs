@@ -10,7 +10,7 @@
 mod common;
 
 use common::{Settings, proxy};
-use datapavan_net::engine::{Addresses, Limits, MtuProbe};
+use datapavan_net::engine::{Addresses, Limits};
 use datapavan_net::{Chain, Config, Engine, Platform, packet};
 use socket2::{Domain, Protocol, Socket, Type};
 use std::collections::HashSet;
@@ -124,29 +124,6 @@ where
     F: FnOnce(Arc<Engine>) -> Fut,
     Fut: Future<Output = Outcome>,
 {
-    lab_in(name, limits, (settings, None), body)
-}
-
-/// [`lab`], with the engine's probe of the first hop's MTU pointed at `probe`; the other tests leave
-/// it off, and their datagrams are never answered as too large.
-fn lab_probing<F, Fut>(name: &str, limits: &Limits, probe: MtuProbe, body: F) -> Outcome
-where
-    F: FnOnce(Arc<Engine>) -> Fut,
-    Fut: Future<Output = Outcome>,
-{
-    lab_in(name, limits, (&[], Some(probe)), body)
-}
-
-fn lab_in<F, Fut>(
-    name: &str,
-    limits: &Limits,
-    (settings, mtu_probe): (&[(&str, &str)], Option<MtuProbe>),
-    body: F,
-) -> Outcome
-where
-    F: FnOnce(Arc<Engine>) -> Fut,
-    Fut: Future<Output = Outcome>,
-{
     if std::env::var_os(INSIDE).is_none() {
         let enter = concat!(env!("CARGO_MANIFEST_DIR"), "/../../scripts/netlab-enter.py");
         let me = std::env::current_exe()?;
@@ -180,7 +157,6 @@ where
         mtu: 1500,
         keep_flows: 64,
         addresses: Addresses::COMMON,
-        mtu_probe,
     };
     let engine = Arc::new(Engine::start(tunnel, config, Arc::new(Lab), None)?);
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -1893,55 +1869,180 @@ fn where_the_kernel_refuses_ping_sockets_echo_is_dropped_and_counted() -> Outcom
 }
 
 /// The narrow network's server (scripts/netlab-enter.py): what the namespace itself sends there leaves
-/// through a route whose MTU is 1,280, while the apps' datagrams reach it through tun0, whose MTU is
-/// 1,500.
+/// through `near`, whose MTU is 1,280, while the apps' datagrams reach it through tun0 first.
 const NARROW: Ipv4Addr = Ipv4Addr::new(198, 51, 100, 20);
 const NARROW6: Ipv6Addr = Ipv6Addr::new(0x2001, 0xdb8, 1, 0, 0, 0, 0, 0x20);
-/// The engine's probe of the first hop's MTU, toward the narrow network: 1,280 for both versions.
-const TOWARD_NARROW: MtuProbe = MtuProbe {
-    v4: NARROW,
-    v6: NARROW6,
-};
-/// Toward the "internet" on the namespace's loopback, whose MTU is 65,536.
-const TOWARD_LOOPBACK: MtuProbe = MtuProbe {
-    v4: SERVER,
-    v6: SERVER6,
-};
-/// The narrow route's MTU, and the route itself, as scripts/netlab-enter.py makes it.
-const NARROW_MTU: u32 = 1_280;
 const ICMP_ORIGIN: u8 = nix::libc::SO_EE_ORIGIN_ICMP;
 const ICMP6_ORIGIN: u8 = nix::libc::SO_EE_ORIGIN_ICMP6;
 const EMSGSIZE: i32 = nix::libc::EMSGSIZE;
 
-/// Waits until the engine's probe has given the first hop's MTU of both versions as `expected`.
-async fn probed(engine: &Engine, expected: (Option<u32>, Option<u32>)) -> Outcome {
-    for _ in 0..500 {
-        if engine.first_hop_mtus() == expected {
-            return Ok(());
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
+/// What became of the datagrams of an app of each path MTU discovery mode (scripts/netlab-app.py),
+/// sending `size` bytes from `source` to the echo server at `server`: one line for each of its
+/// sockets, in their order. It runs beside the test's runtime, which serves the echo.
+async fn modes(
+    source: IpAddr,
+    server: SocketAddr,
+    size: usize,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let app = concat!(env!("CARGO_MANIFEST_DIR"), "/../../scripts/netlab-app.py");
+    let output = tokio::task::spawn_blocking(move || {
+        Command::new("python3")
+            .args(["-I", app])
+            .arg(source.to_string())
+            .arg(server.ip().to_string())
+            .arg(server.port().to_string())
+            .arg(size.to_string())
+            .output()
+    })
+    .await??;
+    if !output.status.success() {
+        return Err(format!("{app}: {}", String::from_utf8_lossy(&output.stderr)).into());
     }
-    Err(format!(
-        "the probe gave {:?}, not {expected:?}",
-        engine.first_hop_mtus()
+    Ok(String::from_utf8(output.stdout)?
+        .lines()
+        .map(str::to_owned)
+        .collect())
+}
+
+/// ADR 0044, decision 5 as amended, and the second review of unit 12 (R1, R3): while the tunnel's MTU
+/// is still 1,500 and the network beneath is narrower, as in the moment before Watch sets the tunnel up
+/// again with that network's MTU, each app socket's datagram that fits the tunnel reaches the server
+/// whole, whatever its path MTU discovery mode, as before this unit: the engine's kernel fragments it
+/// for the narrow network, and the engine answers nothing as too large. So a connected default socket
+/// sees no error, and an IPv6 socket that ignores path MTU (OMIT) loses nothing. IPv4 and IPv6.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn at_the_tunnels_mtu_every_socket_reaches_a_narrower_network() -> Outcome {
+    lab(
+        "at_the_tunnels_mtu_every_socket_reaches_a_narrower_network",
+        &Limits::default(),
+        |engine| async move {
+            ipv6_here()?;
+            for (app_at, server_at, size, sockets) in [
+                (
+                    IpAddr::V4(Addresses::COMMON.tun4),
+                    IpAddr::V4(NARROW),
+                    1_472,
+                    12,
+                ),
+                (
+                    IpAddr::V6(Addresses::COMMON.tun6),
+                    IpAddr::V6(NARROW6),
+                    1_452,
+                    14,
+                ),
+            ] {
+                let server = udp_echo(server_at).await?;
+                let seen = modes(app_at, server, size).await?;
+                assert_eq!(seen.len(), sockets, "{seen:#?}");
+                let echoed = format!(": echoed {size}; echoed {size}");
+                for line in &seen {
+                    assert!(line.ends_with(&echoed), "{line}");
+                }
+            }
+            let counters = engine.counters();
+            assert_eq!(
+                (counters[TOO_BIG], counters[PATH_MTU], counters[FRAGMENTS]),
+                (0, 0, 0)
+            );
+            Ok(())
+        },
     )
-    .into())
+}
+
+/// Sets tun0's MTU, as Watch's Kotlin side sets the tunnel's to the network's first hop's
+/// (`Builder.setMtu`).
+fn set_tunnel_mtu(mtu: u16) -> Outcome {
+    let set = Command::new("ip")
+        .args(["link", "set", "tun0", "mtu", &mtu.to_string()])
+        .status()?;
+    if !set.success() {
+        return Err(format!("ip link set tun0 mtu {mtu}: {set}").into());
+    }
+    Ok(())
+}
+
+/// ADR 0044, decision 5 as amended: with the tunnel's MTU at the network's, 1,280, each app socket's
+/// datagram of 1,500 bytes meets the tunnel as it would meet that network without Watch, measured here
+/// against the same app on the narrow network itself, from an address of the namespace's own. A socket
+/// that may fragment (dont, want, omit) is fragmented by its own kernel, the engine puts the fragments
+/// together, and the server gets the datagram whole; one that may not (do, probe, interface, IPv6's
+/// `IPV6_DONTFRAG`) is refused by its own kernel with `EMSGSIZE`, at once. A connected default socket
+/// sees no error. The answers, 1,500 bytes, reach the app though the tunnel's MTU is smaller: Linux
+/// takes them.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn at_the_networks_mtu_apps_fragment_or_refuse_as_without_watch() -> Outcome {
+    lab(
+        "at_the_networks_mtu_apps_fragment_or_refuse_as_without_watch",
+        &Limits::default(),
+        |engine| async move {
+            ipv6_here()?;
+            set_tunnel_mtu(1_280)?;
+            for (app_at, own_at, server_at, size) in [
+                (
+                    IpAddr::V4(Addresses::COMMON.tun4),
+                    IpAddr::V4(SERVER),
+                    IpAddr::V4(NARROW),
+                    1_472,
+                ),
+                (
+                    IpAddr::V6(Addresses::COMMON.tun6),
+                    IpAddr::V6(SERVER6),
+                    IpAddr::V6(NARROW6),
+                    1_452,
+                ),
+            ] {
+                let server = udp_echo(server_at).await?;
+                let through_watch = modes(app_at, server, size).await?;
+                let without_watch = modes(own_at, server, size).await?;
+                assert_eq!(through_watch, without_watch);
+                for line in &through_watch {
+                    let refused = ["do ", "probe ", "interface ", "dontfrag "]
+                        .iter()
+                        .any(|mode| line.starts_with(mode));
+                    let expected = if refused {
+                        ": refused EMSGSIZE; refused EMSGSIZE".to_owned()
+                    } else {
+                        format!(": echoed {size}; echoed {size}")
+                    };
+                    assert!(line.ends_with(&expected), "{line}");
+                }
+            }
+            // dont, want and omit, unconnected and connected, two datagrams each, in both versions.
+            let counters = engine.counters();
+            assert_eq!(
+                (
+                    counters[REASSEMBLED],
+                    counters[FRAGMENTS],
+                    counters[TOO_BIG]
+                ),
+                (24, 0, 0)
+            );
+            Ok(())
+        },
+    )
 }
 
 /// An app's UDP socket on the tunnel's address of `server`'s IP version, which queues the ICMP
 /// errors it is told of (`IP_RECVERR`, `IPV6_RECVERR`), as an app that asks for them does.
 async fn erring_app(server: SocketAddr) -> io::Result<UdpSocket> {
-    let app = if server.is_ipv4() {
-        UdpSocket::bind((Addresses::COMMON.tun4, 0)).await?
-    } else {
-        UdpSocket::bind((Addresses::COMMON.tun6, 0)).await?
-    };
+    let app = UdpSocket::bind((tunnel_of(server), 0)).await?;
     if server.is_ipv4() {
         nix::sys::socket::setsockopt(&app, nix::sys::socket::sockopt::Ipv4RecvErr, &true)?;
     } else {
         nix::sys::socket::setsockopt(&app, nix::sys::socket::sockopt::Ipv6RecvErr, &true)?;
     }
     Ok(app)
+}
+
+/// The tunnel's address of `to`'s IP version.
+fn tunnel_of(to: SocketAddr) -> IpAddr {
+    if to.is_ipv4() {
+        IpAddr::V4(Addresses::COMMON.tun4)
+    } else {
+        IpAddr::V6(Addresses::COMMON.tun6)
+    }
 }
 
 /// An ICMP error as the kernel queues it for a socket: its origin, type and code, and the MTU or other
@@ -1991,206 +2092,10 @@ async fn told(socket: &impl AsFd) -> Result<Vec<Queued>, Box<dyn std::error::Err
 /// The path MTU the apps' kernel keeps toward `to`: `IP_MTU` of a socket on the tunnel's address
 /// connected there, which takes the apps' route, into tun0. On Linux `IP_MTU` answers for IPv6 too.
 fn app_path_mtu(to: SocketAddr) -> Result<u32, Box<dyn std::error::Error>> {
-    let socket = if to.is_ipv4() {
-        std::net::UdpSocket::bind((Addresses::COMMON.tun4, 0))?
-    } else {
-        std::net::UdpSocket::bind((Addresses::COMMON.tun6, 0))?
-    };
+    let socket = std::net::UdpSocket::bind((tunnel_of(to), 0))?;
     socket.connect(to)?;
     let mtu = nix::sys::socket::getsockopt(&socket, nix::sys::socket::sockopt::IpMtu)?;
     Ok(u32::try_from(mtu)?)
-}
-
-/// Waits until the apps' kernel keeps `mtu` as the path MTU toward `to`.
-async fn app_learned(to: SocketAddr, mtu: u32) -> Outcome {
-    for _ in 0..500 {
-        if app_path_mtu(to)? == mtu {
-            return Ok(());
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-    Err(format!(
-        "the app's path MTU toward {to} is {}, not {mtu}",
-        app_path_mtu(to)?
-    )
-    .into())
-}
-
-/// The apps' kernel forgets the path MTUs it keeps, as when their time runs out, so that the next
-/// datagram past one reaches the engine, as from an app that probes past its path MTU
-/// (`IP_PMTUDISC_PROBE`). A raw socket's datagram with "do not fragment" larger than a path MTU its
-/// kernel keeps is refused by that kernel. IPv4's route cache is flushed, which drops its exceptions;
-/// for IPv6, whose flush the namespace does not offer, the tunnel's route is put anew, which drops
-/// the exceptions under it.
-fn apps_forget_path_mtus() -> Outcome {
-    std::fs::write("/proc/sys/net/ipv4/route/flush", "1")?;
-    let route = Command::new("ip")
-        .args([
-            "-6", "route", "replace", "default", "dev", "tun0", "table", "100",
-        ])
-        .status()?;
-    if !route.success() {
-        return Err(format!("ip -6 route replace: {route}").into());
-    }
-    Ok(())
-}
-
-/// Sends an app's UDP datagram from the tunnel's address and `from_port` to `to`, written whole, its
-/// IP header included, through a raw socket, as the app's kernel would write it: in IPv4, with "do not
-/// fragment" set as a socket set to `IP_PMTUDISC_DO` sends it, or clear as one set to
-/// `IP_PMTUDISC_DONT` does; in IPv6, past what the app's kernel keeps as the path MTU, as an app with
-/// `IPV6_PMTUDISC_PROBE` does. nix 0.31.3 offers no `IP_MTU_DISCOVER` on Linux, and the workspace
-/// forbids unsafe code, so the lab writes the header itself; the kernel fills in IPv4's identification
-/// and header checksum. The raw socket is bound to the tunnel's address, so that the namespace sends
-/// what it writes into tun0, as it sends the apps' datagrams.
-fn send_as_app(from_port: u16, to: SocketAddr, payload: &[u8], dont_fragment: bool) -> Outcome {
-    let tunnel = if to.is_ipv4() {
-        IpAddr::V4(Addresses::COMMON.tun4)
-    } else {
-        IpAddr::V6(Addresses::COMMON.tun6)
-    };
-    let mut datagram =
-        packet::udp(SocketAddr::new(tunnel, from_port), to, payload).ok_or("no datagram built")?;
-    if to.is_ipv4() && !dont_fragment {
-        datagram[6] = 0;
-    }
-    send_raw(tunnel, to.ip(), &[datagram])
-}
-
-/// Writes `packets`, whole, through a raw socket bound to `from`, to `to`.
-fn send_raw(from: IpAddr, to: IpAddr, packets: &[Vec<u8>]) -> Outcome {
-    let domain = if from.is_ipv4() {
-        Domain::IPV4
-    } else {
-        Domain::IPV6
-    };
-    // IPPROTO_RAW: the header is the packet's own, IP_HDRINCL or IPV6_HDRINCL.
-    let raw = Socket::new(domain, Type::RAW, Some(Protocol::from(255)))?;
-    raw.bind(&SocketAddr::new(from, 0).into())?;
-    for packet in packets {
-        raw.send_to(packet, &SocketAddr::new(to, 0).into())?;
-    }
-    Ok(())
-}
-
-/// ADR 0044, decision 5 as amended: a datagram that may not be fragmented, larger than the narrow
-/// network's first hop, is answered "fragmentation needed" (IPv4, "do not fragment" set) or "packet
-/// too big" (IPv6, a socket set to `IPV6_DONTFRAG`), with the MTU the app's packet may have; the app's
-/// kernel takes it, an IPv6 socket that may not fragment then refuses the same datagram itself, and a
-/// datagram of that size passes.
-#[test]
-#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
-fn a_datagram_that_may_not_be_fragmented_is_answered_too_large() -> Outcome {
-    lab_probing(
-        "a_datagram_that_may_not_be_fragmented_is_answered_too_large",
-        &Limits::default(),
-        TOWARD_NARROW,
-        |engine| async move {
-            ipv6_here()?;
-            probed(&engine, (Some(NARROW_MTU), Some(NARROW_MTU))).await?;
-            let server = udp_echo(IpAddr::V4(NARROW)).await?;
-            let app = erring_app(server).await?;
-            let port = app.local_addr()?.port();
-            send_as_app(port, server, &large(1_472), true)?;
-            assert_eq!(told(&app).await?, [(ICMP_ORIGIN, 3, 4, 1_280)]);
-            assert_eq!(app_path_mtu(server)?, 1_280);
-            send_as_app(port, server, &large(1_252), true)?;
-            let (heard, from) = app_receive(&app).await?;
-            assert_eq!((heard, from), (large(1_252), server));
-
-            let server6 = udp_echo(IpAddr::V6(NARROW6)).await?;
-            let app6 = erring_app(server6).await?;
-            nix::sys::socket::setsockopt(&app6, nix::sys::socket::sockopt::Ipv6DontFrag, &true)?;
-            app6.send_to(&large(1_452), server6).await?;
-            assert_eq!(told(&app6).await?, [(ICMP6_ORIGIN, 2, 0, 1_280)]);
-            let refused = app6.send_to(&large(1_452), server6).await;
-            assert!(
-                matches!(&refused, Err(e) if e.raw_os_error() == Some(EMSGSIZE)),
-                "the app's kernel sent it: {refused:?}"
-            );
-            // Its own refusal is on its error queue too.
-            queued(&app6)?;
-            app6.send_to(&large(1_232), server6).await?;
-            let (heard, from) = app_receive(&app6).await?;
-            assert_eq!((heard, from), (large(1_232), server6));
-            assert_eq!(engine.counters()[TOO_BIG], 2);
-            Ok(())
-        },
-    )
-}
-
-/// The regression this unit exists for: a default socket's datagram, which its kernel sends with
-/// "do not fragment" (IPv4) while it fits the tunnel, or which may never be fragmented on the way
-/// (IPv6), is answered too large; the app's kernel then cuts the same datagram into fragments, the
-/// engine puts them together, its own kernel fragments the datagram for the narrow network, and the
-/// server gets it whole. An engine that answered and dropped fragments would cut such apps off.
-#[test]
-#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
-fn after_too_large_the_apps_fragments_reach_the_server_whole() -> Outcome {
-    lab_probing(
-        "after_too_large_the_apps_fragments_reach_the_server_whole",
-        &Limits::default(),
-        TOWARD_NARROW,
-        |engine| async move {
-            ipv6_here()?;
-            probed(&engine, (Some(NARROW_MTU), Some(NARROW_MTU))).await?;
-            for (app_at, server_at, size) in [
-                (
-                    IpAddr::V4(Addresses::COMMON.tun4),
-                    IpAddr::V4(NARROW),
-                    1_472,
-                ),
-                (
-                    IpAddr::V6(Addresses::COMMON.tun6),
-                    IpAddr::V6(NARROW6),
-                    1_452,
-                ),
-            ] {
-                let server = udp_echo(server_at).await?;
-                let app = UdpSocket::bind((app_at, 0)).await?;
-                app.send_to(&large(size), server).await?;
-                app_learned(server, 1_280).await?;
-                app.send_to(&large(size), server).await?;
-                let (heard, from) = app_receive(&app).await?;
-                assert_eq!(from, server);
-                assert!(heard == large(size), "{} bytes of {size}", heard.len());
-            }
-            let counters = engine.counters();
-            assert_eq!(
-                (
-                    counters[TOO_BIG],
-                    counters[REASSEMBLED],
-                    counters[FRAGMENTS]
-                ),
-                (2, 2, 0)
-            );
-            Ok(())
-        },
-    )
-}
-
-/// An IPv4 datagram whose "do not fragment" is clear, as a socket set to `IP_PMTUDISC_DONT` sends
-/// it, is never answered: the engine's kernel fragments it for the narrow network, as a router would,
-/// and the server gets it whole.
-#[test]
-#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
-fn an_ipv4_datagram_that_may_be_fragmented_is_never_answered() -> Outcome {
-    lab_probing(
-        "an_ipv4_datagram_that_may_be_fragmented_is_never_answered",
-        &Limits::default(),
-        TOWARD_NARROW,
-        |engine| async move {
-            probed(&engine, (Some(NARROW_MTU), Some(NARROW_MTU))).await?;
-            let server = udp_echo(IpAddr::V4(NARROW)).await?;
-            let app = erring_app(server).await?;
-            send_as_app(app.local_addr()?.port(), server, &large(1_472), false)?;
-            let (heard, from) = app_receive(&app).await?;
-            assert_eq!((heard, from), (large(1_472), server));
-            assert_eq!(queued(&app)?, []);
-            assert_eq!(engine.counters()[TOO_BIG], 0);
-            Ok(())
-        },
-    )
 }
 
 /// A UDP server at `at` that sends each datagram back, and tells, once, where the first came from:
@@ -2231,28 +2136,18 @@ fn router_says(router: IpAddr, (mapped, server): (SocketAddr, SocketAddr), mtu: 
 }
 
 /// A router past the first hop says a destination's path is narrower: the engine's mapping reads it
-/// off its error queue, the app is told at once with that MTU, counted, and the next datagram larger
-/// than that is answered from what was learned, though the first hop, the loopback's, is far wider;
-/// in IPv4 and IPv6. Once the network moves, what routers said of the old one's paths is forgotten.
+/// off its error queue, and the app is told at once, as if from the destination, with the router's
+/// MTU, and counted; the app's kernel then keeps that MTU for the path. An app's connected default
+/// socket fails its next read once with `EMSGSIZE`, then goes on, as it would without Watch. IPv4 and
+/// IPv6.
 #[test]
 #[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
-fn a_routers_too_big_is_passed_on_and_learned() -> Outcome {
-    lab_probing(
-        "a_routers_too_big_is_passed_on_and_learned",
+fn a_routers_too_big_reaches_the_app() -> Outcome {
+    lab(
+        "a_routers_too_big_reaches_the_app",
         &Limits::default(),
-        TOWARD_LOOPBACK,
         |engine| async move {
             ipv6_here()?;
-            for _ in 0..500 {
-                if matches!(engine.first_hop_mtus(), (Some(_), Some(_))) {
-                    break;
-                }
-                tokio::time::sleep(Duration::from_millis(10)).await;
-            }
-            let (Some(first4), Some(first6)) = engine.first_hop_mtus() else {
-                return Err(format!("no first hop: {:?}", engine.first_hop_mtus()).into());
-            };
-            assert!(first4 > 60_000 && first6 > 60_000, "{first4}, {first6}");
             for (at, router, kind) in [
                 (IpAddr::V4(SERVER), IpAddr::V4(OTHER), (ICMP_ORIGIN, 3, 4)),
                 (
@@ -2263,203 +2158,31 @@ fn a_routers_too_big_is_passed_on_and_learned() -> Outcome {
             ] {
                 let (server, mapping) = reporting_echo(at).await?;
                 let app = erring_app(server).await?;
-                let port = app.local_addr()?.port();
                 app.send_to(b"hello", server).await?;
                 app_receive(&app).await?;
                 let mapped = timeout(STEP, mapping).await??;
                 router_says(router, (mapped, server), 1_400)?;
                 assert_eq!(told(&app).await?, [(kind.0, kind.1, kind.2, 1_400)]);
                 assert_eq!(app_path_mtu(server)?, 1_400);
-                // 1,401 bytes of the app's packet would make an outer packet past 1,400.
-                apps_forget_path_mtus()?;
-                send_as_app(
-                    port,
-                    server,
-                    &large(1_401 - 28 - 20 * usize::from(at.is_ipv6())),
-                    true,
-                )?;
-                assert_eq!(told(&app).await?, [(kind.0, kind.1, kind.2, 1_400)]);
-                send_as_app(
-                    port,
-                    server,
-                    &large(1_400 - 28 - 20 * usize::from(at.is_ipv6())),
-                    true,
-                )?;
-                app_receive(&app).await?;
+
+                let (server, mapping) = reporting_echo(at).await?;
+                let connected = UdpSocket::bind((tunnel_of(server), 0)).await?;
+                connected.connect(server).await?;
+                connected.send(b"hello").await?;
+                let mut buffer = [0u8; 64];
+                within("the echo", connected.recv(&mut buffer)).await?;
+                let mapped = timeout(STEP, mapping).await??;
+                router_says(router, (mapped, server), 1_300)?;
+                let failed = timeout(STEP, connected.recv(&mut buffer)).await?;
+                assert!(
+                    matches!(&failed, Err(e) if e.raw_os_error() == Some(EMSGSIZE)),
+                    "not told: {failed:?}"
+                );
+                connected.send(b"and on").await?;
+                let n = within("the echo after", connected.recv(&mut buffer)).await?;
+                assert_eq!(&buffer[..n], b"and on");
             }
-            let counters = engine.counters();
-            assert_eq!((counters[PATH_MTU], counters[TOO_BIG]), (2, 2));
-
-            engine.network_changed(None, true);
-            let server = udp_echo(IpAddr::V4(SERVER)).await?;
-            let app = erring_app(server).await?;
-            send_as_app(app.local_addr()?.port(), server, &large(1_401 - 28), true)?;
-            let (heard, _) = app_receive(&app).await?;
-            assert_eq!(heard, large(1_401 - 28));
-            assert_eq!(engine.counters()[TOO_BIG], 2);
-            Ok(())
-        },
-    )
-}
-
-/// An echo request with "do not fragment" set, as an app's ping socket sends one that fits the
-/// tunnel, larger than the narrow network's first hop, is answered "fragmentation needed" with its
-/// MTU, and never leaves.
-#[test]
-#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
-fn an_echo_request_too_large_is_answered() -> Outcome {
-    lab_probing(
-        "an_echo_request_too_large_is_answered",
-        &Limits::default(),
-        TOWARD_NARROW,
-        |engine| async move {
-            probed(&engine, (Some(NARROW_MTU), Some(NARROW_MTU))).await?;
-            let app = erring_pinger(IpAddr::V4(Addresses::COMMON.tun4), 4_801)?;
-            let to = SocketAddr::new(IpAddr::V4(NARROW), 0).into();
-            app.send_to(&echo_request(true, 1, &large(1_400)), &to)?;
-            let mut buffer = [0u8; 2048];
-            let read = std::io::Read::read(&mut &app, &mut buffer);
-            assert!(
-                matches!(&read, Err(e) if e.raw_os_error() == Some(EMSGSIZE)),
-                "not told too large: {read:?}"
-            );
-            assert_eq!(queued(&app)?, [(ICMP_ORIGIN, 3, 4, 1_280)]);
-            let counters = engine.counters();
-            assert_eq!((counters[TOO_BIG], counters[ECHO_CARRIED]), (1, 0));
-            Ok(())
-        },
-    )
-}
-
-/// Through the chain nothing is answered as too large: the tool's relay is on the phone, and what the
-/// tool sends further is its own; here its kernel fragments it for the narrow network.
-#[test]
-#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
-fn a_chained_apps_large_datagram_is_not_answered() -> Outcome {
-    lab_probing(
-        "a_chained_apps_large_datagram_is_not_answered",
-        &Limits::default(),
-        TOWARD_NARROW,
-        |engine| async move {
-            probed(&engine, (Some(NARROW_MTU), Some(NARROW_MTU))).await?;
-            // The relay at an address of the namespace's own, as a tool's relay bound to every
-            // address sends from: one on 127.0.0.1 would send the narrow network a packet from the
-            // loopback, which no network takes.
-            let tool = proxy(Settings {
-                relay_at: Some(IpAddr::V4(SERVER)),
-                ..Settings::default()
-            })
-            .await?;
-            engine.chain(Some(lab_chain(tool.address)));
-            let server = udp_echo(IpAddr::V4(NARROW)).await?;
-            let app = erring_app(server).await?;
-            // A default socket: "do not fragment" set, as it fits the tunnel.
-            app.send_to(&large(1_472), server).await?;
-            let (heard, from) = app_receive(&app).await?;
-            assert_eq!((heard, from), (large(1_472), server));
-            assert_eq!(tool.commands(), [3]);
-            assert_eq!(engine.counters()[TOO_BIG], 0);
-            Ok(())
-        },
-    )
-}
-
-/// The engine asks its kernel for the first hop's MTU only at its start and when Watch reports a
-/// network change: a route's MTU changed in between takes effect at the next report, moved or not.
-#[test]
-#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
-fn a_changed_route_mtu_takes_effect_at_the_next_network_change() -> Outcome {
-    lab_probing(
-        "a_changed_route_mtu_takes_effect_at_the_next_network_change",
-        &Limits::default(),
-        TOWARD_NARROW,
-        |engine| async move {
-            probed(&engine, (Some(NARROW_MTU), Some(NARROW_MTU))).await?;
-            let server = udp_echo(IpAddr::V4(NARROW)).await?;
-            let app = erring_app(server).await?;
-            let port = app.local_addr()?.port();
-            send_as_app(port, server, &large(1_372), true)?;
-            assert_eq!(told(&app).await?, [(ICMP_ORIGIN, 3, 4, 1_280)]);
-
-            let widened = Command::new("ip")
-                .args(["route", "replace", "198.51.100.20/32", "dev", "near"])
-                .args(["mtu", "1400", "src", "198.51.100.9", "table", "101"])
-                .status()?;
-            assert!(widened.success(), "ip route replace: {widened}");
-            // Until Watch reports a change, the engine does not ask again.
-            tokio::time::sleep(Duration::from_millis(200)).await;
-            assert_eq!(engine.first_hop_mtus().0, Some(NARROW_MTU));
-            engine.network_changed(None, false);
-            probed(&engine, (Some(1_400), Some(NARROW_MTU))).await?;
-            apps_forget_path_mtus()?;
-            send_as_app(port, server, &large(1_372), true)?;
-            let (heard, _) = app_receive(&app).await?;
-            assert_eq!(heard, large(1_372));
-            send_as_app(port, server, &large(1_373), true)?;
-            assert_eq!(told(&app).await?, [(ICMP_ORIGIN, 3, 4, 1_400)]);
-            assert_eq!(engine.counters()[TOO_BIG], 2);
-            Ok(())
-        },
-    )
-}
-
-/// The fragments of an IPv4 datagram, each with `id`, "do not fragment" as the whole has it, and
-/// `size` bytes of its data but the last.
-fn fragments4(whole: &[u8], id: u16, size: usize) -> Vec<Vec<u8>> {
-    let data = &whole[20..];
-    (0..data.len())
-        .step_by(size)
-        .map(|offset| {
-            let piece = &data[offset..data.len().min(offset + size)];
-            let more = offset + piece.len() < data.len();
-            let mut fragment = whole[..20].to_vec();
-            let total = u16::try_from(20 + piece.len()).unwrap_or(0);
-            fragment[2..4].copy_from_slice(&total.to_be_bytes());
-            fragment[4..6].copy_from_slice(&id.to_be_bytes());
-            let field = (u16::from(whole[6]) << 8) & 0x4000
-                | if more { 0x2000 } else { 0 }
-                | u16::try_from(offset / 8).unwrap_or(0);
-            fragment[6..8].copy_from_slice(&field.to_be_bytes());
-            fragment.extend_from_slice(piece);
-            fragment
-        })
-        .collect()
-}
-
-/// A datagram the engine put together from an app's fragments is never answered as too large, even
-/// past the first hop's MTU and though it may not be fragmented by its header: its app's kernel
-/// fragmented it already. The engine sends it whole, and its kernel fragments it for the narrow
-/// network: an IPv6 one, and an IPv4 one whose fragments keep "do not fragment", as an app's raw
-/// socket may write them.
-#[test]
-#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
-fn a_rebuilt_datagram_larger_than_the_limit_is_sent() -> Outcome {
-    lab_probing(
-        "a_rebuilt_datagram_larger_than_the_limit_is_sent",
-        &Limits::default(),
-        TOWARD_NARROW,
-        |engine| async move {
-            ipv6_here()?;
-            probed(&engine, (Some(NARROW_MTU), Some(NARROW_MTU))).await?;
-            let server6 = udp_echo(IpAddr::V6(NARROW6)).await?;
-            let app6 = UdpSocket::bind((Addresses::COMMON.tun6, 0)).await?;
-            app6.send_to(&large(3_000), server6).await?;
-            let (heard, from) = app_receive(&app6).await?;
-            assert_eq!(from, server6);
-            assert!(heard == large(3_000), "{} bytes of 3,000", heard.len());
-
-            let server = udp_echo(IpAddr::V4(NARROW)).await?;
-            let app = erring_app(server).await?;
-            let from =
-                SocketAddr::new(IpAddr::V4(Addresses::COMMON.tun4), app.local_addr()?.port());
-            let whole = packet::udp(from, server, &large(3_000)).ok_or("no datagram built")?;
-            assert_eq!(whole[6] & 0x40, 0x40, "do not fragment");
-            send_raw(from.ip(), server.ip(), &fragments4(&whole, 0x5151, 1_480))?;
-            let (heard, _) = app_receive(&app).await?;
-            assert!(heard == large(3_000), "{} bytes of 3,000", heard.len());
-            assert_eq!(queued(&app)?, []);
-            let counters = engine.counters();
-            assert_eq!((counters[REASSEMBLED], counters[TOO_BIG]), (2, 0));
+            assert_eq!(engine.counters()[PATH_MTU], 4);
             Ok(())
         },
     )

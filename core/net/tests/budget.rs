@@ -65,7 +65,6 @@ fn engine(limits: &Limits) -> io::Result<(Engine, UnixDatagram)> {
             mtu: 1500,
             keep_flows: 64,
             addresses: Addresses::COMMON,
-            mtu_probe: None,
         },
         Arc::new(ByRange),
         None,

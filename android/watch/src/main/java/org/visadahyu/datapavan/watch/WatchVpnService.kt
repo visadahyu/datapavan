@@ -51,13 +51,11 @@ class WatchVpnService : VpnService() {
     private var current: Network? = null
 
     /**
-     * The network, DNS server and MTU last given to the engine. An engine set up again, for other
-     * addresses or apps left out, starts knowing none of them, so [close] forgets them and the next
-     * callback tells it again.
+     * The network and DNS server last given to the engine. An engine set up again, for other addresses or
+     * apps left out, starts knowing neither, so [close] forgets them and the next callback tells it again.
      */
     private var told: Network? = null
     private var toldDns: String? = null
-    private var toldMtu: Int? = null
 
     /** Follows the network beneath the tunnel: Wi-Fi, mobile data, or none. */
     private val network = object : ConnectivityManager.NetworkCallback() {
@@ -81,17 +79,12 @@ class WatchVpnService : VpnService() {
             if (network != current) return
             // A link-local DNS server needs its interface's scope, which the engine does not take.
             val dns = properties.dnsServers.firstOrNull { !it.isLinkLocalAddress }?.hostAddress ?: ""
-            // The engine reads the network's MTU from its own kernel at each call (ADR 0044, decision 5
-            // as amended): getMtu() is 0 on most networks, but a change of it says the kernel's may
-            // have changed too.
-            val mtu = properties.mtu
             // Android reports a network's properties several times after a switch; only a new network
             // closes the engine's UDP flows, and nothing the engine already knows is sent again.
-            if (network == told && dns == toldDns && mtu == toldMtu) return
+            if (network == told && dns == toldDns) return
             Engine.nativeNetworkChanged(dns, network != told)
             told = network
             toldDns = dns
-            toldMtu = mtu
         }
 
         override fun onLost(network: Network) {
@@ -101,7 +94,6 @@ class WatchVpnService : VpnService() {
             Engine.nativeNetworkChanged("", true)
             told = null
             toldDns = null
-            toldMtu = null
         }
     }
 
@@ -318,7 +310,6 @@ class WatchVpnService : VpnService() {
         current = null
         told = null
         toldDns = null
-        toldMtu = null
         active = false
         state.value = false
         dnsState.value = null

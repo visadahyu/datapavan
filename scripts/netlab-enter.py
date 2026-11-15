@@ -24,11 +24,12 @@
 #   says so, sets NETLAB_IPV6=absent for the test, and goes on with IPv4: the IPv6 tests then fail.
 # - A narrow network (ADR 0044, decision 5 as amended): a server at 198.51.100.20 and 2001:db8:1::20 on
 #   "far", one end of a veth pair whose other end, "near", is in the same namespace. What the
-#   namespace itself sends there takes table 101, whose routes go out of "near" with an MTU of 1,280,
+#   namespace itself sends there takes table 101, whose routes go out of "near", a link of 1,280 bytes,
 #   from the "internet" addresses; packets from the apps still go into tun0 first, by the rule before
 #   it, and packets that come in on "far" are delivered there, by the local table after it. So the
 #   engine's sockets meet a first hop of 1,280 (IP_MTU says so, also for IPv6), their datagrams leave
-#   "near" as fragments, and the server gets them whole. A permanent neighbour entry spares the
+#   "near" as fragments, and the server gets them whole; and an app of the namespace's own addresses
+#   meets that network as an app meets its link without Watch. A permanent neighbour entry spares the
 #   neighbour discovery; "far" takes packets from addresses of the namespace's own.
 #
 #   netlab-enter.py -- PROGRAM [ARGUMENTS...]
@@ -88,6 +89,9 @@ def ipv6():
 # The narrow network's IPv4 side; its IPv6 side follows in ipv6_narrow, where the machine has IPv6.
 def narrow():
     ip("link", "add", "near", "type", "veth", "peer", "name", "far")
+    # The link's own MTU too, not only its route's: a socket that takes the link's MTU (probe,
+    # interface, omit) then meets the same narrow network as one that takes the path's.
+    ip("link", "set", "near", "mtu", NARROW_MTU)
     for side in ("near", "far"):
         ip("link", "set", side, "up")
     ip("addr", "add", NARROW4 + "/32", "dev", "far")
