@@ -97,10 +97,12 @@ an ADR (D25).
    - **ICMP echo:** carried through unprivileged ICMP sockets, protected, at most 32. Its owner cannot be asked of
      Android, so pings are refused while a chain is on. Where Android refuses such sockets, echo is dropped as
      today, and counted.
-   - **Fragments:** counted apart. They are reassembled only if the count shows a need.
+   - **Fragments:** counted apart. They are reassembled only if the count shows a need. (Amended on 2026-11-15,
+     below: they are reassembled.)
    - **Too large:** a datagram larger than the network beneath can carry is answered with ICMP "fragmentation
      needed" or "packet too big", with the network's MTU, which Kotlin passes from `LinkProperties`. The app's
-     "do not fragment" bit is not copied onto the engine's sockets.
+     "do not fragment" bit is not copied onto the engine's sockets. (Amended on 2026-11-15, below: the MTU is
+     the kernel's.)
    - **The lock:** Watch's native side never holds the engine's lock while joining its thread.
 6. **Tests that drive time.**
    - The engine takes its limits and timings from its `Config`, so tests can use seconds.
@@ -109,6 +111,40 @@ an ADR (D25).
      without an emulator.
    - Where namespaces are not available, those tests say plainly that they did not run. They never pass silently.
    - CI allows the namespaces.
+
+**Amendment of decision 5, fragments and the MTU (2026-11-15, unit 12; proposed).**
+- **Why:** answering "too large" makes the app's kernel cut its later datagrams into fragments, unless the app's
+  socket asked never to fragment. In a namespace on Linux (2026-11-15), a default UDP socket, IPv4 or IPv6, whose
+  path MTU was 1280 sent a 1472-byte datagram as two fragments. Only a socket set to "do not fragment" got
+  `EMSGSIZE`. An engine that answers "too large" and drops fragments would cut such apps off where today their
+  datagrams pass, fragmented by the engine's kernel. So the two parts come together.
+- **Fragments are reassembled.**
+  - An app's IPv4 and IPv6 fragments are put together and the whole datagram is handled as any other.
+  - The cost is bounded in datagrams, bytes and time.
+  - Overlapping fragments drop the whole datagram (RFC 5722). So does a first fragment without the whole transport
+    header (RFC 1858, RFC 7112).
+- **The MTU is the kernel's, not `LinkProperties`'.**
+  - `LinkProperties.getMtu()` is 0 on most networks, which says nothing. The engine asks its own kernel instead.
+  - A protected UDP socket of each IP version is connected toward an address only the default route covers, and
+    `IP_MTU` is read from it: the MTU the engine's sockets meet at the first hop, with IPv6's from router
+    advertisements. On Linux `IP_MTU` answers for an IPv6 socket too.
+  - It is asked again at every network change, and Kotlin also reports a change of the network's MTU. No JNI
+    signature changes.
+  - Beyond the first hop, the "fragmentation needed" and "packet too big" that routers send to the engine's
+    sockets give each destination's path MTU. They are read through `IP_RECVERR`, kept 10 minutes as Linux keeps
+    them, and passed on to the app.
+- **What is answered.** On the direct path, a UDP datagram or an echo request is answered and dropped when it
+  meets all three:
+  - its outer packet would exceed the MTU known toward its destination;
+  - it may not be fragmented: IPv6, or IPv4 with "do not fragment";
+  - it is larger than the least MTU of its IP version (576 bytes, or 1280 for IPv6).
+
+  The answer is "fragmentation needed" (ICMP type 3 code 4) or "packet too big" (ICMPv6 type 2), with the size
+  the app's own packet may have.
+- **What is sent as is.** An IPv4 datagram that may be fragmented is sent, and the engine's kernel fragments it,
+  as a router would.
+- **Through the chain** nothing is answered: the tool's relay is on the loopback, and what the tool sends further
+  is its own.
 
 ## Consequences
 
