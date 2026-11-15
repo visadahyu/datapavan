@@ -28,7 +28,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::os::fd::{OwnedFd, RawFd};
+use std::os::fd::{AsFd, OwnedFd, RawFd};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
@@ -993,6 +993,17 @@ impl Shared {
     }
 }
 
+/// The MTU the kernel keeps for the route of a connected socket (`IP_MTU`), or `None` when it says
+/// nothing, as for a socket not connected. Watch's Kotlin side reads the first hop's MTU of the network
+/// beneath with it, from a UDP socket bound to that network and connected toward an address only its
+/// default route covers, and gives the tunnel that MTU (ADR 0044, decision 5 as amended). On Linux
+/// `IP_MTU` answers for an IPv6 socket too, with what router advertisements set.
+#[must_use]
+pub fn route_mtu(socket: &impl AsFd) -> Option<u32> {
+    let mtu = nix::sys::socket::getsockopt(socket, nix::sys::socket::sockopt::IpMtu).ok()?;
+    u32::try_from(mtu).ok().filter(|&mtu| mtu > 0)
+}
+
 fn is_unreachable(error: &io::Error) -> bool {
     matches!(
         error.kind(),
@@ -1044,6 +1055,22 @@ mod tests {
         for address in [common.tun6, common.fake6, common.dns6] {
             assert!(![spare.tun6, spare.fake6, spare.dns6].contains(&address));
         }
+    }
+
+    /// The kernel's MTU for a connected socket's route, of either IP version; none for a socket not
+    /// connected.
+    #[test]
+    fn a_connected_socket_has_its_routes_mtu() -> io::Result<()> {
+        let loopback = std::net::UdpSocket::bind((Ipv4Addr::LOCALHOST, 0))?;
+        assert_eq!(route_mtu(&loopback), None);
+        loopback.connect((Ipv4Addr::LOCALHOST, 9))?;
+        assert!(route_mtu(&loopback).is_some_and(|mtu| mtu >= 1_280));
+        if let Ok(loopback6) = std::net::UdpSocket::bind((Ipv6Addr::LOCALHOST, 0))
+            && loopback6.connect((Ipv6Addr::LOCALHOST, 9)).is_ok()
+        {
+            assert!(route_mtu(&loopback6).is_some_and(|mtu| mtu >= 1_280));
+        }
+        Ok(())
     }
 
     /// The caps and shares follow the process's limit on open files (ADR 0044, decision 3): the

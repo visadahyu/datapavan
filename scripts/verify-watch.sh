@@ -526,6 +526,22 @@ else
     fi
 fi
 
+# The tunnel's MTU follows the network beneath (ADR 0044, decision 5 as amended): Watch reads the first hop's MTU of each IP
+# version from the kernel and gives the tunnel the smaller, within 1,280 and 1,500; its dump says what it chose and what it
+# read. The interface that holds the tunnel's address must carry that MTU. On the emulator both networks are 1,500. Each
+# output is read whole before it is parsed: under pipefail, a reader that stops early would fail the pipe.
+mtu_line=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" </dev/null | tr -d '\r' | sed -n 's/^ *mtu //p')
+read -r chosen _ first4 first6 <<<"$mtu_line"
+links=$(adb shell ip -o -4 addr show </dev/null | tr -d '\r')
+interface=$(awk -v address="$(tunnel_address)" '$4 ~ ("^" address "/") && !found { print $2; found = 1 }' <<<"$links")
+[ -n "$interface" ] || fail "no interface holds the tunnel's address $(tunnel_address)"
+link_mtu=$(adb shell cat "/sys/class/net/$interface/mtu" </dev/null | tr -d '\r')
+[ "$link_mtu" = "$chosen" ] || fail "the tunnel's interface $interface carries an MTU of $link_mtu, not the ${chosen:-none} Watch chose (first hop: IPv4 $first4, IPv6 $first6)"
+if is_emulator && [ "$chosen" != 1500 ]; then
+    fail "on the emulator, whose networks are 1,500, Watch chose a tunnel MTU of $chosen (first hop: IPv4 $first4, IPv6 $first6)"
+fi
+echo "ok: the tunnel's MTU is $chosen, the first hop's (IPv4 $first4, IPv6 $first6)"
+
 # Fragments (ADR 0044, decision 5 as amended): a ping of 2,000 bytes of data is a 2,028-byte request, which the
 # shell's kernel cuts into fragments at the tunnel's MTU of 1,500, and the engine puts together again before it
 # looks at what the request is: the 39th counter counts the datagrams it rebuilt. On an emulator it must rise; a

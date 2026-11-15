@@ -32,6 +32,13 @@ internal object Engine {
     /** Stops the engine and closes the tunnel's descriptor. */
     external fun nativeStop()
 
+    /**
+     * The MTU the kernel keeps for the route of the connected socket [fd] (`IP_MTU`), or -1 when it says
+     * nothing: how [TunnelMtu]'s probe reads the first hop's, since `android.system.Os` offers apps no
+     * `getsockoptInt`. The caller keeps [fd] open for the call; no engine needs to run.
+     */
+    external fun nativeRouteMtu(fd: Int): Int
+
     /** The release month of the organisation table the engine reads, such as "2026-11", or "" for none. */
     external fun nativeOrganisations(): String
 

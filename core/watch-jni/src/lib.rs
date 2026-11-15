@@ -6,7 +6,7 @@
 
 use std::fs::File;
 use std::net::{IpAddr, SocketAddr};
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
+use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd, RawFd};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use datapavan_net::organisations::{FilePart, Organisations};
@@ -220,6 +220,32 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeNetworkCh
             Ok(())
         })
         .resolve::<ThrowRuntimeExAndDefault>();
+}
+
+/// `Engine.nativeRouteMtu(fd)`: the MTU the kernel keeps for the route of the connected socket `fd`
+/// (`IP_MTU`), or -1 when it says nothing. Kotlin makes the socket, binds it to the network beneath,
+/// connects it, and closes it after this returns; it reads the first hop's MTU so, since
+/// `android.system.Os` offers no `getsockoptInt` to apps (ADR 0044, decision 5 as amended).
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeRouteMtu(fd: Int): Int`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeRouteMtu<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    fd: jint,
+) -> jint {
+    unowned_env
+        .with_env(|_env| -> Result<jint, Error> {
+            if fd < 0 {
+                return Ok(-1);
+            }
+            // SAFETY: Kotlin holds `fd` open for the whole call and closes it only after this returns;
+            // the borrow ends with the call, and nothing here closes or keeps it.
+            let socket = unsafe { BorrowedFd::borrow_raw(fd) };
+            Ok(datapavan_net::engine::route_mtu(&socket)
+                .and_then(|mtu| jint::try_from(mtu).ok())
+                .unwrap_or(-1))
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
 }
 
 /// `Engine.nativeOrganisations()`: the release month of the organisation table the running engine

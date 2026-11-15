@@ -13,12 +13,18 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.system.ErrnoException
+import android.system.Os
+import android.system.OsConstants
 import android.util.Log
 import java.io.FileDescriptor
 import java.io.IOException
 import java.io.PrintWriter
+import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -57,6 +63,31 @@ class WatchVpnService : VpnService() {
     private var told: Network? = null
     private var toldDns: String? = null
 
+    /**
+     * The tunnel's MTU for this run (ADR 0044, decision 5 as amended): the first hop's of the network
+     * beneath, as [TunnelMtu] chooses it from what the kernel said. Set on the main thread.
+     */
+    @Volatile
+    private var mtu = TunnelMtu.MOST
+
+    /** What the kernel last said of the first hop's MTU of IPv4 and of IPv6, for the dump. */
+    @Volatile
+    private var firstHops: Pair<Int?, Int?> = null to null
+
+    /**
+     * Where the first hop is measured: off the main thread, where StrictMode counts a UDP socket's
+     * connect as network access, and one at a time.
+     */
+    private val measuring: ExecutorService = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "watch-mtu").apply { isDaemon = true }
+    }
+
+    /**
+     * Every start asked for: one that waits for its measure goes ahead only while it is the last, and no
+     * stop came since. Main thread only.
+     */
+    private var starts = 0
+
     /** Follows the network beneath the tunnel: Wi-Fi, mobile data, or none. */
     private val network = object : ConnectivityManager.NetworkCallback() {
 
@@ -77,6 +108,7 @@ class WatchVpnService : VpnService() {
                 }
             }
             if (network != current) return
+            remeasure(network)
             // A link-local DNS server needs its interface's scope, which the engine does not take.
             val dns = properties.dnsServers.firstOrNull { !it.isLinkLocalAddress }?.hostAddress ?: ""
             // Android reports a network's properties several times after a switch; only a new network
@@ -130,9 +162,92 @@ class WatchVpnService : VpnService() {
                 close()
                 start(null)
             }
-            else -> start(intent)
+            else -> startMeasured(intent)
         }
         return START_NOT_STICKY
+    }
+
+    /**
+     * Starts the tunnel with the first hop's MTU of the network beneath, measured off the main thread
+     * first. Before the tunnel is up no network beneath is followed yet, and Watch's sockets take the
+     * default network.
+     */
+    private fun startMeasured(intent: Intent?) {
+        if (active) return
+        val ticket = ++starts
+        measuring.execute {
+            val chosen = measure(null)
+            main.post {
+                if (ticket == starts && !active) {
+                    mtu = chosen
+                    start(intent)
+                }
+            }
+        }
+    }
+
+    /**
+     * The tunnel's MTU follows the network beneath: [network]'s first hop is measured again, off the
+     * main thread, and when it brings another value, the tunnel is set up again with it, as for an
+     * address clash (ADR 0041). The apps' own kernels then meet that hop as they would without Watch.
+     */
+    private fun remeasure(network: Network) {
+        measuring.execute {
+            val chosen = measure(network)
+            main.post {
+                if (active && network == current && chosen != mtu) {
+                    mtu = chosen
+                    close()
+                    start(null)
+                }
+            }
+        }
+    }
+
+    /** What the kernel says of the first hop on [network], or the default network when null, and the tunnel's MTU it gives. */
+    private fun measure(network: Network?): Int {
+        val v4 = firstHop(network, TunnelMtu.TOWARD_V4)
+        val v6 = firstHop(network, TunnelMtu.TOWARD_V6)
+        firstHops = v4 to v6
+        return TunnelMtu.choose(v4, v6)
+    }
+
+    /**
+     * The first hop's MTU toward [toward] on [network], as the kernel keeps it for the route (`IP_MTU`):
+     * a UDP socket bound to the network, or protected where that is refused or no network is known yet,
+     * and connected there, which sends nothing. Null when the kernel says nothing, as without a route
+     * of that IP version.
+     */
+    private fun firstHop(network: Network?, toward: InetAddress): Int? {
+        val family = if (toward is Inet4Address) OsConstants.AF_INET else OsConstants.AF_INET6
+        val socket = try {
+            Os.socket(family, OsConstants.SOCK_DGRAM, OsConstants.IPPROTO_UDP)
+        } catch (e: ErrnoException) {
+            return null
+        }
+        return try {
+            ParcelFileDescriptor.dup(socket).use { duplicate ->
+                val bound = network != null && try {
+                    network.bindSocket(socket)
+                    true
+                } catch (e: IOException) {
+                    false
+                }
+                if (!bound) protect(duplicate.fd)
+                Os.connect(socket, toward, TunnelMtu.PORT)
+                Engine.nativeRouteMtu(duplicate.fd).takeIf { it > 0 }
+            }
+        } catch (e: ErrnoException) {
+            null
+        } catch (e: IOException) {
+            null
+        } finally {
+            try {
+                Os.close(socket)
+            } catch (e: ErrnoException) {
+                Log.w(TAG, "The MTU probe's socket did not close", e)
+            }
+        }
     }
 
     /**
@@ -193,7 +308,7 @@ class WatchVpnService : VpnService() {
         addresses = forced ?: TunnelAddresses.choose(networksBeneath())
         val builder = Builder()
             .setSession(getString(R.string.app_name))
-            .setMtu(MTU)
+            .setMtu(mtu)
             // A /32 and a /128: a wider prefix would count as local network on Android 17 (ADR 0034).
             .addAddress(addresses.tun4, 32)
             .addAddress(addresses.tun6, 128)
@@ -286,12 +401,14 @@ class WatchVpnService : VpnService() {
             Log.i(TAG, "No table from address to organisation in this build")
         }
         return Engine.nativeStart(
-            this, fd, MTU, if (debuggable) KEPT_FLOWS else 0, tableFd, tableStart, tableLength,
+            this, fd, mtu, if (debuggable) KEPT_FLOWS else 0, tableFd, tableStart, tableLength,
             spareAddresses = addresses === TunnelAddresses.SPARE,
         )
     }
 
     private fun stop() {
+        // A start still waiting for its measure does not come after it.
+        starts++
         close()
         stopSelf()
     }
@@ -322,6 +439,7 @@ class WatchVpnService : VpnService() {
 
     override fun onDestroy() {
         close()
+        measuring.shutdownNow()
         super.onDestroy()
     }
 
@@ -373,6 +491,7 @@ class WatchVpnService : VpnService() {
         }
         writer.println("private-dns $dns")
         writer.println("addresses ${addresses.name} ${addresses.tun4} ${addresses.dns4} ${addresses.tun6} ${addresses.dns6}")
+        writer.println("mtu $mtu first-hop ${firstHops.first ?: "-"} ${firstHops.second ?: "-"}")
         writer.println("counters ${Engine.nativeCounters().joinToString(" ")}")
         writer.println("organisations ${Engine.nativeOrganisations().ifEmpty { "none" }}")
         val log = ConnectionLog.of(this)
@@ -551,7 +670,6 @@ class WatchVpnService : VpnService() {
         /** Debug builds: a comma-separated list of the only apps to send through the tunnel. */
         const val EXTRA_ONLY_APPS = "only_apps"
         private const val TAG = "Watch"
-        private const val MTU = 1500
         private const val KEPT_FLOWS = 512
 
         /** The asset of the table from address to organisation, stored uncompressed (build.gradle.kts). */
