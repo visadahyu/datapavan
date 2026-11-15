@@ -792,16 +792,20 @@ passed through Watch's own socket and its replies came back. How it is built: [A
 
 Fragments and the MTU, 2026-11-15 (finding 21b, ADR 0044 decision 5 as amended and revised), built by a fresh agent
 from a written brief. The engine now puts the apps' IPv4 and IPv6 fragments together again, within bounds of 64
-datagrams, 1 MiB and five seconds that every app shares, where the oldest incomplete datagram gives way; it drops a
-datagram whose fragments overlap, and its later ones, or whose first fragment lacks its header. The tunnel's MTU now
-follows the network beneath: Watch reads the first hop's MTU from the phone's kernel, through a socket bound to that
-network, gives the tunnel the smaller of IPv4's and IPv6's within 1,280 and 1,500, and sets the tunnel up again when a
-network change brings another value. Each app's own kernel then meets that hop as without Watch, fragmenting a
-datagram or refusing it by its socket's setting. What routers beyond it answer, "fragmentation needed" or "packet too
-big", reaches the app with their MTU. A first version answered "too large" from the engine itself; an independent
+datagrams, 1 MiB and five seconds that every app shares, where the datagram heard from longest ago gives way; it
+drops a datagram whose fragments overlap, and its later ones, or whose first fragment lacks its header. The tunnel's
+MTU now follows the network beneath: Watch reads the first hop's MTU from the phone's kernel, through a socket bound
+to that network, gives the tunnel the smaller of IPv4's and IPv6's within 1,280 and 1,500, and sets the tunnel up
+again when a new network brings another value, or the same network a lower one. Each app's own kernel then meets
+that hop as without Watch, fragmenting a datagram or refusing it by its socket's setting; Android gives a tunnel one
+MTU, so where IPv4's and IPv6's hops differ, the wider version meets the narrower MTU. The tunnel is set up again
+make-before-break, for a new MTU, an address clash or a change of the apps left out: the new tunnel is established
+while the old engine still runs, which Android's `Vpn.establish`, as AOSP's code reads, hands over with no moment
+in which apps go out directly, so that a chained app's traffic does not leave outside the tunnel meanwhile. What routers beyond it answer, "fragmentation
+needed" or "packet too big", reaches the app with their MTU. A first version answered "too large" from the engine itself; an independent
 review found that it cost a connected default socket a datagram, and an IPv6 socket set to ignore path MTU every
-one, and it was taken back. Not yet run on the emulator, whose check now looks at the tunnel's MTU and sends a ping larger than it, nor on a
-phone (unit 11b). How it is built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
+one, and it was taken back, and a re-review's findings fixed, setting the tunnel up again make-before-break among them. On the Android 15
+emulator the tunnel's MTU and a ping larger than it passed, before that last change; phones in unit 11b. How it is built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 | # | Milestone | Done when |
 |---|---|---|

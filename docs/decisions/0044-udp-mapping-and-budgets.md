@@ -576,17 +576,46 @@ an ADR (D25).
   `Engine::first_hop_mtus`, `Limits::mtu_learned` and `mtu_expires`).
 - **The tunnel's MTU follows the network beneath** (Kotlin, `TunnelMtu`, `WatchVpnService`).
   - A UDP socket of each IP version is bound to the network beneath (`Network.bindSocket`, or `protect` where that is
-    refused or before any network is followed), connected toward 192.0.2.1:9 or [2001:db8::1]:9, which only a
-    default route covers (connecting sends nothing), and its `IP_MTU` read.
+    refused or before any network is followed), connected toward an address only a default route covers, port 9
+    (connecting sends nothing), and its `IP_MTU` read. The address is drawn anew at each measure, from 192.0.2.2 to
+    192.0.2.254 and from 2001:db8::/32 outside 2001:db8::/40, where the checks send: one address used every time
+    could have a path MTU of its own in the kernel, which an app that sends there and a host that forges a "too big"
+    for it could set, and so steer the tunnel's (re-review, minor 4).
   - `android.system.Os` offers apps no `getsockoptInt` (only `getsockoptTimeval`, whose size check refuses an int),
     so the read is Rust's: `datapavan_net::engine::route_mtu`, through nix's safe `sockopt::IpMtu`, behind a new JNI
     export, `Engine.nativeRouteMtu(fd)`, which borrows Kotlin's socket for the call. No existing JNI signature changed.
   - `TunnelMtu.choose` takes the smaller value, within 1,280 and 1,500, and 1,500 when neither socket answers.
+    Android's `Builder.setMtu` takes one MTU for both IP versions, so on a network whose IPv4 and IPv6 first hops
+    differ, the wider version meets the narrower MTU in the tunnel, not its own hop's: its datagrams between the two
+    are fragmented or refused by the app's kernel where without Watch they would pass whole (re-review, minor 2).
   - The tunnel starts with it, measured off the main thread first, since StrictMode counts a UDP connect as network
-    access; a stop that comes while a start waits for its measure wins. Each change of the followed network's
-    properties measures again, and a change of value sets the tunnel up again, as an address clash does (ADR 0041).
+    access; a stop that comes while a start waits for its measure wins, and so does the service's end (minor 5). Each
+    change of the followed network's properties measures again. Within one network the MTU only goes down
+    (`TunnelMtu.next`): a value that rises, as when one IP version stops answering, waits for the next network, so
+    that a route that flaps cannot set the tunnel up again and again. A new value sets the tunnel up again.
   - Watch's dump prints `mtu <chosen> first-hop <IPv4> <IPv6>`. Kotlin no longer reports the network's MTU to the
     engine, which has no use for it.
+- **The tunnel is set up again make-before-break** (re-review, major 1). Until then, a new MTU, an address clash (ADR
+  0041) and a change of the apps left out each closed the engine and the tunnel before `establish()`: Android tore
+  the VPN network down, and the apps, chained ones included, went out directly until the new one was up, against
+  W6's "nothing of a chained app goes out directly", or lost their traffic under "block connections without VPN".
+  Now each of them, and the debug `addresses-force`, calls `setUpAgain`:
+  - the new tunnel is built and established while the old engine still runs on the old one;
+  - only then does `nativeStart` stop the old engine, which closes the old tunnel, and start one on the new tunnel,
+    which is handed the chain and told the network beneath; the network callbacks stay registered, and the Builder
+    names the followed network as the tunnel's underlying one, as the callback did after a start;
+  - the engine's flows begin anew, as before; unit 12b will hand the new tunnel to the running engine, keeping them;
+  - the debug list of apps the end-to-end test sends through the tunnel now holds for every setup of a run.
+  - **Why no window is left, and what that rests on.** Read in AOSP's `Vpn.java` (main, 2026-11-15): `establish()`
+    called while a VPN interface is up keeps the VPN network and updates its link properties in place when
+    `allowBypass` and the allowed and disallowed apps are unchanged, as for a new MTU or new addresses
+    (`updateLinkPropertiesInPlaceIfPossible`); otherwise, as when the apps left out change, it connects a new network
+    agent before it disconnects the old one ("to prevent the data leakage", `startNewNetworkAgent`); and it resets the
+    old interface only after, and only when the new one has another name. So the apps always have a VPN network, and
+    what they send between `establish()` and the new engine's start waits in the new tunnel, unread, rather than
+    leaving outside it. Not measured: no emulator or phone ran this here, and Android 10 and 11's `Vpn.java` were not
+    read; the emulator's `verify-watch.sh` runs the clash both ways. If `establish()` fails, as when the user withdrew
+    Watch's consent, the tunnel stops, as at any start.
 - **Fragments are put together** (`core/net/src/fragments.rs`, pure): the apps' IPv4 fragments (the "more
   fragments" flag or an offset) and IPv6 ones (a fragment header with an offset or M), by source, destination and
   identification, and IPv4's protocol. An IPv6 atomic fragment is read whole, as before (RFC 6946).
@@ -608,11 +637,14 @@ an ADR (D25).
     held (`fragment_bytes`), and 5 s from a datagram's first fragment to its last (`fragment_wait`). The bound on bytes
     counts what each buffer reserves, its header, and 32 bytes for each fragment's place, so that a datagram cut into
     8-byte fragments holds no more memory than counted. A buffer doubles as a vector does, so that fragments in order
-    do not each move it, and never passes 64 KiB. When a fragment would pass a bound, the oldest incomplete datagram
-    or marker gives way, then the next oldest, until there is room: an honest datagram is whole within milliseconds,
-    so the oldest is the likeliest never to be. A fragment no room could take, larger than the bound with its own
-    datagram, is dropped with it, and nothing gives way for it. Expired datagrams go at the next fragment and in the
-    engine's sweep.
+    do not each move it, and never passes 64 KiB. When a fragment would pass a bound, the incomplete datagram or
+    marker that took a fragment longest ago gives way, then the next, until there is room (re-review, minor 3): an
+    honest datagram's fragments come one after another, so one that stopped taking them is the likeliest never to be
+    whole, and a long one still arriving is not given up for the many that came after its first fragment, as it was
+    when the one whose first fragment came first gave way. Each datagram keeps its place in the order of fragments
+    taken, a count rather than a time, so that fragments of one instant still have an order; a marker's is its
+    marking. A fragment no room could take, larger than the bound with its own datagram, is dropped with it, and
+    nothing gives way for it. Expired datagrams go at the next fragment and in the engine's sweep.
   - **Shared by every app.** Every app sends from the tunnel's one address, so the bounds are not kept for each app:
     one app that keeps them full makes the others' datagrams give way, as every fragment was dropped before. Accepted,
     since the bounds cap what fragments cost, for at most the wait.
@@ -620,7 +652,8 @@ an ADR (D25).
   (type 2) with the MTU the kernel gives in `ee_info`, to the app at once, as if from the destination, as an
   unreachable port is passed on; an MTU of 0, from a router older than RFC 1191, is left out. The engine keeps
   nothing of them: its own kernel keeps the path's MTU for its sockets. What a mapping read as the network beneath
-  moved is not passed on after the move, nor counted, and the mapping ends (second review, minor 4b).
+  moved is not passed on after the move, nor counted, and the mapping ends (second review, minor 4b), whichever way
+  its read ended, the mapping gone or its socket failing among them (re-review, minor 6).
 - **What stays as it is.** A send the engine's kernel refuses as too long (`EMSGSIZE`) is dropped and counted, never
   answered "host unreachable". A datagram larger than the path leaves: the engine's kernel fragments it, or a router
   answers. The chain, lookups to the tunnel's DNS address and TCP are unchanged; writes to the tunnel larger than its
@@ -639,12 +672,15 @@ an ADR (D25).
     `omit`, unconnected and connected, and IPv6's `IPV6_DONTFRAG`. nix sets none of them on Linux and the workspace
     forbids unsafe code; Python's socket module takes the option numbers.
 - **Tests.**
-  - In the engine: 12 of the reassembler (in and out of order, both versions, IPv4 options and IPv6 headers before the
+  - In the engine: 14 of the reassembler (in and out of order, both versions, IPv4 options and IPv6 headers before the
     fragment header, overlap and its marker, exact duplicate, a first fragment without its header, what is malformed or
-    too long, the oldest giving way at each bound with the costs counted, the wait to the nanosecond, the rebuilt
-    headers byte for byte); one of what routers say (`errors::told`); two of the mappings (an error read as the
-    network moves is not passed on, and one read before passes on with its MTU; `EMSGSIZE` dropped and counted); one
-    of `route_mtu`. The fuzz target feeds the reassembler a sequence of fragments and holds it to its bounds.
+    too long, a datagram giving way at each bound with the costs counted, the one heard from longest ago giving way
+    rather than the one that began first, and the re-review's race, a 10-fragment datagram whole among 32 new
+    datagrams after each of its fragments, or 8 far ones of 64 KiB; the wait to the nanosecond, the rebuilt headers
+    byte for byte); one of what routers say (`errors::told`); three of the mappings (an error read as the network
+    moves is not passed on, and one read before passes on with its MTU; a move since a mapping opened, not one before,
+    and the engine stopping, as its watch shows them; `EMSGSIZE` dropped and counted); one of `route_mtu`. The fuzz
+    target feeds the reassembler a sequence of fragments and holds it to its bounds.
   - In the network lab, 4: a 3,000-byte datagram both ways in IPv4 and IPv6; at the tunnel's 1,500 with the network
     at 1,280, as in the moment before Watch sets the tunnel up again, every mode's datagram reaches the server whole,
     with no error on a connected default socket and nothing lost by `omit` (the second review's R1 and R3, now
@@ -652,17 +688,22 @@ an ADR (D25).
     same app does on the narrow network without Watch, and the 24 datagrams fragmented are put together; a router's
     "fragmentation needed" and "packet too big" reach the app with their MTU, and a connected default socket then
     sees `EMSGSIZE` once, as without Watch.
-  - In Kotlin, a JVM test of `TunnelMtu.choose`. `scripts/verify-watch.sh` checks that the interface holding the
-    tunnel's address carries the MTU Watch chose (1,500 on the emulator), and pings with 2,000 bytes, which must be
-    put together on an emulator, its reply reported, not required.
-  - Each was made to fail by a mutation of the code it guards: 46 mutations of the code as it stands, each caught.
+  - In Kotlin, JVM tests of `TunnelMtu`: the choice, the MTU going only down within a network, and the probe's
+    addresses drawn from their ranges, never where checks send. `scripts/verify-watch.sh` checks that the tunnel's
+    interface carries the MTU Watch chose (1,500 on the emulator), where the shell can read it, and pings with 2,000
+    bytes, which must be put together on an emulator, its reply reported, not required. On the Android 15 emulator
+    both passed (the maintainer's session, before the tunnel was set up make-before-break).
+  - Each was made to fail by a mutation of the code it guards: 55 mutations of the code as it stands, each caught.
+    No test reaches the service's lifecycle, which is Android's: setting the tunnel up again, and a start or a stop
+    while a measure runs; nor an early end of a mapping's read after it built errors, which needs the mapping to end
+    between two reads; nor the order in which echo counts a reply and writes it, which is a race with the reader
+    (re-review, minor 7: it counts first now).
 - **Not done, stated:**
-  - neither `verify-watch.sh` check has run yet: the emulator runs after this unit, and phones, what `IP_MTU` says on
-    Wi-Fi and mobile networks and whether their kernels take writes to the tunnel larger than its MTU, in unit 11b;
-  - setting the tunnel up again for a new MTU, as for an address clash, breaks the connections through it for a
-    moment; a network whose first hop changes often would do it often;
-  - the network watch's move reaches the check against passing an old error on through a closure no test drives:
-    the deterministic test drives the check itself;
+  - phones, what `IP_MTU` says on Wi-Fi and mobile networks and whether their kernels take writes to the tunnel
+    larger than its MTU, are measured in unit 11b; the make-before-break setup has not run on an emulator yet;
+  - setting the tunnel up again ends the engine's flows, as before: connections through the tunnel start anew. Within
+    a network that happens only when its MTU goes down; unit 12b keeps the flows;
+  - a network whose IPv4 and IPv6 first hops differ gives the wider version the narrower MTU (above);
   - the ping sockets still set no `IP_RECVERR` (unit 11), so a router's "fragmentation needed" for an echo request is
     not passed on, and a request whose send fails with `EMSGSIZE` is counted as dropped echo;
   - the errors passed on are not rate-limited (RFC 4443 2.4 (f)): they reach only the phone's own apps;
