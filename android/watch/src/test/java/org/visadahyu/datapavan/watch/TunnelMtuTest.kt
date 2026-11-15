@@ -5,7 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.net.Inet4Address
 import java.net.Inet6Address
-import java.net.InetAddress
+import kotlin.random.Random
 
 class TunnelMtuTest {
     @Test
@@ -24,9 +24,26 @@ class TunnelMtuTest {
     }
 
     @Test
-    fun theProbeAddressesAreTheDocumentationOnes() {
-        assertEquals(InetAddress.getByName("192.0.2.1"), TunnelMtu.TOWARD_V4)
-        assertEquals(InetAddress.getByName("2001:db8::1"), TunnelMtu.TOWARD_V6)
-        assertTrue(TunnelMtu.TOWARD_V4 is Inet4Address && TunnelMtu.TOWARD_V6 is Inet6Address)
+    fun theProbesAddressesAreDrawnFromTheDocumentationRangesButNotWhereChecksSend() {
+        val random = Random(2026_11_15)
+        val v4 = List(5_000) { TunnelMtu.towardV4(random) }
+        assertTrue(v4.all { it is Inet4Address })
+        val last = v4.map { it.address[3].toInt() and 0xff }
+        assertTrue("192.0.2.2 to .254", v4.all { it.address.take(3) == listOf(192.toByte(), 0, 2) })
+        assertEquals("every one of .2 to .254, and no other", (2..254).toSet(), last.toSet())
+        val v6 = List(2_000) { TunnelMtu.towardV6(random) }
+        assertTrue(v6.all { it is Inet6Address })
+        assertTrue("2001:db8::/32", v6.all { it.address.take(4) == listOf<Byte>(0x20, 0x01, 0x0d, 0xb8.toByte()) })
+        assertTrue("never 2001:db8::/40, where checks send", v6.none { it.address[4] == 0.toByte() })
+        assertEquals("drawn anew each time", 2_000, v6.toSet().size)
+    }
+
+    @Test
+    fun withinOneNetworkTheMtuOnlyGoesDown() {
+        assertEquals("lower on the same network: taken", 1400, TunnelMtu.next(1500, 1400, sameNetwork = true))
+        assertEquals("higher on the same network: waits", 1400, TunnelMtu.next(1400, 1500, sameNetwork = true))
+        assertEquals("the same", 1500, TunnelMtu.next(1500, 1500, sameNetwork = true))
+        assertEquals("a new network takes its own, higher", 1500, TunnelMtu.next(1400, 1500, sameNetwork = false))
+        assertEquals("or lower", 1280, TunnelMtu.next(1500, 1280, sameNetwork = false))
     }
 }

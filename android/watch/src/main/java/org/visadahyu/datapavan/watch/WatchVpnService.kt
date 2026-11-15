@@ -25,6 +25,7 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlin.random.Random
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -57,11 +58,21 @@ class WatchVpnService : VpnService() {
     private var current: Network? = null
 
     /**
-     * The network and DNS server last given to the engine. An engine set up again, for other addresses or
-     * apps left out, starts knowing neither, so [close] forgets them and the next callback tells it again.
+     * The network and DNS server last given to the engine. An engine started on a tunnel set up again
+     * starts knowing neither, so [setUpAgain] tells it; [close] forgets them, and the next callback of a
+     * run tells its engine.
      */
     private var told: Network? = null
     private var toldDns: String? = null
+
+    /** Debug builds: the only apps the end-to-end test sends through the tunnel, for every setup of a run. */
+    private var onlyApps: List<String>? = null
+
+    /**
+     * The network beneath the tunnel's MTU was last measured on, while the tunnel follows it: within it,
+     * the MTU only goes down ([TunnelMtu.next]). Main thread only.
+     */
+    private var measuredOn: Network? = null
 
     /**
      * The tunnel's MTU for this run (ADR 0044, decision 5 as amended): the first hop's of the network
@@ -100,12 +111,7 @@ class WatchVpnService : VpnService() {
             // A network that now uses the tunnel's addresses itself would lose its router and resolver
             // to the tunnel: the tunnel is set up again with the other set (ADR 0041).
             if ((forced ?: TunnelAddresses.choose(networksBeneath())) !== addresses) {
-                main.post {
-                    if (active) {
-                        close()
-                        start(null)
-                    }
-                }
+                main.post { setUpAgain() }
             }
             if (network != current) return
             remeasure(network)
@@ -157,11 +163,8 @@ class WatchVpnService : VpnService() {
         when (intent?.action) {
             ACTION_STOP -> stop()
             ACTION_APPLY_CHAIN -> if (active) applyChain()
-            // The apps left out are part of the tunnel's own setup: it is set up again, for a moment.
-            ACTION_APPLY_LEFT_OUT -> if (active) {
-                close()
-                start(null)
-            }
+            // The apps left out are part of the tunnel's own setup: it is set up again.
+            ACTION_APPLY_LEFT_OUT -> setUpAgain()
             else -> startMeasured(intent)
         }
         return START_NOT_STICKY
@@ -188,26 +191,34 @@ class WatchVpnService : VpnService() {
 
     /**
      * The tunnel's MTU follows the network beneath: [network]'s first hop is measured again, off the
-     * main thread, and when it brings another value, the tunnel is set up again with it, as for an
-     * address clash (ADR 0041). The apps' own kernels then meet that hop as they would without Watch.
+     * main thread, and when it brings another value, by [TunnelMtu.next], the tunnel is set up again with
+     * it, as for an address clash (ADR 0041). The apps' own kernels then meet that hop as they would
+     * without Watch. Within one network the MTU only goes down, so that a route that flaps cannot set
+     * the tunnel up again and again.
      */
     private fun remeasure(network: Network) {
         measuring.execute {
-            val chosen = measure(network)
+            val measured = measure(network)
             main.post {
-                if (active && network == current && chosen != mtu) {
-                    mtu = chosen
-                    close()
-                    start(null)
+                if (!active || network != current) return@post
+                val next = TunnelMtu.next(mtu, measured, sameNetwork = network == measuredOn)
+                measuredOn = network
+                if (next != mtu) {
+                    mtu = next
+                    setUpAgain()
                 }
             }
         }
     }
 
-    /** What the kernel says of the first hop on [network], or the default network when null, and the tunnel's MTU it gives. */
+    /**
+     * What the kernel says of the first hop on [network], or the default network when null, and the
+     * tunnel's MTU it gives. Each measure connects toward addresses drawn anew, so that no path MTU the
+     * kernel keeps for one of them can steer the tunnel's.
+     */
     private fun measure(network: Network?): Int {
-        val v4 = firstHop(network, TunnelMtu.TOWARD_V4)
-        val v6 = firstHop(network, TunnelMtu.TOWARD_V6)
+        val v4 = firstHop(network, TunnelMtu.towardV4(Random.Default))
+        val v6 = firstHop(network, TunnelMtu.towardV6(Random.Default))
         firstHops = v4 to v6
         return TunnelMtu.choose(v4, v6)
     }
@@ -305,54 +316,8 @@ class WatchVpnService : VpnService() {
 
     private fun start(intent: Intent?) {
         if (active) return
-        addresses = forced ?: TunnelAddresses.choose(networksBeneath())
-        val builder = Builder()
-            .setSession(getString(R.string.app_name))
-            .setMtu(mtu)
-            // A /32 and a /128: a wider prefix would count as local network on Android 17 (ADR 0034).
-            .addAddress(addresses.tun4, 32)
-            .addAddress(addresses.tun6, 128)
-            .addRoute("0.0.0.0", 0)
-            .addRoute("::", 0)
-            // The engine passes queries to this address on to the DNS server of the network beneath.
-            .addDnsServer(addresses.dns4)
-            .addDnsServer(addresses.dns6)
-            // The engine reads until "would block" (spike, finding 8).
-            .setBlocking(false)
-            // A VPN that targets Android 10 or later is metered unless it says otherwise. Watch is
-            // local, so the network keeps the meteredness of the Wi-Fi or mobile network beneath it.
-            .setMetered(false)
-        // Debug builds only: the end-to-end test sends only its own apps through the tunnel.
-        val only = intent?.getStringExtra(EXTRA_ONLY_APPS)?.takeIf { debuggable }?.split(',')?.filter { it.isNotBlank() }
-        if (!only.isNullOrEmpty()) {
-            for (app in only + packageName) {
-                try {
-                    builder.addAllowedApplication(app)
-                } catch (e: PackageManager.NameNotFoundException) {
-                    Log.w(TAG, "Not installed: an app named for the test", e)
-                }
-            }
-        } else {
-            // The apps the user left out go to the internet directly, and Android does not give them the
-            // VPN as their network (ADR 0041). Android allows either a list of apps inside or one of apps
-            // outside, so the test's list above replaces this one.
-            for (app in LeftOut.of(this).apps) {
-                try {
-                    builder.addDisallowedApplication(app)
-                } catch (e: PackageManager.NameNotFoundException) {
-                    Log.i(TAG, "An app left out is no longer installed", e)
-                }
-            }
-        }
-        val established = try {
-            builder.establish()
-        } catch (e: IllegalStateException) {
-            Log.w(TAG, "The tunnel could not be set up", e)
-            null
-        } catch (e: SecurityException) {
-            Log.w(TAG, "The tunnel was not allowed", e)
-            null
-        }
+        onlyApps = intent?.getStringExtra(EXTRA_ONLY_APPS)?.takeIf { debuggable }?.split(',')?.filter { it.isNotBlank() }
+        val established = establish()
         // null: the user's consent is missing or was withdrawn.
         if (established == null || !startEngine(established)) {
             stop()
@@ -378,6 +343,89 @@ class WatchVpnService : VpnService() {
             connectivity.requestNetwork(request, network, handler)
         }
         connectivity.registerDefaultNetworkCallback(ownNetwork, handler)
+    }
+
+    /**
+     * Sets the tunnel up again for what changed, its MTU, its addresses or the apps left out,
+     * make-before-break, so that nothing an app sends, a chained app's included, leaves outside the
+     * tunnel meanwhile (re-review of unit 12, major 1). The new tunnel is established while the old
+     * engine still runs on the old one: Android's `Vpn.establish` then keeps the VPN network and
+     * updates it in place when only addresses or the MTU change, and connects a new network before it
+     * disconnects the old one when the apps left out change (AOSP, `updateLinkPropertiesInPlaceIfPossible`
+     * and `startNewNetworkAgent`); the old interface is reset only after that. Only then does the old
+     * engine stop, closing the old tunnel, and one start on the new tunnel, handed the chain and told the
+     * network beneath. Flows begin anew, as when the tunnel was closed and opened; unit 12b will hand the
+     * new tunnel to the running engine instead, keeping them. Android leaves the network callbacks as
+     * they are, so they are not registered again.
+     */
+    private fun setUpAgain() {
+        if (!active) return
+        val established = establish()
+        // nativeStart stops the engine that runs, which closes the old tunnel, before it starts anew.
+        if (established == null || !startEngine(established)) {
+            stop()
+            return
+        }
+        applyChain()
+        if (told != null) Engine.nativeNetworkChanged(toldDns ?: "", true)
+    }
+
+    /**
+     * A tunnel for this run's addresses, MTU and apps, established: null when the user's consent is
+     * missing or was withdrawn, or Android refused it.
+     */
+    private fun establish(): ParcelFileDescriptor? {
+        addresses = forced ?: TunnelAddresses.choose(networksBeneath())
+        val builder = Builder()
+            .setSession(getString(R.string.app_name))
+            .setMtu(mtu)
+            // A /32 and a /128: a wider prefix would count as local network on Android 17 (ADR 0034).
+            .addAddress(addresses.tun4, 32)
+            .addAddress(addresses.tun6, 128)
+            .addRoute("0.0.0.0", 0)
+            .addRoute("::", 0)
+            // The engine passes queries to this address on to the DNS server of the network beneath.
+            .addDnsServer(addresses.dns4)
+            .addDnsServer(addresses.dns6)
+            // The engine reads until "would block" (spike, finding 8).
+            .setBlocking(false)
+            // A VPN that targets Android 10 or later is metered unless it says otherwise. Watch is
+            // local, so the network keeps the meteredness of the Wi-Fi or mobile network beneath it.
+            .setMetered(false)
+        // A tunnel set up again keeps the network beneath that the callback named; Android takes the
+        // new tunnel's underlying networks from its Builder.
+        current?.let { builder.setUnderlyingNetworks(arrayOf(it)) }
+        // Debug builds only: the end-to-end test sends only its own apps through the tunnel.
+        val only = onlyApps
+        if (!only.isNullOrEmpty()) {
+            for (app in only + packageName) {
+                try {
+                    builder.addAllowedApplication(app)
+                } catch (e: PackageManager.NameNotFoundException) {
+                    Log.w(TAG, "Not installed: an app named for the test", e)
+                }
+            }
+        } else {
+            // The apps the user left out go to the internet directly, and Android does not give them the
+            // VPN as their network (ADR 0041). Android allows either a list of apps inside or one of apps
+            // outside, so the test's list above replaces this one.
+            for (app in LeftOut.of(this).apps) {
+                try {
+                    builder.addDisallowedApplication(app)
+                } catch (e: PackageManager.NameNotFoundException) {
+                    Log.i(TAG, "An app left out is no longer installed", e)
+                }
+            }
+        }
+        return try {
+            builder.establish()
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "The tunnel could not be set up", e)
+            null
+        } catch (e: SecurityException) {
+            Log.w(TAG, "The tunnel was not allowed", e)
+            null
+        }
     }
 
     /**
@@ -427,6 +475,7 @@ class WatchVpnService : VpnService() {
         current = null
         told = null
         toldDns = null
+        measuredOn = null
         active = false
         state.value = false
         dnsState.value = null
@@ -438,6 +487,8 @@ class WatchVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        // A first start still waiting for its measure does not start a tunnel on a destroyed service.
+        starts++
         close()
         measuring.shutdownNow()
         super.onDestroy()
@@ -516,12 +567,7 @@ class WatchVpnService : VpnService() {
                     "common" -> TunnelAddresses.COMMON
                     else -> null
                 }
-                main.post {
-                    if (active) {
-                        close()
-                        start(null)
-                    }
-                }
+                main.post { setUpAgain() }
                 writer.println("addresses-forced $force")
             }
             debugChain(args.orEmpty().toList(), writer)

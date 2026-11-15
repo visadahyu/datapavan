@@ -1,6 +1,7 @@
 package org.visadahyu.datapavan.watch
 
 import java.net.InetAddress
+import kotlin.random.Random
 
 /**
  * The tunnel's MTU (ADR 0044, decision 5 as amended): the first hop's of the network beneath, as the
@@ -11,8 +12,12 @@ import java.net.InetAddress
  * ignore path MTU (the second review of unit 12).
  *
  * `LinkProperties.getMtu()` is 0 on most networks, so the kernel is asked instead: a UDP socket of
- * each IP version, bound to the network beneath, connected toward [TOWARD_V4] or [TOWARD_V6], which
- * only a default route covers, and its `IP_MTU` read. Connecting a UDP socket sends nothing.
+ * each IP version, bound to the network beneath, connected toward an address only a default route
+ * covers ([towardV4], [towardV6]), and its `IP_MTU` read. Connecting a UDP socket sends nothing.
+ *
+ * Android's `Builder.setMtu` takes one MTU for both IP versions, so the tunnel takes the smaller of the
+ * two first hops': on a network whose IPv4 and IPv6 hops differ, the wider version meets the narrower
+ * MTU in the tunnel, not its own hop's.
  */
 object TunnelMtu {
     /** IPv6's least MTU (RFC 8200): a tunnel with IPv6 routes takes no less. */
@@ -21,11 +26,26 @@ object TunnelMtu {
     /** Ethernet's and Wi-Fi's, and the tunnel's before this unit: no more. */
     const val MOST = 1500
 
-    /** Documentation addresses (RFC 5737, RFC 3849), which no network routes on its own. */
-    val TOWARD_V4: InetAddress = InetAddress.getByAddress(byteArrayOf(192.toByte(), 0, 2, 1))
-    val TOWARD_V6: InetAddress = InetAddress.getByAddress(
-        byteArrayOf(0x20, 0x01, 0x0d, 0xb8.toByte(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
-    )
+    /**
+     * An address in 192.0.2.0/24 (RFC 5737), which no network routes on its own, to connect the IPv4
+     * probe toward: drawn anew at each measure, from .2 to .254. One address used every time could have
+     * a path MTU of its own in the kernel, which an app that sends there and a host that forges a "too
+     * big" for it could set, and so steer the tunnel's MTU (re-review of unit 12, minor 4). .1 is left
+     * to the checks that send there (scripts/verify-watch.sh).
+     */
+    fun towardV4(random: Random): InetAddress =
+        InetAddress.getByAddress(byteArrayOf(192.toByte(), 0, 2, random.nextInt(2, 255).toByte()))
+
+    /**
+     * And one in 2001:db8::/32 (RFC 3849), drawn anew from 2^96 at each measure, its fifth byte never 0,
+     * so never in 2001:db8::/40, where 2001:db8::1 and the other addresses checks send to lie.
+     */
+    fun towardV6(random: Random): InetAddress {
+        val address = random.nextBytes(16)
+        byteArrayOf(0x20, 0x01, 0x0d, 0xb8.toByte()).copyInto(address)
+        address[4] = random.nextInt(1, 256).toByte()
+        return InetAddress.getByAddress(address)
+    }
 
     /** The port the probe's sockets are connected to; nothing is sent there. */
     const val PORT = 9
@@ -37,4 +57,13 @@ object TunnelMtu {
      */
     fun choose(v4: Int?, v6: Int?): Int =
         (listOfNotNull(v4, v6).filter { it > 0 }.minOrNull() ?: MOST).coerceIn(LEAST, MOST)
+
+    /**
+     * The tunnel's MTU once a measure gave [measured], where it was [current]: on the same network
+     * ([sameNetwork]) it only goes down, so that a route that flaps, or an IP version whose socket stops
+     * answering, cannot set the tunnel up again and again; a value that rises waits for the next
+     * network, which takes its own.
+     */
+    fun next(current: Int, measured: Int, sameNetwork: Boolean): Int =
+        if (sameNetwork) minOf(current, measured) else measured
 }
