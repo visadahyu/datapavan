@@ -599,7 +599,9 @@ an ADR (D25).
     only once ten minutes have passed since the tunnel was last set up (`TunnelMtu.next`): a reading low for a moment,
     as while a network's IPv6 or its CLAT comes up, does not keep the tunnel narrow for the network's life, and a
     route that flaps sets the tunnel up again at most once in ten minutes for each rise, and once for the fall after
-    it (narrow check of the second round, minor 4). A new network takes its own value. A new value sets the tunnel up
+    it (narrow check of the second round, minor 4). A rise held back is measured again once it may be taken, by a
+    measure posted for then on the main handler, which `close()` drops, so that a network whose properties do not
+    change still gets it (fourth check, minor 2). A new network takes its own value. A new value sets the tunnel up
     again.
   - Watch's dump prints `mtu <chosen> first-hop <IPv4> <IPv6>`. Kotlin no longer reports the network's MTU to the
     engine, which has no use for it.
@@ -618,7 +620,10 @@ an ADR (D25).
     counters, which go on rather than drop (its minor 3). Until then the new engine started with no chain and read
     the new tunnel at once, while Kotlin's `applyChain` came after: a chained app's packets in between went
     directly, and a connection opened then stayed direct for its life. Kotlin sets nothing again after the swap, so
-    that no chain read from settings older than the one just applied replaces it (its minor 6);
+    that no chain read from settings older than the one just applied replaces it (its minor 6). A chain Watch sets
+    while no engine runs, as during the swap, is not lost: Watch's native side keeps the chain last set, with whether
+    answers go uncached, whatever runs, holds it from reading it until the new engine is in place, and the new engine
+    takes it over the one handed over (`ChainSetting`, fourth check, minor 1); stopping the tunnel forgets it;
   - the engine's flows begin anew, as before; unit 12b will hand the new tunnel to the running engine, keeping them;
   - the debug list of apps the end-to-end test sends through the tunnel now holds for every setup of a run.
   - **Why no window is left, and what that rests on.** Read in AOSP's `Vpn.java` (main, 2026-11-15): `establish()`
@@ -710,16 +715,20 @@ an ADR (D25).
     passing); with tun0 at 1,280, as Watch sets it, each mode fragments or is refused with `EMSGSIZE` exactly as the
     same app does on the narrow network without Watch, and the 24 datagrams fragmented are put together; a router's
     "fragmentation needed" and "packet too big" reach the app with their MTU, and a connected default socket then
-    sees `EMSGSIZE` once, as without Watch. In `chain.rs`, a stand-in given before a swap names its name after.
+    sees `EMSGSIZE` once, as without Watch. In `chain.rs`, a stand-in given before a swap names its name after, and a
+    chain set during the swap wins over the one handed over; in watch-jni, a chain set while no engine runs, between
+    the hand-over and the next start as `nativeStart` has them, is the next engine's, and a stop forgets it.
   - In Kotlin, JVM tests of `TunnelMtu`: the choice, the MTU's rise within a network only ten minutes after a setup,
-    to the millisecond, and the probe's
+    to the millisecond, how long a rise held back waits to be measured again, and the probe's
     addresses drawn from their ranges, never where checks send. `scripts/verify-watch.sh` checks that the tunnel's
     interface carries the MTU Watch chose (1,500 on the emulator), where the shell can read it, and pings with 2,000
     bytes, which must be put together on an emulator, its reply reported, not required. On the Android 15 emulator
     both passed (the maintainer's session, before the tunnel was set up make-before-break).
-  - Each was made to fail by a mutation of the code it guards: 64 mutations of the code as it stands, each caught.
-    No test reaches the service's lifecycle, which is Android's: setting the tunnel up again, and a start or a stop
-    while a measure runs; nor `nativeStart`'s own hand-over, two lines that call what the swap test calls; nor an
+  - Each was made to fail by a mutation of the code it guards: 71 mutations of the code as it stands, each caught.
+    No test reaches the service's lifecycle, which is Android's: setting the tunnel up again, a start or a stop while
+    a measure runs, and the measure posted for a rise; nor `nativeStart`'s own hand-over, two lines that call what the
+    swap test calls; nor the order of the native side's two locks against a `nativeChain` that lands mid-swap, nor
+    the logger's last batch after one it was handing over (fourth check, a nit, fixed), both races; nor an
     early end of a mapping's read after it built errors, which needs the mapping to end
     between two reads; nor the order in which echo counts a reply and writes it, which is a race with the reader
     (re-review, minor 7: it counts first now).
@@ -728,8 +737,9 @@ an ADR (D25).
     larger than its MTU, are measured in unit 11b; the make-before-break setup has not run on an emulator yet;
   - the first start keeps its order, older than this unit: the engine reads the tunnel from `nativeStart` on, and
     `applyChain` comes after, so a chained app's first packets can still go directly at a start, as they did before
-    Watch ran. Unit 12b, which hands a new tunnel to the running engine, holds a chained app's new flows until the
-    chain is set;
+    Watch ran. The native side now keeps a chain set before any engine runs and starts the first engine with it, so
+    calling `applyChain` before `nativeStart` would close this; that reorder, with unit 12b's holding of a chained
+    app's new flows until the chain is set, is left to unit 12b;
   - setting the tunnel up again ends the engine's flows, as before: connections through the tunnel start anew. Within
     a network that happens only when its MTU goes down; unit 12b keeps the flows;
   - a network whose IPv4 and IPv6 first hops differ gives the wider version the narrower MTU (above);
