@@ -44,6 +44,7 @@ object Tools {
             ownerOf = { local, remote -> ownerOf(connectivity, local, remote) },
             userId = Process.myUid() / PER_USER_RANGE,
             note = if (debuggable) { line -> Log.i(TAG, "$from: $line") } else { _ -> },
+            retryRefused = setOfNotNull(ChainSettings.of(context).lastTool?.packageName),
         ).search()
     }
 

@@ -1,6 +1,7 @@
 package org.visadahyu.datapavan.watch.chain
 
 import java.io.IOException
+import java.net.ConnectException
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
@@ -53,28 +54,66 @@ class ToolFinder(
      * and these lines say which step failed. They name tools, ports and UIDs, never a password.
      */
     private val note: (String) -> Unit = {},
+    /**
+     * The tools whose refused ports are tried again after a pause: the one Watch found last
+     * (ChainSettings.lastTool), so that a user who never ran a tool in proxy mode does not wait.
+     */
+    private val retryRefused: Set<String> = emptySet(),
+    /** Waits before ports that refused are tried again; a test passes its own. */
+    private val pause: (millis: Long) -> Unit = { Thread.sleep(it) },
 ) {
-    /** Searches once. */
+    /**
+     * Searches once. A search has been refused by a tool that listened, and found it again a moment later
+     * (CI, 2026-11-12 and 14: "ConnectException"); why is not known yet. A tool that is restarting its
+     * proxy refuses for a moment, and Android reports a connection its network rules stop as a
+     * ConnectException too, which may happen while the screen is coming to the front. So before it says
+     * that no tool answers, the search tries the refused ports of the tools in [retryRefused] once more,
+     * after [REFUSED_PAUSE_MS]; the debug log names the error, so that the cause can be settled. Ports
+     * that timed out were already tried twice, and a port held by another app is not the tool's.
+     */
     fun search(): ToolSearch {
         val installed = table.filter { it.proxyMode && it.socksListeners.isNotEmpty() }.mapNotNull { tool ->
             uidOf(tool.packageName)?.let { tool to it }
         }
         if (installed.isEmpty()) return ToolSearch.NoneInstalled.also { note("none installed") }
         val tools = installed.map { it.first }
+        val refused = mutableSetOf<Pair<String, Int>>()
         for ((tool, uid) in installed) {
-            val found = probe(tool, uid) ?: continue
-            note("answering ${tool.packageName} ${found.host}:${found.port} owner ${found.ownerConfirmed}")
-            return ToolSearch.Answering(found, tools)
+            val found = probe(tool, uid, refused = refused.takeIf { tool.packageName in retryRefused }) ?: continue
+            return answering(found, tools)
+        }
+        if (refused.isNotEmpty()) {
+            note("refused: ${refused.joinToString(" ") { "${it.first}:${it.second}" }}; again in $REFUSED_PAUSE_MS ms")
+            pause(REFUSED_PAUSE_MS)
+            for ((tool, uid) in installed.filter { it.first.packageName in retryRefused }) {
+                val found = probe(tool, uid, only = refused) ?: continue
+                note("found on the second try")
+                return answering(found, tools)
+            }
         }
         note("not answering: ${tools.joinToString(" ") { it.packageName }}")
         return ToolSearch.NotAnswering(tools)
     }
 
-    /** Greets the tool's known ports, in the main user's numbering and shifted by the user's number. */
-    fun probe(tool: KnownTool, uid: Int): FoundTool? {
+    private fun answering(found: FoundTool, tools: List<KnownTool>): ToolSearch {
+        note("answering ${found.tool.packageName} ${found.host}:${found.port} owner ${found.ownerConfirmed}")
+        return ToolSearch.Answering(found, tools)
+    }
+
+    /**
+     * Greets the tool's known ports, in the main user's numbering and shifted by the user's number. Ports
+     * that refused the connection are added to [refused]; with [only], just those ports are greeted.
+     */
+    fun probe(
+        tool: KnownTool,
+        uid: Int,
+        refused: MutableSet<Pair<String, Int>>? = null,
+        only: Set<Pair<String, Int>>? = null,
+    ): FoundTool? {
         for (listener in tool.socksListeners) {
             for (port in listOf(listener.port, listener.port + userId).distinct().filter { it in 1..65535 }) {
-                val answer = greet(listener.host, port) ?: continue
+                if (only != null && (listener.host to port) !in only) continue
+                val answer = greet(listener.host, port, refused) ?: continue
                 val owner = answer.owner
                 // Another app holds the port: it is not this tool's proxy.
                 if (owner != null && owner != uid) {
@@ -101,15 +140,22 @@ class ToolFinder(
      * it chose, or "no acceptable method" when it wants a password. Anything else is not a SOCKS5 proxy.
      * A phone busy starting apps can be slow to answer even on its own loopback (CI, 2026-11-11: the first
      * search sometimes missed a proxy that the next one found), so a greeting that times out is tried
-     * once more. A refused connection is not: nothing listens there.
+     * once more at once. A refused connection is not tried at once: it is noted in [refused], and
+     * [search] may try it again after a pause. On Android a ConnectException is not only "refused"
+     * (ECONNREFUSED): it is also a connection the network rules stop (EPERM, EACCES) or no route
+     * (ENETUNREACH); the note names which, and a wrong guess costs one pause, never a wrong result.
      */
-    private fun greet(host: String, port: Int): Greeting? {
+    private fun greet(host: String, port: Int, refused: MutableSet<Pair<String, Int>>? = null): Greeting? {
         repeat(ATTEMPTS - 1) { attempt ->
             try {
                 return greetOnce(host, port)
             } catch (e: SocketTimeoutException) {
                 // Slow, not absent: once more.
                 note("$host:$port: timed out, attempt ${attempt + 1}")
+            } catch (e: ConnectException) {
+                note("$host:$port: ConnectException ${errno(e)}")
+                refused?.add(host to port)
+                return null
             } catch (e: IOException) {
                 note("$host:$port: ${e.javaClass.simpleName}")
                 return null
@@ -117,6 +163,10 @@ class ToolFinder(
         }
         return try {
             greetOnce(host, port)
+        } catch (e: ConnectException) {
+            note("$host:$port: ConnectException ${errno(e)}, attempt $ATTEMPTS")
+            refused?.add(host to port)
+            null
         } catch (e: IOException) {
             note("$host:$port: ${e.javaClass.simpleName}, attempt $ATTEMPTS")
             null
@@ -157,6 +207,9 @@ class ToolFinder(
         const val READ_MS = 1_500
         const val ATTEMPTS = 2
 
+        /** Long enough for a tool to open its proxy again after a change of settings; paid only when none answered. */
+        const val REFUSED_PAUSE_MS = 1_000L
+
         /** The UID the kernel's socket lookup (inet_diag) gives a half-open or TIME_WAIT end: root's. */
         const val ROOT = 0
 
@@ -165,5 +218,8 @@ class ToolFinder(
          * root, and the lookup gives root for an end that is not, or no longer, a socket of its own.
          */
         fun known(owner: Int?): Int? = owner?.takeIf { it != ROOT }
+
+        /** The error's name in the exception's message, such as ECONNREFUSED or EPERM, or "?"; no more of it. */
+        fun errno(e: Exception): String = Regex("\\bE[A-Z]{2,}\\b").find(e.message.orEmpty())?.value ?: "?"
     }
 }
