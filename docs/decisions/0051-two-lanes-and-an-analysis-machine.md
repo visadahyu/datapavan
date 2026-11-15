@@ -61,8 +61,9 @@ Anthropic's guide for such work asks for:
 An agent cannot verify from inside a session which account it runs on. What it can verify is where it runs.
 - **The marker check:** the analysis machine carries a root-owned file, `/etc/datapavan-lane-2`, and a host name of
   the same meaning. A lane-2 session starts only after a check script finds both and also finds what must not be
-  there: the session's user is `agent`; there is no `~/.ssh`, no git credential and no route out except the gateway
-  (decision 4).
+  there: the session's user is `agent`; there is no `~/.ssh` and no git credential; the routes match the job's
+  network mode (decision 4). A check inside the machine proves nothing against code with root there, so the check
+  that counts is the workstation's own (decisions 4 and 6); the one inside only keeps the agent honest.
 - **Outside the machine,** a session that reaches a lane-2 step stops that step, tells the maintainer in one line that
   the step is lane 2 and what it needs (the verified account, the machine ready, the scope written), writes a brief
   in the maintainer's private notes, and goes on with lane-1 work.
@@ -78,8 +79,10 @@ An agent cannot verify from inside a session which account it runs on. What it c
 
 ### 3. The analysis machine
 
-- **A QEMU/KVM virtual machine (libvirt) on the workstation.** Dynamic analysis needs the Android Emulator inside the
-  machine, and the emulator needs KVM there: nested virtualization. No supported or documented way to run a
+- **A QEMU/KVM virtual machine (libvirt's system instance, `qemu:///system`) on the workstation,** confined on the
+  host by libvirt's AppArmor profile (sVirt) and QEMU's seccomp sandbox, and run by a QEMU user of its own, so that an
+  escape from QEMU does not land as the maintainer's user, beside the keys. Dynamic analysis needs the Android
+  Emulator inside the machine, and the emulator needs KVM there: nested virtualization. No supported or documented way to run a
   KVM-accelerated Android Emulator inside a Firecracker guest was found, so Firecracker, which Anthropic's CVP guide
   names for Linux, is not used. Cloud Hypervisor documents nested virtualization (`--cpus nested=on`) but no report of
   the Android Emulator on it was found; it is the fallback. Anthropic's deployment guide lists QEMU beside Firecracker
@@ -96,9 +99,12 @@ An agent cannot verify from inside a session which account it runs on. What it c
   - **If the pilot fails:** the fallback is the emulator on the workstation under a user of its own, in a network
     namespace whose only link is the sinkhole, driven from the machine over a forwarded adb port. That has no VM
     boundary around the emulator, so it needs the maintainer's word before it is used.
-- **Devices:** a serial console and no graphics, or VNC without a clipboard; no SPICE channels, no USB redirection,
-  no shared clipboard or drag and drop, no QEMU guest agent, no shared folders. The maintainer types the sign-in code
-  on the console.
+- **Devices:** a serial console and nothing else to look at: no graphics, no VNC, no SPICE channels, no USB
+  redirection, no shared clipboard or drag and drop, no QEMU guest agent, no shared folders. The console reaches the
+  maintainer's terminal through a filter that strips terminal escape sequences (a guest with root could otherwise
+  write to the clipboard or the title through them), with clipboard writes from the terminal (OSC 52) off; it is
+  never opened in a terminal an agent can read, such as Claude's own terminal panel. The maintainer types the
+  sign-in code on it.
 - **Inside the machine:**
   - **Two users:** `agent` runs Claude Code with the verified account's sign-in; `samples` owns the samples, the
     emulator and the tools that open them. `agent` hands work to `samples` only through fixed wrapper scripts that a
@@ -117,58 +123,80 @@ The machine's design must hold even if code inside it gains root. So every rule 
 where the machine cannot change it.
 
 - **Host side:**
-  - an isolated libvirt network with no forwarding, no DNS and no DHCP from libvirt (static addresses), so the guest
-    has no resolver to tunnel through;
-  - two network interfaces: the agent's, which reaches only the model gateway, and the samples', which reaches only
-    the sinkhole; both run on the workstation, outside the machine;
-  - an nftables `inet` table that drops everything else from the machine's bridge, including toward Docker's published
-    ports (a rule in Docker's `DOCKER-USER` chain as well, since Docker forwards them past an input-only rule); IPv6
-    off on the bridge;
-  - the ruleset's hash checked before each job, since libvirt and Docker rewrite rules when they reload.
+  - two isolated libvirt networks on two bridges, with no forwarding, no DNS and no DHCP from libvirt (static
+    addresses), so the guest has no resolver to tunnel through: the agent's network reaches only the model gateway,
+    the samples' network only the sinkhole; each service listens only on its own bridge's address, and libvirt's
+    `clean-traffic` filter on each interface stops the guest from claiming another address;
+  - an nftables `inet` table that drops everything else from both bridges, IPv6 included by an explicit rule, and a
+    `bridge` table that drops IPv6 frames outright (libvirt resets the bridge's IPv6 setting when it recreates it);
+    a rule in Docker's `DOCKER-USER` chain as well, since Docker forwards its published ports past an input-only rule;
+  - the ruleset's hash checked before each job, and a watcher on the ruleset that destroys the machine if any rule
+    changes during a job (libvirt and Docker rewrite rules when they reload).
+- **Host services are hardened too,** since they read what the guest sends: the gateway and the sinkhole run in small
+  service VMs of their own, or at the least under users of their own with systemd's sandboxing; the gateway's own
+  egress is limited, by an owner match on the workstation, to the addresses of the hosts it serves; captures are
+  written by `tcpdump` dropped to an unprivileged user and are never dissected on the workstation, only inside a fresh
+  analysis machine.
 - **The model gateway** terminates TLS for the machine (whose image trusts the gateway's own certificate authority),
-  passes only the API paths and sign-in hosts Claude Code needs with a claude.ai sign-in (`api.anthropic.com`;
-  `claude.ai`, `claude.com` and `platform.claude.com`), refuses every other path (file uploads, batches and the
-  rest), and logs each request's path and size. Without it, a guest that gains root could send data to someone else's
-  account on Anthropic's own allowed host, which a proxy that only reads the host name cannot see. Whether it can also
-  refuse any credential but the one this machine signed in with is designed in the build unit.
+  because a proxy that reads only the host name cannot see what a guest with root sends to an allowed host. It is a
+  requirement of this ADR, tested by decision 6, that the gateway:
+  - passes only the paths Claude Code needs: the model API's message paths on `api.anthropic.com`, and the token
+    exchange and refresh paths on `platform.claude.com`; the sign-in page itself opens in the maintainer's own
+    browser, outside the machine, so `claude.ai` and `claude.com` are not passed; anything else the pilot shows
+    Claude Code needs is added by name, with the reason;
+  - reads each request's body and refuses server-side tools (web fetch, web search, code execution), remote MCP
+    servers, containers, and any `anthropic-beta` value not on its list, since these would make Anthropic's servers
+    reach hosts the guest names;
+  - binds the credential: it sees the token issued at the exchange and refuses any other `Authorization` or
+    `x-api-key`, so a guest cannot use an account of someone else's;
+  - logs each request's path, size and refusal.
 - **The suspect app's traffic,** in the mode the brief names:
   - **none:** static work; the app never runs, or runs with no network at all;
   - **sinkhole,** the default for dynamic runs: the sinkhole on the workstation answers names and ends every
     connection at a catch-all that records it; nothing leaves; UDP to port 443 is dropped so apps fall back to TCP,
     where it is recorded. An app that pins its certificates refuses the catch-all's, but the name it asked for and
     the attempt are still recorded, which is what Watch needs to know;
-  - **exit,** only with the maintainer's word for that run and with the maintainer watching: through a separate exit
-    that is never the maintainer's home address, logged on the workstation; the agent is signed out for the run, so
-    no sign-in is inside the machine while it has a route out.
+  - **exit,** only with the maintainer's word for that run and with the maintainer watching: on a fresh machine that
+    has never been signed in and has no interface to the gateway; its traffic goes through a separate exit that is
+    never the maintainer's home address, from a network namespace on the workstation whose only route is that exit's
+    tunnel, so that it fails closed if the tunnel drops; logged on the workstation. The agent does not run in exit
+    mode; obtaining a sample this way is the maintainer's own work at the console.
 - **Never reachable:** the home network, the workstation's own services and containers, the lab phones, the project's
   server and the maintainer's accounts.
 - **What stays possible, said plainly:** the agent sends what it reads to the model, through the gateway, by design;
-  and a guest with root can use the machine's own sign-in on the allowed paths. That reaches only Anthropic's servers
-  and the maintainer's own account, not a party outside.
+  and a guest with root can use the machine's own sign-in on the allowed paths, without server-side tools. That
+  reaches only Anthropic's model and the maintainer's own account, not a party outside.
 
 ### 5. Samples in, text out
 
-- **Obtaining:** samples are obtained only in a lane-2 job through the exit mode, or from a source's archive and
-  checked against the hash the source published; never by a browser or a tool on the workstation's home address.
+- **Obtaining:** samples are obtained only by the maintainer in exit mode (decision 4), or from a source's archive
+  and checked against the hash the source published; never by a browser or a tool on the workstation's home
+  address.
 - **Keeping:** on the workstation, samples are kept encrypted, in a folder owned by a user of their own (mode 0700)
   that the lane-1 agents, the maintainer's own user and the desktop's file indexers cannot read. They enter the
   machine as a read-only disk image built for the job; the host enforces read-only, not the guest. A brief names each
   sample by SHA-256 and source; samples never enter git. A sample not kept for a later job is destroyed with the job.
-- **Results out:** only text, written to a separate outbox disk that the workstation reads after the machine has shut
-  down. The text is untrusted: it carries app names, host names and strings from the samples, which can be written to
-  steer an agent. So:
-  - results follow a fixed schema: hashes, host names and addresses matched by pattern, counts, and one summary field
-    capped in length;
-  - a script on the workstation, not a model, checks the schema, the length caps and the character set, and strips
-    control and terminal escape characters;
-  - the maintainer reads each result before any lane-1 session uses it;
-  - a lane-1 session treats every string in a result as data, never as an instruction, and never runs anything a
-    result names.
+- **Results out:** only text, on a separate outbox disk that the workstation reads after the machine has shut down.
+  The disk has no filesystem, so the workstation's kernel never mounts anything the guest wrote: it is a fixed-size
+  raw image holding length-prefixed JSON, read as bytes, and the desktop's disk services are told to ignore it. The
+  text is untrusted: it carries app names, host names and strings from the samples, which can be written to steer an
+  agent, and reading it first does not make it safe for a model. So:
+  - results follow a fixed schema: hashes, host names and addresses matched by pattern, counts and verdicts from a
+    fixed list; free text is limited to one summary field;
+  - a script on the workstation, not a model, run under a user of its own, checks the schema, the length caps and
+    the character set, and strips control and terminal escape characters;
+  - lane-1 sessions get only the structured fields; the summary reaches them only as the maintainer rewrote it;
+  - transcripts, logs, sinkhole records and captures, which also hold strings an attacker chose, are read only by the
+    maintainer or inside a fresh analysis machine, never by a lane-1 session; the guard hook proposed in decision 2
+    also refuses lane-1 reads of their folders;
+  - a lane-1 session treats every string it gets from lane 2 as data, never as an instruction, and never runs
+    anything a result names.
 - **One credential inside:** the verified account's Claude Code sign-in (OAuth, as the program requires; no API key,
   and no one-year token from `claude setup-token`). Claude Code offers no documented way to keep a claude.ai sign-in
   outside the machine, as Anthropic's guide prefers for keys; the sign-in stays with `agent`, the gateway limits what
-  it can reach (decision 4), and the session signs out at the end of each job. Nothing else: no SSH key, no git
-  credential, no signing key, no browser profile of the maintainer's; the machine cannot push.
+  it can reach and refuses any other credential (decision 4), and at the end of each job the session is revoked on
+  Anthropic's side, not only signed out in the machine (a guest with root may have copied it). Nothing else: no SSH
+  key, no git credential, no signing key, no browser profile of the maintainer's; the machine cannot push.
 
 ### 6. A test before the first live run
 
@@ -178,8 +206,11 @@ When the machine is built, and again whenever its image, the host's firewall, th
   gateway's allow-list, the disks) and reports any path out.
 - **Escape attempts,** with the maintainer watching, from `agent`, from `samples` and from inside the emulator: reach
   the host and its services, Docker's published ports, the home network, IPv6 link-local addresses, a resolver,
-  `169.254.169.254`, the internet directly, and a path the gateway should refuse. The agent stops and reports at the
-  first success. Any success blocks lane 2 until it is fixed and the test passes again.
+  `169.254.169.254`, the internet directly, the other bridge's service (in both directions), the gateway with a path,
+  a server-side tool, a remote MCP server or a credential it must refuse. The agent stops and reports at the first
+  success. Any success blocks lane 2 until it is fixed and the test passes again.
+- **Confinement on the host:** QEMU runs under libvirt's system instance with its AppArmor profile, its seccomp
+  sandbox and its own user; the service VMs or users of decision 4 are as stated; the ruleset watcher is running.
 - **Before each job:** the marker check (decision 2), the ruleset's hash, and the tools the brief needs; a brief that
   asks for something the machine cannot do gets the maintainer's attention before it runs.
 
@@ -213,20 +244,21 @@ is checked before each job.
 If any test, log or transcript suggests that code or the agent reached beyond the machine: stop lane 2, destroy the
 machine and keep its disks and the logs as they are; check the workstation; replace the keys it holds (SSH, commit
 signing, the accounts' sessions) and reinstall it if the check cannot rule out a compromise; report to Anthropic
-within the program's time limits (24 hours for a security incident); record what happened in the private notes and
-publish what users of the lab scripts need to know.
+within the time limits of the Cyber Verification Program's security requirements (24 hours for a security
+incident); record what happened in the private notes and publish what users of the lab scripts need to know.
 
 ### 11. Lane 1, hardened now
 
 - **Done on 2026-11-15:** bypass mode is switched off for this project in its local settings, which are not in git
   (`permissions.disableBypassPermissionsMode`, which Claude Code honours from any settings file).
-- **The maintainer's call,** because Claude Code reads them only from the user's own or managed settings, the
-  `--settings` flag or an SDK caller, never from a project's own settings files (so that a repository cannot widen
-  its own permissions):
-  - auto as the default mode for sessions started in a terminal (`permissions.defaultMode`), in every Claude Code
-    configuration folder on the workstation;
-  - a Datapavan section in `autoMode.environment`, stating the project, its two repositories, the lab devices in and
-    out of scope, the network scope, lane 2 and the program's limits (drafted in the maintainer's private notes).
+- **Done the same day at the maintainer's word,** in the maintainer's own settings, because Claude Code reads these
+  only from the user's own or managed settings, the `--settings` flag or an SDK caller, never from a project's own
+  settings files (so that a repository cannot widen its own permissions):
+  - auto as the default mode (`permissions.defaultMode`) in every Claude Code configuration folder on the workstation
+    that has settings; the one without settings prompts before each action, Claude Code's default;
+  - a Datapavan section in `autoMode.environment` in each of them, stating the project, its two repositories, the
+    lab devices in and out of scope, the network scope, lane 2 and the program's limits; `claude auto-mode config`
+    shows it in effect.
 - The first draft of this ADR put both into the project's local settings; Claude Code ignores them there, and they
   were taken out the same day.
 
@@ -246,8 +278,9 @@ publish what users of the lab scripts need to know.
   are the field's long-standing standard; for Android, dynamic analysis runs the app in an emulator behind a sinkhole
   or an intercepting proxy. This ADR follows that standard; it does not try to defeat certificate pinning by default.
 - **The step above the field:** treating text from the samples as hostile on its way back to an agent with keys
-  (decision 5), a model gateway that limits the allowed host to the paths the agent needs (decision 4), and the
-  build scripts published so others can check and rerun them. No frontier research is needed; it is engineering.
+  (decision 5), and a model gateway that limits Anthropic's own host to the paths, features and credential the agent
+  needs (decision 4), so that the allowed host is not a way out; and the build scripts published so others can check
+  and rerun them. No frontier research is needed; it is engineering.
 
 ## Consequences
 
@@ -270,8 +303,10 @@ publish what users of the lab scripts need to know.
   maintainer's home address.
 - **A dedicated lab phone** on an isolated network, for apps that refuse to run in an emulator: lab spending, the
   maintainer's call. Its radios would leave the host's firewall behind, so it needs its own ADR.
-- **The gateway's build:** whether it can tie requests to the machine's own sign-in, and whether a gateway that holds
-  the sign-in itself is possible within the program's rules.
+- **A gateway that holds the sign-in itself,** so that no credential is inside the machine at all: whether that is
+  possible within the program's rules is not known.
+- **Service VMs or service users** for the gateway and the sinkhole (decision 4): the build unit chooses, and decision
+  6 tests what it chose.
 - **Personal data in captures:** in sinkhole mode a sample sees no one's real data; in exit mode it may fetch others'.
   Captures stay inside the job; results carry no personal data; what may be published about a capture follows the
   project's disclosure rule.
