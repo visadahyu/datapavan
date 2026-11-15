@@ -526,6 +526,29 @@ else
     fi
 fi
 
+# Fragments (ADR 0044, decision 5 as amended): a ping of 2,000 bytes of data is a 2,028-byte request, which the
+# shell's kernel cuts into fragments at the tunnel's MTU of 1,500, and the engine puts together again before it
+# looks at what the request is: the 39th counter counts the datagrams it rebuilt. On an emulator it must rise; a
+# phone's shell may not send such a ping, so there it is reported. The reply is larger than the tunnel's MTU too,
+# and is written whole; a CI runner's network may carry no ICMP, so it is reported, not required.
+rebuilt_counters() {
+    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" | tr -d '\r' | sed -n 's/^ *counters //p' | awk '{print $39, $35}'
+}
+read -r rebuilt0 replies0 <<<"$(rebuilt_counters)"
+device 12 "ping -c 2 -s 2000 -W 3 1.1.1.1" >/dev/null 2>&1 || true
+read -r rebuilt1 replies1 <<<"$(rebuilt_counters)"
+if [ "${rebuilt1:-0}" -gt "${rebuilt0:-0}" ]; then
+    if [ "${replies1:-0}" -gt "${replies0:-0}" ]; then
+        echo "ok: a ping larger than the tunnel's MTU is put together from its fragments, and its replies came back"
+    else
+        echo "ok: a ping larger than the tunnel's MTU is put together from its fragments (no reply: the network beneath carries no ICMP here)"
+    fi
+elif is_emulator; then
+    fail "the shell's fragmented ping was not put together: $rebuilt0, then $rebuilt1"
+else
+    echo "not seen: this phone's shell sent no fragmented ping, or the engine did not put it together ($rebuilt0, then $rebuilt1)"
+fi
+
 # Watch's listener is on the tunnel's own address, which any app can reach directly, from a port it
 # picks. A connection that does not come from the address the engine rewrites the apps' connections to
 # come from is closed at once and counted (the 19th counter): it never takes another app's waiting

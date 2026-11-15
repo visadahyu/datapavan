@@ -18,6 +18,10 @@
 //!
 //! An app's ping leaves through a protected ping socket of the engine's own, and is refused while a
 //! chain is on, since Android cannot name its app (ADR 0044, decision 5).
+//!
+//! The apps' fragments are put together again, and a datagram too large for the network beneath, which
+//! may not be fragmented, is answered "fragmentation needed" or "packet too big" with the MTU the
+//! engine's kernel gives (decision 5 as amended on 2026-11-15).
 
 use std::collections::{HashMap, VecDeque};
 use std::io;
@@ -57,6 +61,7 @@ mod errors;
 mod kept;
 mod logbook;
 mod lookups;
+mod mtu;
 mod naming;
 mod tcp;
 mod udp;
@@ -67,6 +72,8 @@ use budget::Budget;
 pub use chain::Chain;
 use echo::Echoes;
 use logbook::{FlowBytes, Live, Lookups, logger, now_ms};
+pub use mtu::MtuProbe;
+use mtu::Mtus;
 #[cfg(test)]
 use naming::Begun;
 use tcp::{Pending, listen};
@@ -211,6 +218,12 @@ pub struct Limits {
     /// A datagram whose last fragment has not come this long after its first is dropped. A sender
     /// sends a datagram's fragments one after another, within milliseconds.
     pub fragment_wait: Duration,
+    /// At most this many destinations have a path MTU a router gave, below the first hop's; past it,
+    /// the one that expires first gives way.
+    pub mtu_learned: usize,
+    /// A path MTU a router gave is kept this long, as Linux keeps it (`net.ipv4.route.mtu_expires`),
+    /// so that a path that grows wider again is found.
+    pub mtu_expires: Duration,
     /// The first of the fake ports handed out, `first_port..=last_port`.
     pub first_port: u16,
     /// The last of them.
@@ -276,6 +289,8 @@ impl Default for Limits {
             fragment_datagrams: 64,
             fragment_bytes: 1 << 20,
             fragment_wait: Duration::from_secs(5),
+            mtu_learned: 256,
+            mtu_expires: Duration::from_secs(600),
             first_port: nat::FIRST_PORT,
             last_port: nat::LAST_PORT,
         }
@@ -425,10 +440,14 @@ pub struct Config {
     pub addresses: Addresses,
     /// How long the engine waits and keeps things; the product uses [`Limits::default`].
     pub limits: Limits,
+    /// Where the engine's probe of the first hop's MTU points ([`MtuProbe::DOCUMENTATION`] on
+    /// Android), or `None` to leave it off: then no MTU is known, and nothing is answered as too
+    /// large, as before ADR 0044's unit 12. Tests that do not need it leave it off.
+    pub mtu_probe: Option<MtuProbe>,
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 39;
+pub const COUNTERS: usize = 41;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -472,6 +491,8 @@ pub struct Counters {
     echo_unsupported: AtomicU64,
     echo_dropped: AtomicU64,
     reassembled: AtomicU64,
+    too_big: AtomicU64,
+    path_mtu: AtomicU64,
 }
 
 impl Counters {
@@ -508,9 +529,12 @@ impl Counters {
     /// chain was on, or because they went to a stand-in address, which only the tool reaches, the
     /// requests dropped because the kernel refused the engine's ping sockets of their IP version at its
     /// start, and those dropped because no ping socket could carry them: the cap was full, too many
-    /// waited for their socket, or it could not be made, protected or sent on; and the datagrams put
-    /// together from the apps' fragments (decision 5 as amended). None names a destination: they can be
-    /// read on any phone. New counters are only ever appended, so that scripts reading a column by its
+    /// waited for their socket, or it could not be made, protected or sent on; then (decision 5 as
+    /// amended) the datagrams put together from the apps' fragments, the datagrams and echo requests
+    /// dropped as too large for the network beneath, answered "fragmentation needed" or "packet too
+    /// big", or not, as when the engine's own send said the message was too long, and the
+    /// "fragmentation needed" and "packet too big" routers sent the engine's sockets, passed on to the
+    /// apps. None names a destination: they can be read on any phone. New counters are only ever appended, so that scripts reading a column by its
     /// place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
@@ -554,6 +578,8 @@ impl Counters {
             &self.echo_unsupported,
             &self.echo_dropped,
             &self.reassembled,
+            &self.too_big,
+            &self.path_mtu,
         ]
         .map(|c| c.load(Ordering::Relaxed))
     }
@@ -612,6 +638,8 @@ struct Shared {
     tool_answers: Mutex<DnsCache>,
     /// The connections to those resolvers through the tool, kept open between questions.
     kept: Mutex<Vec<kept::Kept>>,
+    /// The MTU of the first hop, and of the paths routers told of (ADR 0044, decision 5 as amended).
+    mtus: Mtus,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -660,6 +688,8 @@ pub struct Engine {
     shared: Arc<Shared>,
     stop: watch::Sender<bool>,
     network: watch::Sender<u64>,
+    /// Asks the engine to probe the first hop's MTU again.
+    probes: watch::Sender<u64>,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -702,9 +732,11 @@ impl Engine {
             direct_answers: Mutex::default(),
             tool_answers: Mutex::default(),
             kept: Mutex::default(),
+            mtus: Mtus::new(&config.limits),
         });
         let (stop, stopped) = watch::channel(false);
         let (network, changes) = watch::channel(0);
+        let (probes, asked) = watch::channel(0);
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_io()
             .enable_time()
@@ -714,9 +746,17 @@ impl Engine {
             .name("watch-engine".into())
             .spawn(move || {
                 runtime.block_on(async move {
+                    // The first hop's MTU, asked at the start and at each network change, beside
+                    // the packet loop.
+                    let first_hop = config
+                        .mtu_probe
+                        .map(|toward| tokio::spawn(mtu::probe(Arc::clone(&state), toward, asked)));
                     match Tun::new(fd) {
                         Ok(tun) => run(tun, config.mtu, state, stopped, changes).await,
                         Err(_) => Counters::add(&state.counters.failed, 1),
+                    }
+                    if let Some(first_hop) = first_hop {
+                        first_hop.abort();
                     }
                 });
             })?;
@@ -724,6 +764,7 @@ impl Engine {
             shared,
             stop,
             network,
+            probes,
             thread: Some(thread),
         })
     }
@@ -737,19 +778,24 @@ impl Engine {
         }
     }
 
-    /// The network beneath the tunnel, or its DNS server, changed. DNS goes to `dns` from now on. When
-    /// the network itself is another one (`moved`), UDP mappings and flows are closed, so that their
-    /// next datagram goes out on the new network; TCP connections on the old network end by
-    /// themselves, as without a VPN. A change of the same network's properties closes nothing: Android
-    /// reports several after each switch.
+    /// The network beneath the tunnel, or its DNS server or its MTU, changed. DNS goes to `dns` from
+    /// now on. When the network itself is another one (`moved`), UDP mappings and flows are closed, so
+    /// that their next datagram goes out on the new network, and what routers said of the old one's
+    /// paths is forgotten; TCP connections on the old network end by themselves, as without a VPN. A
+    /// change of the same network's properties closes nothing: Android reports several after each
+    /// switch. Either way, the engine asks its kernel for the first hop's MTU again (ADR 0044,
+    /// decision 5 as amended).
     pub fn network_changed(&self, dns: Option<IpAddr>, moved: bool) {
         *lock(&self.shared.upstream_dns) = dns;
         // Another resolver, or another network, may answer otherwise.
         lock(&self.shared.direct_answers).clear();
         if moved {
+            self.shared.mtus.forget();
             self.network
                 .send_modify(|generation| *generation = generation.wrapping_add(1));
         }
+        self.probes
+            .send_modify(|generation| *generation = generation.wrapping_add(1));
     }
 
     /// Turns chaining on with `chain`, or off with `None` (W6). New flows follow it, and TCP
@@ -784,6 +830,15 @@ impl Engine {
             .organisations
             .as_ref()
             .map(|table| table.month().to_owned())
+    }
+
+    /// The first hop's MTU of IPv4 and of IPv6, as the engine's kernel last gave it, or `None` while
+    /// unknown (ADR 0044, decision 5 as amended): for tests and debugging, which must know when the
+    /// probe, which runs beside the packet loop, has answered.
+    #[must_use]
+    pub fn first_hop_mtus(&self) -> (Option<u32>, Option<u32>) {
+        let mtus = &self.shared.mtus;
+        (mtus.first_hop(true), mtus.first_hop(false))
     }
 
     /// The counters, as [`Counters::snapshot`] orders them.
@@ -924,22 +979,34 @@ impl Loop {
                 if let Some(mut whole) = whole {
                     Counters::add(&self.shared.counters.reassembled, 1);
                     let parsed = packet::parse(&whole);
-                    self.forward(&mut whole, parsed).await;
+                    self.forward(&mut whole, parsed, true).await;
                 }
             }
-            parsed => self.forward(packet, parsed).await,
+            parsed => self.forward(packet, parsed, false).await,
         }
     }
 
-    /// One whole packet, as `parse` read it: TCP, UDP, an echo request, or skipped.
-    async fn forward(&self, packet: &mut [u8], parsed: Result<packet::Packet, Skip>) {
+    /// One whole packet, as `parse` read it: TCP, UDP, an echo request, or skipped. A datagram or an
+    /// echo request `rebuilt` from the app's fragments is never answered as too large: its app's
+    /// kernel fragmented it already, so it may be fragmented, and the engine's kernel fragments it.
+    /// TCP is never answered so either: Android's own stack sizes the segments it sends, and the apps'
+    /// segments reach it through the tunnel's MTU.
+    async fn forward(
+        &self,
+        packet: &mut [u8],
+        parsed: Result<packet::Packet, Skip>,
+        rebuilt: bool,
+    ) {
         match parsed {
             Ok(parsed) if parsed.protocol == TCP => {
                 self.tcp(&mut packet[..parsed.length], &parsed).await;
             }
-            Ok(parsed) => self.udp(&packet[..parsed.length], &parsed).await,
+            Ok(parsed) => self.udp(&packet[..parsed.length], &parsed, rebuilt).await,
             Err(Skip::Other(packet::ICMP | packet::ICMPV6)) => match packet::echo_request(packet) {
-                Ok(request) => self.echo(&packet[..request.length], &request).await,
+                Ok(request) => {
+                    self.echo(&packet[..request.length], &request, rebuilt)
+                        .await;
+                }
                 // Any other ICMP an app sends, as its kernel's errors, stays skipped.
                 Err(_) => Counters::add(&self.shared.counters.skipped, 1),
             },
@@ -1092,6 +1159,7 @@ mod tests {
             direct_answers: Mutex::default(),
             tool_answers: Mutex::default(),
             kept: Mutex::default(),
+            mtus: Mtus::new(&Limits::default()),
         }
     }
 

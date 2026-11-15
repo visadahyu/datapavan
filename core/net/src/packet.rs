@@ -583,11 +583,7 @@ pub fn unreachable(original: &[u8], parsed: &Packet, reason: Unreachable) -> Opt
 /// answer (RFC 1812 4.3.2.7, RFC 4443 2.4 (e)), and which has no one sender to answer as.
 #[must_use]
 pub fn echo_refused(original: &[u8], echo: &Echo) -> Option<Vec<u8>> {
-    let unicast = match echo.destination {
-        IpAddr::V4(to) => !(to.is_multicast() || to.is_broadcast() || to.is_unspecified()),
-        IpAddr::V6(to) => !(to.is_multicast() || to.is_unspecified()),
-    };
-    if !unicast {
+    if !unicast(echo.destination) {
         return None;
     }
     let quoted = original.get(..echo.length)?;
@@ -599,26 +595,76 @@ pub fn echo_refused(original: &[u8], echo: &Echo) -> Option<Vec<u8>> {
     )
 }
 
+/// Whether `address` is one an ICMP error may come from: not multicast, broadcast or unspecified,
+/// whose packets no error answers (RFC 1812 4.3.2.7, RFC 4443 2.4 (e)), and which no one host could
+/// answer as.
+fn unicast(address: IpAddr) -> bool {
+    match address {
+        IpAddr::V4(to) => !(to.is_multicast() || to.is_broadcast() || to.is_unspecified()),
+        IpAddr::V6(to) => !(to.is_multicast() || to.is_unspecified()),
+    }
+}
+
 /// A "destination unreachable" from `from` to `to`, quoting `quoted`.
 fn icmp_error(quoted: &[u8], from: IpAddr, to: IpAddr, reason: Unreachable) -> Option<Vec<u8>> {
-    if from.is_ipv4() {
+    let (kind, code) = if from.is_ipv4() {
         let code = match reason {
             Unreachable::Host => 1,
             Unreachable::Port => 3,
             Unreachable::Prohibited => 13,
         };
-        let mut icmp = vec![3, code, 0, 0, 0, 0, 0, 0];
-        icmp.extend_from_slice(&quoted[..quoted.len().min(576 - 20 - 8)]);
-        assemble(from, to, ICMP, icmp, 2)
+        (3, code)
     } else {
         let code = match reason {
             Unreachable::Host => 3,
             Unreachable::Port => 4,
             Unreachable::Prohibited => 1,
         };
-        let mut icmp = vec![1, code, 0, 0, 0, 0, 0, 0];
-        icmp.extend_from_slice(&quoted[..quoted.len().min(1280 - 40 - 8)]);
-        assemble(from, to, ICMPV6, icmp, 2)
+        (1, code)
+    };
+    icmp_message(quoted, (from, to), (kind, code), [0; 4])
+}
+
+/// An ICMP error message of `kind` and `code` from `from` to `to`, with `rest` as the four bytes of
+/// its header after the checksum, quoting as much of `quoted` as the least MTU allows: 576 bytes in
+/// all for IPv4 (RFC 1812 4.3.2.3), 1,280 for IPv6 (RFC 4443 2.4 (c)).
+fn icmp_message(
+    quoted: &[u8],
+    (from, to): (IpAddr, IpAddr),
+    (kind, code): (u8, u8),
+    rest: [u8; 4],
+) -> Option<Vec<u8>> {
+    let (protocol, room) = if from.is_ipv4() {
+        (ICMP, LEAST_MTU_V4 - 20 - 8)
+    } else {
+        (ICMPV6, LEAST_MTU_V6 - 40 - 8)
+    };
+    let mut icmp = vec![kind, code, 0, 0];
+    icmp.extend_from_slice(&rest);
+    icmp.extend_from_slice(&quoted[..quoted.len().min(room)]);
+    assemble(from, to, protocol, icmp, 2)
+}
+
+/// The least MTU of IPv4 that every host must take: 576 bytes (RFC 791, RFC 1122 3.3.3).
+pub const LEAST_MTU_V4: usize = 576;
+/// The least MTU of IPv6, which every link carries: 1,280 bytes (RFC 8200 5).
+pub const LEAST_MTU_V6: usize = 1_280;
+
+/// An ICMP "fragmentation needed and DF set" (type 3 code 4, RFC 1191) in IPv4, or an `ICMPv6`
+/// "packet too big" (type 2, RFC 8201) in IPv6, from `from` to `to`, saying that packets of at most
+/// `mtu` bytes pass, and quoting `quoted` as [`unreachable()`] quotes the app's packet. IPv4's next-hop
+/// MTU has 16 bits, and a larger `mtu` gives its largest. `None` when `from` is a multicast,
+/// broadcast or unspecified address, which no ICMP error may answer for, or the versions differ.
+#[must_use]
+pub fn too_big(quoted: &[u8], from: IpAddr, to: IpAddr, mtu: u32) -> Option<Vec<u8>> {
+    if !unicast(from) || from.is_ipv4() != to.is_ipv4() {
+        return None;
+    }
+    if from.is_ipv4() {
+        let [high, low] = u16::try_from(mtu).unwrap_or(u16::MAX).to_be_bytes();
+        icmp_message(quoted, (from, to), (3, 4), [0, 0, high, low])
+    } else {
+        icmp_message(quoted, (from, to), (2, 0), mtu.to_be_bytes())
     }
 }
 

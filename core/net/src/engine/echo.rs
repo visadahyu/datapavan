@@ -15,6 +15,7 @@
 //! Echo is not a flow: the connection log gets no record of it, and the log's format is unchanged.
 //! The counters are all that is kept of it.
 
+use super::mtu::Size;
 use super::udp::with_buffer;
 use super::upstream::protect;
 use super::{BATCH, Counters, Loop, Shared, lock, send_to_app};
@@ -219,9 +220,11 @@ impl<S> Table<S> {
 
 impl Loop {
     /// An app's echo request, `packet`: refused while a chain is on, dropped where the kernel allows
-    /// no ping socket, else sent on through the ping socket of its key, made for it if it has none.
-    /// No record of it goes to the connection log, whose format this leaves as it is.
-    pub(super) async fn echo(&self, packet: &[u8], request: &Echo) {
+    /// no ping socket, answered "fragmentation needed" or "packet too big" when it is too large for
+    /// the network beneath and may not be fragmented, unless the engine put it together from the app's
+    /// fragments (`rebuilt`), else sent on through the ping socket of its key, made for it if it has
+    /// none. No record of it goes to the connection log, whose format this leaves as it is.
+    pub(super) async fn echo(&self, packet: &[u8], request: &Echo, rebuilt: bool) {
         let counters = &self.shared.counters;
         // A stand-in address is reached only through the tool, which carries no echo: from an app
         // that goes directly, it can only be one left over from a chain that ended. A ping to a
@@ -251,6 +254,21 @@ impl Loop {
             Counters::add(&counters.echo_dropped, 1);
             return;
         };
+        // ADR 0044, decision 5 as amended: the engine's ping socket would carry the request as large
+        // as it came, and a router past the first hop would drop it.
+        if !rebuilt
+            && let Size::TooLarge(answer) = self.shared.size(
+                packet,
+                request.icmp,
+                (request.source, request.destination),
+                target,
+            )
+        {
+            if let Some(answer) = answer {
+                self.send(&answer).await;
+            }
+            return;
+        }
         let key = (request.source, request.id, request.destination);
         let next = lock(&self.echoes.table).request(
             key,

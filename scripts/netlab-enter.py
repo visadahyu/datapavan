@@ -22,11 +22,20 @@
 # - Through IPv6 the same, where the machine has IPv6: tun0 holds the tunnel's common IPv6 address
 #   (a /128), and the "internet" is 2001:db8::9 (RFC 3849) on the loopback. Where it has none, the lab
 #   says so, sets NETLAB_IPV6=absent for the test, and goes on with IPv4: the IPv6 tests then fail.
+# - A narrow network (ADR 0044, decision 5 as amended): a server at 198.51.100.20 and 2001:db8:1::20 on
+#   "far", one end of a veth pair whose other end, "near", is in the same namespace. What the
+#   namespace itself sends there takes table 101, whose routes go out of "near" with an MTU of 1,280,
+#   from the "internet" addresses; packets from the apps still go into tun0 first, by the rule before
+#   it, and packets that come in on "far" are delivered there, by the local table after it. So the
+#   engine's sockets meet a first hop of 1,280 (IP_MTU says so, also for IPv6), their datagrams leave
+#   "near" as fragments, and the server gets them whole. A permanent neighbour entry spares the
+#   neighbour discovery; "far" takes packets from addresses of the namespace's own.
 #
 #   netlab-enter.py -- PROGRAM [ARGUMENTS...]
 #
 # Everything here is undone when the namespace ends with the test. It changes nothing outside it.
 import fcntl
+import json
 import os
 import struct
 import subprocess
@@ -47,6 +56,10 @@ FAKE6 = "fd00:1:fd00:1:fd00:1:fd00:2"
 DNS6 = "fd00:1:fd00:1:fd00:1:fd00:3"
 SERVER6 = "2001:db8::9"
 APPS_TABLE = "100"
+NARROW4 = "198.51.100.20"
+NARROW6 = "2001:db8:1::20"
+NARROW_TABLE = "101"
+NARROW_MTU = "1280"
 
 
 def ip(*arguments):
@@ -70,6 +83,35 @@ def ipv6():
     ip("-6", "rule", "add", "pref", "100", "from", TUN6, "lookup", APPS_TABLE)
     ip("-6", "rule", "add", "pref", "200", "lookup", "local")
     ip("-6", "rule", "del", "pref", "0")
+
+
+# The narrow network's IPv4 side; its IPv6 side follows in ipv6_narrow, where the machine has IPv6.
+def narrow():
+    ip("link", "add", "near", "type", "veth", "peer", "name", "far")
+    for side in ("near", "far"):
+        ip("link", "set", side, "up")
+    ip("addr", "add", NARROW4 + "/32", "dev", "far")
+    ip("neigh", "add", NARROW4, "lladdr", far_address(), "dev", "near", "nud", "permanent")
+    ip("route", "add", NARROW4 + "/32", "dev", "near", "mtu", NARROW_MTU, "src", SERVER4,
+       "table", NARROW_TABLE)
+    ip("rule", "add", "pref", "150", "iif", "lo", "to", NARROW4, "lookup", NARROW_TABLE)
+    sysctl("net.ipv4.conf.far.rp_filter", "0")
+    sysctl("net.ipv4.conf.far.accept_local", "1")
+
+
+def ipv6_narrow():
+    ip("-6", "addr", "add", NARROW6 + "/128", "dev", "far", "nodad")
+    ip("-6", "neigh", "add", NARROW6, "lladdr", far_address(), "dev", "near", "nud", "permanent")
+    ip("-6", "route", "add", NARROW6 + "/128", "dev", "near", "mtu", NARROW_MTU, "src", SERVER6,
+       "table", NARROW_TABLE)
+    ip("-6", "rule", "add", "pref", "150", "iif", "lo", "to", NARROW6, "lookup", NARROW_TABLE)
+
+
+# /sys in the namespace is the host's, so the veth's address is read from ip itself.
+def far_address():
+    shown = subprocess.run(["ip", "-j", "link", "show", "far"], check=True, capture_output=True,
+                           text=True)
+    return json.loads(shown.stdout)[0]["address"]
 
 
 def tun(name):
@@ -99,8 +141,10 @@ def main():
     ip("rule", "add", "pref", "100", "from", TUN4, "lookup", APPS_TABLE)
     ip("rule", "add", "pref", "200", "lookup", "local")
     ip("rule", "del", "pref", "0")
+    narrow()
     try:
         ipv6()
+        ipv6_narrow()
     except (subprocess.CalledProcessError, OSError) as error:
         print(f"netlab: no IPv6 here ({error}); the IPv6 tests will fail", file=sys.stderr)
         os.environ["NETLAB_IPV6"] = "absent"

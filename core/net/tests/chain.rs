@@ -66,13 +66,13 @@ fn engine(chain: Chain) -> io::Result<(Engine, UnixDatagram)> {
 
 /// As [`engine`], with the tunnel's addresses `addresses`.
 fn engine_at(chain: Chain, addresses: Addresses) -> io::Result<(Engine, UnixDatagram)> {
-    started(chain, addresses, Limits::default(), Arc::new(ByPort))
+    started(chain, addresses, &Limits::default(), Arc::new(ByPort))
 }
 
 /// As [`engine`], with `limits`, and `platform` for Android.
 fn engine_with(
     chain: Chain,
-    limits: Limits,
+    limits: &Limits,
     platform: Arc<dyn Platform>,
 ) -> io::Result<(Engine, UnixDatagram)> {
     started(chain, Addresses::COMMON, limits, platform)
@@ -81,7 +81,7 @@ fn engine_with(
 fn started(
     chain: Chain,
     addresses: Addresses,
-    limits: Limits,
+    limits: &Limits,
     platform: Arc<dyn Platform>,
 ) -> io::Result<(Engine, UnixDatagram)> {
     let (engine_end, app_end) = std::os::unix::net::UnixDatagram::pair()?;
@@ -90,10 +90,11 @@ fn started(
     let engine = Engine::start(
         OwnedFd::from(engine_end),
         Config {
-            limits,
+            limits: *limits,
             mtu: 1500,
             keep_flows: 64,
             addresses,
+            mtu_probe: None,
         },
         platform,
         None,
@@ -918,7 +919,7 @@ async fn what_is_sent_once_the_chain_takes_an_app_goes_through_the_tool() -> Out
     let tool = proxy(Settings::default()).await?;
     let (engine, tunnel) = engine_with(
         chain(tool.address),
-        Limits::default(),
+        &Limits::default(),
         Arc::new(SlowProtect),
     )?;
     send(&tunnel, app(DIRECT_PORT), at, b"before the chain").await?;
@@ -1045,7 +1046,7 @@ async fn destinations_that_wait_for_a_relay_fail_with_it() -> Outcome {
         connect_timeout: Duration::from_secs(1),
         ..Limits::default()
     };
-    let (_engine, tunnel) = engine_with(chain(address), limits, Arc::new(ByPort))?;
+    let (_engine, tunnel) = engine_with(chain(address), &limits, Arc::new(ByPort))?;
     let (first, second) = (udp_echo().await?, udp_echo().await?);
     let started = tokio::time::Instant::now();
     send(&tunnel, app(CHAINED_PORT), first, b"one").await?;
@@ -1199,7 +1200,7 @@ async fn lookups_that_wait_while_the_chain_takes_the_app_stay_off_the_network() 
     let tool = proxy(Settings::default()).await?;
     let (engine, tunnel) = engine_with(
         chain(tool.address),
-        Limits::default(),
+        &Limits::default(),
         Arc::new(SlowProtect),
     )?;
     let (dns, heard) = deaf_resolver(&engine).await?;
@@ -1309,7 +1310,7 @@ async fn a_port_handed_to_a_chained_app_leaves_through_the_tool() -> Outcome {
     let tool = proxy(Settings::default()).await?;
     let owners = Arc::new(Owners::default());
     owners.set(PORT, Some(DIRECT));
-    let (_engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
+    let (_engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), owners.clone())?;
     send(&tunnel, app(PORT), at, b"direct app").await?;
     tokio::time::sleep(Duration::from_millis(200)).await;
     owners.set(PORT, Some(CHAINED));
@@ -1352,7 +1353,7 @@ async fn a_port_handed_over_without_a_pause_is_noticed_in_time() -> Outcome {
     let tool = proxy(Settings::default()).await?;
     let owners = Arc::new(Owners::default());
     owners.set(PORT, Some(DIRECT));
-    let (_engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
+    let (_engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), owners.clone())?;
     // The direct app's mapping is open once its answer comes; the port is the chained app's at once.
     send(&tunnel, app(PORT), at, b"direct app").await?;
     receive(&tunnel).await?.ok_or("a datagram")?;
@@ -1381,7 +1382,7 @@ async fn an_app_android_cannot_name_goes_nowhere_while_a_chain_is_on() -> Outcom
     let tool = proxy(Settings::default()).await?;
     let owners = Arc::new(Owners::default());
     owners.set(PORT, Some(DIRECT));
-    let (_engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
+    let (_engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), owners.clone())?;
     send(&tunnel, app(PORT), first, b"named").await?;
     receive(&tunnel).await?.ok_or("a datagram")?;
     // More than `udp_reask` after the answer naming the direct app: else who sent the next datagram
@@ -1674,7 +1675,7 @@ async fn a_mapping_ends_when_its_port_is_another_apps() -> Outcome {
     let tool = proxy(Settings::default()).await?;
     let owners = Arc::new(Owners::default());
     owners.set(PORT, Some(DIRECT));
-    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), owners.clone())?;
     let mut seen = Vec::new();
     for (server, uid) in [(first, DIRECT), (second, ANOTHER)] {
         // A handover less than `udp_reask` after an answer would drop what came near it.
@@ -1726,7 +1727,7 @@ async fn a_lookup_on_a_port_handed_to_a_chained_app_stays_off_the_network() -> O
     let tool = proxy(Settings::default()).await?;
     let owners = Arc::new(Owners::default());
     owners.set(PORT, Some(DIRECT));
-    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), owners.clone())?;
     let (dns, heard) = deaf_resolver(&engine).await?;
     send(
         &tunnel,
@@ -1781,7 +1782,7 @@ async fn a_lookup_on_a_port_handed_from_a_chained_app_leaves_its_way() -> Outcom
     let tool = proxy(settings).await?;
     let owners = Arc::new(Owners::default());
     owners.set(PORT, Some(CHAINED));
-    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), owners.clone())?;
     let (dns, heard) = deaf_resolver(&engine).await?;
     send(
         &tunnel,
@@ -1819,7 +1820,7 @@ async fn a_chained_apps_flow_of_lookups_ends_with_its_last_answer() -> Outcome {
     let tool = proxy(Settings::default()).await?;
     let owners = Arc::new(Owners::default());
     owners.set(PORT, Some(CHAINED));
-    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), owners.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &Limits::default(), owners.clone())?;
     let (dns, heard) = deaf_resolver(&engine).await?;
     send(
         &tunnel,
@@ -1928,7 +1929,7 @@ async fn a_port_handed_to_another_app_is_logged_under_it_without_a_chain() -> Ou
     let tool = proxy(Settings::default()).await?;
     let owners = Arc::new(Owners::default());
     owners.set(PORT, Some(DIRECT));
-    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), owners.clone())?;
     engine.chain(None);
     let mut seen = Vec::new();
     for (uid, said) in [(DIRECT, &b"first app"[..]), (ANOTHER, b"second app")] {
@@ -1956,7 +1957,7 @@ async fn an_app_android_cannot_name_is_logged_as_unknown() -> Outcome {
     let tool = proxy(Settings::default()).await?;
     let owners = Arc::new(Owners::default());
     owners.set(PORT, Some(DIRECT));
-    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), owners.clone())?;
     engine.chain(None);
     send(&tunnel, app(PORT), first, b"named").await?;
     receive(&tunnel).await?.ok_or("a datagram")?;
@@ -2129,7 +2130,7 @@ async fn flows_that_came_in_and_ended_make_room_for_others() -> Outcome {
         udp_idle: Duration::from_secs(1),
         ..Limits::default()
     };
-    let (engine, tunnel) = engine_with(chain(tool.address), limits, Arc::new(ByPort))?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &limits, Arc::new(ByPort))?;
     send(&tunnel, app(DIRECT_PORT), at, b"hello").await?;
     let seen = everything(&tunnel).await;
     assert_eq!(seen.len(), 64);
@@ -2169,7 +2170,7 @@ async fn a_stand_in_that_ended_is_bound_anew() -> Outcome {
         udp_idle: Duration::from_secs(1),
         ..Limits::default()
     };
-    let (_engine, tunnel) = engine_with(chain(tool.address), limits, Arc::new(ByPort))?;
+    let (_engine, tunnel) = engine_with(chain(tool.address), &limits, Arc::new(ByPort))?;
     let at = SocketAddr::from((
         stand_in(&tunnel, b"\x04echo\x04test\x00").await?,
         named.port(),
@@ -2450,7 +2451,7 @@ async fn a_bound_name_beside_a_silent_one(
         udp_contest: contest,
         ..Limits::default()
     };
-    let (engine, tunnel) = engine_with(chain(tool.address), limits, Arc::new(ByPort))?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &limits, Arc::new(ByPort))?;
     let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, echo.port()));
     let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, echo.port()));
     echoed(&tunnel, a, b"bound").await?;
@@ -2562,7 +2563,7 @@ async fn one_pause_asks_android_once() -> Outcome {
     }
     let tool = proxy(Settings::default()).await?;
     let android = Arc::new(Counting::default());
-    let (_engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    let (_engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), android.clone())?;
     for &echo in &echoes {
         echoed(&tunnel, echo, b"first").await?;
     }
@@ -2595,7 +2596,7 @@ async fn a_mapping_that_never_pauses_is_asked_about_seldom() -> Outcome {
     let echo = udp_echo().await?;
     let tool = proxy(Settings::default()).await?;
     let android = Arc::new(Counting::default());
-    let (_engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    let (_engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), android.clone())?;
     // Every 20 ms, for longer than thirty times the 100 ms that asks again.
     let started = tokio::time::Instant::now();
     while started.elapsed() < Duration::from_millis(3_400) {
@@ -2614,7 +2615,7 @@ async fn a_mapping_that_never_pauses_is_asked_about_seldom() -> Outcome {
 async fn a_flow_of_lookups_that_never_pauses_is_asked_about_seldom() -> Outcome {
     let tool = proxy(Settings::default()).await?;
     let android = Arc::new(Counting::default());
-    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), android.clone())?;
     let (dns, _heard) = deaf_resolver(&engine).await?;
     let started = tokio::time::Instant::now();
     while started.elapsed() < Duration::from_millis(3_400) {
@@ -2890,7 +2891,7 @@ async fn handed_over_while_asked(
     let tool = proxy(Settings::default()).await?;
     let android = Arc::new(SlowOwners::default());
     android.set(port, DIRECT);
-    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), android.clone())?;
     send(&tunnel, app(port), echo, b"direct app").await?;
     receive(&tunnel).await?.ok_or("an echo")?;
     tokio::time::sleep(Duration::from_millis(200)).await;
@@ -3075,7 +3076,7 @@ async fn a_port_that_came_in_is_no_destination_the_app_knew() -> Outcome {
     let tool = proxy(Settings::default()).await?;
     let owners = Arc::new(Owners::default());
     owners.set(PORT, Some(DIRECT));
-    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), owners.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &Limits::default(), owners.clone())?;
     send(&tunnel, app(PORT), at, b"x").await?;
     let (from, _) = receive(&tunnel).await?.ok_or("a datagram")?;
     assert_eq!(from, other);
@@ -3117,7 +3118,7 @@ async fn a_port_that_came_in_and_was_answered_asks_android_once() -> Outcome {
     let (at, other, heard) = answered_from_another_port().await?;
     let tool = proxy(Settings::default()).await?;
     let android = Arc::new(Counting::default());
-    let (_engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    let (_engine, tunnel) = engine_with(chain(tool.address), &Limits::default(), android.clone())?;
     send(&tunnel, app(DIRECT_PORT), at, b"x").await?;
     let (from, _) = receive(&tunnel).await?.ok_or("a datagram")?;
     assert_eq!(from, other);
@@ -3150,7 +3151,7 @@ async fn a_lookup_held_behind_the_old_apps_asks_again() -> Outcome {
     let tool = proxy(Settings::default()).await?;
     let android = Arc::new(SlowOwners::default());
     android.set(PORT, DIRECT);
-    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), android.clone())?;
     let (dns, heard) = deaf_resolver(&engine).await?;
     let public = query(b"\x06public\x04test\x00", 1);
     send(&tunnel, app(PORT), dns, &public).await?;
@@ -3176,7 +3177,7 @@ async fn a_datagram_held_behind_the_old_apps_asks_again() -> Outcome {
     let tool = proxy(Settings::default()).await?;
     let android = Arc::new(SlowOwners::default());
     android.set(PORT, DIRECT);
-    let (_engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    let (_engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), android.clone())?;
     send(&tunnel, app(PORT), c, b"x").await?;
     let asked = android.asked(1).await?;
     tokio::time::sleep_until(asked + Duration::from_millis(50)).await;
@@ -3207,7 +3208,7 @@ async fn a_known_destination_joins_no_question_older_than_the_window() -> Outcom
     let tool = proxy(Settings::default()).await?;
     let android = Arc::new(SlowOwners::default());
     android.set(PORT, DIRECT);
-    let (_engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    let (_engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), android.clone())?;
     send(&tunnel, app(PORT), a, b"x to a").await?;
     tokio::time::sleep_until(android.asked(1).await? + Duration::from_millis(500)).await;
     send(&tunnel, app(PORT), b, b"x to b").await?;
@@ -3240,7 +3241,7 @@ async fn a_slow_answer_makes_a_mapping_fresh_only_from_its_question() -> Outcome
     let tool = proxy(Settings::default()).await?;
     let android = Arc::new(SlowOwners::default());
     android.set(PORT, DIRECT);
-    let (_engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    let (_engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), android.clone())?;
     send(&tunnel, app(PORT), a, b"x").await?;
     tokio::time::sleep_until(android.asked(1).await? + Duration::from_millis(600)).await;
     send(&tunnel, app(PORT), a, b"x again").await?;
@@ -3268,7 +3269,7 @@ async fn a_slow_answer_makes_a_flow_of_lookups_fresh_only_from_its_question() ->
     let tool = proxy(Settings::default()).await?;
     let android = Arc::new(SlowOwners::default());
     android.set(PORT, DIRECT);
-    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), android.clone())?;
     let (dns, heard) = deaf_resolver(&engine).await?;
     let public = query(b"\x06public\x04test\x00", 1);
     send(&tunnel, app(PORT), dns, &public).await?;
@@ -3296,7 +3297,7 @@ async fn a_lookup_that_names_a_new_app_ends_the_old_apps_mapping() -> Outcome {
     let tool = proxy(Settings::default()).await?;
     let owners = Arc::new(Owners::default());
     owners.set(PORT, Some(DIRECT));
-    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), owners.clone())?;
     let (dns, dns_heard) = deaf_resolver(&engine).await?;
     send(&tunnel, app(PORT), at, b"x").await?;
     until_a_flow_to(&engine, at).await?;
@@ -3329,7 +3330,7 @@ async fn a_datagram_that_names_a_new_app_ends_the_old_apps_flow_of_lookups() -> 
     let tool = proxy(Settings::default()).await?;
     let owners = Arc::new(Owners::default());
     owners.set(PORT, Some(DIRECT));
-    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), owners.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), owners.clone())?;
     let (dns, heard) = deaf_resolver(&engine).await?;
     let public = query(b"\x06public\x04test\x00", 1);
     send(&tunnel, app(PORT), dns, &public).await?;
@@ -3361,7 +3362,7 @@ async fn a_live_stand_in_keeps_its_way_once_its_name_leaves_the_map() -> Outcome
         stand_ins: 1,
         ..quick_reask()
     };
-    let (_engine, tunnel) = engine_with(chain(tool.address), limits, Arc::new(ByPort))?;
+    let (_engine, tunnel) = engine_with(chain(tool.address), &limits, Arc::new(ByPort))?;
     let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, echo.port()));
     echoed(&tunnel, a, b"before").await?;
     stand_in(&tunnel, b"\x01b\x04test\x00").await?;
@@ -3489,7 +3490,7 @@ async fn an_older_answer_opens_no_way_once_a_lookup_named_the_new_app() -> Outco
     let android = Arc::new(Staged::default());
     android.set(PORT, Some(DIRECT));
     android.delay(a, Duration::from_millis(300));
-    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &Limits::default(), android.clone())?;
     let (dns, dns_heard) = deaf_resolver(&engine).await?;
     send(&tunnel, app(PORT), a, b"x").await?;
     let asked = android.asked_about(a).await?;
@@ -3522,7 +3523,7 @@ async fn an_older_answer_opens_no_way_once_android_named_no_app() -> Outcome {
     let android = Arc::new(Staged::default());
     android.set(PORT, Some(DIRECT));
     android.delay(a, Duration::from_millis(300));
-    let (_engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    let (_engine, tunnel) = engine_with(chain(tool.address), &Limits::default(), android.clone())?;
     send(&tunnel, app(PORT), a, b"x").await?;
     let asked = android.asked_about(a).await?;
     tokio::time::sleep_until(asked + Duration::from_millis(50)).await;
@@ -3553,7 +3554,7 @@ async fn an_older_answer_opens_no_flow_of_lookups_once_a_datagram_named_the_new_
     let tool = proxy(Settings::default()).await?;
     let android = Arc::new(Staged::default());
     android.set(PORT, Some(DIRECT));
-    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &Limits::default(), android.clone())?;
     let (dns, dns_heard) = deaf_resolver(&engine).await?;
     android.delay(dns, Duration::from_millis(300));
     send(
@@ -3595,7 +3596,7 @@ async fn a_mapping_still_opening_when_a_lookup_names_the_new_app_does_not_open()
     let tool = proxy(Settings::default()).await?;
     let android = Arc::new(Staged::default());
     android.set(PORT, Some(DIRECT));
-    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &Limits::default(), android.clone())?;
     let (dns, dns_heard) = deaf_resolver(&engine).await?;
     android.protect_in(Duration::from_millis(300));
     send(&tunnel, app(PORT), a, b"x").await?;
@@ -3637,7 +3638,7 @@ async fn a_flow_of_lookups_still_opening_when_a_datagram_names_the_new_app_does_
     let tool = proxy(Settings::default()).await?;
     let android = Arc::new(Staged::default());
     android.set(PORT, Some(DIRECT));
-    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &Limits::default(), android.clone())?;
     let (dns, dns_heard) = deaf_resolver(&engine).await?;
     android.protect_in(Duration::from_millis(300));
     send(
@@ -3691,7 +3692,7 @@ async fn another_app_gets_no_way_from_the_old_apps_stand_in() -> Outcome {
         stand_ins: 1,
         ..quick_reask()
     };
-    let (engine, tunnel) = engine_with(both, limits, owners.clone())?;
+    let (engine, tunnel) = engine_with(both, &limits, owners.clone())?;
     let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, echo.port()));
     send(&tunnel, app(PORT), a, b"x").await?;
     assert_eq!(receive(&tunnel).await?, Some((a, b"x".to_vec())));
@@ -3728,7 +3729,7 @@ async fn a_chained_apps_datagram_does_not_leave_directly_once_a_lookup_names_a_d
     let android = Arc::new(Staged::default());
     android.set(PORT, Some(CHAINED));
     android.delay(a, Duration::from_millis(300));
-    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &Limits::default(), android.clone())?;
     let (dns, _) = deaf_resolver(&engine).await?;
     send(&tunnel, app(PORT), a, b"x").await?;
     let asked = android.asked_about(a).await?;
@@ -3775,7 +3776,7 @@ async fn a_chained_apps_datagram_does_not_leave_directly_after_a_slow_handshake(
     let front = slow_front(tool.address, Duration::from_secs(3)).await?;
     let android = Arc::new(Staged::default());
     android.set(PORT, Some(CHAINED));
-    let (engine, tunnel) = engine_with(chain(front), Limits::default(), android.clone())?;
+    let (engine, tunnel) = engine_with(chain(front), &Limits::default(), android.clone())?;
     let (dns, _) = deaf_resolver(&engine).await?;
     send(&tunnel, app(PORT), a, b"x").await?;
     let asked = android.asked_about(a).await?;
@@ -3806,7 +3807,7 @@ async fn a_chained_apps_lookup_stays_off_the_network_once_a_direct_app_is_named(
     let tool = proxy(Settings::default()).await?;
     let android = Arc::new(Staged::default());
     android.set(PORT, Some(CHAINED));
-    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &Limits::default(), android.clone())?;
     let (dns, dns_heard) = deaf_resolver(&engine).await?;
     android.delay(dns, Duration::from_millis(300));
     let private = query(b"\x07private\x04test\x00", 16);
@@ -3846,7 +3847,7 @@ async fn a_direct_app_does_not_wait_for_the_old_apps_tool() -> Outcome {
         connect_timeout: Duration::from_secs(4),
         ..Limits::default()
     };
-    let (_engine, tunnel) = engine_with(chain(hung_at), limits, android.clone())?;
+    let (_engine, tunnel) = engine_with(chain(hung_at), &limits, android.clone())?;
     send(&tunnel, app(PORT), a, b"x").await?;
     let asked = android.asked_about(a).await?;
     tokio::time::sleep_until(asked + Duration::from_millis(1_200)).await;
@@ -3889,7 +3890,7 @@ async fn a_retry_held_behind_a_slow_handshake_leaves_through_the_tool() -> Outco
     let front = slow_front(tool.address, Duration::from_millis(2_500)).await?;
     let android = Arc::new(Staged::default());
     android.set(PORT, Some(CHAINED));
-    let (engine, tunnel) = engine_with(chain(front), Limits::default(), android.clone())?;
+    let (engine, tunnel) = engine_with(chain(front), &Limits::default(), android.clone())?;
     send(&tunnel, app(PORT), a, b"first").await?;
     let asked = android.asked_about(a).await?;
     tokio::time::sleep_until(asked + Duration::from_millis(1_200)).await;
@@ -3911,7 +3912,7 @@ async fn a_retry_held_behind_a_slow_protect_leaves_directly() -> Outcome {
     let tool = proxy(Settings::default()).await?;
     let android = Arc::new(Staged::default());
     android.set(PORT, Some(DIRECT));
-    let (engine, tunnel) = engine_with(chain(tool.address), Limits::default(), android.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &Limits::default(), android.clone())?;
     android.protect_in(Duration::from_millis(2_500));
     send(&tunnel, app(PORT), a, b"first").await?;
     let asked = android.asked_about(a).await?;
@@ -3966,7 +3967,7 @@ async fn chatter_after_a_handover(port: u16, (old, new): (u32, u32)) -> Outcome 
         udp_idle: Duration::from_secs(2),
         ..quick_reask()
     };
-    let (_engine, tunnel) = engine_with(chain(tool.address), limits, android.clone())?;
+    let (_engine, tunnel) = engine_with(chain(tool.address), &limits, android.clone())?;
     send(&tunnel, app(port), at, b"hello").await?;
     receive(&tunnel).await?.ok_or("the peer's first datagram")?;
     android.set(port, Some(new));
@@ -4017,7 +4018,7 @@ async fn a_datagram_dropped_as_its_way_fails_is_counted() -> Outcome {
     let front = closing_front(Duration::from_millis(1_600)).await?;
     let android = Arc::new(Staged::default());
     android.set(PORT, Some(CHAINED));
-    let (engine, tunnel) = engine_with(chain(front), Limits::default(), android.clone())?;
+    let (engine, tunnel) = engine_with(chain(front), &Limits::default(), android.clone())?;
     send(&tunnel, app(PORT), a, b"x").await?;
     let asked = android.asked_about(a).await?;
     tokio::time::sleep_until(asked + Duration::from_millis(1_200)).await;
@@ -4090,7 +4091,7 @@ async fn a_lookup_taken_for_one_app_is_dropped_once_an_answer_near_it_names_anot
         udp_reask: reask,
         ..Limits::default()
     };
-    let (engine, tunnel) = engine_with(chain(tool.address), limits, android.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &limits, android.clone())?;
     let (dns, heard) = deaf_resolver(&engine).await?;
     send(&tunnel, app(PORT), a, b"tick").await?;
     until_heard(&a_heard, b"tick", Duration::from_secs(2)).await?;
@@ -4134,7 +4135,7 @@ async fn a_lookup_held_behind_a_slow_protect_keeps_whose_it_was_taken_for() -> O
     let tool = proxy(Settings::default()).await?;
     let android = Arc::new(Staged::default());
     android.set(PORT, Some(DIRECT));
-    let (engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    let (engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), android.clone())?;
     let (dns, heard) = deaf_resolver(&engine).await?;
     send(&tunnel, app(PORT), a, b"tick").await?;
     until_heard(&a_heard, b"tick", Duration::from_secs(2)).await?;
@@ -4181,7 +4182,7 @@ async fn datagrams_held_behind_one_cost_one_question() -> Outcome {
     let tool = proxy(Settings::default()).await?;
     let android = Arc::new(Staged::default());
     android.set(PORT, Some(DIRECT));
-    let (_engine, tunnel) = engine_with(chain(tool.address), quick_reask(), android.clone())?;
+    let (_engine, tunnel) = engine_with(chain(tool.address), &quick_reask(), android.clone())?;
     send(&tunnel, app(PORT), a, b"first").await?;
     until_heard(&heard, b"first", Duration::from_secs(2)).await?;
     android.delay(a, Duration::from_millis(200));

@@ -36,8 +36,11 @@ internal object Engine {
     external fun nativeOrganisations(): String
 
     /**
-     * The network beneath the tunnel or its DNS server changed; [dns] is its DNS server's address, or
-     * "" for none, and [moved] says whether the network itself is another one, which closes UDP flows.
+     * The network beneath the tunnel, its DNS server or its MTU changed; [dns] is its DNS server's
+     * address, or "" for none, and [moved] says whether the network itself is another one, which closes
+     * UDP flows and forgets the path MTUs routers reported. At each call the engine asks its own kernel
+     * for the MTU of the network's first hop again (ADR 0044, decision 5 as amended), so a change of
+     * `LinkProperties.getMtu()` alone is reported too, with [moved] false.
      */
     external fun nativeNetworkChanged(dns: String, moved: Boolean)
 
@@ -47,9 +50,11 @@ internal object Engine {
      * from QUIC, QUIC flows whose name could not be read, hellos that offered ECH, hellos whose name
      * was an ECH public name, and flows of an app's own plain and encrypted DNS; then those that
      * `Counters::snapshot` in core/net lists after them: among them the refusals and evictions of the
-     * budget for the engine and for each app, and last the echo requests carried, their replies, and
-     * those refused, unsupported or dropped (ADR 0044, decisions 3 and 5). New ones are only appended.
-     * None names a destination. Empty when no engine runs.
+     * budget for the engine and for each app, the echo requests carried, their replies, and those
+     * refused, unsupported or dropped (ADR 0044, decisions 3 and 5), and last the datagrams put together
+     * from the apps' fragments, those dropped as too large for the network beneath, and the path MTUs
+     * routers reported, passed on to the apps (decision 5 as amended; the 20th counts the fragments
+     * dropped). New ones are only appended. None names a destination. Empty when no engine runs.
      */
     external fun nativeCounters(): LongArray
 

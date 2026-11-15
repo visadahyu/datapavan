@@ -9,8 +9,10 @@
 
 use super::budget::{Full, Place};
 use super::chain::{Chain, Route, connect_proxy, io_error};
+use super::errors::Told;
 use super::logbook::FlowBytes;
 use super::lookups;
+use super::mtu::Size;
 use super::naming::Begun;
 use super::upstream::{connect_udp, owner, protect};
 use super::whose::{Named, Record, Settled, Step, Verdict, Waiter};
@@ -245,7 +247,24 @@ pub(super) struct Holding {
 
 /// A datagram that waits for its way: when it came, whose the answers said it was then, and the whole
 /// packet.
-type Held = Waiter<Vec<u8>>;
+type Held = Waiter<Datagram>;
+
+/// A datagram of an app's, whole, and whether the engine put it together from the app's fragments, so
+/// that it is never answered as too large (ADR 0044, decision 5 as amended).
+#[derive(Default)]
+pub(super) struct Datagram {
+    packet: Vec<u8>,
+    rebuilt: bool,
+}
+
+impl From<Vec<u8>> for Datagram {
+    fn from(packet: Vec<u8>) -> Self {
+        Self {
+            packet,
+            rebuilt: false,
+        }
+    }
+}
 
 /// How a mapping leaves.
 #[derive(Clone)]
@@ -1127,13 +1146,16 @@ enum Made {
 /// A destination's first datagram, `packet`, which came `now`, waiting for its way: for a destination
 /// the app had no way to, and a lookup, with the floor of the answers that may stand for it, so that it
 /// takes only an answer asked since it came.
-fn holding(packet: &[u8], now: Instant, floor: bool) -> UdpEntry {
+fn holding(packet: &[u8], rebuilt: bool, now: Instant, floor: bool) -> UdpEntry {
     UdpEntry::Opening(Holding {
         floor: floor.then_some(now),
         held: vec![Waiter {
             came: now,
             then: None,
-            item: packet.to_vec(),
+            item: Datagram {
+                packet: packet.to_vec(),
+                rebuilt,
+            },
         }],
     })
 }
@@ -1452,7 +1474,7 @@ impl UdpTable {
         key: (SocketAddr, SocketAddr),
         way: Option<u32>,
         reask: Duration,
-    ) -> Settled<Vec<u8>> {
+    ) -> Settled<Datagram> {
         let nothing = || Settled {
             leave: Vec::new(),
             dropped: Vec::new(),
@@ -1660,7 +1682,11 @@ impl UdpTable {
 }
 
 impl Loop {
-    pub(super) async fn udp(&self, packet: &[u8], parsed: &Packet) {
+    /// One datagram of an app's, `rebuilt` when the engine put it together from the app's fragments.
+    /// Lookups to the tunnel's DNS address are never answered as too large (ADR 0044, decision 5 as
+    /// amended): their socket is connected to the network's resolver, and a lookup is small.
+    pub(super) async fn udp(&self, packet: &[u8], parsed: &Packet, rebuilt: bool) {
+        let datagram = (packet, rebuilt);
         let Some(payload) = packet::udp_payload(packet, parsed) else {
             Counters::add(&self.shared.counters.skipped, 1);
             return;
@@ -1672,7 +1698,7 @@ impl Loop {
             let now = Instant::now();
             let stale = matches!(table.flows.get(&key), Some(UdpEntry::Open(_)))
                 && !table.lookup_passes(key, now, &self.shared);
-            let holding = |floor| holding(packet, now, floor);
+            let holding = |floor| holding(packet, rebuilt, now, floor);
             if stale {
                 // A flow of lookups that may not carry this one gives way to a new flow, which this
                 // lookup opens once the rule says whose it is and its route is asked. The old flow
@@ -1703,7 +1729,7 @@ impl Loop {
                             holding.held.len() < self.shared.limits.udp_waiting,
                         );
                         if room {
-                            self.hold_behind(&mut table, key, packet, (now, floor));
+                            self.hold_behind(&mut table, key, datagram, (now, floor));
                         } else {
                             Counters::add(&self.shared.counters.skipped, 1);
                         }
@@ -1723,7 +1749,7 @@ impl Loop {
         };
         let (way, uid, cached, owed) = match next {
             Next::Flow(way, uid, cached, owed) => (way, uid, cached, owed),
-            Next::Peer(to) => return self.send_to_peer(to, packet, parsed, payload).await,
+            Next::Peer(to) => return self.send_to_peer(to, datagram, parsed, payload).await,
             Next::Open => {
                 tokio::spawn(open_udp(
                     key,
@@ -1757,7 +1783,7 @@ impl Loop {
             return;
         }
         let sent = way.send(payload).await;
-        if let Some(error) = count_sent(&self.shared, None, packet, parsed, sent) {
+        if let Some(error) = count_sent(&self.shared, None, (packet, false), parsed, sent) {
             self.send(&error).await;
         }
     }
@@ -1770,7 +1796,7 @@ impl Loop {
         &self,
         table: &mut UdpTable,
         key: (SocketAddr, SocketAddr),
-        packet: &[u8],
+        (packet, rebuilt): (&[u8], bool),
         (came, floor): (Instant, Option<Instant>),
     ) {
         let reask = self.shared.limits.udp_reask;
@@ -1782,7 +1808,10 @@ impl Loop {
             holding.held.push(Waiter {
                 came,
                 then,
-                item: packet.to_vec(),
+                item: Datagram {
+                    packet: packet.to_vec(),
+                    rebuilt,
+                },
             });
         }
         if let Some(asking) = table.question_for(key.0, (came, floor, then), reask) {
@@ -1790,9 +1819,33 @@ impl Loop {
         }
     }
 
-    /// A datagram to a peer of its app socket's mapping.
-    async fn send_to_peer(&self, to: ToPeer, packet: &[u8], parsed: &Packet, payload: &[u8]) {
+    /// A datagram to a peer of its app socket's mapping: on the direct path, answered and dropped when
+    /// it is too large for the network beneath (ADR 0044, decision 5 as amended), unless the engine put
+    /// it together from the app's fragments. Through the tool nothing is answered: its relay is on the
+    /// phone ([`on_the_phone`]), and what the tool sends further is its own.
+    async fn send_to_peer(
+        &self,
+        to: ToPeer,
+        (packet, rebuilt): (&[u8], bool),
+        parsed: &Packet,
+        payload: &[u8],
+    ) {
         note_quic(&self.shared, to.quic);
+        let direct = to.header.is_none();
+        if direct
+            && !rebuilt
+            && let Size::TooLarge(answer) = self.shared.size(
+                packet,
+                parsed.transport,
+                (parsed.source.ip(), parsed.destination.ip()),
+                parsed.destination.ip(),
+            )
+        {
+            if let Some(answer) = answer {
+                self.send(&answer).await;
+            }
+            return;
+        }
         let sent = send_to(
             &to.socket,
             to.header.as_deref(),
@@ -1800,7 +1853,9 @@ impl Loop {
             parsed.destination,
         )
         .await;
-        if let Some(error) = count_sent(&self.shared, to.bytes.as_deref(), packet, parsed, sent) {
+        let answerable = (packet, direct && !rebuilt);
+        if let Some(error) = count_sent(&self.shared, to.bytes.as_deref(), answerable, parsed, sent)
+        {
             self.send(&error).await;
         }
     }
@@ -1822,11 +1877,14 @@ fn note_quic(shared: &Shared, quic: Option<QuicRead>) {
 }
 
 /// Counts a datagram that left, or gives the ICMP error that tells the app its destination cannot be
-/// reached. One that found the socket's buffer full is dropped, as a full queue drops it.
+/// reached. One that found the socket's buffer full is dropped, as a full queue drops it. One the
+/// kernel found too long to send (`EMSGSIZE`) is answered as too large where the datagram is
+/// `answerable` and the rule of ADR 0044's decision 5, as amended, allows, and is otherwise dropped:
+/// either way it is counted with those too large, never told "host unreachable".
 fn count_sent(
     shared: &Shared,
     bytes: Option<&FlowBytes>,
-    packet: &[u8],
+    (packet, answerable): (&[u8], bool),
     parsed: &Packet,
     sent: io::Result<usize>,
 ) -> Option<Vec<u8>> {
@@ -1842,6 +1900,26 @@ fn count_sent(
         Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
             Counters::add(&shared.counters.skipped, 1);
             None
+        }
+        Err(error) if error.raw_os_error() == Some(nix::errno::Errno::EMSGSIZE as i32) => {
+            let target = shared
+                .target(parsed.destination)
+                .map_or(parsed.destination.ip(), |target| target.ip());
+            let size = answerable.then(|| {
+                shared.size(
+                    packet,
+                    parsed.transport,
+                    (parsed.source.ip(), parsed.destination.ip()),
+                    target,
+                )
+            });
+            match size {
+                Some(Size::TooLarge(answer)) => answer,
+                Some(Size::Fits) | None => {
+                    Counters::add(&shared.counters.too_big, 1);
+                    None
+                }
+            }
         }
         Err(_) => packet::unreachable(packet, parsed, Unreachable::Host),
     }
@@ -2141,20 +2219,40 @@ async fn open_peer(
         mapping.answering(destination);
         let peer = mapping.peer(shared, key, now, (false, way));
         let header = peer.way.header.clone();
-        for Waiter { item: packet, .. } in &settled.leave {
+        // On the direct path, a datagram too large for the network beneath is answered and dropped,
+        // unless the engine put it together from the app's fragments; through the tool, never (ADR
+        // 0044, decision 5 as amended).
+        let direct = header.is_none();
+        for Waiter {
+            item: Datagram { packet, rebuilt },
+            ..
+        } in &settled.leave
+        {
             let Ok(parsed) = packet::parse(packet) else {
                 continue;
             };
             let Some(payload) = packet::udp_payload(packet, &parsed) else {
                 continue;
             };
+            let answerable = direct && !rebuilt;
+            if answerable
+                && let Size::TooLarge(answer) = shared.size(
+                    packet,
+                    parsed.transport,
+                    (parsed.source.ip(), parsed.destination.ip()),
+                    destination.ip(),
+                )
+            {
+                errors.extend(answer);
+                continue;
+            }
             reads.push(read_quic(&mut peer.quic, payload));
             peer.sent(destination.port(), payload);
             let sent = try_send_to(&socket, header.as_deref(), payload, destination);
             errors.extend(count_sent(
                 shared,
                 peer.bytes.as_deref(),
-                packet,
+                (packet, answerable),
                 &parsed,
                 sent,
             ));
@@ -2530,7 +2628,7 @@ async fn mapped(
 
 /// Reads the errors queued for a socket, which also clears its readiness for errors: a connected
 /// socket's own error comes with its next read instead.
-fn take_errors(socket: &UdpSocket) -> Vec<(SocketAddr, Unreachable)> {
+fn take_errors(socket: &UdpSocket) -> Vec<(SocketAddr, Told)> {
     let mut found = Vec::new();
     let _ = socket.try_io(Interest::ERROR, || {
         found = errors::queued(socket);
@@ -2547,7 +2645,7 @@ fn mapped_receive(
     socket: &UdpSocket,
     buffer: &mut [u8],
     (app, id, uid): (SocketAddr, u64, Option<u32>),
-    queued: Vec<(SocketAddr, Unreachable)>,
+    queued: Vec<(SocketAddr, Told)>,
     shared: &Shared,
     flows: &UdpFlows,
 ) -> (Vec<Vec<u8>>, bool, Option<SocketAddr>) {
@@ -2568,7 +2666,13 @@ fn mapped_receive(
                 }
             }
         };
-        if let Some(error) = unreachable_to(app, destination, told) {
+        // A router's "fragmentation needed" or "packet too big" gives the destination's path MTU:
+        // kept, and passed on to the app, which sends smaller then (ADR 0044, decision 5 as amended).
+        let error = match told {
+            Told::Unreachable(told) => unreachable_to(app, destination, told),
+            Told::TooBig(mtu) => shared.path_too_big(app, destination, mtu),
+        };
+        if let Some(error) = error {
             if let Some(bytes) = &bytes {
                 bytes.add_wire_down(error.len());
             }
@@ -2775,7 +2879,8 @@ async fn open_lookups(
             owed: Arc::clone(&owed),
             chains: now,
         };
-        for Waiter { item: packet, .. } in &settled.leave {
+        for held in &settled.leave {
+            let packet = &held.item.packet;
             let Ok(parsed) = packet::parse(packet) else {
                 continue;
             };
@@ -2796,7 +2901,7 @@ async fn open_lookups(
             if sent.is_ok() {
                 owed.add(payload);
             }
-            errors.extend(count_sent(shared, None, packet, &parsed, sent));
+            errors.extend(count_sent(shared, None, (packet, false), &parsed, sent));
         }
         // What waits on is decided again; this flow then gives way to the next.
         if table.first_held(key).is_none() {
@@ -2984,15 +3089,15 @@ async fn udp_failed(
         count_drops(shared, settled.drops());
         settled.leave
     };
-    let error =
-        waiting
-            .first()
-            .filter(|_| unreachable)
-            .and_then(|Waiter { item: first, .. }| {
-                packet::parse(first)
-                    .ok()
-                    .and_then(|parsed| packet::unreachable(first, &parsed, Unreachable::Host))
-            });
+    let error = waiting
+        .first()
+        .filter(|_| unreachable)
+        .and_then(|Waiter { item, .. }| {
+            let first = &item.packet;
+            packet::parse(first)
+                .ok()
+                .and_then(|parsed| packet::unreachable(first, &parsed, Unreachable::Host))
+        });
     if let Some(error) = error {
         send_to_app(tun, shared, &error).await;
     }
@@ -3268,7 +3373,7 @@ mod tests {
                 held: vec![Waiter {
                     came: asked,
                     then: None,
-                    item: Vec::new(),
+                    item: Datagram::default(),
                 }],
             }),
         );
@@ -3382,7 +3487,7 @@ mod tests {
             held: vec![Waiter {
                 came: Instant::now(),
                 then: None,
-                item: Vec::new(),
+                item: Datagram::default(),
             }],
         };
         table.put(key, UdpEntry::Opening(holding()));
@@ -3422,10 +3527,10 @@ mod tests {
         let after = |ms| base + Duration::from_millis(ms);
         let mut table = UdpTable::default();
         let key = (APP, OTHER);
-        let waiter = |came, item| Waiter {
+        let waiter = |came, item: Vec<u8>| Waiter {
             came,
             then: None,
-            item,
+            item: Datagram::from(item),
         };
         let held = vec![
             waiter(base, vec![1]),
@@ -3456,11 +3561,11 @@ mod tests {
             &shared,
         );
         let settled = table.settle(key, Some(10_078), reask);
-        let packets = |items: &[Held]| items.iter().map(|w| w.item[0]).collect::<Vec<_>>();
+        let packets = |items: &[Held]| items.iter().map(|w| w.item.packet[0]).collect::<Vec<_>>();
         let dropped: Vec<_> = settled
             .dropped
             .iter()
-            .map(|(w, why)| (w.item[0], *why))
+            .map(|(w, why)| (w.item.packet[0], *why))
             .collect();
         assert_eq!(dropped, [(1, Verdict::Ambiguous)]);
         assert_eq!(packets(&settled.leave), [2]);
@@ -3482,7 +3587,7 @@ mod tests {
         let waiter = |came| Waiter {
             came,
             then: None,
-            item: Vec::new(),
+            item: Datagram::default(),
         };
         let held = vec![waiter(base), waiter(after(70))];
         table.put(key, UdpEntry::Opening(Holding { floor: None, held }));
@@ -3670,5 +3775,49 @@ mod tests {
         ));
         assert_eq!(mapping.peers[&stand_in].asked.len(), 0);
         Ok(())
+    }
+
+    /// A send the kernel found too long (`EMSGSIZE`) is no longer answered "host unreachable"
+    /// (ADR 0044, decision 5 as amended): it is answered as too large where the datagram may be and
+    /// the rule allows, and dropped otherwise, while no MTU is known, through the tool or once put
+    /// together from fragments, or when it fits; counted with those too large each time. Another
+    /// failure is still "host unreachable".
+    #[test]
+    fn a_send_too_long_is_answered_too_large_or_dropped() {
+        let shared = shared();
+        let server = SocketAddr::from(([198, 51, 100, 9], 9_000));
+        let large = packet::udp(APP, server, &[7; 1_472]).unwrap_or_default();
+        let small = packet::udp(APP, server, &[7; 100]).unwrap_or_default();
+        let (Ok(parsed), Ok(parsed_small)) = (packet::parse(&large), packet::parse(&small)) else {
+            unreachable!("not parsed")
+        };
+        let too_long = || Err(io::Error::from_raw_os_error(nix::libc::EMSGSIZE));
+        assert_eq!(
+            count_sent(&shared, None, (&large, true), &parsed, too_long()),
+            None
+        );
+        shared.mtus.set_first_hop(true, Some(1_280));
+        let answer =
+            count_sent(&shared, None, (&large, true), &parsed, too_long()).unwrap_or_default();
+        assert_eq!(&answer[20..22], &[3, 4]);
+        assert_eq!(u16::from_be_bytes([answer[26], answer[27]]), 1_280);
+        assert_eq!(
+            count_sent(&shared, None, (&large, false), &parsed, too_long()),
+            None
+        );
+        assert_eq!(
+            count_sent(&shared, None, (&small, true), &parsed_small, too_long()),
+            None
+        );
+        let unreachable = count_sent(
+            &shared,
+            None,
+            (&large, true),
+            &parsed,
+            Err(io::ErrorKind::HostUnreachable.into()),
+        )
+        .unwrap_or_default();
+        assert_eq!(&unreachable[20..22], &[3, 1]);
+        assert_eq!(shared.counters.snapshot()[39], 4);
     }
 }

@@ -54,17 +54,18 @@ impl Platform for ByRange {
 }
 
 /// The engine on a datagram pair, with `limits` and no chain, and the app's end of the pair.
-fn engine(limits: Limits) -> io::Result<(Engine, UnixDatagram)> {
+fn engine(limits: &Limits) -> io::Result<(Engine, UnixDatagram)> {
     let (engine_end, app_end) = std::os::unix::net::UnixDatagram::pair()?;
     engine_end.set_nonblocking(true)?;
     app_end.set_nonblocking(true)?;
     let engine = Engine::start(
         OwnedFd::from(engine_end),
         Config {
-            limits,
+            limits: *limits,
             mtu: 1500,
             keep_flows: 64,
             addresses: Addresses::COMMON,
+            mtu_probe: None,
         },
         Arc::new(ByRange),
         None,
@@ -182,7 +183,7 @@ fn nothing_came(tunnel: &UnixDatagram) -> Outcome {
 #[tokio::test(flavor = "current_thread")]
 async fn an_app_at_its_share_gets_no_new_mapping_while_another_app_does() -> Outcome {
     let echo = udp_echo().await?;
-    let (engine, tunnel) = engine(small(8, 2))?;
+    let (engine, tunnel) = engine(&small(8, 2))?;
     echoed(&tunnel, app(FIRST_PORTS), echo, b"one").await?;
     echoed(&tunnel, app(FIRST_PORTS + 1), echo, b"two").await?;
     send(&tunnel, app(FIRST_PORTS + 2), echo, b"three").await?;
@@ -201,7 +202,7 @@ async fn an_app_at_its_share_gets_no_new_mapping_while_another_app_does() -> Out
 #[tokio::test(flavor = "current_thread")]
 async fn the_cap_for_every_app_refuses_a_new_mapping_once_full() -> Outcome {
     let echo = udp_echo().await?;
-    let (engine, tunnel) = engine(small(3, 2))?;
+    let (engine, tunnel) = engine(&small(3, 2))?;
     echoed(&tunnel, app(FIRST_PORTS), echo, b"one").await?;
     echoed(&tunnel, app(FIRST_PORTS + 1), echo, b"two").await?;
     echoed(&tunnel, app(SECOND_PORTS), echo, b"three").await?;
@@ -224,7 +225,7 @@ async fn the_cap_for_every_app_refuses_a_new_mapping_once_full() -> Outcome {
 #[tokio::test(flavor = "current_thread")]
 async fn apps_android_cannot_name_share_one_share() -> Outcome {
     let echo = udp_echo().await?;
-    let (engine, tunnel) = engine(small(8, 2))?;
+    let (engine, tunnel) = engine(&small(8, 2))?;
     echoed(&tunnel, app(UNNAMED_PORTS), echo, b"one").await?;
     echoed(&tunnel, app(UNNAMED_PORTS + 1), echo, b"two").await?;
     send(&tunnel, app(UNNAMED_PORTS + 2), echo, b"three").await?;
@@ -241,7 +242,7 @@ async fn apps_android_cannot_name_share_one_share() -> Outcome {
 async fn a_lookup_holds_a_place_until_its_answer() -> Outcome {
     let echo = udp_echo().await?;
     let resolver = UdpSocket::bind("127.0.0.1:0").await?;
-    let (engine, tunnel) = engine(small(8, 2))?;
+    let (engine, tunnel) = engine(&small(8, 2))?;
     engine.network_changed(Some(IpAddr::V4(Ipv4Addr::LOCALHOST)), false);
     // Any port of the tunnel's DNS address leads to the same port of the network's resolver.
     let dns = SocketAddr::from((Addresses::COMMON.dns4, resolver.local_addr()?.port()));
@@ -292,7 +293,7 @@ async fn a_lookup_holds_a_place_until_its_answer() -> Outcome {
 #[tokio::test(flavor = "current_thread")]
 async fn an_app_at_its_share_ends_its_own_quiet_mapping_for_a_new_one() -> Outcome {
     let echo = udp_echo().await?;
-    let (engine, tunnel) = engine(quiet_after(8, 2, QUIET))?;
+    let (engine, tunnel) = engine(&quiet_after(8, 2, QUIET))?;
     echoed(&tunnel, app(SECOND_PORTS), echo, b"the other app's").await?;
     echoed(&tunnel, app(FIRST_PORTS), echo, b"quiet soon").await?;
     echoed(&tunnel, app(FIRST_PORTS + 1), echo, b"busy").await?;
@@ -320,7 +321,7 @@ async fn an_app_at_its_share_ends_its_own_quiet_mapping_for_a_new_one() -> Outco
 #[tokio::test(flavor = "current_thread")]
 async fn at_the_cap_the_apps_own_quiet_mapping_ends_before_another_apps() -> Outcome {
     let echo = udp_echo().await?;
-    let (engine, tunnel) = engine(quiet_after(3, 3, QUIET))?;
+    let (engine, tunnel) = engine(&quiet_after(3, 3, QUIET))?;
     echoed(
         &tunnel,
         app(SECOND_PORTS),
@@ -344,7 +345,7 @@ async fn at_the_cap_the_apps_own_quiet_mapping_ends_before_another_apps() -> Out
 #[tokio::test(flavor = "current_thread")]
 async fn at_the_cap_an_app_without_one_of_its_own_ends_another_apps() -> Outcome {
     let echo = udp_echo().await?;
-    let (engine, tunnel) = engine(quiet_after(2, 2, QUIET))?;
+    let (engine, tunnel) = engine(&quiet_after(2, 2, QUIET))?;
     echoed(&tunnel, app(SECOND_PORTS), echo, b"quietest").await?;
     echoed(&tunnel, app(SECOND_PORTS + 1), echo, b"quiet").await?;
     tokio::time::sleep(QUIETER).await;
@@ -380,7 +381,7 @@ async fn at_the_cap_an_answered_lookup_ends_first() -> Outcome {
     let mut settings = Settings::default();
     settings.remap.insert(public, resolver().await?);
     let tool = proxy(settings).await?;
-    let (engine, tunnel) = engine(quiet_after(3, 3, QUIET))?;
+    let (engine, tunnel) = engine(&quiet_after(3, 3, QUIET))?;
     engine.chain(Some(Chain {
         proxy: tool.address,
         credentials: None,
@@ -430,7 +431,7 @@ async fn a_lookup_sent_on_after_its_answer_is_not_ended_first() -> Outcome {
         let mut settings = Settings::default();
         settings.remap.insert(public, resolver_once().await?);
         let tool = proxy(settings).await?;
-        let (engine, tunnel) = engine(small(2, 2))?;
+        let (engine, tunnel) = engine(&small(2, 2))?;
         engine.chain(Some(Chain {
             proxy: tool.address,
             credentials: None,
