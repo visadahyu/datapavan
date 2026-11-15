@@ -50,4 +50,15 @@ class TunnelMtuTest {
         assertEquals("a new network takes its own, higher", 1500, TunnelMtu.next(1400, 1500, false, soon))
         assertEquals("or lower", 1280, TunnelMtu.next(1500, 1280, false, soon))
     }
+
+    @Test
+    fun aRiseHeldBackIsMeasuredAgainOnceItMayBeTaken() {
+        val wait = TunnelMtu.RISE_AFTER_MS
+        assertEquals("held back a second after a setup", wait - 1_000, TunnelMtu.riseWait(1400, 1500, true, 1_000))
+        assertEquals("a millisecond before", 1L, TunnelMtu.riseWait(1400, 1500, true, wait - 1))
+        assertEquals("taken at ten minutes: nothing to wait for", null, TunnelMtu.riseWait(1400, 1500, true, wait))
+        assertEquals("a fall is taken at once", null, TunnelMtu.riseWait(1500, 1400, true, 1_000))
+        assertEquals("the same value", null, TunnelMtu.riseWait(1500, 1500, true, 1_000))
+        assertEquals("a new network takes its own", null, TunnelMtu.riseWait(1400, 1500, false, 1_000))
+    }
 }

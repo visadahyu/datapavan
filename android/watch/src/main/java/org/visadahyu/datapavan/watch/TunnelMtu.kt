@@ -74,4 +74,12 @@ object TunnelMtu {
         sinceSetUpMs >= RISE_AFTER_MS -> measured
         else -> current
     }
+
+    /**
+     * How long until a rise that [next] held back may be taken, so that the first hop is measured again
+     * then, with no change of the network's properties needed to ask (fourth check of unit 12, minor 2);
+     * null when none is held back.
+     */
+    fun riseWait(current: Int, measured: Int, sameNetwork: Boolean, sinceSetUpMs: Long): Long? =
+        if (sameNetwork && measured > current && sinceSetUpMs < RISE_AFTER_MS) RISE_AFTER_MS - sinceSetUpMs else null
 }

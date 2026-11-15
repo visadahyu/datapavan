@@ -79,6 +79,9 @@ class WatchVpnService : VpnService() {
     /** When the tunnel was last set up, by [SystemClock.elapsedRealtime]. Main thread only. */
     private var setUpAt = 0L
 
+    /** The token of the measure posted for when a rise held back may be taken; [close] drops it. */
+    private val riseCheck = Any()
+
     /**
      * The tunnel's MTU for this run (ADR 0044, decision 5 as amended): the first hop's of the network
      * beneath, as [TunnelMtu] chooses it from what the kernel said. Set on the main thread.
@@ -207,12 +210,19 @@ class WatchVpnService : VpnService() {
             main.post {
                 if (!active || network != current) return@post
                 val since = SystemClock.elapsedRealtime() - setUpAt
-                val next = TunnelMtu.next(mtu, measured, sameNetwork = network == measuredOn, sinceSetUpMs = since)
+                val same = network == measuredOn
+                val next = TunnelMtu.next(mtu, measured, sameNetwork = same, sinceSetUpMs = since)
                 measuredOn = network
                 if (next != mtu) {
                     mtu = next
                     setUpAgain()
+                    return@post
                 }
+                // A rise held back is measured again once it may be taken: nothing else would ask, on a
+                // network whose properties do not change.
+                val wait = TunnelMtu.riseWait(mtu, measured, sameNetwork = same, sinceSetUpMs = since) ?: return@post
+                main.removeCallbacksAndMessages(riseCheck)
+                main.postDelayed({ if (active && network == current) remeasure(network) }, riseCheck, wait)
             }
         }
     }
@@ -484,6 +494,7 @@ class WatchVpnService : VpnService() {
             }
         }
         Engine.nativeStop()
+        main.removeCallbacksAndMessages(riseCheck)
         current = null
         told = null
         toldDns = null
