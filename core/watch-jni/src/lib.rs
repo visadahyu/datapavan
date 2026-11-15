@@ -112,7 +112,10 @@ fn set_non_blocking(fd: &OwnedFd) {
 }
 
 /// `Engine.nativeStart(service, fd, mtu, keepFlows, tableFd, tableStart, tableLength)`: takes ownership
-/// of the tunnel's descriptor `fd` and starts the engine, stopping one that runs. `keepFlows` is how
+/// of the tunnel's descriptor `fd` and starts the engine, stopping one that runs. One that runs is a
+/// tunnel set up again (ADR 0044, decision 5 as amended): it hands the new engine its chain, the
+/// network's resolver, its stand-ins, names and counters ([`Engine::hand_over`]) before the new
+/// engine reads its first packet, so that no chained app's packet goes directly meanwhile. `keepFlows` is how
 /// many of the latest flows to keep for debug builds; release builds pass 0. `tableFd`, if not -1, is a
 /// descriptor of the IP-to-organisation table (ADR 0036), which the engine takes over too; the table
 /// is its `tableLength` bytes from `tableStart`, an asset inside the APK.
@@ -136,9 +139,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStart<'ca
         .with_env(|env| -> Result<jboolean, Error> {
             // Taken out first: the lock is not held while the engine's thread is joined.
             let previous = engine().take();
-            if let Some(mut running) = previous {
-                running.stop();
-            }
+            let handover = previous.map(Engine::hand_over);
             if fd < 0 {
                 return Ok(false);
             }
@@ -171,7 +172,9 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStart<'ca
                 );
                 Organisations::open(Box::new(part)).ok()
             });
-            let Ok(started) = Engine::start(fd, config, platform, organisations.flatten()) else {
+            let Ok(started) =
+                Engine::start_with(fd, config, platform, organisations.flatten(), handover)
+            else {
                 return Ok(false);
             };
             *engine() = Some(started);

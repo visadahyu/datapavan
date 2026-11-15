@@ -102,6 +102,28 @@ fn started(
     Ok((engine, UnixDatagram::from_std(app_end)?))
 }
 
+/// A new tunnel, a new pair, for an engine that goes on from `previous`, as Watch's Kotlin side sets
+/// the tunnel up again: the engine before stops and hands over ([`Engine::hand_over`]), with no chain
+/// set on the new one.
+fn set_up_again(previous: Engine) -> io::Result<(Engine, UnixDatagram)> {
+    let (engine_end, app_end) = std::os::unix::net::UnixDatagram::pair()?;
+    engine_end.set_nonblocking(true)?;
+    app_end.set_nonblocking(true)?;
+    let engine = Engine::start_with(
+        OwnedFd::from(engine_end),
+        Config {
+            limits: Limits::default(),
+            mtu: 1500,
+            keep_flows: 64,
+            addresses: Addresses::COMMON,
+        },
+        Arc::new(ByPort),
+        None,
+        Some(previous.hand_over()),
+    )?;
+    Ok((engine, UnixDatagram::from_std(app_end)?))
+}
+
 fn chain(proxy: SocketAddr) -> Chain {
     Chain {
         proxy,
@@ -499,6 +521,28 @@ async fn stand_in(
         [(IpAddr::V4(stand_in), 0)] => Ok(stand_in),
         _ => Err(format!("not one stand-in: {:?}", read.addresses).into()),
     }
+}
+
+/// ADR 0044, unit 12 (re-review, major 1): a stand-in a chained app was given before the tunnel was
+/// set up again still names its name after: the engine hands the next its stand-ins with its chain, so
+/// the app's datagram to it goes through the tool by that name, from the new engine's first packet.
+#[tokio::test(flavor = "current_thread")]
+async fn a_stand_in_keeps_its_name_when_the_tunnel_is_set_up_again() -> Outcome {
+    let echo = udp_echo().await?;
+    let mut settings = Settings::default();
+    settings.names.insert("echo.test".into(), echo.ip());
+    let tool = proxy(settings).await?;
+    let (first, tunnel) = engine(chain(tool.address))?;
+    let stand_in = stand_in(&tunnel, b"\x04echo\x04test\x00").await?;
+    let (_second, tunnel) = set_up_again(first)?;
+    echoed(
+        &tunnel,
+        SocketAddr::from((stand_in, echo.port())),
+        b"by name",
+    )
+    .await?;
+    assert_eq!(tool.commands(), [3], "one association, on the new tunnel");
+    Ok(())
 }
 
 /// The chained app sends `said` to `to`, and its echo comes back from there.

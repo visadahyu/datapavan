@@ -525,6 +525,21 @@ impl Counters {
     /// reading a column by its place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
+        self.each().map(|c| c.load(Ordering::Relaxed))
+    }
+
+    /// Counters that go on from `values`, as an engine started on a tunnel set up again goes on from
+    /// the counts of the one before (re-review of unit 12, minor 3).
+    fn going_on_from(values: &[u64; COUNTERS]) -> Self {
+        let counters = Self::default();
+        for (counter, &value) in counters.each().into_iter().zip(values) {
+            counter.store(value, Ordering::Relaxed);
+        }
+        counters
+    }
+
+    /// Each counter, in the order of [`Counters::snapshot`].
+    fn each(&self) -> [&AtomicU64; COUNTERS] {
         [
             &self.tcp_flows,
             &self.udp_flows,
@@ -568,8 +583,23 @@ impl Counters {
             &self.too_big,
             &self.path_mtu,
         ]
-        .map(|c| c.load(Ordering::Relaxed))
     }
+}
+
+/// What an engine hands the next when the tunnel is set up again (ADR 0044, decision 5 as amended): what
+/// was set on it from outside, the chain, the network's resolver and whether answers go uncached, and
+/// what it learned that the apps' next flows need, the stand-in addresses chained apps were given and
+/// the names DNS answers gave addresses; with its counters, which go on. So the new engine routes a
+/// chained app's first packet through the tool, as the old one would have, rather than directly until
+/// the chain is set again (re-review of unit 12, major 1). Its flows end with it, as before; unit 12b
+/// hands the new tunnel to the running engine instead, keeping them.
+pub struct Handover {
+    chain: Option<Arc<Chain>>,
+    upstream_dns: Option<IpAddr>,
+    uncached_answers: bool,
+    stand_ins: StandIns,
+    names: Names,
+    counters: [u64; COUNTERS],
 }
 
 /// What the engine's thread and its controller share.
@@ -687,6 +717,37 @@ impl Engine {
         platform: Arc<dyn Platform>,
         organisations: Option<Organisations>,
     ) -> io::Result<Self> {
+        Self::start_with(fd, config, platform, organisations, None)
+    }
+
+    /// Starts as [`Engine::start`], on a tunnel set up again, with what the engine before it handed
+    /// over ([`Engine::hand_over`]): all of it is in place before the new engine's thread reads its
+    /// first packet.
+    ///
+    /// # Errors
+    /// When the thread or its event loop cannot be made.
+    pub fn start_with(
+        fd: OwnedFd,
+        config: Config,
+        platform: Arc<dyn Platform>,
+        organisations: Option<Organisations>,
+        handover: Option<Handover>,
+    ) -> io::Result<Self> {
+        let Handover {
+            chain,
+            upstream_dns,
+            uncached_answers,
+            stand_ins,
+            names,
+            counters,
+        } = handover.unwrap_or_else(|| Handover {
+            chain: None,
+            upstream_dns: None,
+            uncached_answers: false,
+            stand_ins: StandIns::with_capacity(config.limits.stand_ins),
+            names: Names::default(),
+            counters: [0; COUNTERS],
+        });
         let shared = Arc::new(Shared {
             platform,
             addresses: config.addresses,
@@ -694,11 +755,11 @@ impl Engine {
             tcp_waiting: AtomicUsize::new(0),
             tcp_shares: Budget::new(config.limits.tcp_waiting, config.limits.tcp_share),
             udp_budget: Budget::new(config.limits.udp_mappings, config.limits.udp_share),
-            counters: Counters::default(),
+            counters: Counters::going_on_from(&counters),
             keep_flows: config.keep_flows,
             flows: Mutex::new(VecDeque::new()),
-            upstream_dns: Mutex::new(None),
-            names: Mutex::new(Names::default()),
+            upstream_dns: Mutex::new(upstream_dns),
+            names: Mutex::new(names),
             organisations,
             resolvers: Resolvers::bundled(),
             owners: Owners::bundled(),
@@ -708,10 +769,10 @@ impl Engine {
             wire: Mutex::default(),
             pending_log: Mutex::default(),
             log_ready: Notify::new(),
-            uncached_answers: AtomicBool::new(false),
-            chain: Mutex::new(None),
+            uncached_answers: AtomicBool::new(uncached_answers),
+            chain: Mutex::new(chain),
             chains: AtomicU64::new(0),
-            stand_ins: Mutex::new(StandIns::with_capacity(config.limits.stand_ins)),
+            stand_ins: Mutex::new(stand_ins),
             direct_answers: Mutex::default(),
             tool_answers: Mutex::default(),
             kept: Mutex::default(),
@@ -747,6 +808,23 @@ impl Engine {
         let _ = self.stop.send(true);
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
+        }
+    }
+
+    /// Stops the engine, as [`Engine::stop`], and hands over what the next engine, on a tunnel set up
+    /// again, goes on with ([`Handover`]). Read once the thread has ended, so that nothing changes it
+    /// after.
+    #[must_use]
+    pub fn hand_over(mut self) -> Handover {
+        self.stop();
+        let shared = &self.shared;
+        Handover {
+            chain: lock(&shared.chain).clone(),
+            upstream_dns: *lock(&shared.upstream_dns),
+            uncached_answers: shared.uncached_answers.load(Ordering::Relaxed),
+            stand_ins: std::mem::replace(&mut *lock(&shared.stand_ins), StandIns::with_capacity(0)),
+            names: std::mem::take(&mut *lock(&shared.names)),
+            counters: shared.counters.snapshot(),
         }
     }
 

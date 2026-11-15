@@ -11,7 +11,7 @@ mod common;
 
 use common::{Settings, proxy};
 use datapavan_net::engine::{Addresses, Limits};
-use datapavan_net::{Chain, Config, Engine, Platform, packet};
+use datapavan_net::{Chain, Config, Engine, Handover, Platform, packet};
 use socket2::{Domain, Protocol, Socket, Type};
 use std::collections::HashSet;
 use std::future::Future;
@@ -124,41 +124,16 @@ where
     F: FnOnce(Arc<Engine>) -> Fut,
     Fut: Future<Output = Outcome>,
 {
-    if std::env::var_os(INSIDE).is_none() {
-        let enter = concat!(env!("CARGO_MANIFEST_DIR"), "/../../scripts/netlab-enter.py");
-        let me = std::env::current_exe()?;
-        let output = Command::new("unshare")
-            .args(["--user", "--map-root-user", "--net", "--"])
-            .args(["python3", "-I", enter, "--"])
-            .arg(me)
-            .args([
-                name,
-                "--exact",
-                "--ignored",
-                "--nocapture",
-                "--test-threads=1",
-            ])
-            .env(INSIDE, "1")
-            .envs(settings.iter().copied())
-            .output()?;
-        let text = format!(
-            "{}{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-        if output.status.success() && text.contains("test result: ok. 1 passed") {
-            return Ok(());
-        }
-        return Err(format!("{name}, in its network namespace:\n{text}").into());
+    if let Some(outcome) = in_namespace(name, settings) {
+        return outcome;
     }
     let tunnel = io::stdin().as_fd().try_clone_to_owned()?;
-    let config = Config {
-        limits: *limits,
-        mtu: 1500,
-        keep_flows: 64,
-        addresses: Addresses::COMMON,
-    };
-    let engine = Arc::new(Engine::start(tunnel, config, Arc::new(Lab), None)?);
+    let engine = Arc::new(Engine::start(
+        tunnel,
+        lab_config(limits),
+        Arc::new(Lab),
+        None,
+    )?);
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
@@ -175,6 +150,93 @@ where
             )
             .into()
         })
+}
+
+/// The engine's settings in the lab.
+fn lab_config(limits: &Limits) -> Config {
+    Config {
+        limits: *limits,
+        mtu: 1500,
+        keep_flows: 64,
+        addresses: Addresses::COMMON,
+    }
+}
+
+/// Engines on the namespace's tunnel, for a test that sets the tunnel up again: each on a descriptor
+/// of its own, a duplicate of the tunnel's, as Watch's Kotlin side starts each on a new tunnel, with
+/// these limits.
+struct Tunnels {
+    limits: Limits,
+}
+
+impl Tunnels {
+    /// An engine on the tunnel, going on from what the engine before it handed over, if any.
+    fn start(&self, handover: Option<Handover>) -> io::Result<Engine> {
+        let tunnel = io::stdin().as_fd().try_clone_to_owned()?;
+        Engine::start_with(
+            tunnel,
+            lab_config(&self.limits),
+            Arc::new(Lab),
+            None,
+            handover,
+        )
+    }
+}
+
+/// [`lab`], for a test that starts its engines itself ([`Tunnels`]).
+fn lab_engines<F, Fut>(name: &str, body: F) -> Outcome
+where
+    F: FnOnce(Tunnels) -> Fut,
+    Fut: Future<Output = Outcome>,
+{
+    if let Some(outcome) = in_namespace(name, &[]) {
+        return outcome;
+    }
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?
+        .block_on(body(Tunnels {
+            limits: Limits::default(),
+        }))
+}
+
+/// Outside the namespace, runs the test `name` inside a fresh one, with `settings` in its environment,
+/// and gives its outcome; inside, `None`.
+fn in_namespace(name: &str, settings: &[(&str, &str)]) -> Option<Outcome> {
+    if std::env::var_os(INSIDE).is_some() {
+        return None;
+    }
+    Some(rerun_inside(name, settings))
+}
+
+/// Runs the test `name` inside a fresh namespace, and fails unless exactly that test ran there and
+/// passed: a lab that could not be built never passes silently.
+fn rerun_inside(name: &str, settings: &[(&str, &str)]) -> Outcome {
+    let enter = concat!(env!("CARGO_MANIFEST_DIR"), "/../../scripts/netlab-enter.py");
+    let me = std::env::current_exe()?;
+    let output = Command::new("unshare")
+        .args(["--user", "--map-root-user", "--net", "--"])
+        .args(["python3", "-I", enter, "--"])
+        .arg(me)
+        .args([
+            name,
+            "--exact",
+            "--ignored",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(INSIDE, "1")
+        .envs(settings.iter().copied())
+        .output()?;
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    if output.status.success() && text.contains("test result: ok. 1 passed") {
+        return Ok(());
+    }
+    Err(format!("{name}, in its network namespace:\n{text}").into())
 }
 
 /// `step`, failing with `what` if it takes longer than [`STEP`].
@@ -2183,6 +2245,143 @@ fn a_routers_too_big_reaches_the_app() -> Outcome {
                 assert_eq!(&buffer[..n], b"and on");
             }
             assert_eq!(engine.counters()[PATH_MTU], 4);
+            Ok(())
+        },
+    )
+}
+
+/// A UDP server that answers each datagram with the address it came from, as text: through the tool,
+/// the test proxy's relay on 127.0.0.1; directly, the engine's own socket.
+async fn source_reporter(ip: Ipv4Addr) -> io::Result<SocketAddr> {
+    let socket = UdpSocket::bind((ip, 0)).await?;
+    let at = socket.local_addr()?;
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 64];
+        while let Ok((_, from)) = socket.recv_from(&mut buffer).await {
+            let _ = socket.send_to(from.ip().to_string().as_bytes(), from).await;
+        }
+    });
+    Ok(at)
+}
+
+/// The network's resolver at `ip`, port 53: it answers each query with one A record, `answer`, with
+/// a time to live of 300 seconds.
+async fn resolver(ip: Ipv4Addr, answer: Ipv4Addr) -> io::Result<()> {
+    let socket = UdpSocket::bind((ip, 53)).await?;
+    tokio::spawn(async move {
+        let mut buffer = [0u8; 512];
+        while let Ok((n, from)) = socket.recv_from(&mut buffer).await {
+            let mut response = buffer[..n].to_vec();
+            if response.len() < 12 {
+                continue;
+            }
+            response[2..4].copy_from_slice(&[0x81, 0x80]);
+            response[6..8].copy_from_slice(&[0, 1]);
+            response.extend_from_slice(&[0xc0, 12, 0, 1, 0, 1, 0, 0, 1, 0x2c, 0, 4]);
+            response.extend_from_slice(&answer.octets());
+            let _ = socket.send_to(&response, from).await;
+        }
+    });
+    Ok(())
+}
+
+/// A query for the A record of `example.test`.
+fn query_example() -> Vec<u8> {
+    let mut query = vec![0x12, 0x34, 0x01, 0x00, 0, 1, 0, 0, 0, 0, 0, 0];
+    query.extend_from_slice(b"\x07example\x04test\x00\x00\x01\x00\x01");
+    query
+}
+
+/// The time to live of the one answer of a response to [`query_example`].
+fn answer_ttl(response: &[u8]) -> Option<u32> {
+    let at = query_example().len() + 6;
+    Some(u32::from_be_bytes(
+        response.get(at..at + 4)?.try_into().ok()?,
+    ))
+}
+
+/// ADR 0044, decision 5 as amended (re-review of unit 12, major 1): when the tunnel is set up again,
+/// the running engine stops and hands the new one its chain, the network's resolver, whether answers go
+/// uncached, the names DNS answers gave, and its counters, all before the new engine reads a packet. So
+/// a chained app's first datagram and first connection on the new tunnel go through the tool, and
+/// nothing of them reaches the server directly; a direct app's lookup reaches the network's resolver,
+/// and its answer comes uncached, as while a chain is on; a flow to an address an answer named before
+/// is named by it; and the counters go on. Before, the new engine started with no chain, and those
+/// went directly until Watch's Kotlin side set the chain again.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_tunnel_set_up_again_keeps_the_chain_from_its_first_packet() -> Outcome {
+    lab_engines(
+        "a_tunnel_set_up_again_keeps_the_chain_from_its_first_packet",
+        |tunnels| async move {
+            let tool = proxy(Settings::default()).await?;
+            resolver(SERVER, OTHER).await?;
+            let reporter = source_reporter(SERVER).await?;
+            let named = udp_echo(IpAddr::V4(OTHER)).await?;
+            let dns = SocketAddr::from((Addresses::COMMON.dns4, 53));
+            let first = tunnels.start(None)?;
+            first.chain(Some(lab_chain(tool.address)));
+            first.network_changed(Some(IpAddr::V4(SERVER)), false);
+            let app = app_socket().await?;
+            app.send_to(b"before", reporter).await?;
+            assert_eq!(
+                app_receive(&app).await?.0,
+                b"127.0.0.1",
+                "before: not through the tool"
+            );
+            // A direct app learns a name, as Android's resolver asks for every app.
+            let direct = UdpSocket::bind((Addresses::COMMON.tun4, SECOND_PORTS.start)).await?;
+            direct.send_to(&query_example(), dns).await?;
+            app_receive(&direct).await?;
+            let before = first.counters();
+
+            // As nativeStart does when it finds an engine running, then at once, before anything else
+            // is said to the new engine, the chained app's first datagram and first connection.
+            let second = tunnels.start(Some(first.hand_over()))?;
+            let app = app_socket().await?;
+            app.send_to(b"after", reporter).await?;
+            let listener = TcpListener::bind((SERVER, 0)).await?;
+            let mut connection = app_connect(listener.local_addr()?).await?;
+            assert_eq!(
+                app_receive(&app).await?.0,
+                b"127.0.0.1",
+                "the datagram reached the server directly"
+            );
+            let (mut accepted, _) = within("the connection", listener.accept()).await?;
+            connection.write_all(b"through").await?;
+            let mut heard = [0u8; 7];
+            within("the connection's bytes", accepted.read_exact(&mut heard)).await?;
+            let mut commands = tool.commands();
+            commands.sort_unstable();
+            assert_eq!(
+                commands,
+                [1, 3, 3],
+                "the one connection the server accepted was not the tool's CONNECT"
+            );
+
+            // The name the first engine learned, before a lookup could teach the second one.
+            direct.send_to(b"by name", named).await?;
+            app_receive(&direct).await?;
+            let flows = second.flows();
+            let to_named = flows.iter().find(|flow| flow.destination == named);
+            assert_eq!(
+                to_named.and_then(|flow| flow.name.as_deref()),
+                Some("example.test"),
+                "flows {flows:?}"
+            );
+            direct.send_to(&query_example(), dns).await?;
+            let (answer, _) = app_receive(&direct).await?;
+            assert_eq!(
+                answer_ttl(&answer),
+                Some(0),
+                "an answer kept by Android's resolver"
+            );
+            let after = second.counters();
+            assert!(
+                after.iter().zip(before).all(|(&now, then)| now >= then),
+                "the counters went back: {before:?}, then {after:?}"
+            );
+            assert_eq!(after[UDP_MAPPINGS], before[UDP_MAPPINGS] + 2);
             Ok(())
         },
     )
