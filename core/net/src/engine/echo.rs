@@ -364,8 +364,9 @@ async fn carry(
                     break;
                 }
                 for reply in replies {
-                    send_to_app(&tun, &shared, &reply).await;
+                    // Counted before it is written: an app that reads it may read the counters next.
                     Counters::add(&shared.counters.echo_replies, 1);
+                    send_to_app(&tun, &shared, &reply).await;
                 }
                 if failed {
                     break;

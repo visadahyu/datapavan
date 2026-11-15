@@ -2515,7 +2515,7 @@ async fn mapped(
                 let ends = (app, id, uid);
                 // A network that moved ends the mapping: what its socket read meanwhile, a router's
                 // error about the old network's path among it, is not passed on after the move.
-                let moved = || changes.has_changed().unwrap_or(true);
+                let moved = || network_moved(&changes);
                 let (packets, end, from) = with_buffer(|buffer| {
                     if through_tool {
                         relayed_receive(&socket, buffer, ends, &shared, &flows)
@@ -2560,23 +2560,69 @@ fn take_errors(socket: &UdpSocket) -> Vec<(SocketAddr, Told)> {
 fn mapped_receive(
     socket: &UdpSocket,
     buffer: &mut [u8],
-    (app, id, uid): (SocketAddr, u64, Option<u32>),
+    ends: (SocketAddr, u64, Option<u32>),
     (queued, moved): (Vec<(SocketAddr, Told)>, &dyn Fn() -> bool),
     shared: &Shared,
     flows: &UdpFlows,
 ) -> (Vec<Vec<u8>>, bool, Option<SocketAddr>) {
-    let mut packets = Vec::new();
-    let mut from_last = None;
-    // Counted once passed on.
-    let mut routers = 0;
+    // Every way out of the reading passes here, so that what it read is checked against a move, and
+    // the routers' errors it passes on are counted, however it ended (second review, minor 6).
+    let Read {
+        packets,
+        end,
+        from_last,
+        routers,
+    } = read_mapped(socket, buffer, ends, queued, shared, flows);
+    if moved() {
+        return (Vec::new(), true, None);
+    }
+    Counters::add(&shared.counters.path_mtu, routers);
+    (packets, end, from_last)
+}
+
+/// Whether the network beneath moved since a mapping opened, by the mapping's copy of the network's
+/// watch, which saw the generation of then: what it read since is not passed on. A watch whose sender
+/// is gone, as when the engine stops, counts as moved.
+fn network_moved(changes: &watch::Receiver<u64>) -> bool {
+    changes.has_changed().unwrap_or(true)
+}
+
+/// What [`read_mapped`] read: the packets for the app, whether the mapping ends, the peer the last
+/// datagram came from, and how many of the packets are routers' "too big".
+struct Read {
+    packets: Vec<Vec<u8>>,
+    end: bool,
+    from_last: Option<SocketAddr>,
+    routers: u64,
+}
+
+/// What [`mapped_receive`] reads, before the check against a move.
+fn read_mapped(
+    socket: &UdpSocket,
+    buffer: &mut [u8],
+    (app, id, uid): (SocketAddr, u64, Option<u32>),
+    queued: Vec<(SocketAddr, Told)>,
+    shared: &Shared,
+    flows: &UdpFlows,
+) -> Read {
+    let mut read = Read {
+        packets: Vec::new(),
+        end: false,
+        from_last: None,
+        routers: 0,
+    };
+    let ended = |mut read: Read| {
+        read.end = true;
+        read
+    };
     for (destination, told) in queued {
         let bytes = match lock(flows).mapping(app, id) {
-            None => return (packets, true, from_last),
+            None => return ended(read),
             Some(mapping) => {
                 // While a chain sends the app elsewhere, nothing comes in on its direct path: its
                 // errors neither.
                 if !mapping.keeps_its_way(shared) {
-                    return (packets, true, from_last);
+                    return ended(read);
                 }
                 match mapping.peers.get(&destination) {
                     Some(peer) => peer.bytes.clone(),
@@ -2588,16 +2634,14 @@ fn mapped_receive(
         // would without Watch (ADR 0044, decision 5 as amended).
         let error = match told {
             Told::Unreachable(told) => unreachable_to(app, destination, told),
-            Told::TooBig(mtu) => {
-                routers += 1;
-                too_big_to(app, destination, mtu)
-            }
+            Told::TooBig(mtu) => too_big_to(app, destination, mtu),
         };
         if let Some(error) = error {
             if let Some(bytes) = &bytes {
                 bytes.add_wire_down(error.len());
             }
-            packets.push(error);
+            read.routers += u64::from(matches!(told, Told::TooBig(_)));
+            read.packets.push(error);
         }
     }
     for _ in 0..BATCH {
@@ -2606,10 +2650,10 @@ fn mapped_receive(
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
             // An ICMP error, which this read took: the error queue says which destination it was for.
             Err(error) if errors::from_icmp(&error) => continue,
-            Err(_) => return (packets, true, from_last),
+            Err(_) => return ended(read),
         };
         let (bytes, learns) = match lock(flows).let_in((app, id), (from, &buffer[..n]), shared) {
-            LetIn::Gone => return (packets, true, from_last),
+            LetIn::Gone => return ended(read),
             LetIn::Filtered => {
                 Counters::add(&shared.counters.udp_filtered, 1);
                 continue;
@@ -2623,11 +2667,11 @@ fn mapped_receive(
                 continue;
             }
             LetIn::Peer(shown, bytes, learns) => {
-                from_last = Some(shown);
+                read.from_last = Some(shown);
                 (bytes, learns)
             }
         };
-        packets.extend(deliver(
+        read.packets.extend(deliver(
             shared,
             (app, uid),
             (from, &buffer[..n]),
@@ -2635,11 +2679,7 @@ fn mapped_receive(
             learns,
         ));
     }
-    if moved() {
-        return (Vec::new(), true, None);
-    }
-    Counters::add(&shared.counters.path_mtu, routers);
-    (packets, false, from_last)
+    read
 }
 
 /// What a mapping through the tool lets in now: each answer its relay holds, read into `buffer`, from
@@ -3765,6 +3805,23 @@ mod tests {
         assert_eq!(&unreachable[20..22], &[3, 3]);
         assert_eq!(shared.counters.snapshot()[PATH_MTU], 1);
         Ok(())
+    }
+
+    /// What a mapping reads is held back once the network moved since it opened, by its copy of the
+    /// network's watch, and once the engine stops, its sender gone; not for a move before it opened,
+    /// which its copy saw already (second review of unit 12, minor 6).
+    #[test]
+    fn a_mapping_sees_a_network_move_since_it_opened() {
+        let (moves, mut changes) = watch::channel(0u64);
+        moves.send_modify(|generation| *generation += 1);
+        changes.borrow_and_update();
+        assert!(!network_moved(&changes), "a move before it opened");
+        moves.send_modify(|generation| *generation += 1);
+        assert!(network_moved(&changes));
+        changes.borrow_and_update();
+        assert!(!network_moved(&changes));
+        drop(moves);
+        assert!(network_moved(&changes), "the engine stopping");
     }
 
     /// A send the engine's kernel refused as too long (`EMSGSIZE`) is dropped and counted, never

@@ -22,9 +22,11 @@
 //!   its header, an IPv6 one when its first fragment says.
 //! - **The bounds** ([`Bounds`]): datagrams being put together at once, markers included, bytes held
 //!   across all of them, and the time from a datagram's first fragment to its last. When a fragment
-//!   would pass a bound, the oldest incomplete datagram, or marker, gives way, then the next oldest,
-//!   until there is room: an honest datagram is whole within milliseconds, so the oldest is the
-//!   likeliest never to be (second review of unit 12, minor 3). A fragment that no room could take,
+//!   would pass a bound, the incomplete datagram, or marker, heard from longest ago gives way, then the
+//!   next, until there is room (second review of unit 12, minor 3; its re-review, minor 3): an honest
+//!   datagram's fragments come one after another, so one that stopped coming is the likeliest never to
+//!   be whole, and a long one still arriving is not given up for the many that came after its first
+//!   fragment. A fragment that no room could take,
 //!   larger than the bound on bytes with its own datagram, is dropped with that datagram, and nothing
 //!   gives way for it. A datagram whose last fragment has not come in time is dropped at the next
 //!   fragment, or when the engine sweeps. Each datagram's buffer grows as its fragments come, doubling
@@ -233,8 +235,11 @@ struct Headers {
 
 /// A datagram being put together.
 struct Datagram {
-    /// When its first fragment came, whatever its place.
+    /// When its first fragment came, whatever its place: its wait runs from then.
     first: Instant,
+    /// When it last took a fragment, in the reassembler's order of fragments taken: the one heard from
+    /// longest ago gives way first at a bound.
+    last: u64,
     /// The first fragment's headers, once it came.
     headers: Option<Headers>,
     /// The data by offset, as long as the furthest fragment's end; what has not come yet is zeros.
@@ -263,6 +268,7 @@ impl Datagram {
     fn new(first: Instant) -> Self {
         Self {
             first,
+            last: 0,
             headers: None,
             data: Vec::new(),
             places: BTreeMap::new(),
@@ -420,6 +426,9 @@ pub struct Reassembler {
     datagrams: HashMap<Key, Datagram>,
     /// What they hold, as [`Bounds::bytes`] counts it.
     bytes: usize,
+    /// How many fragments the datagrams have taken: the order of [`Datagram::last`]. Fragments of one
+    /// instant still come one after the other, so a count, not a time, tells which came last.
+    taken: u64,
 }
 
 impl Reassembler {
@@ -430,6 +439,7 @@ impl Reassembler {
             bounds,
             datagrams: HashMap::new(),
             bytes: 0,
+            taken: 0,
         }
     }
 
@@ -507,6 +517,7 @@ impl Reassembler {
                 return (None, gave_way + 1);
             }
             datagram.insert(fragment);
+            datagram.last = self.next_taken();
             self.bytes += datagram.cost();
             self.datagrams.insert(key, datagram);
             return (None, gave_way);
@@ -526,6 +537,8 @@ impl Reassembler {
         };
         let before = datagram.cost();
         datagram.insert(fragment);
+        self.taken += 1;
+        datagram.last = self.taken;
         self.bytes = self.bytes - before + datagram.cost();
         if !datagram.is_whole() {
             return (None, gave_way);
@@ -545,11 +558,12 @@ impl Reassembler {
     }
 
     /// Makes room for `cost` more bytes, and for one more datagram when `new`, for the datagram of
-    /// `keep`: the oldest incomplete datagram or marker other than it gives way, then the next oldest,
-    /// until there is room (second review of unit 12, minor 3). An honest datagram is whole within
-    /// milliseconds of its first fragment, so the oldest is the likeliest never to be. Where no room
-    /// could be made, `keep`'s own datagram and the cost being larger than the bound, none gives way.
-    /// Whether there is room, and how many fragments those that gave way held.
+    /// `keep`: the incomplete datagram or marker other than it that took a fragment longest ago gives
+    /// way, then the next, until there is room (second review of unit 12, minor 3, and its re-review).
+    /// A datagram whose fragments stopped coming is the likeliest never to be whole; one still taking
+    /// them is not given up, however long ago its first came. Where no room could be made, `keep`'s own
+    /// datagram and the cost being larger than the bound, none gives way. Whether there is room, and
+    /// how many fragments those that gave way held.
     fn make_room(&mut self, keep: Key, cost: usize, new: bool) -> (bool, u64) {
         let own = self.datagrams.get(&keep).map_or(0, Datagram::cost);
         if (new && self.bounds.datagrams == 0) || own + cost > self.bounds.bytes {
@@ -559,16 +573,16 @@ impl Reassembler {
         while (new && self.datagrams.len() >= self.bounds.datagrams)
             || self.bytes + cost > self.bounds.bytes
         {
-            let oldest = self
+            let least_recent = self
                 .datagrams
                 .iter()
                 .filter(|&(key, _)| *key != keep)
-                .min_by_key(|(_, datagram)| datagram.first)
+                .min_by_key(|(_, datagram)| datagram.last)
                 .map(|(key, _)| *key);
-            let Some(oldest) = oldest else {
+            let Some(least_recent) = least_recent else {
                 return (false, gave_way);
             };
-            gave_way += self.abandon(oldest);
+            gave_way += self.abandon(least_recent);
         }
         (true, gave_way)
     }
@@ -582,10 +596,18 @@ impl Reassembler {
             return 0;
         };
         let held = self.abandon(key);
-        let marker = Datagram::marker(first);
+        let mut marker = Datagram::marker(first);
+        // Heard from at its marking: the fragments it drops after do not keep it.
+        marker.last = self.next_taken();
         self.bytes += marker.cost();
         self.datagrams.insert(key, marker);
         held
+    }
+
+    /// The next place in the order of fragments taken.
+    fn next_taken(&mut self) -> u64 {
+        self.taken += 1;
+        self.taken
     }
 
     /// Gives up the datagram of `key`, if one is held: how many fragments it held.
@@ -874,7 +896,8 @@ mod tests {
 
     /// RFC 5722: after an overlap, the datagram's later fragments are dropped as they come, "including
     /// those not yet received", until its wait ends; then the marker goes, and a datagram of the same
-    /// identification is put together again. A marker gives way as the oldest, as a datagram does.
+    /// identification is put together again. A marker gives way as a datagram does, by when it was last
+    /// heard from: its marking.
     #[test]
     fn after_an_overlap_its_later_fragments_are_dropped_until_its_wait_ends() {
         let whole = udp4(3_000);
@@ -896,7 +919,8 @@ mod tests {
         let taken = feed(&mut reassembler, &pieces, start + WAIT);
         assert_eq!(outcome(&taken, &whole)[2], (true, 0));
 
-        // The marker is the oldest: a new datagram past the bound makes it give way.
+        // The marker was heard from last at its marking: a new datagram past the bound makes it give
+        // way.
         let mut reassembler = Reassembler::new(Bounds {
             datagrams: 1,
             ..bounds()
@@ -907,7 +931,10 @@ mod tests {
         assert_eq!(taken.dropped, 0, "a marker holds no fragment");
         assert_eq!(reassembler.datagrams(), 1);
         let taken = reassembler.take(&pieces[1], start + JUST_UNDER);
-        assert_eq!(taken.dropped, 1, "the new one gave way, the oldest now");
+        assert_eq!(
+            taken.dropped, 1,
+            "the new one gave way, heard from longest ago now"
+        );
     }
 
     #[test]
@@ -1115,13 +1142,13 @@ mod tests {
         );
     }
 
-    /// At a bound, the oldest incomplete datagram gives way, not the fragment that comes (second
+    /// At a bound, the incomplete datagram heard from longest ago gives way, not the fragment that comes (second
     /// review of unit 12, minor 3): for a new datagram past the bound on datagrams or on bytes, and for
     /// a held one whose next fragment would pass the bound on bytes. A fragment no room could take is
     /// dropped with its datagram, and nothing gives way for it. What a datagram's buffer reserves is
     /// counted, with its header and 32 bytes for each fragment's place.
     #[test]
-    fn at_a_bound_the_oldest_datagram_gives_way() {
+    fn at_a_bound_a_datagram_gives_way() {
         let start = Instant::now();
         let at = |ms| start + Duration::from_millis(ms);
         let datagram = |id: u16| {
@@ -1139,7 +1166,7 @@ mod tests {
         });
         assert_eq!(reassembler.take(&first(&one), at(0)).dropped, 0);
         assert_eq!(reassembler.take(&first(&two), at(1)).dropped, 0);
-        // A third: the first datagram, the oldest, gives way, with its one fragment.
+        // A third: the first datagram, heard from longest ago, gives way, with its one fragment.
         assert_eq!(reassembler.take(&first(&three), at(2)).dropped, 1);
         assert_eq!(reassembler.datagrams(), 2);
         let taken = reassembler.take(&last(&two), at(3));
@@ -1158,7 +1185,7 @@ mod tests {
         assert_eq!(reassembler.bytes(), 2 * cost);
         assert_eq!(reassembler.take(&first(&three), at(2)).dropped, 1);
         assert_eq!(reassembler.bytes(), 2 * cost);
-        // The second's last fragment doubles its buffer to 2,960 bytes, past the bound: the oldest
+        // The second's last fragment doubles its buffer to 2,960 bytes, past the bound: the least recent
         // other, the third, gives way, and the second is whole.
         let taken = reassembler.take(&last(&two), at(3));
         assert_eq!((taken.whole.as_deref(), taken.dropped), (Some(&two[..]), 1));
@@ -1198,6 +1225,75 @@ mod tests {
         let taken = feed(&mut reassembler, &pieces[..7], start);
         assert!(taken.iter().all(|t| t.dropped == 0));
         assert_eq!(reassembler.bytes(), 64 + 20 + 7 * 32);
+    }
+
+    /// The datagram that took a fragment longest ago gives way, not the one whose first fragment came
+    /// first (re-review of unit 12, minor 3): a long datagram still arriving is kept, though many came
+    /// after its first fragment.
+    #[test]
+    fn the_datagram_heard_from_longest_ago_gives_way() {
+        let start = Instant::now();
+        let datagram = |id: u16| {
+            let mut whole = udp4(4_000);
+            whole[4..6].copy_from_slice(&id.to_be_bytes());
+            reseal(&mut whole);
+            whole
+        };
+        let (one, two, three) = (datagram(1), datagram(2), datagram(3));
+        let mut reassembler = Reassembler::new(Bounds {
+            datagrams: 2,
+            ..bounds()
+        });
+        for piece in [
+            piece4(&one, 0, 1_480, true),
+            piece4(&two, 0, 1_480, true),
+            piece4(&one, 1_480, 1_480, true),
+        ] {
+            assert_eq!(reassembler.take(&piece, start).dropped, 0);
+        }
+        // The second was heard from longest ago: it gives way, though the first began before it.
+        let taken = reassembler.take(&piece4(&three, 0, 1_480, true), start);
+        assert_eq!(taken.dropped, 1);
+        let taken = reassembler.take(&piece4(&one, 2_960, 1_048, false), start);
+        assert_eq!(taken.whole.as_deref(), Some(&one[..]));
+    }
+
+    /// The race the re-review simulated: an honest datagram of 10 fragments, and after each of its
+    /// fragments 32 others, each the first of a datagram that never completes, as one app filling the
+    /// bounds would send; or 8 far fragments of 64 KiB datagrams, which fill the bound on bytes. The
+    /// honest one is whole, since it is heard from more recently than all but 32 others (or 8) at each
+    /// of its fragments; given up by when its first fragment came, it would not be.
+    #[test]
+    fn a_long_datagram_still_arriving_outlives_a_flood() {
+        let start = Instant::now();
+        let honest = udp4(14_700);
+        let pieces = cut(&honest, 20, 1_480, piece4);
+        assert_eq!(pieces.len(), 10);
+        for (each, far) in [(32, false), (8, true)] {
+            let mut reassembler = Reassembler::new(bounds());
+            let mut id = 0u16;
+            let mut flood = || {
+                id += 1;
+                let mut whole = udp4(64_000);
+                whole[12..16].copy_from_slice(&[10, 1, 10, 2]);
+                whole[4..6].copy_from_slice(&id.to_be_bytes());
+                reseal(&mut whole);
+                if far {
+                    piece4(&whole, 63_000, 1_000, false)
+                } else {
+                    piece4(&whole, 0, 1_480, true)
+                }
+            };
+            let mut whole = None;
+            for piece in &pieces {
+                whole = whole.or(reassembler.take(piece, start).whole);
+                for _ in 0..each {
+                    reassembler.take(&flood(), start);
+                }
+            }
+            assert_eq!(whole.as_deref(), Some(&honest[..]), "far {far}");
+            assert!(reassembler.bytes() <= bounds().bytes);
+        }
     }
 
     /// A datagram is put together if its last fragment comes less than the wait after its first; at
