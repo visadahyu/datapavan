@@ -35,6 +35,7 @@ use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
 use tokio::sync::{Notify, watch};
 
 use crate::dnscache::DnsCache;
+use crate::fragments::{self, Reassembler, Taken};
 use crate::log::Record;
 use crate::names::Names;
 #[cfg(test)]
@@ -202,6 +203,14 @@ pub struct Limits {
     /// request every second, so a socket silent this long belongs to one that has stopped; an app that
     /// pings again later gets a socket anew.
     pub echo_idle: Duration,
+    /// At most this many datagrams are put together from the apps' fragments at once (ADR 0044,
+    /// decision 5 as amended). A fragment of one more is dropped; those held are never evicted for it.
+    pub fragment_datagrams: usize,
+    /// At most this many bytes of fragments are held across them ([`crate::fragments::Bounds`]).
+    pub fragment_bytes: usize,
+    /// A datagram whose last fragment has not come this long after its first is dropped. A sender
+    /// sends a datagram's fragments one after another, within milliseconds.
+    pub fragment_wait: Duration,
     /// The first of the fake ports handed out, `first_port..=last_port`.
     pub first_port: u16,
     /// The last of them.
@@ -264,6 +273,9 @@ impl Default for Limits {
             stand_ins: crate::standins::CAPACITY,
             echo_sockets: 32,
             echo_idle: Duration::from_secs(10),
+            fragment_datagrams: 64,
+            fragment_bytes: 1 << 20,
+            fragment_wait: Duration::from_secs(5),
             first_port: nat::FIRST_PORT,
             last_port: nat::LAST_PORT,
         }
@@ -416,7 +428,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 38;
+pub const COUNTERS: usize = 39;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -459,6 +471,7 @@ pub struct Counters {
     echo_refused: AtomicU64,
     echo_unsupported: AtomicU64,
     echo_dropped: AtomicU64,
+    reassembled: AtomicU64,
 }
 
 impl Counters {
@@ -470,8 +483,10 @@ impl Counters {
     /// failed, packets skipped, packets in, packets out, server names read from TLS and from QUIC, QUIC
     /// flows whose name could not be read, hellos that offered ECH, hellos whose name was an ECH public
     /// name, flows of an app's own plain and encrypted DNS, connections to the engine's listener that
-    /// did not come from the fake address, refused, IP fragments dropped (counted apart from the other
-    /// skipped packets, review finding 21), and hellos read on flows a DNS answer had named, and of
+    /// did not come from the fake address, refused, the apps' IP fragments dropped (counted apart from
+    /// the other skipped packets, review finding 21; since ADR 0044's unit 12, those the reassembler
+    /// dropped: past a bound, overlapping, malformed, of a protocol the engine does not carry, or held by
+    /// a datagram it gave up), and hellos read on flows a DNS answer had named, and of
     /// those, how many named another server (finding 20: how often a shared address gives a flow the
     /// wrong name), relayed connections that ended in an error and were reset on both sides (finding
     /// 21), SYNs dropped because as many connections as allowed were waiting for their servers, for
@@ -493,9 +508,10 @@ impl Counters {
     /// chain was on, or because they went to a stand-in address, which only the tool reaches, the
     /// requests dropped because the kernel refused the engine's ping sockets of their IP version at its
     /// start, and those dropped because no ping socket could carry them: the cap was full, too many
-    /// waited for their socket, or it could not be made, protected or sent on. None names a
-    /// destination: they can be read on any phone. New counters are only ever appended, so that
-    /// scripts reading a column by its place keep reading the same one.
+    /// waited for their socket, or it could not be made, protected or sent on; and the datagrams put
+    /// together from the apps' fragments (decision 5 as amended). None names a destination: they can be
+    /// read on any phone. New counters are only ever appended, so that scripts reading a column by its
+    /// place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
         [
@@ -537,6 +553,7 @@ impl Counters {
             &self.echo_refused,
             &self.echo_unsupported,
             &self.echo_dropped,
+            &self.reassembled,
         ]
         .map(|c| c.load(Ordering::Relaxed))
     }
@@ -805,6 +822,10 @@ struct Loop {
     pending: Pending,
     udp: UdpFlows,
     echoes: Echoes,
+    /// The apps' fragments, put together again. Every app sends from the tunnel's one address, so
+    /// the bounds are shared: one app that fills them makes the others' fragments dropped, as all
+    /// were before. Accepted, since the bounds cap what they cost.
+    fragments: Mutex<Reassembler>,
     listener4: u16,
     listener6: u16,
     changes: watch::Receiver<u64>,
@@ -836,6 +857,7 @@ async fn run(
         &nat,
     )
     .await;
+    let limits = shared.limits;
     let state = Loop {
         tun: Arc::new(tun),
         shared,
@@ -844,6 +866,11 @@ async fn run(
         udp: Arc::default(),
         // At the engine's start: whether this kernel lets it make ping sockets at all.
         echoes: Echoes::probe(),
+        fragments: Mutex::new(Reassembler::new(fragments::Bounds {
+            datagrams: limits.fragment_datagrams,
+            bytes: limits.fragment_bytes,
+            wait: limits.fragment_wait,
+        })),
         listener4,
         listener6,
         changes,
@@ -861,6 +888,8 @@ async fn run(
                 }
                 if swept.elapsed() > state.shared.limits.sweep_every {
                     state.sweep();
+                    let dropped = lock(&state.fragments).sweep(Instant::now());
+                    Counters::add(&state.shared.counters.fragments, dropped);
                     swept = Instant::now();
                 }
                 state.handle(&mut buffer[..n]).await;
@@ -883,21 +912,39 @@ async fn run(
 }
 
 impl Loop {
-    /// One packet from the tunnel.
+    /// One packet from the tunnel. A fragment is held until its datagram is whole, which is then
+    /// handled as any other packet, from a buffer of its own: the tunnel's read buffer holds one packet
+    /// of the tunnel's MTU, and the next read overwrites it.
     async fn handle(&self, packet: &mut [u8]) {
         Counters::add(&self.shared.counters.packets_in, 1);
         match packet::parse(packet) {
+            Err(Skip::Fragment) => {
+                let Taken { whole, dropped } = lock(&self.fragments).take(packet, Instant::now());
+                Counters::add(&self.shared.counters.fragments, dropped);
+                if let Some(mut whole) = whole {
+                    Counters::add(&self.shared.counters.reassembled, 1);
+                    let parsed = packet::parse(&whole);
+                    self.forward(&mut whole, parsed).await;
+                }
+            }
+            parsed => self.forward(packet, parsed).await,
+        }
+    }
+
+    /// One whole packet, as `parse` read it: TCP, UDP, an echo request, or skipped.
+    async fn forward(&self, packet: &mut [u8], parsed: Result<packet::Packet, Skip>) {
+        match parsed {
             Ok(parsed) if parsed.protocol == TCP => {
                 self.tcp(&mut packet[..parsed.length], &parsed).await;
             }
             Ok(parsed) => self.udp(&packet[..parsed.length], &parsed).await,
-            Err(Skip::Fragment) => Counters::add(&self.shared.counters.fragments, 1),
             Err(Skip::Other(packet::ICMP | packet::ICMPV6)) => match packet::echo_request(packet) {
                 Ok(request) => self.echo(&packet[..request.length], &request).await,
                 // Any other ICMP an app sends, as its kernel's errors, stays skipped.
                 Err(_) => Counters::add(&self.shared.counters.skipped, 1),
             },
-            Err(Skip::Malformed | Skip::Other(_)) => {
+            // A rebuilt packet is never a fragment (`fragments::Taken::whole`).
+            Err(Skip::Fragment | Skip::Malformed | Skip::Other(_)) => {
                 Counters::add(&self.shared.counters.skipped, 1);
             }
         }

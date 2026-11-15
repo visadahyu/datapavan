@@ -1,16 +1,21 @@
 //! Fuzzing of Watch's packet reader and writers (`datapavan_net::packet`): any bytes an app can put
 //! into the tunnel. A packet that is read must describe the input exactly; its ends rewritten must
 //! read back as the new ends, and every packet built in answer to it must read back as well. An echo
-//! request that is read lies inside the input, and the reply and refusal built for it fit.
+//! request that is read lies inside the input, and the reply and refusal built for it fit. Read as a
+//! sequence of fragments, the input never takes the reassembler past its bounds, and what it rebuilds
+//! is a whole packet by its own header.
 #![no_main]
 
 use std::net::SocketAddr;
+use std::time::{Duration, Instant};
 
-use datapavan_net::packet::{self, Unreachable};
+use datapavan_net::fragments::{Bounds, Reassembler};
+use datapavan_net::packet::{self, Skip, Unreachable};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
     echo(data);
+    fragments(data);
     let Ok(parsed) = packet::parse(data) else {
         return;
     };
@@ -66,6 +71,36 @@ fn echo(data: &[u8]) {
             assert_eq!(packet::echo_request(quoted), Ok(echo));
         }
     }
+}
+
+/// The input as fragments, each a two-byte length and that many bytes (or what is left), 10 ms apart,
+/// taken in by a reassembler with small bounds: whatever they hold, it never holds more datagrams or
+/// bytes than its bounds, and each packet it rebuilds is whole by its own IP header's length, no longer
+/// than IP allows, and no fragment.
+fn fragments(data: &[u8]) {
+    let bounds = Bounds { datagrams: 4, bytes: 16 * 1024, wait: Duration::from_millis(50) };
+    let mut reassembler = Reassembler::new(bounds);
+    let start = Instant::now();
+    let mut rest = data;
+    let mut at = start;
+    while let [high, low, tail @ ..] = rest {
+        let (fragment, after) = tail.split_at(usize::from(u16::from_be_bytes([*high, *low])).min(tail.len()));
+        rest = after;
+        at += Duration::from_millis(10);
+        let taken = reassembler.take(fragment, at);
+        assert!(reassembler.datagrams() <= bounds.datagrams && reassembler.bytes() <= bounds.bytes);
+        if let Some(whole) = taken.whole {
+            assert!(!matches!(packet::parse(&whole), Err(Skip::Fragment)));
+            let length = if whole[0] >> 4 == 4 {
+                usize::from(u16::from_be_bytes([whole[2], whole[3]]))
+            } else {
+                40 + usize::from(u16::from_be_bytes([whole[4], whole[5]]))
+            };
+            assert_eq!(length, whole.len());
+        }
+    }
+    reassembler.sweep(at + bounds.wait);
+    assert_eq!((reassembler.datagrams(), reassembler.bytes()), (0, 0));
 }
 
 /// The one's-complement sum of `bytes` as 16-bit words, the last byte alone padded.

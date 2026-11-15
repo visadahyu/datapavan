@@ -50,6 +50,7 @@ const SLOW_ANSWER: Duration = Duration::from_millis(300);
 const TCP_FLOWS: usize = 0;
 const UDP_FLOWS: usize = 1;
 const STRANGERS: usize = 18;
+const FRAGMENTS: usize = 19;
 const RESETS: usize = 22;
 const TCP_REFUSED: usize = 23;
 const UDP_MAPPINGS: usize = 24;
@@ -62,6 +63,7 @@ const ECHO_REPLIES: usize = 34;
 const ECHO_REFUSED: usize = 35;
 const ECHO_UNSUPPORTED: usize = 36;
 const ECHO_DROPPED: usize = 37;
+const REASSEMBLED: usize = 38;
 /// A server that never answers (scripts/netlab-enter.py routes it into a tunnel no one reads).
 const SILENT: Ipv4Addr = Ipv4Addr::new(203, 0, 113, 1);
 /// How long any one step may take before the test fails.
@@ -952,6 +954,65 @@ fn a_large_answer_arrives_whole() -> Outcome {
             let (heard, from) = app_receive(&app).await?;
             assert_eq!(from, at);
             assert!(heard == large, "{} bytes of 4,000", heard.len());
+            Ok(())
+        },
+    )
+}
+
+/// Bytes that differ from one place to the next, so that a datagram put together wrongly shows.
+fn large(length: usize) -> Vec<u8> {
+    (0..length)
+        .map(|i| u8::try_from(i % 251).unwrap_or(0))
+        .collect()
+}
+
+/// A UDP server at `at` that sends each datagram back as it received it, whole.
+async fn udp_echo(at: IpAddr) -> io::Result<SocketAddr> {
+    let server = UdpSocket::bind((at, 0)).await?;
+    let address = server.local_addr()?;
+    tokio::spawn(async move {
+        let mut buffer = vec![0u8; 65_535];
+        while let Ok((n, from)) = server.recv_from(&mut buffer).await {
+            let _ = server.send_to(&buffer[..n], from).await;
+        }
+    });
+    Ok(address)
+}
+
+/// Fails, saying why, where the lab has no IPv6.
+fn ipv6_here() -> Outcome {
+    if std::env::var_os("NETLAB_IPV6").is_some_and(|v| v == "absent") {
+        return Err("the lab has no IPv6 on this machine: scripts/netlab-enter.py says why".into());
+    }
+    Ok(())
+}
+
+/// ADR 0044, decision 5 as amended: a datagram larger than the tunnel's MTU, which the app's kernel
+/// cuts into fragments at tun0's 1,500 bytes, reaches the server whole, put together by the engine,
+/// and as large an answer reaches the app whole; in IPv4 and IPv6. Before, the engine dropped every
+/// fragment.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_datagram_the_apps_kernel_fragmented_reaches_the_server_whole() -> Outcome {
+    lab(
+        "a_datagram_the_apps_kernel_fragmented_reaches_the_server_whole",
+        Limits::default(),
+        |engine| async move {
+            ipv6_here()?;
+            let datagram = large(3_000);
+            for (app_at, server_at) in [
+                (IpAddr::V4(Addresses::COMMON.tun4), IpAddr::V4(SERVER)),
+                (IpAddr::V6(Addresses::COMMON.tun6), IpAddr::V6(SERVER6)),
+            ] {
+                let server = udp_echo(server_at).await?;
+                let app = UdpSocket::bind((app_at, 0)).await?;
+                app.send_to(&datagram, server).await?;
+                let (heard, from) = app_receive(&app).await?;
+                assert_eq!(from, server);
+                assert!(heard == datagram, "{} bytes of 3,000", heard.len());
+            }
+            let counters = engine.counters();
+            assert_eq!((counters[REASSEMBLED], counters[FRAGMENTS]), (2, 0));
             Ok(())
         },
     )

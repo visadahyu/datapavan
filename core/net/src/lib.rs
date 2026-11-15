@@ -10,6 +10,7 @@ pub mod answers;
 pub mod dns;
 pub mod dnscache;
 pub mod engine;
+pub mod fragments;
 pub mod log;
 pub mod names;
 pub mod nat;

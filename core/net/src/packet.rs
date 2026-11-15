@@ -78,7 +78,9 @@ pub enum Skip {
     /// Too short, a wrong version, lengths that do not fit, or an echo request whose checksum is
     /// wrong.
     Malformed,
-    /// A fragment. Apps' traffic through a tunnel with a 1500-byte MTU is rarely fragmented.
+    /// A fragment, which the engine puts together with the rest of its datagram
+    /// ([`crate::fragments`]). An IPv6 atomic fragment, offset 0 with no more to come, is read as a
+    /// whole packet (RFC 6946).
     Fragment,
     /// Another protocol, by its number: ICMP, for example, which [`echo_request`] reads when it is
     /// an echo request.
@@ -95,14 +97,14 @@ struct Ip {
     destination: IpAddr,
 }
 
-fn u16_at(bytes: &[u8], at: usize) -> Option<u16> {
+pub(crate) fn u16_at(bytes: &[u8], at: usize) -> Option<u16> {
     Some(u16::from_be_bytes([
         *bytes.get(at)?,
         *bytes.get(at.checked_add(1)?)?,
     ]))
 }
 
-fn u32_at(bytes: &[u8], at: usize) -> Option<u32> {
+pub(crate) fn u32_at(bytes: &[u8], at: usize) -> Option<u32> {
     let b = bytes.get(at..at.checked_add(4)?)?;
     Some(u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
 }
@@ -268,20 +270,12 @@ fn ipv6_transport(packet: &[u8]) -> Result<(u8, usize), Skip> {
     let mut next = packet[6];
     let mut at = 40;
     for _ in 0..MAX_EXTENSIONS {
-        let length = match next {
-            // Hop-by-hop options, routing, destination options: (length + 1) * 8 bytes.
-            0 | 43 | 60 => (usize::from(*packet.get(at + 1).ok_or(Skip::Malformed)?) + 1) * 8,
-            // Fragment: 8 bytes, with the offset and the "more" flag.
-            44 => {
-                let field = u16_at(packet, at + 2).ok_or(Skip::Malformed)?;
-                if field & 0xfff9 != 0 {
-                    return Err(Skip::Fragment);
-                }
-                8
-            }
-            // Authentication header: (length + 2) * 4 bytes.
-            51 => (usize::from(*packet.get(at + 1).ok_or(Skip::Malformed)?) + 2) * 4,
-            protocol => return Ok((protocol, at)),
+        // A fragment header with an offset or the "more" flag: an atomic fragment is read whole.
+        if next == FRAGMENT_HEADER && u16_at(packet, at + 2).ok_or(Skip::Malformed)? & 0xfff9 != 0 {
+            return Err(Skip::Fragment);
+        }
+        let Some(length) = extension_length(packet, next, at)? else {
+            return Ok((next, at));
         };
         next = *packet.get(at).ok_or(Skip::Malformed)?;
         at += length;
@@ -290,6 +284,50 @@ fn ipv6_transport(packet: &[u8]) -> Result<(u8, usize), Skip> {
         }
     }
     Err(Skip::Malformed)
+}
+
+/// IPv6's Next Header value of a fragment header.
+pub(crate) const FRAGMENT_HEADER: u8 = 44;
+
+/// The length of the IPv6 extension header `next` that starts at `at` in `packet`, or `None` when
+/// `next` names an upper-layer protocol instead.
+pub(crate) fn extension_length(packet: &[u8], next: u8, at: usize) -> Result<Option<usize>, Skip> {
+    let length = |at: usize| packet.get(at + 1).copied().ok_or(Skip::Malformed);
+    Ok(Some(match next {
+        // Hop-by-hop options, routing, destination options: (length + 1) * 8 bytes.
+        0 | 43 | 60 => (usize::from(length(at)?) + 1) * 8,
+        // Fragment: 8 bytes, with the offset and the "more" flag.
+        FRAGMENT_HEADER => 8,
+        // Authentication header: (length + 2) * 4 bytes.
+        51 => (usize::from(length(at)?) + 2) * 4,
+        _ => return Ok(None),
+    }))
+}
+
+/// Where the first fragment header of an IPv6 packet starts, and where the Next Header field that
+/// names it is: byte 6 of the IPv6 header, or the first byte of the extension header before it.
+/// `None` when the packet has none before its upper-layer header, or its headers do not fit.
+pub(crate) fn ipv6_fragment_header(packet: &[u8]) -> Option<(usize, usize)> {
+    let (mut named, mut at) = (6, 40);
+    let mut next = *packet.get(named)?;
+    for _ in 0..MAX_EXTENSIONS {
+        if next == FRAGMENT_HEADER {
+            return Some((named, at));
+        }
+        let length = extension_length(packet, next, at).ok()??;
+        named = at;
+        next = *packet.get(at)?;
+        at += length;
+        if at > packet.len() {
+            return None;
+        }
+    }
+    None
+}
+
+/// The checksum of an IPv4 header whose checksum field is zero (RFC 791).
+pub(crate) fn header_checksum(header: &[u8]) -> u16 {
+    !fold(sum_words(header))
 }
 
 /// The TCP flags of a parsed TCP packet.
