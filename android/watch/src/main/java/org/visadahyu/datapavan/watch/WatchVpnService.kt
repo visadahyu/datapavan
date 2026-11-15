@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.os.SystemClock
 import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants
@@ -59,8 +60,8 @@ class WatchVpnService : VpnService() {
 
     /**
      * The network and DNS server last given to the engine. An engine started on a tunnel set up again
-     * starts knowing neither, so [setUpAgain] tells it; [close] forgets them, and the next callback of a
-     * run tells its engine.
+     * goes on with what the one before knew ([setUpAgain]); [close] forgets them, and the next callback of
+     * a run tells its engine.
      */
     private var told: Network? = null
     private var toldDns: String? = null
@@ -70,9 +71,13 @@ class WatchVpnService : VpnService() {
 
     /**
      * The network beneath the tunnel's MTU was last measured on, while the tunnel follows it: within it,
-     * the MTU only goes down ([TunnelMtu.next]). Main thread only.
+     * the MTU goes down at once and up only ten minutes after the last setup ([TunnelMtu.next]). Main
+     * thread only.
      */
     private var measuredOn: Network? = null
+
+    /** When the tunnel was last set up, by [SystemClock.elapsedRealtime]. Main thread only. */
+    private var setUpAt = 0L
 
     /**
      * The tunnel's MTU for this run (ADR 0044, decision 5 as amended): the first hop's of the network
@@ -193,15 +198,16 @@ class WatchVpnService : VpnService() {
      * The tunnel's MTU follows the network beneath: [network]'s first hop is measured again, off the
      * main thread, and when it brings another value, by [TunnelMtu.next], the tunnel is set up again with
      * it, as for an address clash (ADR 0041). The apps' own kernels then meet that hop as they would
-     * without Watch. Within one network the MTU only goes down, so that a route that flaps cannot set
-     * the tunnel up again and again.
+     * without Watch. Within one network the MTU rises only ten minutes after the last setup, so that a
+     * route that flaps cannot set the tunnel up again and again.
      */
     private fun remeasure(network: Network) {
         measuring.execute {
             val measured = measure(network)
             main.post {
                 if (!active || network != current) return@post
-                val next = TunnelMtu.next(mtu, measured, sameNetwork = network == measuredOn)
+                val since = SystemClock.elapsedRealtime() - setUpAt
+                val next = TunnelMtu.next(mtu, measured, sameNetwork = network == measuredOn, sinceSetUpMs = since)
                 measuredOn = network
                 if (next != mtu) {
                     mtu = next
@@ -323,8 +329,11 @@ class WatchVpnService : VpnService() {
             stop()
             return
         }
-        // Before any app's traffic can go anywhere it should not (W6).
+        // Before any app's traffic can go anywhere it should not (W6). The engine reads the tunnel from
+        // nativeStart on, so a chained app's packet can come before this; before Watch ran those apps
+        // went directly anyway, and unit 12b holds a chained app's new flows until the chain is set.
         applyChain()
+        setUpAt = SystemClock.elapsedRealtime()
         active = true
         state.value = true
         refreshChain()
@@ -353,21 +362,24 @@ class WatchVpnService : VpnService() {
      * updates it in place when only addresses or the MTU change, and connects a new network before it
      * disconnects the old one when the apps left out change (AOSP, `updateLinkPropertiesInPlaceIfPossible`
      * and `startNewNetworkAgent`); the old interface is reset only after that. Only then does the old
-     * engine stop, closing the old tunnel, and one start on the new tunnel, handed the chain and told the
-     * network beneath. Flows begin anew, as when the tunnel was closed and opened; unit 12b will hand the
-     * new tunnel to the running engine instead, keeping them. Android leaves the network callbacks as
-     * they are, so they are not registered again.
+     * engine stop, closing the old tunnel, and one start on the new tunnel. The old engine hands the new
+     * one, before its first packet, its chain as Watch last set it, the network's resolver, its stand-ins,
+     * names and counters (`Engine::hand_over`, re-review of unit 12, major 1), so that no chained app's
+     * packet goes directly meanwhile; nothing is set on it again after, so that no chain read from older
+     * settings replaces a newer one. Flows begin anew, as when the tunnel was closed and opened; unit 12b
+     * will hand the new tunnel to the running engine instead, keeping them. Android leaves the network
+     * callbacks as they are, so they are not registered again.
      */
     private fun setUpAgain() {
         if (!active) return
         val established = establish()
-        // nativeStart stops the engine that runs, which closes the old tunnel, before it starts anew.
+        // nativeStart stops the engine that runs, which closes the old tunnel and hands over what it
+        // carries, before it starts anew.
         if (established == null || !startEngine(established)) {
             stop()
             return
         }
-        applyChain()
-        if (told != null) Engine.nativeNetworkChanged(toldDns ?: "", true)
+        setUpAt = SystemClock.elapsedRealtime()
     }
 
     /**

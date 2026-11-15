@@ -39,11 +39,15 @@ class TunnelMtuTest {
     }
 
     @Test
-    fun withinOneNetworkTheMtuOnlyGoesDown() {
-        assertEquals("lower on the same network: taken", 1400, TunnelMtu.next(1500, 1400, sameNetwork = true))
-        assertEquals("higher on the same network: waits", 1400, TunnelMtu.next(1400, 1500, sameNetwork = true))
-        assertEquals("the same", 1500, TunnelMtu.next(1500, 1500, sameNetwork = true))
-        assertEquals("a new network takes its own, higher", 1500, TunnelMtu.next(1400, 1500, sameNetwork = false))
-        assertEquals("or lower", 1280, TunnelMtu.next(1500, 1280, sameNetwork = false))
+    fun withinOneNetworkTheMtuRisesOnlyTenMinutesAfterTheLastSetup() {
+        val soon = 1_000L
+        val wait = TunnelMtu.RISE_AFTER_MS
+        assertEquals("lower on the same network: taken at once", 1400, TunnelMtu.next(1500, 1400, true, soon))
+        assertEquals("higher on the same network, soon after a setup: waits", 1400, TunnelMtu.next(1400, 1500, true, soon))
+        assertEquals("a millisecond before ten minutes", 1400, TunnelMtu.next(1400, 1500, true, wait - 1))
+        assertEquals("at ten minutes: taken", 1500, TunnelMtu.next(1400, 1500, true, wait))
+        assertEquals("the same", 1500, TunnelMtu.next(1500, 1500, true, soon))
+        assertEquals("a new network takes its own, higher", 1500, TunnelMtu.next(1400, 1500, false, soon))
+        assertEquals("or lower", 1280, TunnelMtu.next(1500, 1280, false, soon))
     }
 }

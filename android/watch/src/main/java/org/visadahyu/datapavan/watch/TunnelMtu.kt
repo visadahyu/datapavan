@@ -58,12 +58,20 @@ object TunnelMtu {
     fun choose(v4: Int?, v6: Int?): Int =
         (listOfNotNull(v4, v6).filter { it > 0 }.minOrNull() ?: MOST).coerceIn(LEAST, MOST)
 
+    /** How long after the tunnel was last set up its MTU may rise within one network: ten minutes. */
+    const val RISE_AFTER_MS = 10 * 60 * 1_000L
+
     /**
-     * The tunnel's MTU once a measure gave [measured], where it was [current]: on the same network
-     * ([sameNetwork]) it only goes down, so that a route that flaps, or an IP version whose socket stops
-     * answering, cannot set the tunnel up again and again; a value that rises waits for the next
-     * network, which takes its own.
+     * The tunnel's MTU once a measure gave [measured], where it was [current]: a new network takes its
+     * own; within the same network ([sameNetwork]) a lower value is taken at once, and a higher one only
+     * once [RISE_AFTER_MS] have passed since the tunnel was last set up ([sinceSetUpMs]). So a reading
+     * low for a moment, as while a network's IPv6 or its CLAT comes up, does not keep the tunnel narrow
+     * for the network's whole life, and a route that flaps sets the tunnel up again at most once in ten
+     * minutes for each rise, and once for each fall that follows it.
      */
-    fun next(current: Int, measured: Int, sameNetwork: Boolean): Int =
-        if (sameNetwork) minOf(current, measured) else measured
+    fun next(current: Int, measured: Int, sameNetwork: Boolean, sinceSetUpMs: Long): Int = when {
+        !sameNetwork || measured <= current -> measured
+        sinceSetUpMs >= RISE_AFTER_MS -> measured
+        else -> current
+    }
 }
