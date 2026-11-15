@@ -1,15 +1,15 @@
 # 0050. Mobile operators and SIM cards: what the phone installed, what the SIM can do, what to tell users
 
-- Status: Proposed
+- Status: Accepted (by the maintainer on 2026-11-15)
 - Date: 2026-11-14
 - Decided by: the maintainer, 2026-11-14, that the risks of mobile operators and SIM cards become part of the plan;
-  the decisions below are proposed, drafted with AI help.
+  the decisions below were proposed, drafted with AI help.
 - Builds on: ADRs [0015](0015-dataset-licences.md) (decision 10), [0016](0016-no-user-data.md),
   [0023](0023-maker-software-and-system-keys.md), [0025](0025-guided-check-and-traffic-facts.md),
   [0026](0026-remediation-plan-v0.1.md), [0030](0030-more-languages-reviewed-by-independent-models.md),
   [0045](0045-three-editions-of-one-app.md), [0046](0046-live-activity.md) and
   [0048](0048-lab-probe-of-android-gaps.md).
-- Amends, once accepted: the audit's finding "Not from a known app store" (`UNKNOWN_SOURCE`), which stops covering
+- Amends: the audit's finding "Not from a known app store" (`UNKNOWN_SOURCE`), which stops covering
   installs made by the phone's own software (decision 1).
 
 ## Context

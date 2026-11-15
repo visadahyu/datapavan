@@ -1,11 +1,11 @@
 # 0051. Two lanes of work, and an isolated machine for suspect apps
 
-- Status: Proposed
+- Status: Accepted (by the maintainer on 2026-11-15)
 - Date: 2026-11-15
 - Decided by: the maintainer, 2026-11-15, that normal work goes on as before and that sensitive security work runs
   only in an isolated machine, on a separate account verified for defensive security work, with the AI agent itself
-  saying so when it reaches such work; the decisions below are proposed, drafted with AI help and revised after an
-  independent review.
+  saying so when it reaches such work; the decisions below were proposed, drafted with AI help and revised after two
+  independent reviews.
 - Builds on: ADR [0048](0048-lab-probe-of-android-gaps.md) (decision 4, the routes for a finding) and
   [LAB.md](../LAB.md).
 - Follows: Anthropic's "Agent containment best practices for CVP participants" (2026-10-06).

@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-02
 - Decided by: mehdashti
+- Amended by [ADR 0046](0046-live-activity.md) on 2026-11-15: decision 1, for Advanced's live view.
 
 ## Context
 ADR 0022 shows how much each app received and sent. The maintainer asked for more: an expected

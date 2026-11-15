@@ -1,8 +1,8 @@
 # 0048. A lab probe of where stock Android leaves privacy tools blind or exposed
 
-- Status: Proposed
+- Status: Accepted (by the maintainer on 2026-11-15)
 - Date: 2026-11-14
-- Fulfils, once accepted: the probe app of [ADR 0041](0041-watch-visibility-and-coexistence.md), decision 2.
+- Fulfils: the probe app of [ADR 0041](0041-watch-visibility-and-coexistence.md), decision 2.
   Amends its words "on every Android version in CI": the runs happen on the maintainer's machine, and CI only
   builds and unit-tests the probe (decision 7).
 - Amended on 2026-11-14, by the maintainer's rule for the machine: up to three emulators at once instead of one

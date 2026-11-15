@@ -2,6 +2,8 @@
 
 - Status: Accepted (by the maintainer on 2026-11-12)
 - Date: 2026-11-12
+- Amended by [ADR 0048](0048-lab-probe-of-android-gaps.md) on 2026-11-15: decision 2's probe app is built there, and
+  its runs happen on the maintainer's machine rather than "on every Android version in CI".
 
 ## Context
 

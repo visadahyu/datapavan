@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version | 0.2 (draft, revised 2026-11-15: three editions, ADR 0045; what apps sent while not in use, shown live, ADR 0046, proposed; a profile for phones that may be searched, ADR 0047, proposed; a lab probe of where stock Android leaves privacy tools blind or exposed, ADR 0048, proposed; the editions' names and one version line, the maintainer, 2026-11-14; a signing key for each edition, ready to rotate, backed up in shares, ADR 0049, proposed; mobile operators and SIM cards, ADR 0050, proposed; two lanes of work and an isolated machine for suspect apps, ADR 0051, proposed) |
+| Version | 0.2 (draft, revised 2026-11-15: three editions, ADR 0045; what apps sent while not in use, shown live, ADR 0046, accepted 2026-11-15; a profile for phones that may be searched, ADR 0047, accepted 2026-11-15; a lab probe of where stock Android leaves privacy tools blind or exposed, ADR 0048, accepted 2026-11-15; the editions' names and one version line, the maintainer, 2026-11-14; a signing key for each edition, ready to rotate, backed up in shares, ADR 0049, accepted 2026-11-15; mobile operators and SIM cards, ADR 0050, accepted 2026-11-15; two lanes of work and an isolated machine for suspect apps, ADR 0051, accepted 2026-11-15) |
 | Date | 2026-10-28 |
 | Scope | Stage 1: the layer app for stock Android, with no root |
 | Status | The whole design, much of it not built yet. The [README](../README.md) says what exists today |
@@ -860,12 +860,12 @@ Each decision is recorded in full, with context and consequences, as an ADR in
 | [0043](decisions/0043-release-integrity-and-repository-controls.md) | Release integrity, repository controls and continuous fuzzing | Accepted |
 | [0044](decisions/0044-udp-mapping-and-budgets.md) | UDP mapping, budgets for each app, and the engine's smaller gaps | Accepted |
 | [0045](decisions/0045-three-editions-of-one-app.md) | Three editions of one app: Basic, Advanced and Enterprise | Accepted |
-| [0046](decisions/0046-live-activity.md) | What apps sent while the user was not using them, shown live | Proposed |
-| [0047](decisions/0047-profile-for-phones-that-may-be-searched.md) | A profile for phones that may be searched: nothing of use kept | Proposed |
-| [0048](decisions/0048-lab-probe-of-android-gaps.md) | A lab probe of where stock Android leaves privacy tools blind or exposed | Proposed |
-| [0049](decisions/0049-signing-keys-of-the-editions.md) | A signing key for each edition, ready to rotate, backed up in shares | Proposed |
-| [0050](decisions/0050-operators-and-sim-cards.md) | Mobile operators and SIM cards: what the phone installed, what the SIM can do, what to tell users | Proposed |
-| [0051](decisions/0051-two-lanes-and-an-analysis-machine.md) | Two lanes of work, and an isolated machine for suspect apps | Proposed |
+| [0046](decisions/0046-live-activity.md) | What apps sent while the user was not using them, shown live | Accepted |
+| [0047](decisions/0047-profile-for-phones-that-may-be-searched.md) | A profile for phones that may be searched: nothing of use kept | Accepted |
+| [0048](decisions/0048-lab-probe-of-android-gaps.md) | A lab probe of where stock Android leaves privacy tools blind or exposed | Accepted |
+| [0049](decisions/0049-signing-keys-of-the-editions.md) | A signing key for each edition, ready to rotate, backed up in shares | Accepted |
+| [0050](decisions/0050-operators-and-sim-cards.md) | Mobile operators and SIM cards: what the phone installed, what the SIM can do, what to tell users | Accepted |
+| [0051](decisions/0051-two-lanes-and-an-analysis-machine.md) | Two lanes of work, and an isolated machine for suspect apps | Accepted |
 
 ## 15. Names
 

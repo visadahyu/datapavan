@@ -1,8 +1,8 @@
 # 0046. What apps sent while the user was not using them, shown live
 
-- Status: Proposed
+- Status: Accepted (by the maintainer on 2026-11-15)
 - Date: 2026-11-14
-- Amends, once accepted: [ADR 0025](0025-guided-check-and-traffic-facts.md) decision 1, for Advanced's live
+- Amends: [ADR 0025](0025-guided-check-and-traffic-facts.md) decision 1, for Advanced's live
   surfaces only; [ADR 0034](0034-watch-permissions.md), by one exported component (the widget); DESIGN.md's W5
   row; the roadmap's line on the widget.
 

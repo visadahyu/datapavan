@@ -53,12 +53,12 @@ in the Git history.
 | [0043](0043-release-integrity-and-repository-controls.md) | Release integrity, repository controls and continuous fuzzing | Accepted |
 | [0044](0044-udp-mapping-and-budgets.md) | UDP mapping, budgets for each app, and the engine's smaller gaps | Accepted |
 | [0045](0045-three-editions-of-one-app.md) | Three editions of one app: Basic, Advanced and Enterprise | Accepted |
-| [0046](0046-live-activity.md) | What apps sent while the user was not using them, shown live | Proposed |
-| [0047](0047-profile-for-phones-that-may-be-searched.md) | A profile for phones that may be searched: nothing of use kept | Proposed |
-| [0048](0048-lab-probe-of-android-gaps.md) | A lab probe of where stock Android leaves privacy tools blind or exposed | Proposed |
-| [0049](0049-signing-keys-of-the-editions.md) | A signing key for each edition, ready to rotate, backed up in shares | Proposed |
-| [0050](0050-operators-and-sim-cards.md) | Mobile operators and SIM cards: what the phone installed, what the SIM can do, what to tell users | Proposed |
-| [0051](0051-two-lanes-and-an-analysis-machine.md) | Two lanes of work, and an isolated machine for suspect apps | Proposed |
+| [0046](0046-live-activity.md) | What apps sent while the user was not using them, shown live | Accepted |
+| [0047](0047-profile-for-phones-that-may-be-searched.md) | A profile for phones that may be searched: nothing of use kept | Accepted |
+| [0048](0048-lab-probe-of-android-gaps.md) | A lab probe of where stock Android leaves privacy tools blind or exposed | Accepted |
+| [0049](0049-signing-keys-of-the-editions.md) | A signing key for each edition, ready to rotate, backed up in shares | Accepted |
+| [0050](0050-operators-and-sim-cards.md) | Mobile operators and SIM cards: what the phone installed, what the SIM can do, what to tell users | Accepted |
+| [0051](0051-two-lanes-and-an-analysis-machine.md) | Two lanes of work, and an isolated machine for suspect apps | Accepted |
 
 ## Template
 

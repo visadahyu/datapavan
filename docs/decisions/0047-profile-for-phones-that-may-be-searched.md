@@ -1,6 +1,6 @@
 # 0047. A profile for phones that may be searched: nothing of use kept
 
-- Status: Proposed
+- Status: Accepted (by the maintainer on 2026-11-15)
 - Date: 2026-11-14
 
 ## Context

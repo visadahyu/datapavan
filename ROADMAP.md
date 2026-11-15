@@ -158,18 +158,18 @@ comparison, which needs a test account, and W4's runs on the A40 and an Android 
 through the user's tool ([ADR 0038](docs/decisions/0038-dns-of-chained-apps.md)), was accepted and merged on
 2026-11-11. W5, W7, W8 and W9 are not built yet
 ([DESIGN.md §13.2](docs/DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools) has what is left).
-How W5's per-app view is met, live, with which apps sent while the user was not using them, is proposed in
+How W5's per-app view is met, live, with which apps sent while the user was not using them, is decided in
 [ADR 0046](docs/decisions/0046-live-activity.md) (2026-11-14), and a profile for people whose phone may be searched,
 which keeps nothing of use, in [ADR 0047](docs/decisions/0047-profile-for-phones-that-may-be-searched.md).
 The probe app that ADR 0041 promised, which measures where stock Android leaves privacy tools blind or exposed on
-the Android 10 to 17 emulators, is proposed in [ADR 0048](docs/decisions/0048-lab-probe-of-android-gaps.md).
+the Android 10 to 17 emulators, is decided in [ADR 0048](docs/decisions/0048-lab-probe-of-android-gaps.md).
 Datapavan Advanced's own offline signing key, a rehearsed key rotation for both editions and a 2-of-3 split backup
-of each key, all needed before 0.2.0, are proposed in [ADR 0049](docs/decisions/0049-signing-keys-of-the-editions.md).
+of each key, all needed before 0.2.0, are decided in [ADR 0049](docs/decisions/0049-signing-keys-of-the-editions.md).
 What the phone's own software installed, what the SIM and the operator can do, and guidance on SMS login codes,
-in Basic 0.2.0 and 0.2.1 and Advanced 0.2.0 and 0.2.1, are proposed in
+in Basic 0.2.0 and 0.2.1 and Advanced 0.2.0 and 0.2.1, are decided in
 [ADR 0050](docs/decisions/0050-operators-and-sim-cards.md) (see "Mobile operators and SIM cards" below).
 Where the work on suspect apps runs: normal work stays on the maintainer's workstation, and analysis of apps
-suspected of being hostile runs only in an isolated analysis machine with its network closed, proposed in
+suspected of being hostile runs only in an isolated analysis machine with its network closed, decided in
 [ADR 0051](docs/decisions/0051-two-lanes-and-an-analysis-machine.md).
 
 The items, in order:
@@ -241,7 +241,7 @@ referred to helplines that do forensic checks.
 ### Mobile operators and SIM cards, in Datapavan Basic and Advanced
 
 ⏳ Planned: the maintainer made operators' and SIMs' risks part of the plan on 2026-11-14; the design is in
-[ADR 0050](docs/decisions/0050-operators-and-sim-cards.md) (proposed).
+[ADR 0050](docs/decisions/0050-operators-and-sim-cards.md) (accepted on 2026-11-15).
 
 The SIM runs the operator's software, and the phone obeys it: by the standard, and in Android's own code, it can make
 the phone send messages, open data connections and web pages, and report its location and IMEI, mostly without the

@@ -1,12 +1,12 @@
 # 0049. A signing key for each edition, ready to rotate, backed up in shares
 
-- Status: Proposed
+- Status: Accepted (by the maintainer on 2026-11-15)
 - Date: 2026-11-14
 - Decided by: the maintainer, 2026-11-14 (decisions 1 to 6); drafted with AI help.
 - Builds on: ADRs [0018](0018-app-signing-certificates.md), [0024](0024-fake-copies-of-datapavan.md),
   [0031](0031-datapavan-lite-on-google-play.md), [0039](0039-release-gates.md),
   [0043](0043-release-integrity-and-repository-controls.md) and [0045](0045-three-editions-of-one-app.md).
-- Amends, once accepted: [docs/RELEASE.md](../RELEASE.md), its first steps and steps 4 to 7, which take the
+- Amends: [docs/RELEASE.md](../RELEASE.md), its first steps and steps 4 to 7, which take the
   procedures below; the README's "Checking a copy", whose "Every genuine copy, on every channel, is signed with one
   key" becomes one key for each edition; ADR 0018's matching of a signing history (decision 3).
 
