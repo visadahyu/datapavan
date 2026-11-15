@@ -82,9 +82,9 @@ An agent cannot verify from inside a session which account it runs on. What it c
 - **A QEMU/KVM virtual machine (libvirt's system instance, `qemu:///system`) on the workstation,** confined on the
   host by libvirt's AppArmor profile (sVirt) and QEMU's seccomp sandbox, and run by a QEMU user of its own, so that an
   escape from QEMU does not land as the maintainer's user, beside the keys. Dynamic analysis needs the Android
-  Emulator inside the machine, and the emulator needs KVM there: nested virtualization. No supported or documented way to run a
-  KVM-accelerated Android Emulator inside a Firecracker guest was found, so Firecracker, which Anthropic's CVP guide
-  names for Linux, is not used. Cloud Hypervisor documents nested virtualization (`--cpus nested=on`) but no report of
+  Emulator inside the machine, and the emulator needs KVM there: nested virtualization. No supported or documented
+  way to run a KVM-accelerated Android Emulator inside a Firecracker guest was found, so Firecracker, which
+  Anthropic's CVP guide names for Linux, is not used. Cloud Hypervisor documents nested virtualization (`--cpus nested=on`) but no report of
   the Android Emulator on it was found; it is the fallback. Anthropic's deployment guide lists QEMU beside Firecracker
   as a VM with excellent isolation when set up correctly, and adds that a VM's security depends heavily on the
   hypervisor and its device emulation, which is why decision 3 removes every device the work does not need.
