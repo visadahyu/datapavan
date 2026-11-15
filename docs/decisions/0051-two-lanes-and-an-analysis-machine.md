@@ -84,10 +84,11 @@ An agent cannot verify from inside a session which account it runs on. What it c
   escape from QEMU does not land as the maintainer's user, beside the keys. Dynamic analysis needs the Android
   Emulator inside the machine, and the emulator needs KVM there: nested virtualization. No supported or documented
   way to run a KVM-accelerated Android Emulator inside a Firecracker guest was found, so Firecracker, which
-  Anthropic's CVP guide names for Linux, is not used. Cloud Hypervisor documents nested virtualization (`--cpus nested=on`) but no report of
-  the Android Emulator on it was found; it is the fallback. Anthropic's deployment guide lists QEMU beside Firecracker
-  as a VM with excellent isolation when set up correctly, and adds that a VM's security depends heavily on the
-  hypervisor and its device emulation, which is why decision 3 removes every device the work does not need.
+  Anthropic's CVP guide names for Linux, is not used. Cloud Hypervisor documents nested virtualization
+  (`--cpus nested=on`) but no report of the Android Emulator on it was found; it is the fallback. Anthropic's
+  deployment guide lists QEMU beside Firecracker as a VM with excellent isolation when set up correctly, and adds that
+  a VM's security depends heavily on the hypervisor and its device emulation, which is why decision 3 removes every
+  device the work does not need.
 - **Nested virtualization is the sharp edge:**
   - Android's documentation says a VM-accelerated emulator cannot run inside another VM; Google's own container
     scripts run it nested, more slowly. So the build starts with a pilot: the emulator must boot inside the machine
