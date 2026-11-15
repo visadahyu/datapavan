@@ -4,6 +4,7 @@
   adds `HIDE_OVERLAY_WINDOWS` (item 6)
 - Date: 2026-11-09
 - Amended by [ADR 0045](0045-three-editions-of-one-app.md) on 2026-11-13: the project ships as three editions of one app.
+- Amended by [ADR 0046](0046-live-activity.md) on 2026-11-15: one exported component, the widget.
 
 ## Context
 
