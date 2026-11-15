@@ -15,6 +15,9 @@
 //! UDP leaves through one mapping for each app socket, whatever the destination (ADR 0044): on the
 //! direct path one protected socket, through the user's tool one `UDP ASSOCIATE`. Either lets in only
 //! what comes from addresses the app sent to.
+//!
+//! An app's ping leaves through a protected ping socket of the engine's own, and is refused while a
+//! chain is on, since Android cannot name its app (ADR 0044, decision 5).
 
 use std::collections::{HashMap, VecDeque};
 use std::io;
@@ -48,6 +51,7 @@ use crate::tun::Tun;
 
 mod budget;
 mod chain;
+mod echo;
 mod errors;
 mod kept;
 mod logbook;
@@ -60,6 +64,7 @@ mod whose;
 
 use budget::Budget;
 pub use chain::Chain;
+use echo::Echoes;
 use logbook::{FlowBytes, Live, Lookups, logger, now_ms};
 #[cfg(test)]
 use naming::Begun;
@@ -188,6 +193,15 @@ pub struct Limits {
     /// At most this many names hold a stand-in at once (ADR 0038, [`crate::standins::CAPACITY`]); the
     /// least recently used gives way to a new one. The tests hold fewer.
     pub stand_ins: usize,
+    /// At most this many ping sockets are open at once, for every app together (ADR 0044, decision
+    /// 5): one for each app address, echo identifier and destination. A request that needs one more is
+    /// dropped. Each holds a descriptor of its own, beside the budget of decision 3, so the decision
+    /// caps them at 32.
+    pub echo_sockets: usize,
+    /// A ping socket through which no echo passed either way for this long ends. A ping sends a
+    /// request every second, so a socket silent this long belongs to one that has stopped; an app that
+    /// pings again later gets a socket anew.
+    pub echo_idle: Duration,
     /// The first of the fake ports handed out, `first_port..=last_port`.
     pub first_port: u16,
     /// The last of them.
@@ -248,6 +262,8 @@ impl Default for Limits {
             tcp_idle: nat::TCP_IDLE,
             port_cooling: nat::PORT_COOLING,
             stand_ins: crate::standins::CAPACITY,
+            echo_sockets: 32,
+            echo_idle: Duration::from_secs(10),
             first_port: nat::FIRST_PORT,
             last_port: nat::LAST_PORT,
         }
@@ -400,7 +416,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 33;
+pub const COUNTERS: usize = 38;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -438,6 +454,11 @@ pub struct Counters {
     udp_late: AtomicU64,
     udp_refused: AtomicU64,
     udp_evicted: AtomicU64,
+    echo_carried: AtomicU64,
+    echo_replies: AtomicU64,
+    echo_refused: AtomicU64,
+    echo_unsupported: AtomicU64,
+    echo_dropped: AtomicU64,
 }
 
 impl Counters {
@@ -466,8 +487,14 @@ impl Counters {
     /// dropped because they came too late for their app, which lost the socket before their way opened,
     /// or for any answer near them (ADR 0044, unit 9, "Whose a datagram is"), and datagrams and lookups
     /// dropped because their app's UDP way could have no socket: the cap for every app, or their app's
-    /// share, was full (ADR 0044, decision 3), and UDP mappings ended to make room for a new way. None
-    /// names a destination: they can be read on any phone. New counters are only ever appended, so that
+    /// share, was full (ADR 0044, decision 3), and UDP mappings ended to make room for a new way; then,
+    /// for ICMP echo (decision 5), the apps' echo requests sent on to their destination, the echo
+    /// replies handed to the apps, the requests refused with "administratively prohibited" because a
+    /// chain was on, or because they went to a stand-in address, which only the tool reaches, the
+    /// requests dropped because the kernel refused the engine's ping sockets of their IP version at its
+    /// start, and those dropped because no ping socket could carry them: the cap was full, too many
+    /// waited for their socket, or it could not be made, protected or sent on. None names a
+    /// destination: they can be read on any phone. New counters are only ever appended, so that
     /// scripts reading a column by its place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
@@ -505,6 +532,11 @@ impl Counters {
             &self.udp_late,
             &self.udp_refused,
             &self.udp_evicted,
+            &self.echo_carried,
+            &self.echo_replies,
+            &self.echo_refused,
+            &self.echo_unsupported,
+            &self.echo_dropped,
         ]
         .map(|c| c.load(Ordering::Relaxed))
     }
@@ -772,6 +804,7 @@ struct Loop {
     nat: Arc<Mutex<Nat>>,
     pending: Pending,
     udp: UdpFlows,
+    echoes: Echoes,
     listener4: u16,
     listener6: u16,
     changes: watch::Receiver<u64>,
@@ -809,6 +842,8 @@ async fn run(
         nat,
         pending,
         udp: Arc::default(),
+        // At the engine's start: whether this kernel lets it make ping sockets at all.
+        echoes: Echoes::probe(),
         listener4,
         listener6,
         changes,
@@ -857,6 +892,11 @@ impl Loop {
             }
             Ok(parsed) => self.udp(&packet[..parsed.length], &parsed).await,
             Err(Skip::Fragment) => Counters::add(&self.shared.counters.fragments, 1),
+            Err(Skip::Other(packet::ICMP | packet::ICMPV6)) => match packet::echo_request(packet) {
+                Ok(request) => self.echo(&packet[..request.length], &request).await,
+                // Any other ICMP an app sends, as its kernel's errors, stays skipped.
+                Err(_) => Counters::add(&self.shared.counters.skipped, 1),
+            },
             Err(Skip::Malformed | Skip::Other(_)) => {
                 Counters::add(&self.shared.counters.skipped, 1);
             }

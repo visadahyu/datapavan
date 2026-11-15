@@ -49,7 +49,7 @@ thread_local! {
 }
 
 /// Runs `read` with the engine thread's receive buffer, made the first time it is needed.
-fn with_buffer<T>(read: impl FnOnce(&mut [u8]) -> T) -> T {
+pub(super) fn with_buffer<T>(read: impl FnOnce(&mut [u8]) -> T) -> T {
     RECEIVED.with(|cell| match cell.try_borrow_mut() {
         Ok(mut buffer) => {
             if buffer.len() < LARGEST {

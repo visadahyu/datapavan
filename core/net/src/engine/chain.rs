@@ -72,6 +72,15 @@ impl Shared {
         }
     }
 
+    /// Whether a chain is on that sends any app through the tool: every app but the tool, or a set of
+    /// apps that is not empty. Android cannot say whose an ICMP echo is (`getConnectionOwnerUid` knows
+    /// only TCP and UDP), so while this holds no echo leaves directly: it could be a chained app's (ADR
+    /// 0044, decision 5). A chain of no app sends every app directly, so it refuses none.
+    pub(super) fn chains_any_app(&self) -> bool {
+        self.chain()
+            .is_some_and(|chain| chain.apps.as_ref().is_none_or(|apps| !apps.is_empty()))
+    }
+
     /// Where the flows of the app `uid` go, to any address but a stand-in.
     pub(super) fn app_route(&self, uid: Option<u32>) -> Route {
         let Some(chain) = self.chain() else {
@@ -222,6 +231,22 @@ mod tests {
         assert!(is(&shared.route(Some(DIRECT), server), true), "every app");
         assert!(is(&shared.route(Some(TOOL), server), false), "but the tool");
         assert!(matches!(shared.route(None, server), Route::Refused));
+    }
+
+    /// Echo is refused while a chain sends any app through the tool, whichever app pings, since
+    /// Android cannot say which one does.
+    #[test]
+    fn echo_is_refused_while_any_app_is_chained() {
+        let shared = shared();
+        assert!(!shared.chains_any_app(), "no chain");
+        *lock(&shared.chain) = Some(Arc::new(chain(Some(&[CHAINED]))));
+        assert!(shared.chains_any_app());
+        *lock(&shared.chain) = Some(Arc::new(chain(None)));
+        assert!(shared.chains_any_app(), "every app but the tool");
+        *lock(&shared.chain) = Some(Arc::new(chain(Some(&[]))));
+        assert!(!shared.chains_any_app(), "a chain of no app");
+        *lock(&shared.chain) = None;
+        assert!(!shared.chains_any_app(), "the chain off again");
     }
 
     #[test]

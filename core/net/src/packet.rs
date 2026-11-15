@@ -1,6 +1,6 @@
 //! IP packets as they come from and go to the tunnel: the parts the engine reads, the rewriting of
 //! addresses and ports with incremental checksums (RFC 1624), and the few packets the engine builds
-//! itself: TCP resets, UDP datagrams, and ICMP and `ICMPv6` errors.
+//! itself: TCP resets, UDP datagrams, ICMP and `ICMPv6` errors, and echo replies.
 //!
 //! Every function here takes bytes that any app on the phone can choose, so none may panic, loop
 //! without end or read outside the slice, whatever the input (`fuzz_targets/packet.rs`).
@@ -25,7 +25,17 @@ pub const RST: u8 = 0x04;
 /// TCP flags.
 pub const ACK: u8 = 0x10;
 
-/// The hop limit of packets the engine builds.
+/// ICMP's echo request (RFC 792).
+pub const ECHO_REQUEST: u8 = 8;
+/// ICMP's echo reply.
+pub const ECHO_REPLY: u8 = 0;
+/// `ICMPv6`'s echo request (RFC 4443 4.1).
+pub const ECHO_REQUEST_V6: u8 = 128;
+/// `ICMPv6`'s echo reply.
+pub const ECHO_REPLY_V6: u8 = 129;
+
+/// The hop limit of packets the engine builds, echo replies among them: Linux's default, so that a
+/// reply through Watch looks like one from a host a hop away, whatever the path beneath.
 const HOPS: u8 = 64;
 /// IPv6 extension headers followed before giving up on a packet.
 const MAX_EXTENSIONS: usize = 8;
@@ -45,15 +55,44 @@ pub struct Packet {
     pub destination: SocketAddr,
 }
 
+/// What the engine reads of an ICMP or `ICMPv6` echo request (ping) from an app.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Echo {
+    /// Where the ICMP header starts.
+    pub icmp: usize,
+    /// The packet's length by its IP header; bytes after it are padding.
+    pub length: usize,
+    /// The app's address.
+    pub source: IpAddr,
+    /// The address it pings.
+    pub destination: IpAddr,
+    /// The echo identifier: for an unprivileged ping socket, the one its kernel chose.
+    pub id: u16,
+    /// The sequence number.
+    pub sequence: u16,
+}
+
 /// Why a packet is not one the engine forwards.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Skip {
-    /// Too short, a wrong version, or lengths that do not fit.
+    /// Too short, a wrong version, lengths that do not fit, or an echo request whose checksum is
+    /// wrong.
     Malformed,
     /// A fragment. Apps' traffic through a tunnel with a 1500-byte MTU is rarely fragmented.
     Fragment,
-    /// Another protocol, by its number: ICMP, for example.
+    /// Another protocol, by its number: ICMP, for example, which [`echo_request`] reads when it is
+    /// an echo request.
     Other(u8),
+}
+
+/// What an IP header says of its packet.
+struct Ip {
+    protocol: u8,
+    /// Where the upper-layer header starts.
+    transport: usize,
+    length: usize,
+    source: IpAddr,
+    destination: IpAddr,
 }
 
 fn u16_at(bytes: &[u8], at: usize) -> Option<u16> {
@@ -73,6 +112,94 @@ fn u32_at(bytes: &[u8], at: usize) -> Option<u32> {
 /// # Errors
 /// [`Skip`] says why the packet is not one the engine forwards.
 pub fn parse(packet: &[u8]) -> Result<Packet, Skip> {
+    let Ip {
+        protocol,
+        transport,
+        length,
+        source,
+        destination,
+    } = ip(packet)?;
+    let minimum = match protocol {
+        TCP => 20,
+        UDP => 8,
+        other => return Err(Skip::Other(other)),
+    };
+    if transport
+        .checked_add(minimum)
+        .is_none_or(|end| end > length)
+    {
+        return Err(Skip::Malformed);
+    }
+    if protocol == TCP {
+        let offset = usize::from(packet[transport + 12] >> 4) * 4;
+        if offset < 20 || transport + offset > length {
+            return Err(Skip::Malformed);
+        }
+    }
+    let port = |at| u16_at(packet, at).ok_or(Skip::Malformed);
+    Ok(Packet {
+        protocol,
+        transport,
+        length,
+        source: SocketAddr::new(source, port(transport)?),
+        destination: SocketAddr::new(destination, port(transport + 2)?),
+    })
+}
+
+/// Reads an ICMP echo request in IPv4, or an `ICMPv6` one in IPv6, from the tunnel. The engine
+/// rebuilds what it sends on, so a request whose checksum is wrong, which the destination's kernel
+/// would drop, is refused here rather than sent with a checksum made anew.
+///
+/// # Errors
+/// [`Skip::Other`] for any other ICMP message, as an error or ICMP in IPv6, and [`Skip::Malformed`]
+/// for a request cut short or whose checksum is wrong.
+pub fn echo_request(packet: &[u8]) -> Result<Echo, Skip> {
+    let Ip {
+        protocol,
+        transport,
+        length,
+        source,
+        destination,
+    } = ip(packet)?;
+    let request = match (source, protocol) {
+        (IpAddr::V4(_), ICMP) => ECHO_REQUEST,
+        (IpAddr::V6(_), ICMPV6) => ECHO_REQUEST_V6,
+        _ => return Err(Skip::Other(protocol)),
+    };
+    let message = packet.get(transport..length).ok_or(Skip::Malformed)?;
+    let (Some(&kind), Some(&code), Some(id), Some(sequence)) = (
+        message.first(),
+        message.get(1),
+        u16_at(message, 4),
+        u16_at(message, 6),
+    ) else {
+        return Err(Skip::Malformed);
+    };
+    if (kind, code) != (request, 0) {
+        return Err(Skip::Other(protocol));
+    }
+    // ICMP's checksum covers the message alone, `ICMPv6`'s a pseudo-header too (RFC 4443 2.3). Summed
+    // with its checksum, a message that checks out gives all ones.
+    let pseudo = if protocol == ICMP {
+        0
+    } else {
+        pseudo_sum(source, destination, ICMPV6, message.len())
+    };
+    if fold(pseudo + sum_words(message)) != 0xffff {
+        return Err(Skip::Malformed);
+    }
+    Ok(Echo {
+        icmp: transport,
+        length,
+        source,
+        destination,
+        id,
+        sequence,
+    })
+}
+
+/// Reads the IP header of a packet from the tunnel, IPv4 or IPv6, following IPv6's extension headers.
+fn ip(packet: &[u8]) -> Result<Ip, Skip> {
     let first = *packet.first().ok_or(Skip::Malformed)?;
     let (protocol, transport, length, source, destination) = match first >> 4 {
         4 => {
@@ -127,30 +254,12 @@ pub fn parse(packet: &[u8]) -> Result<Packet, Skip> {
         }
         _ => return Err(Skip::Malformed),
     };
-    let minimum = match protocol {
-        TCP => 20,
-        UDP => 8,
-        other => return Err(Skip::Other(other)),
-    };
-    if transport
-        .checked_add(minimum)
-        .is_none_or(|end| end > length)
-    {
-        return Err(Skip::Malformed);
-    }
-    if protocol == TCP {
-        let offset = usize::from(packet[transport + 12] >> 4) * 4;
-        if offset < 20 || transport + offset > length {
-            return Err(Skip::Malformed);
-        }
-    }
-    let port = |at| u16_at(packet, at).ok_or(Skip::Malformed);
-    Ok(Packet {
+    Ok(Ip {
         protocol,
         transport,
         length,
-        source: SocketAddr::new(source, port(transport)?),
-        destination: SocketAddr::new(destination, port(transport + 2)?),
+        source,
+        destination,
     })
 }
 
@@ -415,6 +524,9 @@ pub enum Unreachable {
     Host,
     /// The host answered that no one listens on the port (UDP).
     Port,
+    /// Watch refuses it: "communication administratively prohibited" (RFC 1812 5.2.7.1), `ICMPv6`'s
+    /// "communication with destination administratively prohibited".
+    Prohibited,
 }
 
 /// An ICMP (IPv4) or `ICMPv6` "destination unreachable" for the app's packet `original`, sent as if
@@ -423,11 +535,39 @@ pub enum Unreachable {
 #[must_use]
 pub fn unreachable(original: &[u8], parsed: &Packet, reason: Unreachable) -> Option<Vec<u8>> {
     let quoted = original.get(..parsed.length)?;
-    let (from, to) = (parsed.destination.ip(), parsed.source.ip());
+    icmp_error(quoted, parsed.destination.ip(), parsed.source.ip(), reason)
+}
+
+/// The "administratively prohibited" that refuses the app's echo request `original`, sent as if by
+/// the address it pinged and quoting the request, as [`unreachable`] quotes a datagram. An app's
+/// ping socket hands it to the app as "host unreachable" (IPv4) or "permission denied" (IPv6).
+/// `None` for a request to a multicast, broadcast or unspecified address, which no ICMP error may
+/// answer (RFC 1812 4.3.2.7, RFC 4443 2.4 (e)), and which has no one sender to answer as.
+#[must_use]
+pub fn echo_refused(original: &[u8], echo: &Echo) -> Option<Vec<u8>> {
+    let unicast = match echo.destination {
+        IpAddr::V4(to) => !(to.is_multicast() || to.is_broadcast() || to.is_unspecified()),
+        IpAddr::V6(to) => !(to.is_multicast() || to.is_unspecified()),
+    };
+    if !unicast {
+        return None;
+    }
+    let quoted = original.get(..echo.length)?;
+    icmp_error(
+        quoted,
+        echo.destination,
+        echo.source,
+        Unreachable::Prohibited,
+    )
+}
+
+/// A "destination unreachable" from `from` to `to`, quoting `quoted`.
+fn icmp_error(quoted: &[u8], from: IpAddr, to: IpAddr, reason: Unreachable) -> Option<Vec<u8>> {
     if from.is_ipv4() {
         let code = match reason {
             Unreachable::Host => 1,
             Unreachable::Port => 3,
+            Unreachable::Prohibited => 13,
         };
         let mut icmp = vec![3, code, 0, 0, 0, 0, 0, 0];
         icmp.extend_from_slice(&quoted[..quoted.len().min(576 - 20 - 8)]);
@@ -436,11 +576,36 @@ pub fn unreachable(original: &[u8], parsed: &Packet, reason: Unreachable) -> Opt
         let code = match reason {
             Unreachable::Host => 3,
             Unreachable::Port => 4,
+            Unreachable::Prohibited => 1,
         };
         let mut icmp = vec![1, code, 0, 0, 0, 0, 0, 0];
         icmp.extend_from_slice(&quoted[..quoted.len().min(1280 - 40 - 8)]);
         assemble(from, to, ICMPV6, icmp, 2)
     }
+}
+
+/// An ICMP echo reply in IPv4, or an `ICMPv6` one in IPv6, from `from` to the app at `to`, with the
+/// app's echo identifier `id` and the `sequence` and `data` of the request it answers. Its checksum is
+/// made anew, over the `ICMPv6` pseudo-header too, and its hop limit is the engine's own.
+#[must_use]
+pub fn echo_reply(
+    from: IpAddr,
+    to: IpAddr,
+    id: u16,
+    sequence: u16,
+    data: &[u8],
+) -> Option<Vec<u8>> {
+    let (protocol, kind) = if from.is_ipv4() {
+        (ICMP, ECHO_REPLY)
+    } else {
+        (ICMPV6, ECHO_REPLY_V6)
+    };
+    let mut icmp = Vec::with_capacity(data.len().checked_add(8)?);
+    icmp.extend_from_slice(&[kind, 0, 0, 0]);
+    icmp.extend_from_slice(&id.to_be_bytes());
+    icmp.extend_from_slice(&sequence.to_be_bytes());
+    icmp.extend_from_slice(data);
+    assemble(from, to, protocol, icmp, 2)
 }
 
 /// The unspecified address of the same version as `address`.
@@ -690,5 +855,227 @@ mod tests {
         let error6 = unreachable(&query6, &parsed, Unreachable::Host).unwrap_or_default();
         assert!(checksums_valid(&error6));
         assert_eq!(&error6[40..42], &[1, 3]);
+    }
+
+    /// An app's echo request, as its ping socket's kernel sends it into the tunnel.
+    fn ping4(id: u16, sequence: u16, data: &[u8]) -> Vec<u8> {
+        let mut packet = Vec::new();
+        PacketBuilder::ipv4(APP4, SERVER4, 64)
+            .icmpv4_echo_request(id, sequence)
+            .write(&mut packet, data)
+            .unwrap_or_default();
+        packet
+    }
+
+    fn ping6(id: u16, sequence: u16, data: &[u8]) -> Vec<u8> {
+        let mut packet = Vec::new();
+        PacketBuilder::ipv6(v6(APP6), v6(SERVER6), 64)
+            .icmpv6_echo_request(id, sequence)
+            .write(&mut packet, data)
+            .unwrap_or_default();
+        packet
+    }
+
+    #[test]
+    fn reads_echo_requests_of_both_versions() {
+        let request = ping4(0x1234, 7, b"ping data");
+        assert_eq!(
+            echo_request(&request),
+            Ok(Echo {
+                icmp: 20,
+                length: request.len(),
+                source: IpAddr::from(APP4),
+                destination: IpAddr::from(SERVER4),
+                id: 0x1234,
+                sequence: 7,
+            })
+        );
+        // A TCP or UDP reader gives it up as ICMP, as before.
+        assert_eq!(parse(&request), Err(Skip::Other(ICMP)));
+
+        let mut request6 = ping6(0xbeef, 65_535, b"ping data");
+        assert_eq!(
+            echo_request(&request6),
+            Ok(Echo {
+                icmp: 40,
+                length: request6.len(),
+                source: IpAddr::from(v6(APP6)),
+                destination: IpAddr::from(v6(SERVER6)),
+                id: 0xbeef,
+                sequence: 65_535,
+            })
+        );
+        // Padding after the IP packet's own length is not part of it.
+        request6.extend_from_slice(&[0; 6]);
+        assert_eq!(
+            echo_request(&request6).map(|e| e.length),
+            Ok(request6.len() - 6)
+        );
+    }
+
+    #[test]
+    fn refuses_an_echo_request_whose_checksum_is_wrong() {
+        let mut request = ping4(1, 1, b"data");
+        let last = request.len() - 1;
+        request[last] ^= 0x01;
+        assert_eq!(echo_request(&request), Err(Skip::Malformed));
+
+        // ICMPv6's checksum covers the addresses too: the same message to another address fails.
+        let mut request6 = ping6(1, 1, b"data");
+        assert!(echo_request(&request6).is_ok());
+        request6[39] ^= 0x01;
+        assert_eq!(echo_request(&request6), Err(Skip::Malformed));
+
+        for cut in 0..ping4(1, 1, b"").len() {
+            let mut short = ping4(1, 1, b"");
+            short.truncate(cut);
+            if let Some(length) = short.get_mut(2..4) {
+                length.copy_from_slice(&u16::try_from(cut).unwrap_or(0).to_be_bytes());
+            }
+            assert!(echo_request(&short).is_err(), "cut at {cut}");
+        }
+    }
+
+    #[test]
+    fn other_icmp_from_apps_is_still_skipped() {
+        let app = SocketAddr::from((APP4, 40_000));
+        let server = SocketAddr::from((SERVER4, 53));
+        let datagram = udp(app, server, b"query").unwrap_or_default();
+        let Ok(parsed) = parse(&datagram) else {
+            unreachable!("not parsed")
+        };
+        // An app's kernel saying a port is closed, and an echo reply, which no app sends to be carried.
+        let error = unreachable(&datagram, &parsed, Unreachable::Port).unwrap_or_default();
+        assert_eq!(echo_request(&error), Err(Skip::Other(ICMP)));
+        let reply =
+            echo_reply(IpAddr::from(APP4), IpAddr::from(SERVER4), 1, 1, b"").unwrap_or_default();
+        assert_eq!(echo_request(&reply), Err(Skip::Other(ICMP)));
+        // An echo request with a code other than 0.
+        let mut coded = ping4(1, 1, b"");
+        coded[21] = 1;
+        assert_eq!(echo_request(&coded), Err(Skip::Other(ICMP)));
+        // A neighbour solicitation, and ICMP's echo request inside IPv6 rather than ICMPv6's.
+        let mut solicitation = Vec::new();
+        PacketBuilder::ipv6(v6(APP6), v6(SERVER6), 255)
+            .icmpv6_raw(135, 0, [0; 4])
+            .write(&mut solicitation, &[0; 16])
+            .unwrap_or_default();
+        assert_eq!(echo_request(&solicitation), Err(Skip::Other(ICMPV6)));
+        let mut wrong_version = ping6(1, 1, b"");
+        wrong_version[6] = ICMP;
+        assert_eq!(echo_request(&wrong_version), Err(Skip::Other(ICMP)));
+        // UDP and TCP are no echo.
+        assert_eq!(echo_request(&datagram), Err(Skip::Other(UDP)));
+        assert_eq!(echo_request(&syn4()), Err(Skip::Other(TCP)));
+    }
+
+    #[test]
+    fn a_rebuilt_reply_bears_the_apps_id_and_checks_out() {
+        use etherparse::{IcmpEchoHeader, Icmpv4Type, Icmpv6Type};
+        let data = b"the request's own data, a time stamp among it";
+        let reply = echo_reply(IpAddr::from(SERVER4), IpAddr::from(APP4), 0x1234, 7, data)
+            .unwrap_or_default();
+        assert!(checksums_valid(&reply));
+        let Ok(SlicedPacket {
+            net: Some(NetSlice::Ipv4(ip)),
+            transport: Some(TransportSlice::Icmpv4(icmp)),
+            ..
+        }) = SlicedPacket::from_ip(&reply)
+        else {
+            unreachable!("not an ICMP packet: {reply:?}")
+        };
+        assert_eq!(
+            (
+                ip.header().source(),
+                ip.header().destination(),
+                ip.header().ttl()
+            ),
+            (SERVER4, APP4, 64)
+        );
+        assert_eq!(
+            icmp.icmp_type(),
+            Icmpv4Type::EchoReply(IcmpEchoHeader { id: 0x1234, seq: 7 })
+        );
+        assert_eq!(icmp.payload(), data);
+
+        let reply6 = echo_reply(
+            IpAddr::from(v6(SERVER6)),
+            IpAddr::from(v6(APP6)),
+            0xbeef,
+            9,
+            data,
+        )
+        .unwrap_or_default();
+        assert!(checksums_valid(&reply6));
+        let Ok(SlicedPacket {
+            net: Some(NetSlice::Ipv6(ip)),
+            transport: Some(TransportSlice::Icmpv6(icmp)),
+            ..
+        }) = SlicedPacket::from_ip(&reply6)
+        else {
+            unreachable!("not an ICMPv6 packet: {reply6:?}")
+        };
+        assert_eq!(
+            (
+                ip.header().source(),
+                ip.header().destination(),
+                ip.header().hop_limit()
+            ),
+            (v6(SERVER6), v6(APP6), 64)
+        );
+        assert_eq!(
+            icmp.icmp_type(),
+            Icmpv6Type::EchoReply(IcmpEchoHeader { id: 0xbeef, seq: 9 })
+        );
+        assert_eq!(icmp.payload(), data);
+        assert!(echo_reply(IpAddr::from(SERVER4), IpAddr::from(v6(APP6)), 1, 1, data).is_none());
+    }
+
+    #[test]
+    fn a_refused_echo_is_answered_administratively_prohibited() {
+        let request = ping4(0x1234, 7, b"ping data");
+        let Ok(echo) = echo_request(&request) else {
+            unreachable!("not read")
+        };
+        let error = echo_refused(&request, &echo).unwrap_or_default();
+        assert!(checksums_valid(&error));
+        // From the address pinged to the app, type 3 code 13, quoting the whole request.
+        assert_eq!((&error[12..16], &error[16..20]), (&SERVER4[..], &APP4[..]));
+        assert_eq!(&error[20..22], &[3, 13]);
+        assert_eq!(&error[28..], &request[..]);
+
+        let request6 = ping6(0xbeef, 9, b"ping data");
+        let Ok(echo6) = echo_request(&request6) else {
+            unreachable!("not read")
+        };
+        let error6 = echo_refused(&request6, &echo6).unwrap_or_default();
+        assert!(checksums_valid(&error6));
+        assert_eq!(
+            (&error6[8..24], &error6[24..40]),
+            (&v6(SERVER6)[..], &v6(APP6)[..])
+        );
+        assert_eq!(&error6[40..42], &[1, 1]);
+        assert_eq!(&error6[48..], &request6[..]);
+        // No error answers a request to a multicast or broadcast address.
+        for to in [[224, 0, 0, 1], [255, 255, 255, 255], [0, 0, 0, 0]] {
+            let mut request = Vec::new();
+            PacketBuilder::ipv4(APP4, to, 64)
+                .icmpv4_echo_request(1, 1)
+                .write(&mut request, b"")
+                .unwrap_or_default();
+            let Ok(echo) = echo_request(&request) else {
+                unreachable!("not read: {to:?}")
+            };
+            assert_eq!(echo_refused(&request, &echo), None, "to {to:?}");
+        }
+        let mut all_nodes = Vec::new();
+        PacketBuilder::ipv6(v6(APP6), v6([0xff02, 0, 0, 0, 0, 0, 0, 1]), 64)
+            .icmpv6_echo_request(1, 1)
+            .write(&mut all_nodes, b"")
+            .unwrap_or_default();
+        let Ok(echo) = echo_request(&all_nodes) else {
+            unreachable!("not read")
+        };
+        assert_eq!(echo_refused(&all_nodes, &echo), None);
     }
 }

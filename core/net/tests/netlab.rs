@@ -12,13 +12,15 @@ mod common;
 use common::{Settings, proxy};
 use datapavan_net::engine::{Addresses, Limits};
 use datapavan_net::{Chain, Config, Engine, Platform, packet};
+use socket2::{Domain, Protocol, Socket, Type};
 use std::collections::HashSet;
 use std::future::Future;
 use std::io;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::os::fd::{AsFd, RawFd};
 use std::process::Command;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
@@ -33,6 +35,8 @@ const INSIDE: &str = "NETLAB_INSIDE";
 const SERVER: Ipv4Addr = Ipv4Addr::new(198, 51, 100, 9);
 /// A second address beside it: another server, or a stranger to the apps.
 const OTHER: Ipv4Addr = Ipv4Addr::new(198, 51, 100, 10);
+/// The "internet" through IPv6 (RFC 3849), where the machine has IPv6.
+const SERVER6: Ipv6Addr = Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 9);
 /// The UID the lab's Android names for every app in the tunnel, but the second app.
 const APP: u32 = 10_500;
 /// A second app: the lab's Android names it for a socket bound to one of [`SECOND_PORTS`], below the
@@ -53,15 +57,25 @@ const UDP_FILTERED: usize = 25;
 const UDP_RELAY_ELSEWHERE: usize = 28;
 const UDP_REFUSED: usize = 31;
 const UDP_EVICTED: usize = 32;
+const ECHO_CARRIED: usize = 33;
+const ECHO_REPLIES: usize = 34;
+const ECHO_REFUSED: usize = 35;
+const ECHO_UNSUPPORTED: usize = 36;
+const ECHO_DROPPED: usize = 37;
 /// A server that never answers (scripts/netlab-enter.py routes it into a tunnel no one reads).
 const SILENT: Ipv4Addr = Ipv4Addr::new(203, 0, 113, 1);
 /// How long any one step may take before the test fails.
 const STEP: Duration = Duration::from_secs(5);
 
+/// How long the lab's Android takes to protect a socket, in milliseconds: no time, unless a test sets
+/// it, so that a chain can come on while a socket is being made. Each test runs in a process of its
+/// own.
+static PROTECT_DELAY: AtomicU64 = AtomicU64::new(0);
+
 /// Android as the lab plays it: every app in the tunnel is one app, but one whose socket is bound to
 /// one of [`SECOND_PORTS`], and it answers slowly for one bound to one of [`SLOW_PORTS`]; protection is
 /// the namespace's routing (the engine's sockets are not bound to the tunnel's address, so they never
-/// enter it).
+/// enter it), and takes [`PROTECT_DELAY`].
 struct Lab;
 
 impl Platform for Lab {
@@ -78,6 +92,10 @@ impl Platform for Lab {
     }
 
     fn protect(&self, _: RawFd) -> bool {
+        let delay = PROTECT_DELAY.load(Ordering::Relaxed);
+        if delay > 0 {
+            std::thread::sleep(Duration::from_millis(delay));
+        }
         true
     }
 
@@ -88,6 +106,16 @@ impl Platform for Lab {
 /// test inside a fresh one instead, and fails unless exactly that test ran there and passed: a lab
 /// that could not be built never passes silently.
 fn lab<F, Fut>(name: &str, limits: Limits, body: F) -> Outcome
+where
+    F: FnOnce(Arc<Engine>) -> Fut,
+    Fut: Future<Output = Outcome>,
+{
+    lab_with(name, limits, &[], body)
+}
+
+/// [`lab`], with `settings` for scripts/netlab-enter.py in the namespace's environment: for a test
+/// that changes what the engine finds as it starts.
+fn lab_with<F, Fut>(name: &str, limits: Limits, settings: &[(&str, &str)], body: F) -> Outcome
 where
     F: FnOnce(Arc<Engine>) -> Fut,
     Fut: Future<Output = Outcome>,
@@ -107,6 +135,7 @@ where
                 "--test-threads=1",
             ])
             .env(INSIDE, "1")
+            .envs(settings.iter().copied())
             .output()?;
         let text = format!(
             "{}{}",
@@ -1157,6 +1186,620 @@ fn a_relay_at_the_broadcast_address_is_refused() -> Outcome {
             assert!(answer.is_err(), "an answer came: {answer:?}");
             assert_eq!(tool.commands(), [3]);
             assert_eq!(engine.counters()[UDP_RELAY_ELSEWHERE], 1);
+            Ok(())
+        },
+    )
+}
+
+/// An app's ping socket, made as Android's apps make theirs: unprivileged (the namespace's
+/// `ping_group_range` holds its one group), on the tunnel's address so that the namespace sends its
+/// requests into the tunnel, and with the echo identifier `id`, which its kernel writes into each
+/// request and by which it hands the socket its replies.
+fn app_ping_socket(id: u16) -> io::Result<Socket> {
+    ping_socket_at(IpAddr::V4(Addresses::COMMON.tun4), id)
+}
+
+/// The same on the tunnel's IPv6 address.
+fn ping_socket_at(at: IpAddr, id: u16) -> io::Result<Socket> {
+    let socket = if at.is_ipv4() {
+        Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::ICMPV4))?
+    } else {
+        Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::ICMPV6))?
+    };
+    socket.bind(&SocketAddr::new(at, id).into())?;
+    socket.set_nonblocking(true)?;
+    Ok(socket)
+}
+
+/// [`app_ping_socket`], read and written through Tokio, which sends and receives its datagrams.
+fn app_pinger(id: u16) -> io::Result<UdpSocket> {
+    UdpSocket::from_std(std::net::UdpSocket::from(app_ping_socket(id)?))
+}
+
+/// An echo request numbered `sequence` with `data`, ICMP's or `ICMPv6`'s, as an app hands it to its
+/// ping socket: the kernel fills in the identifier and the checksum.
+fn echo_request(v4: bool, sequence: u16, data: &[u8]) -> Vec<u8> {
+    let kind = if v4 {
+        packet::ECHO_REQUEST
+    } else {
+        packet::ECHO_REQUEST_V6
+    };
+    let mut request = vec![kind, 0, 0, 0, 0, 0];
+    request.extend_from_slice(&sequence.to_be_bytes());
+    request.extend_from_slice(data);
+    request
+}
+
+async fn ping(
+    app: &UdpSocket,
+    to: impl Into<IpAddr>,
+    sequence: u16,
+    data: &[u8],
+) -> io::Result<()> {
+    let to = to.into();
+    app.send_to(&echo_request(to.is_ipv4(), sequence, data), (to, 0))
+        .await
+        .map(|_| ())
+}
+
+/// An echo reply as an app's ping socket reads it: its identifier, sequence number and data, and who
+/// sent it.
+type Pong = (u16, u16, Vec<u8>, IpAddr);
+
+fn pong_of(message: &[u8], from: SocketAddr) -> Result<Pong, Box<dyn std::error::Error>> {
+    match message {
+        [
+            packet::ECHO_REPLY | packet::ECHO_REPLY_V6,
+            0,
+            _,
+            _,
+            id_high,
+            id_low,
+            high,
+            low,
+            data @ ..,
+        ] => Ok((
+            u16::from_be_bytes([*id_high, *id_low]),
+            u16::from_be_bytes([*high, *low]),
+            data.to_vec(),
+            from.ip(),
+        )),
+        other => Err(format!("not an echo reply: {other:?}").into()),
+    }
+}
+
+/// The next echo reply to the app.
+async fn pong(app: &UdpSocket) -> Result<Pong, Box<dyn std::error::Error>> {
+    let mut buffer = vec![0u8; 2048];
+    let (n, from) = within("an echo reply", app.recv_from(&mut buffer)).await?;
+    pong_of(&buffer[..n], from)
+}
+
+/// That no echo reply reaches the app within a second.
+async fn no_pong(app: &UdpSocket) -> Outcome {
+    let mut buffer = vec![0u8; 2048];
+    match timeout(Duration::from_secs(1), app.recv_from(&mut buffer)).await {
+        Err(_) => Ok(()),
+        Ok(read) => Err(format!("an answer came: {read:?}").into()),
+    }
+}
+
+/// The IPv4 ping sockets open in the namespace, the apps' and the engine's, from its own table.
+fn ping_sockets() -> Result<usize, Box<dyn std::error::Error>> {
+    Ok(std::fs::read_to_string("/proc/net/icmp")?
+        .lines()
+        .skip(1)
+        .count())
+}
+
+const SERVER_IP: IpAddr = IpAddr::V4(SERVER);
+
+/// ADR 0044, decision 5 (review finding 21): an app's ping leaves through a ping socket of the
+/// engine's own, whose kernel gives its requests an identifier of that socket's, and each reply
+/// reaches the app with the app's own identifier, sequence number and data. The app's kernel hands a
+/// ping socket only the replies that bear its identifier, so a reply whose identifier was not
+/// restored, or whose checksum is wrong, never reaches it. A ping to the tunnel's DNS address reaches
+/// the network's resolver, and its reply comes from the address the app pinged.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn an_apps_ping_gets_its_reply_with_its_own_id_and_sequence() -> Outcome {
+    lab(
+        "an_apps_ping_gets_its_reply_with_its_own_id_and_sequence",
+        Limits::default(),
+        |engine| async move {
+            let app = app_pinger(4242)?;
+            for sequence in [1, 2, 65_535] {
+                ping(&app, SERVER, sequence, b"a time stamp, say").await?;
+                assert_eq!(
+                    pong(&app).await?,
+                    (4242, sequence, b"a time stamp, say".to_vec(), SERVER_IP)
+                );
+            }
+            let counters = engine.counters();
+            assert_eq!((counters[ECHO_CARRIED], counters[ECHO_REPLIES]), (3, 3));
+            // One socket of the app's, and one of the engine's for it.
+            assert_eq!(ping_sockets()?, 2);
+
+            engine.network_changed(Some(IpAddr::V4(OTHER)), false);
+            let dns = Addresses::COMMON.dns4;
+            ping(&app, dns, 9, b"the resolver").await?;
+            assert_eq!(
+                pong(&app).await?,
+                (4242, 9, b"the resolver".to_vec(), IpAddr::V4(dns))
+            );
+            Ok(())
+        },
+    )
+}
+
+/// The same through IPv6, whose echo checksum covers a pseudo-header with both addresses, so that a
+/// reply rebuilt from another address, or not rebuilt, fails it. The lab gives the tunnel the common
+/// IPv6 address where the machine has IPv6; where it has not, this test fails and says so.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn an_apps_ipv6_ping_gets_its_reply_with_its_own_id_and_sequence() -> Outcome {
+    lab(
+        "an_apps_ipv6_ping_gets_its_reply_with_its_own_id_and_sequence",
+        Limits::default(),
+        |engine| async move {
+            if std::env::var_os("NETLAB_IPV6").is_some_and(|v| v == "absent") {
+                return Err(
+                    "the lab has no IPv6 on this machine: scripts/netlab-enter.py says why".into(),
+                );
+            }
+            let socket = ping_socket_at(IpAddr::V6(Addresses::COMMON.tun6), 4243)?;
+            let app = UdpSocket::from_std(std::net::UdpSocket::from(socket))?;
+            for sequence in [1, 2] {
+                ping(&app, SERVER6, sequence, b"through IPv6").await?;
+                assert_eq!(
+                    pong(&app).await?,
+                    (
+                        4243,
+                        sequence,
+                        b"through IPv6".to_vec(),
+                        IpAddr::V6(SERVER6)
+                    )
+                );
+            }
+            let counters = engine.counters();
+            assert_eq!((counters[ECHO_CARRIED], counters[ECHO_REPLIES]), (2, 2));
+            Ok(())
+        },
+    )
+}
+
+/// One engine socket for each app socket and address pinged: three apps' pings at once, each with its
+/// own identifier, each get their own reply, and one app pinging a second address gets a second
+/// socket of the engine's.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn pings_with_their_own_ids_each_get_their_own_reply() -> Outcome {
+    lab(
+        "pings_with_their_own_ids_each_get_their_own_reply",
+        Limits::default(),
+        |engine| async move {
+            let ids = [4301, 4302, 4303];
+            let mut apps = Vec::new();
+            for id in ids {
+                apps.push(app_pinger(id)?);
+            }
+            for (app, id) in apps.iter().zip(ids) {
+                ping(app, SERVER, id % 100, &id.to_be_bytes()).await?;
+            }
+            for (app, id) in apps.iter().zip(ids) {
+                assert_eq!(
+                    pong(app).await?,
+                    (id, id % 100, id.to_be_bytes().to_vec(), SERVER_IP)
+                );
+            }
+            assert_eq!(ping_sockets()?, 6, "three apps' and three of the engine's");
+            ping(&apps[0], OTHER, 4, b"elsewhere").await?;
+            assert_eq!(
+                pong(&apps[0]).await?,
+                (ids[0], 4, b"elsewhere".to_vec(), IpAddr::V4(OTHER))
+            );
+            assert_eq!(ping_sockets()?, 7);
+            let counters = engine.counters();
+            assert_eq!((counters[ECHO_CARRIED], counters[ECHO_REPLIES]), (4, 4));
+            Ok(())
+        },
+    )
+}
+
+/// The echo identifier of the engine's one ping socket, from the namespace's table: the only one not
+/// bound to the tunnel's address.
+fn engine_ping_id() -> Result<u16, Box<dyn std::error::Error>> {
+    let table = std::fs::read_to_string("/proc/net/icmp")?;
+    let ids: Vec<u16> = table
+        .lines()
+        .skip(1)
+        .filter_map(|line| {
+            let (address, port) = line.split_whitespace().nth(1)?.split_once(':')?;
+            (address == "00000000").then(|| u16::from_str_radix(port, 16).ok())?
+        })
+        .collect();
+    match ids[..] {
+        [id] => Ok(id),
+        _ => Err(format!("not one engine socket: {table}").into()),
+    }
+}
+
+/// The kernel hands a ping socket every echo reply that bears its identifier, from wherever it comes:
+/// a reply forged from another address, with the engine socket's identifier, never reaches the app,
+/// and the destination's own next reply still does.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_reply_from_another_address_never_reaches_the_app() -> Outcome {
+    lab(
+        "a_reply_from_another_address_never_reaches_the_app",
+        Limits::default(),
+        |_engine| async move {
+            let app = app_pinger(4251)?;
+            ping(&app, SERVER, 1, b"first").await?;
+            assert_eq!(pong(&app).await?, (4251, 1, b"first".to_vec(), SERVER_IP));
+            let id = engine_ping_id()?;
+            // A stranger, with a raw socket, which the namespace's root may make.
+            let stranger = Socket::new(Domain::IPV4, Type::RAW, Some(Protocol::ICMPV4))?;
+            stranger.bind(&SocketAddr::from((OTHER, 0)).into())?;
+            let Some(forged) = packet::echo_reply(IpAddr::V4(OTHER), SERVER_IP, id, 99, b"forged")
+            else {
+                return Err("no reply built".into());
+            };
+            stranger.send_to(&forged[20..], &SocketAddr::from((SERVER, 0)).into())?;
+            ping(&app, SERVER, 2, b"second").await?;
+            assert_eq!(pong(&app).await?, (4251, 2, b"second".to_vec(), SERVER_IP));
+            no_pong(&app).await
+        },
+    )
+}
+
+/// At most `Limits::echo_sockets` ping sockets: a third app's ping beyond two is dropped and counted,
+/// while an app that has a socket still pings through it; once both sockets are idle for
+/// `Limits::echo_idle`, they are swept, with no packet needed, and the third app's next ping gets
+/// through.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn pings_beyond_the_cap_are_dropped_until_a_socket_goes_idle() -> Outcome {
+    let limits = Limits {
+        echo_sockets: 2,
+        echo_idle: Duration::from_secs(2),
+        ..Limits::default()
+    };
+    lab(
+        "pings_beyond_the_cap_are_dropped_until_a_socket_goes_idle",
+        limits,
+        |engine| async move {
+            let (first, second, third) = (app_pinger(4401)?, app_pinger(4402)?, app_pinger(4403)?);
+            for (app, id) in [(&first, 4401), (&second, 4402)] {
+                ping(app, SERVER, 1, b"in").await?;
+                assert_eq!(pong(app).await?, (id, 1, b"in".to_vec(), SERVER_IP));
+            }
+            ping(&third, SERVER, 1, b"beyond the cap").await?;
+            no_pong(&third).await?;
+            assert_eq!(engine.counters()[ECHO_DROPPED], 1);
+            ping(&first, SERVER, 2, b"still in").await?;
+            assert_eq!(
+                pong(&first).await?,
+                (4401, 2, b"still in".to_vec(), SERVER_IP)
+            );
+            assert_eq!(ping_sockets()?, 5, "three apps' and two of the engine's");
+
+            until_count("the engine's idle sockets were swept", ping_sockets, 3).await?;
+            ping(&third, SERVER, 2, b"in at last").await?;
+            assert_eq!(
+                pong(&third).await?,
+                (4403, 2, b"in at last".to_vec(), SERVER_IP)
+            );
+            let counters = engine.counters();
+            assert_eq!((counters[ECHO_CARRIED], counters[ECHO_DROPPED]), (4, 1));
+            Ok(())
+        },
+    )
+}
+
+/// The IPv6 ping sockets open in the namespace.
+fn ping_sockets6() -> Result<usize, Box<dyn std::error::Error>> {
+    Ok(std::fs::read_to_string("/proc/net/icmp6")?
+        .lines()
+        .skip(1)
+        .count())
+}
+
+/// How many echo requests the namespace's own stack, the lab's "internet", received: `InEchos` of
+/// `/proc/net/snmp`, or `Icmp6InEchos` of `/proc/net/snmp6`.
+fn echoes_received(v4: bool) -> Result<u64, Box<dyn std::error::Error>> {
+    let found = if v4 {
+        let snmp = std::fs::read_to_string("/proc/net/snmp")?;
+        let mut icmp = snmp.lines().filter(|line| line.starts_with("Icmp: "));
+        let (names, values) = (icmp.next().unwrap_or(""), icmp.next().unwrap_or(""));
+        names
+            .split_whitespace()
+            .zip(values.split_whitespace())
+            .find(|(name, _)| *name == "InEchos")
+            .and_then(|(_, value)| value.parse().ok())
+    } else {
+        std::fs::read_to_string("/proc/net/snmp6")?
+            .lines()
+            .find_map(|line| line.strip_prefix("Icmp6InEchos"))
+            .and_then(|value| value.trim().parse().ok())
+    };
+    found.ok_or_else(|| "no count of echo requests received".into())
+}
+
+/// Waits until the counter at `index` reaches `value`, for five seconds at most.
+async fn counted(engine: &Engine, index: usize, value: u64) -> Outcome {
+    for _ in 0..500 {
+        if engine.counters()[index] >= value {
+            assert_eq!(engine.counters()[index], value, "counted more than once");
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    Err(format!(
+        "counter {index} never reached {value}: {:?}",
+        engine.counters()
+    )
+    .into())
+}
+
+/// Waits until `count` gives `value`, for five seconds at most.
+async fn until_count(
+    what: &str,
+    count: impl Fn() -> Result<usize, Box<dyn std::error::Error>>,
+    value: usize,
+) -> Outcome {
+    for _ in 0..500 {
+        if count()? == value {
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    Err(format!("{what}: {} rather than {value}", count()?).into())
+}
+
+/// A ping from a blocking app socket that asks for its ICMP errors, `IP_RECVERR` or `IPV6_RECVERR`,
+/// as a ping program does: its read wakes for the error, which Tokio's does not.
+fn erring_pinger(at: IpAddr, id: u16) -> io::Result<Socket> {
+    let socket = ping_socket_at(at, id)?;
+    socket.set_nonblocking(false)?;
+    socket.set_read_timeout(Some(STEP))?;
+    if at.is_ipv4() {
+        nix::sys::socket::setsockopt(&socket, nix::sys::socket::sockopt::Ipv4RecvErr, &true)?;
+    } else {
+        nix::sys::socket::setsockopt(&socket, nix::sys::socket::sockopt::Ipv6RecvErr, &true)?;
+    }
+    Ok(socket)
+}
+
+/// What a blocking ping socket reads next: the reply, as [`pong_of`] reads it, or the error its read
+/// failed with and the ICMP errors on its queue, each as (origin, type, code).
+type Heard = Result<Pong, (io::ErrorKind, Vec<(u8, u8, u8)>)>;
+
+fn hear(app: &Socket, from: IpAddr) -> Result<Heard, Box<dyn std::error::Error>> {
+    use nix::libc;
+    use nix::sys::socket::{ControlMessageOwned, MsgFlags, SockaddrStorage, recvmsg};
+    use std::io::Read;
+    use std::os::fd::AsRawFd;
+    let mut buffer = [0u8; 256];
+    let error = match (&*app).read(&mut buffer) {
+        Ok(n) => return Ok(Ok(pong_of(&buffer[..n], SocketAddr::new(from, 0))?)),
+        Err(error) => error.kind(),
+    };
+    let mut control = nix::cmsg_space!(libc::sock_extended_err, libc::sockaddr_in6);
+    let mut quoted = [0u8; 256];
+    let mut parts = [io::IoSliceMut::new(&mut quoted)];
+    let mut errors = Vec::new();
+    if let Ok(message) = recvmsg::<SockaddrStorage>(
+        app.as_raw_fd(),
+        &mut parts,
+        Some(&mut control),
+        MsgFlags::MSG_ERRQUEUE | MsgFlags::MSG_DONTWAIT,
+    ) {
+        for message in message.cmsgs()? {
+            if let ControlMessageOwned::Ipv4RecvErr(error, _)
+            | ControlMessageOwned::Ipv6RecvErr(error, _) = message
+            {
+                errors.push((error.ee_origin, error.ee_type, error.ee_code));
+            }
+        }
+    }
+    Ok(Err((error, errors)))
+}
+
+/// An app pings with the chain off, so that its socket and the engine's are open; then a chain comes
+/// on. Android cannot say whose a ping is, so the next one, from the same app socket, leaves through
+/// no socket: the app learns at once that its destination is "administratively prohibited", from the
+/// error the engine quotes its request in, and the "internet" receives no request. Once the chain is
+/// off, the same socket's ping gets its reply.
+fn refused_once_a_chain_comes_on(engine: &Engine, v4: bool) -> Outcome {
+    let (at, server, id) = if v4 {
+        (IpAddr::V4(Addresses::COMMON.tun4), SERVER_IP, 4601)
+    } else {
+        (
+            IpAddr::V6(Addresses::COMMON.tun6),
+            IpAddr::V6(SERVER6),
+            4602,
+        )
+    };
+    let app = erring_pinger(at, id)?;
+    let to = SocketAddr::new(server, 0).into();
+    app.send_to(&echo_request(v4, 1, b"before"), &to)?;
+    assert_eq!(hear(&app, server)?, Ok((id, 1, b"before".to_vec(), server)));
+    let received = echoes_received(v4)?;
+
+    // The tool's proxy is never asked: a ping does not go through it.
+    engine.chain(Some(lab_chain(SocketAddr::from((Ipv4Addr::LOCALHOST, 9)))));
+    app.send_to(&echo_request(v4, 2, b"may I?"), &to)?;
+    let refused = if v4 {
+        // Linux's ping socket: "host unreachable" for ICMP's code 13.
+        (
+            io::ErrorKind::HostUnreachable,
+            vec![(nix::libc::SO_EE_ORIGIN_ICMP, 3, 13)],
+        )
+    } else {
+        // And "permission denied" for ICMPv6's code 1.
+        (
+            io::ErrorKind::PermissionDenied,
+            vec![(nix::libc::SO_EE_ORIGIN_ICMP6, 1, 1)],
+        )
+    };
+    assert_eq!(hear(&app, server)?, Err(refused));
+    assert_eq!(echoes_received(v4)?, received, "the refused request left");
+    let counters = engine.counters();
+    assert_eq!((counters[ECHO_REFUSED], counters[ECHO_CARRIED]), (1, 1));
+
+    engine.chain(None);
+    app.send_to(&echo_request(v4, 3, b"and now?"), &to)?;
+    assert_eq!(
+        hear(&app, server)?,
+        Ok((id, 3, b"and now?".to_vec(), server))
+    );
+    Ok(())
+}
+
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_ping_is_refused_once_a_chain_comes_on() -> Outcome {
+    lab(
+        "a_ping_is_refused_once_a_chain_comes_on",
+        Limits::default(),
+        |engine| async move { refused_once_a_chain_comes_on(&engine, true) },
+    )
+}
+
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn an_ipv6_ping_is_refused_once_a_chain_comes_on() -> Outcome {
+    lab(
+        "an_ipv6_ping_is_refused_once_a_chain_comes_on",
+        Limits::default(),
+        |engine| async move {
+            if std::env::var_os("NETLAB_IPV6").is_some_and(|v| v == "absent") {
+                return Err(
+                    "the lab has no IPv6 on this machine: scripts/netlab-enter.py says why".into(),
+                );
+            }
+            refused_once_a_chain_comes_on(&engine, false)
+        },
+    )
+}
+
+/// Nothing comes in on the direct path while a chain is on: a reply the engine's socket receives
+/// once a chain is on, here one sent from the address pinged with that socket's identifier, never
+/// reaches the app, and the socket ends.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_reply_after_a_chain_comes_on_never_reaches_the_app() -> Outcome {
+    lab(
+        "a_reply_after_a_chain_comes_on_never_reaches_the_app",
+        Limits::default(),
+        |engine| async move {
+            let app = app_pinger(4611)?;
+            ping(&app, SERVER, 1, b"before").await?;
+            assert_eq!(pong(&app).await?, (4611, 1, b"before".to_vec(), SERVER_IP));
+            let id = engine_ping_id()?;
+            engine.chain(Some(lab_chain(SocketAddr::from((Ipv4Addr::LOCALHOST, 9)))));
+            let late = Socket::new(Domain::IPV4, Type::RAW, Some(Protocol::ICMPV4))?;
+            late.bind(&SocketAddr::from((SERVER, 0)).into())?;
+            let Some(reply) = packet::echo_reply(SERVER_IP, SERVER_IP, id, 77, b"late") else {
+                return Err("no reply built".into());
+            };
+            late.send_to(&reply[20..], &SocketAddr::from((SERVER, 0)).into())?;
+            no_pong(&app).await?;
+            until_count("the engine's socket after the late reply", ping_sockets, 1).await
+        },
+    )
+}
+
+/// A chain that comes on while a ping's socket is being made, here while the lab's Android takes half
+/// a second to protect it, lets nothing that waited for it leave: the request is counted refused, and
+/// the "internet" receives none.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_ping_waiting_for_its_socket_stays_once_a_chain_comes_on() -> Outcome {
+    lab(
+        "a_ping_waiting_for_its_socket_stays_once_a_chain_comes_on",
+        Limits::default(),
+        |engine| async move {
+            PROTECT_DELAY.store(500, Ordering::Relaxed);
+            let app = app_pinger(4621)?;
+            let received = echoes_received(true)?;
+            ping(&app, SERVER, 1, b"waiting").await?;
+            // By now the engine has read the request and is protecting its new socket, which waits 500 ms;
+            // an unbound ping socket is not listed in /proc/net/icmp until its first send, so this cannot be
+            // counted there.
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            engine.chain(Some(lab_chain(SocketAddr::from((Ipv4Addr::LOCALHOST, 9)))));
+            counted(&engine, ECHO_REFUSED, 1).await?;
+            no_pong(&app).await?;
+            assert_eq!(echoes_received(true)?, received, "the waiting request left");
+            assert_eq!(engine.counters()[ECHO_CARRIED], 0);
+            Ok(())
+        },
+    )
+}
+
+/// When the network beneath is another one, the ping sockets end, as UDP mappings do, so that the next
+/// ping goes out on the new network. A ping to the tunnel's DNS address while the network's resolver
+/// is of the other IP version goes nowhere and takes no socket.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_network_move_ends_the_ping_sockets() -> Outcome {
+    lab(
+        "a_network_move_ends_the_ping_sockets",
+        Limits::default(),
+        |engine| async move {
+            let app = app_pinger(4631)?;
+            ping(&app, SERVER, 1, b"before").await?;
+            assert_eq!(pong(&app).await?, (4631, 1, b"before".to_vec(), SERVER_IP));
+            assert_eq!(ping_sockets()?, 2);
+            engine.network_changed(Some(IpAddr::V6(SERVER6)), true);
+            until_count("the engine's socket after the move", ping_sockets, 1).await?;
+            ping(&app, SERVER, 2, b"after").await?;
+            assert_eq!(pong(&app).await?, (4631, 2, b"after".to_vec(), SERVER_IP));
+
+            ping(&app, Addresses::COMMON.dns4, 3, b"the resolver").await?;
+            counted(&engine, ECHO_DROPPED, 1).await?;
+            assert_eq!(ping_sockets6()?, 0, "a socket of the resolver's version");
+            no_pong(&app).await
+        },
+    )
+}
+
+/// Where the kernel refuses the engine's ping sockets, as a probe at its start finds, an app's ping is
+/// dropped as before the engine carried echo, and counted apart. The lab leaves the namespace's
+/// `ping_group_range` at its default, which allows no group, so the app pings from a raw socket, as a
+/// privileged ping does: the namespace's root may make one.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn where_the_kernel_refuses_ping_sockets_echo_is_dropped_and_counted() -> Outcome {
+    lab_with(
+        "where_the_kernel_refuses_ping_sockets_echo_is_dropped_and_counted",
+        Limits::default(),
+        &[("NETLAB_PING_GROUPS", "none")],
+        |engine| async move {
+            assert!(
+                app_ping_socket(4701).is_err(),
+                "the namespace allows ping sockets"
+            );
+            let raw = Socket::new(Domain::IPV4, Type::RAW, Some(Protocol::ICMPV4))?;
+            raw.bind(&SocketAddr::from((Addresses::COMMON.tun4, 0)).into())?;
+            // A raw ICMP socket sends the message as it is given, checksum included.
+            let mut request = Vec::new();
+            etherparse::PacketBuilder::ipv4(Addresses::COMMON.tun4.octets(), SERVER.octets(), 64)
+                .icmpv4_echo_request(4701, 1)
+                .write(&mut request, b"anyone?")?;
+            raw.send_to(&request[20..], &SocketAddr::from((SERVER, 0)).into())?;
+            counted(&engine, ECHO_UNSUPPORTED, 1).await?;
+            let counters = engine.counters();
+            assert_eq!(
+                (
+                    counters[ECHO_UNSUPPORTED],
+                    counters[ECHO_CARRIED],
+                    counters[ECHO_DROPPED]
+                ),
+                (1, 0, 0)
+            );
             Ok(())
         },
     )

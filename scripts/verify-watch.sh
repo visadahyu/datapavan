@@ -504,6 +504,28 @@ grep -qiE 'no route|unreachable' <<<"$answer" || fail "an unreachable IPv6 addre
 has_flow tcp "[2001:db8::1]:80" unreachable || fail "no unreachable flow of the shell"
 echo "ok: an unreachable IPv6 address gets the app an ICMPv6 error"
 
+# Ping through the tunnel (ADR 0044, decision 5): the shell's ping uses an unprivileged ICMP socket, and the
+# engine carries each echo request through one of its own, protected. The 34th counter counts requests carried,
+# the 35th replies, the 37th requests dropped because Android gave Watch no ICMP socket. A reply needs the
+# network beneath to carry ICMP, which a CI runner may not, so it is reported, not required.
+echo_counters() {
+    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" | tr -d '\r' | sed -n 's/^ *counters //p' | awk '{print $34, $35, $37}'
+}
+read -r carried0 replies0 unsupported0 <<<"$(echo_counters)"
+device 12 "ping -c 2 -W 3 1.1.1.1" >/dev/null 2>&1 || true
+read -r carried1 replies1 unsupported1 <<<"$(echo_counters)"
+if [ "${unsupported1:-0}" != "${unsupported0:-0}" ]; then
+    if is_emulator; then fail "Android gave Watch no ICMP socket on the emulator: ping was dropped"; fi
+    echo "skipped: ping, as this phone gives Watch no ICMP socket (dropped and counted)"
+else
+    [ "${carried1:-0}" -gt "${carried0:-0}" ] || fail "the shell's ping was not carried: $carried0, then $carried1"
+    if [ "${replies1:-0}" -gt "${replies0:-0}" ]; then
+        echo "ok: ping passes the tunnel through Watch's own ICMP socket, and its replies came back"
+    else
+        echo "ok: ping passes the tunnel through Watch's own ICMP socket (no reply: the network beneath carries no ICMP here)"
+    fi
+fi
+
 # Watch's listener is on the tunnel's own address, which any app can reach directly, from a port it
 # picks. A connection that does not come from the address the engine rewrites the apps' connections to
 # come from is closed at once and counted (the 19th counter): it never takes another app's waiting

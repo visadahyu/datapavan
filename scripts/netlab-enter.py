@@ -14,9 +14,14 @@
 #   to itself stay local.
 # - Packets the engine writes come from addresses that are local in the namespace, so reverse-path
 #   filtering is off and tun0 accepts local sources.
-# - Only GID 0 exists in the namespace, so it may open ICMP sockets.
+# - Only GID 0 exists in the namespace, so it may open ICMP sockets. With NETLAB_PING_GROUPS=none the
+#   namespace keeps its default range instead, which allows no group, as a kernel that refuses such
+#   sockets: Linux takes no empty range from a user namespace that maps one group.
 # - 203.0.113.0/24 (RFC 5737) is routed into tun1, which no one reads: a server there never answers,
 #   as one behind a firewall that drops packets.
+# - Through IPv6 the same, where the machine has IPv6: tun0 holds the tunnel's common IPv6 address
+#   (a /128), and the "internet" is 2001:db8::9 (RFC 3849) on the loopback. Where it has none, the lab
+#   says so, sets NETLAB_IPV6=absent for the test, and goes on with IPv4: the IPv6 tests then fail.
 #
 #   netlab-enter.py -- PROGRAM [ARGUMENTS...]
 #
@@ -37,6 +42,10 @@ DNS4 = "10.1.10.3"
 SERVER4 = "198.51.100.9"
 OTHER4 = "198.51.100.10"
 SILENT4 = "203.0.113.0/24"
+TUN6 = "fd00:1:fd00:1:fd00:1:fd00:1"
+FAKE6 = "fd00:1:fd00:1:fd00:1:fd00:2"
+DNS6 = "fd00:1:fd00:1:fd00:1:fd00:3"
+SERVER6 = "2001:db8::9"
 APPS_TABLE = "100"
 
 
@@ -47,6 +56,20 @@ def ip(*arguments):
 def sysctl(name, value):
     with open("/proc/sys/" + name.replace(".", "/"), "w") as setting:
         setting.write(value)
+
+
+# The tunnel's IPv6 side, built as its IPv4 side is. The addresses skip duplicate address detection,
+# which would hold them back for a moment.
+def ipv6():
+    ip("-6", "addr", "add", SERVER6 + "/128", "dev", "lo")
+    ip("-6", "addr", "add", TUN6 + "/128", "dev", "tun0", "nodad")
+    for address in (FAKE6, DNS6):
+        ip("-6", "route", "add", address + "/128", "dev", "tun0")
+    ip("-6", "route", "add", "default", "dev", "tun0", "table", APPS_TABLE)
+    ip("-6", "rule", "add", "pref", "50", "from", TUN6, "to", TUN6, "lookup", "local")
+    ip("-6", "rule", "add", "pref", "100", "from", TUN6, "lookup", APPS_TABLE)
+    ip("-6", "rule", "add", "pref", "200", "lookup", "local")
+    ip("-6", "rule", "del", "pref", "0")
 
 
 def tun(name):
@@ -76,6 +99,11 @@ def main():
     ip("rule", "add", "pref", "100", "from", TUN4, "lookup", APPS_TABLE)
     ip("rule", "add", "pref", "200", "lookup", "local")
     ip("rule", "del", "pref", "0")
+    try:
+        ipv6()
+    except (subprocess.CalledProcessError, OSError) as error:
+        print(f"netlab: no IPv6 here ({error}); the IPv6 tests will fail", file=sys.stderr)
+        os.environ["NETLAB_IPV6"] = "absent"
 
     # Its descriptor stays open in the test, unread, for as long as the namespace lives.
     silent = tun("tun1")
@@ -86,7 +114,8 @@ def main():
     sysctl("net.ipv4.conf.all.rp_filter", "0")
     sysctl("net.ipv4.conf.tun0.rp_filter", "0")
     sysctl("net.ipv4.conf.tun0.accept_local", "1")
-    sysctl("net.ipv4.ping_group_range", "0 0")
+    if os.environ.get("NETLAB_PING_GROUPS") != "none":
+        sysctl("net.ipv4.ping_group_range", "0 0")
 
     os.dup2(tunnel, 0)
     os.close(tunnel)
