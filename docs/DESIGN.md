@@ -790,17 +790,18 @@ matter most had no test; a narrow review of the fixes found none left. On the An
 passed through Watch's own socket and its replies came back. How it is built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md),
 "How it is built".
 
-Fragments and the MTU, 2026-11-15 (finding 21b, ADR 0044 decision 5 as amended), built by a fresh agent from a
-written brief. The engine now puts the apps' IPv4 and IPv6 fragments together again, within bounds of 64 datagrams,
-1 MiB and five seconds that every app shares, and drops a datagram whose fragments overlap or whose first fragment
-lacks its header. It reads the first hop's MTU from its own kernel, through a protected socket connected toward the
-default route, at its start and at each network change, and learns each destination's path MTU from what routers
-send its sockets, passing it on to the app. On the direct path, a datagram or an echo request that may not be
-fragmented and is too large for that MTU is answered "fragmentation needed" or "packet too big" with the size the
-app's packet may have: the app's kernel then fragments its next datagrams, unless its socket asked never to, and the
-engine puts them together. A datagram put together so is never answered, and through the chain nothing is. Not yet
-run on the emulator, whose check now sends a ping larger than the tunnel's MTU, nor on a phone (unit 11b). How it
-is built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
+Fragments and the MTU, 2026-11-15 (finding 21b, ADR 0044 decision 5 as amended and revised), built by a fresh agent
+from a written brief. The engine now puts the apps' IPv4 and IPv6 fragments together again, within bounds of 64
+datagrams, 1 MiB and five seconds that every app shares, where the oldest incomplete datagram gives way; it drops a
+datagram whose fragments overlap, and its later ones, or whose first fragment lacks its header. The tunnel's MTU now
+follows the network beneath: Watch reads the first hop's MTU from the phone's kernel, through a socket bound to that
+network, gives the tunnel the smaller of IPv4's and IPv6's within 1,280 and 1,500, and sets the tunnel up again when a
+network change brings another value. Each app's own kernel then meets that hop as without Watch, fragmenting a
+datagram or refusing it by its socket's setting. What routers beyond it answer, "fragmentation needed" or "packet too
+big", reaches the app with their MTU. A first version answered "too large" from the engine itself; an independent
+review found that it cost a connected default socket a datagram, and an IPv6 socket set to ignore path MTU every
+one, and it was taken back. Not yet run on the emulator, whose check now looks at the tunnel's MTU and sends a ping larger than it, nor on a
+phone (unit 11b). How it is built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 | # | Milestone | Done when |
 |---|---|---|
