@@ -88,7 +88,7 @@ fail() {
     local account
     account=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" 2>/dev/null | tr -d '\r' | sed -n 's/^ *//p' || true)
     echo "Watch's own account:" >&2
-    grep -E '^(running|counters)' <<<"$account" >&2 || true
+    grep -E '^(running|counters|mtu)' <<<"$account" >&2 || true
     if is_emulator; then
         echo "The shell's flows:" >&2
         grep -E "^flow [a-z]+ [^ ]+ [^ ]+ $SHELL_UID " <<<"$account" >&2 || echo "  none" >&2
@@ -535,12 +535,25 @@ read -r chosen _ first4 first6 <<<"$mtu_line"
 links=$(adb shell ip -o -4 addr show </dev/null | tr -d '\r')
 interface=$(awk -v address="$(tunnel_address)" '$4 ~ ("^" address "/") && !found { print $2; found = 1 }' <<<"$links")
 [ -n "$interface" ] || fail "no interface holds the tunnel's address $(tunnel_address)"
-link_mtu=$(adb shell cat "/sys/class/net/$interface/mtu" </dev/null | tr -d '\r')
-[ "$link_mtu" = "$chosen" ] || fail "the tunnel's interface $interface carries an MTU of $link_mtu, not the ${chosen:-none} Watch chose (first hop: IPv4 $first4, IPv6 $first6)"
+# Android 15's shell may neither read /sys/class/net nor ask the kernel for links ("ip link": "Permission
+# denied"), so the MTU is read where it may: from ip where that works, else from Android's own record of the
+# VPN network in dumpsys connectivity, whose link properties carry the MTU the tunnel was built with.
+link_mtu=$( { adb shell ip -o link show dev "$interface" </dev/null 2>/dev/null || true; } | tr -d '\r' | sed -n 's/.* mtu \([0-9]*\) .*/\1/p')
+if [ -z "$link_mtu" ]; then
+    connectivity=$(adb shell dumpsys connectivity </dev/null | tr -d '\r')
+    vpn_line=$(grep -m1 "InterfaceName: $interface " <<<"$connectivity" || true)
+    link_mtu=$(sed -n 's/.* MTU: \([0-9]*\).*/\1/p' <<<"$vpn_line")
+fi
 if is_emulator && [ "$chosen" != 1500 ]; then
     fail "on the emulator, whose networks are 1,500, Watch chose a tunnel MTU of $chosen (first hop: IPv4 $first4, IPv6 $first6)"
 fi
-echo "ok: the tunnel's MTU is $chosen, the first hop's (IPv4 $first4, IPv6 $first6)"
+if [ -z "$link_mtu" ]; then
+    echo "skipped: the MTU of the tunnel's interface $interface, which this shell can read neither with ip nor from dumpsys (Watch chose $chosen; first hop: IPv4 $first4, IPv6 $first6)"
+    echo "  the VPN network's record: ${vpn_line:-none}" | cut -c1-400
+else
+    [ "$link_mtu" = "$chosen" ] || fail "the tunnel's interface $interface carries an MTU of $link_mtu, not the ${chosen:-none} Watch chose (first hop: IPv4 $first4, IPv6 $first6)"
+    echo "ok: the tunnel's MTU is $chosen, the first hop's (IPv4 $first4, IPv6 $first6)"
+fi
 
 # Fragments (ADR 0044, decision 5 as amended): a ping of 2,000 bytes of data is a 2,028-byte request, which the
 # shell's kernel cuts into fragments at the tunnel's MTU of 1,500, and the engine puts together again before it
