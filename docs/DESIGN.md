@@ -780,7 +780,17 @@ fault in UDP and one in TCP: a connection dropped for its app's share once its S
 logged. Android is now asked first wherever the share could refuse a connection, and one begun beside Android is
 never dropped. How it is built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
-Still to come: ICMP echo and the network's MTU.
+Ping, 2026-11-15 (finding 21b, ADR 0044 decision 5), built by a fresh agent from a written brief. An app's ping now
+passes the tunnel through a ping socket of Watch's own, at most 32, each ending after ten idle seconds, when the
+network moves or when a chain comes on; the reply comes back with the app's own id. While any app is chained, every
+ping is refused at once with "administratively prohibited", since Android cannot say whose a ping is. Where Android
+gives Watch no ping socket, echo is dropped and counted, as before. An independent review found no fault in safety
+and two majors, fixed: requests that waited for a new socket could leave after a chain came on, and the claims that
+matter most had no test; a narrow review of the fixes found none left. On the Android 15 emulator the shell's ping
+passed through Watch's own socket and its replies came back. How it is built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md),
+"How it is built".
+
+Still to come: the network's MTU.
 
 | # | Milestone | Done when |
 |---|---|---|

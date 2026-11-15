@@ -486,3 +486,44 @@ an ADR (D25).
     while its socket, and through the tool its request's connection, close a moment later, as its task next runs,
     and as a datagram that was leaving by it is sent. For that moment the engine holds one or two descriptors
     more than the cap counts for each mapping so ended.
+
+**Unit 11, ping (2026-11-15, decision 5).**
+- **What is carried.** An app's echo request (ICMP type 8, ICMPv6 type 128) leaves through an unprivileged ping
+  socket of Watch's own (a datagram socket of the ICMP protocol, which Android lets every app make), one for each
+  app address, echo id and destination, protected before its first send. At most 32 exist (`Limits::echo_sockets`,
+  sockets still being made included), and up to 8 requests wait while one is made. A socket ends after 10 s with no
+  request (`Limits::echo_idle`), when the network moves, or when a chain comes on. A reply is taken only from the
+  address pinged and is rebuilt with the app's own id, its sequence and data, and a hop limit of 64; the kernel's
+  id on Watch's socket never reaches the app. A ping to the tunnel's DNS address goes to the network's resolver,
+  as lookups do, and is dropped when that resolver is of the other IP version. Echo writes no record to the log.
+- **While a chain is on,** every echo is refused, since Android cannot say whose a ping is: a unicast destination
+  is answered at once with "administratively prohibited" (ICMP type 3 code 13, ICMPv6 type 1 code 1), a multicast,
+  broadcast or unspecified one with nothing (RFC 1812 4.3.2.7, RFC 4443 2.4(e)). The engine's tasks share one
+  thread, so only an await lets another run: a socket is waited for until it can be written, and only then are the
+  chain checked and the waiting requests sent, with no await between. What is left is a chain set from Android's
+  side between a check and its send, which can let out the requests already decided, as for UDP.
+- **Where Android refuses ping sockets,** a probe at start finds it for each IP version, and echo is dropped and
+  counted, as before this unit.
+- **Counters 34 to 38:** echo requests carried, replies, refused, unsupported, dropped.
+- **Tests:** unit tests of the packets (checksums, the ICMPv6 pseudo-header, padding, the rebuilt reply, the
+  refusal and when none is sent), the cap and the idle end; in netlab, 12 of the engine's 32 tests: ping in IPv4
+  and IPv6 with its own id, several ids at once, the cap and the idle end, a forged reply, the probe, the refusal
+  with sockets already open (the namespace's kernel received no request, `InEchos`), a reply after a chain came on,
+  a request waiting for its socket when a chain comes on, the network moving, and the IPv6 refusal. Each was shown
+  to fail without its part of the code. `verify-watch.sh` pings through the tunnel: on the Android 15 emulator,
+  Watch's own ping socket carried it and the replies came back (2026-11-15).
+- **Reviews.** An independent review found no fault in safety and two majors: requests that waited for a new socket
+  could leave after a chain came on, since a first send on a new socket awaited, and the safety claims that matter
+  most had no test. Both were fixed, with the minors (the resolver's IP version, no error for multicast or
+  broadcast, tests that waited a fixed time, the fuzz target's checksums); a narrow review of the fixes found no
+  critical or major fault left.
+- **Not done, stated:**
+  - errors from the network beneath (unreachable, time exceeded) and the arriving hop limit are not passed on:
+    the app sees a timeout, and a traceroute through Watch shows the destination at every hop. A later change that
+    sets `IP_RECVERR` on the ping sockets must read their error queue, as `errors::queued` does, so that a pending
+    error does not end the socket;
+  - echo's bytes are not in the engine's byte counters, while Android counts them to Watch;
+  - with no owner there is no share for each app: one app can take all 32 sockets for as long as it pings.
+    Accepted: a ping is small and brief, and no other traffic waits on these sockets;
+  - phones of other makers, whose SELinux rules for ICMP sockets may differ, are not measured yet (the Galaxy A40
+    next).
