@@ -210,9 +210,10 @@ pub struct Limits {
     /// pings again later gets a socket anew.
     pub echo_idle: Duration,
     /// At most this many datagrams are put together from the apps' fragments at once (ADR 0044,
-    /// decision 5 as amended). A fragment of one more is dropped; those held are never evicted for it.
+    /// decision 5 as amended): for a fragment of one more, the oldest incomplete one gives way.
     pub fragment_datagrams: usize,
-    /// At most this many bytes of fragments are held across them ([`crate::fragments::Bounds`]).
+    /// At most this many bytes of fragments are held across them ([`crate::fragments::Bounds`]); past
+    /// it, the oldest incomplete datagrams give way too.
     pub fragment_bytes: usize,
     /// A datagram whose last fragment has not come this long after its first is dropped. A sender
     /// sends a datagram's fragments one after another, within milliseconds.

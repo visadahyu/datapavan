@@ -1,7 +1,7 @@
 //! The apps' IP fragments, put together again (ADR 0044, decision 5 as amended on 2026-11-15). An
-//! app's kernel cuts a datagram into fragments when it is larger than the tunnel's MTU, or than the
-//! path MTU the engine told it of; the engine puts each datagram together again, and hands it on as
-//! any other packet.
+//! app's kernel cuts a datagram into fragments when it is larger than the tunnel's MTU, which is the
+//! first hop's of the network beneath, or than the path MTU a router told it of; the engine puts each
+//! datagram together again, and hands it on as any other packet.
 //!
 //! - **Which fragments.** IPv4 ones (the "more fragments" flag set, or an offset), and IPv6 ones (a
 //!   fragment header with an offset or the M flag). An IPv6 atomic fragment, offset 0 with no more to
@@ -12,23 +12,28 @@
 //!   last, or that is empty; a datagram longer than 65,535 bytes (IPv4's total length, IPv6's payload
 //!   length); a first fragment without the whole upper-layer header, and in IPv6 without every
 //!   extension header before it (RFC 1858, RFC 7112); a fragment that overlaps one already held (RFC
-//!   5722, RFC 8200 4.5); and a fragment past the datagram's end, or a second end. An exact duplicate,
-//!   the same place and the same bytes, is dropped alone, and the rest kept, as RFC 8200 4.5 allows.
-//!   No ICMP error answers any of these (RFC 8200 4.5).
+//!   5722, RFC 8200 4.5); and a fragment past the datagram's end, or a second end. After an overlap or
+//!   one of those last two, a marker stays in the datagram's place until its wait ends, and its later
+//!   fragments are dropped as they come, "including those not yet received" (RFC 5722). An exact
+//!   duplicate, the same place and the same bytes, is dropped alone, and the rest kept, as RFC 8200 4.5
+//!   allows. No ICMP error answers any of these (RFC 8200 4.5).
 //! - **Only what the engine carries.** A datagram of another protocol than TCP, UDP or ICMP (`ICMPv6`
 //!   in IPv6) would be skipped once whole, so its fragments are dropped as they come: an IPv4 one by
 //!   its header, an IPv6 one when its first fragment says.
-//! - **The bounds** ([`Bounds`]): datagrams being put together at once, bytes held across all of them,
-//!   and the time from a datagram's first fragment to its last. A fragment of a new datagram that would
-//!   pass a bound is dropped: held datagrams are never evicted for it. A fragment of a held datagram
-//!   that would pass the bound on bytes drops that datagram, which could never be whole. A datagram
-//!   whose last fragment has not come in time is dropped at the next fragment, or when the engine
-//!   sweeps. Each datagram's buffer grows as its fragments come, to the end of the furthest; nothing
-//!   reserves 64 KiB ahead.
+//! - **The bounds** ([`Bounds`]): datagrams being put together at once, markers included, bytes held
+//!   across all of them, and the time from a datagram's first fragment to its last. When a fragment
+//!   would pass a bound, the oldest incomplete datagram, or marker, gives way, then the next oldest,
+//!   until there is room: an honest datagram is whole within milliseconds, so the oldest is the
+//!   likeliest never to be (second review of unit 12, minor 3). A fragment that no room could take,
+//!   larger than the bound on bytes with its own datagram, is dropped with that datagram, and nothing
+//!   gives way for it. A datagram whose last fragment has not come in time is dropped at the next
+//!   fragment, or when the engine sweeps. Each datagram's buffer grows as its fragments come, doubling
+//!   as a vector does, so that fragments in order do not each move it, and never past 64 KiB; the
+//!   bound on bytes counts what it reserves.
 //! - **Shared by every app.** Every app sends from the tunnel's one address, so the bounds are not
-//!   kept for each app: one app that fills them makes the others' fragments dropped, as every
-//!   fragment was before the engine put them together. That is accepted, since the bounds cap what
-//!   fragments can cost the engine, and none of it is kept for longer than the wait.
+//!   kept for each app: one app that keeps them full makes the others' datagrams give way, as every
+//!   fragment was dropped before the engine put them together. That is accepted, since the bounds cap
+//!   what fragments can cost the engine, and none of it is kept for longer than the wait.
 //!
 //! Every function here takes bytes that any app on the phone can choose, so none may panic, loop
 //! without end or read outside the slice, whatever the input (`fuzz_targets/packet.rs`).
@@ -49,10 +54,11 @@ pub const PLACE_COST: usize = 32;
 /// How much the reassembler may hold, and for how long.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Bounds {
-    /// At most this many datagrams are being put together at once.
+    /// At most this many datagrams are being put together at once, the markers of overlapped ones
+    /// included.
     pub datagrams: usize,
-    /// At most this many bytes are held across all of them: the data, the first fragment's headers,
-    /// and [`PLACE_COST`] for each fragment.
+    /// At most this many bytes are held across all of them: what each datagram's buffer reserves, the
+    /// first fragment's headers, and [`PLACE_COST`] for each fragment, and for each marker.
     pub bytes: usize,
     /// A datagram whose last fragment has not come this long after its first is dropped.
     pub wait: Duration,
@@ -239,6 +245,9 @@ struct Datagram {
     length: Option<usize>,
     /// How many bytes of data came.
     received: usize,
+    /// A marker: the datagram overlapped, or came with a second end, and holds nothing more; its later
+    /// fragments are dropped until its wait ends (RFC 5722).
+    marker: bool,
 }
 
 /// Why a fragment cannot join its datagram.
@@ -259,16 +268,30 @@ impl Datagram {
             places: BTreeMap::new(),
             length: None,
             received: 0,
+            marker: false,
         }
     }
 
-    /// What it holds, as the bound on bytes counts it.
+    /// The marker that takes the place of a datagram given up for an overlap, with when its first
+    /// fragment came, from which its wait runs.
+    fn marker(first: Instant) -> Self {
+        Self {
+            marker: true,
+            ..Self::new(first)
+        }
+    }
+
+    /// What it holds, as the bound on bytes counts it: what its buffer reserves, not only what it
+    /// fills; a marker, its place.
     fn cost(&self) -> usize {
+        if self.marker {
+            return PLACE_COST;
+        }
         let headers = self
             .headers
             .as_ref()
             .map_or(0, |headers| headers.bytes.len());
-        self.data.len() + headers + self.places.len() * PLACE_COST
+        self.data.capacity() + headers + self.places.len() * PLACE_COST
     }
 
     fn fragments(&self) -> u64 {
@@ -311,7 +334,8 @@ impl Datagram {
         } else {
             0
         };
-        Ok(end.saturating_sub(self.data.len()) + headers + PLACE_COST)
+        let capacity = self.data.capacity();
+        Ok(capacity_for(capacity, end) - capacity + headers + PLACE_COST)
     }
 
     /// Takes in `fragment`, which [`Datagram::check`] let in.
@@ -323,9 +347,12 @@ impl Datagram {
                 v6: fragment.v6,
             });
         }
+        let capacity = capacity_for(self.data.capacity(), end);
+        if capacity > self.data.capacity() {
+            // Exactly the capacity the cost counted, so that the bound holds the memory reserved.
+            self.data.reserve_exact(capacity - self.data.len());
+        }
         if end > self.data.len() {
-            // Exactly as much as the fragment needs, so that the cost counted is the memory held.
-            self.data.reserve_exact(end - self.data.len());
             self.data.resize(end, 0);
         }
         if let Some(slot) = self.data.get_mut(offset..end) {
@@ -378,6 +405,15 @@ impl Datagram {
     }
 }
 
+/// What a datagram's buffer of `capacity` reserves once it holds data up to `end`: as much again, as a
+/// vector grows, or `end` if that is more, never past the longest datagram.
+fn capacity_for(capacity: usize, end: usize) -> usize {
+    if end <= capacity {
+        return capacity;
+    }
+    end.max(capacity.saturating_mul(2).min(LARGEST))
+}
+
 /// The datagrams being put together, within [`Bounds`].
 pub struct Reassembler {
     bounds: Bounds,
@@ -397,7 +433,7 @@ impl Reassembler {
         }
     }
 
-    /// How many datagrams are being put together.
+    /// How many datagrams are being put together, the markers of overlapped ones included.
     #[must_use]
     pub fn datagrams(&self) -> usize {
         self.datagrams.len()
@@ -413,21 +449,18 @@ impl Reassembler {
     /// completes its datagram, or is dropped. Datagrams that waited too long are dropped first. A packet
     /// that is no fragment, or does not fit, is dropped too.
     pub fn take(&mut self, packet: &[u8], now: Instant) -> Taken {
-        let mut dropped = self.sweep(now);
+        let dropped = self.sweep(now);
         let Some(fragment) = read(packet) else {
             return Taken {
                 whole: None,
                 dropped: dropped + 1,
             };
         };
-        let whole = match self.add(&fragment, now) {
-            Ok(whole) => whole,
-            Err(lost) => {
-                dropped += lost;
-                None
-            }
-        };
-        Taken { whole, dropped }
+        let (whole, lost) = self.add(&fragment, now);
+        Taken {
+            whole,
+            dropped: dropped + lost,
+        }
     }
 
     /// Drops the datagrams whose last fragment has not come `Bounds::wait` after their first: how many
@@ -448,61 +481,111 @@ impl Reassembler {
         dropped
     }
 
-    /// Adds `fragment`: the whole datagram once it completes one, or how many fragments were dropped.
-    fn add(&mut self, fragment: &Fragment<'_>, now: Instant) -> Result<Option<Vec<u8>>, u64> {
+    /// Adds `fragment`: the whole datagram once it completes one, and how many fragments were
+    /// dropped, this one or others.
+    fn add(&mut self, fragment: &Fragment<'_>, now: Instant) -> (Option<Vec<u8>>, u64) {
         let key = fragment.key;
+        if self.datagrams.get(&key).is_some_and(|held| held.marker) {
+            // Its datagram overlapped: what else comes of it until its wait ends is dropped.
+            return (None, 1);
+        }
         let malformed = fragment.data.is_empty()
             || (fragment.more && !fragment.data.len().is_multiple_of(8))
             || fragment.length_with(fragment.end()) > LARGEST
             || !carried(&key)
             || (fragment.offset == 0 && !holds_its_header(fragment));
         if malformed {
-            return Err(self.abandon(key) + 1);
+            return (None, self.abandon(key) + 1);
         }
         let Some(datagram) = self.datagrams.get(&key) else {
-            // A new datagram: never one held is given up for it.
             let mut datagram = Datagram::new(now);
             let Ok(cost) = datagram.check(fragment) else {
-                return Err(1);
+                return (None, 1);
             };
-            if self.datagrams.len() >= self.bounds.datagrams
-                || self.bytes + cost > self.bounds.bytes
-            {
-                return Err(1);
+            let (room, gave_way) = self.make_room(key, cost, true);
+            if !room {
+                return (None, gave_way + 1);
             }
             datagram.insert(fragment);
             self.bytes += datagram.cost();
             self.datagrams.insert(key, datagram);
-            return Ok(None);
+            return (None, gave_way);
         };
         let growth = match datagram.check(fragment) {
             Ok(growth) => growth,
-            Err(Fault::Duplicate) => return Err(1),
-            Err(Fault::Conflict) => return Err(self.abandon(key) + 1),
+            Err(Fault::Duplicate) => return (None, 1),
+            Err(Fault::Conflict) => return (None, self.mark(key) + 1),
         };
-        // A held datagram that cannot take its fragment within the bound could never be whole.
-        if self.bytes + growth > self.bounds.bytes {
-            return Err(self.abandon(key) + 1);
+        // A held datagram that no room could take its fragment could never be whole.
+        let (room, gave_way) = self.make_room(key, growth, false);
+        if !room {
+            return (None, gave_way + self.abandon(key) + 1);
         }
         let Some(datagram) = self.datagrams.get_mut(&key) else {
-            return Err(1);
+            return (None, gave_way + 1);
         };
         let before = datagram.cost();
         datagram.insert(fragment);
         self.bytes = self.bytes - before + datagram.cost();
         if !datagram.is_whole() {
-            return Ok(None);
+            return (None, gave_way);
         }
         let Some(datagram) = self.datagrams.remove(&key) else {
-            return Err(0);
+            return (None, gave_way);
         };
         self.bytes -= datagram.cost();
         let fragments = datagram.fragments();
         // Too long with the first fragment's headers, or a fragment inside the first: dropped.
         match datagram.rebuild() {
-            Some(whole) if !matches!(packet::parse(&whole), Err(Skip::Fragment)) => Ok(Some(whole)),
-            _ => Err(fragments),
+            Some(whole) if !matches!(packet::parse(&whole), Err(Skip::Fragment)) => {
+                (Some(whole), gave_way)
+            }
+            _ => (None, gave_way + fragments),
         }
+    }
+
+    /// Makes room for `cost` more bytes, and for one more datagram when `new`, for the datagram of
+    /// `keep`: the oldest incomplete datagram or marker other than it gives way, then the next oldest,
+    /// until there is room (second review of unit 12, minor 3). An honest datagram is whole within
+    /// milliseconds of its first fragment, so the oldest is the likeliest never to be. Where no room
+    /// could be made, `keep`'s own datagram and the cost being larger than the bound, none gives way.
+    /// Whether there is room, and how many fragments those that gave way held.
+    fn make_room(&mut self, keep: Key, cost: usize, new: bool) -> (bool, u64) {
+        let own = self.datagrams.get(&keep).map_or(0, Datagram::cost);
+        if (new && self.bounds.datagrams == 0) || own + cost > self.bounds.bytes {
+            return (false, 0);
+        }
+        let mut gave_way = 0;
+        while (new && self.datagrams.len() >= self.bounds.datagrams)
+            || self.bytes + cost > self.bounds.bytes
+        {
+            let oldest = self
+                .datagrams
+                .iter()
+                .filter(|&(key, _)| *key != keep)
+                .min_by_key(|(_, datagram)| datagram.first)
+                .map(|(key, _)| *key);
+            let Some(oldest) = oldest else {
+                return (false, gave_way);
+            };
+            gave_way += self.abandon(oldest);
+        }
+        (true, gave_way)
+    }
+
+    /// Gives up the datagram of `key` for an overlap or another conflict, and leaves a marker in its
+    /// place until its wait ends, so that its later fragments are dropped too, "including those not
+    /// yet received" (RFC 5722). The marker costs less than the datagram did, so the bounds hold. How
+    /// many fragments the datagram held.
+    fn mark(&mut self, key: Key) -> u64 {
+        let Some(first) = self.datagrams.get(&key).map(|held| held.first) else {
+            return 0;
+        };
+        let held = self.abandon(key);
+        let marker = Datagram::marker(first);
+        self.bytes += marker.cost();
+        self.datagrams.insert(key, marker);
+        held
     }
 
     /// Gives up the datagram of `key`, if one is held: how many fragments it held.
@@ -745,20 +828,25 @@ mod tests {
         assert_eq!((reassembler.datagrams(), reassembler.bytes()), (0, 0));
     }
 
+    /// An overlap drops the whole datagram, and leaves a marker in its place, which costs one place.
     #[test]
     fn an_overlap_drops_the_whole_datagram() {
         let whole = udp4(3_000);
         let start = Instant::now();
+        let overlapped = |pieces: &[Vec<u8>], whole: &[u8]| {
+            let mut reassembler = Reassembler::new(bounds());
+            let taken = feed(&mut reassembler, pieces, start);
+            assert_eq!(outcome(&taken, whole), [(false, 0), (false, 2)]);
+            assert_eq!((reassembler.datagrams(), reassembler.bytes()), (1, 32));
+        };
         // The second fragment starts 8 bytes inside the first, as in the attack of RFC 1858.
-        let overlapping = [
-            piece4(&whole, 0, 1_480, true),
-            piece4(&whole, 1_472, 1_480, true),
-        ];
-        let mut reassembler = Reassembler::new(bounds());
-        let taken = feed(&mut reassembler, &overlapping, start);
-        assert_eq!(outcome(&taken, &whole), [(false, 0), (false, 2)]);
-        assert_eq!((reassembler.datagrams(), reassembler.bytes()), (0, 0));
-
+        overlapped(
+            &[
+                piece4(&whole, 0, 1_480, true),
+                piece4(&whole, 1_472, 1_480, true),
+            ],
+            &whole,
+        );
         // One that ends inside a held one, one that starts where it does but is longer, and one that
         // starts inside it.
         for second in [
@@ -766,28 +854,60 @@ mod tests {
             piece4(&whole, 8, 1_480, true),
             piece4(&whole, 1_472, 16, true),
         ] {
-            let pieces = [piece4(&whole, 8, 1_472, true), second];
-            let taken = feed(&mut reassembler, &pieces, start);
-            assert_eq!(outcome(&taken, &whole), [(false, 0), (false, 2)]);
+            overlapped(&[piece4(&whole, 8, 1_472, true), second], &whole);
         }
-
         // The same place with other bytes is no duplicate.
         let mut forged = piece4(&whole, 1_480, 1_480, true);
         let last = forged.len() - 1;
         forged[last] ^= 1;
-        let pieces = [piece4(&whole, 1_480, 1_480, true), forged];
-        let taken = feed(&mut reassembler, &pieces, start);
-        assert_eq!(outcome(&taken, &whole), [(false, 0), (false, 2)]);
-
+        overlapped(&[piece4(&whole, 1_480, 1_480, true), forged], &whole);
         // In IPv6 too (RFC 5722).
         let whole6 = udp6(3_000);
-        let pieces = [
-            piece6(&whole6, 1_448, 1_448, true),
-            piece6(&whole6, 0, 1_456, true),
-        ];
-        let taken = feed(&mut reassembler, &pieces, start);
-        assert_eq!(outcome(&taken, &whole6), [(false, 0), (false, 2)]);
+        overlapped(
+            &[
+                piece6(&whole6, 1_448, 1_448, true),
+                piece6(&whole6, 0, 1_456, true),
+            ],
+            &whole6,
+        );
+    }
+
+    /// RFC 5722: after an overlap, the datagram's later fragments are dropped as they come, "including
+    /// those not yet received", until its wait ends; then the marker goes, and a datagram of the same
+    /// identification is put together again. A marker gives way as the oldest, as a datagram does.
+    #[test]
+    fn after_an_overlap_its_later_fragments_are_dropped_until_its_wait_ends() {
+        let whole = udp4(3_000);
+        let pieces = cut(&whole, 20, 1_480, piece4);
+        let start = Instant::now();
+        let mut reassembler = Reassembler::new(bounds());
+        let overlap = [pieces[0].clone(), piece4(&whole, 1_472, 1_480, true)];
+        let taken = feed(&mut reassembler, &overlap, start);
+        assert_eq!(outcome(&taken, &whole), [(false, 0), (false, 2)]);
+        // The rest of it, good fragments all, and the first again: each dropped alone.
+        for piece in [&pieces[1], &pieces[2], &pieces[0]] {
+            let taken = reassembler.take(piece, start + JUST_UNDER);
+            assert_eq!((taken.whole, taken.dropped), (None, 1));
+        }
+        assert_eq!((reassembler.datagrams(), reassembler.bytes()), (1, 32));
+        // At its wait the marker goes, holding no fragment, and the datagram comes whole.
+        assert_eq!(reassembler.sweep(start + WAIT), 0);
         assert_eq!((reassembler.datagrams(), reassembler.bytes()), (0, 0));
+        let taken = feed(&mut reassembler, &pieces, start + WAIT);
+        assert_eq!(outcome(&taken, &whole)[2], (true, 0));
+
+        // The marker is the oldest: a new datagram past the bound makes it give way.
+        let mut reassembler = Reassembler::new(Bounds {
+            datagrams: 1,
+            ..bounds()
+        });
+        feed(&mut reassembler, &overlap, start);
+        let other = udp6(2_000);
+        let taken = reassembler.take(&piece6(&other, 0, 1_448, true), start + JUST_UNDER);
+        assert_eq!(taken.dropped, 0, "a marker holds no fragment");
+        assert_eq!(reassembler.datagrams(), 1);
+        let taken = reassembler.take(&pieces[1], start + JUST_UNDER);
+        assert_eq!(taken.dropped, 1, "the new one gave way, the oldest now");
     }
 
     #[test]
@@ -875,12 +995,19 @@ mod tests {
     }
 
     /// A datagram longer than 65,535 bytes, a fragment not a multiple of 8 that is not the last, an
-    /// empty one, a fragment past the datagram's end, and a second end each drop the whole datagram.
+    /// empty one, a fragment past the datagram's end, and a second end each drop the whole datagram;
+    /// the last two, which conflict with what is held, leave a marker as an overlap does.
     #[test]
     fn malformed_fragments_drop_their_datagram() {
         let whole = udp4(3_000);
         let start = Instant::now();
-        let mut reassembler = Reassembler::new(bounds());
+        let dropped = |pieces: &[Vec<u8>], marked: bool| {
+            let mut reassembler = Reassembler::new(bounds());
+            let taken = feed(&mut reassembler, pieces, start);
+            assert_eq!(outcome(&taken, &whole), [(false, 0), (false, 2)]);
+            let left = if marked { (1, 32) } else { (0, 0) };
+            assert_eq!((reassembler.datagrams(), reassembler.bytes()), left);
+        };
         let first = piece4(&whole, 0, 1_480, true);
         // At the last offset IPv4 can name, 16 bytes pass 65,535 with the 20 of the header.
         let mut far = piece4(&whole, 0, 16, false);
@@ -889,8 +1016,7 @@ mod tests {
         let odd = piece4(&whole, 1_480, 1_476, true);
         let empty = piece4(&whole, 1_480, 0, true);
         for bad in [far, odd, empty] {
-            let taken = feed(&mut reassembler, &[first.clone(), bad], start);
-            assert_eq!(outcome(&taken, &whole), [(false, 0), (false, 2)]);
+            dropped(&[first.clone(), bad], false);
         }
         // The last fragment says the datagram ends at 3,008; another fragment past that, or another
         // last fragment that ends elsewhere, is wrong.
@@ -899,21 +1025,19 @@ mod tests {
             piece4(&udp4(4_000), 1_480, 1_536, true),
             piece4(&whole, 1_480, 8, false),
         ] {
-            let taken = feed(&mut reassembler, &[last.clone(), bad], start);
-            assert_eq!(outcome(&taken, &whole), [(false, 0), (false, 2)]);
+            dropped(&[last.clone(), bad], true);
         }
         // A last fragment that ends before what was held, before any other last fragment came.
-        let taken = feed(
-            &mut reassembler,
+        dropped(
             &[
                 piece4(&whole, 1_480, 1_480, true),
                 piece4(&whole, 8, 8, false),
             ],
-            start,
+            true,
         );
-        assert_eq!(outcome(&taken, &whole), [(false, 0), (false, 2)]);
 
         // In IPv6, past 65,535 bytes of payload by the fragment header's offset.
+        let mut reassembler = Reassembler::new(bounds());
         let whole6 = udp6(100);
         let mut far6 = piece6(&whole6, 0, 16, false);
         far6[42..44].copy_from_slice(&0xfff8u16.to_be_bytes());
@@ -991,12 +1115,15 @@ mod tests {
         );
     }
 
-    /// A fragment of a new datagram beyond the bound on datagrams, or on bytes, is dropped, and the
-    /// datagrams held are not; a held datagram whose next fragment would pass the bound on bytes is
-    /// dropped, since it could never be whole.
+    /// At a bound, the oldest incomplete datagram gives way, not the fragment that comes (second
+    /// review of unit 12, minor 3): for a new datagram past the bound on datagrams or on bytes, and for
+    /// a held one whose next fragment would pass the bound on bytes. A fragment no room could take is
+    /// dropped with its datagram, and nothing gives way for it. What a datagram's buffer reserves is
+    /// counted, with its header and 32 bytes for each fragment's place.
     #[test]
-    fn each_bound_holds_without_evicting_a_held_datagram() {
+    fn at_a_bound_the_oldest_datagram_gives_way() {
         let start = Instant::now();
+        let at = |ms| start + Duration::from_millis(ms);
         let datagram = |id: u16| {
             let mut whole = udp4(2_000);
             whole[4..6].copy_from_slice(&id.to_be_bytes());
@@ -1004,60 +1131,73 @@ mod tests {
             whole
         };
         let (one, two, three) = (datagram(1), datagram(2), datagram(3));
+        let first = |whole: &[u8]| piece4(whole, 0, 1_480, true);
+        let last = |whole: &[u8]| piece4(whole, 1_480, 528, false);
         let mut reassembler = Reassembler::new(Bounds {
             datagrams: 2,
             ..bounds()
         });
-        let firsts = [
-            piece4(&one, 0, 1_480, true),
-            piece4(&two, 0, 1_480, true),
-            piece4(&three, 0, 1_480, true),
-        ];
-        let taken = feed(&mut reassembler, &firsts, start);
-        assert_eq!(
-            taken.iter().map(|t| t.dropped).collect::<Vec<_>>(),
-            [0, 0, 1]
-        );
+        assert_eq!(reassembler.take(&first(&one), at(0)).dropped, 0);
+        assert_eq!(reassembler.take(&first(&two), at(1)).dropped, 0);
+        // A third: the first datagram, the oldest, gives way, with its one fragment.
+        assert_eq!(reassembler.take(&first(&three), at(2)).dropped, 1);
         assert_eq!(reassembler.datagrams(), 2);
-        let taken = reassembler.take(&piece4(&one, 1_480, 528, false), start);
-        assert_eq!(taken.whole.as_deref(), Some(&one[..]));
-        // Room again for a third.
-        let taken = feed(&mut reassembler, &cut(&three, 20, 1_480, piece4), start);
-        assert_eq!(outcome(&taken, &three), [(false, 0), (true, 0)]);
+        let taken = reassembler.take(&last(&two), at(3));
+        assert_eq!((taken.whole.as_deref(), taken.dropped), (Some(&two[..]), 0));
+        let taken = reassembler.take(&last(&three), at(4));
+        assert_eq!(taken.whole.as_deref(), Some(&three[..]));
 
-        // Bytes: what a first fragment of 1,480 bytes costs, with its header and its place.
-        let first = 1_480 + 20 + 32;
+        // Bytes: a first fragment of 1,480 bytes costs its buffer, its header and its place.
+        let cost = 1_480 + 20 + 32;
         let mut reassembler = Reassembler::new(Bounds {
-            bytes: 2 * first,
+            bytes: 2 * cost,
             ..bounds()
         });
-        let taken = feed(&mut reassembler, &firsts, start);
-        assert_eq!(
-            taken.iter().map(|t| t.dropped).collect::<Vec<_>>(),
-            [0, 0, 1]
-        );
-        assert_eq!(reassembler.bytes(), 2 * first);
-        // The second's last fragment would pass the bound: that datagram goes, the first stays.
-        let taken = reassembler.take(&piece4(&two, 1_480, 528, false), start);
-        assert_eq!((taken.whole, taken.dropped), (None, 2));
-        assert_eq!((reassembler.datagrams(), reassembler.bytes()), (1, first));
-        let taken = reassembler.take(&piece4(&one, 1_480, 528, false), start);
-        assert_eq!(taken.whole.as_deref(), Some(&one[..]));
+        assert_eq!(reassembler.take(&first(&one), at(0)).dropped, 0);
+        assert_eq!(reassembler.take(&first(&two), at(1)).dropped, 0);
+        assert_eq!(reassembler.bytes(), 2 * cost);
+        assert_eq!(reassembler.take(&first(&three), at(2)).dropped, 1);
+        assert_eq!(reassembler.bytes(), 2 * cost);
+        // The second's last fragment doubles its buffer to 2,960 bytes, past the bound: the oldest
+        // other, the third, gives way, and the second is whole.
+        let taken = reassembler.take(&last(&two), at(3));
+        assert_eq!((taken.whole.as_deref(), taken.dropped), (Some(&two[..]), 1));
         assert_eq!((reassembler.datagrams(), reassembler.bytes()), (0, 0));
+
+        // A datagram that no room could take: larger than the bound alone. Nothing gives way.
+        let small = piece4(&udp4(100), 0, 8, true);
+        let mut reassembler = Reassembler::new(Bounds {
+            bytes: 1_600,
+            ..bounds()
+        });
+        assert_eq!(reassembler.take(&small, at(0)).dropped, 0);
+        assert_eq!(reassembler.take(&first(&one), at(1)).dropped, 0);
+        assert_eq!(reassembler.datagrams(), 2, "the small one stays");
+        // One's last fragment would take it to 2,960 + 20 + 64 bytes, past 1,600 whatever gives way.
+        let taken = reassembler.take(&last(&one), at(2));
+        assert_eq!((taken.whole, taken.dropped), (None, 2));
+        assert_eq!(reassembler.datagrams(), 1, "the small one still stays");
+        let mut big = udp4(4_000);
+        big[4..6].copy_from_slice(&9u16.to_be_bytes());
+        reseal(&mut big);
+        let taken = reassembler.take(&piece4(&big, 0, 1_600, true), at(3));
+        assert_eq!((taken.whole, taken.dropped), (None, 1));
+        assert_eq!(reassembler.datagrams(), 1);
 
         // A far fragment costs the data before it too, which the buffer holds as zeros.
         let mut reassembler = Reassembler::new(bounds());
         let far = piece4(&udp4(4_000), 2_960, 1_048, false);
         assert_eq!(reassembler.take(&far, start).dropped, 0);
         assert_eq!(reassembler.bytes(), 4_008 + 32);
-        // Each place costs beyond its bytes, so that a datagram cut into the smallest fragments holds
-        // no more memory than the bound counts: here 8 bytes of data each.
+        // A buffer grows as a vector does, doubling, not once for each fragment: seven fragments of 8
+        // bytes in order reserve 64 bytes, and each place costs beyond its bytes, so that a datagram
+        // cut into the smallest fragments holds no more memory than the bound counts.
         let tiny = udp4(56);
         let mut reassembler = Reassembler::new(bounds());
         let pieces = cut(&tiny, 20, 8, piece4);
         let taken = feed(&mut reassembler, &pieces[..7], start);
         assert!(taken.iter().all(|t| t.dropped == 0));
-        assert_eq!(reassembler.bytes(), 56 + 20 + 7 * 32);
+        assert_eq!(reassembler.bytes(), 64 + 20 + 7 * 32);
     }
 
     /// A datagram is put together if its last fragment comes less than the wait after its first; at
