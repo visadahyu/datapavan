@@ -841,8 +841,13 @@ forged for a destination never sent to is dropped and counted; an error the phon
 still comes as if from the destination, which the app's kernel takes. Echo's bytes are now in the engine's byte
 counters. In the network lab, a router's errors are injected from an address the namespace does not hold, and the
 hop limits read on both sides, IPv4 and IPv6; the emulator check pings with a time to live of 1 and reports a network
-that sends no such error. Not yet run on the emulator or a phone. How it is built:
-[ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
+that sends no such error. On the Galaxy A40 the first router's "time exceeded" reached the shell as without Watch,
+and an independent review's lab with a real router showed `ping -t` and Linux traceroute in its three modes, IPv4 and
+IPv6, matching what they show without Watch. Its second round: one-shot pings, which Android's traceroute apps run
+for each probe, now make room at the cap of 32 ping sockets by ending one whose requests have all been answered; a
+UDP datagram that finds its socket's buffer full is dropped rather than holding the event loop, which an ICMP error
+had turned into a spin; an error quotes the app's packet as it sent it; and the emulator check fails on a phone whose
+TTL-1 ping gets a reply. How it is built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 | # | Milestone | Done when |
 |---|---|---|

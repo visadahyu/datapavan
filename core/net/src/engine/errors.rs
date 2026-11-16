@@ -166,9 +166,10 @@ fn v6_address(address: libc::sockaddr_in6) -> Option<IpAddr> {
 /// the very address the engine sent to, `target`, which the app may know by another (the tunnel's DNS
 /// address for the network's resolver), where it is no address an error may come from, or where it is
 /// one of the phone's own. The engine's kernel sends an error from the phone's address on the network
-/// beneath when it answers itself, as with "host unreachable" when a neighbour does not answer; the
-/// app's kernel would drop such a packet coming in on the tunnel as a martian source, and the app then
-/// wait for its timeout, as it did not before this unit.
+/// beneath when it answers itself, as with "host unreachable" when a neighbour does not answer. In IPv4
+/// the app's kernel would drop such a packet coming in on the tunnel as a martian source, and the app
+/// then wait for its timeout, as it did not before this unit; Linux's IPv6 input drops only loopback,
+/// multicast and IPv4-mapped sources, so there it is a harmless choice, kept for one rule in both.
 pub(super) fn sender(offender: Option<IpAddr>, target: IpAddr, shown: IpAddr) -> IpAddr {
     match offender {
         Some(from)
