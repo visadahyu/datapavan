@@ -41,15 +41,30 @@
 #   --move then does what Android's in-place update of a VPN network does (AOSP's Vpn.establish): the
 #   tunnel's addresses and the routes into it go to the new device, then the old one's addresses go and
 #   it goes down, as Android resets the old interface.
+# - Android's marks (ADR 0044, unit 12b, the second review's major 1), for a test that shows why the
+#   running engine takes a new tunnel only on the VPN network Android kept. As netd sets them, in IPv4:
+#   what comes in on a network's interface is marked, in mangle INPUT, after the routing decision, with
+#   the network's netId, explicitlySelected and protectedFromVpn (RouteController's
+#   modifyIncomingPacketMark); net.ipv4.tcp_fwmark_accept is 1, so a connection the engine's listener
+#   accepts carries that mark; a rule for each network sends what bears its netId and explicitlySelected
+#   to the network's own table, into its interface; the apps' rule into the tunnel takes only what is not
+#   protectedFromVpn, as the secure VPN's rule does; and anything else is unreachable, as Android's last
+#   rule. --marks sets them up for a network on tun0; --marks-move moves that network to another
+#   interface, as an in-place update does; --marks-new-network brings up another network on the new
+#   interface and then takes the old one away, as when Android connects a new network agent. They need
+#   iptables in the namespace; without it they say so and fail, so that the test fails rather than pass
+#   without the marks.
 #
 #   netlab-enter.py -- PROGRAM [ARGUMENTS...]
 #   netlab-enter.py --tunnel NAME      (inside the namespace, the new file at standard input)
 #   netlab-enter.py --move FROM TO     (inside the namespace)
+#   netlab-enter.py --marks NETID DEVICE | --marks-move NETID FROM TO | --marks-new-network OLD NEW FROM TO
 #
 # Everything here is undone when the namespace ends with the test. It changes nothing outside it.
 import fcntl
 import json
 import os
+import shutil
 import struct
 import subprocess
 import sys
@@ -170,13 +185,81 @@ def move(old, new):
     ip("link", "set", old, "down")
 
 
+# netd's mark bits beside the netId (Fwmark in netd's Fwmark.h).
+EXPLICITLY_SELECTED = 0x10000
+PROTECTED_FROM_VPN = 0x20000
+MARKS_TABLES = 1000
+# Android's last rule, after every other: nothing goes out by the main table.
+UNREACHABLE_PREF = "30000"
+
+
+def iptables(*arguments):
+    subprocess.run(["iptables", "-w", *arguments], check=True)
+
+
+# What comes in on DEVICE marked as the network NET_ID's (ACTION -A adds it, -D takes it away).
+def incoming_mark(action, net_id, device):
+    iptables("-t", "mangle", action, "INPUT", "-i", device, "-j", "MARK", "--set-mark",
+             hex(net_id | EXPLICITLY_SELECTED | PROTECTED_FROM_VPN))
+
+
+# The network NET_ID's rule, to its own table (ACTION add or del).
+def network_rule(action, net_id):
+    ip("rule", action, "pref", "60", "fwmark", f"{hex(net_id | EXPLICITLY_SELECTED)}/0x1ffff",
+       "lookup", str(MARKS_TABLES + net_id))
+
+
+# The network NET_ID's interface is DEVICE: its incoming mark, and its table's routes into it.
+def network_on(net_id, device):
+    incoming_mark("-A", net_id, device)
+    for route in ("default", FAKE4 + "/32"):
+        ip("route", "replace", route, "dev", device, "table", str(MARKS_TABLES + net_id))
+
+
+def marks(net_id, device):
+    if shutil.which("iptables") is None:
+        sys.exit("netlab: iptables is missing here, so Android's marks cannot be set: this test did not run")
+    net_id = int(net_id)
+    sysctl("net.ipv4.tcp_fwmark_accept", "1")
+    ip("rule", "del", "pref", "100")
+    ip("rule", "add", "pref", "100", "from", TUN4, "fwmark", f"0x0/{hex(PROTECTED_FROM_VPN)}",
+       "lookup", APPS_TABLE)
+    ip("rule", "add", "pref", UNREACHABLE_PREF, "unreachable")
+    network_on(net_id, device)
+    network_rule("add", net_id)
+
+
+# An in-place update: the same network, its netId and rule, on the new interface.
+def marks_move(net_id, old, new):
+    net_id = int(net_id)
+    incoming_mark("-D", net_id, old)
+    network_on(net_id, new)
+
+
+# A new network agent: the new network comes up on the new interface, then the old one goes, its rule
+# and its interface's mark with it.
+def marks_new_network(old_id, new_id, old, new):
+    old_id, new_id = int(old_id), int(new_id)
+    network_on(new_id, new)
+    network_rule("add", new_id)
+    network_rule("del", old_id)
+    incoming_mark("-D", old_id, old)
+
+
 def main():
     if len(sys.argv) == 3 and sys.argv[1] == "--tunnel":
         return second_tunnel(sys.argv[2])
     if len(sys.argv) == 4 and sys.argv[1] == "--move":
         return move(sys.argv[2], sys.argv[3])
+    if len(sys.argv) == 4 and sys.argv[1] == "--marks":
+        return marks(sys.argv[2], sys.argv[3])
+    if len(sys.argv) == 5 and sys.argv[1] == "--marks-move":
+        return marks_move(*sys.argv[2:])
+    if len(sys.argv) == 6 and sys.argv[1] == "--marks-new-network":
+        return marks_new_network(*sys.argv[2:])
     if len(sys.argv) < 3 or sys.argv[1] != "--":
-        sys.exit("usage: netlab-enter.py -- PROGRAM [ARGUMENTS...] | --tunnel NAME | --move FROM TO")
+        sys.exit("usage: netlab-enter.py -- PROGRAM [ARGUMENTS...] | --tunnel NAME | --move FROM TO | "
+                 "--marks NETID DEVICE | --marks-move NETID FROM TO | --marks-new-network OLD NEW FROM TO")
     program = sys.argv[2:]
 
     ip("link", "set", "lo", "up")

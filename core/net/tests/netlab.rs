@@ -2661,3 +2661,132 @@ fn an_ipv6_connection_goes_on_across_a_tunnel_set_up_again() -> Outcome {
         },
     )
 }
+
+/// The netId of the VPN network the lab's Android marks, and of the one it brings up when the apps of
+/// the tunnel change.
+const NETWORK: &str = "100";
+const NEW_NETWORK: &str = "101";
+
+/// A connection through the engine with Android's marks on (`netlab-enter.py --marks`), which the
+/// engine's listener accepted marked with [`NETWORK`]'s netId: the server, and the connection after
+/// its first exchange.
+async fn marked_connection() -> Result<(SocketAddr, TcpStream), Box<dyn std::error::Error>> {
+    change_lab(&["--marks", NETWORK, "tun0"], Stdio::null())?;
+    let (server, _) = echoing_server(SERVER_IP).await?;
+    let mut connection = app_connect(server).await?;
+    assert_eq!(exchange(&mut connection, b"before").await?, b"before");
+    Ok((server, connection))
+}
+
+/// The second tun device, with Android's in-place update of the tunnel's addresses and the apps'
+/// routes (`--move`), and the network's marks either moved with it (`same_network`) or a new
+/// network brought up on it and the old one taken away.
+fn marked_move(same_network: bool) -> Result<OwnedFd, Box<dyn std::error::Error>> {
+    let next = second_tunnel("tun2")?;
+    move_tunnel("tun0", "tun2")?;
+    if same_network {
+        change_lab(&["--marks-move", NETWORK, "tun0", "tun2"], Stdio::null())?;
+    } else {
+        change_lab(
+            &["--marks-new-network", NETWORK, NEW_NETWORK, "tun0", "tun2"],
+            Stdio::null(),
+        )?;
+    }
+    Ok(next)
+}
+
+/// Unit 12b, the second review's major 1, with Android's marks: when Android updates the VPN network
+/// in place, the network keeps its netId on the new interface, and a connection the engine's listener
+/// accepted, which carries that netId, goes on across the swap, as without the marks.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn with_androids_marks_a_swap_on_the_same_network_keeps_a_connection() -> Outcome {
+    lab(
+        "with_androids_marks_a_swap_on_the_same_network_keeps_a_connection",
+        &Limits::default(),
+        |engine| async move {
+            let (server, mut connection) = marked_connection().await?;
+            let next = marked_move(true)?;
+            let swapping = Arc::clone(&engine);
+            tokio::task::spawn_blocking(move || swapping.swap_tunnel(next)).await??;
+            assert_eq!(
+                exchange(&mut connection, b"after").await?,
+                b"after",
+                "the connection kept across the swap"
+            );
+            let mut new = app_connect(server).await?;
+            assert_eq!(exchange(&mut new, b"a new one").await?, b"a new one");
+            Ok(())
+        },
+    )
+}
+
+/// Why Watch does not swap when Android brings up a new VPN network, as when the apps left out change:
+/// a connection the engine's listener accepted carries the old network's netId, and once the old
+/// network is gone what it sends routes nowhere, so the app's connection hangs, here for the 3 s it is
+/// given, while a new connection on the new network passes. The engine is not at fault, and nothing in
+/// it could be: the marks are Android's, so Watch starts a new engine there instead.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn with_androids_marks_a_swap_onto_a_new_network_would_hang_a_connection() -> Outcome {
+    lab(
+        "with_androids_marks_a_swap_onto_a_new_network_would_hang_a_connection",
+        &Limits::default(),
+        |engine| async move {
+            let (server, mut connection) = marked_connection().await?;
+            let next = marked_move(false)?;
+            let swapping = Arc::clone(&engine);
+            tokio::task::spawn_blocking(move || swapping.swap_tunnel(next)).await??;
+            let mut new = app_connect(server).await?;
+            assert_eq!(
+                exchange(&mut new, b"a new one").await?,
+                b"a new one",
+                "a new connection on the new network"
+            );
+            connection.write_all(b"after").await?;
+            let mut heard = [0u8; 5];
+            let read = timeout(Duration::from_secs(3), connection.read_exact(&mut heard)).await;
+            assert!(
+                read.is_err(),
+                "the kept connection did not hang: {read:?}; the model no longer shows why Watch \
+                 starts a new engine on a new network"
+            );
+            Ok(())
+        },
+    )
+}
+
+/// What Watch does instead when Android brings up a new VPN network (unit 12's path): the old engine
+/// hands over and a new one starts on the new tunnel, which knows nothing of the old connection and
+/// resets it at once, so that the app opens a new one.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn with_androids_marks_a_new_engine_on_a_new_network_resets_a_connection_at_once() -> Outcome {
+    lab_engines(
+        "with_androids_marks_a_new_engine_on_a_new_network_resets_a_connection_at_once",
+        |tunnels| async move {
+            let first = tunnels.start(None)?;
+            let (server, mut connection) = marked_connection().await?;
+            let next = marked_move(false)?;
+            let handover = tokio::task::spawn_blocking(move || first.hand_over()).await?;
+            let second = Engine::start_with(
+                next,
+                lab_config(&tunnels.limits),
+                Arc::new(Lab),
+                None,
+                (Some(handover), None),
+            )?;
+            connection.write_all(b"after").await?;
+            let mut heard = [0u8; 5];
+            let read = timeout(Duration::from_secs(1), connection.read_exact(&mut heard)).await;
+            assert!(
+                matches!(&read, Ok(Err(error)) if error.kind() == io::ErrorKind::ConnectionReset),
+                "the kept connection was not reset at once: {read:?}"
+            );
+            let mut new = app_connect(server).await?;
+            assert_eq!(exchange(&mut new, b"a new one").await?, b"a new one");
+            drop(second);
+            Ok(())
+        },
+    )
+}
