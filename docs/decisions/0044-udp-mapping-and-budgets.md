@@ -946,14 +946,12 @@ an ADR (D25).
   rest of the run. Any accept error did so, `EMFILE` among them. Now the loop never ends while the engine runs
   (`tcp::accept`):
   - a listener that no longer listens, as `accept`'s `EINVAL` or `SO_ACCEPTCONN` at 0 says after `SOCK_DESTROY`, is
-    closed and another bound on the tunnel's address (`tcp::bind_anew`): on its old port if it can be, else on
-    another, as when another app's listener took the port meanwhile, which is not harmless (the second round, below).
+    closed and another bound on the tunnel's address (`tcp::bind_anew`), on a port the kernel picks, never on its old
+    one, which another app may hold by then (the second and third rounds, below; the first round bound the old port
+    if it could).
     The listener the engine rewrites to is now `Shared::listener4` and `listener6` (`tcp::Listening`), read where
     packets are rewritten, where it was a plain `u16` of the event loop's: its port, 0 while none listens, and its
-    generation, which grows each time a listener stops listening. The old listener is closed first, since a socket
-    bound to a port by its number holds it until then; with `SO_REUSEADDR`, which the first listener had from tokio
-    and the connections it accepted took from it, the new one binds the old port while those connections are open.
-    An attempt that fails, as without descriptors or with the address gone, is made again after a pause, from 10 ms
+    generation, which grows each time a listener stops listening. The old listener is closed first. An attempt that fails, as without descriptors or with the address gone, is made again after a pause, from 10 ms
     doubling up to 64 s, or after 10 ms when an app's SYN finds no listener, and a listener bound anew that stops
     listening before it accepted anything is bound anew again only after a pause, so that nothing turns in a tight
     loop. A first bind that fails at the engine's start leaves the accept loop binding one the same way (the second
@@ -986,11 +984,11 @@ an ADR (D25).
   the fallback to a new engine, which ends the connections itself, cannot hide behind a destroy (the second round).
 - **Tests.**
   - In the network lab, 6, with iproute2's `ss -K` run in the namespace, where `SOCK_DESTROY` works for an unprivileged
-    user: the listener destroyed alone (`state listening src` the tunnel's address), IPv4 and IPv6: it is bound anew on
-    its port, a new connection passes, and one kept open goes on; every TCP socket on the tunnel's address destroyed, as
+    user: the listener destroyed alone (`state listening src` the tunnel's address), IPv4 and IPv6: it is bound anew
+    (on its port in the first round, on another since the third), a new connection passes, and one kept open goes on; every TCP socket on the tunnel's address destroyed, as
     netd does (`state all src` the address), IPv4 and IPv6: the app's connection ends at once with an error, the
-    server's end with a reset, no connection to the server is left open, the listener is bound anew on its port, and a
-    new connection passes; only the engine's end destroyed (`src` the address `dst` the fake peer): the app reads a
+    server's end with a reset, no connection to the server is left open, the listener is bound anew, and a new
+    connection passes; only the engine's end destroyed (`src` the address `dst` the fake peer): the app reads a
     reset through the engine, the server's end a reset; and the process out of descriptors as a connection reaches the
     listener: the lab sets the test's soft limit on open files to 256 (`NETLAB_NOFILE`) and the test takes the rest
     with `/dev/null` while the lab's Android takes 300 ms to name the app, so that `accept` fails with `EMFILE`; the
@@ -1001,8 +999,9 @@ an ADR (D25).
     has iproute2, and CI now loads `inet_diag` and `tcp_diag` with the lab's other modules; that Ubuntu's kernels set
     `CONFIG_INET_DIAG_DESTROY` is what a Red Hat bug report (2230213) says, not checked on the runner.
   - In the engine, 4: a listener made to stop listening with `shutdown(SHUT_RD)`, which stops a listening socket as
-    `SOCK_DESTROY` does, without its privilege, is bound anew on its port, and the next rewritten connection gets its
-    upstream connection; with its port taken meanwhile, on another, which `Shared` then holds, and the next connection
+    `SOCK_DESTROY` does, without its privilege, is bound anew (on its port in the first round; the third round merged
+    this test with the next, on a new port), and the next rewritten connection gets its upstream connection; with its
+    port taken meanwhile, on another, which `Shared` then holds, and the next connection
     passes there; after that, a connection the old listener took goes on through the old port both ways, and a segment
     from the new port to its fake port is dropped; and Android's reset of a connection not yet relayed reaches the app
     and resets the server's end, with nothing of it left in the pending connections, the NAT or the live flows, while a
@@ -1068,8 +1067,42 @@ an ADR (D25).
     still passes until the new generation; the pause up to 64 s and its cut by an app's SYN, which the engine's test of
     a SYN with no listener shows only as the want; an interloper on the IPv6 listener's port, which takes the same
     code; and Android's own apps, which the lab plays with one socket.
-- **Not done, stated:** the second round has run neither on the emulator nor on a phone; the Galaxy A40 run is the
-  maintainer's, as above.
+- **On the emulator, with the second round (2026-11-16).** The review showed its interloper test failing on the first
+  round's engine and passing on the second's, 12 of 12, and the Android 15 emulator's whole Watch shard passed.
+- **The third round (2026-11-16).** A narrow check found no critical, major or minor fault; its three nits, and what
+  was done for each:
+  - **A listener bound anew on its old port, and SYNs to the fake peer (nit 1).** With generations, a listener bound
+    anew on its old port number kept nothing valid, and left one opening: another app may bind the old port with
+    `SO_REUSEADDR`, without listening, in the moment no listener holds it; the engine's bind on that port then
+    succeeds beside it, and that app's socket can connect from the listener's port, its SYN to the fake peer passing
+    for Android's answer to a connection not yet relayed in the moment before the kernel makes the listener's own
+    request socket for it. A listener is now always bound anew on a port the kernel picks, which is never one another
+    socket holds; and a SYN without ACK from the tunnel's address to the fake peer, which no listener sends, is
+    dropped and counted as skipped, before anything else is read of it.
+  - **The log's outcome (nit 2).** A held SYN refused because no listener was bound, and a connection rewritten to a
+    listener that stopped, which the engine resets itself, were recorded as opened, when the server accepted, and
+    ended in the log as opened with no bytes, though the app saw "refused" or a reset. The held SYN is now recorded
+    as refused, the outcome the app saw; the other ends, in its last segment, the counters and the flows kept,
+    refused when the engine refused its SYN sent again, else failed, the log's outcome for a connection that ended in
+    an error (`Shared::finish_as`). The record format is unchanged: version 1, whose outcomes these are. A connection
+    not yet relayed that Android's stack resets still ends as opened, as a relayed connection a peer resets does.
+  - **What a dropped segment marked (nit 3).** `Nat::answered` marked a connection as just seen for every segment from
+    its listener's port, also for those the caller then dropped, so that segments from an old listener's port kept a
+    connection not yet relayed, and its waiting upstream connection, from the sweep. It no longer marks; a segment
+    that passes does (`Nat::seen`).
+  - **Tests, and their mutations.** In the engine, 3 more, and the two first-round tests of a listener bound anew
+    merged into one: a listener that stops listening is bound anew on a new port, its old port held meanwhile by a
+    socket with `SO_REUSEADDR` that does not listen; a SYN from the listener's port to a connection not yet relayed is
+    dropped and counted, Android's SYN-ACK from there passing; the log, the counters and the flows kept have the
+    engine's resets as refused and failed, and Android's as opened; the held SYN that met no listener is refused in the
+    log too; and a segment dropped from an old listener's port leaves the connection to the sweep, while one that
+    passes marks it. In the lab, the tests of a listener destroyed now check that it is bound anew, on a new port where
+    a kept connection holds the old one. They failed: with the old port bound first (the new port's test, the old port
+    again), with the SYN let through (it reached the app), with the held SYN recorded as opened, with the engine's
+    resets ended as opened, and with every segment from a listener's port marking the connection. The mutations ran in
+    a target directory of their own.
+- **Not done, stated:** the second round had not run on a phone, and the third has run neither on the emulator nor on
+  a phone; the Galaxy A40 run is the maintainer's, as above.
 
 **Unit 11b, traceroute through Watch: hop limits, errors from the path, echo's bytes (2026-11-16, decision 5).**
 - **Watch is not a hop.** An app's echo request, and its UDP datagram on the direct path, leave with the time to live

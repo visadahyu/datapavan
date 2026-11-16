@@ -835,8 +835,8 @@ after the tunnel had been set up again with the same addresses seven times, Andr
 on the tunnel's address, as it does for an address it believes was removed: its bookkeeping of which interfaces hold
 the address raced the in-place update. The connections through Watch ended with them, which no VPN can prevent, and so
 did the engine's listener, whose accept loop ended at its first error: every connection after was refused. The loop
-now never ends: a listener that no longer listens is bound anew, on its own port if it can be, else on another, which
-the engine then rewrites new connections to; one that still listens accepts again, at once after an error of one
+now never ends: a listener that no longer listens is bound anew on a new port, which the engine then rewrites new
+connections to; one that still listens accepts again, at once after an error of one
 connection, and after a pause of 10 ms to a second after a moment without descriptors or memory. Any app may bind a
 port no listener holds, so only the connections the relay already holds go on through an old listener's port: one not
 yet handed over is reset rather than rewritten there again, and while no listener can be bound a new connection is
