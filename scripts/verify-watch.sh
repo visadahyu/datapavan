@@ -56,9 +56,9 @@ QUIC_ON_DEVICE=/data/local/tmp/watch-quic
 # An app's own DNS (ADR 0029): a plain query for example.org, and a TLS hello for dns.google.
 DNS_ON_DEVICE=/data/local/tmp/watch-dns.bin
 DOH_ON_DEVICE=/data/local/tmp/watch-doh.bin
-# A connection kept open across the tunnel set up again (ADR 0044, unit 12b): nc reads its requests from
-# a FIFO and writes the answers to a file, both on the device.
-KEPT_IN=/data/local/tmp/watch-kept-in
+# A connection kept open across the tunnel set up again (ADR 0044, unit 12b): nc writes its answers to a
+# file on the device, and its second request waits until a marker file is there.
+KEPT_GO=/data/local/tmp/watch-kept-go
 KEPT_OUT=/data/local/tmp/watch-kept-out
 # The adb shell on this computer that holds that connection, while it is open.
 KEPT=""
@@ -70,7 +70,7 @@ AIRPLANE=""
 cleanup() {
     [ -z "$KEPT" ] || kill "$KEPT" 2>/dev/null || true
     adb shell rm -f "$HELLO_ON_DEVICE" "$QUIC_ON_DEVICE-1.bin" "$QUIC_ON_DEVICE-2.bin" "$DNS_ON_DEVICE" "$DOH_ON_DEVICE" \
-        "$KEPT_IN" "$KEPT_OUT" >/dev/null 2>&1 || true
+        "$KEPT_GO" "$KEPT_OUT" >/dev/null 2>&1 || true
     adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
     if is_emulator; then
         [ -z "$AIRPLANE" ] || adb shell cmd connectivity airplane-mode disable >/dev/null 2>&1 || true
@@ -566,12 +566,15 @@ fi
 
 # A tunnel set up again with the same addresses, as for a new MTU or a change of the apps left out, is handed
 # to the running engine, which keeps its flows (ADR 0044, unit 12b). A connection to the test server is opened
-# through Watch and kept open: nc reads HTTP requests from a FIFO, which a sleep holds open for writing so that
-# nc's input does not end between them, and writes the answers, kept alive, to a file. A debug command sets the
-# tunnel up again with nothing changed: Android makes a new interface, and the old one goes once the engine has
-# closed it. Then the same connection must carry a request and its answer, with no new connection recorded, and
-# the tunnel keep its MTU. Each output is read whole before it is parsed.
-kept_ask() { device 8 "printf 'GET /ping HTTP/1.1\r\nHost: watch\r\n\r\n' > $KEPT_IN" >/dev/null; }
+# through Watch and kept open: one nc sends an HTTP request, waits until a marker file is there (at most 60 s),
+# then sends a second on the same connection, kept alive, and writes the answers to a file. Android 15's shell may
+# not make a FIFO in /data/local/tmp, so the requests come from one shell's output rather than a FIFO. A debug
+# command sets the tunnel up again with nothing changed: Android makes a new interface, and the old one goes once
+# the engine has closed it. Then the marker lets the second request go: it must be answered on the same
+# connection, with no new connection recorded, and the tunnel keep its MTU. Each output is read whole before it is
+# parsed.
+KEPT_REQUEST='GET /ping HTTP/1.1\r\nHost: watch\r\n\r\n'
+kept_ask() { device 5 "touch $KEPT_GO" >/dev/null; }
 # Waits up to 10 s until the kept connection has had $1 answers.
 kept_answered() {
     local answers
@@ -593,17 +596,10 @@ server_connections() {
     listed=$(flows)
     grep -cE "^tcp [^ ]+ ${HOST//./\\.}:$PORT $SHELL_UID " <<<"$listed" || true
 }
-device 5 "rm -f $KEPT_IN $KEPT_OUT; mkfifo $KEPT_IN" >/dev/null
-adb shell "sleep 90 > $KEPT_IN & nc $HOST $PORT < $KEPT_IN > $KEPT_OUT" </dev/null >/dev/null 2>&1 &
+device 5 "rm -f $KEPT_GO $KEPT_OUT" >/dev/null
+adb shell "(printf '$KEPT_REQUEST'; i=0; while [ ! -e $KEPT_GO ] && [ \$i -lt 300 ]; do sleep 0.2; i=\$((i + 1)); done; printf '$KEPT_REQUEST'; sleep 5) | nc $HOST $PORT > $KEPT_OUT" </dev/null >/dev/null 2>&1 &
 KEPT=$!
-# The answers' file is made once nc's input is open, which needs the sleep's end open first: a request
-# written before could be the FIFO's only writer, and its end would end nc's input.
-for _ in $(seq 1 10); do
-    [ "$(device 5 "[ -e $KEPT_OUT ] && echo made")" = made ] && break
-    sleep 1
-done
-kept_ask
-kept_answered 1 || fail "a connection kept open through Watch got no answer to its first request"
+kept_answered 1 || fail "a connection kept open through Watch got no answer to its first request; the device has: $(device 5 "ls -l $KEPT_OUT; head -c 300 $KEPT_OUT; ps -A -o PID,NAME | grep -E ' (nc|sleep)\$'" | tr '\n' ' ')"
 connections=$(server_connections)
 adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" setup-again </dev/null | grep -q '^ *setup-again' ||
     fail "the debug command to set the tunnel up again failed"
@@ -626,7 +622,7 @@ mtu_after=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.wat
 kill "$KEPT" 2>/dev/null || true
 wait "$KEPT" 2>/dev/null || true
 KEPT=""
-device 5 "rm -f $KEPT_IN $KEPT_OUT" >/dev/null
+device 5 "rm -f $KEPT_GO $KEPT_OUT" >/dev/null
 interface=$moved
 echo "ok: set up again with the same addresses (interface $interface now), the tunnel kept a connection open through Watch, both ways, and its MTU"
 

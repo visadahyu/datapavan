@@ -421,9 +421,17 @@ for _ in $(seq 1 20); do [ "$(workload_log | grep -c "^tcp $HOST:$PORT pong$" ||
 echo "ok: with the tool stopped, the screen says the apps wait, and its switch turns the chain off; the picked app then goes directly"
 
 # An app left out of the tunnel (ADR 0041), chosen on the screen as a user would: Watch sets its tunnel up
-# again, the app still reaches the server, and Watch no longer sees its traffic. Taken back, Watch sees it
-# again.
-workload_flows() { flows | grep -c " $WORKLOAD_UID " || true; }
+# again, the app still reaches the server, and Watch sees no new traffic of it. Taken back, Watch sees it
+# again. The tunnel keeps its addresses, so the running engine keeps its flows, the app's earlier ones among
+# them (ADR 0044, unit 12b): what counts is a flow that was not there before, by its protocol and the app's
+# end of it.
+workload_flows_now() { flows | grep " $WORKLOAD_UID " || true; }
+# The workload's flows now that were not among $1.
+new_workload_flows() {
+    local now
+    now=$(workload_flows_now)
+    awk 'NR == FNR { seen[$1 " " $2] = 1; next } NF && !(($1 " " $2) in seen)' <(printf '%s\n' "$1") <(printf '%s\n' "$now")
+}
 workload_reaches() {
     local before
     before=$(workload_log | grep -c "^tcp $HOST:$PORT pong$" || true)
@@ -432,6 +440,7 @@ workload_reaches() {
     return 1
 }
 adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
+seen=$(workload_flows_now)
 tap_text "Choose apps to leave out" || fail "the screen has no button to leave apps out"
 tap_text "Datapavan workload" || fail "the workload app is not in the list of apps to leave out"
 sleep 2
@@ -440,8 +449,10 @@ vpn_up || fail "Watch's tunnel did not come back after an app was left out"
 scroll_to_top
 scroll_to "1 app is left out." || fail "the screen does not say that one app is left out"
 workload_reaches || fail "the app left out did not reach the server"
-[ "$(workload_flows)" = 0 ] || fail "Watch still saw the left-out app's traffic: $(flows | grep " $WORKLOAD_UID " | head -3 | tr '\n' ';')"
+fresh=$(new_workload_flows "$seen")
+[ -z "$fresh" ] || fail "Watch still saw the left-out app's traffic: $(head -3 <<<"$fresh" | tr '\n' ';')"
 echo "ok: an app left out on the screen reaches the server without Watch seeing it"
+seen=$(workload_flows_now)
 tap_text "Datapavan workload" || fail "the workload app could not be taken back"
 sleep 2
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
@@ -449,7 +460,7 @@ vpn_up || fail "Watch's tunnel did not come back after the app was taken back"
 scroll_to_top
 scroll_to "No app is left out." || fail "the screen does not say that no app is left out"
 workload_reaches || fail "the app taken back did not reach the server"
-for _ in $(seq 1 10); do [ "$(workload_flows)" -gt 0 ] && break; sleep 1; done
-[ "$(workload_flows)" -gt 0 ] || fail "Watch did not see the app's traffic after it was taken back"
+for _ in $(seq 1 10); do [ -n "$(new_workload_flows "$seen")" ] && break; sleep 1; done
+[ -n "$(new_workload_flows "$seen")" ] || fail "Watch did not see the app's traffic after it was taken back"
 echo "ok: taken back, the app passes through Watch again"
 echo "== chain check passed"
