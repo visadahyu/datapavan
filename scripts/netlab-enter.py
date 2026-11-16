@@ -20,8 +20,10 @@
 # - 203.0.113.0/24 (RFC 5737) is routed into tun1, which no one reads: a server there never answers,
 #   as one behind a firewall that drops packets.
 # - Through IPv6 the same, where the machine has IPv6: tun0 holds the tunnel's common IPv6 address
-#   (a /128), and the "internet" is 2001:db8::9 (RFC 3849) on the loopback. Where it has none, the lab
-#   says so, sets NETLAB_IPV6=absent for the test, and goes on with IPv4: the IPv6 tests then fail.
+#   (a /128), and the "internet" is 2001:db8::9 (RFC 3849) on the loopback, with 2001:db8::10 beside
+#   it, a router on the path for the tests of errors from the path (ADR 0044, unit 11b). Where it has
+#   none, the lab says so, sets NETLAB_IPV6=absent for the test, and goes on with IPv4: the IPv6 tests
+#   then fail.
 # - A narrow network (ADR 0044, decision 5 as amended): a server at 198.51.100.20 and 2001:db8:1::20 on
 #   "far", one end of a veth pair whose other end, "near", is in the same namespace. What the
 #   namespace itself sends there takes table 101, whose routes go out of "near", a link of 1,280 bytes,
@@ -83,6 +85,7 @@ TUN6 = "fd00:1:fd00:1:fd00:1:fd00:1"
 FAKE6 = "fd00:1:fd00:1:fd00:1:fd00:2"
 DNS6 = "fd00:1:fd00:1:fd00:1:fd00:3"
 SERVER6 = "2001:db8::9"
+OTHER6 = "2001:db8::10"
 APPS_TABLE = "100"
 NARROW4 = "198.51.100.20"
 NARROW6 = "2001:db8:1::20"
@@ -103,6 +106,7 @@ def sysctl(name, value):
 # which would hold them back for a moment.
 def ipv6():
     ip("-6", "addr", "add", SERVER6 + "/128", "dev", "lo")
+    ip("-6", "addr", "add", OTHER6 + "/128", "dev", "lo")
     ip("-6", "addr", "add", TUN6 + "/128", "dev", "tun0", "nodad")
     for address in (FAKE6, DNS6):
         ip("-6", "route", "add", address + "/128", "dev", "tun0")

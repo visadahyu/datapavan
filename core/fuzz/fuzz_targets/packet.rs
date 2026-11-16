@@ -1,9 +1,10 @@
 //! Fuzzing of Watch's packet reader and writers (`datapavan_net::packet`): any bytes an app can put
 //! into the tunnel. A packet that is read must describe the input exactly; its ends rewritten must
 //! read back as the new ends, and every packet built in answer to it must read back as well. An echo
-//! request that is read lies inside the input, and the reply and refusal built for it fit. Read as a
-//! sequence of fragments, the input never takes the reassembler past its bounds, and what it rebuilds
-//! is a whole packet by its own header.
+//! request that is read lies inside the input, and the reply and refusal built for it fit, as do the
+//! request rebuilt for a router's error and that error, quoting it or any bytes. A hop limit set on any
+//! bytes changes nothing else a read gives. Read as a sequence of fragments, the input never takes the
+//! reassembler past its bounds, and what it rebuilds is a whole packet by its own header.
 #![no_main]
 
 use std::net::SocketAddr;
@@ -16,6 +17,7 @@ use libfuzzer_sys::fuzz_target;
 fuzz_target!(|data: &[u8]| {
     echo(data);
     fragments(data);
+    hops(data);
     let Ok(parsed) = packet::parse(data) else {
         return;
     };
@@ -70,6 +72,33 @@ fn echo(data: &[u8]) {
         if quoted.len() == echo.length {
             assert_eq!(packet::echo_request(quoted), Ok(echo));
         }
+    }
+    // The request as an error from the path quotes it, rebuilt with the app's identifier, and a router's
+    // "time exceeded" quoting it, or the whole input, from the address pinged.
+    if let Some(request) = packet::echo_request_of(echo.source, echo.destination, echo.id, echo.sequence, message) {
+        assert!(checks_out(&request));
+        let read = packet::echo_request(&request).map(|r| (r.source, r.destination, r.id, r.sequence));
+        assert_eq!(read, Ok((echo.source, echo.destination, echo.id, echo.sequence)));
+        let kind = if echo.source.is_ipv4() { (11, 0) } else { (3, 0) };
+        for quoted in [&request[..], data] {
+            if let Some(error) = packet::path_error(quoted, (echo.destination, echo.source), kind, [0; 4]) {
+                assert!(error.len() <= 1280);
+                assert!(checks_out(&error));
+            }
+        }
+    }
+}
+
+/// A hop limit set on any bytes, as on a packet the engine built: what reads as a packet still reads
+/// the same, but for its hop limit.
+fn hops(data: &[u8]) {
+    let mut copy = data.to_vec();
+    packet::set_hops(&mut copy, 7);
+    if let Ok(parsed) = packet::parse(data) {
+        assert_eq!(packet::parse(&copy), Ok(packet::Packet { hops: 7, ..parsed }));
+    }
+    if let Ok(echo) = packet::echo_request(data) {
+        assert_eq!(packet::echo_request(&copy), Ok(packet::Echo { hops: 7, ..echo }));
     }
 }
 

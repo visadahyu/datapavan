@@ -24,6 +24,11 @@
 //! engine answers nothing as too large on its own: the tunnel's MTU is the first hop's, which Watch's
 //! Kotlin side reads and sets, so the apps' own kernels meet it as they would without Watch (decision 5
 //! as amended on 2026-11-15).
+//!
+//! Watch is not a hop (unit 11b): an app's datagram on the direct path and its ping leave with the
+//! app's own hop limit, what comes back reaches the app with the hop limit it arrived with, and the
+//! errors the path sends, a router's "time exceeded" and "destination unreachable" among them, reach
+//! the app from the router or host that sent them, so that a traceroute through Watch sees the path.
 
 use std::collections::{HashMap, VecDeque};
 use std::io;
@@ -443,7 +448,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 41;
+pub const COUNTERS: usize = 45;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -489,6 +494,10 @@ pub struct Counters {
     reassembled: AtomicU64,
     too_big: AtomicU64,
     path_mtu: AtomicU64,
+    time_exceeded: AtomicU64,
+    path_unreachable: AtomicU64,
+    echo_errors: AtomicU64,
+    errors_unasked: AtomicU64,
 }
 
 impl Counters {
@@ -528,8 +537,13 @@ impl Counters {
     /// waited for their socket, or it could not be made, protected or sent on; then (decision 5 as
     /// amended) the datagrams put together from the apps' fragments, the datagrams the engine's kernel
     /// refused to send as too long (`EMSGSIZE`), which are dropped, and the "fragmentation needed" and
-    /// "packet too big" routers sent the engine's sockets, passed on to the apps. None names a
-    /// destination: they can be read on any phone. New counters are only ever appended, so that scripts
+    /// "packet too big" routers sent the engine's sockets, passed on to the apps, for datagrams and,
+    /// since unit 11b, echo requests; then (unit 11b) the "time exceeded" routers sent for them, passed
+    /// on, the "destination unreachable" of every code routers or hosts sent for them, passed on, how
+    /// many of the errors passed on, of those three kinds, answered echo requests, and the errors from
+    /// the path dropped because they answered nothing the app sent: a destination its mapping or ping
+    /// socket never sent to, a request it never sent, or a datagram or request the app was already told
+    /// of once. None names a destination: they can be read on any phone. New counters are only ever appended, so that scripts
     /// reading a column by its place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
@@ -590,6 +604,10 @@ impl Counters {
             &self.reassembled,
             &self.too_big,
             &self.path_mtu,
+            &self.time_exceeded,
+            &self.path_unreachable,
+            &self.echo_errors,
+            &self.errors_unasked,
         ]
     }
 }

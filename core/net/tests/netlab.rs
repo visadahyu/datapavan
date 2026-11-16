@@ -3067,3 +3067,348 @@ fn answers_reach_the_app_with_the_hop_limit_they_arrived_with() -> Outcome {
         },
     )
 }
+
+/// A router on the lab's IPv6 path, beside the "internet" (scripts/netlab-enter.py).
+const OTHER6: Ipv6Addr = Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 0x10);
+const TIME_EXCEEDED: usize = 41;
+const PATH_UNREACHABLE: usize = 42;
+const ECHO_ERRORS: usize = 43;
+const ERRORS_UNASKED: usize = 44;
+
+/// A router or host at `router` on the path sends the engine's socket at `to` the ICMP error `kind`
+/// (type and code), quoting `quoted`, the packet the engine sent, as a router quotes the packet it
+/// could not pass on; it leaves with the hop limit 9. A raw socket of the namespace's root sends it; for
+/// `ICMPv6` the kernel makes the checksum itself.
+fn path_says(router: IpAddr, (to, quoted): (IpAddr, &[u8]), kind: (u8, u8)) -> Outcome {
+    let error = packet::path_error(quoted, (router, to), kind, [0; 4]).ok_or("no error built")?;
+    let (domain, protocol, header) = if router.is_ipv4() {
+        (Domain::IPV4, Protocol::ICMPV4, 20)
+    } else {
+        (Domain::IPV6, Protocol::ICMPV6, 40)
+    };
+    let raw = Socket::new(domain, Type::RAW, Some(protocol))?;
+    raw.bind(&SocketAddr::new(router, 0).into())?;
+    set_hops(&raw, router.is_ipv4(), 9)?;
+    raw.send_to(&error[header..], &SocketAddr::new(to, 0).into())?;
+    Ok(())
+}
+
+/// An ICMP error as an app's socket reads it off its queue.
+#[derive(Debug)]
+struct FromPath {
+    /// Its origin, type and code.
+    kind: (u8, u8, u8),
+    /// The destination of the packet it answered, with its port.
+    about: Option<SocketAddr>,
+    /// Who sent it (`SO_EE_OFFENDER`).
+    from: Option<IpAddr>,
+    /// The hop limit it came with.
+    hops: Option<u8>,
+    /// What it quoted of the app's packet, from its transport header on.
+    quoted: Vec<u8>,
+}
+
+/// The ICMP errors on a socket's error queue now.
+fn from_path(socket: &impl AsFd) -> Result<Vec<FromPath>, Box<dyn std::error::Error>> {
+    use nix::libc;
+    use nix::sys::socket::{ControlMessageOwned, MsgFlags, SockaddrStorage, recvmsg};
+    use std::net::{SocketAddrV4, SocketAddrV6};
+    use std::os::fd::AsRawFd;
+    let mut errors = Vec::new();
+    loop {
+        let mut control =
+            nix::cmsg_space!(libc::sock_extended_err, libc::sockaddr_in6, libc::c_int);
+        let mut quoted = [0u8; 2048];
+        let mut parts = [io::IoSliceMut::new(&mut quoted)];
+        let Ok(message) = recvmsg::<SockaddrStorage>(
+            socket.as_fd().as_raw_fd(),
+            &mut parts,
+            Some(&mut control),
+            MsgFlags::MSG_ERRQUEUE | MsgFlags::MSG_DONTWAIT,
+        ) else {
+            return Ok(errors);
+        };
+        let n = message.bytes;
+        let about = message.address.and_then(|address| {
+            address
+                .as_sockaddr_in()
+                .map(|v4| SocketAddr::from(SocketAddrV4::from(*v4)))
+                .or_else(|| {
+                    address
+                        .as_sockaddr_in6()
+                        .map(|v6| SocketAddr::from(SocketAddrV6::from(*v6)))
+                })
+        });
+        let (mut error, mut hops) = (None, None);
+        for message in message.cmsgs()? {
+            match message {
+                ControlMessageOwned::Ipv4RecvErr(read, offender) => {
+                    let offender = offender
+                        .map(|a| IpAddr::V4(Ipv4Addr::from(u32::from_be(a.sin_addr.s_addr))));
+                    error = Some((read, offender));
+                }
+                ControlMessageOwned::Ipv6RecvErr(read, offender) => {
+                    let offender =
+                        offender.map(|a| IpAddr::V6(Ipv6Addr::from(a.sin6_addr.s6_addr)));
+                    error = Some((read, offender));
+                }
+                ControlMessageOwned::Ipv4Ttl(limit) | ControlMessageOwned::Ipv6HopLimit(limit) => {
+                    hops = u8::try_from(limit).ok();
+                }
+                _ => {}
+            }
+        }
+        if let Some((read, from)) = error {
+            errors.push(FromPath {
+                kind: (read.ee_origin, read.ee_type, read.ee_code),
+                about,
+                from,
+                hops,
+                quoted: quoted[..n.min(quoted.len())].to_vec(),
+            });
+        }
+    }
+}
+
+/// The ICMP errors an app socket reads next, waiting up to [`STEP`] for the first.
+async fn told_from_path(socket: &impl AsFd) -> Result<Vec<FromPath>, Box<dyn std::error::Error>> {
+    for _ in 0..500 {
+        let errors = from_path(socket)?;
+        if !errors.is_empty() {
+            return Ok(errors);
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    Err("no ICMP error reached the app".into())
+}
+
+/// The kinds of error a traceroute meets, of the IP version `v4` or IPv6: the error's origin, "time
+/// exceeded in transit", and "destination unreachable" for no route to the network (IPv4's code 0,
+/// IPv6's "no route to destination").
+fn traced(v4: bool) -> (u8, (u8, u8), (u8, u8)) {
+    if v4 {
+        (ICMP_ORIGIN, (11, 0), (3, 0))
+    } else {
+        (ICMP6_ORIGIN, (3, 0), (1, 0))
+    }
+}
+
+/// ADR 0044, unit 11b: a router's "time exceeded" for a datagram the app sent reaches the app's socket
+/// (`IP_RECVERR`) from that router, as without Watch, with the hop limit it came with, where before it
+/// was dropped; an unreachable with its code too. One error at most for each datagram: a second for one
+/// datagram is dropped and counted, and so is one forged for a destination the app never sent to, which
+/// the engine's kernel queues all the same, its socket not being connected. IPv4 and IPv6, the router
+/// another address than the destination.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_routers_time_exceeded_reaches_the_apps_datagram_from_the_router() -> Outcome {
+    lab(
+        "a_routers_time_exceeded_reaches_the_apps_datagram_from_the_router",
+        &Limits::default(),
+        |engine| async move {
+            ipv6_here()?;
+            // With the errors dropped so far once the second for one datagram is: the forged ones and
+            // the second ones, one of each in each IP version.
+            for (at, router, elsewhere, dropped) in [
+                (SERVER_IP, IpAddr::V4(OTHER), IpAddr::V4(SILENT), 2),
+                (
+                    IpAddr::V6(SERVER6),
+                    IpAddr::V6(OTHER6),
+                    IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 0x99)),
+                    4,
+                ),
+            ] {
+                let (origin, exceeded, unreachable) = traced(at.is_ipv4());
+                let (server, mapping) = reporting_echo(at).await?;
+                let app = erring_app(server).await?;
+                ask_hops(&app, at.is_ipv4())?;
+                app.send_to(b"a probe", server).await?;
+                app_receive(&app).await?;
+                let mapped = timeout(STEP, mapping).await??;
+                let sent = |to| packet::udp(mapped, to, b"a probe").ok_or("no datagram built");
+                // Forged, and sent first: had it got through, the app would read it first.
+                let forged = sent(SocketAddr::new(elsewhere, server.port()))?;
+                path_says(router, (mapped.ip(), &forged), exceeded)?;
+                path_says(router, (mapped.ip(), &sent(server)?), exceeded)?;
+                let heard = told_from_path(&app).await?;
+                let [error] = &heard[..] else {
+                    return Err(format!("not one error: {heard:?}").into());
+                };
+                assert_eq!(
+                    (error.kind, error.about, error.from, error.hops),
+                    (
+                        (origin, exceeded.0, exceeded.1),
+                        Some(server),
+                        Some(router),
+                        Some(9)
+                    )
+                );
+                assert!(error.quoted.is_empty(), "the payload quoted: {error:?}");
+
+                // A second for that one datagram is dropped: the app is told of the next one's only.
+                // It is counted before the app sends again, which the error could otherwise answer.
+                path_says(router, (mapped.ip(), &sent(server)?), exceeded)?;
+                counted(&engine, ERRORS_UNASKED, dropped).await?;
+                app.send_to(b"again", server).await?;
+                app_receive(&app).await?;
+                path_says(router, (mapped.ip(), &sent(server)?), unreachable)?;
+                let heard = told_from_path(&app).await?;
+                let kinds: Vec<_> = heard.iter().map(|e| (e.kind, e.about, e.from)).collect();
+                assert_eq!(
+                    kinds,
+                    [(
+                        (origin, unreachable.0, unreachable.1),
+                        Some(server),
+                        Some(router)
+                    )]
+                );
+            }
+            let counters = engine.counters();
+            assert_eq!(
+                [TIME_EXCEEDED, PATH_UNREACHABLE, ERRORS_UNASKED, ECHO_ERRORS]
+                    .map(|at| counters[at]),
+                [2, 2, 4, 0]
+            );
+            Ok(())
+        },
+    )
+}
+
+/// The echo identifier of the engine's one ping socket of the IP version `v4` or IPv6, from the
+/// namespace's table: the only one not bound to an address.
+fn engine_ping_id_of(v4: bool) -> Result<u16, Box<dyn std::error::Error>> {
+    let (table, unbound) = if v4 {
+        ("/proc/net/icmp", "00000000")
+    } else {
+        ("/proc/net/icmp6", "00000000000000000000000000000000")
+    };
+    let table = std::fs::read_to_string(table)?;
+    let ids: Vec<u16> = table
+        .lines()
+        .skip(1)
+        .filter_map(|line| {
+            let (address, port) = line.split_whitespace().nth(1)?.split_once(':')?;
+            (address == unbound).then(|| u16::from_str_radix(port, 16).ok())?
+        })
+        .collect();
+    match ids[..] {
+        [id] => Ok(id),
+        _ => Err(format!("not one engine socket: {table}").into()),
+    }
+}
+
+/// ADR 0044, unit 11b: the ping sockets queue their errors from the path now. A router's "time
+/// exceeded" for an app's echo request reaches the app's ping socket (`IP_RECVERR`), as `ping -t`
+/// shows it without Watch: from that router, with the hop limit it came with, quoting the app's own
+/// request, with the app's identifier and that request's sequence number, by which the app's kernel
+/// finds the socket and the app its request. Errors forged for a destination the socket never pinged
+/// and for a request it never sent are dropped and counted, as is a second for one request; the
+/// pending error does not end the engine's socket, through which the next ping gets its reply; and an
+/// unreachable with its code reaches the app too. IPv4 and IPv6, the router another address than the
+/// destination. Before, every error was dropped: the app saw a timeout.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_routers_time_exceeded_reaches_the_apps_ping_from_the_router() -> Outcome {
+    lab(
+        "a_routers_time_exceeded_reaches_the_apps_ping_from_the_router",
+        &Limits::default(),
+        |engine| async move {
+            ipv6_here()?;
+            // With the errors dropped so far once the second for one request is: two forged ones and
+            // the second one in each IP version.
+            for (server, tunnel, router, id, dropped) in [
+                (
+                    SERVER_IP,
+                    IpAddr::V4(Addresses::COMMON.tun4),
+                    IpAddr::V4(OTHER),
+                    4821,
+                    3,
+                ),
+                (
+                    IpAddr::V6(SERVER6),
+                    IpAddr::V6(Addresses::COMMON.tun6),
+                    IpAddr::V6(OTHER6),
+                    4822,
+                    6,
+                ),
+            ] {
+                let v4 = server.is_ipv4();
+                let (origin, exceeded, unreachable) = traced(v4);
+                let app = erring_pinger(tunnel, id)?;
+                ask_hops(&app, v4)?;
+                let to = SocketAddr::new(server, 0).into();
+                app.send_to(&echo_request(v4, 1, b"a probe"), &to)?;
+                assert_eq!(
+                    hear(&app, server)?,
+                    Ok((id, 1, b"a probe".to_vec(), server))
+                );
+                let engines = engine_ping_id_of(v4)?;
+                // What the engine's socket sent, from the "internet"'s address it sends from here, and
+                // what forged errors say it sent.
+                let quoting = |to, sequence, data: &[u8]| {
+                    packet::echo_request_of(server, to, engines, sequence, data)
+                        .ok_or("no request built")
+                };
+                let sent = |to, sequence| quoting(to, sequence, b"a probe");
+                // Forged, and sent first: had they got through, the app would read them first, and
+                // their data.
+                path_says(router, (server, &quoting(router, 1, b"forged")?), exceeded)?;
+                path_says(router, (server, &quoting(server, 99, b"forged")?), exceeded)?;
+                path_says(router, (server, &sent(server, 1)?), exceeded)?;
+                let heard = told_from_path(&app).await?;
+                let [error] = &heard[..] else {
+                    return Err(format!("not one error: {heard:?}").into());
+                };
+                assert_eq!(
+                    (error.kind, error.about, error.from, error.hops),
+                    (
+                        (origin, exceeded.0, exceeded.1),
+                        Some(SocketAddr::new(server, 0)),
+                        Some(router),
+                        Some(9)
+                    )
+                );
+                let quoted = &error.quoted;
+                let request = if v4 {
+                    packet::ECHO_REQUEST
+                } else {
+                    packet::ECHO_REQUEST_V6
+                };
+                let mut expected = vec![request, 0];
+                expected.extend_from_slice(&id.to_be_bytes());
+                expected.extend_from_slice(&[0, 1]);
+                assert_eq!(
+                    (quoted.get(..2), quoted.get(4..8), quoted.get(8..)),
+                    (
+                        Some(&expected[..2]),
+                        Some(&expected[2..]),
+                        Some(&b"a probe"[..])
+                    ),
+                    "the request quoted: {quoted:?}"
+                );
+
+                // A second for that one request is dropped, and counted: had it got through, the app's
+                // next read would fail with it rather than read the reply.
+                path_says(router, (server, &sent(server, 1)?), exceeded)?;
+                counted(&engine, ERRORS_UNASKED, dropped).await?;
+                app.send_to(&echo_request(v4, 2, b"and on"), &to)?;
+                assert_eq!(hear(&app, server)?, Ok((id, 2, b"and on".to_vec(), server)));
+                assert_eq!(engine_ping_id_of(v4)?, engines, "the engine's socket ended");
+                path_says(router, (server, &sent(server, 2)?), unreachable)?;
+                let heard = told_from_path(&app).await?;
+                let kinds: Vec<_> = heard.iter().map(|e| (e.kind, e.from)).collect();
+                assert_eq!(
+                    kinds,
+                    [((origin, unreachable.0, unreachable.1), Some(router))]
+                );
+            }
+            let counters = engine.counters();
+            assert_eq!(
+                [TIME_EXCEEDED, PATH_UNREACHABLE, ECHO_ERRORS, ERRORS_UNASKED]
+                    .map(|at| counters[at]),
+                [2, 2, 4, 6]
+            );
+            Ok(())
+        },
+    )
+}

@@ -5,7 +5,9 @@
 //! `Limits::echo_idle`. The kernel gives such a socket an echo identifier of its own and writes it
 //! into every request, so each reply is rebuilt for the app: from the address it pinged, with the
 //! app's identifier, the sequence number and data kept, checksums made anew, and the hop limit it
-//! arrived with. Each request leaves with the app's own hop limit (ADR 0044, unit 11b).
+//! arrived with. Each request leaves with the app's own hop limit, and the errors the path answers it
+//! with, a router's "time exceeded" among them, reach the app from whoever sent them, one at most for
+//! each request (ADR 0044, unit 11b): a traceroute or `ping -t` through Watch sees the path.
 //!
 //! Android cannot say whose an echo is: `getConnectionOwnerUid` knows only TCP and UDP. So while a
 //! chain sends any app through the user's tool, no echo leaves directly, since it could be a chained
@@ -16,7 +18,8 @@
 //! Echo is not a flow: the connection log gets no record of it, and the log's format is unchanged.
 //! The counters are all that is kept of it.
 
-use super::udp::with_buffer;
+use super::errors::{self, Queued, Tally};
+use super::udp::{network_moved, with_buffer};
 use super::upstream::protect;
 use super::{BATCH, Counters, Loop, Shared, hops, lock, send_to_app};
 use crate::packet::{self, ECHO_REPLY, ECHO_REPLY_V6, Echo};
@@ -25,13 +28,14 @@ use crate::tun::Tun;
 use nix::libc;
 use nix::sys::socket::{setsockopt, sockopt};
 use socket2::{Domain, Protocol, Socket, Type};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::os::fd::AsFd;
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use tokio::io::Interest;
 use tokio::net::UdpSocket;
 use tokio::sync::watch;
 
@@ -43,6 +47,12 @@ type Key = (IpAddr, u16, IpAddr);
 /// At most this many requests of a key wait while its socket is made and protected, which takes a
 /// question to Android of a few milliseconds; more are dropped, as by a full queue.
 const HELD: usize = 8;
+
+/// At most this many of a socket's latest requests may each be answered by one error from the path
+/// (ADR 0044, unit 11b). A ping sends one a second and a router answers within a few, so 64 hold every
+/// request an error could still come for; an error for an older one is dropped, as is one for a
+/// request never sent, or a second for one request.
+const ASKED: usize = 64;
 
 /// The engine's ping sockets, and whether the kernel lets it make them.
 pub(super) struct Echoes {
@@ -102,6 +112,9 @@ struct Entry<S> {
     state: State<S>,
     /// When an echo last passed either way.
     last: Instant,
+    /// The sequence numbers of its latest requests that no error from the path answered yet, the
+    /// latest last, at most [`ASKED`].
+    asked: VecDeque<u16>,
 }
 
 enum State<S> {
@@ -126,7 +139,8 @@ enum Next<S> {
 impl<S> Table<S> {
     /// What becomes of a request, `message` with the app's hop limit `hops`, of `key` to `target`, at
     /// `now`, with at most `cap` sockets. A new key takes its place at once, before its socket is made,
-    /// so that the cap holds for the sockets being made too.
+    /// so that the cap holds for the sockets being made too. A request that is not dropped may be
+    /// answered by one error from the path.
     fn request(
         &mut self,
         key: Key,
@@ -135,34 +149,43 @@ impl<S> Table<S> {
         now: Instant,
         cap: usize,
     ) -> Next<S> {
+        let sequence = packet::u16_at(message, 6).unwrap_or(0);
         if let Some(entry) = self.sockets.get_mut(&key) {
-            return match &mut entry.state {
-                State::Open(socket) => {
-                    entry.last = now;
-                    Next::Send(Arc::clone(socket), entry.target)
-                }
+            let next = match &mut entry.state {
+                State::Open(socket) => Next::Send(Arc::clone(socket), entry.target),
                 State::Opening(held) if held.len() < HELD => {
                     held.push((message.to_vec(), hops));
-                    entry.last = now;
                     Next::Held
                 }
-                State::Opening(_) => Next::Full,
+                State::Opening(_) => return Next::Full,
             };
+            entry.last = now;
+            entry.asks(sequence);
+            return next;
         }
         if self.sockets.len() >= cap {
             return Next::Full;
         }
         self.numbered += 1;
-        self.sockets.insert(
-            key,
-            Entry {
-                number: self.numbered,
-                target,
-                state: State::Opening(vec![(message.to_vec(), hops)]),
-                last: now,
-            },
-        );
+        let mut entry = Entry {
+            number: self.numbered,
+            target,
+            state: State::Opening(vec![(message.to_vec(), hops)]),
+            last: now,
+            asked: VecDeque::new(),
+        };
+        entry.asks(sequence);
+        self.sockets.insert(key, entry);
         Next::Open(self.numbered)
+    }
+
+    /// An error from the path for the request numbered `sequence` of the socket of `key` numbered
+    /// `number`: whether a request of that number still waited for one, which it then no longer does;
+    /// `None` when the place is gone.
+    fn answers(&mut self, key: Key, number: u64, sequence: u16) -> Option<bool> {
+        let entry = self.entry(key, number)?;
+        let at = entry.asked.iter().position(|&asked| asked == sequence);
+        Some(at.and_then(|at| entry.asked.remove(at)).is_some())
     }
 
     /// The socket of `key` numbered `number` is open: the requests that waited for it, to send now,
@@ -219,6 +242,16 @@ impl<S> Table<S> {
             return None;
         }
         self.sockets.remove(&key).map(|entry| entry.state)
+    }
+}
+
+impl<S> Entry<S> {
+    /// A request numbered `sequence` goes out, or waits to: one error from the path may answer it.
+    fn asks(&mut self, sequence: u16) {
+        if self.asked.len() == ASKED {
+            self.asked.pop_front();
+        }
+        self.asked.push_back(sequence);
     }
 }
 
@@ -302,8 +335,9 @@ fn count_sent(shared: &Shared, sent: bool) {
 }
 
 /// The task of one ping socket: makes and protects it, sends the requests that waited for it, then
-/// hands the app each reply from its target until no echo passed either way for `Limits::echo_idle`,
-/// the network beneath changes, or a chain comes on.
+/// hands the app each error from the path that answers one of its requests and each reply from its
+/// target, until no echo passed either way for `Limits::echo_idle`, the network beneath changes, or a
+/// chain comes on.
 async fn carry(
     key: Key,
     (number, target): (u64, IpAddr),
@@ -355,18 +389,42 @@ async fn carry(
         tokio::select! {
             _ = changes.changed() => break,
             () = tokio::time::sleep_until(until.into()) => {}
-            ready = socket.socket.readable() => {
-                if ready.is_err() {
+            ready = socket.socket.ready(Interest::READABLE | Interest::ERROR) => {
+                if !ready.is_ok_and(|ready| !ready.is_read_closed()) {
                     break;
                 }
-                let (replies, failed) =
-                    with_buffer(|buffer| receive(&socket.socket, buffer, key, target));
+                // The errors first, which the socket's queue holds apart, each with what it quoted
+                // of the request it answers; then the replies, which may come after a read that took
+                // a pending error: the socket goes on.
+                let (queued, (replies, failed)) = with_buffer(|buffer| {
+                    let queued = errors::take(&socket.socket, buffer);
+                    (queued, receive(&socket.socket, buffer, key, target))
+                });
                 // While a chain is on, nothing comes in on the direct path either.
                 if shared.chains_any_app() {
                     break;
                 }
-                if !replies.is_empty() && !lock(&table).heard(key, number, Instant::now()) {
+                // What the socket read as the network beneath moved, an error about the old network's
+                // path among it, is not passed on: the socket ends with the move, as a mapping does.
+                if network_moved(&changes) {
                     break;
+                }
+                let mut tally = Tally::default();
+                let told = {
+                    let mut table = lock(&table);
+                    let told = path_errors(queued, key, target, &mut tally, |sequence| {
+                        table.answers(key, number, sequence) == Some(true)
+                    });
+                    let quiet = told.is_empty() && replies.is_empty();
+                    if !quiet && !table.heard(key, number, Instant::now()) {
+                        break;
+                    }
+                    told
+                };
+                // Counted before they are written: an app that reads them may read the counters next.
+                tally.count(&shared.counters, true);
+                for error in told {
+                    send_to_app(&tun, &shared, &error).await;
                 }
                 for reply in replies {
                     // Counted before it is written: an app that reads it may read the counters next.
@@ -388,15 +446,16 @@ async fn carry(
 /// without unsafe code. The kernel gives the hop limit each reply arrived with (ADR 0044, unit 11b);
 /// where it refuses, a reply keeps the engine's own.
 ///
-/// It sets no `IP_RECVERR` or `IPV6_RECVERR`: the ICMP errors that answer a ping on the network
-/// beneath ("unreachable", "time exceeded") never reach the app, which sees no reply. Without the
-/// option, an unconnected ping socket's reads never fail for such an error. A later change that sets
-/// it must read the error queue on `Interest::ERROR` with `MSG_ERRQUEUE`, as `errors::queued` does for
-/// UDP mappings, and treat a read failing with such an error as `errors::from_icmp` does, so that a
-/// pending error does not end the socket.
+/// It queues the ICMP errors that answer its requests on the network beneath (`IP_RECVERR`,
+/// `IPV6_RECVERR`): "time exceeded", "destination unreachable", "fragmentation needed" and "packet too
+/// big" then reach the app as they would without Watch, where before the app saw no reply (unit 11b).
+/// With the option, each such error also fails the socket's next read or send once, which then takes
+/// it: such a failure (`errors::from_icmp`) does not end the socket, and the error itself is read off
+/// its queue on `Interest::ERROR`. Where the kernel refuses the option, errors are lost, as before.
 async fn open(shared: &Arc<Shared>, target: IpAddr) -> io::Result<Pinger> {
     let socket = UdpSocket::from_std(std::net::UdpSocket::from(ping_socket(target.is_ipv4())?))?;
     protect(shared, socket.as_fd()).await?;
+    let _ = errors::keep(&socket, target.is_ipv4());
     let _ = hops::ask(&socket, target.is_ipv4());
     Ok(Pinger {
         socket,
@@ -422,8 +481,17 @@ const UNSET: u16 = u16::MAX;
 
 impl Pinger {
     /// Sends a request, `message`, to `to` with the app's hop limit `hops`, without waiting for room
-    /// in the socket's buffer.
+    /// in the socket's buffer. An ICMP error the kernel holds for the socket fails its next send once,
+    /// and that request does not leave: it is sent again. The socket's task reads the error itself
+    /// from the socket's error queue.
     fn send(&self, message: &[u8], to: SocketAddr, hops: u8) -> io::Result<usize> {
+        match self.send_once(message, to, hops) {
+            Err(error) if errors::from_icmp(&error) => self.send_once(message, to, hops),
+            sent => sent,
+        }
+    }
+
+    fn send_once(&self, message: &[u8], to: SocketAddr, hops: u8) -> io::Result<usize> {
         if to.is_ipv4() {
             return hops::try_send(&self.socket, message, to, hops);
         }
@@ -470,6 +538,8 @@ fn receive(
         let (n, from, arrived) = match hops::try_recv(socket, buffer, &mut control) {
             Ok(read) => read,
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
+            // An ICMP error, which this read took: the error queue holds it, with what it answered.
+            Err(error) if errors::from_icmp(&error) => continue,
             Err(_) => return (replies, true),
         };
         // What a ping socket reads starts with the ICMP header: type, code, checksum, identifier
@@ -491,8 +561,60 @@ fn receive(
     (replies, false)
 }
 
+/// The errors from the path a ping socket read off its queue, `queued`, each for the app as it would
+/// reach it without Watch (ADR 0044, unit 11b): from the router or host that sent it, or from the
+/// address the app pinged where the kernel names none or it is the target itself; quoting the app's own
+/// request, with the app's identifier and the sequence number and data the error quoted, by which the
+/// app's kernel finds its ping socket and the app its request. One is dropped, and counted in `tally`,
+/// unless it answers a request of this socket's to its target that no error answered yet, as `asked`
+/// says and notes: one for another destination, a sequence number never sent, or a second error for
+/// one request, as a forged one would be.
+fn path_errors(
+    queued: Vec<Queued>,
+    (app, id, destination): Key,
+    target: IpAddr,
+    tally: &mut Tally,
+    mut asked: impl FnMut(u16) -> bool,
+) -> Vec<Vec<u8>> {
+    let request = if target.is_ipv4() {
+        packet::ECHO_REQUEST
+    } else {
+        packet::ECHO_REQUEST_V6
+    };
+    let mut told = Vec::new();
+    for error in queued {
+        // What an error queues for a ping socket starts with the request's ICMP header: type, code,
+        // checksum, identifier (the socket's own), sequence number; then the data, as far as quoted.
+        let sequence = match error.quoted[..] {
+            [kind, _, _, _, _, _, high, low, ..]
+                if kind == request && error.destination.ip() == target =>
+            {
+                u16::from_be_bytes([high, low])
+            }
+            _ => {
+                tally.unasked();
+                continue;
+            }
+        };
+        if !asked(sequence) {
+            tally.unasked();
+            continue;
+        }
+        let data = error.quoted.get(8..).unwrap_or_default();
+        let from = errors::sender(error.offender, target, destination);
+        let packet = packet::echo_request_of(app, destination, id, sequence, data)
+            .and_then(|quoted| errors::to_app(error.told, &quoted, (from, app), error.hops));
+        if let Some(packet) = packet {
+            tally.passed(error.told);
+            told.push(packet);
+        }
+    }
+    told
+}
+
 #[cfg(test)]
 mod tests {
+    use super::super::errors::Told;
     use super::super::tests::shared;
     use super::super::{COUNTERS, run};
     use super::*;
@@ -510,6 +632,9 @@ mod tests {
     const ECHO_REFUSED: usize = 35;
     const ECHO_DROPPED: usize = 37;
     const SKIPPED: usize = 8;
+    const TIME_EXCEEDED: usize = 41;
+    const ECHO_ERRORS: usize = 43;
+    const ERRORS_UNASKED: usize = 44;
 
     fn key(id: u16, destination: IpAddr) -> Key {
         (APP, id, destination)
@@ -609,6 +734,84 @@ mod tests {
             matches!(request(&mut table, one, at(14), 2), Next::Held),
             "the old task ended the new socket"
         );
+    }
+
+    /// An error from the path reaches the app from the router that sent it, with the hop limit it came
+    /// with, quoting the app's own request, with the app's identifier and the sequence number and data
+    /// the router quoted (ADR 0044, unit 11b); one at most for each request: one for a request never
+    /// sent, for another destination than the socket's, a second for one request, or one that quotes
+    /// no echo request, is dropped and counted.
+    #[test]
+    fn an_error_from_the_path_answers_one_request_once() {
+        let mut table = Table::<()>::default();
+        let now = Instant::now();
+        let key = key(0x0707, SERVER);
+        let message = |sequence: u16| {
+            let mut message = vec![packet::ECHO_REQUEST, 0, 0, 0, 0x12, 0x34];
+            message.extend_from_slice(&sequence.to_be_bytes());
+            message.extend_from_slice(b"data");
+            message
+        };
+        let Next::Open(number) = table.request(key, SERVER, (&message(1), 3), now, 4) else {
+            unreachable!("a socket")
+        };
+        assert!(matches!(
+            table.request(key, SERVER, (&message(2), 3), now, 4),
+            Next::Held
+        ));
+        let router = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1));
+        let error = |destination, quoted: Vec<u8>| Queued {
+            destination: SocketAddr::new(destination, 0),
+            told: Told::TimeExceeded,
+            offender: Some(router),
+            hops: Some(9),
+            quoted,
+        };
+        let queued = vec![
+            error(SERVER, message(1)),
+            error(SERVER, message(1)),
+            error(OTHER, message(2)),
+            error(SERVER, message(3)),
+            error(SERVER, vec![packet::ECHO_REPLY, 0, 0, 0, 0x12, 0x34, 0, 2]),
+            error(SERVER, message(2)[..4].to_vec()),
+        ];
+        let mut tally = Tally::default();
+        let told = path_errors(queued, key, SERVER, &mut tally, |sequence| {
+            table.answers(key, number, sequence) == Some(true)
+        });
+        let [told] = told.as_slice() else {
+            unreachable!("one error: {told:?}")
+        };
+        assert_eq!(&told[12..16], &[192, 0, 2, 1], "from the router");
+        assert_eq!(&told[16..20], &[10, 1, 10, 1], "to the app");
+        assert_eq!((told[8], &told[20..22]), (9, &[11, 0][..]));
+        let quoted = packet::echo_request(&told[28..]);
+        assert_eq!(
+            quoted.map(|request| (
+                request.source,
+                request.destination,
+                request.id,
+                request.sequence
+            )),
+            Ok((APP, SERVER, 0x0707, 1))
+        );
+        assert_eq!(&told[28 + 28..], b"data");
+        let shared = shared();
+        tally.count(&shared.counters, true);
+        let counters = shared.counters.snapshot();
+        assert_eq!(
+            (
+                counters[ECHO_ERRORS],
+                counters[TIME_EXCEEDED],
+                counters[ERRORS_UNASKED]
+            ),
+            (1, 1, 5)
+        );
+        // The second request's error still passes, once.
+        assert_eq!(table.answers(key, number, 2), Some(true));
+        assert_eq!(table.answers(key, number, 2), Some(false));
+        table.end(key, number);
+        assert_eq!(table.answers(key, number, 2), None, "the place is gone");
     }
 
     /// While a chain sends any app through the tool, an app's ping is answered at once with

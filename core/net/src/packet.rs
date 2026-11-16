@@ -612,7 +612,7 @@ pub fn echo_refused(original: &[u8], echo: &Echo) -> Option<Vec<u8>> {
 /// Whether `address` is one an ICMP error may come from: not multicast, broadcast or unspecified,
 /// whose packets no error answers (RFC 1812 4.3.2.7, RFC 4443 2.4 (e)), and which no one host could
 /// answer as.
-fn unicast(address: IpAddr) -> bool {
+pub(crate) fn unicast(address: IpAddr) -> bool {
     match address {
         IpAddr::V4(to) => !(to.is_multicast() || to.is_broadcast() || to.is_unspecified()),
         IpAddr::V6(to) => !(to.is_multicast() || to.is_unspecified()),
@@ -671,15 +671,31 @@ pub const LEAST_MTU_V6: usize = 1_280;
 /// broadcast or unspecified address, which no ICMP error may answer for, or the versions differ.
 #[must_use]
 pub fn too_big(quoted: &[u8], from: IpAddr, to: IpAddr, mtu: u32) -> Option<Vec<u8>> {
+    if from.is_ipv4() {
+        let [high, low] = u16::try_from(mtu).unwrap_or(u16::MAX).to_be_bytes();
+        path_error(quoted, (from, to), (3, 4), [0, 0, high, low])
+    } else {
+        path_error(quoted, (from, to), (2, 0), mtu.to_be_bytes())
+    }
+}
+
+/// An ICMP (IPv4) or `ICMPv6` error of `kind` and `code` from `from` to `to`, with `rest` as the four
+/// bytes of its header after the checksum, quoting `quoted` as [`unreachable()`] quotes the app's
+/// packet: what a router or host on the path sent the engine, as the engine passes it on to the app
+/// ("time exceeded", "destination unreachable" with its code; ADR 0044, unit 11b). `None` when `from`
+/// is a multicast, broadcast or unspecified address, which no ICMP error may come from, or the versions
+/// differ.
+#[must_use]
+pub fn path_error(
+    quoted: &[u8],
+    (from, to): (IpAddr, IpAddr),
+    (kind, code): (u8, u8),
+    rest: [u8; 4],
+) -> Option<Vec<u8>> {
     if !unicast(from) || from.is_ipv4() != to.is_ipv4() {
         return None;
     }
-    if from.is_ipv4() {
-        let [high, low] = u16::try_from(mtu).unwrap_or(u16::MAX).to_be_bytes();
-        icmp_message(quoted, (from, to), (3, 4), [0, 0, high, low])
-    } else {
-        icmp_message(quoted, (from, to), (2, 0), mtu.to_be_bytes())
-    }
+    icmp_message(quoted, (from, to), (kind, code), rest)
 }
 
 /// An ICMP echo reply in IPv4, or an `ICMPv6` one in IPv6, from `from` to the app at `to`, with the
@@ -693,11 +709,42 @@ pub fn echo_reply(
     sequence: u16,
     data: &[u8],
 ) -> Option<Vec<u8>> {
-    let (protocol, kind) = if from.is_ipv4() {
-        (ICMP, ECHO_REPLY)
+    let kind = if from.is_ipv4() {
+        ECHO_REPLY
     } else {
-        (ICMPV6, ECHO_REPLY_V6)
+        ECHO_REPLY_V6
     };
+    echo(kind, (from, to), (id, sequence), data)
+}
+
+/// The echo request an app sent, ICMP's in IPv4 or `ICMPv6`'s in IPv6, from the app at `from` to `to`,
+/// with its own identifier `id`, its `sequence` and `data`: rebuilt for the quote of an error from the
+/// path that answers it, by whose identifier the app's kernel finds its ping socket (ADR 0044, unit
+/// 11b). Its checksum is made over what it holds.
+#[must_use]
+pub fn echo_request_of(
+    from: IpAddr,
+    to: IpAddr,
+    id: u16,
+    sequence: u16,
+    data: &[u8],
+) -> Option<Vec<u8>> {
+    let kind = if from.is_ipv4() {
+        ECHO_REQUEST
+    } else {
+        ECHO_REQUEST_V6
+    };
+    echo(kind, (from, to), (id, sequence), data)
+}
+
+/// An echo message of `kind`, a request or a reply, from `from` to `to`.
+fn echo(
+    kind: u8,
+    (from, to): (IpAddr, IpAddr),
+    (id, sequence): (u16, u16),
+    data: &[u8],
+) -> Option<Vec<u8>> {
+    let protocol = if from.is_ipv4() { ICMP } else { ICMPV6 };
     let mut icmp = Vec::with_capacity(data.len().checked_add(8)?);
     icmp.extend_from_slice(&[kind, 0, 0, 0]);
     icmp.extend_from_slice(&id.to_be_bytes());
@@ -973,6 +1020,45 @@ mod tests {
         let error6 = unreachable(&query6, &parsed, Unreachable::Host).unwrap_or_default();
         assert!(checksums_valid(&error6));
         assert_eq!(&error6[40..42], &[1, 3]);
+    }
+
+    /// A router's "time exceeded" and an unreachable with its code, in IPv4 and IPv6, from the router,
+    /// check out, quote what they were given, and come from no address an error may not come from; the
+    /// app's echo request rebuilt for such a quote reads back as the request it was (ADR 0044, unit
+    /// 11b).
+    #[test]
+    fn errors_from_the_path_and_the_requests_they_quote_check_out() {
+        let router4 = IpAddr::from([192, 0, 2, 1]);
+        let router6 = IpAddr::from([0x2001, 0xdb8, 0, 0, 0, 0, 0, 1]);
+        let (app4, app6) = (IpAddr::from(APP4), IpAddr::from(v6(APP6)));
+        for (router, app, server, header, exceeded) in [
+            (router4, app4, IpAddr::from(SERVER4), 20, (11, 0)),
+            (router6, app6, IpAddr::from(v6(SERVER6)), 40, (3, 0)),
+        ] {
+            let request = echo_request_of(app, server, 0x4242, 9, b"echoed").unwrap_or_default();
+            assert!(checksums_valid(&request));
+            assert_eq!(
+                echo_request(&request).map(|r| (r.source, r.destination, r.id, r.sequence)),
+                Ok((app, server, 0x4242, 9))
+            );
+            let error = path_error(&request, (router, app), exceeded, [0; 4]).unwrap_or_default();
+            assert!(checksums_valid(&error));
+            assert_eq!((error[header], error[header + 1]), exceeded);
+            assert_eq!(&error[header + 8..], &request[..]);
+            let unreachable =
+                path_error(&request, (router, app), (exceeded.0, 0), [0; 4]).unwrap_or_default();
+            assert!(checksums_valid(&unreachable));
+            let multicast = if app.is_ipv4() {
+                IpAddr::from([224, 0, 0, 1])
+            } else {
+                IpAddr::from([0xff02, 0, 0, 0, 0, 0, 0, 1])
+            };
+            assert_eq!(
+                path_error(&request, (multicast, app), exceeded, [0; 4]),
+                None
+            );
+        }
+        assert_eq!(path_error(&[], (router4, app6), (3, 0), [0; 4]), None);
     }
 
     /// An app's echo request, as its ping socket's kernel sends it into the tunnel.
