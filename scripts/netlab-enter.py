@@ -58,18 +58,28 @@
 # - A test that runs the engine out of descriptors (ADR 0044, unit 12b) sets NETLAB_NOFILE, the soft limit on
 #   open files for the test's process, so that it can take every descriptor left with a few hundred files
 #   rather than the tens of thousands a machine allows.
+# - Another app that takes the engine's listener's port the moment the listener stops listening (ADR 0044, unit
+#   12b, second round): any app may bind a port with SO_REUSEADDR, whatever its UID, once no socket listens there.
+#   --interloper stops the test's process, so that its engine cannot bind the port again first, destroys the
+#   engine's listener as netd does, binds the port with SO_REUSEADDR and listens, takes the test's policy rule
+#   RULE away, and lets the process go on; then it says "listening", says "accepted" for each connection it
+#   accepts, sends each a few bytes, and ends when its standard input closes.
 #
 #   netlab-enter.py -- PROGRAM [ARGUMENTS...]
 #   netlab-enter.py --tunnel NAME      (inside the namespace, the new file at standard input)
 #   netlab-enter.py --move FROM TO     (inside the namespace)
 #   netlab-enter.py --marks NETID DEVICE | --marks-move NETID FROM TO | --marks-new-network OLD NEW FROM TO
+#   netlab-enter.py --interloper PID ADDRESS PORT RULE   (inside the namespace)
 #
 # Everything here is undone when the namespace ends with the test. It changes nothing outside it.
 import fcntl
 import json
 import os
 import resource
+import select
 import shutil
+import signal
+import socket
 import struct
 import subprocess
 import sys
@@ -251,7 +261,39 @@ def marks_new_network(old_id, new_id, old, new):
     incoming_mark("-D", old_id, old)
 
 
+# Another app on the engine's listener's port: see the head of this file.
+def interloper(pid, address, port, rule):
+    pid, port = int(pid), int(port)
+    os.kill(pid, signal.SIGSTOP)
+    try:
+        subprocess.run(["ss", "-K", "-t", "state", "listening", "src", f"{address}:{port}"], check=True,
+                       capture_output=True)
+        taker = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        taker.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        taker.bind((address, port))
+        taker.listen()
+        ip("rule", "del", "pref", rule)
+    finally:
+        os.kill(pid, signal.SIGCONT)
+    print("listening", flush=True)
+    held = []
+    while True:
+        ready, _, _ = select.select([taker, sys.stdin], [], [])
+        if sys.stdin in ready and not os.read(sys.stdin.fileno(), 64):
+            return
+        if taker in ready:
+            connection, peer = taker.accept()
+            print(f"accepted {peer[0]}:{peer[1]}", flush=True)
+            try:
+                connection.sendall(b"from another app")
+            except OSError:
+                pass
+            held.append(connection)
+
+
 def main():
+    if len(sys.argv) == 6 and sys.argv[1] == "--interloper":
+        return interloper(*sys.argv[2:])
     if len(sys.argv) == 3 and sys.argv[1] == "--tunnel":
         return second_tunnel(sys.argv[2])
     if len(sys.argv) == 4 and sys.argv[1] == "--move":
@@ -264,7 +306,8 @@ def main():
         return marks_new_network(*sys.argv[2:])
     if len(sys.argv) < 3 or sys.argv[1] != "--":
         sys.exit("usage: netlab-enter.py -- PROGRAM [ARGUMENTS...] | --tunnel NAME | --move FROM TO | "
-                 "--marks NETID DEVICE | --marks-move NETID FROM TO | --marks-new-network OLD NEW FROM TO")
+                 "--marks NETID DEVICE | --marks-move NETID FROM TO | --marks-new-network OLD NEW FROM TO | "
+                 "--interloper PID ADDRESS PORT RULE")
     program = sys.argv[2:]
 
     ip("link", "set", "lo", "up")

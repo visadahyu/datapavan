@@ -4197,3 +4197,118 @@ fn a_listener_out_of_descriptors_accepts_once_there_are_some() -> Outcome {
         },
     )
 }
+
+/// ADR 0044, unit 12b, second round: another app takes the engine's listener's port the moment the
+/// listener stops listening, as any app may, binding it with `SO_REUSEADDR`, which Linux allows
+/// whatever the app's UID. The lab plays it with `netlab-enter.py --interloper`: it stops this
+/// process, so that the engine cannot bind the port again first, destroys the engine's listener with
+/// `ss -K`, binds the port and listens, and lets the process go on.
+///
+/// Beforehand, an app's connection is rewritten to the listener and not yet relayed: a policy rule
+/// drops what the tunnel carries to the listener's port, its SYN among it, so that the connection
+/// waits there; the interloper takes the rule away. Once the engine's listener is bound anew, on
+/// another port since the old one is taken: the waiting connection's SYN, sent again by the app's
+/// stack a second after the first, is refused, never rewritten to the old port; a new connection goes
+/// to the engine's new listener; a connection the relay held goes on through the old port, where the
+/// engine's own socket holds its ends; and the interloper accepted nothing. Before, the SYN sent again
+/// went to the old port, where the interloper accepted it and its bytes reached the app.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn another_app_on_the_listeners_old_port_gets_nothing_through_the_engine() -> Outcome {
+    lab(
+        "another_app_on_the_listeners_old_port_gets_nothing_through_the_engine",
+        &Limits::default(),
+        |engine| async move {
+            sock_destroy_here()?;
+            let (server, accepted) = echoing_server(SERVER_IP).await?;
+            let mut kept = app_connect(server).await?;
+            assert_eq!(exchange(&mut kept, b"before").await?, b"before");
+            let port = listener_port(true)
+                .ok_or("the engine's listener on the tunnel's address")?
+                .to_string();
+            ip(&[
+                "rule",
+                "add",
+                "pref",
+                "10",
+                "iif",
+                "tun0",
+                "ipproto",
+                "tcp",
+                "dport",
+                &port,
+                "blackhole",
+            ])?;
+            let began = std::time::Instant::now();
+            let socket = TcpSocket::new_v4()?;
+            socket.bind(SocketAddr::from((Addresses::COMMON.tun4, 0)))?;
+            let (done, mut waiting) = oneshot::channel();
+            tokio::spawn(async move {
+                let _ = done.send(socket.connect(server).await);
+            });
+            // The engine's connection to the server for it, then a moment for its SYN to be rewritten.
+            until_count(
+                "the engine's connections at the server",
+                || Ok(usize::try_from(accepted.load(Ordering::Relaxed))?),
+                2,
+            )
+            .await?;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            if waiting.try_recv().is_ok() {
+                return Err("the waiting connection was answered: the rule did not hold it".into());
+            }
+
+            let me = std::process::id().to_string();
+            let mut interloper = Command::new("python3")
+                .args(["-I", ENTER, "--interloper", &me])
+                .args([&Addresses::COMMON.tun4.to_string(), &port, "10"])
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()?;
+            let output = interloper.stdout.take().ok_or("no output")?;
+            let (said, lines) = tokio::task::spawn_blocking(move || {
+                use std::io::BufRead;
+                let mut lines = io::BufReader::new(output).lines();
+                (lines.next(), lines)
+            })
+            .await?;
+            let said = said.transpose()?;
+            if said.as_deref() != Some("listening") {
+                return Err(format!("the interloper said {said:?}, not that it listens").into());
+            }
+            // The app's stack sends the SYN again a second after the first: by then the engine must
+            // have bound its listener anew, or the test says nothing.
+            if began.elapsed() > Duration::from_millis(900) {
+                return Err(
+                    "the interloper took longer than the app's stack waits before it sends \
+                            its SYN again: the lab's timing failed, so this test did NOT run"
+                        .into(),
+                );
+            }
+            counted(&engine, LISTENER_RECOVERIES, 1).await?;
+
+            let refused = timeout(STEP, waiting).await??;
+            assert_eq!(
+                refused.map(|_| ()).map_err(|e| e.kind()),
+                Err(io::ErrorKind::ConnectionRefused),
+                "the waiting connection"
+            );
+            let mut new = app_connect(server).await?;
+            assert_eq!(exchange(&mut new, b"a new one").await?, b"a new one");
+            assert_eq!(
+                exchange(&mut kept, b"kept").await?,
+                b"kept",
+                "the relayed connection"
+            );
+
+            drop(interloper.stdin.take());
+            let rest = tokio::task::spawn_blocking(move || {
+                lines.map_while(Result::ok).collect::<Vec<String>>()
+            })
+            .await?;
+            interloper.wait()?;
+            assert!(rest.is_empty(), "the interloper accepted: {rest:?}");
+            Ok(())
+        },
+    )
+}
