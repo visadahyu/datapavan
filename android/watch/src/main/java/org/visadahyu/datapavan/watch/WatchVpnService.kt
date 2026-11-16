@@ -85,6 +85,10 @@ class WatchVpnService : VpnService() {
     /** When the tunnel was last set up, by [SystemClock.elapsedRealtime]. Main thread only. */
     private var setUpAt = 0L
 
+    /** How this run's tunnel was set up again: handed to the running engine, or to a new one; the dump says it. */
+    private var setupsKept = 0
+    private var setupsAnew = 0
+
     /** The token of the measure posted for when a rise held back may be taken; [close] drops it. */
     private val riseCheck = Any()
 
@@ -412,11 +416,22 @@ class WatchVpnService : VpnService() {
         // Otherwise, or when a swap failed, nativeStart stops the engine that runs, which closes the old
         // tunnel and hands over what it carries, before it starts anew.
         val after = setup
-        val kept = after != null && TunnelSetup.canSwap(before, after) && swapTunnel(established)
+        val sameNetwork = after != null && TunnelSetup.canSwap(before, after)
+        val kept = sameNetwork && swapTunnel(established)
         if (!kept && !startEngine(established)) {
             stop()
             return
         }
+        if (kept) setupsKept++ else setupsAnew++
+        // Which way a setup went is what a stalled connection after it first asks (ADR 0044, unit 12b).
+        Log.i(
+            TAG,
+            when {
+                kept -> "Set up again: the running engine took the new tunnel"
+                sameNetwork -> "Set up again: the engine refused the new tunnel, a new engine took it"
+                else -> "Set up again: another VPN network or other addresses, a new engine took it"
+            },
+        )
         setUpAt = SystemClock.elapsedRealtime()
     }
 
@@ -629,6 +644,7 @@ class WatchVpnService : VpnService() {
         writer.println("private-dns $dns")
         writer.println("addresses ${addresses.name} ${addresses.tun4} ${addresses.dns4} ${addresses.tun6} ${addresses.dns6}")
         writer.println("mtu $mtu first-hop ${firstHops.first ?: "-"} ${firstHops.second ?: "-"}")
+        writer.println("setups kept $setupsKept anew $setupsAnew")
         writer.println("counters ${Engine.nativeCounters().joinToString(" ")}")
         writer.println("organisations ${Engine.nativeOrganisations().ifEmpty { "none" }}")
         val log = ConnectionLog.of(this)

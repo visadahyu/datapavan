@@ -97,7 +97,10 @@ fail() {
     local account
     account=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" 2>/dev/null | tr -d '\r' | sed -n 's/^ *//p' || true)
     echo "Watch's own account:" >&2
-    grep -E '^(running|counters|mtu)' <<<"$account" >&2 || true
+    grep -E '^(running|counters|mtu|setups)' <<<"$account" >&2 || true
+    # Watch's own log: how each setup went, and its warnings. It names no destination.
+    echo "Watch's log:" >&2
+    adb logcat -d -s Watch:I 2>/dev/null | tr -d '\r' | tail -15 >&2 || true
     if is_emulator; then
         echo "The shell's flows:" >&2
         grep -E "^flow [a-z]+ [^ ]+ [^ ]+ $SHELL_UID " <<<"$account" >&2 || echo "  none" >&2
