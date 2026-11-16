@@ -82,8 +82,9 @@ internal object Engine {
      * [user] and [password] its credentials or null, [toolUid] the tool's UID, [apps] the UIDs of the
      * chained apps or null for every app but the tool, [udp] whether the tool carries UDP, and
      * [logDestinations] whether chained flows' destinations go to the log. An empty [proxy] turns
-     * chaining off. Returns whether a chain is on; false when no engine runs, as for a moment while
-     * the tunnel is set up again: the chain is kept all the same, and the next engine starts with it
+     * chaining off. Returns whether a chain is on; false when no engine runs, as at a start, where
+     * Watch sets the chain before the engine (unit 12b), or for a moment while the tunnel is set up
+     * again with other addresses: the chain is kept all the same, and the next engine starts with it
      * (ADR 0044, unit 12). Stopping the tunnel forgets it.
      */
     external fun nativeChain(

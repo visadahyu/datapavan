@@ -735,11 +735,6 @@ an ADR (D25).
 - **Not done, stated:**
   - phones, what `IP_MTU` says on Wi-Fi and mobile networks and whether their kernels take writes to the tunnel
     larger than its MTU, are measured in unit 11b; the make-before-break setup has not run on an emulator yet;
-  - the first start keeps its order, older than this unit: the engine reads the tunnel from `nativeStart` on, and
-    `applyChain` comes after, so a chained app's first packets can still go directly at a start, as they did before
-    Watch ran. The native side now keeps a chain set before any engine runs and starts the first engine with it, so
-    calling `applyChain` before `nativeStart` would close this; that reorder, with unit 12b's holding of a chained
-    app's new flows until the chain is set, is left to unit 12b;
   - setting the tunnel up again ends the engine's flows, as before: connections through the tunnel start anew. Within
     a network that happens only when its MTU goes down; unit 12b keeps the flows;
   - a network whose IPv4 and IPv6 first hops differ gives the wider version the narrower MTU (above);

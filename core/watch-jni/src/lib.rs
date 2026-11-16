@@ -642,7 +642,7 @@ mod tests {
     /// Fourth check of unit 12, minor 1: a chain set while no engine runs, as between `hand_over` and
     /// `start_with` in `nativeStart`, is kept, and the next engine starts with it; one set on a running
     /// engine is the next one's too; and the tunnel's stop forgets it, so that the next run starts with
-    /// none.
+    /// none, unless a chain is set before its first engine, as Watch now sets it at a start (unit 12b).
     #[test]
     fn a_chain_set_while_no_engine_runs_is_the_next_engines() {
         let _process = process();
@@ -674,6 +674,16 @@ mod tests {
         stop_running();
         assert!(start_next(None, |given| started(&mut seen, given)));
         assert_eq!(port_of(&seen), None, "a chain of the run before");
+
+        // Unit 12b: a first start with the chain set before it, as `WatchVpnService.start` sets it now.
+        stop_running();
+        assert!(!set_chain(Some(a_chain(10_807))), "no engine runs yet");
+        assert!(start_next(None, |given| started(&mut seen, given)));
+        assert_eq!(
+            port_of(&seen),
+            Some(10_807),
+            "the chain set before the first start"
+        );
         stop_running();
     }
 
