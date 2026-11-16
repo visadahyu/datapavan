@@ -537,11 +537,13 @@ fi
 
 # A traceroute's first hop through Watch (ADR 0044, unit 11b). Watch is not a hop: the shell's ping with a time to live
 # of 1 leaves the phone with 1, and the first router's "time to live exceeded" reaches the shell from that router, as
-# without Watch. It must come from an address other than 1.1.1.1: before, every error from the path was dropped, and
-# Watch's request left with its own 64. ping prints the sender on the error's line, as "From 10.0.2.2: icmp_seq=1 Time to
-# live exceeded" or with a name before the address in brackets; the last address on that line is the sender. The 42nd
-# counter counts the "time exceeded" Watch passed on. A network beneath that sends none, as an emulator's NAT may not,
-# is reported, not required. Each output is read whole before it is parsed.
+# without Watch. It must come from an address other than 1.1.1.1, and the 42nd counter, the "time exceeded" Watch passed
+# on, must grow: before, every error from the path was dropped, and Watch's request left with its own 64. ping prints the
+# sender on the error's line, as "From 10.0.2.2: icmp_seq=1 Time to live exceeded" or with a name before the address in
+# brackets; the last address on that line is the sender. On a phone, a reply from 1.1.1.1 ("bytes from") fails: no path
+# reaches it in one hop, so the request left with a time to live other than the app's (the second review of unit 11b
+# found the check passed so). The emulator's NAT answers ICMP itself, a TTL-1 ping included, so there it is reported, as
+# is a network that sends no "time exceeded". Each output is read whole before it is parsed.
 exceeded_counter() {
     adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" | tr -d '\r' | sed -n 's/^ *counters //p' | awk '{print $42}'
 }
@@ -551,14 +553,23 @@ else
     exceeded0=$(exceeded_counter)
     traced=$(device 12 "ping -c 1 -t 1 -W 3 1.1.1.1")
     exceeded1=$(exceeded_counter)
+    said=$(head -n 4 <<<"$traced" | paste -sd ' ' | cut -c1-300)
     exceeded_line=$(grep -i -m1 'exceeded' <<<"$traced" || true)
     if [ -n "$exceeded_line" ]; then
         router=$(grep -oE '([0-9]{1,3}[.]){3}[0-9]{1,3}' <<<"$exceeded_line" | tail -n 1 || true)
         [ -n "$router" ] && [ "$router" != 1.1.1.1 ] ||
             fail "a ping with a time to live of 1 was told its time ran out by ${router:-no address}, not by a router on the path: $exceeded_line"
-        echo "ok: a ping with a time to live of 1 is told its time ran out by the first router, $router, as without Watch (counted: ${exceeded0:-?}, then ${exceeded1:-?})"
+        [ "${exceeded1:-0}" -gt "${exceeded0:-0}" ] ||
+            fail "a ping with a time to live of 1 was told its time ran out by $router, but Watch counted no \"time exceeded\" passed on (${exceeded0:-?}, then ${exceeded1:-?}): the error did not come through Watch"
+        echo "ok: a ping with a time to live of 1 is told its time ran out by the first router, $router, as without Watch (counted: $exceeded0, then $exceeded1)"
+    elif grep -q 'bytes from' <<<"$traced"; then
+        if is_emulator; then
+            echo "reported: the emulator's NAT answers a ping with a time to live of 1 itself, so no router's \"time exceeded\" can be seen here (counted: ${exceeded0:-?}, then ${exceeded1:-?}); the shell's ping said: $said"
+        else
+            fail "a ping with a time to live of 1 got a reply from 1.1.1.1, which no path reaches in one hop: Watch sent it with another time to live than the shell's, or this network answers pings itself; the shell's ping said: $said"
+        fi
     else
-        echo "not seen: this network sends no \"time to live exceeded\" for a time to live of 1 (counted: ${exceeded0:-?}, then ${exceeded1:-?}); the shell's ping said: $(head -n 4 <<<"$traced" | paste -sd ' ')" | cut -c1-400
+        echo "not seen: this network sends no \"time to live exceeded\" for a time to live of 1 (counted: ${exceeded0:-?}, then ${exceeded1:-?}); the shell's ping said: $said"
     fi
 fi
 
