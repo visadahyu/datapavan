@@ -55,6 +55,10 @@
 #   iptables in the namespace; without it they say so and fail, so that the test fails rather than pass
 #   without the marks.
 #
+# - A test that runs the engine out of descriptors (ADR 0044, unit 12b) sets NETLAB_NOFILE, the soft limit on
+#   open files for the test's process, so that it can take every descriptor left with a few hundred files
+#   rather than the tens of thousands a machine allows.
+#
 #   netlab-enter.py -- PROGRAM [ARGUMENTS...]
 #   netlab-enter.py --tunnel NAME      (inside the namespace, the new file at standard input)
 #   netlab-enter.py --move FROM TO     (inside the namespace)
@@ -64,6 +68,7 @@
 import fcntl
 import json
 import os
+import resource
 import shutil
 import struct
 import subprocess
@@ -297,6 +302,11 @@ def main():
     sysctl("net.ipv4.conf.tun0.accept_local", "1")
     if os.environ.get("NETLAB_PING_GROUPS") != "none":
         sysctl("net.ipv4.ping_group_range", "0 0")
+
+    nofile = os.environ.get("NETLAB_NOFILE")
+    if nofile:
+        _, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        resource.setrlimit(resource.RLIMIT_NOFILE, (int(nofile), hard))
 
     os.dup2(tunnel, 0)
     os.close(tunnel)

@@ -34,7 +34,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::os::fd::{AsFd, OwnedFd, RawFd};
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -461,7 +461,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 46;
+pub const COUNTERS: usize = 47;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -512,6 +512,7 @@ pub struct Counters {
     echo_errors: AtomicU64,
     errors_dropped: AtomicU64,
     echo_evicted: AtomicU64,
+    listener_recoveries: AtomicU64,
 }
 
 impl Counters {
@@ -558,9 +559,12 @@ impl Counters {
     /// the path dropped because they answered nothing the app sent that left: a destination its mapping
     /// or ping socket never sent to, a request it never sent, or a datagram or request the app was
     /// already told of once; or because no error to the app could be built for them; and the ping
-    /// sockets ended at the cap to make room for a new one. None names a
-    /// destination: they can be read on any phone. New counters are only ever appended, so that scripts
-    /// reading a column by its place keep reading the same one.
+    /// sockets ended at the cap to make room for a new one; then (unit 12b) the errors the engine's
+    /// listeners met in accepting a connection, each recovered from: a listener that no longer
+    /// listened, as after Android's netd destroyed the sockets on the tunnel's address, bound anew, or
+    /// one that still did, as when the process was out of descriptors for a moment, accepting again
+    /// after a pause. None names a destination: they can be read on any phone. New counters are only
+    /// ever appended, so that scripts reading a column by its place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
         self.each().map(|c| c.load(Ordering::Relaxed))
@@ -625,6 +629,7 @@ impl Counters {
             &self.echo_errors,
             &self.errors_dropped,
             &self.echo_evicted,
+            &self.listener_recoveries,
         ]
     }
 }
@@ -665,6 +670,12 @@ struct Shared {
     /// The tunnel's addresses for this run.
     addresses: Addresses,
     limits: Limits,
+    /// The port of the engine's listener on the tunnel's IPv4 address, the one the apps' connections are
+    /// rewritten to, or 0 when the tunnel has none. A listener that stopped listening is bound anew, on
+    /// another port if its own is taken, which then goes here (ADR 0044, unit 12b).
+    listener4: AtomicU16,
+    /// The same on the tunnel's IPv6 address.
+    listener6: AtomicU16,
     /// TCP connections waiting for their servers now (`Limits::tcp_waiting`).
     tcp_waiting: AtomicUsize,
     /// Each app's share of them, once Android has named it (`Limits::tcp_share`).
@@ -818,6 +829,8 @@ impl Engine {
             platform,
             addresses: config.addresses,
             limits: config.limits,
+            listener4: AtomicU16::new(0),
+            listener6: AtomicU16::new(0),
             tcp_waiting: AtomicUsize::new(0),
             tcp_shares: Budget::new(config.limits.tcp_waiting, config.limits.tcp_share),
             udp_budget: Budget::new(config.limits.udp_mappings, config.limits.udp_share),
@@ -1013,8 +1026,6 @@ struct Loop {
     /// the bounds are shared: one app that fills them makes the others' fragments dropped, as all
     /// were before. Accepted, since the bounds cap what they cost.
     fragments: Mutex<Reassembler>,
-    listener4: u16,
-    listener6: u16,
     changes: watch::Receiver<u64>,
 }
 
@@ -1029,22 +1040,20 @@ async fn run(
     let pending: Pending = Arc::default();
     let nat = Arc::new(Mutex::new(Nat::with_limits(&shared.limits)));
     let at = shared.addresses;
-    let listener4 = listen(
+    listen(
         IpAddr::V4(at.tun4),
         IpAddr::V4(at.fake4),
         &pending,
         &shared,
         &nat,
-    )
-    .await;
-    let listener6 = listen(
+    );
+    listen(
         IpAddr::V6(at.tun6),
         IpAddr::V6(at.fake6),
         &pending,
         &shared,
         &nat,
-    )
-    .await;
+    );
     let limits = shared.limits;
     let state = Loop {
         tun: Arc::new(tun),
@@ -1059,8 +1068,6 @@ async fn run(
             bytes: limits.fragment_bytes,
             wait: limits.fragment_wait,
         })),
-        listener4,
-        listener6,
         changes,
     };
     // Sized from the first tunnel's MTU, and never smaller than 1,500 bytes: a tunnel set up again and
@@ -1196,12 +1203,15 @@ impl Loop {
         }
     }
 
+    /// The tunnel's address, the fake peer and the port of the engine's listener now, of one IP
+    /// version.
     fn ends(&self, v4: bool) -> (IpAddr, IpAddr, u16) {
         let at = self.shared.addresses;
+        let listener = self.shared.listener(v4).load(Ordering::Acquire);
         if v4 {
-            (IpAddr::V4(at.tun4), IpAddr::V4(at.fake4), self.listener4)
+            (IpAddr::V4(at.tun4), IpAddr::V4(at.fake4), listener)
         } else {
-            (IpAddr::V6(at.tun6), IpAddr::V6(at.fake6), self.listener6)
+            (IpAddr::V6(at.tun6), IpAddr::V6(at.fake6), listener)
         }
     }
 }
@@ -1218,6 +1228,11 @@ impl Shared {
     /// Whether `address` is the tunnel's own DNS address, which leads to the network's resolver.
     fn is_tunnel_dns(&self, address: IpAddr) -> bool {
         self.addresses.is_dns(address)
+    }
+
+    /// Where the port of the engine's listener of one IP version is kept.
+    fn listener(&self, v4: bool) -> &AtomicU16 {
+        if v4 { &self.listener4 } else { &self.listener6 }
     }
 }
 
@@ -1334,6 +1349,8 @@ mod tests {
             platform,
             addresses: Addresses::COMMON,
             limits: Limits::default(),
+            listener4: AtomicU16::new(0),
+            listener6: AtomicU16::new(0),
             tcp_waiting: AtomicUsize::new(0),
             tcp_shares: Budget::new(Limits::default().tcp_waiting, Limits::default().tcp_share),
             udp_budget: Budget::new(Limits::default().udp_mappings, Limits::default().udp_share),
@@ -2129,7 +2146,9 @@ mod tests {
             lock(&nat).lookup(app, destination, true, Instant::now()),
             Lookup::New(port)
         );
-        lock(&nat).open(port);
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+        let address = listener.local_addr()?;
+        lock(&nat).open(port, address.port());
         let upstream = TcpStream::connect(server.local_addr()?).await?;
         let (mut server_end, _) = server.accept().await?;
         let opened = open_flow(&shared, destination);
@@ -2157,11 +2176,9 @@ mod tests {
             },
         );
 
-        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
-        let address = listener.local_addr()?;
         tokio::spawn(accept(
             listener,
-            fake,
+            (address.ip(), fake),
             Arc::clone(&pending),
             Arc::clone(&shared),
             Arc::clone(&nat),
@@ -2194,6 +2211,341 @@ mod tests {
         assert!(lock(&pending).is_empty());
         assert!(!lock(&shared.live).contains_key(&late_opened.id));
         assert!(lock(&shared.live).contains_key(&opened.id));
+        Ok(())
+    }
+
+    /// A connection the engine rewrote to its listener, from `fake`, with an upstream connection to
+    /// `server` waiting for it under its fake port, as `tcp::open` leaves one; and the server's end.
+    async fn waiting_connection(
+        shared: &Shared,
+        (nat, pending): (&Mutex<Nat>, &Pending),
+        fake: IpAddr,
+        (server, listener): (&TcpListener, u16),
+    ) -> io::Result<(TcpSocket, TcpStream)> {
+        let real = TcpSocket::new_v4()?;
+        real.bind(SocketAddr::new(fake, 0))?;
+        let port = real.local_addr()?.port();
+        // The fake port is the socket's own, which the kernel picked: the table hands out that one.
+        *lock(nat) = Nat::with_ports(port, port);
+        let app = SocketAddr::from(([10, 215, 173, 1], 40_000));
+        let destination = SocketAddr::from(([198, 51, 100, 9], 443));
+        if lock(nat).lookup(app, destination, true, Instant::now()) != Lookup::New(port) {
+            return Err(io::Error::other("no fake port"));
+        }
+        lock(nat).open(port, listener);
+        let stream = TcpStream::connect(server.local_addr()?).await?;
+        let (server_end, _) = server.accept().await?;
+        lock(pending).insert(
+            port,
+            Upstream {
+                stream,
+                opened: open_flow(shared, destination),
+                bytes: None,
+            },
+        );
+        Ok((real, server_end))
+    }
+
+    /// Waits up to 3 s until the counter at `index` reaches `value`, letting the engine's tasks run.
+    async fn until_counted(shared: &Shared, index: usize, value: u64) -> io::Result<()> {
+        for _ in 0..300 {
+            if shared.counters.snapshot()[index] >= value {
+                return Ok(());
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        Err(io::Error::other(format!(
+            "counter {index} stayed at {}",
+            shared.counters.snapshot()[index]
+        )))
+    }
+
+    /// The place of `listener_recoveries` in the counters.
+    const LISTENER_RECOVERIES: usize = 46;
+
+    /// The engine's listener and the accept loop on it, on the loopback, its port in `Shared`; and a
+    /// second descriptor of the listener's socket, with which the test makes it stop listening, as
+    /// Android's netd does when it destroys the sockets on the tunnel's address (ADR 0044, unit 12b).
+    /// `shutdown(SHUT_RD)` on a listening socket stops its listening, as `SOCK_DESTROY` does, without
+    /// the privilege `SOCK_DESTROY` needs: `accept` then answers `EINVAL`, and `SO_ACCEPTCONN` reads 0.
+    async fn listening(
+        shared: &Arc<Shared>,
+        nat: &Arc<Mutex<Nat>>,
+        pending: &Pending,
+        fake: IpAddr,
+    ) -> io::Result<(u16, socket2::Socket)> {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+        let address = listener.local_addr()?;
+        shared.listener4.store(address.port(), Ordering::Release);
+        let control = socket2::Socket::from(listener.as_fd().try_clone_to_owned()?);
+        tokio::spawn(accept(
+            listener,
+            (address.ip(), fake),
+            Arc::clone(pending),
+            Arc::clone(shared),
+            Arc::clone(nat),
+        ));
+        Ok((address.port(), control))
+    }
+
+    /// Unit 12b: a listener that stops listening is bound anew on the same port, so the engine's
+    /// rewriting stays valid, and the next connection rewritten to it gets its upstream connection.
+    /// Before, the accept loop ended at the first error, and every later connection was refused.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_listener_that_stops_listening_is_bound_anew_on_its_port() -> io::Result<()> {
+        let shared = Arc::new(shared());
+        let pending: Pending = Arc::default();
+        let nat = Arc::new(Mutex::new(Nat::default()));
+        let fake = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2));
+        let server = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+        let (port, control) = listening(&shared, &nat, &pending, fake).await?;
+
+        control.shutdown(std::net::Shutdown::Read)?;
+        assert!(
+            !nix::sys::socket::getsockopt(&control, nix::sys::socket::sockopt::AcceptConn)?,
+            "still listening"
+        );
+        until_counted(&shared, LISTENER_RECOVERIES, 1).await?;
+        assert_eq!(
+            shared.listener4.load(Ordering::Acquire),
+            port,
+            "another port"
+        );
+
+        let (real, mut server_end) =
+            waiting_connection(&shared, (&nat, &pending), fake, (&server, port)).await?;
+        let mut real = real
+            .connect(SocketAddr::from((Ipv4Addr::LOCALHOST, port)))
+            .await?;
+        real.write_all(b"after").await?;
+        let mut got = [0u8; 5];
+        tokio::time::timeout(Duration::from_secs(3), server_end.read_exact(&mut got)).await??;
+        assert_eq!(&got, b"after");
+        assert!(lock(&pending).is_empty());
+        Ok(())
+    }
+
+    /// Unit 12b: when the listener's port is taken by the time it is bound anew, as by another app's
+    /// listener, it is bound on another, which `Shared` then holds for the engine's rewriting, and the
+    /// next connection rewritten to that port gets its upstream connection.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_listener_whose_port_is_taken_is_bound_anew_on_another() -> io::Result<()> {
+        let shared = Arc::new(shared());
+        let pending: Pending = Arc::default();
+        let nat = Arc::new(Mutex::new(Nat::default()));
+        let fake = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2));
+        let server = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+        let (port, control) = listening(&shared, &nat, &pending, fake).await?;
+
+        control.shutdown(std::net::Shutdown::Read)?;
+        // Taken before the accept loop runs again: this test's thread runs it only when the test waits.
+        let _taken = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, port))?;
+        until_counted(&shared, LISTENER_RECOVERIES, 1).await?;
+        let now = shared.listener4.load(Ordering::Acquire);
+        assert!(now != port && now != 0, "the port now: {now}");
+
+        let (real, mut server_end) =
+            waiting_connection(&shared, (&nat, &pending), fake, (&server, now)).await?;
+        let mut real = real
+            .connect(SocketAddr::from((Ipv4Addr::LOCALHOST, now)))
+            .await?;
+        real.write_all(b"after").await?;
+        let mut got = [0u8; 5];
+        tokio::time::timeout(Duration::from_secs(3), server_end.read_exact(&mut got)).await??;
+        assert_eq!(&got, b"after");
+        Ok(())
+    }
+
+    /// The event loop on a socket pair in place of the tunnel, with the engine's listener on `listener`
+    /// as `Shared` says; the app's end of the pair, and the network's changes, which the loop holds.
+    fn a_loop(listener: u16) -> io::Result<(Loop, tokio::net::UnixDatagram, watch::Sender<u64>)> {
+        let shared = Arc::new(shared());
+        shared.listener4.store(listener, Ordering::Release);
+        let (engine_end, app_end) = std::os::unix::net::UnixDatagram::pair()?;
+        engine_end.set_nonblocking(true)?;
+        app_end.set_nonblocking(true)?;
+        let (moving, changes) = watch::channel(0);
+        let limits = shared.limits;
+        let state = Loop {
+            tun: Arc::new(Tun::new(OwnedFd::from(engine_end))?),
+            shared,
+            nat: Arc::new(Mutex::new(Nat::default())),
+            pending: Arc::default(),
+            udp: Arc::default(),
+            echoes: Echoes::probe(),
+            fragments: Mutex::new(Reassembler::new(fragments::Bounds {
+                datagrams: limits.fragment_datagrams,
+                bytes: limits.fragment_bytes,
+                wait: limits.fragment_wait,
+            })),
+            changes,
+        };
+        Ok((state, tokio::net::UnixDatagram::from_std(app_end)?, moving))
+    }
+
+    /// A TCP segment from `from` to `to` with `flags` (`packet::RST`, `packet::ACK`), as the tunnel
+    /// carries it.
+    fn segment(from: SocketAddr, to: SocketAddr, flags: u8) -> io::Result<Vec<u8>> {
+        let (SocketAddr::V4(from), SocketAddr::V4(to)) = (from, to) else {
+            return Err(io::ErrorKind::InvalidInput.into());
+        };
+        let mut builder = etherparse::PacketBuilder::ipv4(from.ip().octets(), to.ip().octets(), 64)
+            .tcp(from.port(), to.port(), 7_000, 65_535)
+            .ack(9_000);
+        if flags & packet::RST != 0 {
+            builder = builder.rst();
+        }
+        let mut bytes = Vec::new();
+        builder
+            .write(&mut bytes, &[])
+            .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+        Ok(bytes)
+    }
+
+    /// Hands the loop one packet from the tunnel.
+    async fn through(state: &Loop, mut bytes: Vec<u8>) -> io::Result<()> {
+        let parsed =
+            packet::parse(&bytes).map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+        state.tcp(&mut bytes, &parsed).await;
+        Ok(())
+    }
+
+    /// What the loop wrote to the app within half a second: the segment's ends and flags, if any.
+    async fn written(app: &tokio::net::UnixDatagram) -> Option<(SocketAddr, SocketAddr, u8)> {
+        let mut buffer = vec![0u8; 2048];
+        let n = tokio::time::timeout(Duration::from_millis(500), app.recv(&mut buffer))
+            .await
+            .ok()?
+            .ok()?;
+        let parsed = packet::parse(&buffer[..n]).ok()?;
+        Some((
+            parsed.source,
+            parsed.destination,
+            packet::tcp_flags(&buffer[..n], &parsed),
+        ))
+    }
+
+    /// Unit 12b: after the listener was bound anew on another port, a connection the old listener took
+    /// goes on through the old port, both ways: the app's segments are rewritten to the port its SYN
+    /// was rewritten to, not the new one, and Android's answers from that port reach the app. A segment
+    /// from the new port to that connection's fake port is not its answer, and is dropped.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_connection_the_old_listener_took_goes_on_through_its_port() -> io::Result<()> {
+        let (old, new) = (4_000, 5_000);
+        let (state, app_end, _moving) = a_loop(old)?;
+        let at = state.shared.addresses;
+        let app = SocketAddr::from((at.tun4, 40_000));
+        let destination = SocketAddr::from(([198, 51, 100, 9], 443));
+        let Lookup::New(port) = lock(&state.nat).lookup(app, destination, true, Instant::now())
+        else {
+            return Err(io::Error::other("no fake port"));
+        };
+        lock(&state.nat).open(port, old);
+        lock(&state.nat).relayed(port);
+        state.shared.listener4.store(new, Ordering::Release);
+        let fake = SocketAddr::from((at.fake4, port));
+
+        through(&state, segment(app, destination, packet::ACK)?).await?;
+        assert_eq!(
+            written(&app_end).await,
+            Some((fake, SocketAddr::from((at.tun4, old)), packet::ACK)),
+            "the app's segment"
+        );
+        through(
+            &state,
+            segment(SocketAddr::from((at.tun4, old)), fake, packet::ACK)?,
+        )
+        .await?;
+        assert_eq!(
+            written(&app_end).await,
+            Some((destination, app, packet::ACK)),
+            "Android's answer from the old port"
+        );
+        through(
+            &state,
+            segment(SocketAddr::from((at.tun4, new)), fake, packet::ACK)?,
+        )
+        .await?;
+        assert_eq!(written(&app_end).await, None, "a segment from the new port");
+        Ok(())
+    }
+
+    /// Unit 12b: Android's stack resets a connection its listener never handed to the relay, as when
+    /// the listener it waited in stops listening. The app gets the reset, and the upstream connection
+    /// waiting for the handover is reset too, its rewriting forgotten and its flow ended in the log,
+    /// rather than held until the sweep, ten minutes on. A relayed connection's reset is the relay's to
+    /// end, and its rewriting stays.
+    #[tokio::test(flavor = "current_thread")]
+    async fn androids_reset_before_the_relay_resets_the_server_too() -> io::Result<()> {
+        let listener = 4_000;
+        let (state, app_end, _moving) = a_loop(listener)?;
+        let at = state.shared.addresses;
+        let server = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+        let app = SocketAddr::from((at.tun4, 40_000));
+        let destination = SocketAddr::from(([198, 51, 100, 9], 443));
+        let Lookup::New(port) = lock(&state.nat).lookup(app, destination, true, Instant::now())
+        else {
+            return Err(io::Error::other("no fake port"));
+        };
+        lock(&state.nat).open(port, listener);
+        let stream = TcpStream::connect(server.local_addr()?).await?;
+        let (mut server_end, _) = server.accept().await?;
+        let opened = open_flow(&state.shared, destination);
+        lock(&state.pending).insert(
+            port,
+            Upstream {
+                stream,
+                opened,
+                bytes: None,
+            },
+        );
+        let fake = SocketAddr::from((at.fake4, port));
+        let from_listener = SocketAddr::from((at.tun4, listener));
+
+        through(
+            &state,
+            segment(from_listener, fake, packet::RST | packet::ACK)?,
+        )
+        .await?;
+        assert_eq!(
+            written(&app_end).await,
+            Some((destination, app, packet::RST | packet::ACK)),
+            "the reset to the app"
+        );
+        assert!(
+            lock(&state.pending).is_empty(),
+            "the upstream connection is held"
+        );
+        assert_eq!(lock(&state.nat).by_fake(port, Instant::now()), None);
+        assert!(!lock(&state.shared.live).contains_key(&opened.id));
+        let mut byte = [0u8; 1];
+        let read = tokio::time::timeout(Duration::from_secs(3), server_end.read(&mut byte)).await?;
+        assert_eq!(
+            read.map_err(|e| e.kind()),
+            Err(io::ErrorKind::ConnectionReset),
+            "the server's end"
+        );
+
+        // A relayed connection's reset passes, and leaves its rewriting to the relay.
+        let other = SocketAddr::from((at.tun4, 40_001));
+        let Lookup::New(relayed) =
+            lock(&state.nat).lookup(other, destination, true, Instant::now())
+        else {
+            return Err(io::Error::other("no fake port"));
+        };
+        lock(&state.nat).open(relayed, listener);
+        lock(&state.nat).relayed(relayed);
+        let fake = SocketAddr::from((at.fake4, relayed));
+        through(
+            &state,
+            segment(from_listener, fake, packet::RST | packet::ACK)?,
+        )
+        .await?;
+        assert_eq!(
+            written(&app_end).await,
+            Some((destination, other, packet::RST | packet::ACK))
+        );
+        assert!(lock(&state.nat).by_fake(relayed, Instant::now()).is_some());
         Ok(())
     }
 

@@ -24,7 +24,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
 
 type Outcome = Result<(), Box<dyn std::error::Error>>;
@@ -287,11 +287,20 @@ async fn exchange(
     Ok(heard)
 }
 
-/// The engine's listener on the tunnel's address, from the namespace's own table of sockets.
-fn listener_port() -> Option<u16> {
-    let tun4 = u32::from(Addresses::COMMON.tun4).swap_bytes();
-    let wanted = format!("{tun4:08X}");
-    std::fs::read_to_string("/proc/net/tcp")
+/// The port of the engine's listener on the tunnel's address of one IP version, from the namespace's
+/// own table of sockets, which prints each 32-bit word of an address as the machine holds it.
+fn listener_port(v4: bool) -> Option<u16> {
+    let word = |w: &[u8]| {
+        let bytes: [u8; 4] = w.try_into().unwrap_or_default();
+        format!("{:08X}", u32::from_ne_bytes(bytes))
+    };
+    let (table, wanted) = if v4 {
+        ("/proc/net/tcp", word(&Addresses::COMMON.tun4.octets()))
+    } else {
+        let octets = Addresses::COMMON.tun6.octets();
+        ("/proc/net/tcp6", octets.chunks(4).map(word).collect())
+    };
+    std::fs::read_to_string(table)
         .ok()?
         .lines()
         .skip(1)
@@ -354,7 +363,8 @@ fn a_stranger_at_the_engines_listener_is_turned_away() -> Outcome {
             // A first connection, so that the listener is surely up.
             let mut first = app_connect(server).await?;
             exchange(&mut first, b"first").await?;
-            let port = listener_port().ok_or("the engine's listener on the tunnel's address")?;
+            let port =
+                listener_port(true).ok_or("the engine's listener on the tunnel's address")?;
 
             // Not bound to the tunnel's address: the namespace takes it straight to the listener.
             let mut stranger =
@@ -3775,6 +3785,414 @@ fn a_datagram_the_network_queue_drops_is_not_told_as_unreachable() -> Outcome {
                 "the app's sends failed with {failed:?}, and it was told {errors:?}"
             );
             assert!(engine.counters()[SKIPPED] > 0, "no drop counted");
+            Ok(())
+        },
+    )
+}
+
+/// The place of `listener_recoveries` in `Engine::counters`.
+const LISTENER_RECOVERIES: usize = 46;
+
+/// Runs `ss -K -t` with `filter`: the kernel destroys each TCP socket it matches (`SOCK_DESTROY`), as
+/// Android's netd destroys those on an address it believes was removed.
+fn destroy(filter: &[&str]) -> Outcome {
+    let output = Command::new("ss")
+        .args(["-K", "-t"])
+        .args(filter)
+        .output()
+        .map_err(|error| {
+            format!("ss (iproute2) could not be run here ({error}), so this test did NOT run")
+        })?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(format!(
+        "ss -K -t {filter:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    )
+    .into())
+}
+
+/// Fails, and says plainly that the test did not run, where `ss` or the kernel's `SOCK_DESTROY` is
+/// missing. `ss -K` passes over a socket the kernel will not destroy without a word (a kernel built
+/// without `CONFIG_INET_DIAG_DESTROY` answers `EOPNOTSUPP`, which `ss` takes as nothing to do), so a
+/// listener of the test's own is destroyed first, and must have stopped listening.
+fn sock_destroy_here() -> Outcome {
+    let probe = std::net::TcpListener::bind((OTHER, 0))?;
+    let at = probe.local_addr()?.to_string();
+    destroy(&["state", "listening", "src", &at])?;
+    if nix::sys::socket::getsockopt(&probe, nix::sys::socket::sockopt::AcceptConn)? {
+        return Err(
+            "ss -K destroyed nothing here: the kernel has no SOCK_DESTROY \
+                    (CONFIG_INET_DIAG_DESTROY), so this test did NOT run"
+                .into(),
+        );
+    }
+    Ok(())
+}
+
+/// The tunnel's address of one IP version, as `ss` takes it in a filter.
+fn tunnel_filter(v4: bool) -> String {
+    if v4 {
+        Addresses::COMMON.tun4.to_string()
+    } else {
+        format!("[{}]", Addresses::COMMON.tun6)
+    }
+}
+
+/// The "internet" of one IP version.
+fn server_ip(v4: bool) -> IpAddr {
+    if v4 {
+        IpAddr::V4(SERVER)
+    } else {
+        IpAddr::V6(SERVER6)
+    }
+}
+
+/// An app's connection of one IP version: from the tunnel's address, so the namespace sends it into
+/// the tunnel.
+async fn app_connect_from(
+    v4: bool,
+    to: SocketAddr,
+) -> Result<TcpStream, Box<dyn std::error::Error>> {
+    let socket = if v4 {
+        TcpSocket::new_v4()?
+    } else {
+        TcpSocket::new_v6()?
+    };
+    let tun = if v4 {
+        IpAddr::V4(Addresses::COMMON.tun4)
+    } else {
+        IpAddr::V6(Addresses::COMMON.tun6)
+    };
+    socket.bind(SocketAddr::new(tun, 0))?;
+    within(&format!("an app's connection to {to}"), socket.connect(to)).await
+}
+
+/// ADR 0044, unit 12b: the engine's listener, destroyed as Android's netd destroys the sockets on the
+/// tunnel's address (here only the listening one), is bound anew on the same port: a new connection
+/// through the engine passes, and one it relayed before, kept open, goes on. On the Android 15
+/// emulator netd destroyed it when the tunnel was set up again with the same addresses, and every TCP
+/// connection through Watch was refused for the rest of the run: the accept loop had ended at its first
+/// error.
+async fn a_destroyed_listener(engine: &Engine, v4: bool) -> Outcome {
+    if !v4 {
+        ipv6_here()?;
+    }
+    sock_destroy_here()?;
+    let (server, accepted) = echoing_server(server_ip(v4)).await?;
+    let mut kept = app_connect_from(v4, server).await?;
+    assert_eq!(exchange(&mut kept, b"before").await?, b"before");
+    let port = listener_port(v4).ok_or("the engine's listener on the tunnel's address")?;
+
+    destroy(&["state", "listening", "src", &tunnel_filter(v4)])?;
+
+    counted(engine, LISTENER_RECOVERIES, 1).await?;
+    let mut new = app_connect_from(v4, server).await?;
+    assert_eq!(exchange(&mut new, b"a new one").await?, b"a new one");
+    assert_eq!(listener_port(v4), Some(port), "the listener, on its port");
+    assert_eq!(
+        exchange(&mut kept, b"kept").await?,
+        b"kept",
+        "the connection kept open"
+    );
+    assert_eq!(accepted.load(Ordering::Relaxed), 2);
+    Ok(())
+}
+
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_listener_destroyed_as_netd_does_is_bound_anew() -> Outcome {
+    lab(
+        "a_listener_destroyed_as_netd_does_is_bound_anew",
+        &Limits::default(),
+        |engine| async move { a_destroyed_listener(&engine, true).await },
+    )
+}
+
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn an_ipv6_listener_destroyed_as_netd_does_is_bound_anew() -> Outcome {
+    lab(
+        "an_ipv6_listener_destroyed_as_netd_does_is_bound_anew",
+        &Limits::default(),
+        |engine| async move { a_destroyed_listener(&engine, false).await },
+    )
+}
+
+/// A server on the "internet" that hands the test each connection it accepts.
+async fn handing_server(
+    ip: IpAddr,
+) -> io::Result<(SocketAddr, mpsc::UnboundedReceiver<TcpStream>)> {
+    let listener = TcpListener::bind((ip, 0)).await?;
+    let at = listener.local_addr()?;
+    let (hand, handed) = mpsc::unbounded_channel();
+    tokio::spawn(async move {
+        while let Ok((connection, _)) = listener.accept().await {
+            if hand.send(connection).is_err() {
+                break;
+            }
+        }
+    });
+    Ok((at, handed))
+}
+
+/// An app's connection through the engine to `server`, and the server's end of it, with `said` passed
+/// both ways.
+async fn both_ends(
+    v4: bool,
+    (server, handed): (SocketAddr, &mut mpsc::UnboundedReceiver<TcpStream>),
+    said: &[u8],
+) -> Result<(TcpStream, TcpStream), Box<dyn std::error::Error>> {
+    let mut app = app_connect_from(v4, server).await?;
+    app.write_all(said).await?;
+    let mut server_end = timeout(STEP, handed.recv())
+        .await?
+        .ok_or("the server is gone")?;
+    let mut heard = vec![0u8; said.len()];
+    within(
+        "the app's bytes at the server",
+        server_end.read_exact(&mut heard),
+    )
+    .await?;
+    server_end.write_all(&heard).await?;
+    within("the server's answer", app.read_exact(&mut heard)).await?;
+    assert_eq!(heard, said);
+    Ok((app, server_end))
+}
+
+/// Whether the namespace still holds a TCP socket connected to `to`, as the engine's upstream
+/// connection to the server is.
+fn connected_to(to: SocketAddr) -> bool {
+    let wanted = format!(":{:04X}", to.port());
+    let table = if to.is_ipv4() {
+        "/proc/net/tcp"
+    } else {
+        "/proc/net/tcp6"
+    };
+    std::fs::read_to_string(table).is_ok_and(|text| {
+        text.lines().skip(1).any(|line| {
+            let fields: Vec<&str> = line.split_whitespace().collect();
+            // The remote end, in an established state.
+            fields
+                .get(2)
+                .is_some_and(|remote| remote.ends_with(&wanted))
+                && fields.get(3) == Some(&"01")
+        })
+    })
+}
+
+/// ADR 0044, unit 12b, as Android's netd does it when it believes the tunnel's address was removed:
+/// every TCP socket on that address is destroyed, the engine's listener and its end of each relayed
+/// connection among them, and the apps' own. The app's connection ends at once with an error, not a
+/// hang; the server's end with a reset, from the relay, which saw the error, so that no upstream
+/// connection is left open; the listener is bound anew on its port; and a new connection through the
+/// engine passes.
+async fn netd_destroys_the_sockets(engine: &Engine, v4: bool) -> Outcome {
+    if !v4 {
+        ipv6_here()?;
+    }
+    sock_destroy_here()?;
+    let (server, mut handed) = handing_server(server_ip(v4)).await?;
+    let (mut app, mut server_end) = both_ends(v4, (server, &mut handed), b"before").await?;
+    let port = listener_port(v4).ok_or("the engine's listener on the tunnel's address")?;
+    let resets = engine.counters()[RESETS];
+
+    destroy(&["state", "all", "src", &tunnel_filter(v4)])?;
+
+    let (_, end) = read_to_end_or_error(&mut app).await?;
+    assert!(end.is_some(), "the app's connection ended cleanly");
+    let (_, end) = read_to_end_or_error(&mut server_end).await?;
+    assert_eq!(
+        end,
+        Some(io::ErrorKind::ConnectionReset),
+        "the server's end"
+    );
+    assert_eq!(engine.counters()[RESETS], resets + 1);
+    assert!(
+        !connected_to(server),
+        "a connection to the server is still open"
+    );
+    counted(engine, LISTENER_RECOVERIES, 1).await?;
+    both_ends(v4, (server, &mut handed), b"a new one").await?;
+    assert_eq!(listener_port(v4), Some(port), "the listener, on its port");
+    Ok(())
+}
+
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn when_netd_destroys_the_sockets_on_the_tunnels_address_connections_end_and_new_ones_pass()
+-> Outcome {
+    lab(
+        "when_netd_destroys_the_sockets_on_the_tunnels_address_connections_end_and_new_ones_pass",
+        &Limits::default(),
+        |engine| async move { netd_destroys_the_sockets(&engine, true).await },
+    )
+}
+
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn when_netd_destroys_the_sockets_on_the_tunnels_ipv6_address_connections_end_and_new_ones_pass()
+-> Outcome {
+    lab(
+        "when_netd_destroys_the_sockets_on_the_tunnels_ipv6_address_connections_end_and_new_ones_pass",
+        &Limits::default(),
+        |engine| async move { netd_destroys_the_sockets(&engine, false).await },
+    )
+}
+
+/// Unit 12b: only the engine's end of a relayed connection destroyed, the one Android's stack holds
+/// toward the fake peer, while the app's own socket stays. Android's stack resets the connection as it
+/// destroys it, and the reset reaches the app through the engine's rewriting: the app reads a reset at
+/// once, not a hang. The relay sees the error and resets the server's end; the listener, untouched,
+/// takes a new connection.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn when_the_engines_end_is_destroyed_the_app_gets_a_reset() -> Outcome {
+    lab(
+        "when_the_engines_end_is_destroyed_the_app_gets_a_reset",
+        &Limits::default(),
+        |engine| async move {
+            sock_destroy_here()?;
+            let (server, mut handed) = handing_server(server_ip(true)).await?;
+            let (mut app, mut server_end) =
+                both_ends(true, (server, &mut handed), b"before").await?;
+            let resets = engine.counters()[RESETS];
+
+            let fake = Addresses::COMMON.fake4.to_string();
+            destroy(&["src", &tunnel_filter(true), "dst", &fake])?;
+
+            let (_, end) = read_to_end_or_error(&mut app).await?;
+            assert_eq!(end, Some(io::ErrorKind::ConnectionReset), "the app's end");
+            let (_, end) = read_to_end_or_error(&mut server_end).await?;
+            assert_eq!(
+                end,
+                Some(io::ErrorKind::ConnectionReset),
+                "the server's end"
+            );
+            assert_eq!(engine.counters()[RESETS], resets + 1);
+            assert!(!connected_to(server), "a connection to the server is open");
+            both_ends(true, (server, &mut handed), b"a new one").await?;
+            assert_eq!(engine.counters()[LISTENER_RECOVERIES], 0);
+            Ok(())
+        },
+    )
+}
+
+/// A server on the "internet" that sends back each read, and accepts again after an error, as when the
+/// process is out of descriptors; it counts the connections it accepted.
+async fn patient_server(ip: IpAddr) -> io::Result<(SocketAddr, Arc<AtomicU64>)> {
+    let listener = TcpListener::bind((ip, 0)).await?;
+    let at = listener.local_addr()?;
+    let accepted = Arc::new(AtomicU64::new(0));
+    let counted = Arc::clone(&accepted);
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut connection, _)) = listener.accept().await else {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                continue;
+            };
+            counted.fetch_add(1, Ordering::Relaxed);
+            tokio::spawn(async move {
+                let mut buffer = [0u8; 256];
+                while let Ok(n) = connection.read(&mut buffer).await {
+                    if n == 0 || connection.write_all(&buffer[..n]).await.is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+    });
+    Ok((at, accepted))
+}
+
+/// Takes every descriptor the process may still open, with `/dev/null`, until the kernel answers
+/// `EMFILE`; they are given back when the files are dropped. The lab lowers the process's limit first
+/// (`NETLAB_NOFILE`).
+fn every_descriptor_left() -> Result<Vec<std::fs::File>, Box<dyn std::error::Error>> {
+    let mut held = Vec::new();
+    loop {
+        match std::fs::File::open("/dev/null") {
+            Ok(file) => held.push(file),
+            Err(error) if error.raw_os_error() == Some(nix::libc::EMFILE) => return Ok(held),
+            Err(error) => return Err(error.into()),
+        }
+        if held.len() > 4_096 {
+            return Err("the lab did not lower the limit on open files".into());
+        }
+    }
+}
+
+/// Waits until the counter at `index` reaches at least `value`, for five seconds at most.
+async fn at_least(engine: &Engine, index: usize, value: u64) -> Outcome {
+    for _ in 0..500 {
+        if engine.counters()[index] >= value {
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    Err(format!(
+        "counter {index} never reached {value}: {:?}",
+        engine.counters()
+    )
+    .into())
+}
+
+/// Unit 12b, the transient case: the engine's process out of descriptors when a connection reaches its
+/// listener. `accept` fails with `EMFILE` while the listener still listens, and the connection waits in
+/// its queue; the accept loop pauses and accepts again, and once descriptors are free the connection is
+/// accepted and relayed. Before, the first error ended the loop, the listener closed, and the
+/// connection in its queue was reset, as every later one was refused. The lab's Android takes 300 ms to
+/// name the app of a connection from one of `SLOW_PORTS`, while the server is asked at once beside it:
+/// the test takes every descriptor left once the server has the engine's connection and before the
+/// engine rewrites the app's SYN to its listener, and gives them back once the app's connection is
+/// complete and the engine's accept has failed.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_listener_out_of_descriptors_accepts_once_there_are_some() -> Outcome {
+    lab_with(
+        "a_listener_out_of_descriptors_accepts_once_there_are_some",
+        &Limits::default(),
+        &[("NETLAB_NOFILE", "256")],
+        |engine| async move {
+            let (server, accepted) = patient_server(server_ip(true)).await?;
+            let mut first = app_connect(server).await?;
+            assert_eq!(exchange(&mut first, b"first").await?, b"first");
+            let port =
+                listener_port(true).ok_or("the engine's listener on the tunnel's address")?;
+            let socket = TcpSocket::new_v4()?;
+            socket.bind(SocketAddr::from((Addresses::COMMON.tun4, SLOW_PORTS.start)))?;
+            let (done, mut connected) = oneshot::channel();
+            tokio::spawn(async move {
+                let _ = done.send(socket.connect(server).await);
+            });
+            until_count(
+                "the engine's connections at the server",
+                || Ok(usize::try_from(accepted.load(Ordering::Relaxed))?),
+                2,
+            )
+            .await?;
+
+            let held = every_descriptor_left()?;
+            if connected.try_recv().is_ok() {
+                return Err(
+                    "the app's connection was complete before the descriptors were taken: \
+                            the lab's timing failed, so this test did NOT run"
+                        .into(),
+                );
+            }
+            let mut connection = timeout(STEP, connected).await???;
+            at_least(&engine, LISTENER_RECOVERIES, 1).await?;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            drop(held);
+
+            assert_eq!(
+                exchange(&mut connection, b"once there is room").await?,
+                b"once there is room"
+            );
+            // It still listened: no listener was bound anew, whose closing of the old one would have
+            // reset the connection in its queue.
+            assert_eq!(listener_port(true), Some(port));
             Ok(())
         },
     )

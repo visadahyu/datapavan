@@ -41,6 +41,11 @@ pub struct Entry {
     pub open: bool,
     /// Whether Android's stack handed the connection to the relay, which then alone forgets it.
     pub relayed: bool,
+    /// The port of the engine's listener its SYN was rewritten to, once its server accepted (0 until
+    /// then). A listener that stopped listening, as after Android's netd destroyed the sockets on the
+    /// tunnel's address, is bound anew, on another port if its own is taken (ADR 0044, unit 12b): the
+    /// connections the old one took go on through its port, both ways.
+    pub listener: u16,
 }
 
 /// How a packet from an app fits the table.
@@ -48,8 +53,9 @@ pub struct Entry {
 pub enum Lookup {
     /// A new connection: its fake port was just handed out, and its SYN must be held.
     New(u16),
-    /// A known connection whose server has accepted.
-    Open(u16),
+    /// A known connection whose server has accepted: its fake port, and the port of the listener it
+    /// was rewritten to.
+    Open(u16, u16),
     /// A known connection still waiting for its server: the app sent its SYN again.
     Waiting,
     /// Not a SYN, and not a known connection.
@@ -130,7 +136,7 @@ impl Nat {
             };
             entry.seen = now;
             return if entry.open {
-                Lookup::Open(port)
+                Lookup::Open(port, entry.listener)
             } else {
                 Lookup::Waiting
             };
@@ -177,6 +183,7 @@ impl Nat {
                 seen: now,
                 open: false,
                 relayed: false,
+                listener: 0,
             },
         );
         self.by_app.insert((app, destination), port);
@@ -207,10 +214,24 @@ impl Nat {
         Some(*entry)
     }
 
-    /// Marks a connection's server as having accepted.
-    pub fn open(&mut self, port: u16) {
+    /// The connection behind a fake port, if a packet to it from the tunnel's address and `listener`
+    /// is Android's answer to it: one from the port of the listener it was rewritten to. Marks it as just
+    /// seen.
+    pub fn answered(&mut self, port: u16, listener: u16, now: Instant) -> Option<Entry> {
+        let entry = self
+            .by_fake
+            .get_mut(&port)
+            .filter(|e| e.open && e.listener == listener)?;
+        entry.seen = now;
+        Some(*entry)
+    }
+
+    /// Marks a connection's server as having accepted, and its SYN as rewritten to the engine's
+    /// listener on `listener`.
+    pub fn open(&mut self, port: u16, listener: u16) {
         if let Some(entry) = self.by_fake.get_mut(&port) {
             entry.open = true;
+            entry.listener = listener;
         }
     }
 
@@ -298,8 +319,13 @@ mod tests {
             unreachable!("no port")
         };
         assert_eq!(nat.lookup(app, server, true, now), Lookup::Waiting);
-        nat.open(port);
-        assert_eq!(nat.lookup(app, server, false, now), Lookup::Open(port));
+        nat.open(port, 4_000);
+        assert_eq!(
+            nat.lookup(app, server, false, now),
+            Lookup::Open(port, 4_000)
+        );
+        assert!(nat.answered(port, 4_000, now).is_some());
+        assert_eq!(nat.answered(port, 4_001, now), None, "another listener's");
         assert_eq!(
             nat.by_fake(port, now).map(|e| (e.app, e.destination)),
             Some((app, server))
@@ -371,7 +397,7 @@ mod tests {
         let Lookup::New(waiting) = nat.lookup(ends(40_001).0, server, true, then) else {
             unreachable!("no port")
         };
-        nat.open(relayed);
+        nat.open(relayed, 4_000);
         nat.relayed(relayed);
         let hours = then + Duration::from_hours(3);
         assert_eq!(nat.sweep(hours), vec![waiting]);
