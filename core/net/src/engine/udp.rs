@@ -1860,9 +1860,13 @@ fn note_quic(shared: &Shared, quic: Option<QuicRead>) {
 }
 
 /// Counts a datagram that left, or gives the ICMP error that tells the app its destination cannot be
-/// reached. One that found the socket's buffer full is dropped, as a full queue drops it. One the
-/// engine's kernel refused as too long to send (`EMSGSIZE`) is dropped and counted (ADR 0044, decision
-/// 5 as amended): its destination can be reached, and "host unreachable" would tell the app otherwise.
+/// reached. One that found the socket's buffer full is dropped, as a full queue drops it; so is one the
+/// network beneath's queue dropped, which the kernel reports as `ENOBUFS` to a socket that asks for its
+/// ICMP errors, as a mapping's does (third round of unit 11b, finding 2): told as "host unreachable", it
+/// failed an app socket that asks for its errors too at its next send, losing that datagram as well.
+/// One the engine's kernel refused as too long to send (`EMSGSIZE`) is dropped and counted (ADR 0044,
+/// decision 5 as amended): its destination can be reached, and "host unreachable" would tell the app
+/// otherwise.
 /// The tunnel's MTU is the first hop's, so the app's own kernel has already sized it for the network
 /// beneath; the engine's sockets fragment what is larger than the path, and a router beyond answers
 /// for itself.
@@ -1882,7 +1886,10 @@ fn count_sent(
             }
             None
         }
-        Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+        Err(error)
+            if error.kind() == io::ErrorKind::WouldBlock
+                || error.raw_os_error() == Some(nix::errno::Errno::ENOBUFS as i32) =>
+        {
             Counters::add(&shared.counters.skipped, 1);
             None
         }
@@ -3813,8 +3820,9 @@ mod tests {
         Ok(())
     }
 
-    /// The places of two counters in the snapshot.
+    /// The places of counters in the snapshot.
     const TOO_BIG: usize = 39;
+    const SKIPPED: usize = 8;
     const PATH_MTU: usize = 40;
 
     const TIME_EXCEEDED: usize = 41;
@@ -4044,6 +4052,10 @@ mod tests {
         let too_long = Err(io::Error::from_raw_os_error(nix::libc::EMSGSIZE));
         assert_eq!(count_sent(&shared, None, &large, &parsed, too_long), None);
         assert_eq!(shared.counters.snapshot()[TOO_BIG], 1);
+        // A datagram the network beneath's queue dropped is dropped and counted too, as by a full queue.
+        let queue_full = Err(io::Error::from_raw_os_error(nix::libc::ENOBUFS));
+        assert_eq!(count_sent(&shared, None, &large, &parsed, queue_full), None);
+        assert_eq!(shared.counters.snapshot()[SKIPPED], 1);
         let unreachable = count_sent(
             &shared,
             None,

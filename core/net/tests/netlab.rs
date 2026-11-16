@@ -3573,13 +3573,13 @@ const SKIPPED: usize = 8;
 
 /// Slows the namespace's way to the server that never answers (`tun1`) to a trickle, so that what the
 /// engine sends there waits in the kernel and fills its socket's send buffer, as a slow uplink does: a
-/// token bucket of 8 kbit/s holding up to 10 MB.
-fn slow_silent_route() -> Outcome {
+/// token bucket of 8 kbit/s holding up to `limit` bytes, beyond which it drops.
+fn slow_silent_route(limit: &str) -> Outcome {
     let output = Command::new("tc")
         .args([
             "qdisc", "add", "dev", "tun1", "root", "tbf", "rate", "8kbit",
         ])
-        .args(["burst", "1600", "limit", "10000000"])
+        .args(["burst", "1600", "limit", limit])
         .output()
         .map_err(|e| format!("tc, which this test needs: {e}"))?;
     if !output.status.success() {
@@ -3612,7 +3612,7 @@ fn a_full_send_buffer_drops_a_datagram_and_holds_no_one_up() -> Outcome {
         "a_full_send_buffer_drops_a_datagram_and_holds_no_one_up",
         &limits,
         |engine| async move {
-            slow_silent_route()?;
+            slow_silent_route("10000000")?;
             let app = app_socket().await?;
             let closed = std::net::UdpSocket::bind((SERVER, 0))?.local_addr()?;
             app.send_to(b"anyone there?", closed).await?;
@@ -3731,6 +3731,50 @@ fn an_error_for_a_ping_to_the_tunnels_dns_address_reaches_the_app() -> Outcome {
                     );
                 }
             }
+            Ok(())
+        },
+    )
+}
+
+/// ADR 0044, unit 11b (third round, finding 2): a mapping's datagram that the network beneath's queue
+/// drops is dropped and counted, never told to the app as "host unreachable". A mapping's socket asks
+/// for its ICMP errors, so the kernel fails a send whose packet its queue drops with `ENOBUFS`; told
+/// as unreachable, an app socket that asks for its errors too failed its next send with
+/// `EHOSTUNREACH`, losing that datagram as well. Here the way to an address that never answers holds
+/// 3,000 bytes, and the app sends forty datagrams of 1,400 bytes there: none of its sends fails, no
+/// error reaches it, and the drops are counted.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_datagram_the_network_queue_drops_is_not_told_as_unreachable() -> Outcome {
+    // Android is asked whose a socket is again only after a minute's silence, so that every datagram
+    // goes by the mapping, none waiting for an answer.
+    let limits = Limits {
+        udp_reask: Duration::from_secs(60),
+        ..Limits::default()
+    };
+    lab(
+        "a_datagram_the_network_queue_drops_is_not_told_as_unreachable",
+        &limits,
+        |engine| async move {
+            slow_silent_route("3000")?;
+            let silent = SocketAddr::from((SILENT, 9));
+            let app = erring_app(silent).await?;
+            app.send_to(&[7; 1_400], silent).await?;
+            counted(&engine, UDP_FLOWS, 1).await?;
+            let mut failed = Vec::new();
+            for _ in 0..40 {
+                if let Err(error) = app.send_to(&[7; 1_400], silent).await {
+                    failed.push(error);
+                }
+                tokio::time::sleep(Duration::from_millis(2)).await;
+            }
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            let errors = from_path(&app)?;
+            assert!(
+                failed.is_empty() && errors.is_empty(),
+                "the app's sends failed with {failed:?}, and it was told {errors:?}"
+            );
+            assert!(engine.counters()[SKIPPED] > 0, "no drop counted");
             Ok(())
         },
     )
