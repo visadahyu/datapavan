@@ -812,17 +812,20 @@ larger than it passed, before those last changes; phones in unit 11b. How it is 
 [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 The tunnel set up again keeps the flows, 2026-11-16 (unit 12b, ADR 0044), built by a fresh agent from a written
-brief. When Watch sets its tunnel up again with the same addresses, for a new MTU or a change of the apps left out,
-it hands the new tunnel to the running engine, which goes on with it and keeps everything: every app's TCP
-connections and UDP mappings, the ping sockets, the chain, names, stand-ins and counters. The engine first handles
-what was still queued on the old tunnel, then closes it. A tunnel with other addresses, for a network that clashes
-with them (ADR 0041), still starts a new engine, which goes on with the old one's chain, names and counters, since the
-apps' connections are bound to the old addresses; so does a swap that fails. At its first start Watch now sets the
-chain before the engine, so that a chained app's first packet goes through the tool. In the network lab, a second tun
-device and Android's in-place update played with `ip` show a TCP connection, a mapping's port and peers, a ping's
-socket and a chained app's way through the tool going on across the swap; `scripts/verify-watch.sh` keeps a
-connection open across a setup with nothing changed, not yet run on an emulator. How it is built:
-[ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
+brief. When Watch sets its tunnel up again for a new MTU, Android keeps the VPN network, and Watch hands the new tunnel
+to the running engine, which goes on with it and keeps everything: every app's TCP connections and UDP mappings, the
+ping sockets, the chain, names, stand-ins and counters. The engine first handles what was still queued on the old
+tunnel, then closes it. Android keeps the network only when the apps Watch hands it are the same ordered list as
+before, so Watch now hands them in sorted order. When they differ, as when the apps left out change, Android brings up
+a new network, whose connections the old network's marks would leave routing nowhere, and when the addresses differ,
+for a network that clashes with them (ADR 0041), the apps' connections are bound to the old ones: in both cases, and
+when a swap fails, a new engine starts, which goes on with the old one's chain, names and counters while the
+connections start anew. An independent review found that case, which the first version swapped too, and the emulator
+showed it. At its first start Watch now sets the chain before the tunnel and the engine, so that a chained app's first
+packet goes through the tool. In the network lab, a second tun device and Android's in-place update played with `ip`
+show a TCP connection, a mapping's port and peers, a ping's socket and a chained app's way through the tool going on
+across the swap; on the Android 15 emulator, a connection kept open passed a setup with nothing changed. How it is
+built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 | # | Milestone | Done when |
 |---|---|---|

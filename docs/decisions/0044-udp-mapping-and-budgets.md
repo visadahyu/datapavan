@@ -747,8 +747,8 @@ an ADR (D25).
     the tunnel, so they are rare.
 
 **Unit 12b, the engine keeps its flows when the tunnel is set up again (2026-11-16).**
-- **A tunnel set up again with the same addresses goes to the running engine,** for a new MTU and a change of the
-  apps left out. Until then every setup stopped the engine and started another, and every TCP connection and UDP
+- **A tunnel set up again with the same addresses, on the VPN network Android kept, goes to the running engine,** as
+  for a new MTU. Until then every setup stopped the engine and started another, and every TCP connection and UDP
   mapping of every app ended with the old one; now the engine goes on with the new tunnel and keeps everything: its
   NAT, TCP connections and listeners, UDP mappings, ping sockets, the reassembler, chain, names, stand-ins, counters
   and log.
@@ -768,27 +768,48 @@ an ADR (D25).
   - watch-jni has a new export, `Engine.nativeSwapTunnel(fd): Boolean`, which takes ownership of `fd` as
     `nativeStart` does, and returns false, with `fd` closed, when no engine runs or the engine could not take it. It
     holds the native side's engine lock while the engine's thread takes the tunnel, so that a chain set meanwhile
-    reaches the engine after; that thread never takes the lock, and reaches Kotlin only from tokio's blocking
-    threads. No existing signature changed.
-  - Kotlin's `setUpAgain` hands the engine a duplicate of the new tunnel's descriptor when the addresses are the same,
-    keeps its own for `nativeStart` should the swap fail, and closes its own once the engine took it.
+    reaches the engine after. The rule that makes this safe: that thread never takes the lock, and the Kotlin code it
+    reaches, `ownerUid`, `protectSocket` and `logRecords`, from tokio's blocking threads or, for `logRecords`, from
+    the engine's own thread as its loop ends, never calls a native method of `Engine` (second review, minor 4: the
+    first version said the thread reached Kotlin only from the blocking threads). No existing signature changed.
+  - Kotlin's `setUpAgain` hands the engine a duplicate of the new tunnel's descriptor only when Android kept the VPN
+    network and the addresses are the same (below), keeps its own for `nativeStart` should the swap fail, and closes
+    its own once the engine took it.
+- **Only on the VPN network Android kept** (second review, major 1, and the emulator's `verify-chain.sh`). The first
+  version swapped whenever the addresses stayed, also when the apps left out changed. Android then brings up a new
+  network: it keeps the network and updates it in place only when `allowBypass` and the allowed and disallowed apps
+  are unchanged, the apps compared as ordered lists (AOSP's `updateLinkPropertiesInPlaceIfPossible`); otherwise a
+  new network agent, with a new netId, connects before the old one goes. netd marks each packet that comes in on a
+  VPN interface with its network's netId (`RouteController::modifyIncomingPacketMark`), and Android sets
+  `tcp_fwmark_accept`, so the connections the engine's listener accepted carry the old netId, and once the old
+  network goes their packets route nowhere: kept connections hung for minutes, where with a new engine they reset at
+  once and the apps opened new ones. The review modelled it in the network lab with iptables marks,
+  `tcp_fwmark_accept` and a rule for each netId: the same netId with a swap carried 3 of 3, a new netId with a swap
+  gave no answer within 5 s in 3 of 3, and a new netId with a new engine was reset at once; on the emulator, after an
+  app was left out and taken back, its new connection failed too. It also found that the list could differ when the
+  apps had not: Watch handed the Builder the apps left out in the order of `getStringSet`'s `HashSet`, and skipped
+  one no longer installed, so a list in another order, or without a removed app, brought a new network even for a
+  new MTU.
+  - Watch now hands the Builder its apps in sorted order and keeps the list it took, with the addresses, as the
+    tunnel's setup (`TunnelSetup`); Watch never calls `allowBypass`. A setup whose list and addresses are the same as
+    the last one's goes to the running engine; any other starts a new engine, unit 12's path, with what the old one
+    hands over: when the apps left out change, or one of them was removed, the apps' connections through Watch begin
+    anew, as before this unit.
 - **Other addresses still start a new engine.** For ADR 0041's clash and the debug `addresses-force`, the apps'
   connections are bound to the old addresses, as are the engine's listeners and its rewriting, and cannot go on:
   `nativeStart` stops the old engine, which hands the new one what unit 12 hands over, and the flows begin anew, as
   they do when a swap fails.
-- **What Android does with the apps' side.** For a new MTU, Android updates the VPN network in place, so the apps'
-  sockets and routes stay and only the interface beneath them changes; the network lab plays this. For a change of
-  the apps left out it connects a new network agent before it disconnects the old one; whether Android then closes
-  some apps' sockets itself, as the network beneath them changes, is not measured. The engine keeps its side either
-  way.
-- **The first start sets the chain before the engine.** `start()` calls `applyChain()` before `startEngine()`. With no
-  engine running, Watch's native side keeps the chain (unit 12) and the first engine starts with it, so a chained
-  app's first packet goes through the tool; before, the engine read the tunnel from `nativeStart` on and its first
-  packets could leave directly. `nativeChain` says false while no engine runs, which `applyChain` does not read; the
-  screen shows the chain's settings and whether the tunnel runs, neither of which this changes; and a start that
-  fails stops, which forgets the chain.
+- **The first start sets the chain before the tunnel and the engine.** `start()` calls `applyChain()` before
+  `establish()` and `startEngine()`. With no engine running, Watch's native side keeps the chain (unit 12) and the
+  first engine starts with it, so a chained app's first packet goes through the tool; before, the engine read the
+  tunnel from `nativeStart` on and its first packets could leave directly. The first version called it between
+  `establish()` and `startEngine()`, where the apps' packets waited in the tunnel, or were dropped once it held 500,
+  while the main thread read the tool table and perhaps the Keystore (second review, minor 3); it needs no tunnel.
+  `nativeChain` says false while no engine runs, which `applyChain` does not read; the screen shows the chain's
+  settings and whether the tunnel runs, neither of which this changes; and a start that fails, at `establish()` or
+  after, stops, which forgets the chain.
 - **A debug trigger.** The dump argument `setup-again` calls `setUpAgain()` with nothing changed, as `addresses-force`
-  does for the clash, so that the emulator can show a setup with the same addresses.
+  does for the clash, so that the emulator can show a setup that keeps the network and the addresses.
 - **The network lab.** Rust makes a tun device only with unsafe ioctls, and a descriptor inherited by its number
   becomes an owned one only with unsafe code too, so the brief's inherited descriptor could not be used: the test
   opens `/dev/net/tun` itself and `scripts/netlab-enter.py --tunnel tun2`, run with that file as its standard input,
@@ -797,7 +818,8 @@ an ADR (D25).
   the routes into the tunnel go to tun2, and only then are tun0's addresses taken away and tun0 brought down, as
   Android resets the old interface. Linux refuses writes to a tun device that is down (`EIO`), as the lab showed,
   and goes on answering reads with "would block", so the engine runs on, on the old tunnel, until it is handed the
-  new one; what it writes to the old one meanwhile is refused and lost, and TCP sends it again.
+  new one; what it writes to the old one meanwhile is refused and lost, and TCP sends it again (second review, minor
+  5: left so, since a bounded wait for it is not simple).
 - **Tests.**
   - In the engine, 3, with the engine's event loop on the test's own thread, so that what it finds at once can be
     made to be there at once: a datagram queued on the old tunnel when the new one comes is handled on the mapping it
@@ -809,6 +831,9 @@ an ADR (D25).
     one running, one the engine cannot take returns false and the old tunnel stays, and one it can take is kept open
     and the old one closed. The test of unit 12's `SET` now also starts a first engine with a chain set before it, as
     `start()` does. The tests that use the process's engine and chain take a lock, so that they do not run at once.
+  - In Kotlin, JVM tests of `TunnelSetup`: the same apps go to the Builder in the same order whatever order the set
+    gives them in, and the list kept is the Builder's, without an app no longer installed; and setups are the same
+    only with the same addresses and the same ordered lists.
   - In the network lab, 2. With traffic flowing, Android's in-place update played, then the new tunnel handed over:
     the same TCP connection carries bytes both ways after, and the server accepted no other; the app socket's mapping
     leaves through the same port, and a peer it sent to before gets in unasked; the app's ping goes through the same
@@ -820,21 +845,23 @@ an ADR (D25).
   - The brief asked the lab to show a packet queued on the old tunnel at the swap handled too. On a real tun device the
     engine reads each packet as it comes, on a thread of its own, so a test cannot make one wait there at the swap
     but by a race; the engine's own test above makes it so on one thread, deterministically.
-  - `scripts/verify-watch.sh` keeps a connection to the test server open through Watch, nc reading HTTP requests
-    from a FIFO, sets the tunnel up again with `setup-again`, waits until the old interface is gone, and requires an
-    answer on the same connection after, no new connection recorded, and the tunnel's `mtu` line unchanged. Not run
-    yet: the maintainer's session runs the emulator.
+  - `scripts/verify-watch.sh` keeps a connection to the test server open through Watch, one nc sending a request,
+    then a second once a marker file is there (Android 15's shell may not make a FIFO in `/data/local/tmp`), sets the
+    tunnel up again with `setup-again`, waits until the old interface is gone, and requires the second request
+    answered on the same connection and the MTU Watch chose unchanged. It passed on a fresh Android 15 emulator, in
+    the maintainer's session, before the second review's fixes. `scripts/verify-chain.sh`'s step that leaves an app
+    out and takes it back then failed, by major 1; with the fix those setups start a new engine.
   - Each was made to fail by a mutation of the code it guards: the old tunnel's queue left unread, the old tunnel
     never closed, a refused descriptor answered as taken, `swap_tunnel` not waiting for the answer or taking
-    nothing, a waiting write not woken by the replacement, writes kept on the first descriptor, and a descriptor
-    kept open with no engine running.
+    nothing, a waiting write not woken by the replacement, writes kept on the first descriptor, a descriptor kept
+    open with no engine running, and the apps handed to the Builder unsorted.
   - No test reaches: the `select!`'s order, without which a packet queued on the old tunnel is handled the same, by
-    the read that comes first, and a stop waits at most one more batch; Kotlin's choice between a swap and a new engine, its fallback, the duplicate it hands
-    over, and `start()`'s order, which are the service's lifecycle, Android's; `nativeSwapTunnel`'s JNI shell, a few
-    lines around the function tested; and what Android does on a phone.
+    the read that comes first, and a stop waits at most one more batch; the service's use of `TunnelSetup`, its
+    fallback, the duplicate it hands over, and `start()`'s order, which are the service's lifecycle, Android's;
+    `nativeSwapTunnel`'s JNI shell, a few lines around the function tested; Android's marks on a new network, which
+    only the review's model in the lab and the emulator showed; and what Android does on a phone.
 - **Not done, stated:**
-  - the swap has not run on an emulator or a phone: `verify-watch.sh`'s new check runs next, on the maintainer's
-    emulator; phones in unit 11b;
-  - whether Android closes some apps' sockets itself when the apps left out change is not measured;
-  - a setup with other addresses, or a swap that fails, still ends the engine's flows, as before; for other addresses
-    it must.
+  - the swap has not run on a phone (unit 11b), and the second review's fixes not yet on the emulator;
+  - a setup with other addresses, on a new VPN network, or a swap that fails, still ends the engine's flows, as
+    before: for other addresses it must, and on a new network a new engine resets the connections at once, which
+    the swap could not keep.
