@@ -567,8 +567,8 @@ an ADR (D25).
   - errors from the network beneath (unreachable, time exceeded) and the arriving hop limit are not passed on:
     the app sees a timeout, and a traceroute through Watch shows the destination at every hop. A later change that
     sets `IP_RECVERR` on the ping sockets must read their error queue, as `errors::queued` does, so that a pending
-    error does not end the socket;
-  - echo's bytes are not in the engine's byte counters, while Android counts them to Watch;
+    error does not end the socket (closed by unit 11b, below, which does so);
+  - echo's bytes are not in the engine's byte counters, while Android counts them to Watch (closed by unit 11b);
   - with no owner there is no share for each app: one app can take all 32 sockets for as long as it pings.
     Accepted: a ping is small and brief, and no other traffic waits on these sockets;
   - phones of other makers, whose SELinux rules for ICMP sockets may differ, are not measured yet (the Galaxy A40
@@ -742,8 +742,10 @@ an ADR (D25).
     a network that happens only when its MTU goes down; unit 12b keeps the flows;
   - a network whose IPv4 and IPv6 first hops differ gives the wider version the narrower MTU (above);
   - the ping sockets still set no `IP_RECVERR` (unit 11), so a router's "fragmentation needed" for an echo request is
-    not passed on, and a request whose send fails with `EMSGSIZE` is counted as dropped echo;
-  - the errors passed on are not rate-limited (RFC 4443 2.4 (f)): they reach only the phone's own apps;
+    not passed on, and a request whose send fails with `EMSGSIZE` is counted as dropped echo (closed by unit 11b: both
+    are passed on, and a send that takes a pending error is sent again);
+  - the errors passed on are not rate-limited (RFC 4443 2.4 (f)): they reach only the phone's own apps (since unit
+    11b, at most one for each datagram or request the app sent);
   - an app's TCP fragments are put together too and handled as any segment; Android's stack sizes its segments to
     the tunnel, so they are rare.
 
@@ -920,3 +922,116 @@ an ADR (D25).
   - a setup with other addresses, on a new VPN network, or a swap that fails, still ends the engine's flows, as
     before: for other addresses it must, and on a new network a new engine resets the connections at once, which
     the swap could not keep.
+
+**Unit 11b, traceroute through Watch: hop limits, errors from the path, echo's bytes (2026-11-16, decision 5).**
+- **Watch is not a hop.** An app's echo request, and its UDP datagram on the direct path, leave with the time to live
+  (IPv4) or hop limit (IPv6) the app sent them with, copied, not lowered; before, they left with the engine's own 64,
+  and a traceroute through Watch showed the destination at every hop.
+  - The parser reads the value into `Packet::hops` and `Echo::hops`.
+  - A mapping's datagram carries it in its `sendmsg`'s ancillary data, `IP_TTL` or `IPV6_HOPLIMIT`
+    (`engine/hops.rs`, through nix's safe `ControlMessage::Ipv4Ttl` and `Ipv6HopLimit`), so that one socket's
+    datagrams of different hop limits, as a traceroute's probes are, need no socket option between them. An IPv4
+    echo request carries it the same way.
+  - An IPv6 echo request takes it as its ping socket's option, `IPV6_UNICAST_HOPS`, set only when it differs from
+    the one last set on that socket. Linux's IPv6 ping sockets read no ancillary data before 5.18
+    (`ping_v6_sendmsg`), and most phones run older kernels, where the request would leave with the default without
+    a word. A ping socket serves one app socket and address pinged, whose hop limit changes only when the app
+    changes it; the engine's tasks share one thread, so no other request comes between the option and its send.
+  - IPv4 takes a time to live of 1 to 255 in ancillary data: a packet that came with 0, which no socket could have
+    sent, leaves with the socket's own.
+  - Never through the chain, whose relay carries the datagram with its own, and never for lookups to the tunnel's
+    DNS address, which Android's resolver sends whatever the app's socket says.
+- **What comes back keeps the hop limit it arrived with.** Mapping and ping sockets ask for it (`IP_RECVTTL`,
+  `IPV6_RECVHOPLIMIT`) and read with `recvmsg`, and `packet::set_hops` gives the rebuilt answer, echo reply or error
+  that value, IPv4's header checksum made anew; 64 stays where the kernel gives none, and for what the tool's relay
+  hands back, which crossed only the phone. Once a socket asks for hop limits, an error read off its queue carries
+  one too, before the error itself: the room for the error's ancillary data grows by it, or IPv6's error would be
+  cut off (the router's "too big" test failed so).
+- **Errors from the path.** The ping sockets now queue theirs (`IP_RECVERR`, `IPV6_RECVERR`) and read them off their
+  queue on `Interest::ERROR`, before the replies, as the mappings do; a read or a send that takes a pending error
+  goes on (`errors::from_icmp`, which now takes `EREMOTEIO` too, a ping socket's own for a source quench or a
+  redirect), and a send is made again. For both, the app is told:
+  - "time exceeded in transit" (ICMP 11/0, ICMPv6 3/0), what a traceroute asks each hop for;
+  - "destination unreachable" with the code it came with, where before every one but the port's was "host
+    unreachable";
+  - "fragmentation needed" and "packet too big" with their MTU, as unit 12 does for mappings, now for echo too.
+  "Parameter problem", a fragment's reassembly that timed out (11/1, 3/1), and errors of local origin, as the
+  engine's kernel's own "message too long", are left out, as before.
+  - **From whom.** Each comes from the router or host the kernel names as its sender (`SO_EE_OFFENDER`), as it would
+    without Watch; from the destination, as before, where the kernel names none, where the sender is the very address
+    the engine sent to, which the app may know by another (a ping to the tunnel's DNS address reaches the network's
+    resolver), where it is no address an error may come from, or where it is one of the phone's own (`errors::sender`).
+    The engine's own kernel sends an error from the phone's address on the network beneath when it answers itself, as
+    "host unreachable" when a neighbour does not answer; from that address, the app's kernel would drop it on the
+    tunnel as a martian source, and the app wait for its timeout, where before this unit it was told at once. Whether
+    an address is the phone's is asked as for the tool's relay (`on_the_phone`): a UDP socket connected to it, which
+    sends nothing, sends from it only if the phone holds it.
+  - **Quoting.** An echo error quotes the app's own request: an echo request from the app's address to the address
+    it pinged, with the app's identifier, the sequence number read from the payload the error queue returns (the
+    request's ICMP header as the router quoted it) and the data the router quoted. The app's kernel finds its ping
+    socket by that identifier, and `ping` its request by the sequence number. A mapping's error quotes the datagram's
+    header as before, which the app's kernel matches by the ports.
+  - **One at most for each request or datagram the app sent.** A ping socket keeps the sequence numbers of its last
+    64 requests that no error answered yet (`echo::ASKED`), and each peer of a mapping one owed error for each
+    datagram the app sent it, at most 64 (`udp::OWED_ERRORS`). An error for another destination than the socket's or
+    a peer's, for a sequence number never sent, or a second for one request or datagram, is dropped and counted: the
+    engine's kernel queues an error for an unconnected socket whatever destination it quotes, so a forged one would
+    otherwise reach the app. A sender that forges errors for a peer the app sends to without pause passes on at most
+    one for each of the app's last 64 datagrams there; the app's own kernel, without Watch, takes as many.
+  - **A network that moved.** What a ping socket read as the network beneath moved is not passed on, and the socket
+    ends with the move, as unit 12 has it for mappings (`udp::network_moved`).
+- **Echo's bytes are counted** in `bytes_up` and `bytes_down`: what the ping socket sends and reads, the ICMP message,
+  header and data, as UDP's counters hold what its sockets carry, without IP headers. Android counts them to Watch.
+  Echo still writes no record to the connection log.
+- **Counters, appended:** `time_exceeded`, the 42nd, and `path_unreachable`, the 43rd, passed on for datagrams and
+  echo both, as `path_mtu`, the 41st, now counts echo's "too big" too; `echo_errors`, the 44th, how many of those three
+  kinds answered echo requests, counted apart so that a phone's dump says how much of what the path answered was a
+  ping's or a traceroute's; and `errors_unasked`, the 45th, the errors dropped as answering nothing the app sent, or
+  once more. `COUNTERS` is 45.
+- **Not changed:** TCP, which the engine's kernel terminates: a traceroute over TCP sees its probes answered by Watch's
+  listener, and is out of scope. The chain: echo is still refused while a chain is on, and chained UDP keeps the
+  relay's hop limit. Lookups to the tunnel's DNS address. ADR 0044's other decisions.
+- **Tests.**
+  - In the network lab, 5, each in IPv4 and IPv6: an app sending with 3, by UDP and by ping, reaches the server's
+    socket (`IP_RECVTTL`, `IPV6_RECVHOPLIMIT`) and a raw socket of the namespace with 3, while its lookup to the
+    tunnel's DNS address leaves with 64; a server answering with 7, and the namespace's kernel echoing with 7, reach
+    the app's sockets with 7; a router's "time exceeded" for a datagram and for an echo request, from 192.0.2.1 or
+    2001:db8:2::1, addresses the namespace does not hold, as a router on a phone's path is none of the phone's, sent by
+    a raw socket with its own IP header (`IP_HDRINCL`, `IPV6_HDRINCL`), reaches the app's UDP and ping sockets
+    (`IP_RECVERR`) from that router, with its hop limit, about the destination they sent to, the ping's quoting its
+    own identifier, sequence and data, then an unreachable with its code too, while errors forged for another
+    destination, for a sequence never sent, and a second for one datagram or request are dropped and counted, and the
+    ping socket goes on to the next reply through the same engine socket; and two pings of 20 bytes of data add 28
+    bytes each way to the byte counters each. A sixth, IPv4 only, sends an error from the namespace's 198.51.100.10,
+    standing for the phone's own address: the app hears it from the destination. The lab's IPv6 holds no address of
+    its own beside the destination that its rules route as local.
+  - In the engine, 6, 4 of them new: what a mapping reads off its error queue before and after a move, from whom,
+    with what hop limit, and one for each datagram; echo's quoting and its rule of one for each request; whom an
+    error comes from; the kinds the app is told of; and the packets built, a hop limit set, and path errors and the
+    quoted request, checked against etherparse. The fuzz target builds the quoted request and errors from any input, quoting it or any bytes,
+    and sets hop limits on any bytes (6.8 million runs, no fault).
+  - Each was made to fail by a mutation of the code it guards: no ancillary data on a send (64 in IPv4, and alone in
+    IPv6), the IPv4 ping without it, the IPv6 ping without its option, a lookup sent with the app's 3; the answer's
+    hop limit not set, a mapping not asking for it, IPv6 not asking, the reply's not set, the error queue's old room;
+    time exceeded left out, every error from the destination, the error's hop limit not set, unreachables as host
+    unreachable, no rule of one for each datagram or for each request, an error for any destination of a mapping or
+    of a ping socket, any sequence number, ping sockets keeping no errors, the request quoted with the engine's
+    identifier, an error from the phone's own address passed on from it; and either byte count taken away.
+  - `scripts/verify-watch.sh`, after the ping checks, pings 1.1.1.1 from the shell with a time to live of 1: where
+    the network beneath answers "time to live exceeded", the shell must see it from an address other than 1.1.1.1;
+    where it answers none, as an emulator's NAT may not, it is reported, with the 42nd counter. Not run here: the
+    maintainer's session runs it on the emulator and the Galaxy A40.
+- **What no test reaches:** a read or a send that takes a pending error, which needs an error to come between the
+  error queue's read and a reply's read, or before a send: tokio does not try a read on a wake for an error alone,
+  so the lab cannot make one wait there but by a race (the test shows the socket going on after errors); the check
+  against a network that moved for a ping socket, which needs a move between its read and the check; the IPv6 ping
+  socket's option on a kernel older than 5.18 (the lab's is newer, where ancillary data would have done too); the
+  hop limit of the relay's leg through the chain; an error from one of the phone's own IPv6 addresses; and what
+  phones' kernels do, among them whether Android drops an error from the phone's own address as this note says.
+- **Not done, stated:**
+  - phones: the time exceeded, the hop limits and echo's bytes on the emulator and the Galaxy A40 are the
+    maintainer's run, as are unit 12's measures of `IP_MTU` and writes larger than the tunnel's MTU on phones;
+  - "parameter problem" and a fragment's reassembly that timed out are not passed on;
+  - an error passed on for a datagram quotes only its header, as before, not its payload: a tool that reads its own
+    probe back from the error finds none of it there;
+  - a traceroute over TCP sees Watch's listener at every hop.

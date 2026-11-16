@@ -132,7 +132,8 @@ fn queued(socket: &impl AsFd, quote: &mut [u8]) -> Vec<Queued> {
 /// which are told with the MTU the kernel gives in `ee_info` (ADR 0044, decision 5 as amended); and
 /// "time exceeded in transit" (unit 11b). A router older than RFC 1191 gives an MTU of 0, which says
 /// nothing of the path: such an error is left out. The rest, as "parameter problem" or a fragment's
-/// reassembly that timed out, are left out too, as are the engine's kernel's own errors.
+/// reassembly that timed out, are left out too, as are errors of local origin, as the kernel's own
+/// "message too long".
 fn told(error: &libc::sock_extended_err) -> Option<Told> {
     match (error.ee_origin, error.ee_type, error.ee_code) {
         (libc::SO_EE_ORIGIN_ICMP, 3, 4) | (libc::SO_EE_ORIGIN_ICMP6, 2, _) => {

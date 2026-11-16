@@ -535,6 +535,33 @@ else
     fi
 fi
 
+# A traceroute's first hop through Watch (ADR 0044, unit 11b). Watch is not a hop: the shell's ping with a time to live
+# of 1 leaves the phone with 1, and the first router's "time to live exceeded" reaches the shell from that router, as
+# without Watch. It must come from an address other than 1.1.1.1: before, every error from the path was dropped, and
+# Watch's request left with its own 64. ping prints the sender on the error's line, as "From 10.0.2.2: icmp_seq=1 Time to
+# live exceeded" or with a name before the address in brackets; the last address on that line is the sender. The 42nd
+# counter counts the "time exceeded" Watch passed on. A network beneath that sends none, as an emulator's NAT may not,
+# is reported, not required. Each output is read whole before it is parsed.
+exceeded_counter() {
+    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" | tr -d '\r' | sed -n 's/^ *counters //p' | awk '{print $42}'
+}
+if [ "${unsupported1:-0}" != "${unsupported0:-0}" ]; then
+    echo "skipped: a ping with a time to live of 1, as this phone gives Watch no ICMP socket"
+else
+    exceeded0=$(exceeded_counter)
+    traced=$(device 12 "ping -c 1 -t 1 -W 3 1.1.1.1")
+    exceeded1=$(exceeded_counter)
+    exceeded_line=$(grep -i -m1 'exceeded' <<<"$traced" || true)
+    if [ -n "$exceeded_line" ]; then
+        router=$(grep -oE '([0-9]{1,3}[.]){3}[0-9]{1,3}' <<<"$exceeded_line" | tail -n 1 || true)
+        [ -n "$router" ] && [ "$router" != 1.1.1.1 ] ||
+            fail "a ping with a time to live of 1 was told its time ran out by ${router:-no address}, not by a router on the path: $exceeded_line"
+        echo "ok: a ping with a time to live of 1 is told its time ran out by the first router, $router, as without Watch (counted: ${exceeded0:-?}, then ${exceeded1:-?})"
+    else
+        echo "not seen: this network sends no \"time to live exceeded\" for a time to live of 1 (counted: ${exceeded0:-?}, then ${exceeded1:-?}); the shell's ping said: $(head -n 4 <<<"$traced" | paste -sd ' ')" | cut -c1-400
+    fi
+fi
+
 # The tunnel's MTU follows the network beneath (ADR 0044, decision 5 as amended): Watch reads the first hop's MTU of each IP
 # version from the kernel and gives the tunnel the smaller, within 1,280 and 1,500; its dump says what it chose and what it
 # read. The interface that holds the tunnel's address must carry that MTU. On the emulator both networks are 1,500. Each

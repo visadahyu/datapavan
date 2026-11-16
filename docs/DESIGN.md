@@ -830,6 +830,20 @@ the Android 15 emulator, a connection kept open passed a setup with nothing chan
 passed. How it is
 built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
+Traceroute through Watch, 2026-11-16 (unit 11b, ADR 0044 decision 5), built by a fresh agent from a written brief.
+Watch is no longer a hop: an app's ping, and its UDP datagram on the direct path, leave with the app's own time to
+live or hop limit, what comes back reaches the app with the one it arrived with, and the errors the path sends, a
+router's "time exceeded" and "destination unreachable" with its code among them, reach the app from the router or
+host that sent them. So `ping -t` and a traceroute through Watch see the path, where before they saw the destination
+at every hop, and a ping that met an error waited for its timeout. A ping's error quotes the app's own request, by
+which its kernel and `ping` match it. At most one error passes for each request or datagram the app sent, so that one
+forged for a destination never sent to is dropped and counted; an error the phone's own kernel sends from its address
+still comes as if from the destination, which the app's kernel takes. Echo's bytes are now in the engine's byte
+counters. In the network lab, a router's errors are injected from an address the namespace does not hold, and the
+hop limits read on both sides, IPv4 and IPv6; the emulator check pings with a time to live of 1 and reports a network
+that sends no such error. Not yet run on the emulator or a phone. How it is built:
+[ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
+
 | # | Milestone | Done when |
 |---|---|---|
 | W1 | Watch's skeleton | A second Gradle module, `:watch`, package `org.visadahyu.datapavan.watch`, signed with the same key. Both APKs come from one build, CI is green, and each is reproducible on its own. The build fails if the audit app gains `INTERNET`, as now, or if Watch's manifest holds anything outside its permissions ADR. Watch opens on the emulator and the A40 with strings in all eight languages, RTL and pseudo-locales from the start, and an icon from the brand marks. Its tunnel starts and stops. Since ADR 0045, `:watch` is a library that only Datapavan Advanced includes; Advanced is built from `:app` with `-Pdatapavan.edition=advanced`, and the package `org.visadahyu.datapavan.watch` is dropped before its first release. |
