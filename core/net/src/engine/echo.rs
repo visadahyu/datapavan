@@ -16,7 +16,8 @@
 //! unit, and counted.
 //!
 //! Echo is not a flow: the connection log gets no record of it, and the log's format is unchanged.
-//! The counters are all that is kept of it.
+//! The counters are all that is kept of it: since unit 11b its bytes too, in the engine's byte counters,
+//! as Android counts them to Watch's own sockets.
 
 use super::errors::{self, Queued, Tally};
 use super::udp::{network_moved, with_buffer};
@@ -303,7 +304,7 @@ impl Loop {
             // The kernel writes the socket's own identifier and the checksum into the request.
             Next::Send(socket, to) => {
                 let sent = socket.send(message, SocketAddr::new(to, 0), request.hops);
-                count_sent(&self.shared, sent.is_ok());
+                count_sent(&self.shared, &sent);
             }
             Next::Open(number) => {
                 tokio::spawn(carry(
@@ -321,17 +322,19 @@ impl Loop {
     }
 }
 
-/// Counts a request that left, or one whose socket could not send it, as when its buffer is full.
-fn count_sent(shared: &Shared, sent: bool) {
+/// Counts a request that left, with its bytes up (ADR 0044, unit 11b), or one whose socket could not
+/// send it, as when its buffer is full. Its bytes are what the ping socket sent, the ICMP message,
+/// header and data, as UDP's are what its sockets send: Android counts them, with their IP headers, to
+/// Watch, whose own counters left them out before.
+fn count_sent(shared: &Shared, sent: &io::Result<usize>) {
     let counters = &shared.counters;
-    Counters::add(
-        if sent {
-            &counters.echo_carried
-        } else {
-            &counters.echo_dropped
-        },
-        1,
-    );
+    match sent {
+        Ok(n) => {
+            Counters::add(&counters.echo_carried, 1);
+            Counters::add(&counters.bytes_up, *n as u64);
+        }
+        Err(_) => Counters::add(&counters.echo_dropped, 1),
+    }
 }
 
 /// The task of one ping socket: makes and protects it, sends the requests that waited for it, then
@@ -378,7 +381,7 @@ async fn carry(
     }
     let to = SocketAddr::new(target, 0);
     for (message, hops) in held {
-        count_sent(&shared, socket.send(&message, to, hops).is_ok());
+        count_sent(&shared, &socket.send(&message, to, hops));
     }
     let idle = shared.limits.echo_idle;
     loop {
@@ -426,9 +429,10 @@ async fn carry(
                 for error in told {
                     send_to_app(&tun, &shared, &error).await;
                 }
-                for reply in replies {
+                for (reply, read) in replies {
                     // Counted before it is written: an app that reads it may read the counters next.
                     Counters::add(&shared.counters.echo_replies, 1);
+                    Counters::add(&shared.counters.bytes_down, read as u64);
                     send_to_app(&tun, &shared, &reply).await;
                 }
                 if failed {
@@ -519,14 +523,15 @@ fn ping_socket(v4: bool) -> io::Result<Socket> {
 
 /// The replies a ping socket holds, read into `buffer`, each rebuilt for the app: from the address it
 /// pinged, with its own echo identifier, the sequence number and data kept, and the hop limit it
-/// arrived with. The kernel hands a ping socket every echo reply that bears its identifier, from
-/// wherever it comes: only the target's are the app's. `true` when the socket failed.
+/// arrived with; each with how many bytes the socket read, the ICMP message, for the byte counters.
+/// The kernel hands a ping socket every echo reply that bears its identifier, from wherever it comes:
+/// only the target's are the app's. `true` when the socket failed.
 fn receive(
     socket: &UdpSocket,
     buffer: &mut [u8],
     (app, id, destination): Key,
     target: IpAddr,
-) -> (Vec<Vec<u8>>, bool) {
+) -> (Vec<(Vec<u8>, usize)>, bool) {
     let reply = if target.is_ipv4() {
         ECHO_REPLY
     } else {
@@ -555,7 +560,7 @@ fn receive(
             if let Some(hops) = arrived {
                 packet::set_hops(&mut packet, hops);
             }
-            replies.push(packet);
+            replies.push((packet, n));
         }
     }
     (replies, false)

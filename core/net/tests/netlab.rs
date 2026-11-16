@@ -3412,3 +3412,46 @@ fn a_routers_time_exceeded_reaches_the_apps_ping_from_the_router() -> Outcome {
         },
     )
 }
+
+const BYTES_UP: usize = 2;
+const BYTES_DOWN: usize = 3;
+
+/// ADR 0044, unit 11b: echo's bytes are in the engine's byte counters, up and down, as Android counts
+/// them to Watch: what the ping socket sends and reads, the ICMP message, header and data, as UDP's are
+/// what its sockets carry. A ping of 20 bytes of data is 28 each way, here the first, which waits for
+/// its socket, and the next; before, echo counted none. IPv4 and IPv6.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn echos_bytes_are_counted_both_ways() -> Outcome {
+    lab(
+        "echos_bytes_are_counted_both_ways",
+        &Limits::default(),
+        |engine| async move {
+            ipv6_here()?;
+            let data = b"twenty bytes of data";
+            for (server, tunnel, id, total) in [
+                (SERVER_IP, IpAddr::V4(Addresses::COMMON.tun4), 4831, 56),
+                (
+                    IpAddr::V6(SERVER6),
+                    IpAddr::V6(Addresses::COMMON.tun6),
+                    4832,
+                    112,
+                ),
+            ] {
+                let app =
+                    UdpSocket::from_std(std::net::UdpSocket::from(ping_socket_at(tunnel, id)?))?;
+                for sequence in [1, 2] {
+                    ping(&app, server, sequence, data).await?;
+                    assert_eq!(pong(&app).await?, (id, sequence, data.to_vec(), server));
+                }
+                let counters = engine.counters();
+                assert_eq!(
+                    (counters[BYTES_UP], counters[BYTES_DOWN]),
+                    (total, total),
+                    "{server}"
+                );
+            }
+            Ok(())
+        },
+    )
+}
