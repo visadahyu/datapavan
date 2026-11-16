@@ -339,19 +339,17 @@ class WatchVpnService : VpnService() {
     private fun start(intent: Intent?) {
         if (active) return
         onlyApps = intent?.getStringExtra(EXTRA_ONLY_APPS)?.takeIf { debuggable }?.split(',')?.filter { it.isNotBlank() }
+        // The chain before the engine, so that a chained app's first packet goes through the tool (W6,
+        // ADR 0044, unit 12b), and before the tunnel too: from establish() on the apps' packets wait in
+        // it until the engine reads them, and setting the chain reads Watch's settings and the tool table
+        // and may use the Keystore. It needs no tunnel: with no engine running, Watch's native side keeps
+        // the chain, nativeChain says false, which applyChain does not read, and the first engine starts
+        // with it. The screen shows the chain's settings and whether the tunnel runs, neither of which
+        // this changes. A start that fails, at establish() or after, stops, which forgets the chain.
+        applyChain()
         val established = establish()
         // null: the user's consent is missing or was withdrawn.
-        if (established == null) {
-            stop()
-            return
-        }
-        // The chain before the engine, so that a chained app's first packet goes through the tool (W6,
-        // ADR 0044, unit 12b): the engine reads the tunnel from nativeStart on. With no engine running,
-        // Watch's native side keeps the chain, nativeChain says false, which applyChain does not read,
-        // and the first engine starts with it; the screen shows the chain's settings and whether the
-        // tunnel runs, neither of which this changes. A start that fails stops, which forgets the chain.
-        applyChain()
-        if (!startEngine(established)) {
+        if (established == null || !startEngine(established)) {
             stop()
             return
         }
