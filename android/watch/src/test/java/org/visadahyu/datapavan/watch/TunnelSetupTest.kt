@@ -24,8 +24,13 @@ class TunnelSetupTest {
         assertEquals("the same list for the same set, so Android keeps the network", taken, handed(other).second)
     }
 
+    /**
+     * AOSP's `Builder` takes a package no longer installed and keeps its name; a maker's might refuse it,
+     * with `NameNotFoundException`, as this fake `Builder` does: the list kept is then the one the
+     * `Builder` took, without it.
+     */
     @Test
-    fun anAppNoLongerInstalledLeavesTheListAsAndroidHasIt() {
+    fun anAppABuilderRefusesLeavesTheListAsAndroidHasIt() {
         val (builder, taken) = handed(setOf("org.example.chat", "org.example.removed", "org.example.bank"))
         assertEquals(listOf("org.example.bank", "org.example.chat"), builder)
         assertEquals(builder, taken)

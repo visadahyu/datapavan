@@ -24,8 +24,11 @@ internal data class TunnelSetup(
         /**
          * Hands [packages] to [add] in sorted order, and gives the ones it took, in that order. The same
          * set so gives Android the same list at each setup, whatever order the set comes in, as from
-         * `SharedPreferences.getStringSet`; [add] refuses a package that is no longer installed, which
-         * Android's list then lacks too.
+         * `SharedPreferences.getStringSet`'s `HashSet`, which was what changed the list when the apps had
+         * not. AOSP's `Builder` takes a package no longer installed too, and keeps its name in the list
+         * (its `verifyApp` ignores a missing one); [add] says false where a `Builder` refused one, as an
+         * Android maker's might, with `NameNotFoundException`, so that the list kept is the one Android
+         * has either way.
          */
         fun added(packages: Iterable<String>, add: (String) -> Boolean): List<String> {
             val taken = mutableListOf<String>()
