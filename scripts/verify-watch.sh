@@ -567,8 +567,8 @@ fi
 # A tunnel set up again with the same addresses and apps, as for a new MTU, keeps its VPN network on Android and is
 # handed to the running engine, which keeps its flows (ADR 0044, unit 12b). A connection to the test server is opened
 # through Watch and kept open: one nc sends an HTTP request, waits until a marker file is there (at most 60 s),
-# then sends a second on the same connection, kept alive, and writes the answers to a file. Android 15's shell may
-# not make a FIFO in /data/local/tmp, so the requests come from one shell's output rather than a FIFO. A debug
+# then, only if it is there, sends a second on the same connection, kept alive, and writes the answers to a file.
+# Android 15's shell may not make a FIFO in /data/local/tmp, so the requests come from one shell's output. A debug
 # command sets the tunnel up again with nothing changed: Android makes a new interface, and the old one goes once
 # the engine has closed it. Then the marker lets the second request go: it must be answered on the same nc
 # connection, and the tunnel keep the MTU Watch chose (the first-hop values beside it may change with a measure).
@@ -592,7 +592,7 @@ tunnel_interfaces() {
     awk -v address="$(tunnel_address)" '$4 ~ ("^" address "/") { print $2 }' <<<"$links"
 }
 device 5 "rm -f $KEPT_GO $KEPT_OUT" >/dev/null
-adb shell "(printf '$KEPT_REQUEST'; i=0; while [ ! -e $KEPT_GO ] && [ \$i -lt 300 ]; do sleep 0.2; i=\$((i + 1)); done; printf '$KEPT_REQUEST'; sleep 5) | nc $HOST $PORT > $KEPT_OUT" </dev/null >/dev/null 2>&1 &
+adb shell "(printf '$KEPT_REQUEST'; i=0; while [ ! -e $KEPT_GO ] && [ \$i -lt 300 ]; do sleep 0.2; i=\$((i + 1)); done; [ -e $KEPT_GO ] && printf '$KEPT_REQUEST'; sleep 5) | nc $HOST $PORT > $KEPT_OUT" </dev/null >/dev/null 2>&1 &
 KEPT=$!
 kept_answered 1 || fail "a connection kept open through Watch got no answer to its first request; the device has: $(device 5 "ls -l $KEPT_OUT; head -c 300 $KEPT_OUT; ps -A -o PID,NAME | grep -E ' (nc|sleep)\$'" | tr '\n' ' ')"
 adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" setup-again </dev/null | grep -q '^ *setup-again' ||
@@ -607,6 +607,8 @@ for _ in $(seq 1 20); do
     sleep 1
 done
 [ -n "$moved" ] || fail "the tunnel was not set up again within 20 s, or its old interface $interface stayed: $(tunnel_interfaces | paste -sd ' ')"
+# Still one answer: the second request goes only once the marker is there, never when the device's wait ends.
+kept_answered 1 || fail "the connection kept open through Watch had other than one answer before its second request: $(device 5 "grep -o pong $KEPT_OUT | wc -l")"
 kept_ask
 kept_answered 2 || fail "the connection kept open through Watch carried no answer after the tunnel was set up again with the same addresses (interface $interface, then $moved)"
 mtu_after=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" </dev/null | tr -d '\r' | sed -n 's/^ *mtu //p')

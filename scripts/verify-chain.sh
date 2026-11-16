@@ -422,15 +422,16 @@ echo "ok: with the tool stopped, the screen says the apps wait, and its switch t
 
 # An app left out of the tunnel (ADR 0041), chosen on the screen as a user would: Watch sets its tunnel up
 # again, the app still reaches the server, and Watch sees no new traffic of it. Taken back, Watch sees it
-# again. The tunnel keeps its addresses, so the running engine keeps its flows, the app's earlier ones among
-# them (ADR 0044, unit 12b): what counts is a flow that was not there before, by its protocol and the app's
-# end of it.
+# again. Whichever way the setup went, a new engine (the apps left out changed, so Android brings up a new VPN
+# network, ADR 0044, unit 12b) or the running one keeping its flows, only a flow that was not there before
+# counts, by its protocol, the app's end and the destination, so that a UDP socket reused toward another
+# destination counts too.
 workload_flows_now() { flows | grep " $WORKLOAD_UID " || true; }
 # The workload's flows now that were not among $1.
 new_workload_flows() {
     local now
     now=$(workload_flows_now)
-    awk 'NR == FNR { seen[$1 " " $2] = 1; next } NF && !(($1 " " $2) in seen)' <(printf '%s\n' "$1") <(printf '%s\n' "$now")
+    awk 'NR == FNR { seen[$1 " " $2 " " $3] = 1; next } NF && !(($1 " " $2 " " $3) in seen)' <(printf '%s\n' "$1") <(printf '%s\n' "$now")
 }
 workload_reaches() {
     local before
