@@ -621,7 +621,9 @@ fi
 # established): the kept connection's sockets go then, the shell's own among them, and no VPN could keep it. Watch's
 # engine lost its listener with them, and refused every connection after, until it bound its listener anew (ADR 0044,
 # unit 12b). So when the kept connection carries no second answer, a new connection through Watch must pass right
-# after, and Android's log tells a destroy by netd, which is reported and passes, from a stall, which fails.
+# after, and Android's log tells a destroy by netd, which is reported and passes, from a stall, which fails. A destroy
+# passes only if the running engine took the tunnel, as Watch's dump counts ("setups kept N"): a new engine, the
+# fallback when a swap fails, ends the connections itself, which a destroy by netd must not hide.
 KEPT_REQUEST='GET /ping HTTP/1.1\r\nHost: watch\r\n\r\n'
 kept_ask() { device 5 "touch $KEPT_GO" >/dev/null; }
 # Waits up to 10 s until the kept connection has had $1 answers.
@@ -649,6 +651,10 @@ netd_destroyed() {
     pattern="Destroyed [0-9]+ sockets on ${2//./\\.}([^0-9.]|\$)"
     grep -oE "$pattern.*" <<<"$log" | head -3 | paste -sd ';' - | sed 's/;/; /g' || true
 }
+# Watch's count of setups, "kept N anew M": those the running engine took, and those a new engine took.
+setups_line() {
+    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" </dev/null | tr -d '\r' | sed -n 's/^ *setups //p'
+}
 # The interfaces that hold the tunnel's IPv4 address, one a line.
 tunnel_interfaces() {
     local links
@@ -661,8 +667,9 @@ KEPT=$!
 # The device waits 60 s at most for the marker (300 times 0.2 s), from about now.
 kept_since=$SECONDS
 kept_answered 1 || fail "a connection kept open through Watch got no answer to its first request; the device has: $(device 5 "ls -l $KEPT_OUT; head -c 300 $KEPT_OUT; ps -A -o PID,NAME | grep -E ' (nc|sleep)\$'" | tr '\n' ' ')"
-# Android's log is read from here on, by the device's own clock.
+# Android's log is read from here on, by the device's own clock, and Watch's count of setups.
 setup_since=$(adb shell date +%s </dev/null | tr -d '\r')
+setups_before=$(setups_line)
 adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" setup-again </dev/null | grep -q '^ *setup-again' ||
     fail "the debug command to set the tunnel up again failed"
 moved=""
@@ -689,6 +696,11 @@ if ! kept_answered 2; then
         fail "the connection kept open through Watch carried no answer after the tunnel was set up again with the same addresses (interface $interface, then $moved), and a new connection through Watch right after got none either: the engine did not take it (netd's destroys on the tunnel's address: ${kept_destroyed:-none})"
     [ -n "$kept_destroyed" ] ||
         fail "the connection kept open through Watch carried no answer after the tunnel was set up again with the same addresses (interface $interface, then $moved; the marker came after $asked s, within the device's 60 s wait for it), and netd destroyed no socket on the tunnel's address: a stall (a new connection through Watch passed)"
+    read -r _ kept0 _ anew0 <<<"$setups_before"
+    setups_after=$(setups_line)
+    read -r _ kept1 _ anew1 <<<"$setups_after"
+    [ -n "$kept0" ] && [ "${kept1:-}" = "$((kept0 + 1))" ] && [ "${anew1:-}" = "$anew0" ] ||
+        fail "netd destroyed the sockets on the tunnel's address ($kept_destroyed), but the running engine did not take the tunnel set up again: Watch's setups went from '$setups_before' to '$setups_after', so the kept connection may have ended with a new engine"
     note="netd destroyed the sockets on the tunnel's address when the tunnel was set up again with the same addresses ($kept_destroyed): the connection kept open through Watch ended with them, as Android ends it; a new connection through Watch passed right after"
     echo "::warning title=netd destroyed the tunnel's sockets::$note"
     [ -z "${GITHUB_STEP_SUMMARY:-}" ] || echo "- verify-watch.sh: $note (ADR 0044, unit 12b)" >>"$GITHUB_STEP_SUMMARY"
