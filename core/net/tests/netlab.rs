@@ -3068,8 +3068,11 @@ fn answers_reach_the_app_with_the_hop_limit_they_arrived_with() -> Outcome {
     )
 }
 
-/// A router on the lab's IPv6 path, beside the "internet" (scripts/netlab-enter.py).
-const OTHER6: Ipv6Addr = Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 0x10);
+/// Routers on the path, of no address of the namespace's own, as a router on a phone's path is of none
+/// of the phone's: the engine tells the app of an error from one of the phone's own addresses as if
+/// from the destination, since the app's kernel would drop it as a martian source.
+const ROUTER: Ipv4Addr = Ipv4Addr::new(192, 0, 2, 1);
+const ROUTER6: Ipv6Addr = Ipv6Addr::new(0x2001, 0xdb8, 2, 0, 0, 0, 0, 1);
 const TIME_EXCEEDED: usize = 41;
 const PATH_UNREACHABLE: usize = 42;
 const ECHO_ERRORS: usize = 43;
@@ -3077,19 +3080,23 @@ const ERRORS_UNASKED: usize = 44;
 
 /// A router or host at `router` on the path sends the engine's socket at `to` the ICMP error `kind`
 /// (type and code), quoting `quoted`, the packet the engine sent, as a router quotes the packet it
-/// could not pass on; it leaves with the hop limit 9. A raw socket of the namespace's root sends it; for
-/// `ICMPv6` the kernel makes the checksum itself.
+/// could not pass on; it leaves with the hop limit 9. A raw socket of the namespace's root sends it,
+/// whole, its IP header included (`IP_HDRINCL`, `IPV6_HDRINCL`), so that it comes from an address the
+/// namespace does not hold.
 fn path_says(router: IpAddr, (to, quoted): (IpAddr, &[u8]), kind: (u8, u8)) -> Outcome {
-    let error = packet::path_error(quoted, (router, to), kind, [0; 4]).ok_or("no error built")?;
-    let (domain, protocol, header) = if router.is_ipv4() {
-        (Domain::IPV4, Protocol::ICMPV4, 20)
+    let mut error =
+        packet::path_error(quoted, (router, to), kind, [0; 4]).ok_or("no error built")?;
+    packet::set_hops(&mut error, 9);
+    let raw = if router.is_ipv4() {
+        let raw = Socket::new(Domain::IPV4, Type::RAW, Some(Protocol::ICMPV4))?;
+        raw.set_header_included_v4(true)?;
+        raw
     } else {
-        (Domain::IPV6, Protocol::ICMPV6, 40)
+        let raw = Socket::new(Domain::IPV6, Type::RAW, Some(Protocol::ICMPV6))?;
+        raw.set_header_included_v6(true)?;
+        raw
     };
-    let raw = Socket::new(domain, Type::RAW, Some(protocol))?;
-    raw.bind(&SocketAddr::new(router, 0).into())?;
-    set_hops(&raw, router.is_ipv4(), 9)?;
-    raw.send_to(&error[header..], &SocketAddr::new(to, 0).into())?;
+    raw.send_to(&error, &SocketAddr::new(to, 0).into())?;
     Ok(())
 }
 
@@ -3210,10 +3217,10 @@ fn a_routers_time_exceeded_reaches_the_apps_datagram_from_the_router() -> Outcom
             // With the errors dropped so far once the second for one datagram is: the forged ones and
             // the second ones, one of each in each IP version.
             for (at, router, elsewhere, dropped) in [
-                (SERVER_IP, IpAddr::V4(OTHER), IpAddr::V4(SILENT), 2),
+                (SERVER_IP, IpAddr::V4(ROUTER), IpAddr::V4(SILENT), 2),
                 (
                     IpAddr::V6(SERVER6),
-                    IpAddr::V6(OTHER6),
+                    IpAddr::V6(ROUTER6),
                     IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 0x99)),
                     4,
                 ),
@@ -3274,6 +3281,37 @@ fn a_routers_time_exceeded_reaches_the_apps_datagram_from_the_router() -> Outcom
     )
 }
 
+/// An error the engine's own kernel sends from one of the phone's addresses, as "host unreachable" when a
+/// neighbour on the network beneath does not answer, reaches the app as if from the destination, as
+/// before unit 11b: the app's kernel would drop a packet from the phone's own address coming in on the
+/// tunnel as a martian source. Here the namespace's 198.51.100.10 stands for the phone's address (the
+/// lab's tun0 takes local sources, so the test sees what the engine chose). IPv4: the lab's IPv6 holds no
+/// address of its own beside the destination that its rules route as local.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn an_error_from_the_phones_own_address_comes_from_the_destination() -> Outcome {
+    lab(
+        "an_error_from_the_phones_own_address_comes_from_the_destination",
+        &Limits::default(),
+        |_engine| async move {
+            let (server, mapping) = reporting_echo(SERVER_IP).await?;
+            let app = erring_app(server).await?;
+            app.send_to(b"a probe", server).await?;
+            app_receive(&app).await?;
+            let mapped = timeout(STEP, mapping).await??;
+            let sent = packet::udp(mapped, server, b"a probe").ok_or("no datagram built")?;
+            path_says(IpAddr::V4(OTHER), (mapped.ip(), &sent), (3, 1))?;
+            let heard = told_from_path(&app).await?;
+            let kinds: Vec<_> = heard.iter().map(|e| (e.kind, e.about, e.from)).collect();
+            assert_eq!(
+                kinds,
+                [((ICMP_ORIGIN, 3, 1), Some(server), Some(SERVER_IP))]
+            );
+            Ok(())
+        },
+    )
+}
+
 /// The echo identifier of the engine's one ping socket of the IP version `v4` or IPv6, from the
 /// namespace's table: the only one not bound to an address.
 fn engine_ping_id_of(v4: bool) -> Result<u16, Box<dyn std::error::Error>> {
@@ -3320,14 +3358,14 @@ fn a_routers_time_exceeded_reaches_the_apps_ping_from_the_router() -> Outcome {
                 (
                     SERVER_IP,
                     IpAddr::V4(Addresses::COMMON.tun4),
-                    IpAddr::V4(OTHER),
+                    IpAddr::V4(ROUTER),
                     4821,
                     3,
                 ),
                 (
                     IpAddr::V6(SERVER6),
                     IpAddr::V6(Addresses::COMMON.tun6),
-                    IpAddr::V6(OTHER6),
+                    IpAddr::V6(ROUTER6),
                     4822,
                     6,
                 ),

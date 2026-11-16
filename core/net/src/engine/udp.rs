@@ -2458,7 +2458,7 @@ async fn associate(shared: &Arc<Shared>, chain: &Chain) -> io::Result<(UdpSocket
 /// sends nothing, sends from that very address; one connected to any other gets the address of its way
 /// out, and a broadcast address refuses it. A socket merely bound to the address would not tell, since
 /// Linux lets a socket bind a broadcast address too.
-fn on_the_phone(relay: SocketAddr) -> bool {
+pub(super) fn on_the_phone(relay: SocketAddr) -> bool {
     let relay = SocketAddr::new(relay.ip().to_canonical(), relay.port());
     if relay.ip().is_loopback() {
         return true;

@@ -8,6 +8,7 @@
 //! app sent. nix reads that queue with safe functions: the engine has no unsafe code (ADR 0006).
 
 use super::Counters;
+use super::udp::on_the_phone;
 use crate::packet;
 use nix::errno::Errno;
 use nix::libc;
@@ -162,11 +163,18 @@ fn v6_address(address: libc::sockaddr_in6) -> Option<IpAddr> {
 /// Whom an error reaches the app from: the router or host that sent it, `offender`, as it would without
 /// Watch; but the address the app knows, `shown`, where the kernel names no sender, where the sender is
 /// the very address the engine sent to, `target`, which the app may know by another (the tunnel's DNS
-/// address for the network's resolver), or where it is no address an error may come from.
+/// address for the network's resolver), where it is no address an error may come from, or where it is
+/// one of the phone's own. The engine's kernel sends an error from the phone's address on the network
+/// beneath when it answers itself, as with "host unreachable" when a neighbour does not answer; the
+/// app's kernel would drop such a packet coming in on the tunnel as a martian source, and the app then
+/// wait for its timeout, as it did not before this unit.
 pub(super) fn sender(offender: Option<IpAddr>, target: IpAddr, shown: IpAddr) -> IpAddr {
     match offender {
         Some(from)
-            if from != target && from.is_ipv4() == shown.is_ipv4() && packet::unicast(from) =>
+            if from != target
+                && from.is_ipv4() == shown.is_ipv4()
+                && packet::unicast(from)
+                && !on_the_phone(SocketAddr::new(from, 9)) =>
         {
             from
         }
@@ -317,8 +325,8 @@ mod tests {
     }
 
     /// An error reaches the app from the router or host that sent it; from the address the app knows
-    /// where none is named, where it came from the very address the engine sent to, or where its sender
-    /// is no address an error may come from.
+    /// where none is named, where it came from the very address the engine sent to, where its sender is
+    /// no address an error may come from, or where it is the phone's own.
     #[test]
     fn an_error_reaches_the_app_from_whoever_sent_it() {
         let router = IpAddr::from([192, 0, 2, 1]);
@@ -331,6 +339,8 @@ mod tests {
         assert_eq!(sender(Some(target), target, shown), shown);
         let multicast = IpAddr::from([224, 0, 0, 1]);
         assert_eq!(sender(Some(multicast), target, shown), shown);
+        let own = IpAddr::from([127, 0, 0, 1]);
+        assert_eq!(sender(Some(own), target, shown), shown, "the phone's own");
         let unspecified = IpAddr::from([0, 0, 0, 0]);
         assert_eq!(sender(Some(unspecified), target, shown), shown);
         let v6 = IpAddr::from([0x2001, 0xdb8, 0, 0, 0, 0, 0, 1]);
