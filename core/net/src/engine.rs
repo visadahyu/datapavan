@@ -1089,6 +1089,13 @@ impl Loop {
             }
         };
         // Nothing enters the old tunnel any more, so this ends once its queue is read.
+        //
+        // The order across the swap: `replace` has woken the writes refused in the gap, but this
+        // thread runs them only when the loop next yields, at the latest once the drain is done, so
+        // they reach the new tunnel among or after what the handling of the drained packets writes
+        // itself, and before what those packets' own tasks, started later, write: a reset refused in
+        // the gap comes before the answer to a SYN still queued here (the third round's check found
+        // so). Tokio's order of running woken tasks is what holds it; nothing here orders them further.
         while let Ok(n) = old.try_recv(buffer) {
             if n == 0 {
                 break;
