@@ -2443,10 +2443,10 @@ fn descriptors_of(name: &str) -> Result<usize, Box<dyn std::error::Error>> {
     Ok(count)
 }
 
-/// A server on the "internet" that sends back each read, for as long as the connection lasts, and
-/// counts the connections it accepted.
-async fn echoing_server() -> io::Result<(SocketAddr, Arc<AtomicU64>)> {
-    let listener = TcpListener::bind((SERVER, 0)).await?;
+/// A server on the "internet" at `ip` that sends back each read, for as long as the connection lasts,
+/// and counts the connections it accepted.
+async fn echoing_server(ip: IpAddr) -> io::Result<(SocketAddr, Arc<AtomicU64>)> {
+    let listener = TcpListener::bind((ip, 0)).await?;
     let at = listener.local_addr()?;
     let accepted = Arc::new(AtomicU64::new(0));
     let counted = Arc::clone(&accepted);
@@ -2499,7 +2499,7 @@ fn a_tunnel_set_up_again_with_the_same_addresses_keeps_every_flow() -> Outcome {
         "a_tunnel_set_up_again_with_the_same_addresses_keeps_every_flow",
         &Limits::default(),
         |engine| async move {
-            let (server, accepted) = echoing_server().await?;
+            let (server, accepted) = echoing_server(SERVER_IP).await?;
             let mut connection = app_connect(server).await?;
             assert_eq!(exchange(&mut connection, b"before").await?, b"before");
             let app = app_socket().await?;
@@ -2581,7 +2581,7 @@ fn a_chained_app_goes_on_through_the_tool_across_a_tunnel_set_up_again() -> Outc
         |engine| async move {
             let tool = proxy(Settings::default()).await?;
             engine.chain(Some(lab_chain(tool.address)));
-            let (server, accepted) = echoing_server().await?;
+            let (server, accepted) = echoing_server(SERVER_IP).await?;
             let mut connection = app_connect(server).await?;
             assert_eq!(exchange(&mut connection, b"before").await?, b"before");
             let reporter = source_reporter(SERVER).await?;
@@ -2620,6 +2620,43 @@ fn a_chained_app_goes_on_through_the_tool_across_a_tunnel_set_up_again() -> Outc
                 2,
                 "the server accepted a connection that was not the tool's"
             );
+            Ok(())
+        },
+    )
+}
+
+/// Unit 12b, through IPv6: an app's TCP connection over IPv6 goes on across a tunnel set up again on
+/// the same network, as its IPv4 one does: Android's in-place update moves the tunnel's IPv6 address
+/// too, and the engine's listener on it keeps the connection it accepted. The server accepted no other,
+/// and the engine began no other TCP flow. Where the lab has no IPv6, this test fails and says so.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn an_ipv6_connection_goes_on_across_a_tunnel_set_up_again() -> Outcome {
+    lab(
+        "an_ipv6_connection_goes_on_across_a_tunnel_set_up_again",
+        &Limits::default(),
+        |engine| async move {
+            ipv6_here()?;
+            let (server, accepted) = echoing_server(IpAddr::V6(SERVER6)).await?;
+            let socket = TcpSocket::new_v6()?;
+            socket.bind(SocketAddr::from((Addresses::COMMON.tun6, 0)))?;
+            let mut connection = within("an app's IPv6 connection", socket.connect(server)).await?;
+            assert_eq!(exchange(&mut connection, b"before").await?, b"before");
+            let before = engine.counters();
+
+            set_up_again(&engine).await?;
+
+            assert_eq!(
+                exchange(&mut connection, b"after").await?,
+                b"after",
+                "the IPv6 connection"
+            );
+            assert_eq!(
+                accepted.load(Ordering::Relaxed),
+                1,
+                "the server accepted another connection"
+            );
+            assert_eq!(engine.counters()[TCP_FLOWS], before[TCP_FLOWS]);
             Ok(())
         },
     )
