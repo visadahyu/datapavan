@@ -1,7 +1,7 @@
 //! The connection log's bookkeeping inside the engine (ADR 0037): each open flow's bytes, the segments
 //! of open flows at each quarter hour, each app's lookups, and the task that hands the records to Watch.
 
-use super::{DnsUse, Ech, Flow, LOG_DELAY, NamedBy, Outcome, SEGMENT_MS, Shared, lock};
+use super::{Counters, DnsUse, Ech, Flow, LOG_DELAY, NamedBy, Outcome, SEGMENT_MS, Shared, lock};
 use crate::log;
 use crate::log::Record;
 use crate::packet;
@@ -175,6 +175,30 @@ impl Shared {
         };
         let end = now_ms().max(live.start);
         self.write(segment(live, end, false));
+    }
+
+    /// A TCP flow the engine ended itself before its relay began, recorded as opened when its server
+    /// accepted, which the app saw end otherwise (ADR 0044, unit 12b, third round): refused, or reset
+    /// (`Outcome::Failed`). Its outcome becomes `outcome` in its last segment, the counters and the
+    /// flows kept, and its last segment is written, as [`Shared::finish_closed`] writes it.
+    pub(super) fn finish_as(&self, id: u64, outcome: Outcome) {
+        match lock(&self.live).get_mut(&id) {
+            Some(live) => live.flow.outcome = outcome,
+            None => return,
+        }
+        if let Some(flow) = lock(&self.flows).iter_mut().rev().find(|f| f.id == id) {
+            flow.outcome = outcome;
+        }
+        let counter = match outcome {
+            Outcome::Opened => None,
+            Outcome::Refused => Some(&self.counters.refused),
+            Outcome::Unreachable => Some(&self.counters.unreachable),
+            Outcome::Failed => Some(&self.counters.failed),
+        };
+        if let Some(counter) = counter {
+            Counters::add(counter, 1);
+        }
+        self.finish_closed(id);
     }
 
     /// A TCP flow whose rewriting is gone: its last segment holds every packet the tunnel carried for

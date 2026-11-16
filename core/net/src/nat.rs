@@ -30,8 +30,8 @@ const DRAWS: usize = 32;
 /// The engine's listener a connection's SYN was rewritten to (ADR 0044, unit 12b): its port, and its
 /// generation, how many times a listener of that IP version had stopped listening before it was bound.
 /// A listener that stopped listening, as after Android's netd destroyed the sockets on the tunnel's
-/// address, is bound anew, on another port if its own is taken, perhaps by another app's listener. A
-/// connection the relay holds is the engine's on its port for good, since the engine's own socket holds
+/// address, is bound anew on a new port, and its old port may be another app's then. A connection the
+/// relay holds is the engine's on its port for good, since the engine's own socket holds
 /// its ends there; one not yet relayed is the engine's only while its listener is the one now.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Listener {
@@ -237,14 +237,22 @@ impl Nat {
 
     /// The connection behind a fake port, if a packet to it from the tunnel's address and the port
     /// `from` may be Android's answer to it: one from the port of the listener it was rewritten to.
-    /// Whether that listener is still the engine's is the caller's to tell. Marks it as just seen.
-    pub fn answered(&mut self, port: u16, from: u16, now: Instant) -> Option<Entry> {
-        let entry = self
-            .by_fake
-            .get_mut(&port)
-            .filter(|e| e.open && e.listener.port == from)?;
-        entry.seen = now;
-        Some(*entry)
+    /// Whether that listener is still the engine's is the caller's to tell, and so is marking it as just
+    /// seen (`Nat::seen`), which only a packet that passes does: one the caller drops must not keep the
+    /// connection from the sweep.
+    #[must_use]
+    pub fn answered(&self, port: u16, from: u16) -> Option<Entry> {
+        self.by_fake
+            .get(&port)
+            .filter(|e| e.open && e.listener.port == from)
+            .copied()
+    }
+
+    /// Marks the connection behind a fake port as just seen.
+    pub fn seen(&mut self, port: u16, now: Instant) {
+        if let Some(entry) = self.by_fake.get_mut(&port) {
+            entry.seen = now;
+        }
     }
 
     /// Marks a connection's server as having accepted, and its SYN as rewritten to `listener`.
@@ -352,8 +360,8 @@ mod tests {
                 relayed: false
             }
         );
-        assert!(nat.answered(port, 4_000, now).is_some());
-        assert_eq!(nat.answered(port, 4_001, now), None, "another listener's");
+        assert!(nat.answered(port, 4_000).is_some());
+        assert_eq!(nat.answered(port, 4_001), None, "another listener's");
         assert_eq!(
             nat.by_fake(port, now).map(|e| (e.app, e.destination)),
             Some((app, server))

@@ -3870,8 +3870,8 @@ async fn app_connect_from(
 }
 
 /// ADR 0044, unit 12b: the engine's listener, destroyed as Android's netd destroys the sockets on the
-/// tunnel's address (here only the listening one), is bound anew on the same port: a new connection
-/// through the engine passes, and one it relayed before, kept open, goes on. On the Android 15
+/// tunnel's address (here only the listening one), is bound anew, on a new port: a new connection
+/// through the engine passes, and one it relayed before, kept open, goes on through the old port. On the Android 15
 /// emulator netd destroyed it when the tunnel was set up again with the same addresses, and every TCP
 /// connection through Watch was refused for the rest of the run: the accept loop had ended at its first
 /// error.
@@ -3890,7 +3890,12 @@ async fn a_destroyed_listener(engine: &Engine, v4: bool) -> Outcome {
     counted(engine, LISTENER_RECOVERIES, 1).await?;
     let mut new = app_connect_from(v4, server).await?;
     assert_eq!(exchange(&mut new, b"a new one").await?, b"a new one");
-    assert_eq!(listener_port(v4), Some(port), "the listener, on its port");
+    // The kept connection's socket holds the old port, which a port the kernel picks is never.
+    assert!(
+        listener_port(v4).is_some_and(|now| now != port),
+        "the listener: {:?}, the old port {port}",
+        listener_port(v4)
+    );
     assert_eq!(
         exchange(&mut kept, b"kept").await?,
         b"kept",
@@ -3986,8 +3991,8 @@ fn connected_to(to: SocketAddr) -> bool {
 /// every TCP socket on that address is destroyed, the engine's listener and its end of each relayed
 /// connection among them, and the apps' own. The app's connection ends at once with an error, not a
 /// hang; the server's end with a reset, from the relay, which saw the error, so that no upstream
-/// connection is left open; the listener is bound anew on its port; and a new connection through the
-/// engine passes.
+/// connection is left open; the listener is bound anew; and a new connection through the engine
+/// passes.
 async fn netd_destroys_the_sockets(engine: &Engine, v4: bool) -> Outcome {
     if !v4 {
         ipv6_here()?;
@@ -3995,7 +4000,7 @@ async fn netd_destroys_the_sockets(engine: &Engine, v4: bool) -> Outcome {
     sock_destroy_here()?;
     let (server, mut handed) = handing_server(server_ip(v4)).await?;
     let (mut app, mut server_end) = both_ends(v4, (server, &mut handed), b"before").await?;
-    let port = listener_port(v4).ok_or("the engine's listener on the tunnel's address")?;
+    listener_port(v4).ok_or("the engine's listener on the tunnel's address")?;
     let resets = engine.counters()[RESETS];
 
     destroy(&["state", "all", "src", &tunnel_filter(v4)])?;
@@ -4015,7 +4020,7 @@ async fn netd_destroys_the_sockets(engine: &Engine, v4: bool) -> Outcome {
     );
     counted(engine, LISTENER_RECOVERIES, 1).await?;
     both_ends(v4, (server, &mut handed), b"a new one").await?;
-    assert_eq!(listener_port(v4), Some(port), "the listener, on its port");
+    assert!(listener_port(v4).is_some(), "no listener");
     Ok(())
 }
 

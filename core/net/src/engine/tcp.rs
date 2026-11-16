@@ -120,9 +120,7 @@ impl Listening {
     }
 }
 
-/// A listener on `at`, and its port. `SO_REUSEADDR` is set, as tokio's own `bind` sets it: the
-/// connections a listener accepts take it from the listener, and with it a new listener can be bound on
-/// the same port while they are open, once the old one no longer listens (`bind_anew`).
+/// A listener on `at`, and its port. `SO_REUSEADDR` is set, as tokio's own `bind` sets it.
 fn bind(at: SocketAddr) -> io::Result<(TcpListener, u16)> {
     let socket = if at.is_ipv4() {
         TcpSocket::new_v4()?
@@ -161,35 +159,13 @@ impl Loop {
         let listener = listening.now();
         let flags = packet::tcp_flags(packet, parsed);
         let now = Instant::now();
-        if parsed.source.ip() == tun && parsed.destination.ip() == fake {
-            // From the port of the listener the connection was rewritten to (`Nat::answered`).
-            let (port, from) = (parsed.destination.port(), parsed.source.port());
-            let answered = lock(&self.nat).answered(port, from, now);
-            if let Some(entry) = answered {
-                let reset = flags & RST != 0;
-                // Rewritten to a listener that is gone, and never handed to the relay: whoever holds
-                // its port now may be another app (`Listening`), and only a reset passes, which ends
-                // the connection at worst, as Android's stack resets those the old listener held when
-                // it stops listening. The app's next segment ends it otherwise.
-                if !entry.relayed && entry.listener != listener && !reset {
-                    return;
-                }
-                // Back to the app as if from the real destination.
-                if packet::set_ends(packet, parsed, entry.destination, entry.app).is_some() {
-                    if let Some(bytes) = lock(&self.shared.wire).get(&port) {
-                        bytes.add_wire_down(packet.len());
-                    }
-                    if reset && !entry.relayed {
-                        self.reset_before_the_relay(port, now);
-                    }
-                    self.send(packet).await;
-                }
-                return;
-            }
-            // From the listener now, for a connection the engine forgot: dropped, as before.
-            if listener.port != 0 && from == listener.port {
-                return;
-            }
+        if parsed.source.ip() == tun
+            && parsed.destination.ip() == fake
+            && self
+                .androids_answer(packet, parsed, (flags, listener), now)
+                .await
+        {
+            return;
         }
         if parsed.source.ip() != tun {
             Counters::add(&self.shared.counters.skipped, 1);
@@ -203,7 +179,7 @@ impl Loop {
                     bytes.add_wire_up(packet.len());
                 }
                 // To the listener the connection was rewritten to: a relayed one stays on its port
-                // when a listener is bound anew on another.
+                // when a listener is bound anew.
                 if packet::set_ends(
                     packet,
                     parsed,
@@ -220,7 +196,13 @@ impl Loop {
             // them. The app is reset, as a stack that lost the connection resets it, and the upstream
             // connection with it.
             Lookup::Open { port, .. } => {
-                self.reset_before_the_relay(port, now);
+                // The log has it as the app saw it end: refused, for a SYN sent again, else reset.
+                let saw = if syn {
+                    Outcome::Refused
+                } else {
+                    Outcome::Failed
+                };
+                self.reset_before_the_relay(port, now, Some(saw));
                 self.reset(packet, parsed, flags).await;
             }
             // No listener now: refused at once, as Android's stack refuses a SYN no listener takes,
@@ -270,6 +252,55 @@ impl Loop {
         }
     }
 
+    /// A segment from the tunnel's address to the fake peer, which Android's stack sends from the
+    /// engine's listener: rewritten back to the app as if from the real destination when it may be
+    /// Android's answer to a connection, else dropped. Whether it was taken here: one that is not, from
+    /// another port than a listener's, is an app's own, to the fake peer, and goes the apps' way.
+    async fn androids_answer(
+        &self,
+        packet: &mut [u8],
+        parsed: &Packet,
+        (flags, listener): (u8, Listener),
+        now: Instant,
+    ) -> bool {
+        // A SYN without ACK: no listener sends one, only a socket of an app's on the tunnel's address
+        // connecting to the fake peer, perhaps from a port bound beside a listener's, which could pass
+        // for Android's answer to a connection not yet relayed in the moment before the kernel makes
+        // the listener's own request socket for it (third round, nit 1). Dropped.
+        if flags & SYN != 0 && flags & ACK == 0 {
+            Counters::add(&self.shared.counters.skipped, 1);
+            return true;
+        }
+        // From the port of the listener the connection was rewritten to (`Nat::answered`).
+        let (port, from) = (parsed.destination.port(), parsed.source.port());
+        let answered = lock(&self.nat).answered(port, from);
+        let Some(entry) = answered else {
+            // From the listener now, for a connection the engine forgot: dropped, as before.
+            return listener.port != 0 && from == listener.port;
+        };
+        let reset = flags & RST != 0;
+        // Rewritten to a listener that is gone, and never handed to the relay: whoever holds its port
+        // now may be another app (`Listening`), and only a reset passes, which ends the connection at
+        // worst, as Android's stack resets those the old listener held when it stops listening. The
+        // app's next segment ends it otherwise.
+        if !entry.relayed && entry.listener != listener && !reset {
+            return true;
+        }
+        // Back to the app as if from the real destination. Only a segment that passes keeps the
+        // connection from the sweep: one dropped above leaves it to be forgotten.
+        if packet::set_ends(packet, parsed, entry.destination, entry.app).is_some() {
+            lock(&self.nat).seen(port, now);
+            if let Some(bytes) = lock(&self.shared.wire).get(&port) {
+                bytes.add_wire_down(packet.len());
+            }
+            if reset && !entry.relayed {
+                self.reset_before_the_relay(port, now, None);
+            }
+            self.send(packet).await;
+        }
+        true
+    }
+
     /// Resets the app's end of a connection the engine cannot carry, as a real stack answers a
     /// segment of a connection it does not have (RFC 9293 3.10.7.1): a SYN with a reset that
     /// acknowledges it, so that the app reads "refused", and any other segment but a reset with one
@@ -300,16 +331,21 @@ impl Loop {
     /// listener it was rewritten to is gone, and the engine resets the app. The upstream connection
     /// waiting for the handover would otherwise stay open, the server's end with it, until the sweep
     /// forgets the port, ten minutes on. So it is reset now, as the app's end was, the rewriting
-    /// forgotten, and the flow ended in the log. One the accept loop has taken already is the relay's to
-    /// end, as any connection that fails.
-    fn reset_before_the_relay(&self, port: u16, now: Instant) {
+    /// forgotten, and the flow ended in the log: as opened when Android's stack reset it, as a relayed
+    /// connection a peer resets is, and with `saw`, what the app saw, when the engine reset it itself
+    /// (third round, nit 2). One the accept loop has taken already is the relay's to end, as any
+    /// connection that fails.
+    fn reset_before_the_relay(&self, port: u16, now: Instant, saw: Option<Outcome>) {
         let Some(upstream) = lock(&self.pending).remove(&port) else {
             return;
         };
         lock(&self.nat).remove(port, now);
         lock(&self.shared.wire).remove(&port);
         let _ = upstream.stream.set_zero_linger();
-        self.shared.finish_closed(upstream.opened.id);
+        match saw {
+            Some(outcome) => self.shared.finish_as(upstream.opened.id, outcome),
+            None => self.shared.finish_closed(upstream.opened.id),
+        }
     }
 }
 
@@ -357,7 +393,12 @@ async fn open(
     let Some((uid, upstream, _share)) = upstream(&shared, app, destination).await else {
         return refused(&held, &shared, &nat);
     };
+    // The listener now: one bound anew while the server was asked may be on another port, and none
+    // may be bound, which the app then sees as a refusal, and the log records so (third round, nit 2).
+    let listening = shared.listener(app.is_ipv4());
+    let listener = listening.now();
     let outcome = match &upstream {
+        Ok(_) if listener.port == 0 => Outcome::Refused,
         Ok(_) => Outcome::Opened,
         Err(error) if error.kind() == io::ErrorKind::ConnectionRefused => Outcome::Refused,
         Err(error) if is_unreachable(error) => Outcome::Unreachable,
@@ -392,9 +433,6 @@ async fn open(
         resolver,
         network,
     });
-    // To the listener now: one bound anew while the server was asked may be on another port.
-    let listening = shared.listener(app.is_ipv4());
-    let listener = listening.now();
     let answer = match upstream {
         Ok(stream) if listener.port == 0 => {
             // No listener now, as when its port was taken and none can be bound: the app is refused,
@@ -403,7 +441,6 @@ async fn open(
             let _ = stream.set_zero_linger();
             drop(stream);
             lock(&nat).release(held.port);
-            shared.finish(id);
             listening.want();
             let sequence = packet::tcp_sequence(&held.packet, &held.parsed);
             packet::tcp_reset(destination, app, 0, Some(sequence.wrapping_add(1)))
@@ -559,8 +596,6 @@ pub(super) async fn accept(
 ) {
     let listening = shared.listener(address.is_ipv4());
     let mut listener = first;
-    // The port of the last listener, which the next is bound on if it can be.
-    let mut last_port = listening.now().port;
     let mut pause = Pause::new(Pause::LONGEST);
     // Whether a listener stopped listening and none has been bound since, and whether the one now was
     // bound after one stopped and has accepted nothing since.
@@ -572,8 +607,7 @@ pub(super) async fn accept(
             if rebound {
                 pause.wait().await;
             }
-            let (bound, at) = bind_anew(address, last_port, listening).await;
-            (listener, last_port) = (Some(bound), at);
+            listener = Some(bind_anew(address, listening).await);
             if lost {
                 Counters::add(&shared.counters.listener_recoveries, 1);
                 (lost, rebound) = (false, true);
@@ -651,29 +685,24 @@ fn lacks(error: &io::Error) -> bool {
     )
 }
 
-/// A listener on the tunnel's address `address`, and its port, in the place of one that stopped
-/// listening or was never bound (ADR 0044, unit 12b): on `port`, the last one's, if it can be, else on
-/// another, as when another app's listener took the port meanwhile. Either way it is of a new
-/// generation (`Listening`), so that nothing rewritten to the last one before it stopped is the
-/// engine's again unless the relay holds it. Until one is bound the port the engine rewrites to is 0:
-/// a new connection is refused, never rewritten to a port another app may hold.
+/// A listener on the tunnel's address `address`, in the place of one that stopped listening or was
+/// never bound (ADR 0044, unit 12b), on a port the kernel picks, of a new generation (`Listening`), so
+/// that nothing rewritten to the last one before it stopped is the engine's again unless the relay
+/// holds it. Until one is bound the port the engine rewrites to is 0: a new connection is refused, never
+/// rewritten to a port another app may hold. Never on the old port: with generations it would keep
+/// nothing valid, and another app that bound it with `SO_REUSEADDR` in the moment no listener held it
+/// keeps it bound beside the new listener, and can connect from it (third round, nit 1).
 ///
 /// An attempt that fails, as when the process is out of descriptors, or the address is gone, is made
 /// again after a pause, from 10 ms doubling up to a minute, or at once, after 10 ms, when an app's SYN
 /// finds no listener: an address that stays gone, as on a tunnel with none of this version, costs a
 /// wake-up a minute, and a listener lacking when an app needs one is bound as soon as it can be.
-async fn bind_anew(address: IpAddr, port: u16, listening: &Listening) -> (TcpListener, u16) {
+async fn bind_anew(address: IpAddr, listening: &Listening) -> TcpListener {
     let mut pause = Pause::new(Pause::LONGEST_BIND);
     loop {
-        let bound = match bind(SocketAddr::new(address, port)) {
-            Err(error) if port != 0 && error.kind() == io::ErrorKind::AddrInUse => {
-                bind(SocketAddr::new(address, 0))
-            }
-            bound => bound,
-        };
-        if let Ok((listener, port)) = bound {
+        if let Ok((listener, port)) = bind(SocketAddr::new(address, 0)) {
             listening.bound(port);
-            return (listener, port);
+            return listener;
         }
         tokio::select! {
             () = pause.wait() => {}
