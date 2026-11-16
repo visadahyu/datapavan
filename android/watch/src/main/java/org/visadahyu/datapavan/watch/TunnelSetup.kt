@@ -22,6 +22,13 @@ internal data class TunnelSetup(
 ) {
     companion object {
         /**
+         * Whether the running engine may take the tunnel set up again as [after], from the one set up as
+         * [before]: only when Android keeps the VPN network, its ordered lists of apps unchanged, and the
+         * addresses are the same. Otherwise, and with no setup before, a new engine starts.
+         */
+        fun canSwap(before: TunnelSetup?, after: TunnelSetup): Boolean = before == after
+
+        /**
          * Hands [packages] to [add] in sorted order, and gives the ones it took, in that order. The same
          * set so gives Android the same list at each setup, whatever order the set comes in, as from
          * `SharedPreferences.getStringSet`'s `HashSet`, which was what changed the list when the apps had

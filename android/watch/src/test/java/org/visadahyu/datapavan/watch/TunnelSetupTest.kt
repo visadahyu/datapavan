@@ -1,7 +1,8 @@
 package org.visadahyu.datapavan.watch
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TunnelSetupTest {
@@ -36,14 +37,24 @@ class TunnelSetupTest {
         assertEquals(builder, taken)
     }
 
+    /**
+     * The decision setUpAgain takes: the running engine takes the new tunnel only on the VPN network Android
+     * keeps, its ordered lists of apps unchanged, with the same addresses; else a new engine starts.
+     */
     @Test
-    fun theEngineTakesTheTunnelOnlyWhereAddressesAndListsAreTheSame() {
+    fun theRunningEngineTakesTheTunnelOnlyOnTheSameNetworkWithTheSameAddresses() {
         val apps = listOf("org.example.bank", "org.example.chat")
-        val setup = TunnelSetup(TunnelAddresses.COMMON, emptyList(), apps)
-        assertEquals(setup, TunnelSetup(TunnelAddresses.COMMON, emptyList(), apps.toList()))
-        assertNotEquals("other addresses", setup, TunnelSetup(TunnelAddresses.SPARE, emptyList(), apps))
-        assertNotEquals("an app left out more", setup, TunnelSetup(TunnelAddresses.COMMON, emptyList(), apps + "org.example.game"))
-        assertNotEquals("Android compares ordered lists", setup, TunnelSetup(TunnelAddresses.COMMON, emptyList(), apps.reversed()))
-        assertNotEquals("the test's apps instead", setup, TunnelSetup(TunnelAddresses.COMMON, apps, emptyList()))
+        val before = TunnelSetup(TunnelAddresses.COMMON, emptyList(), apps)
+        fun swaps(after: TunnelSetup) = TunnelSetup.canSwap(before, after)
+        assertTrue("the same setup", swaps(TunnelSetup(TunnelAddresses.COMMON, emptyList(), apps.toList())))
+        assertFalse("no setup before", TunnelSetup.canSwap(null, before))
+        assertFalse("other addresses", swaps(TunnelSetup(TunnelAddresses.SPARE, emptyList(), apps)))
+        assertFalse("an app left out more", swaps(TunnelSetup(TunnelAddresses.COMMON, emptyList(), apps + "org.example.game")))
+        assertFalse("an app taken back", swaps(TunnelSetup(TunnelAddresses.COMMON, emptyList(), apps.take(1))))
+        assertFalse("Android compares ordered lists", swaps(TunnelSetup(TunnelAddresses.COMMON, emptyList(), apps.reversed())))
+        assertFalse("the test's allowed apps instead", swaps(TunnelSetup(TunnelAddresses.COMMON, apps, emptyList())))
+        val allowed = TunnelSetup(TunnelAddresses.COMMON, apps, emptyList())
+        assertTrue("the same allowed apps", TunnelSetup.canSwap(allowed, TunnelSetup(TunnelAddresses.COMMON, apps.toList(), emptyList())))
+        assertFalse("other allowed apps", TunnelSetup.canSwap(allowed, TunnelSetup(TunnelAddresses.COMMON, apps.reversed(), emptyList())))
     }
 }

@@ -411,7 +411,8 @@ class WatchVpnService : VpnService() {
         // The same VPN network and addresses: the running engine takes the new tunnel and keeps its flows.
         // Otherwise, or when a swap failed, nativeStart stops the engine that runs, which closes the old
         // tunnel and hands over what it carries, before it starts anew.
-        val kept = setup == before && swapTunnel(established)
+        val after = setup
+        val kept = after != null && TunnelSetup.canSwap(before, after) && swapTunnel(established)
         if (!kept && !startEngine(established)) {
             stop()
             return
