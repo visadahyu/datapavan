@@ -2832,3 +2832,171 @@ fn with_androids_marks_a_new_engine_on_a_new_network_resets_a_connection_at_once
         },
     )
 }
+
+/// Gives a socket the hop limit `hops`, IPv4's time to live or IPv6's unicast hop limit, as an app or a
+/// traceroute sets it (ADR 0044, unit 11b).
+fn set_hops(socket: &impl AsFd, v4: bool, hops: i32) -> io::Result<()> {
+    use nix::sys::socket::{setsockopt, sockopt};
+    if v4 {
+        setsockopt(socket, sockopt::Ipv4Ttl, &hops)
+    } else {
+        setsockopt(socket, sockopt::Ipv6Ttl, &hops)
+    }
+    .map_err(io::Error::from)
+}
+
+/// Asks a socket for the hop limit each packet it reads arrived with (`IP_RECVTTL`,
+/// `IPV6_RECVHOPLIMIT`).
+fn ask_hops(socket: &impl AsFd, v4: bool) -> io::Result<()> {
+    use nix::sys::socket::{setsockopt, sockopt};
+    if v4 {
+        setsockopt(socket, sockopt::Ipv4RecvTtl, &true)
+    } else {
+        setsockopt(socket, sockopt::Ipv6RecvHopLimit, &true)
+    }
+    .map_err(io::Error::from)
+}
+
+/// What a socket read: how many bytes, from where, and the hop limit they arrived with, if the kernel
+/// gave one.
+type ReadWithHops = (usize, Option<SocketAddr>, Option<u8>);
+
+/// What a socket that asks for hop limits ([`ask_hops`]) reads next, into `buffer`. A blocking socket
+/// waits as long as its timeout says.
+fn read_with_hops(
+    socket: &impl AsFd,
+    buffer: &mut [u8],
+) -> Result<ReadWithHops, Box<dyn std::error::Error>> {
+    use nix::sys::socket::{ControlMessageOwned, MsgFlags, SockaddrStorage, recvmsg};
+    use std::net::{SocketAddrV4, SocketAddrV6};
+    use std::os::fd::AsRawFd;
+    let mut control = nix::cmsg_space!(nix::libc::c_int);
+    let mut parts = [io::IoSliceMut::new(buffer)];
+    let message = recvmsg::<SockaddrStorage>(
+        socket.as_fd().as_raw_fd(),
+        &mut parts,
+        Some(&mut control),
+        MsgFlags::empty(),
+    )?;
+    let mut hops = None;
+    for message in message.cmsgs()? {
+        if let ControlMessageOwned::Ipv4Ttl(limit) | ControlMessageOwned::Ipv6HopLimit(limit) =
+            message
+        {
+            hops = u8::try_from(limit).ok();
+        }
+    }
+    let from = message.address.and_then(|address| {
+        address
+            .as_sockaddr_in()
+            .map(|v4| SocketAddr::from(SocketAddrV4::from(*v4)))
+            .or_else(|| {
+                address
+                    .as_sockaddr_in6()
+                    .map(|v6| SocketAddr::from(SocketAddrV6::from(*v6)))
+            })
+    });
+    Ok((message.bytes, from, hops))
+}
+
+/// A UDP server at `at` that answers each datagram with the hop limit it arrived with, in one byte (255
+/// when the kernel gave none), from a socket whose own datagrams leave with the hop limit `answers_with`.
+/// It reads on a thread of its own, beside the test's runtime.
+fn hop_reporter(at: SocketAddr, answers_with: i32) -> io::Result<SocketAddr> {
+    let server = std::net::UdpSocket::bind(at)?;
+    ask_hops(&server, at.is_ipv4())?;
+    set_hops(&server, at.is_ipv4(), answers_with)?;
+    let address = server.local_addr()?;
+    std::thread::spawn(move || {
+        let mut buffer = [0u8; 512];
+        while let Ok((_, Some(from), hops)) = read_with_hops(&server, &mut buffer) {
+            let _ = server.send_to(&[hops.unwrap_or(255)], from);
+        }
+    });
+    Ok(address)
+}
+
+/// A raw ICMP socket of the namespace, IPv4's or IPv6's, which a copy of every ICMP message the
+/// namespace receives reaches, the engine's echo requests among them, with the hop limit each arrived
+/// with: IPv4's in the IP header a raw socket reads, IPv6's as ancillary data.
+fn icmp_sniffer(v4: bool) -> io::Result<Socket> {
+    let socket = if v4 {
+        Socket::new(Domain::IPV4, Type::RAW, Some(Protocol::ICMPV4))?
+    } else {
+        let socket = Socket::new(Domain::IPV6, Type::RAW, Some(Protocol::ICMPV6))?;
+        ask_hops(&socket, false)?;
+        socket
+    };
+    socket.set_read_timeout(Some(STEP))?;
+    Ok(socket)
+}
+
+/// The hop limit of the next echo request a [`icmp_sniffer`] read, of the IP version `v4` or IPv6.
+fn sniffed_request(sniffer: &Socket, v4: bool) -> Result<u8, Box<dyn std::error::Error>> {
+    let mut buffer = [0u8; 2048];
+    for _ in 0..16 {
+        let (n, _, hops) = read_with_hops(sniffer, &mut buffer)?;
+        if v4 {
+            let header = usize::from(buffer[0] & 0x0f) * 4;
+            if n > header && buffer[header] == packet::ECHO_REQUEST {
+                return Ok(buffer[8]);
+            }
+        } else if n > 0 && buffer[0] == packet::ECHO_REQUEST_V6 {
+            return hops.ok_or_else(|| "an echo request without its hop limit".into());
+        }
+    }
+    Err("no echo request among what the namespace received".into())
+}
+
+/// ADR 0044, unit 11b: Watch is not a hop. An app's datagram on the direct path and its echo request
+/// leave with the time to live (IPv4) or hop limit (IPv6) the app sent them with, here 3, as the
+/// server's socket (`IP_RECVTTL`, `IPV6_RECVHOPLIMIT`) and a raw socket of the namespace see them;
+/// before, they left with the engine's own, 64. A lookup to the tunnel's DNS address still leaves with
+/// the engine's own: Android's resolver sends those, whatever the app's socket says.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn an_apps_hop_limit_leaves_with_its_datagram_and_its_ping() -> Outcome {
+    lab(
+        "an_apps_hop_limit_leaves_with_its_datagram_and_its_ping",
+        &Limits::default(),
+        |engine| async move {
+            ipv6_here()?;
+            for (server, tunnel, id) in [
+                (SERVER_IP, IpAddr::V4(Addresses::COMMON.tun4), 4801),
+                (
+                    IpAddr::V6(SERVER6),
+                    IpAddr::V6(Addresses::COMMON.tun6),
+                    4802,
+                ),
+            ] {
+                let v4 = server.is_ipv4();
+                let reporter = hop_reporter(SocketAddr::new(server, 0), 64)?;
+                let app = UdpSocket::bind((tunnel, 0)).await?;
+                set_hops(&app, v4, 3)?;
+                app.send_to(b"which hop limit?", reporter).await?;
+                assert_eq!(app_receive(&app).await?, (vec![3], reporter), "{server}");
+
+                let sniffer = icmp_sniffer(v4)?;
+                let pinger = ping_socket_at(tunnel, id)?;
+                set_hops(&pinger, v4, 3)?;
+                let pinger = UdpSocket::from_std(std::net::UdpSocket::from(pinger))?;
+                ping(&pinger, server, 1, b"which hop limit?").await?;
+                assert_eq!(
+                    pong(&pinger).await?,
+                    (id, 1, b"which hop limit?".to_vec(), server)
+                );
+                assert_eq!(sniffed_request(&sniffer, v4)?, 3, "{server}");
+            }
+
+            let resolver = hop_reporter(SocketAddr::from((OTHER, 53)), 64)?;
+            engine.network_changed(Some(resolver.ip()), false);
+            let app = app_socket().await?;
+            set_hops(&app, true, 3)?;
+            app.send_to(&query_example(), (Addresses::COMMON.dns4, 53))
+                .await?;
+            let (answer, _) = app_receive(&app).await?;
+            assert_eq!(answer, [64], "a lookup left with the app's hop limit");
+            Ok(())
+        },
+    )
+}

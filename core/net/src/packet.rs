@@ -53,6 +53,8 @@ pub struct Packet {
     pub source: SocketAddr,
     /// The receiver's address and port.
     pub destination: SocketAddr,
+    /// The time to live (IPv4) or hop limit (IPv6) the app sent it with.
+    pub hops: u8,
 }
 
 /// What the engine reads of an ICMP or `ICMPv6` echo request (ping) from an app.
@@ -70,6 +72,8 @@ pub struct Echo {
     pub id: u16,
     /// The sequence number.
     pub sequence: u16,
+    /// The time to live (IPv4) or hop limit (IPv6) the app sent it with.
+    pub hops: u8,
 }
 
 /// Why a packet is not one the engine forwards.
@@ -95,6 +99,7 @@ struct Ip {
     length: usize,
     source: IpAddr,
     destination: IpAddr,
+    hops: u8,
 }
 
 pub(crate) fn u16_at(bytes: &[u8], at: usize) -> Option<u16> {
@@ -120,6 +125,7 @@ pub fn parse(packet: &[u8]) -> Result<Packet, Skip> {
         length,
         source,
         destination,
+        hops,
     } = ip(packet)?;
     let minimum = match protocol {
         TCP => 20,
@@ -145,6 +151,7 @@ pub fn parse(packet: &[u8]) -> Result<Packet, Skip> {
         length,
         source: SocketAddr::new(source, port(transport)?),
         destination: SocketAddr::new(destination, port(transport + 2)?),
+        hops,
     })
 }
 
@@ -162,6 +169,7 @@ pub fn echo_request(packet: &[u8]) -> Result<Echo, Skip> {
         length,
         source,
         destination,
+        hops,
     } = ip(packet)?;
     let request = match (source, protocol) {
         (IpAddr::V4(_), ICMP) => ECHO_REQUEST,
@@ -197,13 +205,14 @@ pub fn echo_request(packet: &[u8]) -> Result<Echo, Skip> {
         destination,
         id,
         sequence,
+        hops,
     })
 }
 
 /// Reads the IP header of a packet from the tunnel, IPv4 or IPv6, following IPv6's extension headers.
 fn ip(packet: &[u8]) -> Result<Ip, Skip> {
     let first = *packet.first().ok_or(Skip::Malformed)?;
-    let (protocol, transport, length, source, destination) = match first >> 4 {
+    let (protocol, transport, length, source, destination, hops) = match first >> 4 {
         4 => {
             let header = usize::from(first & 0x0f) * 4;
             let length = usize::from(u16_at(packet, 2).ok_or(Skip::Malformed)?);
@@ -228,6 +237,7 @@ fn ip(packet: &[u8]) -> Result<Ip, Skip> {
                 length,
                 IpAddr::from(source),
                 IpAddr::from(destination),
+                packet[8],
             )
         }
         6 => {
@@ -252,6 +262,7 @@ fn ip(packet: &[u8]) -> Result<Ip, Skip> {
                 length,
                 IpAddr::from(source),
                 IpAddr::from(destination),
+                packet[7],
             )
         }
         _ => return Err(Skip::Malformed),
@@ -262,6 +273,7 @@ fn ip(packet: &[u8]) -> Result<Ip, Skip> {
         length,
         source,
         destination,
+        hops,
     })
 }
 
@@ -972,6 +984,7 @@ mod tests {
                 destination: IpAddr::from(SERVER4),
                 id: 0x1234,
                 sequence: 7,
+                hops: 64,
             })
         );
         // A TCP or UDP reader gives it up as ICMP, as before.
@@ -987,6 +1000,7 @@ mod tests {
                 destination: IpAddr::from(v6(SERVER6)),
                 id: 0xbeef,
                 sequence: 65_535,
+                hops: 64,
             })
         );
         // Padding after the IP packet's own length is not part of it.

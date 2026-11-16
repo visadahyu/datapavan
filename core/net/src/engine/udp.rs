@@ -16,8 +16,8 @@ use super::naming::Begun;
 use super::upstream::{connect_udp, owner, protect};
 use super::whose::{Named, Record, Settled, Step, Verdict, Waiter};
 use super::{
-    BATCH, Counters, Ech, Flow, Loop, NamedBy, Opened, Outcome, Shared, errors, is_unreachable,
-    lock, send_to_app,
+    BATCH, Counters, Ech, Flow, Loop, NamedBy, Opened, Outcome, Shared, errors, hops,
+    is_unreachable, lock, send_to_app,
 };
 use crate::packet::{Packet, UDP, Unreachable};
 use crate::socks5::{self, Command, Target};
@@ -1798,7 +1798,7 @@ impl Loop {
             &to.socket,
             to.header.as_deref(),
             payload,
-            parsed.destination,
+            (parsed.destination, parsed.hops),
         )
         .await;
         if let Some(error) = count_sent(&self.shared, to.bytes.as_deref(), packet, parsed, sent) {
@@ -1858,15 +1858,16 @@ fn count_sent(
 }
 
 /// Sends a datagram from a mapping's socket to `destination`, or through the tool's relay with the
-/// `header` that names it; the bytes sent are the payload's. On the direct path, an ICMP error the
-/// kernel holds for the socket fails its next send once, and that datagram does not leave: it is sent
-/// again. The mapping's task reads the error itself from the socket's error queue, for the destination
-/// it was for.
+/// `header` that names it; the bytes sent are the payload's. On the direct path it leaves with the hop
+/// limit `hops` the app sent it with (ADR 0044, unit 11b); through the tool, the relay carries it, with
+/// a hop limit of its own. On the direct path, an ICMP error the kernel holds for the socket fails its
+/// next send once, and that datagram does not leave: it is sent again. The mapping's task reads the
+/// error itself from the socket's error queue, for the destination it was for.
 async fn send_to(
     socket: &UdpSocket,
     header: Option<&[u8]>,
     payload: &[u8],
-    destination: SocketAddr,
+    (destination, hops): (SocketAddr, u8),
 ) -> io::Result<usize> {
     if let Some(header) = header {
         return socket
@@ -1874,8 +1875,10 @@ async fn send_to(
             .await
             .map(|_| payload.len());
     }
-    match socket.send_to(payload, destination).await {
-        Err(error) if errors::from_icmp(&error) => socket.send_to(payload, destination).await,
+    match hops::send_waiting(socket, payload, destination, hops).await {
+        Err(error) if errors::from_icmp(&error) => {
+            hops::send_waiting(socket, payload, destination, hops).await
+        }
         sent => sent,
     }
 }
@@ -1885,15 +1888,17 @@ fn try_send_to(
     socket: &UdpSocket,
     header: Option<&[u8]>,
     payload: &[u8],
-    destination: SocketAddr,
+    (destination, hops): (SocketAddr, u8),
 ) -> io::Result<usize> {
     if let Some(header) = header {
         return socket
             .try_send(&[header, payload].concat())
             .map(|_| payload.len());
     }
-    match socket.try_send_to(payload, destination) {
-        Err(error) if errors::from_icmp(&error) => socket.try_send_to(payload, destination),
+    match hops::try_send(socket, payload, destination, hops) {
+        Err(error) if errors::from_icmp(&error) => {
+            hops::try_send(socket, payload, destination, hops)
+        }
         sent => sent,
     }
 }
@@ -2160,7 +2165,12 @@ async fn open_peer(
             };
             reads.push(read_quic(&mut peer.quic, payload));
             peer.sent(destination.port(), payload);
-            let sent = try_send_to(&socket, header.as_deref(), payload, destination);
+            let sent = try_send_to(
+                &socket,
+                header.as_deref(),
+                payload,
+                (destination, parsed.hops),
+            );
             errors.extend(count_sent(
                 shared,
                 peer.bytes.as_deref(),

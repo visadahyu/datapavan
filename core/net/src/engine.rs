@@ -60,6 +60,7 @@ mod budget;
 mod chain;
 mod echo;
 mod errors;
+mod hops;
 mod kept;
 mod logbook;
 mod lookups;

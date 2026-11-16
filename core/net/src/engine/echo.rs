@@ -17,15 +17,18 @@
 
 use super::udp::with_buffer;
 use super::upstream::protect;
-use super::{BATCH, Counters, Loop, Shared, lock, send_to_app};
+use super::{BATCH, Counters, Loop, Shared, hops, lock, send_to_app};
 use crate::packet::{self, ECHO_REPLY, ECHO_REPLY_V6, Echo};
 use crate::standins::is_stand_in;
 use crate::tun::Tun;
+use nix::libc;
+use nix::sys::socket::{setsockopt, sockopt};
 use socket2::{Domain, Protocol, Socket, Type};
 use std::collections::HashMap;
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::os::fd::AsFd;
+use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::net::UdpSocket;
@@ -46,7 +49,7 @@ pub(super) struct Echoes {
     v4: bool,
     /// The same for IPv6.
     v6: bool,
-    table: Arc<Mutex<Table<UdpSocket>>>,
+    table: Arc<Mutex<Table<Pinger>>>,
 }
 
 impl Echoes {
@@ -101,8 +104,9 @@ struct Entry<S> {
 }
 
 enum State<S> {
-    /// The socket is being made and protected; these requests wait for it, in order.
-    Opening(Vec<Vec<u8>>),
+    /// The socket is being made and protected; these requests wait for it, in order, each with the
+    /// app's hop limit.
+    Opening(Vec<(Vec<u8>, u8)>),
     Open(Arc<S>),
 }
 
@@ -119,14 +123,14 @@ enum Next<S> {
 }
 
 impl<S> Table<S> {
-    /// What becomes of a request, `message`, of `key` to `target`, at `now`, with at most `cap`
-    /// sockets. A new key takes its place at once, before its socket is made, so that the cap holds
-    /// for the sockets being made too.
+    /// What becomes of a request, `message` with the app's hop limit `hops`, of `key` to `target`, at
+    /// `now`, with at most `cap` sockets. A new key takes its place at once, before its socket is made,
+    /// so that the cap holds for the sockets being made too.
     fn request(
         &mut self,
         key: Key,
         target: IpAddr,
-        message: &[u8],
+        (message, hops): (&[u8], u8),
         now: Instant,
         cap: usize,
     ) -> Next<S> {
@@ -137,7 +141,7 @@ impl<S> Table<S> {
                     Next::Send(Arc::clone(socket), entry.target)
                 }
                 State::Opening(held) if held.len() < HELD => {
-                    held.push(message.to_vec());
+                    held.push((message.to_vec(), hops));
                     entry.last = now;
                     Next::Held
                 }
@@ -153,7 +157,7 @@ impl<S> Table<S> {
             Entry {
                 number: self.numbered,
                 target,
-                state: State::Opening(vec![message.to_vec()]),
+                state: State::Opening(vec![(message.to_vec(), hops)]),
                 last: now,
             },
         );
@@ -162,7 +166,7 @@ impl<S> Table<S> {
 
     /// The socket of `key` numbered `number` is open: the requests that waited for it, to send now,
     /// or `None` when its place is gone.
-    fn opened(&mut self, key: Key, number: u64, socket: Arc<S>) -> Option<Vec<Vec<u8>>> {
+    fn opened(&mut self, key: Key, number: u64, socket: Arc<S>) -> Option<Vec<(Vec<u8>, u8)>> {
         let entry = self.entry(key, number)?;
         match std::mem::replace(&mut entry.state, State::Open(socket)) {
             State::Opening(held) => Some(held),
@@ -255,7 +259,7 @@ impl Loop {
         let next = lock(&self.echoes.table).request(
             key,
             target,
-            message,
+            (message, request.hops),
             Instant::now(),
             self.shared.limits.echo_sockets,
         );
@@ -264,7 +268,7 @@ impl Loop {
         match next {
             // The kernel writes the socket's own identifier and the checksum into the request.
             Next::Send(socket, to) => {
-                let sent = socket.try_send_to(message, SocketAddr::new(to, 0));
+                let sent = socket.send(message, SocketAddr::new(to, 0), request.hops);
                 count_sent(&self.shared, sent.is_ok());
             }
             Next::Open(number) => {
@@ -304,7 +308,7 @@ async fn carry(
     (number, target): (u64, IpAddr),
     tun: Arc<Tun>,
     shared: Arc<Shared>,
-    table: Arc<Mutex<Table<UdpSocket>>>,
+    table: Arc<Mutex<Table<Pinger>>>,
     mut changes: watch::Receiver<u64>,
 ) {
     // Only a change after the socket opened ends it: a clone starts with the loop's last-seen version.
@@ -321,7 +325,7 @@ async fn carry(
     // on, each request leaves with `try_send_to`, with no await between the chain's check and the
     // send. Sent with an await, a request could leave after a chain came on, and the next of the key
     // would find the socket not yet known writable, and be dropped ahead of those waiting.
-    if socket.writable().await.is_err() {
+    if socket.socket.writable().await.is_err() {
         let dropped = lock(&table).failed(key, number);
         Counters::add(&shared.counters.echo_dropped, dropped);
         return;
@@ -338,8 +342,8 @@ async fn carry(
         return;
     }
     let to = SocketAddr::new(target, 0);
-    for message in held {
-        count_sent(&shared, socket.try_send_to(&message, to).is_ok());
+    for (message, hops) in held {
+        count_sent(&shared, socket.send(&message, to, hops).is_ok());
     }
     let idle = shared.limits.echo_idle;
     loop {
@@ -350,12 +354,12 @@ async fn carry(
         tokio::select! {
             _ = changes.changed() => break,
             () = tokio::time::sleep_until(until.into()) => {}
-            ready = socket.readable() => {
+            ready = socket.socket.readable() => {
                 if ready.is_err() {
                     break;
                 }
                 let (replies, failed) =
-                    with_buffer(|buffer| receive(&socket, buffer, key, target));
+                    with_buffer(|buffer| receive(&socket.socket, buffer, key, target));
                 // While a chain is on, nothing comes in on the direct path either.
                 if shared.chains_any_app() {
                     break;
@@ -389,10 +393,46 @@ async fn carry(
 /// queue on `Interest::ERROR` with `MSG_ERRQUEUE`, as `errors::queued` does for UDP mappings, and treat
 /// a read failing with such an error as `errors::from_icmp` does, so that a pending error does not
 /// end the socket.
-async fn open(shared: &Arc<Shared>, target: IpAddr) -> io::Result<UdpSocket> {
+async fn open(shared: &Arc<Shared>, target: IpAddr) -> io::Result<Pinger> {
     let socket = UdpSocket::from_std(std::net::UdpSocket::from(ping_socket(target.is_ipv4())?))?;
     protect(shared, socket.as_fd()).await?;
-    Ok(socket)
+    Ok(Pinger {
+        socket,
+        hops: AtomicU16::new(UNSET),
+    })
+}
+
+/// A ping socket of the engine's, which sends each request with the app's hop limit (ADR 0044, unit
+/// 11b): in IPv4 in the request's own ancillary data, as UDP's datagrams go; in IPv6 as the socket's
+/// option, set only when it differs from the one the socket has, since Linux's IPv6 ping sockets read
+/// no ancillary data before 5.18 (`ping_v6_sendmsg`), and most phones run older kernels. One socket
+/// serves one app socket and address pinged, whose hop limit changes only when the app changes it, as
+/// a traceroute does between its probes; the engine's tasks share one thread, so no other request
+/// comes between the option and its send.
+struct Pinger {
+    socket: UdpSocket,
+    /// The IPv6 hop limit last set on the socket, or [`UNSET`] before the first or after one failed.
+    hops: AtomicU16,
+}
+
+/// No hop limit set on a ping socket yet: none of the 256 a request can have.
+const UNSET: u16 = u16::MAX;
+
+impl Pinger {
+    /// Sends a request, `message`, to `to` with the app's hop limit `hops`, without waiting for room
+    /// in the socket's buffer.
+    fn send(&self, message: &[u8], to: SocketAddr, hops: u8) -> io::Result<usize> {
+        if to.is_ipv4() {
+            return hops::try_send(&self.socket, message, to, hops);
+        }
+        let wanted = u16::from(hops);
+        if self.hops.load(Ordering::Relaxed) != wanted {
+            let set = setsockopt(&self.socket, sockopt::Ipv6Ttl, &libc::c_int::from(hops));
+            let now = if set.is_ok() { wanted } else { UNSET };
+            self.hops.store(now, Ordering::Relaxed);
+        }
+        self.socket.try_send_to(message, to)
+    }
 }
 
 /// An unprivileged ping socket, not blocking, not bound and not connected. Linux makes one only for a
@@ -470,7 +510,7 @@ mod tests {
     }
 
     fn request(table: &mut Table<()>, key: Key, now: Instant, cap: usize) -> Next<()> {
-        table.request(key, key.2, b"ping", now, cap)
+        table.request(key, key.2, (b"ping", 64), now, cap)
     }
 
     /// The cap counts the sockets being made as well as the open ones; a request of a key that has a
