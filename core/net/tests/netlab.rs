@@ -2662,6 +2662,48 @@ fn an_ipv6_connection_goes_on_across_a_tunnel_set_up_again() -> Outcome {
     )
 }
 
+/// Unit 12b, writes in the gap, on a real tun device: once Android's in-place update has taken tun0
+/// down, before the new tunnel is handed over, a datagram a peer sends the app's mapping is written to
+/// tun0, which refuses it with `EIO`, as Linux refuses writes to a tun device that is down; the write
+/// waits for the new tunnel and the app gets the datagram through it. Before, it was lost. The swap
+/// comes 200 ms after the datagram, within the 2 s this test waits.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_write_the_reset_tunnel_refuses_waits_for_the_new_one() -> Outcome {
+    let limits = Limits {
+        tunnel_wait: Duration::from_secs(2),
+        ..Limits::default()
+    };
+    lab(
+        "a_write_the_reset_tunnel_refuses_waits_for_the_new_one",
+        &limits,
+        |engine| async move {
+            let app = app_socket().await?;
+            let peer = UdpSocket::bind((OTHER, 0)).await?;
+            app.send_to(b"to the peer", peer.local_addr()?).await?;
+            let mut buffer = [0u8; 64];
+            let (_, mapping) = within(
+                "the app's datagram at its peer",
+                peer.recv_from(&mut buffer),
+            )
+            .await?;
+
+            let next = second_tunnel("tun2")?;
+            move_tunnel("tun0", "tun2")?;
+            peer.send_to(b"in the gap", mapping).await?;
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            let swapping = Arc::clone(&engine);
+            tokio::task::spawn_blocking(move || swapping.swap_tunnel(next)).await??;
+            assert_eq!(
+                app_receive(&app).await?,
+                (b"in the gap".to_vec(), peer.local_addr()?),
+                "the datagram written in the gap"
+            );
+            Ok(())
+        },
+    )
+}
+
 /// The netId of the VPN network the lab's Android marks, and of the one it brings up when the apps of
 /// the tunnel change.
 const NETWORK: &str = "100";

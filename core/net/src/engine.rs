@@ -1137,13 +1137,14 @@ impl Loop {
         }
     }
 
-    /// Gives the app one packet through the tunnel, from the event loop. One the tunnel refuses, as
-    /// between Android's reset of the old interface and the swap, waits for the next tunnel in a task
-    /// of its own (`Tun::send`), so that the loop reads on meanwhile.
+    /// Gives the app one packet through the tunnel, from the event loop. One the tunnel refuses as
+    /// between Android's reset of the old interface and the swap (`tun::cured_by_another`) waits for the
+    /// next tunnel in a task of its own (`Tun::send`), so that the loop reads on meanwhile; any other
+    /// refusal drops it at once, as before.
     async fn send(&self, packet: &[u8]) {
         match self.tun.send_once(packet).await {
             Ok(_) => Counters::add(&self.shared.counters.packets_out, 1),
-            Err(_) if self.tun.waits() => {
+            Err(error) if self.tun.waits() && crate::tun::cured_by_another(&error) => {
                 let (tun, shared) = (Arc::clone(&self.tun), Arc::clone(&self.shared));
                 let packet = packet.to_vec();
                 tokio::spawn(async move { send_to_app(&tun, &shared, &packet).await });
@@ -1835,10 +1836,20 @@ mod tests {
         Ok(())
     }
 
+    /// How the old tunnel refuses the engine's writes in a [`Gap`].
+    #[derive(Clone, Copy)]
+    enum Refusal {
+        /// With `EIO`, as a tun device whose interface is down does, which only a new tunnel cures: a
+        /// unit test cannot make a tun device, so the tunnel is told to refuse (`Tun::refuse_writes`).
+        Down,
+        /// With another error, which a new tunnel does not cure: here `EPIPE`, as the app's end has shut
+        /// its reading, while the app can still send.
+        Other,
+    }
+
     /// What the gap between Android's reset of the old interface and the swap is made of here: an
-    /// engine whose old tunnel refuses its writes, as a tun device whose interface is down does (the
-    /// app's end has shut its reading, so the engine's writes fail, while the app can still send), and
-    /// waits up to `wait` for a new one; a server that echoes; the new tunnel's app end; and the swaps.
+    /// engine whose old tunnel refuses its writes, and waits up to `wait` for a new one; a server that
+    /// echoes; the new tunnel's app end; and the swaps.
     struct Gap {
         to: SocketAddr,
         /// Written to directly: the app only sends through the old tunnel.
@@ -1852,7 +1863,7 @@ mod tests {
     }
 
     impl Gap {
-        async fn new(wait: Duration) -> io::Result<Self> {
+        async fn new(wait: Duration, refusal: Refusal) -> io::Result<Self> {
             let server = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await?;
             let to = server.local_addr()?;
             tokio::spawn(async move {
@@ -1867,18 +1878,15 @@ mod tests {
             for end in [&old_engine, &old_app, &new_engine, &new_app] {
                 end.set_nonblocking(true)?;
             }
-            old_app.shutdown(std::net::Shutdown::Read)?;
+            let tun = Tun::waiting(OwnedFd::from(old_engine), wait)?;
+            match refusal {
+                Refusal::Down => tun.refuse_writes(nix::libc::EIO),
+                Refusal::Other => old_app.shutdown(std::net::Shutdown::Read)?,
+            }
             let (stopping, stop) = watch::channel(false);
             let (moving, network) = watch::channel(0);
             let (swaps, swapped) = mpsc::unbounded_channel();
-            tokio::spawn(run(
-                Tun::waiting(OwnedFd::from(old_engine), wait)?,
-                1500,
-                Arc::clone(&shared),
-                stop,
-                network,
-                swapped,
-            ));
+            tokio::spawn(run(tun, 1500, Arc::clone(&shared), stop, network, swapped));
             Ok(Self {
                 to,
                 old_app,
@@ -1942,7 +1950,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn writes_refused_in_the_gap_go_to_the_tunnel_that_comes_within_the_wait()
     -> io::Result<()> {
-        let mut gap = Gap::new(Duration::from_secs(2)).await?;
+        let mut gap = Gap::new(Duration::from_secs(2), Refusal::Down).await?;
         gap.send_both()?;
         tokio::time::sleep(Duration::from_millis(200)).await;
         assert_eq!(
@@ -1967,7 +1975,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn writes_refused_in_the_gap_are_dropped_when_no_tunnel_comes_within_the_wait()
     -> io::Result<()> {
-        let mut gap = Gap::new(Duration::from_millis(100)).await?;
+        let mut gap = Gap::new(Duration::from_millis(100), Refusal::Down).await?;
         gap.send_both()?;
         tokio::time::sleep(Duration::from_millis(400)).await;
         gap.swap()?;
@@ -1984,6 +1992,26 @@ mod tests {
             answer(&gap.new_app).await?,
             (gap.to.port(), b"after".to_vec())
         );
+        Ok(())
+    }
+
+    /// A write the old tunnel refuses with an error a new tunnel does not cure, as `ENOMEM` or `ENOBUFS`
+    /// under memory pressure, is dropped at once, as before the wait: here `EPIPE`, with a wait of 2 s
+    /// and a new tunnel that comes within it, through which neither the loop's reset nor the mapping's
+    /// answer comes. The loop reads on all the same.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_write_refused_with_another_error_is_dropped_at_once() -> io::Result<()> {
+        let mut gap = Gap::new(Duration::from_secs(2), Refusal::Other).await?;
+        gap.send_both()?;
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert_eq!(gap.shared.counters.snapshot()[9], 2, "the loop read on");
+        gap.swap()?;
+        let (reset, payloads) = gap.heard(Duration::from_millis(500)).await;
+        assert!(
+            !reset && payloads.is_empty(),
+            "a refusal a new tunnel does not cure waited for one: {reset}, {payloads:?}"
+        );
+        assert_eq!(gap.shared.counters.snapshot()[10], 0, "packets out");
         Ok(())
     }
 

@@ -7,6 +7,19 @@
 //! Android resets the old interface before Watch can hand the new one over, and a tun device whose
 //! interface is down refuses writes (`EIO`): a task's write refused so waits a moment for the new one.
 
+/// Whether a write the tunnel refused with `error` could go to a tunnel set up again: a tun device
+/// refuses writes with `EIO` while its interface is down, as Android leaves the old one between its
+/// reset and the swap, and with `EBADFD` once its file is no longer attached to a device. Any other
+/// error, in practice `ENOMEM` or `ENOBUFS` under memory pressure, a new tunnel does not cure, and
+/// waiting for one would only hold its writer up.
+#[must_use]
+pub fn cured_by_another(error: &io::Error) -> bool {
+    matches!(
+        error.raw_os_error(),
+        Some(nix::libc::EIO | nix::libc::EBADFD)
+    )
+}
+
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::os::fd::OwnedFd;
@@ -26,6 +39,10 @@ pub struct Tun {
     replaced: Notify,
     /// How long a write the descriptor refuses waits for another to take its place ([`Tun::send`]).
     gap: Duration,
+    /// Tests only: the descriptor whose writes fail at once, and the error they fail with. Only a tun
+    /// device whose interface is down refuses writes with `EIO`, which a unit test cannot make.
+    #[cfg(test)]
+    refusing: Mutex<Option<(std::sync::Weak<AsyncFd<File>>, i32)>>,
 }
 
 /// Registers the descriptor with tokio. Needs a tokio runtime with IO enabled.
@@ -55,7 +72,26 @@ impl Tun {
             fd: Mutex::new(Arc::new(register(fd)?)),
             replaced: Notify::new(),
             gap,
+            #[cfg(test)]
+            refusing: Mutex::new(None),
         })
+    }
+
+    /// Tests only: every write to the descriptor in place now fails with `errno`, as a tun device
+    /// whose interface is down fails them with `EIO`; one that takes its place takes writes again.
+    #[cfg(test)]
+    pub(crate) fn refuse_writes(&self, errno: i32) {
+        let refused = Arc::downgrade(&self.current());
+        *self.refusing.lock().unwrap_or_else(PoisonError::into_inner) = Some((refused, errno));
+    }
+
+    /// Tests only: the error a write to `fd` fails with at once, if it is the descriptor refused.
+    #[cfg(test)]
+    fn refusal(&self, fd: &Arc<AsyncFd<File>>) -> Option<io::Error> {
+        let refusing = self.refusing.lock().unwrap_or_else(PoisonError::into_inner);
+        let (refused, errno) = refusing.as_ref()?;
+        std::ptr::eq(refused.as_ptr(), Arc::as_ptr(fd))
+            .then(|| io::Error::from_raw_os_error(*errno))
     }
 
     /// Whether a write the descriptor refuses waits for another ([`Tun::send`]).
@@ -94,11 +130,12 @@ impl Tun {
     }
 
     /// Writes one packet, waiting until the descriptor takes it, as [`Tun::send_once`] does. One the
-    /// descriptor refuses waits up to the gap given to [`Tun::waiting`] for another to take its place,
-    /// and goes to that one; with none by then, it fails as before. Android resets the old interface
-    /// before Watch hands the engine the new tunnel (ADR 0044, unit 12b), and a tun device whose
-    /// interface is down refuses writes (`EIO`): an answer written in between reaches the app through the
-    /// new tunnel rather than being lost. Only for the engine's tasks: a wait here holds up the caller.
+    /// descriptor refuses as a tunnel set up again would not ([`cured_by_another`]) waits up to the gap
+    /// given to [`Tun::waiting`] for another to take its place, and goes to that one; with none by then,
+    /// it fails as before. Android resets the old interface before Watch hands the engine the new tunnel
+    /// (ADR 0044, unit 12b), and a tun device whose interface is down refuses writes (`EIO`): an answer
+    /// written in between reaches the app through the new tunnel rather than being lost. Any other
+    /// refusal fails at once. Only for the engine's tasks: a wait here holds up the caller.
     ///
     /// # Errors
     /// When the descriptor fails, and no other takes its place within the gap.
@@ -107,7 +144,7 @@ impl Tun {
         let replaced = self.replaced.notified();
         let tried = self.current();
         match self.send_once(packet).await {
-            Err(error) if self.waits() => {
+            Err(error) if self.waits() && cured_by_another(&error) => {
                 if !Arc::ptr_eq(&tried, &self.current()) {
                     return self.send_once(packet).await;
                 }
@@ -137,7 +174,12 @@ impl Tun {
                 biased;
                 () = replaced => {}
                 guard = fd.writable() => {
-                    if let Ok(result) = guard?.try_io(|inner| inner.get_ref().write(packet)) {
+                    let mut guard = guard?;
+                    #[cfg(test)]
+                    if let Some(refusal) = self.refusal(&fd) {
+                        return Err(refusal);
+                    }
+                    if let Ok(result) = guard.try_io(|inner| inner.get_ref().write(packet)) {
                         return result;
                     }
                 }
