@@ -1580,8 +1580,9 @@ fn a_reply_from_another_address_never_reaches_the_app() -> Outcome {
     )
 }
 
-/// At most `Limits::echo_sockets` ping sockets: a third app's ping beyond two is dropped and counted,
-/// while an app that has a socket still pings through it; once both sockets are idle for
+/// At most `Limits::echo_sockets` ping sockets: with two pinging an address that never answers, each
+/// waiting on its reply and active within `Limits::echo_quiet`, a third app's ping is dropped and
+/// counted, while an app that has a socket still pings through it; once both sockets are idle for
 /// `Limits::echo_idle`, they are swept, with no packet needed, and the third app's next ping gets
 /// through.
 #[test]
@@ -1590,6 +1591,7 @@ fn pings_beyond_the_cap_are_dropped_until_a_socket_goes_idle() -> Outcome {
     let limits = Limits {
         echo_sockets: 2,
         echo_idle: Duration::from_secs(2),
+        echo_quiet: Duration::from_secs(60),
         ..Limits::default()
     };
     lab(
@@ -1597,18 +1599,15 @@ fn pings_beyond_the_cap_are_dropped_until_a_socket_goes_idle() -> Outcome {
         &limits,
         |engine| async move {
             let (first, second, third) = (app_pinger(4401)?, app_pinger(4402)?, app_pinger(4403)?);
-            for (app, id) in [(&first, 4401), (&second, 4402)] {
-                ping(app, SERVER, 1, b"in").await?;
-                assert_eq!(pong(app).await?, (id, 1, b"in".to_vec(), SERVER_IP));
+            for app in [&first, &second] {
+                ping(app, SILENT, 1, b"anyone?").await?;
             }
+            counted(&engine, ECHO_CARRIED, 2).await?;
             ping(&third, SERVER, 1, b"beyond the cap").await?;
             no_pong(&third).await?;
             assert_eq!(engine.counters()[ECHO_DROPPED], 1);
-            ping(&first, SERVER, 2, b"still in").await?;
-            assert_eq!(
-                pong(&first).await?,
-                (4401, 2, b"still in".to_vec(), SERVER_IP)
-            );
+            ping(&first, SILENT, 2, b"still in").await?;
+            counted(&engine, ECHO_CARRIED, 3).await?;
             assert_eq!(ping_sockets()?, 5, "three apps' and two of the engine's");
 
             until_count("the engine's idle sockets were swept", ping_sockets, 3).await?;
@@ -1618,8 +1617,84 @@ fn pings_beyond_the_cap_are_dropped_until_a_socket_goes_idle() -> Outcome {
                 (4403, 2, b"in at last".to_vec(), SERVER_IP)
             );
             let counters = engine.counters();
-            assert_eq!((counters[ECHO_CARRIED], counters[ECHO_DROPPED]), (4, 1));
+            assert_eq!(
+                (
+                    counters[ECHO_CARRIED],
+                    counters[ECHO_DROPPED],
+                    counters[ECHO_EVICTED]
+                ),
+                (4, 1, 0)
+            );
             Ok(())
+        },
+    )
+}
+
+const ECHO_EVICTED: usize = 45;
+
+/// ADR 0044, unit 11b (second review, major 1): a traceroute app runs `ping -c 1 -t N` once for each
+/// probe, each with a ping socket and an identifier of its own that never pings again, so 40 such
+/// pings take 40 sockets of the engine's, beyond its cap of 32. At the cap each makes room by ending
+/// the least recently active socket whose every request has had its reply, so all 40 get their reply,
+/// 8 sockets are ended and counted, and the engine holds 32 at most, the ended ones closed. Before, the
+/// last 8 found the cap full for 10 seconds and were dropped.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn forty_one_shot_pings_all_get_their_reply() -> Outcome {
+    lab(
+        "forty_one_shot_pings_all_get_their_reply",
+        &Limits::default(),
+        |engine| async move {
+            for id in 4901..4941 {
+                let app = app_pinger(id)?;
+                ping(&app, SERVER, 1, b"one shot").await?;
+                assert_eq!(pong(&app).await?, (id, 1, b"one shot".to_vec(), SERVER_IP));
+            }
+            let counters = engine.counters();
+            assert_eq!(
+                (
+                    counters[ECHO_CARRIED],
+                    counters[ECHO_REPLIES],
+                    counters[ECHO_DROPPED],
+                    counters[ECHO_EVICTED]
+                ),
+                (40, 40, 0, 8)
+            );
+            // The apps' sockets are closed: what is left is the engine's.
+            until_count("the engine's sockets", ping_sockets, 32).await
+        },
+    )
+}
+
+/// ADR 0044, unit 11b: at the cap, with no socket whose every request has had its reply, the one
+/// through which nothing passed for `Limits::echo_quiet` makes room: two pings of an address that never
+/// answers hold the cap of two, a third app's ping is dropped at once, and once both have been quiet
+/// for a second, its next ping ends the one quiet longest and gets its reply.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn at_the_cap_a_quiet_socket_makes_room() -> Outcome {
+    let limits = Limits {
+        echo_sockets: 2,
+        echo_quiet: Duration::from_secs(1),
+        echo_idle: Duration::from_secs(60),
+        ..Limits::default()
+    };
+    lab(
+        "at_the_cap_a_quiet_socket_makes_room",
+        &limits,
+        |engine| async move {
+            let (first, second, third) = (app_pinger(4951)?, app_pinger(4952)?, app_pinger(4953)?);
+            for app in [&first, &second] {
+                ping(app, SILENT, 1, b"anyone?").await?;
+            }
+            counted(&engine, ECHO_CARRIED, 2).await?;
+            ping(&third, SERVER, 1, b"too soon").await?;
+            counted(&engine, ECHO_DROPPED, 1).await?;
+            tokio::time::sleep(Duration::from_millis(1_100)).await;
+            ping(&third, SERVER, 2, b"now").await?;
+            assert_eq!(pong(&third).await?, (4953, 2, b"now".to_vec(), SERVER_IP));
+            assert_eq!(engine.counters()[ECHO_EVICTED], 1);
+            until_count("an app's and two of the engine's", ping_sockets, 5).await
         },
     )
 }

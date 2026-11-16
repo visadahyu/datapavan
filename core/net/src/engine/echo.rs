@@ -38,7 +38,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::io::Interest;
 use tokio::net::UdpSocket;
-use tokio::sync::watch;
+use tokio::sync::{Notify, watch};
 
 /// A ping socket's key: the app's address, the echo identifier of its requests, and the address it
 /// pings. An app's ping socket keeps one identifier for its life, so each app socket and address
@@ -92,6 +92,8 @@ struct Table<S> {
     sockets: HashMap<Key, Entry<S>>,
     /// The number the last entry got.
     numbered: u64,
+    /// How many sockets ended at the cap to make room for a new one, since the counters took them.
+    made_room: u64,
 }
 
 impl<S> Default for Table<S> {
@@ -99,6 +101,7 @@ impl<S> Default for Table<S> {
         Self {
             sockets: HashMap::new(),
             numbered: 0,
+            made_room: 0,
         }
     }
 }
@@ -113,9 +116,20 @@ struct Entry<S> {
     state: State<S>,
     /// When an echo last passed either way.
     last: Instant,
-    /// The sequence numbers of its latest requests that no error from the path answered yet, the
-    /// latest last, at most [`ASKED`].
-    asked: VecDeque<u16>,
+    /// Its latest requests, the latest last, at most [`ASKED`], until an error from the path answers
+    /// one: each may be answered by one, and is noted when its reply came.
+    asked: VecDeque<Asked>,
+    /// Wakes the socket's task when its place is given to a new socket at the cap, so that it closes
+    /// the socket then rather than when it next wakes.
+    ended: Arc<Notify>,
+}
+
+/// A request of a ping socket's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Asked {
+    sequence: u16,
+    /// Whether its reply came.
+    replied: bool,
 }
 
 enum State<S> {
@@ -129,8 +143,9 @@ enum State<S> {
 enum Next<S> {
     /// It goes out through this socket, to this address.
     Send(Arc<S>, IpAddr),
-    /// It waits for a socket to be made, numbered so, and goes out first through it.
-    Open(u64),
+    /// It waits for a socket to be made, numbered so, and goes out first through it; the socket's task
+    /// is woken by this when its place is given to another.
+    Open(u64, Arc<Notify>),
     /// It waits behind others for the socket being made.
     Held,
     /// It is dropped: the cap is full, or too many wait for the socket.
@@ -139,16 +154,17 @@ enum Next<S> {
 
 impl<S> Table<S> {
     /// What becomes of a request, `message` with the app's hop limit `hops`, of `key` to `target`, at
-    /// `now`, with at most `cap` sockets. A new key takes its place at once, before its socket is made,
-    /// so that the cap holds for the sockets being made too. A request that is not dropped may be
-    /// answered by one error from the path.
+    /// `now`, with at most `cap` sockets, of which one `quiet` so long may end to make room
+    /// ([`Table::make_room`]). A new key takes its place at once, before its socket is made, so that
+    /// the cap holds for the sockets being made too. A request that is not dropped may be answered by
+    /// one error from the path.
     fn request(
         &mut self,
         key: Key,
         target: IpAddr,
         (message, hops): (&[u8], u8),
         now: Instant,
-        cap: usize,
+        (cap, quiet): (usize, Duration),
     ) -> Next<S> {
         let sequence = packet::u16_at(message, 6).unwrap_or(0);
         if let Some(entry) = self.sockets.get_mut(&key) {
@@ -164,20 +180,53 @@ impl<S> Table<S> {
             entry.asks(sequence);
             return next;
         }
-        if self.sockets.len() >= cap {
+        if self.sockets.len() >= cap && !self.make_room(now, quiet) {
             return Next::Full;
         }
         self.numbered += 1;
+        let ended = Arc::new(Notify::new());
         let mut entry = Entry {
             number: self.numbered,
             target,
             state: State::Opening(vec![(message.to_vec(), hops)]),
             last: now,
             asked: VecDeque::new(),
+            ended: Arc::clone(&ended),
         };
         entry.asks(sequence);
         self.sockets.insert(key, entry);
-        Next::Open(self.numbered)
+        Next::Open(self.numbered, ended)
+    }
+
+    /// At the cap, ends one open socket to make room for a new one (ADR 0044, unit 11b), the first
+    /// there is of: the least recently active socket whose every request has had its reply or error,
+    /// as one-shot pings leave behind them (`ping -c 1 -t N`, which traceroute apps run once for each
+    /// probe, each with a socket and an identifier of its own); then the least recently active through
+    /// which nothing passed either way for `quiet`. A socket still being made is never ended, nor one
+    /// that a ping still sends through and waits on: it sends every second. Its task is woken to close
+    /// it; its app's next request, if any, gets a socket anew. `false` when none may end.
+    fn make_room(&mut self, now: Instant, quiet: Duration) -> bool {
+        let open = || {
+            self.sockets
+                .iter()
+                .filter(|(_, entry)| matches!(entry.state, State::Open(_)))
+        };
+        let answered = open()
+            .filter(|(_, entry)| entry.answered())
+            .min_by_key(|(_, entry)| entry.last);
+        let victim = answered
+            .or_else(|| {
+                open()
+                    .filter(|(_, entry)| now.saturating_duration_since(entry.last) >= quiet)
+                    .min_by_key(|(_, entry)| entry.last)
+            })
+            .map(|(key, _)| *key);
+        let Some(entry) = victim.and_then(|key| self.sockets.remove(&key)) else {
+            return false;
+        };
+        entry.ended.notify_one();
+        self.made_room += 1;
+        true
     }
 
     /// An error from the path for the request numbered `sequence` of the socket of `key` numbered
@@ -185,7 +234,10 @@ impl<S> Table<S> {
     /// `None` when the place is gone.
     fn answers(&mut self, key: Key, number: u64, sequence: u16) -> Option<bool> {
         let entry = self.entry(key, number)?;
-        let at = entry.asked.iter().position(|&asked| asked == sequence);
+        let at = entry
+            .asked
+            .iter()
+            .position(|asked| asked.sequence == sequence);
         Some(at.and_then(|at| entry.asked.remove(at)).is_some())
     }
 
@@ -208,11 +260,23 @@ impl<S> Table<S> {
         }
     }
 
-    /// A reply came at `now`. `false` when the place is gone.
-    fn heard(&mut self, key: Key, number: u64, now: Instant) -> bool {
-        self.entry(key, number)
-            .map(|entry| entry.last = now)
-            .is_some()
+    /// Replies to the requests numbered `replied`, or errors from the path, came at `now`. `false` when
+    /// the place is gone.
+    fn heard(&mut self, key: Key, number: u64, now: Instant, replied: &[u16]) -> bool {
+        let Some(entry) = self.entry(key, number) else {
+            return false;
+        };
+        entry.last = now;
+        for &sequence in replied {
+            if let Some(asked) = entry
+                .asked
+                .iter_mut()
+                .find(|asked| asked.sequence == sequence && !asked.replied)
+            {
+                asked.replied = true;
+            }
+        }
+        true
     }
 
     /// When the socket of `key` numbered `number` will have passed nothing either way for `idle`, or
@@ -252,7 +316,15 @@ impl<S> Entry<S> {
         if self.asked.len() == ASKED {
             self.asked.pop_front();
         }
-        self.asked.push_back(sequence);
+        self.asked.push_back(Asked {
+            sequence,
+            replied: false,
+        });
+    }
+
+    /// Whether each of its requests has had its reply or an error: nothing more may come for it.
+    fn answered(&self) -> bool {
+        self.asked.iter().all(|asked| asked.replied)
     }
 }
 
@@ -291,13 +363,19 @@ impl Loop {
             return;
         };
         let key = (request.source, request.id, request.destination);
-        let next = lock(&self.echoes.table).request(
-            key,
-            target,
-            (message, request.hops),
-            Instant::now(),
-            self.shared.limits.echo_sockets,
-        );
+        let limits = &self.shared.limits;
+        let (next, made_room) = {
+            let mut table = lock(&self.echoes.table);
+            let next = table.request(
+                key,
+                target,
+                (message, request.hops),
+                Instant::now(),
+                (limits.echo_sockets, limits.echo_quiet),
+            );
+            (next, std::mem::take(&mut table.made_room))
+        };
+        Counters::add(&counters.echo_evicted, made_room);
         // No await between the chain's check above and the send: a chain set meanwhile from Watch's
         // side is seen by the next request.
         match next {
@@ -306,10 +384,10 @@ impl Loop {
                 let sent = socket.send(message, SocketAddr::new(to, 0), request.hops);
                 count_sent(&self.shared, &sent);
             }
-            Next::Open(number) => {
+            Next::Open(number, ended) => {
                 tokio::spawn(carry(
                     key,
-                    (number, target),
+                    (number, target, ended),
                     Arc::clone(&self.tun),
                     Arc::clone(&self.shared),
                     Arc::clone(&self.echoes.table),
@@ -343,7 +421,7 @@ fn count_sent(shared: &Shared, sent: &io::Result<usize>) {
 /// chain comes on.
 async fn carry(
     key: Key,
-    (number, target): (u64, IpAddr),
+    (number, target, ended): (u64, IpAddr, Arc<Notify>),
     tun: Arc<Tun>,
     shared: Arc<Shared>,
     table: Arc<Mutex<Table<Pinger>>>,
@@ -391,6 +469,8 @@ async fn carry(
         };
         tokio::select! {
             _ = changes.changed() => break,
+            // Its place went to a new socket at the cap.
+            () = ended.notified() => break,
             () = tokio::time::sleep_until(until.into()) => {}
             ready = socket.socket.ready(Interest::READABLE | Interest::ERROR) => {
                 if !ready.is_ok_and(|ready| !ready.is_read_closed()) {
@@ -419,7 +499,9 @@ async fn carry(
                         table.answers(key, number, sequence) == Some(true)
                     });
                     let quiet = told.is_empty() && replies.is_empty();
-                    if !quiet && !table.heard(key, number, Instant::now()) {
+                    let answered: Vec<u16> =
+                        replies.iter().map(|&(_, _, sequence)| sequence).collect();
+                    if !quiet && !table.heard(key, number, Instant::now(), &answered) {
                         break;
                     }
                     told
@@ -429,7 +511,7 @@ async fn carry(
                 for error in told {
                     send_to_app(&tun, &shared, &error).await;
                 }
-                for (reply, read) in replies {
+                for (reply, read, _) in replies {
                     // Counted before it is written: an app that reads it may read the counters next.
                     Counters::add(&shared.counters.echo_replies, 1);
                     Counters::add(&shared.counters.bytes_down, read as u64);
@@ -523,15 +605,15 @@ fn ping_socket(v4: bool) -> io::Result<Socket> {
 
 /// The replies a ping socket holds, read into `buffer`, each rebuilt for the app: from the address it
 /// pinged, with its own echo identifier, the sequence number and data kept, and the hop limit it
-/// arrived with; each with how many bytes the socket read, the ICMP message, for the byte counters.
-/// The kernel hands a ping socket every echo reply that bears its identifier, from wherever it comes:
-/// only the target's are the app's. `true` when the socket failed.
+/// arrived with; each with how many bytes the socket read, the ICMP message, for the byte counters, and
+/// the sequence number it answers. The kernel hands a ping socket every echo reply that bears its
+/// identifier, from wherever it comes: only the target's are the app's. `true` when the socket failed.
 fn receive(
     socket: &UdpSocket,
     buffer: &mut [u8],
     (app, id, destination): Key,
     target: IpAddr,
-) -> (Vec<(Vec<u8>, usize)>, bool) {
+) -> (Vec<(Vec<u8>, usize, u16)>, bool) {
     let reply = if target.is_ipv4() {
         ECHO_REPLY
     } else {
@@ -560,7 +642,7 @@ fn receive(
             if let Some(hops) = arrived {
                 packet::set_hops(&mut packet, hops);
             }
-            replies.push((packet, n));
+            replies.push((packet, n, sequence));
         }
     }
     (replies, false)
@@ -645,8 +727,11 @@ mod tests {
         (APP, id, destination)
     }
 
+    /// A long time: no socket is quiet enough to end at the cap.
+    const LONG: Duration = Duration::from_secs(3_600);
+
     fn request(table: &mut Table<()>, key: Key, now: Instant, cap: usize) -> Next<()> {
-        table.request(key, key.2, (b"ping", 64), now, cap)
+        table.request(key, key.2, (b"ping", 64), now, (cap, LONG))
     }
 
     /// The cap counts the sockets being made as well as the open ones; a request of a key that has a
@@ -656,7 +741,7 @@ mod tests {
     fn the_cap_holds_for_sockets_being_made_and_open() {
         let mut table = Table::<()>::default();
         let now = Instant::now();
-        let Next::Open(first) = request(&mut table, key(1, SERVER), now, 2) else {
+        let Next::Open(first, _) = request(&mut table, key(1, SERVER), now, 2) else {
             unreachable!("the first socket")
         };
         for _ in 1..HELD {
@@ -671,7 +756,7 @@ mod tests {
         );
         assert!(matches!(
             request(&mut table, key(2, SERVER), now, 2),
-            Next::Open(_)
+            Next::Open(..)
         ));
         assert!(
             matches!(request(&mut table, key(1, OTHER), now, 2), Next::Full),
@@ -690,7 +775,7 @@ mod tests {
         table.end(key(1, SERVER), first);
         assert!(matches!(
             request(&mut table, key(1, OTHER), now, 2),
-            Next::Open(_)
+            Next::Open(..)
         ));
         // A socket that could not be made gives back its place, and its requests are counted.
         let Some(Entry { number, .. }) = table.sockets.get(&key(2, SERVER)) else {
@@ -711,7 +796,7 @@ mod tests {
         let idle = Duration::from_secs(10);
         let at = |seconds| start + Duration::from_secs(seconds);
         let (one, two) = (key(1, SERVER), key(2, SERVER));
-        let (Next::Open(first), Next::Open(second)) = (
+        let (Next::Open(first, _), Next::Open(second, _)) = (
             request(&mut table, one, start, 2),
             request(&mut table, two, start, 2),
         ) else {
@@ -719,18 +804,18 @@ mod tests {
         };
         table.opened(one, first, Arc::new(()));
         table.opened(two, second, Arc::new(()));
-        assert!(table.heard(one, first, at(3)), "a reply at 3 s");
+        assert!(table.heard(one, first, at(3), &[]), "a reply at 3 s");
         assert!(matches!(request(&mut table, two, at(5), 2), Next::Send(..)));
         assert_eq!(table.until(one, first, at(12), idle), Some(at(13)));
         assert_eq!(table.until(one, first, at(13), idle), None, "swept");
-        assert!(!table.heard(one, first, at(13)), "gone");
+        assert!(!table.heard(one, first, at(13), &[]), "gone");
         assert_eq!(table.until(two, second, at(13), idle), Some(at(15)));
-        let Next::Open(third) = request(&mut table, key(3, OTHER), at(13), 2) else {
+        let Next::Open(third, _) = request(&mut table, key(3, OTHER), at(13), 2) else {
             unreachable!("its place is free")
         };
         // The same key again, once the cap has room.
         table.end(key(3, OTHER), third);
-        let Next::Open(again) = request(&mut table, one, at(14), 2) else {
+        let Next::Open(again, _) = request(&mut table, one, at(14), 2) else {
             unreachable!("a socket anew")
         };
         assert_ne!(again, first);
@@ -739,6 +824,72 @@ mod tests {
             matches!(request(&mut table, one, at(14), 2), Next::Held),
             "the old task ended the new socket"
         );
+    }
+
+    /// At the cap, a socket ends to make room for a new one (ADR 0044, unit 11b): first the least
+    /// recently active whose every request has had its reply or error, as a one-shot ping leaves
+    /// behind; then, with none such, the least recently active quiet for `quiet`; never one still being
+    /// made, nor one that waits on a reply and was active since. The socket ended is woken to close.
+    #[test]
+    fn at_the_cap_an_answered_or_quiet_socket_makes_room() {
+        let mut table = Table::<()>::default();
+        let start = Instant::now();
+        let at = |millis| start + Duration::from_millis(millis);
+        let quiet = Duration::from_secs(2);
+        let ask = |table: &mut Table<()>, key: Key, sequence: u16, now| {
+            let mut message = vec![packet::ECHO_REQUEST, 0, 0, 0, 0, 1];
+            message.extend_from_slice(&sequence.to_be_bytes());
+            table.request(key, key.2, (&message, 64), now, (3, quiet))
+        };
+        let (one, two, three, four) = (
+            key(1, SERVER),
+            key(2, SERVER),
+            key(3, SERVER),
+            key(4, OTHER),
+        );
+        let mut numbers = Vec::new();
+        for (key, now) in [(one, 0), (two, 100), (three, 200)] {
+            let Next::Open(number, ended) = ask(&mut table, key, 1, at(now)) else {
+                unreachable!("a socket")
+            };
+            table.opened(key, number, Arc::new(()));
+            numbers.push((number, ended));
+        }
+        // Each waits on its reply, and none is quiet for two seconds yet: the cap holds.
+        assert!(matches!(ask(&mut table, four, 1, at(1_000)), Next::Full));
+        // The second's reply came: it makes room, though the first was active longer ago.
+        assert!(table.heard(two, numbers[1].0, at(1_100), &[1]));
+        assert!(matches!(
+            ask(&mut table, four, 1, at(1_200)),
+            Next::Open(..)
+        ));
+        assert!(!table.sockets.contains_key(&two));
+        assert_eq!(table.made_room, 1);
+        // Its task is woken: a permit waits for it.
+        let woken = numbers[1].1.notified();
+        let mut woken = std::pin::pin!(woken);
+        assert!(woken.as_mut().enable(), "the socket's task not woken");
+        // A request still being made is never ended, and with none answered, the one quiet longest
+        // ends once quiet for two seconds: the first, at 2,000 ms.
+        let five = key(5, OTHER);
+        assert!(matches!(ask(&mut table, five, 1, at(1_900)), Next::Full));
+        assert!(matches!(
+            ask(&mut table, five, 1, at(2_000)),
+            Next::Open(..)
+        ));
+        assert!(!table.sockets.contains_key(&one));
+        assert!(table.sockets.contains_key(&three) && table.sockets.contains_key(&four));
+        assert_eq!(table.made_room, 2);
+        // A socket that sends on is not quiet: the third asks again at 2,100 ms, the fourth, still
+        // being made, may not end, and the fifth was made since: nothing may end at 2,300 ms.
+        assert!(matches!(
+            ask(&mut table, three, 2, at(2_100)),
+            Next::Send(..)
+        ));
+        assert!(matches!(
+            ask(&mut table, key(6, OTHER), 1, at(2_300)),
+            Next::Full
+        ));
     }
 
     /// An error from the path reaches the app from the router that sent it, with the hop limit it came
@@ -757,11 +908,12 @@ mod tests {
             message.extend_from_slice(b"data");
             message
         };
-        let Next::Open(number) = table.request(key, SERVER, (&message(1), 3), now, 4) else {
+        let Next::Open(number, _) = table.request(key, SERVER, (&message(1), 3), now, (4, LONG))
+        else {
             unreachable!("a socket")
         };
         assert!(matches!(
-            table.request(key, SERVER, (&message(2), 3), now, 4),
+            table.request(key, SERVER, (&message(2), 3), now, (4, LONG)),
             Next::Held
         ));
         let router = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1));

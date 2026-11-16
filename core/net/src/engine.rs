@@ -215,6 +215,11 @@ pub struct Limits {
     /// request every second, so a socket silent this long belongs to one that has stopped; an app that
     /// pings again later gets a socket anew.
     pub echo_idle: Duration,
+    /// At the cap of ping sockets, one through which nothing passed either way for this long ends to
+    /// make room for a new one, when no socket whose every request has had its reply or error can (ADR
+    /// 0044, unit 11b). A ping sends a request every second, so one still pinging is never taken; one
+    /// that waits this long has lost its reply. Its app's next request, if any, gets a socket anew.
+    pub echo_quiet: Duration,
     /// At most this many datagrams are put together from the apps' fragments at once (ADR 0044,
     /// decision 5 as amended): for a fragment of one more, the oldest incomplete one gives way.
     pub fragment_datagrams: usize,
@@ -292,6 +297,7 @@ impl Default for Limits {
             stand_ins: crate::standins::CAPACITY,
             echo_sockets: 32,
             echo_idle: Duration::from_secs(10),
+            echo_quiet: Duration::from_secs(2),
             fragment_datagrams: 64,
             fragment_bytes: 1 << 20,
             fragment_wait: Duration::from_secs(5),
@@ -448,7 +454,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 45;
+pub const COUNTERS: usize = 46;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -498,6 +504,7 @@ pub struct Counters {
     path_unreachable: AtomicU64,
     echo_errors: AtomicU64,
     errors_unasked: AtomicU64,
+    echo_evicted: AtomicU64,
 }
 
 impl Counters {
@@ -543,7 +550,8 @@ impl Counters {
     /// many of the errors passed on, of those three kinds, answered echo requests, and the errors from
     /// the path dropped because they answered nothing the app sent: a destination its mapping or ping
     /// socket never sent to, a request it never sent, or a datagram or request the app was already told
-    /// of once. None names a destination: they can be read on any phone. New counters are only ever appended, so that scripts
+    /// of once; and the ping sockets ended at the cap to make room for a new one. None names a
+    /// destination: they can be read on any phone. New counters are only ever appended, so that scripts
     /// reading a column by its place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
@@ -608,6 +616,7 @@ impl Counters {
             &self.path_unreachable,
             &self.echo_errors,
             &self.errors_unasked,
+            &self.echo_evicted,
         ]
     }
 }
