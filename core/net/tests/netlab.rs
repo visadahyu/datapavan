@@ -2466,7 +2466,7 @@ async fn echoing_server() -> io::Result<(SocketAddr, Arc<AtomicU64>)> {
     Ok((at, accepted))
 }
 
-/// Sets the tunnel up again as Android does when only its MTU or the apps left out change, and as
+/// Sets the tunnel up again as Android does when it keeps the VPN network, as for a new MTU, and as
 /// Watch's Kotlin side then does: a second tun device, tun2, Android's in-place update from tun0 to it,
 /// and its descriptor handed to the running engine, which waits off the test's runtime, whose servers
 /// go on meanwhile. Then the engine's descriptor of tun0 is closed, and the test's own, its standard
@@ -2484,8 +2484,8 @@ async fn set_up_again(engine: &Arc<Engine>) -> Outcome {
     until_count("the descriptors of tun0", || descriptors_of("tun0"), 1).await
 }
 
-/// ADR 0044, unit 12b: a tunnel set up again with the same addresses, as for a new MTU or a change of
-/// the apps left out, is handed to the running engine, which keeps every flow. With traffic flowing,
+/// ADR 0044, unit 12b: a tunnel set up again with the same addresses on the same VPN network, as for a
+/// new MTU, is handed to the running engine, which keeps every flow. With traffic flowing,
 /// Android's in-place update is played as AOSP's `Vpn.establish` does it, then the new tunnel is handed
 /// over. After it, the same TCP connection carries bytes both ways, and the server accepted no other;
 /// the app socket's UDP mapping leaves through the same port, and a peer the app sent to before gets in
@@ -2568,10 +2568,10 @@ fn a_tunnel_set_up_again_with_the_same_addresses_keeps_every_flow() -> Outcome {
 }
 
 /// Unit 12b, with a chain on: a chained app's connection and UDP association through the tool go on
-/// across a tunnel set up again with the same addresses, and its new connection and datagram after it
-/// go through the tool too, so nothing reaches the server directly: the chain stays the running
-/// engine's, with nothing handed over or set again. A chain refuses every ping, so the ping's socket is
-/// [`a_tunnel_set_up_again_with_the_same_addresses_keeps_every_flow`]'s.
+/// across a tunnel set up again with the same addresses on the same network, and its new connection and
+/// datagram after it go through the tool too, so nothing reaches the server directly: the chain stays
+/// the running engine's, with nothing handed over or set again. A chain refuses every ping, so the
+/// ping's socket is [`a_tunnel_set_up_again_with_the_same_addresses_keeps_every_flow`]'s.
 #[test]
 #[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
 fn a_chained_app_goes_on_through_the_tool_across_a_tunnel_set_up_again() -> Outcome {

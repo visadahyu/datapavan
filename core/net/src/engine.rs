@@ -605,8 +605,8 @@ pub struct ChainSetting {
 /// the names DNS answers gave addresses; with its counters, which go on. So the new engine routes a
 /// chained app's first packet through the tool, as the old one would have, rather than directly until
 /// the chain is set again (re-review of unit 12, major 1). Its flows end with it. Since unit 12b this is
-/// only for a tunnel with other addresses: one with the same addresses goes to the running engine
-/// ([`Engine::swap_tunnel`]), which keeps its flows.
+/// only for a tunnel with other addresses or on a new VPN network: one with the same addresses on the
+/// same network goes to the running engine ([`Engine::swap_tunnel`]), which keeps its flows.
 pub struct Handover {
     chain: Option<Arc<Chain>>,
     upstream_dns: Option<IpAddr>,
@@ -827,15 +827,20 @@ impl Engine {
         })
     }
 
-    /// Hands the running engine `fd`, the descriptor of the tunnel set up again with the same addresses,
-    /// which must be non-blocking (ADR 0044, unit 12b). The engine goes on with it in place of the
-    /// tunnel it reads, keeping everything: its NAT, TCP connections and listeners, UDP mappings, ping
-    /// sockets, fragments, chain, names, stand-ins, counters and log. It first handles what is still
-    /// queued on the old tunnel, which it then closes. Waits until the engine's thread has done so.
+    /// Hands the running engine `fd`, the descriptor of the tunnel set up again with the same addresses
+    /// on the same VPN network, which must be non-blocking (ADR 0044, unit 12b). The engine goes on with
+    /// it in place of the tunnel it reads, keeping everything: its NAT, TCP connections and listeners,
+    /// UDP mappings, ping sockets, fragments, chain, names, stand-ins, counters and log. It first handles
+    /// what is still queued on the old tunnel, which it then closes. Waits until the engine's thread has
+    /// done so.
     ///
-    /// Only for the same addresses: the apps' connections are bound to the tunnel's addresses, and the
-    /// engine's listeners and rewriting to them, so a tunnel with other ones starts a new engine, with
-    /// what this one hands over ([`Engine::hand_over`]).
+    /// Only for the same addresses on the same network. The apps' connections are bound to the tunnel's
+    /// addresses, and the engine's listeners and rewriting to them. And Android's netd marks each packet
+    /// that comes in on the tunnel with its VPN network's netId, which the connections the engine's
+    /// listener accepted keep (`tcp_fwmark_accept`): on a new network, which Android brings up when the
+    /// apps of the tunnel change, they would route nowhere once the old one goes, where a new engine's
+    /// connections reset at once. Either way a new engine starts, with what this one hands over
+    /// ([`Engine::hand_over`]).
     ///
     /// # Errors
     /// When the engine has stopped, or tokio cannot register `fd`. `fd` is closed then, and an engine

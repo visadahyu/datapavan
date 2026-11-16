@@ -1,9 +1,9 @@
 //! The tunnel's file descriptor, which `VpnService.Builder.establish()` returns non-blocking: one read
 //! is one IP packet from an app, one write gives one packet to an app.
 //!
-//! A tunnel set up again with the same addresses is handed to the running engine (ADR 0044, unit 12b):
-//! its descriptor takes the old one's place for the engine's one reader and for every writer, each of
-//! which takes the descriptor in place when it reads or writes.
+//! A tunnel set up again with the same addresses, on the VPN network Android kept, is handed to the
+//! running engine (ADR 0044, unit 12b): its descriptor takes the old one's place for the engine's one
+//! reader and for every writer, each of which takes the descriptor in place when it reads or writes.
 
 use std::fs::File;
 use std::io::{self, Read, Write};

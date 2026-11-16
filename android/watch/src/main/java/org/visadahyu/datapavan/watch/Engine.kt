@@ -31,8 +31,9 @@ internal object Engine {
     ): Boolean
 
     /**
-     * Hands the running engine the tunnel set up again with the same addresses, the descriptor [fd],
-     * which it takes over as [nativeStart] does (from `ParcelFileDescriptor.detachFd()`): the engine goes
+     * Hands the running engine the tunnel set up again with the same addresses on the same VPN network
+     * ([TunnelSetup]), the descriptor [fd], which it takes over as [nativeStart] does (from
+     * `ParcelFileDescriptor.detachFd()`): the engine goes
      * on with it in place of the old tunnel, keeping its connections, mappings, ping sockets, chain,
      * names, stand-ins and counters, and closes the old one once it has handled what was still queued
      * on it (ADR 0044, unit 12b). Returns whether it took it; false, with [fd] closed, when no engine

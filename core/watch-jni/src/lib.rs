@@ -95,8 +95,8 @@ fn start_next(
     true
 }
 
-/// Hands the engine that runs `fd`, the tunnel set up again with the same addresses, which it goes on
-/// with, keeping its flows (ADR 0044, unit 12b): whether it took it. With no engine running, or one
+/// Hands the engine that runs `fd`, the tunnel set up again with the same addresses on the same VPN
+/// network, which it goes on with, keeping its flows (ADR 0044, unit 12b): whether it took it. With no engine running, or one
 /// that could not take it, `fd` is closed and the answer is false.
 fn swap_tunnel(fd: OwnedFd) -> bool {
     set_non_blocking(&fd);
@@ -264,7 +264,8 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStart<'ca
 }
 
 /// `Engine.nativeSwapTunnel(fd)`: takes ownership of the descriptor `fd` of the tunnel set up again with
-/// the same addresses, as `nativeStart` does, and hands it to the engine that runs, which goes on with
+/// the same addresses on the same VPN network, as `nativeStart` does, and hands it to the engine that
+/// runs, which goes on with
 /// it in place of the old tunnel and keeps its flows: its NAT, connections, mappings, ping sockets,
 /// chain, names, stand-ins and counters (ADR 0044, unit 12b). The engine handles what is still queued
 /// on the old tunnel, then closes it, before this returns. Returns whether the engine took it; false,

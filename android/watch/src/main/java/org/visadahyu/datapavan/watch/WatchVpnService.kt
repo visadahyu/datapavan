@@ -52,6 +52,12 @@ class WatchVpnService : VpnService() {
     /** Debug builds: a set to take whatever the networks beneath, for scripts/verify-watch.sh, which cannot make its network clash. */
     @Volatile
     private var forced: TunnelAddresses.Set? = null
+
+    /**
+     * What the tunnel was last established with that decides whether the running engine may take it when
+     * it is set up again ([setUpAgain]); [close] forgets it. Main thread only.
+     */
+    private var setup: TunnelSetup? = null
     private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
     private val debuggable by lazy { applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 }
 
@@ -379,31 +385,35 @@ class WatchVpnService : VpnService() {
      * disconnects the old one when the apps left out change (AOSP, `updateLinkPropertiesInPlaceIfPossible`
      * and `startNewNetworkAgent`); the old interface is reset only after that.
      *
-     * Then, when the tunnel's addresses are the same, as for a new MTU or a change of the apps left out,
-     * the new tunnel is handed to the running engine, which goes on with it and keeps everything, its
-     * connections, mappings, ping sockets, chain and counters among them, and closes the old tunnel once
-     * it has read what was still queued there ([swapTunnel], ADR 0044, unit 12b). When they differ, for
-     * an address clash (ADR 0041) or the debug `addresses-force`, the apps' connections are bound to the
-     * old addresses and cannot go on, nor the engine's listeners and rewriting: the old engine stops,
-     * closing the old tunnel, and one starts on the new tunnel, as when a swap fails. The old engine
-     * hands the new one, before its first packet, its chain as Watch last set it, the network's resolver,
-     * its stand-ins, names and counters (`Engine::hand_over`, re-review of unit 12, major 1), so that no
-     * chained app's packet goes directly meanwhile; its flows begin anew. Either way nothing is set on
-     * the engine again after, so that no chain read from older settings replaces a newer one. Android
-     * leaves the network callbacks as they are, so they are not registered again.
+     * Then, when Android kept the VPN network and the tunnel's addresses are the same ([TunnelSetup]), as
+     * for a new MTU, the new tunnel is handed to the running engine, which goes on with it and keeps
+     * everything, its connections, mappings, ping sockets, chain and counters among them, and closes the
+     * old tunnel once it has read what was still queued there ([swapTunnel], ADR 0044, unit 12b).
+     * Otherwise the old engine stops, closing the old tunnel, and one starts on the new tunnel, as when a
+     * swap fails. When the apps handed to the Builder differ, as when the apps left out change, Android
+     * brings up a new network, and the connections the engine accepted keep the old one's mark, so they
+     * would route nowhere once it goes; reset at once by the new engine, the apps open new ones. When the
+     * addresses differ, for an address clash (ADR 0041) or the debug `addresses-force`, the apps'
+     * connections are bound to the old addresses and cannot go on, nor the engine's listeners and
+     * rewriting. The old engine hands the new one, before its first packet, its chain as Watch last set
+     * it, the network's resolver, its stand-ins, names and counters (`Engine::hand_over`, re-review of
+     * unit 12, major 1), so that no chained app's packet goes directly meanwhile; its flows begin anew.
+     * Either way nothing is set on the engine again after, so that no chain read from older settings
+     * replaces a newer one. Android leaves the network callbacks as they are, so they are not registered
+     * again.
      */
     private fun setUpAgain() {
         if (!active) return
-        val before = addresses
+        val before = setup
         val established = establish()
         if (established == null) {
             stop()
             return
         }
-        // The same addresses: the running engine takes the new tunnel and keeps its flows. Other ones, or
-        // a swap that failed: nativeStart stops the engine that runs, which closes the old tunnel and
-        // hands over what it carries, before it starts anew.
-        val kept = addresses === before && swapTunnel(established)
+        // The same VPN network and addresses: the running engine takes the new tunnel and keeps its flows.
+        // Otherwise, or when a swap failed, nativeStart stops the engine that runs, which closes the old
+        // tunnel and hands over what it carries, before it starts anew.
+        val kept = setup == before && swapTunnel(established)
         if (!kept && !startEngine(established)) {
             stop()
             return
@@ -412,8 +422,8 @@ class WatchVpnService : VpnService() {
     }
 
     /**
-     * Hands the running engine [tunnel], set up again with the same addresses, in place of the one it
-     * reads ([Engine.nativeSwapTunnel]); whether it took it. The engine's read buffer, sized from the
+     * Hands the running engine [tunnel], set up again on the same VPN network with the same addresses, in
+     * place of the one it reads ([Engine.nativeSwapTunnel]); whether it took it. The engine's read buffer, sized from the
      * first tunnel's MTU and never below 1,500 bytes, holds the new tunnel's packets too, since the
      * tunnel's MTU never goes above 1,500 ([TunnelMtu]). The engine takes a duplicate of the descriptor,
      * so that this one stays for [startEngine] when no engine runs or it could not take it; once it has
@@ -460,29 +470,37 @@ class WatchVpnService : VpnService() {
         // A tunnel set up again keeps the network beneath that the callback named; Android takes the
         // new tunnel's underlying networks from its Builder.
         current?.let { builder.setUnderlyingNetworks(arrayOf(it)) }
+        // The apps go to the Builder in sorted order, and the ones it took are kept with the setup: Android
+        // compares them as ordered lists to decide whether it keeps the VPN network ([TunnelSetup]).
+        var allowed = emptyList<String>()
+        var disallowed = emptyList<String>()
         // Debug builds only: the end-to-end test sends only its own apps through the tunnel.
         val only = onlyApps
         if (!only.isNullOrEmpty()) {
-            for (app in only + packageName) {
+            allowed = TunnelSetup.added(only + packageName) { app ->
                 try {
                     builder.addAllowedApplication(app)
+                    true
                 } catch (e: PackageManager.NameNotFoundException) {
                     Log.w(TAG, "Not installed: an app named for the test", e)
+                    false
                 }
             }
         } else {
             // The apps the user left out go to the internet directly, and Android does not give them the
             // VPN as their network (ADR 0041). Android allows either a list of apps inside or one of apps
             // outside, so the test's list above replaces this one.
-            for (app in LeftOut.of(this).apps) {
+            disallowed = TunnelSetup.added(LeftOut.of(this).apps) { app ->
                 try {
                     builder.addDisallowedApplication(app)
+                    true
                 } catch (e: PackageManager.NameNotFoundException) {
                     Log.i(TAG, "An app left out is no longer installed", e)
+                    false
                 }
             }
         }
-        return try {
+        val tunnel = try {
             builder.establish()
         } catch (e: IllegalStateException) {
             Log.w(TAG, "The tunnel could not be set up", e)
@@ -491,6 +509,8 @@ class WatchVpnService : VpnService() {
             Log.w(TAG, "The tunnel was not allowed", e)
             null
         }
+        if (tunnel != null) setup = TunnelSetup(addresses, allowed, disallowed)
+        return tunnel
     }
 
     /**
@@ -538,6 +558,7 @@ class WatchVpnService : VpnService() {
         }
         Engine.nativeStop()
         main.removeCallbacksAndMessages(riseCheck)
+        setup = null
         current = null
         told = null
         toldDns = null
@@ -636,9 +657,10 @@ class WatchVpnService : VpnService() {
                 main.post { setUpAgain() }
                 writer.println("addresses-forced $force")
             }
-            // The tunnel set up again with nothing changed, by the path a new MTU or a change of the apps
-            // left out takes: the same addresses, so the running engine takes the new tunnel and keeps its
-            // flows (ADR 0044, unit 12b), which scripts/verify-watch.sh checks on a connection kept open.
+            // The tunnel set up again with nothing changed, by the path a new MTU takes: the same addresses
+            // and apps, so Android keeps its VPN network and the running engine takes the new tunnel and
+            // keeps its flows (ADR 0044, unit 12b), which scripts/verify-watch.sh checks on a connection
+            // kept open.
             if ("setup-again" in args.orEmpty()) {
                 main.post { setUpAgain() }
                 writer.println("setup-again")
