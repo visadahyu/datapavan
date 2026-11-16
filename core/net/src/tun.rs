@@ -4,11 +4,14 @@
 //! A tunnel set up again with the same addresses, on the VPN network Android kept, is handed to the
 //! running engine (ADR 0044, unit 12b): its descriptor takes the old one's place for the engine's one
 //! reader and for every writer, each of which takes the descriptor in place when it reads or writes.
+//! Android resets the old interface before Watch can hand the new one over, and a tun device whose
+//! interface is down refuses writes (`EIO`): a task's write refused so waits a moment for the new one.
 
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::os::fd::OwnedFd;
 use std::sync::{Arc, Mutex, PoisonError};
+use std::time::Duration;
 
 use tokio::io::unix::AsyncFd;
 use tokio::sync::Notify;
@@ -21,6 +24,8 @@ pub struct Tun {
     /// Woken when another descriptor takes the place of the one in place: a write waiting for the old
     /// one to take a packet goes to the new one instead.
     replaced: Notify,
+    /// How long a write the descriptor refuses waits for another to take its place ([`Tun::send`]).
+    gap: Duration,
 }
 
 /// Registers the descriptor with tokio. Needs a tokio runtime with IO enabled.
@@ -37,10 +42,26 @@ impl Tun {
     /// # Errors
     /// When tokio cannot register the descriptor.
     pub fn new(fd: OwnedFd) -> io::Result<Self> {
+        Self::waiting(fd, Duration::ZERO)
+    }
+
+    /// As [`Tun::new`], with writes the descriptor refuses waiting up to `gap` for another to take its
+    /// place ([`Tun::send`]).
+    ///
+    /// # Errors
+    /// When tokio cannot register the descriptor.
+    pub fn waiting(fd: OwnedFd, gap: Duration) -> io::Result<Self> {
         Ok(Self {
             fd: Mutex::new(Arc::new(register(fd)?)),
             replaced: Notify::new(),
+            gap,
         })
+    }
+
+    /// Whether a write the descriptor refuses waits for another ([`Tun::send`]).
+    #[must_use]
+    pub fn waits(&self) -> bool {
+        !self.gap.is_zero()
     }
 
     fn current(&self) -> Arc<AsyncFd<File>> {
@@ -72,13 +93,41 @@ impl Tun {
         self.current().get_ref().read(buffer)
     }
 
+    /// Writes one packet, waiting until the descriptor takes it, as [`Tun::send_once`] does. One the
+    /// descriptor refuses waits up to the gap given to [`Tun::waiting`] for another to take its place,
+    /// and goes to that one; with none by then, it fails as before. Android resets the old interface
+    /// before Watch hands the engine the new tunnel (ADR 0044, unit 12b), and a tun device whose
+    /// interface is down refuses writes (`EIO`): an answer written in between reaches the app through the
+    /// new tunnel rather than being lost. Only for the engine's tasks: a wait here holds up the caller.
+    ///
+    /// # Errors
+    /// When the descriptor fails, and no other takes its place within the gap.
+    pub async fn send(&self, packet: &[u8]) -> io::Result<usize> {
+        // Made before the first try, so that a replacement from then on ends the wait below.
+        let replaced = self.replaced.notified();
+        let tried = self.current();
+        match self.send_once(packet).await {
+            Err(error) if self.waits() => {
+                if !Arc::ptr_eq(&tried, &self.current()) {
+                    return self.send_once(packet).await;
+                }
+                tokio::select! {
+                    biased;
+                    () = replaced => self.send_once(packet).await,
+                    () = tokio::time::sleep(self.gap) => Err(error),
+                }
+            }
+            sent => sent,
+        }
+    }
+
     /// Writes one packet, waiting until the descriptor takes it. A write waiting when the descriptor is
     /// replaced goes to the new one, and lets go of the old one, which can then close: the old
     /// interface is down by then (Android resets it), and would refuse it.
     ///
     /// # Errors
     /// When the descriptor fails.
-    pub async fn send(&self, packet: &[u8]) -> io::Result<usize> {
+    pub async fn send_once(&self, packet: &[u8]) -> io::Result<usize> {
         loop {
             // Made before the descriptor is taken, so that any replacement from then on wakes it.
             let replaced = self.replaced.notified();

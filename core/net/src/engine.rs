@@ -218,6 +218,12 @@ pub struct Limits {
     /// A datagram whose last fragment has not come this long after its first is dropped. A sender
     /// sends a datagram's fragments one after another, within milliseconds.
     pub fragment_wait: Duration,
+    /// A write to the tunnel that the tunnel refuses waits this long, off the event loop, for the
+    /// tunnel set up again to take its place, and goes there (ADR 0044, unit 12b): Android resets the
+    /// old interface before Watch hands the engine the new one, and a tun device whose interface is
+    /// down refuses writes. Watch's Kotlin side hands it over as soon as `establish()` returns, within
+    /// milliseconds; without a new tunnel by then, the packet is dropped, as before.
+    pub tunnel_wait: Duration,
     /// The first of the fake ports handed out, `first_port..=last_port`.
     pub first_port: u16,
     /// The last of them.
@@ -283,6 +289,7 @@ impl Default for Limits {
             fragment_datagrams: 64,
             fragment_bytes: 1 << 20,
             fragment_wait: Duration::from_secs(5),
+            tunnel_wait: Duration::from_millis(200),
             first_port: nat::FIRST_PORT,
             last_port: nat::LAST_PORT,
         }
@@ -812,7 +819,7 @@ impl Engine {
             .name("watch-engine".into())
             .spawn(move || {
                 runtime.block_on(async move {
-                    match Tun::new(fd) {
+                    match Tun::waiting(fd, config.limits.tunnel_wait) {
                         Ok(tun) => run(tun, config.mtu, state, stopped, changes, swapped).await,
                         Err(_) => Counters::add(&state.counters.failed, 1),
                     }
@@ -1130,9 +1137,18 @@ impl Loop {
         }
     }
 
+    /// Gives the app one packet through the tunnel, from the event loop. One the tunnel refuses, as
+    /// between Android's reset of the old interface and the swap, waits for the next tunnel in a task
+    /// of its own (`Tun::send`), so that the loop reads on meanwhile.
     async fn send(&self, packet: &[u8]) {
-        if self.tun.send(packet).await.is_ok() {
-            Counters::add(&self.shared.counters.packets_out, 1);
+        match self.tun.send_once(packet).await {
+            Ok(_) => Counters::add(&self.shared.counters.packets_out, 1),
+            Err(_) if self.tun.waits() => {
+                let (tun, shared) = (Arc::clone(&self.tun), Arc::clone(&self.shared));
+                let packet = packet.to_vec();
+                tokio::spawn(async move { send_to_app(&tun, &shared, &packet).await });
+            }
+            Err(_) => {}
         }
     }
 
@@ -1146,7 +1162,8 @@ impl Loop {
     }
 }
 
-/// Gives the app one packet through the tunnel.
+/// Gives the app one packet through the tunnel, from a task: one the tunnel refuses waits for the
+/// tunnel set up again, for `Limits::tunnel_wait` at most (`Tun::send`).
 async fn send_to_app(tun: &Tun, shared: &Shared, packet: &[u8]) {
     if tun.send(packet).await.is_ok() {
         Counters::add(&shared.counters.packets_out, 1);
@@ -1814,6 +1831,158 @@ mod tests {
             late,
             Err(io::ErrorKind::ConnectionRefused),
             "the old tunnel is still open"
+        );
+        Ok(())
+    }
+
+    /// What the gap between Android's reset of the old interface and the swap is made of here: an
+    /// engine whose old tunnel refuses its writes, as a tun device whose interface is down does (the
+    /// app's end has shut its reading, so the engine's writes fail, while the app can still send), and
+    /// waits up to `wait` for a new one; a server that echoes; the new tunnel's app end; and the swaps.
+    struct Gap {
+        to: SocketAddr,
+        /// Written to directly: the app only sends through the old tunnel.
+        old_app: std::os::unix::net::UnixDatagram,
+        new_app: tokio::net::UnixDatagram,
+        new_engine: Option<OwnedFd>,
+        swaps: mpsc::UnboundedSender<Swap>,
+        shared: Arc<Shared>,
+        /// The loop's stop and the network's changes, which it runs as long as these live.
+        _signals: (watch::Sender<bool>, watch::Sender<u64>),
+    }
+
+    impl Gap {
+        async fn new(wait: Duration) -> io::Result<Self> {
+            let server = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+            let to = server.local_addr()?;
+            tokio::spawn(async move {
+                let mut buffer = [0u8; 512];
+                while let Ok((n, from)) = server.recv_from(&mut buffer).await {
+                    let _ = server.send_to(&buffer[..n], from).await;
+                }
+            });
+            let shared = Arc::new(shared());
+            let (old_engine, old_app) = std::os::unix::net::UnixDatagram::pair()?;
+            let (new_engine, new_app) = std::os::unix::net::UnixDatagram::pair()?;
+            for end in [&old_engine, &old_app, &new_engine, &new_app] {
+                end.set_nonblocking(true)?;
+            }
+            old_app.shutdown(std::net::Shutdown::Read)?;
+            let (stopping, stop) = watch::channel(false);
+            let (moving, network) = watch::channel(0);
+            let (swaps, swapped) = mpsc::unbounded_channel();
+            tokio::spawn(run(
+                Tun::waiting(OwnedFd::from(old_engine), wait)?,
+                1500,
+                Arc::clone(&shared),
+                stop,
+                network,
+                swapped,
+            ));
+            Ok(Self {
+                to,
+                old_app,
+                new_app: tokio::net::UnixDatagram::from_std(new_app)?,
+                new_engine: Some(OwnedFd::from(new_engine)),
+                swaps,
+                shared,
+                _signals: (stopping, moving),
+            })
+        }
+
+        /// Through the old tunnel: a SYN, which the engine's loop answers with a reset itself (no
+        /// listener here), and a datagram, whose mapping's task writes the server's answer.
+        fn send_both(&self) -> io::Result<()> {
+            let mut syn = Vec::new();
+            etherparse::PacketBuilder::ipv4([10, 1, 10, 1], [198, 51, 100, 9], 64)
+                .tcp(40_001, 80, 1_000, 65_535)
+                .syn()
+                .write(&mut syn, &[])
+                .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+            self.old_app.send(&syn)?;
+            let me = SocketAddr::from((Addresses::COMMON.tun4, 40_000));
+            let datagram =
+                packet::udp(me, self.to, b"in the gap").ok_or(io::ErrorKind::InvalidData)?;
+            self.old_app.send(&datagram)?;
+            Ok(())
+        }
+
+        fn swap(&mut self) -> io::Result<()> {
+            let (done, _taken) = std::sync::mpsc::sync_channel(1);
+            let fd = self.new_engine.take().ok_or(io::ErrorKind::NotFound)?;
+            self.swaps
+                .send((fd, done))
+                .map_err(|_| io::Error::other("the engine ended"))
+        }
+
+        /// What reaches the app through the new tunnel within `within`: a reset, and UDP payloads.
+        async fn heard(&self, within: Duration) -> (bool, Vec<Vec<u8>>) {
+            let (mut reset, mut payloads) = (false, Vec::new());
+            let mut buffer = vec![0u8; 2048];
+            while let Ok(Ok(n)) = tokio::time::timeout(within, self.new_app.recv(&mut buffer)).await
+            {
+                let Ok(parsed) = packet::parse(&buffer[..n]) else {
+                    continue;
+                };
+                if parsed.protocol == TCP {
+                    reset |= packet::tcp_flags(&buffer[..n], &parsed) & packet::RST != 0;
+                } else if let Some(payload) = packet::udp_payload(&buffer[..n], &parsed) {
+                    payloads.push(payload.to_vec());
+                }
+            }
+            (reset, payloads)
+        }
+    }
+
+    /// Unit 12b, writes in the gap: what the engine writes while the old tunnel refuses its writes, as
+    /// once Android has reset the old interface and before the new tunnel is handed over, waits for the
+    /// new one and goes there when it comes within `Limits::tunnel_wait`: the loop's own reset to a
+    /// SYN, and a mapping's answer. The loop's write waits in a task of its own, so the loop reads the
+    /// datagram after the SYN, and its mapping reaches the server, meanwhile.
+    #[tokio::test(flavor = "current_thread")]
+    async fn writes_refused_in_the_gap_go_to_the_tunnel_that_comes_within_the_wait()
+    -> io::Result<()> {
+        let mut gap = Gap::new(Duration::from_secs(2)).await?;
+        gap.send_both()?;
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert_eq!(
+            gap.shared.counters.snapshot()[9],
+            2,
+            "the loop read on while its reset waited"
+        );
+        gap.swap()?;
+        let (reset, payloads) = gap.heard(Duration::from_millis(500)).await;
+        assert!(reset, "the loop's reset to the SYN was lost");
+        assert_eq!(
+            payloads,
+            vec![b"in the gap".to_vec()],
+            "the mapping's answer"
+        );
+        assert_eq!(gap.shared.counters.snapshot()[10], 2, "packets out");
+        Ok(())
+    }
+
+    /// The same, with no new tunnel within the wait: both writes are dropped once it ends, as before
+    /// the wait, and a tunnel that comes later carries only what comes after.
+    #[tokio::test(flavor = "current_thread")]
+    async fn writes_refused_in_the_gap_are_dropped_when_no_tunnel_comes_within_the_wait()
+    -> io::Result<()> {
+        let mut gap = Gap::new(Duration::from_millis(100)).await?;
+        gap.send_both()?;
+        tokio::time::sleep(Duration::from_millis(400)).await;
+        gap.swap()?;
+        let (reset, payloads) = gap.heard(Duration::from_millis(300)).await;
+        assert!(
+            !reset && payloads.is_empty(),
+            "written after the wait: {reset}, {payloads:?}"
+        );
+        assert_eq!(gap.shared.counters.snapshot()[10], 0, "packets out");
+        let me = SocketAddr::from((Addresses::COMMON.tun4, 40_000));
+        let after = packet::udp(me, gap.to, b"after").ok_or(io::ErrorKind::InvalidData)?;
+        gap.new_app.send(&after).await?;
+        assert_eq!(
+            answer(&gap.new_app).await?,
+            (gap.to.port(), b"after".to_vec())
         );
         Ok(())
     }
