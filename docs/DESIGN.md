@@ -811,6 +811,19 @@ again make-before-break with the chain carried over among it. On the Android 15 
 larger than it passed, before those last changes; phones in unit 11b. How it is built:
 [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
+The tunnel set up again keeps the flows, 2026-11-16 (unit 12b, ADR 0044), built by a fresh agent from a written
+brief. When Watch sets its tunnel up again with the same addresses, for a new MTU or a change of the apps left out,
+it hands the new tunnel to the running engine, which goes on with it and keeps everything: every app's TCP
+connections and UDP mappings, the ping sockets, the chain, names, stand-ins and counters. The engine first handles
+what was still queued on the old tunnel, then closes it. A tunnel with other addresses, for a network that clashes
+with them (ADR 0041), still starts a new engine, which goes on with the old one's chain, names and counters, since the
+apps' connections are bound to the old addresses; so does a swap that fails. At its first start Watch now sets the
+chain before the engine, so that a chained app's first packet goes through the tool. In the network lab, a second tun
+device and Android's in-place update played with `ip` show a TCP connection, a mapping's port and peers, a ping's
+socket and a chained app's way through the tool going on across the swap; `scripts/verify-watch.sh` keeps a
+connection open across a setup with nothing changed, not yet run on an emulator. How it is built:
+[ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
+
 | # | Milestone | Done when |
 |---|---|---|
 | W1 | Watch's skeleton | A second Gradle module, `:watch`, package `org.visadahyu.datapavan.watch`, signed with the same key. Both APKs come from one build, CI is green, and each is reproducible on its own. The build fails if the audit app gains `INTERNET`, as now, or if Watch's manifest holds anything outside its permissions ADR. Watch opens on the emulator and the A40 with strings in all eight languages, RTL and pseudo-locales from the start, and an icon from the brand marks. Its tunnel starts and stops. Since ADR 0045, `:watch` is a library that only Datapavan Advanced includes; Advanced is built from `:app` with `-Pdatapavan.edition=advanced`, and the package `org.visadahyu.datapavan.watch` is dropped before its first release. |
