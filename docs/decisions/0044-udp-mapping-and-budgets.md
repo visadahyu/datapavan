@@ -758,6 +758,14 @@ an ADR (D25).
     ping sockets that began before among them (`Tun::replace`). A write waiting for the old one to take a packet
     when it is replaced is woken, goes to the new one and lets go of the old one: the old interface is down by then,
     and refuses writes.
+  - **Writes in the gap** (third round). Android resets the old interface inside `establish()`, before Watch can hand
+    the engine the new tunnel, and a tun device whose interface is down refuses writes (`EIO`). A write the tunnel
+    refuses now waits up to `Limits::tunnel_wait`, 200 ms, for the new one, and goes there; with none by then it is
+    dropped, as before (`Tun::send`). A task's write waits where it is; the event loop's own writes, a reset or a
+    rewritten segment, hand a refused packet to a task of their own (`Loop::send`), so that the loop reads on. Every
+    write the tunnel refuses waits so, whatever the error: in the gap they all are of this kind, and a wait elsewhere
+    costs at most 200 ms before the same drop. Watch's Kotlin side hands the new tunnel over as soon as
+    `establish()` returns, within milliseconds.
   - `Engine::swap_tunnel` hands the new `OwnedFd` to the engine's thread through a channel into its event loop,
     beside the stop and the network's changes, and waits for its answer. The loop polls them in order, a stop, a new
     tunnel, then a read (a biased `select!`), registers the descriptor with tokio and puts it in place, then reads
@@ -788,14 +796,18 @@ an ADR (D25).
   `tcp_fwmark_accept` and a rule for each netId: the same netId with a swap carried 3 of 3, a new netId with a swap
   gave no answer within 5 s in 3 of 3, and a new netId with a new engine was reset at once; on the emulator, after an
   app was left out and taken back, its new connection failed too. It also found that the list could differ when the
-  apps had not: Watch handed the Builder the apps left out in the order of `getStringSet`'s `HashSet`, and skipped
-  one no longer installed, so a list in another order, or without a removed app, brought a new network even for a
-  new MTU.
+  apps had not: Watch handed the Builder the apps left out in the order of `getStringSet`'s `HashSet`, so a list in
+  another order brought a new network even for a new MTU. (The first version of this note said that a removed app
+  was skipped too. The narrow check of the second round found otherwise: AOSP's `Builder.verifyApp`, in
+  `android10-release` and `main`, ignores a package that is not installed, so its name stays in Android's list; only
+  a maker's `Builder` might refuse it, and `TunnelSetup` records what the `Builder` took either way.) The narrow
+  check also read `updateLinkPropertiesInPlaceIfPossible` in `android10-release`, `android11-release` and `main`:
+  each compares only `allowBypass` and the two ordered lists, so Watch's condition, which compares the addresses
+  too, is the same or stricter.
   - Watch now hands the Builder its apps in sorted order and keeps the list it took, with the addresses, as the
     tunnel's setup (`TunnelSetup`); Watch never calls `allowBypass`. A setup whose list and addresses are the same as
     the last one's goes to the running engine; any other starts a new engine, unit 12's path, with what the old one
-    hands over: when the apps left out change, or one of them was removed, the apps' connections through Watch begin
-    anew, as before this unit.
+    hands over: when the apps left out change, the apps' connections through Watch begin anew, as before this unit.
 - **Other addresses still start a new engine.** For ADR 0041's clash and the debug `addresses-force`, the apps'
   connections are bound to the old addresses, as are the engine's listeners and its rewriting, and cannot go on:
   `nativeStart` stops the old engine, which hands the new one what unit 12 hands over, and the flows begin anew, as
@@ -819,50 +831,70 @@ an ADR (D25).
   the routes into the tunnel go to tun2, and only then are tun0's addresses taken away and tun0 brought down, as
   Android resets the old interface. Linux refuses writes to a tun device that is down (`EIO`), as the lab showed,
   and goes on answering reads with "would block", so the engine runs on, on the old tunnel, until it is handed the
-  new one; what it writes to the old one meanwhile is refused and lost, and TCP sends it again (second review, minor
-  5: left so, since a bounded wait for it is not simple).
+  new one; what it writes to the old one meanwhile waits for the new one (above).
+  - **Android's marks** (third round, from the second review's model). `netlab-enter.py --marks 100 tun0` sets them
+    as netd does, in IPv4: what comes in on tun0 is marked, in mangle `INPUT`, with netId 100, explicitlySelected and
+    protectedFromVpn (`RouteController::modifyIncomingPacketMark`); `tcp_fwmark_accept` is 1; a rule sends what
+    bears netId 100 and explicitlySelected to the network's own table, into its interface; the apps' rule into the
+    tunnel takes only what is not protectedFromVpn, as the secure VPN's rule does; and the last rule is unreachable.
+    `--marks-move` moves the network to tun2, as an in-place update does; `--marks-new-network` brings up netId 101
+    on tun2 and then takes netId 100 away, its rule and its mark with it, as a new network agent does. It needs
+    iptables in the namespace (iptables-nft sets the mark with nf_tables alone; CI loads that module); without it
+    the mode says so and fails, and with it the test, which never passes without the marks.
 - **Tests.**
-  - In the engine, 3, with the engine's event loop on the test's own thread, so that what it finds at once can be
+  - In the engine, 5, with the engine's event loop on the test's own thread, so that what it finds at once can be
     made to be there at once: a datagram queued on the old tunnel when the new one comes is handled on the mapping it
     had, whose writer began before, and its answer comes through the new tunnel, the old one closed and a datagram on
     the new one carried; a mapping's write waiting for the old tunnel to take a packet, its small buffer full of
     answers the app did not read, goes to the new one when it comes, with every answer after it, in order, and the
-    old one closes; and a descriptor tokio refuses (`/dev/null`) is answered so, the old tunnel carrying on.
+    old one closes; a descriptor tokio refuses (`/dev/null`) is answered so, the old tunnel carrying on; and, with an
+    old tunnel that refuses the engine's writes as a tun device that is down does, the loop's reset to a SYN and a
+    mapping's answer, refused there, reach the app through the new tunnel when it comes within the wait, while the
+    loop reads on meanwhile, and both are dropped, as before, when none comes within it.
   - In watch-jni: `nativeSwapTunnel`'s function with no engine running returns false and closes the descriptor; with
     one running, one the engine cannot take returns false and the old tunnel stays, and one it can take is kept open
     and the old one closed. The test of unit 12's `SET` now also starts a first engine with a chain set before it, as
     `start()` does. The tests that use the process's engine and chain take a lock, so that they do not run at once.
   - In Kotlin, JVM tests of `TunnelSetup`: the same apps go to the Builder in the same order whatever order the set
-    gives them in, and the list kept is the Builder's, without an app no longer installed; and setups are the same
-    only with the same addresses and the same ordered lists.
-  - In the network lab, 2. With traffic flowing, Android's in-place update played, then the new tunnel handed over:
+    gives them in; the list kept is the one the Builder took, also from a maker's Builder that refuses an app no
+    longer installed; and setups are the same only with the same addresses and the same ordered lists.
+  - In the network lab, 6. With traffic flowing, Android's in-place update played, then the new tunnel handed over:
     the same TCP connection carries bytes both ways after, and the server accepted no other; the app socket's mapping
     leaves through the same port, and a peer it sent to before gets in unasked; the app's ping goes through the same
     ping socket of the engine's; the counters go on, with no TCP flow or mapping begun anew; and the engine's
     descriptor of tun0 is closed, counted from `/proc/self/fdinfo`, whose `iff` line names the device, while the
     test's own stays. With a chain on (a chain refuses every ping, so the ping is the first test's only): a chained
     app's connection and UDP association go on through the tool, its new connection and datagram after the swap go
-    through it too, and the server accepted only the tool's connections (two `CONNECT`s, one `UDP ASSOCIATE`).
+    through it too, and the server accepted only the tool's connections (two `CONNECT`s, one `UDP ASSOCIATE`). Through
+    IPv6, an app's TCP connection goes on across the swap, the server accepting no other. And with Android's marks:
+    on the same network, a kept connection goes on across the swap; on a new network, a swap leaves it hanging (no
+    answer in 3 s) while a new connection passes, which is why Watch starts a new engine there; and a new engine on
+    the new network resets it at once, so that the app opens another.
   - The brief asked the lab to show a packet queued on the old tunnel at the swap handled too. On a real tun device the
     engine reads each packet as it comes, on a thread of its own, so a test cannot make one wait there at the swap
     but by a race; the engine's own test above makes it so on one thread, deterministically.
   - `scripts/verify-watch.sh` keeps a connection to the test server open through Watch, one nc sending a request,
-    then a second once a marker file is there (Android 15's shell may not make a FIFO in `/data/local/tmp`), sets the
-    tunnel up again with `setup-again`, waits until the old interface is gone, and requires the second request
-    answered on the same connection and the MTU Watch chose unchanged. It passed on a fresh Android 15 emulator, in
-    the maintainer's session, before the second review's fixes. `scripts/verify-chain.sh`'s step that leaves an app
-    out and takes it back then failed, by major 1; with the fix those setups start a new engine.
+    then a second only once a marker file is there (Android 15's shell may not make a FIFO in `/data/local/tmp`),
+    sets the tunnel up again with `setup-again`, waits until the old interface is gone, checks that the connection
+    still has one answer, and requires the second request answered on the same connection and the MTU Watch chose
+    unchanged. `scripts/verify-chain.sh`'s step that leaves an app out and takes it back counts only flows new since
+    before, by protocol, the app's end and the destination, whichever way the setup went. On a fresh Android 15
+    emulator, in the maintainer's session, the whole watch shard passed with the second round: the swap kept the
+    connection, an app left out reached the server unseen, and taken back it passed through Watch again.
   - Each was made to fail by a mutation of the code it guards: the old tunnel's queue left unread, the old tunnel
     never closed, a refused descriptor answered as taken, `swap_tunnel` not waiting for the answer or taking
     nothing, a waiting write not woken by the replacement, writes kept on the first descriptor, a descriptor kept
-    open with no engine running, and the apps handed to the Builder unsorted.
+    open with no engine running, the apps handed to the Builder unsorted; in the third round, a task's refused write
+    not waiting, the loop's not handed to a task, the loop waiting itself, and the wait with no bound; and, in the
+    lab, the in-place move leaving IPv6 behind, the marks left on the old interface by an in-place update, and a new
+    network that keeps the old netId.
   - No test reaches: the `select!`'s order, without which a packet queued on the old tunnel is handled the same, by
     the read that comes first, and a stop waits at most one more batch; the service's use of `TunnelSetup`, its
     fallback, the duplicate it hands over, and `start()`'s order, which are the service's lifecycle, Android's;
-    `nativeSwapTunnel`'s JNI shell, a few lines around the function tested; Android's marks on a new network, which
-    only the review's model in the lab and the emulator showed; and what Android does on a phone.
+    `nativeSwapTunnel`'s JNI shell, a few lines around the function tested; Android's own marks, which the lab
+    models after netd's code and the emulator showed; and what Android does on a phone.
 - **Not done, stated:**
-  - the swap has not run on a phone (unit 11b), and the second review's fixes not yet on the emulator;
+  - the swap has not run on a phone: the Galaxy A40 run is the maintainer's, next; other phones in unit 11b;
   - a setup with other addresses, on a new VPN network, or a swap that fails, still ends the engine's flows, as
     before: for other addresses it must, and on a new network a new engine resets the connections at once, which
     the swap could not keep.
