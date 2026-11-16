@@ -42,8 +42,10 @@ pub(super) enum Told {
 pub(super) fn queued(socket: &impl AsFd) -> Vec<(SocketAddr, Told)> {
     let fd = socket.as_fd().as_raw_fd();
     let mut found = Vec::new();
-    // The error, and the address of the router or host that sent it.
-    let mut control = nix::cmsg_space!(libc::sock_extended_err, libc::sockaddr_in6);
+    // The error, and the address of the router or host that sent it; and, on a socket that asks for
+    // the hop limits of what it reads (`hops::ask`), the error's own, which comes first: without room
+    // for both, the error would be cut off.
+    let mut control = nix::cmsg_space!(libc::sock_extended_err, libc::sockaddr_in6, libc::c_int);
     for _ in 0..AT_ONCE {
         // The quoted datagram is not needed: the destination names it.
         let Ok(message) = recvmsg::<SockaddrStorage>(
@@ -93,8 +95,8 @@ fn told(error: &libc::sock_extended_err) -> Option<Told> {
     }
 }
 
-/// The address of a datagram's destination, without an IPv6 flow label or scope.
-fn socket_address(address: &SockaddrStorage) -> Option<SocketAddr> {
+/// The address of a datagram's destination, or its sender, without an IPv6 flow label or scope.
+pub(super) fn socket_address(address: &SockaddrStorage) -> Option<SocketAddr> {
     let address = match (address.as_sockaddr_in(), address.as_sockaddr_in6()) {
         (Some(v4), _) => SocketAddr::from(SocketAddrV4::from(*v4)),
         (None, Some(v6)) => SocketAddr::from(SocketAddrV6::from(*v6)),

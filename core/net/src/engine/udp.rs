@@ -2380,13 +2380,15 @@ enum Mapped {
 }
 
 /// A mapping's socket on the direct path: protected, on the unspecified address of the destination's
-/// IP version and a port the kernel picks, not connected, and with the ICMP errors that answer its
-/// datagrams queued.
+/// IP version and a port the kernel picks, not connected, with the ICMP errors that answer its
+/// datagrams queued, and the hop limit of each datagram it reads given.
 async fn mapped_socket(shared: &Arc<Shared>, destination: SocketAddr) -> io::Result<UdpSocket> {
     let socket = UdpSocket::bind(packet::unspecified_like(&destination)).await?;
     protect(shared, socket.as_fd()).await?;
     // Without the queue, the errors are lost, as most userspace NATs lose them; the mapping still works.
     let _ = errors::keep(&socket, destination.is_ipv4());
+    // Without it, the answers reach the app with the engine's own hop limit, as before unit 11b.
+    let _ = hops::ask(&socket, destination.is_ipv4());
     Ok(socket)
 }
 
@@ -2654,9 +2656,10 @@ fn read_mapped(
             read.packets.push(error);
         }
     }
+    let mut control = hops::room();
     for _ in 0..BATCH {
-        let (n, from) = match socket.try_recv_from(buffer) {
-            Ok((n, from)) => (n, SocketAddr::new(from.ip(), from.port())),
+        let (n, from, arrived) = match hops::try_recv(socket, buffer, &mut control) {
+            Ok(read) => read,
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
             // An ICMP error, which this read took: the error queue says which destination it was for.
             Err(error) if errors::from_icmp(&error) => continue,
@@ -2684,7 +2687,7 @@ fn read_mapped(
         read.packets.extend(deliver(
             shared,
             (app, uid),
-            (from, &buffer[..n]),
+            (from, &buffer[..n], arrived),
             bytes.as_deref(),
             learns,
         ));
@@ -2738,10 +2741,11 @@ fn relayed_receive(
                     (from, bytes, learns)
                 }
             };
+        // The relay's datagram crossed only the phone: the answer keeps the engine's own hop limit.
         packets.extend(deliver(
             shared,
             (app, uid),
-            (from, answer),
+            (from, answer, None),
             bytes.as_deref(),
             learns,
         ));
@@ -2750,11 +2754,12 @@ fn relayed_receive(
 }
 
 /// An `answer` a mapping let in from the peer the app knows as `from`: counted, and wrapped in an IP
-/// packet to the app. Watch learns names from it when it `learns`.
+/// packet to the app, with the hop limit it `arrived` with where the kernel gave one (ADR 0044, unit
+/// 11b). Watch learns names from it when it `learns`.
 fn deliver(
     shared: &Shared,
     (app, uid): (SocketAddr, Option<u32>),
-    (from, answer): (SocketAddr, &[u8]),
+    (from, answer, arrived): (SocketAddr, &[u8], Option<u8>),
     bytes: Option<&FlowBytes>,
     learns: bool,
 ) -> Option<Vec<u8>> {
@@ -2766,7 +2771,10 @@ fn deliver(
     if learns && from.port() == 53 && uid.is_some() {
         shared.learn(answer, uid);
     }
-    let packet = packet::udp(from, app, answer)?;
+    let mut packet = packet::udp(from, app, answer)?;
+    if let Some(hops) = arrived {
+        packet::set_hops(&mut packet, hops);
+    }
     if let Some(bytes) = bytes {
         bytes.add_wire_down(packet.len());
     }

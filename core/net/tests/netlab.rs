@@ -3000,3 +3000,70 @@ fn an_apps_hop_limit_leaves_with_its_datagram_and_its_ping() -> Outcome {
         },
     )
 }
+
+/// Makes the namespace's own packets, the kernel's echo replies among them, leave with the hop limit
+/// `hops` unless their socket says otherwise: IPv4's `ip_default_ttl`, and IPv6's `hop_limit` of the
+/// loopback, which the "internet" is on, and of every interface.
+fn namespace_hops(hops: u8) -> Outcome {
+    for setting in [
+        "/proc/sys/net/ipv4/ip_default_ttl",
+        "/proc/sys/net/ipv6/conf/lo/hop_limit",
+        "/proc/sys/net/ipv6/conf/all/hop_limit",
+    ] {
+        std::fs::write(setting, hops.to_string()).map_err(|e| format!("{setting}: {e}"))?;
+    }
+    Ok(())
+}
+
+/// ADR 0044, unit 11b: what comes back reaches the app with the hop limit it arrived with, as a tool
+/// that reads it, ping's `ttl=` or a traceroute's guess of the way back, would see it without Watch: a
+/// server's answer sent with 7, and the namespace's echo reply, sent with 7 by its kernel, reach the
+/// app's socket with 7, IPv4 and IPv6. Before, both reached it with the engine's own 64.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn answers_reach_the_app_with_the_hop_limit_they_arrived_with() -> Outcome {
+    lab(
+        "answers_reach_the_app_with_the_hop_limit_they_arrived_with",
+        &Limits::default(),
+        |_engine| async move {
+            ipv6_here()?;
+            namespace_hops(7)?;
+            for (server, tunnel, id) in [
+                (SERVER_IP, IpAddr::V4(Addresses::COMMON.tun4), 4811),
+                (
+                    IpAddr::V6(SERVER6),
+                    IpAddr::V6(Addresses::COMMON.tun6),
+                    4812,
+                ),
+            ] {
+                let v4 = server.is_ipv4();
+                let reporter = hop_reporter(SocketAddr::new(server, 0), 7)?;
+                // Blocking sockets, which wait for their answer as their timeout says.
+                let app = std::net::UdpSocket::bind((tunnel, 0))?;
+                app.set_read_timeout(Some(STEP))?;
+                ask_hops(&app, v4)?;
+                app.send_to(b"with which hop limit?", reporter)?;
+                let mut buffer = [0u8; 64];
+                let (_, from, hops) = read_with_hops(&app, &mut buffer)?;
+                assert_eq!((from, hops), (Some(reporter), Some(7)), "{server}");
+
+                let pinger = ping_socket_at(tunnel, id)?;
+                pinger.set_nonblocking(false)?;
+                pinger.set_read_timeout(Some(STEP))?;
+                ask_hops(&pinger, v4)?;
+                pinger.send_to(
+                    &echo_request(v4, 1, b"with which hop limit?"),
+                    &SocketAddr::new(server, 0).into(),
+                )?;
+                let (n, from, hops) = read_with_hops(&pinger, &mut buffer)?;
+                let from = from.ok_or("no sender")?;
+                assert_eq!(
+                    pong_of(&buffer[..n], from)?,
+                    (id, 1, b"with which hop limit?".to_vec(), server)
+                );
+                assert_eq!(hops, Some(7), "the echo reply from {server}");
+            }
+            Ok(())
+        },
+    )
+}

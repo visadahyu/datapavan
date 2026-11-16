@@ -4,7 +4,8 @@
 //! most `Limits::echo_sockets` at once, each ending once no echo passed either way for
 //! `Limits::echo_idle`. The kernel gives such a socket an echo identifier of its own and writes it
 //! into every request, so each reply is rebuilt for the app: from the address it pinged, with the
-//! app's identifier, the sequence number and data kept, and checksums made anew.
+//! app's identifier, the sequence number and data kept, checksums made anew, and the hop limit it
+//! arrived with. Each request leaves with the app's own hop limit (ADR 0044, unit 11b).
 //!
 //! Android cannot say whose an echo is: `getConnectionOwnerUid` knows only TCP and UDP. So while a
 //! chain sends any app through the user's tool, no echo leaves directly, since it could be a chained
@@ -383,19 +384,20 @@ async fn carry(
 
 /// A ping socket of the engine's own toward `target`, protected before it sends anything, so that
 /// its requests leave on the network beneath rather than back into the tunnel. Tokio's `UdpSocket`
-/// holds it: it only sends and receives datagrams, with `sendto` and `recvfrom`, which is all a ping
-/// socket takes, and so wraps one without unsafe code.
+/// holds it: it only sends and receives datagrams, which is all a ping socket takes, and so wraps one
+/// without unsafe code. The kernel gives the hop limit each reply arrived with (ADR 0044, unit 11b);
+/// where it refuses, a reply keeps the engine's own.
 ///
 /// It sets no `IP_RECVERR` or `IPV6_RECVERR`: the ICMP errors that answer a ping on the network
-/// beneath ("unreachable", "time exceeded") never reach the app, which sees no reply, and the reply's
-/// hop limit is the engine's own, not the one it arrived with. Without the option, an unconnected
-/// ping socket's reads never fail for such an error. A later unit that sets it must read the error
-/// queue on `Interest::ERROR` with `MSG_ERRQUEUE`, as `errors::queued` does for UDP mappings, and treat
-/// a read failing with such an error as `errors::from_icmp` does, so that a pending error does not
-/// end the socket.
+/// beneath ("unreachable", "time exceeded") never reach the app, which sees no reply. Without the
+/// option, an unconnected ping socket's reads never fail for such an error. A later change that sets
+/// it must read the error queue on `Interest::ERROR` with `MSG_ERRQUEUE`, as `errors::queued` does for
+/// UDP mappings, and treat a read failing with such an error as `errors::from_icmp` does, so that a
+/// pending error does not end the socket.
 async fn open(shared: &Arc<Shared>, target: IpAddr) -> io::Result<Pinger> {
     let socket = UdpSocket::from_std(std::net::UdpSocket::from(ping_socket(target.is_ipv4())?))?;
     protect(shared, socket.as_fd()).await?;
+    let _ = hops::ask(&socket, target.is_ipv4());
     Ok(Pinger {
         socket,
         hops: AtomicU16::new(UNSET),
@@ -448,9 +450,9 @@ fn ping_socket(v4: bool) -> io::Result<Socket> {
 }
 
 /// The replies a ping socket holds, read into `buffer`, each rebuilt for the app: from the address it
-/// pinged, with its own echo identifier, the sequence number and data kept. The kernel hands a ping
-/// socket every echo reply that bears its identifier, from wherever it comes: only the target's are
-/// the app's. `true` when the socket failed.
+/// pinged, with its own echo identifier, the sequence number and data kept, and the hop limit it
+/// arrived with. The kernel hands a ping socket every echo reply that bears its identifier, from
+/// wherever it comes: only the target's are the app's. `true` when the socket failed.
 fn receive(
     socket: &UdpSocket,
     buffer: &mut [u8],
@@ -463,8 +465,9 @@ fn receive(
         ECHO_REPLY_V6
     };
     let mut replies = Vec::new();
+    let mut control = hops::room();
     for _ in 0..BATCH {
-        let (n, from) = match socket.try_recv_from(buffer) {
+        let (n, from, arrived) = match hops::try_recv(socket, buffer, &mut control) {
             Ok(read) => read,
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
             Err(_) => return (replies, true),
@@ -478,7 +481,10 @@ fn receive(
             continue;
         }
         let sequence = u16::from_be_bytes([*high, *low]);
-        if let Some(packet) = packet::echo_reply(destination, app, id, sequence, data) {
+        if let Some(mut packet) = packet::echo_reply(destination, app, id, sequence, data) {
+            if let Some(hops) = arrived {
+                packet::set_hops(&mut packet, hops);
+            }
             replies.push(packet);
         }
     }

@@ -34,9 +34,11 @@ pub const ECHO_REQUEST_V6: u8 = 128;
 /// `ICMPv6`'s echo reply.
 pub const ECHO_REPLY_V6: u8 = 129;
 
-/// The hop limit of packets the engine builds, echo replies among them: Linux's default, so that a
-/// reply through Watch looks like one from a host a hop away, whatever the path beneath.
-const HOPS: u8 = 64;
+/// The hop limit of packets the engine builds: Linux's default. An answer or an echo reply that came
+/// with a hop limit of its own is given that one instead ([`set_hops`]), so that a tool that reads it
+/// sees the network's value (ADR 0044, unit 11b); one from the tool's relay, or one whose hop limit the
+/// kernel did not give, keeps this one.
+pub const HOPS: u8 = 64;
 /// IPv6 extension headers followed before giving up on a packet.
 const MAX_EXTENSIONS: usize = 8;
 
@@ -704,6 +706,26 @@ pub fn echo_reply(
     assemble(from, to, protocol, icmp, 2)
 }
 
+/// Gives `packet`, an IPv4 or IPv6 packet the engine built, the hop limit `hops`: the one its answer
+/// arrived with, which reaches the app as it would without Watch (ADR 0044, unit 11b). IPv4's header
+/// checksum is made anew. A packet too short for its header is left as it is.
+pub fn set_hops(packet: &mut [u8], hops: u8) {
+    match packet.first().map(|first| first >> 4) {
+        Some(4) => {
+            let header = usize::from(packet[0] & 0x0f) * 4;
+            if header < 20 || packet.len() < header {
+                return;
+            }
+            packet[8] = hops;
+            packet[10..12].fill(0);
+            let checksum = header_checksum(&packet[..header]);
+            packet[10..12].copy_from_slice(&checksum.to_be_bytes());
+        }
+        Some(6) if packet.len() >= 40 => packet[7] = hops,
+        _ => {}
+    }
+}
+
 /// The unspecified address of the same version as `address`.
 #[must_use]
 pub fn unspecified_like(address: &SocketAddr) -> SocketAddr {
@@ -970,6 +992,41 @@ mod tests {
             .write(&mut packet, data)
             .unwrap_or_default();
         packet
+    }
+
+    /// A packet the engine built takes the hop limit its answer arrived with, IPv4's with its header
+    /// checksum made anew, as an independent reader checks; one too short is left as it is.
+    #[test]
+    fn a_built_packet_takes_the_hop_limit_its_answer_came_with() {
+        for (from, to) in [
+            (
+                SocketAddr::from((SERVER4, 53)),
+                SocketAddr::from((APP4, 40_000)),
+            ),
+            (
+                SocketAddr::from((v6(SERVER6), 53)),
+                SocketAddr::from((v6(APP6), 40_000)),
+            ),
+        ] {
+            let mut answer = udp(from, to, b"an answer").unwrap_or_default();
+            set_hops(&mut answer, 7);
+            let Ok(sliced) = SlicedPacket::from_ip(&answer) else {
+                unreachable!("not read back")
+            };
+            match sliced.net {
+                Some(NetSlice::Ipv4(ip)) => {
+                    assert_eq!(ip.header().ttl(), 7);
+                    let header = ip.header().to_header();
+                    assert_eq!(header.header_checksum, header.calc_header_checksum());
+                }
+                Some(NetSlice::Ipv6(ip)) => assert_eq!(ip.header().hop_limit(), 7),
+                _ => unreachable!("no IP header"),
+            }
+            assert_eq!(parse(&answer).map(|p| p.hops), Ok(7));
+        }
+        let mut short = vec![0x45, 0, 0, 20];
+        set_hops(&mut short, 7);
+        assert_eq!(short, [0x45, 0, 0, 20]);
     }
 
     #[test]
