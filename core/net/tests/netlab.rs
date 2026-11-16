@@ -3568,3 +3568,73 @@ fn echos_bytes_are_counted_both_ways() -> Outcome {
         },
     )
 }
+
+const SKIPPED: usize = 8;
+
+/// Slows the namespace's way to the server that never answers (`tun1`) to a trickle, so that what the
+/// engine sends there waits in the kernel and fills its socket's send buffer, as a slow uplink does: a
+/// token bucket of 8 kbit/s holding up to 10 MB.
+fn slow_silent_route() -> Outcome {
+    let output = Command::new("tc")
+        .args([
+            "qdisc", "add", "dev", "tun1", "root", "tbf", "rate", "8kbit",
+        ])
+        .args(["burst", "1600", "limit", "10000000"])
+        .output()
+        .map_err(|e| format!("tc, which this test needs: {e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "tc could not slow tun1 (sch_tbf): {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+    Ok(())
+}
+
+/// ADR 0044, unit 11b (second review): a mapping whose socket's send buffer is full drops the app's
+/// datagram, counted as by a full queue, and the engine goes on reading the tunnel. Before, the engine
+/// waited in its event loop for room in that one socket, every app's packets behind it; and once an
+/// ICMP error had come for the socket, which marks it closed for writing in tokio's readiness for
+/// good, it spun on "would block" rather than waiting. Here a closed port's "port unreachable" comes
+/// first, then 300 datagrams of 1,400 bytes to an address whose way drains at 8 kbit/s; another app's
+/// datagram to a server still gets its answer at once.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_full_send_buffer_drops_a_datagram_and_holds_no_one_up() -> Outcome {
+    // Android is asked whose a socket is again only after a minute's silence, so that every datagram
+    // of the burst goes by the mapping, none waiting for an answer.
+    let limits = Limits {
+        udp_reask: Duration::from_secs(60),
+        ..Limits::default()
+    };
+    lab(
+        "a_full_send_buffer_drops_a_datagram_and_holds_no_one_up",
+        &limits,
+        |engine| async move {
+            slow_silent_route()?;
+            let app = app_socket().await?;
+            let closed = std::net::UdpSocket::bind((SERVER, 0))?.local_addr()?;
+            app.send_to(b"anyone there?", closed).await?;
+            counted(&engine, PATH_UNREACHABLE, 1).await?;
+            // The first opens the way there, while the next would wait for it; the rest go by it.
+            let silent = SocketAddr::from((SILENT, 9));
+            app.send_to(&[7; 1_400], silent).await?;
+            counted(&engine, UDP_FLOWS, 2).await?;
+            for _ in 0..300 {
+                app.send_to(&[7; 1_400], silent).await?;
+            }
+            let echo = udp_echo(SERVER_IP).await?;
+            let other = app_socket().await?;
+            other.send_to(b"still there?", echo).await?;
+            let mut buffer = [0u8; 64];
+            let answered = timeout(Duration::from_secs(2), other.recv_from(&mut buffer)).await;
+            assert!(
+                matches!(&answered, Ok(Ok((12, _)))),
+                "no answer while a mapping's buffer is full: {answered:?}"
+            );
+            assert!(engine.counters()[SKIPPED] > 0, "no datagram dropped");
+            Ok(())
+        },
+    )
+}

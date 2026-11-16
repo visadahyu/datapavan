@@ -169,14 +169,8 @@ pub(super) enum UdpWay {
 }
 
 impl UdpWay {
-    /// Sends one datagram's payload; the bytes sent are the payload's. Not for [`UdpWay::Lookups`].
-    async fn send(&self, payload: &[u8]) -> io::Result<usize> {
-        match self {
-            Self::Direct(socket) => socket.send(payload).await,
-            Self::Lookups(_) => Ok(payload.len()),
-        }
-    }
-
+    /// Sends one datagram's payload, without waiting for room in the socket's buffer, as
+    /// [`try_send_to`] does; the bytes sent are the payload's. Not for [`UdpWay::Lookups`].
     fn try_send(&self, payload: &[u8]) -> io::Result<usize> {
         match self {
             Self::Direct(socket) => socket.try_send(payload),
@@ -1778,7 +1772,7 @@ impl Loop {
             }
             return;
         }
-        let sent = way.send(payload).await;
+        let sent = way.try_send(payload);
         if let Some(error) = count_sent(&self.shared, None, packet, parsed, sent) {
             self.send(&error).await;
         }
@@ -1812,16 +1806,16 @@ impl Loop {
         }
     }
 
-    /// A datagram to a peer of its app socket's mapping.
+    /// A datagram to a peer of its app socket's mapping, which never waits for room in the mapping's
+    /// socket ([`try_send_to`]).
     async fn send_to_peer(&self, to: ToPeer, packet: &[u8], parsed: &Packet, payload: &[u8]) {
         note_quic(&self.shared, to.quic);
-        let sent = send_to(
+        let sent = try_send_to(
             &to.socket,
             to.header.as_deref(),
             payload,
             (parsed.destination, parsed.hops),
-        )
-        .await;
+        );
         if let Some(error) = count_sent(&self.shared, to.bytes.as_deref(), packet, parsed, sent) {
             self.send(&error).await;
         }
@@ -1884,27 +1878,14 @@ fn count_sent(
 /// a hop limit of its own. On the direct path, an ICMP error the kernel holds for the socket fails its
 /// next send once, and that datagram does not leave: it is sent again. The mapping's task reads the
 /// error itself from the socket's error queue, for the destination it was for.
-async fn send_to(
-    socket: &UdpSocket,
-    header: Option<&[u8]>,
-    payload: &[u8],
-    (destination, hops): (SocketAddr, u8),
-) -> io::Result<usize> {
-    if let Some(header) = header {
-        return socket
-            .send(&[header, payload].concat())
-            .await
-            .map(|_| payload.len());
-    }
-    match hops::send_waiting(socket, payload, destination, hops).await {
-        Err(error) if errors::from_icmp(&error) => {
-            hops::send_waiting(socket, payload, destination, hops).await
-        }
-        sent => sent,
-    }
-}
-
-/// As [`send_to`], without waiting for room in the socket's buffer.
+///
+/// It never waits for room in the socket's buffer: a datagram that finds it full is dropped, and
+/// counted ([`count_sent`]), as a full queue drops it (unit 11b's second review). Waiting there held the
+/// event loop, and every app's packets behind it, until that one socket drained; and once an ICMP error
+/// had come for the socket, epoll's `EPOLLERR` beside `EPOLLOUT` marks it closed for writing in mio,
+/// which tokio keeps for good, so the wait spun on "would block" at a whole core rather than waiting
+/// (the network lab measured 2 s of CPU time in 2 s). UDP is free to drop, and the app's own stack
+/// sends again where it must.
 fn try_send_to(
     socket: &UdpSocket,
     header: Option<&[u8]>,

@@ -87,18 +87,6 @@ pub(super) fn try_send(
     socket.try_io(Interest::WRITABLE, || send(socket, payload, to, hops))
 }
 
-/// As [`try_send`], waiting for room in the socket's buffer.
-pub(super) async fn send_waiting(
-    socket: &UdpSocket,
-    payload: &[u8],
-    to: SocketAddr,
-    hops: u8,
-) -> io::Result<usize> {
-    socket
-        .async_io(Interest::WRITABLE, || send(socket, payload, to, hops))
-        .await
-}
-
 /// One `sendmsg` of `payload` to `to`, with `hops` as its ancillary data. IPv4 takes a time to live of 1
 /// to 255 (Linux's `ip_cmsg_send`); a packet that came with 0, which no socket could have sent, leaves
 /// with the socket's own. IPv6 takes 0 too.

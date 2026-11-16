@@ -188,17 +188,18 @@ jobs:
       # runner the restriction is lifted, and the tun module loaded if it is not. The lab's test of Android's
       # marks (netlab-enter.py --marks) sets them with the runner's iptables, whose modules a namespace cannot
       # load itself: nf_tables, and, where iptables-nft encodes -j MARK through the xtables compatibility
-      # layer, as Ubuntu 24.04's iptables 1.8.10 may, nft_compat and xt_mark. Each that cannot be loaded is
-      # warned about here, and that test then fails and says so.
+      # layer, as Ubuntu 24.04's iptables 1.8.10 may, nft_compat and xt_mark. Its test of a full send buffer
+      # slows a route with tc's token bucket, sch_tbf. Each that cannot be loaded is warned about here, and
+      # the test that needs it then fails and says so.
       - name: Allow the network lab
         run: |
           if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
           [ -c /dev/net/tun ] || sudo modprobe tun
-          for module in nf_tables nft_compat xt_mark; do
+          for module in nf_tables nft_compat xt_mark sch_tbf; do
             grep -q "^$module " /proc/modules || sudo modprobe "$module" ||
-              echo "::warning::could not load $module: the network lab's test of Android's marks may fail"
+              echo "::warning::could not load $module: a test of the network lab that needs it may fail"
           done
           command -v iptables || echo "::warning::no iptables on this runner: the lab's test of Android's marks will fail"
 
