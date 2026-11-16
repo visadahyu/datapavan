@@ -17,8 +17,8 @@ use std::collections::HashSet;
 use std::future::Future;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::os::fd::{AsFd, RawFd};
-use std::process::Command;
+use std::os::fd::{AsFd, OwnedFd, RawFd};
+use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -31,6 +31,8 @@ type Outcome = Result<(), Box<dyn std::error::Error>>;
 
 /// Set in the test's environment when it runs inside its namespace.
 const INSIDE: &str = "NETLAB_INSIDE";
+/// The script that builds the namespace, and changes it as a test asks.
+const ENTER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../scripts/netlab-enter.py");
 /// The "internet": an address on the namespace's loopback (scripts/netlab-enter.py).
 const SERVER: Ipv4Addr = Ipv4Addr::new(198, 51, 100, 9);
 /// A second address beside it: another server, or a stranger to the apps.
@@ -49,6 +51,7 @@ const SLOW_ANSWER: Duration = Duration::from_millis(300);
 /// The places of counters in `Engine::counters`.
 const TCP_FLOWS: usize = 0;
 const UDP_FLOWS: usize = 1;
+const PACKETS_IN: usize = 9;
 const STRANGERS: usize = 18;
 const FRAGMENTS: usize = 19;
 const RESETS: usize = 22;
@@ -212,11 +215,10 @@ fn in_namespace(name: &str, settings: &[(&str, &str)]) -> Option<Outcome> {
 /// Runs the test `name` inside a fresh namespace, and fails unless exactly that test ran there and
 /// passed: a lab that could not be built never passes silently.
 fn rerun_inside(name: &str, settings: &[(&str, &str)]) -> Outcome {
-    let enter = concat!(env!("CARGO_MANIFEST_DIR"), "/../../scripts/netlab-enter.py");
     let me = std::env::current_exe()?;
     let output = Command::new("unshare")
         .args(["--user", "--map-root-user", "--net", "--"])
-        .args(["python3", "-I", enter, "--"])
+        .args(["python3", "-I", ENTER, "--"])
         .arg(me)
         .args([
             name,
@@ -2382,6 +2384,242 @@ fn a_tunnel_set_up_again_keeps_the_chain_from_its_first_packet() -> Outcome {
                 "the counters went back: {before:?}, then {after:?}"
             );
             assert_eq!(after[UDP_MAPPINGS], before[UDP_MAPPINGS] + 2);
+            Ok(())
+        },
+    )
+}
+
+/// Runs scripts/netlab-enter.py inside the namespace with `arguments`, its standard input `input`.
+fn change_lab(arguments: &[&str], input: Stdio) -> Outcome {
+    let output = Command::new("python3")
+        .args(["-I", ENTER])
+        .args(arguments)
+        .stdin(input)
+        .output()?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(format!(
+        "netlab-enter.py {arguments:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    )
+    .into())
+}
+
+/// A second tun device of the namespace, `name`, up, as Android makes a new interface for each tunnel
+/// it establishes; its descriptor is the test's, to hand to the engine. The test opens `/dev/net/tun`
+/// and scripts/netlab-enter.py names the device on that open file, since Rust makes a tun device only
+/// with unsafe ioctls.
+fn second_tunnel(name: &str) -> Result<OwnedFd, Box<dyn std::error::Error>> {
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/net/tun")?;
+    change_lab(&["--tunnel", name], Stdio::from(file.try_clone()?))?;
+    Ok(OwnedFd::from(file))
+}
+
+/// Android's in-place update of the VPN network (AOSP's `Vpn.establish`, ADR 0044's amendment of
+/// decision 5): the tunnel's addresses and the apps' routes go from the tun device `from` to `to`,
+/// then `from`'s addresses go and it goes down, as Android resets the old interface.
+fn move_tunnel(from: &str, to: &str) -> Outcome {
+    change_lab(&["--move", from, to], Stdio::null())
+}
+
+/// How many of this process's descriptors are of the tun device `name`: its line in
+/// `/proc/self/fdinfo` names the device.
+fn descriptors_of(name: &str) -> Result<usize, Box<dyn std::error::Error>> {
+    let wanted = format!("iff:\t{name}");
+    let mut count = 0;
+    for entry in std::fs::read_dir("/proc/self/fdinfo")? {
+        // A descriptor closed while the directory is read has no file left to read.
+        let Ok(info) = std::fs::read_to_string(entry?.path()) else {
+            continue;
+        };
+        if info.lines().any(|line| line == wanted) {
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+
+/// A server on the "internet" that sends back each read, for as long as the connection lasts, and
+/// counts the connections it accepted.
+async fn echoing_server() -> io::Result<(SocketAddr, Arc<AtomicU64>)> {
+    let listener = TcpListener::bind((SERVER, 0)).await?;
+    let at = listener.local_addr()?;
+    let accepted = Arc::new(AtomicU64::new(0));
+    let counted = Arc::clone(&accepted);
+    tokio::spawn(async move {
+        while let Ok((mut connection, _)) = listener.accept().await {
+            counted.fetch_add(1, Ordering::Relaxed);
+            tokio::spawn(async move {
+                let mut buffer = [0u8; 256];
+                while let Ok(n) = connection.read(&mut buffer).await {
+                    if n == 0 || connection.write_all(&buffer[..n]).await.is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+    });
+    Ok((at, accepted))
+}
+
+/// Sets the tunnel up again as Android does when only its MTU or the apps left out change, and as
+/// Watch's Kotlin side then does: a second tun device, tun2, Android's in-place update from tun0 to it,
+/// and its descriptor handed to the running engine, which waits off the test's runtime, whose servers
+/// go on meanwhile. Then the engine's descriptor of tun0 is closed, and the test's own, its standard
+/// input, is the one left.
+async fn set_up_again(engine: &Arc<Engine>) -> Outcome {
+    assert_eq!(
+        descriptors_of("tun0")?,
+        2,
+        "the test's and the engine's descriptors of tun0"
+    );
+    let next = second_tunnel("tun2")?;
+    move_tunnel("tun0", "tun2")?;
+    let swapping = Arc::clone(engine);
+    tokio::task::spawn_blocking(move || swapping.swap_tunnel(next)).await??;
+    until_count("the descriptors of tun0", || descriptors_of("tun0"), 1).await
+}
+
+/// ADR 0044, unit 12b: a tunnel set up again with the same addresses, as for a new MTU or a change of
+/// the apps left out, is handed to the running engine, which keeps every flow. With traffic flowing,
+/// Android's in-place update is played as AOSP's `Vpn.establish` does it, then the new tunnel is handed
+/// over. After it, the same TCP connection carries bytes both ways, and the server accepted no other;
+/// the app socket's UDP mapping leaves through the same port, and a peer the app sent to before gets in
+/// unasked; the app's ping goes through the same ping socket of the engine's; the counters go on, with
+/// no flow begun anew; and the engine's descriptor of the old tunnel is closed. Before, the engine
+/// stopped and a new one started: every connection and mapping ended.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_tunnel_set_up_again_with_the_same_addresses_keeps_every_flow() -> Outcome {
+    lab(
+        "a_tunnel_set_up_again_with_the_same_addresses_keeps_every_flow",
+        &Limits::default(),
+        |engine| async move {
+            let (server, accepted) = echoing_server().await?;
+            let mut connection = app_connect(server).await?;
+            assert_eq!(exchange(&mut connection, b"before").await?, b"before");
+            let app = app_socket().await?;
+            let reporter = port_reporter(SERVER).await?;
+            app.send_to(b"which port?", reporter).await?;
+            let port = reported(&app_receive(&app).await?.0)?;
+            let peer = UdpSocket::bind((OTHER, 0)).await?;
+            app.send_to(b"to the peer", peer.local_addr()?).await?;
+            let mut buffer = [0u8; 64];
+            let (_, mapping) = within(
+                "the app's datagram at its peer",
+                peer.recv_from(&mut buffer),
+            )
+            .await?;
+            assert_eq!(mapping.port(), port, "two ports for one app socket");
+            let pinger = app_pinger(4500)?;
+            ping(&pinger, SERVER, 1, b"before").await?;
+            assert_eq!(
+                pong(&pinger).await?,
+                (4500, 1, b"before".to_vec(), SERVER_IP)
+            );
+            let engine_socket = engine_ping_id()?;
+            let before = engine.counters();
+
+            set_up_again(&engine).await?;
+
+            assert_eq!(
+                exchange(&mut connection, b"after").await?,
+                b"after",
+                "the connection"
+            );
+            peer.send_to(b"from the peer", mapping).await?;
+            assert_eq!(
+                app_receive(&app).await?,
+                (b"from the peer".to_vec(), peer.local_addr()?),
+                "the peer the app sent to before"
+            );
+            app.send_to(b"which port?", reporter).await?;
+            assert_eq!(reported(&app_receive(&app).await?.0)?, port, "the port");
+            ping(&pinger, SERVER, 2, b"after").await?;
+            assert_eq!(
+                pong(&pinger).await?,
+                (4500, 2, b"after".to_vec(), SERVER_IP)
+            );
+            assert_eq!(engine_ping_id()?, engine_socket, "another ping socket");
+            assert_eq!(
+                accepted.load(Ordering::Relaxed),
+                1,
+                "the server accepted another connection"
+            );
+            let after = engine.counters();
+            assert!(
+                after.iter().zip(before).all(|(&now, then)| now >= then),
+                "the counters went back: {before:?}, then {after:?}"
+            );
+            assert_eq!(
+                (after[TCP_FLOWS], after[UDP_MAPPINGS]),
+                (before[TCP_FLOWS], before[UDP_MAPPINGS]),
+                "a flow begun anew"
+            );
+            assert!(after[PACKETS_IN] > before[PACKETS_IN]);
+            assert_eq!(after[ECHO_CARRIED], before[ECHO_CARRIED] + 1);
+            Ok(())
+        },
+    )
+}
+
+/// Unit 12b, with a chain on: a chained app's connection and UDP association through the tool go on
+/// across a tunnel set up again with the same addresses, and its new connection and datagram after it
+/// go through the tool too, so nothing reaches the server directly: the chain stays the running
+/// engine's, with nothing handed over or set again. A chain refuses every ping, so the ping's socket is
+/// [`a_tunnel_set_up_again_with_the_same_addresses_keeps_every_flow`]'s.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_chained_app_goes_on_through_the_tool_across_a_tunnel_set_up_again() -> Outcome {
+    lab(
+        "a_chained_app_goes_on_through_the_tool_across_a_tunnel_set_up_again",
+        &Limits::default(),
+        |engine| async move {
+            let tool = proxy(Settings::default()).await?;
+            engine.chain(Some(lab_chain(tool.address)));
+            let (server, accepted) = echoing_server().await?;
+            let mut connection = app_connect(server).await?;
+            assert_eq!(exchange(&mut connection, b"before").await?, b"before");
+            let reporter = source_reporter(SERVER).await?;
+            let app = app_socket().await?;
+            app.send_to(b"before", reporter).await?;
+            assert_eq!(
+                app_receive(&app).await?.0,
+                b"127.0.0.1",
+                "before: not through the tool"
+            );
+
+            set_up_again(&engine).await?;
+
+            assert_eq!(
+                exchange(&mut connection, b"after").await?,
+                b"after",
+                "the connection"
+            );
+            app.send_to(b"after", reporter).await?;
+            assert_eq!(
+                app_receive(&app).await?.0,
+                b"127.0.0.1",
+                "the datagram reached the server directly"
+            );
+            let mut new = app_connect(server).await?;
+            assert_eq!(exchange(&mut new, b"a new one").await?, b"a new one");
+            let mut commands = tool.commands();
+            commands.sort_unstable();
+            assert_eq!(
+                commands,
+                [1, 1, 3],
+                "two CONNECTs and the one UDP ASSOCIATE"
+            );
+            assert_eq!(
+                accepted.load(Ordering::Relaxed),
+                2,
+                "the server accepted a connection that was not the tool's"
+            );
             Ok(())
         },
     )

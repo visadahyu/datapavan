@@ -32,7 +32,19 @@
 #   meets that network as an app meets its link without Watch. A permanent neighbour entry spares the
 #   neighbour discovery; "far" takes packets from addresses of the namespace's own.
 #
+# - A tunnel set up again (ADR 0044, unit 12b): a test that hands the running engine a new tunnel needs a
+#   second tun device whose descriptor it owns, as Android makes a new interface for each tunnel it
+#   establishes. Rust makes a tun device only with unsafe ioctls, and a descriptor inherited by its number
+#   becomes an owned one only with unsafe code too, so the test opens /dev/net/tun itself and runs this
+#   script inside the namespace with that file as its standard input: --tunnel names the device (TUNSETIFF
+#   acts on the open file, which the test shares), makes it non-blocking and brings it up as tun0 is.
+#   --move then does what Android's in-place update of a VPN network does (AOSP's Vpn.establish): the
+#   tunnel's addresses and the routes into it go to the new device, then the old one's addresses go and
+#   it goes down, as Android resets the old interface.
+#
 #   netlab-enter.py -- PROGRAM [ARGUMENTS...]
+#   netlab-enter.py --tunnel NAME      (inside the namespace, the new file at standard input)
+#   netlab-enter.py --move FROM TO     (inside the namespace)
 #
 # Everything here is undone when the namespace ends with the test. It changes nothing outside it.
 import fcntl
@@ -120,13 +132,51 @@ def far_address():
 
 def tun(name):
     fd = os.open("/dev/net/tun", os.O_RDWR)
-    fcntl.ioctl(fd, TUNSETIFF, struct.pack("16sH", name.encode(), IFF_TUN | IFF_NO_PI))
+    name_tun(fd, name)
     return fd
 
 
+def name_tun(fd, name):
+    fcntl.ioctl(fd, TUNSETIFF, struct.pack("16sH", name.encode(), IFF_TUN | IFF_NO_PI))
+
+
+# The tun device NAME on the file at standard input, which the test opened and keeps: up, non-blocking,
+# and taking local sources, as tun0 does. Its addresses and routes come with --move.
+def second_tunnel(name):
+    name_tun(0, name)
+    os.set_blocking(0, False)
+    ip("link", "set", name, "mtu", "1500", "up")
+    sysctl(f"net.ipv4.conf.{name}.rp_filter", "0")
+    sysctl(f"net.ipv4.conf.{name}.accept_local", "1")
+
+
+# Android's in-place update of the VPN network, from the tunnel on OLD to the one on NEW: the new
+# interface gets the tunnel's addresses, the network's routes move to it, and only then is the old one
+# reset, its addresses gone and the interface down. IPv6 moves too where the lab has it.
+def move(old, new):
+    ipv6_here = os.environ.get("NETLAB_IPV6") != "absent"
+    ip("addr", "add", TUN4 + "/32", "dev", new)
+    for address in (FAKE4, DNS4):
+        ip("route", "replace", address + "/32", "dev", new)
+    ip("route", "replace", "default", "dev", new, "table", APPS_TABLE)
+    if ipv6_here:
+        ip("-6", "addr", "add", TUN6 + "/128", "dev", new, "nodad")
+        for address in (FAKE6, DNS6):
+            ip("-6", "route", "replace", address + "/128", "dev", new)
+        ip("-6", "route", "replace", "default", "dev", new, "table", APPS_TABLE)
+    ip("addr", "del", TUN4 + "/32", "dev", old)
+    if ipv6_here:
+        ip("-6", "addr", "del", TUN6 + "/128", "dev", old)
+    ip("link", "set", old, "down")
+
+
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == "--tunnel":
+        return second_tunnel(sys.argv[2])
+    if len(sys.argv) == 4 and sys.argv[1] == "--move":
+        return move(sys.argv[2], sys.argv[3])
     if len(sys.argv) < 3 or sys.argv[1] != "--":
-        sys.exit("usage: netlab-enter.py -- PROGRAM [ARGUMENTS...]")
+        sys.exit("usage: netlab-enter.py -- PROGRAM [ARGUMENTS...] | --tunnel NAME | --move FROM TO")
     program = sys.argv[2:]
 
     ip("link", "set", "lo", "up")

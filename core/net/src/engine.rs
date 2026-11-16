@@ -38,7 +38,7 @@ use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 #[cfg(test)]
 use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
-use tokio::sync::{Notify, watch};
+use tokio::sync::{Notify, mpsc, watch};
 
 use crate::dnscache::DnsCache;
 use crate::fragments::{self, Reassembler, Taken};
@@ -604,8 +604,9 @@ pub struct ChainSetting {
 /// what it learned that the apps' next flows need, the stand-in addresses chained apps were given and
 /// the names DNS answers gave addresses; with its counters, which go on. So the new engine routes a
 /// chained app's first packet through the tool, as the old one would have, rather than directly until
-/// the chain is set again (re-review of unit 12, major 1). Its flows end with it, as before; unit 12b
-/// hands the new tunnel to the running engine instead, keeping them.
+/// the chain is set again (re-review of unit 12, major 1). Its flows end with it. Since unit 12b this is
+/// only for a tunnel with other addresses: one with the same addresses goes to the running engine
+/// ([`Engine::swap_tunnel`]), which keeps its flows.
 pub struct Handover {
     chain: Option<Arc<Chain>>,
     upstream_dns: Option<IpAddr>,
@@ -711,11 +712,16 @@ impl Shared {
     }
 }
 
+/// A new descriptor of the tunnel, for the engine's event loop, and where it says whether it took it
+/// ([`Engine::swap_tunnel`]).
+type Swap = (OwnedFd, std::sync::mpsc::SyncSender<io::Result<()>>);
+
 /// The running engine. Dropping it stops the engine and closes the tunnel.
 pub struct Engine {
     shared: Arc<Shared>,
     stop: watch::Sender<bool>,
     network: watch::Sender<u64>,
+    swaps: mpsc::UnboundedSender<Swap>,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -796,6 +802,7 @@ impl Engine {
         });
         let (stop, stopped) = watch::channel(false);
         let (network, changes) = watch::channel(0);
+        let (swaps, swapped) = mpsc::unbounded_channel();
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_io()
             .enable_time()
@@ -806,7 +813,7 @@ impl Engine {
             .spawn(move || {
                 runtime.block_on(async move {
                     match Tun::new(fd) {
-                        Ok(tun) => run(tun, config.mtu, state, stopped, changes).await,
+                        Ok(tun) => run(tun, config.mtu, state, stopped, changes, swapped).await,
                         Err(_) => Counters::add(&state.counters.failed, 1),
                     }
                 });
@@ -815,8 +822,32 @@ impl Engine {
             shared,
             stop,
             network,
+            swaps,
             thread: Some(thread),
         })
+    }
+
+    /// Hands the running engine `fd`, the descriptor of the tunnel set up again with the same addresses,
+    /// which must be non-blocking (ADR 0044, unit 12b). The engine goes on with it in place of the
+    /// tunnel it reads, keeping everything: its NAT, TCP connections and listeners, UDP mappings, ping
+    /// sockets, fragments, chain, names, stand-ins, counters and log. It first handles what is still
+    /// queued on the old tunnel, which it then closes. Waits until the engine's thread has done so.
+    ///
+    /// Only for the same addresses: the apps' connections are bound to the tunnel's addresses, and the
+    /// engine's listeners and rewriting to them, so a tunnel with other ones starts a new engine, with
+    /// what this one hands over ([`Engine::hand_over`]).
+    ///
+    /// # Errors
+    /// When the engine has stopped, or tokio cannot register `fd`. `fd` is closed then, and an engine
+    /// that runs goes on with the tunnel it had.
+    pub fn swap_tunnel(&self, fd: OwnedFd) -> io::Result<()> {
+        let (done, taken) = std::sync::mpsc::sync_channel(1);
+        self.swaps
+            .send((fd, done))
+            .map_err(|_| io::Error::other("the engine has stopped"))?;
+        taken
+            .recv()
+            .map_err(|_| io::Error::other("the engine stopped before it took the tunnel"))?
     }
 
     /// Stops the engine and waits for its thread: the tunnel's descriptor is closed, and with it the
@@ -945,6 +976,7 @@ async fn run(
     shared: Arc<Shared>,
     mut stop: watch::Receiver<bool>,
     changes: watch::Receiver<u64>,
+    mut swaps: mpsc::UnboundedReceiver<Swap>,
 ) {
     let pending: Pending = Arc::default();
     let nat = Arc::new(Mutex::new(Nat::with_limits(&shared.limits)));
@@ -983,13 +1015,21 @@ async fn run(
         listener6,
         changes,
     };
+    // Sized from the first tunnel's MTU, and never smaller than 1,500 bytes: a tunnel set up again and
+    // handed over (`Engine::swap_tunnel`) keeps this buffer, which holds its packets too, since Watch
+    // never gives the tunnel an MTU above 1,500 (ADR 0044, decision 5 as amended).
     let mut buffer = vec![0u8; usize::from(mtu).max(1500) + 64];
     let mut swept = Instant::now();
     let (end_logging, logging_ends) = watch::channel(false);
     let logging = tokio::spawn(logger(Arc::clone(&state.shared), logging_ends));
     loop {
+        // Polled in this order, not at random: a stop, then a new tunnel, which their callers wait for,
+        // before another batch of reads. What is still queued on the old tunnel is then read by
+        // `Loop::take_tunnel` before it closes; read here first, it would be handled the same.
         tokio::select! {
+            biased;
             _ = stop.changed() => break,
+            Some(swap) = swaps.recv() => state.take_tunnel(swap, &mut buffer).await,
             read = state.tun.recv(&mut buffer) => {
                 let Ok(n) = read else { break };
                 if n == 0 {
@@ -1023,6 +1063,30 @@ async fn run(
 }
 
 impl Loop {
+    /// Puts the tunnel set up again in the place of the old one, for reading and for every task that
+    /// writes to the apps (ADR 0044, unit 12b). Android has moved the apps' routes to the new tunnel and
+    /// reset the old one by then; what the apps sent before, still queued on the old tunnel, is read and
+    /// handled first, and only then is the old tunnel closed, so that no packet in flight is lost. The
+    /// buffer is the first tunnel's, which holds the new one's packets too (`run`).
+    async fn take_tunnel(&self, (fd, done): Swap, buffer: &mut [u8]) {
+        let old = match self.tun.replace(fd) {
+            Ok(old) => old,
+            Err(error) => {
+                let _ = done.send(Err(error));
+                return;
+            }
+        };
+        // Nothing enters the old tunnel any more, so this ends once its queue is read.
+        while let Ok(n) = old.try_recv(buffer) {
+            if n == 0 {
+                break;
+            }
+            self.handle(&mut buffer[..n]).await;
+        }
+        drop(old);
+        let _ = done.send(Ok(()));
+    }
+
     /// One packet from the tunnel. A fragment is held until its datagram is whole, which is then
     /// handled as any other packet, from a buffer of its own: the tunnel's read buffer holds one packet
     /// of the tunnel's MTU, and the next read overwrites it.
@@ -1548,12 +1612,14 @@ mod tests {
         let app = tokio::net::UnixDatagram::from_std(app_end)?;
         let (_stop, stop) = watch::channel(false);
         let (_network, network) = watch::channel(0);
+        let (_swaps, swaps) = mpsc::unbounded_channel();
         tokio::spawn(run(
             Tun::new(OwnedFd::from(engine_end))?,
             1500,
             Arc::clone(&shared),
             stop,
             network,
+            swaps,
         ));
 
         let me = SocketAddr::from(([10, 215, 173, 1], 40_000));
@@ -1583,6 +1649,215 @@ mod tests {
             (&b"slow 1"[..], &b"slow 2"[..])
         );
         assert!(started.elapsed() >= delay);
+        Ok(())
+    }
+
+    /// Unit 12b: a tunnel handed to the running engine takes the old one's place for reading and for
+    /// the tasks that write to the apps, here a mapping's, which began before; a datagram still queued
+    /// on the old tunnel when the new one comes is handled first, on the mapping it had, and its answer
+    /// comes through the new one; and the old tunnel is closed. The engine's tasks run on this thread,
+    /// so none of them runs between the datagram queued and the tunnel handed over: the event loop
+    /// finds both at once, as when Android moved the routes while it was busy.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_new_tunnel_takes_over_after_what_is_queued_on_the_old_one() -> io::Result<()> {
+        let server = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+        let to = server.local_addr()?;
+        tokio::spawn(async move {
+            let mut buffer = [0u8; 512];
+            while let Ok((n, from)) = server.recv_from(&mut buffer).await {
+                let _ = server.send_to(&buffer[..n], from).await;
+            }
+        });
+        let shared = Arc::new(shared());
+        // Two pairs of datagram sockets stand in for the old tunnel and the new one.
+        let (old_engine, old_app) = std::os::unix::net::UnixDatagram::pair()?;
+        let (new_engine, new_app) = std::os::unix::net::UnixDatagram::pair()?;
+        for end in [&old_engine, &old_app, &new_engine, &new_app] {
+            end.set_nonblocking(true)?;
+        }
+        let (_stop, stop) = watch::channel(false);
+        let (_network, network) = watch::channel(0);
+        let (swaps, swapped) = mpsc::unbounded_channel();
+        tokio::spawn(run(
+            Tun::new(OwnedFd::from(old_engine))?,
+            1500,
+            Arc::clone(&shared),
+            stop,
+            network,
+            swapped,
+        ));
+        let me = SocketAddr::from((Addresses::COMMON.tun4, 40_000));
+        let datagram =
+            |payload: &[u8]| packet::udp(me, to, payload).ok_or(io::ErrorKind::InvalidData);
+        let old_app = tokio::net::UnixDatagram::from_std(old_app)?;
+        let new_app = tokio::net::UnixDatagram::from_std(new_app)?;
+        old_app.send(&datagram(b"before")?).await?;
+        assert_eq!(answer(&old_app).await?, (to.port(), b"before".to_vec()));
+
+        // No await between the two.
+        old_app.try_send(&datagram(b"queued")?)?;
+        let (done, taken) = std::sync::mpsc::sync_channel(1);
+        swaps
+            .send((OwnedFd::from(new_engine), done))
+            .map_err(|_| io::Error::other("the engine ended"))?;
+        assert_eq!(
+            answer(&new_app).await?,
+            (to.port(), b"queued".to_vec()),
+            "the datagram queued on the old tunnel"
+        );
+        let mut said = taken.try_recv();
+        for _ in 0..100 {
+            if said.is_ok() {
+                break;
+            }
+            tokio::task::yield_now().await;
+            said = taken.try_recv();
+        }
+        assert!(matches!(said, Ok(Ok(()))), "the engine said {said:?}");
+        let late = old_app.try_send(&datagram(b"late")?).map_err(|e| e.kind());
+        assert_eq!(
+            late,
+            Err(io::ErrorKind::ConnectionRefused),
+            "the old tunnel is still open"
+        );
+
+        new_app.send(&datagram(b"after")?).await?;
+        assert_eq!(answer(&new_app).await?, (to.port(), b"after".to_vec()));
+        let counters = shared.counters.snapshot();
+        assert_eq!(
+            (counters[9], counters[24]),
+            (3, 1),
+            "packets in, and mappings"
+        );
+        Ok(())
+    }
+
+    /// A task's write waiting for the old tunnel to take a packet when the new one comes goes to the new
+    /// one, and lets go of the old one, which closes. Here the app does not read the old tunnel, whose
+    /// small buffer fills with a mapping's answers until the mapping's write waits; its answers from
+    /// then on reach the app through the new tunnel, in order.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_write_waiting_on_the_old_tunnel_goes_to_the_new_one() -> io::Result<()> {
+        const SENT: u8 = 32;
+        let server = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+        let to = server.local_addr()?;
+        tokio::spawn(async move {
+            let mut buffer = [0u8; 512];
+            while let Ok((n, from)) = server.recv_from(&mut buffer).await {
+                let _ = server.send_to(&buffer[..n], from).await;
+            }
+        });
+        let shared = Arc::new(shared());
+        let (old_engine, old_app) = std::os::unix::net::UnixDatagram::pair()?;
+        let (new_engine, new_app) = std::os::unix::net::UnixDatagram::pair()?;
+        for end in [&old_engine, &old_app, &new_engine, &new_app] {
+            end.set_nonblocking(true)?;
+        }
+        // The kernel's smallest: a few answers the app does not read fill it.
+        socket2::SockRef::from(&old_engine).set_send_buffer_size(1)?;
+        let (_stop, stop) = watch::channel(false);
+        let (_network, network) = watch::channel(0);
+        let (swaps, swapped) = mpsc::unbounded_channel();
+        tokio::spawn(run(
+            Tun::new(OwnedFd::from(old_engine))?,
+            1500,
+            Arc::clone(&shared),
+            stop,
+            network,
+            swapped,
+        ));
+        let me = SocketAddr::from((Addresses::COMMON.tun4, 40_000));
+        let datagram =
+            |payload: &[u8]| packet::udp(me, to, payload).ok_or(io::ErrorKind::InvalidData);
+        let old_app = tokio::net::UnixDatagram::from_std(old_app)?;
+        let new_app = tokio::net::UnixDatagram::from_std(new_app)?;
+        old_app.send(&datagram(&[0])?).await?;
+        assert_eq!(answer(&old_app).await?, (to.port(), vec![0]));
+        for n in 1..=SENT {
+            old_app.send(&datagram(&[n])?).await?;
+            tokio::task::yield_now().await;
+        }
+        // Until the answers stop coming: the mapping's write waits.
+        let mut out = shared.counters.snapshot()[10];
+        loop {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            let now = shared.counters.snapshot()[10];
+            if now == out {
+                break;
+            }
+            out = now;
+        }
+        let taken = u8::try_from(out - 1).unwrap_or(SENT);
+        assert!(
+            taken < SENT,
+            "the old tunnel took every answer: no write waited"
+        );
+
+        let (done, _taken) = std::sync::mpsc::sync_channel(1);
+        swaps
+            .send((OwnedFd::from(new_engine), done))
+            .map_err(|_| io::Error::other("the engine ended"))?;
+        for n in taken + 1..=SENT {
+            assert_eq!(
+                answer(&new_app).await?,
+                (to.port(), vec![n]),
+                "the answers after the old tunnel's {taken}"
+            );
+        }
+        let late = old_app.try_send(&datagram(b"late")?).map_err(|e| e.kind());
+        assert_eq!(
+            late,
+            Err(io::ErrorKind::ConnectionRefused),
+            "the old tunnel is still open"
+        );
+        Ok(())
+    }
+
+    /// A descriptor tokio cannot register, here `/dev/null`, which epoll refuses, is refused, so that
+    /// Watch's Kotlin side starts an engine instead; the engine goes on with the tunnel it had.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_tunnel_the_engine_cannot_take_leaves_the_old_one_in_place() -> io::Result<()> {
+        let server = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+        let to = server.local_addr()?;
+        tokio::spawn(async move {
+            let mut buffer = [0u8; 512];
+            while let Ok((n, from)) = server.recv_from(&mut buffer).await {
+                let _ = server.send_to(&buffer[..n], from).await;
+            }
+        });
+        let (engine_end, app_end) = std::os::unix::net::UnixDatagram::pair()?;
+        engine_end.set_nonblocking(true)?;
+        app_end.set_nonblocking(true)?;
+        let (_stop, stop) = watch::channel(false);
+        let (_network, network) = watch::channel(0);
+        let (swaps, swapped) = mpsc::unbounded_channel();
+        tokio::spawn(run(
+            Tun::new(OwnedFd::from(engine_end))?,
+            1500,
+            Arc::new(shared()),
+            stop,
+            network,
+            swapped,
+        ));
+        let (done, taken) = std::sync::mpsc::sync_channel(1);
+        let null = OwnedFd::from(std::fs::File::open("/dev/null")?);
+        swaps
+            .send((null, done))
+            .map_err(|_| io::Error::other("the engine ended"))?;
+        let mut said = taken.try_recv();
+        for _ in 0..100 {
+            if said.is_ok() {
+                break;
+            }
+            tokio::task::yield_now().await;
+            said = taken.try_recv();
+        }
+        assert!(matches!(said, Ok(Err(_))), "the engine said {said:?}");
+        let app = tokio::net::UnixDatagram::from_std(app_end)?;
+        let me = SocketAddr::from((Addresses::COMMON.tun4, 40_000));
+        let datagram = packet::udp(me, to, b"still").ok_or(io::ErrorKind::InvalidData)?;
+        app.send(&datagram).await?;
+        assert_eq!(answer(&app).await?, (to.port(), b"still".to_vec()));
         Ok(())
     }
 

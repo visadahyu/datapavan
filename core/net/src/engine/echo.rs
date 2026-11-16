@@ -454,6 +454,7 @@ mod tests {
     use etherparse::PacketBuilder;
     use std::net::Ipv4Addr;
     use std::os::fd::OwnedFd;
+    use tokio::sync::mpsc;
 
     const APP: IpAddr = IpAddr::V4(Ipv4Addr::new(10, 1, 10, 1));
     const SERVER: IpAddr = IpAddr::V4(Ipv4Addr::new(198, 51, 100, 9));
@@ -585,12 +586,14 @@ mod tests {
         let app = tokio::net::UnixDatagram::from_std(app_end)?;
         let (_stop, stop) = watch::channel(false);
         let (_network, network) = watch::channel(0);
+        let (_swaps, swaps) = mpsc::unbounded_channel();
         tokio::spawn(run(
             Tun::new(OwnedFd::from(engine_end))?,
             1500,
             Arc::clone(&shared),
             stop,
             network,
+            swaps,
         ));
         let ping = |to: [u8; 4], kind_of: u8| {
             let mut packet = Vec::new();
