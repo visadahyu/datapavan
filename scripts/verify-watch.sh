@@ -614,6 +614,14 @@ fi
 # the engine has closed it. Then the marker lets the second request go: it must be answered on the same nc
 # connection, and the tunnel keep the MTU Watch chose (the first-hop values beside it may change with a measure).
 # Each output is read whole before it is parsed.
+#
+# Android's netd destroys every TCP socket on an address it believes was removed. The old interface's reset removes
+# the tunnel's address there while the new interface holds it, and netd's count of the interfaces that hold it can
+# race (the Android 15 emulator, 2026-11-16: "Destroyed 5 sockets on 10.1.10.1" right after the new tunnel was
+# established): the kept connection's sockets go then, the shell's own among them, and no VPN could keep it. Watch's
+# engine lost its listener with them, and refused every connection after, until it bound its listener anew (ADR 0044,
+# unit 12b). So when the kept connection carries no second answer, a new connection through Watch must pass right
+# after, and Android's log tells a destroy by netd, which is reported and passes, from a stall, which fails.
 KEPT_REQUEST='GET /ping HTTP/1.1\r\nHost: watch\r\n\r\n'
 kept_ask() { device 5 "touch $KEPT_GO" >/dev/null; }
 # Waits up to 10 s until the kept connection has had $1 answers.
@@ -625,6 +633,21 @@ kept_answered() {
         sleep 1
     done
     return 1
+}
+# A new connection through Watch, as the first traffic check makes one: whether it is answered.
+new_connection_passes() {
+    local answer
+    answer=$(device 15 "printf 'GET /ping HTTP/1.0\r\n\r\n' | nc -w 5 $HOST $PORT")
+    grep -q '^pong$' <<<"$answer"
+}
+# netd's lines in Android's log since the device's time $1, in seconds since the epoch, that say it destroyed sockets
+# on the address $2, as "Destroyed 5 sockets on 10.1.10.1", joined by "; ". The address's dots match only dots, and
+# the address must end there, so that 10.1.10.1 does not match 10.1.10.10. The log is read whole, then searched.
+netd_destroyed() {
+    local log pattern
+    log=$(adb logcat -d -T "$1.000" </dev/null 2>/dev/null | tr -d '\r' || true)
+    pattern="Destroyed [0-9]+ sockets on ${2//./\\.}([^0-9.]|\$)"
+    grep -oE "$pattern.*" <<<"$log" | head -3 | paste -sd ';' - | sed 's/;/; /g' || true
 }
 # The interfaces that hold the tunnel's IPv4 address, one a line.
 tunnel_interfaces() {
@@ -638,6 +661,8 @@ KEPT=$!
 # The device waits 60 s at most for the marker (300 times 0.2 s), from about now.
 kept_since=$SECONDS
 kept_answered 1 || fail "a connection kept open through Watch got no answer to its first request; the device has: $(device 5 "ls -l $KEPT_OUT; head -c 300 $KEPT_OUT; ps -A -o PID,NAME | grep -E ' (nc|sleep)\$'" | tr '\n' ' ')"
+# Android's log is read from here on, by the device's own clock.
+setup_since=$(adb shell date +%s </dev/null | tr -d '\r')
 adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" setup-again </dev/null | grep -q '^ *setup-again' ||
     fail "the debug command to set the tunnel up again failed"
 moved=""
@@ -654,10 +679,19 @@ done
 kept_answered 1 || fail "the connection kept open through Watch had other than one answer before its second request: $(device 5 "grep -o pong $KEPT_OUT | wc -l")"
 asked=$((SECONDS - kept_since))
 kept_ask
+# What netd destroyed on the tunnel's address, when the kept connection ended with it.
+kept_destroyed=""
 if ! kept_answered 2; then
     [ "$asked" -lt 60 ] ||
         fail "the kept connection's second request was never sent: the marker came $asked s after the connection opened, after the device's 60 s wait for it had ended, as the steps before took that long; this says nothing of the swap"
-    fail "the connection kept open through Watch carried no answer after the tunnel was set up again with the same addresses (interface $interface, then $moved; the marker came after $asked s, within the device's 60 s wait for it)"
+    kept_destroyed=$(netd_destroyed "$setup_since" "$(tunnel_address)")
+    new_connection_passes ||
+        fail "the connection kept open through Watch carried no answer after the tunnel was set up again with the same addresses (interface $interface, then $moved), and a new connection through Watch right after got none either: the engine did not take it (netd's destroys on the tunnel's address: ${kept_destroyed:-none})"
+    [ -n "$kept_destroyed" ] ||
+        fail "the connection kept open through Watch carried no answer after the tunnel was set up again with the same addresses (interface $interface, then $moved; the marker came after $asked s, within the device's 60 s wait for it), and netd destroyed no socket on the tunnel's address: a stall (a new connection through Watch passed)"
+    note="netd destroyed the sockets on the tunnel's address when the tunnel was set up again with the same addresses ($kept_destroyed): the connection kept open through Watch ended with them, as Android ends it; a new connection through Watch passed right after"
+    echo "::warning title=netd destroyed the tunnel's sockets::$note"
+    [ -z "${GITHUB_STEP_SUMMARY:-}" ] || echo "- verify-watch.sh: $note (ADR 0044, unit 12b)" >>"$GITHUB_STEP_SUMMARY"
 fi
 mtu_after=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" </dev/null | tr -d '\r' | sed -n 's/^ *mtu //p')
 read -r chosen_after _ <<<"$mtu_after"
@@ -667,7 +701,11 @@ wait "$KEPT" 2>/dev/null || true
 KEPT=""
 device 5 "rm -f $KEPT_GO $KEPT_OUT" >/dev/null
 interface=$moved
-echo "ok: set up again with the same addresses (interface $interface now), the tunnel kept a connection open through Watch, both ways, and its MTU"
+if [ -n "$kept_destroyed" ]; then
+    echo "ok: set up again with the same addresses (interface $interface now), the tunnel kept its MTU; netd destroyed the kept connection's sockets ($kept_destroyed), and a new connection through Watch passed right after"
+else
+    echo "ok: set up again with the same addresses (interface $interface now), the tunnel kept a connection open through Watch, both ways, and its MTU"
+fi
 
 # Fragments (ADR 0044, decision 5 as amended): a ping of 2,000 bytes of data is a 2,028-byte request, which the
 # shell's kernel cuts into fragments at the tunnel's MTU of 1,500, and the engine puts together again before it
