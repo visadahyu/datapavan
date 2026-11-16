@@ -836,12 +836,16 @@ on the tunnel's address, as it does for an address it believes was removed: its 
 the address raced the in-place update. The connections through Watch ended with them, which no VPN can prevent, and so
 did the engine's listener, whose accept loop ended at its first error: every connection after was refused. The loop
 now never ends: a listener that no longer listens is bound anew, on its own port if it can be, else on another, which
-the engine then rewrites new connections to while those the old one took go on through its port; one that still
-listens, after an error of one connection or a moment without descriptors or memory, accepts again after a pause of
-10 ms to a second. An upstream connection whose connection Android's stack reset before the listener handed it over is
-reset too, rather than held for ten minutes. In the network lab, `ss -K` destroys the sockets as netd does, IPv4 and
-IPv6, and a test runs the engine out of descriptors; `verify-watch.sh` tells a destroy by netd, from Android's log,
-from a stall, and requires a new connection to pass either way. How it is built:
+the engine then rewrites new connections to; one that still listens accepts again, at once after an error of one
+connection, and after a pause of 10 ms to a second after a moment without descriptors or memory. Any app may bind a
+port no listener holds, so only the connections the relay already holds go on through an old listener's port: one not
+yet handed over is reset rather than rewritten there again, and while no listener can be bound a new connection is
+refused (the review's second round). An upstream connection whose connection Android's stack reset before the listener
+handed it over is reset too, rather than held for ten minutes. In the network lab, `ss -K` destroys the sockets as
+netd does, IPv4 and IPv6, another app takes the old port the moment the listener stops, and a test runs the engine
+out of descriptors; `verify-watch.sh` tells a destroy by netd, from Android's log, from a stall, requires a new
+connection to pass either way, and a destroy to come with the running engine having taken the tunnel. On the Android
+15 emulator, in 40 swaps, netd destroyed the sockets in 11, and a new connection passed after each. How it is built:
 [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 Traceroute through Watch, 2026-11-16 (unit 11b, ADR 0044 decision 5), built by a fresh agent from a written brief.
