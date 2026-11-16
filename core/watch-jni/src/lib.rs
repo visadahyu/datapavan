@@ -27,7 +27,10 @@ use jni::{EnvUnowned, JValue, JavaVM, jni_sig, jni_str};
 /// across a call into Kotlin that could call back into this file: `ownerUid`, `protectSocket` and
 /// `logRecords`, reached from the engine, must not call a native method of `Engine` while they run.
 /// One exception is kept on purpose: `nativeFlushLog` hands records to `logRecords` under the lock,
-/// which writes them and returns.
+/// which writes them and returns. `nativeSwapTunnel` holds it while the engine's thread takes the new
+/// tunnel, so that the engine stays in place and a chain set meanwhile reaches it after: that thread
+/// never takes this lock, and reaches Kotlin only from tokio's blocking threads, through the three
+/// callbacks above.
 static ENGINE: Mutex<Option<Engine>> = Mutex::new(None);
 
 fn engine() -> MutexGuard<'static, Option<Engine>> {
@@ -90,6 +93,16 @@ fn start_next(
     *engine() = Some(started);
     drop(set);
     true
+}
+
+/// Hands the engine that runs `fd`, the tunnel set up again with the same addresses, which it goes on
+/// with, keeping its flows (ADR 0044, unit 12b): whether it took it. With no engine running, or one
+/// that could not take it, `fd` is closed and the answer is false.
+fn swap_tunnel(fd: OwnedFd) -> bool {
+    set_non_blocking(&fd);
+    engine()
+        .as_ref()
+        .is_some_and(|running| running.swap_tunnel(fd).is_ok())
 }
 
 /// Stops the engine that runs, if any, and forgets the chain set: the tunnel is off.
@@ -183,7 +196,8 @@ fn set_non_blocking(fd: &OwnedFd) {
 
 /// `Engine.nativeStart(service, fd, mtu, keepFlows, tableFd, tableStart, tableLength)`: takes ownership
 /// of the tunnel's descriptor `fd` and starts the engine, stopping one that runs. One that runs is a
-/// tunnel set up again (ADR 0044, decision 5 as amended): it hands the new engine its chain, the
+/// tunnel set up again with other addresses, or one `nativeSwapTunnel` could not hand over (ADR 0044,
+/// decision 5 as amended, and unit 12b): it hands the new engine its chain, the
 /// network's resolver, its stand-ins, names and counters ([`Engine::hand_over`]) before the new
 /// engine reads its first packet, so that no chained app's packet goes directly meanwhile. `keepFlows` is how
 /// many of the latest flows to keep for debug builds; release builds pass 0. `tableFd`, if not -1, is a
@@ -245,6 +259,35 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStart<'ca
             Ok(start_next(handover, |carried| {
                 Engine::start_with(fd, config, platform, organisations.flatten(), carried)
             }))
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `Engine.nativeSwapTunnel(fd)`: takes ownership of the descriptor `fd` of the tunnel set up again with
+/// the same addresses, as `nativeStart` does, and hands it to the engine that runs, which goes on with
+/// it in place of the old tunnel and keeps its flows: its NAT, connections, mappings, ping sockets,
+/// chain, names, stand-ins and counters (ADR 0044, unit 12b). The engine handles what is still queued
+/// on the old tunnel, then closes it, before this returns. Returns whether the engine took it; false,
+/// with `fd` closed, when no engine runs or it could not take it, and then `nativeStart` starts one on
+/// another descriptor of the new tunnel.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeSwapTunnel(fd: Int):
+// Boolean`, unique in this library.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeSwapTunnel<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    fd: jint,
+) -> jboolean {
+    unowned_env
+        .with_env(|_env| -> Result<jboolean, Error> {
+            if fd < 0 {
+                return Ok(false);
+            }
+            // SAFETY: Kotlin passes the result of `ParcelFileDescriptor.detachFd()` on a duplicate it
+            // made for the call, which hands the only owning reference to native code; nothing else
+            // closes it.
+            let fd = unsafe { OwnedFd::from_raw_fd(fd) };
+            Ok(swap_tunnel(fd))
         })
         .resolve::<ThrowRuntimeExAndDefault>()
 }
@@ -527,7 +570,16 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlows<'ca
 mod tests {
     use super::*;
     use std::collections::HashSet;
-    use std::os::unix::net::UnixDatagram;
+    use std::io::Read;
+    use std::os::unix::net::{UnixDatagram, UnixStream};
+
+    /// The process's engine and chain ([`ENGINE`], [`SET`]): each test that uses them holds this, so
+    /// that tests running side by side do not change them under each other.
+    static PROCESS: Mutex<()> = Mutex::new(());
+
+    fn process() -> MutexGuard<'static, ()> {
+        PROCESS.lock().unwrap_or_else(PoisonError::into_inner)
+    }
 
     struct NoPlatform;
 
@@ -590,9 +642,10 @@ mod tests {
     /// Fourth check of unit 12, minor 1: a chain set while no engine runs, as between `hand_over` and
     /// `start_with` in `nativeStart`, is kept, and the next engine starts with it; one set on a running
     /// engine is the next one's too; and the tunnel's stop forgets it, so that the next run starts with
-    /// none. One test, since `ENGINE` and `SET` are the process's.
+    /// none.
     #[test]
     fn a_chain_set_while_no_engine_runs_is_the_next_engines() {
+        let _process = process();
         stop_running();
         let mut seen = Vec::new();
         assert!(start_next(None, |given| started(&mut seen, given)));
@@ -622,5 +675,51 @@ mod tests {
         assert!(start_next(None, |given| started(&mut seen, given)));
         assert_eq!(port_of(&seen), None, "a chain of the run before");
         stop_running();
+    }
+
+    /// Unit 12b: a tunnel swapped in while no engine runs is refused, and its descriptor closed, so that
+    /// nothing holds the new tunnel open behind Kotlin, which starts an engine on its own descriptor of
+    /// it instead. With an engine running, one it cannot take, here `/dev/null`, which epoll refuses, is
+    /// refused too, once the engine has said so, and the old tunnel stays; a tunnel it can take, it
+    /// takes, keeps open, and closes the old one.
+    #[test]
+    fn a_tunnel_is_swapped_in_only_where_an_engine_takes_it() -> io::Result<()> {
+        let _process = process();
+        stop_running();
+        let (given, peer) = UnixStream::pair()?;
+        peer.set_nonblocking(true)?;
+        assert!(!swap_tunnel(OwnedFd::from(given)), "no engine runs");
+        let read = (&peer).read(&mut [0u8; 1]).map_err(|e| e.kind());
+        assert_eq!(read, Ok(0), "the descriptor given is still open");
+
+        let (old, old_peer) = UnixDatagram::pair()?;
+        old.set_nonblocking(true)?;
+        let config = Config {
+            limits: Limits::default(),
+            mtu: 1500,
+            keep_flows: 0,
+            addresses: Addresses::COMMON,
+        };
+        assert!(start_next(None, |carried| Engine::start_with(
+            OwnedFd::from(old),
+            config,
+            Arc::new(NoPlatform),
+            None,
+            carried,
+        )));
+        let null = OwnedFd::from(std::fs::File::open("/dev/null")?);
+        assert!(!swap_tunnel(null), "the engine took /dev/null");
+        assert_eq!(old_peer.send(b"still")?, 5, "the old tunnel is closed");
+        let (new, new_peer) = UnixDatagram::pair()?;
+        assert!(swap_tunnel(OwnedFd::from(new)), "the engine took it");
+        let sent = old_peer.send(b"after").map_err(|e| e.kind());
+        assert_eq!(
+            sent,
+            Err(io::ErrorKind::ConnectionRefused),
+            "the old tunnel is still open"
+        );
+        assert_eq!(new_peer.send(b"after")?, 5, "the new tunnel is closed");
+        stop_running();
+        Ok(())
     }
 }
