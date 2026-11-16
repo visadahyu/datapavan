@@ -1051,11 +1051,11 @@ an ADR (D25).
     each probe, often several at once, since Java and Kotlin cannot read a ping socket's error queue: each is a socket
     and an identifier of its own that never pings again, so 40 such pings found the cap of 32 full for 10 s from the
     33rd on, and a traceroute lost its answers after about ten hops. At the cap, a new socket now makes room
-    (`Table::make_room`) by ending, first, the least recently active socket whose every request has had its reply or
-    an error, as a one-shot ping leaves behind; with none such, the least recently active through which nothing passed
-    for `Limits::echo_quiet`, 2 s. A socket still being made is never ended, nor one a ping still sends through, every
-    second. The ended socket's task is woken to close it, and its app's next request, if any, gets a socket anew.
-    `echo_evicted`, the 46th counter, counts them; `COUNTERS` is 46.
+    (`Table::make_room`) by ending another, in the order the third round set (below). A socket still being made is
+    never ended. The ended socket's task is woken to close it, and its app's next request, if any, gets a socket anew.
+    `echo_evicted`, the 46th counter, counts them; `COUNTERS` is 46. (This round's first order, an answered socket
+    first however recent, then one through which nothing passed for `Limits::echo_quiet`, took a ping that runs between
+    its requests: the third round's finding 1.)
   - **The check passed when the feature was broken (major 2).** A reply to the time-to-live-1 ping, what the engine
     before this unit gave, printed "not seen". On a phone, a reply now fails the check, since no path reaches 1.1.1.1
     in one hop, and a "time to live exceeded" must also have grown the 42nd counter; the emulator, whose NAT answers
@@ -1081,7 +1081,10 @@ an ADR (D25).
     found (1 for "time exceeded", else the one the app sent with, which a router further on finds lower, unknown to
     Watch), and the transport header as sent, an echo request's checksum among it, then what the router quoted after
     it. A ping socket keeps it with each request, a mapping's peer with the app's last datagram to it, which an error
-    for an earlier datagram to that peer quotes too; IPv4 options and IPv6 extension headers are not quoted.
+    for an earlier datagram to that peer quotes too: Paris traceroute and mtr, which match an error to its probe by the
+    IP identification or the checksum, may then miss it where they send several probes to one port, while Linux
+    traceroute and tracepath use a socket or a port for each probe. IPv4 options and IPv6 extension headers are not
+    quoted.
   - **Accounting (minor 4).** A request or datagram is noted as one an error may answer only once it left: a mapping's
     datagram to a known peer is sent under the table's lock, which the send that no longer waits allows. An error used
     up for which no error to the app can be built, as for a multicast destination that named no sender, is counted
@@ -1102,3 +1105,39 @@ an ADR (D25).
     cannot make a ping socket's send fail at will, and a full mapping's peer owes at most 64 errors either way, so the
     table's own test shows it; a lookup to the tunnel's DNS address that finds its socket's buffer full, dropped as a
     mapping's datagram is.
+- **On devices, with the second round (the maintainer's run, 2026-11-16).** The Android 15 emulator's Watch shard
+  passed, the time-to-live check reporting the emulator's NAT, as designed. In the review's real-router lab, the 40
+  one-shot pings that failed in the first round all got their "time exceeded".
+- **The third round (2026-11-16).** A narrow check found no critical or major fault, and two minors:
+  - **A ping that runs could be pushed out between its requests (finding 1).** The second round's order ended first
+    any socket whose every request had had its answer, however recent: a ping that runs, answered between its
+    requests, was the first taken, and beside another app's pings of an address that never answers, neither answered
+    nor quiet, it was then refused for good. At the cap the order is now:
+    1. a socket whose every request has had its reply or error, through which nothing passed for longer than a ping
+       interval (`Limits::echo_interval`, 1.2 s): a ping that stopped, or a one-shot ping's;
+    2. the socket that has waited longest, `Limits::echo_quiet` at least, for an answer that has not come: its target
+       is silent, or its replies lost, even while its app sends on (`echo_quiet` now means that wait, from the first
+       request no answer followed, where it meant no traffic either way);
+    3. the least recently active socket whose one request has had its answer, as a burst of one-shot pings leaves
+       within a ping interval.
+    A ping that runs looks like a one-shot ping until its second request, and may be taken so once, in the third step;
+    its socket then carries a second request, or its key, kept among the last 64 ended (`echo::ENDED`), comes back
+    with its next request, and the third step never takes it again; the first step takes it only once it has stopped
+    for a ping interval, the second only once it has waited two seconds for an answer. In the review's scenario, at a
+    cap of two beside two pings of a silent address, the ping that runs is taken once, refused at its next two
+    requests, back at the third, once one of the silent pings has waited two seconds, and answered every second after;
+    before, it was refused for good. Keeping it from its first second on would mean refusing one-shot pings for a ping
+    interval, which a burst of a traceroute app's would meet.
+  - **A drop by the network's queue was told as "host unreachable" (finding 2).** A mapping's socket asks for its ICMP
+    errors, so the kernel fails a send whose packet the network beneath's queue drops with `ENOBUFS`, which was told to
+    the app as "host unreachable"; an app socket that asks for its errors too then failed its next send with
+    `EHOSTUNREACH`. `ENOBUFS` is now what a full socket buffer is: the datagram is dropped and counted as skipped.
+  - **Noted, unchanged:** a UDP error quotes the peer's last datagram (above); and the stricter time-to-live check of
+    `verify-watch.sh` fails on a phone whose network's gateway answers ICMP itself, as a captive portal may, which its
+    message names.
+  - **Tests.** In the engine, the review's scenario as above, and the order of what makes room; they failed with the
+    second round's order, without the exemption of a key that came back or of a second request, and with the wait
+    counted from the last request rather than from an answer. In the lab, a way to an address that never answers holding
+    3,000 bytes: an app socket with `IP_RECVERR` sends forty datagrams of 1,400 bytes there, none of its sends fails, no
+    error reaches it, and the drops are counted; before, its sends failed with `EHOSTUNREACH`. The lab's 40 one-shot
+    pings, quiet socket and cap tests pass as before.

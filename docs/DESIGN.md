@@ -843,11 +843,13 @@ counters. In the network lab, a router's errors are injected from an address the
 hop limits read on both sides, IPv4 and IPv6; the emulator check pings with a time to live of 1 and reports a network
 that sends no such error. On the Galaxy A40 the first router's "time exceeded" reached the shell as without Watch,
 and an independent review's lab with a real router showed `ping -t` and Linux traceroute in its three modes, IPv4 and
-IPv6, matching what they show without Watch. Its second round: one-shot pings, which Android's traceroute apps run
-for each probe, now make room at the cap of 32 ping sockets by ending one whose requests have all been answered; a
-UDP datagram that finds its socket's buffer full is dropped rather than holding the event loop, which an ICMP error
-had turned into a spin; an error quotes the app's packet as it sent it; and the emulator check fails on a phone whose
-TTL-1 ping gets a reply. How it is built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
+IPv6, matching what they show without Watch. Its second and third rounds: one-shot pings, which Android's traceroute
+apps run for each probe, now make room at the cap of 32 ping sockets, by ending first a socket whose requests have
+all been answered and that has stopped, then one that has waited two seconds for an answer that has not come, so that
+a ping that runs keeps its socket; a UDP datagram that finds its socket's buffer, or the network's queue, full is
+dropped rather than holding the event loop, which an ICMP error had turned into a spin, or being told as unreachable;
+an error quotes the app's packet as it sent it; and the emulator check fails on a phone whose TTL-1 ping gets a
+reply. How it is built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 | # | Milestone | Done when |
 |---|---|---|
