@@ -215,7 +215,7 @@ pub(super) struct Tally {
     too_big: u64,
     time_exceeded: u64,
     unreachable: u64,
-    unasked: u64,
+    dropped: u64,
 }
 
 impl Tally {
@@ -229,10 +229,10 @@ impl Tally {
         *kind += 1;
     }
 
-    /// One error dropped: it answered nothing the app sent, or the app was told of one already for
-    /// what it answered.
-    pub(super) fn unasked(&mut self) {
-        self.unasked += 1;
+    /// One error dropped: it answered nothing the app sent that left, or the app was told of one
+    /// already for what it answered, or no error to the app could be built for it.
+    pub(super) fn dropped(&mut self) {
+        self.dropped += 1;
     }
 
     /// Adds them to the counters, and, for errors that answered echo requests, `echo`, to echo's
@@ -241,7 +241,7 @@ impl Tally {
         Counters::add(&counters.path_mtu, self.too_big);
         Counters::add(&counters.time_exceeded, self.time_exceeded);
         Counters::add(&counters.path_unreachable, self.unreachable);
-        Counters::add(&counters.errors_unasked, self.unasked);
+        Counters::add(&counters.errors_dropped, self.dropped);
         if echo {
             let passed = self.too_big + self.time_exceeded + self.unreachable;
             Counters::add(&counters.echo_errors, passed);

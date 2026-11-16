@@ -19,11 +19,11 @@
 //! The counters are all that is kept of it: since unit 11b its bytes too, in the engine's byte counters,
 //! as Android counts them to Watch's own sockets.
 
-use super::errors::{self, Queued, Tally};
+use super::errors::{self, Queued, Tally, Told};
 use super::udp::{network_moved, with_buffer};
 use super::upstream::protect;
 use super::{BATCH, Counters, Loop, Shared, hops, lock, send_to_app};
-use crate::packet::{self, ECHO_REPLY, ECHO_REPLY_V6, Echo};
+use crate::packet::{self, ECHO_REPLY, ECHO_REPLY_V6, Echo, ICMP, ICMPV6, Sent};
 use crate::standins::is_stand_in;
 use crate::tun::Tun;
 use nix::libc;
@@ -116,33 +116,58 @@ struct Entry<S> {
     state: State<S>,
     /// When an echo last passed either way.
     last: Instant,
-    /// Its latest requests, the latest last, at most [`ASKED`], until an error from the path answers
-    /// one: each may be answered by one, and is noted when its reply came.
+    /// Its latest requests that left, the latest last, at most [`ASKED`], until an error from the path
+    /// answers one: each may be answered by one, and is noted when its reply came.
     asked: VecDeque<Asked>,
     /// Wakes the socket's task when its place is given to a new socket at the cap, so that it closes
     /// the socket then rather than when it next wakes.
     ended: Arc<Notify>,
 }
 
-/// A request of a ping socket's.
+/// A request of a ping socket's that left.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Asked {
     sequence: u16,
+    /// What a router quotes of it, which an error passed on quotes as the app sent it.
+    sent: Sent,
     /// Whether its reply came.
     replied: bool,
 }
 
+/// An app's request: its ICMP message, and what a router quotes of it, the hop limit among it.
+type Request = (Vec<u8>, Sent);
+
+/// What an error from the path for a request finds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Answers {
+    /// A request that left and waited for an error, of which a router quotes this.
+    Asked(Sent),
+    /// No request of that number waits for one.
+    Unasked,
+    /// The socket's place is gone.
+    Gone,
+}
+
+impl Answers {
+    /// What a router quotes of the request the error answers, if one waited for it.
+    fn sent(self) -> Option<Sent> {
+        match self {
+            Self::Asked(sent) => Some(sent),
+            Self::Unasked | Self::Gone => None,
+        }
+    }
+}
+
 enum State<S> {
-    /// The socket is being made and protected; these requests wait for it, in order, each with the
-    /// app's hop limit.
-    Opening(Vec<(Vec<u8>, u8)>),
+    /// The socket is being made and protected; these requests wait for it, in order.
+    Opening(Vec<Request>),
     Open(Arc<S>),
 }
 
 /// What becomes of a request.
 enum Next<S> {
-    /// It goes out through this socket, to this address.
-    Send(Arc<S>, IpAddr),
+    /// It goes out through this socket, numbered so, to this address.
+    Send(Arc<S>, u64, IpAddr),
     /// It waits for a socket to be made, numbered so, and goes out first through it; the socket's task
     /// is woken by this when its place is given to another.
     Open(u64, Arc<Notify>),
@@ -153,31 +178,29 @@ enum Next<S> {
 }
 
 impl<S> Table<S> {
-    /// What becomes of a request, `message` with the app's hop limit `hops`, of `key` to `target`, at
-    /// `now`, with at most `cap` sockets, of which one `quiet` so long may end to make room
+    /// What becomes of a request, `message`, of which a router would quote `sent`, of `key` to
+    /// `target`, at `now`, with at most `cap` sockets, of which one `quiet` so long may end to make room
     /// ([`Table::make_room`]). A new key takes its place at once, before its socket is made, so that
-    /// the cap holds for the sockets being made too. A request that is not dropped may be answered by
-    /// one error from the path.
+    /// the cap holds for the sockets being made too. A request is noted only once it left
+    /// ([`Table::left`]).
     fn request(
         &mut self,
         key: Key,
         target: IpAddr,
-        (message, hops): (&[u8], u8),
+        (message, sent): (&[u8], Sent),
         now: Instant,
         (cap, quiet): (usize, Duration),
     ) -> Next<S> {
-        let sequence = packet::u16_at(message, 6).unwrap_or(0);
         if let Some(entry) = self.sockets.get_mut(&key) {
             let next = match &mut entry.state {
-                State::Open(socket) => Next::Send(Arc::clone(socket), entry.target),
+                State::Open(socket) => Next::Send(Arc::clone(socket), entry.number, entry.target),
                 State::Opening(held) if held.len() < HELD => {
-                    held.push((message.to_vec(), hops));
+                    held.push((message.to_vec(), sent));
                     Next::Held
                 }
                 State::Opening(_) => return Next::Full,
             };
             entry.last = now;
-            entry.asks(sequence);
             return next;
         }
         if self.sockets.len() >= cap && !self.make_room(now, quiet) {
@@ -185,15 +208,14 @@ impl<S> Table<S> {
         }
         self.numbered += 1;
         let ended = Arc::new(Notify::new());
-        let mut entry = Entry {
+        let entry = Entry {
             number: self.numbered,
             target,
-            state: State::Opening(vec![(message.to_vec(), hops)]),
+            state: State::Opening(vec![(message.to_vec(), sent)]),
             last: now,
             asked: VecDeque::new(),
             ended: Arc::clone(&ended),
         };
-        entry.asks(sequence);
         self.sockets.insert(key, entry);
         Next::Open(self.numbered, ended)
     }
@@ -229,21 +251,36 @@ impl<S> Table<S> {
         true
     }
 
+    /// A request numbered `sequence`, of which a router would quote `sent`, left by the socket of `key`
+    /// numbered `number`: one error from the path may answer it. A request that did not leave, its
+    /// socket's buffer full, is never noted, so that no error passes for it (second review of unit
+    /// 11b, minor 4).
+    fn left(&mut self, key: Key, number: u64, sequence: u16, sent: Sent) {
+        if let Some(entry) = self.entry(key, number) {
+            entry.asks(sequence, sent);
+        }
+    }
+
     /// An error from the path for the request numbered `sequence` of the socket of `key` numbered
-    /// `number`: whether a request of that number still waited for one, which it then no longer does;
-    /// `None` when the place is gone.
-    fn answers(&mut self, key: Key, number: u64, sequence: u16) -> Option<bool> {
-        let entry = self.entry(key, number)?;
+    /// `number`: what it finds, a request of that number that still waited for an error, which then no
+    /// longer does, none, or the place gone.
+    fn answers(&mut self, key: Key, number: u64, sequence: u16) -> Answers {
+        let Some(entry) = self.entry(key, number) else {
+            return Answers::Gone;
+        };
         let at = entry
             .asked
             .iter()
             .position(|asked| asked.sequence == sequence);
-        Some(at.and_then(|at| entry.asked.remove(at)).is_some())
+        match at.and_then(|at| entry.asked.remove(at)) {
+            Some(asked) => Answers::Asked(asked.sent),
+            None => Answers::Unasked,
+        }
     }
 
     /// The socket of `key` numbered `number` is open: the requests that waited for it, to send now,
     /// or `None` when its place is gone.
-    fn opened(&mut self, key: Key, number: u64, socket: Arc<S>) -> Option<Vec<(Vec<u8>, u8)>> {
+    fn opened(&mut self, key: Key, number: u64, socket: Arc<S>) -> Option<Vec<Request>> {
         let entry = self.entry(key, number)?;
         match std::mem::replace(&mut entry.state, State::Open(socket)) {
             State::Opening(held) => Some(held),
@@ -311,13 +348,15 @@ impl<S> Table<S> {
 }
 
 impl<S> Entry<S> {
-    /// A request numbered `sequence` goes out, or waits to: one error from the path may answer it.
-    fn asks(&mut self, sequence: u16) {
+    /// A request numbered `sequence`, of which a router would quote `sent`, left: one error from the
+    /// path may answer it.
+    fn asks(&mut self, sequence: u16, sent: Sent) {
         if self.asked.len() == ASKED {
             self.asked.pop_front();
         }
         self.asked.push_back(Asked {
             sequence,
+            sent,
             replied: false,
         });
     }
@@ -357,8 +396,11 @@ impl Loop {
             .target(SocketAddr::new(request.destination, 0))
             .map(|target| target.ip())
             .filter(|target| target.is_ipv4() == request.destination.is_ipv4());
-        let (Some(message), Some(target)) = (packet.get(request.icmp..request.length), target)
-        else {
+        let (Some(message), Some(sent), Some(target)) = (
+            packet.get(request.icmp..request.length),
+            Sent::of(packet, request.icmp),
+            target,
+        ) else {
             Counters::add(&counters.echo_dropped, 1);
             return;
         };
@@ -369,7 +411,7 @@ impl Loop {
             let next = table.request(
                 key,
                 target,
-                (message, request.hops),
+                (message, sent),
                 Instant::now(),
                 (limits.echo_sockets, limits.echo_quiet),
             );
@@ -380,9 +422,12 @@ impl Loop {
         // side is seen by the next request.
         match next {
             // The kernel writes the socket's own identifier and the checksum into the request.
-            Next::Send(socket, to) => {
-                let sent = socket.send(message, SocketAddr::new(to, 0), request.hops);
-                count_sent(&self.shared, &sent);
+            Next::Send(socket, number, to) => {
+                let left = socket.send(message, SocketAddr::new(to, 0), request.hops);
+                if left.is_ok() {
+                    lock(&self.echoes.table).left(key, number, request.sequence, sent);
+                }
+                count_sent(&self.shared, &left);
             }
             Next::Open(number, ended) => {
                 tokio::spawn(carry(
@@ -458,8 +503,13 @@ async fn carry(
         return;
     }
     let to = SocketAddr::new(target, 0);
-    for (message, hops) in held {
-        count_sent(&shared, &socket.send(&message, to, hops));
+    for (message, sent) in held {
+        let left = socket.send(&message, to, sent.hops());
+        if left.is_ok() {
+            let sequence = packet::u16_at(&message, 6).unwrap_or(0);
+            lock(&table).left(key, number, sequence, sent);
+        }
+        count_sent(&shared, &left);
     }
     let idle = shared.limits.echo_idle;
     loop {
@@ -496,7 +546,7 @@ async fn carry(
                 let told = {
                     let mut table = lock(&table);
                     let told = path_errors(queued, key, target, &mut tally, |sequence| {
-                        table.answers(key, number, sequence) == Some(true)
+                        table.answers(key, number, sequence).sent()
                     });
                     let quiet = told.is_empty() && replies.is_empty();
                     let answered: Vec<u16> =
@@ -651,22 +701,24 @@ fn receive(
 /// The errors from the path a ping socket read off its queue, `queued`, each for the app as it would
 /// reach it without Watch (ADR 0044, unit 11b): from the router or host that sent it, or from the
 /// address the app pinged where the kernel names none or it is the target itself; quoting the app's own
-/// request, with the app's identifier and the sequence number and data the error quoted, by which the
-/// app's kernel finds its ping socket and the app its request. One is dropped, and counted in `tally`,
-/// unless it answers a request of this socket's to its target that no error answered yet, as `asked`
-/// says and notes: one for another destination, a sequence number never sent, or a second error for
-/// one request, as a forged one would be.
+/// request as a router does: its IP header as the app sent it, with the hop limit the router found (1
+/// for "time exceeded"), its ICMP header as the app sent it, its identifier and sequence number among
+/// it, by which the app's kernel finds its ping socket and the app its request, and the data the router
+/// quoted. One is dropped, and counted in `tally`, unless it answers a request of this socket's to its
+/// target that left and that no error answered yet, as `asked` says and notes, giving what a router
+/// quotes of it: one for another destination, a sequence number never sent, or a second error for one
+/// request, as a forged one would be; and so is one for which no error to the app can be built.
 fn path_errors(
     queued: Vec<Queued>,
-    (app, id, destination): Key,
+    (app, _, destination): Key,
     target: IpAddr,
     tally: &mut Tally,
-    mut asked: impl FnMut(u16) -> bool,
+    mut asked: impl FnMut(u16) -> Option<Sent>,
 ) -> Vec<Vec<u8>> {
-    let request = if target.is_ipv4() {
-        packet::ECHO_REQUEST
+    let (request, protocol) = if target.is_ipv4() {
+        (packet::ECHO_REQUEST, ICMP)
     } else {
-        packet::ECHO_REQUEST_V6
+        (packet::ECHO_REQUEST_V6, ICMPV6)
     };
     let mut told = Vec::new();
     for error in queued {
@@ -679,21 +731,25 @@ fn path_errors(
                 u16::from_be_bytes([high, low])
             }
             _ => {
-                tally.unasked();
+                tally.dropped();
                 continue;
             }
         };
-        if !asked(sequence) {
-            tally.unasked();
+        let Some(sent) = asked(sequence) else {
+            tally.dropped();
             continue;
-        }
+        };
         let data = error.quoted.get(8..).unwrap_or_default();
         let from = errors::sender(error.offender, target, destination);
-        let packet = packet::echo_request_of(app, destination, id, sequence, data)
+        let expired = error.told == Told::TimeExceeded;
+        let packet = packet::quoted(&sent, (app, destination), protocol, expired, data)
             .and_then(|quoted| errors::to_app(error.told, &quoted, (from, app), error.hops));
-        if let Some(packet) = packet {
-            tally.passed(error.told);
-            told.push(packet);
+        match packet {
+            Some(packet) => {
+                tally.passed(error.told);
+                told.push(packet);
+            }
+            None => tally.dropped(),
         }
     }
     told
@@ -721,7 +777,7 @@ mod tests {
     const SKIPPED: usize = 8;
     const TIME_EXCEEDED: usize = 41;
     const ECHO_ERRORS: usize = 43;
-    const ERRORS_UNASKED: usize = 44;
+    const ERRORS_DROPPED: usize = 44;
 
     fn key(id: u16, destination: IpAddr) -> Key {
         (APP, id, destination)
@@ -730,8 +786,27 @@ mod tests {
     /// A long time: no socket is quiet enough to end at the cap.
     const LONG: Duration = Duration::from_secs(3_600);
 
+    /// An echo request of `key`'s app socket numbered `sequence`, with `data`, as the app's kernel
+    /// sends it into the tunnel, its time to live 3 and its identification 0x5678: its ICMP message, and
+    /// what a router quotes of it.
+    fn app_request(key: Key, sequence: u16, data: &[u8]) -> (Vec<u8>, Sent) {
+        let octets = |address: IpAddr| match address {
+            IpAddr::V4(address) => address.octets(),
+            IpAddr::V6(_) => [0; 4],
+        };
+        let mut packet = Vec::new();
+        PacketBuilder::ipv4(octets(key.0), octets(key.2), 3)
+            .icmpv4_echo_request(key.1, sequence)
+            .write(&mut packet, data)
+            .unwrap_or_default();
+        packet[4..6].copy_from_slice(&[0x56, 0x78]);
+        let sent = Sent::of(&packet, 20).unwrap_or_default();
+        (packet.split_off(20), sent)
+    }
+
     fn request(table: &mut Table<()>, key: Key, now: Instant, cap: usize) -> Next<()> {
-        table.request(key, key.2, (b"ping", 64), now, (cap, LONG))
+        let (message, sent) = app_request(key, 1, b"ping");
+        table.request(key, key.2, (&message, sent), now, (cap, LONG))
     }
 
     /// The cap counts the sockets being made as well as the open ones; a request of a key that has a
@@ -764,9 +839,12 @@ mod tests {
         );
         let held = table.opened(key(1, SERVER), first, Arc::new(()));
         assert_eq!(held.map(|held| held.len()), Some(HELD));
+        // The first left, and waits on its reply: its socket may not end to make room.
+        let (_, sent) = app_request(key(1, SERVER), 1, b"ping");
+        table.left(key(1, SERVER), first, 1, sent);
         assert!(matches!(
             request(&mut table, key(1, SERVER), now, 2),
-            Next::Send(_, SERVER)
+            Next::Send(_, _, SERVER)
         ));
         assert!(matches!(
             request(&mut table, key(1, OTHER), now, 2),
@@ -837,9 +915,8 @@ mod tests {
         let at = |millis| start + Duration::from_millis(millis);
         let quiet = Duration::from_secs(2);
         let ask = |table: &mut Table<()>, key: Key, sequence: u16, now| {
-            let mut message = vec![packet::ECHO_REQUEST, 0, 0, 0, 0, 1];
-            message.extend_from_slice(&sequence.to_be_bytes());
-            table.request(key, key.2, (&message, 64), now, (3, quiet))
+            let (message, sent) = app_request(key, sequence, b"");
+            table.request(key, key.2, (&message, sent), now, (3, quiet))
         };
         let (one, two, three, four) = (
             key(1, SERVER),
@@ -853,6 +930,7 @@ mod tests {
                 unreachable!("a socket")
             };
             table.opened(key, number, Arc::new(()));
+            table.left(key, number, 1, app_request(key, 1, b"").1);
             numbers.push((number, ended));
         }
         // Each waits on its reply, and none is quiet for two seconds yet: the cap holds.
@@ -893,29 +971,37 @@ mod tests {
     }
 
     /// An error from the path reaches the app from the router that sent it, with the hop limit it came
-    /// with, quoting the app's own request, with the app's identifier and the sequence number and data
-    /// the router quoted (ADR 0044, unit 11b); one at most for each request: one for a request never
-    /// sent, for another destination than the socket's, a second for one request, or one that quotes
-    /// no echo request, is dropped and counted.
+    /// with, quoting the app's own request as a router does: its IP header and ICMP header as the app
+    /// sent them, the time to live 1 that the router found, and the data the router quoted (ADR 0044,
+    /// unit 11b, and its second review); one at most for each request that left: one for a request
+    /// never sent, for another destination than the socket's, a second for one request, or one that
+    /// quotes no echo request, is dropped and counted, as is a request that did not leave.
     #[test]
     fn an_error_from_the_path_answers_one_request_once() {
         let mut table = Table::<()>::default();
         let now = Instant::now();
         let key = key(0x0707, SERVER);
+        // As the engine's socket sends them and a router quotes them: with the socket's own identifier.
         let message = |sequence: u16| {
             let mut message = vec![packet::ECHO_REQUEST, 0, 0, 0, 0x12, 0x34];
             message.extend_from_slice(&sequence.to_be_bytes());
             message.extend_from_slice(b"data");
             message
         };
-        let Next::Open(number, _) = table.request(key, SERVER, (&message(1), 3), now, (4, LONG))
-        else {
+        let ask = |table: &mut Table<()>, sequence| {
+            let (message, sent) = app_request(key, sequence, b"data");
+            table.request(key, SERVER, (&message, sent), now, (4, LONG))
+        };
+        let Next::Open(number, _) = ask(&mut table, 1) else {
             unreachable!("a socket")
         };
-        assert!(matches!(
-            table.request(key, SERVER, (&message(2), 3), now, (4, LONG)),
-            Next::Held
-        ));
+        assert!(matches!(ask(&mut table, 2), Next::Held));
+        assert!(matches!(ask(&mut table, 3), Next::Held));
+        // The first two left; the third found the socket's buffer full.
+        table.opened(key, number, Arc::new(()));
+        for sequence in [1, 2] {
+            table.left(key, number, sequence, app_request(key, sequence, b"data").1);
+        }
         let router = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1));
         let error = |destination, quoted: Vec<u8>| Queued {
             destination: SocketAddr::new(destination, 0),
@@ -934,7 +1020,7 @@ mod tests {
         ];
         let mut tally = Tally::default();
         let told = path_errors(queued, key, SERVER, &mut tally, |sequence| {
-            table.answers(key, number, sequence) == Some(true)
+            table.answers(key, number, sequence).sent()
         });
         let [told] = told.as_slice() else {
             unreachable!("one error: {told:?}")
@@ -942,6 +1028,11 @@ mod tests {
         assert_eq!(&told[12..16], &[192, 0, 2, 1], "from the router");
         assert_eq!(&told[16..20], &[10, 1, 10, 1], "to the app");
         assert_eq!((told[8], &told[20..22]), (9, &[11, 0][..]));
+        // The app's identification, and the time to live the router found spent.
+        assert_eq!(
+            (&told[28 + 4..28 + 6], told[28 + 8]),
+            (&[0x56, 0x78][..], 1)
+        );
         let quoted = packet::echo_request(&told[28..]);
         assert_eq!(
             quoted.map(|request| (
@@ -960,15 +1051,56 @@ mod tests {
             (
                 counters[ECHO_ERRORS],
                 counters[TIME_EXCEEDED],
-                counters[ERRORS_UNASKED]
+                counters[ERRORS_DROPPED]
             ),
             (1, 1, 5)
         );
-        // The second request's error still passes, once.
-        assert_eq!(table.answers(key, number, 2), Some(true));
-        assert_eq!(table.answers(key, number, 2), Some(false));
+        // The second request's error still passes, once; the third's never, as it never left.
+        assert!(matches!(table.answers(key, number, 2), Answers::Asked(_)));
+        assert_eq!(table.answers(key, number, 2), Answers::Unasked);
+        assert_eq!(table.answers(key, number, 3), Answers::Unasked);
         table.end(key, number);
-        assert_eq!(table.answers(key, number, 2), None, "the place is gone");
+        assert_eq!(table.answers(key, number, 2), Answers::Gone);
+    }
+
+    /// Each of a socket's last [`ASKED`] requests that left may have its one error from the path (ADR
+    /// 0044, unit 11b): three in flight each have theirs; of `ASKED` and one more, the first has
+    /// fallen out, and an error for it is dropped, while the second's passes.
+    #[test]
+    fn each_of_the_last_asked_requests_may_have_its_error() {
+        let mut table = Table::<()>::default();
+        let now = Instant::now();
+        let key = key(9, SERVER);
+        let Next::Open(number, _) = request(&mut table, key, now, 4) else {
+            unreachable!("a socket")
+        };
+        table.opened(key, number, Arc::new(()));
+        let left = |table: &mut Table<()>, sequence| {
+            table.left(key, number, sequence, app_request(key, sequence, b"").1);
+        };
+        for sequence in 1..=3 {
+            left(&mut table, sequence);
+        }
+        for sequence in 1..=3 {
+            assert!(
+                matches!(table.answers(key, number, sequence), Answers::Asked(_)),
+                "request {sequence}"
+            );
+        }
+        let last = 10 + u16::try_from(ASKED).unwrap_or(u16::MAX);
+        for sequence in 10..=last {
+            left(&mut table, sequence);
+        }
+        assert_eq!(
+            table.answers(key, number, 10),
+            Answers::Unasked,
+            "fallen out"
+        );
+        assert!(matches!(table.answers(key, number, 11), Answers::Asked(_)));
+        assert!(matches!(
+            table.answers(key, number, last),
+            Answers::Asked(_)
+        ));
     }
 
     /// While a chain sends any app through the tool, an app's ping is answered at once with

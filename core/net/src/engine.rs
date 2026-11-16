@@ -503,7 +503,7 @@ pub struct Counters {
     time_exceeded: AtomicU64,
     path_unreachable: AtomicU64,
     echo_errors: AtomicU64,
-    errors_unasked: AtomicU64,
+    errors_dropped: AtomicU64,
     echo_evicted: AtomicU64,
 }
 
@@ -548,9 +548,10 @@ impl Counters {
     /// since unit 11b, echo requests; then (unit 11b) the "time exceeded" routers sent for them, passed
     /// on, the "destination unreachable" of every code routers or hosts sent for them, passed on, how
     /// many of the errors passed on, of those three kinds, answered echo requests, and the errors from
-    /// the path dropped because they answered nothing the app sent: a destination its mapping or ping
-    /// socket never sent to, a request it never sent, or a datagram or request the app was already told
-    /// of once; and the ping sockets ended at the cap to make room for a new one. None names a
+    /// the path dropped because they answered nothing the app sent that left: a destination its mapping
+    /// or ping socket never sent to, a request it never sent, or a datagram or request the app was
+    /// already told of once; or because no error to the app could be built for them; and the ping
+    /// sockets ended at the cap to make room for a new one. None names a
     /// destination: they can be read on any phone. New counters are only ever appended, so that scripts
     /// reading a column by its place keep reading the same one.
     #[must_use]
@@ -615,7 +616,7 @@ impl Counters {
             &self.time_exceeded,
             &self.path_unreachable,
             &self.echo_errors,
-            &self.errors_unasked,
+            &self.errors_dropped,
             &self.echo_evicted,
         ]
     }

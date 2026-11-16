@@ -3151,7 +3151,7 @@ const ROUTER6: Ipv6Addr = Ipv6Addr::new(0x2001, 0xdb8, 2, 0, 0, 0, 0, 1);
 const TIME_EXCEEDED: usize = 41;
 const PATH_UNREACHABLE: usize = 42;
 const ECHO_ERRORS: usize = 43;
-const ERRORS_UNASKED: usize = 44;
+const ERRORS_DROPPED: usize = 44;
 
 /// A router or host at `router` on the path sends the engine's socket at `to` the ICMP error `kind`
 /// (type and code), quoting `quoted`, the packet the engine sent, as a router quotes the packet it
@@ -3330,7 +3330,7 @@ fn a_routers_time_exceeded_reaches_the_apps_datagram_from_the_router() -> Outcom
                 // A second for that one datagram is dropped: the app is told of the next one's only.
                 // It is counted before the app sends again, which the error could otherwise answer.
                 path_says(router, (mapped.ip(), &sent(server)?), exceeded)?;
-                counted(&engine, ERRORS_UNASKED, dropped).await?;
+                counted(&engine, ERRORS_DROPPED, dropped).await?;
                 app.send_to(b"again", server).await?;
                 app_receive(&app).await?;
                 path_says(router, (mapped.ip(), &sent(server)?), unreachable)?;
@@ -3347,7 +3347,7 @@ fn a_routers_time_exceeded_reaches_the_apps_datagram_from_the_router() -> Outcom
             }
             let counters = engine.counters();
             assert_eq!(
-                [TIME_EXCEEDED, PATH_UNREACHABLE, ERRORS_UNASKED, ECHO_ERRORS]
+                [TIME_EXCEEDED, PATH_UNREACHABLE, ERRORS_DROPPED, ECHO_ERRORS]
                     .map(|at| counters[at]),
                 [2, 2, 4, 0]
             );
@@ -3503,7 +3503,7 @@ fn a_routers_time_exceeded_reaches_the_apps_ping_from_the_router() -> Outcome {
                 // A second for that one request is dropped, and counted: had it got through, the app's
                 // next read would fail with it rather than read the reply.
                 path_says(router, (server, &sent(server, 1)?), exceeded)?;
-                counted(&engine, ERRORS_UNASKED, dropped).await?;
+                counted(&engine, ERRORS_DROPPED, dropped).await?;
                 app.send_to(&echo_request(v4, 2, b"and on"), &to)?;
                 assert_eq!(hear(&app, server)?, Ok((id, 2, b"and on".to_vec(), server)));
                 assert_eq!(engine_ping_id_of(v4)?, engines, "the engine's socket ended");
@@ -3517,7 +3517,7 @@ fn a_routers_time_exceeded_reaches_the_apps_ping_from_the_router() -> Outcome {
             }
             let counters = engine.counters();
             assert_eq!(
-                [TIME_EXCEEDED, PATH_UNREACHABLE, ECHO_ERRORS, ERRORS_UNASKED]
+                [TIME_EXCEEDED, PATH_UNREACHABLE, ECHO_ERRORS, ERRORS_DROPPED]
                     .map(|at| counters[at]),
                 [2, 2, 4, 6]
             );
@@ -3634,6 +3634,103 @@ fn a_full_send_buffer_drops_a_datagram_and_holds_no_one_up() -> Outcome {
                 "no answer while a mapping's buffer is full: {answered:?}"
             );
             assert!(engine.counters()[SKIPPED] > 0, "no datagram dropped");
+            Ok(())
+        },
+    )
+}
+
+/// Runs `ip` with `arguments` in the namespace, failing with what it said.
+fn ip(arguments: &[&str]) -> Outcome {
+    let output = Command::new("ip").args(arguments).output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "ip {arguments:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+    Ok(())
+}
+
+/// ADR 0044, unit 11b (second review, minor 1): a ping to the tunnel's DNS address goes to the
+/// network's resolver, so that its socket's target is another address than the one the app pinged. A
+/// router's "time exceeded" for it reaches the app from that router, about the address the app pinged,
+/// quoting the app's own request; an error the resolver itself sends comes from the address the app
+/// pinged, by which the app knows the resolver. The resolver is an address the namespace does not hold,
+/// routed into the tunnel no one reads (`tun1`), as a resolver beyond a router would be. IPv4 and IPv6.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn an_error_for_a_ping_to_the_tunnels_dns_address_reaches_the_app() -> Outcome {
+    lab(
+        "an_error_for_a_ping_to_the_tunnels_dns_address_reaches_the_app",
+        &Limits::default(),
+        |engine| async move {
+            ipv6_here()?;
+            let mut carried = 0;
+            for (resolver, dns, tunnel, router, id) in [
+                (
+                    IpAddr::V4(Ipv4Addr::new(192, 0, 2, 53)),
+                    IpAddr::V4(Addresses::COMMON.dns4),
+                    IpAddr::V4(Addresses::COMMON.tun4),
+                    IpAddr::V4(ROUTER),
+                    4861,
+                ),
+                (
+                    IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 2, 0, 0, 0, 0, 0x53)),
+                    IpAddr::V6(Addresses::COMMON.dns6),
+                    IpAddr::V6(Addresses::COMMON.tun6),
+                    IpAddr::V6(ROUTER6),
+                    4862,
+                ),
+            ] {
+                let v4 = resolver.is_ipv4();
+                let (version, prefix, local) = if v4 {
+                    ("-4", 32, SERVER_IP)
+                } else {
+                    ("-6", 128, IpAddr::V6(SERVER6))
+                };
+                ip(&[
+                    version,
+                    "route",
+                    "add",
+                    &format!("{resolver}/{prefix}"),
+                    "dev",
+                    "tun1",
+                ])?;
+                engine.network_changed(Some(resolver), false);
+                let (origin, exceeded, _) = traced(v4);
+                let unreachable = if v4 { (3, 1) } else { (1, 3) };
+                let app = erring_pinger(tunnel, id)?;
+                let to = SocketAddr::new(dns, 0).into();
+                let about = Some(SocketAddr::new(dns, 0));
+                for (sequence, from, kind, shown) in [
+                    (1, router, exceeded, router),
+                    (2, resolver, unreachable, dns),
+                ] {
+                    app.send_to(&echo_request(v4, sequence, b"the resolver?"), &to)?;
+                    carried += 1;
+                    counted(&engine, ECHO_CARRIED, carried).await?;
+                    // What the engine's socket sent the resolver, as the error quotes it: the
+                    // address it sent from does not matter to its kernel, the identifier does.
+                    let engines = engine_ping_id_of(v4)?;
+                    let sent = packet::echo_request_of(
+                        local,
+                        resolver,
+                        engines,
+                        sequence,
+                        b"the resolver?",
+                    )
+                    .ok_or("no request built")?;
+                    path_says(from, (local, &sent), kind)?;
+                    let heard = told_from_path(&app).await?;
+                    let kinds: Vec<_> = heard.iter().map(|e| (e.kind, e.about, e.from)).collect();
+                    assert_eq!(
+                        kinds,
+                        [((origin, kind.0, kind.1), about, Some(shown))],
+                        "{resolver}"
+                    );
+                }
+            }
             Ok(())
         },
     )

@@ -9,7 +9,7 @@
 
 use super::budget::{Full, Place};
 use super::chain::{Chain, Route, connect_proxy, io_error};
-use super::errors::{Queued, Tally};
+use super::errors::{Queued, Tally, Told};
 use super::logbook::FlowBytes;
 use super::lookups;
 use super::naming::Begun;
@@ -19,7 +19,7 @@ use super::{
     BATCH, Counters, Ech, Flow, Loop, NamedBy, Opened, Outcome, Shared, errors, hops,
     is_unreachable, lock, send_to_app,
 };
-use crate::packet::{Packet, UDP, Unreachable};
+use crate::packet::{Packet, Sent, UDP, Unreachable};
 use crate::socks5::{self, Command, Target};
 use crate::tls::ServerName;
 use crate::tun::Tun;
@@ -357,8 +357,12 @@ struct Peer {
     /// peer that came in. A mapping of one such peer, with none waiting, is an answered lookup.
     lookups: Option<Vec<u16>>,
     /// How many errors from the path the app may still be told of for it: one for each datagram the
-    /// app sent it, at most [`OWED_ERRORS`]. None for a peer that came in until the app sends to it.
+    /// app sent it that left, at most [`OWED_ERRORS`]. None for a peer that came in until the app sends
+    /// to it.
     owed_errors: u8,
+    /// What a router would quote of the app's last datagram to it that left, which an error passed on
+    /// quotes as the app sent it.
+    last_sent: Sent,
 }
 
 /// Where a peer's datagrams go and where its answers come from.
@@ -448,6 +452,7 @@ impl Peer {
             asked: Vec::new(),
             lookups: (!came_in && address.port() == 53).then(Vec::new),
             owed_errors: 0,
+            last_sent: Sent::default(),
         }
     }
 
@@ -460,12 +465,10 @@ impl Peer {
         }
     }
 
-    /// Notes a datagram the app sends it to `port`: one more error from the path may answer it; for a
-    /// peer on port 53 the app sent to, the ID of a DNS query, which waits for its answer; for a
-    /// stand-in on port 53 while it waits, or a flow from a port 53 that came in first, its ID and
-    /// question too.
+    /// Notes a datagram the app sends it to `port`: for a peer on port 53 the app sent to, the ID of a
+    /// DNS query, which waits for its answer; for a stand-in on port 53 while it waits, or a flow from
+    /// a port 53 that came in first, its ID and question too.
     fn sent(&mut self, port: u16, payload: &[u8]) {
-        self.owed_errors = self.owed_errors.saturating_add(1).min(OWED_ERRORS);
         if port != 53 || (self.lookups.is_none() && !(self.waiting || self.came_in_first)) {
             return;
         }
@@ -488,13 +491,24 @@ impl Peer {
         self.asked.push((id, question.name));
     }
 
-    /// Whether the app may be told of one more error from the path for it, which it then is: an error
-    /// for a peer the app never sent to, as a forged one, or one more than the app sent it datagrams,
-    /// is dropped (ADR 0044, unit 11b).
-    fn takes_error(&mut self) -> bool {
+    /// A datagram the app sent it left, of which a router would quote `sent`: one more error from the
+    /// path may answer it. One that did not leave, its socket's buffer full, is never noted, so that no
+    /// error passes for it (second review of unit 11b, minor 4).
+    fn left(&mut self, sent: Option<Sent>) {
+        self.owed_errors = self.owed_errors.saturating_add(1).min(OWED_ERRORS);
+        if let Some(sent) = sent {
+            self.last_sent = sent;
+        }
+    }
+
+    /// Whether the app may be told of one more error from the path for it, which it then is, with what
+    /// a router quotes of the app's last datagram to it: an error for a peer the app never sent to, as a
+    /// forged one, or one more than the app sent it datagrams that left, is dropped (ADR 0044, unit
+    /// 11b).
+    fn takes_error(&mut self) -> Option<Sent> {
         let owed = self.owed_errors > 0;
         self.owed_errors = self.owed_errors.saturating_sub(1);
-        owed
+        owed.then_some(self.last_sent)
     }
 
     /// Notes an `answer` that came from it: a DNS response to a query that waits for one answers it.
@@ -1082,11 +1096,10 @@ struct Out {
 
 pub(super) type UdpFlows = Arc<Mutex<UdpTable>>;
 
-/// What sending a datagram to a peer needs: the mapping's socket, the header that names the peer
-/// through the tool, the peer's bytes, and what the datagram's QUIC Initial packets gave.
+/// What became of a datagram sent to a peer: whether it left, the peer's bytes, and what the
+/// datagram's QUIC Initial packets gave.
 struct ToPeer {
-    socket: Arc<UdpSocket>,
-    header: Option<Arc<[u8]>>,
+    sent: io::Result<usize>,
     bytes: Option<Arc<FlowBytes>>,
     quic: Option<QuicRead>,
 }
@@ -1566,12 +1579,14 @@ impl UdpTable {
         true
     }
 
-    /// A datagram from the app to a peer of its mapping: both are refreshed, and its QUIC Initial
-    /// packets read. A mapping whose app's datagrams leave another way now ends.
+    /// A datagram from the app, `packet`, to a peer of its mapping: both are refreshed, its QUIC
+    /// Initial packets read, and it is sent, under the table's lock, without waiting for room in the
+    /// mapping's socket ([`try_send_to`]), so that one that left is noted as one an error may answer.
+    /// A mapping whose app's datagrams leave another way now ends.
     fn toward_peer(
         &mut self,
         (app, destination): (SocketAddr, SocketAddr),
-        payload: &[u8],
+        (packet, parsed, payload): (&[u8], &Packet, &[u8]),
         now: Instant,
         shared: &Shared,
     ) -> Option<ToPeer> {
@@ -1596,15 +1611,26 @@ impl UdpTable {
             return None;
         }
         socket.record.left(now);
+        let socket = Arc::clone(&mapping.socket);
         let peer = mapping.peers.get_mut(&destination)?;
         peer.last = now;
         peer.sent(destination.port(), payload);
         mapping.last = now;
+        let quic = read_quic(&mut peer.quic, payload);
+        let header = peer.way.header.clone();
+        let sent = try_send_to(
+            &socket,
+            header.as_deref(),
+            payload,
+            (destination, parsed.hops),
+        );
+        if sent.is_ok() {
+            peer.left(Sent::of(packet, parsed.transport));
+        }
         Some(ToPeer {
-            socket: Arc::clone(&mapping.socket),
-            header: peer.way.header.clone(),
+            sent,
             bytes: peer.bytes.clone(),
-            quic: read_quic(&mut peer.quic, payload),
+            quic,
         })
     }
 
@@ -1726,7 +1752,8 @@ impl Loop {
                         return;
                     }
                     None => {
-                        if let Some(to) = table.toward_peer(key, payload, now, &self.shared) {
+                        let datagram = (packet, parsed, payload);
+                        if let Some(to) = table.toward_peer(key, datagram, now, &self.shared) {
                             Next::Peer(to)
                         } else {
                             let known = !lookup && table.knows(key);
@@ -1739,7 +1766,7 @@ impl Loop {
         };
         let (way, uid, cached, owed) = match next {
             Next::Flow(way, uid, cached, owed) => (way, uid, cached, owed),
-            Next::Peer(to) => return self.send_to_peer(to, packet, parsed, payload).await,
+            Next::Peer(to) => return self.sent_to_peer(to, packet, parsed).await,
             Next::Open => {
                 tokio::spawn(open_udp(
                     key,
@@ -1806,17 +1833,12 @@ impl Loop {
         }
     }
 
-    /// A datagram to a peer of its app socket's mapping, which never waits for room in the mapping's
-    /// socket ([`try_send_to`]).
-    async fn send_to_peer(&self, to: ToPeer, packet: &[u8], parsed: &Packet, payload: &[u8]) {
+    /// What a datagram sent to a peer of its app socket's mapping gave ([`UdpTable::toward_peer`]):
+    /// counted, and the app told when its destination cannot be reached.
+    async fn sent_to_peer(&self, to: ToPeer, packet: &[u8], parsed: &Packet) {
         note_quic(&self.shared, to.quic);
-        let sent = try_send_to(
-            &to.socket,
-            to.header.as_deref(),
-            payload,
-            (parsed.destination, parsed.hops),
-        );
-        if let Some(error) = count_sent(&self.shared, to.bytes.as_deref(), packet, parsed, sent) {
+        let bytes = to.bytes.as_deref();
+        if let Some(error) = count_sent(&self.shared, bytes, packet, parsed, to.sent) {
             self.send(&error).await;
         }
     }
@@ -2173,6 +2195,9 @@ async fn open_peer(
                 payload,
                 (destination, parsed.hops),
             );
+            if sent.is_ok() {
+                peer.left(Sent::of(packet, parsed.transport));
+            }
             errors.extend(count_sent(
                 shared,
                 peer.bytes.as_deref(),
@@ -2621,7 +2646,7 @@ fn read_mapped(
     };
     for error in queued {
         let destination = error.destination;
-        let bytes = match lock(flows).mapping(app, id) {
+        let (bytes, sent) = match lock(flows).mapping(app, id) {
             None => return ended(read),
             Some(mapping) => {
                 // While a chain sends the app elsewhere, nothing comes in on its direct path: its
@@ -2632,25 +2657,29 @@ fn read_mapped(
                 // One error at most for each datagram the app sent the destination (ADR 0044, unit
                 // 11b): none for a destination the mapping never sent to, as a forged one would be.
                 let Some(peer) = mapping.peers.get_mut(&destination) else {
-                    read.told.unasked();
+                    read.told.dropped();
                     continue;
                 };
-                if !peer.takes_error() {
-                    read.told.unasked();
+                let Some(sent) = peer.takes_error() else {
+                    read.told.dropped();
                     continue;
-                }
-                peer.bytes.clone()
+                };
+                (peer.bytes.clone(), sent)
             }
         };
         // A router's "time exceeded", "fragmentation needed" or "packet too big" (with its MTU), and an
         // unreachable with its code, reach the app from whoever sent them, as without Watch (ADR 0044,
-        // decision 5 as amended, and unit 11b).
-        if let Some(packet) = told_to(app, destination, &error) {
-            if let Some(bytes) = &bytes {
-                bytes.add_wire_down(packet.len());
+        // decision 5 as amended, and unit 11b). One for which no error to the app can be built is
+        // dropped, and counted.
+        match told_to((app, destination), &error, &sent) {
+            Some(packet) => {
+                if let Some(bytes) = &bytes {
+                    bytes.add_wire_down(packet.len());
+                }
+                read.told.passed(error.told);
+                read.packets.push(packet);
             }
-            read.told.passed(error.told);
-            read.packets.push(packet);
+            None => read.told.dropped(),
         }
     }
     let mut control = hops::room();
@@ -2786,13 +2815,20 @@ fn unreachable_to(app: SocketAddr, destination: SocketAddr, told: Unreachable) -
     packet::unreachable(&quoted, &parsed, told)
 }
 
-/// An error from the path for the app at `app`, about its datagram to `destination`, quoting a
-/// datagram between the two as [`unreachable_to`] does, which the app's kernel matches to its socket by
-/// the ports: from the router or host that sent it, as without Watch, or from the destination where the
-/// kernel names no sender (ADR 0044, unit 11b; before, every one came as if from the destination). The
-/// app's kernel takes a "packet too big" for the path to the destination whoever reports it.
-fn told_to(app: SocketAddr, destination: SocketAddr, error: &Queued) -> Option<Vec<u8>> {
-    let quoted = packet::udp(app, destination, &[])?;
+/// An error from the path for the app at `app`, about its datagram to `destination`, from the router or
+/// host that sent it, as without Watch, or from the destination where the kernel names no sender (ADR
+/// 0044, unit 11b; before, every one came as if from the destination). It quotes the app's last
+/// datagram there, `sent`, as a router does: its IP header as the app sent it, with the hop limit the
+/// router found (1 for "time exceeded"), and its UDP header, by whose ports the app's kernel finds its
+/// socket; its payload, as before, not at all. The app's kernel takes a "packet too big" for the path to
+/// the destination whoever reports it.
+fn told_to(
+    (app, destination): (SocketAddr, SocketAddr),
+    error: &Queued,
+    sent: &Sent,
+) -> Option<Vec<u8>> {
+    let expired = error.told == Told::TimeExceeded;
+    let quoted = packet::quoted(sent, (app.ip(), destination.ip()), UDP, expired, &[])?;
     let from = errors::sender(error.offender, destination.ip(), destination.ip());
     errors::to_app(error.told, &quoted, (from, app.ip()), error.hops)
 }
@@ -3298,9 +3334,13 @@ mod tests {
         let reask = shared.limits.udp_reask;
         let asked = Instant::now();
         let nano = Duration::from_nanos(1);
+        let tick = packet::udp(APP, OTHER, b"tick").unwrap_or_default();
+        let Ok(parsed) = packet::parse(&tick) else {
+            unreachable!("not parsed")
+        };
         let passes = |table: &mut UdpTable, at: Instant| {
             table
-                .toward_peer((APP, OTHER), b"tick", at, &shared)
+                .toward_peer((APP, OTHER), (&tick, &parsed, b"tick"), at, &shared)
                 .is_some()
         };
         let mut table = table_of(&shared, Some(10_077), asked).await?;
@@ -3370,7 +3410,12 @@ mod tests {
         );
         table.answered(APP, (2, Named { uid: None, asked }), &shared);
         assert!(!table.mappings.contains_key(&APP));
-        assert!(table.toward_peer(key, b"after", asked, &shared).is_none());
+        let after = packet::udp(key.0, key.1, b"after").unwrap_or_default();
+        let Ok(parsed) = packet::parse(&after) else {
+            unreachable!("not parsed")
+        };
+        let datagram = (after.as_slice(), &parsed, &b"after"[..]);
+        assert!(table.toward_peer(key, datagram, asked, &shared).is_none());
         Ok(())
     }
 
@@ -3774,7 +3819,7 @@ mod tests {
 
     const TIME_EXCEEDED: usize = 41;
     const PATH_UNREACHABLE: usize = 42;
-    const ERRORS_UNASKED: usize = 44;
+    const ERRORS_DROPPED: usize = 44;
     const ROUTER: IpAddr = IpAddr::V4(std::net::Ipv4Addr::new(203, 0, 113, 7));
 
     /// An error from the path, as a mapping reads it off its queue, about a datagram to `destination`.
@@ -3794,18 +3839,41 @@ mod tests {
     }
 
     /// The app sends each of `peers` of its mapping as many datagrams as is given beside it.
+    /// Each datagram leaves, as the app sent it: with the identification 0x1234 and a time to live of
+    /// 5, which an error's quote keeps.
     fn send_each(flows: &UdpFlows, peers: &[(SocketAddr, usize)]) {
         let mut table = lock(flows);
         let Some(mapping) = table.mappings.get_mut(&APP) else {
             return;
         };
-        for &(peer, times) in peers {
-            if let Some(peer) = mapping.peers.get_mut(&peer) {
+        for &(address, times) in peers {
+            let mut datagram = packet::udp(APP, address, b"datagram").unwrap_or_default();
+            datagram[4..6].copy_from_slice(&[0x12, 0x34]);
+            datagram[8] = 5;
+            if let Some(peer) = mapping.peers.get_mut(&address) {
                 for _ in 0..times {
                     peer.sent(443, b"datagram");
+                    peer.left(Sent::of(&datagram, 20));
                 }
             }
         }
+    }
+
+    /// The datagram an IPv4 error quotes, from its 29th byte on: its identification, time to live,
+    /// ends, and its UDP header's length.
+    fn quote_of(error: &[u8]) -> ([u8; 2], u8, SocketAddr, SocketAddr, u16) {
+        let quote = &error[28..];
+        let address = |at: usize| {
+            std::net::Ipv4Addr::new(quote[at], quote[at + 1], quote[at + 2], quote[at + 3])
+        };
+        let port = |at: usize| u16::from_be_bytes([quote[at], quote[at + 1]]);
+        (
+            [quote[4], quote[5]],
+            quote[8],
+            SocketAddr::from((address(12), port(20))),
+            SocketAddr::from((address(16), port(22))),
+            port(24),
+        )
     }
 
     /// The errors a mapping read off its socket's error queue as the network beneath moved are not
@@ -3846,7 +3914,7 @@ mod tests {
         assert!(packets.is_empty() && end, "passed on after the move");
         let counted = |at: usize| shared.counters.snapshot()[at];
         assert_eq!(
-            [PATH_MTU, TIME_EXCEEDED, PATH_UNREACHABLE, ERRORS_UNASKED].map(counted),
+            [PATH_MTU, TIME_EXCEEDED, PATH_UNREACHABLE, ERRORS_DROPPED].map(counted),
             [0; 4]
         );
 
@@ -3868,10 +3936,9 @@ mod tests {
         assert_eq!(too_big[8], 9, "with the hop limit it came with");
         assert_eq!(&too_big[20..22], &[3, 4]);
         assert_eq!(u16::from_be_bytes([too_big[26], too_big[27]]), 1_400);
-        assert_eq!(
-            packet::parse(&too_big[28..]).map(|p| (p.source, p.destination)),
-            Ok((APP, ASKER))
-        );
+        // The datagram quoted as the app sent it: its identification and time to live, ends, and its
+        // UDP header's length, 16.
+        assert_eq!(quote_of(too_big), ([0x12, 0x34], 5, APP, ASKER, 16));
         assert_eq!(
             &unreachable[12..16],
             &[192, 0, 2, 2],
@@ -3880,12 +3947,10 @@ mod tests {
         assert_eq!((&unreachable[20..22], unreachable[8]), (&[3, 3][..], 64));
         assert_eq!(&exceeded[12..16], &[203, 0, 113, 7]);
         assert_eq!(&exceeded[20..22], &[11, 0]);
+        // A router quotes a packet whose time to live it found spent with 1.
+        assert_eq!(quote_of(exceeded), ([0x12, 0x34], 1, APP, ASKER, 16));
         assert_eq!(
-            packet::parse(&exceeded[28..]).map(|p| (p.source, p.destination)),
-            Ok((APP, ASKER))
-        );
-        assert_eq!(
-            [PATH_MTU, TIME_EXCEEDED, PATH_UNREACHABLE, ERRORS_UNASKED].map(counted),
+            [PATH_MTU, TIME_EXCEEDED, PATH_UNREACHABLE, ERRORS_DROPPED].map(counted),
             [1, 1, 1, 1],
             "the stranger's error dropped"
         );
@@ -3900,7 +3965,52 @@ mod tests {
             &flows,
         );
         assert!(packets.is_empty(), "a third error for two datagrams");
-        assert_eq!(counted(ERRORS_UNASKED), 2);
+        assert_eq!(counted(ERRORS_DROPPED), 2);
+        Ok(())
+    }
+
+    /// At most [`OWED_ERRORS`] errors are owed to a peer, one for each datagram the app sent it that
+    /// left (ADR 0044, unit 11b): after `OWED_ERRORS` and six datagrams, as many errors pass as the
+    /// bound, and the six more are dropped and counted; after three to another peer, all three pass. An
+    /// error for which no error to the app can be built, one from a multicast destination that named no
+    /// sender, is dropped and counted too (second review, minor 4).
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_peer_is_owed_at_most_owed_errors() -> io::Result<()> {
+        let shared = shared();
+        let mut table = table_of(&shared, Some(10_077), Instant::now()).await?;
+        let group = SocketAddr::from(([224, 0, 0, 251], 5353));
+        if let Some(mapping) = table.mappings.get_mut(&APP) {
+            let way = (false, PeerWay::direct(group));
+            mapping.peer(&shared, (APP, group), Instant::now(), way);
+        }
+        let socket = Arc::clone(&table.mappings[&APP].socket);
+        let flows: UdpFlows = Arc::new(Mutex::new(table));
+        let bound = usize::from(OWED_ERRORS);
+        send_each(&flows, &[(ASKER, bound + 6), (OTHER, 3), (group, 1)]);
+        let exceeded = |to| from_path(to, Told::TimeExceeded, Some(ROUTER), None);
+        let mut queued = vec![exceeded(ASKER); bound + 6];
+        queued.extend(vec![exceeded(OTHER); 3]);
+        queued.push(from_path(group, Told::Unreachable(3), None, None));
+        let mut buffer = vec![0u8; 2_048];
+        let (packets, end, _) = mapped_receive(
+            &socket,
+            &mut buffer,
+            (APP, 1, Some(10_077)),
+            (queued, &|| false),
+            &shared,
+            &flows,
+        );
+        assert!(!end);
+        assert_eq!(packets.len(), bound + 3);
+        let counted = shared.counters.snapshot();
+        assert_eq!(
+            (
+                counted[TIME_EXCEEDED],
+                counted[PATH_UNREACHABLE],
+                counted[ERRORS_DROPPED]
+            ),
+            (67, 0, 7)
+        );
         Ok(())
     }
 

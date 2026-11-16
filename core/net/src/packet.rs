@@ -717,6 +717,84 @@ pub fn echo_reply(
     echo(kind, (from, to), (id, sequence), data)
 }
 
+/// What a router quotes back of a packet an app sent, beside its addresses (ADR 0044, unit 11b): the
+/// first eight bytes of its IP header, IPv4's type of service, total length, identification, flags and
+/// fragment offset, or IPv6's traffic class, flow label and payload length; the hop limit it was sent
+/// with; and the first eight bytes of its transport header, UDP's whole, or an echo request's type,
+/// code, checksum, identifier and sequence number. Tools that match an error to their probe by these,
+/// as Paris traceroute and mtr do, find them as the app sent them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Sent {
+    ip: [u8; 8],
+    hops: u8,
+    transport: [u8; 8],
+}
+
+impl Sent {
+    /// What a router would quote of `packet`, an IPv4 or IPv6 packet whose transport header starts at
+    /// `transport`; `None` when it is shorter than that.
+    #[must_use]
+    pub fn of(packet: &[u8], transport: usize) -> Option<Self> {
+        let ip: [u8; 8] = packet.get(..8)?.try_into().ok()?;
+        let hops = *packet.get(if ip[0] >> 4 == 4 { 8 } else { 7 })?;
+        let transport = packet
+            .get(transport..transport.checked_add(8)?)?
+            .try_into()
+            .ok()?;
+        Some(Self {
+            ip,
+            hops,
+            transport,
+        })
+    }
+
+    /// The hop limit it was sent with.
+    #[must_use]
+    pub fn hops(&self) -> u8 {
+        self.hops
+    }
+}
+
+/// The packet an app sent, `sent`, as a router on its path quotes it in an error (RFC 792, RFC 4443
+/// 2.4): an IP header from `from` to `to` for `protocol`, of the app's own fields but with no IPv4
+/// options or IPv6 extension headers, and the hop limit the router found, 1 for one that found it spent
+/// (`expired`), else the one the app sent it with, which a router further on finds lower; then the
+/// transport header as the app sent it, and `rest`, what the router quoted after it. `None` when the
+/// versions of the addresses differ.
+#[must_use]
+pub fn quoted(
+    sent: &Sent,
+    (from, to): (IpAddr, IpAddr),
+    protocol: u8,
+    expired: bool,
+    rest: &[u8],
+) -> Option<Vec<u8>> {
+    let hops = if expired { 1 } else { sent.hops };
+    let ip = sent.ip;
+    let mut quote = match (from, to) {
+        (IpAddr::V4(from), IpAddr::V4(to)) => {
+            let mut header = vec![0x45, ip[1], ip[2], ip[3], ip[4], ip[5], ip[6], ip[7]];
+            header.extend_from_slice(&[hops, protocol, 0, 0]);
+            header.extend_from_slice(&from.octets());
+            header.extend_from_slice(&to.octets());
+            let checksum = header_checksum(&header);
+            header[10..12].copy_from_slice(&checksum.to_be_bytes());
+            header
+        }
+        (IpAddr::V6(from), IpAddr::V6(to)) => {
+            let mut header = vec![0x60 | (ip[0] & 0x0f), ip[1], ip[2], ip[3], ip[4], ip[5]];
+            header.extend_from_slice(&[protocol, hops]);
+            header.extend_from_slice(&from.octets());
+            header.extend_from_slice(&to.octets());
+            header
+        }
+        _ => return None,
+    };
+    quote.extend_from_slice(&sent.transport);
+    quote.extend_from_slice(rest);
+    Some(quote)
+}
+
 /// The echo request an app sent, ICMP's in IPv4 or `ICMPv6`'s in IPv6, from the app at `from` to `to`,
 /// with its own identifier `id`, its `sequence` and `data`: rebuilt for the quote of an error from the
 /// path that answers it, by whose identifier the app's kernel finds its ping socket (ADR 0044, unit

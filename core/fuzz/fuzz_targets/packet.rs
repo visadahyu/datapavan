@@ -90,12 +90,28 @@ fn echo(data: &[u8]) {
 }
 
 /// A hop limit set on any bytes, as on a packet the engine built: what reads as a packet still reads
-/// the same, but for its hop limit.
+/// the same, but for its hop limit. What a router would quote of a packet read, rebuilt as a quote of
+/// any bytes after it, is its own IP and transport headers' length and the bytes, and fits an error.
 fn hops(data: &[u8]) {
     let mut copy = data.to_vec();
     packet::set_hops(&mut copy, 7);
     if let Ok(parsed) = packet::parse(data) {
         assert_eq!(packet::parse(&copy), Ok(packet::Packet { hops: 7, ..parsed }));
+        if let Some(sent) = packet::Sent::of(data, parsed.transport) {
+            let ends = (parsed.source.ip(), parsed.destination.ip());
+            for expired in [false, true] {
+                let Some(quote) = packet::quoted(&sent, ends, parsed.protocol, expired, data) else {
+                    unreachable!("a quote of one IP version")
+                };
+                let ip = if parsed.source.is_ipv4() { 20 } else { 40 };
+                assert_eq!(quote.len(), ip + 8 + data.len());
+                let kind = if parsed.source.is_ipv4() { (11, 0) } else { (3, 0) };
+                if let Some(error) = packet::path_error(&quote, (ends.1, ends.0), kind, [0; 4]) {
+                    assert!(error.len() <= 1280);
+                    assert!(checks_out(&error));
+                }
+            }
+        }
     }
     if let Ok(echo) = packet::echo_request(data) {
         assert_eq!(packet::echo_request(&copy), Ok(packet::Echo { hops: 7, ..echo }));
