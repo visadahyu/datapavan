@@ -2,7 +2,8 @@ package org.visadahyu.datapavan.watch
 
 /**
  * The packet engine in Rust (`core/net`, ADR 0012), through its JNI bridge (`core/watch-jni`). One
- * engine runs at a time; it owns the tunnel's descriptor from [nativeStart] until [nativeStop].
+ * engine runs at a time; it owns the tunnel's descriptor from [nativeStart] or [nativeSwapTunnel] until
+ * [nativeStop].
  */
 internal object Engine {
     init {
@@ -28,6 +29,16 @@ internal object Engine {
         /** The tunnel's spare addresses, for a network that uses the common ones itself (ADR 0041). */
         spareAddresses: Boolean,
     ): Boolean
+
+    /**
+     * Hands the running engine the tunnel set up again with the same addresses, the descriptor [fd],
+     * which it takes over as [nativeStart] does (from `ParcelFileDescriptor.detachFd()`): the engine goes
+     * on with it in place of the old tunnel, keeping its connections, mappings, ping sockets, chain,
+     * names, stand-ins and counters, and closes the old one once it has handled what was still queued
+     * on it (ADR 0044, unit 12b). Returns whether it took it; false, with [fd] closed, when no engine
+     * runs or it could not take it.
+     */
+    external fun nativeSwapTunnel(fd: Int): Boolean
 
     /** Stops the engine and closes the tunnel's descriptor. */
     external fun nativeStop()

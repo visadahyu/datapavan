@@ -7,7 +7,8 @@
 # as "refused" and an unreachable IPv6 address as "no route", as without a VPN; that names resolve
 # through the tunnel's DNS, and flows are named after a DNS answer, a TLS server name or a QUIC one,
 # with the ECH a hello offers noted, an app's own DNS is recognised, and strict Private DNS is
-# detected (W3); that a connection straight to Watch's own listener is closed and counted; and that
+# detected (W3); that a connection straight to Watch's own listener is closed and counted; that a
+# connection kept open goes on when the tunnel is set up again with the same addresses; and that
 # all of it still works after the network beneath switches from Wi-Fi to mobile data. Nothing is left
 # running: the tunnel and the server stop at the end.
 #
@@ -55,13 +56,21 @@ QUIC_ON_DEVICE=/data/local/tmp/watch-quic
 # An app's own DNS (ADR 0029): a plain query for example.org, and a TLS hello for dns.google.
 DNS_ON_DEVICE=/data/local/tmp/watch-dns.bin
 DOH_ON_DEVICE=/data/local/tmp/watch-doh.bin
+# A connection kept open across the tunnel set up again (ADR 0044, unit 12b): nc reads its requests from
+# a FIFO and writes the answers to a file, both on the device.
+KEPT_IN=/data/local/tmp/watch-kept-in
+KEPT_OUT=/data/local/tmp/watch-kept-out
+# The adb shell on this computer that holds that connection, while it is open.
+KEPT=""
 # The emulator's setting to keep mobile data up while Wi-Fi is on, before the test changed it.
 DATA_ALWAYS_ON=""
 # Set while airplane mode is on to restart the emulator's radios, so that a failure then turns it off.
 AIRPLANE=""
 
 cleanup() {
-    adb shell rm -f "$HELLO_ON_DEVICE" "$QUIC_ON_DEVICE-1.bin" "$QUIC_ON_DEVICE-2.bin" "$DNS_ON_DEVICE" "$DOH_ON_DEVICE" >/dev/null 2>&1 || true
+    [ -z "$KEPT" ] || kill "$KEPT" 2>/dev/null || true
+    adb shell rm -f "$HELLO_ON_DEVICE" "$QUIC_ON_DEVICE-1.bin" "$QUIC_ON_DEVICE-2.bin" "$DNS_ON_DEVICE" "$DOH_ON_DEVICE" \
+        "$KEPT_IN" "$KEPT_OUT" >/dev/null 2>&1 || true
     adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
     if is_emulator; then
         [ -z "$AIRPLANE" ] || adb shell cmd connectivity airplane-mode disable >/dev/null 2>&1 || true
@@ -554,6 +563,72 @@ else
     [ "$link_mtu" = "$chosen" ] || fail "the tunnel's interface $interface carries an MTU of $link_mtu, not the ${chosen:-none} Watch chose (first hop: IPv4 $first4, IPv6 $first6)"
     echo "ok: the tunnel's MTU is $chosen, the first hop's (IPv4 $first4, IPv6 $first6)"
 fi
+
+# A tunnel set up again with the same addresses, as for a new MTU or a change of the apps left out, is handed
+# to the running engine, which keeps its flows (ADR 0044, unit 12b). A connection to the test server is opened
+# through Watch and kept open: nc reads HTTP requests from a FIFO, which a sleep holds open for writing so that
+# nc's input does not end between them, and writes the answers, kept alive, to a file. A debug command sets the
+# tunnel up again with nothing changed: Android makes a new interface, and the old one goes once the engine has
+# closed it. Then the same connection must carry a request and its answer, with no new connection recorded, and
+# the tunnel keep its MTU. Each output is read whole before it is parsed.
+kept_ask() { device 8 "printf 'GET /ping HTTP/1.1\r\nHost: watch\r\n\r\n' > $KEPT_IN" >/dev/null; }
+# Waits up to 10 s until the kept connection has had $1 answers.
+kept_answered() {
+    local answers
+    for _ in $(seq 1 10); do
+        answers=$(device 5 "grep -o pong $KEPT_OUT | wc -l")
+        [ "${answers// /}" = "$1" ] && return 0
+        sleep 1
+    done
+    return 1
+}
+# The interfaces that hold the tunnel's IPv4 address, one a line.
+tunnel_interfaces() {
+    local links
+    links=$(adb shell ip -o -4 addr show </dev/null | tr -d '\r')
+    awk -v address="$(tunnel_address)" '$4 ~ ("^" address "/") { print $2 }' <<<"$links"
+}
+server_connections() {
+    local listed
+    listed=$(flows)
+    grep -cE "^tcp [^ ]+ ${HOST//./\\.}:$PORT $SHELL_UID " <<<"$listed" || true
+}
+device 5 "rm -f $KEPT_IN $KEPT_OUT; mkfifo $KEPT_IN" >/dev/null
+adb shell "sleep 90 > $KEPT_IN & nc $HOST $PORT < $KEPT_IN > $KEPT_OUT" </dev/null >/dev/null 2>&1 &
+KEPT=$!
+# The answers' file is made once nc's input is open, which needs the sleep's end open first: a request
+# written before could be the FIFO's only writer, and its end would end nc's input.
+for _ in $(seq 1 10); do
+    [ "$(device 5 "[ -e $KEPT_OUT ] && echo made")" = made ] && break
+    sleep 1
+done
+kept_ask
+kept_answered 1 || fail "a connection kept open through Watch got no answer to its first request"
+connections=$(server_connections)
+adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" setup-again </dev/null | grep -q '^ *setup-again' ||
+    fail "the debug command to set the tunnel up again failed"
+moved=""
+for _ in $(seq 1 20); do
+    now=$(tunnel_interfaces)
+    if [ -n "$now" ] && ! grep -qx "$interface" <<<"$now"; then
+        moved=$(head -n 1 <<<"$now")
+        break
+    fi
+    sleep 1
+done
+[ -n "$moved" ] || fail "the tunnel was not set up again within 20 s, or its old interface $interface stayed: $(tunnel_interfaces | paste -sd ' ')"
+kept_ask
+kept_answered 2 || fail "the connection kept open through Watch carried no answer after the tunnel was set up again with the same addresses (interface $interface, then $moved)"
+[ "$(server_connections)" = "$connections" ] ||
+    fail "the engine recorded another connection to the server after the tunnel was set up again: $connections, then $(server_connections)"
+mtu_after=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" </dev/null | tr -d '\r' | sed -n 's/^ *mtu //p')
+[ "$mtu_after" = "$mtu_line" ] || fail "the tunnel's MTU line changed when it was set up again with nothing changed: $mtu_line, then $mtu_after"
+kill "$KEPT" 2>/dev/null || true
+wait "$KEPT" 2>/dev/null || true
+KEPT=""
+device 5 "rm -f $KEPT_IN $KEPT_OUT" >/dev/null
+interface=$moved
+echo "ok: set up again with the same addresses (interface $interface now), the tunnel kept a connection open through Watch, both ways, and its MTU"
 
 # Fragments (ADR 0044, decision 5 as amended): a ping of 2,000 bytes of data is a 2,028-byte request, which the
 # shell's kernel cuts into fragments at the tunnel's MTU of 1,500, and the engine puts together again before it

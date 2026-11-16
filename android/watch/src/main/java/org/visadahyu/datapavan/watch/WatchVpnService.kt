@@ -371,25 +371,62 @@ class WatchVpnService : VpnService() {
      * engine still runs on the old one: Android's `Vpn.establish` then keeps the VPN network and
      * updates it in place when only addresses or the MTU change, and connects a new network before it
      * disconnects the old one when the apps left out change (AOSP, `updateLinkPropertiesInPlaceIfPossible`
-     * and `startNewNetworkAgent`); the old interface is reset only after that. Only then does the old
-     * engine stop, closing the old tunnel, and one start on the new tunnel. The old engine hands the new
-     * one, before its first packet, its chain as Watch last set it, the network's resolver, its stand-ins,
-     * names and counters (`Engine::hand_over`, re-review of unit 12, major 1), so that no chained app's
-     * packet goes directly meanwhile; nothing is set on it again after, so that no chain read from older
-     * settings replaces a newer one. Flows begin anew, as when the tunnel was closed and opened; unit 12b
-     * will hand the new tunnel to the running engine instead, keeping them. Android leaves the network
-     * callbacks as they are, so they are not registered again.
+     * and `startNewNetworkAgent`); the old interface is reset only after that.
+     *
+     * Then, when the tunnel's addresses are the same, as for a new MTU or a change of the apps left out,
+     * the new tunnel is handed to the running engine, which goes on with it and keeps everything, its
+     * connections, mappings, ping sockets, chain and counters among them, and closes the old tunnel once
+     * it has read what was still queued there ([swapTunnel], ADR 0044, unit 12b). When they differ, for
+     * an address clash (ADR 0041) or the debug `addresses-force`, the apps' connections are bound to the
+     * old addresses and cannot go on, nor the engine's listeners and rewriting: the old engine stops,
+     * closing the old tunnel, and one starts on the new tunnel, as when a swap fails. The old engine
+     * hands the new one, before its first packet, its chain as Watch last set it, the network's resolver,
+     * its stand-ins, names and counters (`Engine::hand_over`, re-review of unit 12, major 1), so that no
+     * chained app's packet goes directly meanwhile; its flows begin anew. Either way nothing is set on
+     * the engine again after, so that no chain read from older settings replaces a newer one. Android
+     * leaves the network callbacks as they are, so they are not registered again.
      */
     private fun setUpAgain() {
         if (!active) return
+        val before = addresses
         val established = establish()
-        // nativeStart stops the engine that runs, which closes the old tunnel and hands over what it
-        // carries, before it starts anew.
-        if (established == null || !startEngine(established)) {
+        if (established == null) {
+            stop()
+            return
+        }
+        // The same addresses: the running engine takes the new tunnel and keeps its flows. Other ones, or
+        // a swap that failed: nativeStart stops the engine that runs, which closes the old tunnel and
+        // hands over what it carries, before it starts anew.
+        val kept = addresses === before && swapTunnel(established)
+        if (!kept && !startEngine(established)) {
             stop()
             return
         }
         setUpAt = SystemClock.elapsedRealtime()
+    }
+
+    /**
+     * Hands the running engine [tunnel], set up again with the same addresses, in place of the one it
+     * reads ([Engine.nativeSwapTunnel]); whether it took it. The engine's read buffer, sized from the
+     * first tunnel's MTU and never below 1,500 bytes, holds the new tunnel's packets too, since the
+     * tunnel's MTU never goes above 1,500 ([TunnelMtu]). The engine takes a duplicate of the descriptor,
+     * so that this one stays for [startEngine] when no engine runs or it could not take it; once it has
+     * taken it, this one is closed, and the engine's keeps the tunnel up.
+     */
+    private fun swapTunnel(tunnel: ParcelFileDescriptor): Boolean {
+        val duplicate = try {
+            tunnel.dup()
+        } catch (e: IOException) {
+            Log.w(TAG, "The new tunnel's descriptor could not be duplicated", e)
+            return false
+        }
+        if (!Engine.nativeSwapTunnel(duplicate.detachFd())) return false
+        try {
+            tunnel.close()
+        } catch (e: IOException) {
+            Log.w(TAG, "The new tunnel's own descriptor did not close", e)
+        }
+        return true
     }
 
     /**
@@ -592,6 +629,13 @@ class WatchVpnService : VpnService() {
                 }
                 main.post { setUpAgain() }
                 writer.println("addresses-forced $force")
+            }
+            // The tunnel set up again with nothing changed, by the path a new MTU or a change of the apps
+            // left out takes: the same addresses, so the running engine takes the new tunnel and keeps its
+            // flows (ADR 0044, unit 12b), which scripts/verify-watch.sh checks on a connection kept open.
+            if ("setup-again" in args.orEmpty()) {
+                main.post { setUpAgain() }
+                writer.println("setup-again")
             }
             debugChain(args.orEmpty().toList(), writer)
             if ("find-tool" in args.orEmpty()) {
