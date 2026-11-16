@@ -29,8 +29,9 @@ use jni::{EnvUnowned, JValue, JavaVM, jni_sig, jni_str};
 /// One exception is kept on purpose: `nativeFlushLog` hands records to `logRecords` under the lock,
 /// which writes them and returns. `nativeSwapTunnel` holds it while the engine's thread takes the new
 /// tunnel, so that the engine stays in place and a chain set meanwhile reaches it after: that thread
-/// never takes this lock, and reaches Kotlin only from tokio's blocking threads, through the three
-/// callbacks above.
+/// never takes this lock, and the Kotlin code it reaches, the three callbacks above, from tokio's
+/// blocking threads or from the engine's own thread as its loop ends (`logRecords`), never calls a
+/// native method of `Engine`.
 static ENGINE: Mutex<Option<Engine>> = Mutex::new(None);
 
 fn engine() -> MutexGuard<'static, Option<Engine>> {
