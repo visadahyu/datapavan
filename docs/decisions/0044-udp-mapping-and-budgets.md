@@ -134,9 +134,10 @@ an ADR (D25).
     socket answers.
   - When a network change brings another value, the tunnel is set up again, as for an address clash (ADR 0041),
     and make-before-break: the new tunnel is established while the engine still runs, so that nothing leaves outside
-    the tunnel meanwhile. Since its addresses stay, the running engine goes on with the new tunnel and keeps its
-    flows, chain and all (unit 12b); only a setup with other addresses starts a new engine, which goes on with the
-    one before's chain from its first packet.
+    the tunnel meanwhile. Where its addresses stay and Android keeps the same VPN network (the apps Watch hands its
+    `Builder` are the same, in the same order), the running engine goes on with the new tunnel and keeps its flows,
+    chain and all (unit 12b); a setup with other addresses or on a new VPN network starts a new engine, which goes
+    on with the one before's chain from its first packet.
     Within one network a lower value is taken at once and a higher one only 10 minutes after the last setup, so
     that a flapping route cannot set the tunnel up again and again.
   - Android's `Builder` takes one MTU for both IP versions, so the wider version meets the narrower one's MTU.
