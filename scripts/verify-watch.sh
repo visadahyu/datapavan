@@ -594,6 +594,8 @@ tunnel_interfaces() {
 device 5 "rm -f $KEPT_GO $KEPT_OUT" >/dev/null
 adb shell "(printf '$KEPT_REQUEST'; i=0; while [ ! -e $KEPT_GO ] && [ \$i -lt 300 ]; do sleep 0.2; i=\$((i + 1)); done; [ -e $KEPT_GO ] && printf '$KEPT_REQUEST'; sleep 5) | nc $HOST $PORT > $KEPT_OUT" </dev/null >/dev/null 2>&1 &
 KEPT=$!
+# The device waits 60 s at most for the marker (300 times 0.2 s), from about now.
+kept_since=$SECONDS
 kept_answered 1 || fail "a connection kept open through Watch got no answer to its first request; the device has: $(device 5 "ls -l $KEPT_OUT; head -c 300 $KEPT_OUT; ps -A -o PID,NAME | grep -E ' (nc|sleep)\$'" | tr '\n' ' ')"
 adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" setup-again </dev/null | grep -q '^ *setup-again' ||
     fail "the debug command to set the tunnel up again failed"
@@ -609,8 +611,13 @@ done
 [ -n "$moved" ] || fail "the tunnel was not set up again within 20 s, or its old interface $interface stayed: $(tunnel_interfaces | paste -sd ' ')"
 # Still one answer: the second request goes only once the marker is there, never when the device's wait ends.
 kept_answered 1 || fail "the connection kept open through Watch had other than one answer before its second request: $(device 5 "grep -o pong $KEPT_OUT | wc -l")"
+asked=$((SECONDS - kept_since))
 kept_ask
-kept_answered 2 || fail "the connection kept open through Watch carried no answer after the tunnel was set up again with the same addresses (interface $interface, then $moved)"
+if ! kept_answered 2; then
+    [ "$asked" -lt 60 ] ||
+        fail "the kept connection's second request was never sent: the marker came $asked s after the connection opened, after the device's 60 s wait for it had ended, as the steps before took that long; this says nothing of the swap"
+    fail "the connection kept open through Watch carried no answer after the tunnel was set up again with the same addresses (interface $interface, then $moved; the marker came after $asked s, within the device's 60 s wait for it)"
+fi
 mtu_after=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" </dev/null | tr -d '\r' | sed -n 's/^ *mtu //p')
 read -r chosen_after _ <<<"$mtu_after"
 [ "$chosen_after" = "$chosen" ] || fail "the tunnel's MTU changed when it was set up again with nothing changed: $chosen, then $chosen_after ($mtu_after)"
