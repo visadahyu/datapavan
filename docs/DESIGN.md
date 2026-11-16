@@ -830,6 +830,20 @@ the Android 15 emulator, a connection kept open passed a setup with nothing chan
 passed. How it is
 built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
+When netd destroys the sockets on the tunnel's address, 2026-11-16 (unit 12b, ADR 0044). On the Android 15 emulator,
+after the tunnel had been set up again with the same addresses seven times, Android's netd destroyed every TCP socket
+on the tunnel's address, as it does for an address it believes was removed: its bookkeeping of which interfaces hold
+the address raced the in-place update. The connections through Watch ended with them, which no VPN can prevent, and so
+did the engine's listener, whose accept loop ended at its first error: every connection after was refused. The loop
+now never ends: a listener that no longer listens is bound anew, on its own port if it can be, else on another, which
+the engine then rewrites new connections to while those the old one took go on through its port; one that still
+listens, after an error of one connection or a moment without descriptors or memory, accepts again after a pause of
+10 ms to a second. An upstream connection whose connection Android's stack reset before the listener handed it over is
+reset too, rather than held for ten minutes. In the network lab, `ss -K` destroys the sockets as netd does, IPv4 and
+IPv6, and a test runs the engine out of descriptors; `verify-watch.sh` tells a destroy by netd, from Android's log,
+from a stall, and requires a new connection to pass either way. How it is built:
+[ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
+
 Traceroute through Watch, 2026-11-16 (unit 11b, ADR 0044 decision 5), built by a fresh agent from a written brief.
 Watch is no longer a hop: an app's ping, and its UDP datagram on the direct path, leave with the app's own time to
 live or hop limit, what comes back reaches the app with the one it arrived with, and the errors the path sends, a
