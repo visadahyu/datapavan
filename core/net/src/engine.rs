@@ -215,11 +215,17 @@ pub struct Limits {
     /// request every second, so a socket silent this long belongs to one that has stopped; an app that
     /// pings again later gets a socket anew.
     pub echo_idle: Duration,
-    /// At the cap of ping sockets, one through which nothing passed either way for this long ends to
-    /// make room for a new one, when no socket whose every request has had its reply or error can (ADR
-    /// 0044, unit 11b). A ping sends a request every second, so one still pinging is never taken; one
-    /// that waits this long has lost its reply. Its app's next request, if any, gets a socket anew.
+    /// At the cap of ping sockets, one that has waited this long for an answer to its requests, with
+    /// none coming meanwhile, may end to make room for a new one (ADR 0044, unit 11b): its target is
+    /// silent, or its replies lost, even while its app sends on. Its app's next request, if any, gets a
+    /// socket anew.
     pub echo_quiet: Duration,
+    /// At the cap of ping sockets, one whose every request has had its reply or error, and through
+    /// which nothing passed for longer than this, ends first to make room for a new one (ADR 0044, unit
+    /// 11b, third round): a ping sends a request every second, so one still pinging sends its next
+    /// before this, while a one-shot ping's socket, as a traceroute app leaves for each probe, never
+    /// sends again.
+    pub echo_interval: Duration,
     /// At most this many datagrams are put together from the apps' fragments at once (ADR 0044,
     /// decision 5 as amended): for a fragment of one more, the oldest incomplete one gives way.
     pub fragment_datagrams: usize,
@@ -298,6 +304,7 @@ impl Default for Limits {
             echo_sockets: 32,
             echo_idle: Duration::from_secs(10),
             echo_quiet: Duration::from_secs(2),
+            echo_interval: Duration::from_millis(1_200),
             fragment_datagrams: 64,
             fragment_bytes: 1 << 20,
             fragment_wait: Duration::from_secs(5),
