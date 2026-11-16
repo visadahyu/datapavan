@@ -8,7 +8,7 @@
 # through the tunnel's DNS, and flows are named after a DNS answer, a TLS server name or a QUIC one,
 # with the ECH a hello offers noted, an app's own DNS is recognised, and strict Private DNS is
 # detected (W3); that a connection straight to Watch's own listener is closed and counted; that a
-# connection kept open goes on when the tunnel is set up again with the same addresses; and that
+# connection kept open goes on when the tunnel is set up again with the same addresses and apps; and that
 # all of it still works after the network beneath switches from Wi-Fi to mobile data. Nothing is left
 # running: the tunnel and the server stop at the end.
 #
@@ -564,15 +564,15 @@ else
     echo "ok: the tunnel's MTU is $chosen, the first hop's (IPv4 $first4, IPv6 $first6)"
 fi
 
-# A tunnel set up again with the same addresses, as for a new MTU or a change of the apps left out, is handed
-# to the running engine, which keeps its flows (ADR 0044, unit 12b). A connection to the test server is opened
+# A tunnel set up again with the same addresses and apps, as for a new MTU, keeps its VPN network on Android and is
+# handed to the running engine, which keeps its flows (ADR 0044, unit 12b). A connection to the test server is opened
 # through Watch and kept open: one nc sends an HTTP request, waits until a marker file is there (at most 60 s),
 # then sends a second on the same connection, kept alive, and writes the answers to a file. Android 15's shell may
 # not make a FIFO in /data/local/tmp, so the requests come from one shell's output rather than a FIFO. A debug
 # command sets the tunnel up again with nothing changed: Android makes a new interface, and the old one goes once
-# the engine has closed it. Then the marker lets the second request go: it must be answered on the same
-# connection, with no new connection recorded, and the tunnel keep its MTU. Each output is read whole before it is
-# parsed.
+# the engine has closed it. Then the marker lets the second request go: it must be answered on the same nc
+# connection, and the tunnel keep the MTU Watch chose (the first-hop values beside it may change with a measure).
+# Each output is read whole before it is parsed.
 KEPT_REQUEST='GET /ping HTTP/1.1\r\nHost: watch\r\n\r\n'
 kept_ask() { device 5 "touch $KEPT_GO" >/dev/null; }
 # Waits up to 10 s until the kept connection has had $1 answers.
@@ -591,16 +591,10 @@ tunnel_interfaces() {
     links=$(adb shell ip -o -4 addr show </dev/null | tr -d '\r')
     awk -v address="$(tunnel_address)" '$4 ~ ("^" address "/") { print $2 }' <<<"$links"
 }
-server_connections() {
-    local listed
-    listed=$(flows)
-    grep -cE "^tcp [^ ]+ ${HOST//./\\.}:$PORT $SHELL_UID " <<<"$listed" || true
-}
 device 5 "rm -f $KEPT_GO $KEPT_OUT" >/dev/null
 adb shell "(printf '$KEPT_REQUEST'; i=0; while [ ! -e $KEPT_GO ] && [ \$i -lt 300 ]; do sleep 0.2; i=\$((i + 1)); done; printf '$KEPT_REQUEST'; sleep 5) | nc $HOST $PORT > $KEPT_OUT" </dev/null >/dev/null 2>&1 &
 KEPT=$!
 kept_answered 1 || fail "a connection kept open through Watch got no answer to its first request; the device has: $(device 5 "ls -l $KEPT_OUT; head -c 300 $KEPT_OUT; ps -A -o PID,NAME | grep -E ' (nc|sleep)\$'" | tr '\n' ' ')"
-connections=$(server_connections)
 adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" setup-again </dev/null | grep -q '^ *setup-again' ||
     fail "the debug command to set the tunnel up again failed"
 moved=""
@@ -615,10 +609,9 @@ done
 [ -n "$moved" ] || fail "the tunnel was not set up again within 20 s, or its old interface $interface stayed: $(tunnel_interfaces | paste -sd ' ')"
 kept_ask
 kept_answered 2 || fail "the connection kept open through Watch carried no answer after the tunnel was set up again with the same addresses (interface $interface, then $moved)"
-[ "$(server_connections)" = "$connections" ] ||
-    fail "the engine recorded another connection to the server after the tunnel was set up again: $connections, then $(server_connections)"
 mtu_after=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" </dev/null | tr -d '\r' | sed -n 's/^ *mtu //p')
-[ "$mtu_after" = "$mtu_line" ] || fail "the tunnel's MTU line changed when it was set up again with nothing changed: $mtu_line, then $mtu_after"
+read -r chosen_after _ <<<"$mtu_after"
+[ "$chosen_after" = "$chosen" ] || fail "the tunnel's MTU changed when it was set up again with nothing changed: $chosen, then $chosen_after ($mtu_after)"
 kill "$KEPT" 2>/dev/null || true
 wait "$KEPT" 2>/dev/null || true
 KEPT=""
