@@ -192,6 +192,35 @@ class RulesTest {
     }
 
     @Test
+    fun `each finding of the hardware check is as severe as what it could hide`() {
+        // What could hide an unlocked bootloader or a system not verified is high, as they are; what cannot be
+        // confirmed, or failed, is medium; a software answer where the phone declares no secure hardware, or
+        // on an emulator, is low.
+        val expected = mapOf(
+            FindingKind.BOOTLOADER_UNLOCKED to Severity.HIGH,
+            FindingKind.BOOT_NOT_VERIFIED to Severity.HIGH,
+            FindingKind.ATTESTATION_REVOKED to Severity.HIGH,
+            FindingKind.ATTESTATION_FORGED to Severity.HIGH,
+            FindingKind.ATTESTATION_SOFTWARE_ANSWER to Severity.HIGH,
+            FindingKind.ATTESTATION_PUBLIC_ROOT to Severity.HIGH,
+            FindingKind.ATTESTATION_UNCONFIRMED to Severity.MEDIUM,
+            FindingKind.ATTESTATION_INCOMPLETE to Severity.MEDIUM,
+            FindingKind.ATTESTATION_OUT_OF_DATE to Severity.MEDIUM,
+            FindingKind.ATTESTATION_BROKEN to Severity.MEDIUM,
+            FindingKind.ATTESTATION_KEYS_UNAVAILABLE to Severity.MEDIUM,
+            FindingKind.ATTESTATION_FAILED to Severity.MEDIUM,
+            FindingKind.SYSTEM_OWN_KEY to Severity.MEDIUM,
+            FindingKind.OLD_SECURITY_PATCH to Severity.MEDIUM,
+            FindingKind.INTEGRITY_SOFTWARE_ONLY to Severity.LOW,
+            FindingKind.INTEGRITY_EMULATOR to Severity.LOW,
+        )
+        assertEquals(expected, expected.keys.associateWith { it.severity })
+        // A new kind of the check is given a severity here too.
+        val ofTheCheck = FindingKind.entries.filter { it.name.startsWith("ATTESTATION_") || it.name.startsWith("INTEGRITY_") }
+        assertTrue(expected.keys.containsAll(ofTheCheck))
+    }
+
+    @Test
     fun `a phone waiting for keys from Google is told apart from a failed check`() {
         val waiting = DeviceFacts(false, false, emptyList(), vpnActive = false, integrity = null, integrityFailure = IntegrityFailure.KEYS_UNAVAILABLE)
         assertEquals(listOf(FindingKind.ATTESTATION_KEYS_UNAVAILABLE), Rules.forDevice(waiting, nowYearMonth = 202_610))

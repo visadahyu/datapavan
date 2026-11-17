@@ -505,11 +505,6 @@ internal fun integrityLines(device: DeviceFacts, today: LocalDate): List<Pair<In
     val lines = mutableListOf<Pair<Int, String?>>()
     if (confirmed && integrity.deviceLocked == true && integrity.verifiedBoot == 0) {
         lines += R.string.device_integrity_ok to null
-        // Not revoked as of the list's date: a key revoked since then would pass.
-        integrity.revocationListDate?.let { date ->
-            val old = ChronoUnit.DAYS.between(date, today) > REVOCATION_LIST_DAYS
-            lines += (if (old) R.string.device_revocation_list_old else R.string.device_revocation_list) to date.toString()
-        }
     }
     integrity.osPatchLevel?.let {
         lines += (if (confirmed) R.string.device_patch else R.string.device_patch_system) to yearMonth(it)
@@ -521,6 +516,12 @@ internal fun integrityLines(device: DeviceFacts, today: LocalDate): List<Pair<In
     // the hardware states it, since a forger could show any key.
     integrity.verifiedBootKey?.takeIf { confirmed && integrity.verifiedBoot == 1 }
         ?.let { lines += R.string.device_boot_key to it }
+    // Every value above was confirmed against the revocation list as of its date, under them all: a key revoked
+    // since then would pass.
+    integrity.revocationListDate?.takeIf { confirmed && lines.isNotEmpty() }?.let { date ->
+        val old = ChronoUnit.DAYS.between(date, today) > REVOCATION_LIST_DAYS
+        lines += (if (old) R.string.device_revocation_list_old else R.string.device_revocation_list) to date.toString()
+    }
     return lines
 }
 

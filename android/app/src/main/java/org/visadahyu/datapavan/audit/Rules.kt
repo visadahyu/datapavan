@@ -165,7 +165,8 @@ object Rules {
         }
         device.integrity?.let { integrity ->
             val trust = integrity.trust
-            // Nothing a forged attestation says is used: not its bootloader state, not its patch level.
+            // Nothing a forged attestation says is used, not its bootloader state, not its patch level: it may be
+            // another phone's answer, or whatever its forger chose.
             if (trust == AttestationTrust.FORGED) {
                 add(FindingKind.ATTESTATION_FORGED)
                 return@let
@@ -187,7 +188,8 @@ object Rules {
                     },
                 )
             } else {
-                // A claim of secure hardware signed under a key that AOSP publishes: anyone could have made it.
+                // A claim of secure hardware signed under a key that AOSP publishes: anyone could have made it, and
+                // no sound phone does. Like a forged one, it is reported alone; what it says is its maker's choice.
                 if (trust == AttestationTrust.SOFTWARE_ROOT) {
                     add(FindingKind.ATTESTATION_PUBLIC_ROOT)
                     return@let
@@ -203,15 +205,17 @@ object Rules {
                 // in the list it enforces itself, and the engine never takes them from the list the
                 // system writes (ADR 0040, decision 5), so their absence is reported, not passed over.
                 if (integrity.deviceLocked == null || integrity.verifiedBoot == null) add(FindingKind.ATTESTATION_INCOMPLETE)
-                // An unconfirmed attestation's warnings are reported all the same: a forger gains nothing by them.
+                // The warnings of an attestation a sound phone could have made are reported, confirmed or not: a
+                // forger gains nothing by them. (The two that no sound phone makes returned above.)
                 if (integrity.deviceLocked == false) add(FindingKind.BOOTLOADER_UNLOCKED)
                 // Locked with a key that is not the maker's (ADR 0040, decision 7): until a dataset of the keys
                 // that systems such as GrapheneOS publish exists, no such key can be named, so each is a medium fact.
                 if (integrity.deviceLocked == true && integrity.verifiedBoot == 1) add(FindingKind.SYSTEM_OWN_KEY)
                 if (integrity.deviceLocked == true && integrity.verifiedBoot in setOf(2, 3)) add(FindingKind.BOOT_NOT_VERIFIED)
             }
-            // An old patch level is believed from any source: no system makes itself look older than it is. The
-            // vendor's level is shown, not judged: a phone may patch its vendor image and leave the level behind.
+            // An old patch level is believed from any attestation a sound phone could have made, in hardware or in
+            // software, confirmed or not: no system makes itself look older than it is. The vendor's level is
+            // shown, not judged: a phone may patch its vendor image and leave the level behind.
             val patch = integrity.osPatchLevel
             if (patch != null && months(nowYearMonth) - months(patch) > 12) add(FindingKind.OLD_SECURITY_PATCH)
         }

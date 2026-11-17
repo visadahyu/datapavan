@@ -435,6 +435,14 @@ class DeviceCollector(private val context: Context) {
      * this one's. A hook inside this app's own process can do more: make the challenge one it knows, so that a
      * captured genuine chain from any phone answers it, or hand back certificates whose signature check lies.
      * Only a check from outside the phone (ADR 0040, decision 6) closes all three.
+     *
+     * On a phone that declares secure hardware for its keys ([hardwareKeystore]), a hook cannot make the answer
+     * quiet, but it can still make it medium where an unlocked bootloader is high: a chain at a hardware level
+     * under a root of its own (unconfirmed), a broken chain, a failed check, or the error that says the keys are
+     * unavailable (waiting for Google). With root, a modified system can also hide the declaration, the feature's
+     * file in the vendor partition, and a software answer then reads as on a phone without such hardware (low).
+     * Remembering an earlier sound check on the phone would not close these (ADR 0040: unlocking wipes the
+     * memory, and root can erase it); decision 6's check from a second phone, which pins what it saw, does.
      */
     private fun integrity(): IntegrityResult {
         val keystore = try {
@@ -470,10 +478,7 @@ class DeviceCollector(private val context: Context) {
 
     private fun attestationChain(): AttestationChain {
         val data = DataPackStore.get(context)
-        val roots = data.file(AttestationChain.ROOTS_PATH) ?: throw IOException(AttestationChain.ROOTS_PATH)
-        val revoked = data.file(AttestationChain.REVOKED_PATH) ?: throw IOException(AttestationChain.REVOKED_PATH)
-        val source = data.file(AttestationChain.SOURCE_PATH)
-        return AttestationChain.load(roots.inputStream(), revoked.inputStream(), source?.inputStream())
+        return AttestationChain.load(data.active, data.bundled)
     }
 
     private companion object {

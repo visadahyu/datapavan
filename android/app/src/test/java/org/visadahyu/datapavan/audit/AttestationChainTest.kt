@@ -3,10 +3,12 @@ package org.visadahyu.datapavan.audit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.visadahyu.datapavan.datapack.DataPack
 import java.io.File
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.time.Instant
+import java.time.LocalDate
 import java.util.Date
 
 /**
@@ -54,6 +56,66 @@ class AttestationChainTest {
         val retrieved = File(DATA, "SOURCE").readLines().first { it.startsWith("retrieved:") }
         assertEquals(retrieved.substringAfter(":").trim().take(10), loaded.revocationListDate.toString())
         assertEquals(null, google.revocationListDate)
+    }
+
+    /** A data pack holding [files], by path. */
+    private fun pack(files: Map<String, String>): DataPack {
+        var bytes = ByteArray(0)
+        val ranges = files.mapValues { (_, text) ->
+            val start = bytes.size
+            bytes += text.toByteArray()
+            start until bytes.size
+        }
+        return DataPack(bytes, 0, 1, "2026-11-17", emptyList(), emptyList(), ranges)
+    }
+
+    @Test
+    fun `the revocation list comes with its own date, from the pack that holds it`() {
+        val roots = File(DATA, "google-roots.pem").readText()
+        val sony = corpus("sony-xperia10-iii/sdk33/TEE_EC.pem")
+        val revokedSony = sony[0].serialNumber.toString(16) + "\n"
+        val bundled = pack(
+            mapOf(
+                AttestationChain.ROOTS_PATH to roots,
+                AttestationChain.REVOKED_PATH to "# none\n",
+                AttestationChain.SOURCE_PATH to "retrieved: 2026-10-29T15:10:29Z\n",
+            ),
+        )
+        // A newer pack with a date but no list: the date is not put on the APK's older list.
+        val dateOnly = pack(mapOf(AttestationChain.SOURCE_PATH to "retrieved: 2027-03-01T00:00:00Z\n"))
+        assertEquals(LocalDate.of(2026, 10, 29), AttestationChain.load(dateOnly, bundled).revocationListDate)
+        // A newer pack with a list but no date: its list is used, and not called as old as the APK's.
+        val listOnly = AttestationChain.load(pack(mapOf(AttestationChain.REVOKED_PATH to revokedSony)), bundled)
+        assertEquals(AttestationTrust.REVOKED, listOnly.trust(sony))
+        assertEquals(null, listOnly.revocationListDate)
+        // A whole newer dataset, as packs carry it.
+        val newer = pack(
+            mapOf(
+                AttestationChain.ROOTS_PATH to roots,
+                AttestationChain.REVOKED_PATH to revokedSony,
+                AttestationChain.SOURCE_PATH to "retrieved: 2027-03-01T00:00:00Z\n",
+            ),
+        )
+        val loaded = AttestationChain.load(newer, bundled)
+        assertEquals(AttestationTrust.REVOKED, loaded.trust(sony))
+        assertEquals(LocalDate.of(2027, 3, 1), loaded.revocationListDate)
+        assertEquals(LocalDate.of(2026, 10, 29), AttestationChain.load(bundled).revocationListDate)
+    }
+
+    @Test
+    fun `the software keystore's chain is told by its root before its dates, after revocation`() {
+        // The Pixel XL's software chain at the time of this test: its intermediate expired in January 2026, and
+        // the chain is still the published root's, not merely out of date.
+        val marlin = corpus("marlin/sdk29/TEE_EC_NONE.pem")
+        val today = Date.from(Instant.parse("2026-11-17T00:00:00Z"))
+        assertTrue(marlin[1].notAfter.before(today))
+        assertEquals(AttestationTrust.SOFTWARE_ROOT, google.trust(marlin, today))
+        // A revoked serial in it is reported as revoked, as from any chain.
+        val roots = File(DATA, "google-roots.pem").inputStream().use { input ->
+            CertificateFactory.getInstance("X.509").generateCertificates(input).map { AttestationChain.keyFingerprint(it.publicKey) }.toSet()
+        }
+        val revoked = AttestationChain(roots, setOf(marlin[1].serialNumber.toString(16)))
+        assertEquals(AttestationTrust.REVOKED, revoked.trust(marlin))
     }
 
     @Test

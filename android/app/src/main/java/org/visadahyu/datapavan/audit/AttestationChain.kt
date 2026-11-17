@@ -1,5 +1,7 @@
 package org.visadahyu.datapavan.audit
 
+import org.visadahyu.datapavan.datapack.DataPack
+import java.io.IOException
 import java.io.InputStream
 import java.math.BigInteger
 import java.security.GeneralSecurityException
@@ -224,6 +226,20 @@ class AttestationChain(
             }
             val date = retrieved?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
             return AttestationChain(keys, serials, date)
+        }
+
+        /**
+         * Reads the attestation dataset from [packs], the active pack first: the root keys from the first pack
+         * that holds them, and the revocation list together with its SOURCE from the first pack that holds the
+         * list, so that the date shown is the date of the list in use. Read file by file, as DataPackStore.file
+         * falls back, a newer pack's date could be put on the APK's older list, or the APK's older date on a
+         * newer list. A list without its SOURCE is undated.
+         */
+        fun load(vararg packs: DataPack): AttestationChain {
+            val roots = packs.firstNotNullOfOrNull { it.file(ROOTS_PATH) } ?: throw IOException(ROOTS_PATH)
+            val (pack, revoked) = packs.firstNotNullOfOrNull { pack -> pack.file(REVOKED_PATH)?.let { pack to it } }
+                ?: throw IOException(REVOKED_PATH)
+            return load(roots.inputStream(), revoked.inputStream(), pack.file(SOURCE_PATH)?.inputStream())
         }
     }
 }

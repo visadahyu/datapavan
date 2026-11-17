@@ -26,15 +26,33 @@ class IntegrityLinesTest {
 
     @Test
     fun `the check says how old its revocation list is`() {
+        // Under every value it confirms, after them.
         val fresh = locked.copy(revocationListDate = LocalDate.of(2026, 10, 29))
         assertEquals(
-            listOf(R.string.device_integrity_ok to null, R.string.device_revocation_list to "2026-10-29", R.string.device_patch to "2026-07"),
+            listOf(R.string.device_integrity_ok to null, R.string.device_patch to "2026-07", R.string.device_revocation_list to "2026-10-29"),
             lines(fresh),
         )
         // Ninety days is the last day the list is not called old.
-        assertEquals(R.string.device_revocation_list, lines(locked.copy(revocationListDate = today.minusDays(90)))[1].first)
+        assertEquals(R.string.device_revocation_list, lines(locked.copy(revocationListDate = today.minusDays(90))).last().first)
         val old = locked.copy(revocationListDate = today.minusDays(91))
-        assertEquals(R.string.device_revocation_list_old to today.minusDays(91).toString(), lines(old)[1])
+        assertEquals(R.string.device_revocation_list_old to today.minusDays(91).toString(), lines(old).last())
+    }
+
+    @Test
+    fun `values confirmed on a phone that is not locked and verified carry the list's date too`() {
+        // A system locked with its owner's key, such as GrapheneOS: its boot key is confirmed, so the date of the
+        // revocation list it was confirmed against is shown with it.
+        val own = locked.copy(verifiedBoot = 1, verifiedBootKey = "ab12", revocationListDate = LocalDate.of(2026, 10, 29))
+        assertEquals(
+            listOf(R.string.device_patch to "2026-07", R.string.device_boot_key to "ab12", R.string.device_revocation_list to "2026-10-29"),
+            lines(own),
+        )
+        // An unlocked phone's patch level, confirmed by Google's key.
+        val unlocked = locked.copy(deviceLocked = false, verifiedBoot = 2, revocationListDate = LocalDate.of(2026, 10, 29))
+        assertEquals(listOf(R.string.device_patch to "2026-07", R.string.device_revocation_list to "2026-10-29"), lines(unlocked))
+        // Nothing confirmed, nothing to date; and nothing unconfirmed is dated.
+        assertEquals(emptyList<Pair<Int, String?>>(), lines(unlocked.copy(osPatchLevel = null)))
+        assertEquals(listOf(R.string.device_patch_system to "2026-07"), lines(own.copy(trust = AttestationTrust.OTHER_ROOT)))
     }
 
     @Test

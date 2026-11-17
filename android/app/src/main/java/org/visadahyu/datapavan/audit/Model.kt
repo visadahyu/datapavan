@@ -90,7 +90,11 @@ enum class AttestationTrust {
     /** Signed up to one of Google's attestation root keys, and nothing in the chain is revoked. */
     GOOGLE_ROOT,
 
-    /** A valid chain to a root key that Google does not vouch for, such as the emulator's software key. */
+    /**
+     * A valid chain to a root key that Google does not vouch for: a maker's or a system's own root, as on phones
+     * outside Google's programme, or a root that whoever hooks the keystore made. (The emulator's software
+     * keystore signs under AOSP's published root, [SOFTWARE_ROOT].)
+     */
     OTHER_ROOT,
 
     /** A certificate is not signed by the next one, so the chain proves nothing. */
