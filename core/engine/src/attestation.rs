@@ -3,10 +3,17 @@
 //! The extension (OID 1.3.6.1.4.1.11129.2.1.17) states, among other things, whether the bootloader
 //! is locked and whether verified boot succeeded. The bytes come from the device's keystore, which
 //! a compromised system can tamper with, so they are parsed as untrusted input: every length is
-//! checked, nesting is bounded, and malformed input is an error, never a panic.
+//! checked, and malformed input is an error, never a panic.
 //!
 //! Only the fields the audit needs are decoded. Schema:
 //! <https://source.android.com/docs/security/features/keystore/attestation#schema>
+//!
+//! # Depth
+//!
+//! The parser descends by the schema, never by the input, and without recursion: the deepest
+//! element it reads is a field of `RootOfTrust`, five elements below the extension's OCTET STRING
+//! (`KeyDescription`, an authorization list, the `[704]` wrapper, `RootOfTrust`, the field).
+//! Nesting in the input cannot take it deeper, so it needs no depth limit.
 
 use core::fmt;
 
@@ -14,8 +21,6 @@ use core::fmt;
 const TAG_ROOT_OF_TRUST: u32 = 704;
 /// Context-specific tag of `osPatchLevel` in an `AuthorizationList`.
 const TAG_OS_PATCH_LEVEL: u32 = 706;
-/// Deeper nesting than this never occurs in a valid `KeyDescription`.
-const MAX_DEPTH: u8 = 8;
 
 /// Where the attested key lives, and so how much the attestation can be trusted.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,21 +73,24 @@ pub struct KeyDescription {
 pub enum Error {
     /// The input ended inside an element.
     Truncated,
+    /// A field that the schema requires is absent.
+    MissingField,
+    /// Bytes or elements follow the last element that the schema allows there.
+    ExtraData,
     /// An element had a tag other than the one the schema requires.
     UnexpectedTag,
     /// A length or a value could not be represented.
     InvalidValue,
-    /// Elements were nested deeper than any valid `KeyDescription`.
-    TooDeep,
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Self::Truncated => "truncated attestation extension",
+            Self::MissingField => "missing field in attestation extension",
+            Self::ExtraData => "unexpected data after a field of attestation extension",
             Self::UnexpectedTag => "unexpected element in attestation extension",
             Self::InvalidValue => "invalid value in attestation extension",
-            Self::TooDeep => "attestation extension nested too deeply",
         })
     }
 }
@@ -100,15 +108,15 @@ pub fn parse_key_description(extension: &[u8]) -> Result<KeyDescription, Error> 
     let sequence = Element::read_one(wrapper.content, Tag::universal(TAG_SEQUENCE, true))?;
     let fields = sequence.children()?;
 
-    let attestation_version = fields.first().ok_or(Error::Truncated)?.unsigned()?;
-    let security_level = match fields.get(1).ok_or(Error::Truncated)?.unsigned()? {
+    let attestation_version = fields.first().ok_or(Error::MissingField)?.unsigned()?;
+    let security_level = match fields.get(1).ok_or(Error::MissingField)?.unsigned()? {
         0 => SecurityLevel::Software,
         1 => SecurityLevel::TrustedEnvironment,
         2 => SecurityLevel::StrongBox,
         _ => return Err(Error::InvalidValue),
     };
-    let software = fields.get(6).ok_or(Error::Truncated)?.children()?;
-    let hardware = fields.get(7).ok_or(Error::Truncated)?.children()?;
+    let software = fields.get(6).ok_or(Error::MissingField)?.children()?;
+    let hardware = fields.get(7).ok_or(Error::MissingField)?.children()?;
 
     // The hardware-enforced list is authoritative; software keystores fill only the other one.
     let root_of_trust = match find(&hardware, TAG_ROOT_OF_TRUST) {
@@ -123,7 +131,7 @@ pub fn parse_key_description(extension: &[u8]) -> Result<KeyDescription, Error> 
             explicit
                 .children()?
                 .first()
-                .ok_or(Error::Truncated)?
+                .ok_or(Error::MissingField)?
                 .unsigned()
         })
         .transpose()?;
@@ -143,9 +151,9 @@ fn find<'l, 'a>(list: &'l [Element<'a>], tag: u32) -> Option<&'l Element<'a>> {
 
 fn root_of_trust(explicit: &Element<'_>) -> Result<RootOfTrust, Error> {
     let inner = explicit.children()?;
-    let sequence = inner.first().ok_or(Error::Truncated)?;
+    let sequence = inner.first().ok_or(Error::MissingField)?;
     let fields = sequence.children()?;
-    let locked = fields.get(1).ok_or(Error::Truncated)?;
+    let locked = fields.get(1).ok_or(Error::MissingField)?;
     if locked.tag != Tag::universal(TAG_BOOLEAN, false) {
         return Err(Error::UnexpectedTag);
     }
@@ -154,7 +162,7 @@ fn root_of_trust(explicit: &Element<'_>) -> Result<RootOfTrust, Error> {
         [_] => true,
         _ => return Err(Error::InvalidValue),
     };
-    let verified_boot = match fields.get(2).ok_or(Error::Truncated)?.unsigned()? {
+    let verified_boot = match fields.get(2).ok_or(Error::MissingField)?.unsigned()? {
         0 => VerifiedBootState::Verified,
         1 => VerifiedBootState::SelfSigned,
         2 => VerifiedBootState::Unverified,
@@ -197,26 +205,22 @@ impl Tag {
 struct Element<'a> {
     tag: Tag,
     content: &'a [u8],
-    depth: u8,
 }
 
 impl<'a> Element<'a> {
     /// Reads one element that must fill `input` completely and carry `expected` as its tag.
     fn read_one(input: &'a [u8], expected: Tag) -> Result<Self, Error> {
-        let (element, rest) = Self::read(input, 0)?;
+        let (element, rest) = Self::read(input)?;
         if element.tag != expected {
             return Err(Error::UnexpectedTag);
         }
         if !rest.is_empty() {
-            return Err(Error::InvalidValue);
+            return Err(Error::ExtraData);
         }
         Ok(element)
     }
 
-    fn read(input: &'a [u8], depth: u8) -> Result<(Self, &'a [u8]), Error> {
-        if depth > MAX_DEPTH {
-            return Err(Error::TooDeep);
-        }
+    fn read(input: &'a [u8]) -> Result<(Self, &'a [u8]), Error> {
         let (&first, mut rest) = input.split_first().ok_or(Error::Truncated)?;
         let class = first >> 6;
         let constructed = first & 0x20 != 0;
@@ -257,7 +261,6 @@ impl<'a> Element<'a> {
                     number,
                 },
                 content,
-                depth,
             },
             rest,
         ))
@@ -271,7 +274,7 @@ impl<'a> Element<'a> {
         let mut out = Vec::new();
         let mut rest = self.content;
         while !rest.is_empty() {
-            let (child, tail) = Self::read(rest, self.depth.saturating_add(1))?;
+            let (child, tail) = Self::read(rest)?;
             out.push(child);
             rest = tail;
         }
@@ -556,6 +559,7 @@ mod tests {
 
     /// Paths into `tee_device()`.
     const ATTESTATION_LEVEL: &[usize] = &[0, 1];
+    const ROOT_SEQUENCE: &[usize] = &[0, 7, 7, 0];
     const BOOT_STATE: &[usize] = &[0, 7, 7, 0, 2];
     const PATCH_VALUE: &[usize] = &[0, 7, 9, 0];
 
@@ -604,37 +608,22 @@ mod tests {
         );
     }
 
-    // Errors, and values of any size.
+    // Error names, and values of any size.
 
     #[test]
-    fn rejects_trailing_bytes_and_wrong_tags() {
+    fn names_a_missing_field_and_extra_data() {
+        assert_eq!(
+            with(ROOT_SEQUENCE, sequence(vec![octets(&[0xaa; 32])], 3)),
+            Err(Error::MissingField)
+        );
         let mut trailing = encode(&tee_device());
         trailing.push(0);
-        assert_eq!(parse_key_description(&trailing), Err(Error::InvalidValue));
+        assert_eq!(parse_key_description(&trailing), Err(Error::ExtraData));
         assert_eq!(
             parse_key_description(&encode(&sequence(vec![], 0))),
             Err(Error::UnexpectedTag)
         );
-    }
-
-    #[test]
-    fn bounds_nesting_depth() {
-        let mut nested = integer(1);
-        for _ in 0..20 {
-            nested = sequence(vec![nested], 0);
-        }
-        let bytes = encode(&nested);
-        let mut current = Element::read(&bytes, 0).map(|(e, _)| e);
-        let outcome = loop {
-            match current {
-                Ok(e) => match e.children() {
-                    Ok(kids) => current = kids.first().copied().ok_or(Error::Truncated),
-                    Err(err) => break err,
-                },
-                Err(err) => break err,
-            }
-        };
-        assert_eq!(outcome, Error::TooDeep);
+        assert_eq!(parse_key_description(&[]), Err(Error::Truncated));
     }
 
     #[test]
