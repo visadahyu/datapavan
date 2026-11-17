@@ -204,6 +204,7 @@ class RulesTest {
             FindingKind.ATTESTATION_FORGED to Severity.HIGH,
             FindingKind.ATTESTATION_SOFTWARE_ANSWER to Severity.HIGH,
             FindingKind.ATTESTATION_PUBLIC_ROOT to Severity.HIGH,
+            FindingKind.ATTESTATION_TEST_ROOT to Severity.HIGH,
             FindingKind.ATTESTATION_UNCONFIRMED to Severity.MEDIUM,
             FindingKind.ATTESTATION_INCOMPLETE to Severity.MEDIUM,
             FindingKind.ATTESTATION_OUT_OF_DATE to Severity.MEDIUM,
@@ -255,6 +256,31 @@ class RulesTest {
         )) {
             val failed = emulator.copy(integrity = null, integrityFailure = failure, hardwareKeystore = true)
             assertEquals("$failure", listOf(finding), Rules.forDevice(failed, nowYearMonth = 202_610))
+        }
+    }
+
+    @Test
+    fun `the emulator's claim stands under Google's test root as under AOSP's`() {
+        // Android 15's emulator (dp-api35-ci) attests in software under Google's test root for unregistered
+        // devices, with keys from Google's provisioning service; Android 11's under AOSP's software root.
+        val test = Integrity(0, deviceLocked = false, verifiedBoot = 2, osPatchLevel = 202_609, trust = AttestationTrust.TEST_ROOT)
+        val emulator = DeviceFacts(
+            false, false, emptyList(), vpnActive = false, integrity = test, hardwareKeystore = true, emulator = true, sdk = 35,
+        )
+        assertEquals(listOf(FindingKind.INTEGRITY_EMULATOR), Rules.forDevice(emulator, nowYearMonth = 202_611))
+        // Without the claim: a phone that declares secure hardware is answered by software; Android 12 or later
+        // without the declaration is the medium finding that names Android on a computer and uncertified phones.
+        assertEquals(listOf(FindingKind.ATTESTATION_SOFTWARE_ANSWER), Rules.forDevice(emulator.copy(emulator = false), nowYearMonth = 202_611))
+        val undeclared = emulator.copy(emulator = false, hardwareKeystore = false)
+        assertEquals(listOf(FindingKind.ATTESTATION_SOFTWARE_UNDECLARED), Rules.forDevice(undeclared, nowYearMonth = 202_611))
+        // Before Android 12 there was no key provisioning: only a system that fakes it answers so.
+        assertEquals(listOf(FindingKind.ATTESTATION_TEST_ROOT), Rules.forDevice(undeclared.copy(sdk = 30), nowYearMonth = 202_611))
+        assertEquals(Severity.HIGH, FindingKind.ATTESTATION_TEST_ROOT.severity)
+        // A claim of secure hardware under it: an unregistered device on a test build, or a forgery; anyone can
+        // obtain keys under it, so, as under AOSP's published root, nothing it says is used.
+        val hardware = test.copy(securityLevel = 1, deviceLocked = false, osPatchLevel = 201_001)
+        for (device in listOf(undeclared, emulator)) {
+            assertEquals(listOf(FindingKind.ATTESTATION_TEST_ROOT), Rules.forDevice(device.copy(integrity = hardware), nowYearMonth = 202_611))
         }
     }
 

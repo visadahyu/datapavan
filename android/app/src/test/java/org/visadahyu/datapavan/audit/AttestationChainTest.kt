@@ -143,6 +143,46 @@ class AttestationChainTest {
     }
 
     @Test
+    fun `the emulators' chains are told by roots that vouch for nothing`() {
+        // Captured with the debug build's lab record from Android's emulator (core/engine/testdata/emulator:
+        // SOURCE), judged at fixed dates, since the Android 15 chain's intermediate lives about two weeks.
+        val sdk35 = chain(File(EMULATOR, "sdk35.pem"))
+        val sdk30 = chain(File(EMULATOR, "sdk30.pem"))
+        val captured = Date.from(Instant.parse("2026-11-17T00:00:00Z"))
+        // Android 15: a key from Google's provisioning service for unregistered devices, under its test root.
+        assertEquals("51894c6169633e9f928538774e91838a50dcc27cf02dd3f420bb0c018492c679", AttestationChain.keyFingerprint(sdk35.last().publicKey))
+        assertEquals(AttestationChain.RKP_TEST_ROOT, sdk35.last().subjectX500Principal)
+        assertEquals(AttestationTrust.TEST_ROOT, google.trust(sdk35, captured))
+        // Out of date, it is still the test root's: no date makes a root that vouches for nothing vouch.
+        assertTrue(sdk35[1].notAfter.before(Date.from(Instant.parse("2027-06-01T00:00:00Z"))))
+        assertEquals(AttestationTrust.TEST_ROOT, google.trust(sdk35, Date.from(Instant.parse("2027-06-01T00:00:00Z"))))
+        // Android 11: Keymaster 4.1 in software, under AOSP's published root, its intermediate expired since
+        // January 2026.
+        assertTrue(sdk30[1].notAfter.before(captured))
+        assertEquals(AttestationTrust.SOFTWARE_ROOT, google.trust(sdk30, captured))
+        // A revoked serial in the test root's chain is reported as revoked, as from any chain.
+        val roots = File(DATA, "google-roots.pem").inputStream().use { input ->
+            CertificateFactory.getInstance("X.509").generateCertificates(input).map { AttestationChain.keyFingerprint(it.publicKey) }.toSet()
+        }
+        assertEquals(AttestationTrust.REVOKED, AttestationChain(roots, setOf(sdk35[1].serialNumber.toString(16))).trust(sdk35, captured))
+    }
+
+    @Test
+    fun `the test root is told by its name, which gives a forger nothing`() {
+        // Google reissues the test root (the captured one was issued the day of its intermediate, for 72 days),
+        // so a root of that name with another key is the test root too. A forger gains nothing by the name: the
+        // published software root's key is AOSP's to anyone already, and both are judged alike.
+        val mid2026 = Date.from(Instant.parse("2026-06-01T00:00:00Z"))
+        val named = chain(File(javaClass.getResource("/attestation/synthetic/test-root-name.pem")!!.toURI()))
+        assertEquals(AttestationTrust.TEST_ROOT, google.trust(named, mid2026))
+        // A root of another name is another root; and a root that holds a key the app trusts as Google's is
+        // Google's, whatever its name.
+        val otherRoot = chain(File(javaClass.getResource("/attestation/synthetic/root-expired.pem")!!.toURI()))
+        assertEquals(AttestationTrust.OTHER_ROOT, google.trust(otherRoot, mid2026))
+        assertEquals(AttestationTrust.GOOGLE_ROOT, synthetic("test-root-name.pem"))
+    }
+
+    @Test
     fun `a chain whose leaf was edited is broken`() {
         // Google's sample with entries out of tag order: its leaf's signature does not verify.
         assertEquals(AttestationTrust.BROKEN_CHAIN, google.trust(corpus("invalid/tags_not_in_ascending_order.pem")))
@@ -299,6 +339,7 @@ class AttestationChainTest {
         // Unit tests run in the app module's directory.
         val DATA = File("../../data/attestation")
         val CORPUS = File("../../core/engine/testdata/keyattestation")
+        val EMULATOR = File("../../core/engine/testdata/emulator")
 
         val REMOTE = listOf("akita/sdk34/TEE_EC_NONE.pem", "caiman/sdk36/TEE_EC_RKP.pem", "tokay/sdk37/TEE_MLDSA_RKP.pem")
 

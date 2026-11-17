@@ -166,21 +166,53 @@ below.
   their maker's choice, or another phone's answer. The warnings of any other attestation, which a sound phone
   could have made, are reported confirmed or not (an unlocked bootloader, an old patch level), since a forger
   gains nothing by them.
-- **The emulator.** The hardware-keystore feature does not prove the hardware: Android 15's emulator (CI's
-  `dp-api35-ci`) declares `android.hardware.hardware_keystore=300` for a KeyMint that runs in software and signs
-  under AOSP's software root, so the rule above called it "answered by software" (high). Nothing else tells that
-  KeyMint from a hooked keystore's answer: its extension states the software level for both the attestation and
-  the key, which is exactly what a hook answering in software writes, and its chain is AOSP's. What tells it is
-  what the system says the device is: `Build.HARDWARE` (`ro.hardware`) is "ranchu" on Android's emulator, and was
-  "goldfish" before. The emulator always signs under AOSP's software root, whether or not its image declares the
-  feature (Android 11's does not), so only that answer of a device that says so is "No hardware check on an
-  emulator"; a revoked, broken or other chain is judged as on any device. The finding is medium: free on real
-  emulators, which developers and CI run, and level with the other answers a system with root can give. Its
-  text says plainly what an emulator is (a program that runs Android on a computer) and that on a real phone the
-  report is false, made only by a modified system, which can hide an unlocked bootloader this way. What a hook
-  can do with it: a modified system can set `ro.hardware` on a phone and turn "answered by software" (high)
-  into this medium finding. What it cannot do: make that quiet, or change how a hardware attestation is
-  judged.
+- **The emulator, from its real chains.** The hardware-keystore feature does not prove the hardware: Android 15's
+  emulator (CI's `dp-api35-ci`) declares `android.hardware.hardware_keystore=300` for a KeyMint that runs in
+  software. What tells it is what the system says the device is: `Build.HARDWARE` (`ro.hardware`) is "ranchu" on
+  Android's emulator, and was "goldfish" before. Its chain was first assumed to be AOSP's software root; round 5
+  limited the emulator's claim to that root, and Android 15's emulator then showed "answered by software" again,
+  so its chains were read from the device with the lab record below (2026-11-17, `core/engine/testdata/emulator`,
+  with SOURCE):
+  - Android 15 (`system-images;android-35;google_apis;x86_64`, revision 9, userdebug) runs AOSP's in-process
+    KeyMint (`android.hardware.security.keymint-service`, KeyMint 300, documented in AOSP as insecure, its TA
+    running in the HAL's process), and its attestation key came from Google's key provisioning service: the
+    chain is the leaf, an intermediate "O=TEE" valid for 16 days, and the root "Droid Unregistered Device CA" of
+    "Google Test LLC", self-signed and valid for 72 days, issued the same day as the intermediate. The check said
+    OTHER_ROOT, at the software level.
+  - Android 11 (`android-30`, revision 16, userdebug) runs Keymaster 4.1 in software and signs under AOSP's
+    software intermediate (expired 2026-01-08) and root, as `system/keymaster`'s `soft_attestation_cert.cpp`
+    holds them. The check said SOFTWARE_ROOT. So the two images' keystores differ, and the captures say how.
+
+  Both roots vouch for nothing about a phone, so the emulator's claim counts under either, and only under them:
+  "No hardware check on an emulator", medium; a revoked, broken or other chain is judged as on any device. The
+  finding is free on real emulators, which developers and CI run, and level with the other answers a system with
+  root can give; its text says plainly what an emulator is (a program that runs Android on a computer) and that on
+  a real phone the report is false, made only by a modified system, which can hide an unlocked bootloader this
+  way. What a hook can do with it: set `ro.hardware` on a phone and turn "answered by software" (high) into this
+  medium finding. What it cannot do: make that quiet, or change how a hardware attestation is judged.
+- **Google's test root for unregistered devices.** Google's key provisioning service gives devices whose maker did
+  not register them certificates under a test root (a vendor's guide to it, ArmSoM's on Rockchip boards, says so
+  of unregistered devices on userdebug and eng builds, and that the root must not be trusted for production; we
+  found no Google page that names it). It is not among Google's attestation roots, and anyone who runs Android's
+  public emulator holds a key certified under it, in software, so it vouches for nothing, as AOSP's published
+  root does not. The app tells it as its own verdict (TEST_ROOT) by the root's name, not its key: Google reissues
+  the root (the captured one lives 72 days), nothing says its key stays, and a key pinned today could miss the
+  next. The name gives a forger nothing: anyone can already sign under AOSP's published root key, which is judged
+  alike, and a root that holds one of Google's keys is Google's whatever its name. What a device that does not
+  call itself an emulator is shown under it:
+  - in software, where the phone declares secure hardware: "Hardware check answered by software" (high);
+  - in software, on Android 12 or later without the declaration: "No secure hardware for keys on Android 12 or
+    later" (medium), whose text names Android on a computer and phones that do not meet Android's requirements;
+  - in software, on Android 10 or 11, which had no key provisioning: "Hardware check signed with Google's test
+    certificate" (high), since only a system that fakes it answers so;
+  - claiming secure hardware: the same high finding, and nothing else it says, as under AOSP's published root: an
+    unregistered device on a test build can answer so, and so can a forgery; no phone made for sale does.
+
+  The test root's intermediates live about two weeks, so the test vector is judged at fixed dates; and the
+  verdict comes before the dates are checked, so that an expired chain under it is still the test root's, as one
+  under AOSP's root is. The Galaxy A40's chain, captured the same way (factory-provisioned, four certificates),
+  is Google's at its capture date with the bundled revocation list; it is the maintainer's lab phone, so it is
+  not a test vector until the maintainer agrees.
 - **What a hook can still make of a phone that declares the hardware, or runs Android 12 or later.** The rules
   above keep a hook from turning such a phone's answer quiet; short of that, a hooked keystore can still give,
   in place of the high finding an unlocked bootloader gets, a medium one: a chain at a hardware level under a
@@ -292,13 +324,15 @@ What the app shows, in each case:
   tampered with" (high), and nothing else it says, not even its patch level;
 - a software answer on a phone that declares secure hardware for keys: "Hardware check answered by software"
   (high);
-- a software answer under AOSP's software root on a device whose system reports it as Android's emulator: "No
-  hardware check on an emulator" (medium), which says what an emulator is and that on a real phone the report
+- a software answer under AOSP's software root or Google's test root on a device whose system reports it as
+  Android's emulator: "No hardware check on an emulator" (medium), which says what an emulator is and that on a real phone the report
   is false;
 - a software answer on Android 12 or later with no secure hardware declared: "No secure hardware for keys on
   Android 12 or later" (medium);
 - a claim of secure hardware under AOSP's software root: "Hardware check signed with a published key" (high),
-  and nothing else it says;
+  and nothing else it says; under Google's test root for unregistered devices: "Hardware check signed with
+  Google's test certificate" (high), and nothing else it says, as for a software answer under it on Android 10
+  or 11;
 - a software attestation under AOSP's software root on Android 10 or 11, on a phone that declares no such
   hardware: "No hardware check available" (low), and its patch level as "Security patch, as the system states
   it";

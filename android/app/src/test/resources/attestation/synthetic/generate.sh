@@ -77,3 +77,11 @@ cert root-e "/CN=Synthetic Root E" other-e ca.ext $FROM $UNTIL
 cert attest-e "/CN=Synthetic Attestation E" root-e ca.ext $FROM $UNTIL
 cert leaf-e "/CN=Android Keystore Key" attest-e leaf.ext $FROM $UNTIL
 chain root-not-self-signed.pem leaf-e attest-e root-e
+
+# A root under the name of Google's test root for unregistered devices, with a key of its own: the name tells
+# the test root, since Google reissues it, and the name alone gives a forger nothing that AOSP's published
+# software root does not (ADR 0040).
+cert root-f "/CN=Droid Unregistered Device CA/O=Google Test LLC" self ca.ext $FROM $UNTIL
+cert attest-f "/O=TEE/CN=Synthetic Attestation F" root-f ca.ext $FROM $UNTIL
+cert leaf-f "/CN=Android Keystore Key" attest-f leaf.ext $FROM $UNTIL
+chain test-root-name.pem leaf-f attest-f root-f

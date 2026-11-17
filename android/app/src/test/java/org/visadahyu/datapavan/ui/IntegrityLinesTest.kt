@@ -117,6 +117,9 @@ class IntegrityLinesTest {
     fun `nothing a forged attestation, or a hardware claim anyone could make, says is shown`() {
         assertEquals(emptyList<Pair<Int, String?>>(), lines(locked.copy(trust = AttestationTrust.FORGED, vendorPatchLevel = 202_001)))
         assertEquals(emptyList<Pair<Int, String?>>(), lines(locked.copy(trust = AttestationTrust.SOFTWARE_ROOT)))
+        assertEquals(emptyList<Pair<Int, String?>>(), lines(locked.copy(trust = AttestationTrust.TEST_ROOT)))
+        // In software under Google's test root, as on Android 15's emulator: the patch level is the system's word.
+        assertEquals(listOf(R.string.device_patch_system to "2026-07"), lines(locked.copy(securityLevel = 0, trust = AttestationTrust.TEST_ROOT)))
     }
 
     @Test

@@ -31,6 +31,7 @@ enum class FindingKind(val severity: Severity) {
     ATTESTATION_FORGED(Severity.HIGH),
     ATTESTATION_SOFTWARE_ANSWER(Severity.HIGH),
     ATTESTATION_PUBLIC_ROOT(Severity.HIGH),
+    ATTESTATION_TEST_ROOT(Severity.HIGH),
     ATTESTATION_UNCONFIRMED(Severity.MEDIUM),
     ATTESTATION_INCOMPLETE(Severity.MEDIUM),
     ATTESTATION_OUT_OF_DATE(Severity.MEDIUM),
@@ -180,9 +181,10 @@ object Rules {
             }
             if (integrity.securityLevel == 0) {
                 // A software answer says nothing reliable about the bootloader.
-                // - Android's emulator answers under AOSP's software root, whether or not its image declares a
-                //   hardware keystore (Android 15's does, Android 11's does not), and so only that answer of a
-                //   device that calls itself one (Build.HARDWARE) is told as an emulator's: medium, since a modified
+                // - Android's emulator answers in software under a root that vouches for nothing ([ROOTS_OF_NOTHING]:
+                //   AOSP's software root on Android 11's image, which declares no hardware keystore; Google's test
+                //   root for unregistered devices on Android 15's, which declares one), and so only such an answer of
+                //   a device that calls itself one (Build.HARDWARE) is told as an emulator's: medium, since a modified
                 //   system can make the claim on a phone, and the finding says in words what it means there.
                 // - On a phone that declares secure hardware for its keys, a software answer is not one a sound
                 //   phone gives: a hook that answers in software must not look quieter than the unlocked bootloader
@@ -196,12 +198,14 @@ object Rules {
                 //   a software answer under AOSP's root low.
                 add(
                     when {
-                        device.emulator && trust == AttestationTrust.SOFTWARE_ROOT -> FindingKind.INTEGRITY_EMULATOR
+                        device.emulator && trust in ROOTS_OF_NOTHING -> FindingKind.INTEGRITY_EMULATOR
                         device.hardwareKeystore -> FindingKind.ATTESTATION_SOFTWARE_ANSWER
                         trust == AttestationTrust.BROKEN_CHAIN -> FindingKind.ATTESTATION_BROKEN
                         trust == AttestationTrust.OTHER_ROOT -> FindingKind.ATTESTATION_UNCONFIRMED
                         trust == AttestationTrust.REVOKED -> FindingKind.ATTESTATION_REVOKED
                         device.sdk >= ANDROID_12 -> FindingKind.ATTESTATION_SOFTWARE_UNDECLARED
+                        // Key provisioning came with Android 12: before, only a system that fakes it answers so.
+                        trust == AttestationTrust.TEST_ROOT -> FindingKind.ATTESTATION_TEST_ROOT
                         else -> FindingKind.INTEGRITY_SOFTWARE_ONLY
                     },
                 )
@@ -212,8 +216,15 @@ object Rules {
                     add(FindingKind.ATTESTATION_PUBLIC_ROOT)
                     return@let
                 }
+                // Likewise under Google's test root for unregistered devices: anyone who runs Android's emulator
+                // holds a key under it. An unregistered device on a test build can claim hardware so; no phone
+                // made for sale does.
+                if (trust == AttestationTrust.TEST_ROOT) {
+                    add(FindingKind.ATTESTATION_TEST_ROOT)
+                    return@let
+                }
                 when (trust) {
-                    AttestationTrust.GOOGLE_ROOT, AttestationTrust.FORGED, AttestationTrust.SOFTWARE_ROOT -> Unit
+                    AttestationTrust.GOOGLE_ROOT, AttestationTrust.FORGED, AttestationTrust.SOFTWARE_ROOT, AttestationTrust.TEST_ROOT -> Unit
                     AttestationTrust.REVOKED -> add(FindingKind.ATTESTATION_REVOKED)
                     AttestationTrust.OTHER_ROOT -> add(FindingKind.ATTESTATION_UNCONFIRMED)
                     AttestationTrust.BROKEN_CHAIN -> add(FindingKind.ATTESTATION_BROKEN)
@@ -250,4 +261,11 @@ object Rules {
 
     /** API 31: Android 12, whose phones all have secure hardware for keys where they meet Android's requirements. */
     private const val ANDROID_12 = 31
+
+    /**
+     * The roots under which Android's emulator answers, which vouch for nothing about a phone: AOSP's software
+     * root, whose key is published (Android 11's image), and Google's test root for unregistered devices, under
+     * which anyone running the emulator holds a key (Android 15's image).
+     */
+    private val ROOTS_OF_NOTHING = setOf(AttestationTrust.SOFTWARE_ROOT, AttestationTrust.TEST_ROOT)
 }

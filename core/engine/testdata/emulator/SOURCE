@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: CC0-1.0
+retrieved: 2026-11-17
+what: the certificate chain that Android's emulator gave Datapavan's hardware check, captured on the maintainer's
+  computer with the debug build's lab record (ADR 0040; adb logcat -s DatapavanAttestationLab,
+  scripts/attestation-chain-from-logcat.py), with the emulator booted read-only from these SDK images. The
+  debug build was signed with a throwaway debug key, made only for these captures (its certificate's SHA-256
+  begins dc0043e7b001dc98), so that no developer's own debug key is in the leaves.
+sdk35.pem: system-images;android-35;google_apis;x86_64, revision 9 (userdebug, security patch 2024-09-05), AVD
+  dp-api35-ci (the CI image); the check said: verdict TEST_ROOT, level 0 (software), 3 certificates. Its
+  KeyMint is AOSP's in-process C++ service (android.hardware.security.keymint-service, KeyMint 300), whose
+  attestation key came from Google's Remote Key Provisioning service for unregistered devices: intermediate
+  "O=TEE, CN=977cc1f929de582ef099b0e57d4c900d", valid 2026-11-05 to 2026-11-21, under the root
+  "CN=Droid Unregistered Device CA, O=Google Test LLC", self-signed, valid 2026-11-05 to 2027-01-16,
+  SubjectPublicKeyInfo SHA-256 51894c6169633e9f928538774e91838a50dcc27cf02dd3f420bb0c018492c679. The
+  intermediate lives about two weeks, so tests judge this chain at fixed dates.
+sdk30.pem: system-images;android-30;google_apis;x86_64, revision 16 (userdebug, security patch 2021-08-05),
+  AVD dp-api30; the check said: verdict SOFTWARE_ROOT, level 0, 3 certificates. Its keystore is Keymaster 4.1
+  in software (attestation version 4, keymaster version 41), signing under AOSP's software attestation
+  intermediate (serial 1001, expired 2026-01-08) and root (SubjectPublicKeyInfo SHA-256
+  d5100c7942ef2e8310dc30ef82729680cf48d690735c3f68179a33c7c370f286), whose private keys AOSP publishes
+  (system/keymaster, contexts/soft_attestation_cert.cpp).
+leaves: each leaf names the app that asked (org.visadahyu.datapavan, version 3) and the SHA-256 of the
+  throwaway key's certificate that signed the build, and carries a random challenge; nothing else of the
+  computer or its owner.
+licence: certificates are facts issued by AOSP's software keymaster (Apache-2.0) and by Google's provisioning
+  service; the capture is the project's, CC0-1.0.
+sha256:
+  6d6744e2de351bd5039d119abec7a183afca6e55585eb41621fa69f2e27fdaca  sdk30.pem
+  22a243c62873c64a2b1f936038e73236d3a480d0fdf1de15dd661c992a85e113  sdk35.pem
+converted: convert.py writes vectors.tsv: each leaf's KeyDescription extension

@@ -499,7 +499,8 @@ internal fun integrityLines(device: DeviceFacts, today: LocalDate): List<Pair<In
         null -> emptyList()
     }
     val hardware = integrity.securityLevel > 0
-    if (integrity.trust == AttestationTrust.FORGED || (hardware && integrity.trust == AttestationTrust.SOFTWARE_ROOT)) {
+    val anyone = integrity.trust == AttestationTrust.SOFTWARE_ROOT || integrity.trust == AttestationTrust.TEST_ROOT
+    if (integrity.trust == AttestationTrust.FORGED || (hardware && anyone)) {
         return emptyList()
     }
     val confirmed = hardware && integrity.trust == AttestationTrust.GOOGLE_ROOT
@@ -780,6 +781,7 @@ private fun title(kind: FindingKind) = when (kind) {
     FindingKind.ATTESTATION_SOFTWARE_UNDECLARED -> R.string.finding_attestation_software_undeclared_title
     FindingKind.ATTESTATION_BROKEN -> R.string.finding_attestation_broken_title
     FindingKind.ATTESTATION_PUBLIC_ROOT -> R.string.finding_attestation_public_root_title
+    FindingKind.ATTESTATION_TEST_ROOT -> R.string.finding_attestation_test_root_title
     FindingKind.ATTESTATION_SOFTWARE_ANSWER -> R.string.finding_attestation_software_answer_title
     FindingKind.ATTESTATION_OUT_OF_DATE -> R.string.finding_attestation_out_of_date_title
     FindingKind.ATTESTATION_UNCONFIRMED -> R.string.finding_attestation_unconfirmed_title
@@ -824,6 +826,7 @@ private fun body(kind: FindingKind) = when (kind) {
     FindingKind.ATTESTATION_SOFTWARE_UNDECLARED -> R.string.finding_attestation_software_undeclared_body
     FindingKind.ATTESTATION_BROKEN -> R.string.finding_attestation_broken_body
     FindingKind.ATTESTATION_PUBLIC_ROOT -> R.string.finding_attestation_public_root_body
+    FindingKind.ATTESTATION_TEST_ROOT -> R.string.finding_attestation_test_root_body
     FindingKind.ATTESTATION_SOFTWARE_ANSWER -> R.string.finding_attestation_software_answer_body
     FindingKind.ATTESTATION_OUT_OF_DATE -> R.string.finding_attestation_out_of_date_body
     FindingKind.ATTESTATION_UNCONFIRMED -> R.string.finding_attestation_unconfirmed_body

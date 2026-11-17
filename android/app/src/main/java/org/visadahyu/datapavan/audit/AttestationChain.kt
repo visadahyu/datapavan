@@ -82,7 +82,8 @@ class AttestationChain(
             !shaped || !chained -> AttestationTrust.BROKEN_CHAIN
             chain.any { serial(it.serialNumber) in revokedSerials } -> AttestationTrust.REVOKED
             keyFingerprint(chain.last().publicKey) in AOSP_SOFTWARE_ROOT_KEYS -> AttestationTrust.SOFTWARE_ROOT
-            keyFingerprint(chain.last().publicKey) !in rootKeys -> AttestationTrust.OTHER_ROOT
+            keyFingerprint(chain.last().publicKey) !in rootKeys ->
+                if (chain.last().subjectX500Principal == RKP_TEST_ROOT) AttestationTrust.TEST_ROOT else AttestationTrust.OTHER_ROOT
             !valid(chain.subList(1, chain.lastIndex), now, expiryExempt = provisioning == Provisioning.FACTORY) ->
                 AttestationTrust.OUT_OF_DATE
             else -> AttestationTrust.GOOGLE_ROOT
@@ -122,6 +123,17 @@ class AttestationChain(
          * test data). Its private key is published with AOSP's software keymaster, so anyone can sign under it.
          */
         val AOSP_SOFTWARE_ROOT_KEYS = setOf("d5100c7942ef2e8310dc30ef82729680cf48d690735c3f68179a33c7c370f286")
+
+        /**
+         * The root of the certificates that Google's key provisioning service gives to devices their maker did not
+         * register, "Droid Unregistered Device CA" of "Google Test LLC" (core/engine/testdata/emulator: Android 15's
+         * emulator, captured 2026-11-17). Its keys are not among Google's attestation roots, and anyone who runs the
+         * emulator, whose KeyMint runs in software (AOSP's android.hardware.security.keymint-service), holds a key
+         * under it, so it vouches for nothing about a phone. It is told by its name, not its key: Google reissues
+         * it (the captured one was issued the day of its intermediate and lives 72 days), nothing says its key
+         * stays, and the name gives a forger nothing that the published software root's key does not already.
+         */
+        val RKP_TEST_ROOT = X500Principal("O=Google Test LLC, CN=Droid Unregistered Device CA")
         const val KEY_DESCRIPTION_OID = "1.3.6.1.4.1.11129.2.1.17"
 
         /**

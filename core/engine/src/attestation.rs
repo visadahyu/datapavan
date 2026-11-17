@@ -1087,6 +1087,57 @@ mod tests {
     }
 
     #[test]
+    fn reads_the_emulators_software_attestations() {
+        // Android's emulator, captured with the debug build's lab record (testdata/emulator: SOURCE,
+        // convert.py): Android 15's KeyMint 300 and Android 11's Keymaster 4.1, both in software, so
+        // both read from the list the system writes, with no secure hardware's word in them.
+        let vectors: Vec<(&str, Vec<u8>)> = include_str!("../testdata/emulator/vectors.tsv")
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .filter_map(|line| line.split_once('\t'))
+            .map(|(path, extension)| (path, hex(extension)))
+            .collect();
+        let parsed = |name: &str| {
+            let (_, extension) = vectors.iter().find(|(path, _)| *path == name)?;
+            parse_key_description(extension)
+                .ok()
+                .map(|d| Owned::from(&d))
+        };
+        let unlocked = Some(OwnedRoot {
+            verified_boot_key: vec![0; 32],
+            device_locked: false,
+            verified_boot: VerifiedBootState::Unverified,
+            verified_boot_hash: Some(vec![0; 32]),
+        });
+        assert_eq!(
+            parsed("sdk35.pem"),
+            Some(Owned {
+                attestation_version: 300,
+                security_level: SecurityLevel::Software,
+                attestation_challenge: hex("a6f831247c02f26685403075bd1de90f"),
+                root_of_trust: unlocked.clone(),
+                os_version: Some(150_000),
+                os_patch_level: Some(202_409),
+                vendor_patch_level: Some(202_409),
+                boot_patch_level: Some(202_409),
+            })
+        );
+        assert_eq!(
+            parsed("sdk30.pem"),
+            Some(Owned {
+                attestation_version: 4,
+                security_level: SecurityLevel::Software,
+                attestation_challenge: hex("9da816a9be237f11071f50cbf7d6ad12"),
+                root_of_trust: unlocked,
+                os_version: Some(110_000),
+                os_patch_level: Some(202_108),
+                vendor_patch_level: None,
+                boot_patch_level: None,
+            })
+        );
+    }
+
+    #[test]
     fn reads_googles_invalid_samples_as_decided() {
         let corpus = corpus();
         let parsed = |name: &str| {

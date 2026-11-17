@@ -118,6 +118,14 @@ enum class AttestationTrust {
      * gives, and what anyone can make.
      */
     SOFTWARE_ROOT,
+
+    /**
+     * A valid chain to the root of the certificates that Google's key provisioning service gives to devices their
+     * maker did not register ("Droid Unregistered Device CA", Google Test LLC): Android's emulator from Android 12
+     * on, and test devices on debug builds. Anyone who runs the emulator holds keys under it, in software, so it
+     * vouches for nothing about a phone.
+     */
+    TEST_ROOT,
 }
 
 /** Device-wide facts. */
