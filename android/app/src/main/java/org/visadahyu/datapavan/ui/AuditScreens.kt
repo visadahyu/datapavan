@@ -778,7 +778,7 @@ private fun title(kind: FindingKind) = when (kind) {
     FindingKind.ATTESTATION_KEYS_UNAVAILABLE -> R.string.finding_attestation_keys_unavailable_title
     FindingKind.ATTESTATION_UPDATE_REQUIRED -> R.string.finding_attestation_update_required_title
     FindingKind.ATTESTATION_KEYS_REFUSED -> R.string.finding_attestation_keys_refused_title
-    FindingKind.ATTESTATION_SOFTWARE_UNDECLARED -> R.string.finding_attestation_software_undeclared_title
+    FindingKind.ATTESTATION_SOFTWARE_ANDROID_12 -> R.string.finding_attestation_software_android12_title
     FindingKind.ATTESTATION_BROKEN -> R.string.finding_attestation_broken_title
     FindingKind.ATTESTATION_PUBLIC_ROOT -> R.string.finding_attestation_public_root_title
     FindingKind.ATTESTATION_TEST_ROOT -> R.string.finding_attestation_test_root_title
@@ -823,7 +823,7 @@ private fun body(kind: FindingKind) = when (kind) {
     FindingKind.ATTESTATION_KEYS_UNAVAILABLE -> R.string.finding_attestation_keys_unavailable_body
     FindingKind.ATTESTATION_UPDATE_REQUIRED -> R.string.finding_attestation_update_required_body
     FindingKind.ATTESTATION_KEYS_REFUSED -> R.string.finding_attestation_keys_refused_body
-    FindingKind.ATTESTATION_SOFTWARE_UNDECLARED -> R.string.finding_attestation_software_undeclared_body
+    FindingKind.ATTESTATION_SOFTWARE_ANDROID_12 -> R.string.finding_attestation_software_android12_body
     FindingKind.ATTESTATION_BROKEN -> R.string.finding_attestation_broken_body
     FindingKind.ATTESTATION_PUBLIC_ROOT -> R.string.finding_attestation_public_root_body
     FindingKind.ATTESTATION_TEST_ROOT -> R.string.finding_attestation_test_root_body

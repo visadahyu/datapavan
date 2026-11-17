@@ -438,15 +438,14 @@ class DeviceCollector(private val context: Context) {
      * captured genuine chain from any phone answers it, or hand back certificates whose signature check lies.
      * Only a check from outside the phone (ADR 0040, decision 6) closes all three.
      *
-     * On a phone that declares secure hardware for its keys ([hardwareKeystore]), or runs Android 12 or later, a
-     * hook cannot make the answer quiet, but it can still make it medium where an unlocked bootloader is high: a
+     * A hook cannot make the answer quiet, but it can still make it medium where an unlocked bootloader is high: a
      * chain at a hardware level under a root of its own (unconfirmed), a broken chain, a failed check, the errors
-     * that say the keys are unavailable, need a system update or were refused, or, with root, the declaration
-     * hidden (a software answer on Android 12 or later without it) or `ro.hardware` set to the emulator's (a
-     * software answer under AOSP's root on a device that calls itself an emulator). Only on Android 10 and 11
-     * can a hidden declaration bring a software answer down to low. Remembering an earlier sound check on the
-     * phone would not close these (ADR 0040: unlocking wipes that memory and makes the old keys unusable, and
-     * root can erase it); decision 6's check from a second phone, which pins what it saw, does.
+     * that say the keys are unavailable, need a system update or were refused, a software answer (on Android 12
+     * or later under a root that vouches for nothing, declared or not; on Android 10 and 11, where most phones
+     * declare nothing, with nothing else to hide), or, with root, `ro.hardware` set to the emulator's. None is
+     * low (Rules). Remembering an earlier sound check on the phone would not close these (ADR 0040: unlocking
+     * wipes that memory and makes the old keys unusable, and root can erase it); decision 6's check from a second
+     * phone, which pins what it saw, does.
      */
     private fun integrity(): IntegrityResult {
         val keystore = try {

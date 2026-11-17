@@ -39,14 +39,14 @@ enum class FindingKind(val severity: Severity) {
     ATTESTATION_KEYS_UNAVAILABLE(Severity.MEDIUM),
     ATTESTATION_UPDATE_REQUIRED(Severity.MEDIUM),
     ATTESTATION_KEYS_REFUSED(Severity.MEDIUM),
-    ATTESTATION_SOFTWARE_UNDECLARED(Severity.MEDIUM),
+    ATTESTATION_SOFTWARE_ANDROID_12(Severity.MEDIUM),
     INTEGRITY_EMULATOR(Severity.MEDIUM),
+    INTEGRITY_SOFTWARE_ONLY(Severity.MEDIUM),
     SYSTEM_KEY_LEAKED(Severity.MEDIUM),
     USB_DEBUGGING(Severity.MEDIUM),
     OLD_SECURITY_PATCH(Severity.MEDIUM),
     ATTESTATION_FAILED(Severity.MEDIUM),
     SYSTEM_OWN_KEY(Severity.MEDIUM),
-    INTEGRITY_SOFTWARE_ONLY(Severity.LOW),
     VPN_ACTIVE(Severity.INFO),
     SYSTEM_KEY_DEVELOPMENT(Severity.INFO),
 }
@@ -180,31 +180,36 @@ object Rules {
                 return@let
             }
             if (integrity.securityLevel == 0) {
-                // A software answer says nothing reliable about the bootloader.
+                // A software answer says nothing reliable about the bootloader. No answer a system with root can give
+                // is below medium (ADR 0040).
                 // - Android's emulator answers in software under a root that vouches for nothing ([ROOTS_OF_NOTHING]:
                 //   AOSP's software root on Android 11's image, which declares no hardware keystore; Google's test
                 //   root for unregistered devices on Android 15's, which declares one), and so only such an answer of
                 //   a device that calls itself one (Build.HARDWARE) is told as an emulator's: medium, since a modified
                 //   system can make the claim on a phone, and the finding says in words what it means there.
-                // - On a phone that declares secure hardware for its keys, a software answer is not one a sound
-                //   phone gives: a hook that answers in software must not look quieter than the unlocked bootloader
-                //   it could hide.
-                // - Otherwise the chain's own verdict decides.
-                // - Android 12 or later is a second declaration: every phone that meets Android's requirements and
-                //   runs it has such hardware. Without the feature declared, a software answer there is Android on
-                //   a computer, a phone that does not meet the requirements, or a system with root that hid the
-                //   declaration: medium, level with the other answers a system with root can give.
-                // - Only on Android 10 and 11, which phones launched before attestation was required still run, is
-                //   a software answer under AOSP's root low.
+                // - On Android 12 or later, every phone that meets Android's requirements answers from secure
+                //   hardware, so a software answer under such a root is Android on a computer, a phone that does not
+                //   meet the requirements, or a modified system: medium, whether or not the feature is declared,
+                //   since Android's own keystores declare it on virtual machines too (Redroid, Waydroid) and root
+                //   already reaches medium.
+                // - Otherwise, on a phone that declares secure hardware for its keys, a software answer is not one
+                //   a sound phone gives: a hook that answers in software must not look quieter than the unlocked
+                //   bootloader it could hide.
+                // - Otherwise the chain's own verdict decides: broken, another root, revoked.
+                // - What is left (a software answer under a root of nothing, or under Google's, in or out of date)
+                //   is medium on Android 12 or later, as above; on Android 10 and 11 under the test root, which came
+                //   with Android 12's key provisioning, only a system that fakes it answers so; anything else there
+                //   is "No hardware check available", medium too, since phones launched with Android 8 or later
+                //   answer from secure hardware.
                 add(
                     when {
                         device.emulator && trust in ROOTS_OF_NOTHING -> FindingKind.INTEGRITY_EMULATOR
+                        device.sdk >= ANDROID_12 && trust in ROOTS_OF_NOTHING -> FindingKind.ATTESTATION_SOFTWARE_ANDROID_12
                         device.hardwareKeystore -> FindingKind.ATTESTATION_SOFTWARE_ANSWER
                         trust == AttestationTrust.BROKEN_CHAIN -> FindingKind.ATTESTATION_BROKEN
                         trust == AttestationTrust.OTHER_ROOT -> FindingKind.ATTESTATION_UNCONFIRMED
                         trust == AttestationTrust.REVOKED -> FindingKind.ATTESTATION_REVOKED
-                        device.sdk >= ANDROID_12 -> FindingKind.ATTESTATION_SOFTWARE_UNDECLARED
-                        // Key provisioning came with Android 12: before, only a system that fakes it answers so.
+                        device.sdk >= ANDROID_12 -> FindingKind.ATTESTATION_SOFTWARE_ANDROID_12
                         trust == AttestationTrust.TEST_ROOT -> FindingKind.ATTESTATION_TEST_ROOT
                         else -> FindingKind.INTEGRITY_SOFTWARE_ONLY
                     },

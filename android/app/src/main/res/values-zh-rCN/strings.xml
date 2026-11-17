@@ -238,7 +238,7 @@
     <string name="finding_old_patch_title">安全更新太旧</string>
     <string name="finding_old_patch_body">此手机上最近一次安全补丁已超过一年，因此已知漏洞没有修复。</string>
     <string name="finding_software_only_title">没有可用的硬件检查</string>
-    <string name="finding_software_only_body">此手机的硬件检查来自软件，而软件受系统控制，因此无法确认引导加载程序或系统。这在模拟器上以及没有用于密钥的安全硬件的手机上是正常的；修改过的系统也可能这样回应。</string>
+    <string name="finding_software_only_body">此手机的硬件检查来自软件，而软件受系统控制，因此无法确认引导加载程序或系统。所有出厂时搭载 Android 8 或更高版本的手机（即 2018 年以来售出的大多数手机）都支持来自安全硬件的硬件检查。在这样的手机上，这意味着它的系统代替硬件作出了回应，就像修改过的系统为隐藏已解锁的引导加载程序所做的那样。只有在更早出厂的手机上，以及在电脑上运行的 Android 中，这才是正常的。</string>
     <string name="finding_integrity_emulator_title">模拟器上没有硬件检查</string>
     <string name="finding_integrity_emulator_body">此设备报告自己是 Android 模拟器，即一种在电脑上运行 Android 的程序，通常用于测试应用。模拟器将密钥保存在软件中，因此没有对引导加载程序或系统的硬件检查。如果这是一部真实的手机，那么这一报告是虚假的：只有修改过的系统才会这样报告，而这样的系统可以借此隐藏已解锁的引导加载程序。请把这当作严重警告。</string>
     <string name="finding_attestation_revoked_title">硬件检查密钥已被吊销</string>
@@ -251,8 +251,8 @@
     <string name="finding_attestation_forged_body">此手机的硬件检查在手机的安全硬件生成之后被更改过，或者它回应的不是 Datapavan 的请求，而是另一个请求。此手机上有某种东西在干扰检查，因此 Datapavan 不使用检查报告的内容。请把这当作严重警告：系统可能已被修改，以隐藏其状态。</string>
     <string name="finding_attestation_software_answer_title">硬件检查由软件回应</string>
     <string name="finding_attestation_software_answer_body">此手机声明有用于其密钥的安全硬件，但其硬件检查来自软件，而软件受系统控制。修改过的系统可能这样回应，以隐藏已解锁的引导加载程序；手机密钥库的故障，或声明了自身并不具备的硬件的手机，也可能如此。无法确认引导加载程序和系统状态。请把这当作严重警告。</string>
-    <string name="finding_attestation_software_undeclared_title">Android 12 或更高版本上没有用于密钥的安全硬件</string>
-    <string name="finding_attestation_software_undeclared_body">此设备运行 Android 12 或更高版本，但它没有声明用于其密钥的安全硬件，而且其硬件检查来自软件，而软件受系统控制。符合 Android 要求且运行 Android 12 或更高版本的手机都具备这种硬件。没有这种硬件，这很可能是在电脑上运行的 Android，或是不符合这些要求的手机；但修改过的系统也可能隐藏手机具备的硬件并这样回应，以隐藏已解锁的引导加载程序。无法确认引导加载程序和系统状态。</string>
+    <string name="finding_attestation_software_android12_title">Android 12 或更高版本上的硬件检查由软件回应</string>
+    <string name="finding_attestation_software_android12_body">此设备运行 Android 12 或更高版本，其硬件检查来自软件，而软件受系统控制。符合 Android 要求且运行 Android 12 或更高版本的手机，其硬件检查都来自安全硬件。这很可能是在电脑上运行的 Android（例如模拟器或虚拟机），或是不符合这些要求的手机；但修改过的系统也可能这样回应，以隐藏已解锁的引导加载程序。无法确认引导加载程序和系统状态。</string>
     <string name="finding_attestation_public_root_title">硬件检查使用已公开的密钥签名</string>
     <string name="finding_attestation_public_root_body">此手机的硬件检查声称来自安全硬件，但它使用随 Android 源代码一起公开的密钥签名，因此任何人都可能生成它。Datapavan 不使用检查报告的内容。修改过的系统可能这样做；模拟器也可能如此。</string>
     <string name="finding_attestation_test_root_title">硬件检查使用 Google 的测试证书签名</string>
@@ -268,7 +268,7 @@
     <string name="finding_attestation_out_of_date_title">硬件检查不在有效期内</string>
     <string name="finding_attestation_out_of_date_body">此手机硬件检查中的一个证书在手机显示的日期无效，因此无法确认该检查。通常的原因是手机上的日期不对：请设置正确的日期，然后重新打开 Datapavan。</string>
     <string name="finding_attestation_failed_title">硬件检查失败</string>
-    <string name="finding_attestation_failed_body">Datapavan 无法在此手机上完成硬件检查，或无法读取其回应，因此无法确认引导加载程序和系统状态。所有出厂时搭载 Android 8 或更高版本的手机都支持此检查。在正常的手机上，手机软件或 Datapavan 中的故障可能导致这种情况；在 Android 12 上，手机无法连接到 Google 期间过期的 Google 密钥也可能导致这种情况，而 Android 12 不会报告这一点，因此请在手机联网之后再试一次。隐藏引导加载程序状态的修改过的系统也可能导致这种情况。仅凭这一点，并不意味着手机被改动过。</string>
+    <string name="finding_attestation_failed_body">Datapavan 无法在此手机上完成硬件检查，或无法读取其回应，因此无法确认引导加载程序和系统状态。所有出厂时搭载 Android 8 或更高版本的手机都支持此检查。在正常的手机上，手机软件或 Datapavan 中的故障可能导致这种情况；在 Android 12 上，手机无法连接到 Google 期间过期的 Google 密钥也可能导致这种情况，而 Android 12 不会报告这一点，因此请在手机连接到 Google 之后再试一次。隐藏引导加载程序状态的修改过的系统也可能导致这种情况。仅凭这一点，并不意味着手机被改动过。</string>
     <string name="finding_system_own_key_title">系统使用自己的密钥签名</string>
     <string name="finding_system_own_key_body">此手机的引导加载程序已用一个不属于厂商的密钥锁定，因此其系统是由机主或其他人安装的。如果您自己安装了 GrapheneOS 之类的系统，请将 Datapavan 为此手机显示的验证启动密钥与该系统的开发项目为此型号发布的密钥进行比较。如果不是您自己安装的，请把这当作严重警告。</string>
     <string name="finding_vpn_active_title">有 VPN 正在运行</string>
