@@ -900,15 +900,22 @@ the hand-written GHASH gave way to RustCrypto's aes-gcm; the fuzz target's missi
 CI's fuzzing; and the emulator step passed without reaching the new code, which it now must. Two fresh reviews of
 that round found more, fixed in a second: a server known by its address, or a resolver already answered, sent the
 same NTP timestamp or DNS query as a new name could have its answer moved to that name, so every peer through the
-tool now keeps the fingerprints of the last 64 identifiers the app sent it, and an identifier two peers were sent
-moves no answer from where either answers; a name bound beside another's label now takes that label when the other
-ends; an association of a stand-in's own no longer needs the mapping's reopened after a pause, outlives its
+tool now keeps the fingerprints of the last 64 identifiers the app sent it (in the order last sent, since the
+third round), and an identifier two peers were sent
+moves no answer from where either answers; a name bound beside another's label now gets what comes under it once
+the other ends (by a hand-over at first, which the third round made a hint resolved among the live peers, so that the
+label is the other's again when the app asks it again); an association of a stand-in's own no longer needs the
+mapping's reopened after a pause, outlives its
 stand-in while a flow that came in through it lives, and fails nothing that became a peer meanwhile; the packets an
 answer may open are shared among the stand-ins round by round, so that a newer one is not starved; a QUIC Retry in
-another version than the app's, and what a client discards (reserved bits set, no frame, a server's Initial with a
-token, a Retry without one, a Version Negotiation listing the client's version), binds nothing; the hello's reader
+another version than the app's, and what a client discards or treats as a connection error (reserved bits set, no
+frame, a server's Initial with a token, a Retry without one or from the client's own ID, a Version Negotiation listing
+the client's version), binds nothing, an Initial or a Retry being opened since the third round whatever the client's
+source ID; the hello's reader
 reads no further than 16 packets of a datagram; the fuzz target asserts what must not carry; two network lab
-tests that misread Linux's ping table when other tests ran beside them were made exact; and the emulator step sends its STUN requests again
+tests that misread Linux's ping table when other tests ran beside them were made to read it as the kernel lists
+it (in a third round: the first fix still took other sockets listed anew); and the emulator step sends its STUN
+requests again
 as clients do and tells an engine started afresh from a result. How it is built: [ADR
 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
