@@ -1,5 +1,8 @@
 package org.visadahyu.datapavan.audit
 
+import android.annotation.SuppressLint
+import android.content.pm.PackageManager
+import android.security.KeyStoreException
 import java.security.PublicKey
 import java.security.cert.X509Certificate
 import java.util.Date
@@ -18,6 +21,12 @@ interface AttestationKeystore {
 
     fun delete(alias: String)
 }
+
+/**
+ * What the keystore said about a failure, on Android 13 and later (android.security.KeyStoreException): its
+ * public error code and its retry policy.
+ */
+data class KeystoreError(val code: Int, val retryPolicy: Int)
 
 /**
  * The hardware check: creates a throwaway key with a fresh random challenge, checks its certificate chain
@@ -107,5 +116,39 @@ class HardwareCheck(
 
         /** One check at a time in the process, whichever screen asked for it. */
         private val LOCK = Any()
+
+        /**
+         * What a failed check means, from what the keystore said about it: on Android 13 and later its errors
+         * carry a retry policy ([KeystoreError]), and before, nothing, so that every failure there is
+         * [IntegrityFailure.FAILED].
+         *
+         * The check waits for Google ([IntegrityFailure.KEYS_UNAVAILABLE]) where the keystore says to try again
+         * once the phone is online, or that its keys are unavailable and to try again after a while: Google's
+         * provisioning server could not be reached, as where a network blocks Google. Anything else is a
+         * failure: a policy of never, as when Google's server refused to issue keys to this phone, which no
+         * connection mends, or of after the next reboot, as when the phone needs a system update first. A
+         * refusal for good among the errors decides, whatever the others say.
+         */
+        @SuppressLint("InlinedApi") // Constants, read on Android 13 and later only, where the errors carry them.
+        fun failureOf(errors: Sequence<KeystoreError>): IntegrityFailure {
+            val policies = errors.toList()
+            val waiting = policies.none { it.retryPolicy == KeyStoreException.RETRY_NEVER } && policies.any {
+                it.retryPolicy == KeyStoreException.RETRY_WHEN_CONNECTIVITY_AVAILABLE ||
+                    (
+                        it.code == KeyStoreException.ERROR_ATTESTATION_KEYS_UNAVAILABLE &&
+                            it.retryPolicy == KeyStoreException.RETRY_WITH_EXPONENTIAL_BACKOFF
+                        )
+            }
+            return if (waiting) IntegrityFailure.KEYS_UNAVAILABLE else IntegrityFailure.FAILED
+        }
+
+        /**
+         * Whether the phone declares secure hardware for its keys, as [declares] (the package manager) answers
+         * for a system feature: a keystore backed by a trusted environment (a feature of Android 12 and later)
+         * or a secure chip (Android 9 and later).
+         */
+        @SuppressLint("InlinedApi") // Feature names; an older system just does not declare the newer one.
+        fun declaresHardware(declares: (String) -> Boolean): Boolean =
+            declares(PackageManager.FEATURE_HARDWARE_KEYSTORE) || declares(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
     }
 }

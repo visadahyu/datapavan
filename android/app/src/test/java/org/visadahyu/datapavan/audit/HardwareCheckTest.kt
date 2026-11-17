@@ -1,5 +1,6 @@
 package org.visadahyu.datapavan.audit
 
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -37,12 +38,14 @@ class HardwareCheckTest {
         private val queue = ArrayDeque(chains.toList())
         val keys = mutableMapOf<String, Pair<List<X509Certificate>, ByteArray>>()
         val generated = mutableListOf<String>()
+        val challenges = mutableListOf<ByteArray>()
         val deleted = mutableListOf<String>()
 
         override fun generate(alias: String, challenge: ByteArray): PublicKey = synchronized(this) {
             val chain = queue.removeFirst().also { queue.addLast(it) }
             keys[alias] = chain to challenge.copyOf()
             generated += alias
+            challenges += challenge.copyOf()
             chain.first().publicKey
         }
 
@@ -75,11 +78,12 @@ class HardwareCheckTest {
         keystore: FakeKeystore,
         parse: (ByteArray) -> AttestationFields? = { extension -> keystore.challengeOf(extension)?.let(::fields) },
         failure: (Exception) -> IntegrityFailure = { IntegrityFailure.FAILED },
+        random: (ByteArray) -> Unit = { bytes -> bytes.fill(7) },
     ) = HardwareCheck(
         keystore = keystore,
         chains = { google },
         parse = parse,
-        random = { bytes -> bytes.fill(7) },
+        random = random,
         now = { validDate },
         failure = failure,
     )
@@ -95,6 +99,19 @@ class HardwareCheckTest {
         assertNull(result.failure)
         assertEquals(keystore.generated, keystore.deleted)
         assertTrue(keystore.aliases().isEmpty())
+    }
+
+    @Test
+    fun `each check sends sixteen fresh random bytes as its challenge`() {
+        val keystore = FakeKeystore(sony)
+        var draws = 0
+        val random = { bytes: ByteArray -> draws++; bytes.indices.forEach { bytes[it] = (draws * 32 + it).toByte() } }
+        check(keystore, random = random).run()
+        check(keystore, random = random).run()
+        assertEquals(2, draws)
+        assertArrayEquals(ByteArray(HardwareCheck.CHALLENGE_BYTES) { (32 + it).toByte() }, keystore.challenges[0])
+        assertArrayEquals(ByteArray(HardwareCheck.CHALLENGE_BYTES) { (64 + it).toByte() }, keystore.challenges[1])
+        assertEquals(16, HardwareCheck.CHALLENGE_BYTES)
     }
 
     @Test
@@ -128,16 +145,56 @@ class HardwareCheckTest {
     }
 
     @Test
+    fun `a check waits for Google only where the keystore says it can be mended by reaching Google`() {
+        // android.security.KeyStoreException's public values (Android 13): the code ERROR_ATTESTATION_KEYS_UNAVAILABLE,
+        // and the retry policies never, with backoff, when online again, and after the next reboot.
+        val keysUnavailable = 16
+        val never = 1
+        val backoff = 2
+        val online = 3
+        val reboot = 4
+        val other = 4_000
+        fun failure(vararg errors: KeystoreError) = HardwareCheck.failureOf(errors.asSequence())
+        // No key until the phone reaches Google's provisioning server, or the server could not be reached.
+        assertEquals(IntegrityFailure.KEYS_UNAVAILABLE, failure(KeystoreError(keysUnavailable, online)))
+        assertEquals(IntegrityFailure.KEYS_UNAVAILABLE, failure(KeystoreError(keysUnavailable, backoff)))
+        assertEquals(IntegrityFailure.KEYS_UNAVAILABLE, failure(KeystoreError(other, online)))
+        // Google's server refused this phone for good (RKP_SERVER_REFUSED_ISSUANCE, OUT_OF_KEYS_PERMANENT_ERROR):
+        // no connection mends it, so it is not called waiting. Nor is a wait for a reboot or a system update.
+        assertEquals(IntegrityFailure.FAILED, failure(KeystoreError(keysUnavailable, never)))
+        assertEquals(IntegrityFailure.FAILED, failure(KeystoreError(keysUnavailable, reboot)))
+        assertEquals(IntegrityFailure.FAILED, failure(KeystoreError(other, backoff)))
+        assertEquals(IntegrityFailure.FAILED, failure(KeystoreError(other, never)))
+        // A refusal for good anywhere among the causes decides; no explained error at all is a failure.
+        assertEquals(IntegrityFailure.FAILED, failure(KeystoreError(keysUnavailable, online), KeystoreError(keysUnavailable, never)))
+        assertEquals(IntegrityFailure.FAILED, failure(KeystoreError(keysUnavailable, never), KeystoreError(keysUnavailable, online)))
+        assertEquals(IntegrityFailure.KEYS_UNAVAILABLE, failure(KeystoreError(other, reboot), KeystoreError(keysUnavailable, online)))
+        assertEquals(IntegrityFailure.FAILED, failure())
+    }
+
+    @Test
+    fun `secure hardware is what the package manager declares, of either kind`() {
+        val declared = { features: Set<String> -> HardwareCheck.declaresHardware { it in features } }
+        assertTrue(declared(setOf("android.hardware.hardware_keystore")))
+        assertTrue(declared(setOf("android.hardware.strongbox_keystore")))
+        assertTrue(declared(setOf("android.hardware.hardware_keystore", "android.hardware.strongbox_keystore")))
+        assertFalse(declared(emptySet()))
+        assertFalse(declared(setOf("android.hardware.keystore.app_attest_key", "android.software.device_id_attestation")))
+    }
+
+    @Test
     fun `each check has an alias of its own, and leftovers are swept`() {
         val keystore = FakeKeystore(sony)
         keystore.keys[HardwareCheck.ALIAS_PREFIX] = sony to ByteArray(0)
         keystore.keys["${HardwareCheck.ALIAS_PREFIX}-left-by-a-killed-check"] = sony to ByteArray(0)
         keystore.keys["another app's key"] = sony to ByteArray(0)
+        // Only the check's own aliases: not another key whose name merely starts alike.
+        keystore.keys["${HardwareCheck.ALIAS_PREFIX}s-of-another-feature"] = sony to ByteArray(0)
         check(keystore).run()
         check(keystore).run()
         assertEquals(2, keystore.generated.toSet().size)
         assertTrue(keystore.generated.all { it.startsWith("${HardwareCheck.ALIAS_PREFIX}-") })
-        assertEquals(listOf("another app's key"), keystore.aliases())
+        assertEquals(listOf("another app's key", "${HardwareCheck.ALIAS_PREFIX}s-of-another-feature"), keystore.aliases())
     }
 
     @Test

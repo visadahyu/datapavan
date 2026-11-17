@@ -27,7 +27,6 @@ import android.view.accessibility.AccessibilityManager
 import android.service.wallpaper.WallpaperService
 import android.view.inputmethod.InputMethod
 import android.view.inputmethod.InputMethodManager
-import androidx.annotation.RequiresApi
 import androidx.core.net.toUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -380,18 +379,16 @@ class DeviceCollector(private val context: Context) {
     }
 
     /**
-     * Whether the phone declares secure hardware for its keys: Android 12 and later declare a keystore backed by a
-     * trusted environment, and Android 9 and later a secure chip. The package manager answers this from the
-     * system server, apart from the keystore, so a hook in the keystore does not change it. On Android 10 and 11
-     * without a secure chip, no public API says, and the check cannot tell a software answer from a phone
-     * without such hardware. The feature does not prove the hardware: Android's emulator declares it for its
-     * KeyMint, which runs in software, and so it is weighed with [EMULATOR_HARDWARE].
+     * Whether the phone declares secure hardware for its keys ([HardwareCheck.declaresHardware]). The package
+     * manager answers this from the system server, apart from the keystore, so a hook in the keystore does not
+     * change it. It is a declaration, not proof: Android's emulator declares a keystore in a trusted environment
+     * for its KeyMint, which runs in software, and so it is weighed with [EMULATOR_HARDWARE]; a system modified
+     * with root can also hide the declaration (the feature's file in the vendor partition). A phone upgraded to
+     * Android 12 or later whose vendor partition stayed as it shipped may not declare it, and on Android 10 and 11
+     * without a secure chip no public API says: there, the check cannot tell a software answer from a phone
+     * without such hardware.
      */
-    private fun hardwareKeystore(): Boolean {
-        val packages = context.packageManager
-        return (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && packages.hasSystemFeature(PackageManager.FEATURE_HARDWARE_KEYSTORE)) ||
-            packages.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
-    }
+    private fun hardwareKeystore(): Boolean = HardwareCheck.declaresHardware(context.packageManager::hasSystemFeature)
 
     /** Debugging and user certificate authorities only, read again after a system screen of the plan (ADR 0026). */
     fun planState(): ItemState = ItemState(
@@ -459,21 +456,17 @@ class DeviceCollector(private val context: Context) {
         ).run()
     }
 
-    /**
-     * What a failed check means: on Android 13 and later the keystore says when the secure hardware has no
-     * attestation key until the phone reaches Google's provisioning server; anything else is a failure.
-     */
+    /** What a failed check means ([HardwareCheck.failureOf]), from the keystore's errors among its causes. */
     private fun failureOf(error: Exception): IntegrityFailure {
-        val causes = generateSequence<Throwable>(error) { it.cause }.take(MAX_CAUSES)
-        val waiting = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            causes.filterIsInstance<android.security.KeyStoreException>().any(::keysUnavailable)
-        return if (waiting) IntegrityFailure.KEYS_UNAVAILABLE else IntegrityFailure.FAILED
+        val errors = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            generateSequence<Throwable>(error) { it.cause }.take(MAX_CAUSES)
+                .filterIsInstance<android.security.KeyStoreException>()
+                .map { KeystoreError(it.numericErrorCode, it.retryPolicy) }
+        } else {
+            emptySequence()
+        }
+        return HardwareCheck.failureOf(errors)
     }
-
-    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-    private fun keysUnavailable(error: android.security.KeyStoreException): Boolean =
-        error.numericErrorCode == android.security.KeyStoreException.ERROR_ATTESTATION_KEYS_UNAVAILABLE ||
-            error.retryPolicy == android.security.KeyStoreException.RETRY_WHEN_CONNECTIVITY_AVAILABLE
 
     private fun attestationChain(): AttestationChain {
         val data = DataPackStore.get(context)
