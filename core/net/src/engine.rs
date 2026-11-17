@@ -2160,7 +2160,7 @@ mod tests {
         // A connection the engine rewrote, its upstream waiting under its fake port; and another app's
         // socket from that same port at the loopback address, which the kernel's choice of the port at
         // the fake address does not keep free there: another socket on the machine may hold it (unit 9b,
-        // fix round 2: one run in 256, 16 at once, failed with "address in use").
+        // fix round 2: 8 runs in 256, 16 at once, failed with "address in use").
         let mut tries = 0;
         let (real, stranger, port) = loop {
             let real = TcpSocket::new_v4()?;

@@ -309,8 +309,9 @@ const ASKED: usize = 64;
 /// several attempts of one connection.
 const QUIC_ASKED: usize = 8;
 
-/// At most this many identifiers the app sent a peer through the tool are remembered for it, the latest
-/// (ADR 0044, unit 9b, fix round 2): each as a fingerprint of 8 bytes ([`identifiers::fingerprint`]), and
+/// At most this many identifiers the app sent a peer through the tool are remembered for it, those it sent
+/// last, one sent again counting as sent then (ADR 0044, unit 9b, fix rounds 2 and 3): each as a
+/// fingerprint of 8 bytes ([`identifiers::fingerprint`]), and
 /// counted once in its association's [`Fingerprints`], so that an identifier the app also sent another peer on
 /// the same port tells neither apart. A stand-in whose first datagram carries one another peer of the
 /// mapping's association was sent gets an association of its own ([`UdpTable::own_wanted`]); where it
@@ -320,7 +321,11 @@ const QUIC_ASKED: usize = 8;
 /// 64 x 8 bytes for each peer, and an entry of the association's count for each of those, 16 bytes and a
 /// control byte in a table whose buckets are at most 16/7 of its entries, about 39 bytes, so at most
 /// 64 x (8 + 39) = 3,008 bytes for a peer the app sent identifiers to, nothing for one it sent none; on
-/// the direct path, where no stand-in waits, nothing is kept.
+/// the direct path, where no stand-in waits, nothing is kept. A settled peer's are read from the
+/// datagram's headers ([`identifiers::named`]), a QUIC Initial unopened. Peers are not capped: each
+/// destination the app sent to within `udp_idle` is one, as each is a flow in the log; an app pays
+/// these bytes for the identifiers it sends, 47 at most for each, within the life of the peer it sends
+/// them to.
 const TOLD: usize = 64;
 
 /// At most this many associations of a stand-in's own for each mapping (ADR 0044, unit 9b): one for
@@ -609,11 +614,19 @@ impl Peer {
             if !candidate && told.is_none() {
                 return;
             }
-            for asked in identifiers::of((self.app_port, port), payload) {
+            // A candidate reads them strictly, QUIC's opened, since they will tell its answers; a settled
+            // peer only notes them, QUIC's from the headers, at no AEAD's cost (fix round 3).
+            let ports = (self.app_port, port);
+            let read = if candidate {
+                identifiers::of(ports, payload)
+            } else {
+                identifiers::named(ports, payload)
+            };
+            for asked in read {
                 if let Some(told) = told.as_deref_mut() {
                     self.tell(identifiers::fingerprint(port, &asked), told);
                 }
-                if candidate && !self.ids.contains(&asked) {
+                if candidate {
                     self.keep(asked);
                 }
             }
@@ -638,16 +651,27 @@ impl Peer {
         if !(candidate || self.came_in_first) {
             return;
         }
-        if self.asked.len() == ASKED {
+        // One asked again is the latest asked (fix round 3).
+        let query = (id, question.name);
+        if let Some(at) = self.asked.iter().position(|asked| *asked == query) {
+            self.asked.remove(at);
+        } else if self.asked.len() == ASKED {
             self.asked.remove(0);
         }
-        self.asked.push((id, question.name));
+        self.asked.push(query);
     }
 
-    /// Keeps `asked`, new, among its identifiers, at most [`ASKED`], of which at most [`QUIC_ASKED`] QUIC
-    /// ones: the oldest of its kind gives way, a QUIC identifier keeping the server's keys it was
-    /// answered with.
+    /// Keeps `asked` among its identifiers, the latest, at most [`ASKED`], of which at most [`QUIC_ASKED`]
+    /// QUIC ones: the oldest of its kind gives way, a QUIC identifier keeping the server's keys it was
+    /// answered with. One sent again, as a client sends a request or an Initial again until it is
+    /// answered, moves to the latest place, keeping those keys (fix round 3: it stayed where it was first
+    /// sent, and could give way while it was still being sent).
     fn keep(&mut self, asked: identifiers::Asked) {
+        if let Some(at) = self.ids.iter().position(|kept| *kept == asked) {
+            let kept = self.ids.remove(at);
+            self.ids.push(kept);
+            return;
+        }
         let quic = matches!(asked, identifiers::Asked::Quic(_));
         let oldest = if quic
             && self
@@ -670,9 +694,13 @@ impl Peer {
     }
 
     /// Notes that the app sent it the identifier of `fingerprint`, counted in its association's `told`:
-    /// once, the oldest of [`TOLD`] giving way.
+    /// once, the latest, the least recently sent of [`TOLD`] giving way; one sent again moves to the
+    /// latest place (fix round 3: it stayed where it was first sent, and was forgotten while the app was
+    /// sending it again).
     fn tell(&mut self, fingerprint: u64, told: &mut Fingerprints) {
-        if self.told.contains(&fingerprint) {
+        if let Some(at) = self.told.iter().position(|&kept| kept == fingerprint) {
+            self.told.remove(at);
+            self.told.push(fingerprint);
             return;
         }
         if self.told.len() == TOLD {
@@ -749,12 +777,10 @@ struct Sources {
     /// Every stand-in bound beside another, by an address or by a relay's name, by its port: those an
     /// answer under a name on that port may be for (ADR 0044, unit 9b, fix round 1).
     beside_on: HashMap<u16, Vec<SocketAddr>>,
-    /// The stand-ins bound beside another by a relay's answer under that one's name, by the name, in the
-    /// order they were bound: the first takes the name when the last peer that had it ends (ADR 0044,
-    /// unit 9b, fix round 2).
+    /// The stand-ins bound beside another by a relay's answer under that one's name, by the name: once no
+    /// peer has that name, the one on a port takes what comes under it (ADR 0044, unit 9b, fix rounds 2
+    /// and 3).
     named_beside: HashMap<String, Vec<SocketAddr>>,
-    /// The names a stand-in took so, by the stand-in: they go when it ends.
-    took: HashMap<SocketAddr, Vec<String>>,
     /// The identifiers the app sent the peers of the association, by fingerprint, each with how many
     /// peers it was sent to ([`TOLD`]).
     told: Fingerprints,
@@ -834,63 +860,34 @@ impl Sources {
 
     /// The peer the app knows as `shown`, which left by `way` and was sent the identifiers of `told`, is
     /// gone. When it held its address first and a stand-in was bound beside it there, that stand-in now
-    /// holds it alone; when it was the last to have a name and a stand-in was bound beside it under
-    /// that name, that stand-in takes the name (ADR 0044, unit 9b, fix round 2). Either is returned, so
-    /// that it may let go of its identifiers.
-    fn remove_peer(&mut self, shown: SocketAddr, way: &PeerWay, told: &[u64]) -> Vec<SocketAddr> {
+    /// holds it alone: it is returned, so that it may let go of its identifiers. A name goes with the last
+    /// peer that has it; the stand-ins bound beside them under it stay so, and take what comes under it
+    /// while no peer has it (`Scope::relayed_answer`, fix round 3).
+    fn remove_peer(
+        &mut self,
+        shown: SocketAddr,
+        way: &PeerWay,
+        told: &[u64],
+    ) -> Option<SocketAddr> {
         self.leave_beside_on(shown);
         for &fingerprint in told {
             self.told.forget(fingerprint);
         }
-        let mut alone: Vec<SocketAddr> = way
-            .from
-            .and_then(|from| self.remove(shown, from))
-            .into_iter()
-            .collect();
+        let alone = way.from.and_then(|from| self.remove(shown, from));
         if let Some(name) = &way.name {
-            self.leave_name(name_key(name), &mut alone);
+            let key = name_key(name);
+            let left = self.names.get_mut(&key).map(|known| {
+                known.peers = known.peers.saturating_sub(1);
+                known.peers
+            });
+            if left == Some(0) {
+                self.names.remove(&key);
+            }
             if way.from.is_none() {
                 self.stop_waiting(shown);
             }
         }
-        for key in self.took.remove(&shown).unwrap_or_default() {
-            self.leave_name(key, &mut alone);
-        }
         alone
-    }
-
-    /// One peer that had the name of `key` has it no more. When none has, the first stand-in bound
-    /// beside them under it takes it, as one bound beside a peer at an address holds that address once
-    /// the peer ends: a relay that gives the asked name to every answer from where it resolved the
-    /// name goes on doing so for the stand-in that is left (Xray's `freedom`, sing-box), and its
-    /// answers, its identifiers' and others', are its own. It is pushed onto `alone`.
-    fn leave_name(&mut self, key: String, alone: &mut Vec<SocketAddr>) {
-        let left = self.names.get_mut(&key).map(|known| {
-            known.peers = known.peers.saturating_sub(1);
-            known.peers
-        });
-        if left != Some(0) {
-            return;
-        }
-        self.names.remove(&key);
-        let Some(next) = self
-            .named_beside
-            .get_mut(&key)
-            .filter(|beside| !beside.is_empty())
-            .map(|beside| beside.remove(0))
-        else {
-            return;
-        };
-        self.leave_beside_on(next);
-        self.names.insert(
-            key.clone(),
-            Known {
-                shown: next.ip(),
-                peers: 1,
-            },
-        );
-        self.took.entry(next).or_default().push(key);
-        alone.push(next);
     }
 
     /// The answers of the peer the app knows as `shown` come from `from`.
@@ -1434,57 +1431,126 @@ impl<'a> Scope<'a> {
             // A relay that gives back the name it was asked for answers for that name's stand-in;
             // another port of the name is another port of the stand-in.
             Target::Name(name, port) => {
-                let key = name_key(name);
-                let Some(stand_in) = self.sources.names.get(&key).map(|k| k.shown) else {
-                    return LetIn::Filtered;
-                };
-                let shown = SocketAddr::new(stand_in, *port);
-                // Identifiers outrank the relay's name (unit 9b, fix round 1). Xray's `freedom` and
-                // sing-box give the asked name to every answer from the address their association's
-                // first destination resolved to: where the tool resolved two names asked on one
-                // association to one address, the second's answers come under the first's name. One
-                // that carries the identifier of exactly one other stand-in on its port, waiting or
-                // bound beside another, is that one's, which a waiting one is bound beside the named
-                // one by; otherwise the name decides, as before. An identifier the app sent another
-                // peer of the association on the port too tells nothing here (fix round 2): the name
-                // may stand for that peer's address.
-                let mut candidates = self.waiting_on(*port, true);
-                candidates.extend(
-                    self.sources
-                        .beside_on
-                        .get(port)
-                        .into_iter()
-                        .flatten()
-                        .copied(),
-                );
-                match self.carried(&candidates, &read, Others::All) {
-                    Carried::One(other) if other != shown => {
-                        Counters::add(&shared.counters.udp_identified, 1);
-                        return self.bind_beside_named(other, &key, answer, now);
-                    }
-                    Carried::Several => return LetIn::Unmatched,
-                    Carried::One(_) | Carried::None => {}
+                match self.by_name(shared, (name, *port), (answer, &read), now) {
+                    UnderName::Done(let_in) => return let_in,
+                    UnderName::ComeIn(shown) => (shown, None),
                 }
-                let via = self.via;
-                if let Some(peer) = self.peers.get_mut(&shown).filter(|peer| peer.via == via) {
-                    // The stand-in's own answer: it no longer waits for a first answer from an address,
-                    // which whoever reached the relay later from its port could otherwise send it. One
-                    // bound beside another leaves the address it was bound to beside the other.
-                    if peer.standing == Standing::Beside {
-                        let from = peer.way.from.take();
-                        self.sources.unbind_beside(shown, from);
-                    }
-                    peer.answered();
-                    self.sources.stop_waiting(shown);
-                    return self.answered_by(shown, answer, now);
-                }
-                (shown, None)
             }
         };
         self.come_in(shared, (app, shown), now, |sources| match from {
             Some(from) => sources.way_from(shown, from),
             None => PeerWay::through_tool(target.clone()),
         })
+    }
+
+    /// Which peer an answer from the tool's relay under `name` on `port` is for (ADR 0044, decision 2,
+    /// unit 9b): one it carries the identifier of, the peer whose own name it is, or a stand-in bound
+    /// beside them under it; or a new flow of the name's stand-in on another port.
+    fn by_name(
+        &mut self,
+        shared: &Shared,
+        (name, port): (&str, u16),
+        (answer, read): (&[u8], &identifiers::Reading),
+        now: Instant,
+    ) -> UnderName {
+        let key = name_key(name);
+        // A relay's name is a hint, resolved among the peers that live now (fix round 3): the
+        // peer whose own name it is, or once none has it, the stand-in bound beside them under
+        // it. Before, a name was handed to the stand-in bound beside it when its own peer ended,
+        // and never came back to a peer of that name the app asked again.
+        let named = self
+            .sources
+            .names
+            .get(&key)
+            .map(|known| SocketAddr::new(known.shown, port));
+        let beside = self.named_beside(&key, port);
+        if named.is_none() && beside.is_empty() {
+            return UnderName::Done(LetIn::Filtered);
+        }
+        // Identifiers outrank the relay's name (unit 9b, fix round 1). Xray's `freedom` and
+        // sing-box give the asked name to every answer from the address their association's
+        // first destination resolved to: where the tool resolved two names asked on one
+        // association to one address, the second's answers come under the first's name. One
+        // that carries the identifier of exactly one other stand-in on its port, waiting or
+        // bound beside another, is that one's, which a waiting one is bound beside the named
+        // one by; otherwise the name decides, as before. An identifier the app sent another
+        // peer of the association on the port too tells nothing here (fix round 2): the name
+        // may stand for that peer's address.
+        let mut candidates = self.waiting_on(port, true);
+        candidates.extend(
+            self.sources
+                .beside_on
+                .get(&port)
+                .into_iter()
+                .flatten()
+                .copied(),
+        );
+        match self.carried(&candidates, read, Others::All) {
+            Carried::One(other) if Some(other) != named => {
+                Counters::add(&shared.counters.udp_identified, 1);
+                return UnderName::Done(self.bind_beside_named(other, &key, answer, now));
+            }
+            Carried::Several => return UnderName::Done(LetIn::Unmatched),
+            Carried::One(_) | Carried::None => {}
+        }
+        // What answers an identifier the app sent another peer of the association, and not the
+        // one the name would give it to, is that other peer's, which no name tells: no one's here
+        // (fix round 3: it went to the named peer, which never asked it).
+        let foreign = |taker: SocketAddr| {
+            read.answers(port).is_some_and(|fingerprint| {
+                self.sources.told.count(fingerprint) > 0
+                    && !self
+                        .peers
+                        .get(&taker)
+                        .is_some_and(|peer| peer.told.contains(&fingerprint))
+            })
+        };
+        let Some(shown) = named else {
+            // No peer has the name now: the one stand-in bound beside them under it on this
+            // port takes what carries none of its identifiers, as a TURN server's data or a
+            // keepalive the relay names by the first name (review C of fix round 1, major 2);
+            // it stays bound beside, keeping its identifiers, should a peer of the name come
+            // again. Several such leave it unmatched.
+            return UnderName::Done(match beside.as_slice() {
+                [one] if !foreign(*one) => self.answered_by(*one, answer, now),
+                _ => LetIn::Unmatched,
+            });
+        };
+        if foreign(shown) {
+            return UnderName::Done(LetIn::Unmatched);
+        }
+        let via = self.via;
+        if let Some(peer) = self.peers.get_mut(&shown).filter(|peer| peer.via == via) {
+            // The stand-in's own answer: it no longer waits for a first answer from an address,
+            // which whoever reached the relay later from its port could otherwise send it. One
+            // bound beside another leaves the address it was bound to beside the other.
+            if peer.standing == Standing::Beside {
+                let from = peer.way.from.take();
+                self.sources.unbind_beside(shown, from);
+            }
+            peer.answered();
+            self.sources.stop_waiting(shown);
+            return UnderName::Done(self.answered_by(shown, answer, now));
+        }
+        UnderName::ComeIn(shown)
+    }
+
+    /// The stand-ins of this association bound beside another under the name of `key`, on `port`.
+    fn named_beside(&self, key: &str, port: u16) -> Vec<SocketAddr> {
+        self.sources
+            .named_beside
+            .get(key)
+            .into_iter()
+            .flatten()
+            .copied()
+            .filter(|shown| {
+                shown.port() == port
+                    && self
+                        .peers
+                        .get(shown)
+                        .is_some_and(|peer| peer.via == self.via)
+            })
+            .collect()
     }
 
     /// An answer from `from`, which the peer the app knows as `owner` holds (ADR 0044, unit 9b): the
@@ -1794,6 +1860,14 @@ impl<'a> Scope<'a> {
     }
 }
 
+/// What an answer under a relay's name comes to ([`Scope::by_name`]).
+enum UnderName {
+    /// A peer's, or no one's.
+    Done(LetIn),
+    /// A new flow, from another port of the stand-in the app knows as this.
+    ComeIn(SocketAddr),
+}
+
 /// Whose answers may come from where an answer came, besides the stand-ins it is checked for: an
 /// identifier the app sent one of them tells none of the stand-ins apart (ADR 0044, unit 9b, fix round 2).
 #[derive(Clone, Copy)]
@@ -2054,7 +2128,8 @@ impl UdpTable {
         let Some(mapping) = self.mapping(app, id) else {
             return true;
         };
-        if mapping.owns.is_empty() {
+        // One being opened counts: it is the stand-in's way (fix round 3).
+        if mapping.owns() == 0 {
             self.end(app, id, shared);
             return true;
         }
@@ -2562,9 +2637,12 @@ impl UdpTable {
         if mapping.owns() >= OWN_RELAYS || open >= shared.limits.udp_own_relays {
             return OwnWanted::Refused;
         }
-        // The app sends by it now: making room never ends it.
+        // The app sends by it now: making room never ends it, neither as one quiet for `udp_quiet`, nor
+        // as an answered lookup, which it still is when its one peer was a resolver that answered (fix
+        // round 3: a resolver's failure, then the app's next name, made room by ending this mapping).
         mapping.last = Instant::now();
         let uid = mapping.uid;
+        self.answered.remove(uid, &(id, app, uid));
         let Some(place) = self.room(uid, shared) else {
             return OwnWanted::Refused;
         };
@@ -3256,9 +3334,17 @@ fn leave_by(
         return Leaving::Made(Made::Done);
     };
     let existing = mapping.peers.get(&destination).map(|peer| peer.via);
+    let alone = !mapping.main_open && mapping.owns() == 0;
     let own = match (existing, opened) {
         (Some(_), _) | (None, None) => None,
-        (None, Some((Err(error), _))) => return Leaving::Failed(error),
+        (None, Some((Err(error), _))) => {
+            // Its mapping's own association closed meanwhile, and nothing else of it is open or opening:
+            // it ends now, as when its last association ends (fix round 3).
+            if alone {
+                table.end(app, id, shared);
+            }
+            return Leaving::Failed(error);
+        }
         (None, Some((Ok((out, control)), places))) => Some((Arc::new(out), control, places)),
     };
     let by_main = own.is_none() && !matches!(existing, Some(Some(_)));
@@ -3458,7 +3544,7 @@ async fn own_relayed(
     let mut table = lock(&flows);
     let alone = table.mapping(app, id).is_some_and(|mapping| {
         mapping.end_own(own, &shared);
-        !mapping.main_open && mapping.owns.is_empty()
+        !mapping.main_open && mapping.owns() == 0
     });
     // Its mapping's own association closed before it: nothing of the mapping is left open.
     if alone {
@@ -3829,7 +3915,7 @@ async fn mapped(
                 swept = now;
             }
             // With its own association closed, it lives only while one of a stand-in's own does.
-            if !mapping.main_open && mapping.owns.is_empty() {
+            if !mapping.main_open && mapping.owns() == 0 {
                 break;
             }
             mapping.last
@@ -5822,11 +5908,12 @@ mod tests {
             Some(b),
             "data under a's name"
         );
-        assert_eq!(mapping.peers[&b].standing, Standing::Settled);
-        // Once b ends too, the name it took goes with it.
+        // It stays bound beside, keeping its identifiers, should a peer of a.test come again.
+        assert_eq!(mapping.peers[&b].standing, Standing::Beside);
+        // Once b ends too, nothing has the name, and nothing stands beside under it.
         mapping.sweep(later + Duration::from_secs(1), &shared);
         assert!(mapping.sources.names.is_empty());
-        assert!(mapping.sources.took.is_empty());
+        assert!(mapping.sources.named_beside.is_empty());
         Ok(())
     }
 
@@ -5990,6 +6077,323 @@ mod tests {
             mapping.end_own(number, &shared);
         }
         assert_eq!(table.own_places.load(Ordering::Relaxed), 0);
+        Ok(())
+    }
+
+    /// Review E, probe 1: a relay's name is a hint resolved among the peers that live now (fix round 3).
+    /// `a.test` and `b.test` on one port, which the tool resolved to one address, under a relay that names
+    /// every answer from there `a.test` (Xray's `freedom`, sing-box). `a` ends; what comes under its name
+    /// goes to `b`, which stays bound beside it. The app then sends to `a.test`'s stand-in again, a
+    /// datagram with no identifier: the relay's answers under `a.test` are `a`'s again, `b`'s identifiers
+    /// still `b`'s; and once `b` ends too, `a`'s. Fix round 2 handed the name to `b` for good.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_name_goes_to_its_own_peer_again() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let mut mapping = mapping(now).await?;
+        let a = SocketAddr::from(([198, 18, 0, 1], 3_478));
+        let b = SocketAddr::from(([198, 18, 0, 2], 3_478));
+        mapping.peer(&shared, (APP, a), now, (false, tooled("a.test", 3_478)));
+        mapping.sent(a, &binding(0xa1, false));
+        mapping.peer(&shared, (APP, b), now, (false, tooled("b.test", 3_478)));
+        mapping.sent(b, &binding(0xb2, false));
+        let by_a = Target::Name("a.test".into(), 3_478);
+        let to = |mapping: &mut Mapping, answer: &[u8], at: Instant| match mapping
+            .main()
+            .relayed_answer(&shared, APP, (&by_a, answer), at)
+        {
+            LetIn::Peer(shown, ..) => Some(shown),
+            _ => None,
+        };
+        assert_eq!(to(&mut mapping, &binding(0xa1, true), now), Some(a));
+        assert_eq!(to(&mut mapping, &binding(0xb2, true), now), Some(b));
+        let later = now + Duration::from_secs(200);
+        if let Some(peer) = mapping.peers.get_mut(&b) {
+            peer.last = later;
+        }
+        mapping.sweep(now + Duration::from_secs(120), &shared);
+        assert!(!mapping.peers.contains_key(&a), "a ended");
+        assert_eq!(
+            to(&mut mapping, b"turn data", later),
+            Some(b),
+            "while a is gone"
+        );
+        // The app asks a.test again, by a protocol whose datagram carries no identifier.
+        mapping.peer(&shared, (APP, a), later, (false, tooled("a.test", 3_478)));
+        mapping.sent(a, b"a request of a protocol without identifiers");
+        mapping.sent(b, &binding(0xb3, false));
+        assert_eq!(to(&mut mapping, b"a.test's answer", later), Some(a));
+        assert_eq!(
+            to(&mut mapping, &binding(0xb3, true), later),
+            Some(b),
+            "b's own"
+        );
+        // Then b ends.
+        if let Some(peer) = mapping.peers.get_mut(&a) {
+            peer.last = later + Duration::from_secs(200);
+        }
+        mapping.sweep(later + Duration::from_secs(1), &shared);
+        assert!(!mapping.peers.contains_key(&b), "b ended");
+        assert_eq!(
+            to(
+                &mut mapping,
+                b"a.test's next answer",
+                later + Duration::from_secs(2)
+            ),
+            Some(a)
+        );
+        Ok(())
+    }
+
+    /// Review E, probe 2: under a relay's name, an answer that carries an identifier the app sent another
+    /// peer of the association, and never the one the name would give it to, is no one's there: a waiting
+    /// stand-in and a server known by its address were sent one NTP timestamp, and a reply carrying it,
+    /// named `a.test`, is dropped as unmatched, not given to `a`, which never asked it; nor is a reply
+    /// carrying one only the server was sent (fix round 3).
+    #[tokio::test(flavor = "current_thread")]
+    async fn under_a_name_another_peers_identifier_goes_to_no_one() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let mut mapping = mapping(now).await?;
+        let a = SocketAddr::from(([198, 18, 0, 1], 123));
+        let b = SocketAddr::from(([198, 18, 0, 2], 123));
+        let server = SocketAddr::from(([192, 0, 2, 9], 123));
+        let by_a = Target::Name("a.test".into(), 123);
+        let to = |mapping: &mut Mapping, answer: &[u8]| {
+            mapping
+                .main()
+                .relayed_answer(&shared, APP, (&by_a, answer), now)
+        };
+        mapping.peer(&shared, (APP, a), now, (false, tooled("a.test", 123)));
+        mapping.sent(a, &ntp(3, 40, 0x1111));
+        assert!(
+            matches!(to(&mut mapping, &ntp(4, 24, 0x1111)), LetIn::Peer(shown, ..) if shown == a)
+        );
+        let stamp = 0xe9a1_0000_0000_0007;
+        mapping.peer(&shared, (APP, b), now, (false, tooled("b.test", 123)));
+        mapping.sent(b, &ntp(3, 40, stamp));
+        let way = PeerWay::through_tool(Target::Address(server));
+        mapping.peer(&shared, (APP, server), now, (false, way));
+        mapping.sent(server, &ntp(3, 40, stamp));
+        assert!(matches!(
+            to(&mut mapping, &ntp(4, 24, stamp)),
+            LetIn::Unmatched
+        ));
+        mapping.sent(server, &ntp(3, 40, stamp + 1));
+        assert!(matches!(
+            to(&mut mapping, &ntp(4, 24, stamp + 1)),
+            LetIn::Unmatched
+        ));
+        // What a asked is still a's, and what no one was sent goes by the name, as before.
+        mapping.sent(a, &ntp(3, 40, 0x2222));
+        assert!(
+            matches!(to(&mut mapping, &ntp(4, 24, 0x2222)), LetIn::Peer(shown, ..) if shown == a)
+        );
+        assert!(
+            matches!(to(&mut mapping, &ntp(4, 24, 0x3333)), LetIn::Peer(shown, ..) if shown == a)
+        );
+        Ok(())
+    }
+
+    /// Review E, probe 4: an identifier sent again is the latest sent (fix round 3). An NTP server known by
+    /// its address is sent a timestamp, then 32 others, the first again, then 32 more; a name is then sent
+    /// that same timestamp, and the server's reply carrying it, from its own address, is the server's,
+    /// not the name's: kept in first-sent order, it had been forgotten while the app sent it again. A
+    /// stand-in's own identifiers and port 53's queries keep the same order.
+    #[tokio::test(flavor = "current_thread")]
+    async fn an_identifier_sent_again_is_the_latest_sent() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let mut mapping = mapping(now).await?;
+        let server = SocketAddr::from(([192, 0, 2, 9], 123));
+        let name = SocketAddr::from(([198, 18, 0, 1], 123));
+        let way = PeerWay::through_tool(Target::Address(server));
+        mapping.peer(&shared, (APP, server), now, (false, way));
+        let stamp = 0xe9a1_0000_0000_0000;
+        mapping.sent(server, &ntp(3, 40, stamp));
+        for n in 1..=32 {
+            mapping.sent(server, &ntp(3, 40, stamp + n));
+        }
+        mapping.sent(server, &ntp(3, 40, stamp));
+        for n in 33..=u64::try_from(TOLD).unwrap_or(0) {
+            mapping.sent(server, &ntp(3, 40, stamp + n));
+        }
+        mapping.peer(&shared, (APP, name), now, (false, tooled("b.test", 123)));
+        mapping.sent(name, &ntp(3, 40, stamp));
+        let from_server = Target::Address(server);
+        let to =
+            mapping
+                .main()
+                .relayed_answer(&shared, APP, (&from_server, &ntp(4, 24, stamp)), now);
+        assert!(
+            matches!(to, LetIn::Peer(shown, ..) if shown == server),
+            "the server's reply to a request just sent again went to the name"
+        );
+        // A waiting stand-in's identifiers: the one sent again stays among the last 64.
+        let stand_in = SocketAddr::from(([198, 18, 0, 2], 3_478));
+        let peer = mapping.peer(&shared, (APP, stand_in), now, (false, waiting_stand_in()));
+        peer.sent(3_478, &binding(0, false), None);
+        for n in 1..=32 {
+            peer.sent(3_478, &binding(n, false), None);
+        }
+        peer.sent(3_478, &binding(0, false), None);
+        for n in 33..=u8::try_from(ASKED).unwrap_or(0) {
+            peer.sent(3_478, &binding(n, false), None);
+        }
+        assert!(identifiers::carries(&peer.ids, &binding(0, true)));
+        // And port 53's queries.
+        let resolver = SocketAddr::from(([198, 18, 0, 3], 53));
+        let peer = mapping.peer(&shared, (APP, resolver), now, (false, waiting_stand_in()));
+        peer.sent(53, &query(0, b"\x01a\x04test\x00"), None);
+        for n in 1..=32 {
+            peer.sent(53, &query(n, b"\x01a\x04test\x00"), None);
+        }
+        peer.sent(53, &query(0, b"\x01a\x04test\x00"), None);
+        for n in 33..=u16::try_from(ASKED).unwrap_or(0) {
+            peer.sent(53, &query(n, b"\x01a\x04test\x00"), None);
+        }
+        assert!(peer.asked.iter().any(|(id, _)| *id == 0));
+        Ok(())
+    }
+
+    /// Making room for an association of a stand-in's own never ends its own mapping (fix round 3, review
+    /// E): not as an answered lookup, which it still is when its one peer is a resolver that answered,
+    /// before the app asks the next name the resolver was sent the same query for.
+    #[tokio::test(flavor = "current_thread")]
+    async fn making_room_for_an_own_association_never_ends_its_mapping() -> io::Result<()> {
+        let mut shared = shared();
+        shared.udp_budget = super::super::budget::Budget::new(1, 1);
+        let now = Instant::now();
+        let uid = Some(10_077);
+        // The app's one place is taken: room is made only by ending a mapping.
+        let _full = shared
+            .udp_budget
+            .take(uid)
+            .map_err(|_| io::ErrorKind::OutOfMemory)?;
+        let mut mapping = mapping(now).await?;
+        mapping.uid = uid;
+        let resolver = SocketAddr::from(([192, 0, 2, 53], 53));
+        let way = PeerWay::through_tool(Target::Address(resolver));
+        mapping.peer(&shared, (APP, resolver), now, (false, way));
+        let asked = query(0x5151, b"\x01x\x04test\x00");
+        mapping.sent(resolver, &asked);
+        let answer = Target::Address(resolver);
+        let let_in = mapping
+            .main()
+            .relayed_answer(&shared, APP, (&answer, &response(&asked)), now);
+        assert!(matches!(let_in, LetIn::Peer(..)));
+        assert!(mapping.answered_lookup());
+        let id = mapping.id;
+        let mut table = UdpTable::default();
+        table.mappings.insert(APP, mapping);
+        table.sockets.entry(APP).or_default();
+        table.answered(APP, (1, Named { uid, asked: now }), &shared);
+        table.heard((APP, id));
+        // The next server's stand-in, sent the same query: an association of its own is wanted.
+        let next = SocketAddr::from(([198, 18, 0, 1], 53));
+        let packet = packet::udp(APP, next, &asked).unwrap_or_default();
+        table.put(
+            (APP, next),
+            UdpEntry::Opening(Holding {
+                floor: None,
+                held: vec![Waiter {
+                    came: now,
+                    then: None,
+                    item: packet,
+                }],
+            }),
+        );
+        let tool = Arc::new(Chain {
+            proxy: SocketAddr::from(([127, 0, 0, 1], 1080)),
+            credentials: None,
+            tool: 10_200,
+            apps: None,
+            udp: true,
+            log_destinations: false,
+        });
+        let wanted = Wanted {
+            uid,
+            exit: Exit::Tool(tool),
+            chains: 0,
+        };
+        let wants = table.own_wanted((APP, next), id, (&named("y.test"), &wanted), &shared);
+        assert!(
+            matches!(wants, OwnWanted::Refused),
+            "no place, and none made"
+        );
+        assert!(
+            table.mapping(APP, id).is_some(),
+            "the mapping ended to make room"
+        );
+        Ok(())
+    }
+
+    /// An association of a stand-in's own that is being opened counts as one of the mapping's (fix round
+    /// 3, review E): the tool closing the mapping's own association ends only what left by it; and when
+    /// the one being opened fails while the mapping's own is closed, nothing of the mapping is left, and
+    /// it ends.
+    #[tokio::test(flavor = "current_thread")]
+    async fn an_own_association_being_opened_keeps_its_mapping() -> io::Result<()> {
+        let shared = shared();
+        let asked = Instant::now();
+        let uid = Some(10_077);
+        let mut table = table_of(&shared, uid, asked).await?;
+        let id = table.mappings.get(&APP).map_or(0, |mapping| mapping.id);
+        if let Some(mapping) = table.mappings.get_mut(&APP) {
+            mapping.owns_opening = 1;
+        }
+        assert!(!table.close_main(APP, id, &shared), "the mapping ended");
+        assert!(
+            table
+                .mapping(APP, id)
+                .is_some_and(|mapping| !mapping.main_open)
+        );
+        let stand_in = SocketAddr::from(([198, 18, 0, 1], 4_000));
+        let key = (APP, stand_in);
+        let packet = packet::udp(APP, stand_in, b"held").unwrap_or_default();
+        table.put(
+            key,
+            UdpEntry::Opening(Holding {
+                floor: None,
+                held: vec![Waiter {
+                    came: asked,
+                    then: None,
+                    item: packet,
+                }],
+            }),
+        );
+        let place = super::super::budget::Budget::new(4, 4)
+            .take(uid)
+            .map_err(|_| io::ErrorKind::OutOfMemory)?;
+        let own = OwnPlace::take(&table.own_places);
+        let socket = table
+            .mappings
+            .get(&APP)
+            .map(|mapping| Arc::clone(&mapping.socket))
+            .ok_or(io::ErrorKind::NotFound)?;
+        let wanted = Wanted {
+            uid,
+            exit: Exit::Direct,
+            chains: 0,
+        };
+        let failed = Err(io::ErrorKind::ConnectionRefused.into());
+        let (mut reads, mut errors) = (Vec::new(), Vec::new());
+        let left = leave_by(
+            &mut table,
+            (key, id),
+            (
+                named("a.test"),
+                &wanted,
+                socket,
+                (Some((failed, (place, own))), false),
+            ),
+            (&shared, &mut reads, &mut errors),
+        );
+        assert!(matches!(left, Leaving::Failed(_)));
+        assert!(
+            table.mapping(APP, id).is_none(),
+            "a mapping with nothing open lives on"
+        );
         Ok(())
     }
 
