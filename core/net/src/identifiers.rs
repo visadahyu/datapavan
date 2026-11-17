@@ -346,13 +346,17 @@ fn stun_class(message: &[u8]) -> u8 {
 /// that each fit, padded to 4 bytes, to its end, walked over its first [`WALKED`] bytes.
 ///
 /// A STUN message over UDP SHOULD be smaller than the path's MTU (RFC 8489 6.1), at most 1,500 bytes
-/// through Watch's tunnel, but need not be: the rule is a SHOULD so that STUN may probe the MTU (RFC
-/// 5780), whose PADDING makes a response as large as the server's outgoing MTU (5780 6.1, 7.6), larger
-/// than the request where the server's path is. So a larger message is read, its header and its
-/// transaction ID, which tell its answer apart, as any other's; its attributes past the first 1,500
-/// bytes are taken to fit, so that walking them costs no more than 1,500 bytes' worth (fix round 4,
-/// review G's G6: 65,500 bytes of empty attributes cost 36 us; fix round 5, review J's minor 2: the
-/// round's bound refused such a message whole, a padded response among them).
+/// through Watch's tunnel, but need not be: the rule is a SHOULD so that STUN may probe the MTU with RFC
+/// 5780's PADDING, an attribute whose own length SHOULD be the MTU of the sender's outgoing interface
+/// (5780 7.6), and which a server MUST put in its response to a padded request (6.1): a padded message
+/// exceeds 1,500 bytes on any path of 1,500. So a larger message is read, its header in full and its
+/// transaction ID, which tell its answer apart, as any other's; its attributes past the first 1,500 bytes
+/// are taken to fit, so that walking them costs no more than 1,500 bytes' worth (fix round 4, review G's
+/// G6: 65,500 bytes of empty attributes cost 36 us; fix round 5, review J's minor 2: the round's bound
+/// refused such a message whole, a padded response among them). **Accepted limit** (ADR 0044, unit 9b's
+/// list): a message whose attributes past there are malformed is read as well formed; what tells its
+/// answer is its method, class, cookie, exact length and 96-bit ID, which anyone who knows the ID could
+/// put in a well-formed one, and its client discards a malformed one and sends again.
 fn stun(message: &[u8]) -> Option<(u8, u16, [u8; 12])> {
     let kind = dns::u16_at(message, 0)?;
     let length = usize::from(dns::u16_at(message, 2)?);

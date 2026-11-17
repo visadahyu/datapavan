@@ -320,11 +320,11 @@ const QUIC_ASKED: usize = 8;
 /// next server, and an ICE agent's checks of one remote candidate. It costs at most 64 x 8 bytes for each
 /// peer, and an entry of the association's fingerprints for each of those, 32 bytes (the fingerprint, its
 /// count and its keepers' exclusive-or, [`Keepers`]) and a control byte in a table whose buckets are at most
-/// 16/7 of its entries, about 75 bytes, so at most 64 x (8 + 75) = 5,312 bytes for a peer the app sent
+/// 16/7 of its entries, about 75.4 bytes, so at most 64 x 83.4 = 5,339 bytes for a peer the app sent
 /// identifiers to, nothing for one it sent none; on the direct path, where no stand-in waits, nothing is
 /// kept. A settled peer's are read from the datagram's headers ([`identifiers::named`]), a QUIC Initial
 /// unopened. Peers are not capped: each destination the app sent to within `udp_idle` is one, as each is a
-/// flow in the log; an app pays these bytes for the identifiers it sends, 83 at most for each, within the
+/// flow in the log; an app pays these bytes for the identifiers it sends, 83.4 at most for each, within the
 /// life of the peer it sends them to.
 const TOLD: usize = 64;
 
@@ -1604,7 +1604,8 @@ impl<'a> Scope<'a> {
     ///   is the holder's;
     /// - what carries none is the holder's, but for `Limits::udp_contest` after a stand-in without
     ///   identifiers began to wait on the port, as for an address a stand-in was bound to: the holder is a
-    ///   stand-in, the name's own peer too;
+    ///   stand-in, the name's own peer too; what is addressed to its client's QUIC source ID is the
+    ///   holder's all the same, as by an address (fix round 6);
     /// - with no holder, another port of a name the app sent to comes in as that name's stand-in's, its
     ///   newest live address, as another port of a known address does, under the same contest; and a name
     ///   no peer has is a source the app never saw, or no longer sees: a stand-in with identifiers takes

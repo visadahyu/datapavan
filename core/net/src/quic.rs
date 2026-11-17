@@ -504,7 +504,7 @@ impl std::fmt::Debug for Ids {
 
 impl Ids {
     /// Its source connection ID, when that tells a connection's packets apart by itself, of
-    /// [`TOLD_APART`] bytes or more: every packet of the server's carries it as its destination, in the
+    /// 4 bytes or more (`TOLD_APART`): every packet of the server's carries it as its destination, in the
     /// clear (RFC 9000 17.2, 17.3), a short header's too (ADR 0044, unit 9b, fix round 6).
     #[must_use]
     pub fn telling_source(&self) -> Option<&[u8]> {
@@ -541,9 +541,9 @@ impl Ids {
 }
 
 /// What the destination connection ID of the first packet of `answer`, a server's datagram, may be, of
-/// [`TOLD_APART`] bytes or more, where a client's source ID that tells its packets apart would stand
+/// 4 bytes or more (`TOLD_APART`), where a client's source ID that tells its packets apart would stand
 /// (ADR 0044, unit 9b, fix round 6): a long header's, which gives its length; for a short header, which
-/// does not, each length from [`TOLD_APART`] to 20 bytes it may have. Nothing is opened.
+/// does not, each length from 4 to 20 bytes it may have. Nothing is opened.
 #[must_use]
 pub fn addressed_to(answer: &[u8]) -> Vec<&[u8]> {
     let Some(&first) = answer.first() else {
