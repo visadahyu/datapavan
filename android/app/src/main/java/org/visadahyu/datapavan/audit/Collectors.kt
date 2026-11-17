@@ -27,6 +27,7 @@ import android.view.accessibility.AccessibilityManager
 import android.service.wallpaper.WallpaperService
 import android.view.inputmethod.InputMethod
 import android.view.inputmethod.InputMethodManager
+import androidx.annotation.RequiresApi
 import androidx.core.net.toUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -373,7 +374,21 @@ class DeviceCollector(private val context: Context) {
             vpnActive = vpnActive(),
             integrity = check.integrity,
             integrityFailure = check.failure,
+            hardwareKeystore = hardwareKeystore(),
         )
+    }
+
+    /**
+     * Whether the phone declares secure hardware for its keys: Android 12 and later declare a keystore backed by a
+     * trusted environment, and Android 9 and later a secure chip. The package manager answers this from the
+     * system server, apart from the keystore, so a hook in the keystore does not change it. On Android 10 and 11
+     * without a secure chip, no public API says, and the check cannot tell a software answer from a phone
+     * without such hardware.
+     */
+    private fun hardwareKeystore(): Boolean {
+        val packages = context.packageManager
+        return (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && packages.hasSystemFeature(PackageManager.FEATURE_HARDWARE_KEYSTORE)) ||
+            packages.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
     }
 
     /** Debugging and user certificate authorities only, read again after a system screen of the plan (ADR 0026). */
@@ -438,19 +453,39 @@ class DeviceCollector(private val context: Context) {
             parse = { extension -> Parsers(context).use { it.parseAttestation(extension) } },
             random = random::nextBytes,
             now = ::Date,
-            failure = { IntegrityFailure.FAILED },
+            failure = ::failureOf,
         ).run()
     }
+
+    /**
+     * What a failed check means: on Android 13 and later the keystore says when the secure hardware has no
+     * attestation key until the phone reaches Google's provisioning server; anything else is a failure.
+     */
+    private fun failureOf(error: Exception): IntegrityFailure {
+        val causes = generateSequence<Throwable>(error) { it.cause }.take(MAX_CAUSES)
+        val waiting = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            causes.filterIsInstance<android.security.KeyStoreException>().any(::keysUnavailable)
+        return if (waiting) IntegrityFailure.KEYS_UNAVAILABLE else IntegrityFailure.FAILED
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private fun keysUnavailable(error: android.security.KeyStoreException): Boolean =
+        error.numericErrorCode == android.security.KeyStoreException.ERROR_ATTESTATION_KEYS_UNAVAILABLE ||
+            error.retryPolicy == android.security.KeyStoreException.RETRY_WHEN_CONNECTIVITY_AVAILABLE
 
     private fun attestationChain(): AttestationChain {
         val data = DataPackStore.get(context)
         val roots = data.file(AttestationChain.ROOTS_PATH) ?: throw IOException(AttestationChain.ROOTS_PATH)
         val revoked = data.file(AttestationChain.REVOKED_PATH) ?: throw IOException(AttestationChain.REVOKED_PATH)
-        return AttestationChain.load(roots.inputStream(), revoked.inputStream())
+        val source = data.file(AttestationChain.SOURCE_PATH)
+        return AttestationChain.load(roots.inputStream(), revoked.inputStream(), source?.inputStream())
     }
 
     private companion object {
         const val SETTING_ADB_WIFI = "adb_wifi_enabled"
+
+        /** How far down an exception's causes to look; the keystore's errors are one or two deep. */
+        const val MAX_CAUSES = 8
     }
 }
 

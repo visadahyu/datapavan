@@ -29,13 +29,16 @@ enum class FindingKind(val severity: Severity) {
     BOOT_NOT_VERIFIED(Severity.HIGH),
     ATTESTATION_REVOKED(Severity.HIGH),
     ATTESTATION_FORGED(Severity.HIGH),
+    ATTESTATION_SOFTWARE_ANSWER(Severity.HIGH),
+    ATTESTATION_PUBLIC_ROOT(Severity.HIGH),
     ATTESTATION_UNCONFIRMED(Severity.MEDIUM),
     ATTESTATION_INCOMPLETE(Severity.MEDIUM),
     ATTESTATION_OUT_OF_DATE(Severity.MEDIUM),
+    ATTESTATION_BROKEN(Severity.MEDIUM),
+    ATTESTATION_KEYS_UNAVAILABLE(Severity.MEDIUM),
     SYSTEM_KEY_LEAKED(Severity.MEDIUM),
     USB_DEBUGGING(Severity.MEDIUM),
     OLD_SECURITY_PATCH(Severity.MEDIUM),
-    OLD_VENDOR_PATCH(Severity.MEDIUM),
     ATTESTATION_FAILED(Severity.MEDIUM),
     SYSTEM_OWN_KEY(Severity.MEDIUM),
     INTEGRITY_SOFTWARE_ONLY(Severity.LOW),
@@ -150,38 +153,63 @@ object Rules {
         if (device.wirelessDebugging) add(FindingKind.WIRELESS_DEBUGGING)
         if (device.usbDebugging) add(FindingKind.USB_DEBUGGING)
         // A check that should work and did not is reported, so that a system cannot hide the bootloader's
-        // state by breaking the check, and a fault on a sound phone comes to light.
-        if (device.integrity == null && device.integrityFailure == IntegrityFailure.FAILED) add(FindingKind.ATTESTATION_FAILED)
+        // state by breaking the check, and a fault on a sound phone comes to light. A phone waiting for keys from
+        // Google is told apart, at the same severity, since a hook could claim that too.
+        if (device.integrity == null) {
+            when (device.integrityFailure) {
+                IntegrityFailure.FAILED -> add(FindingKind.ATTESTATION_FAILED)
+                IntegrityFailure.KEYS_UNAVAILABLE -> add(FindingKind.ATTESTATION_KEYS_UNAVAILABLE)
+                null -> Unit
+            }
+        }
         device.integrity?.let { integrity ->
+            val trust = integrity.trust
             // Nothing a forged attestation says is used: not its bootloader state, not its patch level.
-            if (integrity.trust == AttestationTrust.FORGED) {
+            if (trust == AttestationTrust.FORGED) {
                 add(FindingKind.ATTESTATION_FORGED)
                 return@let
             }
-            // A software-only attestation says nothing reliable about the bootloader.
             if (integrity.securityLevel == 0) {
-                add(FindingKind.INTEGRITY_SOFTWARE_ONLY)
+                // A software answer says nothing reliable about the bootloader. On a phone that declares secure
+                // hardware for its keys, it is not the answer a sound phone gives: a hook that answers in software
+                // must not look quieter than the unlocked bootloader it could hide.
+                add(
+                    when {
+                        device.hardwareKeystore -> FindingKind.ATTESTATION_SOFTWARE_ANSWER
+                        trust == AttestationTrust.BROKEN_CHAIN -> FindingKind.ATTESTATION_BROKEN
+                        trust == AttestationTrust.OTHER_ROOT -> FindingKind.ATTESTATION_UNCONFIRMED
+                        trust == AttestationTrust.REVOKED -> FindingKind.ATTESTATION_REVOKED
+                        else -> FindingKind.INTEGRITY_SOFTWARE_ONLY
+                    },
+                )
             } else {
-                when (integrity.trust) {
-                    AttestationTrust.GOOGLE_ROOT, AttestationTrust.FORGED -> Unit
+                // A claim of secure hardware signed under a key that AOSP publishes: anyone could have made it.
+                if (trust == AttestationTrust.SOFTWARE_ROOT) {
+                    add(FindingKind.ATTESTATION_PUBLIC_ROOT)
+                    return@let
+                }
+                when (trust) {
+                    AttestationTrust.GOOGLE_ROOT, AttestationTrust.FORGED, AttestationTrust.SOFTWARE_ROOT -> Unit
                     AttestationTrust.REVOKED -> add(FindingKind.ATTESTATION_REVOKED)
-                    AttestationTrust.OTHER_ROOT, AttestationTrust.BROKEN_CHAIN -> add(FindingKind.ATTESTATION_UNCONFIRMED)
+                    AttestationTrust.OTHER_ROOT -> add(FindingKind.ATTESTATION_UNCONFIRMED)
+                    AttestationTrust.BROKEN_CHAIN -> add(FindingKind.ATTESTATION_BROKEN)
                     AttestationTrust.OUT_OF_DATE -> add(FindingKind.ATTESTATION_OUT_OF_DATE)
                 }
                 // A sound trusted environment or secure chip always states the bootloader and boot state
                 // in the list it enforces itself, and the engine never takes them from the list the
                 // system writes (ADR 0040, decision 5), so their absence is reported, not passed over.
                 if (integrity.deviceLocked == null || integrity.verifiedBoot == null) add(FindingKind.ATTESTATION_INCOMPLETE)
+                // An unconfirmed attestation's warnings are reported all the same: a forger gains nothing by them.
                 if (integrity.deviceLocked == false) add(FindingKind.BOOTLOADER_UNLOCKED)
                 // Locked with a key that is not the maker's (ADR 0040, decision 7): until a dataset of the keys
                 // that systems such as GrapheneOS publish exists, no such key can be named, so each is a medium fact.
                 if (integrity.deviceLocked == true && integrity.verifiedBoot == 1) add(FindingKind.SYSTEM_OWN_KEY)
                 if (integrity.deviceLocked == true && integrity.verifiedBoot in setOf(2, 3)) add(FindingKind.BOOT_NOT_VERIFIED)
             }
+            // An old patch level is believed from any source: no system makes itself look older than it is. The
+            // vendor's level is shown, not judged: a phone may patch its vendor image and leave the level behind.
             val patch = integrity.osPatchLevel
             if (patch != null && months(nowYearMonth) - months(patch) > 12) add(FindingKind.OLD_SECURITY_PATCH)
-            val vendor = integrity.vendorPatchLevel
-            if (vendor != null && months(nowYearMonth) - months(vendor) > 12) add(FindingKind.OLD_VENDOR_PATCH)
         }
         if (device.vpnActive) add(FindingKind.VPN_ACTIVE)
     }.sortedBy { it.severity }

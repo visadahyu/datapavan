@@ -1,5 +1,7 @@
 package org.visadahyu.datapavan.audit
 
+import java.time.LocalDate
+
 /** Special access that the user grants in system Settings, outside the normal permission dialog. */
 enum class SpecialAccess {
     ACCESSIBILITY,
@@ -73,6 +75,8 @@ data class Integrity(
     val verifiedBootKey: String? = null,
     /** The vendor image's security patch level as `YYYYMM`. */
     val vendorPatchLevel: Int? = null,
+    /** The day the revocation list that the chain was checked against was fetched. */
+    val revocationListDate: LocalDate? = null,
 ) {
     companion object {
         /** An attestation that is not the hardware's answer to this app's request: nothing it says is used. */
@@ -103,6 +107,12 @@ enum class AttestationTrust {
 
     /** A certificate between the leaf and the root is not valid at the phone's date (AttestationChain). */
     OUT_OF_DATE,
+
+    /**
+     * A valid chain to AOSP's software attestation root, whose private key is published: what a software keystore
+     * gives, and what anyone can make.
+     */
+    SOFTWARE_ROOT,
 }
 
 /** Device-wide facts. */
@@ -116,12 +126,23 @@ data class DeviceFacts(
     val integrity: Integrity?,
     /** Why [integrity] is null: the hardware check failed, or its answer could not be read (see HardwareCheck). */
     val integrityFailure: IntegrityFailure? = null,
+    /**
+     * Whether the phone declares secure hardware for its keys, which Android says through its package manager,
+     * apart from the keystore (DeviceCollector).
+     */
+    val hardwareKeystore: Boolean = false,
 )
 
 /** Why the hardware check gave no result. */
 enum class IntegrityFailure {
     /** The keystore refused the check, the data pack lacked its data, or the answer could not be read. */
     FAILED,
+
+    /**
+     * The phone's secure hardware has no attestation key until the phone reaches Google's provisioning server
+     * (Remote Key Provisioning), as the keystore says (Android 13 and later).
+     */
+    KEYS_UNAVAILABLE,
 }
 
 /** What the hardware check found: the attestation's decoded state, or why there is none. */

@@ -61,7 +61,8 @@ class HardwareCheck(
         val challenge = ByteArray(CHALLENGE_BYTES).also(random)
         val key = keystore.generate(alias, challenge)
         val chain = keystore.chain(alias)
-        val trust = chains().trust(chain, key, now())
+        val chains = chains()
+        val trust = chains.trust(chain, key, now())
         // Nothing a forged attestation says is used, so it is not even decoded.
         if (trust == AttestationTrust.FORGED) return IntegrityResult(Integrity.forged())
         val extension = chain.firstOrNull()?.getExtensionValue(AttestationChain.KEY_DESCRIPTION_OID)
@@ -76,6 +77,7 @@ class HardwareCheck(
                 trust = AttestationChain.verdict(trust, fields.challenge, challenge),
                 verifiedBootKey = fields.verifiedBootKey?.joinToString("") { "%02x".format(Locale.ROOT, it) },
                 vendorPatchLevel = fields.vendorPatchLevel,
+                revocationListDate = chains.revocationListDate,
             ),
         )
     }

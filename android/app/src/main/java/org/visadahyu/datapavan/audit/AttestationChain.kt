@@ -9,6 +9,7 @@ import java.security.cert.CertificateExpiredException
 import java.security.cert.CertificateFactory
 import java.security.cert.CertificateNotYetValidException
 import java.security.cert.X509Certificate
+import java.time.LocalDate
 import java.util.Date
 import java.util.Locale
 import javax.security.auth.x500.X500Principal
@@ -30,8 +31,11 @@ import javax.security.auth.x500.X500Principal
  *   signed: four certificates from a factory-provisioned key, five from a remotely provisioned one, and three
  *   or four when that certificate names neither. Each is issued by the next by name and signed by it, the root
  *   by itself ([AttestationTrust.BROKEN_CHAIN]).
- * - No certificate is on Google's revocation list ([AttestationTrust.REVOKED]), and the root holds one of
- *   Google's attestation root keys ([AttestationTrust.OTHER_ROOT]).
+ * - No certificate is on Google's revocation list ([AttestationTrust.REVOKED]), as of the day the list in
+ *   the data pack was fetched ([revocationListDate]). The root holds one of Google's attestation root keys;
+ *   AOSP's software attestation root, whose private key is published with Android's source code, is told
+ *   apart from the root of a maker outside Google's programme ([AttestationTrust.SOFTWARE_ROOT],
+ *   [AttestationTrust.OTHER_ROOT]).
  * - Every certificate between the leaf and the root is valid at the phone's date, but for an expired one in
  *   a factory-provisioned chain, which Google exempts ([AttestationTrust.OUT_OF_DATE]). The leaf's dates are
  *   set on the phone and the root's are not used, as in Google's verifier.
@@ -51,6 +55,8 @@ class AttestationChain(
     private val rootKeys: Set<String>,
     /** Revoked certificate serial numbers in lowercase hex, as in Google's list. */
     private val revokedSerials: Set<String>,
+    /** The day Google's revocation list was fetched: a key revoked since then passes. */
+    val revocationListDate: LocalDate? = null,
 ) {
     /** The verdict on [chain], leaf first, as the attestation of [generatedKey], at [now] by the phone's clock. */
     fun trust(chain: List<X509Certificate>, generatedKey: PublicKey, now: Date): AttestationTrust {
@@ -72,6 +78,7 @@ class AttestationChain(
         return when {
             !shaped || !chained -> AttestationTrust.BROKEN_CHAIN
             chain.any { serial(it.serialNumber) in revokedSerials } -> AttestationTrust.REVOKED
+            keyFingerprint(chain.last().publicKey) in AOSP_SOFTWARE_ROOT_KEYS -> AttestationTrust.SOFTWARE_ROOT
             keyFingerprint(chain.last().publicKey) !in rootKeys -> AttestationTrust.OTHER_ROOT
             !valid(chain.subList(1, chain.lastIndex), now, expiryExempt = provisioning == Provisioning.FACTORY) ->
                 AttestationTrust.OUT_OF_DATE
@@ -104,6 +111,14 @@ class AttestationChain(
     companion object {
         const val ROOTS_PATH = "attestation/google-roots.pem"
         const val REVOKED_PATH = "attestation/revoked-serials.txt"
+        const val SOURCE_PATH = "attestation/SOURCE"
+
+        /**
+         * SHA-256 of the SubjectPublicKeyInfo of AOSP's software attestation root for EC keys, the kind the app
+         * generates ("Android Keystore Software Attestation Root", the root of the Pixel XL's chain in Google's
+         * test data). Its private key is published with AOSP's software keymaster, so anyone can sign under it.
+         */
+        val AOSP_SOFTWARE_ROOT_KEYS = setOf("d5100c7942ef2e8310dc30ef82729680cf48d690735c3f68179a33c7c370f286")
         const val KEY_DESCRIPTION_OID = "1.3.6.1.4.1.11129.2.1.17"
 
         /**
@@ -194,14 +209,21 @@ class AttestationChain(
             return parts.joinToString(".")
         }
 
-        /** Reads the data pack's files: PEM certificates, and one serial per line with `#` comments. */
-        fun load(roots: InputStream, revoked: InputStream): AttestationChain {
+        /**
+         * Reads the data pack's files: PEM certificates, one serial per line with `#` comments, and the dataset's
+         * SOURCE, whose `retrieved:` line dates the revocation list.
+         */
+        fun load(roots: InputStream, revoked: InputStream, source: InputStream? = null): AttestationChain {
             val certificates = CertificateFactory.getInstance("X.509").generateCertificates(roots)
             val keys = certificates.map { keyFingerprint(it.publicKey) }.toSet()
             val serials = revoked.bufferedReader().useLines { lines ->
                 lines.map(String::trim).filter { it.isNotEmpty() && !it.startsWith("#") }.toSet()
             }
-            return AttestationChain(keys, serials)
+            val retrieved = source?.bufferedReader()?.useLines { lines ->
+                lines.firstOrNull { it.startsWith("retrieved:") }?.substringAfter(":")?.trim()?.take(10)
+            }
+            val date = retrieved?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+            return AttestationChain(keys, serials, date)
         }
     }
 }

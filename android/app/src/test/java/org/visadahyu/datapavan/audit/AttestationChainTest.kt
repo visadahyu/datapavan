@@ -33,11 +33,27 @@ class AttestationChainTest {
         trust(chain, chain.first().publicKey, now)
 
     @Test
-    fun `every genuine chain is trusted, and the software keystore's is not Google's`() {
+    fun `every genuine chain is trusted, and the software keystore's is told by its published root`() {
         for (path in GENUINE) {
             assertEquals(path, AttestationTrust.GOOGLE_ROOT, google.trust(corpus(path)))
         }
-        assertEquals(AttestationTrust.OTHER_ROOT, google.trust(corpus("marlin/sdk29/TEE_EC_NONE.pem")))
+        // The Pixel XL's software keystore signs under AOSP's software attestation root, whose private key AOSP
+        // publishes: not a maker's own root.
+        assertEquals(AttestationTrust.SOFTWARE_ROOT, google.trust(corpus("marlin/sdk29/TEE_EC_NONE.pem")))
+        val otherRoot = chain(File(javaClass.getResource("/attestation/synthetic/root-expired.pem")!!.toURI()))
+        assertEquals(AttestationTrust.OTHER_ROOT, google.trust(otherRoot, otherRoot.first().publicKey, Date.from(Instant.parse("2026-06-01T00:00:00Z"))))
+    }
+
+    @Test
+    fun `the revocation list is dated by its SOURCE`() {
+        val loaded = File(DATA, "google-roots.pem").inputStream().use { roots ->
+            File(DATA, "revoked-serials.txt").inputStream().use { revoked ->
+                File(DATA, "SOURCE").inputStream().use { source -> AttestationChain.load(roots, revoked, source) }
+            }
+        }
+        val retrieved = File(DATA, "SOURCE").readLines().first { it.startsWith("retrieved:") }
+        assertEquals(retrieved.substringAfter(":").trim().take(10), loaded.revocationListDate.toString())
+        assertEquals(null, google.revocationListDate)
     }
 
     @Test

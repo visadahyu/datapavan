@@ -10,6 +10,9 @@
     <string name="device_integrity_ok">Comprobación de hardware, firmada con la clave de certificación de Google: el bootloader está bloqueado y el sistema está verificado.</string>
     <string name="device_patch">Parche de seguridad: %1$s</string>
     <string name="device_integrity_failed">La comprobación de hardware falló en este teléfono.</string>
+    <string name="device_integrity_waiting">La comprobación de hardware está esperando a que este teléfono contacte con Google.</string>
+    <string name="device_revocation_list">Comprobado con la lista de Google de claves revocadas del %1$s.</string>
+    <string name="device_revocation_list_old">La lista de Google de claves revocadas que se usa aquí es del %1$s, hace más de tres meses, así que una clave revocada desde entonces no se detectaría. Importa un paquete de datos más reciente para actualizarla.</string>
     <string name="device_boot_key">Clave de arranque verificado: %1$s</string>
     <string name="device_patch_system">Parche de seguridad, según el sistema: %1$s</string>
     <string name="device_vendor_patch">Parche de seguridad de los proveedores: %1$s</string>
@@ -239,10 +242,8 @@
     <string name="finding_usb_debugging_body">Una computadora conectada por cable puede instalar apps y leer datos una vez que aceptas su clave. Desactívala cuando no la necesites.</string>
     <string name="finding_old_patch_title">Las actualizaciones de seguridad son antiguas</string>
     <string name="finding_old_patch_body">El último parche de seguridad de este teléfono tiene más de un año, así que hay vulnerabilidades conocidas sin corregir.</string>
-    <string name="finding_old_vendor_patch_title">Las actualizaciones de seguridad de los proveedores son antiguas</string>
-    <string name="finding_old_vendor_patch_body">Las partes del software de este teléfono que proceden de los proveedores de sus chips y de su hardware recibieron su último parche hace más de un año. Puede que haya en ellas vulnerabilidades conocidas sin corregir.</string>
     <string name="finding_software_only_title">Comprobación de hardware no disponible</string>
-    <string name="finding_software_only_body">Este teléfono solo hace la certificación por software, así que el hardware no puede confirmar el estado del sistema. Es normal en los emuladores.</string>
+    <string name="finding_software_only_body">La comprobación de hardware de este teléfono procede de software, que el sistema controla, así que no puede confirmar el bootloader ni el sistema. Es normal en los emuladores y en los teléfonos sin hardware seguro para claves; un sistema modificado también puede responder así.</string>
     <string name="finding_attestation_revoked_title">Clave de la comprobación de hardware revocada</string>
     <string name="finding_attestation_revoked_body">Google ha revocado una clave de la comprobación de hardware de este teléfono, por ejemplo porque se filtró. El estado del bootloader y del sistema que indica la comprobación puede estar falsificado.</string>
     <string name="finding_attestation_unconfirmed_title">Comprobación de hardware no confirmada</string>
@@ -251,6 +252,14 @@
     <string name="finding_attestation_incomplete_body">La comprobación de hardware de este teléfono no indica si el bootloader está bloqueado ni si el sistema está verificado, así que no se puede confirmar ninguna de las dos cosas. Un teléfono que sigue las reglas de Android siempre indica ambas. Un error del fabricante puede causar esto; un sistema modificado también.</string>
     <string name="finding_attestation_forged_title">Comprobación de hardware manipulada</string>
     <string name="finding_attestation_forged_body">La comprobación de hardware de este teléfono se modificó después de que el hardware seguro del teléfono la generara, o responde a una solicitud distinta de la de Datapavan. Algo en este teléfono está interfiriendo con la comprobación, así que Datapavan no usa lo que indica. Tómate esto como una advertencia seria: puede que el sistema se haya modificado para ocultar su estado.</string>
+    <string name="finding_attestation_software_answer_title">Comprobación de hardware respondida por software</string>
+    <string name="finding_attestation_software_answer_body">Este teléfono tiene hardware seguro para sus claves, pero su comprobación de hardware procede de software, que el sistema controla. Un sistema modificado puede responder así para ocultar un bootloader desbloqueado; también puede hacerlo un fallo en el almacén de claves del teléfono. No se puede confirmar el estado del bootloader y del sistema. Tómate esto como una advertencia seria.</string>
+    <string name="finding_attestation_public_root_title">Comprobación de hardware firmada con una clave pública</string>
+    <string name="finding_attestation_public_root_body">La comprobación de hardware de este teléfono afirma proceder de hardware seguro, pero está firmada con una clave que se publica con el código fuente de Android, así que cualquiera podría haberla generado. Datapavan no usa lo que indica. Un sistema modificado puede hacer esto; un emulador también.</string>
+    <string name="finding_attestation_broken_title">Comprobación de hardware defectuosa</string>
+    <string name="finding_attestation_broken_body">Los certificados de la comprobación de hardware de este teléfono no encajan entre sí, así que la comprobación no demuestra nada sobre el bootloader ni el sistema. Un teléfono en buen estado nunca responde así; un sistema modificado o un fallo en el almacén de claves del teléfono puede provocar esta respuesta.</string>
+    <string name="finding_attestation_keys_unavailable_title">Comprobación de hardware a la espera de Google</string>
+    <string name="finding_attestation_keys_unavailable_body">El hardware seguro de este teléfono no tiene ahora mismo ninguna clave para la comprobación. Android obtiene estas claves de Google por internet, y duran unas dos semanas. Lo más probable es que este teléfono no haya contactado con Google últimamente, por ejemplo porque su red bloquea Google. Datapavan nunca se conecta por sí mismo. La comprobación vuelve a funcionar en cuanto el teléfono contacte con Google. Hasta entonces, no se puede confirmar el estado del bootloader y del sistema; por sí solo, esto no significa que el teléfono se haya modificado.</string>
     <string name="finding_attestation_out_of_date_title">Comprobación de hardware no válida en esta fecha</string>
     <string name="finding_attestation_out_of_date_body">Un certificado de la comprobación de hardware de este teléfono no es válido en la fecha que muestra el teléfono, así que no se puede confirmar la comprobación. La causa habitual es una fecha incorrecta en el teléfono: pon la fecha correcta y vuelve a abrir Datapavan.</string>
     <string name="finding_attestation_failed_title">Comprobación de hardware fallida</string>

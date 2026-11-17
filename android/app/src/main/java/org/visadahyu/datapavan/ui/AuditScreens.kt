@@ -108,6 +108,7 @@ import org.visadahyu.datapavan.datapack.DataPackRules
 import org.visadahyu.datapavan.datapack.DataPackStore
 import java.text.DateFormat
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -474,37 +475,53 @@ internal fun SectionTitle(@StringRes title: Int) {
 @Composable
 internal fun IntegrityLine(device: DeviceFacts) {
     Column(Modifier.padding(vertical = 4.dp)) {
-        for ((text, argument) in integrityLines(device)) {
+        for ((text, argument) in integrityLines(device, LocalDate.now())) {
             val line = if (argument == null) stringResource(text) else stringResource(text, isolateLtr(argument))
             Text(line, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
 
-/** What the hardware check's lines say on the phone's page: each a string and its argument, if it has one. */
-internal fun integrityLines(device: DeviceFacts): List<Pair<Int, String?>> {
-    val integrity = device.integrity
-    val status = when {
-        integrity == null && device.integrityFailure == IntegrityFailure.FAILED -> R.string.device_integrity_failed
-        integrity == null -> null
-        integrity.deviceLocked == true && integrity.verifiedBoot == 0 && integrity.securityLevel > 0 &&
-            integrity.trust == AttestationTrust.GOOGLE_ROOT -> R.string.device_integrity_ok
-        else -> null
+/** Past this age, the revocation list that confirms the check is called old, and a newer data pack asked for. */
+internal const val REVOCATION_LIST_DAYS = 90L
+
+/**
+ * What the hardware check's lines say on the phone's page, on [today]: each a string and its argument, if it has
+ * one. A value is shown as the hardware's only when Google's root confirms a hardware attestation; otherwise as the
+ * system's word, and not at all when the attestation is forged or anyone could have made it.
+ */
+internal fun integrityLines(device: DeviceFacts, today: LocalDate): List<Pair<Int, String?>> {
+    val integrity = device.integrity ?: return when (device.integrityFailure) {
+        IntegrityFailure.FAILED -> listOf(R.string.device_integrity_failed to null)
+        IntegrityFailure.KEYS_UNAVAILABLE -> listOf(R.string.device_integrity_waiting to null)
+        null -> emptyList()
     }
-    // Nothing a forged attestation says is shown.
-    val shown = integrity?.takeIf { it.trust != AttestationTrust.FORGED }
+    val hardware = integrity.securityLevel > 0
+    if (integrity.trust == AttestationTrust.FORGED || (hardware && integrity.trust == AttestationTrust.SOFTWARE_ROOT)) {
+        return emptyList()
+    }
+    val confirmed = hardware && integrity.trust == AttestationTrust.GOOGLE_ROOT
     val yearMonth = { level: Int -> String.format(Locale.ROOT, "%04d-%02d", level / 100, level % 100) }
-    // A software attestation's patch level is only what the system says of itself.
-    val patch = shown?.osPatchLevel?.let {
-        (if (shown.securityLevel == 0) R.string.device_patch_system else R.string.device_patch) to yearMonth(it)
+    val lines = mutableListOf<Pair<Int, String?>>()
+    if (confirmed && integrity.deviceLocked == true && integrity.verifiedBoot == 0) {
+        lines += R.string.device_integrity_ok to null
+        // Not revoked as of the list's date: a key revoked since then would pass.
+        integrity.revocationListDate?.let { date ->
+            val old = ChronoUnit.DAYS.between(date, today) > REVOCATION_LIST_DAYS
+            lines += (if (old) R.string.device_revocation_list_old else R.string.device_revocation_list) to date.toString()
+        }
     }
-    // The vendor's patch level, where it lags behind the system's.
-    val vendor = shown?.vendorPatchLevel?.takeIf { shown.osPatchLevel == null || it < shown.osPatchLevel }
-        ?.let { R.string.device_vendor_patch to yearMonth(it) }
-    // The key that verified a system of the owner's own, to compare with the one its project publishes.
-    val bootKey = shown?.takeIf { it.securityLevel > 0 && it.verifiedBoot == 1 }?.verifiedBootKey
-        ?.let { R.string.device_boot_key to it }
-    return listOfNotNull(status?.let { it to null }, patch, vendor, bootKey)
+    integrity.osPatchLevel?.let {
+        lines += (if (confirmed) R.string.device_patch else R.string.device_patch_system) to yearMonth(it)
+    }
+    // The vendor's patch level, where the hardware states it and it lags behind the system's.
+    integrity.vendorPatchLevel?.takeIf { confirmed && (integrity.osPatchLevel == null || it < integrity.osPatchLevel) }
+        ?.let { lines += R.string.device_vendor_patch to yearMonth(it) }
+    // The key that verified a system of the owner's own, to compare with the one its project publishes; only where
+    // the hardware states it, since a forger could show any key.
+    integrity.verifiedBootKey?.takeIf { confirmed && integrity.verifiedBoot == 1 }
+        ?.let { lines += R.string.device_boot_key to it }
+    return lines
 }
 
 @Composable
@@ -740,12 +757,15 @@ private fun title(kind: FindingKind) = when (kind) {
     FindingKind.BOOT_NOT_VERIFIED -> R.string.finding_boot_not_verified_title
     FindingKind.USB_DEBUGGING -> R.string.finding_usb_debugging_title
     FindingKind.OLD_SECURITY_PATCH -> R.string.finding_old_patch_title
-    FindingKind.OLD_VENDOR_PATCH -> R.string.finding_old_vendor_patch_title
     FindingKind.ATTESTATION_FAILED -> R.string.finding_attestation_failed_title
     FindingKind.SYSTEM_OWN_KEY -> R.string.finding_system_own_key_title
     FindingKind.INTEGRITY_SOFTWARE_ONLY -> R.string.finding_software_only_title
     FindingKind.ATTESTATION_REVOKED -> R.string.finding_attestation_revoked_title
     FindingKind.ATTESTATION_FORGED -> R.string.finding_attestation_forged_title
+    FindingKind.ATTESTATION_KEYS_UNAVAILABLE -> R.string.finding_attestation_keys_unavailable_title
+    FindingKind.ATTESTATION_BROKEN -> R.string.finding_attestation_broken_title
+    FindingKind.ATTESTATION_PUBLIC_ROOT -> R.string.finding_attestation_public_root_title
+    FindingKind.ATTESTATION_SOFTWARE_ANSWER -> R.string.finding_attestation_software_answer_title
     FindingKind.ATTESTATION_OUT_OF_DATE -> R.string.finding_attestation_out_of_date_title
     FindingKind.ATTESTATION_UNCONFIRMED -> R.string.finding_attestation_unconfirmed_title
     FindingKind.ATTESTATION_INCOMPLETE -> R.string.finding_attestation_incomplete_title
@@ -777,12 +797,15 @@ private fun body(kind: FindingKind) = when (kind) {
     FindingKind.BOOT_NOT_VERIFIED -> R.string.finding_boot_not_verified_body
     FindingKind.USB_DEBUGGING -> R.string.finding_usb_debugging_body
     FindingKind.OLD_SECURITY_PATCH -> R.string.finding_old_patch_body
-    FindingKind.OLD_VENDOR_PATCH -> R.string.finding_old_vendor_patch_body
     FindingKind.ATTESTATION_FAILED -> R.string.finding_attestation_failed_body
     FindingKind.SYSTEM_OWN_KEY -> R.string.finding_system_own_key_body
     FindingKind.INTEGRITY_SOFTWARE_ONLY -> R.string.finding_software_only_body
     FindingKind.ATTESTATION_REVOKED -> R.string.finding_attestation_revoked_body
     FindingKind.ATTESTATION_FORGED -> R.string.finding_attestation_forged_body
+    FindingKind.ATTESTATION_KEYS_UNAVAILABLE -> R.string.finding_attestation_keys_unavailable_body
+    FindingKind.ATTESTATION_BROKEN -> R.string.finding_attestation_broken_body
+    FindingKind.ATTESTATION_PUBLIC_ROOT -> R.string.finding_attestation_public_root_body
+    FindingKind.ATTESTATION_SOFTWARE_ANSWER -> R.string.finding_attestation_software_answer_body
     FindingKind.ATTESTATION_OUT_OF_DATE -> R.string.finding_attestation_out_of_date_body
     FindingKind.ATTESTATION_UNCONFIRMED -> R.string.finding_attestation_unconfirmed_body
     FindingKind.ATTESTATION_INCOMPLETE -> R.string.finding_attestation_incomplete_body

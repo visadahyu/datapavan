@@ -13,6 +13,9 @@
     <!-- %1$s is a date such as 2023-03, passed in already bidi-isolated. -->
     <string name="device_patch">Security patch: %1$s</string>
     <string name="device_integrity_failed">The hardware check failed on this phone.</string>
+    <string name="device_integrity_waiting">The hardware check is waiting for this phone to reach Google.</string>
+    <string name="device_revocation_list">Checked against Google\'s list of revoked keys from %1$s.</string>
+    <string name="device_revocation_list_old">Google\'s list of revoked keys used here is from %1$s, more than three months ago, so a key revoked since then would not be caught. Import a newer data pack to update it.</string>
     <string name="device_boot_key">Verified boot key: %1$s</string>
     <string name="device_patch_system">Security patch, as the system states it: %1$s</string>
     <string name="device_vendor_patch">Vendor security patch: %1$s</string>
@@ -258,10 +261,8 @@
     <string name="finding_usb_debugging_body">A computer connected by cable can install apps and read data once you accept its key. Turn it off when you do not need it.</string>
     <string name="finding_old_patch_title">Security updates are old</string>
     <string name="finding_old_patch_body">The last security patch on this phone is more than a year old, so known vulnerabilities are not fixed.</string>
-    <string name="finding_old_vendor_patch_title">Vendor security updates are old</string>
-    <string name="finding_old_vendor_patch_body">The parts of this phone\'s software that come from its chip and hardware makers were last patched more than a year ago. Known vulnerabilities in them may not be fixed.</string>
     <string name="finding_software_only_title">No hardware check available</string>
-    <string name="finding_software_only_body">This phone attests only in software, so hardware cannot confirm the system state. This is normal for emulators.</string>
+    <string name="finding_software_only_body">This phone\'s hardware check came from software, which the system controls, so it cannot confirm the bootloader or the system. This is normal on emulators and on phones without secure hardware for keys; a modified system can answer this way too.</string>
     <string name="finding_attestation_revoked_title">Hardware check key revoked</string>
     <string name="finding_attestation_revoked_body">Google has revoked a key in this phone\'s hardware check, for example because it leaked. The bootloader and system state that the check reports may be forged.</string>
     <string name="finding_attestation_unconfirmed_title">Hardware check not confirmed</string>
@@ -270,6 +271,14 @@
     <string name="finding_attestation_incomplete_body">This phone\'s hardware check does not say whether the bootloader is locked or whether the system is verified, so neither can be confirmed. A phone that follows Android\'s rules always says both. A maker\'s error can cause this; so can a modified system.</string>
     <string name="finding_attestation_forged_title">Hardware check tampered with</string>
     <string name="finding_attestation_forged_body">This phone\'s hardware check was changed after the phone\'s secure hardware made it, or it answers another request than Datapavan\'s. Something on this phone is interfering with the check, so Datapavan does not use what it reports. Treat this as a serious warning: the system may have been changed to hide its state.</string>
+    <string name="finding_attestation_software_answer_title">Hardware check answered by software</string>
+    <string name="finding_attestation_software_answer_body">This phone has secure hardware for its keys, but its hardware check came from software, which the system controls. A modified system can answer this way to hide an unlocked bootloader; so can a fault in the phone\'s keystore. The bootloader and system state cannot be confirmed. Treat this as a serious warning.</string>
+    <string name="finding_attestation_public_root_title">Hardware check signed with a public key</string>
+    <string name="finding_attestation_public_root_body">This phone\'s hardware check claims to come from secure hardware, but it is signed with a key that is published with Android\'s source code, so anyone could have made it. Datapavan does not use what it reports. A modified system can do this; so can an emulator.</string>
+    <string name="finding_attestation_broken_title">Hardware check broken</string>
+    <string name="finding_attestation_broken_body">The certificates of this phone\'s hardware check do not fit together, so the check proves nothing about the bootloader or the system. A sound phone never answers this way; a modified system or a fault in the phone\'s keystore can.</string>
+    <string name="finding_attestation_keys_unavailable_title">Hardware check waiting for Google</string>
+    <string name="finding_attestation_keys_unavailable_body">This phone\'s secure hardware has no key for the check right now. Android gets these keys from Google over the internet, and they last about two weeks. This phone has most likely not reached Google lately, for example because its network blocks Google. Datapavan never connects itself. The check works again once the phone has reached Google. Until then, the bootloader and system state cannot be confirmed; on its own, this does not mean that the phone was changed.</string>
     <string name="finding_attestation_out_of_date_title">Hardware check out of date</string>
     <string name="finding_attestation_out_of_date_body">A certificate in this phone\'s hardware check is not valid on the date the phone shows, so the check cannot be confirmed. A wrong date on the phone is the usual cause: set the right date and open Datapavan again.</string>
     <string name="finding_attestation_failed_title">Hardware check failed</string>

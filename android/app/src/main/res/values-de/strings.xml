@@ -11,6 +11,9 @@
     <string name="device_integrity_ok">Hardware-Prüfung, signiert mit Googles Attestierungsschlüssel: Der Bootloader ist gesperrt und das System ist verifiziert.</string>
     <string name="device_patch">Sicherheitspatch: %1$s</string>
     <string name="device_integrity_failed">Die Hardware-Prüfung ist auf diesem Telefon fehlgeschlagen.</string>
+    <string name="device_integrity_waiting">Die Hardware-Prüfung wartet darauf, dass dieses Telefon Google erreicht.</string>
+    <string name="device_revocation_list">Geprüft mit Googles Liste widerrufener Schlüssel vom %1$s.</string>
+    <string name="device_revocation_list_old">Googles hier verwendete Liste widerrufener Schlüssel stammt vom %1$s, also von vor mehr als drei Monaten; ein seither widerrufener Schlüssel würde daher nicht erkannt. Importieren Sie ein neueres Datenpaket, um sie zu aktualisieren.</string>
     <string name="device_boot_key">Schlüssel für den verifizierten Start: %1$s</string>
     <string name="device_patch_system">Sicherheitspatch laut System: %1$s</string>
     <string name="device_vendor_patch">Sicherheitspatch der Zulieferer: %1$s</string>
@@ -239,10 +242,8 @@
     <string name="finding_usb_debugging_body">Ein per Kabel verbundener Computer kann Apps installieren und Daten lesen, sobald Sie seinen Schlüssel akzeptieren. Schalten Sie es aus, wenn Sie es nicht brauchen.</string>
     <string name="finding_old_patch_title">Sicherheitsupdates sind alt</string>
     <string name="finding_old_patch_body">Der letzte Sicherheitspatch dieses Telefons ist über ein Jahr alt; bekannte Schwachstellen sind nicht behoben.</string>
-    <string name="finding_old_vendor_patch_title">Sicherheitsupdates der Zulieferer sind alt</string>
-    <string name="finding_old_vendor_patch_body">Die Teile der Software dieses Telefons, die von seinen Chip- und Hardware-Zulieferern stammen, wurden zuletzt vor mehr als einem Jahr gepatcht. Bekannte Schwachstellen darin sind möglicherweise nicht behoben.</string>
     <string name="finding_software_only_title">Keine Hardware-Prüfung verfügbar</string>
-    <string name="finding_software_only_body">Dieses Telefon bestätigt nur per Software, die Hardware kann den Systemzustand also nicht bestätigen. Auf Emulatoren ist das normal.</string>
+    <string name="finding_software_only_body">Die Hardware-Prüfung dieses Telefons stammt von Software, die das System kontrolliert, daher kann sie weder Bootloader noch System bestätigen. Auf Emulatoren und auf Telefonen ohne sichere Hardware für Schlüssel ist das normal; auch ein verändertes System kann so antworten.</string>
     <string name="finding_attestation_revoked_title">Schlüssel der Hardware-Prüfung widerrufen</string>
     <string name="finding_attestation_revoked_body">Google hat einen Schlüssel der Hardware-Prüfung dieses Telefons widerrufen, zum Beispiel weil er öffentlich geworden ist. Der gemeldete Zustand von Bootloader und System kann gefälscht sein.</string>
     <string name="finding_attestation_unconfirmed_title">Hardware-Prüfung nicht bestätigt</string>
@@ -251,6 +252,14 @@
     <string name="finding_attestation_incomplete_body">Die Hardware-Prüfung dieses Telefons gibt weder an, ob der Bootloader gesperrt ist, noch, ob das System verifiziert ist, daher lässt sich keines von beiden bestätigen. Ein Telefon, das sich an die Regeln von Android hält, gibt immer beides an. Ein Fehler des Herstellers kann die Ursache sein; ebenso ein verändertes System.</string>
     <string name="finding_attestation_forged_title">Hardware-Prüfung manipuliert</string>
     <string name="finding_attestation_forged_body">Die Hardware-Prüfung dieses Telefons wurde verändert, nachdem die sichere Hardware des Telefons sie erstellt hat, oder sie beantwortet eine andere Anfrage als die von Datapavan. Etwas auf diesem Telefon greift in die Prüfung ein, daher verwendet Datapavan nicht, was sie meldet. Nehmen Sie diese Warnung ernst: Das System wurde möglicherweise verändert, um seinen Zustand zu verbergen.</string>
+    <string name="finding_attestation_software_answer_title">Hardware-Prüfung von Software beantwortet</string>
+    <string name="finding_attestation_software_answer_body">Dieses Telefon hat sichere Hardware für seine Schlüssel, aber seine Hardware-Prüfung stammt von Software, die das System kontrolliert. Ein verändertes System kann so antworten, um einen entsperrten Bootloader zu verbergen; ebenso ein Fehler im Schlüsselspeicher des Telefons. Der Zustand von Bootloader und System lässt sich nicht bestätigen. Nehmen Sie diese Warnung ernst.</string>
+    <string name="finding_attestation_public_root_title">Hardware-Prüfung mit öffentlichem Schlüssel signiert</string>
+    <string name="finding_attestation_public_root_body">Die Hardware-Prüfung dieses Telefons gibt an, von sicherer Hardware zu stammen, ist aber mit einem Schlüssel signiert, der mit dem Quellcode von Android veröffentlicht ist, daher hätte jeder sie erstellen können. Datapavan verwendet nicht, was sie meldet. Ein verändertes System kann das tun; ebenso ein Emulator.</string>
+    <string name="finding_attestation_broken_title">Hardware-Prüfung fehlerhaft</string>
+    <string name="finding_attestation_broken_body">Die Zertifikate der Hardware-Prüfung dieses Telefons passen nicht zusammen, daher beweist die Prüfung nichts über Bootloader oder System. Ein intaktes Telefon antwortet nie so; ein verändertes System oder ein Fehler im Schlüsselspeicher des Telefons kann zu dieser Antwort führen.</string>
+    <string name="finding_attestation_keys_unavailable_title">Hardware-Prüfung wartet auf Google</string>
+    <string name="finding_attestation_keys_unavailable_body">Die sichere Hardware dieses Telefons hat gerade keinen Schlüssel für die Prüfung. Android bezieht diese Schlüssel über das Internet von Google, und sie gelten etwa zwei Wochen. Dieses Telefon hat Google wahrscheinlich in letzter Zeit nicht erreicht, zum Beispiel weil sein Netzwerk Google sperrt. Datapavan selbst stellt nie eine Verbindung her. Die Prüfung funktioniert wieder, sobald das Telefon Google erreicht hat. Bis dahin lässt sich der Zustand von Bootloader und System nicht bestätigen; für sich allein bedeutet das nicht, dass das Telefon verändert wurde.</string>
     <string name="finding_attestation_out_of_date_title">Hardware-Prüfung zeitlich ungültig</string>
     <string name="finding_attestation_out_of_date_body">Ein Zertifikat in der Hardware-Prüfung dieses Telefons ist für das vom Telefon angezeigte Datum nicht gültig, daher lässt sich die Prüfung nicht bestätigen. Die übliche Ursache ist ein falsches Datum auf dem Telefon: Stellen Sie das richtige Datum ein und öffnen Sie Datapavan erneut.</string>
     <string name="finding_attestation_failed_title">Hardware-Prüfung fehlgeschlagen</string>

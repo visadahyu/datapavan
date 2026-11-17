@@ -25,7 +25,7 @@ class HardwareCheckTest {
         }
 
     private val google = File("../../data/attestation/google-roots.pem").inputStream().use { roots ->
-        AttestationChain.load(roots, "".byteInputStream())
+        AttestationChain.load(roots, "".byteInputStream(), "retrieved: 2026-10-29T15:10:29Z\n".byteInputStream())
     }
 
     private val sony = corpus("sony-xperia10-iii/sdk33/TEE_EC.pem")
@@ -91,6 +91,7 @@ class HardwareCheckTest {
         assertEquals(AttestationTrust.GOOGLE_ROOT, result.integrity?.trust)
         assertEquals(true, result.integrity?.deviceLocked)
         assertEquals("0102", result.integrity?.verifiedBootKey)
+        assertEquals(java.time.LocalDate.of(2026, 10, 29), result.integrity?.revocationListDate)
         assertNull(result.failure)
         assertEquals(keystore.generated, keystore.deleted)
         assertTrue(keystore.aliases().isEmpty())

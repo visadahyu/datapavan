@@ -128,11 +128,53 @@ class RulesTest {
     }
 
     @Test
-    fun `hardware attestation that Google does not vouch for is unconfirmed`() {
-        for (trust in listOf(AttestationTrust.OTHER_ROOT, AttestationTrust.BROKEN_CHAIN)) {
-            val integrity = Integrity(1, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_608, trust = trust)
-            assertEquals(listOf(FindingKind.ATTESTATION_UNCONFIRMED), Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610))
+    fun `hardware attestation that Google does not vouch for is unconfirmed, or broken`() {
+        val integrity = Integrity(1, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_608, trust = AttestationTrust.OTHER_ROOT)
+        assertEquals(listOf(FindingKind.ATTESTATION_UNCONFIRMED), Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610))
+        val broken = integrity.copy(trust = AttestationTrust.BROKEN_CHAIN)
+        assertEquals(listOf(FindingKind.ATTESTATION_BROKEN), Rules.forDevice(device(integrity = broken), nowYearMonth = 202_610))
+    }
+
+    @Test
+    fun `a hardware claim under AOSP's published software root is reported alone`() {
+        // Anyone can sign under that root: nothing the claim says is used, not even its unlocked bootloader.
+        val integrity = Integrity(1, deviceLocked = false, verifiedBoot = 2, osPatchLevel = 201_001, trust = AttestationTrust.SOFTWARE_ROOT)
+        assertEquals(listOf(FindingKind.ATTESTATION_PUBLIC_ROOT), Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610))
+    }
+
+    @Test
+    fun `a software answer on a phone with secure hardware for keys is as loud as what it could hide`() {
+        // The third review's probe: a hooked keystore answers in software, with the app's challenge and the
+        // TEE's own public key, under a chain it signs itself or under AOSP's software root. Neither is forged.
+        val unlocked = Integrity(1, deviceLocked = false, verifiedBoot = 2, osPatchLevel = 202_608, trust = AttestationTrust.GOOGLE_ROOT)
+        val worst = { facts: DeviceFacts -> Rules.forDevice(facts, nowYearMonth = 202_610).minOf { it.severity } }
+        val withHardware = device(integrity = unlocked).copy(hardwareKeystore = true)
+        assertEquals(Severity.HIGH, worst(withHardware))
+        for (trust in listOf(AttestationTrust.BROKEN_CHAIN, AttestationTrust.SOFTWARE_ROOT, AttestationTrust.OTHER_ROOT)) {
+            val hooked = withHardware.copy(integrity = unlocked.copy(securityLevel = 0, trust = trust))
+            assertEquals(listOf(FindingKind.ATTESTATION_SOFTWARE_ANSWER), Rules.forDevice(hooked, nowYearMonth = 202_610))
+            assertEquals(Severity.HIGH, worst(hooked))
         }
+    }
+
+    @Test
+    fun `a software answer is judged by its chain where the phone declares no secure hardware`() {
+        val software = Integrity(0, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_608, trust = AttestationTrust.SOFTWARE_ROOT)
+        assertEquals(listOf(FindingKind.INTEGRITY_SOFTWARE_ONLY), Rules.forDevice(device(integrity = software), nowYearMonth = 202_610))
+        for ((trust, finding) in listOf(
+            AttestationTrust.BROKEN_CHAIN to FindingKind.ATTESTATION_BROKEN,
+            AttestationTrust.OTHER_ROOT to FindingKind.ATTESTATION_UNCONFIRMED,
+            AttestationTrust.REVOKED to FindingKind.ATTESTATION_REVOKED,
+        )) {
+            assertEquals(listOf(finding), Rules.forDevice(device(integrity = software.copy(trust = trust)), nowYearMonth = 202_610))
+        }
+    }
+
+    @Test
+    fun `a phone waiting for keys from Google is told apart from a failed check`() {
+        val waiting = DeviceFacts(false, false, emptyList(), vpnActive = false, integrity = null, integrityFailure = IntegrityFailure.KEYS_UNAVAILABLE)
+        assertEquals(listOf(FindingKind.ATTESTATION_KEYS_UNAVAILABLE), Rules.forDevice(waiting, nowYearMonth = 202_610))
+        assertEquals(Severity.MEDIUM, FindingKind.ATTESTATION_KEYS_UNAVAILABLE.severity)
     }
 
     @Test
@@ -151,13 +193,11 @@ class RulesTest {
     }
 
     @Test
-    fun `an old vendor patch is a finding of its own`() {
+    fun `a vendor patch level is shown, not judged`() {
+        // A Pixel 3 in Google's test data, patched in August 2019, still stated its vendor level as September
+        // 2018: a phone can patch its vendor image and leave the level behind.
         val integrity = Integrity(1, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_608, trust = AttestationTrust.GOOGLE_ROOT)
-        assertEquals(
-            listOf(FindingKind.OLD_VENDOR_PATCH),
-            Rules.forDevice(device(integrity = integrity.copy(vendorPatchLevel = 202_509)), nowYearMonth = 202_610),
-        )
-        assertEquals(emptyList<FindingKind>(), Rules.forDevice(device(integrity = integrity.copy(vendorPatchLevel = 202_510)), nowYearMonth = 202_610))
+        assertEquals(emptyList<FindingKind>(), Rules.forDevice(device(integrity = integrity.copy(vendorPatchLevel = 202_001)), nowYearMonth = 202_610))
     }
 
     @Test
@@ -188,13 +228,7 @@ class RulesTest {
 
     @Test
     fun `software attestation without the bootloader state is reported only as software`() {
-        val integrity = Integrity(0, deviceLocked = null, verifiedBoot = null, osPatchLevel = null, trust = AttestationTrust.OTHER_ROOT)
-        assertEquals(listOf(FindingKind.INTEGRITY_SOFTWARE_ONLY), Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610))
-    }
-
-    @Test
-    fun `software attestation is reported only as such, whatever its chain`() {
-        val integrity = Integrity(0, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_608, trust = AttestationTrust.OTHER_ROOT)
+        val integrity = Integrity(0, deviceLocked = null, verifiedBoot = null, osPatchLevel = null, trust = AttestationTrust.SOFTWARE_ROOT)
         assertEquals(listOf(FindingKind.INTEGRITY_SOFTWARE_ONLY), Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610))
     }
 

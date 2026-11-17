@@ -11,6 +11,9 @@
     <string name="device_integrity_ok">硬件检查（由 Google 的认证密钥签名）：引导加载程序已锁定，系统已通过验证。</string>
     <string name="device_patch">安全补丁：%1$s</string>
     <string name="device_integrity_failed">此手机的硬件检查失败。</string>
+    <string name="device_integrity_waiting">硬件检查正在等待此手机连接到 Google。</string>
+    <string name="device_revocation_list">已对照 Google 截至 %1$s 的已吊销密钥列表进行检查。</string>
+    <string name="device_revocation_list_old">此处使用的 Google 已吊销密钥列表截至 %1$s，已超过三个月，因此此后被吊销的密钥不会被发现。请导入较新的数据包来更新它。</string>
     <string name="device_boot_key">验证启动密钥：%1$s</string>
     <string name="device_patch_system">安全补丁（由系统声明）：%1$s</string>
     <string name="device_vendor_patch">供应商安全补丁：%1$s</string>
@@ -231,10 +234,8 @@
     <string name="finding_usb_debugging_body">您接受电脑的密钥后，通过数据线连接的电脑就可以安装应用并读取数据。不需要时，请将其关闭。</string>
     <string name="finding_old_patch_title">安全更新太旧</string>
     <string name="finding_old_patch_body">此手机上最近一次安全补丁已超过一年，因此已知漏洞没有修复。</string>
-    <string name="finding_old_vendor_patch_title">供应商安全更新太旧</string>
-    <string name="finding_old_vendor_patch_body">此手机软件中来自芯片和硬件供应商的部分，最近一次打补丁已超过一年。其中的已知漏洞可能没有修复。</string>
     <string name="finding_software_only_title">没有可用的硬件检查</string>
-    <string name="finding_software_only_body">此手机只在软件层面提供认证，因此硬件无法确认系统状态。这在模拟器上是正常的。</string>
+    <string name="finding_software_only_body">此手机的硬件检查来自软件，而软件受系统控制，因此无法确认引导加载程序或系统。这在模拟器上以及没有用于密钥的安全硬件的手机上是正常的；修改过的系统也可能这样回应。</string>
     <string name="finding_attestation_revoked_title">硬件检查密钥已被吊销</string>
     <string name="finding_attestation_revoked_body">Google 已吊销此手机硬件检查中的一个密钥，例如因为该密钥已泄露。检查报告的引导加载程序和系统状态可能是伪造的。</string>
     <string name="finding_attestation_unconfirmed_title">硬件检查未得到确认</string>
@@ -243,6 +244,14 @@
     <string name="finding_attestation_incomplete_body">此手机的硬件检查没有说明引导加载程序是否已锁定，也没有说明系统是否已通过验证，因此两者都无法确认。遵循 Android 规则的手机总会说明这两项。厂商的错误可能导致这种情况；修改过的系统也可能如此。</string>
     <string name="finding_attestation_forged_title">硬件检查遭到篡改</string>
     <string name="finding_attestation_forged_body">此手机的硬件检查在手机的安全硬件生成之后被更改过，或者它回应的不是 Datapavan 的请求，而是另一个请求。此手机上有某种东西在干扰检查，因此 Datapavan 不使用检查报告的内容。请把这当作严重警告：系统可能已被修改，以隐藏其状态。</string>
+    <string name="finding_attestation_software_answer_title">硬件检查由软件回应</string>
+    <string name="finding_attestation_software_answer_body">此手机有用于其密钥的安全硬件，但其硬件检查来自软件，而软件受系统控制。修改过的系统可能这样回应，以隐藏已解锁的引导加载程序；手机密钥库的故障也可能如此。无法确认引导加载程序和系统状态。请把这当作严重警告。</string>
+    <string name="finding_attestation_public_root_title">硬件检查使用已公开的密钥签名</string>
+    <string name="finding_attestation_public_root_body">此手机的硬件检查声称来自安全硬件，但它使用随 Android 源代码一起公开的密钥签名，因此任何人都可能生成它。Datapavan 不使用检查报告的内容。修改过的系统可能这样做；模拟器也可能如此。</string>
+    <string name="finding_attestation_broken_title">硬件检查已损坏</string>
+    <string name="finding_attestation_broken_body">此手机硬件检查中的证书彼此对不上，因此该检查无法证明引导加载程序或系统的任何情况。正常的手机绝不会这样回应；修改过的系统或手机密钥库的故障则可能如此。</string>
+    <string name="finding_attestation_keys_unavailable_title">硬件检查正在等待 Google</string>
+    <string name="finding_attestation_keys_unavailable_body">此手机的安全硬件目前没有用于此检查的密钥。Android 通过互联网从 Google 获取这些密钥，它们的有效期约为两周。此手机很可能最近没有连接到 Google，例如因为它的网络屏蔽了 Google。Datapavan 本身从不建立连接。手机连接到 Google 之后，检查就会恢复。在此之前，无法确认引导加载程序和系统状态；仅凭这一点，并不意味着手机被改动过。</string>
     <string name="finding_attestation_out_of_date_title">硬件检查不在有效期内</string>
     <string name="finding_attestation_out_of_date_body">此手机硬件检查中的一个证书在手机显示的日期无效，因此无法确认该检查。通常的原因是手机上的日期不对：请设置正确的日期，然后重新打开 Datapavan。</string>
     <string name="finding_attestation_failed_title">硬件检查失败</string>
