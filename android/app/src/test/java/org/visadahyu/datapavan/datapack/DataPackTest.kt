@@ -67,14 +67,14 @@ class DataPackTest {
     }
 
     /** A pack holding [files], by path. */
-    private fun pack(sequence: Int, files: Map<String, String>): DataPack {
+    private fun pack(sequence: Int, files: Map<String, String>, date: String = "2026-11-17"): DataPack {
         var bytes = ByteArray(0)
         val ranges = files.mapValues { (_, text) ->
             val start = bytes.size
             bytes += text.toByteArray()
             start until bytes.size
         }
-        return DataPack(bytes, 0, sequence, "2026-11-17", emptyList(), emptyList(), ranges)
+        return DataPack(bytes, 0, sequence, date, emptyList(), emptyList(), ranges)
     }
 
     @Test
@@ -114,8 +114,11 @@ class DataPackTest {
         }
         // A list dated after its pack was made (2026-11-17, as these packs are) would stay fresh for ever.
         val later = dated + ("attestation/SOURCE" to "retrieved: 2026-11-18\n")
-        assertEquals(PackRefusal.UNDATED_DATASET, DataPackRules.refusal(pack(4, later), pack(3)))
+        assertEquals(PackRefusal.DATED_AFTER_PACK, DataPackRules.refusal(pack(4, later), pack(3)))
         assertNull(DataPackRules.refusal(pack(4, dated + ("attestation/SOURCE" to "retrieved: 2026-11-17\n")), pack(3)))
+        // A header date that the engine lets through but no calendar has dates nothing.
+        assertEquals(PackRefusal.DATED_AFTER_PACK, DataPackRules.refusal(pack(4, dated, date = "2026-02-31"), pack(3)))
+        assertNull(DataPackRules.refusal(pack(4, mapOf("exodus/trackers.tsv" to "x"), date = "2026-02-31"), pack(3)))
         // A pack without the dataset leaves the APK's in use; other datasets' SOURCE is not judged here.
         assertNull(DataPackRules.refusal(pack(4, mapOf("exodus/trackers.tsv" to "x")), pack(3)))
         // An older pack is refused as older first.

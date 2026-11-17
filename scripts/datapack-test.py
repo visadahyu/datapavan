@@ -9,8 +9,11 @@ same bytes as `signify -S -e` would; CI has OpenSSL but not signify.
     scripts/datapack-test.py PAYLOAD PACK [--sequence N] [--date YYYY-MM-DD] [--corrupt]
 
 --sequence replaces the payload's sequence number, so that a test can make a pack newer than the
-app's own, and --date its date, for example to make the data look old. --corrupt changes the last
-byte after signing, so that the signature no longer matches.
+app's own, and --date its date, for example to make the data look old. Since no pack can hold data
+fetched after it was made, and the app refuses one whose attestation list says so (ADR 0040), --date
+also moves back to that day every dataset's SOURCE whose retrieved: date is later, in place and at the
+same length, so that the files keep their sizes. --corrupt changes the last byte after signing, so that
+the signature no longer matches.
 """
 import argparse
 import base64
@@ -46,6 +49,26 @@ def sign(message, seed):
         ).stdout
 
 
+def backdate(header, files, date):
+    """The files after the header, with each SOURCE's retrieved: date later than [date] set to it."""
+    if not re.fullmatch(rb"[0-9]{4}-[0-9]{2}-[0-9]{2}", date):
+        sys.exit(f"--date {date.decode()}: not YYYY-MM-DD")
+    files = bytearray(files)
+    at = 0
+    for name, size in re.findall(rb"^file (\S+) ([0-9]+)$", header, flags=re.M):
+        size = int(size)
+        if name.endswith(b"/SOURCE"):
+            text = bytes(files[at:at + size])
+            line = re.search(rb"^retrieved: ([0-9]{4}-[0-9]{2}-[0-9]{2})", text, flags=re.M)
+            if line and line.group(1) > date:
+                start = at + line.start(1)
+                files[start:start + len(date)] = date
+        at += size
+    if at != len(files):
+        sys.exit("the payload's files do not add up to its header")
+    return bytes(files)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("payload", type=pathlib.Path)
@@ -65,6 +88,8 @@ def main():
                                     header, count=1, flags=re.M)
             if count != 1:
                 sys.exit(f"{args.payload}: no {field} line")
+    if args.date is not None:
+        rest = backdate(header, rest, args.date.encode())
     payload = header + end + rest
     number, seed = secret_key()
     signature = sign(payload, seed)

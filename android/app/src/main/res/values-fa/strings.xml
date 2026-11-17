@@ -330,6 +330,7 @@
     <string name="data_refused_unsupported">این بسته به نسخه تازه‌تری از برنامه نیاز دارد.</string>
     <string name="data_refused_invalid">این بسته خراب است.</string>
     <string name="data_refused_undated">این بسته نمی‌گوید فهرست کلیدهای باطل آن کی تهیه شده است، پس برنامه نتوانست بفهمد این فهرست چقدر قدیمی است. این بسته وارد نشد.</string>
+    <string name="data_refused_list_after_pack">تاریخ فهرست کلیدهای باطل این بسته بعد از روزی است که خود بسته تهیه شده است؛ این ممکن نیست، پس برنامه نتوانست بفهمد این فهرست چقدر قدیمی است. این بسته وارد نشد.</string>
     <string name="data_refused_too_large">این فایل برای یک بسته داده بیش از حد بزرگ است.</string>
     <string name="data_refused_not_newer">این بسته از بسته فعلی تازه‌تر نیست.</string>
     <string name="data_refused_unreadable">فایل خوانده نشد.</string>

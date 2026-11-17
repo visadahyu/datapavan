@@ -332,6 +332,7 @@
     <string name="data_refused_unsupported">Для этого пакета нужна более новая версия Datapavan.</string>
     <string name="data_refused_invalid">Этот пакет повреждён.</string>
     <string name="data_refused_undated">В этом пакете не указано, когда был составлен его список отозванных ключей, поэтому Datapavan не смог определить, насколько этот список старый. Пакет не импортирован.</string>
+    <string name="data_refused_list_after_pack">В этом пакете список отозванных ключей датирован более поздним днём, чем день создания самого пакета, чего быть не может, поэтому Datapavan не смог определить, насколько этот список старый. Пакет не импортирован.</string>
     <string name="data_refused_too_large">Этот файл слишком большой для пакета данных.</string>
     <string name="data_refused_not_newer">Этот пакет не новее используемого.</string>
     <string name="data_refused_unreadable">Не удалось прочитать файл.</string>

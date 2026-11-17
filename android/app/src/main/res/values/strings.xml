@@ -355,6 +355,7 @@
     <string name="data_refused_unsupported">This pack needs a newer version of Datapavan.</string>
     <string name="data_refused_invalid">This pack is damaged.</string>
     <string name="data_refused_undated">This pack does not say when its list of revoked keys was made, so Datapavan could not tell how old the list is. The pack was not imported.</string>
+    <string name="data_refused_list_after_pack">This pack dates its list of revoked keys after the day the pack itself was made, which cannot be, so Datapavan could not tell how old the list is. The pack was not imported.</string>
     <string name="data_refused_too_large">This file is too large to be a data pack.</string>
     <string name="data_refused_not_newer">This pack is not newer than the one in use.</string>
     <string name="data_refused_unreadable">The file could not be read.</string>

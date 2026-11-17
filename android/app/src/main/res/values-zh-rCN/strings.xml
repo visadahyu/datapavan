@@ -322,6 +322,7 @@
     <string name="data_refused_unsupported">此数据包需要较新版本的 Datapavan。</string>
     <string name="data_refused_invalid">此数据包已损坏。</string>
     <string name="data_refused_undated">此数据包没有说明其中的已吊销密钥列表是何时生成的，因此 Datapavan 无法判断该列表有多旧。此数据包未导入。</string>
+    <string name="data_refused_list_after_pack">此数据包将其中的已吊销密钥列表的日期标为晚于数据包本身的生成日期，这是不可能的，因此 Datapavan 无法判断该列表有多旧。此数据包未导入。</string>
     <string name="data_refused_too_large">此文件太大，不可能是数据包。</string>
     <string name="data_refused_not_newer">此数据包并不比当前使用的数据包新。</string>
     <string name="data_refused_unreadable">无法读取此文件。</string>

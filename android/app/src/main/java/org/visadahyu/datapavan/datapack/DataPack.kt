@@ -98,6 +98,9 @@ enum class PackRefusal(internal val code: Int) {
 
     /** A dataset whose age the app shows has no date in its SOURCE. */
     UNDATED_DATASET(103),
+
+    /** A dataset whose age the app shows is dated after the pack that holds it was made. */
+    DATED_AFTER_PACK(104),
     ;
 
     internal companion object {
@@ -172,24 +175,25 @@ internal object DataPackRules {
     /**
      * A pack can only replace an older one, so an old pack with known problems cannot return. A pack must also
      * date each dataset whose age the app shows: the attestation revocation list, which the app calls old after
-     * 90 days (ADR 0040), and could not tell from a fresh one without its date. The date cannot be after the
-     * pack's own signed date, since no list was fetched after its pack was made: a later date would keep the
-     * list fresh for ever.
+     * 90 days (ADR 0040), and could not tell from a fresh one without its date ([PackRefusal.UNDATED_DATASET]).
+     * The date cannot be after the pack's own signed date, since no list was fetched after its pack was made: a
+     * later date would keep the list fresh for ever ([PackRefusal.DATED_AFTER_PACK]). The project's own pack
+     * build refuses to make such a pack (`:app:dataPayload`, docs/DATA-PACKS.md), so this rule cannot refuse a
+     * pack the project published.
      */
-    fun refusal(candidate: DataPack, active: DataPack): PackRefusal? = when {
-        candidate.sequence <= active.sequence -> PackRefusal.NOT_NEWER
-        DATED_DATASETS.any { it in candidate.datasets && !datedBy(candidate, it) } -> PackRefusal.UNDATED_DATASET
-        else -> null
-    }
-
-    private fun datedBy(pack: DataPack, dataset: String): Boolean {
-        val retrieved = pack.retrieved(dataset) ?: return false
+    fun refusal(candidate: DataPack, active: DataPack): PackRefusal? {
+        if (candidate.sequence <= active.sequence) return PackRefusal.NOT_NEWER
+        val held = DATED_DATASETS.filter { it in candidate.datasets }
+        val dates = held.mapNotNull { candidate.retrieved(it) }
+        if (dates.size < held.size) return PackRefusal.UNDATED_DATASET
+        // The engine refuses a header date that is not YYYY-MM-DD; one that is no day of the calendar cannot
+        // date the pack either, and nothing can be compared with it.
         val made = try {
-            LocalDate.parse(pack.date)
+            LocalDate.parse(candidate.date)
         } catch (_: DateTimeParseException) {
-            return false
+            return if (dates.isEmpty()) null else PackRefusal.DATED_AFTER_PACK
         }
-        return !retrieved.isAfter(made)
+        return if (dates.any { it.isAfter(made) }) PackRefusal.DATED_AFTER_PACK else null
     }
 
     /** The datasets whose age the app shows from their SOURCE. */

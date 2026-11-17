@@ -4,8 +4,10 @@
 # imports them through the system file picker: a damaged pack must be refused, a newer one used,
 # the same one again refused as not newer, and the imported pack must still be in use after a
 # restart. The newer pack carries an old date, so the overview must warn that the data is old, and
-# the data sources screen must show the fingerprint that sha256sum gives. The packs and the imported
-# data are removed afterwards.
+# the data sources screen must show the fingerprint that sha256sum gives; its datasets' retrieved:
+# dates are moved back to that date (scripts/datapack-test.py), since the app refuses a pack whose
+# list of revoked keys is dated after the pack (ADR 0040). The packs and the imported data are
+# removed afterwards.
 #
 # Checked on emulators. On a Galaxy A40 (Android 11), a file pushed over adb stays "pending" in the
 # media store, so the file picker greys it out and the check cannot pick it; a file saved by a browser

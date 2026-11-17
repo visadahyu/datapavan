@@ -23,6 +23,7 @@ class DataSourcesTest {
             PackRefusal.UNREADABLE to R.string.data_refused_unreadable,
             // Signed and whole, so not "damaged": it says the list's date is missing.
             PackRefusal.UNDATED_DATASET to R.string.data_refused_undated,
+            PackRefusal.DATED_AFTER_PACK to R.string.data_refused_list_after_pack,
         )
         assertEquals(PackRefusal.entries.toSet(), expected.keys)
         assertEquals(expected, PackRefusal.entries.associateWith(::refusalText))

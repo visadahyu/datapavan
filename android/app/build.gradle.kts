@@ -1,5 +1,7 @@
 import com.android.build.api.artifact.SingleArtifact
 import com.android.build.api.variant.BuiltArtifactsLoader
+import java.time.LocalDate
+import java.time.format.DateTimeParseException
 import java.util.zip.ZipFile
 import javax.inject.Inject
 import javax.xml.parsers.DocumentBuilderFactory
@@ -293,6 +295,15 @@ abstract class BundledDataTask : DefaultTask() {
     @get:Input
     abstract val extraKeys: ListProperty<String>
 
+    /**
+     * Whether this is a pack to publish (`dataPayload`), which must be dated no earlier than any dataset it holds:
+     * the app refuses an imported pack whose attestation list is dated after the pack (ADR 0040), and no pack can
+     * have been made before the data in it was fetched. The APK's own pack is not held to it, since `data/PACK`'s
+     * date is the last published pack's, while the datasets are updated between releases.
+     */
+    @get:Input
+    abstract val publishing: Property<Boolean>
+
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
 
@@ -327,10 +338,35 @@ abstract class BundledDataTask : DefaultTask() {
         files.firstOrNull { (name, _) -> !path.matches(name) || name.length > 128 }
             ?.let { throw GradleException("data/${it.first}: the name cannot go into a data pack") }
 
+        val date = single("date", Regex("[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])"))
+        if (publishing.get()) {
+            val made = try {
+                LocalDate.parse(date)
+            } catch (_: DateTimeParseException) {
+                throw GradleException("data/PACK: the date $date is no day of the calendar")
+            }
+            // As the app reads a SOURCE (DataPackRules.retrieved): the date that starts its first retrieved: line.
+            val late = files.filter { (name, _) -> name.endsWith("/SOURCE") }.mapNotNull { (name, file) ->
+                val line = file.readLines().firstOrNull { it.startsWith("retrieved:") }
+                val retrieved = line?.substringAfter(':')?.trim()?.take(10)
+                    ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                when {
+                    retrieved == null -> "data/$name has no retrieved: date"
+                    retrieved.isAfter(made) -> "data/$name was retrieved on $retrieved, after the pack's date $date"
+                    else -> null
+                }
+            }
+            if (late.isNotEmpty()) {
+                throw GradleException(
+                    "This pack cannot be published: ${late.joinToString("; ")}. Set data/PACK's date to the day the " +
+                        "pack is made, and raise its sequence (docs/DATA-PACKS.md, \"Publishing a pack\").",
+                )
+            }
+        }
         val header = buildString {
             append("datapavan-data-pack 1\n")
             append("sequence ${single("sequence", Regex("[1-9][0-9]{0,8}"))}\n")
-            append("date ${single("date", Regex("[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])"))}\n")
+            append("date $date\n")
             keys.forEach { append("key $it\n") }
             revoked.forEach { append("revoked $it\n") }
             files.forEach { (name, file) -> append("file $name ${file.length()}\n") }
@@ -568,6 +604,7 @@ val testDataKey = providers.fileContents(repositoryRoot.file("scripts/testdata/d
 tasks.register<BundledDataTask>("dataPayload") {
     dataDir.set(repositoryRoot.dir("data"))
     extraKeys.set(emptyList())
+    publishing.set(true)
     outputDir.set(layout.buildDirectory.dir("datapack"))
 }
 
@@ -603,6 +640,7 @@ androidComponents {
         val dataTask = tasks.register<BundledDataTask>("bundledData$suffix") {
             dataDir.set(repositoryRoot.dir("data"))
             extraKeys.set(if (variant.buildType == "debug") testDataKey.map(::listOf) else provider { emptyList() })
+            publishing.set(false)
         }
         variant.sources.assets?.addGeneratedSourceDirectory(dataTask, BundledDataTask::outputDir)
 

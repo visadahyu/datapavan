@@ -351,6 +351,7 @@
     <string name="data_refused_unsupported">تحتاج هذه الحزمة إلى إصدار أحدث من Datapavan.</string>
     <string name="data_refused_invalid">هذه الحزمة تالفة.</string>
     <string name="data_refused_undated">لا تذكر هذه الحزمة متى أُعدّت قائمة المفاتيح المُبطَلة فيها، لذا لم يتمكن Datapavan من معرفة عمر القائمة. لم تُستورد الحزمة.</string>
+    <string name="data_refused_list_after_pack">تؤرِّخ هذه الحزمة قائمة المفاتيح المُبطَلة فيها بيومٍ لاحق ليوم إعداد الحزمة نفسها، وهذا غير ممكن، لذا لم يتمكن Datapavan من معرفة عمر القائمة. لم تُستورد الحزمة.</string>
     <string name="data_refused_too_large">هذا الملف أكبر من أن يكون حزمة بيانات.</string>
     <string name="data_refused_not_newer">هذه الحزمة ليست أحدث من الحزمة المستخدمة.</string>
     <string name="data_refused_unreadable">تعذّرت قراءة الملف.</string>

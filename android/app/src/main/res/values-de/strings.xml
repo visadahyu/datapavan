@@ -330,6 +330,7 @@
     <string name="data_refused_unsupported">Dieses Paket braucht eine neuere Version von Datapavan.</string>
     <string name="data_refused_invalid">Dieses Paket ist beschädigt.</string>
     <string name="data_refused_undated">Dieses Paket gibt nicht an, wann seine Liste widerrufener Schlüssel erstellt wurde, daher konnte Datapavan nicht feststellen, wie alt die Liste ist. Das Paket wurde nicht importiert.</string>
+    <string name="data_refused_list_after_pack">Dieses Paket datiert seine Liste widerrufener Schlüssel auf einen Tag nach der Erstellung des Pakets selbst, was nicht sein kann, daher konnte Datapavan nicht feststellen, wie alt die Liste ist. Das Paket wurde nicht importiert.</string>
     <string name="data_refused_too_large">Diese Datei ist zu groß für ein Datenpaket.</string>
     <string name="data_refused_not_newer">Dieses Paket ist nicht neuer als das verwendete.</string>
     <string name="data_refused_unreadable">Die Datei konnte nicht gelesen werden.</string>

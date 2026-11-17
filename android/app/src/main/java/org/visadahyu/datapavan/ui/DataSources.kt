@@ -189,6 +189,7 @@ internal fun refusalText(reason: PackRefusal): Int = when (reason) {
     PackRefusal.UNSUPPORTED_VERSION -> R.string.data_refused_unsupported
     PackRefusal.NOT_PACK, PackRefusal.INVALID_HEADER, PackRefusal.INVALID_KEY -> R.string.data_refused_invalid
     PackRefusal.UNDATED_DATASET -> R.string.data_refused_undated
+    PackRefusal.DATED_AFTER_PACK -> R.string.data_refused_list_after_pack
     PackRefusal.TOO_LARGE -> R.string.data_refused_too_large
     PackRefusal.NOT_NEWER -> R.string.data_refused_not_newer
     PackRefusal.NO_TRUSTED_KEYS -> R.string.data_import_unavailable

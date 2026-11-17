@@ -328,6 +328,7 @@
     <string name="data_refused_unsupported">Este paquete necesita una versión más reciente de Datapavan.</string>
     <string name="data_refused_invalid">Este paquete está dañado.</string>
     <string name="data_refused_undated">Este paquete no indica cuándo se creó su lista de claves revocadas, así que Datapavan no pudo saber qué antigüedad tiene la lista. El paquete no se importó.</string>
+    <string name="data_refused_list_after_pack">Este paquete pone a su lista de claves revocadas una fecha posterior al día en que se creó el propio paquete, lo cual no es posible, así que Datapavan no pudo saber qué antigüedad tiene la lista. El paquete no se importó.</string>
     <string name="data_refused_too_large">Este archivo es demasiado grande para ser un paquete de datos.</string>
     <string name="data_refused_not_newer">Este paquete no es más reciente que el que está en uso.</string>
     <string name="data_refused_unreadable">No se pudo leer el archivo.</string>
