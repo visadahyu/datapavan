@@ -8,6 +8,20 @@
 //! Only the fields the audit needs are decoded. Schema:
 //! <https://source.android.com/docs/security/features/keystore/attestation#schema>
 //!
+//! # Which list a value comes from
+//!
+//! A `KeyDescription` carries two authorization lists. The secure environment that signs the
+//! attestation enforces the entries of `hardwareEnforced` itself; the entries of `softwareEnforced`
+//! are what the operating system states, and a compromised system controls them. A sound trusted
+//! environment or `StrongBox` always puts `rootOfTrust` and `osPatchLevel` in its hardware-enforced
+//! list. So every value is read from one list only, the one the attestation's security level makes
+//! authoritative: the hardware-enforced list for a trusted environment or `StrongBox`, the
+//! software-enforced list for a software attestation, which is only as trustworthy as the system
+//! anyway. A value missing from that list is reported as absent, never taken from the other list,
+//! so that the system cannot fill in a bootloader state that the hardware left out. The security
+//! level is the weaker of `attestationSecurityLevel` and `keyMintSecurityLevel`, as Google's
+//! verifier takes it (`android/keyattestation`, `Verifier.kt`).
+//!
 //! # Encoding
 //!
 //! The schema requires DER, and every element the parser reads must be DER (X.690, section 10):
@@ -43,8 +57,9 @@ const TAG_ROOT_OF_TRUST: u32 = 704;
 /// Context-specific tag of `osPatchLevel` in an `AuthorizationList`.
 const TAG_OS_PATCH_LEVEL: u32 = 706;
 
-/// Where the attested key lives, and so how much the attestation can be trusted.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Where the attested key lives, and so how much the attestation can be trusted. Ordered from the
+/// weakest to the strongest.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SecurityLevel {
     /// Software only: the statement is as trustworthy as the operating system.
     Software,
@@ -81,11 +96,13 @@ pub struct RootOfTrust {
 pub struct KeyDescription {
     /// Attestation format version, e.g. 3 for Keymaster 4 or 400 for `KeyMint` 4.
     pub attestation_version: u32,
-    /// Where the attestation was produced.
+    /// Where the attestation was produced: the weaker of the attestation's and the key's levels.
     pub security_level: SecurityLevel,
-    /// Bootloader state, taken from the hardware-enforced list when present.
+    /// Bootloader state, from the hardware-enforced list unless [`Self::security_level`] is
+    /// [`SecurityLevel::Software`], and then from the software-enforced list; never from the other
+    /// list (see the module documentation).
     pub root_of_trust: Option<RootOfTrust>,
-    /// Operating-system patch level as `YYYYMM`.
+    /// Operating-system patch level as `YYYYMM`, from the same list as [`Self::root_of_trust`].
     pub os_patch_level: Option<u32>,
 }
 
@@ -135,26 +152,39 @@ pub fn parse_key_description(extension: &[u8]) -> Result<KeyDescription, Error> 
     let mut fields = read_one(wrapper)?.contents(SEQUENCE)?;
 
     let attestation_version = fields.required()?.integer()?;
-    let security_level = security_level(fields.required()?.enumerated()?)?;
-    // keyMintVersion and keyMintSecurityLevel: checked, but the audit does not use them.
+    let attestation_level = security_level(fields.required()?.enumerated()?)?;
+    // keyMintVersion: checked, but the audit does not use it.
     fields.required()?.integer()?;
-    self::security_level(fields.required()?.enumerated()?)?;
+    let keymint_level = security_level(fields.required()?.enumerated()?)?;
     // attestationChallenge and uniqueId.
     fields.required()?.expect(OCTET_STRING)?;
     fields.required()?.expect(OCTET_STRING)?;
-    let software = entries(fields.required()?.contents(SEQUENCE)?)?;
-    let hardware = entries(fields.required()?.contents(SEQUENCE)?)?;
+    let software = fields.required()?.contents(SEQUENCE)?;
+    let hardware = fields.required()?.contents(SEQUENCE)?;
     fields.finish()?;
 
-    // The hardware-enforced list is authoritative; software keystores fill only the other one.
-    let root = hardware.root_of_trust.or(software.root_of_trust);
-    let patch = hardware.os_patch_level.or(software.os_patch_level);
+    // A key the attestation calls hardware-backed but whose own level is software (or the other
+    // way round, as on early Pixels, where a software keystore attests keys of an older trusted
+    // environment) is trusted only as far as the weaker of the two.
+    let security_level = attestation_level.min(keymint_level);
+    let (authoritative, other) = match security_level {
+        SecurityLevel::Software => (software, hardware),
+        SecurityLevel::TrustedEnvironment | SecurityLevel::StrongBox => (hardware, software),
+    };
+    // The other list is read only far enough to know that it is well formed.
+    for entry in other {
+        entry?;
+    }
+    let entries = entries(authoritative)?;
 
     Ok(KeyDescription {
         attestation_version,
         security_level,
-        root_of_trust: root.map(root_of_trust).transpose()?,
-        os_patch_level: patch.map(|entry| explicit(entry)?.integer()).transpose()?,
+        root_of_trust: entries.root_of_trust.map(root_of_trust).transpose()?,
+        os_patch_level: entries
+            .os_patch_level
+            .map(|entry| explicit(entry)?.integer())
+            .transpose()?,
     })
 }
 
@@ -743,12 +773,53 @@ mod tests {
         );
     }
 
+    // Which list a value comes from.
+
     #[test]
-    fn reads_software_attestation_from_the_software_list() {
+    fn hardware_backed_attestation_ignores_the_software_list() {
+        // The system can put any rootOfTrust and osPatchLevel in the software-enforced list. Where
+        // the hardware left them out, they stay absent.
+        for (levels, level) in [
+            ((1, 1), SecurityLevel::TrustedEnvironment),
+            ((2, 2), SecurityLevel::StrongBox),
+        ] {
+            let forged = extension(
+                levels,
+                software(vec![root(0xff, 0), patch(202_611)]),
+                hardware(None, None),
+            );
+            assert_eq!(parse(&forged), Ok(description(level, None, None)));
+        }
+    }
+
+    #[test]
+    fn hardware_list_wins_when_both_lists_carry_values() {
+        let both = extension(
+            TEE,
+            software(vec![root(0xff, 0), patch(202_611)]),
+            hardware(Some(root(0x00, 2)), Some(patch(202_301))),
+        );
+        assert_eq!(
+            parse(&both),
+            Ok(description(
+                SecurityLevel::TrustedEnvironment,
+                Some(RootOfTrust {
+                    device_locked: false,
+                    verified_boot: VerifiedBootState::Unverified,
+                }),
+                Some(202_301)
+            ))
+        );
+    }
+
+    #[test]
+    fn software_attestation_reads_only_the_software_list() {
+        // AOSP's software keystore, as on the emulator: everything in the software-enforced list.
+        // Whatever its hardware-enforced list says is no more trustworthy, and is not read.
         let software_only = extension(
             (0, 0),
             software(vec![root(0x00, 2), patch(202_608)]),
-            hardware(None, None),
+            hardware(Some(root(0xff, 0)), Some(patch(202_611))),
         );
         assert_eq!(
             parse(&software_only),
@@ -761,6 +832,30 @@ mod tests {
                 Some(202_608)
             ))
         );
+    }
+
+    #[test]
+    fn security_level_is_the_weaker_of_the_two() {
+        for (levels, expected) in [
+            // A software keystore that attests the keys of an older trusted environment, as the
+            // Pixel XL's (android/keyattestation, testdata/marlin).
+            ((0, 1), SecurityLevel::Software),
+            ((1, 0), SecurityLevel::Software),
+            ((2, 1), SecurityLevel::TrustedEnvironment),
+            ((1, 2), SecurityLevel::TrustedEnvironment),
+            ((2, 2), SecurityLevel::StrongBox),
+        ] {
+            let attestation = extension(
+                levels,
+                software(vec![]),
+                hardware(Some(root(0xff, 0)), Some(patch(202_507))),
+            );
+            assert_eq!(
+                parse(&attestation).map(|d| d.security_level),
+                Ok(expected),
+                "levels {levels:?}"
+            );
+        }
     }
 
     // DER.
@@ -968,6 +1063,13 @@ mod tests {
         let mut patches = hardware(Some(root(0xff, 0)), Some(patch(202_507)));
         patches.push(patch(202_611));
         assert_eq!(parse(&twice(patches)), Err(Error::DuplicateField));
+        // In the list that is not read, it changes nothing.
+        let ignored = extension(
+            TEE,
+            software(vec![root(0x00, 2), root(0x00, 3)]),
+            hardware(Some(root(0xff, 0)), Some(patch(202_507))),
+        );
+        assert_eq!(parse(&ignored), parse(&tee_device()));
     }
 
     #[test]
@@ -1129,10 +1231,11 @@ mod tests {
 
     #[test]
     fn rejects_every_truncation_of_every_element() {
-        // A trusted environment's attestation of an unlocked phone.
+        // A trusted environment's attestation whose software list carries a forged root of trust
+        // and patch level: no cut may bring them in.
         let tee = extension(
             TEE,
-            software(vec![]),
+            software(vec![unread(root(0xff, 0)), unread(patch(202_611))]),
             hardware(Some(root(0x00, 2)), Some(patch(202_301))),
         );
         // A software attestation, with the hardware list of a keystore that attests in software

@@ -54,9 +54,13 @@ data class AppFacts(
     val quietRole: QuietRole? = null,
 )
 
-/** Hardware key attestation, decoded by the Rust engine. Null fields were absent. */
+/**
+ * Hardware key attestation, decoded by the Rust engine. Null fields were absent. With a [securityLevel]
+ * of 1 or 2, [deviceLocked], [verifiedBoot] and [osPatchLevel] come from the list the secure hardware
+ * enforces itself, never from the one the system writes; with 0, everything is the system's word.
+ */
 data class Integrity(
-    /** 0 software, 1 trusted execution environment, 2 secure chip. */
+    /** 0 software, 1 trusted execution environment, 2 secure chip: the weaker of the attestation's and the key's. */
     val securityLevel: Int,
     val deviceLocked: Boolean?,
     /** 0 verified, 1 self-signed, 2 unverified, 3 failed. */

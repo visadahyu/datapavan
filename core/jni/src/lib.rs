@@ -37,7 +37,11 @@ pub extern "system" fn Java_org_visadahyu_datapavan_core_NativeCore_version<'cal
 /// `org.visadahyu.datapavan.core.NativeCore.parseAttestation(byte[])`: decodes the `KeyDescription`
 /// extension of an attestation certificate, exactly as `X509Certificate.getExtensionValue` returns
 /// it. The result is `[attestationVersion, securityLevel, deviceLocked, verifiedBoot, osPatchLevel]`,
-/// with -1 for an absent value; malformed input throws a `RuntimeException`.
+/// with -1 for an absent value; malformed input throws a `RuntimeException`. `securityLevel` is the
+/// weaker of the attestation's and the key's levels. The other three come from the
+/// hardware-enforced list when it is 1 or 2, and from the software-enforced list only when it is 0,
+/// so a value the hardware left out is -1 even where the system wrote one into the other list
+/// (see the engine's `attestation` module).
 // SAFETY: `no_mangle` exports this function under the JNI-mangled name the JVM resolves for
 // `NativeCore.parseAttestation`. The name is unique within this library, and the signature matches
 // the static Kotlin declaration `external fun parseAttestation(extension: ByteArray): LongArray`.
