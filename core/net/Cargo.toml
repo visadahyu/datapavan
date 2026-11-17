@@ -15,11 +15,14 @@ tokio = { version = "1.54.1", default-features = false, features = ["rt", "net",
 # Inflates one block of the organisation table at a time (ADR 0036): pure Rust, MIT.
 miniz_oxide = "0.9.1"
 
-# Read the server name of a QUIC Initial packet (W3, RFC 9001 5): AES removes its header and payload
-# protection, SHA-256 derives its keys. Pure Rust, MIT or Apache-2.0, from RustCrypto. HKDF, and
-# GCM's counter mode without its tag, are a few lines on top (src/quic.rs).
+# Read the server name of a QUIC Initial packet (W3, RFC 9001 5): AES removes its header protection, and
+# under AES-GCM below its payload's; HKDF over SHA-256 derives its keys. Pure Rust, MIT or Apache-2.0, from
+# RustCrypto, all with no default features (no allocator, no random numbers). `hkdf` brings `hmac`, of
+# the same digest traits as `sha2` (digest 0.11); their review is in ADR 0044's note on unit 9b, fix
+# round 2.
 aes = { version = "0.9.4", default-features = false }
 sha2 = { version = "0.11.1", default-features = false }
+hkdf = { version = "0.13.0", default-features = false }
 # AES-GCM's tag for the QUIC Initial and Retry packets that tell a stand-in's answers apart (ADR 0044,
 # unit 9b), and for the hellos that name a flow: RustCrypto's AEAD on the `aes` above, with no default
 # features (no allocator, no random numbers). Apache-2.0 OR MIT. Its review is in ADR 0044's note on

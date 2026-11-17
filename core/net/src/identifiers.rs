@@ -20,18 +20,24 @@
 //! loosely as unit 9 reads them. On other ports a protocol that looks like DNS is read as DNS only where
 //! its answer repeats the query's ID and question (ADR 0044, unit 9b, fix round 1): LLMNR on 5355 does
 //! (RFC 4795 2.1.1), and so does a Multicast DNS responder to a query from any port but 5353, a "legacy
-//! unicast" one (RFC 6762 6.7). the `NetBIOS` name service on 137 does not, its responses holding no
+//! unicast" one (RFC 6762 6.7). The `NetBIOS` name service on 137 does not, its responses holding no
 //! question (RFC 1002 4.2.13), nor Multicast DNS between two queriers on 5353, whose responses hold none
 //! and an ID of zero (RFC 6762 6, 18.1): such datagrams ask nothing, and their stand-ins are bound as
 //! stand-ins without identifiers are.
 //!
 //! An answer is read once ([`Reading`]), whatever the number of stand-ins it is checked for, and opens
-//! at most [`quic::MOST_OPENED`] QUIC packets in all.
+//! at most [`quic::MOST_OPENED`] QUIC packets in all. What costs no packet opened is told first
+//! ([`Reading::tells`]); the engine spends the opens on what is left ([`Reading::opens_for`]).
+//!
+//! What the app asked of every peer is also kept as a fingerprint ([`fingerprint`]), so that an identifier
+//! it sent to two peers is known for one that tells neither apart (ADR 0044, unit 9b, fix round 2).
 //!
 //! The bytes come from any app and any sender, so nothing here may panic or read outside a slice
 //! (`fuzz_targets/identifiers.rs`, `fuzz_targets/quic_answers.rs`).
 
 use std::cell::OnceCell;
+use std::hash::{BuildHasher, Hash, Hasher, RandomState};
+use std::sync::LazyLock;
 
 use crate::{answers, dns, quic};
 
@@ -45,6 +51,10 @@ const NTP_SIZE: usize = 48;
 const NETBIOS: u16 = 137;
 /// Multicast DNS's port (RFC 6762): from it, a querier's responses hold no question.
 const MDNS: u16 = 5353;
+
+/// The keys of this run's fingerprints ([`fingerprint`]): random, so that no one can choose identifiers
+/// whose fingerprints meet.
+static KEYS: LazyLock<RandomState> = LazyLock::new(RandomState::new);
 
 /// One thing an app's datagram asked, which an answer to it carries.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -69,6 +79,46 @@ pub enum Asked {
     /// An NTP client request's transmit timestamp, which the server's reply carries as its origin
     /// timestamp (RFC 5905 8).
     Ntp(u64),
+}
+
+impl Hash for Asked {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Stun {
+                method,
+                transaction,
+            } => (0u8, method, transaction).hash(state),
+            Self::Quic(ids) => (1u8, ids).hash(state),
+            Self::Dns { id, question } => dns_hash(*id, question, state),
+            Self::Ntp(transmit) => (3u8, transmit).hash(state),
+        }
+    }
+}
+
+/// A DNS query's ID and question as [`Asked::Dns`] hashes them, whatever port it went to.
+fn dns_hash<H: Hasher>(id: u16, question: &str, state: &mut H) {
+    (2u8, id, question).hash(state);
+}
+
+/// The fingerprint of `asked` sent to `port`: 64 bits of `SipHash` under this run's random keys (ADR 0044,
+/// unit 9b, fix round 2). Two equal identifiers to one port have one; two different ones meet by a chance
+/// of 2^-64.
+#[must_use]
+pub fn fingerprint(port: u16, asked: &Asked) -> u64 {
+    let mut state = KEYS.build_hasher();
+    port.hash(&mut state);
+    asked.hash(&mut state);
+    state.finish()
+}
+
+/// The fingerprint of a DNS query with `id` for `question` sent to `port`, as [`fingerprint`] gives it for
+/// [`Asked::Dns`]: on port 53, where the engine reads a query loosely, without making one.
+#[must_use]
+pub fn dns_fingerprint(port: u16, id: u16, question: &str) -> u64 {
+    let mut state = KEYS.build_hasher();
+    port.hash(&mut state);
+    dns_hash(id, question, &mut state);
+    state.finish()
 }
 
 /// What `payload`, an app's datagram from its port `from` to `to`, asks an answer to carry: nothing when
@@ -126,13 +176,33 @@ impl<'a> Reading<'a> {
         }
     }
 
-    /// Whether it carries one of `asked`, the latest asked first: a STUN success or error response with a
-    /// request's method and transaction ID; a QUIC server's answer to an Initial packet
-    /// ([`quic::Answer::carries`]); a DNS response with a query's ID and question; an NTP server reply
-    /// whose origin timestamp is a request's transmit timestamp.
+    /// Whether it carries one of `asked`: each told where that costs no packet opened, then those only
+    /// an opened packet tells, the latest asked first, while it may open more.
     #[must_use]
     pub fn carries(&self, asked: &[Asked]) -> bool {
-        asked.iter().rev().any(|one| match one {
+        let mut costly = false;
+        for one in asked {
+            match self.tells(one) {
+                Some(true) => return true,
+                Some(false) => {}
+                None => costly = true,
+            }
+        }
+        costly
+            && asked
+                .iter()
+                .rev()
+                .any(|one| self.tells(one).is_none() && self.opens_for(one))
+    }
+
+    /// Whether it carries `one` where that costs no QUIC packet opened: a STUN success or error response
+    /// with a request's method and transaction ID; a QUIC server's answer that its IDs or its kind tell
+    /// ([`quic::Answer::tells`]); a DNS response with a query's ID and question; an NTP server reply whose
+    /// origin timestamp is a request's transmit timestamp. `None` for a QUIC identifier only an opened
+    /// packet tells ([`Reading::opens_for`]).
+    #[must_use]
+    pub fn tells(&self, one: &Asked) -> Option<bool> {
+        Some(match one {
             Asked::Stun {
                 method,
                 transaction,
@@ -143,7 +213,12 @@ impl<'a> Reading<'a> {
                         .map(|(_, method, transaction)| (method, transaction))
                 }) == Some((*method, *transaction))
             }
-            Asked::Quic(ids) => self.quic.as_ref().is_some_and(|read| read.carries(ids)),
+            Asked::Quic(ids) => {
+                return self
+                    .quic
+                    .as_ref()
+                    .map_or(Some(false), |read| read.tells(ids));
+            }
             Asked::Dns { id, question } => self
                 .dns_response()
                 .is_some_and(|(answered, of)| answered == *id && of == &**question),
@@ -151,6 +226,22 @@ impl<'a> Reading<'a> {
                 *self.ntp.get_or_init(|| ntp(self.answer, 4, 24)) == Some(*transmit)
             }
         })
+    }
+
+    /// Whether it carries `one`, a QUIC identifier [`Reading::tells`] left to an opened packet, by
+    /// opening one ([`quic::Answer::opens_for`]); `false` once it may open no more.
+    #[must_use]
+    pub fn opens_for(&self, one: &Asked) -> bool {
+        match (one, &self.quic) {
+            (Asked::Quic(ids), Some(read)) => read.opens_for(ids),
+            _ => false,
+        }
+    }
+
+    /// How many more QUIC packets it may open.
+    #[must_use]
+    pub fn opens_left(&self) -> usize {
+        self.quic.as_ref().map_or(0, quic::Answer::opens_left)
     }
 
     /// Its ID and question, when it is a DNS response with one question.
@@ -476,6 +567,75 @@ mod tests {
                 "{from} to {to}"
             );
         }
+    }
+
+    /// A STUN request's method is read in all its twelve bits (RFC 8489 5): a response of another method
+    /// that differs from it only in the high bits does not carry it (review D's surviving mutant).
+    #[test]
+    fn a_stun_methods_high_bits_tell_it() {
+        // Method 0x080: M7, bit 9 of the type.
+        let asked = of((APP, 3_478), &stun_message(0x0200, ID, b"app"));
+        assert_eq!(
+            asked,
+            [Asked::Stun {
+                method: 0x080,
+                transaction: ID
+            }]
+        );
+        assert!(carries(&asked, &stun_message(0x0300, ID, b"server")));
+        assert!(
+            !carries(&asked, &stun_message(0x0100, ID, b"server")),
+            "method 0"
+        );
+    }
+
+    /// Of many QUIC identifiers only opened packets tell, the latest asked is tried first, within the
+    /// packets an answer may open (review D's surviving mutant).
+    #[test]
+    fn the_latest_quic_identifier_is_tried_first() {
+        let asked: Vec<Asked> = (0..20u8)
+            .flat_map(|n| {
+                let initial = quic::client_initial(1, (&[n; 8], &[]), (0, &[0x01]), 1200);
+                of((APP, 443), &initial.unwrap_or_default())
+            })
+            .collect();
+        assert_eq!(asked.len(), 20);
+        let answer = |n: u8| {
+            quic::server_initial(1, &[n; 8], (&[], &[0x5a; 8]), (0, &[0x02, 0, 0, 0, 0]))
+                .unwrap_or_default()
+        };
+        assert!(carries(&asked, &answer(19)));
+        assert!(
+            !carries(&asked, &answer(0)),
+            "beyond the packets an answer opens"
+        );
+    }
+
+    /// A fingerprint is the identifier's and its port's: the same on both ways a DNS query's is taken,
+    /// another for another port or identifier (fix round 2).
+    #[test]
+    fn a_fingerprint_is_an_identifiers_on_its_port() {
+        let query = Asked::Dns {
+            id: 0x5151,
+            question: "x.test".into(),
+        };
+        assert_eq!(
+            fingerprint(53, &query),
+            dns_fingerprint(53, 0x5151, "x.test")
+        );
+        assert_ne!(fingerprint(53, &query), fingerprint(5_353, &query));
+        assert_ne!(
+            fingerprint(53, &query),
+            dns_fingerprint(53, 0x5152, "x.test")
+        );
+        assert_ne!(
+            fingerprint(123, &Asked::Ntp(1)),
+            fingerprint(123, &Asked::Ntp(2))
+        );
+        assert_eq!(
+            fingerprint(123, &Asked::Ntp(1)),
+            fingerprint(123, &Asked::Ntp(1))
+        );
     }
 
     /// The most an identifier holds in place, beside a DNS question's name on the heap (at most 253

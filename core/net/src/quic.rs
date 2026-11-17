@@ -12,7 +12,9 @@
 //! unit 9b, fix round 1): anyone can compute these keys, so a valid tag proves nothing about who sent the
 //! packet, but a packet damaged on its way, or bytes that only look like an Initial, then name no flow,
 //! where before a reader that removed the protection without the tag took whatever frames happened to
-//! parse. HKDF is HMAC over SHA-256. Both are checked against the RFCs' sample packets below.
+//! parse. The keys come from `RustCrypto`'s `hkdf` over SHA-256 (fix round 2). Both are checked against the
+//! RFCs' sample packets below, and what a receiver must discard is discarded here too: a packet whose
+//! reserved bits are set (RFC 9000 17.2), or that holds no frame (12.4).
 //!
 //! The same keys tell a stand-in's answers apart (ADR 0044, unit 9b): [`asked`] reads the connection IDs
 //! of the Initial packets an app sends, and [`Answer`] whether what comes back is the server's answer to
@@ -34,7 +36,8 @@ use aes::Aes128;
 use aes::cipher::{BlockCipherEncrypt, KeyInit};
 use aes_gcm::Aes128Gcm;
 use aes_gcm::aead::{AeadInOut, Nonce, Tag};
-use sha2::{Digest, Sha256};
+use hkdf::Hkdf;
+use sha2::Sha256;
 
 use crate::tls::{self, ServerName};
 
@@ -76,7 +79,7 @@ pub const MOST_OPENED: usize = 16;
 const MOST_PACKETS: usize = 16;
 
 /// The QUIC versions whose Initial packets can be read.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Version {
     /// RFC 9000.
     V1,
@@ -163,36 +166,16 @@ impl Version {
     }
 }
 
-/// HMAC-SHA-256 (RFC 2104) of the concatenated `parts`.
-fn hmac(key: &[u8], parts: &[&[u8]]) -> [u8; 32] {
-    let mut block = [0u8; 64];
-    if key.len() > block.len() {
-        block[..32].copy_from_slice(&Sha256::digest(key));
-    } else {
-        block[..key.len()].copy_from_slice(key);
-    }
-    let mut inner = Sha256::new();
-    inner.update(block.map(|b| b ^ 0x36));
-    for part in parts {
-        inner.update(part);
-    }
-    let inner = inner.finalize();
-    let mut outer = Sha256::new();
-    outer.update(block.map(|b| b ^ 0x5c));
-    outer.update(inner);
-    let mut out = [0u8; 32];
-    out.copy_from_slice(&outer.finalize());
-    out
-}
-
-/// TLS 1.3's `HKDF-Expand-Label` with an empty context (RFC 8446 7.1), for at most 32 bytes: one block
-/// of HKDF-Expand (RFC 5869).
-fn expand_label(secret: &[u8; 32], label: &[u8], length: u8) -> [u8; 32] {
-    let label_length = u8::try_from(6 + label.len()).unwrap_or(u8::MAX);
-    hmac(
-        secret,
-        &[&[0, length, label_length], b"tls13 ", label, &[0], &[1]],
-    )
+/// TLS 1.3's `HKDF-Expand-Label` with an empty context (RFC 8446 7.1), filling `out`, by `RustCrypto`'s
+/// `hkdf` (ADR 0044, unit 9b, fix round 2): the output's length, the label's, "tls13 " and the label, then
+/// the empty context, as HKDF-Expand's info (RFC 5869 2.3). `None` only for an output longer than HKDF
+/// gives, which no caller asks.
+fn expand_label(secret: &Hkdf<Sha256>, label: &[u8], out: &mut [u8]) -> Option<()> {
+    let length = u16::try_from(out.len()).ok()?.to_be_bytes();
+    let label_length = [u8::try_from(b"tls13 ".len() + label.len()).ok()?];
+    secret
+        .expand_multi_info(&[&length, &label_length, b"tls13 ", label, &[0]], out)
+        .ok()
 }
 
 /// The keys of one side's Initial packets.
@@ -204,21 +187,25 @@ struct Keys {
 }
 
 impl Keys {
-    /// The Initial keys for the connection ID `cid`, on the side named by `label`.
-    fn initial(version: Version, cid: &[u8], label: &[u8]) -> Self {
-        let initial = hmac(version.salt(), &[cid]);
-        let secret = expand_label(&initial, label, 32);
+    /// The Initial keys for the connection ID `cid`, on the side named by `label` (RFC 9001 5.2): the
+    /// initial secret extracted from `cid` with the version's salt, the side's secret expanded from it,
+    /// and the keys from that. `None` never comes for the lengths used here; it stands for HKDF's own
+    /// refusals, which only other lengths meet.
+    fn initial(version: Version, cid: &[u8], label: &[u8]) -> Option<Self> {
+        let initial = Hkdf::<Sha256>::new(Some(version.salt()), cid);
+        let mut secret = [0u8; 32];
+        expand_label(&initial, label, &mut secret)?;
+        let secret = Hkdf::<Sha256>::from_prk(&secret).ok()?;
         let [key, iv, hp] = version.labels();
-        let key = expand_label(&secret, key, 16);
-        let iv = expand_label(&secret, iv, 12);
-        let hp = expand_label(&secret, hp, 16);
-        let mut nonce = [0u8; 12];
-        nonce.copy_from_slice(&iv[..12]);
-        Self {
-            aead: Aes128Gcm::from(aes(&key)),
-            iv: nonce,
-            hp: aes(&hp),
-        }
+        let (mut key16, mut iv12, mut hp16) = ([0u8; 16], [0u8; 12], [0u8; 16]);
+        expand_label(&secret, key, &mut key16)?;
+        expand_label(&secret, iv, &mut iv12)?;
+        expand_label(&secret, hp, &mut hp16)?;
+        Some(Self {
+            aead: Aes128Gcm::from(aes(&key16)),
+            iv: iv12,
+            hp: aes(&hp16),
+        })
     }
 
     /// The header protection mask for a sample of the protected payload.
@@ -239,22 +226,15 @@ impl Keys {
     }
 }
 
-fn aes(key: &[u8; 32]) -> Aes128 {
-    let mut key16 = aes::cipher::Key::<Aes128>::default();
-    key16.copy_from_slice(&key[..16]);
-    Aes128::new(&key16)
+fn aes(key: &[u8; 16]) -> Aes128 {
+    Aes128::new(&(*key).into())
 }
 
 /// The cipher of a Retry packet's integrity tag for `version` (RFC 9001 5.8, RFC 9369 3.3.3), with its
 /// nonce.
 fn retry_aead(version: Version) -> (Aes128Gcm, Nonce<Aes128Gcm>) {
     let (key, nonce) = version.retry();
-    let mut key16 = aes::cipher::Key::<Aes128>::default();
-    key16.copy_from_slice(&key);
-    (
-        Aes128Gcm::from(Aes128::new(&key16)),
-        Nonce::<Aes128Gcm>::from(nonce),
-    )
+    (Aes128Gcm::from(aes(&key)), Nonce::<Aes128Gcm>::from(nonce))
 }
 
 /// Reads a variable-length integer (RFC 9000 16) at `at`, moving `at` past it.
@@ -277,6 +257,8 @@ fn varint_usize(bytes: &[u8], at: &mut usize) -> Option<usize> {
 struct LongPacket {
     version: Version,
     initial: bool,
+    /// An Initial's token's length: a server's is always empty (RFC 9000 17.2.2).
+    token: usize,
     dcid_start: usize,
     dcid_end: usize,
     scid_start: usize,
@@ -316,8 +298,9 @@ fn long_packet(datagram: &[u8], at: usize) -> Option<LongPacket> {
     let scid_end = scid_start + scid_length;
     pos = scid_end;
     let initial = kind == initial_kind;
+    let mut token = 0;
     if initial {
-        let token = varint_usize(datagram, &mut pos)?;
+        token = varint_usize(datagram, &mut pos)?;
         pos = pos.checked_add(token)?;
     }
     let length = varint_usize(datagram, &mut pos)?;
@@ -328,6 +311,7 @@ fn long_packet(datagram: &[u8], at: usize) -> Option<LongPacket> {
     Some(LongPacket {
         version,
         initial,
+        token,
         dcid_start,
         dcid_end,
         scid_start,
@@ -339,8 +323,11 @@ fn long_packet(datagram: &[u8], at: usize) -> Option<LongPacket> {
 
 /// Removes the protection of the packet that starts at `start`, returning its payload without the
 /// tag: the header's protection, then the payload's, with AES-GCM, the header with its protection
-/// removed as the associated data (RFC 9001 5.3, 5.4). `None` for a packet too short for it, or whose tag
-/// does not check.
+/// removed as the associated data (RFC 9001 5.3, 5.4). `None` for a packet too short for it, whose tag
+/// does not check, or whose reserved bits are set, which a receiver must refuse (RFC 9000 17.2). Those
+/// bits are read before the tag: RFC 9001 9.5 asks an endpoint to read them after, so that their timing
+/// tells nothing of its keys, but Initial keys are no secret, and a packet with them set is refused
+/// either way, so a wrong key costs no AEAD three times in four.
 fn open(
     keys: &Keys,
     datagram: &[u8],
@@ -353,6 +340,9 @@ fn open(
     }
     let mask = keys.mask(datagram.get(pn_offset + 4..pn_offset + 4 + SAMPLE)?);
     let first = datagram.get(start)? ^ (mask[0] & 0x0f);
+    if first & 0x0c != 0 {
+        return None;
+    }
     let pn_length = usize::from(first & 3) + 1;
     let mut header = datagram.get(start..pn_offset + pn_length)?.to_vec();
     header[0] = first;
@@ -380,8 +370,12 @@ fn open(
 /// Walks the frames of an Initial packet's payload whose protection is removed, handing each CRYPTO frame's
 /// data to `crypto` at its offset: PADDING, PING, ACK with or without ECN counts, CRYPTO and
 /// `CONNECTION_CLOSE`, the frames an Initial may carry (RFC 9000 17.2.2, 12.4). `None` for any other, for one
-/// cut short, or when `crypto` refuses.
+/// cut short, for a payload of no frame at all, which a receiver must refuse (12.4), or when `crypto`
+/// refuses.
 fn walk_frames(payload: &[u8], mut crypto: impl FnMut(usize, &[u8]) -> Option<()>) -> Option<()> {
+    if payload.is_empty() {
+        return None;
+    }
     let mut at = 0;
     while at < payload.len() {
         match varint(payload, &mut at)? {
@@ -431,7 +425,7 @@ fn frames_parse(payload: &[u8]) -> bool {
 }
 
 /// A connection ID, of at most 20 bytes in QUIC versions 1 and 2, kept in place.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct Cid {
     length: u8,
     bytes: [u8; MAX_CID],
@@ -465,9 +459,9 @@ pub struct Ids {
     version: Version,
     destination: Cid,
     source: Cid,
-    /// The server's Initial keys of `destination`, for each version a server may answer in (RFC 9368),
-    /// derived the first time an answer needs them and kept with the identifier from then on (ADR 0044,
-    /// unit 9b, fix round 1).
+    /// The server's Initial keys of `destination`, for each version a server may answer an Initial in
+    /// (RFC 9368), derived the first time an answer needs them and kept with the identifier from then on
+    /// (ADR 0044, unit 9b, fix round 1).
     server: [OnceCell<Box<Keys>>; 2],
 }
 
@@ -479,6 +473,12 @@ impl PartialEq for Ids {
 }
 
 impl Eq for Ids {}
+
+impl std::hash::Hash for Ids {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        (self.version, self.destination, self.source).hash(state);
+    }
+}
 
 impl std::fmt::Debug for Ids {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -501,12 +501,16 @@ impl Ids {
     }
 
     /// The server's Initial keys of the app's destination ID in `version`.
-    fn server_keys(&self, version: Version) -> &Keys {
-        self.server[version.index()]
-            .get_or_init(|| Box::new(Keys::initial(version, self.destination.get(), SERVER)))
+    fn server_keys(&self, version: Version) -> Option<&Keys> {
+        let kept = &self.server[version.index()];
+        if let Some(keys) = kept.get() {
+            return Some(keys);
+        }
+        let keys = Keys::initial(version, self.destination.get(), SERVER)?;
+        Some(kept.get_or_init(|| Box::new(keys)))
     }
 
-    /// Whether the server's keys of some version were derived and are kept.
+    /// For how many versions the server's keys were derived and are kept.
     #[cfg(test)]
     fn keys_kept(&self) -> usize {
         self.server
@@ -545,9 +549,14 @@ pub fn asked(datagram: &[u8]) -> Vec<Ids> {
             break;
         }
         if packet.initial {
-            let keys = keys[packet.version.index()]
-                .get_or_insert_with(|| Keys::initial(packet.version, destination.get(), CLIENT));
-            match open(keys, datagram, at, packet.pn_offset, packet.end) {
+            let slot = &mut keys[packet.version.index()];
+            if slot.is_none() {
+                *slot = Keys::initial(packet.version, destination.get(), CLIENT);
+            }
+            match slot
+                .as_ref()
+                .and_then(|keys| open(keys, datagram, at, packet.pn_offset, packet.end))
+            {
                 Some(payload) if frames_parse(&payload) => initial = true,
                 _ => return Vec::new(),
             }
@@ -600,7 +609,9 @@ impl<'a> ServerHeader<'a> {
 
 /// A datagram that came back from where an app sent QUIC, read for whether it answers what the app
 /// asked ([`Answer::carries`]). Whatever stand-ins it is checked for, it opens at most [`MOST_OPENED`]
-/// packets, and none when it is larger than [`LARGEST_ANSWER`] (ADR 0044, unit 9b, fix round 1).
+/// packets, and none when it is larger than [`LARGEST_ANSWER`] (ADR 0044, unit 9b, fix round 1). Most
+/// checks cost no packet opened ([`Answer::tells`]); the engine spends the opens the others need
+/// ([`Answer::opens_for`]) so that each stand-in checked has its newest identifier tried (fix round 2).
 pub struct Answer<'a> {
     datagram: &'a [u8],
     /// Its first packet's long header; `None` for a short header.
@@ -632,66 +643,110 @@ impl<'a> Answer<'a> {
         MOST_OPENED - self.opens.get()
     }
 
-    /// Whether it is the server's answer to `asked` (RFC 9000 17.2, RFC 9001 5, RFC 9369, RFC 9368): a
-    /// Version Negotiation packet whose source connection ID is the app's destination and whose destination
-    /// is the app's source; a Retry whose integrity tag checks with the app's destination ID; an Initial
-    /// whose protection, removed with the server's keys of the app's destination ID, gives a tag that
-    /// checks and frames that parse to its end; or any packet whose destination ID is the app's source
-    /// ID, where that is 4 bytes or more, long enough to tell. The Retry and the Initial may be of either
-    /// version this module reads, whichever the app's was: a server that negotiates a compatible version
-    /// answers a version 1 Initial in version 2, with version 2's keys of the same destination ID (RFC
-    /// 9368 2.3, RFC 9369 3). A client that sends no source ID, as Chromium's, so Cronet's, does, is told
-    /// only by its Initial keys: by the server's Version Negotiation, Retry or first Initial packet.
+    /// How many more packets it may open.
+    #[must_use]
+    pub fn opens_left(&self) -> usize {
+        self.opens.get()
+    }
+
+    /// Whether it is the server's answer to `asked` (RFC 9000 17.2, RFC 9001 5, RFC 9369, RFC 9368): what
+    /// [`Answer::tells`] says, or where only an opened packet can tell, what [`Answer::opens_for`] does.
     #[must_use]
     pub fn carries(&self, asked: &Ids) -> bool {
+        self.tells(asked).unwrap_or_else(|| self.opens_for(asked))
+    }
+
+    /// Whether it is the server's answer to `asked`, where that costs no packet opened; `None` where only
+    /// an opened packet can tell ([`Answer::opens_for`]).
+    ///
+    /// It is when it is a Version Negotiation packet whose source connection ID is the app's destination
+    /// and whose destination is the app's source, listing versions in whole words, the app's own not among
+    /// them (RFC 9000 6.2, 17.2.1; RFC 9368 2.1); or any packet whose destination ID is the app's source
+    /// ID, where that is 4 bytes or more, long enough to tell. It is not when it is a packet the client
+    /// would discard whatever its keys: a Retry in another version than the app's (RFC 9369 4.1), or
+    /// without a token (RFC 9000 17.2.5.2); a server's Initial with a token (17.2.2). A client that sends
+    /// no source ID, as Chromium's, so Cronet's, does, is told only by its Initial keys: by the server's
+    /// Version Negotiation, or by its Retry or first Initial packet opened.
+    #[must_use]
+    pub fn tells(&self, asked: &Ids) -> Option<bool> {
         let source = asked.source.get();
         let Some(header) = &self.long else {
-            return asked.source.tells() && self.datagram.get(1..1 + source.len()) == Some(source);
+            return Some(
+                asked.source.tells() && self.datagram.get(1..1 + source.len()) == Some(source),
+            );
         };
         if header.version == 0 {
-            let versions = self.datagram.len().saturating_sub(header.rest);
-            return header.source == asked.destination.get()
-                && header.destination == source
-                && versions >= 4
-                && versions % 4 == 0;
+            return Some(self.negotiates(header, asked));
         }
         let Some(version) = Version::from_wire(header.version) else {
-            return false;
+            return Some(false);
         };
         if header.destination != source {
-            return false;
-        }
-        if asked.source.tells() {
-            return true;
+            return Some(false);
         }
         let kind = (header.first >> 4) & 3;
         let (initial, retry) = version.kinds();
-        if (kind != initial && kind != retry) || self.datagram.len() > LARGEST_ANSWER {
-            return false;
+        if kind == retry && (version != asked.version || self.datagram.len() <= header.rest + TAG) {
+            return Some(false);
         }
+        if kind == initial && long_packet(self.datagram, 0).is_none_or(|packet| packet.token != 0) {
+            return Some(false);
+        }
+        if asked.source.tells() {
+            return Some(true);
+        }
+        if (kind != initial && kind != retry) || self.datagram.len() > LARGEST_ANSWER {
+            return Some(false);
+        }
+        None
+    }
+
+    /// Opens its first packet, if it may open one more, to tell whether it is the server's answer to
+    /// `asked` where [`Answer::tells`] could not, and only then: a Retry whose integrity tag checks with the app's
+    /// destination ID, or an Initial whose protection, removed with the server's keys of the app's
+    /// destination ID, gives a tag that checks and frames that parse to its end. The Initial may be of
+    /// either version this module reads, whichever the app's was: a server that negotiates a compatible
+    /// version answers a version 1 Initial in version 2, with version 2's keys of the same destination ID
+    /// (RFC 9368 2.3, RFC 9369 4). `false` once it may open no more.
+    #[must_use]
+    pub fn opens_for(&self, asked: &Ids) -> bool {
+        let Some(header) = &self.long else {
+            return false;
+        };
+        let Some(version) = Version::from_wire(header.version) else {
+            return false;
+        };
         let Some(left) = self.opens.get().checked_sub(1) else {
             return false;
         };
         self.opens.set(left);
-        if kind == retry {
+        if (header.first >> 4) & 3 == version.kinds().1 {
             self.retry_for(asked, version)
         } else {
             self.initial_for(asked, version)
         }
     }
 
+    /// Whether it is a Version Negotiation packet for `asked`: the IDs crossed, versions listed in whole
+    /// 4-byte words, and the app's own version not among them, as a client would have it (RFC 9000 6.2).
+    fn negotiates(&self, header: &ServerHeader, asked: &Ids) -> bool {
+        let Some(versions) = self.datagram.get(header.rest..) else {
+            return false;
+        };
+        let own = asked.version.wire().to_be_bytes();
+        header.source == asked.destination.get()
+            && header.destination == asked.source.get()
+            && !versions.is_empty()
+            && versions.len().is_multiple_of(4)
+            && !versions.as_chunks::<4>().0.contains(&own)
+    }
+
     /// Whether it is a Retry of `version` whose integrity tag checks with the app's destination ID (RFC
-    /// 9001 5.8).
+    /// 9001 5.8). [`Answer::tells`] has refused one without a token, or in another version than the app's.
     fn retry_for(&self, asked: &Ids, version: Version) -> bool {
         let Some(end) = self.datagram.len().checked_sub(TAG) else {
             return false;
         };
-        let Some(header) = &self.long else {
-            return false;
-        };
-        if end < header.rest {
-            return false;
-        }
         let original = asked.destination.get();
         let mut pseudo = Vec::with_capacity(1 + original.len() + end);
         pseudo.push(asked.destination.length);
@@ -704,37 +759,38 @@ impl<'a> Answer<'a> {
         })
     }
 
-    /// Whether it is an Initial of `version` that the server's keys of the app's destination ID open,
-    /// to frames that parse.
+    /// Whether it is an Initial of `version` that the server's keys of the app's destination ID open, to
+    /// frames that parse. [`Answer::tells`] has refused one with a token.
     fn initial_for(&self, asked: &Ids, version: Version) -> bool {
         let Some(packet) = long_packet(self.datagram, 0) else {
             return false;
         };
         packet.initial
             && packet.version == version
-            && open(
-                asked.server_keys(version),
-                self.datagram,
-                0,
-                packet.pn_offset,
-                packet.end,
-            )
-            .is_some_and(|payload| frames_parse(&payload))
+            && asked.server_keys(version).is_some_and(|keys| {
+                open(keys, self.datagram, 0, packet.pn_offset, packet.end)
+                    .is_some_and(|payload| frames_parse(&payload))
+            })
     }
 }
 
 /// An Initial packet of `version`, protected with `keys` as its sender protects one, whose header names
-/// `destination` and `source`, numbered `pn` in `pn_length` bytes (1 to 4), holding `payload` as it is.
+/// `destination` and `source`, numbered `pn` in `pn_length` bytes (1 to 4), with the `reserved` bits of
+/// its first byte (none, but in tests of what a receiver refuses) and `token`, holding `payload` as it is.
 fn seal(
     version: Version,
     keys: &Keys,
     (destination, source): (&[u8], &[u8]),
     (pn, pn_length): (u32, usize),
+    (reserved, token): (u8, &[u8]),
     payload: &[u8],
 ) -> Option<Vec<u8>> {
     let numbered = pn.to_be_bytes();
     let pn_bytes = numbered.get(4usize.checked_sub(pn_length)?..)?;
-    let first = 0xc0 | (version.kinds().0 << 4) | u8::try_from(pn_length.checked_sub(1)?).ok()?;
+    let first = 0xc0
+        | (version.kinds().0 << 4)
+        | (reserved & 0x0c)
+        | u8::try_from(pn_length.checked_sub(1)?).ok()?;
     let mut header = vec![first];
     header.extend_from_slice(&version.wire().to_be_bytes());
     for id in [destination, source] {
@@ -745,8 +801,8 @@ fn seal(
         );
         header.extend_from_slice(id);
     }
-    // No token.
-    header.push(0);
+    header.push(u8::try_from(token.len()).ok().filter(|&n| n < 0x40)?);
+    header.extend_from_slice(token);
     let length = u16::try_from(pn_length + payload.len() + TAG)
         .ok()
         .filter(|&n| n <= 0x3fff)?;
@@ -790,8 +846,15 @@ pub fn server_initial(
     (pn, frames): (u32, &[u8]),
 ) -> Option<Vec<u8>> {
     let version = Version::from_wire(version)?;
-    let keys = Keys::initial(version, original, SERVER);
-    seal(version, &keys, (destination, source), (pn, 2), frames)
+    let keys = Keys::initial(version, original, SERVER)?;
+    seal(
+        version,
+        &keys,
+        (destination, source),
+        (pn, 2),
+        (0, &[]),
+        frames,
+    )
 }
 
 /// A client's Initial packet of `version` to `destination`, from `source`, numbered `pn` in four
@@ -806,16 +869,24 @@ pub fn client_initial(
     size: usize,
 ) -> Option<Vec<u8>> {
     let version = Version::from_wire(version)?;
-    let keys = Keys::initial(version, destination, CLIENT);
+    let keys = Keys::initial(version, destination, CLIENT)?;
     let header = 1 + 4 + 1 + destination.len() + 1 + source.len() + 1 + 2 + 4;
     let mut payload = frames.to_vec();
     payload.resize(size.saturating_sub(header + TAG).max(frames.len()), 0);
-    seal(version, &keys, (destination, source), (pn, 4), &payload)
+    seal(
+        version,
+        &keys,
+        (destination, source),
+        (pn, 4),
+        (0, &[]),
+        &payload,
+    )
 }
 
 /// A Retry packet of `version` to the client's source ID `destination`, from `source`, with `token`,
 /// for the client's destination ID `original`: its integrity tag computed as a server does (RFC 9001
-/// 5.8). Only for tests, as [`server_initial`].
+/// 5.8), and its unused bits set, so that it seals the Retry samples of RFC 9001 A.4 and RFC 9369 A.4
+/// byte for byte. Only for tests, as [`server_initial`].
 #[doc(hidden)]
 #[must_use]
 pub fn retry(
@@ -825,7 +896,8 @@ pub fn retry(
     token: &[u8],
 ) -> Option<Vec<u8>> {
     let version = Version::from_wire(version)?;
-    let mut packet = vec![0xc0 | (version.kinds().1 << 4)];
+    // The four unused bits set, as the RFCs' samples have them.
+    let mut packet = vec![0xc0 | (version.kinds().1 << 4) | 0x0f];
     packet.extend_from_slice(&version.wire().to_be_bytes());
     for id in [destination, source] {
         packet.push(
@@ -851,7 +923,7 @@ pub fn retry(
 #[derive(Default)]
 pub struct Initial {
     /// The last Initial keys, with the version and connection ID they are for.
-    keys: Option<(Version, Vec<u8>, Keys)>,
+    keys: Option<(Version, Cid, Keys)>,
     /// The CRYPTO stream as far as it came, gaps filled with zeros.
     crypto: Vec<u8>,
     /// The parts of `crypto` that arrived, sorted and not touching.
@@ -875,25 +947,32 @@ impl Initial {
 
     /// Reads one datagram the app sent. [`ServerName::None`] means that this flow will not give a
     /// name: its first datagram holds no Initial packet that can be read, an Initial's frames make no
-    /// sense, or [`MAX_DATAGRAMS`] passed without a whole `ClientHello`.
+    /// sense, or [`MAX_DATAGRAMS`] passed without a whole `ClientHello`. Its packets are read as [`asked`]
+    /// reads them (ADR 0044, unit 9b, fix round 2): those after one to another destination ID than the
+    /// first are ignored (RFC 9000 12.2), and so are those after the first [`MOST_PACKETS`].
     pub fn push(&mut self, datagram: &[u8]) -> ServerName {
         self.datagrams += 1;
         let mut read = false;
         let mut at = 0;
-        while let Some(packet) = long_packet(datagram, at) {
+        let mut first: Option<Cid> = None;
+        for _ in 0..MOST_PACKETS {
+            let Some(packet) = long_packet(datagram, at) else {
+                break;
+            };
+            let Some(cid) = datagram
+                .get(packet.dcid_start..packet.dcid_end)
+                .and_then(Cid::new)
+            else {
+                break;
+            };
+            if *first.get_or_insert(cid) != cid {
+                break;
+            }
             if packet.initial {
-                let cid = &datagram[packet.dcid_start..packet.dcid_end];
-                let keys = match &self.keys {
-                    Some((version, known, keys)) if *version == packet.version && known == cid => {
-                        keys.clone()
-                    }
-                    _ => {
-                        let keys = Keys::initial(packet.version, cid, CLIENT);
-                        self.keys = Some((packet.version, cid.to_vec(), keys.clone()));
-                        keys
-                    }
-                };
-                let Some(payload) = open(&keys, datagram, at, packet.pn_offset, packet.end) else {
+                let payload = self
+                    .keys_for(packet.version, cid)
+                    .and_then(|keys| open(keys, datagram, at, packet.pn_offset, packet.end));
+                let Some(payload) = payload else {
                     return ServerName::None;
                 };
                 if self.frames(&payload).is_none() {
@@ -908,6 +987,15 @@ impl Initial {
             return ServerName::None;
         }
         self.name()
+    }
+
+    /// The client's Initial keys of `cid` in `version`: the last ones, when they are for the same, else
+    /// derived and kept.
+    fn keys_for(&mut self, version: Version, cid: Cid) -> Option<&Keys> {
+        if !matches!(&self.keys, Some((kept, known, _)) if *kept == version && *known == cid) {
+            self.keys = Some((version, cid, Keys::initial(version, cid.get(), CLIENT)?));
+        }
+        self.keys.as_ref().map(|(_, _, keys)| keys)
     }
 
     /// Reads the frames of one Initial packet whose protection is already removed, as [`Self::push`]
@@ -1002,53 +1090,72 @@ pub(crate) mod tests {
     /// The client's original connection ID in the samples of RFC 9001 A and RFC 9369 A.
     const CID: &str = "8394c8f03e515708";
 
+    /// RFC 5869 A.1, through `RustCrypto`'s `hkdf` as the keys derive: the extract step's PRK, and the
+    /// expand step's 42 bytes (fix round 2, review D: the HKDF that was written here gave way).
     #[test]
     fn hkdf_matches_rfc_5869() {
-        // RFC 5869 A.1, the extract step, and one block of the expand step with its info.
-        let prk = hmac(&hex("000102030405060708090a0b0c"), &[&[0x0b; 22]]);
+        let (prk, hkdf) =
+            Hkdf::<Sha256>::extract(Some(&hex("000102030405060708090a0b0c")), &[0x0b; 22]);
         assert_eq!(
             prk.to_vec(),
             hex("077709362c2e32df0ddc3f0dc47bba6390b6c73bb50f9c3122ec844ad7c2b3e5")
         );
-        let okm = hmac(&prk, &[&hex("f0f1f2f3f4f5f6f7f8f9"), &[1]]);
+        let mut okm = [0u8; 42];
+        assert!(hkdf.expand(&hex("f0f1f2f3f4f5f6f7f8f9"), &mut okm).is_ok());
         assert_eq!(
             okm.to_vec(),
-            hex("3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf")
+            hex(
+                "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865"
+            )
         );
     }
 
+    /// The secret of `out`'s length that `HKDF-Expand-Label` gives from `secret` under `label`.
+    fn expanded<const N: usize>(secret: &Hkdf<Sha256>, label: &[u8]) -> Vec<u8> {
+        let mut out = [0u8; N];
+        assert_eq!(expand_label(secret, label, &mut out), Some(()));
+        out.to_vec()
+    }
+
+    /// RFC 9001 A.1's secrets and keys, step by step, and A.2 and A.3's header protection masks.
     #[test]
     fn keys_match_rfc_9001() {
-        // RFC 9001 A.1.
-        let initial = hmac(Version::V1.salt(), &[&hex(CID)]);
+        let (initial, extracted) = Hkdf::<Sha256>::extract(Some(Version::V1.salt()), &hex(CID));
         assert_eq!(
             initial.to_vec(),
             hex("7db5df06e7a69e432496adedb00851923595221596ae2ae9fb8115c1e9ed0a44")
         );
-        let client = expand_label(&initial, CLIENT, 32);
+        let client = expanded::<32>(&extracted, CLIENT);
         assert_eq!(
-            client.to_vec(),
+            client,
             hex("c00cf151ca5be075ed0ebfb5c80323c42d6b7db67881289af4008f1f6c357aea")
         );
+        let Ok(client) = Hkdf::<Sha256>::from_prk(&client) else {
+            unreachable!("a whole SHA-256 output")
+        };
         assert_eq!(
-            expand_label(&client, b"quic key", 16)[..16].to_vec(),
+            expanded::<16>(&client, b"quic key"),
             hex("1f369613dd76d5467730efcbe3b1a22d")
         );
         assert_eq!(
-            expand_label(&client, b"quic iv", 12)[..12].to_vec(),
+            expanded::<12>(&client, b"quic iv"),
             hex("fa044b2f42a3fd3b46fb255c")
         );
         assert_eq!(
-            expand_label(&client, b"quic hp", 16)[..16].to_vec(),
+            expanded::<16>(&client, b"quic hp"),
             hex("9f50449e04a0e810283a1e9933adedd2")
         );
         // RFC 9001 A.2 and A.3: the header protection masks of the client's and the server's samples.
-        let keys = Keys::initial(Version::V1, &hex(CID), CLIENT);
+        let (Some(keys), Some(server)) = (
+            Keys::initial(Version::V1, &hex(CID), CLIENT),
+            Keys::initial(Version::V1, &hex(CID), SERVER),
+        ) else {
+            unreachable!("Initial keys")
+        };
         assert_eq!(
             keys.mask(&hex("d1b1c98dd7689fb8ec11d242b123dc9b"))[..5].to_vec(),
             hex("437b9aec36")
         );
-        let server = Keys::initial(Version::V1, &hex(CID), b"server in");
         assert_eq!(
             server.mask(&hex("2cd0991cd25b0aac406a5816b6394100"))[..5].to_vec(),
             hex("2ec0d8356a")
@@ -1069,9 +1176,11 @@ pub(crate) mod tests {
              5a1200130100002e00330024001d00209d3c940d89690b84d08a60993c144eca684d1081287c834d5311bcf32b
              b9da1a002b00020304",
         );
-        let keys = Keys::initial(Version::V2, &hex(CID), b"server in");
-        let Some(packet) = long_packet(&protected, 0) else {
-            unreachable!("a long header")
+        let (Some(keys), Some(packet)) = (
+            Keys::initial(Version::V2, &hex(CID), SERVER),
+            long_packet(&protected, 0),
+        ) else {
+            unreachable!("keys and a long header")
         };
         assert_eq!(packet.version, Version::V2);
         assert!(packet.initial);
@@ -1245,7 +1354,8 @@ pub(crate) mod tests {
         "cf6b3343cf0008f067a5502a4262b5746f6b656ec8646ce8bfe33952d955543665dcc7b6";
 
     /// The sample packets of RFC 9001 A.2 to A.4 and RFC 9369 A.2 to A.4, versions 1 and 2: the client's
-    /// Initial and the server's sealed byte for byte from the RFCs' frames, what the client's Initial
+    /// Initial, the server's and the Retry sealed byte for byte from the RFCs' frames and token, its
+    /// unused bits as the samples set them (fix round 2, review D), what the client's Initial
     /// asks read from it, the server's Initial and Retry each carrying it, and the client's hello naming
     /// `example.com`.
     #[test]
@@ -1276,6 +1386,11 @@ pub(crate) mod tests {
                 server_initial(version, &original, (&[], &source), (1, &hex(SERVER_FRAMES))),
                 Some(server.clone()),
                 "A.3 of version {version:#x}"
+            );
+            assert_eq!(
+                super::retry(version, &original, (&[], &source), b"token"),
+                Some(retry.clone()),
+                "A.4 of version {version:#x}"
             );
             let asked = asked(&client);
             assert_eq!(asked.len(), 1);
@@ -1448,29 +1563,34 @@ pub(crate) mod tests {
     }
 
     /// A server that negotiates a compatible version (RFC 9368) answers a version 1 Initial in version 2,
-    /// with version 2's keys of the app's destination ID: its Initial, and a Retry of version 2, carry what
-    /// the app asked (unit 9b, fix round 1; reviews A and B, probe 2).
+    /// with version 2's keys of the app's destination ID: its Initial carries what the app asked (unit 9b,
+    /// fix round 1; reviews A and B, probe 2). Its Retry may not: a server sends one only in the original
+    /// version, and the client ignores one in another (RFC 9369 4.1; fix round 2, review D).
     #[test]
     fn a_server_may_answer_in_a_compatible_version() {
-        let (_, ids) = v1_asked(&[0x42; 8]);
-        let initial = server_initial(
-            0x6b33_43cf,
-            &[0x42; 8],
-            (&[], &[0x5a; 8]),
-            (0, &[0x02, 0, 0, 0, 0]),
-        );
-        let retry = retry(0x6b33_43cf, &[0x42; 8], (&[], &[0x5a; 8]), b"token");
-        for answer in [initial, retry] {
-            let answer = answer.unwrap_or_default();
-            assert!(Answer::read(&answer).is_some_and(|read| read.carries(&ids)));
+        for (asked, other) in [(1, 0x6b33_43cf), (0x6b33_43cf, 1)] {
+            let Some(client) = client_initial(asked, (&[0x42; 8], &[]), (0, &[0x01]), 1200) else {
+                unreachable!("an Initial packet")
+            };
+            let ids = &super::asked(&client)[0];
+            let carries = |answer: Option<Vec<u8>>| {
+                Answer::read(&answer.unwrap_or_default()).is_some_and(|read| read.carries(ids))
+            };
+            let initial = |version, original: &[u8]| {
+                server_initial(
+                    version,
+                    original,
+                    (&[], &[0x5a; 8]),
+                    (0, &[0x02, 0, 0, 0, 0]),
+                )
+            };
+            assert!(carries(initial(other, &[0x42; 8])), "{other:#x}'s Initial");
+            assert!(carries(initial(asked, &[0x42; 8])), "{asked:#x}'s Initial");
+            assert!(!carries(initial(other, &[0x43; 8])));
+            let retry = |version| retry(version, &[0x42; 8], (&[], &[0x5a; 8]), b"token");
+            assert!(carries(retry(asked)), "{asked:#x}'s Retry");
+            assert!(!carries(retry(other)), "{other:#x}'s Retry for {asked:#x}");
         }
-        let other = server_initial(
-            0x6b33_43cf,
-            &[0x43; 8],
-            (&[], &[0x5a; 8]),
-            (0, &[2, 0, 0, 0, 0]),
-        );
-        assert!(!Answer::read(&other.unwrap_or_default()).is_some_and(|read| read.carries(&ids)));
     }
 
     /// An app's datagram asks only what an Initial in it carries: one of a 0-RTT packet alone asks nothing,
@@ -1547,8 +1667,129 @@ pub(crate) mod tests {
         assert!(!Answer::read(&stream.unwrap_or_default()).is_some_and(|read| read.carries(&ids)));
     }
 
-    /// A Version Negotiation packet carries the app's IDs crossed, then the versions it lists; a packet
-    /// whose destination is the app's source ID carries it where that ID has 4 bytes or more.
+    /// What a client discards carries nothing, though the right keys protect it or the right integrity
+    /// key tags it (fix round 2, review D): a server's Initial with its reserved bits set (RFC 9000 17.2),
+    /// with no frame (12.4), or with a token (17.2.2); a Retry without a token (17.2.5.2).
+    #[test]
+    fn what_a_client_discards_answers_nothing() {
+        let (_, ids) = v1_asked(&[0x42; 8]);
+        let carries = |packet: Option<Vec<u8>>| {
+            Answer::read(&packet.unwrap_or_default()).is_some_and(|read| read.carries(&ids))
+        };
+        let Some(keys) = Keys::initial(Version::V1, &[0x42; 8], SERVER) else {
+            unreachable!("Initial keys")
+        };
+        let sealed = |(reserved, token): (u8, &[u8]), frames: &[u8]| {
+            seal(
+                Version::V1,
+                &keys,
+                (&[], &[0x5a; 8]),
+                (0, 4),
+                (reserved, token),
+                frames,
+            )
+        };
+        assert!(carries(sealed((0, &[]), &[0x01])), "as a server sends it");
+        assert!(!carries(sealed((0x04, &[]), &[0x01])), "a reserved bit");
+        assert!(!carries(sealed((0x08, &[]), &[0x01])), "the other");
+        assert!(!carries(sealed((0, &[]), &[])), "no frame");
+        assert!(!carries(sealed((0, b"token"), &[0x01])), "a token");
+        let retry = |token: &[u8]| retry(1, &[0x42; 8], (&[], &[0x5a; 8]), token);
+        assert!(carries(retry(b"t")));
+        assert!(!carries(retry(b"")), "a Retry without a token");
+    }
+
+    /// The frames of a server's Initial are read to their end as RFC 9000 19 has them (fix round 2, review
+    /// D's surviving mutants): an ACK with ECN counts reads its three counts, which are no frames of their
+    /// own, and a `CONNECTION_CLOSE` whose reason runs past the payload is cut short.
+    #[test]
+    fn a_servers_frames_are_read_to_their_end() {
+        let (_, ids) = v1_asked(&[0x42; 8]);
+        let carries = |frames: &[u8]| {
+            let answer = server_initial(1, &[0x42; 8], (&[], &[0x5a; 8]), (0, frames));
+            Answer::read(&answer.unwrap_or_default()).is_some_and(|read| read.carries(&ids))
+        };
+        // ACK_ECN: largest 0, delay 0, no more ranges, first range 0, then counts 5, 7 and 9, which read
+        // as frames would be RESET_STREAM and others an Initial may not carry; then a PING.
+        assert!(carries(&[0x03, 0, 0, 0, 0, 5, 7, 9, 0x01]));
+        assert!(
+            !carries(&[0x02, 0, 0, 0, 0, 5, 7, 9, 0x01]),
+            "an ACK without counts"
+        );
+        assert!(carries(&[0x1c, 0, 0, 3, b'a', b'b', b'c']));
+        assert!(
+            !carries(&[0x1c, 0, 0, 10, b'a', b'b', b'c']),
+            "a reason past the end"
+        );
+    }
+
+    /// An answer of [`LARGEST_ANSWER`] bytes is opened and told, one byte more is not (fix round 2, review
+    /// D's surviving mutant).
+    #[test]
+    fn the_largest_answer_is_read_and_no_larger() {
+        let (_, ids) = v1_asked(&[0x42; 8]);
+        // 20 bytes of header and 16 of tag around an ACK and PADDING.
+        for (size, told) in [(LARGEST_ANSWER, true), (LARGEST_ANSWER + 1, false)] {
+            let mut frames = vec![0x02, 0, 0, 0, 0];
+            frames.resize(size - 36, 0);
+            let answer =
+                server_initial(1, &[0x42; 8], (&[], &[0x5a; 8]), (0, &frames)).unwrap_or_default();
+            assert_eq!(answer.len(), size);
+            assert_eq!(
+                Answer::read(&answer).is_some_and(|read| read.carries(&ids)),
+                told,
+                "{size} bytes"
+            );
+        }
+    }
+
+    /// A datagram whose Initials are of both versions, to one destination ID, asks each, each opened with
+    /// its version's keys; the hello's reader, likewise, derives a version's keys for a destination ID it
+    /// read in the other version (fix round 2, review D's surviving mutants).
+    #[test]
+    fn each_version_has_its_own_keys() {
+        let hello = tls::tests::handshake("watch.test", false);
+        let cid = [0x42; 8];
+        let (half, rest) = hello.split_at(hello.len() / 2);
+        let first = initial_packet(1, &cid, 0, &crypto(0, half), 0);
+        let second = initial_packet(0x6b33_43cf, &cid, 1, &crypto(half.len(), rest), 0);
+        assert_eq!(asked(&[first.clone(), second.clone()].concat()).len(), 2);
+        let mut initial = Initial::new();
+        assert_eq!(initial.push(&first), ServerName::Incomplete);
+        assert_eq!(initial.push(&second), found("watch.test", false));
+    }
+
+    /// The hello's reader reads a datagram as [`asked`] does (fix round 2, review D): a packet after one to
+    /// another destination ID is not read, nor one after the first [`MOST_PACKETS`], so neither a damaged
+    /// one there undoes the name, nor do a datagram's many tiny Initials cost more than a few.
+    #[test]
+    fn the_hellos_reader_reads_a_datagram_no_further_than_asked_does() {
+        let hello = tls::tests::handshake("watch.test", false);
+        let packet = initial_packet(1, &hex(CID), 0, &crypto(0, &hello), 0);
+        let mut damaged = initial_packet(1, &[0x22; 8], 0, &[0x01], 0);
+        let last = damaged.len() - 1;
+        damaged[last] ^= 1;
+        assert_eq!(
+            Initial::new().push(&[packet.clone(), damaged].concat()),
+            found("watch.test", false)
+        );
+        let tiny = |pn| initial_packet(1, &hex(CID), pn, &[0x01], 0);
+        let mut many: Vec<u8> = (1..=u32::try_from(MOST_PACKETS).unwrap_or(0))
+            .flat_map(tiny)
+            .collect();
+        let mut late = tiny(99);
+        let last = late.len() - 1;
+        late[last] ^= 1;
+        many.extend_from_slice(&late);
+        let mut initial = Initial::new();
+        assert_eq!(initial.push(&many), ServerName::Incomplete);
+        assert!(initial.is_quic());
+    }
+
+    /// A Version Negotiation packet carries the app's IDs crossed, each half of the crossing checked,
+    /// then versions listed in whole 4-byte words, not the app's own, which a client would discard (RFC
+    /// 9000 6.2; fix round 2, review D); a packet whose destination is the app's source ID carries it
+    /// where that ID has 4 bytes or more.
     #[test]
     fn negotiation_and_the_apps_source_id_carry_what_it_asked() {
         let (destination, source) = (hex("0011223344556677"), hex("a1a2a3a4"));
@@ -1569,7 +1810,8 @@ pub(crate) mod tests {
         };
         let carries =
             |packet: &[u8], ids: &Ids| Answer::read(packet).is_some_and(|a| a.carries(ids));
-        let versions = [0, 0, 0, 1, 0x6b, 0x33, 0x43, 0xcf];
+        // Version 2 and a reserved version (RFC 9000 15), not the app's version 1.
+        let versions = [0x6b, 0x33, 0x43, 0xcf, 0x1a, 0x2a, 0x3a, 0x4a];
         assert!(carries(
             &negotiation(&source, &destination, &versions),
             &asked(&source)
@@ -1582,14 +1824,28 @@ pub(crate) mod tests {
             &negotiation(&destination, &source, &versions),
             &asked(&source)
         ));
+        // Each half of the crossing alone.
         assert!(!carries(
-            &negotiation(&source, &destination, &[]),
+            &negotiation(&hex("b1b2b3b4"), &destination, &versions),
             &asked(&source)
         ));
         assert!(!carries(
-            &negotiation(&source, &destination, &versions[..3]),
+            &negotiation(&source, &hex("0011223344556678"), &versions),
             &asked(&source)
         ));
+        for listed in [&versions[..0], &versions[..3], &versions[..7]] {
+            assert!(
+                !carries(&negotiation(&source, &destination, listed), &asked(&source)),
+                "{} bytes of versions",
+                listed.len()
+            );
+        }
+        let mut own = versions.to_vec();
+        own.extend_from_slice(&[0, 0, 0, 1]);
+        assert!(
+            !carries(&negotiation(&source, &destination, &own), &asked(&source)),
+            "a list with the app's own version"
+        );
         // A short header to the app's source ID, and a Handshake packet (version 1's type 2).
         let mut short = vec![0x41];
         short.extend_from_slice(&source);
@@ -1605,6 +1861,14 @@ pub(crate) mod tests {
         handshake.extend_from_slice(&[0x55; 40]);
         assert!(carries(&handshake, &asked(&source)));
         assert!(!carries(&handshake, &asked(&hex("b1b2b3b4"))));
+        // A Handshake packet to an ID too short to tell is told by nothing, and opens nothing.
+        let mut empty = vec![0xe0, 0, 0, 0, 1, 0, 0];
+        empty.extend_from_slice(&[0x55; 40]);
+        let Some(read) = Answer::read(&empty) else {
+            unreachable!("a long header")
+        };
+        assert!(!read.carries(&asked(&[])));
+        assert_eq!(read.opened(), 0);
     }
 
     /// A CRYPTO frame holding `data` at `offset`.
