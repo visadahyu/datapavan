@@ -12,6 +12,8 @@
     <string name="device_patch">安全补丁：%1$s</string>
     <string name="device_integrity_failed">此手机的硬件检查失败。</string>
     <string name="device_integrity_waiting">硬件检查正在等待此手机连接到 Google。</string>
+    <string name="device_integrity_update">硬件检查正在等待此手机进行系统更新。</string>
+    <string name="device_integrity_refused">Google 拒绝向此手机提供用于硬件检查的密钥。</string>
     <string name="device_revocation_list">已对照 Google 截至 %1$s 的已吊销密钥列表进行检查。</string>
     <string name="device_revocation_list_old">此处使用的 Google 已吊销密钥列表截至 %1$s，已超过三个月，因此此后被吊销的密钥不会被发现。请导入较新的数据包来更新它。</string>
     <string name="device_revocation_list_undated">此处使用的 Google 已吊销密钥列表日期不明，因此此后被吊销的密钥可能不会被发现。请导入较新的数据包来更新它。</string>
@@ -255,10 +257,14 @@
     <string name="finding_attestation_broken_body">此手机硬件检查中的证书彼此对不上，因此该检查无法证明引导加载程序或系统的任何情况。正常的手机绝不会这样回应；修改过的系统或手机密钥库的故障则可能如此。</string>
     <string name="finding_attestation_keys_unavailable_title">硬件检查正在等待 Google</string>
     <string name="finding_attestation_keys_unavailable_body">此手机的安全硬件目前没有用于此检查的密钥。Android 通过互联网从 Google 获取这些密钥，它们的有效期为一到四周。此手机很可能最近没有连接到 Google，例如因为它的网络屏蔽了 Google。Datapavan 本身从不建立连接。手机连接到 Google 之后，检查就会恢复。在此之前，无法确认引导加载程序和系统状态。仅凭这一点，并不意味着手机被改动过，但修改过的系统可能给出这样的回应，以隐藏引导加载程序的状态。</string>
+    <string name="finding_attestation_update_required_title">硬件检查需要系统更新</string>
+    <string name="finding_attestation_update_required_body">Android 报告称，Google 只有在系统更新之后才会向此手机提供用于硬件检查的密钥。请安装手机提供的系统更新，重启手机，然后重新打开 Datapavan。在此之前，无法确认引导加载程序和系统状态。仅凭这一点，并不意味着手机被改动过，但修改过的系统可能给出这样的回应，以隐藏引导加载程序的状态。</string>
+    <string name="finding_attestation_keys_refused_title">Google 拒绝提供用于硬件检查的密钥</string>
+    <string name="finding_attestation_keys_refused_body">Android 报告称，Google 的服务器已永久拒绝向此手机提供用于硬件检查的密钥。对于厂商未在 Google 注册的手机，或 Google 不再信任的手机，Google 会这样做。手机上的任何操作都无法改变这一点；手机的厂商或销售商也许可以。无法确认引导加载程序和系统状态。仅凭这一点，并不意味着手机被改动过，但修改过的系统可能给出这样的回应，以隐藏引导加载程序的状态。</string>
     <string name="finding_attestation_out_of_date_title">硬件检查不在有效期内</string>
     <string name="finding_attestation_out_of_date_body">此手机硬件检查中的一个证书在手机显示的日期无效，因此无法确认该检查。通常的原因是手机上的日期不对：请设置正确的日期，然后重新打开 Datapavan。</string>
     <string name="finding_attestation_failed_title">硬件检查失败</string>
-    <string name="finding_attestation_failed_body">Datapavan 无法在此手机上完成硬件检查，或无法读取其回应，因此无法确认引导加载程序和系统状态。所有出厂时搭载 Android 8 或更高版本的手机都支持此检查。手机软件或 Datapavan 中的故障可能导致这种情况；隐藏引导加载程序状态的修改过的系统也可能如此。仅凭这一点，并不意味着手机被改动过。</string>
+    <string name="finding_attestation_failed_body">Datapavan 无法在此手机上完成硬件检查，或无法读取其回应，因此无法确认引导加载程序和系统状态。所有出厂时搭载 Android 8 或更高版本的手机都支持此检查。在正常的手机上，手机软件或 Datapavan 中的故障可能导致这种情况；在 Android 12 上，手机无法连接到 Google 期间过期的 Google 密钥也可能导致这种情况，而 Android 12 不会报告这一点，因此请在手机联网之后再试一次。隐藏引导加载程序状态的修改过的系统也可能导致这种情况。仅凭这一点，并不意味着手机被改动过。</string>
     <string name="finding_system_own_key_title">系统使用自己的密钥签名</string>
     <string name="finding_system_own_key_body">此手机的引导加载程序已用一个不属于厂商的密钥锁定，因此其系统是由机主或其他人安装的。如果您自己安装了 GrapheneOS 之类的系统，请将 Datapavan 为此手机显示的验证启动密钥与该系统的开发项目为此型号发布的密钥进行比较。如果不是您自己安装的，请把这当作严重警告。</string>
     <string name="finding_vpn_active_title">有 VPN 正在运行</string>

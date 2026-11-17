@@ -36,6 +36,8 @@ enum class FindingKind(val severity: Severity) {
     ATTESTATION_OUT_OF_DATE(Severity.MEDIUM),
     ATTESTATION_BROKEN(Severity.MEDIUM),
     ATTESTATION_KEYS_UNAVAILABLE(Severity.MEDIUM),
+    ATTESTATION_UPDATE_REQUIRED(Severity.MEDIUM),
+    ATTESTATION_KEYS_REFUSED(Severity.MEDIUM),
     SYSTEM_KEY_LEAKED(Severity.MEDIUM),
     USB_DEBUGGING(Severity.MEDIUM),
     OLD_SECURITY_PATCH(Severity.MEDIUM),
@@ -154,12 +156,16 @@ object Rules {
         if (device.wirelessDebugging) add(FindingKind.WIRELESS_DEBUGGING)
         if (device.usbDebugging) add(FindingKind.USB_DEBUGGING)
         // A check that should work and did not is reported, so that a system cannot hide the bootloader's
-        // state by breaking the check, and a fault on a sound phone comes to light. A phone waiting for keys from
-        // Google is told apart, at the same severity, since a hook could claim that too.
+        // state by breaking the check, and a fault on a sound phone comes to light. What the keystore says of
+        // the cause (waiting for Google, a system update needed, keys refused) is told apart, so that the owner
+        // knows what to do, at the same severity, since a hook could claim each of them too. A device that
+        // calls itself an emulator changes none of this.
         if (device.integrity == null) {
             when (device.integrityFailure) {
                 IntegrityFailure.FAILED -> add(FindingKind.ATTESTATION_FAILED)
                 IntegrityFailure.KEYS_UNAVAILABLE -> add(FindingKind.ATTESTATION_KEYS_UNAVAILABLE)
+                IntegrityFailure.UPDATE_REQUIRED -> add(FindingKind.ATTESTATION_UPDATE_REQUIRED)
+                IntegrityFailure.KEYS_REFUSED -> add(FindingKind.ATTESTATION_KEYS_REFUSED)
                 null -> Unit
             }
         }

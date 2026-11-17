@@ -494,6 +494,8 @@ internal fun integrityLines(device: DeviceFacts, today: LocalDate): List<Pair<In
     val integrity = device.integrity ?: return when (device.integrityFailure) {
         IntegrityFailure.FAILED -> listOf(R.string.device_integrity_failed to null)
         IntegrityFailure.KEYS_UNAVAILABLE -> listOf(R.string.device_integrity_waiting to null)
+        IntegrityFailure.UPDATE_REQUIRED -> listOf(R.string.device_integrity_update to null)
+        IntegrityFailure.KEYS_REFUSED -> listOf(R.string.device_integrity_refused to null)
         null -> emptyList()
     }
     val hardware = integrity.securityLevel > 0
@@ -773,6 +775,8 @@ private fun title(kind: FindingKind) = when (kind) {
     FindingKind.ATTESTATION_REVOKED -> R.string.finding_attestation_revoked_title
     FindingKind.ATTESTATION_FORGED -> R.string.finding_attestation_forged_title
     FindingKind.ATTESTATION_KEYS_UNAVAILABLE -> R.string.finding_attestation_keys_unavailable_title
+    FindingKind.ATTESTATION_UPDATE_REQUIRED -> R.string.finding_attestation_update_required_title
+    FindingKind.ATTESTATION_KEYS_REFUSED -> R.string.finding_attestation_keys_refused_title
     FindingKind.ATTESTATION_BROKEN -> R.string.finding_attestation_broken_title
     FindingKind.ATTESTATION_PUBLIC_ROOT -> R.string.finding_attestation_public_root_title
     FindingKind.ATTESTATION_SOFTWARE_ANSWER -> R.string.finding_attestation_software_answer_title
@@ -814,6 +818,8 @@ private fun body(kind: FindingKind) = when (kind) {
     FindingKind.ATTESTATION_REVOKED -> R.string.finding_attestation_revoked_body
     FindingKind.ATTESTATION_FORGED -> R.string.finding_attestation_forged_body
     FindingKind.ATTESTATION_KEYS_UNAVAILABLE -> R.string.finding_attestation_keys_unavailable_body
+    FindingKind.ATTESTATION_UPDATE_REQUIRED -> R.string.finding_attestation_update_required_body
+    FindingKind.ATTESTATION_KEYS_REFUSED -> R.string.finding_attestation_keys_refused_body
     FindingKind.ATTESTATION_BROKEN -> R.string.finding_attestation_broken_body
     FindingKind.ATTESTATION_PUBLIC_ROOT -> R.string.finding_attestation_public_root_body
     FindingKind.ATTESTATION_SOFTWARE_ANSWER -> R.string.finding_attestation_software_answer_body

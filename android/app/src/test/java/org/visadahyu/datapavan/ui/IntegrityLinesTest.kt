@@ -107,6 +107,8 @@ class IntegrityLinesTest {
     fun `a failed check, and one waiting for Google, have lines of their own`() {
         assertEquals(listOf(R.string.device_integrity_failed to null), lines(null, IntegrityFailure.FAILED))
         assertEquals(listOf(R.string.device_integrity_waiting to null), lines(null, IntegrityFailure.KEYS_UNAVAILABLE))
+        assertEquals(listOf(R.string.device_integrity_update to null), lines(null, IntegrityFailure.UPDATE_REQUIRED))
+        assertEquals(listOf(R.string.device_integrity_refused to null), lines(null, IntegrityFailure.KEYS_REFUSED))
         // No check made, which the app never shows: nothing to say.
         assertEquals(emptyList<Pair<Int, String?>>(), lines(null))
     }

@@ -150,6 +150,18 @@ enum class IntegrityFailure {
      * (Remote Key Provisioning), as the keystore says (Android 13 and later).
      */
     KEYS_UNAVAILABLE,
+
+    /**
+     * Google's provisioning server gives the phone keys only after a system update: the keystore says to try
+     * again after the next reboot, once an update is installed (Android 14 and later).
+     */
+    UPDATE_REQUIRED,
+
+    /**
+     * Google's provisioning server refused the phone keys for good, as for a phone its maker did not register
+     * or that Google no longer trusts: the keystore says the keys are unavailable and never to try again.
+     */
+    KEYS_REFUSED,
 }
 
 /** What the hardware check found: the attestation's decoded state, or why there is none. */

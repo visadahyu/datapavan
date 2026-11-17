@@ -146,9 +146,11 @@ class HardwareCheckTest {
 
     @Test
     fun `a check waits for Google only where the keystore says it can be mended by reaching Google`() {
-        // android.security.KeyStoreException's public values (Android 13): the code ERROR_ATTESTATION_KEYS_UNAVAILABLE,
-        // and the retry policies never, with backoff, when online again, and after the next reboot.
+        // android.security.KeyStoreException's values: the codes ERROR_ATTESTATION_KEYS_UNAVAILABLE (16) and, hidden,
+        // ERROR_DEVICE_REQUIRES_UPGRADE_FOR_ATTESTATION (17), and the retry policies never, with backoff, when
+        // online again, and after the next reboot.
         val keysUnavailable = 16
+        val upgradeRequired = 17
         val never = 1
         val backoff = 2
         val online = 3
@@ -160,14 +162,27 @@ class HardwareCheckTest {
         assertEquals(IntegrityFailure.KEYS_UNAVAILABLE, failure(KeystoreError(keysUnavailable, backoff)))
         assertEquals(IntegrityFailure.KEYS_UNAVAILABLE, failure(KeystoreError(other, online)))
         // Google's server refused this phone for good (RKP_SERVER_REFUSED_ISSUANCE, OUT_OF_KEYS_PERMANENT_ERROR):
-        // no connection mends it, so it is not called waiting. Nor is a wait for a reboot or a system update.
-        assertEquals(IntegrityFailure.FAILED, failure(KeystoreError(keysUnavailable, never)))
-        assertEquals(IntegrityFailure.FAILED, failure(KeystoreError(keysUnavailable, reboot)))
+        // no connection mends it, so it is not called waiting, but told as a refusal.
+        assertEquals(IntegrityFailure.KEYS_REFUSED, failure(KeystoreError(keysUnavailable, never)))
+        // Keys only after a system update and a restart (OUT_OF_KEYS_REQUIRES_SYSTEM_UPGRADE, and
+        // RKP_FETCHING_PENDING_SOFTWARE_REBOOT).
+        assertEquals(IntegrityFailure.UPDATE_REQUIRED, failure(KeystoreError(upgradeRequired, reboot)))
+        assertEquals(IntegrityFailure.UPDATE_REQUIRED, failure(KeystoreError(keysUnavailable, reboot)))
+        // Anything else is a failure: other errors, whatever their policy.
+        assertEquals(IntegrityFailure.FAILED, failure(KeystoreError(other, reboot)))
         assertEquals(IntegrityFailure.FAILED, failure(KeystoreError(other, backoff)))
         assertEquals(IntegrityFailure.FAILED, failure(KeystoreError(other, never)))
-        // A refusal for good anywhere among the causes decides; no explained error at all is a failure.
-        assertEquals(IntegrityFailure.FAILED, failure(KeystoreError(keysUnavailable, online), KeystoreError(keysUnavailable, never)))
-        assertEquals(IntegrityFailure.FAILED, failure(KeystoreError(keysUnavailable, never), KeystoreError(keysUnavailable, online)))
+        assertEquals(IntegrityFailure.FAILED, failure(KeystoreError(upgradeRequired, never)))
+        // A refusal for good anywhere among the causes decides, whatever the others say: the keys' own refusal
+        // over every other answer, and any other error's over a wait.
+        assertEquals(IntegrityFailure.KEYS_REFUSED, failure(KeystoreError(keysUnavailable, online), KeystoreError(keysUnavailable, never)))
+        assertEquals(IntegrityFailure.KEYS_REFUSED, failure(KeystoreError(keysUnavailable, never), KeystoreError(keysUnavailable, online)))
+        assertEquals(IntegrityFailure.KEYS_REFUSED, failure(KeystoreError(other, never), KeystoreError(keysUnavailable, never)))
+        assertEquals(IntegrityFailure.FAILED, failure(KeystoreError(other, never), KeystoreError(keysUnavailable, online)))
+        assertEquals(IntegrityFailure.FAILED, failure(KeystoreError(keysUnavailable, online), KeystoreError(other, never)))
+        assertEquals(IntegrityFailure.FAILED, failure(KeystoreError(other, never), KeystoreError(upgradeRequired, reboot)))
+        // A system update outranks a wait; an error that names neither changes nothing.
+        assertEquals(IntegrityFailure.UPDATE_REQUIRED, failure(KeystoreError(keysUnavailable, online), KeystoreError(upgradeRequired, reboot)))
         assertEquals(IntegrityFailure.KEYS_UNAVAILABLE, failure(KeystoreError(other, reboot), KeystoreError(keysUnavailable, online)))
         assertEquals(IntegrityFailure.FAILED, failure())
     }

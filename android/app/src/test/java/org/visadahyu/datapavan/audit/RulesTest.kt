@@ -208,6 +208,8 @@ class RulesTest {
             FindingKind.ATTESTATION_OUT_OF_DATE to Severity.MEDIUM,
             FindingKind.ATTESTATION_BROKEN to Severity.MEDIUM,
             FindingKind.ATTESTATION_KEYS_UNAVAILABLE to Severity.MEDIUM,
+            FindingKind.ATTESTATION_UPDATE_REQUIRED to Severity.MEDIUM,
+            FindingKind.ATTESTATION_KEYS_REFUSED to Severity.MEDIUM,
             FindingKind.ATTESTATION_FAILED to Severity.MEDIUM,
             FindingKind.SYSTEM_OWN_KEY to Severity.MEDIUM,
             FindingKind.OLD_SECURITY_PATCH to Severity.MEDIUM,
@@ -218,6 +220,14 @@ class RulesTest {
         // A new kind of the check is given a severity here too.
         val ofTheCheck = FindingKind.entries.filter { it.name.startsWith("ATTESTATION_") || it.name.startsWith("INTEGRITY_") }
         assertTrue(expected.keys.containsAll(ofTheCheck))
+    }
+
+    @Test
+    fun `a system update required, and keys refused, are told apart from a failed check`() {
+        val update = DeviceFacts(false, false, emptyList(), vpnActive = false, integrity = null, integrityFailure = IntegrityFailure.UPDATE_REQUIRED)
+        assertEquals(listOf(FindingKind.ATTESTATION_UPDATE_REQUIRED), Rules.forDevice(update, nowYearMonth = 202_610))
+        val refused = update.copy(integrityFailure = IntegrityFailure.KEYS_REFUSED)
+        assertEquals(listOf(FindingKind.ATTESTATION_KEYS_REFUSED), Rules.forDevice(refused, nowYearMonth = 202_610))
     }
 
     @Test

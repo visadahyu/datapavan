@@ -119,28 +119,43 @@ class HardwareCheck(
 
         /**
          * What a failed check means, from what the keystore said about it: on Android 13 and later its errors
-         * carry a retry policy ([KeystoreError]), and before, nothing, so that every failure there is
-         * [IntegrityFailure.FAILED].
-         *
-         * The check waits for Google ([IntegrityFailure.KEYS_UNAVAILABLE]) where the keystore says to try again
-         * once the phone is online, or that its keys are unavailable and to try again after a while: Google's
-         * provisioning server could not be reached, as where a network blocks Google. Anything else is a
-         * failure: a policy of never, as when Google's server refused to issue keys to this phone, which no
-         * connection mends, or of after the next reboot, as when the phone needs a system update first. A
-         * refusal for good among the errors decides, whatever the others say.
+         * carry a code and a retry policy ([KeystoreError]; AOSP's KeyStoreException.getRetryPolicy), and before,
+         * nothing, so that every failure there is [IntegrityFailure.FAILED]. In this order:
+         * - the keys unavailable, never to try again: Google's provisioning server refused this phone keys for
+         *   good ([IntegrityFailure.KEYS_REFUSED]), as for a phone its maker did not register, which no
+         *   connection mends;
+         * - any other error never to try again: a failure, whatever the others say;
+         * - the keys unavailable, or a system update needed, until after the next reboot: Google gives keys only
+         *   once a system update is installed ([IntegrityFailure.UPDATE_REQUIRED], Android 14 and later);
+         * - try again once online, or the keys unavailable for now: waiting for Google
+         *   ([IntegrityFailure.KEYS_UNAVAILABLE]), as where a network blocks Google;
+         * - anything else is a failure.
          */
         @SuppressLint("InlinedApi") // Constants, read on Android 13 and later only, where the errors carry them.
         fun failureOf(errors: Sequence<KeystoreError>): IntegrityFailure {
             val policies = errors.toList()
-            val waiting = policies.none { it.retryPolicy == KeyStoreException.RETRY_NEVER } && policies.any {
-                it.retryPolicy == KeyStoreException.RETRY_WHEN_CONNECTIVITY_AVAILABLE ||
-                    (
-                        it.code == KeyStoreException.ERROR_ATTESTATION_KEYS_UNAVAILABLE &&
-                            it.retryPolicy == KeyStoreException.RETRY_WITH_EXPONENTIAL_BACKOFF
-                        )
+            val keys = { error: KeystoreError -> error.code == KeyStoreException.ERROR_ATTESTATION_KEYS_UNAVAILABLE }
+            val never = { error: KeystoreError -> error.retryPolicy == KeyStoreException.RETRY_NEVER }
+            return when {
+                policies.any { keys(it) && never(it) } -> IntegrityFailure.KEYS_REFUSED
+                policies.any(never) -> IntegrityFailure.FAILED
+                policies.any {
+                    it.retryPolicy == KeyStoreException.RETRY_AFTER_NEXT_REBOOT &&
+                        (keys(it) || it.code == ERROR_DEVICE_REQUIRES_UPGRADE_FOR_ATTESTATION)
+                } -> IntegrityFailure.UPDATE_REQUIRED
+                policies.any {
+                    it.retryPolicy == KeyStoreException.RETRY_WHEN_CONNECTIVITY_AVAILABLE ||
+                        (keys(it) && it.retryPolicy == KeyStoreException.RETRY_WITH_EXPONENTIAL_BACKOFF)
+                } -> IntegrityFailure.KEYS_UNAVAILABLE
+                else -> IntegrityFailure.FAILED
             }
-            return if (waiting) IntegrityFailure.KEYS_UNAVAILABLE else IntegrityFailure.FAILED
         }
+
+        /**
+         * KeyStoreException's code for "this device requires a software upgrade to use the key provisioning
+         * server", hidden from the public API but returned by getNumericErrorCode (AOSP, Android 14 and later).
+         */
+        private const val ERROR_DEVICE_REQUIRES_UPGRADE_FOR_ATTESTATION = 17
 
         /**
          * Whether the phone declares secure hardware for its keys, as [declares] (the package manager) answers
