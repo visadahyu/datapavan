@@ -42,7 +42,9 @@ The constraints:
    cannot be brought back. It must also date each dataset whose age the app shows from its `SOURCE`, so far
    the attestation revocation list (ADR 0040, amended 2026-11-17): a pack that holds the attestation dataset
    without a `retrieved:` date the app can read, or with one after the pack's own date, is refused, with a
-   message that says so, since the app could not tell how old its list of revoked keys is.
+   message that says which, since the app could not tell how old its list of revoked keys is. The build of a
+   pack to publish (`:app:dataPayload`) refuses a pack dated before any dataset it holds, so the project's
+   own tooling cannot make a pack the app refuses.
 5. **Trust follows a chain to a pinned key.** The keys pinned in a build are the `key` lines of
    `data/PACK`, which go into the APK's own pack. An imported pack may name more keys and revoke keys, and
    the app records which keys led to each imported pack. A build drops an imported pack whose chain does

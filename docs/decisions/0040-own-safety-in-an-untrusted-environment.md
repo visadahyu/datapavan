@@ -117,10 +117,12 @@ below.
   store falls back to the APK's pack file by file, which could have put a newer pack's date on the APK's older
   list. The roots come from the newest pack that holds them, so that a pack can rotate them. A pack whose
   attestation `SOURCE` does not date the list, or dates it after the pack's own signed date (which would keep the
-  list fresh for ever), is refused at import, with a message that says so (ADR 0017, DATA-PACKS.md), and a test
-  checks that every dataset in the repository dates itself. (The APK's own pack is not bounded so: `data/PACK`'s
-  date moves with releases while the datasets are updated between them, and the build makes that pack from the
-  repository.) A list whose date is unknown all the same (an imported pack from before this rule) is shown as
+  list fresh for ever), is refused at import, with a message for each case (ADR 0017, DATA-PACKS.md), and a
+  test checks that every dataset in the repository dates itself. The build of a pack to publish refuses one
+  dated before any dataset it holds, so that the project's own tooling cannot make a pack every phone refuses;
+  `scripts/datapack-test.py` moves its test packs' datasets back to an old date it gives them. (The APK's own
+  pack is not bounded so: `data/PACK`'s date is the last published pack's, while the datasets are updated
+  between releases.) A list whose date is unknown all the same (an imported pack from before this rule) is shown as
   such, never as fresh. The phone's date is its system's, so a clock set back could make an old list look fresh:
   the list's age is counted at the least from the first day of the month before the patch level that Google's
   key confirms, since a system with that patch cannot run long before its month, and makers ship a month's

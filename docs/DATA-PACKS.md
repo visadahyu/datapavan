@@ -73,10 +73,13 @@ The signature library is also tested against Project Wycheproof's Ed25519 vector
    - The pack must be newer than the one in use. An old pack with known errors cannot be brought back,
      and replaying a pack changes nothing.
    - **Dated lists.** A pack that holds the attestation dataset must date it: its `SOURCE` needs a
-     `retrieved:` line that starts with a date, no later than the pack's own `date`, since the app shows the
-     age of the list of revoked keys and warns when it is old (ADR 0040), and a later date would keep the list
-     fresh for ever. Otherwise the pack is refused with "This pack does not say when its list of revoked keys
-     was made".
+     `retrieved:` line that starts with a date, since the app shows the age of the list of revoked keys and
+     warns when it is old (ADR 0040); otherwise the pack is refused with "This pack does not say when its
+     list of revoked keys was made". The date must also be no later than the pack's own `date`, since no
+     pack holds data fetched after it was made, and a later date would keep the list fresh for ever;
+     otherwise the pack is refused with "This pack dates its list of revoked keys after the day the pack
+     itself was made". The build of a pack to publish holds every dataset to this (below), so a pack the
+     project publishes is never refused for it.
    - **Trusted keys** are those named by the APK's pack (the pinned keys) and by the imported pack in
      use, minus every key either one revokes.
    - For each imported pack the app records its **chain**: the key that signed it and the keys that
@@ -140,7 +143,9 @@ itself.
 
 1. Update the datasets with their `update.py` converters and review the diff (ADR 0015).
 2. In `data/PACK`, raise `sequence` by one and set `date`. Commit.
-3. Build the payload: `cd android && ./gradlew :app:dataPayload`. It is written to
+3. Build the payload: `cd android && ./gradlew :app:dataPayload`. The build refuses a pack dated before
+   any dataset it holds was retrieved (the `retrieved:` line of each `SOURCE`), and names the datasets, so
+   a date left from the last pack fails here and not on every phone. It is written to
    `android/app/build/datapack/data/bundled.payload`; the release APK built from the same commit carries
    the same bytes.
 4. Carry the payload to the offline computer and sign it:
