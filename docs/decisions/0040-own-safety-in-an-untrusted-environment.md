@@ -211,6 +211,16 @@ below.
   (PRIVACY.md). The memory belongs outside the phone, where neither a wipe nor root reaches it: decision 6's
   check from a second phone pins what it saw, as GrapheneOS's Auditor does. What it would change: the medium
   routes above would show as a change on a phone checked before.
+- **The lab record (debug builds only).** To judge a device's real chain from facts, as the emulator's, debug
+  builds log what each check saw under the logcat tag `DatapavanAttestationLab`: the verdict, the chain check's
+  verdict before the challenge is compared, the security level the parser reads (the weaker of the two; both
+  are in the leaf), the chain's length, and each certificate as base64 DER, in parts under logcat's limit
+  (`src/debug/.../audit/AttestationLab.kt`). `scripts/attestation-chain-from-logcat.py` turns a capture into
+  PEM. The certificates are public data, and nothing else of the phone is logged; a chain from Remote Key
+  Provisioning carries a certificate issued for the phone's current attestation key, so a chain becomes a test
+  vector only from lab devices. Release builds cannot reach it: the code lives in the debug source set, the
+  release source set has a no-op in its place, and `verifyApkRelease` fails if a release APK's code holds the
+  tag, while `verifyApkDebug` fails if a debug APK's does not, so that the check is shown to see it.
 - **One check at a time.** The check used one fixed key alias, and a rotation, a fold or a theme change recreates
   the screen and starts a second check while the first waits on the keystore: the second could read the first's
   key and call a sound phone's check tampered with. `HardwareCheck` now runs one check at a time in the process,

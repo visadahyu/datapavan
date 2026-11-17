@@ -465,6 +465,8 @@ class DeviceCollector(private val context: Context) {
             random = random::nextBytes,
             now = ::Date,
             failure = ::failureOf,
+            // Debug builds log what the check saw, for lab runs; release builds have a no-op here (src/release).
+            lab = AttestationLab::record,
         ).run()
     }
 

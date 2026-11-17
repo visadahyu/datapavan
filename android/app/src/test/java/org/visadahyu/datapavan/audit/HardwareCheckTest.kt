@@ -79,6 +79,7 @@ class HardwareCheckTest {
         parse: (ByteArray) -> AttestationFields? = { extension -> keystore.challengeOf(extension)?.let(::fields) },
         failure: (Exception) -> IntegrityFailure = { IntegrityFailure.FAILED },
         random: (ByteArray) -> Unit = { bytes -> bytes.fill(7) },
+        lab: (AttestationSeen) -> Unit = {},
     ) = HardwareCheck(
         keystore = keystore,
         chains = { google },
@@ -86,6 +87,7 @@ class HardwareCheckTest {
         random = random,
         now = { validDate },
         failure = failure,
+        lab = lab,
     )
 
     @Test
@@ -112,6 +114,36 @@ class HardwareCheckTest {
         assertArrayEquals(ByteArray(HardwareCheck.CHALLENGE_BYTES) { (32 + it).toByte() }, keystore.challenges[0])
         assertArrayEquals(ByteArray(HardwareCheck.CHALLENGE_BYTES) { (64 + it).toByte() }, keystore.challenges[1])
         assertEquals(16, HardwareCheck.CHALLENGE_BYTES)
+    }
+
+    @Test
+    fun `each check tells the lab record what it saw, once`() {
+        val seen = mutableListOf<AttestationSeen>()
+        val keystore = FakeKeystore(sony)
+        check(keystore, lab = { seen += it }).run()
+        assertEquals(listOf("GOOGLE_ROOT"), seen.map { it.verdict })
+        assertEquals(AttestationTrust.GOOGLE_ROOT, seen.single().chainTrust)
+        assertEquals(1, seen.single().securityLevel)
+        assertEquals(sony, seen.single().chain)
+        // Another challenge: the chain is Google's, the verdict is not.
+        seen.clear()
+        check(FakeKeystore(sony), parse = { fields("another challenge".toByteArray()) }, lab = { seen += it }).run()
+        assertEquals(listOf("FORGED" to AttestationTrust.GOOGLE_ROOT), seen.map { it.verdict to it.chainTrust })
+        // A forged chain, an unreadable attestation and a failing keystore.
+        seen.clear()
+        check(FakeKeystore(listOf(sony[0]) + sony), lab = { seen += it }).run()
+        check(FakeKeystore(sony), parse = { null }, lab = { seen += it }).run()
+        check(FakeKeystore(sony.drop(1)), lab = { seen += it }).run()
+        val failing = object : FakeKeystore(sony) {
+            override fun generate(alias: String, challenge: ByteArray): PublicKey = throw IllegalStateException("keystore")
+        }
+        check(failing, lab = { seen += it }).run()
+        assertEquals(
+            listOf("FORGED", "failed: attestation unreadable", "failed: no attestation", "failed: FAILED (IllegalStateException)"),
+            seen.map { it.verdict },
+        )
+        assertEquals(listOf(sony.size + 1, sony.size, sony.size - 1, 0), seen.map { it.chain.size })
+        assertEquals(listOf(null, null, null, null), seen.map { it.securityLevel })
     }
 
     @Test

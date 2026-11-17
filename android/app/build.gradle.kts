@@ -471,6 +471,13 @@ abstract class ApkNativeLibraryCheck : DefaultTask() {
     @get:Input
     abstract val callbacks: ListProperty<String>
 
+    /** The debug builds' lab record's logcat tag (src/debug/.../AttestationLab.kt), and whether this APK holds it. */
+    @get:Input
+    abstract val labTag: Property<String>
+
+    @get:Input
+    abstract val labTagExpected: Property<Boolean>
+
     @get:OutputFile
     abstract val report: RegularFileProperty
 
@@ -508,6 +515,17 @@ abstract class ApkNativeLibraryCheck : DefaultTask() {
                     }
                     lines += "OK $apk keeps $name"
                 }
+                // The hardware check's lab record logs certificate chains: debug builds only (ADR 0040). A debug
+                // APK must hold its tag, so that this check is shown to see it, and a release APK must not.
+                val tag = labTag.get()
+                if (code.contains(tag) != labTagExpected.get()) {
+                    throw GradleException(
+                        if (labTagExpected.get()) "${element.outputFile}: the lab record's tag $tag is missing, so this check cannot see it"
+                        else "${element.outputFile}: holds the lab record's tag $tag, which only debug builds may (ADR 0040)",
+                    )
+                }
+                lines += if (labTagExpected.get()) "OK $apk holds the lab record" else "OK $apk has no lab record"
+
             }
         }
         report.get().asFile.writeText(lines.joinToString("\n", postfix = "\n"))
@@ -595,6 +613,8 @@ androidComponents {
             libraries.set(requiredLibraries)
             forbidden.set(forbiddenLibraries)
             callbacks.set(jniCallbacks)
+            labTag.set("DatapavanAttestationLab")
+            labTagExpected.set(variant.buildType == "debug")
             report.set(layout.buildDirectory.file("reports/apk-native/${variant.name}.txt"))
         }
     }

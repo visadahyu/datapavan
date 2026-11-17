@@ -29,6 +29,21 @@ interface AttestationKeystore {
 data class KeystoreError(val code: Int, val retryPolicy: Int)
 
 /**
+ * What one hardware check saw, for the lab's record that debug builds alone keep (AttestationLab, ADR 0040): the
+ * certificates are public data, and nothing else of the phone is in it.
+ */
+class AttestationSeen(
+    /** The result: an [AttestationTrust]'s name, or why there is none. */
+    val verdict: String,
+    /** The chain check's verdict, before the challenge is compared; null when there was none. */
+    val chainTrust: AttestationTrust?,
+    /** The weaker of the attestation's and KeyMint's security levels, as the parser reads them; null when not read. */
+    val securityLevel: Int?,
+    /** The certificate chain, leaf first, as the keystore gave it; empty when it gave none. */
+    val chain: List<X509Certificate>,
+)
+
+/**
  * The hardware check: creates a throwaway key with a fresh random challenge, checks its certificate chain
  * ([AttestationChain]), decodes the leaf's KeyDescription with [parse] (the parsers' isolated process on the
  * phone), compares its challenge with the one sent ([AttestationChain.verdict]), and deletes the key again.
@@ -50,40 +65,54 @@ class HardwareCheck(
     private val now: () -> Date,
     /** What a failure of the keystore, the data pack or the parsers' process means. */
     private val failure: (Exception) -> IntegrityFailure,
+    /** Told what each check saw: AttestationLab's record in debug builds, nothing in release builds. */
+    private val lab: (AttestationSeen) -> Unit = {},
 ) {
     /** The check's result: the attestation's decoded state, or why there is none. */
     fun run(): IntegrityResult = synchronized(LOCK) {
         sweep()
         val alias = "$ALIAS_PREFIX-${UUID.randomUUID()}"
+        var chain = emptyList<X509Certificate>()
         try {
-            check(alias)
+            check(alias) { chain = it }
         } catch (error: Exception) {
             // Every failure of the keystore, the data pack or the parsers' process ends the check the same way:
             // without a result, and with what it most likely means.
-            IntegrityResult(failure = failure(error))
+            val meaning = failure(error)
+            lab(AttestationSeen("failed: $meaning (${error.javaClass.simpleName})", null, null, chain))
+            IntegrityResult(failure = meaning)
         } finally {
             delete(alias)
         }
     }
 
-    private fun check(alias: String): IntegrityResult {
+    private fun check(alias: String, given: (List<X509Certificate>) -> Unit): IntegrityResult {
         val challenge = ByteArray(CHALLENGE_BYTES).also(random)
         val key = keystore.generate(alias, challenge)
-        val chain = keystore.chain(alias)
+        val chain = keystore.chain(alias).also(given)
         val chains = chains()
         val trust = chains.trust(chain, key, now())
+        val seen = { verdict: String, level: Int? -> lab(AttestationSeen(verdict, trust, level, chain)) }
         // Nothing a forged attestation says is used, so it is not even decoded.
-        if (trust == AttestationTrust.FORGED) return IntegrityResult(Integrity.forged())
+        if (trust == AttestationTrust.FORGED) {
+            seen(trust.name, null)
+            return IntegrityResult(Integrity.forged())
+        }
         val extension = chain.firstOrNull()?.getExtensionValue(AttestationChain.KEY_DESCRIPTION_OID)
-            ?: return IntegrityResult(failure = IntegrityFailure.FAILED)
-        val fields = parse(extension) ?: return IntegrityResult(failure = IntegrityFailure.FAILED)
+        val fields = extension?.let(parse)
+        if (fields == null) {
+            seen(if (extension == null) "failed: no attestation" else "failed: attestation unreadable", null)
+            return IntegrityResult(failure = IntegrityFailure.FAILED)
+        }
+        val verdict = AttestationChain.verdict(trust, fields.challenge, challenge)
+        seen(verdict.name, fields.securityLevel)
         return IntegrityResult(
             Integrity(
                 securityLevel = fields.securityLevel,
                 deviceLocked = fields.deviceLocked,
                 verifiedBoot = fields.verifiedBoot,
                 osPatchLevel = fields.osPatchLevel,
-                trust = AttestationChain.verdict(trust, fields.challenge, challenge),
+                trust = verdict,
                 verifiedBootKey = fields.verifiedBootKey?.joinToString("") { "%02x".format(Locale.ROOT, it) },
                 vendorPatchLevel = fields.vendorPatchLevel,
                 revocationListDate = chains.revocationListDate,
