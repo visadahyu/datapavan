@@ -6818,6 +6818,104 @@ mod tests {
         Ok(())
     }
 
+    /// Under a label whose holder is the stand-in bound beside it (the name's own peer gone), an answer
+    /// naming what the app sent another peer, and not the holder, is that peer's where it alone was sent
+    /// it, and no one's where several were (fix round 4, review H's surviving mutant U2, at its place in
+    /// the label's rules).
+    #[tokio::test(flavor = "current_thread")]
+    async fn under_a_label_held_beside_another_peers_identifier_is_not_the_holders()
+    -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let mut mapping = mapping(now).await?;
+        let a = SocketAddr::from(([198, 18, 0, 1], 3_478));
+        let b = SocketAddr::from(([198, 18, 0, 2], 3_478));
+        let server = SocketAddr::from(([192, 0, 2, 9], 3_478));
+        let other = SocketAddr::from(([192, 0, 2, 10], 3_478));
+        let by_a = Target::Name("a.test".into(), 3_478);
+        let to = |mapping: &mut Mapping, answer: &[u8], at: Instant| {
+            mapping
+                .main()
+                .relayed_answer(&shared, APP, (&by_a, answer), at)
+        };
+        mapping.peer(&shared, (APP, a), now, (false, tooled("a.test", 3_478)));
+        mapping.sent(a, &binding(0xa1, false));
+        mapping.peer(&shared, (APP, b), now, (false, tooled("b.test", 3_478)));
+        mapping.sent(b, &binding(0xb2, false));
+        assert!(
+            matches!(to(&mut mapping, &binding(0xb2, true), now), LetIn::Peer(shown, ..) if shown == b)
+        );
+        let later = now + Duration::from_secs(200);
+        if let Some(peer) = mapping.peers.get_mut(&b) {
+            peer.last = later;
+        }
+        mapping.sweep(now + Duration::from_secs(120), &shared);
+        assert!(!mapping.peers.contains_key(&a), "a ended");
+        for at in [server, other] {
+            let way = PeerWay::through_tool(Target::Address(at));
+            mapping.peer(&shared, (APP, at), later, (false, way));
+        }
+        mapping.sent(server, &binding(0xc1, false));
+        assert!(
+            matches!(to(&mut mapping, &binding(0xc1, true), later), LetIn::Peer(shown, ..) if shown == server),
+            "what the server alone was sent"
+        );
+        mapping.sent(server, &binding(0xc2, false));
+        mapping.sent(other, &binding(0xc2, false));
+        assert!(matches!(
+            to(&mut mapping, &binding(0xc2, true), later),
+            LetIn::Unmatched
+        ));
+        assert!(
+            matches!(to(&mut mapping, b"turn data", later), LetIn::Peer(shown, ..) if shown == b)
+        );
+        Ok(())
+    }
+
+    /// A stand-in on port 53 asked for the root name is bound by its response, as off port 53 (fix
+    /// round 4, review H's surviving mutant U5: only port 5355 was tested).
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_stand_in_on_port_53_asked_for_the_root_is_bound_by_its_answer() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let mut mapping = mapping(now).await?;
+        let stand_in = SocketAddr::from(([198, 18, 0, 1], 53));
+        let mut root = vec![0x12, 0x34, 0x01, 0x00, 0, 1, 0, 0, 0, 0, 0, 0];
+        root.extend_from_slice(&[0, 0, 2, 0, 1]);
+        mapping
+            .peer(&shared, (APP, stand_in), now, (false, waiting_stand_in()))
+            .sent(53, &root, None);
+        let mut answer = root.clone();
+        answer[2..4].copy_from_slice(&[0x81, 0x80]);
+        let far = Target::Address(SocketAddr::from(([203, 0, 113, 53], 53)));
+        let let_in = mapping
+            .main()
+            .relayed_answer(&shared, APP, (&far, &answer), now);
+        assert!(matches!(let_in, LetIn::Peer(shown, ..) if shown == stand_in));
+        Ok(())
+    }
+
+    /// A stand-in's QUIC Initial is read opened, its tag checked: one whose tag fails is never noted,
+    /// and does not make the stand-in strict with identifiers no answer would carry (fix round 4, review
+    /// H's surviving mutant U6; it matters for clients whose Initials have QUIC version 1's header and
+    /// other keys).
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_stand_ins_initial_whose_tag_fails_is_never_noted() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let mut mapping = mapping(now).await?;
+        let stand_in = SocketAddr::from(([198, 18, 0, 1], 443));
+        let peer = mapping.peer(&shared, (APP, stand_in), now, (false, waiting_stand_in()));
+        let mut initial =
+            crate::quic::client_initial(1, (&[9; 8], &[]), (0, &[0x01]), 1200).unwrap_or_default();
+        let last = initial.len() - 1;
+        initial[last] ^= 1;
+        peer.sent(443, &initial, None);
+        assert_eq!(peer.ids.len(), 0);
+        assert!(!peer.strict());
+        Ok(())
+    }
+
     /// The places of counters in the snapshot.
     const TOO_BIG: usize = 39;
     const IDENTIFIED: usize = 47;
