@@ -51,6 +51,9 @@ const NTP_SIZE: usize = 48;
 const NETBIOS: u16 = 137;
 /// Multicast DNS's port (RFC 6762): from it, a querier's responses hold no question.
 const MDNS: u16 = 5353;
+/// Of a STUN message, the bytes over which its attributes are walked ([`stun`]): Watch's tunnel's largest
+/// MTU, [`quic::LARGEST_DATAGRAM`] (ADR 0044, unit 9b, fix rounds 4 and 5).
+const WALKED: usize = quic::LARGEST_DATAGRAM;
 
 /// The keys of this run's fingerprints ([`fingerprint`]): random, so that no one can choose identifiers
 /// whose fingerprints meet.
@@ -317,14 +320,17 @@ fn stun_class(message: &[u8]) -> u8 {
 
 /// A STUN message of RFC 5389 or 8489 (5 and 14): its class, method and transaction ID. The top two
 /// bits zero, the magic cookie, a length that is a multiple of 4 and the message's own, and attributes
-/// that each fit, padded to 4 bytes, to its end.
+/// that each fit, padded to 4 bytes, to its end, walked over its first [`WALKED`] bytes.
+///
+/// A STUN message over UDP SHOULD be smaller than the path's MTU (RFC 8489 6.1), at most 1,500 bytes
+/// through Watch's tunnel, but need not be: the rule is a SHOULD so that STUN may probe the MTU (RFC
+/// 5780), whose PADDING makes a response as large as the server's outgoing MTU (5780 6.1, 7.6), larger
+/// than the request where the server's path is. So a larger message is read, its header and its
+/// transaction ID, which tell its answer apart, as any other's; its attributes past the first 1,500
+/// bytes are taken to fit, so that walking them costs no more than 1,500 bytes' worth (fix round 4,
+/// review G's G6: 65,500 bytes of empty attributes cost 36 us; fix round 5, review J's minor 2: the
+/// round's bound refused such a message whole, a padded response among them).
 fn stun(message: &[u8]) -> Option<(u8, u16, [u8; 12])> {
-    // STUN over UDP keeps within the path's MTU (RFC 8489 6.2.1), at most 1,500 bytes through Watch's
-    // tunnel: a larger one is read no further, so that walking its attributes costs no more than that
-    // (ADR 0044, unit 9b, fix round 4, review G's G6: 65,500 bytes of empty attributes cost 36 us).
-    if message.len() > quic::LARGEST_DATAGRAM {
-        return None;
-    }
     let kind = dns::u16_at(message, 0)?;
     let length = usize::from(dns::u16_at(message, 2)?);
     if kind & 0xc000 != 0 || !length.is_multiple_of(4) || message.len() != 20 + length {
@@ -334,11 +340,13 @@ fn stun(message: &[u8]) -> Option<(u8, u16, [u8; 12])> {
         return None;
     }
     let mut at = 20;
-    while at < message.len() {
+    // Past the walk's end, `at` is at the message's end or, for a larger message, at an attribute's
+    // start beyond the walked bytes; past its end only where an attribute walked overruns it.
+    while at < message.len().min(WALKED) {
         let value = usize::from(dns::u16_at(message, at + 2)?);
         at += 4 + value.next_multiple_of(4);
     }
-    if at != message.len() {
+    if at > message.len() {
         return None;
     }
     let method = (kind & 0x000f) | ((kind >> 1) & 0x0070) | ((kind >> 2) & 0x0f80);
@@ -751,20 +759,51 @@ mod tests {
         assert_eq!(Reading::new(&initial).answers(443), None);
     }
 
-    /// A STUN message larger than 1,500 bytes is read no further (fix round 4, review G's G6): STUN over
-    /// UDP keeps within the path's MTU (RFC 8489 6.2.1), so its attributes are walked over 1,500 bytes
-    /// at most.
+    /// A STUN message larger than 1,500 bytes is read, its attributes walked over its first 1,500
+    /// bytes (fix round 5, review J's minor 2; fix round 4, review G's G6, refused it whole): a request
+    /// of 1,504 bytes, and a Binding response padded to a server's outgoing MTU (RFC 5780 7.6), which
+    /// answers its request. An attribute walked that overruns the message still refuses it, also in a
+    /// larger one.
     #[test]
-    fn a_stun_message_past_1_500_bytes_is_not_read() {
-        for (size, read) in [(1_500, true), (1_504, false)] {
-            let mut request = stun_message(0x0001, ID, &[]);
-            request.resize(size, 0);
+    fn a_stun_messages_attributes_are_walked_over_1_500_bytes() {
+        let sized = |kind: u16, size: usize| {
+            let mut message = stun_message(kind, ID, &[]);
+            message.resize(size, 0);
             let attributes = u16::try_from(size - 20).unwrap_or(0).to_be_bytes();
-            request[2..4].copy_from_slice(&attributes);
+            message[2..4].copy_from_slice(&attributes);
+            message
+        };
+        for size in [1_500, 1_504, 65_500] {
             assert_eq!(
-                of((APP, 3_478), &request).len(),
-                usize::from(read),
+                of((APP, 3_478), &sized(0x0001, size)).len(),
+                1,
                 "{size} bytes"
+            );
+        }
+        // A Binding success response padded to 1,524 bytes: PADDING (0x0026) after SOFTWARE.
+        let mut padded = stun_message(0x0101, ID, &[]);
+        padded.extend_from_slice(&[0x00, 0x26]);
+        padded.extend_from_slice(&1_496u16.to_be_bytes());
+        padded.resize(padded.len() + 1_496, 0);
+        let attributes = u16::try_from(padded.len() - 20).unwrap_or(0).to_be_bytes();
+        padded[2..4].copy_from_slice(&attributes);
+        assert_eq!(padded.len(), 1_524);
+        let asked = of((APP, 3_478), &stun_message(0x0001, ID, &[]));
+        assert!(
+            carries(&asked, &padded),
+            "a padded response answers its request"
+        );
+        assert_eq!(
+            Reading::new(&padded).answers(3_478),
+            Some(fingerprint(3_478, &asked[0]))
+        );
+        // An attribute that overruns its message, at its start and at the walk's last bytes.
+        for (size, at) in [(1_500, 20), (2_000, 20), (2_000, 1_496)] {
+            let mut overrun = sized(0x0001, size);
+            overrun[at + 2..at + 4].copy_from_slice(&4_000u16.to_be_bytes());
+            assert!(
+                of((APP, 3_478), &overrun).is_empty(),
+                "{size} bytes, at {at}"
             );
         }
     }
