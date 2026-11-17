@@ -888,8 +888,15 @@ answer or NTP reply reaches its own name, and what carries none goes to the firs
 own separates stand-ins from each other, not from a stranger who learns the relay's port, which no relay read
 filters; for a protocol with no identifier that risk stays as unit 9 states it. Four counters are appended. The
 emulator check now sends STUN requests to two names on one port at once through the test tool and requires both
-answers; it has not run yet. How it is built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is
-built".
+answers; it has not run yet. Two independent reviews and the emulator's first run found more, all fixed in a first
+round: a stand-in's datagrams left by the mapping's association after Android was asked again; a relay that labels
+every answer from its first destination's address with that name gave another stand-in's answers to it, so
+identifiers now outrank the label; identical identifiers of two stand-ins left both unanswered and now get an
+association of their own; the tool closing an idle association ended a live one beside it; QUIC answers cost tens of
+milliseconds under the engine's lock and now cost microseconds; compatible version negotiation was not understood;
+the hand-written GHASH gave way to RustCrypto's aes-gcm; the fuzz target's missing seeds kept seven targets from
+CI's fuzzing; and the emulator step passed without reaching the new code, which it now must. How it is built: [ADR
+0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 | # | Milestone | Done when |
 |---|---|---|

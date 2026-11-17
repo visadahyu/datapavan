@@ -404,13 +404,21 @@ echo "ok: the screen says the proxy asks for a password; with UDP allowed, the p
 # 127.0.0.1 and 127.0.0.2, where its STUN server answers on the same port, so the app's two stand-ins
 # both wait on that port when the answers come back through the relay, each from an address the app
 # never saw. Before unit 9b both were dropped, as either name's; now each reaches the app from its own
-# stand-in, told by its transaction ID. The 48th counter counts the answers so told.
+# stand-in, told by its transaction ID. The workload app resolves both names before it sends, and sends
+# the two requests back to back, so that the first answer finds both stand-ins waiting: the 48th counter,
+# the answers told by an identifier where the address alone could not tell, must grow by one at least
+# (the second answer may find the first stand-in bound already). The emulator's first run of this step
+# resolved the second name between the two sends, and passed with the counter at 0, as unit 9 would
+# have: it showed nothing of unit 9b.
 grep -q "^stun 127.0.0.2 $STUN_PORT$" <<<"$(tool_log)" || fail "the test tool's STUN server does not listen at 127.0.0.2"
 identified=$(counter 48)
 log=$(work --es stun "stun-a.test,stun-b.test:$STUN_PORT")
 grep -q "^stun stun-a.test,stun-b.test:$STUN_PORT both$" <<<"$log" ||
     fail "two STUN requests to two names on one port, from one socket: not both answered: $log; $(tool_log | grep '^stun' | tail -4 | tr '\n' ' ')"
-echo "ok: two STUN names asked at once on one port through the tool, each answered from its own stand-in (told by their IDs: $identified, then $(counter 48))"
+told=$(counter 48)
+[ "$told" -gt "$identified" ] ||
+    fail "both STUN answers came, but none was told by its transaction ID (48th counter $identified, then $told): the step did not reach unit 9b"
+echo "ok: two STUN names asked at once on one port through the tool, each answered from its own stand-in, told by their IDs ($identified, then $told)"
 
 # The screen looked for the tool again when the workload app left it. A search that says a listening
 # tool does not answer is W6's open finding (CI, 2026-11-12): not a failure yet, but its steps are shown.

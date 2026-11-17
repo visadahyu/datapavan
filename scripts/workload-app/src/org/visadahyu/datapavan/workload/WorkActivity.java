@@ -15,9 +15,9 @@ import java.nio.charset.StandardCharsets;
 /**
  * Does what the extras ask, in this app's own process and so under its own UID, then finishes:
  * "name" is looked up through Android's resolver, "tcp" (host:port) gets an HTTP request for /ping,
- * "udp" (host:port) gets a datagram and waits for its echo, and "stun" (first,second:port) sends a STUN
- * Binding request to each of two names on one port at once, from one socket, and waits for both
- * responses, each from the name's own address with its own transaction ID (ADR 0044, unit 9b). Each
+ * "udp" (host:port) gets a datagram and waits for its echo, and "stun" (first,second:port) resolves two
+ * names, then sends a STUN Binding request to each on one port back to back, from one socket, and waits
+ * for both responses, each from the name's own address with its own transaction ID (ADR 0044, unit 9b). Each
  * result is one line of logcat under the tag DatapavanWorkload, and "done" ends them.
  */
 public final class WorkActivity extends Activity {
@@ -67,32 +67,38 @@ public final class WorkActivity extends Activity {
 
     /**
      * Sends a STUN Binding request (RFC 8489) to each of the two names in [target], "first,second:port",
-     * from one socket, the second right after the first, and logs "stun TARGET both" once each name's
-     * address answered with a Binding success response carrying the transaction ID sent to it, or
-     * "stun TARGET got N" with how many did within five seconds.
+     * from one socket, back to back once both names are resolved, so that both stand-ins wait on the
+     * port when the first answer comes back; logs "stun TARGET both" once each name's address answered
+     * with a Binding success response carrying the transaction ID sent to it, or "stun TARGET got N"
+     * with how many did within five seconds.
      */
     private static void stun(String target) {
         String[] namesPort = target.split(":", 2);
         String[] names = namesPort[0].split(",", 2);
         int port = Integer.parseInt(namesPort[1]);
-        java.util.Map<InetSocketAddress, byte[]> asked = new java.util.HashMap<>();
+        java.util.Map<InetSocketAddress, byte[]> asked = new java.util.LinkedHashMap<>();
         java.util.Set<InetSocketAddress> answered = new java.util.HashSet<>();
         java.security.SecureRandom random = new java.security.SecureRandom();
         try (DatagramSocket socket = new DatagramSocket()) {
+            // Both names first: a lookup between the two requests would let the first answer come back
+            // before the second stand-in waited, which unit 9 handled too.
             for (String name : names) {
-                InetSocketAddress to = new InetSocketAddress(InetAddress.getByName(name), port);
+                byte[] id = new byte[12];
+                random.nextBytes(id);
+                asked.put(new InetSocketAddress(InetAddress.getByName(name), port), id);
+            }
+            java.util.List<DatagramPacket> requests = new java.util.ArrayList<>();
+            for (java.util.Map.Entry<InetSocketAddress, byte[]> entry : asked.entrySet()) {
                 byte[] request = new byte[20];
                 request[1] = 0x01;
                 request[4] = 0x21;
                 request[5] = 0x12;
                 request[6] = (byte) 0xa4;
                 request[7] = 0x42;
-                byte[] id = new byte[12];
-                random.nextBytes(id);
-                System.arraycopy(id, 0, request, 8, 12);
-                asked.put(to, id);
-                socket.send(new DatagramPacket(request, request.length, to));
+                System.arraycopy(entry.getValue(), 0, request, 8, 12);
+                requests.add(new DatagramPacket(request, request.length, entry.getKey()));
             }
+            for (DatagramPacket request : requests) socket.send(request);
             long until = System.currentTimeMillis() + 5000;
             byte[] in = new byte[1500];
             while (answered.size() < asked.size() && System.currentTimeMillis() < until) {
