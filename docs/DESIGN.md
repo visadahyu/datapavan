@@ -883,14 +883,14 @@ second waits. For QUIC, the server's first answer is opened with the keys of the
 tag checked, which rules out a chance match, not a sender who saw the app's packet: at first by GHASH written out in
 the engine with no new dependency, which gave way to RustCrypto's aes-gcm in the first fix round, and its keys
 derived by RustCrypto's hkdf since the second, in place of the HMAC and HKDF written there since W3. A stand-in that sends nothing of the kind, beside another waiting on its port, leaves by a
-`UDP ASSOCIATE` of its own, at most 8 for each app socket and 32 for the engine, each a place in its app's share;
+`UDP ASSOCIATE` of its own, at most 8 for each app and 32 for the engine (8 for each app socket until a fifth round), each a place in its app's share;
 beyond them the stand-in waits beside the other and what could be either's is dropped and counted. Where two names
 reach one address and port, each STUN response, QUIC packet to a client's own connection ID of 4 bytes or more, DNS
 answer or NTP reply reaches its own name, and what carries none goes to the first, as before. An association of its
 own separates stand-ins from each other, not from a stranger who learns the relay's port, which no relay read
 filters; for a protocol with no identifier that risk stays as unit 9 states it. Four counters are appended. The
 emulator check now sends STUN requests to two names on one port at once through the test tool and requires both
-answers; it has not run yet. Two independent reviews and the emulator's first run found more, all fixed in a first
+answers; it passed on Android 15's emulator after each round from the second to the fifth. Two independent reviews and the emulator's first run found more, all fixed in a first
 round: a stand-in's datagrams left by the mapping's association after Android was asked again; a relay that labels
 every answer from its first destination's address with that name gave another stand-in's answers to it, so
 identifiers now outrank the label; identical identifiers of two stand-ins left both unanswered and now get an
@@ -925,7 +925,10 @@ what every datagram through the tool is now read with. A fifth round found no ma
 the one peer an identifier was sent without a walk of every peer, holds a label its own stand-in holds under the same
 five-second contest as an address, spares what the holder itself was sent, gives each app a quarter of the tool's
 relays of a stand-in's own, reads a STUN message larger than 1,500 bytes again (its attributes walked over 1,500), and
-keeps the hello's reader's keys off every peer that sends no QUIC. How it is built: [ADR
+keeps the hello's reader's keys off every peer that sends no QUIC. A sixth and last round, again with no major fault,
+spares in the contest a holder's QUIC answers by its client's source ID, which they carry in the clear, ends many
+stand-ins' records without a walk for each, keeps a model check of the fingerprint index as a test, and gathers the
+accepted limits into one list. How it is built: [ADR
 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 | # | Milestone | Done when |
