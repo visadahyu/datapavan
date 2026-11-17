@@ -209,6 +209,10 @@ pub struct Limits {
     /// protocol without identifiers; beyond the cap, such a stand-in waits beside the others under unit
     /// 9's floor.
     pub udp_own_relays: usize,
+    /// At most this many of them are one app's, or of apps Android cannot name, which share one share:
+    /// a quarter of `udp_own_relays`, as decision 3 shares its caps (unit 9b, fix round 5, review I's
+    /// I8: one app could hold them all, and every other app's stand-ins fell to unit 9's floor).
+    pub udp_own_share: usize,
     /// At most this many names hold a stand-in at once (ADR 0038, [`crate::standins::CAPACITY`]); the
     /// least recently used gives way to a new one. The tests hold fewer.
     pub stand_ins: usize,
@@ -307,6 +311,7 @@ impl Default for Limits {
             tcp_idle: nat::TCP_IDLE,
             port_cooling: nat::PORT_COOLING,
             udp_own_relays: 32,
+            udp_own_share: 8,
             stand_ins: crate::standins::CAPACITY,
             echo_sockets: 32,
             echo_idle: Duration::from_secs(10),
@@ -706,6 +711,9 @@ struct Shared {
     /// The UDP ways that hold a socket of their own, for every app together and for each
     /// (`Limits::udp_mappings`, `Limits::udp_share`).
     udp_budget: Arc<Budget>,
+    /// The associations of a stand-in's own, opening or open, for every app together and for each
+    /// (`Limits::udp_own_relays`, `Limits::udp_own_share`).
+    own_relays: Arc<Budget>,
     counters: Counters,
     keep_flows: usize,
     flows: Mutex<VecDeque<Flow>>,
@@ -857,6 +865,7 @@ impl Engine {
             tcp_waiting: AtomicUsize::new(0),
             tcp_shares: Budget::new(config.limits.tcp_waiting, config.limits.tcp_share),
             udp_budget: Budget::new(config.limits.udp_mappings, config.limits.udp_share),
+            own_relays: Budget::new(config.limits.udp_own_relays, config.limits.udp_own_share),
             counters: Counters::going_on_from(&counters),
             keep_flows: config.keep_flows,
             flows: Mutex::new(VecDeque::new()),
@@ -1375,6 +1384,10 @@ mod tests {
             tcp_waiting: AtomicUsize::new(0),
             tcp_shares: Budget::new(Limits::default().tcp_waiting, Limits::default().tcp_share),
             udp_budget: Budget::new(Limits::default().udp_mappings, Limits::default().udp_share),
+            own_relays: Budget::new(
+                Limits::default().udp_own_relays,
+                Limits::default().udp_own_share,
+            ),
             counters: Counters::default(),
             keep_flows: 8,
             flows: Mutex::default(),

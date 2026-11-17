@@ -32,7 +32,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::io;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::os::fd::AsFd;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, Interest};
@@ -395,26 +395,10 @@ struct Own {
     /// Wakes its task when it is ended from elsewhere.
     ended: Arc<Notify>,
     /// Its place in the budget for its app (ADR 0044, decision 3): it holds a socket and a connection to
-    /// the tool, as a mapping through the tool does; and its place under `Limits::udp_own_relays`.
-    _places: (Place, OwnPlace),
-}
-
-/// The place of one association of a stand-in's own under `Limits::udp_own_relays`, while it opens and
-/// once it is open, given back when it goes (ADR 0044, unit 9b, fix round 2): the table counts them as
-/// they come and go, so that a new one asks one number rather than every mapping under the table's lock.
-struct OwnPlace(Arc<AtomicUsize>);
-
-impl OwnPlace {
-    fn take(count: &Arc<AtomicUsize>) -> Self {
-        count.fetch_add(1, Ordering::Relaxed);
-        Self(Arc::clone(count))
-    }
-}
-
-impl Drop for OwnPlace {
-    fn drop(&mut self) {
-        self.0.fetch_sub(1, Ordering::Relaxed);
-    }
+    /// the tool, as a mapping through the tool does; and its place under `Limits::udp_own_relays`, in its
+    /// app's share of them (fix round 5), held while it opens and once it is open, given back when it
+    /// goes.
+    _places: (Place, Place),
 }
 
 /// A peer of a mapping: a flow in the log.
@@ -2080,8 +2064,6 @@ pub(super) struct UdpTable {
     /// Mappings that were answered lookups when their last answer came, by their number and app
     /// socket, with their app; one that is no longer one goes when a search finds it.
     answered: Ranks<(u64, SocketAddr, Option<u32>)>,
-    /// How many associations of a stand-in's own are open, or opening, for every mapping ([`OwnPlace`]).
-    own_places: Arc<AtomicUsize>,
 }
 
 /// Whose mappings a search looks at: every app's, or one app's.
@@ -2778,7 +2760,6 @@ impl UdpTable {
             return OwnWanted::No;
         }
         let asks = self.held_asks((app, destination));
-        let open = self.own_places.load(Ordering::Relaxed);
         let Some(mapping) = self.mapping(app, id) else {
             return OwnWanted::No;
         };
@@ -2798,19 +2779,22 @@ impl UdpTable {
         if !beside_one && !collides {
             return OwnWanted::No;
         }
-        if mapping.owns() >= OWN_RELAYS || open >= shared.limits.udp_own_relays {
+        if mapping.owns() >= OWN_RELAYS {
             return OwnWanted::Refused;
         }
+        // Its place under the cap, in its app's share, before room is made for it.
+        let uid = mapping.uid;
+        let Ok(own) = shared.own_relays.take(uid) else {
+            return OwnWanted::Refused;
+        };
         // The app sends by it now: making room never ends it, neither as one quiet for `udp_quiet`, nor
         // as an answered lookup, which it still is when its one peer was a resolver that answered (fix
         // round 3: a resolver's failure, then the app's next name, made room by ending this mapping).
         mapping.last = Instant::now();
-        let uid = mapping.uid;
         self.answered.remove(uid, &(id, app, uid));
         let Some(place) = self.room(uid, shared) else {
             return OwnWanted::Refused;
         };
-        let own = OwnPlace::take(&self.own_places);
         let Some(mapping) = self.mapping(app, id) else {
             return OwnWanted::No;
         };
@@ -3451,7 +3435,7 @@ async fn open_peer(
 }
 
 /// An association of a stand-in's own as it opened, or failed to, with its places.
-type OwnOpened = (io::Result<(UdpSocket, TcpStream)>, (Place, OwnPlace));
+type OwnOpened = (io::Result<(UdpSocket, TcpStream)>, (Place, Place));
 
 /// What became of the datagrams that waited for a destination's way ([`leave_by`]).
 enum Leaving {
@@ -3650,7 +3634,7 @@ enum OwnWanted {
     /// It would, but a cap, or the budget, refuses one: it leaves by the mapping's, under unit 9's floor.
     Refused,
     /// It does, through this tool, with its place in the budget and under `Limits::udp_own_relays`.
-    Place(Arc<Chain>, (Place, OwnPlace)),
+    Place(Arc<Chain>, (Place, Place)),
 }
 
 /// Relays what comes back on an association of a stand-in's own (ADR 0044, unit 9b) to the app, each
@@ -5803,7 +5787,7 @@ mod tests {
             .ok_or(io::ErrorKind::NotFound)?;
         hold(&mut table, asked);
         let (mut reads, mut errors) = (Vec::new(), Vec::new());
-        let own = OwnPlace::take(&table.own_places);
+        let own = own_place(&shared)?;
         let left = leave_by(
             &mut table,
             (key, id),
@@ -5840,7 +5824,7 @@ mod tests {
     }
 
     /// An association of a stand-in's own for a test, with its places.
-    async fn own_for_test(table: &UdpTable) -> io::Result<Own> {
+    async fn own_for_test(shared: &Shared) -> io::Result<Own> {
         Ok(Own {
             socket: Arc::new(UdpSocket::bind("127.0.0.1:0").await?),
             sources: Sources::default(),
@@ -5849,9 +5833,17 @@ mod tests {
                 super::super::budget::Budget::new(4, 4)
                     .take(None)
                     .map_err(|_| io::ErrorKind::OutOfMemory)?,
-                OwnPlace::take(&table.own_places),
+                own_place(shared)?,
             ),
         })
+    }
+
+    /// A place under `Limits::udp_own_relays`, for apps Android cannot name.
+    fn own_place(shared: &Shared) -> io::Result<Place> {
+        shared
+            .own_relays
+            .take(None)
+            .map_err(|_| io::ErrorKind::OutOfMemory.into())
     }
 
     /// Under a relay's name, an identifier the app sent the named stand-in too tells no other stand-in
@@ -6001,9 +5993,8 @@ mod tests {
     async fn a_live_flow_that_came_in_outlives_its_stand_ins_silence() -> io::Result<()> {
         let shared = shared();
         let now = Instant::now();
-        let table = UdpTable::default();
         let mut mapping = mapping(now).await?;
-        mapping.owns.insert(1, own_for_test(&table).await?);
+        mapping.owns.insert(1, own_for_test(&shared).await?);
         let stand_in = SocketAddr::from(([198, 18, 0, 1], 69));
         let server = SocketAddr::from(([192, 0, 2, 9], 69));
         {
@@ -6037,17 +6028,13 @@ mod tests {
             "a live flow ended with its stand-in's silence"
         );
         assert!(mapping.owns.contains_key(&1));
-        assert_eq!(table.own_places.load(Ordering::Relaxed), 1);
+        assert_eq!(shared.own_relays.held(None).1, 1);
         mapping.sweep(later + Duration::from_secs(10), &shared);
         assert!(
             mapping.owns.is_empty(),
             "the association outlived its last flow"
         );
-        assert_eq!(
-            table.own_places.load(Ordering::Relaxed),
-            0,
-            "its place given back"
-        );
+        assert_eq!(shared.own_relays.held(None).1, 0, "its place given back");
         Ok(())
     }
 
@@ -6167,7 +6154,7 @@ mod tests {
             mapping.owns_opening = 1;
         }
         hold(&mut table);
-        let own = OwnPlace::take(&table.own_places);
+        let own = own_place(&shared)?;
         let failed = Err(io::ErrorKind::ConnectionRefused.into());
         let socket = main(&table)?;
         let left = leave(&mut table, socket, Some((failed, (place()?, own))));
@@ -6176,7 +6163,7 @@ mod tests {
             "a peer failed with its new association"
         );
         assert!(!table.flows.contains_key(&key), "nothing waits");
-        assert_eq!(table.own_places.load(Ordering::Relaxed), 0);
+        assert_eq!(shared.own_relays.held(None).1, 0);
         // The mapping's own association closed by the tool, or opened anew since.
         for closed in [true, false] {
             let mut table = table_of(&shared, uid, asked).await?;
@@ -6237,7 +6224,7 @@ mod tests {
             stream.set_nonblocking(true)?;
             stream
         })?;
-        let own = OwnPlace::take(&table.own_places);
+        let own = own_place(&shared)?;
         let opened = Ok((UdpSocket::bind("127.0.0.1:0").await?, control));
         let place = super::super::budget::Budget::new(4, 4)
             .take(uid)
@@ -6262,11 +6249,11 @@ mod tests {
         let Leaving::Left(Some((number, _task))) = left else {
             return Err(io::ErrorKind::NotFound.into());
         };
-        assert_eq!(table.own_places.load(Ordering::Relaxed), 1);
+        assert_eq!(shared.own_relays.held(None).1, 1);
         if let Some(mapping) = table.mappings.get_mut(&APP) {
             mapping.end_own(number, &shared);
         }
-        assert_eq!(table.own_places.load(Ordering::Relaxed), 0);
+        assert_eq!(shared.own_relays.held(None).1, 0);
         Ok(())
     }
 
@@ -6556,7 +6543,7 @@ mod tests {
         let place = super::super::budget::Budget::new(4, 4)
             .take(uid)
             .map_err(|_| io::ErrorKind::OutOfMemory)?;
-        let own = OwnPlace::take(&table.own_places);
+        let own = own_place(&shared)?;
         let socket = table
             .mappings
             .get(&APP)
@@ -6883,7 +6870,7 @@ mod tests {
         let place = super::super::budget::Budget::new(4, 4)
             .take(uid)
             .map_err(|_| io::ErrorKind::OutOfMemory)?;
-        let own = OwnPlace::take(&table.own_places);
+        let own = own_place(&shared)?;
         let opened = Ok((UdpSocket::bind("127.0.0.1:0").await?, control));
         let wanted = Wanted {
             uid,
@@ -6904,7 +6891,7 @@ mod tests {
             (&shared, &mut reads, &mut errors),
         );
         assert!(matches!(left, Leaving::Made(Made::Done)));
-        assert_eq!(table.own_places.load(Ordering::Relaxed), 0);
+        assert_eq!(shared.own_relays.held(None).1, 0);
         assert!(
             table.mapping(APP, id).is_none(),
             "a mapping with nothing open lives on"
@@ -7339,9 +7326,8 @@ mod tests {
     -> io::Result<()> {
         let shared = shared();
         let now = Instant::now();
-        let table = UdpTable::default();
         let mut mapping = mapping(now).await?;
-        mapping.owns.insert(1, own_for_test(&table).await?);
+        mapping.owns.insert(1, own_for_test(&shared).await?);
         let stamp = 0xe9a1_0000_0000_0005;
         let a = SocketAddr::from(([198, 18, 0, 1], 123));
         mapping.peer(&shared, (APP, a), now, (false, tooled("a.test", 123)));
@@ -7393,9 +7379,8 @@ mod tests {
     async fn under_a_name_its_peer_on_another_association_holds_nothing() -> io::Result<()> {
         let shared = shared();
         let now = Instant::now();
-        let table = UdpTable::default();
         let mut mapping = mapping(now).await?;
-        mapping.owns.insert(1, own_for_test(&table).await?);
+        mapping.owns.insert(1, own_for_test(&shared).await?);
         let a = SocketAddr::from(([198, 18, 0, 1], 3_478));
         let a_own = SocketAddr::from(([198, 18, 0, 1], 5_000));
         mapping.peer(&shared, (APP, a), now, (false, tooled("a.test", 3_478)));
@@ -7695,6 +7680,67 @@ mod tests {
             .main()
             .relayed_answer(&shared, APP, (&elsewhere, b"c's own"), now);
         assert!(matches!(got, LetIn::Peer(shown, ..) if shown == c));
+        Ok(())
+    }
+
+    /// Each app holds at most a quarter of the associations of a stand-in's own, `udp_own_share`, as
+    /// decision 3 shares its caps, the apps Android cannot name sharing one share (fix round 5, review
+    /// I's I8: one app could hold all 32, four sockets of 8, and every other app's stand-ins fell to
+    /// unit 9's floor).
+    #[tokio::test(flavor = "current_thread")]
+    async fn an_app_holds_a_quarter_of_the_own_associations() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let (busy, other) = (Some(10_077), Some(10_078));
+        let held: Vec<Place> = (0..shared.limits.udp_own_share)
+            .map(|_| shared.own_relays.take(busy))
+            .collect::<Result<_, _>>()
+            .map_err(|_| io::ErrorKind::OutOfMemory)?;
+        assert_eq!(held.len(), 8);
+        for (uid, opens) in [(busy, false), (other, true)] {
+            let mut mapping = mapping(now).await?;
+            mapping.uid = uid;
+            let first = SocketAddr::from(([198, 18, 0, 1], 4_000));
+            mapping.peer(&shared, (APP, first), now, (false, tooled("x.test", 4_000)));
+            mapping.sent(first, b"no identifier");
+            let id = mapping.id;
+            let mut table = UdpTable::default();
+            table.mappings.insert(APP, mapping);
+            table.sockets.entry(APP).or_default();
+            let next = SocketAddr::from(([198, 18, 0, 2], 4_000));
+            let packet = packet::udp(APP, next, b"no identifier either").unwrap_or_default();
+            table.put(
+                (APP, next),
+                UdpEntry::Opening(Holding {
+                    floor: None,
+                    held: vec![Waiter {
+                        came: now,
+                        then: None,
+                        item: packet,
+                    }],
+                }),
+            );
+            let tool = Arc::new(Chain {
+                proxy: SocketAddr::from(([127, 0, 0, 1], 1080)),
+                credentials: None,
+                tool: 10_200,
+                apps: None,
+                udp: true,
+                log_destinations: false,
+            });
+            let wanted = Wanted {
+                uid,
+                exit: Exit::Tool(tool),
+                chains: 0,
+            };
+            let wants = table.own_wanted((APP, next), id, (&named("y.test"), &wanted), &shared);
+            assert_eq!(matches!(wants, OwnWanted::Place(..)), opens, "{uid:?}");
+        }
+        assert_eq!(
+            shared.own_relays.held(busy),
+            (8, 8),
+            "the refused app's share held as it was"
+        );
         Ok(())
     }
 }
