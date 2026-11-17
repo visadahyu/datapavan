@@ -7994,4 +7994,33 @@ mod tests {
         );
         Ok(())
     }
+
+    /// Under a relay's name, an identifier several peers were sent, and not the holder, is no one's,
+    /// whatever their addresses: the association's fingerprints name a peer only where one alone keeps
+    /// one, as the exclusive-or of several addresses may be any address, here a fifth peer's, four of
+    /// them cancelling out (fix round 5, I4).
+    #[tokio::test(flavor = "current_thread")]
+    async fn under_a_name_what_five_were_sent_is_no_ones_whatever_their_addresses() -> io::Result<()>
+    {
+        let shared = shared();
+        let now = Instant::now();
+        let mut mapping = mapping(now).await?;
+        let a = SocketAddr::from(([198, 18, 0, 1], 123));
+        mapping.peer(&shared, (APP, a), now, (false, tooled("a.test", 123)));
+        mapping.sent(a, &ntp(3, 40, 1));
+        let stamp = 0xe9a1_0000_0000_0009;
+        // 192.0.2.0 to .3 cancel out; .9 is left.
+        for n in [0u8, 1, 2, 3, 9] {
+            let server = SocketAddr::from(([192, 0, 2, n], 123));
+            let way = PeerWay::through_tool(Target::Address(server));
+            mapping.peer(&shared, (APP, server), now, (false, way));
+            mapping.sent(server, &ntp(3, 40, stamp));
+        }
+        let by_a = Target::Name("a.test".into(), 123);
+        let got = mapping
+            .main()
+            .relayed_answer(&shared, APP, (&by_a, &ntp(4, 24, stamp)), now);
+        assert!(matches!(got, LetIn::Unmatched), "five were sent it");
+        Ok(())
+    }
 }
