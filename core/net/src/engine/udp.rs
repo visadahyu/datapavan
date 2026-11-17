@@ -763,7 +763,7 @@ impl Peer {
 /// without a scan of every peer under the table's lock.
 #[derive(Default)]
 struct Sources {
-    /// Each address answers come from, with the address the app knows it by and how many peers have it.
+    /// Each address answers come from, with the addresses the app knows its peers by.
     addresses: HashMap<IpAddr, Known>,
     /// The peers whose answers come from another address than the one the app knows them by (through
     /// the tool, a stand-in bound to the address the tool reached), by the address they come from.
@@ -856,12 +856,44 @@ impl Fingerprints {
     }
 }
 
-/// An address answers come from, or a name the tool resolves.
+/// An address answers come from.
+#[derive(Default)]
 struct Known {
-    /// The address the app knows it by: itself, or a stand-in the tool resolved to it.
-    shown: IpAddr,
-    /// How many peers' answers come from it.
-    peers: usize,
+    /// The addresses the app knows the peers whose answers come from it by, itself or stand-ins the tool
+    /// resolved to it, in the order they came, each with how many peers have it (fix round 5, review I's
+    /// I7: one address, the first peer's, stood for it after that peer ended).
+    shown: Vec<(IpAddr, usize)>,
+}
+
+impl Known {
+    /// One more peer the app knows at `ip` has its answers come from it.
+    fn add(&mut self, ip: IpAddr) {
+        match self.shown.iter_mut().find(|(shown, _)| *shown == ip) {
+            Some((_, peers)) => *peers += 1,
+            None => self.shown.push((ip, 1)),
+        }
+    }
+
+    /// One peer the app knows at `ip` has its answers come from it no more; whether none does now.
+    fn remove(&mut self, ip: IpAddr) -> bool {
+        for (shown, peers) in &mut self.shown {
+            if *shown == ip {
+                *peers = peers.saturating_sub(1);
+            }
+        }
+        self.shown.retain(|&(_, peers)| peers > 0);
+        self.shown.is_empty()
+    }
+
+    /// The address the app knows `address`, this one, by: itself while the app knows a peer by it, as
+    /// one it sent to itself, before a stand-in the tool resolved to it; else the stand-in of the
+    /// oldest of its peers that lives, the one an address handed over to is among them.
+    fn shown_as(&self, address: IpAddr) -> Option<IpAddr> {
+        if self.shown.iter().any(|&(shown, _)| shown == address) {
+            return Some(address);
+        }
+        self.shown.first().map(|&(shown, _)| shown)
+    }
 }
 
 /// The name a target names, if it names one.
@@ -935,16 +967,7 @@ impl Sources {
 
     /// The answers of the peer the app knows as `shown` come from `from`.
     fn add(&mut self, shown: SocketAddr, from: SocketAddr) {
-        let known = self.addresses.entry(from.ip()).or_insert(Known {
-            shown: shown.ip(),
-            peers: 0,
-        });
-        known.peers += 1;
-        // An address the app sent to itself is shown as itself, before a stand-in the tool resolved to
-        // it.
-        if shown.ip() == from.ip() {
-            known.shown = from.ip();
-        }
+        self.addresses.entry(from.ip()).or_default().add(shown.ip());
         if from != shown {
             self.aliases.insert(from, shown);
         }
@@ -954,14 +977,7 @@ impl Sources {
     /// no more, unless another peer has the same one. When it held `from` first, the first stand-in bound
     /// beside it there holds it now, and is returned.
     fn remove(&mut self, shown: SocketAddr, from: SocketAddr) -> Option<SocketAddr> {
-        let ip = from.ip();
-        let left = self.addresses.get_mut(&ip).map(|known| {
-            known.peers = known.peers.saturating_sub(1);
-            known.peers
-        });
-        if left == Some(0) {
-            self.addresses.remove(&ip);
-        }
+        self.unknown(shown, from);
         let beside = self.beside.get_mut(&from);
         if let Some(beside) = beside {
             if let Some(at) = beside.iter().position(|&other| other == shown) {
@@ -989,7 +1005,7 @@ impl Sources {
     /// held first: what comes from there is let in still, and the stand-in is among those it may be for.
     fn add_beside(&mut self, shown: SocketAddr, from: SocketAddr) {
         if let Some(known) = self.addresses.get_mut(&from.ip()) {
-            known.peers += 1;
+            known.add(shown.ip());
         }
         self.beside.entry(from).or_default().push(shown);
         self.beside_on.entry(shown.port()).or_default().push(shown);
@@ -1023,12 +1039,18 @@ impl Sources {
         if beside.is_empty() {
             self.beside.remove(&from);
         }
+        self.unknown(shown, from);
+    }
+
+    /// The answers of the peer the app knows as `shown` come from `from` no more: the address is let
+    /// in no more once none of its peers' do.
+    fn unknown(&mut self, shown: SocketAddr, from: SocketAddr) {
         let ip = from.ip();
-        let left = self.addresses.get_mut(&ip).map(|known| {
-            known.peers = known.peers.saturating_sub(1);
-            known.peers
-        });
-        if left == Some(0) {
+        if self
+            .addresses
+            .get_mut(&ip)
+            .is_some_and(|known| known.remove(shown.ip()))
+        {
             self.addresses.remove(&ip);
         }
     }
@@ -1060,7 +1082,7 @@ impl Sources {
 
     /// The address the app knows `ip` by, if what comes from it is let in.
     fn shown(&self, ip: IpAddr) -> Option<IpAddr> {
-        self.addresses.get(&ip).map(|known| known.shown)
+        self.addresses.get(&ip).and_then(|known| known.shown_as(ip))
     }
 
     /// The way of a peer that came in from `from` through the tool, which the app knows as `shown`.
@@ -7549,6 +7571,79 @@ mod tests {
             matches!(got, LetIn::Peer(shown, ..) if shown == b),
             "b's own Initial, told by its keys, was cut by c's contest"
         );
+        Ok(())
+    }
+
+    /// Another port of an address comes in as the address the app knows a live peer there by (fix round
+    /// 5, review I's I7): handed to the stand-in bound beside its holder, the address showed the ended
+    /// holder's stand-in still, so that a STUN server's alternate port (RFC 5780) came in as a flow of
+    /// `a.test`, which the app no longer has, and was logged under its name; and so it did where two
+    /// names were bound to one address on two ports, the second by its identifier, and the first ended.
+    #[tokio::test(flavor = "current_thread")]
+    async fn another_port_of_an_address_shows_a_live_peer() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let later = now + Duration::from_secs(200);
+        let server = SocketAddr::from(([192, 0, 2, 9], 3_478));
+        let from_server = Target::Address(server);
+        let alternate = Target::Address(SocketAddr::from(([192, 0, 2, 9], 3_479)));
+        let a = SocketAddr::from(([198, 18, 0, 1], 3_478));
+        // Handed over beside: `b` bound beside `a` by its STUN ID.
+        let mut handed = mapping(now).await?;
+        let b = SocketAddr::from(([198, 18, 0, 2], 3_478));
+        handed.peer(&shared, (APP, a), now, (false, tooled("a.test", 3_478)));
+        handed.sent(a, &binding(0xa1, false));
+        handed
+            .main()
+            .relayed_answer(&shared, APP, (&from_server, &binding(0xa1, true)), now);
+        handed.peer(&shared, (APP, b), now, (false, tooled("b.test", 3_478)));
+        handed.sent(b, &binding(0xb2, false));
+        let got =
+            handed
+                .main()
+                .relayed_answer(&shared, APP, (&from_server, &binding(0xb2, true)), now);
+        assert!(matches!(got, LetIn::Peer(shown, ..) if shown == b));
+        // Two names bound to one address, on two ports.
+        let mut two = mapping(now).await?;
+        let c = SocketAddr::from(([198, 18, 0, 3], 5_000));
+        two.peer(&shared, (APP, a), now, (false, tooled("a.test", 3_478)));
+        two.sent(a, b"no identifier");
+        two.main()
+            .relayed_answer(&shared, APP, (&from_server, b"a's"), now);
+        let at_5000 = Target::Address(SocketAddr::from(([192, 0, 2, 9], 5_000)));
+        two.peer(&shared, (APP, c), now, (false, tooled("c.test", 5_000)));
+        two.sent(c, &binding(0xc3, false));
+        let got = two
+            .main()
+            .relayed_answer(&shared, APP, (&at_5000, &binding(0xc3, true)), now);
+        assert!(matches!(got, LetIn::Peer(shown, ..) if shown == c));
+        for (mapping, left) in [(&mut two, c), (&mut handed, b)] {
+            if let Some(peer) = mapping.peers.get_mut(&left) {
+                peer.last = later;
+            }
+            mapping.sweep(now + Duration::from_secs(120), &shared);
+            assert!(!mapping.peers.contains_key(&a), "a ended");
+            let got = mapping.main().relayed_answer(
+                &shared,
+                APP,
+                (&alternate, b"from the alternate port"),
+                later,
+            );
+            let LetIn::Peer(shown, ..) = got else {
+                unreachable!("{left}: the alternate port came in as nothing")
+            };
+            assert_eq!(
+                shown.ip(),
+                left.ip(),
+                "came in as a's stand-in, not the live one's"
+            );
+            let name = mapping.peers[&shown].way.name.clone();
+            assert_ne!(
+                name.as_deref(),
+                Some("a.test"),
+                "logged under the ended name"
+            );
+        }
         Ok(())
     }
 }
