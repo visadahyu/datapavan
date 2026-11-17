@@ -856,16 +856,18 @@ async fn only_a_stand_in_beside_one_without_identifiers_gets_an_association_of_i
     Ok(())
 }
 
-/// The caps on associations of a stand-in's own: 8 for a mapping, and `Limits::udp_own_relays` for the
-/// engine. A stand-in without identifiers beyond either waits beside the first on the mapping's
-/// association, under unit 9's floor: an answer there from an address the app never saw is dropped and
-/// counted, as either's, while those on the associations opened reach their own stand-ins.
+/// The caps on associations of a stand-in's own: an app's share, `Limits::udp_own_share` (8, a quarter of
+/// the engine's), and `Limits::udp_own_relays` for the engine (fix round 6: a cap of 8 for each mapping
+/// went, the share reaching it first). A stand-in without identifiers beyond either waits beside the first
+/// on the mapping's association, under unit 9's floor: an answer there from an address the app never saw is
+/// dropped and counted, as either's, while those on the associations opened reach their own stand-ins.
 #[tokio::test(flavor = "current_thread")]
 async fn beyond_the_caps_a_stand_in_waits_beside_the_other_under_the_floor() -> Outcome {
-    for (cap, names) in [(32, 10usize), (1, 3)] {
+    for (cap, share, names) in [(32, 8, 10usize), (1, 8, 3), (32, 2, 4)] {
         let (proxy, relay, mut script) = scripted().await?;
         let limits = Limits {
             udp_own_relays: cap,
+            udp_own_share: share,
             ..Limits::default()
         };
         let (engine, tunnel) = engine_with(chain(proxy), &limits, Arc::new(ByPort))?;
@@ -885,7 +887,7 @@ async fn beyond_the_caps_a_stand_in_waits_beside_the_other_under_the_floor() -> 
         assert_eq!(
             (counters[OWN_RELAYS], counters[OWN_REFUSED]),
             (u64::try_from(opened)?, 1),
-            "cap {cap}"
+            "cap {cap}, share {share}"
         );
         let last = engine_ats[names - 1];
         assert_eq!(last, engine_ats[0], "the last waits beside the first");
@@ -899,9 +901,17 @@ async fn beyond_the_caps_a_stand_in_waits_beside_the_other_under_the_floor() -> 
         let expected: HashSet<_> = (1..names - 1)
             .map(|n| (stand_ins[n], vec![u8::try_from(n).unwrap_or(0)]))
             .collect();
-        assert_eq!(received(&tunnel, names - 2).await?, expected, "cap {cap}");
+        assert_eq!(
+            received(&tunnel, names - 2).await?,
+            expected,
+            "cap {cap}, share {share}"
+        );
         assert!(silent(&tunnel).await, "the floor's answer reached the app");
-        assert_eq!(engine.counters()[UDP_UNMATCHED], 1, "cap {cap}");
+        assert_eq!(
+            engine.counters()[UDP_UNMATCHED],
+            1,
+            "cap {cap}, share {share}"
+        );
     }
     Ok(())
 }

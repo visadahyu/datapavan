@@ -328,12 +328,6 @@ const QUIC_ASKED: usize = 8;
 /// life of the peer it sends them to.
 const TOLD: usize = 64;
 
-/// At most this many associations of a stand-in's own for each mapping (ADR 0044, unit 9b): one for
-/// each stand-in without identifiers that would share a port another stand-in waits on, or with them
-/// beside one without. An app asks few names at once on one port without identifiers; beyond this, a
-/// stand-in waits beside the others on the mapping's association, under unit 9's floor.
-const OWN_RELAYS: usize = 8;
-
 /// At most this many errors from the path are owed to one peer of a mapping: one for each datagram the
 /// app sent it (ADR 0044, unit 11b). An app that sends a peer many datagrams at once, each too large
 /// for a router on the path, may be told of each; a sender that forges errors for a peer the app sends
@@ -2757,8 +2751,12 @@ impl UdpTable {
     /// waits without, would break that; and an identifier the app sent another peer of the association on
     /// the port, of whatever standing, tells nothing apart (fix rounds 1 and 2: one DNS query, one ID and
     /// question, sent to two servers, as a stub resolver retries one with the next; one NTP timestamp to
-    /// two). Either gets one, if the caps allow it ([`OWN_RELAYS`], `Limits::udp_own_relays`) and its
-    /// app's share of the budget has a place, made room for as for a mapping. Only through the tool; on
+    /// two). Either gets one, if its app's share of them allows it (`Limits::udp_own_share`, under
+    /// `Limits::udp_own_relays`) and its app's share of the budget has a place, made room for as for a
+    /// mapping. An app asks few names at once on one port without identifiers; beyond its share, a
+    /// stand-in waits beside the others on the mapping's association, under unit 9's floor. (A cap of 8
+    /// for each mapping, unit 9b's, went in fix round 6: the share of 8 for each app, which fix round 5
+    /// set, reached it first, so that it never applied.) Only through the tool; on
     /// port 53, where every stand-in has identifiers, only for an identifier another peer was sent too;
     /// and never for a destination the mapping already knows, which keeps the association it has.
     fn own_wanted(
@@ -2793,9 +2791,6 @@ impl UdpTable {
         let beside_one = !waiting.is_empty() && port != 53 && (!carries || without);
         if !beside_one && !collides {
             return OwnWanted::No;
-        }
-        if mapping.owns() >= OWN_RELAYS {
-            return OwnWanted::Refused;
         }
         // Its place under the cap, in its app's share, before room is made for it.
         let uid = mapping.uid;
