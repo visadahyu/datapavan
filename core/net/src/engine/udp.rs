@@ -294,11 +294,20 @@ const CAME_IN: usize = 64;
 /// Binding by any DNS response instead would let any sender at port 53 take the stand-in.
 ///
 /// On other ports a stand-in keeps as many of the identifiers its app's datagrams carry
-/// ([`identifiers::of`]), on the same terms (ADR 0044, unit 9b): 48 bytes each in place, and a DNS
-/// question's name of at most 253 bytes beside it, so at most 64 x (48 + 253) = 19,264 bytes and the
-/// vector's 24, only while it is a candidate. A STUN client retransmits a request with its ID, a QUIC
-/// client its Initial with its IDs, so the same one is kept once.
+/// ([`identifiers::of`]), on the same terms (ADR 0044, unit 9b): 64 bytes each in place, a DNS question's
+/// name of at most 253 bytes beside it, and for each of at most [`QUIC_ASKED`] QUIC identifiers the
+/// server's keys in two versions once an answer needed them (864 bytes each on x86-64), so at most
+/// 64 x 64 + 56 x 253 + 8 x 2 x 864 = 32,088 bytes and the vector's 24, only while it is a candidate.
+/// That is for each stand-in the app sent to, an address and a port: an app that asks one name on many
+/// ports makes one for each, and a stranger makes none. A STUN client retransmits a request with its
+/// ID, a QUIC client its Initial with its IDs, so the same one is kept once.
 const ASKED: usize = 64;
+
+/// Of those, at most this many QUIC identifiers (ADR 0044, unit 9b, fix round 1): each keeps the server's
+/// Initial keys once an answer needed them, in each version a server may answer in. A QUIC client changes
+/// the destination ID it asks by only for a Retry, a Version Negotiation or a new attempt, so 8 hold
+/// several attempts of one connection.
+const QUIC_ASKED: usize = 8;
 
 /// At most this many associations of a stand-in's own for each mapping (ADR 0044, unit 9b): one for
 /// each stand-in without identifiers that would share a port another stand-in waits on, or with them
@@ -366,6 +375,9 @@ struct Own {
 struct Peer {
     /// The flow's number, port and DNS use, for the QUIC Initial packets that may name it.
     opened: Opened,
+    /// The app's port, from which it sends to the peer: Multicast DNS answers a query from its own port
+    /// otherwise than one from another (RFC 6762 6.7).
+    app_port: u16,
     /// The flow's number.
     id: u64,
     /// While the app's first datagrams to it may still name it, their QUIC Initial packets read so far.
@@ -499,6 +511,7 @@ impl Peer {
         }
         Self {
             opened,
+            app_port: app.port(),
             id: opened.id,
             quic: (!came_in).then(|| (opened, Box::new(quic::Initial::new()))),
             bytes: shared.record(flow),
@@ -540,13 +553,17 @@ impl Peer {
         self.opened.port == 53 || !self.ids.is_empty()
     }
 
-    /// Whether `answer` carries one of its identifiers: on port 53, a DNS response to a query the app
-    /// sent it, by its ID and question; elsewhere, what [`identifiers::carries`] reads.
-    fn carries(&self, answer: &[u8]) -> bool {
+    /// Whether the answer `read` carries one of its identifiers: on port 53, a DNS response to a query the
+    /// app sent it, by its ID and question; elsewhere, what [`identifiers::Reading::carries`] reads.
+    fn carries(&self, read: &identifiers::Reading) -> bool {
         if self.opened.port == 53 {
-            self.asked_for(answer)
+            read.dns_response().is_some_and(|(id, question)| {
+                self.asked
+                    .iter()
+                    .any(|(asked, of)| *asked == id && of == question)
+            })
         } else {
-            identifiers::carries(&self.ids, answer)
+            read.carries(&self.ids)
         }
     }
 
@@ -559,12 +576,28 @@ impl Peer {
         let candidate = self.standing != Standing::Settled;
         if port != 53 {
             if candidate {
-                for asked in identifiers::of(port, payload) {
+                for asked in identifiers::of((self.app_port, port), payload) {
                     if self.ids.contains(&asked) {
                         continue;
                     }
-                    if self.ids.len() == ASKED {
-                        self.ids.remove(0);
+                    // A QUIC identifier keeps the server's keys it was answered with, so fewer are kept.
+                    let quic = matches!(asked, identifiers::Asked::Quic(_));
+                    let oldest = if quic
+                        && self
+                            .ids
+                            .iter()
+                            .filter(|kept| matches!(kept, identifiers::Asked::Quic(_)))
+                            .count()
+                            >= QUIC_ASKED
+                    {
+                        self.ids
+                            .iter()
+                            .position(|kept| matches!(kept, identifiers::Asked::Quic(_)))
+                    } else {
+                        (self.ids.len() == ASKED).then_some(0)
+                    };
+                    if let Some(oldest) = oldest {
+                        self.ids.remove(oldest);
                     }
                     self.ids.push(asked);
                 }
@@ -1107,6 +1140,8 @@ impl<'a> Scope<'a> {
         (target, answer): (&Target, &[u8]),
         now: Instant,
     ) -> LetIn {
+        // Read once, whatever stand-ins it is checked for (unit 9b, fix round 1).
+        let read = identifiers::Reading::new(answer);
         let (shown, from) = match target {
             Target::Address(address) => {
                 // An IPv4 address the relay gives as IPv6 is still the address the app sent to.
@@ -1120,13 +1155,13 @@ impl<'a> Scope<'a> {
                     .get(&from)
                     .is_some_and(|peer| peer.way.from == Some(from) && peer.via == self.via)
                 {
-                    return self.beside_or(shared, (from, from), answer, (now, false));
+                    return self.beside_or(shared, (from, from), (answer, &read), (now, false));
                 }
                 if let Some(&owner) = self.sources.aliases.get(&from) {
-                    return self.beside_or(shared, (owner, from), answer, (now, true));
+                    return self.beside_or(shared, (owner, from), (answer, &read), (now, true));
                 }
                 let Some(ip) = self.sources.shown(from.ip()) else {
-                    return self.first_answer(shared, from, answer, now);
+                    return self.first_answer(shared, from, (answer, &read), now);
                 };
                 // Another port of an address the app sent to: a stand-in waiting on this port whose
                 // name the tool resolved to this address takes it by its identifier (unit 9b); else
@@ -1136,7 +1171,7 @@ impl<'a> Scope<'a> {
                 // answer binds it there too; while another name's without identifiers still contests
                 // the port, the answer could again be either name's.
                 let strict = self.waiting_on(from.port(), true);
-                match self.carried(strict, answer) {
+                match self.carried(strict, &read) {
                     Carried::One(shown) => {
                         Counters::add(&shared.counters.udp_identified, 1);
                         return self.bind(shown, (from, answer), now);
@@ -1201,7 +1236,7 @@ impl<'a> Scope<'a> {
         &mut self,
         shared: &Shared,
         (owner, from): (SocketAddr, SocketAddr),
-        answer: &[u8],
+        (answer, read): (&[u8], &identifiers::Reading),
         (now, contestable): (Instant, bool),
     ) -> LetIn {
         let mut candidates = self.waiting_on(from.port(), true);
@@ -1213,7 +1248,7 @@ impl<'a> Scope<'a> {
                 .flatten()
                 .copied(),
         );
-        match self.carried(candidates, answer) {
+        match self.carried(candidates, read) {
             Carried::One(shown) => {
                 Counters::add(&shared.counters.udp_identified, 1);
                 if self
@@ -1252,12 +1287,10 @@ impl<'a> Scope<'a> {
     }
 
     /// Which of `candidates` an `answer` carries the identifiers of.
-    fn carried(&self, candidates: Vec<SocketAddr>, answer: &[u8]) -> Carried {
-        let mut takers = candidates.into_iter().filter(|shown| {
-            self.peers
-                .get(shown)
-                .is_some_and(|peer| peer.carries(answer))
-        });
+    fn carried(&self, candidates: Vec<SocketAddr>, read: &identifiers::Reading) -> Carried {
+        let mut takers = candidates
+            .into_iter()
+            .filter(|shown| self.peers.get(shown).is_some_and(|peer| peer.carries(read)));
         match (takers.next(), takers.next()) {
             (None, _) => Carried::None,
             (Some(shown), None) => Carried::One(shown),
@@ -1305,7 +1338,7 @@ impl<'a> Scope<'a> {
         &mut self,
         shared: &Shared,
         from: SocketAddr,
-        answer: &[u8],
+        (answer, read): (&[u8], &identifiers::Reading),
         now: Instant,
     ) -> LetIn {
         let several = self
@@ -1315,7 +1348,7 @@ impl<'a> Scope<'a> {
             .is_some_and(|waiting| waiting.len() > 1);
         let strict = self.waiting_on(from.port(), true);
         let any_strict = !strict.is_empty();
-        match self.carried(strict, answer) {
+        match self.carried(strict, read) {
             Carried::One(shown) => {
                 if several {
                     Counters::add(&shared.counters.udp_identified, 1);
@@ -2106,8 +2139,9 @@ impl UdpTable {
         };
         holding.held.iter().any(|waiter| {
             packet::parse(&waiter.item).is_ok_and(|parsed| {
-                packet::udp_payload(&waiter.item, &parsed)
-                    .is_some_and(|payload| !identifiers::of(destination.port(), payload).is_empty())
+                packet::udp_payload(&waiter.item, &parsed).is_some_and(|payload| {
+                    !identifiers::of((app.port(), destination.port()), payload).is_empty()
+                })
             })
         })
     }

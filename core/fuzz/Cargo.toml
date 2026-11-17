@@ -94,3 +94,10 @@ path = "fuzz_targets/identifiers.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "quic_answers"
+path = "fuzz_targets/quic_answers.rs"
+test = false
+doc = false
+bench = false
