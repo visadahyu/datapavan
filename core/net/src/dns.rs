@@ -104,6 +104,21 @@ pub(crate) fn read_name(message: &[u8], mut at: usize) -> Option<(String, usize)
     }
 }
 
+/// The ID and the one question of a DNS response, the root name among questions (ADR 0044, unit 9b, fix
+/// round 3): what tells whose query it answers, as [`crate::answers::question`] reads the query's. Unlike
+/// [`response`], which reads a response for the names it teaches and so takes none for the root, it
+/// reads nothing past the question.
+#[must_use]
+pub fn answered(message: &[u8]) -> Option<(u16, String)> {
+    let flags = u16_at(message, 2)?;
+    // QR set: a response; opcode 0: a standard query.
+    if flags & 0x8000 == 0 || flags & 0x7800 != 0 || u16_at(message, 4)? != 1 {
+        return None;
+    }
+    let (question, at) = read_name(message, 12)?;
+    (at.checked_add(4)? <= message.len()).then_some((u16_at(message, 0)?, question))
+}
+
 /// Reads a DNS response: its first question and the A and AAAA records of the answer section. Records
 /// whose owner is not the question or a name a CNAME of the answer led to are left out, so that a
 /// resolver cannot name an address after a name the app never asked for. Returns `None` for anything

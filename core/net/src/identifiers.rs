@@ -100,7 +100,8 @@ fn dns_hash<H: Hasher>(id: u16, question: &str, state: &mut H) {
     (2u8, id, question).hash(state);
 }
 
-/// The fingerprint of `asked` sent to `port`: 64 bits of `SipHash` under this run's random keys (ADR 0044,
+/// The fingerprint of `asked` sent to `port`: 64 bits of the hash of Rust's `RandomState`, keyed at random
+/// for each run (an algorithm Rust leaves unspecified, `SipHash-1-3` today) (ADR 0044,
 /// unit 9b, fix round 2). Two equal identifiers to one port have one; two different ones meet by a chance
 /// of 2^-64.
 #[must_use]
@@ -122,9 +123,23 @@ pub fn dns_fingerprint(port: u16, id: u16, question: &str) -> u64 {
 }
 
 /// What `payload`, an app's datagram from its port `from` to `to`, asks an answer to carry: nothing when
-/// it is of no protocol read here, or does not read strictly as one.
+/// it is of no protocol read here, or does not read strictly as one. A QUIC Initial is opened and its tag
+/// checked ([`quic::asked`]), in a datagram of [`quic::LARGEST_DATAGRAM`] bytes at most.
 #[must_use]
-pub fn of((from, to): (u16, u16), payload: &[u8]) -> Vec<Asked> {
+pub fn of(ports: (u16, u16), payload: &[u8]) -> Vec<Asked> {
+    read(ports, payload, quic::asked)
+}
+
+/// What [`of`] reads, with a QUIC Initial's IDs read from its headers alone, none opened
+/// ([`quic::named`]): for what the app is remembered to have sent a peer (ADR 0044, unit 9b, fix round
+/// 3), on every datagram through the tool, at a cost a datagram's parse bounds without AEAD.
+#[must_use]
+pub fn named(ports: (u16, u16), payload: &[u8]) -> Vec<Asked> {
+    read(ports, payload, quic::named)
+}
+
+/// What [`of`] and [`named`] read, QUIC's by `quic`.
+fn read((from, to): (u16, u16), payload: &[u8], quic: fn(&[u8]) -> Vec<quic::Ids>) -> Vec<Asked> {
     if let Some((0, method, transaction)) = stun(payload) {
         return vec![Asked::Stun {
             method,
@@ -143,7 +158,7 @@ pub fn of((from, to): (u16, u16), payload: &[u8]) -> Vec<Asked> {
     {
         return vec![Asked::Ntp(transmit)];
     }
-    quic::asked(payload).into_iter().map(Asked::Quic).collect()
+    quic(payload).into_iter().map(Asked::Quic).collect()
 }
 
 /// Whether `answer` carries one of `asked` (see [`Reading::carries`]), for one check alone.
@@ -206,13 +221,7 @@ impl<'a> Reading<'a> {
             Asked::Stun {
                 method,
                 transaction,
-            } => {
-                *self.stun.get_or_init(|| {
-                    stun(self.answer)
-                        .filter(|&(class, ..)| class >= 2)
-                        .map(|(_, method, transaction)| (method, transaction))
-                }) == Some((*method, *transaction))
-            }
+            } => self.stun_response() == Some((*method, *transaction)),
             Asked::Quic(ids) => {
                 return self
                     .quic
@@ -244,18 +253,52 @@ impl<'a> Reading<'a> {
         self.quic.as_ref().map_or(0, quic::Answer::opens_left)
     }
 
-    /// Its ID and question, when it is a DNS response with one question.
+    /// Its ID and question, when it is a DNS response with one question, the root among them
+    /// ([`dns::answered`]: since fix round 3, as a query's is read, so that a query for the root binds by
+    /// its answer).
     #[must_use]
     pub fn dns_response(&self) -> Option<(u16, &str)> {
         self.dns
-            .get_or_init(|| {
-                Some((
-                    dns::u16_at(self.answer, 0)?,
-                    dns::response(self.answer)?.question,
-                ))
-            })
+            .get_or_init(|| dns::answered(self.answer))
             .as_ref()
             .map(|(id, question)| (*id, question.as_str()))
+    }
+
+    /// The fingerprint ([`fingerprint`]) of what it answers where it names that in the clear, as an answer
+    /// on `port`: a STUN success or error response's method and transaction ID; a DNS response's ID and
+    /// question; on port 123, an NTP server reply's origin timestamp. `None` for anything else, a QUIC
+    /// packet among them, whose answer names nothing of the app's but under keys. So an answer under a
+    /// relay's name is told to be another peer's, though no stand-in may take it (ADR 0044, unit 9b, fix
+    /// round 3).
+    #[must_use]
+    pub fn answers(&self, port: u16) -> Option<u64> {
+        if let Some((method, transaction)) = self.stun_response() {
+            return Some(fingerprint(
+                port,
+                &Asked::Stun {
+                    method,
+                    transaction,
+                },
+            ));
+        }
+        if let Some((id, question)) = self.dns_response() {
+            return Some(dns_fingerprint(port, id, question));
+        }
+        if port == NTP
+            && let Some(origin) = *self.ntp.get_or_init(|| ntp(self.answer, 4, 24))
+        {
+            return Some(fingerprint(port, &Asked::Ntp(origin)));
+        }
+        None
+    }
+
+    /// Its method and transaction ID, when it is a STUN success or error response.
+    fn stun_response(&self) -> Option<(u16, [u8; 12])> {
+        *self.stun.get_or_init(|| {
+            stun(self.answer)
+                .filter(|&(class, ..)| class >= 2)
+                .map(|(_, method, transaction)| (method, transaction))
+        })
     }
 
     /// How many QUIC packets it opened so far.
@@ -632,10 +675,74 @@ mod tests {
             fingerprint(123, &Asked::Ntp(1)),
             fingerprint(123, &Asked::Ntp(2))
         );
+        // QUIC's IDs, the source among them (review F's surviving mutant F22).
+        let quic = |source: &[u8]| {
+            let initial = quic::client_initial(1, (&[7; 8], source), (0, &[0x01]), 1200);
+            of((APP, 443), &initial.unwrap_or_default()).remove(0)
+        };
+        assert_ne!(
+            fingerprint(443, &quic(&[1, 2, 3, 4])),
+            fingerprint(443, &quic(&[1, 2, 3, 5]))
+        );
         assert_eq!(
             fingerprint(123, &Asked::Ntp(1)),
             fingerprint(123, &Asked::Ntp(1))
         );
+    }
+
+    /// A query for the root name, as a resolver primes itself with, off port 53 asks its ID and the empty
+    /// question, and its response carries them (fix round 3, review F: the response's reader took no root
+    /// question, so the stand-in, strict by the query, was answered by nothing).
+    #[test]
+    fn a_query_for_the_root_is_answered_by_its_response() {
+        let mut root = vec![0x12, 0x34, 0x01, 0x00, 0, 1, 0, 0, 0, 0, 0, 0];
+        root.extend_from_slice(&[0, 0, 2, 0, 1]);
+        let asked = of((APP, 5_355), &root);
+        assert_eq!(
+            asked,
+            [Asked::Dns {
+                id: 0x1234,
+                question: "".into()
+            }]
+        );
+        assert!(carries(&asked, &response(&root, 0x1234)));
+        assert!(!carries(&asked, &response(&root, 0x1235)));
+        assert_eq!(
+            Reading::new(&response(&root, 0x1234)).dns_response(),
+            Some((0x1234, ""))
+        );
+    }
+
+    /// What an answer answers, where it names it in the clear, has the fingerprint of what was asked: a
+    /// STUN response's, a DNS response's, an NTP reply's on port 123, none for a QUIC packet (fix round 3).
+    #[test]
+    fn an_answer_names_what_it_answers() {
+        let stun = Asked::Stun {
+            method: 1,
+            transaction: ID,
+        };
+        assert_eq!(
+            Reading::new(&stun_message(0x0101, ID, b"server")).answers(3_478),
+            Some(fingerprint(3_478, &stun))
+        );
+        let query = query(0x1234, b"\x07example\x03com\x00", false);
+        let dns = &of((APP, 5_353), &query)[0];
+        assert_eq!(
+            Reading::new(&response(&query, 0x1234)).answers(5_353),
+            Some(fingerprint(5_353, dns))
+        );
+        assert_eq!(
+            Reading::new(&response(&query, 0x1234)).answers(53),
+            Some(dns_fingerprint(53, 0x1234, "example.com"))
+        );
+        assert_eq!(
+            Reading::new(&ntp_packet(4, 77, 1)).answers(NTP),
+            Some(fingerprint(NTP, &Asked::Ntp(77)))
+        );
+        assert_eq!(Reading::new(&ntp_packet(4, 77, 1)).answers(4_123), None);
+        let initial = quic::server_initial(1, &[7; 8], (&[], &[0x5a; 8]), (0, &[0x02, 0, 0, 0, 0]))
+            .unwrap_or_default();
+        assert_eq!(Reading::new(&initial).answers(443), None);
     }
 
     /// The most an identifier holds in place, beside a DNS question's name on the heap (at most 253

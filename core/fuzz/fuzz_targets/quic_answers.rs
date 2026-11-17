@@ -3,20 +3,22 @@
 //! app's Initial from connection IDs it chooses, then the server's answer: raw bytes; an Initial sealed
 //! with the server's keys of those IDs, or of another destination ID; a Retry with its integrity tag, for
 //! those IDs or another destination ID; or a Version Negotiation; each in either version, with one byte
-//! changed or not (review B's probe of fix round 1, review D's of fix round 2). The input: a byte for the
-//! versions, the app's destination and source IDs each after its length, a byte for how the answer is
-//! made, a byte for the change, and the rest: for an Initial its frames, each byte one of the frames an
-//! Initial may carry (RFC 9000 17.2.2), for a Retry its token, for a Version Negotiation its versions.
+//! changed or not (review B's probe of fix round 1, reviews D and F of fix rounds 2 and 3). The input: a
+//! byte for the versions, the app's destination and source IDs each after its length, a byte for how the
+//! answer is made (its low three bits the kind, six of them, and 8 for a byte changed), a byte for the
+//! change, and the rest: for an Initial its frames, each byte one of the frames an Initial may carry (RFC
+//! 9000 17.2.2), for a Retry its token, for a Version Negotiation its versions.
 //!
-//! Nothing may panic, nor open more packets than an answer may. Built for the IDs and whole, an answer
-//! carries them exactly as a client would take it: an Initial of frames, in either version (RFC 9368);
-//! a Retry with a token, in the app's version only (RFC 9369 4.1); a Version Negotiation of whole
-//! versions, not the app's among them (RFC 9000 6.2). Where the app's source ID is too short to tell
-//! its connection's packets apart by itself, only keys and tags tell, and every byte of an Initial or a
-//! Retry is under its tag: one with any byte changed, or built for another destination ID, never
-//! carries them, but where the change makes it a Version Negotiation, which has no tag. With a longer
-//! source ID a packet to it is matched by the ID alone, as a client's packets are, and a change elsewhere
-//! in it is not looked for.
+//! Nothing may panic, nor open more packets than an answer may, and nothing carries the app's IDs that is
+//! not sent to them: a packet to the app's source ID, or a Version Negotiation from its destination ID.
+//! Built for the IDs and whole, an answer carries them exactly as a client would take it: an Initial of
+//! frames, in either version (RFC 9368); a Retry with a token, in the app's version only (RFC 9369 4.1),
+//! not from the app's own destination ID (RFC 9000 17.2.5.1); a Version Negotiation of whole versions,
+//! not the app's among them (RFC 9000 6.2). Every byte of an Initial or a Retry is under its tag, which is
+//! checked whatever the app's source ID (since fix round 3): one with any byte changed, or built for
+//! another destination ID, never carries them, but where the change makes it a packet no tag covers, a
+//! Version Negotiation, or a Handshake or 0-RTT packet, or one with a short header, which a source ID of
+//! 4 bytes or more matches by itself.
 #![no_main]
 
 use datapavan_net::{identifiers, quic};
@@ -94,7 +96,8 @@ fuzz_target!(|data: &[u8]| {
     let retry = |original: &[u8]| {
         quic::retry(answered_in, original, (source, &server), rest).unwrap_or_default()
     };
-    let mut answer = match how % 6 {
+    let kind = (how & 7) % 6;
+    let mut answer = match kind {
         0 => rest.to_vec(),
         1 => initial(destination),
         2 => retry(destination),
@@ -117,23 +120,26 @@ fuzz_target!(|data: &[u8]| {
     let read = identifiers::Reading::new(&answer);
     let carried = read.carries(&asked);
     assert!(read.opened() <= quic::MOST_OPENED);
-    if answer.is_empty() || answer.len() > quic::LARGEST_ANSWER {
+    if carried {
+        assert!(
+            sent_to(&answer, destination, source),
+            "an answer not sent to the app's IDs carries them"
+        );
+    }
+    if answer.is_empty() || answer.len() > quic::LARGEST_DATAGRAM {
         return;
     }
-    // A change that zeroes version 1's last byte makes a Version Negotiation, which no tag covers: a
-    // client would take it as one where it reads as one, and so may Watch.
-    let sealed = matches!(how % 6, 1 | 2 | 4 | 5) && answer.get(1..5) != Some(&[0; 4]);
-    if source.len() < TELLS && sealed && (changed || how % 6 >= 4) {
+    if matches!(kind, 1 | 2 | 4 | 5) && (changed || kind >= 4) && still_sealed(&answer) {
         assert!(!carried, "a sealed answer changed, or for another destination ID");
     }
     if changed {
         return;
     }
-    match how % 6 {
+    match kind {
         1 => assert!(carried, "an Initial of frames built for the IDs"),
         2 => assert_eq!(
             carried,
-            answered_in == asked_in && !rest.is_empty(),
+            answered_in == asked_in && !rest.is_empty() && destination != server,
             "a Retry built for the IDs"
         ),
         3 => {
@@ -144,3 +150,41 @@ fuzz_target!(|data: &[u8]| {
         _ => {}
     }
 });
+
+/// Whether `answer` is sent to the app's IDs as an answer must be: a long header whose destination ID is
+/// the app's `source`, or a Version Negotiation whose source ID is the app's `destination` as well; a
+/// short header that begins with the app's source ID, where that is long enough to tell.
+fn sent_to(answer: &[u8], destination: &[u8], source: &[u8]) -> bool {
+    let Some(&first) = answer.first() else {
+        return false;
+    };
+    if first & 0x80 == 0 {
+        return source.len() >= TELLS && answer.get(1..1 + source.len()) == Some(source);
+    }
+    let id = |at: usize| -> Option<(&[u8], usize)> {
+        let length = usize::from(*answer.get(at)?);
+        Some((answer.get(at + 1..at + 1 + length)?, at + 1 + length))
+    };
+    let Some((to, after)) = id(5) else {
+        return false;
+    };
+    if answer.get(1..5) == Some(&[0; 4]) {
+        return to == source && id(after).is_some_and(|(from, _)| from == destination);
+    }
+    to == source
+}
+
+/// Whether `answer` still reads as an Initial or a Retry of a version this engine reads, which only its
+/// tag lets carry the app's IDs: a change may have made it another kind of packet.
+fn still_sealed(answer: &[u8]) -> bool {
+    let (Some(&first), Some(version)) = (answer.first(), answer.get(1..5)) else {
+        return false;
+    };
+    let kind = (first >> 4) & 3;
+    first & 0x80 != 0
+        && match version {
+            [0, 0, 0, 1] => kind == 0 || kind == 3,
+            [0x6b, 0x33, 0x43, 0xcf] => kind == 1 || kind == 0,
+            _ => false,
+        }
+}

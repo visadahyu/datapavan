@@ -21,9 +21,11 @@
 //! one of them. An Initial or a Retry is matched through the keys or the integrity key and its tag, which
 //! does not keep out a sender who saw the app's packet and can compute them as well, but rules out a
 //! chance match (2^-128). A Retry carries no trace of the connection ID it answers but its integrity tag
-//! (RFC 9001 5.8), so only the tag can tell which of an app's Initial packets it is for. A packet matched
-//! by the app's source connection ID alone is matched at the chance its length gives (2^-32 for 4 bytes),
-//! and a Version Negotiation packet, which has no tag, by the two IDs it echoes.
+//! (RFC 9001 5.8), so only the tag can tell which of an app's Initial packets it is for. Since fix round
+//! 3 an Initial or a Retry is opened whatever the app's source ID; a Handshake, 0-RTT or short-header
+//! packet, whose keys are the two ends' alone, is matched by the app's source connection ID, at the chance
+//! its length gives (2^-32 for 4 bytes), and a Version Negotiation packet, which has no tag, by the two
+//! IDs it echoes.
 //!
 //! The bytes come from any app and any sender, so nothing here may panic or read outside a slice: the
 //! fuzz target `quic` fuzzes the hello's reader; `identifiers` what an app's datagram asks and whether
@@ -60,13 +62,15 @@ const SERVER: &[u8] = b"server in";
 /// matched by a stranger's packet by a chance of one in 256 for one byte. A client that chooses one of 4
 /// bytes or more, as most do but Chromium's, which chooses none, is matched by it at a chance of 2^-32.
 const TOLD_APART: usize = 4;
-/// The largest datagram read as a server's Initial or Retry (ADR 0044, unit 9b, fix round 1): a larger one
-/// costs no keys and no AEAD, and carries nothing. QUIC never lets IP fragment its datagrams (RFC 9000 14),
-/// and before it has probed a larger path a server sends what fits the path it has validated, from 1,200
-/// bytes up (RFC 9000 14.1, 14.3); the paths of the internet, and Watch's tunnel (ADR 0044, decision 5 as
-/// amended), carry 1,500 bytes at most, so no server's first answer that reaches the app is larger. A Retry's
-/// token goes back in the client's next Initial, which must fit the same path.
-pub const LARGEST_ANSWER: usize = 1_500;
+/// The largest datagram read as QUIC's, a server's Initial or Retry (ADR 0044, unit 9b, fix round 1) or,
+/// since fix round 3, an app's: a larger one costs no keys and no AEAD, carries nothing and asks nothing.
+/// QUIC never lets IP fragment its datagrams (RFC 9000 14), and a sender makes an Initial's datagram larger
+/// than 1,200 bytes only where it believes the path and its peer carry it (14.1). An app's path ends in
+/// Watch's tunnel, whose MTU is 1,500 bytes at most (ADR 0044, decision 5 as amended): a larger datagram
+/// from an app came in IP fragments, which no QUIC client sends, and a server's answer larger than that
+/// could reach the app only so. A Retry's token goes back in the client's next Initial, which must fit the
+/// same path.
+pub const LARGEST_DATAGRAM: usize = 1_500;
 /// At most this many Initial or Retry packets are opened, keys derived where they are not kept, to tell one
 /// datagram that came back (ADR 0044, unit 9b, fix round 1), whatever stand-ins it is checked for: one for
 /// each destination ID an app's Initial asked, the latest first. A client that sends no source ID can tell
@@ -523,12 +527,29 @@ impl Ids {
 /// The connection IDs of each long-header packet in `datagram`, an app's, when the datagram holds a
 /// QUIC Initial packet of version 1 or 2 whose protection, removed with the client's keys, gives a tag
 /// that checks and frames that parse to its end; none otherwise, nor when one of its Initial packets
-/// fails so. Each distinct pair once: an Initial sent again carries the same. Packets after one to
-/// another destination ID than the first are ignored, as RFC 9000 12.2 has a receiver do, and so are
-/// those after the first [`MOST_PACKETS`]; the client's keys are derived once for the datagram, all of
-/// whose packets share their destination ID.
+/// fails so, nor for a datagram larger than [`LARGEST_DATAGRAM`]. Each distinct pair once: an Initial
+/// sent again carries the same. Packets after one to another destination ID than the first are ignored,
+/// as RFC 9000 12.2 has a receiver do, and so are those after the first [`MOST_PACKETS`]; the client's
+/// keys are derived once for the datagram, all of whose packets share their destination ID. So one
+/// datagram costs at most two key derivations and AEAD over 1,500 bytes (ADR 0044, unit 9b, fix round 3).
 #[must_use]
 pub fn asked(datagram: &[u8]) -> Vec<Ids> {
+    read_ids(datagram, true)
+}
+
+/// The connection IDs [`asked`] reads, from the packets' headers alone, none opened: for what the app is
+/// remembered to have sent a peer (ADR 0044, unit 9b, fix round 3), where a datagram that only looks like
+/// an Initial costs a false memory, which withholds an answer at a chance of 2^-64, never a false match.
+#[must_use]
+pub fn named(datagram: &[u8]) -> Vec<Ids> {
+    read_ids(datagram, false)
+}
+
+/// What [`asked`] reads, opening the Initial packets when `open`.
+fn read_ids(datagram: &[u8], open_them: bool) -> Vec<Ids> {
+    if datagram.len() > LARGEST_DATAGRAM {
+        return Vec::new();
+    }
     let mut asked: Vec<Ids> = Vec::new();
     let mut keys: [Option<Keys>; 2] = [None, None];
     let mut first: Option<Cid> = None;
@@ -548,7 +569,9 @@ pub fn asked(datagram: &[u8]) -> Vec<Ids> {
         if *first.get_or_insert(destination) != destination {
             break;
         }
-        if packet.initial {
+        if packet.initial && !open_them {
+            initial = true;
+        } else if packet.initial {
             let slot = &mut keys[packet.version.index()];
             if slot.is_none() {
                 *slot = Keys::initial(packet.version, destination.get(), CLIENT);
@@ -609,7 +632,7 @@ impl<'a> ServerHeader<'a> {
 
 /// A datagram that came back from where an app sent QUIC, read for whether it answers what the app
 /// asked ([`Answer::carries`]). Whatever stand-ins it is checked for, it opens at most [`MOST_OPENED`]
-/// packets, and none when it is larger than [`LARGEST_ANSWER`] (ADR 0044, unit 9b, fix round 1). Most
+/// packets, and none when it is larger than [`LARGEST_DATAGRAM`] (ADR 0044, unit 9b, fix round 1). Most
 /// checks cost no packet opened ([`Answer::tells`]); the engine spends the opens the others need
 /// ([`Answer::opens_for`]) so that each stand-in checked has its newest identifier tried (fix round 2).
 pub struct Answer<'a> {
@@ -661,12 +684,15 @@ impl<'a> Answer<'a> {
     ///
     /// It is when it is a Version Negotiation packet whose source connection ID is the app's destination
     /// and whose destination is the app's source, listing versions in whole words, the app's own not among
-    /// them (RFC 9000 6.2, 17.2.1; RFC 9368 2.1); or any packet whose destination ID is the app's source
-    /// ID, where that is 4 bytes or more, long enough to tell. It is not when it is a packet the client
-    /// would discard whatever its keys: a Retry in another version than the app's (RFC 9369 4.1), or
-    /// without a token (RFC 9000 17.2.5.2); a server's Initial with a token (17.2.2). A client that sends
-    /// no source ID, as Chromium's, so Cronet's, does, is told only by its Initial keys: by the server's
-    /// Version Negotiation, or by its Retry or first Initial packet opened.
+    /// them (RFC 9000 6.2, 17.2.1; RFC 9368 2.1); or a Handshake or 0-RTT packet, or one with a short
+    /// header, whose destination ID is the app's source ID, where that is 4 bytes or more, long enough to
+    /// tell: their keys are the two ends' alone, so the ID is all that can be read of them. An Initial or a
+    /// Retry to the app's source ID is opened whatever that ID's length (since fix round 3: before, a
+    /// source ID of 4 bytes took one whose tag failed), at most [`LARGEST_DATAGRAM`] bytes. It is not when
+    /// it is a Retry the client discards whatever its tag (RFC 9000 17.2.5.1, 17.2.5.2; RFC 9369 4.1): in
+    /// another version than the app's, without a token, or from the app's own destination ID. A client
+    /// that sends no source ID, as Chromium's, so Cronet's, does, is told only by its Initial keys: by the
+    /// server's Version Negotiation, or by its Retry or first Initial packet opened.
     #[must_use]
     pub fn tells(&self, asked: &Ids) -> Option<bool> {
         let source = asked.source.get();
@@ -686,25 +712,24 @@ impl<'a> Answer<'a> {
         }
         let kind = (header.first >> 4) & 3;
         let (initial, retry) = version.kinds();
-        if kind == retry && (version != asked.version || self.datagram.len() <= header.rest + TAG) {
-            return Some(false);
+        if kind != initial && kind != retry {
+            return Some(asked.source.tells());
         }
-        if kind == initial && long_packet(self.datagram, 0).is_none_or(|packet| packet.token != 0) {
-            return Some(false);
-        }
-        if asked.source.tells() {
-            return Some(true);
-        }
-        if (kind != initial && kind != retry) || self.datagram.len() > LARGEST_ANSWER {
+        let discarded = kind == retry
+            && (version != asked.version
+                || self.datagram.len() <= header.rest + TAG
+                || header.source == asked.destination.get());
+        if discarded || self.datagram.len() > LARGEST_DATAGRAM {
             return Some(false);
         }
         None
     }
 
     /// Opens its first packet, if it may open one more, to tell whether it is the server's answer to
-    /// `asked` where [`Answer::tells`] could not, and only then: a Retry whose integrity tag checks with the app's
-    /// destination ID, or an Initial whose protection, removed with the server's keys of the app's
-    /// destination ID, gives a tag that checks and frames that parse to its end. The Initial may be of
+    /// `asked` where [`Answer::tells`] could not, and only then: a Retry whose integrity tag checks with the
+    /// app's destination ID, or an Initial without a token (RFC 9000 17.2.2) whose protection, removed with
+    /// the server's keys of the app's destination ID, gives a tag that checks and frames that parse to its
+    /// end. The Initial may be of
     /// either version this module reads, whichever the app's was: a server that negotiates a compatible
     /// version answers a version 1 Initial in version 2, with version 2's keys of the same destination ID
     /// (RFC 9368 2.3, RFC 9369 4). `false` once it may open no more.
@@ -742,7 +767,7 @@ impl<'a> Answer<'a> {
     }
 
     /// Whether it is a Retry of `version` whose integrity tag checks with the app's destination ID (RFC
-    /// 9001 5.8). [`Answer::tells`] has refused one without a token, or in another version than the app's.
+    /// 9001 5.8). [`Answer::tells`] has refused one the client discards whatever its tag.
     fn retry_for(&self, asked: &Ids, version: Version) -> bool {
         let Some(end) = self.datagram.len().checked_sub(TAG) else {
             return false;
@@ -759,14 +784,15 @@ impl<'a> Answer<'a> {
         })
     }
 
-    /// Whether it is an Initial of `version` that the server's keys of the app's destination ID open, to
-    /// frames that parse. [`Answer::tells`] has refused one with a token.
+    /// Whether it is an Initial of `version`, without a token, that the server's keys of the app's
+    /// destination ID open, to frames that parse.
     fn initial_for(&self, asked: &Ids, version: Version) -> bool {
         let Some(packet) = long_packet(self.datagram, 0) else {
             return false;
         };
         packet.initial
             && packet.version == version
+            && packet.token == 0
             && asked.server_keys(version).is_some_and(|keys| {
                 open(keys, self.datagram, 0, packet.pn_offset, packet.end)
                     .is_some_and(|payload| frames_parse(&payload))
@@ -948,14 +974,21 @@ impl Initial {
     /// Reads one datagram the app sent. [`ServerName::None`] means that this flow will not give a
     /// name: its first datagram holds no Initial packet that can be read, an Initial's frames make no
     /// sense, or [`MAX_DATAGRAMS`] passed without a whole `ClientHello`. Its packets are read as [`asked`]
-    /// reads them (ADR 0044, unit 9b, fix round 2): those after one to another destination ID than the
-    /// first are ignored (RFC 9000 12.2), and so are those after the first [`MOST_PACKETS`].
+    /// reads them (ADR 0044, unit 9b, fix rounds 2 and 3): those after one to another destination ID than
+    /// the first are ignored (RFC 9000 12.2), and so are those after the first [`MOST_PACKETS`], and those
+    /// of a datagram larger than [`LARGEST_DATAGRAM`].
     pub fn push(&mut self, datagram: &[u8]) -> ServerName {
         self.datagrams += 1;
         let mut read = false;
         let mut at = 0;
         let mut first: Option<Cid> = None;
-        for _ in 0..MOST_PACKETS {
+        // A datagram larger than any a QUIC client sends through Watch's tunnel is read no further.
+        let packets = if datagram.len() > LARGEST_DATAGRAM {
+            0
+        } else {
+            MOST_PACKETS
+        };
+        for _ in 0..packets {
             let Some(packet) = long_packet(datagram, at) else {
                 break;
             };
@@ -1526,11 +1559,11 @@ pub(crate) mod tests {
                 version,
                 (&destination, &source),
                 (0, &crypto(0, &hello)),
-                1200,
+                700,
             ) else {
                 unreachable!("an Initial packet")
             };
-            assert_eq!(packet.len(), 1200);
+            assert_eq!(packet.len(), 700);
             let mut twice = packet.clone();
             twice.extend_from_slice(&packet);
             let asked = asked(&twice);
@@ -1539,7 +1572,7 @@ pub(crate) mod tests {
             assert_eq!(asked[0].source.get(), source.as_slice());
             assert_eq!(asked[0].version.wire(), version);
             let mut damaged = packet.clone();
-            damaged[1199] ^= 1;
+            damaged[699] ^= 1;
             assert_eq!(super::asked(&damaged).len(), 0, "a tag that fails");
         }
         // The right tag over frames an Initial may not carry (a STREAM frame).
@@ -1599,7 +1632,10 @@ pub(crate) mod tests {
     /// (unit 9b, fix round 1; review B).
     #[test]
     fn an_apps_datagram_is_read_as_rfc_9000_12_2_has_it_and_no_further() {
-        let (packet, _) = v1_asked(&[0x11; 8]);
+        // Two of them fit a datagram of 1,500 bytes.
+        let small =
+            |id: u8| client_initial(1, (&[id; 8], &[]), (0, &[0x01]), 700).unwrap_or_default();
+        let packet = small(0x11);
         // A 0-RTT packet of version 1 (type 1), its length to the end.
         let mut zero_rtt = vec![0xd0, 0, 0, 0, 1, 8];
         zero_rtt.extend_from_slice(&[0x11; 8]);
@@ -1610,7 +1646,7 @@ pub(crate) mod tests {
         let last = damaged.len() - 1;
         damaged[last] ^= 1;
         assert_eq!(asked(&[packet.clone(), damaged.clone()].concat()).len(), 0);
-        let (other, _) = v1_asked(&[0x22; 8]);
+        let other = small(0x22);
         let read = asked(&[packet.clone(), other].concat());
         assert_eq!(read.len(), 1);
         assert_eq!(read[0].destination.get(), &[0x11; 8]);
@@ -1631,12 +1667,12 @@ pub(crate) mod tests {
     }
 
     /// Whatever it is checked against, an answer opens at most [`MOST_OPENED`] packets, and none when it
-    /// is larger than [`LARGEST_ANSWER`]; the server's keys an identifier was checked with are kept with it
+    /// is larger than [`LARGEST_DATAGRAM`]; the server's keys an identifier was checked with are kept with it
     /// (unit 9b, fix round 1; review A, probe 3, and review B).
     #[test]
     fn an_answer_opens_few_packets_and_keeps_the_keys_it_derived() {
         let ids: Vec<Ids> = (0..64u8).map(|n| v1_asked(&[n; 8]).1).collect();
-        for (size, opened) in [(1_400, MOST_OPENED), (LARGEST_ANSWER + 1, 0), (64_000, 0)] {
+        for (size, opened) in [(1_400, MOST_OPENED), (LARGEST_DATAGRAM + 1, 0), (64_000, 0)] {
             let mut forged = vec![0xc0, 0, 0, 0, 1, 0, 0, 0];
             let length = u32::try_from(size - forged.len() - 4).unwrap_or(0) | 0x8000_0000;
             forged.extend_from_slice(&length.to_be_bytes());
@@ -1667,36 +1703,121 @@ pub(crate) mod tests {
         assert!(!Answer::read(&stream.unwrap_or_default()).is_some_and(|read| read.carries(&ids)));
     }
 
+    /// A datagram larger than [`LARGEST_DATAGRAM`] is no QUIC client's through Watch's tunnel: it asks
+    /// nothing, opens nothing and names no flow, however many Initials it holds, so that one costs no more
+    /// than the largest a client sends (fix round 3, review E: 16 Initials of 4,000 bytes cost 200 us).
+    #[test]
+    fn a_datagram_larger_than_a_client_sends_is_not_read() {
+        let hello = tls::tests::handshake("watch.test", false);
+        for (size, read) in [(LARGEST_DATAGRAM, true), (LARGEST_DATAGRAM + 1, false)] {
+            let packet = initial_packet(1, &hex(CID), 0, &crypto(0, &hello), size);
+            assert_eq!(packet.len(), size);
+            assert_eq!(asked(&packet).len(), usize::from(read), "{size} bytes");
+            assert_eq!(
+                named(&packet).len(),
+                usize::from(read),
+                "{size} bytes, unopened"
+            );
+            let name = if read {
+                found("watch.test", false)
+            } else {
+                ServerName::None
+            };
+            assert_eq!(Initial::new().push(&packet), name, "{size} bytes");
+        }
+    }
+
+    /// The IDs of an Initial read from its headers alone, none opened: what [`asked`] reads of a whole
+    /// one, and also of one whose tag fails, where [`asked`] reads nothing (fix round 3).
+    #[test]
+    fn named_reads_the_ids_without_opening() {
+        let (packet, ids) = v1_asked(&[0x11; 8]);
+        assert_eq!(named(&packet), vec![ids.clone()]);
+        let mut damaged = packet;
+        let last = damaged.len() - 1;
+        damaged[last] ^= 1;
+        assert_eq!(asked(&damaged).len(), 0);
+        assert_eq!(named(&damaged), vec![ids]);
+        assert_eq!(named(b"\x12\x34 an ordinary datagram").len(), 0);
+    }
+
     /// What a client discards carries nothing, though the right keys protect it or the right integrity
     /// key tags it (fix round 2, review D): a server's Initial with its reserved bits set (RFC 9000 17.2),
     /// with no frame (12.4), or with a token (17.2.2); a Retry without a token (17.2.5.2).
     #[test]
     fn what_a_client_discards_answers_nothing() {
-        let (_, ids) = v1_asked(&[0x42; 8]);
-        let carries = |packet: Option<Vec<u8>>| {
-            Answer::read(&packet.unwrap_or_default()).is_some_and(|read| read.carries(&ids))
-        };
-        let Some(keys) = Keys::initial(Version::V1, &[0x42; 8], SERVER) else {
-            unreachable!("Initial keys")
-        };
-        let sealed = |(reserved, token): (u8, &[u8]), frames: &[u8]| {
-            seal(
-                Version::V1,
-                &keys,
-                (&[], &[0x5a; 8]),
-                (0, 4),
-                (reserved, token),
-                frames,
-            )
-        };
-        assert!(carries(sealed((0, &[]), &[0x01])), "as a server sends it");
-        assert!(!carries(sealed((0x04, &[]), &[0x01])), "a reserved bit");
-        assert!(!carries(sealed((0x08, &[]), &[0x01])), "the other");
-        assert!(!carries(sealed((0, &[]), &[])), "no frame");
-        assert!(!carries(sealed((0, b"token"), &[0x01])), "a token");
-        let retry = |token: &[u8]| retry(1, &[0x42; 8], (&[], &[0x5a; 8]), token);
-        assert!(carries(retry(b"t")));
-        assert!(!carries(retry(b"")), "a Retry without a token");
+        // With no source ID, and with one of 4 bytes, which tells the app's packets apart by itself but
+        // matches an Initial or a Retry only once it is opened (fix round 3, review F).
+        for source in [&[][..], &[0xa1, 0xa2, 0xa3, 0xa4][..]] {
+            let Some(client) = client_initial(1, (&[0x42; 8], source), (0, &[0x01]), 1200) else {
+                unreachable!("an Initial packet")
+            };
+            let ids = &asked(&client)[0];
+            let carries = |packet: Option<Vec<u8>>| {
+                Answer::read(&packet.unwrap_or_default()).is_some_and(|read| read.carries(ids))
+            };
+            let Some(keys) = Keys::initial(Version::V1, &[0x42; 8], SERVER) else {
+                unreachable!("Initial keys")
+            };
+            let sealed = |(reserved, token): (u8, &[u8]), frames: &[u8]| {
+                seal(
+                    Version::V1,
+                    &keys,
+                    (source, &[0x5a; 8]),
+                    (0, 4),
+                    (reserved, token),
+                    frames,
+                )
+            };
+            let n = source.len();
+            assert!(
+                carries(sealed((0, &[]), &[0x01])),
+                "{n}: as a server sends it"
+            );
+            assert!(
+                !carries(sealed((0x04, &[]), &[0x01])),
+                "{n}: a reserved bit"
+            );
+            assert!(!carries(sealed((0x08, &[]), &[0x01])), "{n}: the other");
+            assert!(!carries(sealed((0, &[]), &[])), "{n}: no frame");
+            assert!(!carries(sealed((0, b"token"), &[0x01])), "{n}: a token");
+            let mut broken = sealed((0, &[]), &[0x01]).unwrap_or_default();
+            let last = broken.len() - 1;
+            broken[last] ^= 1;
+            assert!(!carries(Some(broken)), "{n}: an Initial whose tag fails");
+            let retry = |version, (from, token): (&[u8], &[u8])| {
+                retry(version, &[0x42; 8], (source, from), token)
+            };
+            assert!(carries(retry(1, (&[0x5a; 8], b"t"))), "{n}: a Retry");
+            assert!(
+                !carries(retry(1, (&[0x5a; 8], b""))),
+                "{n}: without a token"
+            );
+            assert!(
+                !carries(retry(0x6b33_43cf, (&[0x5a; 8], b"t"))),
+                "{n}: in another version"
+            );
+            // RFC 9000 17.2.5.1: from the app's own destination ID.
+            assert!(
+                !carries(retry(1, (&[0x42; 8], b"t"))),
+                "{n}: from the app's ID"
+            );
+            let mut broken = retry(1, (&[0x5a; 8], b"t")).unwrap_or_default();
+            let last = broken.len() - 1;
+            broken[last] ^= 1;
+            assert!(!carries(Some(broken)), "{n}: a Retry whose tag fails");
+            // A Handshake packet to a source ID that tells is matched by it alone: its keys are the
+            // two ends'.
+            let mut handshake = vec![0xe0, 0, 0, 0, 1, u8::try_from(n).unwrap_or(0)];
+            handshake.extend_from_slice(source);
+            handshake.push(0);
+            handshake.extend_from_slice(&[0x55; 40]);
+            assert_eq!(
+                carries(Some(handshake)),
+                n >= TOLD_APART,
+                "{n}: a Handshake packet"
+            );
+        }
     }
 
     /// The frames of a server's Initial are read to their end as RFC 9000 19 has them (fix round 2, review
@@ -1723,13 +1844,13 @@ pub(crate) mod tests {
         );
     }
 
-    /// An answer of [`LARGEST_ANSWER`] bytes is opened and told, one byte more is not (fix round 2, review
+    /// An answer of [`LARGEST_DATAGRAM`] bytes is opened and told, one byte more is not (fix round 2, review
     /// D's surviving mutant).
     #[test]
     fn the_largest_answer_is_read_and_no_larger() {
         let (_, ids) = v1_asked(&[0x42; 8]);
         // 20 bytes of header and 16 of tag around an ACK and PADDING.
-        for (size, told) in [(LARGEST_ANSWER, true), (LARGEST_ANSWER + 1, false)] {
+        for (size, told) in [(LARGEST_DATAGRAM, true), (LARGEST_DATAGRAM + 1, false)] {
             let mut frames = vec![0x02, 0, 0, 0, 0];
             frames.resize(size - 36, 0);
             let answer =
