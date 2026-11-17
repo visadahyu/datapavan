@@ -1327,6 +1327,11 @@ mod tests {
             with(VERSION, primitive(&[0x02], &[0xff, 0x80])),
             Err(Error::NotDer)
         );
+        // A negative number in its shortest form is out of range, not its byte read as 128.
+        assert_eq!(
+            with(VERSION, primitive(&[0x02], &[0x80])),
+            Err(Error::InvalidValue)
+        );
         // In an entry the audit reads, the entry is malformed, so absent.
         assert_eq!(
             with(PATCH_VALUE, primitive(&[0x02], &[0x00, 0x03, 0x17, 0x0b]))
@@ -1569,6 +1574,8 @@ mod tests {
             (0, None),
             (99_999, None),
             (1_000_000, None),
+            // Seven digits, whose first five would read as a year and a valid month.
+            (2_020_112, None),
             (100_000_000, None),
             (202_500, None),
             (202_513, None),
