@@ -242,6 +242,8 @@
     <string name="finding_attestation_revoked_body">Google hat einen Schlüssel der Hardware-Prüfung dieses Telefons widerrufen, zum Beispiel weil er öffentlich geworden ist. Der gemeldete Zustand von Bootloader und System kann gefälscht sein.</string>
     <string name="finding_attestation_unconfirmed_title">Hardware-Prüfung nicht bestätigt</string>
     <string name="finding_attestation_unconfirmed_body">Die Hardware-Prüfung dieses Telefons ist nicht mit Googles Attestierungsschlüssel signiert, daher lässt sich der gemeldete Zustand von Bootloader und System nicht bestätigen. Manche Hersteller außerhalb von Googles Programm nutzen einen eigenen Schlüssel; auch ein verändertes System kann die Ursache sein.</string>
+    <string name="finding_attestation_incomplete_title">Hardware-Prüfung unvollständig</string>
+    <string name="finding_attestation_incomplete_body">Die Hardware-Prüfung dieses Telefons gibt weder an, ob der Bootloader gesperrt ist, noch, ob das System verifiziert ist, daher lässt sich keines von beiden bestätigen. Ein Telefon, das sich an die Regeln von Android hält, gibt immer beides an. Ein Fehler des Herstellers kann die Ursache sein; ebenso ein verändertes System.</string>
     <string name="finding_vpn_active_title">Ein VPN ist aktiv</string>
     <string name="finding_vpn_active_body">Der gesamte Datenverkehr läuft gerade durch eine VPN-App. Vergewissern Sie sich, dass Sie ihr vertrauen.</string>
 

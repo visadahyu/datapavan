@@ -29,6 +29,7 @@ enum class FindingKind(val severity: Severity) {
     BOOT_NOT_VERIFIED(Severity.HIGH),
     ATTESTATION_REVOKED(Severity.HIGH),
     ATTESTATION_UNCONFIRMED(Severity.MEDIUM),
+    ATTESTATION_INCOMPLETE(Severity.MEDIUM),
     SYSTEM_KEY_LEAKED(Severity.MEDIUM),
     USB_DEBUGGING(Severity.MEDIUM),
     OLD_SECURITY_PATCH(Severity.MEDIUM),
@@ -153,6 +154,10 @@ object Rules {
                     AttestationTrust.REVOKED -> add(FindingKind.ATTESTATION_REVOKED)
                     AttestationTrust.OTHER_ROOT, AttestationTrust.BROKEN_CHAIN -> add(FindingKind.ATTESTATION_UNCONFIRMED)
                 }
+                // A sound trusted environment or secure chip always states the bootloader and boot state
+                // in the list it enforces itself, and the engine never takes them from the list the
+                // system writes (ADR 0040, decision 5), so their absence is reported, not passed over.
+                if (integrity.deviceLocked == null || integrity.verifiedBoot == null) add(FindingKind.ATTESTATION_INCOMPLETE)
                 if (integrity.deviceLocked == false) add(FindingKind.BOOTLOADER_UNLOCKED)
                 if (integrity.deviceLocked == true && integrity.verifiedBoot in setOf(2, 3)) add(FindingKind.BOOT_NOT_VERIFIED)
             }

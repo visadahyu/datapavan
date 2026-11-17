@@ -242,6 +242,8 @@
     <string name="finding_attestation_revoked_body">Google ha revocado una clave de la comprobación de hardware de este teléfono, por ejemplo porque se filtró. El estado del bootloader y del sistema que indica la comprobación puede estar falsificado.</string>
     <string name="finding_attestation_unconfirmed_title">Comprobación de hardware no confirmada</string>
     <string name="finding_attestation_unconfirmed_body">La comprobación de hardware de este teléfono no está firmada con la clave de certificación de Google, así que no se puede confirmar el estado del bootloader y del sistema que indica. Algunos fabricantes fuera del programa de Google usan su propia clave; un sistema modificado también puede causar esto.</string>
+    <string name="finding_attestation_incomplete_title">Comprobación de hardware incompleta</string>
+    <string name="finding_attestation_incomplete_body">La comprobación de hardware de este teléfono no indica si el bootloader está bloqueado ni si el sistema está verificado, así que no se puede confirmar ninguna de las dos cosas. Un teléfono que sigue las reglas de Android siempre indica ambas. Un error del fabricante puede causar esto; un sistema modificado también.</string>
     <string name="finding_vpn_active_title">Hay una VPN activa</string>
     <string name="finding_vpn_active_body">Todo el tráfico pasa ahora por una app de VPN. Asegúrate de que sea una en la que confíes.</string>
 

@@ -234,6 +234,8 @@
     <string name="finding_attestation_revoked_body">Google 已吊销此手机硬件检查中的一个密钥，例如因为该密钥已泄露。检查报告的引导加载程序和系统状态可能是伪造的。</string>
     <string name="finding_attestation_unconfirmed_title">硬件检查未得到确认</string>
     <string name="finding_attestation_unconfirmed_body">此手机的硬件检查没有使用 Google 的认证密钥签名，因此无法确认其报告的引导加载程序和系统状态。一些未加入 Google 项目的厂商使用自己的密钥；修改过的系统也可能导致这种情况。</string>
+    <string name="finding_attestation_incomplete_title">硬件检查不完整</string>
+    <string name="finding_attestation_incomplete_body">此手机的硬件检查没有说明引导加载程序是否已锁定，也没有说明系统是否已通过验证，因此两者都无法确认。遵循 Android 规则的手机总会说明这两项。厂商的错误可能导致这种情况；修改过的系统也可能导致这种情况。</string>
     <string name="finding_vpn_active_title">有 VPN 正在运行</string>
     <string name="finding_vpn_active_body">目前所有流量都经过一个 VPN 应用。请确保它是您信任的应用。</string>
 

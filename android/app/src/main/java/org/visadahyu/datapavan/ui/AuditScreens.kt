@@ -722,6 +722,7 @@ private fun title(kind: FindingKind) = when (kind) {
     FindingKind.INTEGRITY_SOFTWARE_ONLY -> R.string.finding_software_only_title
     FindingKind.ATTESTATION_REVOKED -> R.string.finding_attestation_revoked_title
     FindingKind.ATTESTATION_UNCONFIRMED -> R.string.finding_attestation_unconfirmed_title
+    FindingKind.ATTESTATION_INCOMPLETE -> R.string.finding_attestation_incomplete_title
     FindingKind.VPN_ACTIVE -> R.string.finding_vpn_active_title
     FindingKind.UNTRUSTED_SYSTEM_KEY -> R.string.finding_untrusted_system_key_title
     FindingKind.LEAKED_KEY_FROM_STORE -> R.string.finding_leaked_key_from_store_title
@@ -753,6 +754,7 @@ private fun body(kind: FindingKind) = when (kind) {
     FindingKind.INTEGRITY_SOFTWARE_ONLY -> R.string.finding_software_only_body
     FindingKind.ATTESTATION_REVOKED -> R.string.finding_attestation_revoked_body
     FindingKind.ATTESTATION_UNCONFIRMED -> R.string.finding_attestation_unconfirmed_body
+    FindingKind.ATTESTATION_INCOMPLETE -> R.string.finding_attestation_incomplete_body
     FindingKind.VPN_ACTIVE -> R.string.finding_vpn_active_body
     FindingKind.UNTRUSTED_SYSTEM_KEY -> R.string.finding_untrusted_system_key_body
     FindingKind.LEAKED_KEY_FROM_STORE -> R.string.finding_leaked_key_from_store_body

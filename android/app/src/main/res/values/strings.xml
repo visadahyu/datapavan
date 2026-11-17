@@ -261,6 +261,8 @@
     <string name="finding_attestation_revoked_body">Google has revoked a key in this phone\'s hardware check, for example because it leaked. The bootloader and system state that the check reports may be forged.</string>
     <string name="finding_attestation_unconfirmed_title">Hardware check not confirmed</string>
     <string name="finding_attestation_unconfirmed_body">This phone\'s hardware check is not signed with Google\'s attestation key, so the bootloader and system state that it reports cannot be confirmed. Some makers outside Google\'s programme use their own key; a modified system can also cause this.</string>
+    <string name="finding_attestation_incomplete_title">Hardware check incomplete</string>
+    <string name="finding_attestation_incomplete_body">This phone\'s hardware check does not say whether the bootloader is locked or whether the system is verified, so neither can be confirmed. A phone that follows Android\'s rules always says both. A maker\'s error can cause this; so can a modified system.</string>
     <string name="finding_vpn_active_title">A VPN is active</string>
     <string name="finding_vpn_active_body">All traffic currently passes through a VPN app. Make sure it is one you trust.</string>
 

@@ -136,6 +136,24 @@ class RulesTest {
     }
 
     @Test
+    fun `hardware attestation without the bootloader state is incomplete`() {
+        // The engine reads these only from the hardware-enforced list, so null means the hardware left them out.
+        val integrity = Integrity(1, deviceLocked = null, verifiedBoot = null, osPatchLevel = null, trust = AttestationTrust.GOOGLE_ROOT)
+        assertEquals(listOf(FindingKind.ATTESTATION_INCOMPLETE), Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610))
+        val unconfirmed = integrity.copy(securityLevel = 2, trust = AttestationTrust.OTHER_ROOT)
+        assertEquals(
+            listOf(FindingKind.ATTESTATION_UNCONFIRMED, FindingKind.ATTESTATION_INCOMPLETE),
+            Rules.forDevice(device(integrity = unconfirmed), nowYearMonth = 202_610),
+        )
+    }
+
+    @Test
+    fun `software attestation without the bootloader state is reported only as software`() {
+        val integrity = Integrity(0, deviceLocked = null, verifiedBoot = null, osPatchLevel = null, trust = AttestationTrust.OTHER_ROOT)
+        assertEquals(listOf(FindingKind.INTEGRITY_SOFTWARE_ONLY), Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610))
+    }
+
+    @Test
     fun `software attestation is reported only as such, whatever its chain`() {
         val integrity = Integrity(0, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_608, trust = AttestationTrust.OTHER_ROOT)
         assertEquals(listOf(FindingKind.INTEGRITY_SOFTWARE_ONLY), Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610))
