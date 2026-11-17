@@ -236,6 +236,8 @@
     <string name="finding_old_patch_body">此手机上最近一次安全补丁已超过一年，因此已知漏洞没有修复。</string>
     <string name="finding_software_only_title">没有可用的硬件检查</string>
     <string name="finding_software_only_body">此手机的硬件检查来自软件，而软件受系统控制，因此无法确认引导加载程序或系统。这在模拟器上以及没有用于密钥的安全硬件的手机上是正常的；修改过的系统也可能这样回应。</string>
+    <string name="finding_integrity_emulator_title">模拟器上没有硬件检查</string>
+    <string name="finding_integrity_emulator_body">此设备报告自己是模拟器，而模拟器将密钥保存在软件中，因此没有对引导加载程序或系统的硬件检查。如果这是一部手机，它没有如实说明自己的情况：其系统已被修改，因此请把这当作严重警告。</string>
     <string name="finding_attestation_revoked_title">硬件检查密钥已被吊销</string>
     <string name="finding_attestation_revoked_body">Google 已吊销此手机硬件检查中的一个密钥，例如因为该密钥已泄露。检查报告的引导加载程序和系统状态可能是伪造的。</string>
     <string name="finding_attestation_unconfirmed_title">硬件检查未得到确认</string>

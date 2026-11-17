@@ -249,6 +249,8 @@
     <string name="finding_old_patch_body">Le dernier correctif de sécurité de ce téléphone date de plus d\'un an : des failles connues ne sont pas corrigées.</string>
     <string name="finding_software_only_title">Aucun contrôle matériel disponible</string>
     <string name="finding_software_only_body">Le contrôle matériel de ce téléphone provient d\'un logiciel, que le système maîtrise : il ne peut donc confirmer ni le bootloader ni le système. C\'est normal sur un émulateur et sur un téléphone sans matériel sécurisé pour les clés ; un système modifié peut aussi répondre ainsi.</string>
+    <string name="finding_integrity_emulator_title">Aucun contrôle matériel sur un émulateur</string>
+    <string name="finding_integrity_emulator_body">Cet appareil indique qu\'il est un émulateur, et un émulateur garde ses clés dans un logiciel : il n\'y a donc aucun contrôle matériel du bootloader ni du système. S\'il s\'agit d\'un téléphone, il ne dit pas la vérité sur lui-même : son système a été modifié, prenez donc cet avertissement au sérieux.</string>
     <string name="finding_attestation_revoked_title">Clé du contrôle matériel révoquée</string>
     <string name="finding_attestation_revoked_body">Google a révoqué une clé du contrôle matériel de ce téléphone, par exemple parce qu\'elle a fuité. L\'état du bootloader et du système que ce contrôle indique peut être falsifié.</string>
     <string name="finding_attestation_unconfirmed_title">Contrôle matériel non confirmé</string>

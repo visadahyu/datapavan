@@ -760,6 +760,7 @@ private fun title(kind: FindingKind) = when (kind) {
     FindingKind.ATTESTATION_FAILED -> R.string.finding_attestation_failed_title
     FindingKind.SYSTEM_OWN_KEY -> R.string.finding_system_own_key_title
     FindingKind.INTEGRITY_SOFTWARE_ONLY -> R.string.finding_software_only_title
+    FindingKind.INTEGRITY_EMULATOR -> R.string.finding_integrity_emulator_title
     FindingKind.ATTESTATION_REVOKED -> R.string.finding_attestation_revoked_title
     FindingKind.ATTESTATION_FORGED -> R.string.finding_attestation_forged_title
     FindingKind.ATTESTATION_KEYS_UNAVAILABLE -> R.string.finding_attestation_keys_unavailable_title
@@ -800,6 +801,7 @@ private fun body(kind: FindingKind) = when (kind) {
     FindingKind.ATTESTATION_FAILED -> R.string.finding_attestation_failed_body
     FindingKind.SYSTEM_OWN_KEY -> R.string.finding_system_own_key_body
     FindingKind.INTEGRITY_SOFTWARE_ONLY -> R.string.finding_software_only_body
+    FindingKind.INTEGRITY_EMULATOR -> R.string.finding_integrity_emulator_body
     FindingKind.ATTESTATION_REVOKED -> R.string.finding_attestation_revoked_body
     FindingKind.ATTESTATION_FORGED -> R.string.finding_attestation_forged_body
     FindingKind.ATTESTATION_KEYS_UNAVAILABLE -> R.string.finding_attestation_keys_unavailable_body

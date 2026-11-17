@@ -96,7 +96,7 @@ class RulesTest {
     }
 
     @Test
-    fun `emulators attest in software only`() {
+    fun `a software answer where no secure hardware is declared has no hardware check`() {
         val integrity = Integrity(0, deviceLocked = false, verifiedBoot = 2, osPatchLevel = 202_608, trust = AttestationTrust.GOOGLE_ROOT)
         val findings = Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610)
         assertEquals(listOf(FindingKind.INTEGRITY_SOFTWARE_ONLY), findings)
@@ -155,6 +155,27 @@ class RulesTest {
             assertEquals(listOf(FindingKind.ATTESTATION_SOFTWARE_ANSWER), Rules.forDevice(hooked, nowYearMonth = 202_610))
             assertEquals(Severity.HIGH, worst(hooked))
         }
+    }
+
+    @Test
+    fun `an emulator says it is one, even where it declares a hardware keystore`() {
+        // Android 15's emulator (the CI image dp-api35-ci) declares android.hardware.hardware_keystore=300 for a
+        // KeyMint that runs in software and signs under AOSP's software root.
+        val emulator = DeviceFacts(
+            false, false, emptyList(), vpnActive = false,
+            integrity = Integrity(0, deviceLocked = false, verifiedBoot = 2, osPatchLevel = 202_608, trust = AttestationTrust.SOFTWARE_ROOT),
+            hardwareKeystore = true, emulator = true,
+        )
+        assertEquals(listOf(FindingKind.INTEGRITY_EMULATOR), Rules.forDevice(emulator, nowYearMonth = 202_610))
+        // The same answer on a phone that does not call itself an emulator is as loud as what it could hide.
+        assertEquals(listOf(FindingKind.ATTESTATION_SOFTWARE_ANSWER), Rules.forDevice(emulator.copy(emulator = false), nowYearMonth = 202_610))
+        // Calling itself an emulator changes nothing of what hardware-backed attestation says.
+        val unlocked = Integrity(1, deviceLocked = false, verifiedBoot = 2, osPatchLevel = 202_608, trust = AttestationTrust.GOOGLE_ROOT)
+        assertEquals(listOf(FindingKind.BOOTLOADER_UNLOCKED), Rules.forDevice(emulator.copy(integrity = unlocked), nowYearMonth = 202_610))
+        assertEquals(
+            listOf(FindingKind.ATTESTATION_PUBLIC_ROOT),
+            Rules.forDevice(emulator.copy(integrity = unlocked.copy(trust = AttestationTrust.SOFTWARE_ROOT)), nowYearMonth = 202_610),
+        )
     }
 
     @Test

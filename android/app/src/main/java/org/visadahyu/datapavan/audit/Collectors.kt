@@ -375,6 +375,7 @@ class DeviceCollector(private val context: Context) {
             integrity = check.integrity,
             integrityFailure = check.failure,
             hardwareKeystore = hardwareKeystore(),
+            emulator = Build.HARDWARE in EMULATOR_HARDWARE,
         )
     }
 
@@ -383,7 +384,8 @@ class DeviceCollector(private val context: Context) {
      * trusted environment, and Android 9 and later a secure chip. The package manager answers this from the
      * system server, apart from the keystore, so a hook in the keystore does not change it. On Android 10 and 11
      * without a secure chip, no public API says, and the check cannot tell a software answer from a phone
-     * without such hardware.
+     * without such hardware. The feature does not prove the hardware: Android's emulator declares it for its
+     * KeyMint, which runs in software, and so it is weighed with [EMULATOR_HARDWARE].
      */
     private fun hardwareKeystore(): Boolean {
         val packages = context.packageManager
@@ -486,6 +488,13 @@ class DeviceCollector(private val context: Context) {
 
         /** How far down an exception's causes to look; the keystore's errors are one or two deep. */
         const val MAX_CAUSES = 8
+
+        /**
+         * `Build.HARDWARE` (ro.hardware) of Android's emulator: "ranchu" since 2015, "goldfish" before. The system
+         * sets it, so a modified one can claim it; a phone that does so is then told, in words, that it calls itself
+         * an emulator, which its owner can see is false.
+         */
+        val EMULATOR_HARDWARE = setOf("ranchu", "goldfish")
     }
 }
 

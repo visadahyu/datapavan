@@ -128,6 +128,18 @@ kills, or, where neither could be, as stated below.
   emulators and phones without such hardware; a broken chain, another root or a revoked key is reported as such.
   A claim of secure hardware under AOSP's software root is "Hardware check signed with a public key" (high), and
   nothing it says is used.
+- **The emulator.** The hardware-keystore feature does not prove the hardware: Android 15's emulator (CI's
+  `dp-api35-ci`) declares `android.hardware.hardware_keystore=300` for a KeyMint that runs in software and signs
+  under AOSP's software root, so the rule above called it "answered by software" (high). Nothing else tells that
+  KeyMint from a hooked keystore's answer: its extension states the software level for both the attestation and
+  the key, which is exactly what a hook answering in software writes, and its chain is AOSP's. What tells it is
+  what the system says the device is: `Build.HARDWARE` (`ro.hardware`) is "ranchu" on Android's emulator, and was
+  "goldfish" before. A software answer on a device that says so is "No hardware check on an emulator" (low), whose
+  text says, in words, that the device reports itself as an emulator, and that on a phone this is untrue and a
+  serious warning. What a hook can do with it: a modified system can set `ro.hardware` on a phone and turn
+  "answered by software" (high) into this low finding. What it cannot do: make that quiet. The phone then tells
+  its owner, by name, that it is an emulator, which they can see is false, and the finding says what that means;
+  and the claim changes nothing for a hardware attestation, which is judged as before.
 - **One check at a time.** The check used one fixed key alias, and a rotation, a fold or a theme change recreates
   the screen and starts a second check while the first waits on the keystore: the second could read the first's
   key and call a sound phone's check tampered with. `HardwareCheck` now runs one check at a time in the process,
@@ -189,6 +201,8 @@ What the app shows, in each case:
   tampered with" (high), and nothing else it says, not even its patch level;
 - a software answer on a phone that declares secure hardware for keys: "Hardware check answered by software"
   (high);
+- a software answer on a device whose system reports it as Android's emulator: "No hardware check on an
+  emulator" (low), which says that on a phone this would be false;
 - a claim of secure hardware under AOSP's software root: "Hardware check signed with a public key" (high);
 - a software attestation under AOSP's software root, on a phone that declares no such hardware: "No hardware
   check available" (low), and its patch level as "Security patch, as the system states it";

@@ -263,6 +263,8 @@
     <string name="finding_old_patch_body">The last security patch on this phone is more than a year old, so known vulnerabilities are not fixed.</string>
     <string name="finding_software_only_title">No hardware check available</string>
     <string name="finding_software_only_body">This phone\'s hardware check came from software, which the system controls, so it cannot confirm the bootloader or the system. This is normal on emulators and on phones without secure hardware for keys; a modified system can answer this way too.</string>
+    <string name="finding_integrity_emulator_title">No hardware check on an emulator</string>
+    <string name="finding_integrity_emulator_body">This device reports itself as an emulator, and an emulator keeps its keys in software, so there is no hardware check of the bootloader or the system. If this is a phone, it is not telling the truth about itself: its system has been changed, so treat this as a serious warning.</string>
     <string name="finding_attestation_revoked_title">Hardware check key revoked</string>
     <string name="finding_attestation_revoked_body">Google has revoked a key in this phone\'s hardware check, for example because it leaked. The bootloader and system state that the check reports may be forged.</string>
     <string name="finding_attestation_unconfirmed_title">Hardware check not confirmed</string>

@@ -244,6 +244,8 @@
     <string name="finding_old_patch_body">El último parche de seguridad de este teléfono tiene más de un año, así que hay vulnerabilidades conocidas sin corregir.</string>
     <string name="finding_software_only_title">Comprobación de hardware no disponible</string>
     <string name="finding_software_only_body">La comprobación de hardware de este teléfono procede de software, que el sistema controla, así que no puede confirmar el bootloader ni el sistema. Es normal en los emuladores y en los teléfonos sin hardware seguro para claves; un sistema modificado también puede responder así.</string>
+    <string name="finding_integrity_emulator_title">Comprobación de hardware no disponible en un emulador</string>
+    <string name="finding_integrity_emulator_body">Este dispositivo indica que es un emulador, y un emulador guarda sus claves en software, así que no hay comprobación de hardware del bootloader ni del sistema. Si esto es un teléfono, no está diciendo la verdad sobre sí mismo: su sistema se ha modificado, así que tómate esto como una advertencia seria.</string>
     <string name="finding_attestation_revoked_title">Clave de la comprobación de hardware revocada</string>
     <string name="finding_attestation_revoked_body">Google ha revocado una clave de la comprobación de hardware de este teléfono, por ejemplo porque se filtró. El estado del bootloader y del sistema que indica la comprobación puede estar falsificado.</string>
     <string name="finding_attestation_unconfirmed_title">Comprobación de hardware no confirmada</string>

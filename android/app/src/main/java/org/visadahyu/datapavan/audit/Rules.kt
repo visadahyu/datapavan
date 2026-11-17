@@ -42,6 +42,7 @@ enum class FindingKind(val severity: Severity) {
     ATTESTATION_FAILED(Severity.MEDIUM),
     SYSTEM_OWN_KEY(Severity.MEDIUM),
     INTEGRITY_SOFTWARE_ONLY(Severity.LOW),
+    INTEGRITY_EMULATOR(Severity.LOW),
     VPN_ACTIVE(Severity.INFO),
     SYSTEM_KEY_DEVELOPMENT(Severity.INFO),
 }
@@ -172,9 +173,12 @@ object Rules {
             if (integrity.securityLevel == 0) {
                 // A software answer says nothing reliable about the bootloader. On a phone that declares secure
                 // hardware for its keys, it is not the answer a sound phone gives: a hook that answers in software
-                // must not look quieter than the unlocked bootloader it could hide.
+                // must not look quieter than the unlocked bootloader it could hide. Android's emulator declares the
+                // same feature with a KeyMint in software; it says so in words, which a phone made to claim it would
+                // show its owner as plainly false.
                 add(
                     when {
+                        device.emulator -> FindingKind.INTEGRITY_EMULATOR
                         device.hardwareKeystore -> FindingKind.ATTESTATION_SOFTWARE_ANSWER
                         trust == AttestationTrust.BROKEN_CHAIN -> FindingKind.ATTESTATION_BROKEN
                         trust == AttestationTrust.OTHER_ROOT -> FindingKind.ATTESTATION_UNCONFIRMED

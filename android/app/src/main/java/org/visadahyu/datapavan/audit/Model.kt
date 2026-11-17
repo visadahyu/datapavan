@@ -132,6 +132,8 @@ data class DeviceFacts(
      * apart from the keystore (DeviceCollector).
      */
     val hardwareKeystore: Boolean = false,
+    /** Whether the system reports this device as an emulator (DeviceCollector). */
+    val emulator: Boolean = false,
 )
 
 /** Why the hardware check gave no result. */

@@ -265,6 +265,8 @@
     <string name="finding_old_patch_body">مضى أكثر من عام على آخر تصحيح أمان في هذا الهاتف، لذا فإن الثغرات المعروفة لم تُصلَح.</string>
     <string name="finding_software_only_title">لا يتوفر فحص العتاد</string>
     <string name="finding_software_only_body">جاء فحص العتاد في هذا الهاتف من برامج يتحكم بها النظام، لذا لا يمكنه تأكيد برنامج الإقلاع ولا النظام. هذا طبيعي في المحاكيات وفي الهواتف التي لا تملك عتادًا آمنًا للمفاتيح، ويمكن أن يجيب النظام المعدَّل بهذه الطريقة أيضًا.</string>
+    <string name="finding_integrity_emulator_title">لا يتوفر فحص العتاد في المحاكي</string>
+    <string name="finding_integrity_emulator_body">يُبلغ هذا الجهاز عن نفسه بأنه محاكٍ، والمحاكي يحفظ مفاتيحه في البرامج، لذا لا يوجد فحص عتاد لبرنامج الإقلاع ولا للنظام. إذا كان هذا هاتفًا، فهو لا يقول الحقيقة عن نفسه: لقد عُدِّل نظامه، لذا تعامل مع هذا كتحذير جدي.</string>
     <string name="finding_attestation_revoked_title">أُبطل مفتاح فحص العتاد</string>
     <string name="finding_attestation_revoked_body">أبطلت Google مفتاحًا في فحص العتاد لهذا الهاتف، مثلًا لأنه تسرّب. قد تكون حالة برنامج الإقلاع والنظام التي يُبلغ عنها الفحص مزوَّرة.</string>
     <string name="finding_attestation_unconfirmed_title">لم يتم تأكيد فحص العتاد</string>
