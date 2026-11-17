@@ -1504,6 +1504,23 @@ mod tests {
             parse(&twice(patches)).map(|d| (d.root_of_trust, d.os_patch_level)),
             Ok((Some(OwnedRoot::from(&LOCKED_VERIFIED)), None))
         );
+        // Copies whose content agrees but whose tags do not, the second one primitive, also differ.
+        let root_sequence = encode(&sequence(
+            vec![
+                octets(&[0xaa; 32]),
+                primitive(&[0x01], &[0xff]),
+                enumerated(0),
+            ],
+            3,
+        ));
+        let mut mixed = hardware(None, Some(patch(202_507)));
+        mixed.push(lenient(constructed(
+            &context_tag(TAG_ROOT_OF_TRUST),
+            vec![raw(&root_sequence)],
+            1,
+        )));
+        mixed.push(lenient(primitive(&[0x9f, 0x85, 0x40], &root_sequence)));
+        assert_eq!(parse(&twice(mixed)).map(|d| d.root_of_trust), Ok(None));
         // In the list that is not read, it changes nothing.
         let ignored = extension(
             TEE,
@@ -1574,6 +1591,27 @@ mod tests {
     }
 
     #[test]
+    fn refuses_integers_beyond_32_bits_and_short_patch_levels() {
+        // An INTEGER beyond 32 bits whose low 32 bits are a plausible value: refused, not cut.
+        assert_eq!(
+            with(VERSION, integer((1 << 32) + 300)),
+            Err(Error::InvalidValue)
+        );
+        assert_eq!(
+            with(PATCH_VALUE, integer((1 << 32) + 202_507)).map(|d| d.os_patch_level),
+            Ok(None)
+        );
+        // Fewer than six digits, with a month in range: not a patch level.
+        for value in [1, 12, 507, 2_507, 99_912] {
+            assert_eq!(
+                with(PATCH_VALUE, integer(value)).map(|d| d.os_patch_level),
+                Ok(None),
+                "{value}"
+            );
+        }
+    }
+
+    #[test]
     fn reads_each_verified_boot_state() {
         for (value, state) in [
             (0, VerifiedBootState::Verified),
@@ -1592,6 +1630,17 @@ mod tests {
             with(BOOT_STATE, enumerated(4)).map(|d| d.root_of_trust),
             Ok(None)
         );
+    }
+
+    #[test]
+    fn stops_reading_elements_after_an_error() {
+        // The callers return at the first error, so this is not needed for what they read; it keeps
+        // the iterator from reporting the same broken element again to a caller that went on.
+        let mut elements = Elements {
+            rest: &[0x02, 0x05, 0x01],
+        };
+        assert!(matches!(elements.next(), Some(Err(Error::Truncated))));
+        assert!(elements.next().is_none());
     }
 
     #[test]

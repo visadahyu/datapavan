@@ -6,7 +6,8 @@
 //! encoded again: as each authorization list, and as the content of a `rootOfTrust`. There these
 //! properties of ADR 0040's decision 5 must hold, whatever the bytes: a trusted environment's values
 //! come from its hardware-enforced list alone, a software attestation's from its software-enforced
-//! list alone, and a malformed root of trust leaves the rest of the extension readable.
+//! list alone, the list that is not read makes the extension fail exactly when it is not well
+//! formed, and a malformed root of trust leaves the rest of the extension readable.
 #![no_main]
 
 use datapavan_engine::attestation::parse_key_description;
@@ -83,6 +84,8 @@ fuzz_target!(|data: &[u8]| {
         0 => extension(0, read, other),
         _ => extension(level, other, read),
     };
+    let as_read_bytes = extension(1, &[], data);
+    let as_read = parse_key_description(&as_read_bytes);
     for (level, read) in [
         (1, &hardware[..]),
         (2, &hardware[..]),
@@ -93,15 +96,17 @@ fuzz_target!(|data: &[u8]| {
         let alone = build(level, read, &[]);
         let expected = parse_key_description(&alone);
         assert!(expected.is_ok());
-        // Whatever the other list holds, the values are the authoritative list's.
+        // Whatever the other list holds, the values are the authoritative list's; it makes the
+        // extension fail only when it is not well formed, and exactly then, as the same bytes do as
+        // the list that is read (where a malformed entry is absent, never an error).
         let beside = build(level, read, data);
         let parsed = parse_key_description(&beside);
         assert!(parsed.is_err() || parsed == expected, "{parsed:?}");
+        assert_eq!(parsed.is_err(), as_read.is_err(), "{parsed:?} {as_read:?}");
     }
 
-    // The bytes as the list the parser reads, and as a rootOfTrust: a malformed root of trust is
-    // absent, and never makes the rest of the extension fail.
-    let _ = parse_key_description(&extension(1, &[], data));
+    // The bytes as a rootOfTrust: a malformed root of trust is absent, and never makes the rest of
+    // the extension fail.
     let with_root = extension(1, &[], &root_of_trust(data));
     let root = parse_key_description(&with_root);
     assert!(root.is_ok(), "{root:?}");
