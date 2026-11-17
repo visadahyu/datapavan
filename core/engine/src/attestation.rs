@@ -929,6 +929,31 @@ mod tests {
     }
 
     #[test]
+    fn rejects_tag_numbers_beyond_32_bits() {
+        // [2^32]: five base-128 digits whose value does not fit a u32.
+        assert_eq!(
+            with(
+                HARDWARE_DIGEST,
+                raw(&[0xbf, 0x90, 0x80, 0x80, 0x80, 0x00, 0x00])
+            ),
+            Err(Error::InvalidValue)
+        );
+    }
+
+    #[test]
+    fn skips_elements_of_other_classes_in_a_list() {
+        // No authorization list holds an element that is not a context-specific entry, but such an
+        // element is skipped like an entry the audit does not use, even with a number it reads.
+        let mut list = hardware(Some(root(0xff, 0)), Some(patch(202_507)));
+        list.insert(0, primitive(&[0x1f, 0x85, 0x40], &[0x00]));
+        list.insert(0, integer(704));
+        assert_eq!(
+            parse(&extension(TEE, software(vec![]), list)),
+            parse(&tee_device())
+        );
+    }
+
+    #[test]
     fn rejects_integers_that_are_not_the_shortest() {
         assert_eq!(
             with(PATCH_VALUE, primitive(&[0x02], &[0x00, 0x03, 0x17, 0x0b])),
