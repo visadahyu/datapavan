@@ -1904,7 +1904,8 @@ impl<'a> Scope<'a> {
     ///
     /// A stand-in without identifiers is bound to the first answer from its port when it alone waits
     /// there, as unit 9 has it: whoever reaches the tool's relay first from that port, at an address the
-    /// app never sent to, takes it, and the real answer is then dropped. It waits beside another only
+    /// app never sent to, takes it, and the real answer is then dropped; one that names in the clear what
+    /// the app sent another peer binds it not ([`Scope::answers_another`]). It waits beside another only
     /// where the caps on associations of a stand-in's own, or the budget, refused it one
     /// ([`UdpTable::own_wanted`]): the answer could then be either's, and is dropped and counted, for as
     /// long as more than one waits (the maintainer's decision, 2026-11-13: the safe floor).
@@ -1937,6 +1938,7 @@ impl<'a> Scope<'a> {
         let all = self.waiting_on(from.port(), false);
         match (any_strict, all.as_slice()) {
             (_, []) => LetIn::Filtered,
+            (false, &[_]) if self.answers_another(read, from.port()) => LetIn::Unmatched,
             (false, &[shown]) => self.bind(shown, (from, answer), now),
             (true, _)
                 if all
@@ -1947,6 +1949,18 @@ impl<'a> Scope<'a> {
             }
             _ => LetIn::Unmatched,
         }
+    }
+
+    /// Whether `read`, an answer on `port`, names in the clear what the app sent a peer of this
+    /// association ([`identifiers::Reading::answers`]): no stand-in without identifiers asked it, and
+    /// none is bound by it (fix round 5, review I's I5: from an address the app never saw, it bound
+    /// the one waiting on the port, which then took every later answer from there). It is no one's
+    /// either: from an address the app never saw, nothing reaches a peer but a stand-in's first answer
+    /// (unit 9), where under a relay's name, which may stand for the peer's own address, it would be
+    /// that peer's.
+    fn answers_another(&self, read: &identifiers::Reading, port: u16) -> bool {
+        read.answers(port)
+            .is_some_and(|fingerprint| self.sources.told.count(fingerprint) > 0)
     }
 
     /// Binds the stand-in the app knows as `shown` to `from`, the address its first answer came from,
@@ -7644,6 +7658,43 @@ mod tests {
                 "logged under the ended name"
             );
         }
+        Ok(())
+    }
+
+    /// An answer that names in the clear what the app sent another peer binds no stand-in without
+    /// identifiers, which cannot have asked it (fix round 5, review I's I5). `a.test`, answered by name,
+    /// sends a STUN request; its server answers from an address no peer's answers came from (RFC 5780's
+    /// CHANGE-REQUEST, or Xray's link dialled anew with another first destination); `c.test`, whose
+    /// datagrams carry no identifier, waits alone on 3478. It bound `c`, and every later answer from that
+    /// address went to `c`.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_clear_answer_to_another_binds_no_stand_in_without_identifiers() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let a = SocketAddr::from(([198, 18, 0, 1], 3_478));
+        let c = SocketAddr::from(([198, 18, 0, 3], 3_478));
+        let by_a = Target::Name("a.test".into(), 3_478);
+        let mut labelled = mapping(now).await?;
+        labelled.peer(&shared, (APP, a), now, (false, tooled("a.test", 3_478)));
+        labelled.sent(a, &binding(0xa1, false));
+        let first =
+            labelled
+                .main()
+                .relayed_answer(&shared, APP, (&by_a, &binding(0xa1, true)), now);
+        assert!(matches!(first, LetIn::Peer(shown, ..) if shown == a));
+        labelled.peer(&shared, (APP, c), now, (false, tooled("c.test", 3_478)));
+        labelled.sent(c, b"c's request, no identifier");
+        labelled.sent(a, &binding(0xa2, false));
+        let elsewhere = Target::Address(SocketAddr::from(([192, 0, 2, 77], 3_478)));
+        let got =
+            labelled
+                .main()
+                .relayed_answer(&shared, APP, (&elsewhere, &binding(0xa2, true)), now);
+        assert!(matches!(got, LetIn::Unmatched), "a's STUN response bound c");
+        let got = labelled
+            .main()
+            .relayed_answer(&shared, APP, (&elsewhere, b"c's own"), now);
+        assert!(matches!(got, LetIn::Peer(shown, ..) if shown == c));
         Ok(())
     }
 }
