@@ -30,7 +30,7 @@ use crate::{answers, dns, packet, quic};
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::io;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::os::fd::AsFd;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -311,20 +311,21 @@ const QUIC_ASKED: usize = 8;
 
 /// At most this many identifiers the app sent a peer through the tool are remembered for it, those it sent
 /// last, one sent again counting as sent then (ADR 0044, unit 9b, fix rounds 2 and 3): each as a
-/// fingerprint of 8 bytes ([`identifiers::fingerprint`]), and
-/// counted once in its association's [`Fingerprints`], so that an identifier the app also sent another peer on
-/// the same port tells neither apart. A stand-in whose first datagram carries one another peer of the
+/// fingerprint of 8 bytes ([`identifiers::fingerprint`]), and kept once in its association's
+/// [`Fingerprints`], so that an identifier the app also sent another peer on the same port tells neither
+/// apart, and one it sent one peer alone names that peer (fix round 5). A stand-in whose first datagram carries one another peer of the
 /// mapping's association was sent gets an association of its own ([`UdpTable::own_wanted`]); where it
 /// cannot, or where the other peer came after it, the identifier binds it to nothing another peer that
 /// was sent it answers from. 64 hold an NTP client's requests to its servers, a stub resolver's retry of
 /// one query to the next server, and an ICE agent's checks of one remote candidate. It costs at most
-/// 64 x 8 bytes for each peer, and an entry of the association's count for each of those, 16 bytes and a
-/// control byte in a table whose buckets are at most 16/7 of its entries, about 39 bytes, so at most
-/// 64 x (8 + 39) = 3,008 bytes for a peer the app sent identifiers to, nothing for one it sent none; on
-/// the direct path, where no stand-in waits, nothing is kept. A settled peer's are read from the
+/// 64 x 8 bytes for each peer, and an entry of the association's fingerprints for each of those, 32 bytes
+/// (the fingerprint, its count and its keepers' exclusive-or, [`Keepers`]) and a control byte in a table
+/// whose buckets are at most 16/7 of its entries, about 75 bytes, so at most 64 x (8 + 75) = 5,312 bytes
+/// for a peer the app sent identifiers to, nothing for one it sent none; on the direct path, where no
+/// stand-in waits, nothing is kept. A settled peer's are read from the
 /// datagram's headers ([`identifiers::named`]), a QUIC Initial unopened. Peers are not capped: each
 /// destination the app sent to within `udp_idle` is one, as each is a flow in the log; an app pays
-/// these bytes for the identifiers it sends, 47 at most for each, within the life of the peer it sends
+/// these bytes for the identifiers it sends, 83 at most for each, within the life of the peer it sends
 /// them to.
 const TOLD: usize = 64;
 
@@ -607,8 +608,9 @@ impl Peer {
     /// beside another peer, or a flow from a port 53 that came in first, its ID and question too; for a
     /// stand-in on another port while it waits or is bound beside another peer, what it asked an answer
     /// to carry. Through the tool, whatever it stands as, the fingerprint of each identifier it carries,
-    /// counted in its association's `told` (ADR 0044, unit 9b, fix round 2).
-    fn sent(&mut self, port: u16, payload: &[u8], mut told: Option<&mut Fingerprints>) {
+    /// kept in its association's `told` with the address the app knows it by (ADR 0044, unit 9b, fix
+    /// rounds 2 and 5).
+    fn sent(&mut self, port: u16, payload: &[u8], mut told: Option<(&mut Fingerprints, IpAddr)>) {
         let candidate = self.standing != Standing::Settled;
         if port != 53 {
             if !candidate && told.is_none() {
@@ -623,8 +625,8 @@ impl Peer {
                 identifiers::named(ports, payload)
             };
             for asked in read {
-                if let Some(told) = told.as_deref_mut() {
-                    self.tell(identifiers::fingerprint(port, &asked), told);
+                if let Some((told, ip)) = told.as_mut() {
+                    self.tell(identifiers::fingerprint(port, &asked), (told, *ip));
                 }
                 if candidate {
                     self.keep(asked);
@@ -693,21 +695,21 @@ impl Peer {
         self.ids.push(asked);
     }
 
-    /// Notes that the app sent it the identifier of `fingerprint`, counted in its association's `told`:
-    /// once, the latest, the least recently sent of [`TOLD`] giving way; one sent again moves to the
-    /// latest place (fix round 3: it stayed where it was first sent, and was forgotten while the app was
-    /// sending it again).
-    fn tell(&mut self, fingerprint: u64, told: &mut Fingerprints) {
+    /// Notes that the app sent it, which the app knows at `ip`, the identifier of `fingerprint`, kept in
+    /// its association's `told`: once, the latest, the least recently sent of [`TOLD`] giving way; one
+    /// sent again moves to the latest place (fix round 3: it stayed where it was first sent, and was
+    /// forgotten while the app was sending it again).
+    fn tell(&mut self, fingerprint: u64, (told, ip): (&mut Fingerprints, IpAddr)) {
         if let Some(at) = self.told.iter().position(|&kept| kept == fingerprint) {
             self.told.remove(at);
             self.told.push(fingerprint);
             return;
         }
         if self.told.len() == TOLD {
-            told.forget(self.told.remove(0));
+            told.forget(self.told.remove(0), ip);
         }
         self.told.push(fingerprint);
-        told.add(fingerprint);
+        told.add(fingerprint, ip);
     }
 
     /// A datagram the app sent it left, of which a router would quote `sent`: one more error from the
@@ -783,7 +785,7 @@ struct Sources {
     /// fix rounds 2 to 4): as [`Sources::beside`] by an address.
     named_beside: HashMap<(String, u16), Vec<SocketAddr>>,
     /// The identifiers the app sent the peers of the association, by fingerprint, each with how many
-    /// peers it was sent to ([`TOLD`]).
+    /// peers it was sent to and, where one was, which ([`TOLD`]).
     told: Fingerprints,
     /// Where the next answer that cannot open a packet for each stand-in waiting on its port begins
     /// ([`Scope::carried`]): it moves on by those it opened for, so that each is tried in turn.
@@ -791,20 +793,49 @@ struct Sources {
 }
 
 /// The identifiers the app sent the peers of one association through the tool (ADR 0044, unit 9b, fix
-/// round 2), by their fingerprints ([`identifiers::fingerprint`], which holds the port), each with how
-/// many peers keep it among those they were sent ([`TOLD`]).
+/// round 2), by their fingerprints ([`identifiers::fingerprint`], which holds the port), each with the
+/// peers that keep it among those they were sent ([`TOLD`]).
 #[derive(Default)]
-struct Fingerprints(HashMap<u64, u32>);
+struct Fingerprints(HashMap<u64, Keepers>);
+
+/// The peers of an association that keep one fingerprint: how many, and the exclusive-or of the
+/// addresses the app knows them by, each as an IPv6 address, an IPv4 one mapped (fix round 5). Where one
+/// keeps it, that is its address, found without a walk of the mapping's peers, which an answer under a
+/// relay's name made under the table's lock (review I's I4: 152 us with 4,000 peers on the port); where
+/// several do, it tells nothing, and nothing needs it.
+#[derive(Default)]
+struct Keepers {
+    peers: u32,
+    addresses: [u8; 16],
+}
+
+impl Keepers {
+    /// Adds the peer at `ip` to the exclusive-or, or takes it out: the same either way.
+    fn toggle(&mut self, ip: IpAddr) {
+        let octets = match ip {
+            IpAddr::V4(v4) => v4.to_ipv6_mapped().octets(),
+            IpAddr::V6(v6) => v6.octets(),
+        };
+        for (kept, byte) in self.addresses.iter_mut().zip(octets) {
+            *kept ^= byte;
+        }
+    }
+}
 
 impl Fingerprints {
-    fn add(&mut self, fingerprint: u64) {
-        *self.0.entry(fingerprint).or_default() += 1;
+    /// The peer the app knows at `ip` keeps `fingerprint`.
+    fn add(&mut self, fingerprint: u64, ip: IpAddr) {
+        let keepers = self.0.entry(fingerprint).or_default();
+        keepers.peers += 1;
+        keepers.toggle(ip);
     }
 
-    fn forget(&mut self, fingerprint: u64) {
-        if let Some(count) = self.0.get_mut(&fingerprint) {
-            *count = count.saturating_sub(1);
-            if *count == 0 {
+    /// The peer the app knows at `ip` keeps `fingerprint` no more.
+    fn forget(&mut self, fingerprint: u64, ip: IpAddr) {
+        if let Some(keepers) = self.0.get_mut(&fingerprint) {
+            keepers.peers = keepers.peers.saturating_sub(1);
+            keepers.toggle(ip);
+            if keepers.peers == 0 {
                 self.0.remove(&fingerprint);
             }
         }
@@ -812,7 +843,16 @@ impl Fingerprints {
 
     /// How many peers were sent the identifier of `fingerprint`.
     fn count(&self, fingerprint: u64) -> u32 {
-        self.0.get(&fingerprint).copied().unwrap_or(0)
+        self.0.get(&fingerprint).map_or(0, |keepers| keepers.peers)
+    }
+
+    /// Where one peer alone keeps `fingerprint`, the address the app knows it by on `port`, the port the
+    /// fingerprint holds. An address the app knows as an IPv4-mapped IPv6 one comes back as IPv4, which no
+    /// peer has: the caller finds no one, as for several.
+    fn one(&self, fingerprint: u64, port: u16) -> Option<SocketAddr> {
+        let keepers = self.0.get(&fingerprint)?;
+        (keepers.peers == 1)
+            .then(|| SocketAddr::new(Ipv6Addr::from(keepers.addresses).to_canonical(), port))
     }
 }
 
@@ -870,7 +910,7 @@ impl Sources {
     ) -> Option<SocketAddr> {
         self.leave_beside_on(shown);
         for &fingerprint in told {
-            self.told.forget(fingerprint);
+            self.told.forget(fingerprint, shown.ip());
         }
         let alone = way.from.and_then(|from| self.remove(shown, from));
         if let Some(name) = &way.name {
@@ -1172,7 +1212,11 @@ impl Mapping {
             (Some(_), None) => Some(&mut sources.told),
             (Some(_), Some(own)) => owns.get_mut(&own).map(|own| &mut own.sources.told),
         };
-        peer.sent(destination.port(), payload, told);
+        peer.sent(
+            destination.port(),
+            payload,
+            told.map(|told| (told, destination.ip())),
+        );
     }
 
     /// The tool closed its own association (ADR 0044, unit 9b, fix round 1): the flows that left by it
@@ -1486,12 +1530,13 @@ impl<'a> Scope<'a> {
         if let Some(fingerprint) = read.answers(port)
             && self.sources.told.count(fingerprint) > 0
         {
-            let told = self.told_peers(fingerprint, port);
-            let taker = match (holder, told.as_slice()) {
-                (Some(holder), _) if told.contains(&holder) => Some(holder),
-                (_, [one]) => Some(*one),
-                _ => None,
-            };
+            // The holder first, however many others were sent it too (fix round 5, review I's I1: of
+            // three or more, the two found first stood for all); else the one peer that was, by the
+            // association's count, without a walk of the peers (I4).
+            let sent = |shown: &SocketAddr| self.was_sent(*shown, fingerprint);
+            let taker = holder
+                .filter(sent)
+                .or_else(|| self.sources.told.one(fingerprint, port).filter(sent));
             return UnderName::Done(match taker {
                 Some(taker) => {
                     if Some(taker) != holder {
@@ -1597,17 +1642,13 @@ impl<'a> Scope<'a> {
             })
     }
 
-    /// The peers of this association on `port` that the app sent the identifier of `fingerprint`: two at
-    /// most, enough to tell one from several.
-    fn told_peers(&self, fingerprint: u64, port: u16) -> Vec<SocketAddr> {
+    /// Whether the app sent the peer it knows as `shown` the identifier of `fingerprint`, among the last
+    /// [`TOLD`] it sent it. Both peers it is asked of leave by this association: the holder, found on it,
+    /// and the one this association's fingerprints name.
+    fn was_sent(&self, shown: SocketAddr, fingerprint: u64) -> bool {
         self.peers
-            .iter()
-            .filter(|(shown, peer)| {
-                shown.port() == port && peer.via == self.via && peer.told.contains(&fingerprint)
-            })
-            .map(|(&shown, _)| shown)
-            .take(2)
-            .collect()
+            .get(&shown)
+            .is_some_and(|peer| peer.told.contains(&fingerprint))
     }
 
     /// The stand-ins of this association bound beside another under the name of `key`, on `port`, in
@@ -5824,6 +5865,8 @@ mod tests {
             mapping.sent(server, &ntp(3, 40, stamp));
         }
         let fingerprint = |stamp| identifiers::fingerprint(123, &identifiers::Asked::Ntp(stamp));
+        // An entry of the association's fingerprints, as `TOLD` counts it.
+        assert_eq!(std::mem::size_of::<(u64, Keepers)>(), 32);
         assert_eq!(mapping.peers[&server].told.len(), TOLD);
         assert_eq!(mapping.sources.told.0.len(), TOLD);
         assert_eq!(
@@ -7206,5 +7249,159 @@ mod tests {
         .unwrap_or_default();
         assert_eq!(&unreachable[20..22], &[3, 1]);
         assert_eq!(shared.counters.snapshot()[TOO_BIG], 1);
+    }
+
+    /// Under a relay's name, an answer that names in the clear what the label's holder was sent is the
+    /// holder's however many other peers were sent it too (fix round 5, review I's I1: of three or more,
+    /// the two found first in the map's order stood for all, and the holder's answer was dropped as
+    /// unmatched at random). A stub resolver sends one query to `dns.test`, the label's holder, and, as
+    /// glibc's and c-ares' retries do, to two more servers by their address.
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_holder_sent_an_identifier_among_several_takes_its_answer() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let a = SocketAddr::from(([198, 18, 0, 1], 53));
+        let by_a = Target::Name("dns.test".into(), 53);
+        let asked = query(0x4242, b"\x07example\x03com\x00");
+        for _ in 0..20 {
+            let mut mapping = mapping(now).await?;
+            mapping.peer(&shared, (APP, a), now, (false, tooled("dns.test", 53)));
+            mapping.sent(a, &asked);
+            for n in 1..=2u8 {
+                let server = SocketAddr::from(([192, 0, 2, n], 53));
+                let way = PeerWay::through_tool(Target::Address(server));
+                mapping.peer(&shared, (APP, server), now, (false, way));
+                mapping.sent(server, &asked);
+            }
+            let got = mapping
+                .main()
+                .relayed_answer(&shared, APP, (&by_a, &response(&asked)), now);
+            assert!(matches!(got, LetIn::Peer(shown, ..) if shown == a));
+        }
+        Ok(())
+    }
+
+    /// Under a relay's name, an answer that names in the clear what one peer alone was sent is that
+    /// peer's, found by the association's fingerprints (fix round 5, I4): also once two of three that
+    /// were sent it ended, the one left; and a peer of another association that was sent it too, as a
+    /// stand-in given one of its own for that very identifier is, makes it no less this one's.
+    #[tokio::test(flavor = "current_thread")]
+    async fn under_a_name_the_one_peer_of_the_association_sent_an_identifier_takes_it()
+    -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let table = UdpTable::default();
+        let mut mapping = mapping(now).await?;
+        mapping.owns.insert(1, own_for_test(&table).await?);
+        let stamp = 0xe9a1_0000_0000_0005;
+        let a = SocketAddr::from(([198, 18, 0, 1], 123));
+        mapping.peer(&shared, (APP, a), now, (false, tooled("a.test", 123)));
+        mapping.sent(a, &ntp(3, 40, 1));
+        let servers: Vec<SocketAddr> = (1..=3u8)
+            .map(|n| SocketAddr::from(([192, 0, 2, n], 123)))
+            .collect();
+        for &server in &servers {
+            let way = PeerWay::through_tool(Target::Address(server));
+            mapping.peer(&shared, (APP, server), now, (false, way));
+            mapping.sent(server, &ntp(3, 40, stamp));
+        }
+        // A stand-in on an association of its own, sent the same timestamp.
+        let own = SocketAddr::from(([198, 18, 0, 7], 123));
+        mapping
+            .scope(Some(1))
+            .ok_or(io::ErrorKind::NotFound)?
+            .into_peer(&shared, (APP, own), now, (false, tooled("own.test", 123)));
+        mapping.sent(own, &ntp(3, 40, stamp));
+        let by_a = Target::Name("a.test".into(), 123);
+        let to = |mapping: &mut Mapping, at: Instant| match mapping.main().relayed_answer(
+            &shared,
+            APP,
+            (&by_a, &ntp(4, 24, stamp)),
+            at,
+        ) {
+            LetIn::Peer(shown, ..) => Some(shown),
+            _ => None,
+        };
+        assert_eq!(to(&mut mapping, now), None, "three were sent it");
+        let later = now + Duration::from_secs(200);
+        for shown in [a, servers[1], own] {
+            if let Some(peer) = mapping.peers.get_mut(&shown) {
+                peer.last = later;
+            }
+        }
+        mapping.sweep(now + Duration::from_secs(120), &shared);
+        assert!(
+            !mapping.peers.contains_key(&servers[0]) && !mapping.peers.contains_key(&servers[2])
+        );
+        assert_eq!(to(&mut mapping, later), Some(servers[1]));
+        Ok(())
+    }
+
+    /// Under a relay's name on the mapping's association, a peer of the name on an association of its
+    /// own holds nothing: its answers come on that association (fix round 5, review J's J12). `a.test`
+    /// is asked on 3478 by the mapping's association and on 5000 by one of its own.
+    #[tokio::test(flavor = "current_thread")]
+    async fn under_a_name_its_peer_on_another_association_holds_nothing() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let table = UdpTable::default();
+        let mut mapping = mapping(now).await?;
+        mapping.owns.insert(1, own_for_test(&table).await?);
+        let a = SocketAddr::from(([198, 18, 0, 1], 3_478));
+        let a_own = SocketAddr::from(([198, 18, 0, 1], 5_000));
+        mapping.peer(&shared, (APP, a), now, (false, tooled("a.test", 3_478)));
+        mapping
+            .scope(Some(1))
+            .ok_or(io::ErrorKind::NotFound)?
+            .into_peer(&shared, (APP, a_own), now, (false, tooled("a.test", 5_000)));
+        let by_a = Target::Name("a.test".into(), 5_000);
+        let got =
+            mapping
+                .main()
+                .relayed_answer(&shared, APP, (&by_a, b"on the wrong association"), now);
+        assert!(
+            !matches!(got, LetIn::Peer(shown, ..) if shown == a_own),
+            "an answer on the mapping's association reached a peer of another"
+        );
+        Ok(())
+    }
+
+    /// Review I's measure of I4: what an answer under a relay's name costs once it names in the clear an
+    /// identifier the app sent one peer of 4,000 on the port, each sent 64. Fix round 5: 152 us before
+    /// on x86-64, in a release build, every peer walked.
+    #[tokio::test(flavor = "current_thread")]
+    #[ignore = "a measure, run with --release --ignored"]
+    async fn measure_an_answer_under_a_name_among_4_000_peers() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let mut mapping = mapping(now).await?;
+        let peers = 4_000u32;
+        let mut last = APP;
+        for n in 0..peers {
+            let [_, _, hi, lo] = n.to_be_bytes();
+            let server = SocketAddr::from(([10, 9, hi, lo], 3_478));
+            let way = PeerWay::through_tool(Target::Address(server));
+            mapping.peer(&shared, (APP, server), now, (false, way));
+            for k in 0..64u8 {
+                let mut request = binding(k, false);
+                request[8..12].copy_from_slice(&n.to_be_bytes());
+                mapping.sent(server, &request);
+            }
+            last = server;
+        }
+        let mut answer = binding(63, true);
+        answer[8..12].copy_from_slice(&(peers - 1).to_be_bytes());
+        let label = Target::Name("nobody.test".into(), 3_478);
+        let rounds = 1_000u32;
+        let start = Instant::now();
+        for _ in 0..rounds {
+            let got = mapping
+                .main()
+                .relayed_answer(&shared, APP, (&label, &answer), now);
+            assert!(matches!(got, LetIn::Peer(shown, ..) if shown == last));
+        }
+        let each = start.elapsed() / rounds;
+        eprintln!("{peers} peers on the port, 64 identifiers each: {each:?} for each answer");
+        Ok(())
     }
 }
