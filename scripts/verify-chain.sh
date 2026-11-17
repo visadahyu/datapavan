@@ -55,10 +55,9 @@ cleanup() {
 trap cleanup EXIT
 
 dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" "$@" | tr -d '\r'; }
-# The engine's counter at place $1, counting from 1, as Watch's dump prints them.
-counter() { dump | sed -n 's/^ *counters //p' | awk -v n="$1" '{print $n}'; }
-# When the engine's counters began, then its counter at place $1, from one dump: two reads with another
-# beginning span an engine Watch started afresh, whose counters began again at 0 (unit 9b, fix round 2).
+# When the engine's counters began, then its counter at place $1, counting from 1, as Watch's dump prints
+# them, from one dump: two reads with another beginning span an engine Watch started afresh, whose
+# counters began again at 0 (unit 9b, fix round 2).
 counter_since() { dump | awk -v n="$1" '/^ *counters-since /{since=$2} /^ *counters /{sub(/^ *counters /, ""); split($0, c, " ")} END{print since, c[n]}'; }
 flows() { dump | sed -n 's/^ *flow //p'; }
 tool_log() { adb logcat -d -s DatapavanTestTool | tr -d '\r' | sed -n 's/.*DatapavanTestTool: //p'; }

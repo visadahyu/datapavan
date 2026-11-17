@@ -752,6 +752,8 @@ mod tests {
 
     /// What an answer answers, where it names it in the clear, has the fingerprint of what was asked: a
     /// STUN response's, a DNS response's, an NTP reply's on port 123, none for a QUIC packet (fix round 3).
+    /// A STUN request or indication answers nothing, the app's own request echoed back among them (fix
+    /// round 6, review L's surviving mutant L8, which named them).
     #[test]
     fn an_answer_names_what_it_answers() {
         let stun = Asked::Stun {
@@ -762,6 +764,13 @@ mod tests {
             Reading::new(&stun_message(0x0101, ID, b"server")).answers(3_478),
             Some(fingerprint(3_478, &stun))
         );
+        for kind in [0x0001, 0x0011] {
+            assert_eq!(
+                Reading::new(&stun_message(kind, ID, b"app")).answers(3_478),
+                None,
+                "a STUN message of type {kind:#06x}"
+            );
+        }
         let query = query(0x1234, b"\x07example\x03com\x00", false);
         let dns = &of((APP, 5_353), &query)[0];
         assert_eq!(
@@ -785,8 +794,8 @@ mod tests {
     /// A STUN message larger than 1,500 bytes is read, its attributes walked over its first 1,500
     /// bytes (fix round 5, review J's minor 2; fix round 4, review G's G6, refused it whole): a request
     /// of 1,504 bytes, and a Binding response padded to a server's outgoing MTU (RFC 5780 7.6), which
-    /// answers its request. An attribute walked that overruns the message still refuses it, also in a
-    /// larger one.
+    /// answers its request. Its header is checked in full, and an attribute walked that overruns the
+    /// message still refuses it, also in a larger one.
     #[test]
     fn a_stun_messages_attributes_are_walked_over_1_500_bytes() {
         let sized = |kind: u16, size: usize| {
@@ -828,6 +837,22 @@ mod tests {
                 of((APP, 3_478), &overrun).is_empty(),
                 "{size} bytes, at {at}"
             );
+        }
+        // A message of 2,000 bytes is held to its header all the same: its length field its own, the
+        // cookie, the top two bits zero (fix round 6, review L's surviving mutants L1, L2 and L3).
+        let large = sized(0x0001, 2_000);
+        let mut length = large.clone();
+        length[2..4].copy_from_slice(&100u16.to_be_bytes());
+        let mut cookie = large.clone();
+        cookie[4] ^= 1;
+        let mut top = large;
+        top[0] |= 0x80;
+        for (refused, what) in [
+            (length, "a length not its own"),
+            (cookie, "no cookie"),
+            (top, "a top bit"),
+        ] {
+            assert!(of((APP, 3_478), &refused).is_empty(), "2,000 bytes, {what}");
         }
         // Past the first 1,500 bytes nothing is walked: an attribute there that overruns the message is
         // not seen, so that 65,500 bytes cost no more to read than 1,500.

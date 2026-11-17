@@ -6,10 +6,13 @@
 //! round 3), and the answer for what it answers in the clear (`Reading::answers`). Nothing may panic; a
 //! STUN request, a DNS query or an NTP request never carries what it asked itself: an app's own datagram
 //! echoed back binds no stand-in; `named` reads whatever `of` reads, and of other protocols than QUIC
-//! the same (review H of fix round 3); and what an answer names in the clear is what it tells it
-//! answers (review J of fix round 4): `answers` names an identifier only where `tells` finds it, and
-//! names one wherever `tells` finds a STUN, DNS or NTP identifier, that very one for STUN, which it
-//! reads first.
+//! the same (review H of fix round 3); what an answer names in the clear is what it tells it answers
+//! (review J of fix round 4): `answers` names an identifier only where `tells` finds it, and that very
+//! one wherever `tells` finds a STUN or DNS identifier (a STUN response's cookie reads as 0x2112
+//! questions, so it never reads as DNS too), and something wherever it finds an NTP one (a reply may
+//! read as DNS, which is read first; review L of fix round 5); and an answer whose first packet, a short
+//! header's, begins with a QUIC source ID of 4 bytes or more the app sent is addressed to it
+//! (`Reading::addressed`, fix round 6).
 #![no_main]
 
 use datapavan_net::identifiers::{self, Asked};
@@ -25,6 +28,8 @@ fuzz_target!(|data: &[u8]| {
     // From an app's port, and from the destination's own port, as a Multicast DNS querier sends.
     let read = identifiers::Reading::new(answer);
     let answers = read.answers(port);
+    let addressed = read.addressed(port);
+    assert!(addressed.len() <= 17, "more IDs than lengths a source ID may have");
     for from in [40_000, port] {
         let asked = identifiers::of((from, port), datagram);
         let named = identifiers::named((from, port), datagram);
@@ -43,11 +48,20 @@ fuzz_target!(|data: &[u8]| {
             let told = read.tells(one) == Some(true);
             assert!(!named || told, "answers names what tells does not find: {one:?}");
             match one {
-                Asked::Quic(_) => assert!(!named, "answers named a QUIC identifier"),
-                Asked::Stun { .. } => assert_eq!(named, told, "a STUN response: {one:?}"),
-                Asked::Dns { .. } | Asked::Ntp(_) => {
-                    assert!(!told || answers.is_some(), "answers names nothing: {one:?}");
+                Asked::Quic(ids) => {
+                    assert!(!named, "answers named a QUIC identifier");
+                    if let Some(source) = ids.telling_source()
+                        && answer.first().is_some_and(|&first| first & 0x80 == 0)
+                        && answer.get(1..=source.len()) == Some(source)
+                    {
+                        let fingerprint = identifiers::source_fingerprint(port, source);
+                        assert!(addressed.contains(&fingerprint), "not addressed: {one:?}");
+                    }
                 }
+                Asked::Stun { .. } | Asked::Dns { .. } => {
+                    assert_eq!(named, told, "a STUN or DNS response: {one:?}");
+                }
+                Asked::Ntp(_) => assert!(!told || answers.is_some(), "answers names nothing: {one:?}"),
             }
         }
     }
