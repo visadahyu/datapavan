@@ -319,6 +319,12 @@ fn stun_class(message: &[u8]) -> u8 {
 /// bits zero, the magic cookie, a length that is a multiple of 4 and the message's own, and attributes
 /// that each fit, padded to 4 bytes, to its end.
 fn stun(message: &[u8]) -> Option<(u8, u16, [u8; 12])> {
+    // STUN over UDP keeps within the path's MTU (RFC 8489 6.2.1), at most 1,500 bytes through Watch's
+    // tunnel: a larger one is read no further, so that walking its attributes costs no more than that
+    // (ADR 0044, unit 9b, fix round 4, review G's G6: 65,500 bytes of empty attributes cost 36 us).
+    if message.len() > quic::LARGEST_DATAGRAM {
+        return None;
+    }
     let kind = dns::u16_at(message, 0)?;
     let length = usize::from(dns::u16_at(message, 2)?);
     if kind & 0xc000 != 0 || !length.is_multiple_of(4) || message.len() != 20 + length {
@@ -743,6 +749,24 @@ mod tests {
         let initial = quic::server_initial(1, &[7; 8], (&[], &[0x5a; 8]), (0, &[0x02, 0, 0, 0, 0]))
             .unwrap_or_default();
         assert_eq!(Reading::new(&initial).answers(443), None);
+    }
+
+    /// A STUN message larger than 1,500 bytes is read no further (fix round 4, review G's G6): STUN over
+    /// UDP keeps within the path's MTU (RFC 8489 6.2.1), so its attributes are walked over 1,500 bytes
+    /// at most.
+    #[test]
+    fn a_stun_message_past_1_500_bytes_is_not_read() {
+        for (size, read) in [(1_500, true), (1_504, false)] {
+            let mut request = stun_message(0x0001, ID, &[]);
+            request.resize(size, 0);
+            let attributes = u16::try_from(size - 20).unwrap_or(0).to_be_bytes();
+            request[2..4].copy_from_slice(&attributes);
+            assert_eq!(
+                of((APP, 3_478), &request).len(),
+                usize::from(read),
+                "{size} bytes"
+            );
+        }
     }
 
     /// The most an identifier holds in place, beside a DNS question's name on the heap (at most 253
