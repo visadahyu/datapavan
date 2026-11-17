@@ -9,7 +9,6 @@
     <string name="section_apps">التطبيقات</string>
     <string name="device_all_clear">لم يُعثر على مخاطر تخص الهاتف كله.</string>
     <string name="device_integrity_ok">فحص العتاد، موقَّع بمفتاح الإثبات من Google: برنامج الإقلاع مقفل وتم التحقق من النظام.</string>
-    <string name="device_integrity_unavailable">فحص العتاد غير متاح على هذا الهاتف.</string>
     <string name="device_patch">تصحيح الأمان: %1$s</string>
     <string name="device_integrity_failed">فشل فحص العتاد على هذا الهاتف.</string>
     <string name="device_boot_key">مفتاح الإقلاع المتحقَّق منه: %1$s</string>

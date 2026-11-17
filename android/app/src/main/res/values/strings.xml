@@ -10,7 +10,6 @@
     <string name="section_apps">Apps</string>
     <string name="device_all_clear">No phone-wide risks found.</string>
     <string name="device_integrity_ok">Hardware check, signed with Google\'s attestation key: the bootloader is locked and the system is verified.</string>
-    <string name="device_integrity_unavailable">The hardware check is not available on this phone.</string>
     <!-- %1$s is a date such as 2023-03, passed in already bidi-isolated. -->
     <string name="device_patch">Security patch: %1$s</string>
     <string name="device_integrity_failed">The hardware check failed on this phone.</string>

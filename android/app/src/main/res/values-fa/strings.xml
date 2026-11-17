@@ -9,7 +9,6 @@
     <string name="section_apps">برنامه‌ها</string>
     <string name="device_all_clear">خطری در سطح کل گوشی پیدا نشد.</string>
     <string name="device_integrity_ok">بررسی سخت‌افزاری، امضاشده با کلید گواهی گوگل: بوت‌لودر قفل است و سیستم تأیید شده است.</string>
-    <string name="device_integrity_unavailable">بررسی سخت‌افزاری روی این گوشی در دسترس نیست.</string>
     <string name="device_patch">وصله امنیتی: %1$s</string>
     <string name="device_integrity_failed">بررسی سخت‌افزاری روی این گوشی ناموفق بود.</string>
     <string name="device_boot_key">کلید بوت تأییدشده: %1$s</string>

@@ -9,7 +9,6 @@
     <string name="section_apps">Apps</string>
     <string name="device_all_clear">Keine geräteweiten Risiken gefunden.</string>
     <string name="device_integrity_ok">Hardware-Prüfung, signiert mit Googles Attestierungsschlüssel: Der Bootloader ist gesperrt und das System ist verifiziert.</string>
-    <string name="device_integrity_unavailable">Die Hardware-Prüfung ist auf diesem Telefon nicht verfügbar.</string>
     <string name="device_patch">Sicherheitspatch: %1$s</string>
     <string name="device_integrity_failed">Die Hardware-Prüfung ist auf diesem Telefon fehlgeschlagen.</string>
     <string name="device_boot_key">Schlüssel für den verifizierten Start: %1$s</string>

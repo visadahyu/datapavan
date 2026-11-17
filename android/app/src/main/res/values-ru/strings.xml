@@ -8,7 +8,6 @@
     <string name="section_apps">Приложения</string>
     <string name="device_all_clear">Рисков для всего телефона не найдено.</string>
     <string name="device_integrity_ok">Аппаратная проверка, подписанная ключом аттестации Google: загрузчик заблокирован, система проверена.</string>
-    <string name="device_integrity_unavailable">На этом телефоне аппаратная проверка недоступна.</string>
     <string name="device_patch">Обновление системы безопасности: %1$s</string>
     <string name="device_integrity_failed">На этом телефоне аппаратная проверка не удалась.</string>
     <string name="device_boot_key">Ключ проверенной загрузки: %1$s</string>

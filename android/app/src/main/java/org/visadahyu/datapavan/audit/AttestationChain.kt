@@ -19,11 +19,17 @@ import javax.security.auth.x500.X500Principal
  *
  * - The KeyDescription extension occurs once, in the leaf: a certificate below the attested key, which a
  *   hooked keystore can sign with any key of its own, carries a forged one ([AttestationTrust.FORGED]).
- * - The leaf certifies the key the app generated, not one from another request or another phone
- *   ([AttestationTrust.FORGED]); the caller compares the challenge, once the extension is decoded ([verdict]).
- * - The chain has the shape of its provisioning: four certificates from a factory-provisioned key, five from
- *   a remotely provisioned one, three from a software keystore. Each is issued by the next by name and
- *   signed by it ([AttestationTrust.BROKEN_CHAIN]).
+ * - The caller compares the challenge, once the extension is decoded ([verdict]): an attestation of another
+ *   request is [AttestationTrust.FORGED].
+ * - The leaf certifies the key the app generated ([AttestationTrust.FORGED] otherwise). This costs nothing but
+ *   protects little: on Android 12 and later the keystore takes the generated key's public half from the same
+ *   answer's leaf, and on 10 and 11 from its own export of the key, so a hooked keystore controls both. It
+ *   catches a keystore that answers with another key's chain by mistake, and Google's verifier does not check
+ *   it.
+ * - The chain has the shape of its provisioning, as Google's verifier tells it from the certificate the root
+ *   signed: four certificates from a factory-provisioned key, five from a remotely provisioned one, and three
+ *   or four when that certificate names neither. Each is issued by the next by name and signed by it, the root
+ *   by itself ([AttestationTrust.BROKEN_CHAIN]).
  * - No certificate is on Google's revocation list ([AttestationTrust.REVOKED]), and the root holds one of
  *   Google's attestation root keys ([AttestationTrust.OTHER_ROOT]).
  * - Every certificate between the leaf and the root is valid at the phone's date, but for an expired one in

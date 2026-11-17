@@ -114,6 +114,15 @@ data class DeviceFacts(
     val vpnActive: Boolean,
     /** Null when attestation is unavailable or failed. */
     val integrity: Integrity?,
-    /** Whether the hardware check was made and failed, or its answer could not be read (see DeviceCollector). */
-    val integrityFailed: Boolean = false,
+    /** Why [integrity] is null: the hardware check failed, or its answer could not be read (see HardwareCheck). */
+    val integrityFailure: IntegrityFailure? = null,
 )
+
+/** Why the hardware check gave no result. */
+enum class IntegrityFailure {
+    /** The keystore refused the check, the data pack lacked its data, or the answer could not be read. */
+    FAILED,
+}
+
+/** What the hardware check found: the attestation's decoded state, or why there is none. */
+data class IntegrityResult(val integrity: Integrity? = null, val failure: IntegrityFailure? = null)

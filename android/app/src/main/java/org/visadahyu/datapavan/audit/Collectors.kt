@@ -36,6 +36,7 @@ import org.visadahyu.datapavan.datapack.DataPackStore
 import java.io.IOException
 import java.security.KeyPairGenerator
 import java.security.KeyStore
+import java.security.PublicKey
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.util.Date
@@ -364,18 +365,14 @@ class AppCollector(private val context: Context) {
 class DeviceCollector(private val context: Context) {
 
     fun collect(): DeviceFacts {
-        val integrity = integrity()
+        val check = integrity()
         return DeviceFacts(
             usbDebugging = global(Settings.Global.ADB_ENABLED) == "1",
             wirelessDebugging = global(SETTING_ADB_WIFI) == "1",
             userCertificateAuthorities = userCertificateAuthorities(),
             vpnActive = vpnActive(),
-            // Every phone this app runs on can attest: Android requires it of phones that launched with Android 8
-            // or later, and the keystore of the few that launched earlier and run Android 10 attests in software,
-            // as the Pixel XL's chain in Google's test data shows. No public API says which version a phone
-            // launched with, so a failure counts everywhere.
-            integrity = integrity,
-            integrityFailed = integrity == null,
+            integrity = check.integrity,
+            integrityFailure = check.failure,
         )
     }
 
@@ -410,67 +407,39 @@ class DeviceCollector(private val context: Context) {
     }
 
     /**
-     * Creates a throwaway key with a fresh random challenge, checks its certificate chain (AttestationChain:
-     * one KeyDescription, in the leaf, which certifies this key; Google's roots and revocation list; the chain's
-     * shape and dates), decodes the KeyDescription in the parsers' isolated process, compares its challenge with
-     * the one sent, and deletes the key again.
+     * The hardware check (HardwareCheck), with AndroidKeyStore, the parsers' isolated process and the phone's
+     * clock.
      *
-     * A system that hooks the keystore can still put a false state in front of the user in two ways, and the
-     * result is reported as what the keystore states, never as proof: with an attestation key that leaked and is
-     * not yet revoked, it can sign a whole chain of its own; and it can pass the challenge to another phone that
-     * it controls, locked and sound, and show that phone's answer as this one's. Only a check from outside the
-     * phone (ADR 0040, decision 6) closes both.
+     * Every phone this app runs on can attest: Android requires it of phones that launched with Android 8 or
+     * later, and the keystore of the few that launched earlier and run Android 10 attests in software, as the
+     * Pixel XL's chain in Google's test data shows. No public API says which version a phone launched with, so a
+     * failure counts everywhere.
+     *
+     * What a system that hooks the keystore can still do, so that the result is reported as what the keystore
+     * states, never as proof: sign a whole chain with an attestation key that leaked and is not yet revoked; or
+     * pass the challenge to another phone that it controls, locked and sound, and show that phone's answer as
+     * this one's. A hook inside this app's own process can do more: make the challenge one it knows, so that a
+     * captured genuine chain from any phone answers it, or hand back certificates whose signature check lies.
+     * Only a check from outside the phone (ADR 0040, decision 6) closes all three.
      */
-    private fun integrity(): Integrity? {
-        val store = try {
-            KeyStore.getInstance(KEYSTORE).apply { load(null) }
+    private fun integrity(): IntegrityResult {
+        val keystore = try {
+            AndroidAttestationKeystore()
         } catch (_: java.security.GeneralSecurityException) {
-            return null
-        }
-        return try {
-            val challenge = ByteArray(CHALLENGE_BYTES).also { SecureRandom().nextBytes(it) }
-            val generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, KEYSTORE)
-            generator.initialize(
-                KeyGenParameterSpec.Builder(ATTESTATION_ALIAS, KeyProperties.PURPOSE_SIGN)
-                    .setDigests(KeyProperties.DIGEST_SHA256)
-                    .setAttestationChallenge(challenge)
-                    .build(),
-            )
-            val key = generator.generateKeyPair().public
-            val chain = store.getCertificateChain(ATTESTATION_ALIAS)?.filterIsInstance<X509Certificate>().orEmpty()
-            val trust = attestationChain().trust(chain, key, Date())
-            if (trust == AttestationTrust.FORGED) return Integrity.forged()
-            val extension = chain.firstOrNull()?.getExtensionValue(AttestationChain.KEY_DESCRIPTION_OID) ?: return null
-            // Parsed in the parsers' isolated process (ParserService), like every untrusted input.
-            val fields = Parsers(context).use { it.parseAttestation(extension) } ?: return null
-            Integrity(
-                securityLevel = fields.securityLevel,
-                deviceLocked = fields.deviceLocked,
-                verifiedBoot = fields.verifiedBoot,
-                osPatchLevel = fields.osPatchLevel,
-                trust = AttestationChain.verdict(trust, fields.challenge, challenge),
-                verifiedBootKey = fields.verifiedBootKey?.joinToString("") { "%02x".format(Locale.ROOT, it) },
-                vendorPatchLevel = fields.vendorPatchLevel,
-            )
-        } catch (_: java.security.GeneralSecurityException) {
-            null
+            return IntegrityResult(failure = IntegrityFailure.FAILED)
         } catch (_: IOException) {
-            // The data pack lacks the roots or the revocation list; the smoke test catches this, and the
-            // user sees the check as failed.
-            null
-        } catch (_: android.os.RemoteException) {
-            // The parsers' process could not be reached; the device is then reported as not checked.
-            null
-        } catch (_: RuntimeException) {
-            // A keystore without attestation.
-            null
-        } finally {
-            try {
-                store.deleteEntry(ATTESTATION_ALIAS)
-            } catch (_: java.security.KeyStoreException) {
-                // Nothing to clean up.
-            }
+            return IntegrityResult(failure = IntegrityFailure.FAILED)
         }
+        val random = SecureRandom()
+        return HardwareCheck(
+            keystore = keystore,
+            chains = ::attestationChain,
+            // Parsed in the parsers' isolated process (ParserService), like every untrusted input.
+            parse = { extension -> Parsers(context).use { it.parseAttestation(extension) } },
+            random = random::nextBytes,
+            now = ::Date,
+            failure = { IntegrityFailure.FAILED },
+        ).run()
     }
 
     private fun attestationChain(): AttestationChain {
@@ -482,8 +451,32 @@ class DeviceCollector(private val context: Context) {
 
     private companion object {
         const val SETTING_ADB_WIFI = "adb_wifi_enabled"
+    }
+}
+
+/** AndroidKeyStore, for the hardware check: P-256 signing keys, each with an attestation of its own. */
+private class AndroidAttestationKeystore : AttestationKeystore {
+    private val store = KeyStore.getInstance(KEYSTORE).apply { load(null) }
+
+    override fun generate(alias: String, challenge: ByteArray): PublicKey {
+        val generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, KEYSTORE)
+        generator.initialize(
+            KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_SIGN)
+                .setDigests(KeyProperties.DIGEST_SHA256)
+                .setAttestationChallenge(challenge)
+                .build(),
+        )
+        return generator.generateKeyPair().public
+    }
+
+    override fun chain(alias: String): List<X509Certificate> =
+        store.getCertificateChain(alias)?.filterIsInstance<X509Certificate>().orEmpty()
+
+    override fun aliases(): List<String> = store.aliases().toList()
+
+    override fun delete(alias: String) = store.deleteEntry(alias)
+
+    private companion object {
         const val KEYSTORE = "AndroidKeyStore"
-        const val ATTESTATION_ALIAS = "datapavan-integrity-check"
-        const val CHALLENGE_BYTES = 16
     }
 }

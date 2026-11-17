@@ -9,7 +9,6 @@
     <string name="section_apps">应用</string>
     <string name="device_all_clear">未发现影响整部手机的风险。</string>
     <string name="device_integrity_ok">硬件检查（由 Google 的认证密钥签名）：引导加载程序已锁定，系统已通过验证。</string>
-    <string name="device_integrity_unavailable">此手机无法进行硬件检查。</string>
     <string name="device_patch">安全补丁：%1$s</string>
     <string name="device_integrity_failed">此手机的硬件检查失败。</string>
     <string name="device_boot_key">验证启动密钥：%1$s</string>

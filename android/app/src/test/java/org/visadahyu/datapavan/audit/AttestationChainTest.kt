@@ -136,9 +136,35 @@ class AttestationChainTest {
         // A certificate not yet valid is not, from any chain: a phone whose date is years behind.
         val past = Date.from(Instant.parse("2015-01-01T00:00:00Z"))
         assertEquals(AttestationTrust.OUT_OF_DATE, google.trust(sony, past))
-        // The leaf's dates are set on the phone, and are not checked.
-        val akita = corpus("akita/sdk34/TEE_EC_NONE.pem")
-        assertTrue(akita[0].notBefore.before(Date.from(Instant.parse("1971-01-01T00:00:00Z"))))
+    }
+
+    /** A synthetic chain (`synthetic/generate.sh`), checked with its own root trusted, in mid-2026. */
+    private fun synthetic(name: String): AttestationTrust {
+        val chain = chain(File(javaClass.getResource("/attestation/synthetic/$name")!!.toURI()))
+        val trusted = AttestationChain(setOf(AttestationChain.keyFingerprint(chain.last().publicKey)), emptySet())
+        return trusted.trust(chain, chain.first().publicKey, Date.from(Instant.parse("2026-06-01T00:00:00Z")))
+    }
+
+    @Test
+    fun `the leaf's and the root's dates are not checked, as in Google's verifier`() {
+        // The leaf's dates are set on the phone; the root's do not matter, since its key is what is trusted.
+        assertEquals(AttestationTrust.GOOGLE_ROOT, synthetic("leaf-not-yet-valid.pem"))
+        assertEquals(AttestationTrust.GOOGLE_ROOT, synthetic("root-expired.pem"))
+    }
+
+    @Test
+    fun `only a factory chain is exempt from expiry`() {
+        // A chain whose provisioning is unknown, with its attestation certificate expired in 2025.
+        assertEquals(AttestationTrust.OUT_OF_DATE, synthetic("intermediate-expired.pem"))
+    }
+
+    @Test
+    fun `shapes and signatures no phone makes are broken`() {
+        // Five certificates whose second from the root is "Droid CA2" but not of "Google LLC": not Remote Key
+        // Provisioning, and five is too many for any other provisioning.
+        assertEquals(AttestationTrust.BROKEN_CHAIN, synthetic("five-not-remote.pem"))
+        // A root named as its own issuer, but signed by another key.
+        assertEquals(AttestationTrust.BROKEN_CHAIN, synthetic("root-not-self-signed.pem"))
     }
 
     @Test

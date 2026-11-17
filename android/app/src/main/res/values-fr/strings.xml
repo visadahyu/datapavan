@@ -9,7 +9,6 @@
     <string name="section_apps">Applis</string>
     <string name="device_all_clear">Aucun risque trouvé au niveau du téléphone.</string>
     <string name="device_integrity_ok">Contrôle matériel, signé avec la clé d\'attestation de Google : le bootloader est verrouillé et le système est vérifié.</string>
-    <string name="device_integrity_unavailable">Le contrôle matériel n\'est pas disponible sur ce téléphone.</string>
     <string name="device_patch">Correctif de sécurité : %1$s</string>
     <string name="device_integrity_failed">Le contrôle matériel a échoué sur ce téléphone.</string>
     <string name="device_boot_key">Clé de démarrage vérifié : %1$s</string>

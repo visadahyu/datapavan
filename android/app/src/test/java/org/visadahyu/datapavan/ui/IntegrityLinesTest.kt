@@ -6,10 +6,13 @@ import org.visadahyu.datapavan.R
 import org.visadahyu.datapavan.audit.AttestationTrust
 import org.visadahyu.datapavan.audit.DeviceFacts
 import org.visadahyu.datapavan.audit.Integrity
+import org.visadahyu.datapavan.audit.IntegrityFailure
 
 class IntegrityLinesTest {
-    private fun device(integrity: Integrity?, failed: Boolean = false) =
-        DeviceFacts(false, false, emptyList(), vpnActive = false, integrity = integrity, integrityFailed = failed)
+    private fun device(integrity: Integrity?, failed: Boolean = false) = DeviceFacts(
+        false, false, emptyList(), vpnActive = false, integrity = integrity,
+        integrityFailure = if (failed) IntegrityFailure.FAILED else null,
+    )
 
     private val locked = Integrity(1, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_607, trust = AttestationTrust.GOOGLE_ROOT)
 
@@ -27,7 +30,8 @@ class IntegrityLinesTest {
     @Test
     fun `a failed check has a line of its own`() {
         assertEquals(listOf(R.string.device_integrity_failed to null), integrityLines(device(null, failed = true)))
-        assertEquals(listOf(R.string.device_integrity_unavailable to null), integrityLines(device(null)))
+        // No check made, which the app never shows: nothing to say.
+        assertEquals(emptyList<Pair<Int, String?>>(), integrityLines(device(null)))
     }
 
     @Test

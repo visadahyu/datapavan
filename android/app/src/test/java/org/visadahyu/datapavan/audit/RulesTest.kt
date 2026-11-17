@@ -136,10 +136,10 @@ class RulesTest {
     }
 
     @Test
-    fun `a failed check is a finding only where the phone must support it`() {
-        val failed = DeviceFacts(false, false, emptyList(), vpnActive = false, integrity = null, integrityFailed = true)
+    fun `a failed check is a finding, and no check made is none`() {
+        val failed = DeviceFacts(false, false, emptyList(), vpnActive = false, integrity = null, integrityFailure = IntegrityFailure.FAILED)
         assertEquals(listOf(FindingKind.ATTESTATION_FAILED), Rules.forDevice(failed, nowYearMonth = 202_610))
-        assertEquals(emptyList<FindingKind>(), Rules.forDevice(failed.copy(integrityFailed = false), nowYearMonth = 202_610))
+        assertEquals(emptyList<FindingKind>(), Rules.forDevice(failed.copy(integrityFailure = null), nowYearMonth = 202_610))
     }
 
     @Test

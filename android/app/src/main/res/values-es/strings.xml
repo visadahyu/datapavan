@@ -8,7 +8,6 @@
     <string name="section_apps">Apps</string>
     <string name="device_all_clear">No se encontraron riesgos que afecten a todo el teléfono.</string>
     <string name="device_integrity_ok">Comprobación de hardware, firmada con la clave de certificación de Google: el bootloader está bloqueado y el sistema está verificado.</string>
-    <string name="device_integrity_unavailable">La comprobación de hardware no está disponible en este teléfono.</string>
     <string name="device_patch">Parche de seguridad: %1$s</string>
     <string name="device_integrity_failed">La comprobación de hardware falló en este teléfono.</string>
     <string name="device_boot_key">Clave de arranque verificado: %1$s</string>

@@ -151,7 +151,7 @@ object Rules {
         if (device.usbDebugging) add(FindingKind.USB_DEBUGGING)
         // A check that should work and did not is reported, so that a system cannot hide the bootloader's
         // state by breaking the check, and a fault on a sound phone comes to light.
-        if (device.integrity == null && device.integrityFailed) add(FindingKind.ATTESTATION_FAILED)
+        if (device.integrity == null && device.integrityFailure == IntegrityFailure.FAILED) add(FindingKind.ATTESTATION_FAILED)
         device.integrity?.let { integrity ->
             // Nothing a forged attestation says is used: not its bootloader state, not its patch level.
             if (integrity.trust == AttestationTrust.FORGED) {

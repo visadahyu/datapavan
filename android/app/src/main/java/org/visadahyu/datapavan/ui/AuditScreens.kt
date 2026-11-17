@@ -73,6 +73,7 @@ import org.visadahyu.datapavan.audit.Capability
 import org.visadahyu.datapavan.audit.DeviceCollector
 import org.visadahyu.datapavan.audit.DeviceFacts
 import org.visadahyu.datapavan.audit.FindingKind
+import org.visadahyu.datapavan.audit.IntegrityFailure
 import org.visadahyu.datapavan.audit.FloorReason
 import org.visadahyu.datapavan.audit.HealthAnswer
 import org.visadahyu.datapavan.audit.InstallSource
@@ -484,8 +485,8 @@ internal fun IntegrityLine(device: DeviceFacts) {
 internal fun integrityLines(device: DeviceFacts): List<Pair<Int, String?>> {
     val integrity = device.integrity
     val status = when {
-        integrity == null && device.integrityFailed -> R.string.device_integrity_failed
-        integrity == null -> R.string.device_integrity_unavailable
+        integrity == null && device.integrityFailure == IntegrityFailure.FAILED -> R.string.device_integrity_failed
+        integrity == null -> null
         integrity.deviceLocked == true && integrity.verifiedBoot == 0 && integrity.securityLevel > 0 &&
             integrity.trust == AttestationTrust.GOOGLE_ROOT -> R.string.device_integrity_ok
         else -> null
