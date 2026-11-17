@@ -85,3 +85,11 @@ cert root-f "/CN=Droid Unregistered Device CA/O=Google Test LLC" self ca.ext $FR
 cert attest-f "/O=TEE/CN=Synthetic Attestation F" root-f ca.ext $FROM $UNTIL
 cert leaf-f "/CN=Android Keystore Key" attest-f leaf.ext $FROM $UNTIL
 chain test-root-name.pem leaf-f attest-f root-f
+
+# A certificate too long for one line of the debug builds' lab record (AttestationLabTest): 3,000 bytes of an
+# extension of no meaning make its base64 longer than one part.
+key big
+printf '1.3.6.1.4.1.99999.1=DER:04820bb8%s\n' "$(head -c 3000 /dev/zero | od -An -v -tx1 | tr -d ' \n')" > "$work/big.ext"
+openssl req -new -key "$work/big.key" -subj "/CN=Synthetic Large Certificate" -out "$work/big.csr"
+openssl x509 -req -in "$work/big.csr" -signkey "$work/big.key" -extfile "$work/big.ext" \
+    -not_before $FROM -not_after $UNTIL -set_serial "0x$(openssl rand -hex 8)" -out large-certificate.pem 2>/dev/null

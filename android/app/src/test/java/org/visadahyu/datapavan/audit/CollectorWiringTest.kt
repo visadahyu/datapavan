@@ -46,10 +46,12 @@ class CollectorWiringTest {
         assertEquals(IntegrityFailure.KEYS_REFUSED, HardwareCheck.failureOf(HardwareCheck.keystoreErrors(nested, read)))
         val waiting = ProviderException("generate", KeystoreFailure(16, 3))
         assertEquals(IntegrityFailure.KEYS_UNAVAILABLE, HardwareCheck.failureOf(HardwareCheck.keystoreErrors(waiting, read)))
-        // Only so deep: an error past the eighth cause is not looked for.
-        var deep: Throwable = KeystoreFailure(16, 3)
-        repeat(HardwareCheck.MAX_CAUSES) { deep = RuntimeException(deep) }
-        assertEquals(emptyList<KeystoreError>(), HardwareCheck.keystoreErrors(deep, read).toList())
+        // Only so deep: the eighth cause is looked at, the ninth is not.
+        var eighth: Throwable = KeystoreFailure(16, 3)
+        repeat(HardwareCheck.MAX_CAUSES - 1) { eighth = RuntimeException(eighth) }
+        assertEquals(listOf(KeystoreError(16, 3)), HardwareCheck.keystoreErrors(eighth, read).toList())
+        val ninth = RuntimeException(eighth)
+        assertEquals(emptyList<KeystoreError>(), HardwareCheck.keystoreErrors(ninth, read).toList())
         assertEquals(8, HardwareCheck.MAX_CAUSES)
     }
 }

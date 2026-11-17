@@ -65,7 +65,10 @@ class HardwareCheck(
     private val now: () -> Date,
     /** What a failure of the keystore, the data pack or the parsers' process means. */
     private val failure: (Exception) -> IntegrityFailure,
-    /** Told what each check saw: AttestationLab's record in debug builds, nothing in release builds. */
+    /**
+     * Told what each check saw: AttestationLab's record in debug builds when the lab turns it on, nothing
+     * otherwise. Whatever it does, it cannot change the check's result ([tell]).
+     */
     private val lab: (AttestationSeen) -> Unit = {},
 ) {
     /** The check's result: the attestation's decoded state, or why there is none. */
@@ -79,7 +82,7 @@ class HardwareCheck(
             // Every failure of the keystore, the data pack or the parsers' process ends the check the same way:
             // without a result, and with what it most likely means.
             val meaning = failure(error)
-            lab(AttestationSeen("failed: $meaning (${error.javaClass.simpleName})", null, null, chain))
+            tell(lab, AttestationSeen("failed: $meaning (${error.javaClass.simpleName})", null, null, chain))
             IntegrityResult(failure = meaning)
         } finally {
             delete(alias)
@@ -92,7 +95,7 @@ class HardwareCheck(
         val chain = keystore.chain(alias).also(given)
         val chains = chains()
         val trust = chains.trust(chain, key, now())
-        val seen = { verdict: String, level: Int? -> lab(AttestationSeen(verdict, trust, level, chain)) }
+        val seen = { verdict: String, level: Int? -> tell(lab, AttestationSeen(verdict, trust, level, chain)) }
         // Nothing a forged attestation says is used, so it is not even decoded.
         if (trust == AttestationTrust.FORGED) {
             seen(trust.name, null)
@@ -177,6 +180,18 @@ class HardwareCheck(
                         (keys(it) && it.retryPolicy == KeyStoreException.RETRY_WITH_EXPONENTIAL_BACKOFF)
                 } -> IntegrityFailure.KEYS_UNAVAILABLE
                 else -> IntegrityFailure.FAILED
+            }
+        }
+
+        /**
+         * Tells [lab] what a check saw, so that nothing it does, a throw included, changes the check's result: the
+         * record is for the lab, and a debug build's check must answer as a release build's does.
+         */
+        fun tell(lab: (AttestationSeen) -> Unit, seen: AttestationSeen) {
+            try {
+                lab(seen)
+            } catch (_: Exception) {
+                // The record failed; the check's result stands.
             }
         }
 

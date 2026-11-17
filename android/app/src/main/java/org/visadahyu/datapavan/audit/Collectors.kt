@@ -477,12 +477,14 @@ class DeviceCollector(private val context: Context) {
      * phone, which pins what it saw, does.
      */
     private fun integrity(): IntegrityResult {
+        // Debug builds log what the check saw when the lab turns it on; release builds have a no-op (src/release).
+        val lab = AttestationLab.recorder(context)
         val keystore = try {
             AndroidAttestationKeystore()
-        } catch (_: java.security.GeneralSecurityException) {
-            return IntegrityResult(failure = IntegrityFailure.FAILED)
-        } catch (_: IOException) {
-            return IntegrityResult(failure = IntegrityFailure.FAILED)
+        } catch (error: java.security.GeneralSecurityException) {
+            return opening(lab, error)
+        } catch (error: IOException) {
+            return opening(lab, error)
         }
         val random = SecureRandom()
         return HardwareCheck(
@@ -493,9 +495,14 @@ class DeviceCollector(private val context: Context) {
             random = random::nextBytes,
             now = ::Date,
             failure = ::failureOf,
-            // Debug builds log what the check saw, for lab runs; release builds have a no-op here (src/release).
-            lab = AttestationLab::record,
+            lab = lab,
         ).run()
+    }
+
+    /** A check that failed before it began: AndroidKeyStore could not be opened. */
+    private fun opening(lab: (AttestationSeen) -> Unit, error: Exception): IntegrityResult {
+        HardwareCheck.tell(lab, AttestationSeen("failed: FAILED opening the keystore (${error.javaClass.simpleName})", null, null, emptyList()))
+        return IntegrityResult(failure = IntegrityFailure.FAILED)
     }
 
     /** What a failed check means ([HardwareCheck.failureOf]), from the keystore's errors among its causes. */

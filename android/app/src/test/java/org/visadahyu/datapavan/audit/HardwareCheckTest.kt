@@ -80,9 +80,10 @@ class HardwareCheckTest {
         failure: (Exception) -> IntegrityFailure = { IntegrityFailure.FAILED },
         random: (ByteArray) -> Unit = { bytes -> bytes.fill(7) },
         lab: (AttestationSeen) -> Unit = {},
+        chains: () -> AttestationChain = { google },
     ) = HardwareCheck(
         keystore = keystore,
-        chains = { google },
+        chains = chains,
         parse = parse,
         random = random,
         now = { validDate },
@@ -144,6 +145,32 @@ class HardwareCheckTest {
         )
         assertEquals(listOf(sony.size + 1, sony.size, sony.size - 1, 0), seen.map { it.chain.size })
         assertEquals(listOf(null, null, null, null), seen.map { it.securityLevel })
+    }
+
+    @Test
+    fun `a check that fails after the keystore answered is recorded with the chain it gave`() {
+        // The data pack cannot be read, or the parsers' process fails: the chain is the keystore's, whole.
+        val seen = mutableListOf<AttestationSeen>()
+        val noData = check(FakeKeystore(sony), lab = { seen += it }, chains = { throw java.io.IOException("data pack") }).run()
+        assertEquals(IntegrityFailure.FAILED, noData.failure)
+        val noParser = check(FakeKeystore(sony), lab = { seen += it }, parse = { throw IllegalStateException("parsers") }).run()
+        assertEquals(IntegrityFailure.FAILED, noParser.failure)
+        assertEquals(listOf("failed: FAILED (IOException)", "failed: FAILED (IllegalStateException)"), seen.map { it.verdict })
+        assertEquals(listOf(sony, sony), seen.map { it.chain })
+    }
+
+    @Test
+    fun `the lab record cannot change the check's result`() {
+        val throwing = { _: AttestationSeen -> throw IllegalStateException("record") }
+        val sound = check(FakeKeystore(sony), lab = throwing).run()
+        assertEquals(AttestationTrust.GOOGLE_ROOT, sound.integrity?.trust)
+        assertNull(sound.failure)
+        val failing = object : FakeKeystore(sony) {
+            override fun generate(alias: String, challenge: ByteArray): PublicKey = throw IllegalStateException("keystore")
+        }
+        // A record that throws while a failure is told does not escape the check either.
+        assertEquals(IntegrityFailure.FAILED, check(failing, lab = throwing).run().failure)
+        HardwareCheck.tell(throwing, AttestationSeen("x", null, null, emptyList()))
     }
 
     @Test

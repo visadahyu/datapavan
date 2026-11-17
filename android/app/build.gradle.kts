@@ -547,6 +547,18 @@ val remappedRustFlags = cargoHome.map { home ->
     )
 }
 
+// The unit tests read these files of the repository while they run (the datasets, the attestation test data,
+// the release key, the lab record's capture script), so a change to any of them must run the tests again.
+tasks.withType<Test>().configureEach {
+    inputs.dir(repositoryRoot.dir("data")).withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("repositoryData")
+    inputs.dir(repositoryRoot.dir("core/engine/testdata")).withPathSensitivity(PathSensitivity.RELATIVE)
+        .withPropertyName("engineTestData")
+    inputs.file(repositoryRoot.file("keys/datapavan-release.pem")).withPathSensitivity(PathSensitivity.NONE)
+        .withPropertyName("releaseKey")
+    inputs.file(repositoryRoot.file("scripts/attestation-chain-from-logcat.py")).withPathSensitivity(PathSensitivity.NONE)
+        .withPropertyName("labCaptureScript")
+}
+
 // The data-signing test key (scripts/testdata), whose secret half is public: debug builds trust it so
 // that imports can be tested, and release builds never do.
 val testDataKey = providers.fileContents(repositoryRoot.file("scripts/testdata/datapack-test.pub"))
