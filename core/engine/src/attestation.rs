@@ -1577,6 +1577,8 @@ mod tests {
             // Seven digits, whose first five would read as a year and a valid month.
             (2_020_112, None),
             (100_000_000, None),
+            // Nine digits, whose first seven would read as a year, a valid month and a day.
+            (202_501_200, None),
             (202_500, None),
             (202_513, None),
             (20_251_305, None),
