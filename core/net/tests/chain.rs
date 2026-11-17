@@ -4749,10 +4749,10 @@ async fn a_stun_response_with_another_id_takes_no_stand_in() -> Outcome {
     Ok(())
 }
 
-/// Two QUIC stand-ins on port 443 whose clients send no source connection ID, as Chromium's do: each
-/// server Initial, built with the server keys of its own client's destination ID, reaches its own
-/// stand-in, in crossed order; a datagram that is no QUIC for either, sent first, is dropped and
-/// counted.
+/// Two QUIC stand-ins on port 443, both of version 1, whose clients send no source connection ID, as
+/// Chromium's do: each server Initial, built with the server keys of its own client's destination ID,
+/// reaches its own stand-in, in crossed order, told by the keys alone; a datagram that is no QUIC for
+/// either, sent first, is dropped and counted.
 #[tokio::test(flavor = "current_thread")]
 async fn two_quic_stand_ins_are_told_by_their_initial_keys() -> Outcome {
     let ping = [0x01];
@@ -4761,14 +4761,13 @@ async fn two_quic_stand_ins_are_told_by_their_initial_keys() -> Outcome {
         let (a_id, b_id) = ([0xa0; 8], [0xb0; 8]);
         let a_asks = datapavan_net::quic::client_initial(1, (&a_id, &[]), (0, &ping), 1200)
             .ok_or("a client Initial")?;
-        let b_asks =
-            datapavan_net::quic::client_initial(0x6b33_43cf, (&b_id, &[]), (0, &ping), 1200)
-                .ok_or("a client Initial")?;
+        let b_asks = datapavan_net::quic::client_initial(1, (&b_id, &[]), (0, &ping), 1200)
+            .ok_or("a client Initial")?;
         let a_answer =
             datapavan_net::quic::server_initial(1, &a_id, (&[], &[0x5a; 8]), (0, &acked))
                 .ok_or("a server Initial")?;
         let b_answer =
-            datapavan_net::quic::server_initial(0x6b33_43cf, &b_id, (&[], &[0x5b; 8]), (0, &acked))
+            datapavan_net::quic::server_initial(1, &b_id, (&[], &[0x5b; 8]), (0, &acked))
                 .ok_or("a server Initial")?;
         let (stand_ins, (engine, tunnel, relay, engine_at, _script)) = asked_by_script(
             &[
@@ -4813,17 +4812,18 @@ async fn two_quic_stand_ins_are_told_by_their_initial_keys() -> Outcome {
 
 /// A server that cannot go on with what a QUIC client sent answers with a Version Negotiation packet,
 /// the client's IDs crossed, or a Retry, whose integrity tag holds the client's destination ID: each
-/// reaches its own stand-in, crossed, while both wait on port 443.
+/// reaches its own stand-in, crossed, while both wait on port 443. Neither client sends a source ID, so
+/// the Retry, to an empty destination ID as either's would be, is told by its tag alone.
 #[tokio::test(flavor = "current_thread")]
 async fn a_version_negotiation_and_a_retry_find_their_stand_ins() -> Outcome {
     let ping = [0x01];
     for (far_a, far_b) in far_pairs(443) {
-        let (a_id, a_source, b_id) = ([0xa0; 8], [0xa9; 2], [0xb0; 8]);
+        let (a_id, a_source, b_id) = ([0xa0; 8], [0u8; 0], [0xb0; 8]);
         let a_asks = datapavan_net::quic::client_initial(1, (&a_id, &a_source), (0, &ping), 1200)
             .ok_or("a client Initial")?;
         let b_asks = datapavan_net::quic::client_initial(1, (&b_id, &[]), (0, &ping), 1200)
             .ok_or("a client Initial")?;
-        let mut negotiation = vec![0xc5, 0, 0, 0, 0, 2];
+        let mut negotiation = vec![0xc5, 0, 0, 0, 0, 0];
         negotiation.extend_from_slice(&a_source);
         negotiation.push(8);
         negotiation.extend_from_slice(&a_id);
@@ -4997,6 +4997,221 @@ async fn the_contest_is_settled_by_an_identifier() -> Outcome {
             (3, 0),
             "{far}"
         );
+    }
+    Ok(())
+}
+
+// ADR 0044, unit 9b, fix round 1.
+
+/// Review A, probe 4: a stand-in that leaves by an association of its own, after a pause longer than
+/// `udp_reask`, while Android is asked again: its datagram still leaves by its own association, so that
+/// the answer, from the address both names resolve to, reaches it, not the first name (item 1).
+#[tokio::test(flavor = "current_thread")]
+async fn after_a_pause_a_stand_ins_datagram_leaves_by_its_own_association() -> Outcome {
+    let (proxy, relay, mut script) = scripted().await?;
+    let (_engine, tunnel) = engine_with(chain(proxy), &quick_reask(), Arc::new(ByPort))?;
+    let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, 4_000));
+    let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, 4_000));
+    send(&tunnel, app(CHAINED_PORT), a, b"plain a").await?;
+    let main_at = heard_from_engine(&mut script).await?;
+    send(&tunnel, app(CHAINED_PORT), b, b"plain b").await?;
+    let own_at = heard_from_engine(&mut script).await?;
+    assert_ne!(main_at, own_at, "b has an association of its own");
+    let server = SocketAddr::from(([198, 51, 100, 30], 4_000));
+    relay
+        .send_to(&relayed(header_by_address(server), b"for a"), main_at)
+        .await?;
+    assert_eq!(receive(&tunnel).await?, Some((a, b"for a".to_vec())));
+    relay
+        .send_to(&relayed(header_by_address(server), b"for b"), own_at)
+        .await?;
+    assert_eq!(receive(&tunnel).await?, Some((b, b"for b".to_vec())));
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    send(&tunnel, app(CHAINED_PORT), b, b"b after a pause").await?;
+    let at = heard_from_engine(&mut script).await?;
+    assert_eq!(
+        at, own_at,
+        "b's datagram after a pause left by the mapping's association"
+    );
+    relay
+        .send_to(&relayed(header_by_address(server), b"b's answer"), at)
+        .await?;
+    assert_eq!(receive(&tunnel).await?, Some((b, b"b's answer".to_vec())));
+    Ok(())
+}
+
+/// Review A, probe 5: the same with a third stand-in `c`, without identifiers, waiting alone on the
+/// mapping's association: after a pause, `b`'s answer, which comes back on `b`'s own association, never
+/// binds `c` to `b`'s server (item 1).
+#[tokio::test(flavor = "current_thread")]
+async fn after_a_pause_another_names_answer_binds_no_waiting_stand_in() -> Outcome {
+    let (proxy, relay, mut script) = scripted().await?;
+    let (_engine, tunnel) = engine_with(chain(proxy), &quick_reask(), Arc::new(ByPort))?;
+    let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, 4_000));
+    let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, 4_000));
+    let c = SocketAddr::from((stand_in(&tunnel, b"\x01c\x04test\x00").await?, 4_000));
+    send(&tunnel, app(CHAINED_PORT), a, b"plain a").await?;
+    let main_at = heard_from_engine(&mut script).await?;
+    send(&tunnel, app(CHAINED_PORT), b, b"plain b").await?;
+    let own_at = heard_from_engine(&mut script).await?;
+    assert_ne!(main_at, own_at, "b has an association of its own");
+    let (a_server, b_server) = (
+        SocketAddr::from(([198, 51, 100, 31], 4_000)),
+        SocketAddr::from(([198, 51, 100, 32], 4_000)),
+    );
+    relay
+        .send_to(&relayed(header_by_address(a_server), b"for a"), main_at)
+        .await?;
+    assert_eq!(receive(&tunnel).await?, Some((a, b"for a".to_vec())));
+    relay
+        .send_to(&relayed(header_by_address(b_server), b"for b"), own_at)
+        .await?;
+    assert_eq!(receive(&tunnel).await?, Some((b, b"for b".to_vec())));
+    send(&tunnel, app(CHAINED_PORT), c, b"plain c").await?;
+    assert_eq!(heard_from_engine(&mut script).await?, main_at);
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    send(&tunnel, app(CHAINED_PORT), b, b"b after a pause").await?;
+    let at = heard_from_engine(&mut script).await?;
+    relay
+        .send_to(&relayed(header_by_address(b_server), b"b's answer"), at)
+        .await?;
+    let got = everything(&tunnel).await;
+    assert_eq!(got, [(b, b"b's answer".to_vec())], "c is {c}");
+    Ok(())
+}
+
+/// Review A, probe 6: a flow that came in through an association of a stand-in's own, which the app
+/// answers: the app's reply waits for Android, and leaves by that association (item 1).
+#[tokio::test(flavor = "current_thread")]
+async fn a_reply_to_a_flow_that_came_in_through_its_own_association_leaves_by_it() -> Outcome {
+    let (proxy, relay, mut script) = scripted().await?;
+    let (_engine, tunnel) = engine_with(chain(proxy), &quick_reask(), Arc::new(ByPort))?;
+    let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, 4_000));
+    let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, 4_000));
+    send(&tunnel, app(CHAINED_PORT), a, b"plain a").await?;
+    let main_at = heard_from_engine(&mut script).await?;
+    send(&tunnel, app(CHAINED_PORT), b, b"plain b").await?;
+    let own_at = heard_from_engine(&mut script).await?;
+    assert_ne!(main_at, own_at);
+    let b_server = SocketAddr::from(([198, 51, 100, 32], 4_000));
+    relay
+        .send_to(&relayed(header_by_address(b_server), b"for b"), own_at)
+        .await?;
+    assert_eq!(receive(&tunnel).await?, Some((b, b"for b".to_vec())));
+    let other = SocketAddr::from(([198, 51, 100, 32], 5_000));
+    relay
+        .send_to(
+            &relayed(header_by_address(other), b"from another port"),
+            own_at,
+        )
+        .await?;
+    let came_in = SocketAddr::new(b.ip(), 5_000);
+    assert_eq!(
+        receive(&tunnel).await?,
+        Some((came_in, b"from another port".to_vec()))
+    );
+    send(&tunnel, app(CHAINED_PORT), came_in, b"the app's reply").await?;
+    let at = heard_from_engine(&mut script).await?;
+    assert_eq!(
+        at, own_at,
+        "the reply left by the mapping's association ({main_at})"
+    );
+    Ok(())
+}
+
+/// One DNS query, one ID and question, sent to two stand-ins on one port at once, as a stub resolver
+/// may, off port 53 and on it: the second's identifiers are the first's, which would tell nothing
+/// apart, so it gets an association of its own, and each answer reaches its own stand-in (item 7).
+#[tokio::test(flavor = "current_thread")]
+async fn a_stand_in_whose_identifiers_are_anothers_gets_an_association_of_its_own() -> Outcome {
+    let mut query = 0x0a0au16.to_be_bytes().to_vec();
+    query.extend_from_slice(&[0x01, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
+    query.extend_from_slice(b"\x01x\x04test\x00");
+    query.extend_from_slice(&[0, 1, 0, 1]);
+    for port in [5_353, 53] {
+        let (stand_ins, engine_ats, (engine, tunnel, relay, _, _script)) = asked_through(
+            &[
+                (b"\x01a\x04test\x00", &query),
+                (b"\x01b\x04test\x00", &query),
+            ],
+            port,
+        )
+        .await?;
+        assert_ne!(engine_ats[0], engine_ats[1], "port {port}: one association");
+        let answer = dns_response(&query, 0x0a0a);
+        for (n, at) in engine_ats.iter().enumerate() {
+            let far = SocketAddr::from(([198, 51, 100, 10 + u8::try_from(n)?], port));
+            relay
+                .send_to(&relayed(header_by_address(far), &answer), *at)
+                .await?;
+        }
+        let both = HashSet::from([
+            (stand_ins[0], answer.clone()),
+            (stand_ins[1], answer.clone()),
+        ]);
+        assert_eq!(received(&tunnel, 2).await?, both, "port {port}");
+        let counters = engine.counters();
+        assert_eq!((counters[OWN_RELAYS], counters[UDP_UNMATCHED]), (1, 0));
+    }
+    Ok(())
+}
+
+/// Identifiers that come to be another's only after the stand-ins were placed, the second asking what
+/// the first asked once it shares the mapping's association: an answer that carries both is dropped and
+/// counted as unmatched, never given to the first (review B: `Carried::Several` given to the first
+/// taker survived every test).
+#[tokio::test(flavor = "current_thread")]
+async fn an_answer_that_carries_two_stand_ins_identifiers_is_dropped() -> Outcome {
+    let query = |id: u16| {
+        let mut query = id.to_be_bytes().to_vec();
+        query.extend_from_slice(&[0x01, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
+        query.extend_from_slice(b"\x01x\x04test\x00");
+        query.extend_from_slice(&[0, 1, 0, 1]);
+        query
+    };
+    let (first, second) = (query(0x0a0a), query(0x0b0b));
+    let (stand_ins, engine_ats, (engine, tunnel, relay, _, mut script)) = asked_through(
+        &[
+            (b"\x01a\x04test\x00", &first),
+            (b"\x01b\x04test\x00", &second),
+        ],
+        5_353,
+    )
+    .await?;
+    assert_eq!(engine_ats[0], engine_ats[1], "one association");
+    send(&tunnel, app(CHAINED_PORT), stand_ins[1], &first).await?;
+    heard_from_engine(&mut script).await?;
+    let far = SocketAddr::from(([198, 51, 100, 10], 5_353));
+    relay
+        .send_to(
+            &relayed(header_by_address(far), &dns_response(&first, 0x0a0a)),
+            engine_ats[0],
+        )
+        .await?;
+    assert!(
+        silent(&tunnel).await,
+        "an answer both could take reached the app"
+    );
+    assert_eq!(engine.counters()[UDP_UNMATCHED], 1);
+    Ok(())
+}
+
+/// Review B, patch 05: unit 9's first scenario, two stand-ins without identifiers on one port asked at
+/// once, both waiting for the mapping to open: whichever leaves second gets an association of its own,
+/// and each its own answer, twenty times over.
+#[tokio::test(flavor = "current_thread")]
+async fn two_stand_ins_without_identifiers_asked_at_once_each_get_their_answer() -> Outcome {
+    for _ in 0..20 {
+        let port = two_echoes_on_one_port().await?;
+        let tool = proxy(two_names(port, false)).await?;
+        let (_engine, tunnel) = engine(chain(tool.address))?;
+        let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, port));
+        let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, port));
+        send(&tunnel, app(CHAINED_PORT), a, b"to a").await?;
+        send(&tunnel, app(CHAINED_PORT), b, b"to b").await?;
+        let both = HashSet::from([(a, b"to a".to_vec()), (b, b"to b".to_vec())]);
+        assert_eq!(received(&tunnel, 2).await?, both);
+        assert_eq!(tool.commands(), [3, 3]);
     }
     Ok(())
 }
