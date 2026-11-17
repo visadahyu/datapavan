@@ -221,14 +221,6 @@ adb shell cmd locale set-app-locales "$PKG" --locales en-US >/dev/null 2>&1 || t
 listening=$(tool_log | grep -c "^listening")
 adb shell am start-foreground-service -n "$TOOL/.ToolService" --ei port "$TOOL_PORT" --es map "watch.test=$HOST" >/dev/null
 for _ in $(seq 1 10); do [ "$(tool_log | grep -c "^listening")" -gt "$listening" ] && break; sleep 1; done
-# The STUN server's lines are read now, as the tool starts it, not at the STUN step at the end of the run,
-# by when logcat's ring may have turned past them (unit 9b, fix round 2).
-for _ in $(seq 1 10); do
-    [ "$(tool_log | grep -cE "^stun 127\.0\.0\.[12] $STUN_PORT$")" -ge 2 ] && break
-    sleep 1
-done
-[ "$(tool_log | grep -cE "^stun 127\.0\.0\.[12] $STUN_PORT$")" -ge 2 ] ||
-    fail "the test tool's STUN server does not listen at 127.0.0.1 and 127.0.0.2: $(tool_log | grep '^stun' | tr '\n' ' ')"
 # Back to Watch as a user comes back to it, which makes it look for the tool again.
 adb shell input keyevent KEYCODE_HOME
 sleep 1
@@ -307,11 +299,20 @@ for try in 1 2; do
 done
 [ -n "$user" ] && [ -n "$password" ] || fail "the chain screen offered no user name and password for the tool"
 listening=$(tool_log | grep -c "^listening")
+stun_listening=$(tool_log | grep -cE "^stun 127\.0\.0\.[12] $STUN_PORT$" || true)
 adb shell am force-stop "$TOOL"
 adb shell am start-foreground-service -n "$TOOL/.ToolService" --ei port "$TOOL_PORT" \
     --es user "$user" --es password "$password" --ei stun "$STUN_PORT" \
     --es map "watch.test=$HOST,stun-a.test=127.0.0.1,stun-b.test=127.0.0.2" >/dev/null
 for _ in $(seq 1 10); do [ "$(tool_log | grep -c "^listening")" -gt "$listening" ] && break; sleep 1; done
+# The STUN server for unit 9b's step starts with the tool here, the only start that asks for it. Its two
+# lines are read now, not at the step near the end of the run, by when logcat's ring may have turned past
+# them (unit 9b, fix round 2), and counted from before this start, so that lines of an earlier run cannot
+# stand in for them.
+stun_lines() { tool_log | grep -cE "^stun 127\.0\.0\.[12] $STUN_PORT$" || true; }
+for _ in $(seq 1 10); do [ "$(stun_lines)" -ge $((stun_listening + 2)) ] && break; sleep 1; done
+[ "$(stun_lines)" -ge $((stun_listening + 2)) ] ||
+    fail "the test tool's STUN server does not listen at 127.0.0.1 and 127.0.0.2: $(tool_log | grep '^stun' | tail -4 | tr '\n' ' ')"
 # The state of the row showing exactly the text $1 in the last dump: "chosen", "not chosen" or "absent".
 # The row is the element with that text, or the nearest one around it that can be checked or selected.
 row_state() {
