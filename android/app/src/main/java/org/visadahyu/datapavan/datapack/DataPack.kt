@@ -50,10 +50,6 @@ class DataPack internal constructor(
     }
 }
 
-/** The value of a `name: value` line in a dataset's `SOURCE` file, for example its `retrieved` time. */
-fun sourceField(source: String, name: String): String? =
-    source.lineSequence().firstOrNull { it.startsWith("$name: ") }?.substringAfter(": ")?.trim()
-
 /**
  * Joins the hard-wrapped lines of a notice into paragraphs, so that a narrow screen can wrap them. A
  * line joins the one before it when both have text and the same indentation, which is how the

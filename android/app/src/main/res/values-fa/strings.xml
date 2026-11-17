@@ -16,7 +16,7 @@
     <string name="device_integrity_refused">گوگل از دادن کلید بررسی سخت‌افزاری به این گوشی خودداری کرد.</string>
     <string name="device_revocation_list">با فهرست گوگل از کلیدهای باطل، مربوط به %1$s، بررسی شد.</string>
     <string name="device_revocation_list_old">فهرست گوگل از کلیدهای باطل که اینجا به کار رفته مربوط به %1$s است، یعنی بیش از سه ماه پیش، پس کلیدی که پس از آن باطل شده باشد شناسایی نمی‌شود. برای به‌روزرسانی آن، یک بسته داده تازه‌تر وارد کنید.</string>
-    <string name="device_revocation_list_undated">تاریخ فهرست گوگل از کلیدهای باطل که اینجا به کار رفته معلوم نیست، پس ممکن است کلیدی که پس از آن باطل شده باشد شناسایی نشود. برای به‌روزرسانی آن، یک بسته داده تازه‌تر وارد کنید.</string>
+    <string name="device_revocation_list_undated">تاریخ فهرست گوگل از کلیدهای باطل که اینجا به کار رفته معلوم نیست، پس ممکن است کلیدی که پس از تهیه این فهرست باطل شده باشد شناسایی نشود. برای به‌روزرسانی آن، یک بسته داده تازه‌تر وارد کنید.</string>
     <string name="device_boot_key">کلید بوت تأییدشده: %1$s</string>
     <string name="device_patch_system">وصله امنیتی، به گفته سیستم: %1$s</string>
     <string name="device_vendor_patch">وصله امنیتی سازندگان قطعات: %1$s</string>
@@ -328,6 +328,7 @@
     <string name="data_refused_bad_signature">امضا مطابقت ندارد: فایل تغییر کرده یا خراب شده است.</string>
     <string name="data_refused_unsupported">این بسته به نسخه تازه‌تری از برنامه نیاز دارد.</string>
     <string name="data_refused_invalid">این بسته خراب است.</string>
+    <string name="data_refused_undated">این بسته نمی‌گوید فهرست کلیدهای باطل آن کی تهیه شده است، پس برنامه نتوانست بفهمد این فهرست چقدر قدیمی است. این بسته وارد نشد.</string>
     <string name="data_refused_too_large">این فایل برای یک بسته داده بیش از حد بزرگ است.</string>
     <string name="data_refused_not_newer">این بسته از بسته فعلی تازه‌تر نیست.</string>
     <string name="data_refused_unreadable">فایل خوانده نشد.</string>

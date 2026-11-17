@@ -16,7 +16,7 @@
     <string name="device_integrity_refused">Google hat diesem Telefon Schlüssel für die Hardware-Prüfung verweigert.</string>
     <string name="device_revocation_list">Geprüft mit Googles Liste widerrufener Schlüssel vom %1$s.</string>
     <string name="device_revocation_list_old">Googles hier verwendete Liste widerrufener Schlüssel stammt vom %1$s, also von vor mehr als drei Monaten; ein seither widerrufener Schlüssel würde daher nicht erkannt. Importieren Sie ein neueres Datenpaket, um sie zu aktualisieren.</string>
-    <string name="device_revocation_list_undated">Das Datum von Googles hier verwendeter Liste widerrufener Schlüssel ist unbekannt; ein seither widerrufener Schlüssel wird daher möglicherweise nicht erkannt. Importieren Sie ein neueres Datenpaket, um sie zu aktualisieren.</string>
+    <string name="device_revocation_list_undated">Das Datum von Googles hier verwendeter Liste widerrufener Schlüssel ist unbekannt; ein Schlüssel, der nach dem Erstellen der Liste widerrufen wurde, wird daher möglicherweise nicht erkannt. Importieren Sie ein neueres Datenpaket, um sie zu aktualisieren.</string>
     <string name="device_boot_key">Schlüssel für den verifizierten Start: %1$s</string>
     <string name="device_patch_system">Sicherheitspatch laut System: %1$s</string>
     <string name="device_vendor_patch">Sicherheitspatch der Zulieferer: %1$s</string>
@@ -328,6 +328,7 @@
     <string name="data_refused_bad_signature">Die Signatur passt nicht: Die Datei wurde verändert oder ist beschädigt.</string>
     <string name="data_refused_unsupported">Dieses Paket braucht eine neuere Version von Datapavan.</string>
     <string name="data_refused_invalid">Dieses Paket ist beschädigt.</string>
+    <string name="data_refused_undated">Dieses Paket gibt nicht an, wann seine Liste widerrufener Schlüssel erstellt wurde, daher konnte Datapavan nicht feststellen, wie alt die Liste ist. Das Paket wurde nicht importiert.</string>
     <string name="data_refused_too_large">Diese Datei ist zu groß für ein Datenpaket.</string>
     <string name="data_refused_not_newer">Dieses Paket ist nicht neuer als das verwendete.</string>
     <string name="data_refused_unreadable">Die Datei konnte nicht gelesen werden.</string>

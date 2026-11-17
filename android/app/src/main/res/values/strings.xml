@@ -18,7 +18,7 @@
     <string name="device_integrity_refused">Google refused this phone keys for the hardware check.</string>
     <string name="device_revocation_list">Checked against Google\'s list of revoked keys from %1$s.</string>
     <string name="device_revocation_list_old">Google\'s list of revoked keys used here is from %1$s, more than three months ago, so a key revoked since then would not be caught. Import a newer data pack to update it.</string>
-    <string name="device_revocation_list_undated">The date of Google\'s list of revoked keys used here is unknown, so a key revoked since then might not be caught. Import a newer data pack to update it.</string>
+    <string name="device_revocation_list_undated">The date of Google\'s list of revoked keys used here is unknown, so a key revoked after the list was made might not be caught. Import a newer data pack to update it.</string>
     <string name="device_boot_key">Verified boot key: %1$s</string>
     <string name="device_patch_system">Security patch, as the system states it: %1$s</string>
     <string name="device_vendor_patch">Vendor security patch: %1$s</string>
@@ -353,6 +353,7 @@
     <string name="data_refused_bad_signature">The signature does not match: the file was changed or damaged.</string>
     <string name="data_refused_unsupported">This pack needs a newer version of Datapavan.</string>
     <string name="data_refused_invalid">This pack is damaged.</string>
+    <string name="data_refused_undated">This pack does not say when its list of revoked keys was made, so Datapavan could not tell how old the list is. The pack was not imported.</string>
     <string name="data_refused_too_large">This file is too large to be a data pack.</string>
     <string name="data_refused_not_newer">This pack is not newer than the one in use.</string>
     <string name="data_refused_unreadable">The file could not be read.</string>

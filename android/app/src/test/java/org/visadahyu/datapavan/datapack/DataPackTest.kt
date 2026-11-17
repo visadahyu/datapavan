@@ -84,8 +84,12 @@ class DataPackTest {
         assertNull(DataPackRules.retrieved("retrieved: 29 October 2026\n"))
         assertNull(DataPackRules.retrieved("retrieved:\n"))
         assertNull(DataPackRules.retrieved("page: https://example.org\n"))
-        // Every dataset in the repository dates itself so.
-        for (source in java.io.File("../../data").listFiles()!!.map { java.io.File(it, "SOURCE") }.filter { it.isFile }) {
+        // The first retrieved line dates the dataset, as the data sources screen shows it; one SOURCE has one.
+        assertEquals(java.time.LocalDate.of(2026, 10, 29), DataPackRules.retrieved("retrieved: 2026-10-29\nretrieved: 2027-01-01\n"))
+        // Every dataset in the repository dates itself so, the attestation dataset's among them.
+        val sources = java.io.File("../../data").listFiles()!!.map { java.io.File(it, "SOURCE") }.filter { it.isFile }
+        assertTrue(sources.map { it.parentFile.name }.containsAll(listOf("attestation", "exodus")))
+        for (source in sources) {
             assertTrue(source.path, DataPackRules.retrieved(source.readText()) != null)
         }
     }
@@ -134,14 +138,6 @@ class DataPackTest {
         assertFalse(DataPackRules.keep(pack(2, keys = listOf("K9")), pack(3), listOf("K1")))
         assertFalse(DataPackRules.keep(pack(2, keys = listOf("K1"), revoked = listOf("K2")), pack(3), listOf("K1", "K2")))
         assertFalse(DataPackRules.keep(bundled, pack(3), emptyList()))
-    }
-
-    @Test
-    fun `reads fields of a SOURCE file`() {
-        val source = "# SPDX-License-Identifier: CC0-1.0\nretrieved: 2026-10-29T15:10:29Z\ntrackers: 432\n"
-        assertEquals("2026-10-29T15:10:29Z", sourceField(source, "retrieved"))
-        assertEquals("432", sourceField(source, "trackers"))
-        assertNull(sourceField(source, "page"))
     }
 
     @Test

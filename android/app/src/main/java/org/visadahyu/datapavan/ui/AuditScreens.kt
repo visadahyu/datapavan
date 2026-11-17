@@ -522,10 +522,12 @@ internal fun integrityLines(device: DeviceFacts, today: LocalDate): List<Pair<In
     // Every value above was confirmed against the revocation list as of its date, under them all: a key revoked
     // since then would pass. A list of unknown date cannot be called fresh. The phone's date is set by its
     // system, so a clock set back could make an old list look fresh; a system whose patch level Google's key
-    // confirms is not running before that month began, so the list's age is counted from then at the least.
+    // confirms cannot run long before that month, so the list's age is counted at the least from the first day
+    // of the month before it, since makers ship a month's patch up to a few weeks early (ADR 0040).
     if (confirmed && lines.isNotEmpty()) {
         val date = integrity.revocationListDate
-        val patched = integrity.osPatchLevel?.takeIf { it % 100 in 1..12 }?.let { LocalDate.of(it / 100, it % 100, 1) }
+        val patched = integrity.osPatchLevel?.takeIf { it % 100 in 1..12 }
+            ?.let { LocalDate.of(it / 100, it % 100, 1).minusMonths(1) }
         val now = if (patched != null && patched.isAfter(today)) patched else today
         lines += when {
             date == null -> R.string.device_revocation_list_undated to null

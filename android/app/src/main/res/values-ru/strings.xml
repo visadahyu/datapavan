@@ -15,7 +15,7 @@
     <string name="device_integrity_refused">Google отказал этому телефону в ключах для аппаратной проверки.</string>
     <string name="device_revocation_list">Проверено по списку отозванных ключей Google от %1$s.</string>
     <string name="device_revocation_list_old">Используемый здесь список отозванных ключей Google — от %1$s, то есть старше трёх месяцев, поэтому ключ, отозванный после этого, не был бы обнаружен. Импортируйте более новый пакет данных, чтобы обновить его.</string>
-    <string name="device_revocation_list_undated">Дата используемого здесь списка отозванных ключей Google неизвестна, поэтому ключ, отозванный с тех пор, может быть не обнаружен. Импортируйте более новый пакет данных, чтобы обновить его.</string>
+    <string name="device_revocation_list_undated">Дата используемого здесь списка отозванных ключей Google неизвестна, поэтому ключ, отозванный после составления списка, может быть не обнаружен. Импортируйте более новый пакет данных, чтобы обновить его.</string>
     <string name="device_boot_key">Ключ проверенной загрузки: %1$s</string>
     <string name="device_patch_system">Обновление системы безопасности, по данным системы: %1$s</string>
     <string name="device_vendor_patch">Обновление системы безопасности от поставщиков: %1$s</string>
@@ -330,6 +330,7 @@
     <string name="data_refused_bad_signature">Подпись не совпадает: файл изменён или повреждён.</string>
     <string name="data_refused_unsupported">Для этого пакета нужна более новая версия Datapavan.</string>
     <string name="data_refused_invalid">Этот пакет повреждён.</string>
+    <string name="data_refused_undated">В этом пакете не указано, когда был составлен его список отозванных ключей, поэтому Datapavan не смог определить, насколько этот список старый. Пакет не импортирован.</string>
     <string name="data_refused_too_large">Этот файл слишком большой для пакета данных.</string>
     <string name="data_refused_not_newer">Этот пакет не новее используемого.</string>
     <string name="data_refused_unreadable">Не удалось прочитать файл.</string>

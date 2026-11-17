@@ -42,7 +42,6 @@ import org.visadahyu.datapavan.datapack.DataPackStore
 import org.visadahyu.datapavan.datapack.ImportResult
 import org.visadahyu.datapavan.datapack.PackRefusal
 import org.visadahyu.datapavan.datapack.reflow
-import org.visadahyu.datapavan.datapack.sourceField
 
 /**
  * The data the audit uses: each dataset with its date and licence, which the ODbL and the other
@@ -149,7 +148,7 @@ internal fun StaleDataCard(date: String, onOpen: () -> Unit) {
 @Composable
 private fun Dataset(pack: DataPack, dataset: String) {
     val name = datasetName(dataset)?.let { stringResource(it) } ?: dataset
-    val retrieved = pack.text("$dataset/SOURCE")?.let { sourceField(it, "retrieved") }?.take(DATE_LENGTH)
+    val retrieved = pack.retrieved(dataset)?.toString()
     Spacer(Modifier.height(8.dp))
     Text(name, style = MaterialTheme.typography.titleMedium)
     if (retrieved != null) {
@@ -166,8 +165,6 @@ private fun Dataset(pack: DataPack, dataset: String) {
         }
     }
 }
-
-private const val DATE_LENGTH = 10
 
 /** Datasets the app knows by name; a new one in a newer pack shows its folder name instead. */
 @StringRes
@@ -189,7 +186,8 @@ private fun refusalText(reason: PackRefusal): Int = when (reason) {
     PackRefusal.UNKNOWN_KEY -> R.string.data_refused_unknown_key
     PackRefusal.BAD_SIGNATURE -> R.string.data_refused_bad_signature
     PackRefusal.UNSUPPORTED_VERSION -> R.string.data_refused_unsupported
-    PackRefusal.NOT_PACK, PackRefusal.INVALID_HEADER, PackRefusal.INVALID_KEY, PackRefusal.UNDATED_DATASET -> R.string.data_refused_invalid
+    PackRefusal.NOT_PACK, PackRefusal.INVALID_HEADER, PackRefusal.INVALID_KEY -> R.string.data_refused_invalid
+    PackRefusal.UNDATED_DATASET -> R.string.data_refused_undated
     PackRefusal.TOO_LARGE -> R.string.data_refused_too_large
     PackRefusal.NOT_NEWER -> R.string.data_refused_not_newer
     PackRefusal.NO_TRUSTED_KEYS -> R.string.data_import_unavailable

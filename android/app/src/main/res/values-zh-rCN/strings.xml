@@ -16,7 +16,7 @@
     <string name="device_integrity_refused">Google 拒绝向此手机提供用于硬件检查的密钥。</string>
     <string name="device_revocation_list">已对照 Google 截至 %1$s 的已吊销密钥列表进行检查。</string>
     <string name="device_revocation_list_old">此处使用的 Google 已吊销密钥列表截至 %1$s，已超过三个月，因此此后被吊销的密钥不会被发现。请导入较新的数据包来更新它。</string>
-    <string name="device_revocation_list_undated">此处使用的 Google 已吊销密钥列表日期不明，因此此后被吊销的密钥可能不会被发现。请导入较新的数据包来更新它。</string>
+    <string name="device_revocation_list_undated">此处使用的 Google 已吊销密钥列表日期不明，因此在该列表生成之后被吊销的密钥可能不会被发现。请导入较新的数据包来更新它。</string>
     <string name="device_boot_key">验证启动密钥：%1$s</string>
     <string name="device_patch_system">安全补丁（由系统声明）：%1$s</string>
     <string name="device_vendor_patch">供应商安全补丁：%1$s</string>
@@ -320,6 +320,7 @@
     <string name="data_refused_bad_signature">签名不匹配：文件已被更改或损坏。</string>
     <string name="data_refused_unsupported">此数据包需要较新版本的 Datapavan。</string>
     <string name="data_refused_invalid">此数据包已损坏。</string>
+    <string name="data_refused_undated">此数据包没有说明其中的已吊销密钥列表是何时生成的，因此 Datapavan 无法判断该列表有多旧。此数据包未导入。</string>
     <string name="data_refused_too_large">此文件太大，不可能是数据包。</string>
     <string name="data_refused_not_newer">此数据包并不比当前使用的数据包新。</string>
     <string name="data_refused_unreadable">无法读取此文件。</string>

@@ -72,15 +72,20 @@ class IntegrityLinesTest {
 
     @Test
     fun `a clock set back does not make the list younger than the confirmed patch level allows`() {
-        // A phone whose system Google's key confirms as patched in July 2026 cannot be running before July 2026,
-        // whatever its clock says; the list's age is counted from then at the least.
+        // A phone whose system Google's key confirms as patched in July 2026 cannot be running long before July
+        // 2026, whatever its clock says: makers ship a month's patch up to a few weeks early, so the list's age is
+        // counted from 1 June at the least.
         val list = LocalDate.of(2026, 2, 1)
         val setBack = integrityLines(device(locked.copy(revocationListDate = list)), LocalDate.of(2026, 3, 1))
         assertEquals(R.string.device_revocation_list_old to "2026-02-01", setBack.last())
-        // 90 days before the patch month's first day is still fresh; 91 is old.
-        val july = LocalDate.of(2026, 7, 1)
-        assertEquals(R.string.device_revocation_list, integrityLines(device(locked.copy(revocationListDate = july.minusDays(90))), list).last().first)
-        assertEquals(R.string.device_revocation_list_old, integrityLines(device(locked.copy(revocationListDate = july.minusDays(91))), list).last().first)
+        // 90 days before the first day of the month before the patch month is still fresh; 91 is old.
+        val june = LocalDate.of(2026, 6, 1)
+        assertEquals(R.string.device_revocation_list, integrityLines(device(locked.copy(revocationListDate = june.minusDays(90))), list).last().first)
+        assertEquals(R.string.device_revocation_list_old, integrityLines(device(locked.copy(revocationListDate = june.minusDays(91))), list).last().first)
+        // The fifth review's probe: on 2026-11-27, with the clock right, a phone given December's patch early and
+        // a list 88 days old: fresh.
+        val early = locked.copy(osPatchLevel = 202_612, revocationListDate = LocalDate.of(2026, 11, 27).minusDays(88))
+        assertEquals(R.string.device_revocation_list, integrityLines(device(early), LocalDate.of(2026, 11, 27)).last().first)
         // Without a confirmed patch level, the phone's date is all there is.
         val noPatch = locked.copy(osPatchLevel = null, revocationListDate = list)
         assertEquals(R.string.device_revocation_list, integrityLines(device(noPatch), LocalDate.of(2026, 3, 1)).last().first)

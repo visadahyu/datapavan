@@ -16,7 +16,7 @@
     <string name="device_integrity_refused">Google a refusé à ce téléphone des clés pour le contrôle matériel.</string>
     <string name="device_revocation_list">Vérifié avec la liste des clés révoquées de Google datant du %1$s.</string>
     <string name="device_revocation_list_old">La liste des clés révoquées de Google utilisée ici date du %1$s, il y a plus de trois mois : une clé révoquée depuis ne serait pas détectée. Importez un paquet de données plus récent pour la mettre à jour.</string>
-    <string name="device_revocation_list_undated">La date de la liste des clés révoquées de Google utilisée ici est inconnue : une clé révoquée depuis pourrait ne pas être détectée. Importez un paquet de données plus récent pour la mettre à jour.</string>
+    <string name="device_revocation_list_undated">La date de la liste des clés révoquées de Google utilisée ici est inconnue : une clé révoquée après la création de la liste pourrait ne pas être détectée. Importez un paquet de données plus récent pour la mettre à jour.</string>
     <string name="device_boot_key">Clé de démarrage vérifié : %1$s</string>
     <string name="device_patch_system">Correctif de sécurité, selon le système : %1$s</string>
     <string name="device_vendor_patch">Correctif de sécurité des fournisseurs : %1$s</string>
@@ -333,6 +333,7 @@
     <string name="data_refused_bad_signature">La signature ne correspond pas : le fichier a été modifié ou endommagé.</string>
     <string name="data_refused_unsupported">Ce paquet nécessite une version plus récente de Datapavan.</string>
     <string name="data_refused_invalid">Ce paquet est endommagé.</string>
+    <string name="data_refused_undated">Ce paquet n\'indique pas quand sa liste des clés révoquées a été créée : Datapavan n\'a donc pas pu déterminer l\'âge de la liste. Le paquet n\'a pas été importé.</string>
     <string name="data_refused_too_large">Ce fichier est trop volumineux pour être un paquet de données.</string>
     <string name="data_refused_not_newer">Ce paquet n\'est pas plus récent que celui utilisé.</string>
     <string name="data_refused_unreadable">Le fichier n\'a pas pu être lu.</string>

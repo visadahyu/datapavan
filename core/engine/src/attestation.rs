@@ -1628,6 +1628,9 @@ mod tests {
             // Seven digits, whose first five would read as a year and a valid month.
             (2_020_112, None),
             (100_000_000, None),
+            // The day of an eight-digit level is not judged, as Google's library reads only the first
+            // six digits: a day of 99 still gives its month.
+            (20_250_799, Some(202_507)),
             // Nine digits, whose first seven would read as a year, a valid month and a day.
             (202_501_200, None),
             (202_500, None),
