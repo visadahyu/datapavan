@@ -7743,4 +7743,231 @@ mod tests {
         );
         Ok(())
     }
+
+    /// The stand-ins bound beside under a label are recorded per name and port, and on one port the
+    /// first bound holds the label once the name's own peer ends (fix round 4, review G's G1; fix round
+    /// 5, review J's surviving mutants J23 and J30, each failing this).
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_stand_ins_beside_a_label_hold_it_on_their_port_the_first_first() -> io::Result<()>
+    {
+        let shared = shared();
+        let now = Instant::now();
+        let mut mapping = mapping(now).await?;
+        let a = SocketAddr::from(([198, 18, 0, 1], 3_478));
+        let b = SocketAddr::from(([198, 18, 0, 2], 3_478));
+        let c = SocketAddr::from(([198, 18, 0, 3], 5_000));
+        let d = SocketAddr::from(([198, 18, 0, 4], 3_478));
+        mapping.peer(&shared, (APP, a), now, (false, tooled("a.test", 3_478)));
+        mapping.sent(a, &binding(0xa1, false));
+        for (shown, name, port, id) in [
+            (b, "b.test", 3_478, 0xb2),
+            (c, "c.test", 5_000, 0xc3),
+            (d, "d.test", 3_478, 0xd4),
+        ] {
+            mapping.peer(&shared, (APP, shown), now, (false, tooled(name, port)));
+            mapping.sent(shown, &binding(id, false));
+        }
+        let to = |mapping: &mut Mapping, port: u16, answer: &[u8], at: Instant| match mapping
+            .main()
+            .relayed_answer(
+                &shared,
+                APP,
+                (&Target::Name("a.test".into(), port), answer),
+                at,
+            ) {
+            LetIn::Peer(shown, ..) => Some(shown),
+            _ => None,
+        };
+        assert_eq!(to(&mut mapping, 3_478, &binding(0xa1, true), now), Some(a));
+        assert_eq!(to(&mut mapping, 3_478, &binding(0xb2, true), now), Some(b));
+        assert_eq!(to(&mut mapping, 5_000, &binding(0xc3, true), now), Some(c));
+        assert_eq!(to(&mut mapping, 3_478, &binding(0xd4, true), now), Some(d));
+        let later = now + Duration::from_secs(200);
+        for shown in [b, c, d] {
+            if let Some(peer) = mapping.peers.get_mut(&shown) {
+                peer.last = later;
+            }
+        }
+        mapping.sweep(now + Duration::from_secs(120), &shared);
+        assert!(!mapping.peers.contains_key(&a), "a ended");
+        assert_eq!(
+            to(&mut mapping, 5_000, b"data on 5000", later),
+            Some(c),
+            "the one beside under a.test on 5000"
+        );
+        assert_eq!(
+            to(&mut mapping, 3_478, b"data on 3478", later),
+            Some(b),
+            "the first bound beside under a.test on 3478"
+        );
+        Ok(())
+    }
+
+    /// An association of a stand-in's own that opened with nothing to send ends no mapping that still
+    /// has its own association open, or another of a stand-in's own opening (fix round 4, G7's guard;
+    /// fix round 5, review J's surviving mutants J25 and J26, each failing this).
+    #[tokio::test(flavor = "current_thread")]
+    async fn nothing_to_send_ends_no_mapping_with_something_open() -> io::Result<()> {
+        for (main_open, opening) in [(true, 1), (false, 2)] {
+            let shared = shared();
+            let asked = Instant::now();
+            let uid = Some(10_077);
+            let mut table = table_of(&shared, uid, asked).await?;
+            let id = table.mappings.get(&APP).map_or(0, |mapping| mapping.id);
+            let socket = table
+                .mappings
+                .get(&APP)
+                .map(|mapping| Arc::clone(&mapping.socket))
+                .ok_or(io::ErrorKind::NotFound)?;
+            if let Some(mapping) = table.mappings.get_mut(&APP) {
+                mapping.owns_opening = opening;
+                if !main_open {
+                    mapping.end_main(&shared);
+                }
+            }
+            let stand_in = SocketAddr::from(([198, 18, 0, 1], 4_000));
+            let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+            let control = TcpStream::from_std({
+                let stream = std::net::TcpStream::connect(listener.local_addr()?)?;
+                stream.set_nonblocking(true)?;
+                stream
+            })?;
+            let place = super::super::budget::Budget::new(4, 4)
+                .take(uid)
+                .map_err(|_| io::ErrorKind::OutOfMemory)?;
+            let own = own_place(&shared)?;
+            let opened = Ok((UdpSocket::bind("127.0.0.1:0").await?, control));
+            let wanted = Wanted {
+                uid,
+                exit: Exit::Direct,
+                chains: 0,
+            };
+            let (mut reads, mut errors) = (Vec::new(), Vec::new());
+            let left = leave_by(
+                &mut table,
+                ((APP, stand_in), id),
+                (
+                    named("a.test"),
+                    &wanted,
+                    socket,
+                    (Some((opened, (place, own))), false),
+                ),
+                (&shared, &mut reads, &mut errors),
+            );
+            assert!(matches!(left, Leaving::Made(Made::Done)));
+            assert!(
+                table.mapping(APP, id).is_some(),
+                "main open {main_open}, opening {opening}: a mapping with something open ended"
+            );
+        }
+        Ok(())
+    }
+
+    /// Under a relay's name, the counters say what the label's rules did (fix round 5, review J's
+    /// surviving mutants J17 and J22): an answer an identifier gave another peer than the holder is
+    /// counted identified, one the holder takes is not; under a name no peer has, an answer without the
+    /// identifiers of the stand-ins that wait there, all of them with some, is counted unidentified, and
+    /// with one without among them, filtered.
+    #[tokio::test(flavor = "current_thread")]
+    async fn under_a_name_the_counters_say_what_the_rules_did() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let mut mapping = mapping(now).await?;
+        let a = SocketAddr::from(([198, 18, 0, 1], 3_478));
+        let server = SocketAddr::from(([192, 0, 2, 9], 3_478));
+        mapping.peer(&shared, (APP, a), now, (false, tooled("a.test", 3_478)));
+        mapping.sent(a, &binding(0xa1, false));
+        let way = PeerWay::through_tool(Target::Address(server));
+        mapping.peer(&shared, (APP, server), now, (false, way));
+        mapping.sent(server, &binding(0x51, false));
+        let by_a = Target::Name("a.test".into(), 3_478);
+        let identified = |shared: &Shared| shared.counters.snapshot()[IDENTIFIED];
+        let got = mapping
+            .main()
+            .relayed_answer(&shared, APP, (&by_a, &binding(0xa1, true)), now);
+        assert!(matches!(got, LetIn::Peer(shown, ..) if shown == a));
+        assert_eq!(identified(&shared), 0, "the holder's own");
+        let got = mapping
+            .main()
+            .relayed_answer(&shared, APP, (&by_a, &binding(0x51, true)), now);
+        assert!(matches!(got, LetIn::Peer(shown, ..) if shown == server));
+        assert_eq!(identified(&shared), 1, "another peer's, by its identifier");
+        // A name no peer has, `gone.test`, where `s` waits with identifiers.
+        let s = SocketAddr::from(([198, 18, 0, 5], 3_478));
+        mapping.peer(&shared, (APP, s), now, (false, tooled("s.test", 3_478)));
+        mapping.sent(s, &binding(0x55, false));
+        let gone = Target::Name("gone.test".into(), 3_478);
+        let got = mapping
+            .main()
+            .relayed_answer(&shared, APP, (&gone, b"no identifier"), now);
+        assert!(matches!(got, LetIn::Unidentified));
+        let w = SocketAddr::from(([198, 18, 0, 6], 3_478));
+        mapping.peer(&shared, (APP, w), now, (false, tooled("w.test", 3_478)));
+        mapping.sent(w, b"no identifier");
+        let got = mapping
+            .main()
+            .relayed_answer(&shared, APP, (&gone, b"no identifier"), now);
+        assert!(matches!(got, LetIn::Filtered));
+        Ok(())
+    }
+
+    /// Under a relay's name with no holder on the port, an answer comes in as another port of the
+    /// name's newest live stand-in address, but not while a stand-in without identifiers contests the
+    /// port; and an answer that names in the clear what one settled peer was sent is that peer's
+    /// (fix round 5, review J's surviving mutants J20, J21, J24 and J28, each failing this).
+    #[tokio::test(flavor = "current_thread")]
+    async fn under_a_name_without_a_holder_on_the_port_an_answer_comes_in() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let mut mapping = mapping(now).await?;
+        // `a.test` on 3478 at two stand-in addresses: the first from before it gave way in the stand-in
+        // map, the second since.
+        let old = SocketAddr::from(([198, 18, 0, 1], 3_478));
+        let new = SocketAddr::from(([198, 18, 0, 9], 3_478));
+        for shown in [old, new] {
+            mapping.peer(&shared, (APP, shown), now, (false, tooled("a.test", 3_478)));
+            mapping.sent(shown, b"no identifier");
+        }
+        let server = SocketAddr::from(([192, 0, 2, 9], 5_000));
+        let way = PeerWay::through_tool(Target::Address(server));
+        mapping.peer(&shared, (APP, server), now, (false, way));
+        mapping.sent(server, &binding(0x51, false));
+        let at_5000 = Target::Name("a.test".into(), 5_000);
+        let to = |mapping: &mut Mapping, answer: &[u8], at: Instant| match mapping
+            .main()
+            .relayed_answer(&shared, APP, (&at_5000, answer), at)
+        {
+            LetIn::Peer(shown, ..) => Some(shown),
+            _ => None,
+        };
+        assert_eq!(
+            to(&mut mapping, &binding(0x51, true), now),
+            Some(server),
+            "the one settled peer sent it"
+        );
+        // `c.test`, without identifiers, waits on 5000: the port is contested.
+        let c = SocketAddr::from(([198, 18, 0, 3], 5_000));
+        mapping.peer(&shared, (APP, c), now, (false, tooled("c.test", 5_000)));
+        mapping.sent(c, b"no identifier");
+        assert_eq!(to(&mut mapping, b"data", now), None, "contested");
+        let later = now + Duration::from_secs(200);
+        for shown in [old, c, server] {
+            if let Some(peer) = mapping.peers.get_mut(&shown) {
+                peer.last = later;
+            }
+        }
+        // While both live, the newest; once it ends, the old one, which lives.
+        let newest = to(&mut mapping, b"data", now + shared.limits.udp_contest);
+        assert_eq!(newest, Some(SocketAddr::from(([198, 18, 0, 9], 5_000))));
+        if let Some(peer) = newest.and_then(|shown| mapping.peers.get_mut(&shown)) {
+            peer.last = now;
+        }
+        mapping.sweep(now + Duration::from_secs(120), &shared);
+        assert!(!mapping.peers.contains_key(&new), "the newest ended");
+        assert_eq!(
+            to(&mut mapping, b"data", later),
+            Some(SocketAddr::from(([198, 18, 0, 1], 5_000)))
+        );
+        Ok(())
+    }
 }
