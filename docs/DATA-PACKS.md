@@ -72,6 +72,10 @@ The signature library is also tested against Project Wycheproof's Ed25519 vector
 3. **Then the app's rules** (`DataPackRules` in the app):
    - The pack must be newer than the one in use. An old pack with known errors cannot be brought back,
      and replaying a pack changes nothing.
+   - **Dated lists.** A pack that holds the attestation dataset must date it: its `SOURCE` needs a
+     `retrieved:` line that starts with a date, since the app shows the age of the list of revoked keys and
+     warns when it is old (ADR 0040). Otherwise the pack is refused with "This pack does not say when its
+     list of revoked keys was made".
    - **Trusted keys** are those named by the APK's pack (the pinned keys) and by the imported pack in
      use, minus every key either one revokes.
    - For each imported pack the app records its **chain**: the key that signed it and the keys that

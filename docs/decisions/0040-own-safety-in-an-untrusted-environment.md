@@ -115,12 +115,15 @@ below.
   revokes it. The list and its `SOURCE` are read from the same pack, the first that holds the list: the data
   store falls back to the APK's pack file by file, which could have put a newer pack's date on the APK's older
   list. The roots come from the newest pack that holds them, so that a pack can rotate them. A pack whose
-  attestation `SOURCE` does not date the list is refused at import, and a test checks that every dataset in the
+  attestation `SOURCE` does not date the list is refused at import, with a message that says so (ADR 0017,
+  DATA-PACKS.md), and a test checks that every dataset in the
   repository dates itself; a list whose date is unknown all the same (an imported pack from before this rule) is
   shown as such, never as fresh. The phone's date is its system's, so a clock set back could make an old list
-  look fresh: the list's age is counted at the least from the first day of the month of the patch level that
-  Google's key confirms, since that system did not exist before. An offline app has no better time: the pack's
-  signed date is close to the list's own, and Remote Key Provisioning's certificates, which Google dates, are
+  look fresh: the list's age is counted at the least from the first day of the month before the patch level that
+  Google's key confirms, since a system with that patch cannot run long before its month, and makers ship a
+  month's patch up to a few weeks early (Samsung has shipped June's in late May): counting from the patch
+  month itself called a fresh list old on such a phone (the fifth review's probe). An offline app has no better
+  time: the pack's signed date is close to the list's own, and Remote Key Provisioning's certificates, which Google dates, are
   already checked against the phone's date, so a clock set before them makes the chain out of date. What
   remains: on a phone with an old patch level, a clock set back still silences this warning, as it silences the
   old-patch finding.
@@ -141,26 +144,46 @@ below.
   Android 12 or later whose vendor partition stayed as it shipped may not make it (AOSP added the feature's file
   to the Keymaster 4.1 reference HAL only in 2021). Where it is not declared, the chain's own verdict decides
   first: a broken chain, another root or a revoked key is reported as such.
-- **Android 12 and later as a second declaration (the fourth review).** The Android version is set by the whole
-  system and much harder to fake than one file, and the Compatibility Definition Document makes it a
-  declaration of its own. From Android 12, every handheld must back its keystore with an isolated execution
-  environment and support key attestation signed in secure hardware ([9.11/H-0-2] and [9.11/H-0-5], as in 9.11
-  [C-1-1] and [C-1-4] for any device with a secure lock screen); the only exemption is a device "already
-  launched on an earlier Android version", and attestation has been required of phones launched with Android 8
-  or later, none of which launched before it. The CDD has no exemption for low-RAM or Android Go devices. So on
-  Android 12 or later, a software answer under AOSP's root with no feature declared has no sound-phone
-  explanation; it does have others: Android running on a computer (Waydroid, the Windows Subsystem for
-  Android, Genymotion and other virtual machines and containers, whose keystores are software), and phones
-  that do not meet the CDD (uncertified ones), as well as a system with root that hid the declaration. It is
-  "No secure hardware for keys on Android 12 or later" (medium), whose text names all three. Not high: every
-  other answer a system with root can give is already medium (below), so high would raise no floor and would
-  call every Android virtual machine and uncertified phone hooked. Only on Android 10 and 11, which phones
-  launched before Android 8 still run (the Pixel XL in the corpus runs 10 and attests in software), is a
-  software answer under AOSP's root with nothing declared "No hardware check available" (low), with a text that
-  names a modified system as well as emulators and phones without such hardware: there, and only there, no
-  public API says whether a phone has such hardware. Not checked on a device: whether ChromeOS's Android (ARC)
-  declares the feature and answers in hardware; if it answers in software without declaring it, it reads as
-  medium.
+- **Android 12 and later as a second declaration (the fourth and fifth reviews).** The Android version is set by
+  the whole system and much harder to fake than one file. The Compatibility Definition Document requires every
+  handheld to back its keystore with an isolated execution environment and to support key attestation signed in
+  secure hardware ([9.11/H-0-2] and [9.11/H-0-5], unconditional for handhelds but not tablets, which have 9.11
+  [C-1-1] and [C-1-4] whenever they have a secure lock screen), and has done so in the Android 11 CDD as in
+  Android 12's; the only exemption is a device "already launched on an earlier Android version", and
+  attestation has been required of phones launched with Android 8 or later. The CDD has no exemption for
+  low-RAM or Android Go devices. So the line is where phones launched before Android 8 stop: Google's Pixel and
+  Pixel XL, launched with 7.1, were updated to Android 10, and Google's test data holds the Pixel XL on 10
+  attesting in software; we found no phone launched before Android 8 with an official update to 11 or 12, but
+  could not rule one out for 11, and custom systems run 11 on such phones; the hardware-keystore feature also
+  begins at 12. So 12 is the line we can stand behind; moving it to 11 would bring the Android 11 phones (the
+  Galaxy A40 among them) under this rule too, and is the maintainer's call. On Android 12 or later, a software
+  answer under a root that vouches for nothing (AOSP's published software root, Google's test root) has no
+  sound-phone explanation, and others: Android running on a computer (Waydroid, Redroid, the Windows Subsystem
+  for Android, Genymotion and other virtual machines and containers, whose keystores are software), phones that
+  do not meet the CDD (uncertified ones), and a modified system. It is "Hardware check answered by software on
+  Android 12 or later" (medium), whose text names all three, whether or not the feature is declared: AOSP's own
+  software keystores declare it (`keymaster/4.1/default` requires `android.hardware.hardware_keystore.km41.xml`,
+  and `security/keymint/aidl/default`'s C++ service, registered at the software level, requires
+  `android.hardware.hardware_keystore.xml`), so Redroid 13 to 15 and Waydroid's Android 16 branch declare it and
+  answer in software under AOSP's root, and high would call them hooked; and since every other answer a system
+  with root can give is already medium (below), high would raise no floor. A software answer under Google's own
+  root, in date or not (not seen on a device), is judged the same way by version. On a phone that declares
+  secure hardware, a software answer under any other chain, or one on Android 10 or 11, stays "Hardware check
+  answered by software" (high): no virtual machine is known to give it. On Android 10 and 11, a software answer
+  with nothing declared is "No hardware check available", medium since this round: after the emulator got its
+  own finding, its only sound causes are phones launched before Android 8 and Android on a computer, while on
+  most phones on those versions, which declare nothing since the feature begins at 12 and have no secure chip, a
+  hook reaches it with nothing to hide; its text now says that phones launched with Android 8 or later all
+  support the check, so that an owner can tell it is not normal for their phone. Whether the app could read the
+  version a phone launched with on 10 and 11: `Build.VERSION.DEVICE_INITIAL_SDK_INT` is public only from Android
+  12; `ro.product.first_api_level` is a system property, read only through hidden API (`SystemProperties`),
+  native code (`__system_property_get`, which this project's native code would need new unsafe code for), or a
+  shell; whether an app's SELinux domain may read it on 10 and 11 is not verified; and a modified system can
+  set it as it can `ro.hardware`. So it is left. What is known of ChromeOS's Android (ARC): its sources hold
+  `libarc-attestation`, so it may answer at a hardware level, under a root we have not seen; whether it does,
+  under which root, at which level, and whether it declares the feature, is unknown until a Chromebook is run
+  with the lab record below. If it answers in software under a root of nothing on Android 12 or later, it reads
+  as medium; if under another root, as that root's verdict.
   A claim of secure hardware under AOSP's software root is "Hardware check signed with a published key" (high),
   and, as with a forged attestation, nothing it says is used: no sound phone makes either, and what they say is
   their maker's choice, or another phone's answer. The warnings of any other attestation, which a sound phone
@@ -200,9 +223,10 @@ below.
   next. The name gives a forger nothing: anyone can already sign under AOSP's published root key, which is judged
   alike, and a root that holds one of Google's keys is Google's whatever its name. What a device that does not
   call itself an emulator is shown under it:
-  - in software, where the phone declares secure hardware: "Hardware check answered by software" (high);
-  - in software, on Android 12 or later without the declaration: "No secure hardware for keys on Android 12 or
+  - in software, on Android 12 or later, declared or not: "Hardware check answered by software on Android 12 or
     later" (medium), whose text names Android on a computer and phones that do not meet Android's requirements;
+  - in software, on Android 10 or 11, where the phone declares a secure chip: "Hardware check answered by
+    software" (high);
   - in software, on Android 10 or 11, which had no key provisioning: "Hardware check signed with Google's test
     certificate" (high), since only a system that fakes it answers so;
   - claiming secure hardware: the same high finding, and nothing else it says, as under AOSP's published root: an
@@ -220,12 +244,12 @@ below.
   ("Hardware check failed"), or one of the errors that say the keys are unavailable, need a system update, or
   were refused ("Hardware check waiting for Google", "Hardware check needs a system update", "Google refused
   keys for the hardware check", each of whose texts says that a modified system could give this answer). With
-  root, it can also hide the declaration (the feature's file in the vendor partition, under
-  `/vendor/etc/permissions`), which on Android 12 or later gives "No secure hardware for keys on Android 12 or
-  later" (medium), or set `ro.hardware` to the emulator's, which gives "No hardware check on an emulator"
-  (medium). Each says that the state cannot be confirmed, none shows a value as the hardware's, and a sound phone
-  gives each rarely, so none is made high. Only on Android 10 and 11 can a hidden declaration still bring a
-  software answer down to "No hardware check available" (low), since no sound-phone rule can tell it there.
+  root, it can also answer in software under a root of nothing, which on Android 12 or later gives "Hardware
+  check answered by software on Android 12 or later" (medium) whether or not the declaration is hidden, or set
+  `ro.hardware` to the emulator's, which gives "No hardware check on an emulator" (medium); on Android 10 and 11,
+  where most phones declare nothing, a software answer gives "No hardware check available" (medium) with nothing
+  to hide. Each says that the state cannot be confirmed, none shows a value as the hardware's, and a sound phone
+  gives each rarely, so none is made high, and since this round none is low.
 - **Not remembering earlier checks (trust on first use), with the reason.** The third review asked whether to
   remember, locally, what an earlier sound check saw (Google's root, the provisioning, the boot key) and report a
   weaker later answer as a change, high where it could hide an unlocked bootloader. It is not built on the phone,
@@ -323,19 +347,19 @@ What the app shows, in each case:
 - a forged attestation (another challenge or key, or a certificate below the attested key): "Hardware check
   tampered with" (high), and nothing else it says, not even its patch level;
 - a software answer on a phone that declares secure hardware for keys: "Hardware check answered by software"
-  (high);
+  (high), but for one under a root of nothing on Android 12 or later (next);
 - a software answer under AOSP's software root or Google's test root on a device whose system reports it as
-  Android's emulator: "No hardware check on an emulator" (medium), which says what an emulator is and that on a real phone the report
-  is false;
-- a software answer on Android 12 or later with no secure hardware declared: "No secure hardware for keys on
-  Android 12 or later" (medium);
+  Android's emulator: "No hardware check on an emulator" (medium), which says what an emulator is and that on a
+  real phone the report is false;
+- a software answer on Android 12 or later under a root of nothing, declared or not, or under Google's root with
+  nothing declared: "Hardware check answered by software on Android 12 or later" (medium);
 - a claim of secure hardware under AOSP's software root: "Hardware check signed with a published key" (high),
   and nothing else it says; under Google's test root for unregistered devices: "Hardware check signed with
   Google's test certificate" (high), and nothing else it says, as for a software answer under it on Android 10
   or 11;
-- a software attestation under AOSP's software root on Android 10 or 11, on a phone that declares no such
-  hardware: "No hardware check available" (low), and its patch level as "Security patch, as the system states
-  it";
+- a software attestation under AOSP's software root or Google's on Android 10 or 11, on a phone that declares no
+  such hardware: "No hardware check available" (medium), which says that phones launched with Android 8 or later
+  all support the check, and its patch level as "Security patch, as the system states it";
 - a broken chain: "Hardware check broken" (medium); a chain to another root: "Hardware check not confirmed"
   (medium); a revoked key: "Hardware check key revoked" (high); a certificate not valid at the phone's date:
   "Hardware check out of date" (medium); each with its patch level as the system's word. For a software answer,

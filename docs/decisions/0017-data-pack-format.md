@@ -39,7 +39,10 @@ The constraints:
    it brings about fifteen crates, a procedural macro, and a licence (BSD-3-Clause) that the policy does
    not yet allow.
 4. **A pack must be newer than the one in use** (its sequence number), so an old pack with known errors
-   cannot be brought back.
+   cannot be brought back. It must also date each dataset whose age the app shows from its `SOURCE`, so far
+   the attestation revocation list (ADR 0040, amended 2026-11-17): a pack that holds the attestation dataset
+   without a `retrieved:` date the app can read is refused, with a message that says so, since the app could
+   not tell how old its list of revoked keys is.
 5. **Trust follows a chain to a pinned key.** The keys pinned in a build are the `key` lines of
    `data/PACK`, which go into the APK's own pack. An imported pack may name more keys and revoke keys, and
    the app records which keys led to each imported pack. A build drops an imported pack whose chain does

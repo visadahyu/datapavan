@@ -34,7 +34,7 @@ Datapavan Basic 0.1 does not request the INTERNET permission, so Android itself 
 opening network connections. The build fails if any component tries to add that permission. Like any
 app, it can still hand information to another app when you ask it to, for example when you open a link.
 
-What Android itself does is outside Datapavan's control. On phones with Google's services, Play Protect may give Google information about the apps you install from any source, Datapavan included, and may send it an unknown app to check. You can turn part of this off in Play Protect's settings in the Play Store.
+What Android itself does is outside Datapavan's control. On phones with Google's services, Play Protect may give Google information about the apps you install from any source, Datapavan included, and may send it an unknown app to check. You can turn part of this off in Play Protect's settings in the Play Store. Datapavan's hardware check can also make Android contact Google: on phones that get their attestation keys from Google's provisioning server, a check that finds none left asks Android for more (Android 13 tells the provisioning service, and from Android 14 the keystore asks it), and Android fetches them over its own connection. Datapavan sends nothing itself.
 
 ## Permissions and why they are needed
 
