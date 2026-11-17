@@ -6601,6 +6601,8 @@ mod tests {
         let later = now + Duration::from_secs(200);
         mapping.peer(&shared, (APP, new), later, (false, tooled("a.test", 3_478)));
         mapping.sent(new, b"no identifier");
+        // While both live, the name stands for the newest address, which the app uses now.
+        assert_eq!(to(&mut mapping, b"a.test's answer", later), Some(new));
         mapping.sweep(now + Duration::from_secs(120), &shared);
         assert!(
             !mapping.peers.contains_key(&old),
