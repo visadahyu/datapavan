@@ -1563,21 +1563,26 @@ impl<'a> Scope<'a> {
                 Counters::add(&shared.counters.udp_identified, 1);
                 return UnderName::Done(self.label_taken(other, &key, answer, now));
             }
+            // The holder's own identifier: a stand-in without identifiers cannot have asked it, and
+            // contests nothing of it (fix round 5, review I's I3).
+            Carried::One(holder) => {
+                return UnderName::Done(self.label_taken(holder, &key, answer, now));
+            }
             Carried::Several => return UnderName::Done(LetIn::Unmatched),
-            Carried::One(_) | Carried::None => {}
+            Carried::None => {}
         }
-        if let Some(own) = own {
-            return UnderName::Done(self.label_taken(own, &key, answer, now));
-        }
-        let contested = self.contested(port, None, (now, shared.limits.udp_contest));
-        if let Some(first) = holder {
-            if contested {
+        // What carries no identifier is the holder's, but for `udp_contest` after a stand-in without
+        // identifiers began to wait on the port: the tool may have resolved its name to the label's
+        // address too, as for an address a stand-in was bound to. So also where the name's own peer
+        // holds it, which is a stand-in too (fix round 5, review I's I2: it took the answer at once).
+        if let Some(holder) = holder {
+            if self.contested(port, Some(holder), (now, shared.limits.udp_contest)) {
                 return UnderName::Done(LetIn::Unmatched);
             }
-            return UnderName::Done(self.answered_by(first, answer, now));
+            return UnderName::Done(self.label_taken(holder, &key, answer, now));
         }
         if let Some(ip) = self.sources.names.get(&key).and_then(|ips| ips.last()) {
-            if contested {
+            if self.contested(port, None, (now, shared.limits.udp_contest)) {
                 return UnderName::Done(LetIn::Unmatched);
             }
             return UnderName::ComeIn(SocketAddr::new(ip.0, port));
@@ -1708,7 +1713,15 @@ impl<'a> Scope<'a> {
             Carried::Several => return LetIn::Unmatched,
             Carried::None => {}
         }
-        if contestable && self.contested(from.port(), None, (now, shared.limits.udp_contest)) {
+        // What names in the clear an identifier `owner` was sent is its own, which a stand-in without
+        // identifiers cannot have asked: the contest spares it (fix round 5, review I's I3: a TURN
+        // refresh's response was cut).
+        if contestable
+            && self.contested(from.port(), None, (now, shared.limits.udp_contest))
+            && !read
+                .answers(from.port())
+                .is_some_and(|fingerprint| self.was_sent(owner, fingerprint))
+        {
             return LetIn::Unmatched;
         }
         self.answered_by(owner, answer, now)
@@ -7402,6 +7415,140 @@ mod tests {
         }
         let each = start.elapsed() / rounds;
         eprintln!("{peers} peers on the port, 64 identifiers each: {each:?} for each answer");
+        Ok(())
+    }
+
+    /// The contest under a label held by the name's own stand-in, as under an address a stand-in holds
+    /// (fix round 5, review I's I2). A stand-in bound to an address has its answers there cut for
+    /// `udp_contest` while a stand-in without identifiers, asked meanwhile, waits on the port: the tool
+    /// may have resolved both names to that address. Under a label its own stand-in holds, the same
+    /// holds (Xray's `freedom` labels every answer from the first destination's address, the second
+    /// name's among them where it resolved there too); the answer went to the first name at once.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_label_held_by_its_own_stand_in_is_contested_as_an_address() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let later = now + Duration::from_secs(10);
+        let a = SocketAddr::from(([198, 18, 0, 1], 3_478));
+        let c = SocketAddr::from(([198, 18, 0, 3], 3_478));
+        let server = Target::Address(SocketAddr::from(([192, 0, 2, 9], 3_478)));
+        let by_a = Target::Name("a.test".into(), 3_478);
+        for source in [&server, &by_a] {
+            let mut mapping = mapping(now).await?;
+            mapping.peer(&shared, (APP, a), now, (false, tooled("a.test", 3_478)));
+            mapping.sent(a, b"a protocol without identifiers");
+            let first = mapping
+                .main()
+                .relayed_answer(&shared, APP, (source, b"first"), now);
+            assert!(matches!(first, LetIn::Peer(shown, ..) if shown == a));
+            mapping.peer(&shared, (APP, c), later, (false, tooled("c.test", 3_478)));
+            mapping.sent(c, b"c's request, no identifier");
+            let got = mapping
+                .main()
+                .relayed_answer(&shared, APP, (source, b"c's answer?"), later);
+            assert!(
+                matches!(got, LetIn::Unmatched),
+                "{source:?}: the port was not contested"
+            );
+            let after = later + shared.limits.udp_contest;
+            let got = mapping
+                .main()
+                .relayed_answer(&shared, APP, (source, b"a's again"), after);
+            assert!(matches!(got, LetIn::Peer(shown, ..) if shown == a));
+        }
+        Ok(())
+    }
+
+    /// The contest spares an answer that names in the clear what the stand-in holding the address was
+    /// sent (fix round 5, review I's I3): `a.test`, bound to its server's address by its STUN response,
+    /// sends a TURN refresh, a STUN request; `c.test`, whose datagrams carry no identifier, is asked on
+    /// 3478 meanwhile. The refresh's response carries the transaction ID the app sent `a` alone, which
+    /// `c`, without identifiers, cannot have asked: it is `a`'s at once, as under a label.
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_contest_spares_what_the_holder_was_sent() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let later = now + Duration::from_secs(10);
+        let mut mapping = mapping(now).await?;
+        let a = SocketAddr::from(([198, 18, 0, 1], 3_478));
+        let c = SocketAddr::from(([198, 18, 0, 3], 3_478));
+        let from_server = Target::Address(SocketAddr::from(([192, 0, 2, 9], 3_478)));
+        mapping.peer(&shared, (APP, a), now, (false, tooled("a.test", 3_478)));
+        mapping.sent(a, &binding(0xa1, false));
+        let first =
+            mapping
+                .main()
+                .relayed_answer(&shared, APP, (&from_server, &binding(0xa1, true)), now);
+        assert!(matches!(first, LetIn::Peer(shown, ..) if shown == a));
+        mapping.peer(&shared, (APP, c), later, (false, tooled("c.test", 3_478)));
+        mapping.sent(c, b"c's request, no identifier");
+        mapping.sent(a, &binding(0xa2, false));
+        let got = mapping.main().relayed_answer(
+            &shared,
+            APP,
+            (&from_server, &binding(0xa2, true)),
+            later,
+        );
+        assert!(
+            matches!(got, LetIn::Peer(shown, ..) if shown == a),
+            "a's own refresh response was cut by c's contest"
+        );
+        let got =
+            mapping
+                .main()
+                .relayed_answer(&shared, APP, (&from_server, b"no identifier"), later);
+        assert!(matches!(got, LetIn::Unmatched), "the contest itself holds");
+        Ok(())
+    }
+
+    /// Under a label held by the stand-in bound beside it, an answer its QUIC keys tell is its own is
+    /// spared by the contest, as a STUN response it was sent is (fix round 5, review I's I3: it fell
+    /// through to the contest and was cut).
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_beside_holders_quic_answer_is_not_contested() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let mut mapping = mapping(now).await?;
+        let a = SocketAddr::from(([198, 18, 0, 1], 443));
+        let b = SocketAddr::from(([198, 18, 0, 2], 443));
+        let c = SocketAddr::from(([198, 18, 0, 3], 443));
+        let by_a = Target::Name("a.test".into(), 443);
+        mapping.peer(&shared, (APP, a), now, (false, tooled("a.test", 443)));
+        mapping.sent(a, b"a protocol without identifiers");
+        let first = mapping
+            .main()
+            .relayed_answer(&shared, APP, (&by_a, b"a's"), now);
+        assert!(matches!(first, LetIn::Peer(shown, ..) if shown == a));
+        let dcid = [0xb0; 8];
+        let initial = crate::quic::client_initial(1, (&dcid, &[]), (0, &[0x01]), 1200)
+            .ok_or(io::ErrorKind::InvalidData)?;
+        mapping.peer(&shared, (APP, b), now, (false, tooled("b.test", 443)));
+        mapping.sent(b, &initial);
+        let answer = |pn| {
+            crate::quic::server_initial(1, &dcid, (&[], &[0x5a; 8]), (pn, &[0x02, 0, 0, 0, 0]))
+                .ok_or(io::ErrorKind::InvalidData)
+        };
+        let got = mapping
+            .main()
+            .relayed_answer(&shared, APP, (&by_a, &answer(0)?), now);
+        assert!(matches!(got, LetIn::Peer(shown, ..) if shown == b));
+        assert_eq!(mapping.peers[&b].standing, Standing::Beside);
+        // `a` ends; `b` holds the label beside it. `c`, with no identifier, is asked on 443.
+        let later = now + Duration::from_secs(200);
+        if let Some(peer) = mapping.peers.get_mut(&b) {
+            peer.last = later;
+        }
+        mapping.sweep(now + Duration::from_secs(120), &shared);
+        assert!(!mapping.peers.contains_key(&a));
+        mapping.peer(&shared, (APP, c), later, (false, tooled("c.test", 443)));
+        mapping.sent(c, b"no identifier");
+        let got = mapping
+            .main()
+            .relayed_answer(&shared, APP, (&by_a, &answer(1)?), later);
+        assert!(
+            matches!(got, LetIn::Peer(shown, ..) if shown == b),
+            "b's own Initial, told by its keys, was cut by c's contest"
+        );
         Ok(())
     }
 }
