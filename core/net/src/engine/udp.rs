@@ -37,7 +37,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, Interest};
 use tokio::net::{TcpStream, UdpSocket};
-use tokio::sync::{Notify, watch};
+use tokio::sync::{Notify, mpsc, watch};
 
 /// How long a lookup to Watch's own DNS address waits for its answer before its flow ends (ADR 0044,
 /// decision 3). Android's resolver gives up sooner.
@@ -352,7 +352,17 @@ struct Mapping {
     owns: BTreeMap<u64, Own>,
     /// How many of those are being opened now: they count against the caps already.
     owns_opening: usize,
+    /// Through the tool, whether its own association is open: the tool may close it, as for idleness,
+    /// while an association of a stand-in's own still carries a flow; the mapping then lives on, and the
+    /// next datagram that needs its own association opens it anew (ADR 0044, unit 9b, fix round 1).
+    main_open: bool,
+    /// Hands its task the relay of its own association opened anew.
+    reopened: mpsc::UnboundedSender<Relay>,
 }
+
+/// A relay of the tool's opened anew for a mapping's own association: its socket, and the request's
+/// connection that keeps it.
+type Relay = (Arc<UdpSocket>, TcpStream);
 
 /// Through the tool, an association of one stand-in's own (ADR 0044, unit 9b): a `UDP ASSOCIATE`
 /// opened for a stand-in whose first datagram would have shared a port another stand-in waits on where
@@ -1014,6 +1024,23 @@ impl Mapping {
         for own in orphans {
             self.end_own(own, shared);
         }
+    }
+
+    /// The tool closed its own association (ADR 0044, unit 9b, fix round 1): the flows that left by it
+    /// end, and where answers come back on it is forgotten, while those that leave by an association of
+    /// a stand-in's own go on.
+    fn end_main(&mut self, shared: &Shared) {
+        self.main_open = false;
+        self.sources = Sources::default();
+        let came_in = &mut self.came_in;
+        self.peers.retain(|_, peer| {
+            if peer.via.is_some() {
+                return true;
+            }
+            shared.finish(peer.id);
+            *came_in = came_in.saturating_sub(usize::from(peer.came_in_first));
+            false
+        });
     }
 
     /// Ends its association of a stand-in's own `own` (ADR 0044, unit 9b), with the flows of every peer
@@ -1680,6 +1707,8 @@ struct Wanted {
 enum Current {
     /// It is the one: its number and socket.
     Same(u64, Arc<UdpSocket>),
+    /// It is the one, but the tool closed its own association, to be opened anew.
+    Closed,
     /// There is none, or it ended: another app's, or one that leaves another way.
     Gone,
 }
@@ -1746,6 +1775,21 @@ impl UdpTable {
             self.answered.remove(uid, &(id, app, uid));
         }
         self.forget(app);
+    }
+
+    /// The tool closed the own association of the mapping `id` of `app`: with no association of a
+    /// stand-in's own, the mapping ends, as before; with one, only what left by its own association ends
+    /// ([`Mapping::end_main`]). Whether it ended.
+    fn close_main(&mut self, app: SocketAddr, id: u64, shared: &Shared) -> bool {
+        let Some(mapping) = self.mapping(app, id) else {
+            return true;
+        };
+        if mapping.owns.is_empty() {
+            self.end(app, id, shared);
+            return true;
+        }
+        mapping.end_main(shared);
+        false
     }
 
     /// A place in the budget for a new UDP way of the app `uid` that holds a socket of its own. Where
@@ -1972,6 +2016,9 @@ impl UdpTable {
             && mapping.exit.same(&wanted.exit)
             && mapping.keeps_its_way(shared)
         {
+            if !mapping.main_open {
+                return Current::Closed;
+            }
             return Current::Same(mapping.id, Arc::clone(&mapping.socket));
         }
         let id = mapping.id;
@@ -2156,7 +2203,8 @@ impl UdpTable {
         // A stand-in, or a flow that came in through it, leaves by its association of its own if it has
         // one (ADR 0044, unit 9b).
         let socket = match mapping.peers.get(&destination)?.via {
-            None => Arc::clone(&mapping.socket),
+            None if mapping.main_open => Arc::clone(&mapping.socket),
+            None => return None,
             Some(own) => Arc::clone(&mapping.owns.get(&own)?.socket),
         };
         let peer = mapping.peers.get_mut(&destination)?;
@@ -2970,6 +3018,7 @@ fn leave_by(
                 socket: Arc::clone(&out),
                 control: Some(control),
                 ended,
+                reopened: None,
             };
             (Some(number), out, Some((number, task)))
         }
@@ -3067,6 +3116,7 @@ async fn own_relayed(
         socket,
         mut control,
         ended,
+        ..
     } = task;
     // The tool keeps the relay for as long as the request's connection is open.
     let mut closed = std::pin::pin!(async {
@@ -3107,8 +3157,14 @@ async fn own_relayed(
             }
         }
     }
-    if let Some(mapping) = lock(&flows).mapping(app, id) {
+    let mut table = lock(&flows);
+    let alone = table.mapping(app, id).is_some_and(|mapping| {
         mapping.end_own(own, &shared);
+        !mapping.main_open && mapping.owns.is_empty()
+    });
+    // Its mapping's own association closed before it: nothing of the mapping is left open.
+    if alone {
+        table.end(app, id, &shared);
     }
 }
 
@@ -3138,8 +3194,9 @@ enum Turn {
     /// It found the mapping open, or failed as the destination that opened it did, or was refused.
     Done(io::Result<Mapped>),
     /// It opens one, with its place in the budget, telling those that wait for it how it went if it
-    /// is the first of its app to open one now.
-    Open(Option<watch::Sender<Option<io::ErrorKind>>>, Place),
+    /// is the first of its app to open one now; or opens anew the association of the one there, which
+    /// holds its place already.
+    Open(Option<watch::Sender<Option<io::ErrorKind>>>, Option<Place>),
 }
 
 /// Whether a new destination of `app`'s socket opens the socket's mapping, as [`mapping_for`] says, or
@@ -3150,9 +3207,11 @@ async fn turn(app: SocketAddr, wanted: &Wanted, shared: &Shared, flows: &UdpFlow
     loop {
         let mut waiting = {
             let mut table = lock(flows);
-            if let Current::Same(id, socket) = table.open_mapping(app, wanted, shared) {
-                return Turn::Done(Ok(Mapped::Open(id, socket)));
-            }
+            let reopen = match table.open_mapping(app, wanted, shared) {
+                Current::Same(id, socket) => return Turn::Done(Ok(Mapped::Open(id, socket))),
+                Current::Closed => true,
+                Current::Gone => false,
+            };
             let first = match table.opening.get(&app) {
                 // One whose opener is gone without a word (the engine stopping) holds no one up.
                 Some((uid, waiting)) if waiting.has_changed().is_ok() => {
@@ -3170,8 +3229,13 @@ async fn turn(app: SocketAddr, wanted: &Wanted, shared: &Shared, flows: &UdpFlow
             match first {
                 Err(waiting) => waiting,
                 Ok(first) => {
-                    let Some(place) = table.room(wanted.uid, shared) else {
-                        return Turn::Done(Ok(Mapped::Refused));
+                    let place = if reopen {
+                        None
+                    } else {
+                        let Some(place) = table.room(wanted.uid, shared) else {
+                            return Turn::Done(Ok(Mapped::Refused));
+                        };
+                        Some(place)
                     };
                     let told = first.then(|| {
                         let (told, waiting) = watch::channel(None);
@@ -3245,12 +3309,23 @@ async fn mapping_for(
         return Ok(Mapped::Stale);
     }
     // Those that waited find this one once the lock is let go, and `told` goes with this function.
-    if let Current::Same(id, socket) = table.open_mapping(app, wanted, shared) {
-        return Ok(Mapped::Open(id, socket));
+    match table.open_mapping(app, wanted, shared) {
+        Current::Same(id, socket) => return Ok(Mapped::Open(id, socket)),
+        Current::Closed => return Ok(reopened(&mut table, app, (socket, control))),
+        Current::Gone => {}
     }
+    // The mapping that was to be opened anew is gone meanwhile: a new one takes a place of its own.
+    let place = match place {
+        Some(place) => place,
+        None => match table.room(wanted.uid, shared) {
+            Some(place) => place,
+            None => return Ok(Mapped::Refused),
+        },
+    };
     table.opened += 1;
     let id = table.opened;
     let ended = Arc::new(Notify::new());
+    let (reopened, relays) = mpsc::unbounded_channel();
     let now = Instant::now();
     table.recent.insert(wanted.uid, (now, id, app, wanted.uid));
     table.sockets.entry(app).or_default();
@@ -3271,6 +3346,8 @@ async fn mapping_for(
             _place: place,
             owns: BTreeMap::new(),
             owns_opening: 0,
+            main_open: true,
+            reopened,
         },
     );
     drop(table);
@@ -3283,6 +3360,7 @@ async fn mapping_for(
             socket: Arc::clone(&socket),
             control,
             ended,
+            reopened: Some(relays),
         },
         Arc::clone(tun),
         Arc::clone(shared),
@@ -3290,6 +3368,22 @@ async fn mapping_for(
         changes.clone(),
     ));
     Ok(Mapped::Open(id, socket))
+}
+
+/// The own association of `app`'s mapping, opened anew with `socket` and the request's connection
+/// `control`, for the mapping, whose task takes the relay (ADR 0044, unit 9b, fix round 1).
+fn reopened(
+    table: &mut UdpTable,
+    app: SocketAddr,
+    (socket, control): (Arc<UdpSocket>, Option<TcpStream>),
+) -> Mapped {
+    let (Some(mapping), Some(control)) = (table.mappings.get_mut(&app), control) else {
+        return Mapped::Stale;
+    };
+    mapping.socket = Arc::clone(&socket);
+    mapping.main_open = true;
+    let _ = mapping.reopened.send((Arc::clone(&socket), control));
+    Mapped::Open(mapping.id, socket)
 }
 
 /// The mapping a new destination of an app socket gets.
@@ -3384,6 +3478,8 @@ struct MappingTask {
     /// Through the tool, the connection that keeps its relay.
     control: Option<TcpStream>,
     ended: Arc<Notify>,
+    /// For a mapping through the tool, the relays of its own association opened anew.
+    reopened: Option<mpsc::UnboundedReceiver<Relay>>,
 }
 
 /// Relays a mapping's answers to the app, each from the peer that sent it, with the ICMP errors that
@@ -3403,19 +3499,15 @@ async fn mapped(
         id,
         uid,
         socket,
-        mut control,
+        control,
         ended,
+        reopened,
     } = task;
     let through_tool = control.is_some();
-    // The tool keeps a UDP relay for as long as the request's connection is open, and ends it by
-    // closing that connection; the mapping ends with it.
-    let mut closed = std::pin::pin!(async {
-        let mut byte = [0u8; 1];
-        match control.as_mut() {
-            Some(control) => while matches!(control.read(&mut byte).await, Ok(n) if n > 0) {},
-            None => std::future::pending::<()>().await,
-        }
-    });
+    let mut reopened = reopened;
+    // Its own association, while it is open: the socket, and through the tool the request's connection,
+    // which the tool keeps open for as long as it keeps the relay.
+    let mut relay = Some((socket, control));
     let idle = shared.limits.udp_idle;
     let mut swept = Instant::now();
     // Only a change after the mapping opened ends it: a clone starts with the loop's last-seen version.
@@ -3433,49 +3525,109 @@ async fn mapped(
                 mapping.sweep(since, &shared);
                 swept = now;
             }
+            // With its own association closed, it lives only while one of a stand-in's own does.
+            if !mapping.main_open && mapping.owns.is_empty() {
+                break;
+            }
             mapping.last
         };
         let silent = last + idle;
         if now >= silent {
             break;
         }
-        tokio::select! {
-            _ = changes.changed() => break,
-            () = ended.notified() => break,
-            () = &mut closed => break,
-            () = tokio::time::sleep_until(silent.into()) => {}
-            ready = socket.ready(Interest::READABLE | Interest::ERROR) => {
-                if !ready.is_ok_and(|ready| !ready.is_read_closed()) {
-                    break;
-                }
-                let queued = errors::take(&socket, &mut []);
-                let ends = (app, id, uid);
-                // A network that moved ends the mapping: what its socket read meanwhile, a router's
-                // error about the old network's path among it, is not passed on after the move.
-                let moved = || network_moved(&changes);
-                let (packets, end, from) = with_buffer(|buffer| {
-                    if through_tool {
-                        relayed_receive(&socket, buffer, (ends, None), &shared, &flows)
+        let wake = if let Some((socket, control)) = relay.as_mut() {
+            tokio::select! {
+                _ = changes.changed() => Wake::End,
+                () = ended.notified() => Wake::End,
+                () = until_closed(control) => Wake::Closed,
+                () = tokio::time::sleep_until(silent.into()) => Wake::Again,
+                ready = socket.ready(Interest::READABLE | Interest::ERROR) => {
+                    if ready.is_ok_and(|ready| !ready.is_read_closed()) {
+                        let queued = errors::take(socket, &mut []);
+                        let ends = (app, id, uid);
+                        // A network that moved ends the mapping: what its socket read meanwhile, a
+                        // router's error about the old network's path among it, is not passed on after
+                        // the move.
+                        let moved = || network_moved(&changes);
+                        let (packets, end, from) = with_buffer(|buffer| {
+                            if through_tool {
+                                relayed_receive(socket, buffer, (ends, None), &shared, &flows)
+                            } else {
+                                mapped_receive(socket, buffer, ends, (queued, &moved), &shared, &flows)
+                            }
+                        });
+                        let reask = shared.limits.udp_reask;
+                        if let Some(from) = from
+                            && let Some(asking) = lock(&flows).came_in((app, id), Instant::now(), reask)
+                        {
+                            spawn_question((app, from), asking, &shared, &flows);
+                        }
+                        for packet in packets {
+                            send_to_app(&tun, &shared, &packet).await;
+                        }
+                        if end { Wake::Closed } else { Wake::Again }
                     } else {
-                        mapped_receive(&socket, buffer, ends, (queued, &moved), &shared, &flows)
+                        Wake::Closed
                     }
-                });
-                let reask = shared.limits.udp_reask;
-                if let Some(from) = from
-                    && let Some(asking) = lock(&flows).came_in((app, id), Instant::now(), reask)
-                {
-                    spawn_question((app, from), asking, &shared, &flows);
                 }
-                for packet in packets {
-                    send_to_app(&tun, &shared, &packet).await;
-                }
-                if end {
+            }
+        } else {
+            tokio::select! {
+                _ = changes.changed() => Wake::End,
+                () = ended.notified() => Wake::End,
+                () = tokio::time::sleep_until(silent.into()) => Wake::Again,
+                anew = next_relay(&mut reopened) => match anew {
+                    Some((socket, control)) => Wake::Reopened(socket, control),
+                    None => Wake::End,
+                },
+            }
+        };
+        match wake {
+            Wake::Again => {}
+            Wake::End => break,
+            Wake::Reopened(socket, control) => relay = Some((socket, Some(control))),
+            // On the direct path, a socket that fails ends the mapping. Through the tool, its relay ended:
+            // only what left by it ends, while an association of a stand-in's own lives (ADR 0044, unit
+            // 9b, fix round 1); the next datagram that needs it opens it anew.
+            Wake::Closed => {
+                if !through_tool || lock(&flows).close_main(app, id, &shared) {
                     break;
                 }
+                relay = None;
             }
         }
     }
     lock(&flows).end(app, id, &shared);
+}
+
+/// What woke a mapping's task.
+enum Wake {
+    /// Nothing that ends anything: it looks again.
+    Again,
+    /// The mapping ends.
+    End,
+    /// Its own association's relay, or its socket, ended.
+    Closed,
+    /// Its own association was opened anew.
+    Reopened(Arc<UdpSocket>, TcpStream),
+}
+
+/// Until the tool closes `control`, the connection that keeps a relay, ending it; never for none, on
+/// the direct path. Reading is cancel-safe, so it is waited for anew at each turn.
+async fn until_closed(control: &mut Option<TcpStream>) {
+    let mut byte = [0u8; 1];
+    match control.as_mut() {
+        Some(control) => while matches!(control.read(&mut byte).await, Ok(n) if n > 0) {},
+        None => std::future::pending::<()>().await,
+    }
+}
+
+/// The next relay a mapping's own association was opened anew with; never on the direct path.
+async fn next_relay(reopened: &mut Option<mpsc::UnboundedReceiver<Relay>>) -> Option<Relay> {
+    match reopened.as_mut() {
+        Some(reopened) => reopened.recv().await,
+        None => std::future::pending().await,
+    }
 }
 
 /// What a mapping on the direct path lets in now: for each ICMP error `queued` for its datagrams, the
@@ -4192,6 +4344,8 @@ mod tests {
                 .map_err(|_| io::ErrorKind::OutOfMemory)?,
             owns: BTreeMap::new(),
             owns_opening: 0,
+            main_open: true,
+            reopened: mpsc::unbounded_channel().0,
         })
     }
 

@@ -5215,3 +5215,122 @@ async fn two_stand_ins_without_identifiers_asked_at_once_each_get_their_answer()
     }
     Ok(())
 }
+
+/// As [`scripted`], where the test can close the request's connection of each association, the first
+/// asked for first, as a tool closes one for idleness: the proxy's address, the relay, what it heard,
+/// and a sender for each connection that closes it.
+async fn scripted_closable() -> io::Result<(SocketAddr, Arc<UdpSocket>, Script, Closers)> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let proxy = listener.local_addr()?;
+    let relay = Arc::new(UdpSocket::bind("127.0.0.1:0").await?);
+    let at = relay.local_addr()?;
+    let closers: Closers = Arc::default();
+    let kept = Arc::clone(&closers);
+    tokio::spawn(async move {
+        while let Ok((mut client, _)) = listener.accept().await {
+            let (close, closed) = oneshot::channel::<()>();
+            kept.lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(close);
+            tokio::spawn(async move {
+                let mut head = [0u8; 2];
+                if client.read_exact(&mut head).await.is_err() {
+                    return;
+                }
+                let mut methods = vec![0u8; usize::from(head[1])];
+                let _ = client.read_exact(&mut methods).await;
+                let _ = client.write_all(&[5, 0]).await;
+                let mut request = [0u8; 4];
+                let _ = client.read_exact(&mut request).await;
+                let rest = match request[3] {
+                    1 => 6,
+                    4 => 18,
+                    _ => return,
+                };
+                let mut skip = vec![0u8; rest];
+                let _ = client.read_exact(&mut skip).await;
+                let mut reply = vec![5, 0, 0];
+                reply.extend_from_slice(&header_by_address(at)[3..]);
+                let _ = client.write_all(&reply).await;
+                let mut byte = [0u8; 1];
+                tokio::select! {
+                    _ = closed => {}
+                    () = async { while matches!(client.read(&mut byte).await, Ok(n) if n > 0) {} } => {}
+                }
+            });
+        }
+    });
+    let (tell, heard) = tokio::sync::mpsc::unbounded_channel();
+    let reader = Arc::clone(&relay);
+    tokio::spawn(async move {
+        let mut buffer = vec![0u8; 65_535];
+        while let Ok((n, from)) = reader.recv_from(&mut buffer).await {
+            let _ = tell.send((from, buffer[..n].to_vec()));
+        }
+    });
+    Ok((proxy, relay, heard, closers))
+}
+
+/// What closes each association's connection at a [`scripted_closable`] proxy, in the order asked.
+type Closers = Arc<std::sync::Mutex<Vec<oneshot::Sender<()>>>>;
+
+/// The tool closes the mapping's own association, as Xray and sing-box do once it has been idle for
+/// five minutes, while a stand-in's own association still carries a flow (item 8): only the flows that
+/// left by the closed one end. The stand-in on its own association goes on, and the app's next
+/// datagram to a destination of the closed one opens the mapping's association anew, a third `UDP
+/// ASSOCIATE`, by the same mapping, and its answer comes back there.
+#[tokio::test(flavor = "current_thread")]
+async fn the_tool_closing_the_mappings_association_ends_only_what_left_by_it() -> Outcome {
+    let (proxy, relay, mut script, closers) = scripted_closable().await?;
+    let (engine, tunnel) = engine(chain(proxy))?;
+    let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, 4_000));
+    let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, 4_000));
+    send(&tunnel, app(CHAINED_PORT), a, b"plain a").await?;
+    let main_at = heard_from_engine(&mut script).await?;
+    send(&tunnel, app(CHAINED_PORT), b, b"plain b").await?;
+    let own_at = heard_from_engine(&mut script).await?;
+    assert_ne!(main_at, own_at, "b has an association of its own");
+    let (a_server, b_server) = (
+        SocketAddr::from(([198, 51, 100, 31], 4_000)),
+        SocketAddr::from(([198, 51, 100, 32], 4_000)),
+    );
+    relay
+        .send_to(&relayed(header_by_address(a_server), b"for a"), main_at)
+        .await?;
+    assert_eq!(receive(&tunnel).await?, Some((a, b"for a".to_vec())));
+    relay
+        .send_to(&relayed(header_by_address(b_server), b"for b"), own_at)
+        .await?;
+    assert_eq!(receive(&tunnel).await?, Some((b, b"for b".to_vec())));
+    // The tool closes the mapping's association: a's flow ends.
+    let close = closers
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(0);
+    let _ = close.send(());
+    // The engine sees the connection close at once; a moment for it to.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    // b goes on, on its own association.
+    send(&tunnel, app(CHAINED_PORT), b, b"b again").await?;
+    assert_eq!(heard_from_engine(&mut script).await?, own_at);
+    relay
+        .send_to(&relayed(header_by_address(b_server), b"b's answer"), own_at)
+        .await?;
+    assert_eq!(receive(&tunnel).await?, Some((b, b"b's answer".to_vec())));
+    // a is asked again: the mapping's association opens anew.
+    send(&tunnel, app(CHAINED_PORT), a, b"a again").await?;
+    let anew_at = heard_from_engine(&mut script).await?;
+    assert!(
+        anew_at != main_at && anew_at != own_at,
+        "a third association"
+    );
+    relay
+        .send_to(
+            &relayed(header_by_address(a_server), b"a's answer"),
+            anew_at,
+        )
+        .await?;
+    assert_eq!(receive(&tunnel).await?, Some((a, b"a's answer".to_vec())));
+    assert_eq!(engine.counters()[UDP_MAPPINGS], 1, "the same mapping");
+    Ok(())
+}
