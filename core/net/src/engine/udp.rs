@@ -753,22 +753,26 @@ struct Sources {
     /// The peers whose answers come from another address than the one the app knows them by (through
     /// the tool, a stand-in bound to the address the tool reached), by the address they come from.
     aliases: HashMap<SocketAddr, SocketAddr>,
-    /// The stand-ins still waiting for their first answer, by the port the app asked.
-    waiting: HashMap<u16, Vec<SocketAddr>>,
+    /// The stand-ins still waiting for their first answer, by the port the app asked, in the order they
+    /// came.
+    waiting: HashMap<u16, Ordered<SocketAddr>>,
     /// The names behind the mapping's stand-ins (lower case, without a final dot), each with the stand-in
     /// addresses the app knows it by, the newest last, and how many peers have each: a name that gave way
     /// in the stand-in map and was asked again has a second (ADR 0044, unit 9b, fix round 4).
     names: HashMap<String, Vec<(IpAddr, usize)>>,
     /// The stand-ins bound by their identifiers to an address another peer had first, by that address,
     /// in the order they were bound ([`Standing::Beside`]).
-    beside: HashMap<SocketAddr, Vec<SocketAddr>>,
+    beside: HashMap<SocketAddr, Ordered<SocketAddr>>,
     /// Every stand-in bound beside another, by an address or by a relay's name, by its port: those an
     /// answer under a name on that port may be for (ADR 0044, unit 9b, fix round 1).
-    beside_on: HashMap<u16, Vec<SocketAddr>>,
+    beside_on: HashMap<u16, Ordered<SocketAddr>>,
     /// The stand-ins bound beside another under a relay's name, by the name and the port, the source an
     /// answer under that name on that port came from, in the order they were bound (ADR 0044, unit 9b,
     /// fix rounds 2 to 4): as [`Sources::beside`] by an address.
-    named_beside: HashMap<(String, u16), Vec<SocketAddr>>,
+    named_beside: HashMap<(String, u16), Ordered<SocketAddr>>,
+    /// The same, the name and port each such stand-in is beside under (fix round 6, review K: its end
+    /// walked every name's).
+    named_of: HashMap<SocketAddr, (String, u16)>,
     /// The identifiers the app sent the peers of the association, by fingerprint, each with how many
     /// peers it was sent to and, where one was, which ([`TOLD`]).
     told: Fingerprints,
@@ -845,39 +849,118 @@ impl Fingerprints {
 #[derive(Default)]
 struct Known {
     /// The addresses the app knows the peers whose answers come from it by, itself or stand-ins the tool
-    /// resolved to it, in the order they came, each with how many peers have it (fix round 5, review I's
-    /// I7: one address, the first peer's, stood for it after that peer ended).
-    shown: Vec<(IpAddr, usize)>,
+    /// resolved to it, each with how many peers have it (fix round 5, review I's I7: one address, the
+    /// first peer's, stood for it after that peer ended).
+    peers: HashMap<IpAddr, usize>,
+    /// The same, in the order they came (fix round 6, review K: walked for each, 16,384 stand-ins bound
+    /// to one address took 0.18 s to end under the table's lock).
+    order: Ordered<IpAddr>,
 }
 
 impl Known {
     /// One more peer the app knows at `ip` has its answers come from it.
     fn add(&mut self, ip: IpAddr) {
-        match self.shown.iter_mut().find(|(shown, _)| *shown == ip) {
-            Some((_, peers)) => *peers += 1,
-            None => self.shown.push((ip, 1)),
-        }
+        *self.peers.entry(ip).or_default() += 1;
+        self.order.push(ip);
     }
 
     /// One peer the app knows at `ip` has its answers come from it no more; whether none does now.
     fn remove(&mut self, ip: IpAddr) -> bool {
-        for (shown, peers) in &mut self.shown {
-            if *shown == ip {
-                *peers = peers.saturating_sub(1);
+        if let Some(peers) = self.peers.get_mut(&ip) {
+            *peers = peers.saturating_sub(1);
+            if *peers == 0 {
+                self.peers.remove(&ip);
+                self.order.remove(&ip);
             }
         }
-        self.shown.retain(|&(_, peers)| peers > 0);
-        self.shown.is_empty()
+        self.peers.is_empty()
     }
 
     /// The address the app knows `address`, this one, by: itself while the app knows a peer by it, as
     /// one it sent to itself, before a stand-in the tool resolved to it; else the stand-in of the
     /// oldest of its peers that lives, the one an address handed over to is among them.
     fn shown_as(&self, address: IpAddr) -> Option<IpAddr> {
-        if self.shown.iter().any(|&(shown, _)| shown == address) {
+        if self.peers.contains_key(&address) {
             return Some(address);
         }
-        self.shown.first().map(|&(shown, _)| shown)
+        self.order.first()
+    }
+}
+
+/// Members in the order they came, each once: pushed, taken out, found, and the first read, each without
+/// a walk, so that ending many costs no more than making them (ADR 0044, unit 9b, fix round 6, review K:
+/// as vectors walked for each removal, 16,384 stand-ins beside one label took half a second to end under
+/// the table's lock).
+struct Ordered<T> {
+    order: BTreeMap<u64, T>,
+    at: HashMap<T, u64>,
+    next: u64,
+}
+
+impl<T> Default for Ordered<T> {
+    fn default() -> Self {
+        Self {
+            order: BTreeMap::new(),
+            at: HashMap::new(),
+            next: 0,
+        }
+    }
+}
+
+impl<T: Copy + Eq + std::hash::Hash> Ordered<T> {
+    /// Adds `member` last, unless it is in already.
+    fn push(&mut self, member: T) {
+        if self.at.contains_key(&member) {
+            return;
+        }
+        self.order.insert(self.next, member);
+        self.at.insert(member, self.next);
+        self.next += 1;
+    }
+
+    /// Takes `member` out; whether it was in.
+    fn remove(&mut self, member: &T) -> bool {
+        let Some(at) = self.at.remove(member) else {
+            return false;
+        };
+        self.order.remove(&at);
+        true
+    }
+
+    /// Takes out the first, and gives it.
+    fn pop_first(&mut self) -> Option<T> {
+        let (_, member) = self.order.pop_first()?;
+        self.at.remove(&member);
+        Some(member)
+    }
+
+    fn first(&self) -> Option<T> {
+        self.order.values().next().copied()
+    }
+
+    fn contains(&self, member: &T) -> bool {
+        self.at.contains_key(member)
+    }
+
+    fn iter(&self) -> impl Iterator<Item = &T> {
+        self.order.values()
+    }
+
+    fn len(&self) -> usize {
+        self.at.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.at.is_empty()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a Ordered<T> {
+    type Item = &'a T;
+    type IntoIter = std::collections::btree_map::Values<'a, u64, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.order.values()
     }
 }
 
@@ -965,20 +1048,21 @@ impl Sources {
         self.unknown(shown, from);
         let beside = self.beside.get_mut(&from);
         if let Some(beside) = beside {
-            if let Some(at) = beside.iter().position(|&other| other == shown) {
-                beside.remove(at);
+            if beside.remove(&shown) {
                 if beside.is_empty() {
                     self.beside.remove(&from);
                 }
                 return None;
             }
-            let next = beside.remove(0);
+            let next = beside.pop_first();
             if beside.is_empty() {
                 self.beside.remove(&from);
             }
-            self.aliases.insert(from, next);
-            self.leave_beside_on(next);
-            return Some(next);
+            if let Some(next) = next {
+                self.aliases.insert(from, next);
+                self.leave_beside_on(next);
+                return Some(next);
+            }
         }
         if from != shown {
             self.aliases.remove(&from);
@@ -1000,10 +1084,12 @@ impl Sources {
     /// its port: the source an answer under that name there comes from.
     fn add_named_beside(&mut self, shown: SocketAddr, key: &str) {
         self.beside_on.entry(shown.port()).or_default().push(shown);
+        let label = (key.to_owned(), shown.port());
         self.named_beside
-            .entry((key.to_owned(), shown.port()))
+            .entry(label.clone())
             .or_default()
             .push(shown);
+        self.named_of.insert(shown, label);
     }
 
     /// The stand-in the app knows as `shown` is bound beside another no more, as when its relay names
@@ -1017,10 +1103,9 @@ impl Sources {
         let Some(beside) = self.beside.get_mut(&from) else {
             return;
         };
-        let Some(at) = beside.iter().position(|&other| other == shown) else {
+        if !beside.remove(&shown) {
             return;
-        };
-        beside.remove(at);
+        }
         if beside.is_empty() {
             self.beside.remove(&from);
         }
@@ -1044,21 +1129,26 @@ impl Sources {
     /// under a name.
     fn leave_beside_on(&mut self, shown: SocketAddr) {
         if let Some(beside) = self.beside_on.get_mut(&shown.port()) {
-            beside.retain(|&other| other != shown);
+            beside.remove(&shown);
             if beside.is_empty() {
                 self.beside_on.remove(&shown.port());
             }
         }
-        self.named_beside.retain(|_, beside| {
-            beside.retain(|&other| other != shown);
-            !beside.is_empty()
-        });
+        let Some(label) = self.named_of.remove(&shown) else {
+            return;
+        };
+        if let Some(beside) = self.named_beside.get_mut(&label) {
+            beside.remove(&shown);
+            if beside.is_empty() {
+                self.named_beside.remove(&label);
+            }
+        }
     }
 
     /// The stand-in the app knows as `shown` waits no more.
     fn stop_waiting(&mut self, shown: SocketAddr) {
         if let Some(waiting) = self.waiting.get_mut(&shown.port()) {
-            waiting.retain(|&other| other != shown);
+            waiting.remove(&shown);
             if waiting.is_empty() {
                 self.waiting.remove(&shown.port());
             }
@@ -5716,13 +5806,20 @@ mod tests {
         mapping
             .main()
             .relayed_answer(&shared, APP, (&from_server, &binding(0xb2, true)), now);
-        assert_eq!(mapping.sources.beside.get(&server), Some(&vec![b]));
+        assert_eq!(
+            mapping
+                .sources
+                .beside
+                .get(&server)
+                .map(|beside| beside.iter().copied().collect::<Vec<_>>()),
+            Some(vec![b])
+        );
         let by_b = Target::Name("b.test".into(), 3_478);
         mapping
             .main()
             .relayed_answer(&shared, APP, (&by_b, b"by name"), now);
-        assert_eq!(mapping.sources.beside.get(&server), None);
-        assert_eq!(mapping.sources.beside_on.get(&3_478), None);
+        assert!(!mapping.sources.beside.contains_key(&server));
+        assert!(!mapping.sources.beside_on.contains_key(&3_478));
         assert_eq!(mapping.peers[&b].way.from, None);
         // The first ends: the address goes, and is handed to no one.
         if let Some(peer) = mapping.peers.get_mut(&b) {
@@ -8100,6 +8197,88 @@ mod tests {
                 .main()
                 .relayed_answer(&shared, APP, (source, b"no identifier"), now);
             assert!(matches!(got, LetIn::Unmatched), "the contest itself holds");
+        }
+        Ok(())
+    }
+
+    /// Review K's measure of fix round 5: what one address's records cost once many stand-ins of the
+    /// app are bound to it, each by its identifier on a port of its own, and then all end. Fix round 6:
+    /// 126 to 149 ms for 16,384 before, each step a walk of the address's stand-ins (ADR 0044).
+    #[tokio::test(flavor = "current_thread")]
+    #[ignore = "a measure, run with --release --ignored"]
+    async fn measure_many_stand_ins_bound_to_one_address() -> io::Result<()> {
+        for n in [1_024u32, 4_096, 16_384] {
+            let mut sources = Sources::default();
+            let far = IpAddr::from([192, 0, 2, 9]);
+            let peers: Vec<(SocketAddr, SocketAddr)> = (0..n)
+                .map(|k| {
+                    let [_, _, hi, lo] = k.to_be_bytes();
+                    let port = 1_024 + u16::try_from(k).unwrap_or(0);
+                    (
+                        SocketAddr::from(([198, 18, hi, lo], port)),
+                        SocketAddr::new(far, port),
+                    )
+                })
+                .collect();
+            let start = Instant::now();
+            for &(shown, from) in &peers {
+                sources.add(shown, from);
+            }
+            let added = start.elapsed();
+            let start = Instant::now();
+            for &(_, from) in &peers {
+                assert!(sources.shown(from.ip()).is_some());
+            }
+            let shown = start.elapsed();
+            let start = Instant::now();
+            for &(shown, from) in peers.iter().rev() {
+                sources.remove(shown, from);
+            }
+            let removed = start.elapsed();
+            eprintln!(
+                "{n} stand-ins bound to one address: added in {added:?}, shown in {shown:?}, removed in \
+                 {removed:?}"
+            );
+        }
+        Ok(())
+    }
+
+    /// Review K's measure of fix round 5: the same under a relay's name, each stand-in bound beside under
+    /// the first name on a port of its own, as Xray's `freedom` labels every answer from the first
+    /// destination's address; and beside one another on one port. Fix round 6: 377 ms for 16,384 under
+    /// one label before, each removal a walk of every label's stand-ins (ADR 0044).
+    #[tokio::test(flavor = "current_thread")]
+    #[ignore = "a measure, run with --release --ignored"]
+    async fn measure_many_stand_ins_beside_one_label() -> io::Result<()> {
+        for n in [1_024u32, 4_096, 16_384] {
+            for one_port in [false, true] {
+                let mut sources = Sources::default();
+                let peers: Vec<SocketAddr> = (0..n)
+                    .map(|k| {
+                        let [_, _, hi, lo] = k.to_be_bytes();
+                        let port = if one_port {
+                            3_478
+                        } else {
+                            1_024 + u16::try_from(k).unwrap_or(0)
+                        };
+                        SocketAddr::from(([198, 18, hi, lo], port))
+                    })
+                    .collect();
+                let start = Instant::now();
+                for &shown in &peers {
+                    sources.add_named_beside(shown, "first.test");
+                }
+                let added = start.elapsed();
+                let start = Instant::now();
+                for &shown in &peers {
+                    sources.leave_beside_on(shown);
+                }
+                let removed = start.elapsed();
+                eprintln!(
+                    "{n} stand-ins beside one label, one port {one_port}: added in {added:?}, removed in \
+                     {removed:?}"
+                );
+            }
         }
         Ok(())
     }
