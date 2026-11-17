@@ -6916,6 +6916,46 @@ mod tests {
         Ok(())
     }
 
+    /// Under a label held by the stand-in bound beside it, as under an address a stand-in was bound to,
+    /// what carries no identifier is dropped for `udp_contest` after a stand-in without identifiers began
+    /// to wait on the port: the tool may have resolved that one's name there too (fix round 4).
+    #[tokio::test(flavor = "current_thread")]
+    async fn under_a_label_held_beside_a_waiting_stand_in_contests_the_port() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let contest = shared.limits.udp_contest;
+        let mut mapping = mapping(now).await?;
+        let a = SocketAddr::from(([198, 18, 0, 1], 3_478));
+        let b = SocketAddr::from(([198, 18, 0, 2], 3_478));
+        let c = SocketAddr::from(([198, 18, 0, 3], 3_478));
+        let by_a = Target::Name("a.test".into(), 3_478);
+        let to = |mapping: &mut Mapping, answer: &[u8], at: Instant| {
+            mapping
+                .main()
+                .relayed_answer(&shared, APP, (&by_a, answer), at)
+        };
+        mapping.peer(&shared, (APP, a), now, (false, tooled("a.test", 3_478)));
+        mapping.peer(&shared, (APP, b), now, (false, tooled("b.test", 3_478)));
+        mapping.sent(b, &binding(0xb2, false));
+        assert!(
+            matches!(to(&mut mapping, &binding(0xb2, true), now), LetIn::Peer(shown, ..) if shown == b)
+        );
+        let later = now + Duration::from_secs(200);
+        if let Some(peer) = mapping.peers.get_mut(&b) {
+            peer.last = later;
+        }
+        mapping.sweep(now + Duration::from_secs(120), &shared);
+        assert!(!mapping.peers.contains_key(&a), "a ended");
+        mapping.peer(&shared, (APP, c), later, (false, tooled("c.test", 3_478)));
+        mapping.sent(c, b"no identifier");
+        assert!(matches!(to(&mut mapping, b"data", later), LetIn::Unmatched));
+        assert!(matches!(
+            to(&mut mapping, b"data", later + contest),
+            LetIn::Peer(shown, ..) if shown == b
+        ));
+        Ok(())
+    }
+
     /// The places of counters in the snapshot.
     const TOO_BIG: usize = 39;
     const IDENTIFIED: usize = 47;
