@@ -876,11 +876,13 @@ answers only by the port: on ports other than 53, whoever reached the relay firs
 stand-ins asked at once on one port got no answer, and a second name cut a bound one's answers for five seconds.
 Watch now reads what the app's own datagram asked the answer to carry, by a strict parse: a STUN request's
 transaction ID, a QUIC Initial's connection IDs and the keys that derive from them, a DNS query's ID and question on
-any port, an NTP request's timestamp on port 123. A stand-in that sent one is bound only by an answer that carries
+any port whose answers repeat it (not the NetBIOS name service on 137, nor Multicast DNS from port 5353 to 5353, whose
+responses hold no question), an NTP request's timestamp on port 123. A stand-in that sent one is bound only by an answer that carries
 it, several on one port each take their own, and the bound one's address goes on answering the first name while the
 second waits. For QUIC, the server's first answer is opened with the keys of the app's connection ID, its AES-GCM
-tag checked by GHASH written out in the engine with no new dependency, which rules out a chance match, not a sender
-who saw the app's packet. A stand-in that sends nothing of the kind, beside another waiting on its port, leaves by a
+tag checked, which rules out a chance match, not a sender who saw the app's packet: at first by GHASH written out in
+the engine with no new dependency, which gave way to RustCrypto's aes-gcm in the first fix round, and its keys
+derived by RustCrypto's hkdf since the second, in place of the HMAC and HKDF written there since W3. A stand-in that sends nothing of the kind, beside another waiting on its port, leaves by a
 `UDP ASSOCIATE` of its own, at most 8 for each app socket and 32 for the engine, each a place in its app's share;
 beyond them the stand-in waits beside the other and what could be either's is dropped and counted. Where two names
 reach one address and port, each STUN response, QUIC packet to a client's own connection ID of 4 bytes or more, DNS
@@ -895,7 +897,19 @@ identifiers now outrank the label; identical identifiers of two stand-ins left b
 association of their own; the tool closing an idle association ended a live one beside it; QUIC answers cost tens of
 milliseconds under the engine's lock and now cost microseconds; compatible version negotiation was not understood;
 the hand-written GHASH gave way to RustCrypto's aes-gcm; the fuzz target's missing seeds kept seven targets from
-CI's fuzzing; and the emulator step passed without reaching the new code, which it now must. How it is built: [ADR
+CI's fuzzing; and the emulator step passed without reaching the new code, which it now must. Two fresh reviews of
+that round found more, fixed in a second: a server known by its address, or a resolver already answered, sent the
+same NTP timestamp or DNS query as a new name could have its answer moved to that name, so every peer through the
+tool now keeps the fingerprints of the last 64 identifiers the app sent it, and an identifier two peers were sent
+moves no answer from where either answers; a name bound beside another's label now takes that label when the other
+ends; an association of a stand-in's own no longer needs the mapping's reopened after a pause, outlives its
+stand-in while a flow that came in through it lives, and fails nothing that became a peer meanwhile; the packets an
+answer may open are shared among the stand-ins round by round, so that a newer one is not starved; a QUIC Retry in
+another version than the app's, and what a client discards (reserved bits set, no frame, a server's Initial with a
+token, a Retry without one, a Version Negotiation listing the client's version), binds nothing; the hello's reader
+reads no further than 16 packets of a datagram; the fuzz target asserts what must not carry; two network lab
+tests that misread Linux's ping table when other tests ran beside them were made exact; and the emulator step sends its STUN requests again
+as clients do and tells an engine started afresh from a result. How it is built: [ADR
 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 | # | Milestone | Done when |

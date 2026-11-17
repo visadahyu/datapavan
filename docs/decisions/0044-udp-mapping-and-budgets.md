@@ -181,14 +181,36 @@ an ADR (D25).
   the three Android targets build. **Audit:** the crate's README cites one review by NCC Group, read here in the
   report itself ("RustCrypto AES/GCM and ChaCha20+Poly1305 Implementation Review", version 1.0 of 2020-02-13, by
   Gérald Doussot and Thomas Pornin, for MobileCoin, five person-days): it covered `aes-gcm`, `aes`, `ghash`,
-  `polyval`, `aead` and `universal-hash` at their commits of December 2019 and found no vulnerability, only remarks
-  on speed. The code reviewed is that of six years ago, not 0.11's, whose ARMv8 backends, those a phone uses, came
-  later and have no audit. **Advisories:** one in RustSec's database, RUSTSEC-2023-0096 (a failed tag left the
-  decrypted text in the caller's buffer, 0.10.0 to 0.10.2, patched in 0.10.3); 0.11.1 checks the tag before it
-  decrypts, and the engine never reads a buffer whose tag failed. The arm64 library grew from 1,040,152 to
+  `polyval`, `aead` and `universal-hash` at their commits of December 2019 and found no vulnerability; in its words,
+  "a few cosmetic remarks, mostly related to potential performance improvements", and one on GCM's size limits:
+  `aes-gcm`'s checks of the largest plaintext, ciphertext and associated data were slightly off GCM's own (2^36
+  bytes against 2^36 - 32, the tag left out of the ciphertext's, and associated data held to 2^36 bytes where GCM
+  allows 2^61 - 1), which the report found no risk in, the checks being failsafes and 2^36 bytes about 69 GB; this
+  engine's packets are at most 64 KB. The code reviewed is that of nearly seven years ago, not 0.11's, whose ARMv8
+  backends, those a phone uses, came later and have no audit (corrected in fix round 2: "six years", and "only
+  remarks on speed"). **Advisories:** RUSTSEC-2023-0096 (a failed tag left the decrypted text in the caller's buffer,
+  0.10.0 to 0.10.2, patched in 0.10.3); 0.11.1 checks the tag before it decrypts, and the engine never reads a
+  buffer whose tag failed. Two more in RustSec's database for crates it brings, read in fix round 2:
+  RUSTSEC-2026-0003 (`cmov` before 0.4.4 made code on 32-bit ARM that branched on the values it was to move in
+  constant time) and RUSTSEC-2026-0385 (`ctutils` before 0.4.4, masks built with a branch, and `u128` comparisons
+  branching on 32-bit targets); the lockfiles hold `cmov` 0.5.4 and `ctutils` 0.4.8, both after the fixes, which
+  matters since 32-bit ARM (`armv7-linux-androideabi`) is one of the engine's targets. The arm64 library grew from
+  1,040,152 to
   1,050,160 bytes. The hello's reader, which removed an Initial's protection without its tag, now checks it too:
   with the library it costs one GHASH for each of a flow's first few datagrams, and a packet damaged on its way,
   or bytes that only look like an Initial, then name no flow rather than one by frames that happened to parse.
+- **hkdf's review (2026-11-17, unit 9b, fix round 2):** the same rule replaced the HMAC-SHA-256 and TLS 1.3's
+  `HKDF-Expand-Label` written in `quic.rs` since W3 with RustCrypto's `hkdf` 0.13.0 (MIT OR Apache-2.0, published by
+  the RustCrypto developers, repository RustCrypto/KDFs), which brings `hmac` 0.13.0 (the same, repository
+  RustCrypto/MACs); both are built on `digest` 0.11, as the `sha2` 0.11.1 already in both lockfiles is, both
+  forbid unsafe code, neither is used with a default feature (`hkdf`'s `kdf`, off by default, is not taken), and
+  `digest` gains its `mac` feature. No newer release of either exists than these, of 2026-03-29 and 2026-03-30, the
+  first stable ones on `digest` 0.11; RustSec's database (read 2026-11-17) has no advisory for either. Neither is
+  covered by NCC's review above, nor by any audit their repositories cite: HKDF and HMAC are a few dozen lines over
+  SHA-256, checked here against RFC 5869 A.1 (the PRK, and all 42 bytes of the expand step) and RFC 9001 A.1 (each
+  secret and key, step by step), as the code they replace was, and against every RFC sample packet the sealer
+  reproduces. `cargo deny` passes, both lockfiles hold them, and the three Android targets build. Initial keys are
+  no secret, so a fault in either would misread packets, not leak anything.
 - **Two filters differ by design:** address-dependent for answers, endpoint-independent for mappings. These are
   the defaults RFC 4787 recommends, and what most home routers do.
 - **ADR 0012's "one socket per flow" for UDP is superseded** by decision 1. W6's done-when changes its wording,
@@ -1373,16 +1395,19 @@ an ADR (D25).
     with the client's keys, a tag that checks and frames that parse to the end gives the destination and source
     connection IDs of each of its long-header packets. An answer carries them when it is a Version Negotiation
     packet whose source ID is the app's destination ID and whose destination ID is the app's source ID, the
-    versions after them whole; a Retry whose integrity tag checks with the app's destination ID, the only trace of
+    versions after them whole, the app's own not among them (since fix round 2, RFC 9000 6.2); a Retry with a token
+    whose integrity tag checks with the app's destination ID, the only trace of
     that ID a Retry holds (RFC 9001 5.8); an Initial to the app's source ID that the server's keys of the app's
     destination ID open, its tag checked and its frames parsed to the end; or any packet whose destination ID is
     the app's source ID, where that has 4 bytes or more. A shorter one would be matched by a stranger's packet by
     a chance up to one in 256, and is not used alone. A client that sends no source ID, as Chromium's, so Cronet's,
-    does, is told only by its Initial keys: by the server's first answer. Since fix round 1 the Retry and the
-    Initial may be of either version, keyed by the answer's own (RFC 9368's compatible negotiation, below).
+    does, is told only by its Initial keys: by the server's first answer. Since fix round 1 the Initial may be of
+    either version, keyed by its own (RFC 9368's compatible negotiation, below); the Retry only of the app's (fix
+    round 2: RFC 9369 4.1 has the client ignore one in another version, which fix round 1 took).
   - **The AEAD tag is checked** for both, since fix round 1 by RustCrypto's `aes-gcm` (its review is under
     "Consequences"; until then by GHASH written out in `quic.rs`): checked against GCM's test cases 1 to 4 and RFC
-    9001's and RFC 9369's sample packets A.2 to A.4, which the tests' sealer reproduces byte for byte. It protects
+    9001's and RFC 9369's sample packets A.2 to A.4, which the tests' sealer reproduces byte for byte (the Retry's
+    four unused bits set as the samples set them since fix round 2; before, the A.4 Retries were only read). It protects
     nothing against a sender who saw the app's packet, who can compute the keys and the tag as well, as the tool and
     anyone on its path can. On that path, keys and tag, a chance match is 2^-128, where frames alone would be
     matched by random bytes at about 2^-24 (a CRYPTO frame whose length runs exactly to the end), by this unit's
@@ -1428,7 +1453,10 @@ an ADR (D25).
   does an NTP client that sends one timestamp to two servers, as a clock of a millisecond's resolution may. Since
   fix round 1 such a stand-in gets an association of its own as it is placed, on port 53 too, so that the
   association tells their answers apart; only identifiers that come to be another's later, once both are placed,
-  still make an answer several stand-ins', dropped and counted as unmatched, which a test now holds.
+  still make an answer several stand-ins', dropped and counted as unmatched, which a test now holds. Fix round 1
+  looked only at the other stand-ins waiting or bound beside one; since fix round 2 an identifier the app sent any
+  peer of the association on the port counts, a server known by its address and a bound stand-in among them
+  (below, "Identifiers the app sent two peers").
 - **The contest.** An answer from a bound stand-in's address, or a destination's own, that carries the identifier
   of a stand-in waiting on that port goes to the waiting one, which is bound by it beside the peer that held the
   address first; one that carries none of the waiting ones' goes to that peer, with no cut. `udp_contest`'s cut
@@ -1470,7 +1498,8 @@ an ADR (D25).
     that stand-in's datagrams as a mapping's failing association fails a destination's: its flow is recorded, the app
     told it cannot be reached, and nothing leaves directly. Its next datagram tries again.
   - **How it ends:** with its stand-in's flow, silent for `udp_idle`, which ends the flows that came in through it
-    too; with its mapping, whatever ends that: the chain set again another way, the network moving, an answer of
+    too (since fix round 2: with the last flow that leaves by it, its stand-in's or one that came in through it); with
+    its mapping, whatever ends that: the chain set again another way, the network moving, an answer of
     Android's naming another app, the budget; and when the tool closes it, which ends its stand-in's flow, so that the
     app's next datagram to the stand-in is decided anew. Its place goes back with it.
   - **What unit 9 holds for a mapping's association holds for it:** it opens only for a chained mapping, and is
@@ -1510,7 +1539,8 @@ an ADR (D25).
     Initial asks, once however often it is sent, and nothing from a tag or frames that fail; a Version Negotiation
     with the IDs crossed, and a packet to a source ID of 4 bytes or more. In `core/net/src/identifiers.rs`, 5: STUN,
     DNS on another port, NTP and QUIC, each asked and answered, and what each refuses; and the 48 bytes an identifier
-    takes. The fuzz target `identifiers` holds that nothing panics and that a request never carries what it asked
+    took then (64 since fix round 1). The fuzz target `identifiers` holds that nothing panics and that a request never
+    carries what it asked
     itself (12.9 million runs in 60 s of `cargo fuzz run identifiers` with no seeds, no fault). Random bytes reach
     its QUIC answers only up to their tags: fix round 1 adds seeds that start past them, and a target,
     `quic_answers`, that builds the answers.
@@ -1591,10 +1621,15 @@ limit with its reason here.
   datagrams, and a damaged packet names no flow.
 - **What an answer costs under the table's lock** (reviews A and B), on the engine's one thread. An answer is read
   once, whatever the number of stand-ins it is checked for (`identifiers::Reading`), and opens at most 16 Initial or
-  Retry packets in all (`quic::MOST_OPENED`), the latest identifiers first, none when it is larger than 1,500 bytes
-  (`quic::LARGEST_ANSWER`: QUIC never lets IP fragment its datagrams, RFC 9000 14; before it probes a larger path a
-  server sends what fits the path it validated, RFC 9000 14.1 and 14.3; the internet's paths and Watch's tunnel carry
-  1,500 bytes at most; and a Retry's token must fit the client's next Initial on the same path). The server's keys of
+  Retry packets in all (`quic::MOST_OPENED`), counted across every stand-in it is checked for, each one's latest
+  identifiers first (fix round 2 found the stand-ins taken in the order they began waiting, so that one could be
+  left none; they now take turns), none when it is larger than 1,500 bytes (`quic::LARGEST_ANSWER`: QUIC never lets
+  IP fragment its datagrams, RFC 9000 14, and a sender makes an Initial's datagram larger than 1,200 bytes only where
+  it believes the path and its peer carry it, 14.1; the path an answer takes to the app ends in Watch's tunnel, whose
+  MTU is 1,500 bytes at most, decision 5 as amended, and the app's own Initials fit it, so a larger answer is
+  outside what that path carries; a Retry's token must fit the client's next Initial on the same path. Corrected in
+  fix round 2, where this said the internet's paths carry no more than 1,500 bytes, which RFC 9000 does not). The
+  server's keys of
   each destination ID are derived once and kept with the identifier, of which a stand-in keeps 8 at most. An app's
   datagram is read as RFC 9000 12.2 has a receiver read one, the packets after one to another destination ID
   ignored, no further than 16 packets, its client keys derived once, its frames checked without being kept. In a
@@ -1606,8 +1641,10 @@ limit with its reason here.
   stand-in that has more distinct destination IDs than the 16 opens reach, the answer to its oldest unopened; both
   need a server or a client outside what the RFCs' paths and connections allow above.
 - **Compatible version negotiation** (reviews A and B, RFC 9368): a server that negotiates it answers a version 1
-  Initial in version 2, with version 2's keys of the client's original destination ID. An answer's Initial or
-  Retry in either version this engine reads, keyed by its own version, now carries what the app asked.
+  Initial in version 2, with version 2's keys of the client's original destination ID. An answer's Initial in either
+  version this engine reads, keyed by its own version, now carries what the app asked. (This round took the Retry in
+  either version too, citing RFC 9368; RFC 9369 4.1 has the server send a Retry only in the original version and
+  the client ignore one in another: fix round 2 holds the Retry to the app's version.)
 - **Colliding identifiers** (review A): one DNS query, one ID and question, sent to two names, or one NTP timestamp
   to two servers, left both stand-ins on one association and every answer several's, dropped. A stand-in whose
   identifiers another on its port has too now gets an association of its own as it is placed, on port 53 too,
@@ -1653,3 +1690,144 @@ limit with its reason here.
 - **Found on the way.** Changing `identifiers::of` to take the app's port left the `identifiers` fuzz target calling
   it with one: the fuzz crate builds only under `cargo fuzz`, which neither gate of `scripts/check.sh` runs, and
   `scripts/fuzz.sh 480` stopped there; fixed in its own commit, and all twelve targets built.
+
+**Unit 9b, fix round 2 (2026-11-17).** Two fresh reviews of fix round 1, C of the engine and D of QUIC's reading,
+the fuzzing, the tests and the emulator step, after the coordinator's own commit `d99da80`: `verify-watch.sh` seals
+its QUIC Initials with a real GCM tag now that the hello's reader checks it, and with it the emulator's Watch shard
+passed on Android 15 and the STUN step's 48th counter rose from 0 to 1. The maintainer's rule again: every finding
+gets the best-in-class fix, or an accepted limit with its reason here.
+- **Identifiers the app sent two peers** (review C, major 1; a regression of unit 9b's, where unit 9 gave the answer
+  to the address's peer). Fix round 1's check of colliding identifiers looked only at the other stand-ins waiting or
+  bound beside one. A peer settled by then, a server the app knows by its address or a stand-in bound alone or
+  answered by name, keeps none: one NTP request's timestamp sent to such a server and to a name, or a stub resolver's
+  query sent again with its ID to its next server after the first, already bound, was slow (glibc's `res_send`), left
+  the name on the mapping's association; the server's reply, from its own address, carried the name's identifier,
+  went to the name and bound it beside the server, and the name's own server was filtered from then on (under a
+  relay's name, one answer went to the wrong name). Now every peer through the tool, whatever it stands as, keeps the
+  fingerprints of the last 64 identifiers the app sent it (`TOLD`: `SipHash` under keys random for each run, 8 bytes
+  each, the port within), and its association counts them (`Fingerprints`). A new stand-in whose datagrams carry an
+  identifier any peer of the mapping's association was sent gets an association of its own, as fix round 1's
+  collisions do. Where the caps refuse it one, or where the other peer was sent the identifier only after the
+  stand-in was placed, the identifier is no stand-in's to take an answer by from where that peer answers: from an
+  address, the peer that holds it and those bound beside it there; under a relay's name, which may stand for any
+  peer's address, every peer of the association. From an address no peer answers from, it binds as before: the other
+  peer's answers come from its own. **What it costs:** every datagram through the tool is read for identifiers, as
+  only a waiting stand-in's were, 9 to 12 ns for one that carries none (a release build: 1,200 bytes of noise, a QUIC
+  short header, a game's datagram, a STUN request) and 5.2 us for a client's QUIC Initial, whose keys and tag the
+  hello's reader computes too in a flow's first datagrams; and at most 64 fingerprints for each peer, 512 bytes, with
+  one entry each in its association's count, 16 bytes and a control byte in a table whose buckets are at most 16/7
+  of its entries once it holds 8 or more: at most 3,008 bytes for a peer the app sent identifiers to, nothing for
+  one it sent none, nothing on the direct path, where no stand-in waits. The count's table keeps the size it grew to
+  until its association ends, as Rust's tables do, so an association holds at most what its peers held at once.
+  **Accepted limit:** an identifier the app sent a peer more than 64
+  identifiers earlier is forgotten for it; sent again to a new name at that distance, it is no retry of the same
+  request.
+- **A stand-in bound beside a name outlives it** (review C, major 2). Under Xray's `freedom` or sing-box, a second
+  name the tool resolved to the first's address is bound beside the first by its identifiers (fix round 1); once the
+  first was silent for `udp_idle` and swept, the relay still gave its name, which no peer had any more, and the
+  second's STUN keepalives and TURN refreshes were filtered. An address was handed over to the stand-in bound beside
+  it (`Sources::remove`); a name was not. Now the first stand-in bound beside a name takes it when the last peer that
+  had it ends (`Sources::leave_name`), lets go of its identifiers, and the relay's answers under that name, its
+  identifiers' and others', a TURN server's data among them, are its own; the name goes when it ends.
+- **An association of a stand-in's own after the mapping's closed** (review C, minor 1). Once the tool closed the
+  mapping's association, a pause long enough to ask Android again sent a stand-in's datagram through the opening of
+  the mapping's association, which it does not use, and a tool that refuses a further association failed it with
+  "unreachable" though its own was open. A destination that is a peer of an association of a stand-in's own now
+  passes a closed mapping's association (`UdpTable::open_mapping`).
+- **A flow that came in through an association of a stand-in's own** (review C, minor 2) ended with the stand-in's
+  silence, where on the mapping's association it outlives it (a TFTP server goes on from a port of its own). The
+  association now ends with the last flow that leaves by it (`Mapping::sweep`).
+- **What waited, at the end of its wait** (review C, minors 3 and 4). A destination that became a peer while an
+  association of its own failed to open was failed with it; it now leaves by the association it has. One that would
+  leave by the mapping's association after the tool closed it, or opened it anew, while it waited for writability,
+  was sent by the old socket; it now waits on and is routed again (`Made::Reroute`), before anything is taken from
+  its queue. And the associations of a stand-in's own are counted by a place each holds while it opens and once it
+  is open (`OwnPlace`), not summed over every mapping under the table's lock.
+- **The opens shared among stand-ins** (review D, 1). `quic::MOST_OPENED` counts across every stand-in an answer is
+  checked for, and they were taken oldest first, each with all its identifiers: two stand-ins whose clients send no
+  source ID, with 8 destination IDs each, spent all 16 opens, and a newer one's genuine server Initial was dropped
+  every time. What costs no packet opened is now told first for every stand-in; the opens go round by round, each
+  stand-in's newest identifier first, then each one's next. Where one round has more stand-ins than opens left,
+  each answer begins it where the last such answer stopped. **Remaining limit:** with more than 16 QUIC stand-ins
+  whose clients send no source ID waiting at once on one port of one association, an answer opens for 16 of them:
+  a server's Initial sent again, as on a loss (RFC 9002 6.2), reaches its stand-in within as many sendings as there
+  are rounds of 16 (the test holds 17 stand-ins, the newest reached at the second sending); and an answer opens at
+  most 16 identifiers of one stand-in, which keeps 8 at most.
+- **A Retry only in the app's version** (review D, 2; RFC 9369 4.1, against fix round 1, which took one in either
+  version citing RFC 9368). Only the Initial may come in a compatible version.
+- **What a client discards binds nothing** (review D, 3): a packet whose reserved bits are set once its protection
+  is removed (RFC 9000 17.2; read before the tag, since Initial keys are no secret and RFC 9001 9.5's timing concern
+  is a secret key's), one with no frame (12.4), a server's Initial with a token (17.2.2), a Retry without one
+  (17.2.5.2), a Version Negotiation that lists the client's own version (6.2, RFC 9368 2.1). A packet matched by the
+  app's source ID alone, of 4 bytes or more, is held to the token and version rules too, but not opened: its
+  reserved bits and frames go unread, as before, and only a sender who saw the app's packet makes one.
+- **The hello's reader bounded** (review D, 4) as `asked` is: no packet after one to another destination ID (RFC
+  9000 12.2), none after the first 16, its keys kept between packets without a copy. A release build, before and
+  after: one datagram of 1,666 tiny Initials 508 us to 6.9 us; one Initial of 1,200 bytes 5.3 us and 5.6 us, the
+  same within the measure's noise.
+- **A lone QUIC stand-in whose client sends no source ID** (review D's note): a Handshake packet of the server's
+  first flight that comes in a datagram of its own before the server's Initial tells nothing (its destination ID is
+  the client's empty one, its keys the two ends' alone) and is dropped as unidentified; the server sends it again on
+  its probe timeout (RFC 9002 6.2), after its Initial bound the stand-in, a round trip later. Coalesced with the
+  Initial, as servers send their first flight, it goes with it.
+- **HMAC and HKDF from RustCrypto** (review D, 7): `hkdf` 0.13.0 with `hmac` 0.13.0, reviewed under
+  "Consequences".
+- **The fuzzing** (review D, 6): `quic_answers` asserted only that an answer built whole carries the IDs, and only
+  for four PINGs. It now builds an Initial of any frames an Initial may carry, and an Initial and a Retry for another
+  destination ID; built whole, an answer must carry the IDs exactly as a client takes it, and where the app's source
+  ID is too short to tell, one with any byte changed, or for another destination ID, must never carry them (but
+  where the change makes it a Version Negotiation, which no tag covers). Review D's mutant Q14, opening a packet
+  without its tag, fails it within seconds from the seeds, one for each kind of answer.
+- **The network lab's flake** (review C): `docs/ci-flakes.md`, 2026-11-17. Linux lists an older ping socket of the
+  other IP version in a table whose chain it shares (`ping_get_next`); two tests took the one unbound socket of the
+  table for the engine's, and failed 4 times in 192 and 3 in 256 runs, 16 at once. They now take the one listed
+  since the app's first ping: none in 256 of each.
+- **The emulator step** (review D): the workload app sends each STUN request again, with its transaction ID, as RFC
+  8489 6.2.1 has a client do over UDP (500 ms, doubled each time, 7 requests, 39.5 s in all); the test tool's lines
+  that its STUN server listens are read as it starts, before logcat's ring can turn past them; and the 48th counter
+  is read with when the engine's counters began (`counters-since` in Watch's dump), so that an engine started afresh
+  between the two reads runs the step once more, and fails the run as that the second time, never as a pass or as
+  unit 9b's failure. Not run here.
+- **Corrected above,** each where it stands: the opens counted across every stand-in, the Retry's version and the
+  1,500-byte cap's wording (fix round 1); fix round 1's collision check, which missed settled peers; the Retry samples
+  of A.4, which the sealer now reproduces byte for byte where before they were only read; the 48 bytes an identifier
+  took at first (64 since fix round 1); NCC's summary, quoted, its remark on GCM's size limits, and "nearly seven
+  years"; two advisories of crates `aes-gcm` brings, RUSTSEC-2026-0003 and RUSTSEC-2026-0385, which the locked
+  versions are past; an association's end. And `docs/DESIGN.md` (port 137 and Multicast DNS between queriers ask
+  nothing; the GHASH gave way), `core/net/Cargo.toml`'s comment, and a sentence of `identifiers.rs` that began in
+  lower case.
+- **Tests, each shown to fail once without its fix.** In `chain.rs`, on the code of `d99da80` before this round:
+  review C's probe 1, one NTP timestamp to a server known by its address and to a name, both with an association of
+  its own for the name and with the caps refusing one; the same with the name asked first; probe 2, a query sent again
+  to the next server, both ways too; probe 3, a pause after the mapping's association closed, with a tool that
+  refuses a third association; and review D's probe, a newer QUIC stand-in among two with 8 identifiers each, and
+  among 16 with one each. In the engine: probe 4, a flow that came in outliving its stand-in's silence; probe 5, a
+  name taken by the stand-in bound beside it, and gone with it; an identifier two names were sent under the first's
+  label; what a peer is sent counted while it lives and no more than 64; the QUIC cap of 8 and the eviction of the
+  oldest QUIC identifier (review D's mutants U1 and U2); what waited, leaving by a peer's association whatever failed,
+  waiting on while the mapping's association is closed or opened anew; and the places of associations of a
+  stand-in's own. In `quic.rs`: what a client discards; ACK with ECN counts and a reason past the end; the
+  1,500/1,501 boundary; both versions in one datagram and in the hello's reader; the hello's reader bounded; the
+  Version Negotiation's halves, whole words and own version; a Handshake packet opening nothing; the Retry only in
+  the app's version; the RFC samples' Retries sealed. In `identifiers.rs`: STUN's high method bits, the latest QUIC
+  identifier first, and the fingerprints. RFC 5869 A.1 (now all 42 bytes) and RFC 9001 A.1 hold `hkdf`.
+- **The mutation runner** (review D's `run.py`, pointed at a worktree of this round's last code commit): review D's 23
+  mutants, each at its place in
+  the code now, and 20 more, one or two for each of this round's fixes: all 43 killed, review D's 13 survivors among
+  them (`muts-d.log`: the Version Negotiation's whole words and destination half, the 1,500-byte boundary, both
+  versions' keys in `asked` and in the hello's reader, a Retry's token check, any long-header kind opened, a reason
+  past the end, ACK's ECN counts, the oldest identifier first, STUN's high method bits, the QUIC cap of 8 and its
+  eviction).
+- **Fuzzing:** `scripts/fuzz.sh 480`, as CI runs it, on this round's code: all twelve targets, 40 s each, found
+  nothing (`identifiers` 3,498,043 runs, `quic` 4,592,133, `quic_answers` 653,279); `quic_answers` alone, two
+  minutes, 2,053,882 runs, nothing.
+- **Found on the way.** The mutation runner's run beside the fuzzing failed the engine's
+  `the_listener_takes_only_connections_from_the_fake_address` once with "address in use": it took the port the
+  kernel picked at 127.0.0.2 as free at 127.0.0.1 too, which another socket may hold (8 runs of 256, 16 at once).
+  It now takes a port free at both, and none of 256 fail; `docs/ci-flakes.md`, 2026-11-17. And the engine
+  commit's message gave the fingerprints' cost as 2,560 bytes; a table's control bytes and its growth make it
+  3,008, as above and in `TOLD`'s comment.
+- **Not done, stated:** the emulator step has not run, here as before; a peer's fingerprints cover the last 64
+  identifiers the app sent it (above); the `counters-since` line has no test of its own but the emulator step that
+  reads it; the name's label taken over is tested in the engine, not through the scripted relay; and nothing here
+  tells a stranger who learned the relay's port from a server, for a protocol without identifiers, as unit 9 states.

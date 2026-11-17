@@ -317,9 +317,10 @@ const QUIC_ASKED: usize = 8;
 /// cannot, or where the other peer came after it, the identifier binds it to nothing another peer that
 /// was sent it answers from. 64 hold an NTP client's requests to its servers, a stub resolver's retry of
 /// one query to the next server, and an ICE agent's checks of one remote candidate. It costs at most
-/// 64 x 8 bytes for each peer, and an entry of the association's count for each of those, 16 bytes in a
-/// table at most half empty, so at most 64 x (8 + 32) = 2,560 bytes, for a peer the app sent identifiers
-/// to, nothing for one it sent none; on the direct path, where no stand-in waits, nothing is kept.
+/// 64 x 8 bytes for each peer, and an entry of the association's count for each of those, 16 bytes and a
+/// control byte in a table whose buckets are at most 16/7 of its entries, about 39 bytes, so at most
+/// 64 x (8 + 39) = 3,008 bytes for a peer the app sent identifiers to, nothing for one it sent none; on
+/// the direct path, where no stand-in waits, nothing is kept.
 const TOLD: usize = 64;
 
 /// At most this many associations of a stand-in's own for each mapping (ADR 0044, unit 9b): one for
