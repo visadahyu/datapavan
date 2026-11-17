@@ -13,7 +13,7 @@ use common::{Settings, proxy};
 use datapavan_net::engine::{Addresses, Limits};
 use datapavan_net::{Chain, Config, Engine, Handover, Platform, packet};
 use socket2::{Domain, Protocol, Socket, Type};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
@@ -1544,7 +1544,8 @@ fn pings_with_their_own_ids_each_get_their_own_reply() -> Outcome {
 }
 
 /// The echo identifier of the engine's one ping socket, from the namespace's table: the only one not
-/// bound to the tunnel's address.
+/// bound to the tunnel's address. Only for a test with IPv4 ping sockets alone, whose table lists no
+/// socket of the other version ([`unbound_pings`]).
 fn engine_ping_id() -> Result<u16, Box<dyn std::error::Error>> {
     let table = std::fs::read_to_string("/proc/net/icmp")?;
     let ids: Vec<u16> = table
@@ -3397,26 +3398,50 @@ fn an_error_from_the_phones_own_address_comes_from_the_destination() -> Outcome 
     )
 }
 
-/// The echo identifier of the engine's one ping socket of the IP version `v4` or IPv6, from the
-/// namespace's table: the only one not bound to an address.
-fn engine_ping_id_of(v4: bool) -> Result<u16, Box<dyn std::error::Error>> {
+/// The ping sockets of the IP version `v4` or IPv6 that the namespace's table lists as bound to no
+/// address: each one's echo identifier, by its inode. Linux lists in one IP version's table every
+/// socket that follows one of that version in its hash chain, whatever its own version
+/// (`ping_get_next` checks the namespace, not the family), so an older socket of the other version,
+/// whose identifier shares a chain with one of this version's, is listed too, its address read as
+/// none. Whether one does depends on the identifiers the kernel hands out, from one counter for every
+/// namespace: run beside other tests, a test that took the one unbound socket of the table for the
+/// engine's failed at times (unit 9b, fix round 2, review C: 4 runs of 192, 16 at once).
+fn unbound_pings(v4: bool) -> Result<HashMap<u64, u16>, Box<dyn std::error::Error>> {
     let (table, unbound) = if v4 {
         ("/proc/net/icmp", "00000000")
     } else {
         ("/proc/net/icmp6", "00000000000000000000000000000000")
     };
-    let table = std::fs::read_to_string(table)?;
-    let ids: Vec<u16> = table
+    Ok(std::fs::read_to_string(table)?
         .lines()
         .skip(1)
         .filter_map(|line| {
-            let (address, port) = line.split_whitespace().nth(1)?.split_once(':')?;
-            (address == unbound).then(|| u16::from_str_radix(port, 16).ok())?
+            let fields: Vec<&str> = line.split_whitespace().collect();
+            let (address, port) = fields.get(1)?.split_once(':')?;
+            let inode = fields.get(9)?.parse().ok()?;
+            (address == unbound).then(|| Some((inode, u16::from_str_radix(port, 16).ok()?)))?
         })
+        .collect())
+}
+
+/// The inode and echo identifier of the ping socket of the IP version `v4` or IPv6 that the engine
+/// opened since the table read `before` ([`unbound_pings`]): the newest socket heads its hash chain,
+/// so that only its own version's table lists it, and it is the one the table did not list before.
+fn engine_ping_since(
+    v4: bool,
+    before: &HashMap<u64, u16>,
+) -> Result<(u64, u16), Box<dyn std::error::Error>> {
+    let now = unbound_pings(v4)?;
+    let new: Vec<(u64, u16)> = now
+        .iter()
+        .filter(|(inode, _)| !before.contains_key(inode))
+        .map(|(&inode, &id)| (inode, id))
         .collect();
-    match ids[..] {
-        [id] => Ok(id),
-        _ => Err(format!("not one engine socket: {table}").into()),
+    match new[..] {
+        [one] => Ok(one),
+        _ => {
+            Err(format!("not one new engine socket: {new:?} of {now:?}, {before:?} before").into())
+        }
     }
 }
 
@@ -3459,13 +3484,14 @@ fn a_routers_time_exceeded_reaches_the_apps_ping_from_the_router() -> Outcome {
                 let (origin, exceeded, unreachable) = traced(v4);
                 let app = erring_pinger(tunnel, id)?;
                 ask_hops(&app, v4)?;
+                let before = unbound_pings(v4)?;
                 let to = SocketAddr::new(server, 0).into();
                 app.send_to(&echo_request(v4, 1, b"a probe"), &to)?;
                 assert_eq!(
                     hear(&app, server)?,
                     Ok((id, 1, b"a probe".to_vec(), server))
                 );
-                let engines = engine_ping_id_of(v4)?;
+                let (socket, engines) = engine_ping_since(v4, &before)?;
                 // What the engine's socket sent, from the "internet"'s address it sends from here, and
                 // what forged errors say it sent.
                 let quoting = |to, sequence, data: &[u8]| {
@@ -3516,7 +3542,11 @@ fn a_routers_time_exceeded_reaches_the_apps_ping_from_the_router() -> Outcome {
                 counted(&engine, ERRORS_DROPPED, dropped).await?;
                 app.send_to(&echo_request(v4, 2, b"and on"), &to)?;
                 assert_eq!(hear(&app, server)?, Ok((id, 2, b"and on".to_vec(), server)));
-                assert_eq!(engine_ping_id_of(v4)?, engines, "the engine's socket ended");
+                assert_eq!(
+                    unbound_pings(v4)?.get(&socket),
+                    Some(&engines),
+                    "the engine's socket ended"
+                );
                 path_says(router, (server, &sent(server, 2)?), unreachable)?;
                 let heard = told_from_path(&app).await?;
                 let kinds: Vec<_> = heard.iter().map(|e| (e.kind, e.from)).collect();
@@ -3711,6 +3741,7 @@ fn an_error_for_a_ping_to_the_tunnels_dns_address_reaches_the_app() -> Outcome {
                 let (origin, exceeded, _) = traced(v4);
                 let unreachable = if v4 { (3, 1) } else { (1, 3) };
                 let app = erring_pinger(tunnel, id)?;
+                let before = unbound_pings(v4)?;
                 let to = SocketAddr::new(dns, 0).into();
                 let about = Some(SocketAddr::new(dns, 0));
                 for (sequence, from, kind, shown) in [
@@ -3722,7 +3753,7 @@ fn an_error_for_a_ping_to_the_tunnels_dns_address_reaches_the_app() -> Outcome {
                     counted(&engine, ECHO_CARRIED, carried).await?;
                     // What the engine's socket sent the resolver, as the error quotes it: the
                     // address it sent from does not matter to its kernel, the identifier does.
-                    let engines = engine_ping_id_of(v4)?;
+                    let (_, engines) = engine_ping_since(v4, &before)?;
                     let sent = packet::echo_request_of(
                         local,
                         resolver,
