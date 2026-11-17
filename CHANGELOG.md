@@ -46,6 +46,13 @@ All notable changes to this project are documented here. The format follows
   - **The About page says which edition this is,** and what the others are: Basic never has internet access, Basic on Google Play has the same checks and is signed by Google, and Advanced uses the internet only for the user's own apps' traffic and the servers they choose, so Basic can check it from outside. In Persian and Arabic, Watch is no longer called an app. The release rehearsal checks Basic's signed APK against an allowlist of its own as well.
 - The emulator check of the network switch brings mobile data up before Watch starts, and restarts the emulator's radios if it does not come; on CI it was sometimes not up at all when the switch came.
 
+### Security
+
+- The hardware check's parser, after an independent review (ADR 0040, decision 5):
+  - **The bootloader state comes only from the part the secure hardware enforces itself.** Where a trusted environment's or secure chip's attestation left it out, the parser took it from the part the system writes, so a modified system could have filled in "locked and verified". It now takes each value from one list only, as the attestation's security level says, and such a check is reported as a new finding, "Hardware check incomplete", in all eight languages.
+  - **The extension is read as strict DER,** as its schema requires: lengths, tag numbers and integers in their shortest form, INTEGER and ENUMERATED where the schema puts each, and no element beyond those it allows. Two tolerances follow Google's reference verifier and are written down with their reasons.
+  - **Its tests cut every element, not only the outer one,** and read two extensions encoded by OpenSSL; the fuzz target checks that the list the parser does not read never changes what it returns.
+
 
 ## [0.1.2] - 2026-11-08
 

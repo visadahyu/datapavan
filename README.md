@@ -54,8 +54,9 @@ checked on Android 11 and 17 emulators and on Galaxy A40 and A56 phones.
   each change, and Datapavan makes it quick and keeps watch. On our lab phone, the Google app kept the
   microphone open for its wake word until that was turned off.
 - **Device integrity.** The bootloader lock and verified-boot state from hardware key attestation,
-  checked against Google's attestation root certificates and decoded by a parser in the Rust engine, and
-  the age of the security patch. *Why:* on a phone with an unlocked bootloader or a modified system, no
+  checked against Google's attestation root certificates and decoded by a strict DER parser in the Rust
+  engine, which takes them only from the part the secure hardware enforces itself, and the age of the
+  security patch. *Why:* on a phone with an unlocked bootloader or a modified system, no
   app can be trusted, Datapavan included.
 - **Tracker scan.** The code of every installed app, in its base APK and every split, is read by a DEX
   parser in the Rust engine and matched against the εxodus tracker database. Trackers whose code the app
