@@ -180,8 +180,9 @@ private fun datasetName(dataset: String): Int? = when (dataset) {
     else -> null
 }
 
+/** What the data sources screen says of a refused pack (tested: DataSourcesTest). */
 @StringRes
-private fun refusalText(reason: PackRefusal): Int = when (reason) {
+internal fun refusalText(reason: PackRefusal): Int = when (reason) {
     PackRefusal.NOT_SIGNED -> R.string.data_refused_not_signed
     PackRefusal.UNKNOWN_KEY -> R.string.data_refused_unknown_key
     PackRefusal.BAD_SIGNATURE -> R.string.data_refused_bad_signature

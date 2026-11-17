@@ -84,6 +84,11 @@ class DataPackTest {
         assertNull(DataPackRules.retrieved("retrieved: 29 October 2026\n"))
         assertNull(DataPackRules.retrieved("retrieved:\n"))
         assertNull(DataPackRules.retrieved("page: https://example.org\n"))
+        // Only a line that starts with "retrieved:" dates the dataset, not one that mentions it.
+        assertEquals(
+            java.time.LocalDate.of(2026, 10, 29),
+            DataPackRules.retrieved("what: a list\n  retrieved earlier: 2020-01-01\nretrieved: 2026-10-29\n"),
+        )
         // The first retrieved line dates the dataset, as the data sources screen shows it; one SOURCE has one.
         assertEquals(java.time.LocalDate.of(2026, 10, 29), DataPackRules.retrieved("retrieved: 2026-10-29\nretrieved: 2027-01-01\n"))
         // Every dataset in the repository dates itself so, the attestation dataset's among them.
@@ -107,6 +112,10 @@ class DataPackTest {
         )) {
             assertEquals("$undated", PackRefusal.UNDATED_DATASET, DataPackRules.refusal(pack(4, undated), pack(3)))
         }
+        // A list dated after its pack was made (2026-11-17, as these packs are) would stay fresh for ever.
+        val later = dated + ("attestation/SOURCE" to "retrieved: 2026-11-18\n")
+        assertEquals(PackRefusal.UNDATED_DATASET, DataPackRules.refusal(pack(4, later), pack(3)))
+        assertNull(DataPackRules.refusal(pack(4, dated + ("attestation/SOURCE" to "retrieved: 2026-11-17\n")), pack(3)))
         // A pack without the dataset leaves the APK's in use; other datasets' SOURCE is not judged here.
         assertNull(DataPackRules.refusal(pack(4, mapOf("exodus/trackers.tsv" to "x")), pack(3)))
         // An older pack is refused as older first.

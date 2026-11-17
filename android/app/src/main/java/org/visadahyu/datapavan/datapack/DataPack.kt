@@ -172,12 +172,24 @@ internal object DataPackRules {
     /**
      * A pack can only replace an older one, so an old pack with known problems cannot return. A pack must also
      * date each dataset whose age the app shows: the attestation revocation list, which the app calls old after
-     * 90 days (ADR 0040), and could not tell from a fresh one without its date.
+     * 90 days (ADR 0040), and could not tell from a fresh one without its date. The date cannot be after the
+     * pack's own signed date, since no list was fetched after its pack was made: a later date would keep the
+     * list fresh for ever.
      */
     fun refusal(candidate: DataPack, active: DataPack): PackRefusal? = when {
         candidate.sequence <= active.sequence -> PackRefusal.NOT_NEWER
-        DATED_DATASETS.any { it in candidate.datasets && candidate.retrieved(it) == null } -> PackRefusal.UNDATED_DATASET
+        DATED_DATASETS.any { it in candidate.datasets && !datedBy(candidate, it) } -> PackRefusal.UNDATED_DATASET
         else -> null
+    }
+
+    private fun datedBy(pack: DataPack, dataset: String): Boolean {
+        val retrieved = pack.retrieved(dataset) ?: return false
+        val made = try {
+            LocalDate.parse(pack.date)
+        } catch (_: DateTimeParseException) {
+            return false
+        }
+        return !retrieved.isAfter(made)
     }
 
     /** The datasets whose age the app shows from their SOURCE. */
