@@ -64,12 +64,18 @@ const SERVER: &[u8] = b"server in";
 const TOLD_APART: usize = 4;
 /// The largest datagram read as QUIC's, a server's Initial or Retry (ADR 0044, unit 9b, fix round 1) or,
 /// since fix round 3, an app's: a larger one costs no keys and no AEAD, carries nothing and asks nothing.
-/// QUIC never lets IP fragment its datagrams (RFC 9000 14), and a sender makes an Initial's datagram larger
-/// than 1,200 bytes only where it believes the path and its peer carry it (14.1). An app's path ends in
-/// Watch's tunnel, whose MTU is 1,500 bytes at most (ADR 0044, decision 5 as amended): a larger datagram
-/// from an app came in IP fragments, which no QUIC client sends, and a server's answer larger than that
-/// could reach the app only so. A Retry's token goes back in the client's next Initial, which must fit the
-/// same path.
+/// It is the tunnel's largest MTU, `TunnelMtu.MOST` on Watch's side, which a test holds to it. QUIC lets IP
+/// fragment none of its datagrams (RFC 9000 14), and a sender makes an Initial's datagram larger than 1,200
+/// bytes only where it believes the path and its peer carry it (14.1): an app's path ends in Watch's
+/// tunnel, so an app's larger datagram came in IP fragments, as a QUIC stack that cannot set "don't
+/// fragment", configured above the MTU, sends them, and the engine puts together (`fragments.rs`).
+/// **Accepted limit** (fix round 4, review H): such a client's Initial asks nothing, so its stand-in has no
+/// identifiers and is bound as unit 9 binds one without, and its hello names no flow. A server's answer
+/// larger than this tells nothing either, also an accepted limit: the engine writes it to the app as it
+/// writes any, but a stand-in whose server's first answer is that large is not bound by it, where a
+/// tool's relay carries one whole from a path larger than the phone's (a relay that reframes UDP from a
+/// stream is bounded by no path). A Retry's token goes back in the client's next Initial, which must fit
+/// the client's path.
 pub const LARGEST_DATAGRAM: usize = 1_500;
 /// At most this many Initial or Retry packets are opened, keys derived where they are not kept, to tell one
 /// datagram that came back (ADR 0044, unit 9b, fix round 1), whatever stand-ins it is checked for: one for
@@ -328,10 +334,12 @@ fn long_packet(datagram: &[u8], at: usize) -> Option<LongPacket> {
 /// Removes the protection of the packet that starts at `start`, returning its payload without the
 /// tag: the header's protection, then the payload's, with AES-GCM, the header with its protection
 /// removed as the associated data (RFC 9001 5.3, 5.4). `None` for a packet too short for it, whose tag
-/// does not check, or whose reserved bits are set, which a receiver must refuse (RFC 9000 17.2). Those
-/// bits are read before the tag: RFC 9001 9.5 asks an endpoint to read them after, so that their timing
-/// tells nothing of its keys, but Initial keys are no secret, and a packet with them set is refused
-/// either way, so a wrong key costs no AEAD three times in four.
+/// does not check, or whose reserved bits are set, a connection error for a receiver (RFC 9000 17.2).
+/// Those bits are read before the tag: RFC 9001 9.5, to which 17.2 points, asks an endpoint to remove
+/// header and packet protection together, so that their timing confirms no guess of a packet number, its
+/// length or the Key Phase; Watch is no endpoint of these packets, sends nothing on what it reads, and
+/// Initial keys are anyone's. A packet with them set is refused either way, so a wrong key costs no AEAD
+/// three times in four.
 fn open(
     keys: &Keys,
     datagram: &[u8],
@@ -948,8 +956,13 @@ pub fn retry(
 /// The start of a QUIC connection, read for its `ClientHello` one datagram at a time.
 #[derive(Default)]
 pub struct Initial {
-    /// The last Initial keys, with the version and connection ID they are for.
-    keys: Option<(Version, Cid, Keys)>,
+    /// For each version, the last Initial keys derived, with the connection ID they are for: one set for
+    /// each, as [`asked`] keeps them, so that packets alternating versions to one destination ID derive
+    /// them once each (fix round 4, review H: one set for both derived them for every packet).
+    keys: [Option<(Cid, Keys)>; 2],
+    /// How many key sets it derived, for the tests.
+    #[cfg(test)]
+    derived: usize,
     /// The CRYPTO stream as far as it came, gaps filled with zeros.
     crypto: Vec<u8>,
     /// The parts of `crypto` that arrived, sorted and not touching.
@@ -1022,13 +1035,18 @@ impl Initial {
         self.name()
     }
 
-    /// The client's Initial keys of `cid` in `version`: the last ones, when they are for the same, else
-    /// derived and kept.
+    /// The client's Initial keys of `cid` in `version`: the last ones of that version, when they are for
+    /// the same connection ID, else derived and kept.
     fn keys_for(&mut self, version: Version, cid: Cid) -> Option<&Keys> {
-        if !matches!(&self.keys, Some((kept, known, _)) if *kept == version && *known == cid) {
-            self.keys = Some((version, cid, Keys::initial(version, cid.get(), CLIENT)?));
+        let slot = &mut self.keys[version.index()];
+        if !matches!(slot, Some((known, _)) if *known == cid) {
+            *slot = Some((cid, Keys::initial(version, cid.get(), CLIENT)?));
+            #[cfg(test)]
+            {
+                self.derived += 1;
+            }
         }
-        self.keys.as_ref().map(|(_, _, keys)| keys)
+        slot.as_ref().map(|(_, keys)| keys)
     }
 
     /// Reads the frames of one Initial packet whose protection is already removed, as [`Self::push`]
@@ -1703,6 +1721,36 @@ pub(crate) mod tests {
         assert!(!Answer::read(&stream.unwrap_or_default()).is_some_and(|read| read.carries(&ids)));
     }
 
+    /// The hello's reader keeps one key set for each version, as [`asked`] does: 16 tiny Initials
+    /// alternating versions 1 and 2 to one destination ID derive keys twice, not 16 times (fix round 4,
+    /// review H: 23.6 us where the bound was 10.4).
+    #[test]
+    fn the_hellos_reader_derives_each_versions_keys_once() {
+        let mut datagram = Vec::new();
+        for n in 0..16u32 {
+            let version = if n % 2 == 0 { 1 } else { 0x6b33_43cf };
+            datagram.extend_from_slice(&initial_packet(version, &hex(CID), n, &[0x01], 0));
+        }
+        assert!(datagram.len() <= LARGEST_DATAGRAM);
+        let mut initial = Initial::new();
+        assert_eq!(initial.push(&datagram), ServerName::Incomplete);
+        assert_eq!(initial.derived, 2);
+    }
+
+    /// [`LARGEST_DATAGRAM`] is the tunnel's largest MTU, which Watch's `TunnelMtu.MOST` sets: raising
+    /// one without the other would drop real Initials unread (fix round 4, review H).
+    #[test]
+    fn the_largest_datagram_is_the_tunnels_largest_mtu() {
+        let kotlin = include_str!(
+            "../../../android/watch/src/main/java/org/visadahyu/datapavan/watch/TunnelMtu.kt"
+        );
+        let most = kotlin
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("const val MOST = "))
+            .and_then(|value| value.trim().parse::<usize>().ok());
+        assert_eq!(most, Some(LARGEST_DATAGRAM));
+    }
+
     /// A datagram larger than [`LARGEST_DATAGRAM`] is no QUIC client's through Watch's tunnel: it asks
     /// nothing, opens nothing and names no flow, however many Initials it holds, so that one costs no more
     /// than the largest a client sends (fix round 3, review E: 16 Initials of 4,000 bytes cost 200 us).
@@ -1913,8 +1961,9 @@ pub(crate) mod tests {
 
     /// A Version Negotiation packet carries the app's IDs crossed, each half of the crossing checked,
     /// then versions listed in whole 4-byte words, not the app's own, which a client would discard (RFC
-    /// 9000 6.2; fix round 2, review D); a packet whose destination is the app's source ID carries it
-    /// where that ID has 4 bytes or more.
+    /// 9000 6.2; fix round 2, review D); a Handshake, 0-RTT or short-header packet whose destination is
+    /// the app's source ID carries it where that ID has 4 bytes or more (an Initial or a Retry to it is
+    /// opened since fix round 3).
     #[test]
     fn negotiation_and_the_apps_source_id_carry_what_it_asked() {
         let (destination, source) = (hex("0011223344556677"), hex("a1a2a3a4"));

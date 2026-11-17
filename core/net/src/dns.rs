@@ -316,6 +316,41 @@ fn ech_public_names(record: &[u8], names: &mut Vec<String>) -> Option<()> {
 
 #[cfg(test)]
 mod tests {
+
+    /// A response's ID and its one question, the root among questions, and nothing past the question
+    /// read (fix round 4, review H's surviving mutants): no query, no other opcode, one question exactly,
+    /// and its type and class there.
+    #[test]
+    fn answered_reads_a_responses_id_and_one_question() {
+        let mut response = vec![0x12, 0x34, 0x81, 0x80, 0, 1, 0, 0, 0, 0, 0, 0];
+        response.extend_from_slice(b"\x01x\x04test\x00\x00\x01\x00\x01");
+        assert_eq!(answered(&response), Some((0x1234, "x.test".to_owned())));
+        let mut root = vec![0x12, 0x34, 0x81, 0x80, 0, 1, 0, 0, 0, 0, 0, 0];
+        root.extend_from_slice(&[0, 0, 2, 0, 1]);
+        assert_eq!(answered(&root), Some((0x1234, String::new())));
+        let mut query = response.clone();
+        query[2] = 0x01;
+        assert_eq!(answered(&query), None, "a query");
+        for opcode in [1u8, 2, 4, 8] {
+            let mut other = response.clone();
+            other[2] |= opcode << 3;
+            assert_eq!(answered(&other), None, "opcode {opcode}");
+        }
+        let mut two = response.clone();
+        two[5] = 2;
+        assert_eq!(answered(&two), None, "two questions");
+        assert_eq!(
+            answered(&response[..response.len() - 4]),
+            None,
+            "no type and class"
+        );
+        assert_eq!(
+            answered(&response[..response.len() - 1]),
+            None,
+            "a class cut short"
+        );
+    }
+
     use super::*;
 
     /// A response for `www.Example.com`: a CNAME to `edge.cdn.net`, its A and AAAA records, and an A
