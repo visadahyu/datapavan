@@ -5334,3 +5334,312 @@ async fn the_tool_closing_the_mappings_association_ends_only_what_left_by_it() -
     assert_eq!(engine.counters()[UDP_MAPPINGS], 1, "the same mapping");
     Ok(())
 }
+
+// Unit 9b, fix round 2: the reviewers' probes (C and D), each a test.
+
+/// An NTP packet of `mode` with `stamp` at `at`: a client's request has its transmit timestamp at 40,
+/// a server's reply the request's as its origin, at 24.
+fn ntp_packet(mode: u8, at: usize, stamp: u64) -> Vec<u8> {
+    let mut packet = vec![0u8; 48];
+    packet[0] = (4 << 3) | mode;
+    packet[at..at + 8].copy_from_slice(&stamp.to_be_bytes());
+    packet
+}
+
+/// The caps on associations of a stand-in's own: the default's, or none at all.
+fn own_relays(cap: usize) -> Limits {
+    Limits {
+        udp_own_relays: cap,
+        ..Limits::default()
+    }
+}
+
+/// Review C, probe 1: the app sends one NTP request, one transmit timestamp (a clock of a millisecond's
+/// resolution), to a server it knows by its address, then to a name. The name's identifier is one the
+/// known server was sent: it gets an association of its own, and each reply reaches the app from its own
+/// server (fix round 2). Where the caps refuse it one, it waits on the mapping's association: the known
+/// server's reply, from its own address, is the known server's though it carries the name's identifier,
+/// and the name's reply, from where the tool resolved it, the name's.
+#[tokio::test(flavor = "current_thread")]
+async fn an_identifier_a_known_server_was_sent_too_binds_no_stand_in_to_it() -> Outcome {
+    let request = ntp_packet(3, 40, 0xe9a1_0000_0000_0001);
+    let reply = ntp_packet(4, 24, 0xe9a1_0000_0000_0001);
+    let known = SocketAddr::from(([198, 51, 100, 20], 123));
+    for (cap, own) in [(32, true), (0, false)] {
+        for (far_b, _) in far_pairs(123) {
+            let (proxy, relay, mut script) = scripted().await?;
+            let (engine, tunnel) = engine_with(chain(proxy), &own_relays(cap), Arc::new(ByPort))?;
+            let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, 123));
+            send(&tunnel, app(CHAINED_PORT), known, &request).await?;
+            let engine_at = heard_from_engine(&mut script).await?;
+            send(&tunnel, app(CHAINED_PORT), b, &request).await?;
+            let b_at = heard_from_engine(&mut script).await?;
+            assert_eq!(
+                b_at != engine_at,
+                own,
+                "cap {cap}: an association of its own"
+            );
+            relay
+                .send_to(&relayed(header_by_address(known), &reply), engine_at)
+                .await?;
+            assert_eq!(
+                receive(&tunnel).await?,
+                Some((known, reply.clone())),
+                "cap {cap}, {far_b}: the known server's reply"
+            );
+            relay
+                .send_to(&relayed(header_by_address(far_b), &reply), b_at)
+                .await?;
+            assert_eq!(
+                receive(&tunnel).await?,
+                Some((b, reply.clone())),
+                "cap {cap}, {far_b}: the name's own reply"
+            );
+            assert_eq!(engine.counters()[OWN_RELAYS], u64::from(own));
+        }
+    }
+    Ok(())
+}
+
+/// The same the other way round: the name asked first, waiting with the timestamp, then the server known
+/// by its address with the same. The known server's reply, from its own address, is its own; the name's
+/// is the name's (fix round 2).
+#[tokio::test(flavor = "current_thread")]
+async fn an_identifier_sent_later_to_a_known_server_binds_no_stand_in_to_it() -> Outcome {
+    let request = ntp_packet(3, 40, 0xe9a1_0000_0000_0002);
+    let reply = ntp_packet(4, 24, 0xe9a1_0000_0000_0002);
+    let known = SocketAddr::from(([198, 51, 100, 20], 123));
+    for (far_b, _) in far_pairs(123) {
+        let (proxy, relay, mut script) = scripted().await?;
+        let (_engine, tunnel) = engine(chain(proxy))?;
+        let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, 123));
+        send(&tunnel, app(CHAINED_PORT), b, &request).await?;
+        let engine_at = heard_from_engine(&mut script).await?;
+        send(&tunnel, app(CHAINED_PORT), known, &request).await?;
+        assert_eq!(
+            heard_from_engine(&mut script).await?,
+            engine_at,
+            "one association"
+        );
+        relay
+            .send_to(&relayed(header_by_address(known), &reply), engine_at)
+            .await?;
+        assert_eq!(
+            receive(&tunnel).await?,
+            Some((known, reply.clone())),
+            "{far_b}: the known server's reply"
+        );
+        relay
+            .send_to(&relayed(header_by_address(far_b), &reply), engine_at)
+            .await?;
+        assert_eq!(
+            receive(&tunnel).await?,
+            Some((b, reply.clone())),
+            "{far_b}: the name's own reply"
+        );
+    }
+    Ok(())
+}
+
+/// Review C, probe 2: a stub resolver that sends a query again, with the same ID, to its next server
+/// when the first is slow (as glibc's `res_send` does). The first name is bound by an earlier answer;
+/// the second is new, and its query is one the first was sent: it gets an association of its own (fix
+/// round 2). The first server's late answer reaches the app from the first name, and the second's from
+/// the second, also where the caps refuse the second an association of its own.
+#[tokio::test(flavor = "current_thread")]
+async fn a_query_sent_again_to_the_next_server_binds_it_to_neither() -> Outcome {
+    let dns_query = |id: u16| {
+        let mut query = id.to_be_bytes().to_vec();
+        query.extend_from_slice(&[0x01, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
+        query.extend_from_slice(b"\x01x\x04test\x00");
+        query.extend_from_slice(&[0, 1, 0, 1]);
+        query
+    };
+    for (cap, own) in [(32, true), (0, false)] {
+        for (far_a, far_b) in far_pairs(53) {
+            let (proxy, relay, mut script) = scripted().await?;
+            let (_engine, tunnel) = engine_with(chain(proxy), &own_relays(cap), Arc::new(ByPort))?;
+            let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, 53));
+            let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, 53));
+            let earlier = dns_query(0x0101);
+            send(&tunnel, app(CHAINED_PORT), a, &earlier).await?;
+            let engine_at = heard_from_engine(&mut script).await?;
+            relay
+                .send_to(
+                    &relayed(header_by_address(far_a), &dns_response(&earlier, 0x0101)),
+                    engine_at,
+                )
+                .await?;
+            assert_eq!(receive(&tunnel).await?.map(|(from, _)| from), Some(a));
+            let query = dns_query(0x5151);
+            send(&tunnel, app(CHAINED_PORT), a, &query).await?;
+            heard_from_engine(&mut script).await?;
+            send(&tunnel, app(CHAINED_PORT), b, &query).await?;
+            let b_at = heard_from_engine(&mut script).await?;
+            assert_eq!(
+                b_at != engine_at,
+                own,
+                "cap {cap}: an association of its own"
+            );
+            let answer = dns_response(&query, 0x5151);
+            relay
+                .send_to(&relayed(header_by_address(far_a), &answer), engine_at)
+                .await?;
+            assert_eq!(
+                receive(&tunnel).await?,
+                Some((a, answer.clone())),
+                "cap {cap}, {far_a}: the first server's answer"
+            );
+            relay
+                .send_to(&relayed(header_by_address(far_b), &answer), b_at)
+                .await?;
+            assert_eq!(
+                receive(&tunnel).await?,
+                Some((b, answer.clone())),
+                "cap {cap}, {far_b}: the second server's own answer"
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Review C, probe 3: once the tool closed the mapping's association, a stand-in on an association of
+/// its own whose app pauses for `udp_reask` asks Android again, and its datagram leaves by its own
+/// association, without the mapping's being opened anew for it (fix round 2): a tool that refuses a
+/// further association (here: it accepts two and no more) fails nothing.
+#[tokio::test(flavor = "current_thread")]
+async fn after_a_pause_an_own_association_needs_no_main_one() -> Outcome {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let proxy = listener.local_addr()?;
+    let relay = Arc::new(UdpSocket::bind("127.0.0.1:0").await?);
+    let at = relay.local_addr()?;
+    let closers: Closers = Arc::default();
+    let kept = Arc::clone(&closers);
+    tokio::spawn(async move {
+        for _ in 0..2 {
+            let Ok((mut client, _)) = listener.accept().await else {
+                return;
+            };
+            let (close, closed) = oneshot::channel::<()>();
+            kept.lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(close);
+            tokio::spawn(async move {
+                let mut head = [0u8; 2];
+                if client.read_exact(&mut head).await.is_err() {
+                    return;
+                }
+                let mut methods = vec![0u8; usize::from(head[1])];
+                let _ = client.read_exact(&mut methods).await;
+                let _ = client.write_all(&[5, 0]).await;
+                let mut request = [0u8; 4];
+                let _ = client.read_exact(&mut request).await;
+                let mut skip = vec![0u8; if request[3] == 4 { 18 } else { 6 }];
+                let _ = client.read_exact(&mut skip).await;
+                let mut reply = vec![5, 0, 0];
+                reply.extend_from_slice(&header_by_address(at)[3..]);
+                let _ = client.write_all(&reply).await;
+                let mut byte = [0u8; 1];
+                tokio::select! {
+                    _ = closed => {}
+                    () = async { while matches!(client.read(&mut byte).await, Ok(n) if n > 0) {} } => {}
+                }
+            });
+        }
+        // The listener goes: no more associations.
+    });
+    let (tell, mut script) = tokio::sync::mpsc::unbounded_channel();
+    let reader = Arc::clone(&relay);
+    tokio::spawn(async move {
+        let mut buffer = vec![0u8; 65_535];
+        while let Ok((n, from)) = reader.recv_from(&mut buffer).await {
+            let _ = tell.send((from, buffer[..n].to_vec()));
+        }
+    });
+    let (engine, tunnel) = engine_with(chain(proxy), &quick_reask(), Arc::new(ByPort))?;
+    let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, 4_000));
+    let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, 4_000));
+    send(&tunnel, app(CHAINED_PORT), a, b"plain a").await?;
+    let main_at = heard_from_engine(&mut script).await?;
+    send(&tunnel, app(CHAINED_PORT), b, b"plain b").await?;
+    let own_at = heard_from_engine(&mut script).await?;
+    assert_ne!(main_at, own_at, "b has an association of its own");
+    let b_server = SocketAddr::from(([198, 51, 100, 32], 4_000));
+    relay
+        .send_to(&relayed(header_by_address(b_server), b"for b"), own_at)
+        .await?;
+    assert_eq!(receive(&tunnel).await?, Some((b, b"for b".to_vec())));
+    let close = closers
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(0);
+    let _ = close.send(());
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    send(&tunnel, app(CHAINED_PORT), b, b"b after a pause").await?;
+    let heard = tokio::time::timeout(Duration::from_secs(3), script.recv()).await;
+    assert!(
+        matches!(heard, Ok(Some((from, _))) if from == own_at),
+        "b's datagram after a pause did not leave by its own association: {heard:?}"
+    );
+    assert_eq!(engine.counters()[UDP_MAPPINGS], 1, "the same mapping");
+    Ok(())
+}
+
+/// Review D's probe: the packets an answer may open are spread over the QUIC stand-ins that wait on its
+/// port, the newest identifier of each first (fix round 2). Older stand-ins whose clients send no
+/// source ID wait unanswered with 8 destination IDs each, or many with one each, then a newer one asks
+/// once; its server's genuine Initial, sent again as on a loss, reaches it: at once where one round of
+/// opens holds every stand-in, and with 16 others, where it does not, at the next sending, each answer
+/// beginning where the last one stopped.
+#[tokio::test(flavor = "current_thread")]
+async fn a_newer_quic_stand_in_is_not_starved_of_opens() -> Outcome {
+    let ping = [0x01];
+    let acked = [0x02, 0, 0, 0, 0];
+    for (older, n, sendings) in [(2usize, 8u8, 1usize), (16, 1, 2)] {
+        let (far_c, _) = far_pairs(443)[0];
+        let (proxy, relay, mut script) = scripted().await?;
+        let (engine, tunnel) = engine(chain(proxy))?;
+        let mut stand_ins = Vec::new();
+        for i in 0..=older {
+            let name = [&[1u8, b'a' + u8::try_from(i)?][..], b"\x04test\x00"].concat();
+            stand_ins.push(SocketAddr::from((stand_in(&tunnel, &name).await?, 443)));
+        }
+        let mut engine_at = None;
+        for (i, to) in stand_ins.iter().enumerate() {
+            let attempts = if i < older { n } else { 1 };
+            for k in 0..attempts {
+                let id = [u8::try_from(i)?, k, 0x77, 0x77, 0x77, 0x77, 0x77, 0x77];
+                let asks = datapavan_net::quic::client_initial(1, (&id, &[]), (0, &ping), 1200)
+                    .ok_or("a client Initial")?;
+                send(&tunnel, app(CHAINED_PORT), *to, &asks).await?;
+                engine_at = Some(heard_from_engine(&mut script).await?);
+            }
+        }
+        let newest = u8::try_from(older)?;
+        let c_id = [newest, 0, 0x77, 0x77, 0x77, 0x77, 0x77, 0x77];
+        let c_answer =
+            datapavan_net::quic::server_initial(1, &c_id, (&[], &[0x5c; 8]), (0, &acked))
+                .ok_or("a server Initial")?;
+        for _ in 0..sendings {
+            relay
+                .send_to(
+                    &relayed(header_by_address(far_c), &c_answer),
+                    engine_at.ok_or("no association")?,
+                )
+                .await?;
+        }
+        let got = receive(&tunnel).await?;
+        assert_eq!(
+            got.map(|(to, _)| to),
+            Some(stand_ins[older]),
+            "{older} older of {n} identifiers each"
+        );
+        let counters = engine.counters();
+        assert_eq!(
+            (counters[UDP_IDENTIFIED], counters[UDP_UNIDENTIFIED]),
+            (1, u64::try_from(sendings - 1)?),
+            "{older} older of {n} identifiers each"
+        );
+    }
+    Ok(())
+}
