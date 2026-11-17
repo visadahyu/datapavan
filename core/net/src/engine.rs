@@ -2157,10 +2157,22 @@ mod tests {
         let server = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
         let destination = SocketAddr::from(([198, 51, 100, 9], 443));
 
-        // A connection the engine rewrote, its upstream waiting under its fake port.
-        let real = TcpSocket::new_v4()?;
-        real.bind(SocketAddr::new(fake, 0))?;
-        let port = real.local_addr()?.port();
+        // A connection the engine rewrote, its upstream waiting under its fake port; and another app's
+        // socket from that same port at the loopback address, which the kernel's choice of the port at
+        // the fake address does not keep free there: another socket on the machine may hold it (unit 9b,
+        // fix round 2: one run in 256, 16 at once, failed with "address in use").
+        let mut tries = 0;
+        let (real, stranger, port) = loop {
+            let real = TcpSocket::new_v4()?;
+            real.bind(SocketAddr::new(fake, 0))?;
+            let port = real.local_addr()?.port();
+            let stranger = TcpSocket::new_v4()?;
+            match stranger.bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port))) {
+                Ok(()) => break (real, stranger, port),
+                Err(error) if error.kind() == io::ErrorKind::AddrInUse && tries < 64 => tries += 1,
+                Err(error) => return Err(error),
+            }
+        };
         let nat = Arc::new(Mutex::new(Nat::with_ports(port, port)));
         let app = SocketAddr::from(([10, 215, 173, 1], 40_000));
         assert_eq!(
@@ -2212,8 +2224,6 @@ mod tests {
         ));
 
         // Another app, straight to the listener, from the waiting connection's port.
-        let stranger = TcpSocket::new_v4()?;
-        stranger.bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port)))?;
         let mut stranger = stranger.connect(address).await?;
         let mut byte = [0u8; 1];
         assert_eq!(stranger.read(&mut byte).await?, 0, "closed at once");
