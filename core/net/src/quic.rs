@@ -958,8 +958,10 @@ pub fn retry(
 pub struct Initial {
     /// For each version, the last Initial keys derived, with the connection ID they are for: one set for
     /// each, as [`asked`] keeps them, so that packets alternating versions to one destination ID derive
-    /// them once each (fix round 4, review H: one set for both derived them for every packet).
-    keys: [Option<(Cid, Keys)>; 2],
+    /// them once each (fix round 4, review H: one set for both derived them for every packet). Each on the
+    /// heap, made when an Initial of its version first comes (fix round 5, review J's minor 3: inline,
+    /// the two made every peer's reader 1,904 bytes, QUIC or not).
+    keys: [Option<Box<(Cid, Keys)>>; 2],
     /// How many key sets it derived, for the tests.
     #[cfg(test)]
     derived: usize,
@@ -1039,14 +1041,18 @@ impl Initial {
     /// the same connection ID, else derived and kept.
     fn keys_for(&mut self, version: Version, cid: Cid) -> Option<&Keys> {
         let slot = &mut self.keys[version.index()];
-        if !matches!(slot, Some((known, _)) if *known == cid) {
-            *slot = Some((cid, Keys::initial(version, cid.get(), CLIENT)?));
+        if !matches!(slot.as_deref(), Some((known, _)) if *known == cid) {
+            let keys = (cid, Keys::initial(version, cid.get(), CLIENT)?);
+            match slot {
+                Some(kept) => **kept = keys,
+                None => *slot = Some(Box::new(keys)),
+            }
             #[cfg(test)]
             {
                 self.derived += 1;
             }
         }
-        slot.as_ref().map(|(_, keys)| keys)
+        slot.as_deref().map(|(_, keys)| keys)
     }
 
     /// Reads the frames of one Initial packet whose protection is already removed, as [`Self::push`]
@@ -1735,6 +1741,40 @@ pub(crate) mod tests {
         let mut initial = Initial::new();
         assert_eq!(initial.push(&datagram), ServerName::Incomplete);
         assert_eq!(initial.derived, 2);
+    }
+
+    /// A hello the app sends across two destination IDs of one version, as after a Retry (RFC 9000
+    /// 17.2.5.2), is read with each ID's keys, derived anew for the second (review J's surviving mutant
+    /// J6: keys kept for the first ID were never derived again).
+    #[test]
+    fn a_hello_across_a_new_destination_id_is_read_with_its_keys() {
+        let hello = tls::tests::handshake("retried.example", false);
+        let half = hello.len() / 2;
+        let one = initial_packet(1, &[0x11; 8], 0, &crypto(0, &hello[..half]), 1200);
+        let two = initial_packet(1, &[0x22; 8], 1, &crypto(half, &hello[half..]), 1200);
+        let mut initial = Initial::new();
+        assert_eq!(initial.push(&one), ServerName::Incomplete);
+        assert!(matches!(initial.push(&two), ServerName::Found(_)));
+        assert_eq!(initial.derived, 2);
+    }
+
+    /// The hello's reader, made for every peer the app sends to, keeps no key set in place: each is
+    /// made when an Initial of its version first comes (fix round 5, review J's minor 3: two inline made
+    /// every reader 1,904 bytes, QUIC or not). 80 bytes on x86-64, without the tests' count.
+    #[test]
+    fn the_hellos_reader_keeps_its_keys_on_the_heap() {
+        assert!(std::mem::size_of::<Initial>() < std::mem::size_of::<Keys>());
+        #[cfg(target_pointer_width = "64")]
+        assert_eq!(
+            std::mem::size_of::<Initial>(),
+            80 + std::mem::size_of::<usize>()
+        );
+        let mut initial = Initial::new();
+        assert!(initial.keys.iter().all(Option::is_none));
+        let datagram = initial_packet(1, &hex(CID), 0, &[0x01], 1200);
+        assert_eq!(initial.push(&datagram), ServerName::Incomplete);
+        assert!(initial.keys[Version::V1.index()].is_some());
+        assert!(initial.keys[Version::V2.index()].is_none());
     }
 
     /// [`LARGEST_DATAGRAM`] is the tunnel's largest MTU, which Watch's `TunnelMtu.MOST` sets: raising
