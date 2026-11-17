@@ -8282,4 +8282,140 @@ mod tests {
         }
         Ok(())
     }
+
+    /// Whether each association's fingerprints hold exactly how many of its peers keep each, and their
+    /// addresses' exclusive-or, as its peers' own lists say: for the model check below.
+    fn fingerprints_match(mapping: &mut Mapping) -> Result<(), String> {
+        for via in [None, Some(1u64), Some(2u64)] {
+            let mut expected: HashMap<u64, (u32, [u8; 16])> = HashMap::new();
+            for (shown, peer) in &mapping.peers {
+                if peer.via != via {
+                    continue;
+                }
+                for &fp in &peer.told {
+                    let entry = expected.entry(fp).or_insert((0, [0; 16]));
+                    entry.0 += 1;
+                    let mut keepers = Keepers::default();
+                    keepers.toggle(shown.ip());
+                    for (kept, byte) in entry.1.iter_mut().zip(keepers.addresses) {
+                        *kept ^= byte;
+                    }
+                }
+            }
+            let Some(scope) = mapping.scope(via) else {
+                if expected.is_empty() {
+                    continue;
+                }
+                return Err(format!("{via:?}: peers with no association"));
+            };
+            let actual: HashMap<u64, (u32, [u8; 16])> = scope
+                .sources
+                .told
+                .0
+                .iter()
+                .map(|(&fp, keepers)| (fp, (keepers.peers, keepers.addresses)))
+                .collect();
+            if actual != expected {
+                return Err(format!(
+                    "{via:?}: index {} entries, peers {} entries",
+                    actual.len(),
+                    expected.len()
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Review K's model check of fix round 5's index: in 40 runs of 3,000 random steps (peers made on the
+    /// mapping's association and two of a stand-in's own, by an address and by a name, IPv4 and IPv6;
+    /// STUN and NTP identifiers sent them; sweeps; associations ended and made again), each association's
+    /// fingerprints hold exactly, after every step, how many of its peers keep each and their addresses'
+    /// exclusive-or, as its peers' own lists say (fix round 6; it fails at step 16 with a peer's end not
+    /// forgetting its fingerprints).
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_fingerprint_index_matches_its_peers_at_every_step() -> io::Result<()> {
+        let shared = shared();
+        let mut seed: u64 = 0x9e37_79b9_7f4a_7c15;
+        let mut next = move |n: u64| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed % n
+        };
+        for round in 0..40u64 {
+            let start = Instant::now();
+            let mut now = start;
+            let mut mapping = mapping(now).await?;
+            mapping.owns.insert(1, own_for_test(&shared).await?);
+            mapping.owns.insert(2, own_for_test(&shared).await?);
+            for step in 0..3000u64 {
+                now += Duration::from_millis(10);
+                match next(10) {
+                    0..=2 => {
+                        let port = [3_478u16, 123][usize::try_from(next(2)).unwrap_or(0)];
+                        let n = u8::try_from(next(3)).unwrap_or(0);
+                        let ip: IpAddr = match next(3) {
+                            0 => IpAddr::from([198, 18, 0, n]),
+                            1 => IpAddr::from([192, 0, 2, n]),
+                            _ => IpAddr::from([0x2001, 0xdb8, 0, 0, 0, 0, 0, u16::from(n)]),
+                        };
+                        let shown = SocketAddr::new(ip, port);
+                        let way = if next(2) == 0 {
+                            tooled(&format!("n{n}.test"), port)
+                        } else {
+                            PeerWay::through_tool(Target::Address(shown))
+                        };
+                        let via = [None, Some(1), Some(2)][usize::try_from(next(3)).unwrap_or(0)];
+                        if !mapping.peers.contains_key(&shown)
+                            && let Some(scope) = mapping.scope(via)
+                        {
+                            scope.into_peer(&shared, (APP, shown), now, (false, way));
+                        }
+                    }
+                    3..=6 => {
+                        let peers: Vec<SocketAddr> = mapping.peers.keys().copied().collect();
+                        if peers.is_empty() {
+                            continue;
+                        }
+                        let to = peers[usize::try_from(next(peers.len() as u64)).unwrap_or(0)];
+                        let k = u8::try_from(next(80)).unwrap_or(0);
+                        let payload = if to.port() == 123 {
+                            ntp(3, 40, u64::from(k) + 1)
+                        } else {
+                            binding(k, false)
+                        };
+                        mapping.sent(to, &payload);
+                    }
+                    7 => {
+                        let peers: Vec<SocketAddr> = mapping.peers.keys().copied().collect();
+                        for shown in peers {
+                            if next(3) != 0
+                                && let Some(peer) = mapping.peers.get_mut(&shown)
+                            {
+                                peer.last = now;
+                            }
+                        }
+                        let since = now.checked_sub(Duration::from_millis(5)).unwrap_or(start);
+                        mapping.sweep(since, &shared);
+                    }
+                    8 => {
+                        if next(10) == 0 {
+                            let own = 1 + next(2);
+                            mapping.end_own(own, &shared);
+                            mapping.owns.insert(own, own_for_test(&shared).await?);
+                        }
+                    }
+                    _ => {
+                        if next(20) == 0 {
+                            mapping.end_main(&shared);
+                        }
+                    }
+                }
+                fingerprints_match(&mut mapping).map_err(|why| {
+                    io::Error::other(format!("round {round}, step {step}: {why}"))
+                })?;
+            }
+        }
+        Ok(())
+    }
 }
