@@ -3,10 +3,10 @@
 //!
 //! Random bytes seldom get past an extension's outer elements, so the same bytes are also put where
 //! the parser's inner paths read them, inside a valid extension whose every enclosing length is
-//! encoded again: as each authorization list, and as the content of a `rootOfTrust`. There two
+//! encoded again: as each authorization list, and as the content of a `rootOfTrust`. There these
 //! properties of ADR 0040's decision 5 must hold, whatever the bytes: a trusted environment's values
-//! come from its hardware-enforced list alone, and a software attestation's from its
-//! software-enforced list alone.
+//! come from its hardware-enforced list alone, a software attestation's from its software-enforced
+//! list alone, and a malformed root of trust leaves the rest of the extension readable.
 #![no_main]
 
 use datapavan_engine::attestation::parse_key_description;
@@ -97,10 +97,9 @@ fuzz_target!(|data: &[u8]| {
         assert!(parsed.is_err() || parsed == expected, "{parsed:?}");
     }
 
-    // The bytes as the list the parser reads, and as a rootOfTrust: one that is there is read or
-    // rejected, never dropped.
+    // The bytes as the list the parser reads, and as a rootOfTrust: a malformed root of trust is
+    // absent, and never makes the rest of the extension fail.
     let _ = parse_key_description(&extension(1, &[], data));
-    if let Ok(description) = parse_key_description(&extension(1, &[], &root_of_trust(data))) {
-        assert!(description.root_of_trust.is_some());
-    }
+    let root = parse_key_description(&extension(1, &[], &root_of_trust(data)));
+    assert!(root.is_ok(), "{root:?}");
 });
