@@ -8,13 +8,21 @@
 //! PING and PADDING, so that middleboxes cannot depend on one layout. The frames are put together by
 //! their offsets, up to [`tls::MAX_HELLO`] bytes, over at most [`MAX_DATAGRAMS`] datagrams.
 //!
-//! The AEAD tag is not checked: anyone can compute these keys, so a valid tag would prove nothing about
-//! who sent the packet, and a damaged packet fails to parse. Removing the payload's protection is AES
-//! in counter mode as GCM runs it (the counter starts at 2), which is all of GCM a reader needs; HKDF
+//! The AEAD tag is not checked there: anyone can compute these keys, so a valid tag would prove nothing
+//! about who sent the packet, and a damaged packet fails to parse. Removing the payload's protection is
+//! AES in counter mode as GCM runs it (the counter starts at 2), which is all of GCM a reader needs; HKDF
 //! is HMAC over SHA-256. Both are checked against the RFCs' sample packets below.
 //!
+//! The same keys tell a stand-in's answers apart (ADR 0044, unit 9b): [`asked`] reads the connection IDs
+//! of the Initial packets an app sends, and [`Answer`] whether what comes back is the server's answer to
+//! one of them. There the tag is checked, by GCM's GHASH written out below from NIST SP 800-38D, with no
+//! further dependency: not against a sender who saw the app's packet, who can compute the keys and the
+//! tag as well, but so that a datagram of anyone else matches only by a chance of 2^-128 rather than by
+//! frames that happen to parse. A Retry carries no trace of the connection ID it answers but its
+//! integrity tag (RFC 9001 5.8), so only the tag can tell which of an app's Initial packets it is for.
+//!
 //! The bytes come from any app, so nothing here may panic or read outside a slice
-//! (`fuzz_targets/quic.rs`).
+//! (`fuzz_targets/quic.rs`, `fuzz_targets/identifiers.rs`).
 
 use aes::Aes128;
 use aes::cipher::{BlockCipherEncrypt, KeyInit};
@@ -35,6 +43,12 @@ const SAMPLE: usize = 16;
 
 /// The client's label for its Initial secret.
 const CLIENT: &[u8] = b"client in";
+/// The server's label for its Initial secret.
+const SERVER: &[u8] = b"server in";
+/// The shortest connection ID that tells a connection's packets apart by itself: a shorter one would be
+/// matched by a stranger's packet by a chance of one in 256 for one byte. A client that chooses one of 4
+/// bytes or more, as most do but Chromium's, which chooses none, is matched by it at a chance of 2^-32.
+const TOLD_APART: usize = 4;
 
 /// The QUIC versions whose Initial packets can be read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,6 +65,13 @@ impl Version {
             1 => Some(Self::V1),
             0x6b33_43cf => Some(Self::V2),
             _ => None,
+        }
+    }
+
+    fn wire(self) -> u32 {
+        match self {
+            Self::V1 => 1,
+            Self::V2 => 0x6b33_43cf,
         }
     }
 
@@ -81,6 +102,30 @@ impl Version {
         match self {
             Self::V1 => (0, 3),
             Self::V2 => (1, 0),
+        }
+    }
+
+    /// The fixed key and nonce of a Retry packet's integrity tag (RFC 9001 5.8, RFC 9369 3.3.3).
+    fn retry(self) -> ([u8; 16], [u8; 12]) {
+        match self {
+            Self::V1 => (
+                [
+                    0xbe, 0x0c, 0x69, 0x0b, 0x9f, 0x66, 0x57, 0x5a, 0x1d, 0x76, 0x6b, 0x54, 0xe3,
+                    0x68, 0xc8, 0x4e,
+                ],
+                [
+                    0x46, 0x15, 0x99, 0xd3, 0x5d, 0x63, 0x2b, 0xf2, 0x23, 0x98, 0x25, 0xbb,
+                ],
+            ),
+            Self::V2 => (
+                [
+                    0x8f, 0xb4, 0xb0, 0x1b, 0x56, 0xac, 0x48, 0xe2, 0x60, 0xfb, 0xcb, 0xce, 0xad,
+                    0x7c, 0xcc, 0x92,
+                ],
+                [
+                    0xd8, 0x69, 0x69, 0xbc, 0x2d, 0x7c, 0x6d, 0x99, 0x90, 0xef, 0xb0, 0x4a,
+                ],
+            ),
         }
     }
 }
@@ -151,12 +196,18 @@ impl Keys {
         block.into()
     }
 
-    /// Removes (or adds) the payload's protection: AES-CTR with GCM's counter blocks for packet `pn`.
-    fn apply(&self, pn: u64, data: &mut [u8]) {
+    /// The nonce of packet `pn`: the IV with the packet number in its last eight bytes (RFC 9001 5.3).
+    fn nonce(&self, pn: u64) -> [u8; 12] {
         let mut nonce = self.iv;
         for (byte, pn_byte) in nonce[4..].iter_mut().zip(pn.to_be_bytes()) {
             *byte ^= pn_byte;
         }
+        nonce
+    }
+
+    /// Removes (or adds) the payload's protection: AES-CTR with GCM's counter blocks for packet `pn`.
+    fn apply(&self, pn: u64, data: &mut [u8]) {
+        let nonce = self.nonce(pn);
         let mut counter: u32 = 2;
         for chunk in data.chunks_mut(16) {
             let mut block = aes::Block::default();
@@ -175,6 +226,55 @@ fn aes(key: &[u8; 32]) -> Aes128 {
     let mut key16 = aes::cipher::Key::<Aes128>::default();
     key16.copy_from_slice(&key[..16]);
     Aes128::new(&key16)
+}
+
+/// `block` encrypted with `key`, as a number, the first byte highest.
+fn encrypted(key: &Aes128, block: [u8; 16]) -> u128 {
+    let mut out = aes::Block::default();
+    out.copy_from_slice(&block);
+    key.encrypt_block(&mut out);
+    let mut bytes = [0u8; 16];
+    bytes.copy_from_slice(&out);
+    u128::from_be_bytes(bytes)
+}
+
+/// The product of `x` and `y` in GCM's field, GF(2^128) with its bits in GCM's order: the first bit of
+/// the block, the number's highest, is the coefficient of x^0 (NIST SP 800-38D 6.3, Algorithm 1).
+fn multiply(x: u128, y: u128) -> u128 {
+    const R: u128 = 0xe1 << 120;
+    let mut product = 0;
+    let mut v = y;
+    for bit in (0..128).rev() {
+        if (x >> bit) & 1 == 1 {
+            product ^= v;
+        }
+        v = if v & 1 == 1 { (v >> 1) ^ R } else { v >> 1 };
+    }
+    product
+}
+
+/// GHASH (SP 800-38D 6.4) under the hash key `h` of `aad` and then `ciphertext`, each padded with zeros
+/// to whole blocks, then their lengths in bits.
+fn ghash(h: u128, aad: &[u8], ciphertext: &[u8]) -> u128 {
+    let mut y = 0;
+    for part in [aad, ciphertext] {
+        for chunk in part.chunks(16) {
+            let mut block = [0u8; 16];
+            block[..chunk.len()].copy_from_slice(chunk);
+            y = multiply(y ^ u128::from_be_bytes(block), h);
+        }
+    }
+    let bits = |part: &[u8]| u128::from(u64::try_from(part.len()).unwrap_or(u64::MAX)) * 8;
+    multiply(y ^ (bits(aad) << 64 | bits(ciphertext)), h)
+}
+
+/// AES-128-GCM's tag (SP 800-38D 7.1) for a 96-bit `nonce`, over `aad` and `ciphertext`.
+fn gcm_tag(key: &Aes128, nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8]) -> [u8; 16] {
+    let h = encrypted(key, [0; 16]);
+    let mut first = [0u8; 16];
+    first[..12].copy_from_slice(nonce);
+    first[15] = 1;
+    (encrypted(key, first) ^ ghash(h, aad, ciphertext)).to_be_bytes()
 }
 
 /// Reads a variable-length integer (RFC 9000 16) at `at`, moving `at` past it.
@@ -199,6 +299,8 @@ struct LongPacket {
     initial: bool,
     dcid_start: usize,
     dcid_end: usize,
+    scid_start: usize,
+    scid_end: usize,
     pn_offset: usize,
     end: usize,
 }
@@ -230,7 +332,9 @@ fn long_packet(datagram: &[u8], at: usize) -> Option<LongPacket> {
     if scid_length > MAX_CID {
         return None;
     }
-    pos += 1 + scid_length;
+    let scid_start = pos + 1;
+    let scid_end = scid_start + scid_length;
+    pos = scid_end;
     let initial = kind == initial_kind;
     if initial {
         let token = varint_usize(datagram, &mut pos)?;
@@ -246,6 +350,8 @@ fn long_packet(datagram: &[u8], at: usize) -> Option<LongPacket> {
         initial,
         dcid_start,
         dcid_end,
+        scid_start,
+        scid_end,
         pn_offset: pos,
         end,
     })
@@ -276,6 +382,366 @@ fn open(
     let mut payload = datagram.get(pn_offset + pn_length..payload_end)?.to_vec();
     keys.apply(pn, &mut payload);
     Some(payload)
+}
+
+/// As [`open`], but only for a packet whose AEAD tag checks: the header, its protection removed, is the
+/// associated data (RFC 9001 5.3).
+fn open_checked(
+    keys: &Keys,
+    datagram: &[u8],
+    start: usize,
+    pn_offset: usize,
+    end: usize,
+) -> Option<Vec<u8>> {
+    if pn_offset + 4 + SAMPLE > end {
+        return None;
+    }
+    let mask = keys.mask(datagram.get(pn_offset + 4..pn_offset + 4 + SAMPLE)?);
+    let first = datagram.get(start)? ^ (mask[0] & 0x0f);
+    let pn_length = usize::from(first & 3) + 1;
+    let mut header = datagram.get(start..pn_offset + pn_length)?.to_vec();
+    header[0] = first;
+    let numbered = pn_offset - start;
+    for (byte, m) in header[numbered..].iter_mut().zip(&mask[1..]) {
+        *byte ^= m;
+    }
+    let pn = header[numbered..]
+        .iter()
+        .fold(0u64, |pn, &b| pn << 8 | u64::from(b));
+    let payload_end = end.checked_sub(TAG)?;
+    let ciphertext = datagram.get(pn_offset + pn_length..payload_end)?;
+    let tag = datagram.get(payload_end..end)?;
+    if gcm_tag(&keys.key, &keys.nonce(pn), &header, ciphertext) != tag {
+        return None;
+    }
+    let mut payload = ciphertext.to_vec();
+    keys.apply(pn, &mut payload);
+    Some(payload)
+}
+
+/// Whether `payload`, an Initial packet's with its protection removed, holds only the frames an Initial
+/// may carry, each whole, to its end (RFC 9000 17.2.2).
+fn frames_parse(payload: &[u8]) -> bool {
+    Initial::default().frames(payload).is_some()
+}
+
+/// A connection ID, of at most 20 bytes in QUIC versions 1 and 2, kept in place.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Cid {
+    length: u8,
+    bytes: [u8; MAX_CID],
+}
+
+impl Cid {
+    fn new(id: &[u8]) -> Option<Self> {
+        let mut bytes = [0u8; MAX_CID];
+        bytes.get_mut(..id.len())?.copy_from_slice(id);
+        Some(Self {
+            length: u8::try_from(id.len()).ok()?,
+            bytes,
+        })
+    }
+
+    fn get(&self) -> &[u8] {
+        &self.bytes[..usize::from(self.length)]
+    }
+
+    /// Whether it tells a connection's packets apart by itself ([`TOLD_APART`]).
+    fn tells(&self) -> bool {
+        usize::from(self.length) >= TOLD_APART
+    }
+}
+
+/// What an app's QUIC Initial packet asked, for the server's answers to carry (RFC 9000 17.2, RFC 9001
+/// 5): its version, its destination connection ID, from which the server's Initial keys derive, and its
+/// source connection ID, which every packet of the server's carries as its destination.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Ids {
+    version: Version,
+    destination: Cid,
+    source: Cid,
+}
+
+/// The connection IDs of each long-header packet in `datagram`, an app's, when the datagram holds a
+/// QUIC Initial packet of version 1 or 2 whose protection, removed with the client's keys, gives a tag
+/// that checks and frames that parse to its end; none otherwise, nor when one of its Initial packets
+/// fails so. Each distinct pair once: an Initial sent again carries the same.
+#[must_use]
+pub fn asked(datagram: &[u8]) -> Vec<Ids> {
+    let mut asked: Vec<Ids> = Vec::new();
+    let mut initial = false;
+    let mut at = 0;
+    while let Some(packet) = long_packet(datagram, at) {
+        let ids = |start: usize, end: usize| Cid::new(datagram.get(start..end)?);
+        let (Some(destination), Some(source)) = (
+            ids(packet.dcid_start, packet.dcid_end),
+            ids(packet.scid_start, packet.scid_end),
+        ) else {
+            return Vec::new();
+        };
+        if packet.initial {
+            let keys = Keys::initial(packet.version, destination.get(), CLIENT);
+            match open_checked(&keys, datagram, at, packet.pn_offset, packet.end) {
+                Some(payload) if frames_parse(&payload) => initial = true,
+                _ => return Vec::new(),
+            }
+        }
+        let ids = Ids {
+            version: packet.version,
+            destination,
+            source,
+        };
+        if !asked.contains(&ids) {
+            asked.push(ids);
+        }
+        at = packet.end;
+    }
+    if initial { asked } else { Vec::new() }
+}
+
+/// The long header of a packet a server sent: its version as on the wire, its first byte, and where its
+/// connection IDs and what follows them are.
+struct ServerHeader<'a> {
+    first: u8,
+    version: u32,
+    destination: &'a [u8],
+    source: &'a [u8],
+    /// What follows the source connection ID.
+    rest: usize,
+}
+
+impl<'a> ServerHeader<'a> {
+    fn read(packet: &'a [u8]) -> Option<Self> {
+        let first = *packet.first()?;
+        let wire = packet.get(1..5)?;
+        let version = u32::from_be_bytes([wire[0], wire[1], wire[2], wire[3]]);
+        let length = usize::from(*packet.get(5)?);
+        if length > MAX_CID {
+            return None;
+        }
+        let destination = packet.get(6..6 + length)?;
+        let at = 6 + length;
+        let source_length = usize::from(*packet.get(at)?);
+        if source_length > MAX_CID {
+            return None;
+        }
+        let source = packet.get(at + 1..at + 1 + source_length)?;
+        Some(Self {
+            first,
+            version,
+            destination,
+            source,
+            rest: at + 1 + source_length,
+        })
+    }
+}
+
+/// A datagram that came back from where an app sent QUIC, read for whether it answers what the app
+/// asked ([`Answer::carries`]).
+pub struct Answer<'a> {
+    datagram: &'a [u8],
+    /// Its first packet's long header; `None` for a short header.
+    long: Option<ServerHeader<'a>>,
+}
+
+impl<'a> Answer<'a> {
+    /// `None` where no QUIC packet with a long header that reads, or a short header, starts it.
+    #[must_use]
+    pub fn read(datagram: &'a [u8]) -> Option<Self> {
+        let first = *datagram.first()?;
+        let long = if first & 0x80 == 0 {
+            None
+        } else {
+            Some(ServerHeader::read(datagram)?)
+        };
+        Some(Self { datagram, long })
+    }
+
+    /// Whether it is the server's answer to `asked` (RFC 9000 17.2, RFC 9001 5, RFC 9369): a Version
+    /// Negotiation packet whose source connection ID is the app's destination and whose destination is
+    /// the app's source; a Retry whose integrity tag checks with the app's destination ID; an Initial
+    /// whose protection, removed with the server's keys of the app's destination ID, gives a tag that
+    /// checks and frames that parse to its end; or any packet whose destination ID is the app's source
+    /// ID, where that is long enough to tell ([`TOLD_APART`]). A client that sends no source ID, as
+    /// Chromium's, so Cronet's, does, is told only by its Initial keys: by the server's Version
+    /// Negotiation, Retry or first Initial packet.
+    #[must_use]
+    pub fn carries(&self, asked: &Ids) -> bool {
+        let source = asked.source.get();
+        let Some(header) = &self.long else {
+            return asked.source.tells() && self.datagram.get(1..1 + source.len()) == Some(source);
+        };
+        if header.version == 0 {
+            let versions = self.datagram.len().saturating_sub(header.rest);
+            return header.source == asked.destination.get()
+                && header.destination == source
+                && versions >= 4
+                && versions % 4 == 0;
+        }
+        if Version::from_wire(header.version) != Some(asked.version) || header.destination != source
+        {
+            return false;
+        }
+        if asked.source.tells() {
+            return true;
+        }
+        let kind = (header.first >> 4) & 3;
+        let (initial, retry) = asked.version.kinds();
+        if kind == retry {
+            return self.retry_for(asked);
+        }
+        kind == initial && self.initial_for(asked)
+    }
+
+    /// Whether it is a Retry whose integrity tag checks with the app's destination ID (RFC 9001 5.8).
+    fn retry_for(&self, asked: &Ids) -> bool {
+        let Some(end) = self.datagram.len().checked_sub(TAG) else {
+            return false;
+        };
+        let Some(header) = &self.long else {
+            return false;
+        };
+        if end < header.rest {
+            return false;
+        }
+        let original = asked.destination.get();
+        let mut pseudo = Vec::with_capacity(1 + original.len() + end);
+        pseudo.push(asked.destination.length);
+        pseudo.extend_from_slice(original);
+        pseudo.extend_from_slice(&self.datagram[..end]);
+        let (key, nonce) = asked.version.retry();
+        let mut key16 = aes::cipher::Key::<Aes128>::default();
+        key16.copy_from_slice(&key);
+        gcm_tag(&Aes128::new(&key16), &nonce, &pseudo, &[]) == self.datagram[end..]
+    }
+
+    /// Whether it is an Initial that the server's keys of the app's destination ID open.
+    fn initial_for(&self, asked: &Ids) -> bool {
+        let Some(packet) = long_packet(self.datagram, 0) else {
+            return false;
+        };
+        let keys = Keys::initial(asked.version, asked.destination.get(), SERVER);
+        packet.initial
+            && open_checked(&keys, self.datagram, 0, packet.pn_offset, packet.end)
+                .is_some_and(|payload| frames_parse(&payload))
+    }
+}
+
+/// An Initial packet of `version`, protected with `keys` as its sender protects one, whose header names
+/// `destination` and `source`, numbered `pn` in `pn_length` bytes (1 to 4), holding `payload` as it is.
+fn seal(
+    version: Version,
+    keys: &Keys,
+    (destination, source): (&[u8], &[u8]),
+    (pn, pn_length): (u32, usize),
+    payload: &[u8],
+) -> Option<Vec<u8>> {
+    let numbered = pn.to_be_bytes();
+    let pn_bytes = numbered.get(4usize.checked_sub(pn_length)?..)?;
+    let first = 0xc0 | (version.kinds().0 << 4) | u8::try_from(pn_length.checked_sub(1)?).ok()?;
+    let mut header = vec![first];
+    header.extend_from_slice(&version.wire().to_be_bytes());
+    for id in [destination, source] {
+        header.push(
+            u8::try_from(id.len())
+                .ok()
+                .filter(|&n| usize::from(n) <= MAX_CID)?,
+        );
+        header.extend_from_slice(id);
+    }
+    // No token.
+    header.push(0);
+    let length = u16::try_from(pn_length + payload.len() + TAG)
+        .ok()
+        .filter(|&n| n <= 0x3fff)?;
+    header.extend_from_slice(&(length | 0x4000).to_be_bytes());
+    let pn_offset = header.len();
+    header.extend_from_slice(pn_bytes);
+    let mut ciphertext = payload.to_vec();
+    keys.apply(u64::from(pn), &mut ciphertext);
+    let tag = gcm_tag(&keys.key, &keys.nonce(u64::from(pn)), &header, &ciphertext);
+    let mut packet = header;
+    packet.extend_from_slice(&ciphertext);
+    packet.extend_from_slice(&tag);
+    let mask = keys.mask(packet.get(pn_offset + 4..pn_offset + 4 + SAMPLE)?);
+    packet[0] ^= mask[0] & 0x0f;
+    for (byte, m) in packet[pn_offset..pn_offset + pn_length]
+        .iter_mut()
+        .zip(&mask[1..])
+    {
+        *byte ^= m;
+    }
+    Some(packet)
+}
+
+/// A server's Initial packet of `version` (1 or `0x6b3343cf`), numbered 0 in two bytes, to the client's
+/// source ID `destination`, from `source`, protected with the server's keys of the client's destination
+/// ID `original`, holding `frames`. Only for tests, the engine's among them, which build a server's
+/// answers with it; [`asked`] and [`Answer`] are checked against RFC 9369's sample, which this seals
+/// byte for byte.
+#[doc(hidden)]
+#[must_use]
+pub fn server_initial(
+    version: u32,
+    original: &[u8],
+    (destination, source): (&[u8], &[u8]),
+    (pn, frames): (u32, &[u8]),
+) -> Option<Vec<u8>> {
+    let version = Version::from_wire(version)?;
+    let keys = Keys::initial(version, original, SERVER);
+    seal(version, &keys, (destination, source), (pn, 2), frames)
+}
+
+/// A client's Initial packet of `version` to `destination`, from `source`, numbered `pn` in four
+/// bytes, holding `frames` padded with PADDING to `size` bytes, as a client sends its first. Only for
+/// tests, as [`server_initial`].
+#[doc(hidden)]
+#[must_use]
+pub fn client_initial(
+    version: u32,
+    (destination, source): (&[u8], &[u8]),
+    (pn, frames): (u32, &[u8]),
+    size: usize,
+) -> Option<Vec<u8>> {
+    let version = Version::from_wire(version)?;
+    let keys = Keys::initial(version, destination, CLIENT);
+    let header = 1 + 4 + 1 + destination.len() + 1 + source.len() + 1 + 2 + 4;
+    let mut payload = frames.to_vec();
+    payload.resize(size.saturating_sub(header + TAG).max(frames.len()), 0);
+    seal(version, &keys, (destination, source), (pn, 4), &payload)
+}
+
+/// A Retry packet of `version` to the client's source ID `destination`, from `source`, with `token`,
+/// for the client's destination ID `original`: its integrity tag computed as a server does (RFC 9001
+/// 5.8). Only for tests, as [`server_initial`].
+#[doc(hidden)]
+#[must_use]
+pub fn retry(
+    version: u32,
+    original: &[u8],
+    (destination, source): (&[u8], &[u8]),
+    token: &[u8],
+) -> Option<Vec<u8>> {
+    let version = Version::from_wire(version)?;
+    let mut packet = vec![0xc0 | (version.kinds().1 << 4)];
+    packet.extend_from_slice(&version.wire().to_be_bytes());
+    for id in [destination, source] {
+        packet.push(
+            u8::try_from(id.len())
+                .ok()
+                .filter(|&n| usize::from(n) <= MAX_CID)?,
+        );
+        packet.extend_from_slice(id);
+    }
+    packet.extend_from_slice(token);
+    let mut pseudo = vec![u8::try_from(original.len()).ok()?];
+    pseudo.extend_from_slice(original);
+    pseudo.extend_from_slice(&packet);
+    let (key, nonce) = version.retry();
+    let mut key16 = aes::cipher::Key::<Aes128>::default();
+    key16.copy_from_slice(&key);
+    packet.extend_from_slice(&gcm_tag(&Aes128::new(&key16), &nonce, &pseudo, &[]));
+    Some(packet)
 }
 
 /// The start of a QUIC connection, read for its `ClientHello` one datagram at a time.
@@ -445,6 +911,9 @@ impl Initial {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+
+    /// No IDs asked.
+    const NOTHING: [Ids; 0] = [];
     use crate::tls::Hello;
 
     fn hex(text: &str) -> Vec<u8> {
@@ -553,35 +1022,233 @@ pub(crate) mod tests {
         frames: &[u8],
         size: usize,
     ) -> Vec<u8> {
-        let Some(v) = Version::from_wire(version) else {
-            unreachable!("a known version")
+        client_initial(version, (cid, &[]), (pn, frames), size).unwrap_or_default()
+    }
+
+    /// GCM's first two test cases, from the paper that defined it ("The Galois/Counter Mode of
+    /// Operation", appendix B), under the all-zero key and nonce: no data, and one block of zeros.
+    #[test]
+    fn the_gcm_tag_matches_its_specification() {
+        let mut zero = aes::cipher::Key::<Aes128>::default();
+        zero.copy_from_slice(&[0; 16]);
+        let key = Aes128::new(&zero);
+        assert_eq!(
+            gcm_tag(&key, &[0; 12], &[], &[]).to_vec(),
+            hex("58e2fccefa7e3061367f1d57a4e7455a")
+        );
+        assert_eq!(
+            gcm_tag(
+                &key,
+                &[0; 12],
+                &[],
+                &hex("0388dace60b6a392f328c2b971b2fe78")
+            )
+            .to_vec(),
+            hex("ab6e47d42cec13bdf53a67b21257bddf")
+        );
+    }
+
+    /// RFC 9369 A.3's server Initial, sealed byte for byte from its frames, and opened with its tag
+    /// checked: it answers the client's original destination ID, and nothing else.
+    #[test]
+    fn seals_and_tells_the_server_initial_of_rfc_9369() {
+        let protected = hex(
+            "dc6b3343cf0008f067a5502a4262b5004075d92faaf16f05d8a4398c47089698baeea26b91eb761d9b89237bbf87
+             2630179153582300 35f7fd3945d88965cf17f9af6e16886c61bfc703106fbaf3cb4cfa52382dd16a393e4275
+             75076980 75b2c984c707f0a0812d8cd5a6881eaf21ceda98f4bd23f6fe1a3e2c43edd9ce7ca84bed8521e2e140",
+        );
+        let plain = hex(
+            "02000000000600405a020000560303eefce7f7b37ba1d1632e96677825ddf73988cfc79825df566dc5430b9a04
+             5a1200130100002e00330024001d00209d3c940d89690b84d08a60993c144eca684d1081287c834d5311bcf32b
+             b9da1a002b00020304",
+        );
+        let source = hex("f067a5502a4262b5");
+        assert_eq!(
+            server_initial(0x6b33_43cf, &hex(CID), (&[], &source), (1, &plain)),
+            Some(protected.clone())
+        );
+        let ids = |version, destination: &[u8]| Ids {
+            version,
+            destination: Cid::new(destination).unwrap_or(Cid {
+                length: 0,
+                bytes: [0; MAX_CID],
+            }),
+            source: Cid {
+                length: 0,
+                bytes: [0; MAX_CID],
+            },
         };
-        let keys = Keys::initial(v, cid, CLIENT);
-        let first = 0xc3 | (v.kinds().0 << 4);
-        let mut header = vec![first];
-        header.extend_from_slice(&version.to_be_bytes());
-        header.push(u8::try_from(cid.len()).unwrap_or(0));
-        header.extend_from_slice(cid);
-        header.extend_from_slice(&[0, 0]); // no source connection ID, no token
-        let payload_length = size
-            .saturating_sub(header.len() + 2 + 4 + TAG)
-            .max(frames.len());
-        let length = u16::try_from(4 + payload_length + TAG).unwrap_or(0) | 0x4000;
-        header.extend_from_slice(&length.to_be_bytes());
-        let pn_offset = header.len();
-        header.extend_from_slice(&pn.to_be_bytes());
-        let mut payload = frames.to_vec();
-        payload.resize(payload_length, 0);
-        keys.apply(u64::from(pn), &mut payload);
-        let mut packet = header;
-        packet.extend_from_slice(&payload);
-        packet.extend_from_slice(&[0; TAG]);
-        let mask = keys.mask(&packet[pn_offset + 4..pn_offset + 4 + SAMPLE]);
-        packet[0] ^= mask[0] & 0x0f;
-        for i in 0..4 {
-            packet[pn_offset + i] ^= mask[1 + i];
+        let read = Answer::read(&protected);
+        assert!(
+            read.as_ref()
+                .is_some_and(|a| a.carries(&ids(Version::V2, &hex(CID))))
+        );
+        assert!(
+            !read
+                .as_ref()
+                .is_some_and(|a| a.carries(&ids(Version::V2, &hex("8394c8f03e515709"))))
+        );
+        assert!(
+            !read
+                .as_ref()
+                .is_some_and(|a| a.carries(&ids(Version::V1, &hex(CID))))
+        );
+        let mut damaged = protected;
+        let last = damaged.len() - 1;
+        damaged[last] ^= 1;
+        assert!(!Answer::read(&damaged).is_some_and(|a| a.carries(&ids(Version::V2, &hex(CID)))));
+    }
+
+    /// The Retry packets of RFC 9001 A.4 and RFC 9369 A.4 carry their client's original destination ID
+    /// only in their integrity tag, which tells them; one built here, too.
+    #[test]
+    fn the_retries_of_rfc_9001_and_9369_are_told_by_their_tag() {
+        let empty = Cid {
+            length: 0,
+            bytes: [0; MAX_CID],
+        };
+        let ids = |version, destination: &[u8]| Ids {
+            version,
+            destination: Cid::new(destination).unwrap_or(empty),
+            source: empty,
+        };
+        for (version, retry) in [
+            (
+                Version::V1,
+                hex("ff000000010008f067a5502a4262b5746f6b656e04a265ba2eff4d829058fb3f0f2496ba"),
+            ),
+            (
+                Version::V2,
+                hex("cf6b3343cf0008f067a5502a4262b5746f6b656ec8646ce8bfe33952d955543665dcc7b6"),
+            ),
+        ] {
+            let read = Answer::read(&retry);
+            assert!(
+                read.as_ref()
+                    .is_some_and(|a| a.carries(&ids(version, &hex(CID))))
+            );
+            assert!(
+                !read
+                    .as_ref()
+                    .is_some_and(|a| a.carries(&ids(version, &hex("0011223344556677"))))
+            );
+            let mut damaged = retry.clone();
+            damaged[10] ^= 1;
+            assert!(!Answer::read(&damaged).is_some_and(|a| a.carries(&ids(version, &hex(CID)))));
+            let built = super::retry(
+                version.wire(),
+                &hex(CID),
+                (&[], &hex("f067a5502a4262b5")),
+                b"token",
+            );
+            assert!(
+                built
+                    .as_deref()
+                    .and_then(Answer::read)
+                    .is_some_and(|a| a.carries(&ids(version, &hex(CID))))
+            );
         }
-        packet
+    }
+
+    /// What an app's Initial packet asks: its version and both connection IDs, once however often it
+    /// is sent, and nothing from a packet whose tag or frames fail, or from what is no Initial.
+    #[test]
+    fn asked_reads_the_ids_of_an_apps_initial_and_nothing_else() {
+        let hello = tls::tests::handshake("watch.test", false);
+        let (destination, source) = (hex("0011223344556677"), hex("a1a2a3a4"));
+        for version in [1, 0x6b33_43cf] {
+            let Some(packet) = client_initial(
+                version,
+                (&destination, &source),
+                (0, &crypto(0, &hello)),
+                1200,
+            ) else {
+                unreachable!("an Initial packet")
+            };
+            assert_eq!(packet.len(), 1200);
+            let mut twice = packet.clone();
+            twice.extend_from_slice(&packet);
+            let asked = asked(&twice);
+            assert_eq!(asked.len(), 1);
+            assert_eq!(asked[0].destination.get(), destination.as_slice());
+            assert_eq!(asked[0].source.get(), source.as_slice());
+            assert_eq!(asked[0].version.wire(), version);
+            let mut damaged = packet.clone();
+            damaged[1199] ^= 1;
+            assert_eq!(super::asked(&damaged), NOTHING, "a tag that fails");
+        }
+        // The right tag over frames an Initial may not carry (a STREAM frame).
+        let Some(stream) = client_initial(1, (&destination, &[]), (0, &[0x08, 0, 1, 0]), 1200)
+        else {
+            unreachable!("an Initial packet")
+        };
+        assert_eq!(asked(&stream), NOTHING);
+        assert_eq!(asked(b"\x12\x34 an ordinary datagram"), NOTHING);
+        assert_eq!(asked(&[0x40; 1200]), NOTHING);
+    }
+
+    /// A Version Negotiation packet carries the app's IDs crossed, then the versions it lists; a packet
+    /// whose destination is the app's source ID carries it where that ID has 4 bytes or more.
+    #[test]
+    fn negotiation_and_the_apps_source_id_carry_what_it_asked() {
+        let (destination, source) = (hex("0011223344556677"), hex("a1a2a3a4"));
+        let asked = |source: &[u8]| Ids {
+            version: Version::V1,
+            destination: Cid::new(&destination).unwrap_or(Cid {
+                length: 0,
+                bytes: [0; MAX_CID],
+            }),
+            source: Cid::new(source).unwrap_or(Cid {
+                length: 0,
+                bytes: [0; MAX_CID],
+            }),
+        };
+        let negotiation = |to: &[u8], from: &[u8], versions: &[u8]| {
+            let mut packet = vec![0x80 | 0x2a, 0, 0, 0, 0, u8::try_from(to.len()).unwrap_or(0)];
+            packet.extend_from_slice(to);
+            packet.push(u8::try_from(from.len()).unwrap_or(0));
+            packet.extend_from_slice(from);
+            packet.extend_from_slice(versions);
+            packet
+        };
+        let carries =
+            |packet: &[u8], ids: &Ids| Answer::read(packet).is_some_and(|a| a.carries(ids));
+        let versions = [0, 0, 0, 1, 0x6b, 0x33, 0x43, 0xcf];
+        assert!(carries(
+            &negotiation(&source, &destination, &versions),
+            &asked(&source)
+        ));
+        assert!(carries(
+            &negotiation(&[], &destination, &versions),
+            &asked(&[])
+        ));
+        assert!(!carries(
+            &negotiation(&destination, &source, &versions),
+            &asked(&source)
+        ));
+        assert!(!carries(
+            &negotiation(&source, &destination, &[]),
+            &asked(&source)
+        ));
+        assert!(!carries(
+            &negotiation(&source, &destination, &versions[..3]),
+            &asked(&source)
+        ));
+        // A short header to the app's source ID, and a Handshake packet (version 1's type 2).
+        let mut short = vec![0x41];
+        short.extend_from_slice(&source);
+        short.extend_from_slice(&[0x55; 40]);
+        assert!(carries(&short, &asked(&source)));
+        assert!(
+            !carries(&short, &asked(&source[..3])),
+            "an ID too short to tell"
+        );
+        let mut handshake = vec![0xe0, 0, 0, 0, 1, 4];
+        handshake.extend_from_slice(&source);
+        handshake.push(0);
+        handshake.extend_from_slice(&[0x55; 40]);
+        assert!(carries(&handshake, &asked(&source)));
+        assert!(!carries(&handshake, &asked(&hex("b1b2b3b4"))));
     }
 
     /// A CRYPTO frame holding `data` at `offset`.

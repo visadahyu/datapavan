@@ -11,6 +11,7 @@ pub mod dns;
 pub mod dnscache;
 pub mod engine;
 pub mod fragments;
+pub mod identifiers;
 pub mod log;
 pub mod names;
 pub mod nat;

@@ -44,7 +44,7 @@ pub struct Question {
     /// Its class; 1 is the internet's.
     pub class: u16,
     /// Where the question ends in the query.
-    end: usize,
+    pub(crate) end: usize,
 }
 
 /// The question of a standard query with one question, or `None`.

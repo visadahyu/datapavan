@@ -87,3 +87,10 @@ path = "fuzz_targets/socks5.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "identifiers"
+path = "fuzz_targets/identifiers.rs"
+test = false
+doc = false
+bench = false
