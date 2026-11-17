@@ -81,9 +81,10 @@ does.
 
 ## How it is built
 
-**The hardware check after four independent reviews (2026-11-17, decisions 5 and 7).** The first review read
+**The hardware check after six independent reviews (2026-11-17, decisions 5 and 7).** The first review read
 the parser, `core/engine/src/attestation.rs`; the second the whole check, the chain included; the third the
-result, adversarially, twice; the fourth the result again, with probes and fresh mutants. Each fault was shown
+result, adversarially, twice; the fourth, the fifth and the sixth the result again, each with probes and fresh
+mutants. Each fault was shown
 before its fix by a test that failed, by a mutant that a new test kills, or, where neither could be, as stated
 below.
 
@@ -115,17 +116,19 @@ below.
   revokes it. The list and its `SOURCE` are read from the same pack, the first that holds the list: the data
   store falls back to the APK's pack file by file, which could have put a newer pack's date on the APK's older
   list. The roots come from the newest pack that holds them, so that a pack can rotate them. A pack whose
-  attestation `SOURCE` does not date the list is refused at import, with a message that says so (ADR 0017,
-  DATA-PACKS.md), and a test checks that every dataset in the
-  repository dates itself; a list whose date is unknown all the same (an imported pack from before this rule) is
-  shown as such, never as fresh. The phone's date is its system's, so a clock set back could make an old list
-  look fresh: the list's age is counted at the least from the first day of the month before the patch level that
-  Google's key confirms, since a system with that patch cannot run long before its month, and makers ship a
-  month's patch up to a few weeks early (Samsung has shipped June's in late May): counting from the patch
-  month itself called a fresh list old on such a phone (the fifth review's probe). An offline app has no better
-  time: the pack's signed date is close to the list's own, and Remote Key Provisioning's certificates, which Google dates, are
-  already checked against the phone's date, so a clock set before them makes the chain out of date. What
-  remains: on a phone with an old patch level, a clock set back still silences this warning, as it silences the
+  attestation `SOURCE` does not date the list, or dates it after the pack's own signed date (which would keep the
+  list fresh for ever), is refused at import, with a message that says so (ADR 0017, DATA-PACKS.md), and a test
+  checks that every dataset in the repository dates itself. (The APK's own pack is not bounded so: `data/PACK`'s
+  date moves with releases while the datasets are updated between them, and the build makes that pack from the
+  repository.) A list whose date is unknown all the same (an imported pack from before this rule) is shown as
+  such, never as fresh. The phone's date is its system's, so a clock set back could make an old list look fresh:
+  the list's age is counted at the least from the first day of the month before the patch level that Google's
+  key confirms, since a system with that patch cannot run long before its month, and makers ship a month's
+  patch up to a few weeks early (Samsung has shipped June's in late May): counting from the patch month itself
+  called a fresh list old on such a phone (the fifth review's probe). An offline app has no better time: the
+  pack's signed date is close to the list's own, and Remote Key Provisioning's certificates, which Google
+  dates, are already checked against the phone's date, so a clock set before them makes the chain out of date.
+  What remains: on a phone with an old patch level, a clock set back still silences this warning, as it silences the
   old-patch finding.
 - **What a hooked keystore can still do.** Sign a whole chain with an attestation key that leaked and is not yet
   revoked; or pass the challenge to another phone it controls, locked and sound, and show that phone's answer as
@@ -170,7 +173,8 @@ below.
   root, in date or not (not seen on a device), is judged the same way by version. On a phone that declares
   secure hardware, a software answer under any other chain, or one on Android 10 or 11, stays "Hardware check
   answered by software" (high): no virtual machine is known to give it. On Android 10 and 11, a software answer
-  with nothing declared is "No hardware check available", medium since this round: after the emulator got its
+  with nothing declared is "No hardware check available", medium since the fifth review (2026-11-17; it was low
+  before): after the emulator got its
   own finding, its only sound causes are phones launched before Android 8 and Android on a computer, while on
   most phones on those versions, which declare nothing since the feature begins at 12 and have no secure chip, a
   hook reaches it with nothing to hide; its text now says that phones launched with Android 8 or later all
@@ -192,16 +196,19 @@ below.
 - **The emulator, from its real chains.** The hardware-keystore feature does not prove the hardware: Android 15's
   emulator (CI's `dp-api35-ci`) declares `android.hardware.hardware_keystore=300` for a KeyMint that runs in
   software. What tells it is what the system says the device is: `Build.HARDWARE` (`ro.hardware`) is "ranchu" on
-  Android's emulator, and was "goldfish" before. Its chain was first assumed to be AOSP's software root; round 5
-  limited the emulator's claim to that root, and Android 15's emulator then showed "answered by software" again,
-  so its chains were read from the device with the lab record below (2026-11-17, `core/engine/testdata/emulator`,
-  with SOURCE):
+  Android's emulator, and was "goldfish" before. Its chain was first assumed to be AOSP's software root; the
+  fourth review's round limited the emulator's claim to that root, and Android 15's emulator then showed
+  "answered by software" again, so its chains were read from the device with the lab record below (2026-11-17,
+  `core/engine/testdata/emulator`, with SOURCE):
   - Android 15 (`system-images;android-35;google_apis;x86_64`, revision 9, userdebug) runs AOSP's in-process
     KeyMint (`android.hardware.security.keymint-service`, KeyMint 300, documented in AOSP as insecure, its TA
     running in the HAL's process), and its attestation key came from Google's key provisioning service: the
     chain is the leaf, an intermediate "O=TEE" valid for 16 days, and the root "Droid Unregistered Device CA" of
-    "Google Test LLC", self-signed and valid for 72 days, issued the same day as the intermediate. The check said
-    OTHER_ROOT, at the software level.
+    "Google Test LLC", self-signed and valid for 72 days, issued the same day as the intermediate. Two captures
+    were made: the first (16:44 UTC+3, intermediate "CN=a6a327…") said OTHER_ROOT, at the software level, before
+    the test root was told; the second (17:44, intermediate "CN=977cc1…", the committed `sdk35.pem`, with a build
+    that tells it and is signed with a throwaway debug key) said TEST_ROOT. Both are under the same root (serial
+    9BA2D252…, SubjectPublicKeyInfo SHA-256 51894c…).
   - Android 11 (`android-30`, revision 16, userdebug) runs Keymaster 4.1 in software and signs under AOSP's
     software intermediate (expired 2026-01-08) and root, as `system/keymaster`'s `soft_attestation_cert.cpp`
     holds them. The check said SOFTWARE_ROOT. So the two images' keystores differ, and the captures say how.
@@ -228,9 +235,11 @@ below.
   - in software, on Android 10 or 11, where the phone declares a secure chip: "Hardware check answered by
     software" (high);
   - in software, on Android 10 or 11, which had no key provisioning: "Hardware check signed with Google's test
-    certificate" (high), since only a system that fakes it answers so;
-  - claiming secure hardware: the same high finding, and nothing else it says, as under AOSP's published root: an
-    unregistered device on a test build can answer so, and so can a forgery; no phone made for sale does.
+    certificate" (high), whose text there says that those versions cannot get such keys, so that only a modified
+    system answers so;
+  - claiming secure hardware: the same high finding, and nothing else it says, as under AOSP's published root: on
+    Android 12 or later an unregistered device on a test build can answer so, and so can a forgery, and the text
+    says both; on 10 and 11, only a forgery, and the text says that; no phone made for sale does.
 
   The test root's intermediates live about two weeks, so the test vector is judged at fixed dates; and the
   verdict comes before the dates are checked, so that an expired chain under it is still the test root's, as one
@@ -249,7 +258,7 @@ below.
   `ro.hardware` to the emulator's, which gives "No hardware check on an emulator" (medium); on Android 10 and 11,
   where most phones declare nothing, a software answer gives "No hardware check available" (medium) with nothing
   to hide. Each says that the state cannot be confirmed, none shows a value as the hardware's, and a sound phone
-  gives each rarely, so none is made high, and since this round none is low.
+  gives each rarely, so none is made high, and since the fifth review (2026-11-17) none is low.
 - **Not remembering earlier checks (trust on first use), with the reason.** The third review asked whether to
   remember, locally, what an earlier sound check saw (Google's root, the provisioning, the boot key) and report a
   weaker later answer as a change, high where it could hide an unlocked bootloader. It is not built on the phone,
@@ -271,10 +280,19 @@ below.
   builds log what each check saw under the logcat tag `DatapavanAttestationLab`: the verdict, the chain check's
   verdict before the challenge is compared, the security level the parser reads (the weaker of the two; both
   are in the leaf), the chain's length, and each certificate as base64 DER, in parts under logcat's limit
-  (`src/debug/.../audit/AttestationLab.kt`). `scripts/attestation-chain-from-logcat.py` turns a capture into
-  PEM. The certificates are public data, and nothing else of the phone is logged; a chain from Remote Key
-  Provisioning carries a certificate issued for the phone's current attestation key, so a chain becomes a test
-  vector only from lab devices. Release builds cannot reach it: the code lives in the debug source set, the
+  (`src/debug/.../audit/AttestationLab.kt`). It is off unless the lab turns it on, so that a debug build given to
+  a tester logs nothing: only while the app's files hold `attestation-lab`, which only `adb shell run-as` can put
+  there, and only for a debuggable build (`adb shell run-as <package> touch files/attestation-lab`; `rm` turns
+  it off). `scripts/attestation-chain-from-logcat.py` turns a capture into PEM, and fails unless every
+  certificate the summary counts is there whole. What a chain holds, beyond the verdict: the leaf states the
+  phone's bootloader lock state, verified boot state, verified boot key and hash, OS version and patch levels,
+  and the app that asked, by its package and the SHA-256 of the certificate that signed it (in a debug build,
+  the developer's own debug key, often the same for all their projects); a chain from Remote Key Provisioning
+  carries an intermediate issued for the phone's current attestation key (O=TEE, CN=a serial), which links
+  captures while that key lives; a factory-provisioned intermediate may name a serial number of the batch or the
+  unit (the Galaxy A40's names one). So a chain becomes a test vector only from a lab device, from a build
+  signed with a throwaway key, as the emulators' are. Nothing the record does can change the check's result: a
+  record that fails is ignored. Release builds cannot reach it: the code lives in the debug source set, the
   release source set has a no-op in its place, and `verifyApkRelease` fails if a release APK's code holds the
   tag, while `verifyApkDebug` fails if a debug APK's does not, so that the check is shown to see it.
 - **One check at a time.** The check used one fixed key alias, and a rotation, a fold or a theme change recreates
@@ -361,18 +379,20 @@ What the app shows, in each case:
   such hardware: "No hardware check available" (medium), which says that phones launched with Android 8 or later
   all support the check, and its patch level as "Security patch, as the system states it";
 - a broken chain: "Hardware check broken" (medium); a chain to another root: "Hardware check not confirmed"
-  (medium); a revoked key: "Hardware check key revoked" (high); a certificate not valid at the phone's date:
-  "Hardware check out of date" (medium); each with its patch level as the system's word. For a software answer,
-  these apply where the phone declares no secure hardware, whether or not it calls itself an emulator; where it
-  declares it, "answered by software" (high) comes first;
+  (medium); a revoked key: "Hardware check key revoked" (high); a certificate not valid at the phone's date, for
+  a hardware attestation: "Hardware check out of date" (medium); each with its patch level as the system's word.
+  For a software answer, the first three apply where the phone declares no secure hardware, whether or not it
+  calls itself an emulator (where it declares it, "answered by software", high, comes first), and a software
+  answer is never called out of date: under Google's root, in date or not, it is judged by version;
 - a hardware attestation without a root of trust in its hardware list: "Hardware check incomplete" (medium);
 - a locked phone whose boot state is self-signed: "System signed with its own key" (medium, as decision 7
   rates a key that matches no published one, since the dataset of published keys does not exist yet), and, with
   Google's root, its verified boot key, to compare with the one its project publishes;
 - otherwise, with Google's root, a locked bootloader and a verified boot: the "locked and verified" line, the
   patch level, and the vendor's where it lags;
-- under any value Google's root confirms: the day of the revocation list it was checked against, counted from
-  the confirmed patch month at the least, or that the list's date is unknown.
+- under any value Google's root confirms: the day of the revocation list it was checked against, its age counted
+  at the least from the first day of the month before the confirmed patch month, or that the list's date is
+  unknown.
 
 Decoded but not shown, with the reason: `verifiedBootHash`, which nothing on the phone could be compared with
 (decision 6's check pins it); `osVersion`, until real phones show how often it differs from what the system

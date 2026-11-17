@@ -61,9 +61,10 @@ checked on Android 11 and 17 emulators and on Galaxy A40 and A56 phones.
   security patch. A system that hooks the keystore can still fake the check with an attestation key that leaked
   and is not yet revoked, or by passing it to another phone, and a hook inside Datapavan's own process can
   replay a check captured from any phone; short of faking it, a hook can make the check fail, or answer it in
-  ways reported as medium rather than as the unlocked bootloader they could hide: under a root of its own, in
-  software (on Android 10 and 11, where most phones declare no secure hardware, with nothing else to hide), or,
-  with root, claiming to be an emulator. None is reported as low. Only a check from a second phone can rule
+  ways reported as medium rather than as the unlocked bootloader they could hide: under a root of its own; in
+  software under AOSP's published root or Google's test root on Android 12 or later, whether the phone declares
+  secure hardware or not; in software on Android 10 and 11, where most phones declare no secure hardware, with
+  nothing else to hide; or, with root, claiming to be an emulator. None is reported as low. Only a check from a second phone can rule
   those out (planned). *Why:* on a phone with an unlocked bootloader or a modified system, no app can be
   trusted, Datapavan included.
 - **Tracker scan.** The code of every installed app, in its base APK and every split, is read by a DEX
