@@ -631,10 +631,9 @@ class WatchVpnService : VpnService() {
 
     /**
      * `adb shell dumpsys activity service org.visadahyu.datapavan.watch/.WatchVpnService`: the
-     * engine's counters, with when they began ([countersSince]), and Private DNS, and in debug builds the
-     * flows it kept and Private DNS's
-     * provider, for the end-to-end test (scripts/verify-watch.sh). Release builds print no
-     * destination and no provider.
+     * engine's counters, with when they began ([countersSince]), and Private DNS, and in debug builds
+     * the flows it kept and Private DNS's provider, for the end-to-end test (scripts/verify-watch.sh).
+     * Release builds print no destination and no provider.
      */
     override fun dump(fd: FileDescriptor?, writer: PrintWriter, args: Array<out String>?) {
         // Debug builds: the file as it is, before the status line below runs expiry.

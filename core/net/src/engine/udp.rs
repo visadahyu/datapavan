@@ -310,23 +310,22 @@ const ASKED: usize = 64;
 const QUIC_ASKED: usize = 8;
 
 /// At most this many identifiers the app sent a peer through the tool are remembered for it, those it sent
-/// last, one sent again counting as sent then (ADR 0044, unit 9b, fix rounds 2 and 3): each as a
-/// fingerprint of 8 bytes ([`identifiers::fingerprint`]), and kept once in its association's
-/// [`Fingerprints`], so that an identifier the app also sent another peer on the same port tells neither
-/// apart, and one it sent one peer alone names that peer (fix round 5). A stand-in whose first datagram carries one another peer of the
-/// mapping's association was sent gets an association of its own ([`UdpTable::own_wanted`]); where it
-/// cannot, or where the other peer came after it, the identifier binds it to nothing another peer that
-/// was sent it answers from. 64 hold an NTP client's requests to its servers, a stub resolver's retry of
-/// one query to the next server, and an ICE agent's checks of one remote candidate. It costs at most
-/// 64 x 8 bytes for each peer, and an entry of the association's fingerprints for each of those, 32 bytes
-/// (the fingerprint, its count and its keepers' exclusive-or, [`Keepers`]) and a control byte in a table
-/// whose buckets are at most 16/7 of its entries, about 75 bytes, so at most 64 x (8 + 75) = 5,312 bytes
-/// for a peer the app sent identifiers to, nothing for one it sent none; on the direct path, where no
-/// stand-in waits, nothing is kept. A settled peer's are read from the
-/// datagram's headers ([`identifiers::named`]), a QUIC Initial unopened. Peers are not capped: each
-/// destination the app sent to within `udp_idle` is one, as each is a flow in the log; an app pays
-/// these bytes for the identifiers it sends, 83 at most for each, within the life of the peer it sends
-/// them to.
+/// last, one sent again counting as sent then (ADR 0044, unit 9b, fix rounds 2 and 3): each as a fingerprint
+/// of 8 bytes ([`identifiers::fingerprint`]), and kept once in its association's [`Fingerprints`], so that an
+/// identifier the app also sent another peer on the same port tells neither apart, and one it sent one peer
+/// alone names that peer (fix round 5). A stand-in whose first datagram carries one another peer of the
+/// mapping's association was sent gets an association of its own ([`UdpTable::own_wanted`]); where it cannot,
+/// or where the other peer came after it, the identifier binds it to nothing another peer that was sent it
+/// answers from. 64 hold an NTP client's requests to its servers, a stub resolver's retry of one query to the
+/// next server, and an ICE agent's checks of one remote candidate. It costs at most 64 x 8 bytes for each
+/// peer, and an entry of the association's fingerprints for each of those, 32 bytes (the fingerprint, its
+/// count and its keepers' exclusive-or, [`Keepers`]) and a control byte in a table whose buckets are at most
+/// 16/7 of its entries, about 75 bytes, so at most 64 x (8 + 75) = 5,312 bytes for a peer the app sent
+/// identifiers to, nothing for one it sent none; on the direct path, where no stand-in waits, nothing is
+/// kept. A settled peer's are read from the datagram's headers ([`identifiers::named`]), a QUIC Initial
+/// unopened. Peers are not capped: each destination the app sent to within `udp_idle` is one, as each is a
+/// flow in the log; an app pays these bytes for the identifiers it sends, 83 at most for each, within the
+/// life of the peer it sends them to.
 const TOLD: usize = 64;
 
 /// At most this many associations of a stand-in's own for each mapping (ADR 0044, unit 9b): one for
@@ -1500,28 +1499,44 @@ impl<'a> Scope<'a> {
     }
 
     /// Which peer an answer from the tool's relay under `name` on `port` is for (ADR 0044, decision 2,
-    /// unit 9b, fix round 4). The relays read for this unit put a name on an answer to say that it came
-    /// from the address the association's first destination, that name, resolved to, at the answer's own
-    /// port: a label is a source, as an address and port are, whose address Watch does not know. So it is
-    /// resolved by the rules an answer from an address is, with the label in place of the address:
-    /// - the source's holder is the name's own peer on that port, as a destination holds its own address
+    /// unit 9b, fix rounds 4 and 5). The relays read for this unit put a name on an answer to say that it
+    /// came from the address the association's first destination, that name, resolved to, at the
+    /// answer's own port: a label is a source, as an address and port are, whose address Watch does not
+    /// know. So it is resolved by the rules an answer from an address is, with the label in place of the
+    /// address:
+    /// - its holder is the name's own peer on that port, as a destination holds its own address
     ///   (`Scope::relayed_answer`'s first rule); while none lives, the stand-in first bound beside it under
-    ///   the name there holds it, as the first bound beside an address holds it once its holder ends;
-    /// - an answer carrying the identifier of a stand-in that waits on the port, or is bound beside under
-    ///   the label, is that one's, a waiting one bound beside under it; what the holder was sent is the
-    ///   holder's ([`Scope::beside_or`]);
-    /// - with no holder, another port of a name the app sent to comes in as that name's stand-in's, as
-    ///   another port of a known address does; and a name no peer has is a source the app never saw, or
-    ///   no longer sees: a stand-in with identifiers takes an answer that carries one, as from an address
-    ///   the app never saw ([`Scope::first_answer`]), but a lone one without takes none, where it would
-    ///   take an unseen address's first: a name nobody asked for is dropped (unit 9's M21).
+    ///   the name there, as the first bound beside an address holds it once its holder ends;
+    /// - an answer carrying the identifier of a stand-in that waits on the port takes it, bound beside
+    ///   under the label, and so does one bound beside, as from an address; one carrying the holder's own
+    ///   is the holder's;
+    /// - what carries none is the holder's, but for `Limits::udp_contest` after a stand-in without
+    ///   identifiers began to wait on the port, as for an address a stand-in was bound to: the holder is a
+    ///   stand-in, the name's own peer too;
+    /// - with no holder, another port of a name the app sent to comes in as that name's stand-in's, its
+    ///   newest live address, as another port of a known address does, under the same contest; and a name
+    ///   no peer has is a source the app never saw, or no longer sees: a stand-in with identifiers takes
+    ///   an answer that carries one, as from an address the app never saw ([`Scope::first_answer`]).
     ///
-    /// The one difference: the address behind a label is unknown, so any peer of the association may be
-    /// at it. An answer that names in the clear what the app sent (a STUN, DNS or NTP identifier,
-    /// [`identifiers::Reading::answers`]) is therefore the holder's if the holder was sent it, else the one
-    /// peer's that was, and no one's where several were (fix round 3, review E's minor 2; round 4, review
-    /// G's G4); and a stand-in bound beside under a label stays beside, keeping its identifiers, never
-    /// taking the name, which is its own peer's again when the app asks it again (review E's major 1).
+    /// Where it differs from an address, and why:
+    /// - the address behind a label is unknown, so any peer of the association may be at it: an answer
+    ///   that names in the clear what the app sent (a STUN, DNS or NTP identifier,
+    ///   [`identifiers::Reading::answers`]) is the holder's if the holder was sent it, else the one peer's
+    ///   of the association that was, and no one's where several were (fix round 3, review E's minor 2;
+    ///   round 4, review G's G4); and what only an opened packet tells (QUIC's) is looked for among every
+    ///   stand-in bound beside on the port, by an address or under any name, not those under the label
+    ///   alone;
+    /// - a stand-in bound beside under a label stays beside, keeping its identifiers, never taking the
+    ///   name, which is its own peer's again when the app asks it again (review E's major 1), where the
+    ///   first bound beside an address takes it once its holder ends;
+    /// - a name may have several stand-in addresses, one from before it gave way in the stand-in map and
+    ///   one since: the newest that has a peer on the port holds the label, the one the app uses now;
+    /// - the name's own stand-in, waiting with identifiers, takes an answer under its own name without
+    ///   them, where from an address the app never saw it would take none: the relay names the address
+    ///   the name resolved to, which a stranger who reaches the relay's port from elsewhere is not;
+    /// - a name no peer has binds no lone stand-in without identifiers, where an address the app never
+    ///   saw binds one by its first answer, unit 9's floor: a name nobody asked for is dropped (unit 9's
+    ///   M21), and one whose peers ended cannot be told from it.
     fn by_name(
         &mut self,
         shared: &Shared,
@@ -6322,14 +6337,14 @@ mod tests {
         Ok(())
     }
 
-    /// Review E, probe 2: under a relay's name, an answer that carries an identifier the app sent other
-    /// peers of the association, and never the one the name would give it to, is no one's there: a
-    /// waiting stand-in and a server known by its address were sent one NTP timestamp, and a reply
-    /// carrying it, named `a.test`, is dropped as unmatched, not given to `a`, which never asked it (fix
-    /// round 3). A reply carrying one only the server was sent is the server's (fix round 4, review G's
-    /// G4: the address behind a label is unknown, and may be the server's; fix round 3 dropped it).
+    /// Review E, probe 2 (fix round 3), and review G's G4 (fix round 4): under a relay's name, an answer that
+    /// carries an identifier the app sent several other peers of the association, and never the one the name
+    /// would give it to, is no one's: a waiting stand-in and a server known by its address were sent one NTP
+    /// timestamp, and a reply carrying it, named `a.test`, is dropped as unmatched, not given to `a`, which
+    /// never asked it. A reply carrying one the server alone was sent is the server's: the address behind a
+    /// label is unknown, and may be the server's (fix round 3 dropped it).
     #[tokio::test(flavor = "current_thread")]
-    async fn under_a_name_another_peers_identifier_goes_to_no_one() -> io::Result<()> {
+    async fn under_a_name_what_others_were_sent_goes_to_the_one_sent_it() -> io::Result<()> {
         let shared = shared();
         let now = Instant::now();
         let mut mapping = mapping(now).await?;
@@ -6575,12 +6590,13 @@ mod tests {
         Ok(())
     }
 
-    /// Review G, probe G1a (fix round 4): under Xray's `freedom` or sing-box, `a.test` (the association's first destination, on
-    /// 3478) and `b.test` on 5000, which the tool resolved to one address: b's STUN response comes under
-    /// a.test's name on port 5000 and binds b beside a.test there by its ID. b's server's later datagram
-    /// that carries no identifier (TURN data, a keepalive) comes from the same address and port, labelled
-    /// the same way, and no peer of a.test lives on 5000: b is the one peer it can be. It becomes a new
-    /// flow of a.test's stand-in on 5000 instead, and from then on that flow takes all of b's.
+    /// Review G's probe G1a, failing on fix round 3 (fix round 4): under Xray's `freedom` or sing-box,
+    /// `a.test` (the association's first destination, on 3478) and `b.test` on 5000, which the tool resolved
+    /// to one address. b's STUN response comes under a.test's name on port 5000 and binds b beside a.test
+    /// there by its ID. b's server's later datagram that carries no identifier (TURN data, a keepalive) comes
+    /// from the same address and port, labelled the same way, where no peer of a.test lives on 5000: it is
+    /// b's, the one peer it can be. Fix round 3 made it a new flow of a.test's stand-in on 5000, which then
+    /// took all of b's.
     #[tokio::test(flavor = "current_thread")]
     async fn a_stand_in_beside_under_a_name_on_another_port_keeps_its_data() -> io::Result<()> {
         let shared = shared();
@@ -6613,10 +6629,11 @@ mod tests {
         Ok(())
     }
 
-    /// Review G, probe G1b (fix round 4): the same on one port, once a.test's peer on that port ended while a.test lives on
-    /// another port (here the app's datagrams to a.test:443): b, bound beside under a.test on 3478, is
-    /// the one peer left there, yet b's data becomes a new flow of a.test's stand-in on 3478, as fix
-    /// round 3's rule looks for "no peer has the name" rather than "no peer of the name on this port".
+    /// Review G's probe G1b, failing on fix round 3 (fix round 4): the same on one port, once a.test's peer
+    /// on that port ended while a.test lives on another (here the app's datagrams to a.test:443). b, bound
+    /// beside under a.test on 3478, is the one peer left there, and takes b's data; fix round 3 made it a new
+    /// flow of a.test's stand-in on 3478, as its rule looked for "no peer has the name" rather than "no peer
+    /// of the name on this port".
     #[tokio::test(flavor = "current_thread")]
     async fn a_name_alive_on_another_port_takes_nothing_of_the_one_beside() -> io::Result<()> {
         let shared = shared();
@@ -6655,10 +6672,12 @@ mod tests {
         Ok(())
     }
 
-    /// Review G, probe G2 (fix round 4): a name that gave way in the stand-in map, asked again, has a second stand-in address;
-    /// the app's socket sends to both (the old peer still within `udp_idle`). Once the old one ends, the
-    /// name's record still holds the old address, so that the relay's answers under the name, for the
-    /// one live peer of that name on that port, become a new flow of the dead stand-in address.
+    /// Review G's probe G2, failing on fix round 3 (fix round 4): a name that gave way in the stand-in map,
+    /// asked again, has a second stand-in address, and the app's socket sends to both (the old peer still
+    /// within `udp_idle`). While both live, the label stands for the newest; once the old one ends, for the
+    /// one left. Fix round 3's record of the name kept the first address, so that the relay's answers under
+    /// the name, for the one live peer of that name on that port, became a new flow of the dead stand-in
+    /// address.
     #[tokio::test(flavor = "current_thread")]
     async fn a_name_with_a_new_stand_in_follows_its_live_peer() -> io::Result<()> {
         let shared = shared();
@@ -6695,9 +6714,10 @@ mod tests {
         Ok(())
     }
 
-    /// Review G, probe G3 (fix round 4): making room for an association of a stand-in's own still ends its mapping when an answer
-    /// comes while that association opens: the resolver's answer marks the mapping an answered lookup
-    /// again (`heard`), and the next way the app needs a place for ends it, with what was being opened.
+    /// Review G's probe G3, failing on fix round 3 (fix round 4): making room for an association of a
+    /// stand-in's own ends no mapping when an answer comes while that association opens. Fix round 3's
+    /// resolver's answer marked the mapping an answered lookup again (`heard`), and the next way the app
+    /// needed a place for ended it, with what was being opened.
     #[tokio::test(flavor = "current_thread")]
     async fn an_answer_while_its_own_opens_makes_no_answered_lookup() -> io::Result<()> {
         let mut shared = shared();
@@ -6763,12 +6783,13 @@ mod tests {
         Ok(())
     }
 
-    /// Review G, probe G4 (fix round 4): an answer under a name that carries an identifier exactly one settled peer of the
-    /// association was sent, on that port, is that peer's: the relay put the name on it because it came
-    /// from the address that name resolved to, and the identifier says which peer's server sent it. Here
-    /// the label is `b.test` (Xray with cone off re-dials its link after a minute without answers, with
-    /// the datagram that came next as the first destination) and the response answers `a`'s STUN request:
-    /// fix round 3 drops it as unmatched, though `a` alone asked it.
+    /// Review G's probe G4, failing on fix round 3 (fix round 4): an answer under a name that carries an
+    /// identifier exactly one settled peer of the association was sent, on that port, is that peer's: the
+    /// relay put the name on it because it came from the address that name resolved to, and the identifier
+    /// says which peer's server sent it. Here the label is `b.test` (Xray with cone off re-dials its link
+    /// after a minute without answers, with the datagram that came next as the first destination) and the
+    /// response answers `a`'s STUN request, which fix round 3 dropped as unmatched, though `a` alone asked
+    /// it.
     #[tokio::test(flavor = "current_thread")]
     async fn one_peers_identifier_under_another_name_reaches_it() -> io::Result<()> {
         let shared = shared();
@@ -6802,12 +6823,12 @@ mod tests {
         Ok(())
     }
 
-    /// Review G, probe G5 (fix round 4): Xray's `freedom` and sing-box keep labelling every answer from the address their
-    /// association's first destination resolved to with that destination's name for as long as the
-    /// association lives. `a.test` was asked first and fell silent, its peer ended; the app then asks
-    /// `b.test`, which the tool resolved to the same address, with a STUN request. b's response carries
-    /// b's transaction ID under a.test's label: no peer has a.test and none stands beside under it, so
-    /// `Scope::by_name` returns `Filtered` before it looks at the identifier, and b waits for ever.
+    /// Review G's probe G5, failing on fix round 3 (fix round 4): Xray's `freedom` and sing-box keep
+    /// labelling every answer from the address their association's first destination resolved to with that
+    /// destination's name for as long as the association lives. `a.test` was asked first and fell silent, its
+    /// peer ended; the app then asks `b.test`, which the tool resolved to the same address, with a STUN
+    /// request. b's response carries b's transaction ID under a.test's label, and binds b; fix round 3's
+    /// `Scope::by_name` returned `Filtered` before it looked at the identifier, and b waited for ever.
     #[tokio::test(flavor = "current_thread")]
     async fn under_a_name_no_peer_has_an_identifier_still_binds() -> io::Result<()> {
         let shared = shared();
@@ -6938,7 +6959,10 @@ mod tests {
         }
         mapping.sent(server, &binding(0xc1, false));
         assert!(
-            matches!(to(&mut mapping, &binding(0xc1, true), later), LetIn::Peer(shown, ..) if shown == server),
+            matches!(
+                to(&mut mapping, &binding(0xc1, true), later),
+                LetIn::Peer(shown, ..) if shown == server
+            ),
             "what the server alone was sent"
         );
         mapping.sent(server, &binding(0xc2, false));

@@ -23,7 +23,11 @@ object TunnelMtu {
     /** IPv6's least MTU (RFC 8200): a tunnel with IPv6 routes takes no less. */
     const val LEAST = 1280
 
-    /** Ethernet's and Wi-Fi's, and the tunnel's before this unit: no more. */
+    /**
+     * Ethernet's and Wi-Fi's, and the tunnel's before this unit: no more. The engine reads no datagram
+     * larger than this as QUIC's (`quic::LARGEST_DATAGRAM`), which a Rust test holds to this value: raise
+     * one, and the other must follow (ADR 0044, unit 9b, fix round 4).
+     */
     const val MOST = 1500
 
     /**
