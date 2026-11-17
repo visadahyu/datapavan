@@ -14,8 +14,10 @@
 # the tool, and adb's shell, not picked, goes directly. The screen says what the tool's proxy lets other
 # apps do, without a password and then with one (ADR 0041, decision 5). Then the tool stops with the chain
 # on: the screen says the apps wait, its switch still turns the chain off, and the picked app then goes
-# directly. Last, that app is left out of the tunnel on the screen (ADR 0041): Watch sets its tunnel up
-# again, the app reaches the server and Watch no longer sees it; taken back, Watch sees it again. Nothing
+# directly. With UDP allowed, the picked app also sends STUN requests from one socket to two names on one
+# port at once, and both answers must reach it (ADR 0044, unit 9b). Last, that app is left out of the
+# tunnel on the screen (ADR 0041): Watch sets its tunnel up again, the app reaches the server and Watch
+# no longer sees it; taken back, Watch sees it again. Nothing
 # is left running: the tunnel, the tool and the server stop at the end, and the tool is uninstalled.
 #
 #   scripts/verify-chain.sh [path/to/Datapavan-Advanced-debug.apk]
@@ -29,6 +31,8 @@ WATCH_SCREEN=org.visadahyu.datapavan.watch.MainActivity
 TOOL=org.visadahyu.datapavan.testtool
 WORKLOAD=org.visadahyu.datapavan.workload
 TOOL_PORT=10870
+# The test tool's STUN server for unit 9b's step, at 127.0.0.1 and 127.0.0.2 on the phone.
+STUN_PORT=10871
 SHELL_UID=2000
 # shellcheck source=scripts/adb-ui.sh
 . "$ROOT/scripts/adb-ui.sh"
@@ -51,6 +55,8 @@ cleanup() {
 trap cleanup EXIT
 
 dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" "$@" | tr -d '\r'; }
+# The engine's counter at place $1, counting from 1, as Watch's dump prints them.
+counter() { dump | sed -n 's/^ *counters //p' | awk -v n="$1" '{print $n}'; }
 flows() { dump | sed -n 's/^ *flow //p'; }
 tool_log() { adb logcat -d -s DatapavanTestTool | tr -d '\r' | sed -n 's/.*DatapavanTestTool: //p'; }
 workload_log() { adb logcat -d -s DatapavanWorkload | tr -d '\r' | sed -n 's/.*DatapavanWorkload: //p'; }
@@ -292,7 +298,8 @@ done
 listening=$(tool_log | grep -c "^listening")
 adb shell am force-stop "$TOOL"
 adb shell am start-foreground-service -n "$TOOL/.ToolService" --ei port "$TOOL_PORT" \
-    --es user "$user" --es password "$password" --es map "watch.test=$HOST" >/dev/null
+    --es user "$user" --es password "$password" --ei stun "$STUN_PORT" \
+    --es map "watch.test=$HOST,stun-a.test=127.0.0.1,stun-b.test=127.0.0.2" >/dev/null
 for _ in $(seq 1 10); do [ "$(tool_log | grep -c "^listening")" -gt "$listening" ] && break; sleep 1; done
 # The state of the row showing exactly the text $1 in the last dump: "chosen", "not chosen" or "absent".
 # The row is the element with that text, or the nearest one around it that can be checked or selected.
@@ -392,6 +399,18 @@ log=$(work --es udp "watch.test:$((PORT + 1))")
 grep -q "^udp watch.test:$((PORT + 1)) echo$" <<<"$log" || fail "the workload app's UDP did not get through once allowed: $log"
 [ "$(tool_log | grep -c "^associate$")" -gt "$associations" ] || fail "the tool was not asked for a UDP relay once UDP was allowed"
 echo "ok: the screen says the proxy asks for a password; with UDP allowed, the picked app's UDP goes through the tool"
+
+# Two names on one port, asked at once from one socket (ADR 0044, unit 9b). The tool resolves them to
+# 127.0.0.1 and 127.0.0.2, where its STUN server answers on the same port, so the app's two stand-ins
+# both wait on that port when the answers come back through the relay, each from an address the app
+# never saw. Before unit 9b both were dropped, as either name's; now each reaches the app from its own
+# stand-in, told by its transaction ID. The 48th counter counts the answers so told.
+grep -q "^stun 127.0.0.2 $STUN_PORT$" <<<"$(tool_log)" || fail "the test tool's STUN server does not listen at 127.0.0.2"
+identified=$(counter 48)
+log=$(work --es stun "stun-a.test,stun-b.test:$STUN_PORT")
+grep -q "^stun stun-a.test,stun-b.test:$STUN_PORT both$" <<<"$log" ||
+    fail "two STUN requests to two names on one port, from one socket: not both answered: $log; $(tool_log | grep '^stun' | tail -4 | tr '\n' ' ')"
+echo "ok: two STUN names asked at once on one port through the tool, each answered from its own stand-in (told by their IDs: $identified, then $(counter 48))"
 
 # The screen looked for the tool again when the workload app left it. A search that says a listening
 # tool does not answer is W6's open finding (CI, 2026-11-12): not a failure yet, but its steps are shown.

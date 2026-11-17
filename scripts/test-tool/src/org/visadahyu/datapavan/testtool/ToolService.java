@@ -30,8 +30,14 @@ import java.util.Map;
  * looked up in the "map" extra (name=address, comma separated) before Android's resolver. Each request
  * goes to logcat under the tag DatapavanTestTool: "connect HOST PORT", "associate", "password refused".
  *
+ * With the "stun" extra it also runs, beside the proxy, a STUN server for the check of ADR 0044's unit
+ * 9b: at 127.0.0.1 and 127.0.0.2 on that port, two servers on one port the relay reaches at two
+ * addresses, as two names a tool resolves. Each answers a Binding request with a success response
+ * carrying its transaction ID and the sender's address (RFC 8489), and logs "stun answered ADDRESS".
+ * It is the check's server, not part of what a tool does; it holds the phone's loopback only.
+ *
  *   am start-foreground-service -n org.visadahyu.datapavan.testtool/.ToolService \
- *       --ei port 10870 [--es user U --es password P] [--es map watch.test=10.0.2.2]
+ *       --ei port 10870 [--es user U --es password P] [--es map watch.test=10.0.2.2] [--ei stun 10871]
  */
 public final class ToolService extends Service {
     private static final String TAG = "DatapavanTestTool";
@@ -66,6 +72,12 @@ public final class ToolService extends Service {
             }
         }
         new Thread(() -> listen(port), "tool-listen").start();
+        int stun = intent.getIntExtra("stun", 0);
+        if (stun > 0) {
+            for (String address : new String[] {"127.0.0.1", "127.0.0.2"}) {
+                new Thread(() -> stun(address, stun), "tool-stun").start();
+            }
+        }
         return START_NOT_STICKY;
     }
 
@@ -243,6 +255,44 @@ public final class ToolService extends Service {
                 }
             }
         } catch (IOException ignored) {
+        }
+    }
+
+    /**
+     * A STUN server at [address]:[port] that answers each Binding request (type 0x0001, the magic cookie,
+     * no attributes needed) with a Binding success response (0x0101) with the same transaction ID and an
+     * XOR-MAPPED-ADDRESS of the sender, an IPv4 address (RFC 8489 14.2).
+     */
+    private static void stun(String address, int port) {
+        try (DatagramSocket socket = new DatagramSocket(new InetSocketAddress(InetAddress.getByName(address), port))) {
+            Log.i(TAG, "stun " + address + " " + port);
+            byte[] buffer = new byte[1500];
+            while (true) {
+                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                socket.receive(packet);
+                if (packet.getLength() < 20 || buffer[0] != 0 || buffer[1] != 1
+                        || buffer[4] != 0x21 || buffer[5] != 0x12 || buffer[6] != (byte) 0xa4 || buffer[7] != 0x42) continue;
+                byte[] from = packet.getAddress().getAddress();
+                if (from.length != 4) continue;
+                byte[] out = new byte[32];
+                out[1] = 0x01;
+                out[0] = 0x01;
+                out[3] = 12;
+                System.arraycopy(buffer, 4, out, 4, 16);
+                // XOR-MAPPED-ADDRESS: family 1, the port and address each XORed with the magic cookie.
+                out[20] = 0x00;
+                out[21] = 0x20;
+                out[23] = 8;
+                out[25] = 1;
+                int mapped = packet.getPort() ^ 0x2112;
+                out[26] = (byte) (mapped >> 8);
+                out[27] = (byte) mapped;
+                for (int i = 0; i < 4; i++) out[28 + i] = (byte) (from[i] ^ buffer[4 + i]);
+                socket.send(new DatagramPacket(out, out.length, packet.getSocketAddress()));
+                Log.i(TAG, "stun answered " + address);
+            }
+        } catch (IOException e) {
+            Log.i(TAG, "stun " + address + " stopped: " + e);
         }
     }
 

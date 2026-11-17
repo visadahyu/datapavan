@@ -15,8 +15,10 @@ import java.nio.charset.StandardCharsets;
 /**
  * Does what the extras ask, in this app's own process and so under its own UID, then finishes:
  * "name" is looked up through Android's resolver, "tcp" (host:port) gets an HTTP request for /ping,
- * "udp" (host:port) gets a datagram and waits for its echo. Each result is one line of logcat under
- * the tag DatapavanWorkload, and "done" ends them.
+ * "udp" (host:port) gets a datagram and waits for its echo, and "stun" (first,second:port) sends a STUN
+ * Binding request to each of two names on one port at once, from one socket, and waits for both
+ * responses, each from the name's own address with its own transaction ID (ADR 0044, unit 9b). Each
+ * result is one line of logcat under the tag DatapavanWorkload, and "done" ends them.
  */
 public final class WorkActivity extends Activity {
     private static final String TAG = "DatapavanWorkload";
@@ -27,10 +29,12 @@ public final class WorkActivity extends Activity {
         String name = getIntent().getStringExtra("name");
         String tcp = getIntent().getStringExtra("tcp");
         String udp = getIntent().getStringExtra("udp");
+        String stun = getIntent().getStringExtra("stun");
         new Thread(() -> {
             if (name != null) resolve(name);
             if (tcp != null) tcp(tcp);
             if (udp != null) udp(udp);
+            if (stun != null) stun(stun);
             Log.i(TAG, "done");
             runOnUiThread(this::finish);
         }, "workload").start();
@@ -58,6 +62,57 @@ public final class WorkActivity extends Activity {
             Log.i(TAG, "tcp " + target + (pong ? " pong" : " no pong"));
         } catch (Exception e) {
             Log.i(TAG, "tcp " + target + " failed: " + e);
+        }
+    }
+
+    /**
+     * Sends a STUN Binding request (RFC 8489) to each of the two names in [target], "first,second:port",
+     * from one socket, the second right after the first, and logs "stun TARGET both" once each name's
+     * address answered with a Binding success response carrying the transaction ID sent to it, or
+     * "stun TARGET got N" with how many did within five seconds.
+     */
+    private static void stun(String target) {
+        String[] namesPort = target.split(":", 2);
+        String[] names = namesPort[0].split(",", 2);
+        int port = Integer.parseInt(namesPort[1]);
+        java.util.Map<InetSocketAddress, byte[]> asked = new java.util.HashMap<>();
+        java.util.Set<InetSocketAddress> answered = new java.util.HashSet<>();
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        try (DatagramSocket socket = new DatagramSocket()) {
+            for (String name : names) {
+                InetSocketAddress to = new InetSocketAddress(InetAddress.getByName(name), port);
+                byte[] request = new byte[20];
+                request[1] = 0x01;
+                request[4] = 0x21;
+                request[5] = 0x12;
+                request[6] = (byte) 0xa4;
+                request[7] = 0x42;
+                byte[] id = new byte[12];
+                random.nextBytes(id);
+                System.arraycopy(id, 0, request, 8, 12);
+                asked.put(to, id);
+                socket.send(new DatagramPacket(request, request.length, to));
+            }
+            long until = System.currentTimeMillis() + 5000;
+            byte[] in = new byte[1500];
+            while (answered.size() < asked.size() && System.currentTimeMillis() < until) {
+                socket.setSoTimeout((int) Math.max(1, until - System.currentTimeMillis()));
+                DatagramPacket reply = new DatagramPacket(in, in.length);
+                try {
+                    socket.receive(reply);
+                } catch (java.net.SocketTimeoutException e) {
+                    break;
+                }
+                InetSocketAddress from = (InetSocketAddress) reply.getSocketAddress();
+                byte[] id = asked.get(from);
+                boolean success = reply.getLength() >= 20 && in[0] == 0x01 && in[1] == 0x01;
+                if (id != null && success && java.util.Arrays.equals(java.util.Arrays.copyOfRange(in, 8, 20), id)) {
+                    answered.add(from);
+                }
+            }
+            Log.i(TAG, "stun " + target + (answered.size() == names.length ? " both" : " got " + answered.size()));
+        } catch (Exception e) {
+            Log.i(TAG, "stun " + target + " failed: " + e);
         }
     }
 
