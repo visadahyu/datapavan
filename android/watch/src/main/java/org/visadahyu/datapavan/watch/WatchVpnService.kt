@@ -89,6 +89,14 @@ class WatchVpnService : VpnService() {
     private var setupsKept = 0
     private var setupsAnew = 0
 
+    /**
+     * When the engine's counters began, by [SystemClock.elapsedRealtime]: at Watch's start of its engine,
+     * and kept when a new engine takes the tunnel, to which the old one hands its counters. A test that
+     * reads a counter twice tells by it an engine started afresh between, whose counters began again at
+     * 0, from one that counted nothing (ADR 0044, unit 9b, fix round 2).
+     */
+    private var countersSince = 0L
+
     /** The token of the measure posted for when a rise held back may be taken; [close] drops it. */
     private val riseCheck = Any()
 
@@ -358,6 +366,7 @@ class WatchVpnService : VpnService() {
             return
         }
         setUpAt = SystemClock.elapsedRealtime()
+        countersSince = setUpAt
         active = true
         state.value = true
         refreshChain()
@@ -622,7 +631,8 @@ class WatchVpnService : VpnService() {
 
     /**
      * `adb shell dumpsys activity service org.visadahyu.datapavan.watch/.WatchVpnService`: the
-     * engine's counters and Private DNS, and in debug builds the flows it kept and Private DNS's
+     * engine's counters, with when they began ([countersSince]), and Private DNS, and in debug builds the
+     * flows it kept and Private DNS's
      * provider, for the end-to-end test (scripts/verify-watch.sh). Release builds print no
      * destination and no provider.
      */
@@ -646,6 +656,7 @@ class WatchVpnService : VpnService() {
         writer.println("mtu $mtu first-hop ${firstHops.first ?: "-"} ${firstHops.second ?: "-"}")
         writer.println("setups kept $setupsKept anew $setupsAnew")
         writer.println("counters ${Engine.nativeCounters().joinToString(" ")}")
+        writer.println("counters-since $countersSince")
         writer.println("organisations ${Engine.nativeOrganisations().ifEmpty { "none" }}")
         val log = ConnectionLog.of(this)
         val counts = log.counts()

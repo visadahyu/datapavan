@@ -57,6 +57,9 @@ trap cleanup EXIT
 dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" "$@" | tr -d '\r'; }
 # The engine's counter at place $1, counting from 1, as Watch's dump prints them.
 counter() { dump | sed -n 's/^ *counters //p' | awk -v n="$1" '{print $n}'; }
+# When the engine's counters began, then its counter at place $1, from one dump: two reads with another
+# beginning span an engine Watch started afresh, whose counters began again at 0 (unit 9b, fix round 2).
+counter_since() { dump | awk -v n="$1" '/^ *counters-since /{since=$2} /^ *counters /{sub(/^ *counters /, ""); split($0, c, " ")} END{print since, c[n]}'; }
 flows() { dump | sed -n 's/^ *flow //p'; }
 tool_log() { adb logcat -d -s DatapavanTestTool | tr -d '\r' | sed -n 's/.*DatapavanTestTool: //p'; }
 workload_log() { adb logcat -d -s DatapavanWorkload | tr -d '\r' | sed -n 's/.*DatapavanWorkload: //p'; }
@@ -218,6 +221,14 @@ adb shell cmd locale set-app-locales "$PKG" --locales en-US >/dev/null 2>&1 || t
 listening=$(tool_log | grep -c "^listening")
 adb shell am start-foreground-service -n "$TOOL/.ToolService" --ei port "$TOOL_PORT" --es map "watch.test=$HOST" >/dev/null
 for _ in $(seq 1 10); do [ "$(tool_log | grep -c "^listening")" -gt "$listening" ] && break; sleep 1; done
+# The STUN server's lines are read now, as the tool starts it, not at the STUN step at the end of the run,
+# by when logcat's ring may have turned past them (unit 9b, fix round 2).
+for _ in $(seq 1 10); do
+    [ "$(tool_log | grep -cE "^stun 127\.0\.0\.[12] $STUN_PORT$")" -ge 2 ] && break
+    sleep 1
+done
+[ "$(tool_log | grep -cE "^stun 127\.0\.0\.[12] $STUN_PORT$")" -ge 2 ] ||
+    fail "the test tool's STUN server does not listen at 127.0.0.1 and 127.0.0.2: $(tool_log | grep '^stun' | tr '\n' ' ')"
 # Back to Watch as a user comes back to it, which makes it look for the tool again.
 adb shell input keyevent KEYCODE_HOME
 sleep 1
@@ -369,7 +380,7 @@ work() {
     local runs
     runs=$(workload_log | grep -c "^done$" || true)
     adb shell am start -W -n "$WORKLOAD/.WorkActivity" "$@" >/dev/null
-    for _ in $(seq 1 30); do [ "$(workload_log | grep -c "^done$")" -gt "$runs" ] && break; sleep 1; done
+    for _ in $(seq 1 "${WORK_WAIT:-30}"); do [ "$(workload_log | grep -c "^done$")" -gt "$runs" ] && break; sleep 1; done
     workload_log | awk -v runs="$runs" '$0 == "done" { done++; next } done == runs'
 }
 log=$(work --es name watch.test --es tcp "watch.test:$PORT" --es udp "watch.test:$((PORT + 1))")
@@ -409,16 +420,29 @@ echo "ok: the screen says the proxy asks for a password; with UDP allowed, the p
 # the answers told by an identifier where the address alone could not tell, must grow by one at least
 # (the second answer may find the first stand-in bound already). The emulator's first run of this step
 # resolved the second name between the two sends, and passed with the counter at 0, as unit 9 would
-# have: it showed nothing of unit 9b.
-grep -q "^stun 127.0.0.2 $STUN_PORT$" <<<"$(tool_log)" || fail "the test tool's STUN server does not listen at 127.0.0.2"
-identified=$(counter 48)
-log=$(work --es stun "stun-a.test,stun-b.test:$STUN_PORT")
-grep -q "^stun stun-a.test,stun-b.test:$STUN_PORT both$" <<<"$log" ||
+# have: it showed nothing of unit 9b. The app sends each request again until it is answered, with its
+# transaction ID, as RFC 8489 6.2.1 has a client do, for up to 39.5 s (fix round 2). The counter is read
+# with when the engine's counters began: an engine Watch started afresh between the two reads counted from
+# 0 again, which says nothing of this step either way, so the step runs once more, and a second such
+# start fails the run as that, never as a pass or as unit 9b's failure.
+for attempt in 1 2; do
+    before=$(counter_since 48)
+    log=$(WORK_WAIT=45 work --es stun "stun-a.test,stun-b.test:$STUN_PORT")
+    after=$(counter_since 48)
+    [ "${before%% *}" = "${after%% *}" ] && break
+    [ "$attempt" = 2 ] &&
+        fail "Watch's engine started afresh during the STUN step, twice (counters since ${before%% *}, then ${after%% *}): whether unit 9b told the answers apart cannot be read"
+    restarted="Watch's engine started afresh during the STUN step (counters since ${before%% *}, then ${after%% *}); the step runs once more"
+    echo "::warning title=Watch's engine::$restarted"
+    [ -z "${GITHUB_STEP_SUMMARY:-}" ] || echo "- verify-chain.sh: $restarted" >>"$GITHUB_STEP_SUMMARY"
+done
+grep -qE "^stun stun-a\.test,stun-b\.test:$STUN_PORT both after [0-9]+ sendings$" <<<"$log" ||
     fail "two STUN requests to two names on one port, from one socket: not both answered: $log; $(tool_log | grep '^stun' | tail -4 | tr '\n' ' ')"
-told=$(counter 48)
+identified=${before#* }
+told=${after#* }
 [ "$told" -gt "$identified" ] ||
-    fail "both STUN answers came, but none was told by its transaction ID (48th counter $identified, then $told): the step did not reach unit 9b"
-echo "ok: two STUN names asked at once on one port through the tool, each answered from its own stand-in, told by their IDs ($identified, then $told)"
+    fail "both STUN answers came, but none was told by its transaction ID (48th counter $identified, then $told, the engine's counters since ${after%% *}): the step did not reach unit 9b"
+echo "ok: two STUN names asked at once on one port through the tool, each answered from its own stand-in, told by their IDs ($identified, then $told; $(sed -n 's/.* both after \([0-9]*\) sendings$/\1/p' <<<"$log") sendings)"
 
 # The screen looked for the tool again when the workload app left it. A search that says a listening
 # tool does not answer is W6's open finding (CI, 2026-11-12): not a failure yet, but its steps are shown.

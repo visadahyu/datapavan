@@ -16,9 +16,10 @@ import java.nio.charset.StandardCharsets;
  * Does what the extras ask, in this app's own process and so under its own UID, then finishes:
  * "name" is looked up through Android's resolver, "tcp" (host:port) gets an HTTP request for /ping,
  * "udp" (host:port) gets a datagram and waits for its echo, and "stun" (first,second:port) resolves two
- * names, then sends a STUN Binding request to each on one port back to back, from one socket, and waits
- * for both responses, each from the name's own address with its own transaction ID (ADR 0044, unit 9b). Each
- * result is one line of logcat under the tag DatapavanWorkload, and "done" ends them.
+ * names, then sends a STUN Binding request to each on one port back to back, from one socket, sending each
+ * again as a STUN client does until it is answered, and waits for both responses, each from the name's own
+ * address with its own transaction ID (ADR 0044, unit 9b). Each result is one line of logcat under the tag
+ * DatapavanWorkload, and "done" ends them.
  */
 public final class WorkActivity extends Activity {
     private static final String TAG = "DatapavanWorkload";
@@ -65,12 +66,21 @@ public final class WorkActivity extends Activity {
         }
     }
 
+    /** RFC 8489 6.2.1's defaults for a STUN client over UDP: the first retransmission timeout, doubled
+     * after each, how many requests in all, and how many timeouts after the last before giving up. */
+    private static final long RTO = 500;
+    private static final int RC = 7;
+    private static final int RM = 16;
+
     /**
      * Sends a STUN Binding request (RFC 8489) to each of the two names in [target], "first,second:port",
      * from one socket, back to back once both names are resolved, so that both stand-ins wait on the
-     * port when the first answer comes back; logs "stun TARGET both" once each name's address answered
-     * with a Binding success response carrying the transaction ID sent to it, or "stun TARGET got N"
-     * with how many did within five seconds.
+     * port when the first answer comes back; each one not answered yet is sent again with its transaction
+     * ID as RFC 8489 6.2.1 has a client do over UDP, after 500 ms, then after twice as long each time, 7
+     * requests in all, until 16 times 500 ms after the last (fix round 2 of unit 9b: a datagram lost on
+     * the emulator's way no longer fails the step). Logs "stun TARGET both after N sendings" once each
+     * name's address answered with a Binding success response carrying the transaction ID sent to it, or
+     * "stun TARGET got M after N sendings" with how many did by then.
      */
     private static void stun(String target) {
         String[] namesPort = target.split(":", 2);
@@ -87,7 +97,7 @@ public final class WorkActivity extends Activity {
                 random.nextBytes(id);
                 asked.put(new InetSocketAddress(InetAddress.getByName(name), port), id);
             }
-            java.util.List<DatagramPacket> requests = new java.util.ArrayList<>();
+            java.util.Map<InetSocketAddress, DatagramPacket> requests = new java.util.LinkedHashMap<>();
             for (java.util.Map.Entry<InetSocketAddress, byte[]> entry : asked.entrySet()) {
                 byte[] request = new byte[20];
                 request[1] = 0x01;
@@ -96,18 +106,32 @@ public final class WorkActivity extends Activity {
                 request[6] = (byte) 0xa4;
                 request[7] = 0x42;
                 System.arraycopy(entry.getValue(), 0, request, 8, 12);
-                requests.add(new DatagramPacket(request, request.length, entry.getKey()));
+                requests.put(entry.getKey(), new DatagramPacket(request, request.length, entry.getKey()));
             }
-            for (DatagramPacket request : requests) socket.send(request);
-            long until = System.currentTimeMillis() + 5000;
+            long start = System.currentTimeMillis();
+            long timeout = RTO;
+            long next = start;
+            int sent = 0;
             byte[] in = new byte[1500];
-            while (answered.size() < asked.size() && System.currentTimeMillis() < until) {
-                socket.setSoTimeout((int) Math.max(1, until - System.currentTimeMillis()));
+            while (answered.size() < asked.size()) {
+                long now = System.currentTimeMillis();
+                if (now >= next) {
+                    if (sent == RC) break;
+                    for (java.util.Map.Entry<InetSocketAddress, DatagramPacket> request : requests.entrySet()) {
+                        if (!answered.contains(request.getKey())) socket.send(request.getValue());
+                    }
+                    sent++;
+                    // After the last request, the client waits Rm times the first timeout.
+                    next = now + (sent == RC ? RM * RTO : timeout);
+                    timeout *= 2;
+                    continue;
+                }
+                socket.setSoTimeout((int) Math.max(1, next - now));
                 DatagramPacket reply = new DatagramPacket(in, in.length);
                 try {
                     socket.receive(reply);
                 } catch (java.net.SocketTimeoutException e) {
-                    break;
+                    continue;
                 }
                 InetSocketAddress from = (InetSocketAddress) reply.getSocketAddress();
                 byte[] id = asked.get(from);
@@ -116,7 +140,8 @@ public final class WorkActivity extends Activity {
                     answered.add(from);
                 }
             }
-            Log.i(TAG, "stun " + target + (answered.size() == names.length ? " both" : " got " + answered.size()));
+            Log.i(TAG, "stun " + target + (answered.size() == names.length ? " both" : " got " + answered.size())
+                    + " after " + sent + " sendings");
         } catch (Exception e) {
             Log.i(TAG, "stun " + target + " failed: " + e);
         }
