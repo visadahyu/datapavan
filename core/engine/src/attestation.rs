@@ -302,167 +302,329 @@ impl<'a> Element<'a> {
 mod tests {
     use super::*;
 
-    /// Encodes one DER element with a short or long length.
-    fn der(tag: &[u8], content: &[u8]) -> Vec<u8> {
-        let mut out = tag.to_vec();
-        let len = content.len();
-        if len < 128 {
-            out.push(u8::try_from(len).unwrap_or_default());
-        } else {
-            out.extend_from_slice(&[
-                0x82,
-                u8::try_from(len >> 8).unwrap_or_default(),
-                u8::try_from(len & 0xff).unwrap_or_default(),
-            ]);
+    /// One element of a test extension. The tests build each extension as a tree, so that a test
+    /// can change one element and have every enclosing length encoded again.
+    #[derive(Clone, Debug)]
+    struct Node {
+        /// The identifier bytes: class, constructed bit and tag number.
+        tag: Vec<u8>,
+        body: Body,
+        /// Whether the parser reads the content, as opposed to skipping it.
+        read: bool,
+    }
+
+    #[derive(Clone, Debug)]
+    enum Body {
+        /// Content given as bytes.
+        Bytes(Vec<u8>),
+        /// Content made of elements, of which the schema requires at least `required`.
+        Elements {
+            children: Vec<Node>,
+            required: usize,
+        },
+    }
+
+    /// The DER length octets of `len`.
+    fn length(len: usize) -> Vec<u8> {
+        if len < 0x80 {
+            return vec![u8::try_from(len).unwrap_or_default()];
         }
-        out.extend_from_slice(content);
+        let digits: Vec<u8> = len
+            .to_be_bytes()
+            .into_iter()
+            .skip_while(|&b| b == 0)
+            .collect();
+        let mut out = vec![0x80 | u8::try_from(digits.len()).unwrap_or_default()];
+        out.extend(digits);
         out
     }
 
-    fn seq(parts: &[Vec<u8>]) -> Vec<u8> {
-        der(&[0x30], &parts.concat())
-    }
-
-    /// Context-specific constructed tag with a multi-byte number (704 = 0x05 0x40, 706 = 0x05 0x42).
-    fn explicit(number: u32, inner: &[u8]) -> Vec<u8> {
-        let high = u8::try_from(number >> 7).unwrap_or_default() | 0x80;
-        let low = u8::try_from(number & 0x7f).unwrap_or_default();
-        der(&[0xbf, high, low], inner)
-    }
-
-    fn key_description(
-        locked: u8,
-        boot: u8,
-        level: u8,
-        patch: Option<u32>,
-        in_hardware: bool,
-    ) -> Vec<u8> {
-        let root = explicit(
-            TAG_ROOT_OF_TRUST,
-            &seq(&[
-                der(&[0x04], &[0xaa; 32]),
-                der(&[0x01], &[locked]),
-                der(&[0x0a], &[boot]),
-                der(&[0x04], &[0xbb; 32]),
-            ]),
-        );
-        let mut list = vec![root];
-        if let Some(p) = patch {
-            list.push(explicit(
-                TAG_OS_PATCH_LEVEL,
-                &der(
-                    &[0x02],
-                    &[
-                        0x03,
-                        u8::try_from((p >> 8) & 0xff).unwrap_or_default(),
-                        u8::try_from(p & 0xff).unwrap_or_default(),
-                    ],
-                ),
-            ));
+    fn content(node: &Node) -> Vec<u8> {
+        match &node.body {
+            Body::Bytes(bytes) => bytes.clone(),
+            Body::Elements { children, .. } => children.iter().flat_map(encode).collect(),
         }
-        let filled = seq(&list);
-        let empty = seq(&[]);
-        let (software, hardware) = if in_hardware {
-            (empty, filled)
-        } else {
-            (filled, empty)
+    }
+
+    fn encode(node: &Node) -> Vec<u8> {
+        let content = content(node);
+        [node.tag.clone(), length(content.len()), content].concat()
+    }
+
+    fn primitive(tag: &[u8], content: &[u8]) -> Node {
+        Node {
+            tag: tag.to_vec(),
+            body: Body::Bytes(content.to_vec()),
+            read: true,
+        }
+    }
+
+    fn constructed(tag: &[u8], children: Vec<Node>, required: usize) -> Node {
+        Node {
+            tag: tag.to_vec(),
+            body: Body::Elements { children, required },
+            read: true,
+        }
+    }
+
+    /// The shortest two's-complement content of a non-negative integer.
+    fn unsigned_content(value: u64) -> Vec<u8> {
+        let digits: Vec<u8> = value
+            .to_be_bytes()
+            .into_iter()
+            .skip_while(|&b| b == 0)
+            .collect();
+        match digits.first() {
+            None => vec![0],
+            Some(&first) if first & 0x80 != 0 => [vec![0], digits].concat(),
+            Some(_) => digits,
+        }
+    }
+
+    fn integer(value: u64) -> Node {
+        primitive(&[0x02], &unsigned_content(value))
+    }
+
+    fn enumerated(value: u64) -> Node {
+        primitive(&[0x0a], &unsigned_content(value))
+    }
+
+    fn octets(bytes: &[u8]) -> Node {
+        primitive(&[0x04], bytes)
+    }
+
+    fn sequence(children: Vec<Node>, required: usize) -> Node {
+        constructed(&[0x30], children, required)
+    }
+
+    fn set(children: Vec<Node>) -> Node {
+        constructed(&[0x31], children, 0)
+    }
+
+    /// The identifier of a context-specific constructed tag, in the high tag number form from 31 on.
+    fn context_tag(number: u32) -> Vec<u8> {
+        if number < 31 {
+            return vec![0xa0 | u8::try_from(number).unwrap_or_default()];
+        }
+        let mut digits = vec![u8::try_from(number & 0x7f).unwrap_or_default()];
+        let mut rest = number >> 7;
+        while rest > 0 {
+            digits.push(0x80 | u8::try_from(rest & 0x7f).unwrap_or_default());
+            rest >>= 7;
+        }
+        digits.push(0xbf);
+        digits.reverse();
+        digits
+    }
+
+    /// An entry of an authorization list, `[number] EXPLICIT`.
+    fn explicit(number: u32, inner: Node) -> Node {
+        constructed(&context_tag(number), vec![inner], 1)
+    }
+
+    /// Marks an element and everything in it as content the parser skips.
+    fn unread(node: Node) -> Node {
+        let body = match node.body {
+            Body::Elements { children, required } => Body::Elements {
+                children: children.into_iter().map(unread).collect(),
+                required,
+            },
+            body @ Body::Bytes(_) => body,
         };
-        let body = seq(&[
-            der(&[0x02], &[0x03]),
-            der(&[0x0a], &[level]),
-            der(&[0x02], &[0x04]),
-            der(&[0x0a], &[level]),
-            der(&[0x04], b"challenge"),
-            der(&[0x04], &[]),
-            software,
-            hardware,
-        ]);
-        der(&[0x04], &body)
+        Node {
+            body,
+            read: false,
+            ..node
+        }
+    }
+
+    /// `[704] rootOfTrust`, with the verifiedBootHash of attestation version 3 and later.
+    fn root(locked: u8, boot: u8) -> Node {
+        explicit(
+            TAG_ROOT_OF_TRUST,
+            sequence(
+                vec![
+                    unread(octets(&[0xaa; 32])),
+                    primitive(&[0x01], &[locked]),
+                    enumerated(boot.into()),
+                    unread(octets(&[0xbb; 32])),
+                ],
+                3,
+            ),
+        )
+    }
+
+    /// `[706] osPatchLevel`.
+    fn patch(level: u32) -> Node {
+        explicit(TAG_OS_PATCH_LEVEL, integer(level.into()))
+    }
+
+    /// The other entries a `KeyMint` device puts in its hardware-enforced list, in tag order and
+    /// split where `rootOfTrust` and `osPatchLevel` go: purpose, algorithm, key size, digest, EC
+    /// curve, no authentication required, origin; then osVersion; then the vendor and boot patch
+    /// levels.
+    fn hardware(root: Option<Node>, patch: Option<Node>) -> Vec<Node> {
+        let mut list = vec![
+            unread(explicit(1, set(vec![integer(2)]))),
+            unread(explicit(2, integer(3))),
+            unread(explicit(3, integer(256))),
+            unread(explicit(5, set(vec![integer(4)]))),
+            unread(explicit(10, integer(1))),
+            unread(explicit(503, primitive(&[0x05], &[]))),
+            unread(explicit(702, integer(0))),
+        ];
+        list.extend(root);
+        list.push(unread(explicit(705, integer(150_000))));
+        list.extend(patch);
+        list.push(unread(explicit(718, integer(20_250_705))));
+        list.push(unread(explicit(719, integer(20_250_705))));
+        list
+    }
+
+    /// The entries a `KeyMint` device puts in its software-enforced list: creationDateTime and
+    /// attestationApplicationId, with `extra` between them.
+    fn software(extra: Vec<Node>) -> Vec<Node> {
+        let mut list = vec![unread(explicit(701, integer(1_752_000_000_000)))];
+        list.extend(extra);
+        list.push(unread(explicit(709, octets(b"application id"))));
+        list
+    }
+
+    /// The extension as `getExtensionValue` returns it, with attestation version 300 (`KeyMint`
+    /// 3): the attestation's and the key's security levels, then the two lists.
+    fn extension(levels: (u8, u8), software: Vec<Node>, hardware: Vec<Node>) -> Node {
+        wrap(fields(levels, software, hardware))
+    }
+
+    /// The eight fields of a `KeyDescription`.
+    fn fields(levels: (u8, u8), software: Vec<Node>, hardware: Vec<Node>) -> Vec<Node> {
+        vec![
+            integer(300),
+            enumerated(levels.0.into()),
+            unread(integer(300)),
+            unread(enumerated(levels.1.into())),
+            unread(octets(b"challenge")),
+            unread(octets(&[])),
+            sequence(software, 0),
+            sequence(hardware, 0),
+        ]
+    }
+
+    /// The `KeyDescription` sequence of `fields`, in its OCTET STRING.
+    fn wrap(fields: Vec<Node>) -> Node {
+        constructed(&[0x04], vec![sequence(fields, 8)], 1)
+    }
+
+    const TEE: (u8, u8) = (1, 1);
+    const LOCKED_VERIFIED: RootOfTrust = RootOfTrust {
+        device_locked: true,
+        verified_boot: VerifiedBootState::Verified,
+    };
+
+    /// A trusted environment's attestation of a locked, verified phone, as a `KeyMint` device
+    /// writes it.
+    fn tee_device() -> Node {
+        extension(
+            TEE,
+            software(vec![]),
+            hardware(Some(root(0xff, 0)), Some(patch(202_507))),
+        )
+    }
+
+    fn parse(node: &Node) -> Result<KeyDescription, Error> {
+        parse_key_description(&encode(node))
+    }
+
+    /// What the parser makes of `tee_device()` with its element at `path` (child indices from the
+    /// outer OCTET STRING) replaced by `replacement`.
+    fn with(path: &[usize], replacement: Node) -> Result<KeyDescription, Error> {
+        fn replace(node: &mut Node, path: &[usize], replacement: Node) {
+            match (path.split_first(), &mut node.body) {
+                (None, _) => *node = replacement,
+                (Some((&index, rest)), Body::Elements { children, .. }) => {
+                    if let Some(child) = children.get_mut(index) {
+                        replace(child, rest, replacement);
+                    }
+                }
+                (Some(_), _) => {}
+            }
+        }
+        let mut node = tee_device();
+        replace(&mut node, path, replacement);
+        parse(&node)
+    }
+
+    /// Paths into `tee_device()`.
+    const ATTESTATION_LEVEL: &[usize] = &[0, 1];
+    const BOOT_STATE: &[usize] = &[0, 7, 7, 0, 2];
+    const PATCH_VALUE: &[usize] = &[0, 7, 9, 0];
+
+    fn description(
+        security_level: SecurityLevel,
+        root_of_trust: Option<RootOfTrust>,
+        os_patch_level: Option<u32>,
+    ) -> KeyDescription {
+        KeyDescription {
+            attestation_version: 300,
+            security_level,
+            root_of_trust,
+            os_patch_level,
+        }
     }
 
     #[test]
     fn reads_locked_verified_tee_device() {
-        let parsed = parse_key_description(&key_description(0xff, 0, 1, Some(202_303), true));
         assert_eq!(
-            parsed,
-            Ok(KeyDescription {
-                attestation_version: 3,
-                security_level: SecurityLevel::TrustedEnvironment,
-                root_of_trust: Some(RootOfTrust {
-                    device_locked: true,
-                    verified_boot: VerifiedBootState::Verified
-                }),
-                os_patch_level: Some(202_303),
-            })
-        );
-    }
-
-    #[test]
-    fn reads_software_attestation_from_the_software_list() {
-        let parsed = parse_key_description(&key_description(0, 2, 0, None, false));
-        assert_eq!(
-            parsed.map(|d| (d.security_level, d.root_of_trust, d.os_patch_level)),
-            Ok((
-                SecurityLevel::Software,
-                Some(RootOfTrust {
-                    device_locked: false,
-                    verified_boot: VerifiedBootState::Unverified
-                }),
-                None
+            parse(&tee_device()),
+            Ok(description(
+                SecurityLevel::TrustedEnvironment,
+                Some(LOCKED_VERIFIED),
+                Some(202_507)
             ))
         );
     }
 
     #[test]
-    fn rejects_every_truncation_without_panicking() {
-        let full = key_description(0xff, 0, 1, Some(202_303), true);
-        for cut in 0..full.len() {
-            assert!(
-                parse_key_description(full.get(..cut).unwrap_or_default()).is_err(),
-                "cut at {cut}"
-            );
-        }
+    fn reads_software_attestation_from_the_software_list() {
+        let software_only = extension(
+            (0, 0),
+            software(vec![root(0x00, 2), patch(202_608)]),
+            hardware(None, None),
+        );
+        assert_eq!(
+            parse(&software_only),
+            Ok(description(
+                SecurityLevel::Software,
+                Some(RootOfTrust {
+                    device_locked: false,
+                    verified_boot: VerifiedBootState::Unverified,
+                }),
+                Some(202_608)
+            ))
+        );
     }
+
+    // Errors, and values of any size.
 
     #[test]
     fn rejects_trailing_bytes_and_wrong_tags() {
-        let mut extra = key_description(0xff, 0, 1, None, true);
-        extra.push(0);
-        assert_eq!(parse_key_description(&extra), Err(Error::InvalidValue));
+        let mut trailing = encode(&tee_device());
+        trailing.push(0);
+        assert_eq!(parse_key_description(&trailing), Err(Error::InvalidValue));
         assert_eq!(
-            parse_key_description(&der(&[0x30], &[])),
+            parse_key_description(&encode(&sequence(vec![], 0))),
             Err(Error::UnexpectedTag)
         );
     }
 
     #[test]
-    fn rejects_out_of_range_enums_and_negative_integers() {
-        assert_eq!(
-            parse_key_description(&key_description(0xff, 7, 1, None, true)),
-            Err(Error::InvalidValue)
-        );
-        assert_eq!(
-            parse_key_description(&key_description(0xff, 0, 5, None, true)),
-            Err(Error::InvalidValue)
-        );
-        assert_eq!(
-            Element {
-                tag: Tag::universal(TAG_INTEGER, false),
-                content: &[0x80],
-                depth: 0
-            }
-            .unsigned(),
-            Err(Error::InvalidValue)
-        );
-    }
-
-    #[test]
     fn bounds_nesting_depth() {
-        let mut nested = der(&[0x02], &[0x01]);
+        let mut nested = integer(1);
         for _ in 0..20 {
-            nested = seq(&[nested]);
+            nested = sequence(vec![nested], 0);
         }
-        let mut current = Element::read(&nested, 0).map(|(e, _)| e);
+        let bytes = encode(&nested);
+        let mut current = Element::read(&bytes, 0).map(|(e, _)| e);
         let outcome = loop {
             match current {
                 Ok(e) => match e.children() {
@@ -473,5 +635,158 @@ mod tests {
             }
         };
         assert_eq!(outcome, Error::TooDeep);
+    }
+
+    #[test]
+    fn reads_patch_levels_of_any_size() {
+        for level in [0, 127, 128, 202_507, 20_250_705, u32::MAX] {
+            assert_eq!(
+                with(PATCH_VALUE, integer(level.into())).map(|d| d.os_patch_level),
+                Ok(Some(level))
+            );
+        }
+        assert_eq!(
+            with(PATCH_VALUE, integer(u64::from(u32::MAX) + 1)),
+            Err(Error::InvalidValue)
+        );
+        assert_eq!(
+            with(PATCH_VALUE, primitive(&[0x02], &[0x80])),
+            Err(Error::InvalidValue)
+        );
+    }
+
+    #[test]
+    fn rejects_out_of_range_enums() {
+        assert_eq!(with(BOOT_STATE, enumerated(4)), Err(Error::InvalidValue));
+        assert_eq!(
+            with(ATTESTATION_LEVEL, enumerated(3)),
+            Err(Error::InvalidValue)
+        );
+    }
+
+    // Truncation of every element, not only of the outer one.
+
+    /// What the parser must make of an extension with one element cut short.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Expect {
+        /// An error: the cut left an element the parser reads incomplete, or a required one out.
+        Rejected,
+        /// The description of the whole extension: the parser skips the element that was cut.
+        Unchanged,
+        /// The whole extension's description, but for values whose entries were cut away.
+        Consistent,
+        /// Anything but a panic: a cut integer is still an integer, of another value.
+        Any,
+    }
+
+    /// Every way to cut one element's content short, each in the whole extension encoded again
+    /// around it, with what the parser must make of it.
+    fn truncations(node: &Node) -> Vec<(Node, Expect)> {
+        let whole = content(node);
+        let mut out = Vec::new();
+        for cut in 0..whole.len() {
+            let expect = match &node.body {
+                _ if !node.read => Expect::Unchanged,
+                Body::Bytes(_) if cut == 0 => Expect::Rejected,
+                Body::Bytes(_) => Expect::Any,
+                Body::Elements { children, required } => {
+                    // The number of children left whole, if the cut falls between two.
+                    let mut end = 0;
+                    let kept = std::iter::once(0)
+                        .chain(children.iter().map(|child| {
+                            end += encode(child).len();
+                            end
+                        }))
+                        .position(|boundary| boundary == cut);
+                    match kept {
+                        Some(kept) if kept >= *required => Expect::Consistent,
+                        _ => Expect::Rejected,
+                    }
+                }
+            };
+            let cut_node = Node {
+                body: Body::Bytes(whole.get(..cut).unwrap_or_default().to_vec()),
+                ..node.clone()
+            };
+            out.push((cut_node, expect));
+        }
+        if let Body::Elements { children, required } = &node.body {
+            for (index, child) in children.iter().enumerate() {
+                for (cut_child, expect) in truncations(child) {
+                    let mut children = children.clone();
+                    if let Some(slot) = children.get_mut(index) {
+                        *slot = cut_child;
+                    }
+                    let body = Body::Elements {
+                        children,
+                        required: *required,
+                    };
+                    out.push((
+                        Node {
+                            body,
+                            ..node.clone()
+                        },
+                        expect,
+                    ));
+                }
+            }
+        }
+        out
+    }
+
+    fn check_every_truncation(extension: &Node) -> usize {
+        let Ok(whole) = parse(extension) else {
+            return 0;
+        };
+        let cases = truncations(extension);
+        for (index, (cut, expect)) in cases.iter().enumerate() {
+            let parsed = parse(cut);
+            match expect {
+                Expect::Rejected => assert!(parsed.is_err(), "case {index}: {parsed:?}"),
+                Expect::Unchanged => assert_eq!(parsed, Ok(whole), "case {index}"),
+                Expect::Consistent => {
+                    let Ok(cut) = parsed else {
+                        assert!(parsed.is_ok(), "case {index}: {parsed:?}");
+                        continue;
+                    };
+                    assert_eq!(cut.attestation_version, whole.attestation_version);
+                    assert_eq!(cut.security_level, whole.security_level);
+                    assert!(
+                        cut.root_of_trust.is_none() || cut.root_of_trust == whole.root_of_trust,
+                        "case {index}: {cut:?}"
+                    );
+                    assert!(
+                        cut.os_patch_level.is_none() || cut.os_patch_level == whole.os_patch_level,
+                        "case {index}: {cut:?}"
+                    );
+                }
+                Expect::Any => {}
+            }
+        }
+        cases.len()
+    }
+
+    #[test]
+    fn rejects_every_truncation_of_every_element() {
+        // A trusted environment's attestation of an unlocked phone.
+        let tee = extension(
+            TEE,
+            software(vec![]),
+            hardware(Some(root(0x00, 2)), Some(patch(202_301))),
+        );
+        // A software attestation, with the hardware list of a keystore that attests in software
+        // for an older trusted environment.
+        let software_only = extension(
+            (0, 1),
+            software(vec![root(0x00, 2), patch(202_608)]),
+            hardware(None, None),
+        );
+        for fixture in [tee, software_only] {
+            let whole = encode(&fixture).len();
+            let cases = check_every_truncation(&fixture);
+            // Each byte of each element's content is a cut, so there are far more cases than the
+            // outer element's own cuts.
+            assert!(cases > 4 * whole, "{cases} cases for {whole} bytes");
+        }
     }
 }
