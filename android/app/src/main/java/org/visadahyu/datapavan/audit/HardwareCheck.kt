@@ -180,6 +180,17 @@ class HardwareCheck(
             }
         }
 
+        /** How far down an exception's causes to look; the keystore's errors are one to three deep. */
+        const val MAX_CAUSES = 8
+
+        /**
+         * The keystore's errors among [error]'s causes, outermost first, as [read] (KeyStoreException's code and
+         * retry policy on Android 13 and later) finds them: on Android 13, generateKeyPair throws a
+         * ProviderException whose cause is the KeyStoreException, which may wrap another.
+         */
+        fun keystoreErrors(error: Throwable, read: (Throwable) -> KeystoreError?): Sequence<KeystoreError> =
+            generateSequence(error) { it.cause }.take(MAX_CAUSES).mapNotNull(read)
+
         /**
          * KeyStoreException's code for "this device requires a software upgrade to use the key provisioning
          * server", hidden from the public API but returned by getNumericErrorCode (AOSP, Android 14 and later).

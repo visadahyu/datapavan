@@ -361,23 +361,52 @@ class AppCollector(private val context: Context) {
     }
 }
 
+/**
+ * `Build.HARDWARE` (ro.hardware) of Android's emulator: "ranchu" since 2015, "goldfish" before. The system sets it,
+ * so a modified one can claim it on a phone. The claim counts only for the answers the emulator gives (software,
+ * under a root that vouches for nothing), and its finding is medium, level with the other answers a system with
+ * root can give, and says in words what the claim means on a real phone.
+ */
+internal val EMULATOR_HARDWARE = setOf("ranchu", "goldfish")
+
+/**
+ * The device's facts from what [DeviceCollector] read from the system: [hardware] is `Build.HARDWARE` and [sdk]
+ * `Build.VERSION.SDK_INT`. Apart from the reads, so that how they are judged is tested (CollectorWiringTest).
+ */
+internal fun deviceFacts(
+    usbDebugging: Boolean,
+    wirelessDebugging: Boolean,
+    userCertificateAuthorities: List<String>,
+    vpnActive: Boolean,
+    check: IntegrityResult,
+    hardwareKeystore: Boolean,
+    hardware: String,
+    sdk: Int,
+) = DeviceFacts(
+    usbDebugging = usbDebugging,
+    wirelessDebugging = wirelessDebugging,
+    userCertificateAuthorities = userCertificateAuthorities,
+    vpnActive = vpnActive,
+    integrity = check.integrity,
+    integrityFailure = check.failure,
+    hardwareKeystore = hardwareKeystore,
+    emulator = hardware in EMULATOR_HARDWARE,
+    sdk = sdk,
+)
+
 /** Reads device-wide settings, user certificate authorities and hardware key attestation. */
 class DeviceCollector(private val context: Context) {
 
-    fun collect(): DeviceFacts {
-        val check = integrity()
-        return DeviceFacts(
-            usbDebugging = global(Settings.Global.ADB_ENABLED) == "1",
-            wirelessDebugging = global(SETTING_ADB_WIFI) == "1",
-            userCertificateAuthorities = userCertificateAuthorities(),
-            vpnActive = vpnActive(),
-            integrity = check.integrity,
-            integrityFailure = check.failure,
-            hardwareKeystore = hardwareKeystore(),
-            emulator = Build.HARDWARE in EMULATOR_HARDWARE,
-            sdk = Build.VERSION.SDK_INT,
-        )
-    }
+    fun collect(): DeviceFacts = deviceFacts(
+        usbDebugging = global(Settings.Global.ADB_ENABLED) == "1",
+        wirelessDebugging = global(SETTING_ADB_WIFI) == "1",
+        userCertificateAuthorities = userCertificateAuthorities(),
+        vpnActive = vpnActive(),
+        check = integrity(),
+        hardwareKeystore = hardwareKeystore(),
+        hardware = Build.HARDWARE,
+        sdk = Build.VERSION.SDK_INT,
+    )
 
     /**
      * Whether the phone declares secure hardware for its keys ([HardwareCheck.declaresHardware]). The package
@@ -472,9 +501,9 @@ class DeviceCollector(private val context: Context) {
     /** What a failed check means ([HardwareCheck.failureOf]), from the keystore's errors among its causes. */
     private fun failureOf(error: Exception): IntegrityFailure {
         val errors = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            generateSequence<Throwable>(error) { it.cause }.take(MAX_CAUSES)
-                .filterIsInstance<android.security.KeyStoreException>()
-                .map { KeystoreError(it.numericErrorCode, it.retryPolicy) }
+            HardwareCheck.keystoreErrors(error) { cause ->
+                (cause as? android.security.KeyStoreException)?.let { KeystoreError(it.numericErrorCode, it.retryPolicy) }
+            }
         } else {
             emptySequence()
         }
@@ -488,17 +517,6 @@ class DeviceCollector(private val context: Context) {
 
     private companion object {
         const val SETTING_ADB_WIFI = "adb_wifi_enabled"
-
-        /** How far down an exception's causes to look; the keystore's errors are one or two deep. */
-        const val MAX_CAUSES = 8
-
-        /**
-         * `Build.HARDWARE` (ro.hardware) of Android's emulator: "ranchu" since 2015, "goldfish" before. The system
-         * sets it, so a modified one can claim it on a phone. The claim counts only for the answer the emulator
-         * gives (software, under AOSP's root), and its finding is medium, level with the other answers a system
-         * with root can give, and says in words what the claim means on a real phone.
-         */
-        val EMULATOR_HARDWARE = setOf("ranchu", "goldfish")
     }
 }
 
