@@ -479,7 +479,9 @@ internal fun IntegrityLine(device: DeviceFacts) {
             integrity.trust == AttestationTrust.GOOGLE_ROOT -> stringResource(R.string.device_integrity_ok)
         else -> null
     }
-    val patch = integrity?.osPatchLevel?.let { String.format(Locale.ROOT, "%04d-%02d", it / 100, it % 100) }
+    // A forged attestation's patch level is not shown, like the rest of what it says.
+    val patch = integrity?.takeIf { it.trust != AttestationTrust.FORGED }?.osPatchLevel
+        ?.let { String.format(Locale.ROOT, "%04d-%02d", it / 100, it % 100) }
     Column(Modifier.padding(vertical = 4.dp)) {
         text?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
         patch?.let { Text(stringResource(R.string.device_patch, isolateLtr(it)), style = MaterialTheme.typography.bodyMedium) }
@@ -721,6 +723,8 @@ private fun title(kind: FindingKind) = when (kind) {
     FindingKind.OLD_SECURITY_PATCH -> R.string.finding_old_patch_title
     FindingKind.INTEGRITY_SOFTWARE_ONLY -> R.string.finding_software_only_title
     FindingKind.ATTESTATION_REVOKED -> R.string.finding_attestation_revoked_title
+    FindingKind.ATTESTATION_FORGED -> R.string.finding_attestation_forged_title
+    FindingKind.ATTESTATION_OUT_OF_DATE -> R.string.finding_attestation_out_of_date_title
     FindingKind.ATTESTATION_UNCONFIRMED -> R.string.finding_attestation_unconfirmed_title
     FindingKind.ATTESTATION_INCOMPLETE -> R.string.finding_attestation_incomplete_title
     FindingKind.VPN_ACTIVE -> R.string.finding_vpn_active_title
@@ -753,6 +757,8 @@ private fun body(kind: FindingKind) = when (kind) {
     FindingKind.OLD_SECURITY_PATCH -> R.string.finding_old_patch_body
     FindingKind.INTEGRITY_SOFTWARE_ONLY -> R.string.finding_software_only_body
     FindingKind.ATTESTATION_REVOKED -> R.string.finding_attestation_revoked_body
+    FindingKind.ATTESTATION_FORGED -> R.string.finding_attestation_forged_body
+    FindingKind.ATTESTATION_OUT_OF_DATE -> R.string.finding_attestation_out_of_date_body
     FindingKind.ATTESTATION_UNCONFIRMED -> R.string.finding_attestation_unconfirmed_body
     FindingKind.ATTESTATION_INCOMPLETE -> R.string.finding_attestation_incomplete_body
     FindingKind.VPN_ACTIVE -> R.string.finding_vpn_active_body

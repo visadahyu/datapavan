@@ -6,43 +6,139 @@ import org.junit.Test
 import java.io.File
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
+import java.time.Instant
+import java.util.Date
 
-/** The test chain (leaf 3003, intermediate 2002, root 1001) and the second root are throwaway certificates. */
+/**
+ * The chain check on real phones' chains: Google's test data in `core/engine/testdata/keyattestation` (SOURCE
+ * there), checked against the bundled roots, each as the attestation of its own leaf's key, at a date when its
+ * certificates were valid unless a test says otherwise.
+ */
 class AttestationChainTest {
-    private fun certificates(name: String): List<X509Certificate> =
-        requireNotNull(javaClass.getResourceAsStream("/attestation/$name")).use { input ->
-            CertificateFactory.getInstance("X.509").generateCertificates(input).map { it as X509Certificate }
-        }
+    private fun chain(file: File): List<X509Certificate> = file.inputStream().use { input ->
+        CertificateFactory.getInstance("X.509").generateCertificates(input).map { it as X509Certificate }
+    }
 
-    private val chain = certificates("chain.pem")
-    private val otherRoot = certificates("other-root.pem").single()
-    private val rootKey = AttestationChain.keyFingerprint(chain.last().publicKey)
+    private fun corpus(path: String) = chain(File(CORPUS, path))
+
+    private val google = File(DATA, "google-roots.pem").inputStream().use { roots ->
+        AttestationChain.load(roots, "".byteInputStream())
+    }
+
+    /** A date at which every certificate between the leaf and the root is valid. */
+    private fun whenValid(chain: List<X509Certificate>) =
+        Date(chain.subList(1, chain.lastIndex).maxOf { it.notBefore.time } + 60_000)
+
+    private fun AttestationChain.trust(chain: List<X509Certificate>, now: Date = whenValid(chain)) =
+        trust(chain, chain.first().publicKey, now)
 
     @Test
-    fun `a chain that ends at a trusted root key is trusted`() {
-        assertEquals(AttestationTrust.GOOGLE_ROOT, AttestationChain(setOf(rootKey), emptySet()).trust(chain))
+    fun `every genuine chain is trusted, and the software keystore's is not Google's`() {
+        for (path in GENUINE) {
+            assertEquals(path, AttestationTrust.GOOGLE_ROOT, google.trust(corpus(path)))
+        }
+        assertEquals(AttestationTrust.OTHER_ROOT, google.trust(corpus("marlin/sdk29/TEE_EC_NONE.pem")))
     }
 
     @Test
-    fun `a valid chain to any other root is not trusted`() {
-        assertEquals(AttestationTrust.OTHER_ROOT, AttestationChain(emptySet(), emptySet()).trust(chain))
+    fun `a chain whose leaf was edited is broken`() {
+        // Google's sample with entries out of tag order: its leaf's signature does not verify.
+        assertEquals(AttestationTrust.BROKEN_CHAIN, google.trust(corpus("invalid/tags_not_in_ascending_order.pem")))
+    }
+
+    @Test
+    fun `a chain extended below the attested key is forged`() {
+        // The second review's probe: [forged, leaf, intermediate, root], where `forged` carries a "locked and
+        // verified" KeyDescription and is signed by the leaf's own key, as a hooked keystore can sign with any key
+        // it holds. Its signatures and names chain, so the check before this branch called it trusted. Google's
+        // verifier calls it CHAIN_EXTENDED_WITH_FAKE_ATTESTATION_EXTENSION.
+        val extended = chain(File(javaClass.getResource("/attestation/extended-chain.pem")!!.toURI()))
+        val probeRoot = AttestationChain(setOf(AttestationChain.keyFingerprint(extended.last().publicKey)), emptySet())
+        for (key in listOf(extended[0].publicKey, extended[1].publicKey)) {
+            assertEquals(AttestationTrust.FORGED, probeRoot.trust(extended, key, whenValid(extended)))
+        }
+        // The same on a genuine chain: an extra certificate below the leaf, with an extension, or without one.
+        val genuine = corpus("caiman/sdk36/TEE_EC_RKP.pem")
+        assertEquals(AttestationTrust.FORGED, google.trust(listOf(genuine[0]) + genuine, genuine[0].publicKey, whenValid(genuine)))
+        val other = corpus("akita/sdk34/TEE_EC_NONE.pem")[1]
+        assertEquals(AttestationTrust.FORGED, google.trust(listOf(other) + genuine, other.publicKey, whenValid(genuine)))
+    }
+
+    @Test
+    fun `an attestation of another key is forged`() {
+        // A genuine chain replayed from another phone, or another request: the leaf is not the app's key.
+        val chain = corpus("sony-xperia10-iii/sdk33/TEE_EC.pem")
+        val otherKey = corpus("caiman/sdk36/TEE_EC_RKP.pem").first().publicKey
+        assertEquals(AttestationTrust.FORGED, google.trust(chain, otherKey, whenValid(chain)))
+    }
+
+    @Test
+    fun `an attestation that answers another challenge is forged`() {
+        val challenge = "challenge".toByteArray()
+        for (trust in AttestationTrust.entries) {
+            assertEquals(trust, AttestationChain.verdict(trust, challenge.copyOf(), challenge))
+            assertEquals(AttestationTrust.FORGED, AttestationChain.verdict(trust, "challengf".toByteArray(), challenge))
+        }
+        assertEquals(AttestationTrust.FORGED, AttestationChain.verdict(AttestationTrust.GOOGLE_ROOT, ByteArray(0), challenge))
+    }
+
+    @Test
+    fun `a chain without an attestation, or of the wrong shape, is broken`() {
+        val chain = corpus("blueline/sdk28/SB_RSA_NONE.pem")
+        // No KeyDescription at all: the chain from the attestation key up.
+        assertEquals(AttestationTrust.BROKEN_CHAIN, google.trust(chain.drop(1), chain[1].publicKey, whenValid(chain)))
+        // Without its root, or with the root twice: no longer a factory chain of four.
+        assertEquals(AttestationTrust.BROKEN_CHAIN, google.trust(chain.dropLast(1), chain[0].publicKey, whenValid(chain)))
+        assertEquals(AttestationTrust.BROKEN_CHAIN, google.trust(chain + chain.last(), chain[0].publicKey, whenValid(chain)))
+        // A remotely provisioned chain cut to four, and a factory one stretched to five, by an intermediate of
+        // another chain: neither shape nor signatures fit.
+        val remote = corpus("akita/sdk34/TEE_EC_NONE.pem")
+        assertEquals(AttestationTrust.BROKEN_CHAIN, google.trust(remote.take(2) + remote.drop(3)))
+        assertEquals(
+            AttestationTrust.BROKEN_CHAIN,
+            google.trust(chain.take(2) + remote[2] + chain.drop(2), chain[0].publicKey, whenValid(chain)),
+        )
     }
 
     @Test
     fun `a certificate that the next one did not sign breaks the chain`() {
-        val forged = listOf(chain.first(), otherRoot)
-        assertEquals(AttestationTrust.BROKEN_CHAIN, AttestationChain(setOf(rootKey), emptySet()).trust(forged))
-    }
-
-    @Test
-    fun `a chain must end in a self-signed root`() {
-        assertEquals(AttestationTrust.BROKEN_CHAIN, AttestationChain(setOf(rootKey), emptySet()).trust(chain.dropLast(1)))
-        assertEquals(AttestationTrust.BROKEN_CHAIN, AttestationChain(setOf(rootKey), emptySet()).trust(emptyList()))
+        val sony = corpus("sony-xperia10-iii/sdk33/TEE_EC.pem")
+        val walleye = corpus("walleye/sdk27/TEE_EC_NONE.pem")
+        // Both factory chains of four under the same root; swap their attestation certificates.
+        val swapped = listOf(sony[0], walleye[1], sony[2], sony[3])
+        assertEquals(AttestationTrust.BROKEN_CHAIN, google.trust(swapped, sony[0].publicKey, whenValid(sony)))
     }
 
     @Test
     fun `a revoked certificate anywhere in the chain wins over a trusted root`() {
-        assertEquals(AttestationTrust.REVOKED, AttestationChain(setOf(rootKey), setOf("2002")).trust(chain))
+        val chain = corpus("tokay/sdk37/TEE_MLDSA_RKP.pem")
+        val roots = File(DATA, "google-roots.pem").inputStream().use { input ->
+            CertificateFactory.getInstance("X.509").generateCertificates(input).map { AttestationChain.keyFingerprint(it.publicKey) }.toSet()
+        }
+        for (certificate in chain) {
+            val revoked = AttestationChain(roots, setOf(certificate.serialNumber.toString(16)))
+            assertEquals(AttestationTrust.REVOKED, revoked.trust(chain))
+        }
+    }
+
+    @Test
+    fun `dates are checked between the leaf and the root, as Google's verifier checks them`() {
+        val today = Date.from(Instant.parse("2026-11-17T00:00:00Z"))
+        // Remote Key Provisioning's certificates live for weeks; these expired long ago.
+        for (path in REMOTE) {
+            assertEquals(path, AttestationTrust.OUT_OF_DATE, google.trust(corpus(path), today))
+        }
+        // An expired certificate of a factory-provisioned chain is exempt, as Google exempts it: the Sony's
+        // intermediate expired in May 2026.
+        val sony = corpus("sony-xperia10-iii/sdk33/TEE_EC.pem")
+        assertTrue(sony[2].notAfter.before(today))
+        assertEquals(AttestationTrust.GOOGLE_ROOT, google.trust(sony, today))
+        // A certificate not yet valid is not, from any chain: a phone whose date is years behind.
+        val past = Date.from(Instant.parse("2015-01-01T00:00:00Z"))
+        assertEquals(AttestationTrust.OUT_OF_DATE, google.trust(sony, past))
+        // The leaf's dates are set on the phone, and are not checked.
+        val akita = corpus("akita/sdk34/TEE_EC_NONE.pem")
+        assertTrue(akita[0].notBefore.before(Date.from(Instant.parse("1971-01-01T00:00:00Z"))))
     }
 
     @Test
@@ -74,5 +170,17 @@ class AttestationChainTest {
     private companion object {
         // Unit tests run in the app module's directory.
         val DATA = File("../../data/attestation")
+        val CORPUS = File("../../core/engine/testdata/keyattestation")
+
+        val REMOTE = listOf("akita/sdk34/TEE_EC_NONE.pem", "caiman/sdk36/TEE_EC_RKP.pem", "tokay/sdk37/TEE_MLDSA_RKP.pem")
+
+        /** Chains whose signatures verify up to one of Google's roots. */
+        val GENUINE = REMOTE + listOf(
+            "blueline/sdk28/SB_RSA_NONE.pem",
+            "sony-xperia10-iii/sdk33/TEE_EC.pem",
+            "walleye/sdk27/TEE_EC_NONE.pem",
+            // deviceLocked written as 0x01: a genuine chain all the same.
+            "invalid/malformed_rot_device_locked.pem",
+        )
     }
 }

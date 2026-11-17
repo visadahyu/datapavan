@@ -265,6 +265,10 @@
     <string name="finding_attestation_unconfirmed_body">فحص العتاد في هذا الهاتف غير موقَّع بمفتاح الإثبات من Google، لذا لا يمكن تأكيد حالة برنامج الإقلاع والنظام التي يُبلغ عنها. تستخدم بعض الشركات المصنّعة خارج برنامج Google مفتاحها الخاص، ويمكن أن يكون النظام المعدَّل سببًا لذلك أيضًا.</string>
     <string name="finding_attestation_incomplete_title">فحص العتاد غير مكتمل</string>
     <string name="finding_attestation_incomplete_body">لا يذكر فحص العتاد في هذا الهاتف ما إذا كان برنامج الإقلاع مقفلًا ولا ما إذا كان قد تم التحقق من النظام، لذا لا يمكن تأكيد أي منهما. الهاتف الذي يلتزم بقواعد Android يذكر الأمرين دائمًا. قد يكون السبب خطأً من الشركة المصنّعة، ويمكن أن يكون النظام المعدَّل سببًا لذلك أيضًا.</string>
+    <string name="finding_attestation_forged_title">تم التلاعب بفحص العتاد</string>
+    <string name="finding_attestation_forged_body">تم تغيير فحص العتاد في هذا الهاتف بعد أن أنشأه العتاد الآمن في الهاتف، أو أنه يجيب عن طلب غير طلب Datapavan. هناك شيء على هذا الهاتف يتدخّل في الفحص، لذا لا يستخدم Datapavan ما يُبلغ عنه الفحص. تعامل مع هذا كتحذير جدي: ربما عُدِّل النظام لإخفاء حالته.</string>
+    <string name="finding_attestation_out_of_date_title">فحص العتاد غير صالح في تاريخ الهاتف</string>
+    <string name="finding_attestation_out_of_date_body">إحدى الشهادات في فحص العتاد لهذا الهاتف غير صالحة في التاريخ الذي يعرضه الهاتف، لذا لا يمكن تأكيد الفحص. السبب المعتاد هو تاريخ خاطئ على الهاتف: اضبط التاريخ الصحيح ثم افتح Datapavan من جديد.</string>
     <string name="finding_vpn_active_title">هناك شبكة VPN نشطة</string>
     <string name="finding_vpn_active_body">تمر كل حركة البيانات حاليًا عبر تطبيق VPN. تأكّد من أنه تطبيق تثق به.</string>
 

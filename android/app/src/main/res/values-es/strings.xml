@@ -244,6 +244,10 @@
     <string name="finding_attestation_unconfirmed_body">La comprobación de hardware de este teléfono no está firmada con la clave de certificación de Google, así que no se puede confirmar el estado del bootloader y del sistema que indica. Algunos fabricantes fuera del programa de Google usan su propia clave; un sistema modificado también puede causar esto.</string>
     <string name="finding_attestation_incomplete_title">Comprobación de hardware incompleta</string>
     <string name="finding_attestation_incomplete_body">La comprobación de hardware de este teléfono no indica si el bootloader está bloqueado ni si el sistema está verificado, así que no se puede confirmar ninguna de las dos cosas. Un teléfono que sigue las reglas de Android siempre indica ambas. Un error del fabricante puede causar esto; un sistema modificado también.</string>
+    <string name="finding_attestation_forged_title">Comprobación de hardware manipulada</string>
+    <string name="finding_attestation_forged_body">La comprobación de hardware de este teléfono se modificó después de que el hardware seguro del teléfono la generara, o responde a una solicitud distinta de la de Datapavan. Algo en este teléfono está interfiriendo con la comprobación, así que Datapavan no usa lo que indica. Tómate esto como una advertencia seria: puede que el sistema se haya modificado para ocultar su estado.</string>
+    <string name="finding_attestation_out_of_date_title">Comprobación de hardware no válida en esta fecha</string>
+    <string name="finding_attestation_out_of_date_body">Un certificado de la comprobación de hardware de este teléfono no es válido en la fecha que muestra el teléfono, así que no se puede confirmar la comprobación. La causa habitual es una fecha incorrecta en el teléfono: pon la fecha correcta y vuelve a abrir Datapavan.</string>
     <string name="finding_vpn_active_title">Hay una VPN activa</string>
     <string name="finding_vpn_active_body">Todo el tráfico pasa ahora por una app de VPN. Asegúrate de que sea una en la que confíes.</string>
 

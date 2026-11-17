@@ -28,8 +28,10 @@ enum class FindingKind(val severity: Severity) {
     BOOTLOADER_UNLOCKED(Severity.HIGH),
     BOOT_NOT_VERIFIED(Severity.HIGH),
     ATTESTATION_REVOKED(Severity.HIGH),
+    ATTESTATION_FORGED(Severity.HIGH),
     ATTESTATION_UNCONFIRMED(Severity.MEDIUM),
     ATTESTATION_INCOMPLETE(Severity.MEDIUM),
+    ATTESTATION_OUT_OF_DATE(Severity.MEDIUM),
     SYSTEM_KEY_LEAKED(Severity.MEDIUM),
     USB_DEBUGGING(Severity.MEDIUM),
     OLD_SECURITY_PATCH(Severity.MEDIUM),
@@ -145,14 +147,20 @@ object Rules {
         if (device.wirelessDebugging) add(FindingKind.WIRELESS_DEBUGGING)
         if (device.usbDebugging) add(FindingKind.USB_DEBUGGING)
         device.integrity?.let { integrity ->
+            // Nothing a forged attestation says is used: not its bootloader state, not its patch level.
+            if (integrity.trust == AttestationTrust.FORGED) {
+                add(FindingKind.ATTESTATION_FORGED)
+                return@let
+            }
             // A software-only attestation says nothing reliable about the bootloader.
             if (integrity.securityLevel == 0) {
                 add(FindingKind.INTEGRITY_SOFTWARE_ONLY)
             } else {
                 when (integrity.trust) {
-                    AttestationTrust.GOOGLE_ROOT -> Unit
+                    AttestationTrust.GOOGLE_ROOT, AttestationTrust.FORGED -> Unit
                     AttestationTrust.REVOKED -> add(FindingKind.ATTESTATION_REVOKED)
                     AttestationTrust.OTHER_ROOT, AttestationTrust.BROKEN_CHAIN -> add(FindingKind.ATTESTATION_UNCONFIRMED)
+                    AttestationTrust.OUT_OF_DATE -> add(FindingKind.ATTESTATION_OUT_OF_DATE)
                 }
                 // A sound trusted environment or secure chip always states the bootloader and boot state
                 // in the list it enforces itself, and the engine never takes them from the list the

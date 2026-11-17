@@ -236,6 +236,10 @@
     <string name="finding_attestation_unconfirmed_body">此手机的硬件检查没有使用 Google 的认证密钥签名，因此无法确认其报告的引导加载程序和系统状态。一些未加入 Google 项目的厂商使用自己的密钥；修改过的系统也可能导致这种情况。</string>
     <string name="finding_attestation_incomplete_title">硬件检查不完整</string>
     <string name="finding_attestation_incomplete_body">此手机的硬件检查没有说明引导加载程序是否已锁定，也没有说明系统是否已通过验证，因此两者都无法确认。遵循 Android 规则的手机总会说明这两项。厂商的错误可能导致这种情况；修改过的系统也可能导致这种情况。</string>
+    <string name="finding_attestation_forged_title">硬件检查遭到篡改</string>
+    <string name="finding_attestation_forged_body">此手机的硬件检查在手机的安全硬件生成之后被更改过，或者它回应的不是 Datapavan 的请求，而是另一个请求。此手机上有某种东西在干扰检查，因此 Datapavan 不使用检查报告的内容。请把这当作严重警告：系统可能已被修改，以隐藏其状态。</string>
+    <string name="finding_attestation_out_of_date_title">硬件检查不在有效期内</string>
+    <string name="finding_attestation_out_of_date_body">此手机硬件检查中的一个证书在手机显示的日期无效，因此无法确认该检查。通常的原因是手机上的日期不对：请设置正确的日期，然后重新打开 Datapavan。</string>
     <string name="finding_vpn_active_title">有 VPN 正在运行</string>
     <string name="finding_vpn_active_body">目前所有流量都经过一个 VPN 应用。请确保它是您信任的应用。</string>
 

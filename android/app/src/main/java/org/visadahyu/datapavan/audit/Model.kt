@@ -69,7 +69,12 @@ data class Integrity(
     val osPatchLevel: Int?,
     /** Whether the attestation's certificate chain leads to Google's attestation root. */
     val trust: AttestationTrust,
-)
+) {
+    companion object {
+        /** An attestation that is not the hardware's answer to this app's request: nothing it says is used. */
+        fun forged() = Integrity(securityLevel = 0, deviceLocked = null, verifiedBoot = null, osPatchLevel = null, trust = AttestationTrust.FORGED)
+    }
+}
 
 /** Result of checking an attestation certificate chain; see [AttestationChain]. */
 enum class AttestationTrust {
@@ -84,6 +89,16 @@ enum class AttestationTrust {
 
     /** A certificate in the chain is on Google's revocation list, for example because its key leaked. */
     REVOKED,
+
+    /**
+     * The attestation is not the secure hardware's answer to this app's request: a certificate below the
+     * attested key carries an attestation of its own, or the attested key or the challenge is not the one
+     * the app generated. Only something that tampers with the keystore produces this.
+     */
+    FORGED,
+
+    /** A certificate between the leaf and the root is not valid at the phone's date (AttestationChain). */
+    OUT_OF_DATE,
 }
 
 /** Device-wide facts. */

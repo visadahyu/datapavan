@@ -136,6 +136,20 @@ class RulesTest {
     }
 
     @Test
+    fun `a forged attestation is reported alone, whatever it says`() {
+        // Not its unlocked bootloader, not its old patch: nothing a forged attestation says is used.
+        val integrity = Integrity(2, deviceLocked = false, verifiedBoot = 2, osPatchLevel = 201_001, trust = AttestationTrust.FORGED)
+        assertEquals(listOf(FindingKind.ATTESTATION_FORGED), Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610))
+        assertEquals(listOf(FindingKind.ATTESTATION_FORGED), Rules.forDevice(device(integrity = Integrity.forged()), nowYearMonth = 202_610))
+    }
+
+    @Test
+    fun `a hardware attestation out of date cannot be confirmed`() {
+        val integrity = Integrity(1, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_608, trust = AttestationTrust.OUT_OF_DATE)
+        assertEquals(listOf(FindingKind.ATTESTATION_OUT_OF_DATE), Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610))
+    }
+
+    @Test
     fun `hardware attestation without the bootloader state is incomplete`() {
         // The engine reads these only from the hardware-enforced list, so null means the hardware left them out.
         val integrity = Integrity(1, deviceLocked = null, verifiedBoot = null, osPatchLevel = null, trust = AttestationTrust.GOOGLE_ROOT)

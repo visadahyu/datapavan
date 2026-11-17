@@ -244,6 +244,10 @@
     <string name="finding_attestation_unconfirmed_body">Die Hardware-Prüfung dieses Telefons ist nicht mit Googles Attestierungsschlüssel signiert, daher lässt sich der gemeldete Zustand von Bootloader und System nicht bestätigen. Manche Hersteller außerhalb von Googles Programm nutzen einen eigenen Schlüssel; auch ein verändertes System kann die Ursache sein.</string>
     <string name="finding_attestation_incomplete_title">Hardware-Prüfung unvollständig</string>
     <string name="finding_attestation_incomplete_body">Die Hardware-Prüfung dieses Telefons gibt weder an, ob der Bootloader gesperrt ist, noch, ob das System verifiziert ist, daher lässt sich keines von beiden bestätigen. Ein Telefon, das sich an die Regeln von Android hält, gibt immer beides an. Ein Fehler des Herstellers kann die Ursache sein; ebenso ein verändertes System.</string>
+    <string name="finding_attestation_forged_title">Hardware-Prüfung manipuliert</string>
+    <string name="finding_attestation_forged_body">Die Hardware-Prüfung dieses Telefons wurde verändert, nachdem die sichere Hardware des Telefons sie erstellt hat, oder sie beantwortet eine andere Anfrage als die von Datapavan. Etwas auf diesem Telefon greift in die Prüfung ein, daher verwendet Datapavan nicht, was sie meldet. Nehmen Sie diese Warnung ernst: Das System wurde möglicherweise verändert, um seinen Zustand zu verbergen.</string>
+    <string name="finding_attestation_out_of_date_title">Hardware-Prüfung zeitlich ungültig</string>
+    <string name="finding_attestation_out_of_date_body">Ein Zertifikat in der Hardware-Prüfung dieses Telefons ist für das vom Telefon angezeigte Datum nicht gültig, daher lässt sich die Prüfung nicht bestätigen. Die übliche Ursache ist ein falsches Datum auf dem Telefon: Stellen Sie das richtige Datum ein und öffnen Sie Datapavan erneut.</string>
     <string name="finding_vpn_active_title">Ein VPN ist aktiv</string>
     <string name="finding_vpn_active_body">Der gesamte Datenverkehr läuft gerade durch eine VPN-App. Vergewissern Sie sich, dass Sie ihr vertrauen.</string>
 

@@ -263,6 +263,10 @@
     <string name="finding_attestation_unconfirmed_body">This phone\'s hardware check is not signed with Google\'s attestation key, so the bootloader and system state that it reports cannot be confirmed. Some makers outside Google\'s programme use their own key; a modified system can also cause this.</string>
     <string name="finding_attestation_incomplete_title">Hardware check incomplete</string>
     <string name="finding_attestation_incomplete_body">This phone\'s hardware check does not say whether the bootloader is locked or whether the system is verified, so neither can be confirmed. A phone that follows Android\'s rules always says both. A maker\'s error can cause this; so can a modified system.</string>
+    <string name="finding_attestation_forged_title">Hardware check tampered with</string>
+    <string name="finding_attestation_forged_body">This phone\'s hardware check was changed after the phone\'s secure hardware made it, or it answers another request than Datapavan\'s. Something on this phone is interfering with the check, so Datapavan does not use what it reports. Treat this as a serious warning: the system may have been changed to hide its state.</string>
+    <string name="finding_attestation_out_of_date_title">Hardware check out of date</string>
+    <string name="finding_attestation_out_of_date_body">A certificate in this phone\'s hardware check is not valid on the date the phone shows, so the check cannot be confirmed. A wrong date on the phone is the usual cause: set the right date and open Datapavan again.</string>
     <string name="finding_vpn_active_title">A VPN is active</string>
     <string name="finding_vpn_active_body">All traffic currently passes through a VPN app. Make sure it is one you trust.</string>
 

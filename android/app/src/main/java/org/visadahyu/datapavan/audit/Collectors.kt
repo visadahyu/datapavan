@@ -38,6 +38,7 @@ import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
+import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
 
 /** The sensor that a runtime permission gives access to, if any. */
@@ -400,11 +401,16 @@ class DeviceCollector(private val context: Context) {
     }
 
     /**
-     * Creates a throwaway key with an attestation challenge, reads the `KeyDescription` extension of
-     * its certificate, checks the certificate chain against Google's attestation roots and revocation
-     * list, and deletes the key again. A compromised system can still tamper with this check on itself
-     * (with a leaked key that is not yet revoked), so the result is reported as what the keystore
-     * states, never as proof.
+     * Creates a throwaway key with a fresh random challenge, checks its certificate chain (AttestationChain:
+     * one KeyDescription, in the leaf, which certifies this key; Google's roots and revocation list; the chain's
+     * shape and dates), decodes the KeyDescription in the parsers' isolated process, compares its challenge with
+     * the one sent, and deletes the key again.
+     *
+     * A system that hooks the keystore can still put a false state in front of the user in two ways, and the
+     * result is reported as what the keystore states, never as proof: with an attestation key that leaked and is
+     * not yet revoked, it can sign a whole chain of its own; and it can pass the challenge to another phone that
+     * it controls, locked and sound, and show that phone's answer as this one's. Only a check from outside the
+     * phone (ADR 0040, decision 6) closes both.
      */
     private fun integrity(): Integrity? {
         val store = try {
@@ -413,16 +419,19 @@ class DeviceCollector(private val context: Context) {
             return null
         }
         return try {
+            val challenge = ByteArray(CHALLENGE_BYTES).also { SecureRandom().nextBytes(it) }
             val generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, KEYSTORE)
             generator.initialize(
                 KeyGenParameterSpec.Builder(ATTESTATION_ALIAS, KeyProperties.PURPOSE_SIGN)
                     .setDigests(KeyProperties.DIGEST_SHA256)
-                    .setAttestationChallenge(ByteArray(CHALLENGE_BYTES).also { SecureRandom().nextBytes(it) })
+                    .setAttestationChallenge(challenge)
                     .build(),
             )
-            generator.generateKeyPair()
+            val key = generator.generateKeyPair().public
             val chain = store.getCertificateChain(ATTESTATION_ALIAS)?.filterIsInstance<X509Certificate>().orEmpty()
-            val extension = chain.firstOrNull()?.getExtensionValue(KEY_DESCRIPTION_OID) ?: return null
+            val trust = attestationChain().trust(chain, key, Date())
+            if (trust == AttestationTrust.FORGED) return Integrity.forged()
+            val extension = chain.firstOrNull()?.getExtensionValue(AttestationChain.KEY_DESCRIPTION_OID) ?: return null
             // Parsed in the parsers' isolated process (ParserService), like every untrusted input.
             val fields = Parsers(context).use { it.parseAttestation(extension) } ?: return null
             Integrity(
@@ -430,7 +439,7 @@ class DeviceCollector(private val context: Context) {
                 deviceLocked = fields.deviceLocked,
                 verifiedBoot = fields.verifiedBoot,
                 osPatchLevel = fields.osPatchLevel,
-                trust = attestationChain().trust(chain),
+                trust = AttestationChain.verdict(trust, fields.challenge, challenge),
             )
         } catch (_: java.security.GeneralSecurityException) {
             null
@@ -463,7 +472,6 @@ class DeviceCollector(private val context: Context) {
         const val SETTING_ADB_WIFI = "adb_wifi_enabled"
         const val KEYSTORE = "AndroidKeyStore"
         const val ATTESTATION_ALIAS = "datapavan-integrity-check"
-        const val KEY_DESCRIPTION_OID = "1.3.6.1.4.1.11129.2.1.17"
         const val CHALLENGE_BYTES = 16
     }
 }

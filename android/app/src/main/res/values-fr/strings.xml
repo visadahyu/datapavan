@@ -249,6 +249,10 @@
     <string name="finding_attestation_unconfirmed_body">Le contrôle matériel de ce téléphone n\'est pas signé avec la clé d\'attestation de Google : l\'état du bootloader et du système qu\'il indique ne peut donc pas être confirmé. Certains fabricants hors du programme de Google utilisent leur propre clé ; un système modifié peut aussi en être la cause.</string>
     <string name="finding_attestation_incomplete_title">Contrôle matériel incomplet</string>
     <string name="finding_attestation_incomplete_body">Le contrôle matériel de ce téléphone n\'indique pas si le bootloader est verrouillé ni si le système est vérifié : aucun des deux ne peut donc être confirmé. Un téléphone qui respecte les règles d\'Android indique toujours les deux. Une erreur du fabricant peut en être la cause ; un système modifié aussi.</string>
+    <string name="finding_attestation_forged_title">Contrôle matériel altéré</string>
+    <string name="finding_attestation_forged_body">Le contrôle matériel de ce téléphone a été modifié après que le matériel sécurisé du téléphone l\'a produit, ou il répond à une autre demande que celle de Datapavan. Quelque chose sur ce téléphone interfère avec le contrôle : Datapavan n\'utilise donc pas ce qu\'il indique. Prenez cet avertissement au sérieux : le système a peut-être été modifié pour cacher son état.</string>
+    <string name="finding_attestation_out_of_date_title">Contrôle matériel non valide à cette date</string>
+    <string name="finding_attestation_out_of_date_body">Un certificat du contrôle matériel de ce téléphone n\'est pas valide à la date qu\'affiche le téléphone : le contrôle ne peut donc pas être confirmé. La cause habituelle est une date erronée sur le téléphone : réglez la bonne date et rouvrez Datapavan.</string>
     <string name="finding_vpn_active_title">Un VPN est actif</string>
     <string name="finding_vpn_active_body">Tout le trafic passe actuellement par une appli VPN. Assurez-vous qu\'elle est digne de confiance.</string>
 
