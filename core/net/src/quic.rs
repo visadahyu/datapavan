@@ -562,7 +562,7 @@ impl<'a> Answer<'a> {
     /// the app's source; a Retry whose integrity tag checks with the app's destination ID; an Initial
     /// whose protection, removed with the server's keys of the app's destination ID, gives a tag that
     /// checks and frames that parse to its end; or any packet whose destination ID is the app's source
-    /// ID, where that is long enough to tell ([`TOLD_APART`]). A client that sends no source ID, as
+    /// ID, where that is 4 bytes or more, long enough to tell. A client that sends no source ID, as
     /// Chromium's, so Cronet's, does, is told only by its Initial keys: by the server's Version
     /// Negotiation, Retry or first Initial packet.
     #[must_use]

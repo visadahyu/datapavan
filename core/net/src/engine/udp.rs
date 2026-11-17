@@ -19,6 +19,7 @@ use super::{
     BATCH, Counters, Ech, Flow, Loop, NamedBy, Opened, Outcome, Shared, errors, hops,
     is_unreachable, lock, send_to_app,
 };
+use crate::identifiers;
 use crate::packet::{Packet, Sent, UDP, Unreachable};
 use crate::socks5::{self, Command, Target};
 use crate::tls::ServerName;
@@ -289,6 +290,12 @@ const CAME_IN: usize = 64;
 /// both A and AAAA, and asking several names at once; 64 holds 32 names asked both ways. It is bounded
 /// all the same: 64 questions of at most 255 bytes, about 17 KB, and only while the stand-in waits.
 /// Binding by any DNS response instead would let any sender at port 53 take the stand-in.
+///
+/// On other ports a stand-in keeps as many of the identifiers its app's datagrams carry
+/// ([`identifiers::of`]), on the same terms (ADR 0044, unit 9b): 48 bytes each in place, and a DNS
+/// question's name of at most 253 bytes beside it, so at most 64 x (48 + 253) = 19,264 bytes and the
+/// vector's 24, only while it is a candidate. A STUN client retransmits a request with its ID, a QUIC
+/// client its Initial with its IDs, so the same one is kept once.
 const ASKED: usize = 64;
 
 /// At most this many errors from the path are owed to one peer of a mapping: one for each datagram the
@@ -346,8 +353,14 @@ struct Peer {
     /// Whether it came in before the app sent to it: it counts under [`CAME_IN`], and Watch learns names
     /// from it only from an answer to a query the app sent it, even once the app answers it.
     came_in_first: bool,
-    /// Whether it is a stand-in the app sent to, waiting for its first answer from an address.
-    waiting: bool,
+    /// Whether it is a stand-in the app sent to that waits for its first answer from an address, or
+    /// one bound beside another peer.
+    standing: Standing,
+    /// For a stand-in on a port other than 53 while it waits, or while it is bound beside another peer,
+    /// what the app's datagrams to it asked an answer to carry ([`identifiers::of`]), each once, the
+    /// latest last, at most [`ASKED`]: while it has one, only an answer that carries one of them is its
+    /// own.
+    ids: Vec<identifiers::Asked>,
     /// For a stand-in on port 53 while it waits, or a flow from a port 53 that came in first, the ID and
     /// question of each DNS query the app sent it, the latest last: only an answer to one of them binds
     /// the stand-in, or teaches Watch names from a flow the app did not start.
@@ -363,6 +376,20 @@ struct Peer {
     /// What a router would quote of the app's last datagram to it that left, which an error passed on
     /// quotes as the app sent it.
     last_sent: Sent,
+}
+
+/// Where a stand-in stands with its answers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Standing {
+    /// No stand-in that waits: a destination the app knows by its address, a flow that came in, or a
+    /// stand-in bound to an address of its own, or answered by name.
+    Settled,
+    /// A stand-in the app sent to, waiting for its first answer from an address.
+    Waiting,
+    /// A stand-in bound by its identifier to an address another peer of its association had first,
+    /// beside that peer (ADR 0044, unit 9b): what comes from there is its own only when it carries its
+    /// identifiers, which it keeps for that.
+    Beside,
 }
 
 /// Where a peer's datagrams go and where its answers come from.
@@ -447,9 +474,14 @@ impl Peer {
             made: now,
             came_in,
             came_in_first: came_in,
-            waiting: !came_in && way.name.is_some() && way.from.is_none(),
+            standing: if !came_in && way.name.is_some() && way.from.is_none() {
+                Standing::Waiting
+            } else {
+                Standing::Settled
+            },
             way,
             asked: Vec::new(),
+            ids: Vec::new(),
             lookups: (!came_in && address.port() == 53).then(Vec::new),
             owed_errors: 0,
             last_sent: Sent::default(),
@@ -457,19 +489,56 @@ impl Peer {
     }
 
     /// It waits no more for a first answer from an address: bound to one, or answered by name. The
-    /// queries it kept for that go.
+    /// queries and identifiers it kept for that go.
     fn answered(&mut self) {
-        self.waiting = false;
+        self.standing = Standing::Settled;
+        self.ids = Vec::new();
         if !self.came_in_first {
             self.asked = Vec::new();
         }
     }
 
+    /// Whether only an answer that carries one of its identifiers is its own (ADR 0044, unit 9b): on
+    /// port 53 always, since unit 9, as only a DNS response to a query the app sent it is; elsewhere
+    /// once the app's datagrams to it carried one. A stand-in that had one keeps that, also when a later
+    /// datagram carries none: the answer to the one it sent still carries it, and a datagram without one
+    /// is no reason to take an answer without one, a stranger's, as its first.
+    fn strict(&self) -> bool {
+        self.opened.port == 53 || !self.ids.is_empty()
+    }
+
+    /// Whether `answer` carries one of its identifiers: on port 53, a DNS response to a query the app
+    /// sent it, by its ID and question; elsewhere, what [`identifiers::carries`] reads.
+    fn carries(&self, answer: &[u8]) -> bool {
+        if self.opened.port == 53 {
+            self.asked_for(answer)
+        } else {
+            identifiers::carries(&self.ids, answer)
+        }
+    }
+
     /// Notes a datagram the app sends it to `port`: for a peer on port 53 the app sent to, the ID of a
-    /// DNS query, which waits for its answer; for a stand-in on port 53 while it waits, or a flow from
-    /// a port 53 that came in first, its ID and question too.
+    /// DNS query, which waits for its answer; for a stand-in on port 53 while it waits or is bound
+    /// beside another peer, or a flow from a port 53 that came in first, its ID and question too; for a
+    /// stand-in on another port while it waits or is bound beside another peer, what it asked an answer
+    /// to carry.
     fn sent(&mut self, port: u16, payload: &[u8]) {
-        if port != 53 || (self.lookups.is_none() && !(self.waiting || self.came_in_first)) {
+        let candidate = self.standing != Standing::Settled;
+        if port != 53 {
+            if candidate {
+                for asked in identifiers::of(port, payload) {
+                    if self.ids.contains(&asked) {
+                        continue;
+                    }
+                    if self.ids.len() == ASKED {
+                        self.ids.remove(0);
+                    }
+                    self.ids.push(asked);
+                }
+            }
+            return;
+        }
+        if self.lookups.is_none() && !(candidate || self.came_in_first) {
             return;
         }
         let query = dns::u16_at(payload, 0).zip(answers::question(payload));
@@ -479,7 +548,7 @@ impl Peer {
                 _ => self.lookups = None,
             }
         }
-        if !(self.waiting || self.came_in_first) {
+        if !(candidate || self.came_in_first) {
             return;
         }
         let Some((id, question)) = query else {
@@ -552,6 +621,9 @@ struct Sources {
     /// The names behind the mapping's stand-ins (lower case, without a final dot), each with its
     /// stand-in and how many peers have it.
     names: HashMap<String, Known>,
+    /// The stand-ins bound by their identifiers to an address another peer had first, by that address,
+    /// in the order they were bound ([`Standing::Beside`]).
+    beside: HashMap<SocketAddr, Vec<SocketAddr>>,
 }
 
 /// An address answers come from, or a name the tool resolves.
@@ -597,11 +669,11 @@ impl Sources {
         }
     }
 
-    /// The peer the app knows as `shown`, which left by `way`, is gone.
-    fn remove_peer(&mut self, shown: SocketAddr, way: &PeerWay) {
-        if let Some(from) = way.from {
-            self.remove(shown, from);
-        }
+    /// The peer the app knows as `shown`, which left by `way`, is gone. When it held its address first
+    /// and a stand-in was bound beside it there, that stand-in now holds it alone: it is returned, so
+    /// that it may let go of its identifiers.
+    fn remove_peer(&mut self, shown: SocketAddr, way: &PeerWay) -> Option<SocketAddr> {
+        let alone = way.from.and_then(|from| self.remove(shown, from));
         if let Some(name) = &way.name {
             let key = name_key(name);
             let left = self.names.get_mut(&key).map(|known| {
@@ -615,6 +687,7 @@ impl Sources {
                 self.stop_waiting(shown);
             }
         }
+        alone
     }
 
     /// The answers of the peer the app knows as `shown` come from `from`.
@@ -635,8 +708,9 @@ impl Sources {
     }
 
     /// The peer the app knows as `shown`, whose answers came from `from`, is gone: its address is let in
-    /// no more, unless another peer has the same one.
-    fn remove(&mut self, shown: SocketAddr, from: SocketAddr) {
+    /// no more, unless another peer has the same one. When it held `from` first, the first stand-in bound
+    /// beside it there holds it now, and is returned.
+    fn remove(&mut self, shown: SocketAddr, from: SocketAddr) -> Option<SocketAddr> {
         let ip = from.ip();
         let left = self.addresses.get_mut(&ip).map(|known| {
             known.peers = known.peers.saturating_sub(1);
@@ -645,9 +719,35 @@ impl Sources {
         if left == Some(0) {
             self.addresses.remove(&ip);
         }
+        let beside = self.beside.get_mut(&from);
+        if let Some(beside) = beside {
+            if let Some(at) = beside.iter().position(|&other| other == shown) {
+                beside.remove(at);
+                if beside.is_empty() {
+                    self.beside.remove(&from);
+                }
+                return None;
+            }
+            let next = beside.remove(0);
+            if beside.is_empty() {
+                self.beside.remove(&from);
+            }
+            self.aliases.insert(from, next);
+            return Some(next);
+        }
         if from != shown {
             self.aliases.remove(&from);
         }
+        None
+    }
+
+    /// The stand-in the app knows as `shown` is bound by its identifiers to `from`, which another peer
+    /// held first: what comes from there is let in still, and the stand-in is among those it may be for.
+    fn add_beside(&mut self, shown: SocketAddr, from: SocketAddr) {
+        if let Some(known) = self.addresses.get_mut(&from.ip()) {
+            known.peers += 1;
+        }
+        self.beside.entry(from).or_default().push(shown);
     }
 
     /// The stand-in the app knows as `shown` waits no more.
@@ -740,7 +840,8 @@ impl Mapping {
     }
 
     /// Ends the flows of the peers silent since `since`; their addresses are let in no more, unless
-    /// another peer has the same one.
+    /// another peer has the same one. A stand-in bound beside one that ends holds its address alone
+    /// from then on, and lets go of its identifiers.
     fn sweep(&mut self, since: Instant, shared: &Shared) {
         let Self {
             peers,
@@ -748,15 +849,21 @@ impl Mapping {
             came_in,
             ..
         } = self;
+        let mut alone = Vec::new();
         peers.retain(|&address, peer| {
             if peer.last > since {
                 return true;
             }
             shared.finish(peer.id);
-            sources.remove_peer(address, &peer.way);
+            alone.extend(sources.remove_peer(address, &peer.way));
             *came_in = came_in.saturating_sub(usize::from(peer.came_in_first));
             false
         });
+        for shown in alone {
+            if let Some(peer) = peers.get_mut(&shown) {
+                peer.answered();
+            }
+        }
     }
 
     /// Whether the app sent to the peer it knows as `address`: a destination of its own, which may
@@ -820,7 +927,8 @@ impl Mapping {
     /// Which peer an answer from the tool's relay is for, by the address or the name its header gives
     /// (ADR 0044, decision 2), with the direct path's filtering: from a peer, to that peer; from another
     /// port of an address the app sent to, to a new peer; from an address the app never saw, to the
-    /// stand-in it may be the first answer of; from anywhere else, nowhere.
+    /// stand-in it may be the first answer of; from anywhere else, nowhere. Where the address alone
+    /// cannot tell, the identifier the answer carries does (unit 9b).
     fn relayed_answer(
         &mut self,
         shared: &Shared,
@@ -832,35 +940,42 @@ impl Mapping {
             Target::Address(address) => {
                 // An IPv4 address the relay gives as IPv6 is still the address the app sent to.
                 let from = SocketAddr::new(address.ip().to_canonical(), address.port());
-                let contest = shared.limits.udp_contest;
                 // A destination's own address first, then the one a stand-in was bound to: such an
-                // answer never binds a stand-in. A bound stand-in's address, on a port another stand-in
-                // waits on, could be answering either name: the tool may have resolved both to it. So
-                // for `Limits::udp_contest` after the app first asked the other name.
+                // answer is theirs, unless it carries the identifier of a stand-in that waits on its
+                // port, or was bound beside them there, which then takes it (unit 9b). Such an answer
+                // never binds a stand-in without identifiers.
                 if self
                     .peers
                     .get(&from)
                     .is_some_and(|peer| peer.way.from == Some(from))
                 {
-                    return self.answered_by(from, answer, now);
+                    return self.beside_or(shared, (from, from), answer, (now, false));
                 }
-                if let Some(&shown) = self.sources.aliases.get(&from) {
-                    if self.contested(from.port(), None, (now, contest)) {
-                        return LetIn::Unmatched;
-                    }
-                    return self.answered_by(shown, answer, now);
+                if let Some(&owner) = self.sources.aliases.get(&from) {
+                    return self.beside_or(shared, (owner, from), answer, (now, true));
                 }
-                // Another port of an address the app sent to comes in as that address's, never as a
-                // stand-in's first answer. Of an address only a stand-in was bound to, on a port a
-                // stand-in waits on: when that is the same stand-in, the name the tool resolved to this
-                // address asked on another port, the answer binds it there too; while another name's
-                // still contests the port, the answer could again be either name's.
                 let Some(ip) = self.sources.shown(from.ip()) else {
-                    return self.first_answer(from, answer, now);
+                    return self.first_answer(shared, from, answer, now);
                 };
+                // Another port of an address the app sent to: a stand-in waiting on this port whose
+                // name the tool resolved to this address takes it by its identifier (unit 9b); else
+                // it comes in as that address's, never as a stand-in's first answer. Of an address
+                // only a stand-in was bound to, on a port a stand-in waits on: when that is the same
+                // stand-in, the name the tool resolved to this address asked on another port, the
+                // answer binds it there too; while another name's without identifiers still contests
+                // the port, the answer could again be either name's.
+                let strict = self.waiting_on(from.port(), true);
+                match self.carried(strict, answer) {
+                    Carried::One(shown) => {
+                        Counters::add(&shared.counters.udp_identified, 1);
+                        return self.bind(shown, (from, answer), now);
+                    }
+                    Carried::Several => return LetIn::Unmatched,
+                    Carried::None => {}
+                }
                 if ip != from.ip() {
                     let same = SocketAddr::new(ip, from.port());
-                    if self.contested(from.port(), Some(same), (now, contest)) {
+                    if self.contested(from.port(), Some(same), (now, shared.limits.udp_contest)) {
                         return LetIn::Unmatched;
                     }
                     let waits = self
@@ -869,15 +984,12 @@ impl Mapping {
                         .get(&from.port())
                         .is_some_and(|waiting| waiting.contains(&same));
                     if waits {
-                        let asked = from.port() != 53
-                            || self
-                                .peers
-                                .get(&same)
-                                .is_some_and(|peer| peer.asked_for(answer));
-                        if asked {
-                            return self.bind(same, (from, answer), now);
+                        // With identifiers, it waits for an answer that carries one, which this
+                        // does not; on port 53, for a response to its query.
+                        if self.peers.get(&same).is_some_and(Peer::strict) {
+                            return LetIn::Unidentified;
                         }
-                        return LetIn::Unmatched;
+                        return self.bind(same, (from, answer), now);
                     }
                 }
                 (SocketAddr::new(ip, from.port()), Some(from))
@@ -906,8 +1018,85 @@ impl Mapping {
         })
     }
 
-    /// Whether a stand-in other than `except` waits on `port` and still contests the answers from an
-    /// address another stand-in was bound to: for `contest` after the app first sent to it, `now`.
+    /// An answer from `from`, which the peer the app knows as `owner` holds (ADR 0044, unit 9b): the
+    /// stand-in whose identifier it carries, among those that wait on its port and those bound beside
+    /// `owner` there, takes it, a waiting one bound beside `owner` by it; else `owner` does. The tool may
+    /// have resolved several names to one address and port: the identifier, not the address, tells
+    /// their answers apart. A stand-in without identifiers that waits on the port could be answered
+    /// from there too, by nothing that tells: for a stand-in's address (`contestable`), its answers are
+    /// dropped for `Limits::udp_contest` after the app first asked it, as unit 9 has it.
+    fn beside_or(
+        &mut self,
+        shared: &Shared,
+        (owner, from): (SocketAddr, SocketAddr),
+        answer: &[u8],
+        (now, contestable): (Instant, bool),
+    ) -> LetIn {
+        let mut candidates = self.waiting_on(from.port(), true);
+        candidates.extend(
+            self.sources
+                .beside
+                .get(&from)
+                .into_iter()
+                .flatten()
+                .copied(),
+        );
+        match self.carried(candidates, answer) {
+            Carried::One(shown) => {
+                Counters::add(&shared.counters.udp_identified, 1);
+                if self
+                    .peers
+                    .get(&shown)
+                    .is_some_and(|peer| peer.standing == Standing::Waiting)
+                {
+                    return self.bind_beside(shown, (from, answer), now);
+                }
+                return self.answered_by(shown, answer, now);
+            }
+            Carried::Several => return LetIn::Unmatched,
+            Carried::None => {}
+        }
+        if contestable && self.contested(from.port(), None, (now, shared.limits.udp_contest)) {
+            return LetIn::Unmatched;
+        }
+        self.answered_by(owner, answer, now)
+    }
+
+    /// The stand-ins that wait on `port` for their first answer; with `strict`, only those with
+    /// identifiers ([`Peer::strict`]).
+    fn waiting_on(&self, port: u16, strict: bool) -> Vec<SocketAddr> {
+        self.sources
+            .waiting
+            .get(&port)
+            .into_iter()
+            .flatten()
+            .copied()
+            .filter(|shown| {
+                self.peers
+                    .get(shown)
+                    .is_some_and(|peer| !strict || peer.strict())
+            })
+            .collect()
+    }
+
+    /// Which of `candidates` an `answer` carries the identifiers of.
+    fn carried(&self, candidates: Vec<SocketAddr>, answer: &[u8]) -> Carried {
+        let mut takers = candidates.into_iter().filter(|shown| {
+            self.peers
+                .get(shown)
+                .is_some_and(|peer| peer.carries(answer))
+        });
+        match (takers.next(), takers.next()) {
+            (None, _) => Carried::None,
+            (Some(shown), None) => Carried::One(shown),
+            (Some(_), Some(_)) => Carried::Several,
+        }
+    }
+
+    /// Whether a stand-in other than `except`, without identifiers, waits on `port` and still contests
+    /// the answers from an address another stand-in was bound to: for `contest` after the app first
+    /// sent to it, `now`. One with identifiers contests nothing: what carries them is its own, and what
+    /// does not, not (ADR 0044, unit 9b).
     fn contested(
         &self,
         port: u16,
@@ -917,10 +1106,9 @@ impl Mapping {
         self.sources.waiting.get(&port).is_some_and(|waiting| {
             waiting.iter().any(|shown| {
                 Some(*shown) != except
-                    && self
-                        .peers
-                        .get(shown)
-                        .is_some_and(|peer| now.duration_since(peer.made) < contest)
+                    && self.peers.get(shown).is_some_and(|peer| {
+                        !peer.strict() && now.duration_since(peer.made) < contest
+                    })
             })
         })
     }
@@ -929,39 +1117,53 @@ impl Mapping {
     /// still waiting on its port, or nothing (ADR 0044, decision 2).
     ///
     /// The tool resolved the stand-in's name itself, so its relay answers from an address the app never
-    /// saw. A stand-in is bound to the first answer from the port the app asked, when it alone could
-    /// take it; the answer then goes to the app from the stand-in, and later ones from that address too.
-    /// On port 53 the answer must also be a DNS response to a query the app sent that stand-in, by its
-    /// ID and question: so a sender that guesses neither cannot take the stand-in, nor feed Watch's
-    /// names. On other ports, until unit 9b reads each protocol's own identifier, any sender that
-    /// reaches the tool's relay first from that port, at an address the app never sent to, takes a
-    /// waiting stand-in, and the real answer is then dropped.
+    /// saw. A stand-in with identifiers ([`Peer::strict`]) is bound only by an answer that carries one
+    /// of them, also when it waits alone (unit 9b): a sender that reaches the tool's relay first from
+    /// its port cannot take it without what the app sent it, and several such stand-ins on one port each
+    /// take their own answer. One that carries none of theirs is dropped and counted. On port 53 a
+    /// stand-in has them always, its queries' IDs and questions, as since unit 9.
     ///
-    /// When several stand-ins could take it, the answer could be any of their names', and handing it
-    /// to one could give the app one name's answer as another's for as long as the mapping lasts: it
-    /// is dropped and counted, and so are the next ones, for as long as more than one waits. An app
-    /// that asks names on one port one after another, each once the last answered, binds each in turn;
-    /// one that asks them all at once, as some apps ask several STUN servers, gets no answer from them
-    /// through the tool. The counter says how often (the maintainer's decision, 2026-11-13: the safe
-    /// floor until unit 9b).
-    fn first_answer(&mut self, from: SocketAddr, answer: &[u8], now: Instant) -> LetIn {
-        let takers = {
-            let Some(waiting) = self.sources.waiting.get(&from.port()) else {
-                return LetIn::Filtered;
-            };
-            let mut takers = waiting.iter().copied().filter(|shown| {
-                from.port() != 53
-                    || self
-                        .peers
-                        .get(shown)
-                        .is_some_and(|peer| peer.asked_for(answer))
-            });
-            (takers.next(), takers.next())
-        };
-        match takers {
-            (Some(shown), None) => self.bind(shown, (from, answer), now),
-            (Some(_), Some(_)) => LetIn::Unmatched,
-            (None, _) => LetIn::Filtered,
+    /// A stand-in without identifiers is bound to the first answer from its port when it alone waits
+    /// there, as unit 9 has it: whoever reaches the tool's relay first from that port, at an address the
+    /// app never sent to, takes it, and the real answer is then dropped. Where it waits beside another,
+    /// the answer could be either's: it is dropped and counted, for as long as more than one waits (the
+    /// maintainer's decision, 2026-11-13: the safe floor).
+    fn first_answer(
+        &mut self,
+        shared: &Shared,
+        from: SocketAddr,
+        answer: &[u8],
+        now: Instant,
+    ) -> LetIn {
+        let several = self
+            .sources
+            .waiting
+            .get(&from.port())
+            .is_some_and(|waiting| waiting.len() > 1);
+        let strict = self.waiting_on(from.port(), true);
+        let any_strict = !strict.is_empty();
+        match self.carried(strict, answer) {
+            Carried::One(shown) => {
+                if several {
+                    Counters::add(&shared.counters.udp_identified, 1);
+                }
+                return self.bind(shown, (from, answer), now);
+            }
+            Carried::Several => return LetIn::Unmatched,
+            Carried::None => {}
+        }
+        let all = self.waiting_on(from.port(), false);
+        match (any_strict, all.as_slice()) {
+            (_, []) => LetIn::Filtered,
+            (false, &[shown]) => self.bind(shown, (from, answer), now),
+            (true, _)
+                if all
+                    .iter()
+                    .all(|shown| self.peers.get(shown).is_some_and(Peer::strict)) =>
+            {
+                LetIn::Unidentified
+            }
+            _ => LetIn::Unmatched,
         }
     }
 
@@ -981,6 +1183,32 @@ impl Mapping {
         }
         self.answered_by(shown, answer, now)
     }
+
+    /// Binds the waiting stand-in the app knows as `shown` to `from`, beside the peer that holds it,
+    /// by its identifier that `answer` carries (ADR 0044, unit 9b): it keeps its identifiers, and those
+    /// of what the app sends it from now on, so that what comes from `from` is its own only when it
+    /// carries them.
+    fn bind_beside(
+        &mut self,
+        shown: SocketAddr,
+        (from, answer): (SocketAddr, &[u8]),
+        now: Instant,
+    ) -> LetIn {
+        self.sources.stop_waiting(shown);
+        self.sources.add_beside(shown, from);
+        if let Some(peer) = self.peers.get_mut(&shown) {
+            peer.way.from = Some(from);
+            peer.standing = Standing::Beside;
+        }
+        self.answered_by(shown, answer, now)
+    }
+}
+
+/// Which stand-ins an answer carries the identifiers of (ADR 0044, unit 9b).
+enum Carried {
+    None,
+    One(SocketAddr),
+    Several,
 }
 
 /// The engine's UDP: the destinations waiting for their way, the flows of lookups to Watch's own DNS
@@ -1122,6 +1350,9 @@ enum LetIn {
     Filtered,
     /// No one peer can be told for it.
     Unmatched,
+    /// Only stand-ins with identifiers could take it, and it carries none of theirs (ADR 0044, unit
+    /// 9b).
+    Unidentified,
     /// It came from another port of an address the app sent to, beyond [`CAME_IN`].
     Capped,
     /// It came from the peer the app knows as this address, whose bytes these are; and whether Watch may
@@ -2708,6 +2939,10 @@ fn read_mapped(
                 Counters::add(&shared.counters.udp_unmatched, 1);
                 continue;
             }
+            LetIn::Unidentified => {
+                Counters::add(&shared.counters.udp_unidentified, 1);
+                continue;
+            }
             LetIn::Capped => {
                 Counters::add(&shared.counters.udp_came_in_capped, 1);
                 continue;
@@ -2763,6 +2998,10 @@ fn relayed_receive(
                 }
                 LetIn::Unmatched => {
                     Counters::add(&shared.counters.udp_unmatched, 1);
+                    continue;
+                }
+                LetIn::Unidentified => {
+                    Counters::add(&shared.counters.udp_unidentified, 1);
                     continue;
                 }
                 LetIn::Capped => {
@@ -3817,6 +4056,101 @@ mod tests {
             LetIn::Peer(..)
         ));
         assert_eq!(mapping.peers[&stand_in].asked.len(), 0);
+        Ok(())
+    }
+
+    /// A STUN Binding request, or with `answer` its success response, under the transaction ID `n` in
+    /// each byte.
+    fn binding(n: u8, answer: bool) -> Vec<u8> {
+        let mut message = vec![u8::from(answer), 0x01, 0, 0, 0x21, 0x12, 0xa4, 0x42];
+        message.extend_from_slice(&[n; 12]);
+        message
+    }
+
+    /// A stand-in on a port other than 53 keeps what its app's datagrams asked an answer to carry only
+    /// while it is a candidate: at most 64, each once, the oldest giving way. Bound by an answer, or
+    /// answered by name, it keeps none and records none after; bound beside another peer by its
+    /// identifier, it keeps them and records more, and once that peer ends, it holds the address alone
+    /// and keeps none (ADR 0044, unit 9b).
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_stand_in_keeps_identifiers_only_while_it_is_a_candidate() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let mut mapping = mapping(now).await?;
+        let first = SocketAddr::from(([198, 18, 0, 1], 3_478));
+        let peer = mapping.peer(&shared, (APP, first), now, (false, waiting_stand_in()));
+        for n in 0..70 {
+            peer.sent(3_478, &binding(n, false));
+        }
+        peer.sent(3_478, &binding(69, false));
+        let kept = |peer: &Peer| -> Vec<[u8; 12]> {
+            peer.ids
+                .iter()
+                .filter_map(|asked| match asked {
+                    identifiers::Asked::Stun { transaction, .. } => Some(*transaction),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert_eq!(kept(peer).len(), ASKED);
+        assert_eq!(kept(peer).first(), Some(&[6; 12]), "the oldest gave way");
+        assert_eq!(kept(peer).last(), Some(&[69; 12]), "sent again, kept once");
+        // Bound by its answer: none kept, none recorded after.
+        let server = SocketAddr::from(([192, 0, 2, 9], 3_478));
+        let from_server = Target::Address(server);
+        assert!(matches!(
+            mapping.relayed_answer(&shared, APP, (&from_server, &binding(69, true)), now),
+            LetIn::Peer(..)
+        ));
+        let peer = mapping
+            .peers
+            .get_mut(&first)
+            .ok_or(io::ErrorKind::NotFound)?;
+        assert_eq!(kept(peer).len(), 0, "kept once bound");
+        peer.sent(3_478, &binding(70, false));
+        assert_eq!(kept(peer).len(), 0, "recorded once bound");
+        // A second name, answered from the first's address by its ID: bound beside it, it keeps them.
+        let second = SocketAddr::from(([198, 18, 0, 2], 3_478));
+        let later = now + Duration::from_secs(10);
+        let peer = mapping.peer(&shared, (APP, second), later, (false, waiting_stand_in()));
+        peer.sent(3_478, &binding(0x80, false));
+        assert!(matches!(
+            mapping.relayed_answer(&shared, APP, (&from_server, &binding(0x80, true)), later),
+            LetIn::Peer(shown, ..) if shown == second
+        ));
+        let peer = mapping
+            .peers
+            .get_mut(&second)
+            .ok_or(io::ErrorKind::NotFound)?;
+        assert_eq!(peer.standing, Standing::Beside);
+        peer.sent(3_478, &binding(0x81, false));
+        assert_eq!(kept(peer), [[0x80; 12], [0x81; 12]]);
+        // The first ends: the second holds the address alone, and keeps nothing.
+        if let Some(peer) = mapping.peers.get_mut(&first) {
+            peer.last = now;
+        }
+        mapping.sweep(now + Duration::from_secs(5), &shared);
+        let peer = mapping.peers.get(&second).ok_or(io::ErrorKind::NotFound)?;
+        assert_eq!(peer.standing, Standing::Settled);
+        assert_eq!(kept(peer).len(), 0);
+        assert_eq!(mapping.sources.aliases.get(&server), Some(&second));
+        // Answered by name: a third keeps nothing.
+        let third = SocketAddr::from(([198, 18, 0, 3], 5_000));
+        let named = PeerWay {
+            name: Some("third.test".into()),
+            ..waiting_stand_in()
+        };
+        mapping
+            .peer(&shared, (APP, third), later, (false, named))
+            .sent(5_000, &binding(0x90, false));
+        let by_name = Target::Name("third.test".into(), 5_000);
+        mapping.relayed_answer(&shared, APP, (&by_name, b"by name"), later);
+        let peer = mapping
+            .peers
+            .get_mut(&third)
+            .ok_or(io::ErrorKind::NotFound)?;
+        peer.sent(5_000, &binding(0x91, false));
+        assert_eq!(kept(peer).len(), 0, "kept once answered by name");
         Ok(())
     }
 

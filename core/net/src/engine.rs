@@ -461,7 +461,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 47;
+pub const COUNTERS: usize = 49;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -513,6 +513,8 @@ pub struct Counters {
     errors_dropped: AtomicU64,
     echo_evicted: AtomicU64,
     listener_recoveries: AtomicU64,
+    udp_identified: AtomicU64,
+    udp_unidentified: AtomicU64,
 }
 
 impl Counters {
@@ -563,7 +565,12 @@ impl Counters {
     /// listeners met in accepting a connection, each recovered from: a listener that no longer
     /// listened, as after Android's netd destroyed the sockets on the tunnel's address, bound anew, or
     /// one that still did, as when the process was out of descriptors for a moment, accepting again
-    /// after a pause. None names a destination: they can be read on any phone. New counters are only
+    /// after a pause; then (unit 9b) the answers from the tool's relay that a stand-in took by the
+    /// identifier its app's datagram carried (a STUN transaction ID, a QUIC connection ID or the keys
+    /// that derive from it, a DNS query's ID and question, an NTP request's timestamp) where the address
+    /// alone could not tell: several stand-ins waited on the port, or the address was another peer's,
+    /// and the answers dropped because only stand-ins with identifiers could take them and they carried
+    /// none of theirs. None names a destination: they can be read on any phone. New counters are only
     /// ever appended, so that scripts reading a column by its place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
@@ -630,6 +637,8 @@ impl Counters {
             &self.errors_dropped,
             &self.echo_evicted,
             &self.listener_recoveries,
+            &self.udp_identified,
+            &self.udp_unidentified,
         ]
     }
 }

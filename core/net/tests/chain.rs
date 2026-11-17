@@ -39,6 +39,8 @@ const UDP_CAME_IN_CAPPED: usize = 27;
 const UDP_RELAY_ELSEWHERE: usize = 28;
 const UDP_AMBIGUOUS: usize = 29;
 const UDP_LATE: usize = 30;
+const UDP_IDENTIFIED: usize = 47;
+const UDP_UNIDENTIFIED: usize = 48;
 
 /// Android names the app by its port inside the tunnel.
 struct ByPort;
@@ -841,7 +843,8 @@ async fn a_second_name_at_a_bound_address_is_not_answered_as_the_first() -> Outc
 
 /// On port 53, a stand-in is bound only by a DNS response to a query the app sent it: a stranger that
 /// answers first, with something else or under another ID, takes nothing, and feeds Watch no names
-/// (review of unit 9, finding 2).
+/// (review of unit 9, finding 2). Since unit 9b, such answers are counted as carrying none of the
+/// stand-in's identifiers, where unit 9 counted them as filtered.
 #[tokio::test(flavor = "current_thread")]
 async fn a_stranger_cannot_take_a_stand_in_on_port_53() -> Outcome {
     let resolver = UdpSocket::bind("127.0.0.1:0").await?;
@@ -870,7 +873,8 @@ async fn a_stranger_cannot_take_a_stand_in_on_port_53() -> Outcome {
     send(&tunnel, app(CHAINED_PORT), at, &asked).await?;
     let answer = receive(&tunnel).await?.ok_or("a datagram")?;
     assert_eq!(answer, (at, dns_response(&asked, 0x5152)));
-    assert_eq!(engine.counters()[UDP_FILTERED], 2);
+    let counters = engine.counters();
+    assert_eq!((counters[UDP_FILTERED], counters[UDP_UNIDENTIFIED]), (0, 2));
     Ok(())
 }
 
@@ -1563,7 +1567,8 @@ async fn a_bound_name_does_not_take_a_port_another_name_also_waits_on() -> Outco
 }
 
 /// A name bound on one port, then asked on port 53 of the same address: there it is bound only by an
-/// answer to the app's own query, not by anything else that comes from that port.
+/// answer to the app's own query, not by anything else that comes from that port, which is counted as
+/// carrying none of its identifiers (unmatched before unit 9b).
 #[tokio::test(flavor = "current_thread")]
 async fn a_bound_name_on_port_53_takes_only_an_answer_to_its_query() -> Outcome {
     let one = udp_echo().await?;
@@ -1600,7 +1605,11 @@ async fn a_bound_name_on_port_53_takes_only_an_answer_to_its_query() -> Outcome 
         answer,
         (SocketAddr::from((at, 53)), dns_response(&asked, 0x5152))
     );
-    assert_eq!(engine.counters()[UDP_UNMATCHED], 1);
+    let counters = engine.counters();
+    assert_eq!(
+        (counters[UDP_UNMATCHED], counters[UDP_UNIDENTIFIED]),
+        (0, 1)
+    );
     Ok(())
 }
 
@@ -4279,5 +4288,425 @@ async fn datagrams_held_behind_one_cost_one_question() -> Outcome {
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
     assert_eq!(asked() - before, 1, "questions to Android for one pause");
+    Ok(())
+}
+
+// ADR 0044, unit 9b: a stand-in's answers told apart by what the protocol itself carries. The scripted
+// relay sends each answer from the address the test chooses, as a tool reaches a name's server, in
+// IPv4 and in IPv6; the stand-ins themselves are IPv4, as Watch gives them.
+
+/// The addresses a tool reaches for two names on `port`, in IPv4 and in IPv6.
+fn far_pairs(port: u16) -> [(SocketAddr, SocketAddr); 2] {
+    [
+        (
+            SocketAddr::from(([198, 51, 100, 10], port)),
+            SocketAddr::from(([198, 51, 100, 11], port)),
+        ),
+        (
+            SocketAddr::new(
+                "2001:db8::10"
+                    .parse()
+                    .unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
+                port,
+            ),
+            SocketAddr::new(
+                "2001:db8::11"
+                    .parse()
+                    .unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
+                port,
+            ),
+        ),
+    ]
+}
+
+/// A STUN message of RFC 8489 (5), written by hand: its type, length, the magic cookie and the
+/// transaction ID `id`, then an XOR-MAPPED-ADDRESS of zeros when it is a response.
+fn stun(kind: u16, id: [u8; 12]) -> Vec<u8> {
+    let response = kind & 0x0110 != 0;
+    let mut message = kind.to_be_bytes().to_vec();
+    message.extend_from_slice(&[0, if response { 12 } else { 0 }, 0x21, 0x12, 0xa4, 0x42]);
+    message.extend_from_slice(&id);
+    if response {
+        message.extend_from_slice(&[0, 0x20, 0, 8, 0, 1, 0, 0, 0, 0, 0, 0]);
+    }
+    message
+}
+
+/// A Binding request with the transaction ID `n` in each byte, and its success response.
+fn binding(n: u8) -> (Vec<u8>, Vec<u8>) {
+    (stun(0x0001, [n; 12]), stun(0x0101, [n; 12]))
+}
+
+/// What a scripted engine's test holds: the engine, the tunnel, the relay and the engine's address at it,
+/// and what the relay hears.
+type Scripted = (Engine, UnixDatagram, Arc<UdpSocket>, SocketAddr, Script);
+
+/// An engine chained through a scripted relay, whose chained app looks up each of `names` and sends the
+/// stand-in it gets, on `port`, the payload paired with it: the stand-ins, and what the test holds once
+/// the relay heard every datagram.
+async fn asked_by_script(
+    names: &[(&[u8], &[u8])],
+    port: u16,
+) -> Result<(Vec<SocketAddr>, Scripted), Box<dyn std::error::Error>> {
+    let (proxy, relay, mut script) = scripted().await?;
+    let (engine, tunnel) = engine(chain(proxy))?;
+    let mut stand_ins = Vec::new();
+    for (name, _) in names {
+        stand_ins.push(SocketAddr::from((stand_in(&tunnel, name).await?, port)));
+    }
+    let mut engine_at = None;
+    for (to, (_, payload)) in stand_ins.iter().zip(names) {
+        send(&tunnel, app(CHAINED_PORT), *to, payload).await?;
+        engine_at = Some(heard_from_engine(&mut script).await?);
+    }
+    let engine_at = engine_at.ok_or("no datagram")?;
+    Ok((stand_ins, (engine, tunnel, relay, engine_at, script)))
+}
+
+/// Two stand-ins wait on one port with a STUN request each; their responses come from addresses the app
+/// never saw, the second name's first: each reaches the app from its own stand-in, by its transaction
+/// ID, and later answers follow each one's address. Before unit 9b both were dropped.
+#[tokio::test(flavor = "current_thread")]
+async fn two_stun_stand_ins_on_one_port_each_get_their_own_answer() -> Outcome {
+    for (far_a, far_b) in far_pairs(3_478) {
+        let ((a_asks, a_answer), (b_asks, b_answer)) = (binding(0xa1), binding(0xb2));
+        let (stand_ins, (engine, tunnel, relay, engine_at, _script)) = asked_by_script(
+            &[
+                (b"\x01a\x04test\x00", &a_asks),
+                (b"\x01b\x04test\x00", &b_asks),
+            ],
+            3_478,
+        )
+        .await?;
+        let (a, b) = (stand_ins[0], stand_ins[1]);
+        for (from, answer) in [(far_b, &b_answer), (far_a, &a_answer)] {
+            relay
+                .send_to(&relayed(header_by_address(from), answer), engine_at)
+                .await?;
+        }
+        assert_eq!(
+            receive(&tunnel).await?,
+            Some((b, b_answer.clone())),
+            "{far_b}"
+        );
+        assert_eq!(
+            receive(&tunnel).await?,
+            Some((a, a_answer.clone())),
+            "{far_a}"
+        );
+        for (from, said) in [(far_a, &b"a later"[..]), (far_b, b"b later")] {
+            relay
+                .send_to(&relayed(header_by_address(from), said), engine_at)
+                .await?;
+            let to = if from == far_a { a } else { b };
+            assert_eq!(receive(&tunnel).await?, Some((to, said.to_vec())));
+        }
+        let counters = engine.counters();
+        assert_eq!(
+            (
+                counters[UDP_IDENTIFIED],
+                counters[UDP_UNMATCHED],
+                counters[UDP_UNIDENTIFIED]
+            ),
+            (1, 0, 0),
+            "{far_a}: the first answer told by its ID, the second alone"
+        );
+    }
+    Ok(())
+}
+
+/// A stranger's STUN response, with another transaction ID, from the port the app asked, before the
+/// real one: it takes no stand-in, whether the stand-in waits alone or beside another, and the real one
+/// then binds it. Before unit 9b the stranger took a stand-in that waited alone.
+#[tokio::test(flavor = "current_thread")]
+async fn a_stun_response_with_another_id_takes_no_stand_in() -> Outcome {
+    for (server, stranger) in far_pairs(3_478) {
+        for alone in [true, false] {
+            let ((asks, answer), (other_asks, _)) = (binding(0x11), binding(0x22));
+            let mut names: Vec<(&[u8], &[u8])> = vec![(b"\x01a\x04test\x00", &asks)];
+            if !alone {
+                names.push((b"\x01b\x04test\x00", &other_asks));
+            }
+            let (stand_ins, (engine, tunnel, relay, engine_at, _script)) =
+                asked_by_script(&names, 3_478).await?;
+            let forged = stun(0x0101, [0x33; 12]);
+            relay
+                .send_to(&relayed(header_by_address(stranger), &forged), engine_at)
+                .await?;
+            relay
+                .send_to(&relayed(header_by_address(server), &answer), engine_at)
+                .await?;
+            assert_eq!(
+                receive(&tunnel).await?,
+                Some((stand_ins[0], answer.clone())),
+                "{server}, alone: {alone}"
+            );
+            assert!(
+                silent(&tunnel).await,
+                "the stranger's answer reached the app"
+            );
+            assert_eq!(engine.counters()[UDP_UNIDENTIFIED], 1);
+            // Bound to the server's address, the stand-in is no stranger's later either.
+            relay
+                .send_to(&relayed(header_by_address(stranger), b"later"), engine_at)
+                .await?;
+            if alone {
+                assert!(
+                    silent(&tunnel).await,
+                    "the stranger took the bound stand-in"
+                );
+                assert_eq!(engine.counters()[UDP_FILTERED], 1);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Two QUIC stand-ins on port 443 whose clients send no source connection ID, as Chromium's do: each
+/// server Initial, built with the server keys of its own client's destination ID, reaches its own
+/// stand-in, in crossed order; a datagram that is no QUIC for either, sent first, is dropped and
+/// counted.
+#[tokio::test(flavor = "current_thread")]
+async fn two_quic_stand_ins_are_told_by_their_initial_keys() -> Outcome {
+    let ping = [0x01];
+    let acked = [0x02, 0, 0, 0, 0];
+    for (far_a, far_b) in far_pairs(443) {
+        let (a_id, b_id) = ([0xa0; 8], [0xb0; 8]);
+        let a_asks = datapavan_net::quic::client_initial(1, (&a_id, &[]), (0, &ping), 1200)
+            .ok_or("a client Initial")?;
+        let b_asks =
+            datapavan_net::quic::client_initial(0x6b33_43cf, (&b_id, &[]), (0, &ping), 1200)
+                .ok_or("a client Initial")?;
+        let a_answer =
+            datapavan_net::quic::server_initial(1, &a_id, (&[], &[0x5a; 8]), (0, &acked))
+                .ok_or("a server Initial")?;
+        let b_answer =
+            datapavan_net::quic::server_initial(0x6b33_43cf, &b_id, (&[], &[0x5b; 8]), (0, &acked))
+                .ok_or("a server Initial")?;
+        let (stand_ins, (engine, tunnel, relay, engine_at, _script)) = asked_by_script(
+            &[
+                (b"\x01a\x04test\x00", &a_asks),
+                (b"\x01b\x04test\x00", &b_asks),
+            ],
+            443,
+        )
+        .await?;
+        let (a, b) = (stand_ins[0], stand_ins[1]);
+        let not_quic = [0x40; 64];
+        relay
+            .send_to(&relayed(header_by_address(far_a), &not_quic), engine_at)
+            .await?;
+        for (from, answer) in [(far_b, &b_answer), (far_a, &a_answer)] {
+            relay
+                .send_to(&relayed(header_by_address(from), answer), engine_at)
+                .await?;
+        }
+        assert_eq!(
+            receive(&tunnel).await?,
+            Some((b, b_answer.clone())),
+            "{far_b}"
+        );
+        assert_eq!(
+            receive(&tunnel).await?,
+            Some((a, a_answer.clone())),
+            "{far_a}"
+        );
+        let counters = engine.counters();
+        assert_eq!(
+            (
+                counters[UDP_IDENTIFIED],
+                counters[UDP_UNIDENTIFIED],
+                counters[UDP_UNMATCHED]
+            ),
+            (1, 1, 0)
+        );
+    }
+    Ok(())
+}
+
+/// A server that cannot go on with what a QUIC client sent answers with a Version Negotiation packet,
+/// the client's IDs crossed, or a Retry, whose integrity tag holds the client's destination ID: each
+/// reaches its own stand-in, crossed, while both wait on port 443.
+#[tokio::test(flavor = "current_thread")]
+async fn a_version_negotiation_and_a_retry_find_their_stand_ins() -> Outcome {
+    let ping = [0x01];
+    for (far_a, far_b) in far_pairs(443) {
+        let (a_id, a_source, b_id) = ([0xa0; 8], [0xa9; 2], [0xb0; 8]);
+        let a_asks = datapavan_net::quic::client_initial(1, (&a_id, &a_source), (0, &ping), 1200)
+            .ok_or("a client Initial")?;
+        let b_asks = datapavan_net::quic::client_initial(1, (&b_id, &[]), (0, &ping), 1200)
+            .ok_or("a client Initial")?;
+        let mut negotiation = vec![0xc5, 0, 0, 0, 0, 2];
+        negotiation.extend_from_slice(&a_source);
+        negotiation.push(8);
+        negotiation.extend_from_slice(&a_id);
+        negotiation.extend_from_slice(&[0x6b, 0x33, 0x43, 0xcf]);
+        let retry =
+            datapavan_net::quic::retry(1, &b_id, (&[], &[0x5b; 8]), b"token").ok_or("a Retry")?;
+        let (stand_ins, (engine, tunnel, relay, engine_at, _script)) = asked_by_script(
+            &[
+                (b"\x01a\x04test\x00", &a_asks),
+                (b"\x01b\x04test\x00", &b_asks),
+            ],
+            443,
+        )
+        .await?;
+        for (from, answer) in [(far_b, &retry), (far_a, &negotiation)] {
+            relay
+                .send_to(&relayed(header_by_address(from), answer), engine_at)
+                .await?;
+        }
+        assert_eq!(
+            receive(&tunnel).await?,
+            Some((stand_ins[1], retry.clone())),
+            "{far_b}"
+        );
+        assert_eq!(
+            receive(&tunnel).await?,
+            Some((stand_ins[0], negotiation.clone())),
+            "{far_a}"
+        );
+        assert_eq!(engine.counters()[UDP_IDENTIFIED], 1);
+    }
+    Ok(())
+}
+
+/// A port, and for each of two stand-ins what the app asks and what answers it.
+type Exchange<'a> = (u16, (&'a [u8], Vec<u8>), (&'a [u8], Vec<u8>));
+
+/// A DNS query to a port other than 53 that reads strictly as one, and an NTP request to port 123,
+/// each sent to two stand-ins at once: each answer reaches its own stand-in by the query's ID and
+/// question, or by the request's transmit timestamp; one with another ID is dropped and counted.
+#[tokio::test(flavor = "current_thread")]
+async fn dns_on_another_port_and_ntp_are_told_by_their_own_fields() -> Outcome {
+    let dns_query = |id: u16, name: &[u8]| {
+        let mut query = id.to_be_bytes().to_vec();
+        query.extend_from_slice(&[0x01, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
+        query.extend_from_slice(name);
+        query.extend_from_slice(&[0, 1, 0, 1]);
+        query
+    };
+    let ntp = |mode: u8, at: usize, stamp: u64| {
+        let mut packet = vec![0u8; 48];
+        packet[0] = (4 << 3) | mode;
+        packet[at..at + 8].copy_from_slice(&stamp.to_be_bytes());
+        packet
+    };
+    let (a_query, b_query) = (
+        dns_query(0x0a0a, b"\x01x\x04test\x00"),
+        dns_query(0x0b0b, b"\x01y\x04test\x00"),
+    );
+    let (a_ntp, b_ntp) = (
+        ntp(3, 40, 0xe9a1_0000_0000_0001),
+        ntp(3, 40, 0xe9a1_0000_0000_0002),
+    );
+    let cases: [Exchange<'_>; 2] = [
+        (
+            5_353,
+            (&a_query, dns_response(&a_query, 0x0a0a)),
+            (&b_query, dns_response(&b_query, 0x0b0b)),
+        ),
+        (
+            123,
+            (&a_ntp, ntp(4, 24, 0xe9a1_0000_0000_0001)),
+            (&b_ntp, ntp(4, 24, 0xe9a1_0000_0000_0002)),
+        ),
+    ];
+    for (port, (a_asks, a_answer), (b_asks, b_answer)) in cases {
+        let (far_a, far_b) = far_pairs(port)[0];
+        let (stand_ins, (engine, tunnel, relay, engine_at, _script)) = asked_by_script(
+            &[
+                (b"\x01a\x04test\x00", a_asks),
+                (b"\x01b\x04test\x00", b_asks),
+            ],
+            port,
+        )
+        .await?;
+        if port != 123 {
+            let wrong = dns_response(&a_query, 0x0c0c);
+            relay
+                .send_to(&relayed(header_by_address(far_a), &wrong), engine_at)
+                .await?;
+        }
+        for (from, answer) in [(far_b, &b_answer), (far_a, &a_answer)] {
+            relay
+                .send_to(&relayed(header_by_address(from), answer), engine_at)
+                .await?;
+        }
+        assert_eq!(
+            receive(&tunnel).await?,
+            Some((stand_ins[1], b_answer.clone())),
+            "port {port}"
+        );
+        assert_eq!(
+            receive(&tunnel).await?,
+            Some((stand_ins[0], a_answer.clone())),
+            "port {port}"
+        );
+        let counters = engine.counters();
+        assert_eq!(
+            (counters[UDP_IDENTIFIED], counters[UDP_UNIDENTIFIED]),
+            (1, u64::from(port != 123)),
+            "port {port}"
+        );
+    }
+    Ok(())
+}
+
+/// The contest settled by an identifier: one name bound to an address, a second asked on its port
+/// with a STUN request. What comes from the bound address that carries none of the second's IDs goes
+/// to the first at once, with no cut; the second's response from there goes to the second, which is
+/// then bound beside the first, and from then on each STUN transaction's response from that address
+/// reaches the one that sent it, in IPv4 and IPv6. A second name without identifiers still cuts the
+/// bound one for `udp_contest` (`an_unanswered_name_cuts_a_bound_one_only_for_a_while`).
+#[tokio::test(flavor = "current_thread")]
+async fn the_contest_is_settled_by_an_identifier() -> Outcome {
+    for (far, _) in far_pairs(3_478) {
+        let (proxy, relay, mut script) = scripted().await?;
+        let (engine, tunnel) = engine(chain(proxy))?;
+        let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, 3_478));
+        let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, 3_478));
+        let (a_asks, a_answer) = binding(0xa1);
+        send(&tunnel, app(CHAINED_PORT), a, &a_asks).await?;
+        let engine_at = heard_from_engine(&mut script).await?;
+        let from_far = |payload: &[u8]| relayed(header_by_address(far), payload);
+        relay.send_to(&from_far(&a_answer), engine_at).await?;
+        assert_eq!(receive(&tunnel).await?, Some((a, a_answer.clone())));
+        let (b_asks, b_answer) = binding(0xb2);
+        send(&tunnel, app(CHAINED_PORT), b, &b_asks).await?;
+        heard_from_engine(&mut script).await?;
+        relay
+            .send_to(&from_far(b"for a, while b waits"), engine_at)
+            .await?;
+        assert_eq!(
+            receive(&tunnel).await?,
+            Some((a, b"for a, while b waits".to_vec()))
+        );
+        relay.send_to(&from_far(&b_answer), engine_at).await?;
+        assert_eq!(
+            receive(&tunnel).await?,
+            Some((b, b_answer.clone())),
+            "{far}"
+        );
+        for (to, n) in [(b, 0xb3), (a, 0xa4), (b, 0xb5)] {
+            let (asks, answer) = binding(n);
+            send(&tunnel, app(CHAINED_PORT), to, &asks).await?;
+            heard_from_engine(&mut script).await?;
+            relay.send_to(&from_far(&answer), engine_at).await?;
+            assert_eq!(receive(&tunnel).await?, Some((to, answer)), "{far}: {n:#x}");
+        }
+        relay.send_to(&from_far(b"no ID"), engine_at).await?;
+        assert_eq!(
+            receive(&tunnel).await?,
+            Some((a, b"no ID".to_vec())),
+            "the first holds it"
+        );
+        let counters = engine.counters();
+        assert_eq!(
+            (counters[UDP_IDENTIFIED], counters[UDP_UNMATCHED]),
+            (3, 0),
+            "{far}"
+        );
+    }
     Ok(())
 }
