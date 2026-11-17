@@ -3425,16 +3425,29 @@ fn unbound_pings(v4: bool) -> Result<HashMap<u64, u16>, Box<dyn std::error::Erro
 }
 
 /// The inode and echo identifier of the ping socket of the IP version `v4` or IPv6 that the engine
-/// opened since the table read `before` ([`unbound_pings`]): the newest socket heads its hash chain,
-/// so that only its own version's table lists it, and it is the one the table did not list before.
+/// opened since the table read `before` ([`unbound_pings`]). The newest socket heads its hash chain, so
+/// that its own version's table lists it and the other's does not; the other version's sockets after it
+/// in that chain, which its table now lists too, are listed in their own version's table, and are left
+/// out (unit 9b, fix round 3, review F: fix round 2 took every socket listed since, those among them).
 fn engine_ping_since(
     v4: bool,
     before: &HashMap<u64, u16>,
 ) -> Result<(u64, u16), Box<dyn std::error::Error>> {
     let now = unbound_pings(v4)?;
+    // Every socket of the other table, bound or not: one bound to an address of its version reads as
+    // bound to none in this version's.
+    let others: HashSet<u64> = std::fs::read_to_string(if v4 {
+        "/proc/net/icmp6"
+    } else {
+        "/proc/net/icmp"
+    })?
+    .lines()
+    .skip(1)
+    .filter_map(|line| line.split_whitespace().nth(9)?.parse().ok())
+    .collect();
     let new: Vec<(u64, u16)> = now
         .iter()
-        .filter(|(inode, _)| !before.contains_key(inode))
+        .filter(|(inode, _)| !before.contains_key(inode) && !others.contains(inode))
         .map(|(&inode, &id)| (inode, id))
         .collect();
     match new[..] {
