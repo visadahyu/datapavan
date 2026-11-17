@@ -48,11 +48,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Security
 
-- The hardware check's parser, after an independent review (ADR 0040, decision 5):
-  - **The bootloader state comes only from the part the secure hardware enforces itself.** Where a trusted environment's or secure chip's attestation left it out, the parser took it from the part the system writes, so a modified system could have filled in "locked and verified". It now takes each value from one list only, as the attestation's security level says, and such a check is reported as a new finding, "Hardware check incomplete", in all eight languages.
-  - **The extension is read as strict DER,** as its schema requires: lengths, tag numbers and integers in their shortest form, INTEGER and ENUMERATED where the schema puts each, and no element beyond those it allows. Two tolerances follow Google's reference verifier and are written down with their reasons.
-  - **Its tests cut every element, not only the outer one,** and read two extensions encoded by OpenSSL; the fuzz target checks that the list the parser does not read never changes what it returns.
-
+- The hardware check, after two independent reviews (ADR 0040, decisions 5 and 7):
+  - **The check must be the phone's answer to Datapavan's own request.** Before, a system that hooks the keystore could show a false "locked and verified" without any leaked key: by adding a certificate of its own below the attested key, or by replaying a genuine check from another phone. Now the attestation must occur once, in the certificate of the key Datapavan has just generated, with the challenge Datapavan chose, in a chain of the shape and dates Google's own verifier expects. Anything else is reported as "Hardware check tampered with", and nothing it says is shown. What a hooked keystore can still do is sign a whole check with an attestation key that leaked and is not yet revoked, or pass the request to another phone it controls; only a check from a second phone can tell those apart.
+  - **The bootloader state comes only from the part the secure hardware enforces itself.** Where a trusted environment's or secure chip's attestation left it out, the parser took it from the part the system writes. It now takes each value from one list only, and such a check is reported as "Hardware check incomplete".
+  - **A check that fails is reported,** as "Hardware check failed", so that breaking it cannot hide the bootloader's state.
+  - **More of the attestation is read:** a locked phone running a system signed with its owner's key is reported as such, with its verified boot key to compare with the one its project publishes, an old vendor patch level is reported, and a patch level that only the system states is marked as its word.
+  - **The parser reads the extension as leniently as Google's verifier where the meaning is not in doubt,** and as strictly where it is, and says where it differs. It is tested against the chains of seven real phones in Google's test data, cut at every element, and fuzzed inside valid extensions.
 
 ## [0.1.2] - 2026-11-08
 
