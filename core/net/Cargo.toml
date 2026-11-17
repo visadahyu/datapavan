@@ -20,6 +20,11 @@ miniz_oxide = "0.9.1"
 # GCM's counter mode without its tag, are a few lines on top (src/quic.rs).
 aes = { version = "0.9.4", default-features = false }
 sha2 = { version = "0.11.1", default-features = false }
+# AES-GCM's tag for the QUIC Initial and Retry packets that tell a stand-in's answers apart (ADR 0044,
+# unit 9b), and for the hellos that name a flow: RustCrypto's AEAD on the `aes` above, with no default
+# features (no allocator, no random numbers). Apache-2.0 OR MIT. Its review is in ADR 0044's note on
+# unit 9b, fix round 1.
+aes-gcm = { version = "0.11.1", default-features = false, features = ["aes"] }
 
 # The ICMP errors that answer a mapping's datagrams (ADR 0044, decision 1): `IP_RECVERR` and
 # `IPV6_RECVERR`, and the socket's error queue read with `recvmsg`, behind safe functions. MIT. Only the

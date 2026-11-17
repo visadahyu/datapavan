@@ -172,6 +172,23 @@ an ADR (D25).
 - **nix's review (2026-11-12):** nix 0.31.3 (MIT), with the features `net` and `uio`, passed `cargo deny` and
   builds for the three Android targets. It brings memoffset, cfg_aliases, bitflags and autocfg (build only). With
   the new UDP code, the arm64 library grew from 775,976 to 812,312 bytes, about 2.8 KB of it nix's own.
+- **aes-gcm's review (2026-11-17, unit 9b, fix round 1):** the maintainer's rule, vetted libraries over cryptography of
+  our own, replaced unit 9b's GHASH written out by hand with RustCrypto's `aes-gcm` 0.11.1 (Apache-2.0 OR MIT,
+  published by the RustCrypto developers, repository RustCrypto/AEADs), without its default features (no allocator,
+  no random numbers), on the `aes` 0.9.4 and `cipher` 0.5.2 already in both lockfiles. It brings seven more crates,
+  all RustCrypto's and under the same licences: `aead` 0.6.1, `ctr` 0.10.1, `ghash` 0.6.0, `polyval` 0.7.3,
+  `universal-hash` 0.6.1, `ctutils` 0.4.8 and `cmov` 0.5.4; `cargo deny` passes, both lockfiles hold them, and
+  the three Android targets build. **Audit:** the crate's README cites one review by NCC Group, read here in the
+  report itself ("RustCrypto AES/GCM and ChaCha20+Poly1305 Implementation Review", version 1.0 of 2020-02-13, by
+  Gérald Doussot and Thomas Pornin, for MobileCoin, five person-days): it covered `aes-gcm`, `aes`, `ghash`,
+  `polyval`, `aead` and `universal-hash` at their commits of December 2019 and found no vulnerability, only remarks
+  on speed. The code reviewed is that of six years ago, not 0.11's, whose ARMv8 backends, those a phone uses, came
+  later and have no audit. **Advisories:** one in RustSec's database, RUSTSEC-2023-0096 (a failed tag left the
+  decrypted text in the caller's buffer, 0.10.0 to 0.10.2, patched in 0.10.3); 0.11.1 checks the tag before it
+  decrypts, and the engine never reads a buffer whose tag failed. The arm64 library grew from 1,040,152 to
+  1,050,160 bytes. The hello's reader, which removed an Initial's protection without its tag, now checks it too:
+  with the library it costs one GHASH for each of a flow's first few datagrams, and a packet damaged on its way,
+  or bytes that only look like an Initial, then name no flow rather than one by frames that happened to parse.
 - **Two filters differ by design:** address-dependent for answers, endpoint-independent for mappings. These are
   the defaults RFC 4787 recommends, and what most home routers do.
 - **ADR 0012's "one socket per flow" for UDP is superseded** by decision 1. W6's done-when changes its wording,

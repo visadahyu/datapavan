@@ -8,24 +8,29 @@
 //! PING and PADDING, so that middleboxes cannot depend on one layout. The frames are put together by
 //! their offsets, up to [`tls::MAX_HELLO`] bytes, over at most [`MAX_DATAGRAMS`] datagrams.
 //!
-//! The AEAD tag is not checked there: anyone can compute these keys, so a valid tag would prove nothing
-//! about who sent the packet, and a damaged packet fails to parse. Removing the payload's protection is
-//! AES in counter mode as GCM runs it (the counter starts at 2), which is all of GCM a reader needs; HKDF
-//! is HMAC over SHA-256. Both are checked against the RFCs' sample packets below.
+//! A packet's protection is removed only when its AES-GCM tag checks, by `RustCrypto`'s `aes-gcm` (ADR 0044,
+//! unit 9b, fix round 1): anyone can compute these keys, so a valid tag proves nothing about who sent the
+//! packet, but a packet damaged on its way, or bytes that only look like an Initial, then name no flow,
+//! where before a reader that removed the protection without the tag took whatever frames happened to
+//! parse. HKDF is HMAC over SHA-256. Both are checked against the RFCs' sample packets below.
 //!
 //! The same keys tell a stand-in's answers apart (ADR 0044, unit 9b): [`asked`] reads the connection IDs
 //! of the Initial packets an app sends, and [`Answer`] whether what comes back is the server's answer to
-//! one of them. There the tag is checked, by GCM's GHASH written out below from NIST SP 800-38D, with no
-//! further dependency: not against a sender who saw the app's packet, who can compute the keys and the
-//! tag as well, but so that a datagram of anyone else matches only by a chance of 2^-128 rather than by
-//! frames that happen to parse. A Retry carries no trace of the connection ID it answers but its
-//! integrity tag (RFC 9001 5.8), so only the tag can tell which of an app's Initial packets it is for.
+//! one of them. An Initial or a Retry is matched through the keys or the integrity key and its tag, which
+//! does not keep out a sender who saw the app's packet and can compute them as well, but rules out a
+//! chance match (2^-128). A Retry carries no trace of the connection ID it answers but its integrity tag
+//! (RFC 9001 5.8), so only the tag can tell which of an app's Initial packets it is for. A packet matched
+//! by the app's source connection ID alone is matched at the chance its length gives (2^-32 for 4 bytes),
+//! and a Version Negotiation packet, which has no tag, by the two IDs it echoes.
 //!
-//! The bytes come from any app, so nothing here may panic or read outside a slice
-//! (`fuzz_targets/quic.rs`, `fuzz_targets/identifiers.rs`).
+//! The bytes come from any app and any sender, so nothing here may panic or read outside a slice: the
+//! fuzz target `quic` fuzzes the hello's reader, and `identifiers` what an app's datagram asks and whether
+//! anything carries it.
 
 use aes::Aes128;
 use aes::cipher::{BlockCipherEncrypt, KeyInit};
+use aes_gcm::Aes128Gcm;
+use aes_gcm::aead::{AeadInOut, Nonce, Tag};
 use sha2::{Digest, Sha256};
 
 use crate::tls::{self, ServerName};
@@ -165,7 +170,7 @@ fn expand_label(secret: &[u8; 32], label: &[u8], length: u8) -> [u8; 32] {
 /// The keys of one side's Initial packets.
 #[derive(Clone)]
 struct Keys {
-    key: Aes128,
+    aead: Aes128Gcm,
     iv: [u8; 12],
     hp: Aes128,
 }
@@ -182,7 +187,7 @@ impl Keys {
         let mut nonce = [0u8; 12];
         nonce.copy_from_slice(&iv[..12]);
         Self {
-            key: aes(&key),
+            aead: Aes128Gcm::from(aes(&key)),
             iv: nonce,
             hp: aes(&hp),
         }
@@ -197,28 +202,12 @@ impl Keys {
     }
 
     /// The nonce of packet `pn`: the IV with the packet number in its last eight bytes (RFC 9001 5.3).
-    fn nonce(&self, pn: u64) -> [u8; 12] {
+    fn nonce(&self, pn: u64) -> Nonce<Aes128Gcm> {
         let mut nonce = self.iv;
         for (byte, pn_byte) in nonce[4..].iter_mut().zip(pn.to_be_bytes()) {
             *byte ^= pn_byte;
         }
-        nonce
-    }
-
-    /// Removes (or adds) the payload's protection: AES-CTR with GCM's counter blocks for packet `pn`.
-    fn apply(&self, pn: u64, data: &mut [u8]) {
-        let nonce = self.nonce(pn);
-        let mut counter: u32 = 2;
-        for chunk in data.chunks_mut(16) {
-            let mut block = aes::Block::default();
-            block[..12].copy_from_slice(&nonce);
-            block[12..].copy_from_slice(&counter.to_be_bytes());
-            self.key.encrypt_block(&mut block);
-            for (byte, key_byte) in chunk.iter_mut().zip(block.iter()) {
-                *byte ^= key_byte;
-            }
-            counter = counter.wrapping_add(1);
-        }
+        Nonce::<Aes128Gcm>::from(nonce)
     }
 }
 
@@ -228,53 +217,16 @@ fn aes(key: &[u8; 32]) -> Aes128 {
     Aes128::new(&key16)
 }
 
-/// `block` encrypted with `key`, as a number, the first byte highest.
-fn encrypted(key: &Aes128, block: [u8; 16]) -> u128 {
-    let mut out = aes::Block::default();
-    out.copy_from_slice(&block);
-    key.encrypt_block(&mut out);
-    let mut bytes = [0u8; 16];
-    bytes.copy_from_slice(&out);
-    u128::from_be_bytes(bytes)
-}
-
-/// The product of `x` and `y` in GCM's field, GF(2^128) with its bits in GCM's order: the first bit of
-/// the block, the number's highest, is the coefficient of x^0 (NIST SP 800-38D 6.3, Algorithm 1).
-fn multiply(x: u128, y: u128) -> u128 {
-    const R: u128 = 0xe1 << 120;
-    let mut product = 0;
-    let mut v = y;
-    for bit in (0..128).rev() {
-        if (x >> bit) & 1 == 1 {
-            product ^= v;
-        }
-        v = if v & 1 == 1 { (v >> 1) ^ R } else { v >> 1 };
-    }
-    product
-}
-
-/// GHASH (SP 800-38D 6.4) under the hash key `h` of `aad` and then `ciphertext`, each padded with zeros
-/// to whole blocks, then their lengths in bits.
-fn ghash(h: u128, aad: &[u8], ciphertext: &[u8]) -> u128 {
-    let mut y = 0;
-    for part in [aad, ciphertext] {
-        for chunk in part.chunks(16) {
-            let mut block = [0u8; 16];
-            block[..chunk.len()].copy_from_slice(chunk);
-            y = multiply(y ^ u128::from_be_bytes(block), h);
-        }
-    }
-    let bits = |part: &[u8]| u128::from(u64::try_from(part.len()).unwrap_or(u64::MAX)) * 8;
-    multiply(y ^ (bits(aad) << 64 | bits(ciphertext)), h)
-}
-
-/// AES-128-GCM's tag (SP 800-38D 7.1) for a 96-bit `nonce`, over `aad` and `ciphertext`.
-fn gcm_tag(key: &Aes128, nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8]) -> [u8; 16] {
-    let h = encrypted(key, [0; 16]);
-    let mut first = [0u8; 16];
-    first[..12].copy_from_slice(nonce);
-    first[15] = 1;
-    (encrypted(key, first) ^ ghash(h, aad, ciphertext)).to_be_bytes()
+/// The cipher of a Retry packet's integrity tag for `version` (RFC 9001 5.8, RFC 9369 3.3.3), with its
+/// nonce.
+fn retry_aead(version: Version) -> (Aes128Gcm, Nonce<Aes128Gcm>) {
+    let (key, nonce) = version.retry();
+    let mut key16 = aes::cipher::Key::<Aes128>::default();
+    key16.copy_from_slice(&key);
+    (
+        Aes128Gcm::from(Aes128::new(&key16)),
+        Nonce::<Aes128Gcm>::from(nonce),
+    )
 }
 
 /// Reads a variable-length integer (RFC 9000 16) at `at`, moving `at` past it.
@@ -358,35 +310,10 @@ fn long_packet(datagram: &[u8], at: usize) -> Option<LongPacket> {
 }
 
 /// Removes the protection of the packet that starts at `start`, returning its payload without the
-/// tag, or `None` if the packet is too short for it.
+/// tag: the header's protection, then the payload's, with AES-GCM, the header with its protection
+/// removed as the associated data (RFC 9001 5.3, 5.4). `None` for a packet too short for it, or whose tag
+/// does not check.
 fn open(
-    keys: &Keys,
-    datagram: &[u8],
-    start: usize,
-    pn_offset: usize,
-    end: usize,
-) -> Option<Vec<u8>> {
-    let sample = datagram.get(pn_offset + 4..pn_offset + 4 + SAMPLE)?;
-    if pn_offset + 4 + SAMPLE > end {
-        return None;
-    }
-    let mask = keys.mask(sample);
-    let first = datagram.get(start)? ^ (mask[0] & 0x0f);
-    let pn_length = usize::from(first & 3) + 1;
-    let pn = datagram
-        .get(pn_offset..pn_offset + pn_length)?
-        .iter()
-        .zip(&mask[1..])
-        .fold(0u64, |pn, (b, m)| pn << 8 | u64::from(b ^ m));
-    let payload_end = end.checked_sub(TAG)?;
-    let mut payload = datagram.get(pn_offset + pn_length..payload_end)?.to_vec();
-    keys.apply(pn, &mut payload);
-    Some(payload)
-}
-
-/// As [`open`], but only for a packet whose AEAD tag checks: the header, its protection removed, is the
-/// associated data (RFC 9001 5.3).
-fn open_checked(
     keys: &Keys,
     datagram: &[u8],
     start: usize,
@@ -409,13 +336,16 @@ fn open_checked(
         .iter()
         .fold(0u64, |pn, &b| pn << 8 | u64::from(b));
     let payload_end = end.checked_sub(TAG)?;
-    let ciphertext = datagram.get(pn_offset + pn_length..payload_end)?;
-    let tag = datagram.get(payload_end..end)?;
-    if gcm_tag(&keys.key, &keys.nonce(pn), &header, ciphertext) != tag {
-        return None;
-    }
-    let mut payload = ciphertext.to_vec();
-    keys.apply(pn, &mut payload);
+    let mut payload = datagram.get(pn_offset + pn_length..payload_end)?.to_vec();
+    let tag = Tag::<Aes128Gcm>::try_from(datagram.get(payload_end..end)?).ok()?;
+    keys.aead
+        .decrypt_inout_detached(
+            &keys.nonce(pn),
+            &header,
+            payload.as_mut_slice().into(),
+            &tag,
+        )
+        .ok()?;
     Some(payload)
 }
 
@@ -481,7 +411,7 @@ pub fn asked(datagram: &[u8]) -> Vec<Ids> {
         };
         if packet.initial {
             let keys = Keys::initial(packet.version, destination.get(), CLIENT);
-            match open_checked(&keys, datagram, at, packet.pn_offset, packet.end) {
+            match open(&keys, datagram, at, packet.pn_offset, packet.end) {
                 Some(payload) if frames_parse(&payload) => initial = true,
                 _ => return Vec::new(),
             }
@@ -609,10 +539,11 @@ impl<'a> Answer<'a> {
         pseudo.push(asked.destination.length);
         pseudo.extend_from_slice(original);
         pseudo.extend_from_slice(&self.datagram[..end]);
-        let (key, nonce) = asked.version.retry();
-        let mut key16 = aes::cipher::Key::<Aes128>::default();
-        key16.copy_from_slice(&key);
-        gcm_tag(&Aes128::new(&key16), &nonce, &pseudo, &[]) == self.datagram[end..]
+        let (aead, nonce) = retry_aead(asked.version);
+        Tag::<Aes128Gcm>::try_from(&self.datagram[end..]).is_ok_and(|tag| {
+            aead.decrypt_inout_detached(&nonce, &pseudo, (&mut [0u8; 0][..]).into(), &tag)
+                .is_ok()
+        })
     }
 
     /// Whether it is an Initial that the server's keys of the app's destination ID open.
@@ -622,7 +553,7 @@ impl<'a> Answer<'a> {
         };
         let keys = Keys::initial(asked.version, asked.destination.get(), SERVER);
         packet.initial
-            && open_checked(&keys, self.datagram, 0, packet.pn_offset, packet.end)
+            && open(&keys, self.datagram, 0, packet.pn_offset, packet.end)
                 .is_some_and(|payload| frames_parse(&payload))
     }
 }
@@ -658,8 +589,14 @@ fn seal(
     let pn_offset = header.len();
     header.extend_from_slice(pn_bytes);
     let mut ciphertext = payload.to_vec();
-    keys.apply(u64::from(pn), &mut ciphertext);
-    let tag = gcm_tag(&keys.key, &keys.nonce(u64::from(pn)), &header, &ciphertext);
+    let tag = keys
+        .aead
+        .encrypt_inout_detached(
+            &keys.nonce(u64::from(pn)),
+            &header,
+            ciphertext.as_mut_slice().into(),
+        )
+        .ok()?;
     let mut packet = header;
     packet.extend_from_slice(&ciphertext);
     packet.extend_from_slice(&tag);
@@ -737,10 +674,11 @@ pub fn retry(
     let mut pseudo = vec![u8::try_from(original.len()).ok()?];
     pseudo.extend_from_slice(original);
     pseudo.extend_from_slice(&packet);
-    let (key, nonce) = version.retry();
-    let mut key16 = aes::cipher::Key::<Aes128>::default();
-    key16.copy_from_slice(&key);
-    packet.extend_from_slice(&gcm_tag(&Aes128::new(&key16), &nonce, &pseudo, &[]));
+    let (aead, nonce) = retry_aead(version);
+    let tag = aead
+        .encrypt_inout_detached(&nonce, &pseudo, (&mut [0u8; 0][..]).into())
+        .ok()?;
+    packet.extend_from_slice(&tag);
     Some(packet)
 }
 
@@ -1025,27 +963,219 @@ pub(crate) mod tests {
         client_initial(version, (cid, &[]), (pn, frames), size).unwrap_or_default()
     }
 
-    /// GCM's first two test cases, from the paper that defined it ("The Galois/Counter Mode of
-    /// Operation", appendix B), under the all-zero key and nonce: no data, and one block of zeros.
+    /// GCM's test cases 1 to 4, from the paper that defined it ("The Galois/Counter Mode of Operation",
+    /// appendix B), as `Keys` seals and opens through `RustCrypto`'s `aes-gcm`: no data and one block of
+    /// zeros under the all-zero key and nonce, then four whole blocks, and 60 bytes with 20 of associated
+    /// data, under another key and nonce.
     #[test]
-    fn the_gcm_tag_matches_its_specification() {
-        let mut zero = aes::cipher::Key::<Aes128>::default();
-        zero.copy_from_slice(&[0; 16]);
-        let key = Aes128::new(&zero);
-        assert_eq!(
-            gcm_tag(&key, &[0; 12], &[], &[]).to_vec(),
-            hex("58e2fccefa7e3061367f1d57a4e7455a")
+    fn aes_gcm_matches_gcm_test_cases_1_to_4() {
+        let keys = |key: &str, iv: &str| {
+            let mut key16 = aes::cipher::Key::<Aes128>::default();
+            key16.copy_from_slice(&hex(key));
+            let mut nonce = [0u8; 12];
+            nonce.copy_from_slice(&hex(iv));
+            Keys {
+                aead: Aes128Gcm::from(Aes128::new(&key16)),
+                iv: nonce,
+                hp: Aes128::new(&key16),
+            }
+        };
+        let zero = keys(
+            "00000000000000000000000000000000",
+            "000000000000000000000000",
         );
-        assert_eq!(
-            gcm_tag(
-                &key,
-                &[0; 12],
-                &[],
-                &hex("0388dace60b6a392f328c2b971b2fe78")
-            )
-            .to_vec(),
-            hex("ab6e47d42cec13bdf53a67b21257bddf")
+        let other = keys(
+            "feffe9928665731c6d6a8f9467308308",
+            "cafebabefacedbaddecaf888",
         );
+        let plain = hex(
+            "d9313225f88406e5a55909c5aff5269a86a7a9531534f7da2e4c303d8a318a72
+             1c3c0c95956809532fcf0e2449a6b525b16aedf5aa0de657ba637b391aafd255",
+        );
+        let cipher = hex(
+            "42831ec2217774244b7221b784d0d49ce3aa212f2c02a4e035c17e2329aca12e
+             21d514b25466931c7d8f6a5aac84aa051ba30b396a0aac973d58e091473f5985",
+        );
+        let aad = hex("feedfacedeadbeeffeedfacedeadbeefabaddad2");
+        for (keys, aad, plain, cipher, tag) in [
+            (
+                &zero,
+                &[][..],
+                &[][..],
+                &[][..],
+                "58e2fccefa7e3061367f1d57a4e7455a",
+            ),
+            (
+                &zero,
+                &[][..],
+                &[0u8; 16][..],
+                &hex("0388dace60b6a392f328c2b971b2fe78")[..],
+                "ab6e47d42cec13bdf53a67b21257bddf",
+            ),
+            (
+                &other,
+                &[][..],
+                &plain[..],
+                &cipher[..],
+                "4d5c2af327cd64a62cf35abd2ba6fab4",
+            ),
+            (
+                &other,
+                &aad[..],
+                &plain[..60],
+                &cipher[..60],
+                "5bc94fbc3221a5db94fae95ae7121a47",
+            ),
+        ] {
+            let mut sealed = plain.to_vec();
+            let made =
+                keys.aead
+                    .encrypt_inout_detached(&keys.nonce(0), aad, sealed.as_mut_slice().into());
+            assert_eq!(made.map(|tag| tag.to_vec()).ok(), Some(hex(tag)));
+            assert_eq!(sealed, cipher);
+            let Ok(tag) = Tag::<Aes128Gcm>::try_from(&hex(tag)[..]) else {
+                unreachable!("a tag of 16 bytes")
+            };
+            assert!(
+                keys.aead
+                    .decrypt_inout_detached(&keys.nonce(0), aad, sealed.as_mut_slice().into(), &tag)
+                    .is_ok()
+            );
+            assert_eq!(sealed, plain);
+        }
+    }
+
+    const CLIENT_HELLO_FRAME: &str = "060040f1010000ed0303ebf8fa56f12939b9584a3896472ec40bb863cfd3e86804fe3a47f06a2b69484c000004130113
+         02010000c000000010000e00000b6578616d706c652e636f6dff01000100000a00080006001d00170018001000070005
+         04616c706e000500050100000000003300260024001d00209370b2c9caa47fbabaf4559fedba753de171fa71f50f1ce1
+         5d43e994ec74d748002b0003020304000d0010000e0403050306030203080408050806002d00020101001c0002400100
+         3900320408ffffffffffffffff05048000ffff07048000ffff0801100104800075300901100f088394c8f03e51570806
+         048000ffff";
+    const SERVER_FRAMES: &str = "02000000000600405a020000560303eefce7f7b37ba1d1632e96677825ddf73988cfc79825df566dc5430b9a045a1200
+         130100002e00330024001d00209d3c940d89690b84d08a60993c144eca684d1081287c834d5311bcf32bb9da1a002b00
+         020304";
+    const CLIENT_INITIAL_9001: &str = "c000000001088394c8f03e5157080000449e7b9aec34d1b1c98dd7689fb8ec11d242b123dc9bd8bab936b47d92ec356c
+         0bab7df5976d27cd449f63300099f3991c260ec4c60d17b31f8429157bb35a1282a643a8d2262cad67500cadb8e7378c
+         8eb7539ec4d4905fed1bee1fc8aafba17c750e2c7ace01e6005f80fcb7df621230c83711b39343fa028cea7f7fb5ff89
+         eac2308249a02252155e2347b63d58c5457afd84d05dfffdb20392844ae812154682e9cf012f9021a6f0be17ddd0c208
+         4dce25ff9b06cde535d0f920a2db1bf362c23e596d11a4f5a6cf3948838a3aec4e15daf8500a6ef69ec4e3feb6b1d98e
+         610ac8b7ec3faf6ad760b7bad1db4ba3485e8a94dc250ae3fdb41ed15fb6a8e5eba0fc3dd60bc8e30c5c4287e53805db
+         059ae0648db2f64264ed5e39be2e20d82df566da8dd5998ccabdae053060ae6c7b4378e846d29f37ed7b4ea9ec5d82e7
+         961b7f25a9323851f681d582363aa5f89937f5a67258bf63ad6f1a0b1d96dbd4faddfcefc5266ba6611722395c906556
+         be52afe3f565636ad1b17d508b73d8743eeb524be22b3dcbc2c7468d54119c7468449a13d8e3b95811a198f3491de3e7
+         fe942b330407abf82a4ed7c1b311663ac69890f4157015853d91e923037c227a33cdd5ec281ca3f79c44546b9d90ca00
+         f064c99e3dd97911d39fe9c5d0b23a229a234cb36186c4819e8b9c5927726632291d6a418211cc2962e20fe47feb3edf
+         330f2c603a9d48c0fcb5699dbfe5896425c5bac4aee82e57a85aaf4e2513e4f05796b07ba2ee47d80506f8d2c25e50fd
+         14de71e6c418559302f939b0e1abd576f279c4b2e0feb85c1f28ff18f58891ffef132eef2fa09346aee33c28eb130ff2
+         8f5b766953334113211996d20011a198e3fc433f9f2541010ae17c1bf202580f6047472fb36857fe843b19f5984009dd
+         c324044e847a4f4a0ab34f719595de37252d6235365e9b84392b061085349d73203a4a13e96f5432ec0fd4a1ee65accd
+         d5e3904df54c1da510b0ff20dcc0c77fcb2c0e0eb605cb0504db87632cf3d8b4dae6e705769d1de354270123cb11450e
+         fc60ac47683d7b8d0f811365565fd98c4c8eb936bcab8d069fc33bd801b03adea2e1fbc5aa463d08ca19896d2bf59a07
+         1b851e6c239052172f296bfb5e72404790a2181014f3b94a4e97d117b438130368cc39dbb2d198065ae3986547926cd2
+         162f40a29f0c3c8745c0f50fba3852e566d44575c29d39a03f0cda721984b6f440591f355e12d439ff150aab7613499d
+         bd49adabc8676eef023b15b65bfc5ca06948109f23f350db82123535eb8a7433bdabcb909271a6ecbcb58b936a88cd4e
+         8f2e6ff5800175f113253d8fa9ca8885c2f552e657dc603f252e1a8e308f76f0be79e2fb8f5d5fbbe2e30ecadd220723
+         c8c0aea8078cdfcb3868263ff8f0940054da48781893a7e49ad5aff4af300cd804a6b6279ab3ff3afb64491c85194aab
+         760d58a606654f9f4400e8b38591356fbf6425aca26dc85244259ff2b19c41b9f96f3ca9ec1dde434da7d2d392b905dd
+         f3d1f9af93d1af5950bd493f5aa731b4056df31bd267b6b90a079831aaf579be0a39013137aac6d404f518cfd4684064
+         7e78bfe706ca4cf5e9c5453e9f7cfd2b8b4c8d169a44e55c88d4a9a7f9474241e221af44860018ab0856972e194cd934";
+    const SERVER_INITIAL_9001: &str = "cf000000010008f067a5502a4262b5004075c0d95a482cd0991cd25b0aac406a5816b6394100f37a1c69797554780bb3
+         8cc5a99f5ede4cf73c3ec2493a1839b3dbcba3f6ea46c5b7684df3548e7ddeb9c3bf9c73cc3f3bded74b562bfb19fb84
+         022f8ef4cdd93795d77d06edbb7aaf2f58891850abbdca3d20398c276456cbc42158407dd074ee";
+    const RETRY_9001: &str =
+        "ff000000010008f067a5502a4262b5746f6b656e04a265ba2eff4d829058fb3f0f2496ba";
+    const CLIENT_INITIAL_9369: &str = "d76b3343cf088394c8f03e5157080000449ea0c95e82ffe67b6abcdb4298b485dd04de806071bf03dceebfa162e75d6c
+         96058bdbfb127cdfcbf903388e99ad049f9a3dd4425ae4d0992cfff18ecf0fdb5a842d09747052f17ac2053d21f57c5d
+         250f2c4f0e0202b70785b7946e992e58a59ac52dea6774d4f03b55545243cf1a12834e3f249a78d395e0d18f4d766004
+         f1a2674802a747eaa901c3f10cda5500cb9122faa9f1df66c392079a1b40f0de1c6054196a11cbea40afb6ef5253cd68
+         18f6625efce3b6def6ba7e4b37a40f7732e093daa7d52190935b8da58976ff3312ae50b187c1433c0f028edcc4c2838b
+         6a9bfc226ca4b4530e7a4ccee1bfa2a3d396ae5a3fb512384b2fdd851f784a65e03f2c4fbe11a53c7777c023462239dd
+         6f7521a3f6c7d5dd3ec9b3f233773d4b46d23cc375eb198c63301c21801f6520bcfb7966fc49b393f0061d974a2706df
+         8c4a9449f11d7f3d2dcbb90c6b877045636e7c0c0fe4eb0f697545460c806910d2c355f1d253bc9d2452aaa549e27a1f
+         ac7cf4ed77f322e8fa894b6a83810a34b361901751a6f5eb65a0326e07de7c1216ccce2d0193f958bb3850a833f7ae43
+         2b65bc5a53975c155aa4bcb4f7b2c4e54df16efaf6ddea94e2c50b4cd1dfe06017e0e9d02900cffe1935e0491d77ffb4
+         fdf85290fdd893d577b1131a610ef6a5c32b2ee0293617a37cbb08b847741c3b8017c25ca9052ca1079d8b78aebd4787
+         6d330a30f6a8c6d61dd1ab5589329de714d19d61370f8149748c72f132f0fc99f34d766c6938597040d8f9e2bb522ff9
+         9c63a344d6a2ae8aa8e51b7b90a4a806105fcbca31506c446151adfeceb51b91abfe43960977c87471cf9ad4074d30e1
+         0d6a7f03c63bd5d4317f68ff325ba3bd80bf4dc8b52a0ba031758022eb025cdd770b44d6d6cf0670f4e990b22347a7db
+         848265e3e5eb72dfe8299ad7481a408322cac55786e52f633b2fb6b614eaed18d703dd84045a274ae8bfa73379661388
+         d6991fe39b0d93debb41700b41f90a15c4d526250235ddcd6776fc77bc97e7a417ebcb31600d01e57f32162a8560cacc
+         7e27a096d37a1a86952ec71bd89a3e9a30a2a26162984d7740f81193e8238e61f6b5b984d4d3dfa033c1bb7e4f0037fe
+         bf406d91c0dccf32acf423cfa1e7071010d3f270121b493ce85054ef58bada42310138fe081adb04e2bd901f2f13458b
+         3d6758158197107c14ebb193230cd1157380aa79cae1374a7c1e5bbcb80ee23e06ebfde206bfb0fcbc0edc4ebec30966
+         1bdd908d532eb0c6adc38b7ca7331dce8dfce39ab71e7c32d318d136b6100671a1ae6a6600e3899f31f0eed19e3417d1
+         34b90c9058f8632c798d4490da4987307cba922d61c39805d072b589bd52fdf1e86215c2d54e6670e07383a27bbffb5a
+         ddf47d66aa85a0c6f9f32e59d85a44dd5d3b22dc2be80919b490437ae4f36a0ae55edf1d0b5cb4e9a3ecabee93dfc6e3
+         8d209d0fa6536d27a5d6fbb17641cde27525d61093f1b28072d111b2b4ae5f89d5974ee12e5cf7d5da4d6a31123041f3
+         3e61407e76cffcdcfd7e19ba58cf4b536f4c4938ae79324dc402894b44faf8afbab35282ab659d13c93f70412e85cb19
+         9a37ddec600545473cfb5a05e08d0b209973b2172b4d21fb69745a262ccde96ba18b2faa745b6fe189cf772a9f84cbfc";
+    const SERVER_INITIAL_9369: &str = "dc6b3343cf0008f067a5502a4262b5004075d92faaf16f05d8a4398c47089698baeea26b91eb761d9b89237bbf872630
+         17915358230035f7fd3945d88965cf17f9af6e16886c61bfc703106fbaf3cb4cfa52382dd16a393e42757507698075b2
+         c984c707f0a0812d8cd5a6881eaf21ceda98f4bd23f6fe1a3e2c43edd9ce7ca84bed8521e2e140";
+    const RETRY_9369: &str =
+        "cf6b3343cf0008f067a5502a4262b5746f6b656ec8646ce8bfe33952d955543665dcc7b6";
+
+    /// The sample packets of RFC 9001 A.2 to A.4 and RFC 9369 A.2 to A.4, versions 1 and 2: the client's
+    /// Initial and the server's sealed byte for byte from the RFCs' frames, what the client's Initial
+    /// asks read from it, the server's Initial and Retry each carrying it, and the client's hello naming
+    /// `example.com`.
+    #[test]
+    fn the_rfcs_sample_packets_are_sealed_read_and_told() {
+        let original = hex(CID);
+        let source = hex("f067a5502a4262b5");
+        for (version, client, server, retry) in [
+            (1, CLIENT_INITIAL_9001, SERVER_INITIAL_9001, RETRY_9001),
+            (
+                0x6b33_43cf,
+                CLIENT_INITIAL_9369,
+                SERVER_INITIAL_9369,
+                RETRY_9369,
+            ),
+        ] {
+            let (client, server, retry) = (hex(client), hex(server), hex(retry));
+            assert_eq!(
+                client_initial(
+                    version,
+                    (&original, &[]),
+                    (2, &hex(CLIENT_HELLO_FRAME)),
+                    1200
+                ),
+                Some(client.clone()),
+                "A.2 of version {version:#x}"
+            );
+            assert_eq!(
+                server_initial(version, &original, (&[], &source), (1, &hex(SERVER_FRAMES))),
+                Some(server.clone()),
+                "A.3 of version {version:#x}"
+            );
+            let asked = asked(&client);
+            assert_eq!(asked.len(), 1);
+            assert_eq!(asked[0].destination.get(), original.as_slice());
+            for answer in [&server, &retry] {
+                assert!(
+                    Answer::read(answer).is_some_and(|read| read.carries(&asked[0])),
+                    "A.3 or A.4 of version {version:#x}"
+                );
+            }
+            let mut initial = Initial::new();
+            assert_eq!(initial.push(&client), found("example.com", false));
+            assert!(initial.is_quic());
+        }
+    }
+
+    /// The hello's reader removes a packet's protection only when its tag checks: a packet whose last
+    /// byte changed names no flow and is no QUIC (unit 9b, fix round 1).
+    #[test]
+    fn the_hello_is_read_only_from_a_packet_whose_tag_checks() {
+        let hello = tls::tests::handshake("watch.test", false);
+        let packet = initial_packet(1, &hex(CID), 0, &crypto(0, &hello), 1200);
+        let mut damaged = packet.clone();
+        let last = damaged.len() - 1;
+        damaged[last] ^= 1;
+        let mut initial = Initial::new();
+        assert_eq!(initial.push(&damaged), ServerName::None);
+        assert!(!initial.is_quic());
+        assert_eq!(Initial::new().push(&packet), found("watch.test", false));
     }
 
     /// RFC 9369 A.3's server Initial, sealed byte for byte from its frames, and opened with its tag
