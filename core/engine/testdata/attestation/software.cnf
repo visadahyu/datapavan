@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: Apache-2.0
+# A software attestation of an unlocked, unverified phone, shaped as AOSP's software keystore writes
+# it: every entry in the software-enforced list, none in the hardware-enforced one. Written from the
+# published schema (https://source.android.com/docs/security/features/keystore/attestation#schema)
+# for OpenSSL's ASN1_generate_nconf; generate.sh turns it into software.der.
+asn1 = OCTWRAP,SEQUENCE:key_description
+
+[key_description]
+attestationVersion = INTEGER:300
+attestationSecurityLevel = ENUMERATED:0
+keyMintVersion = INTEGER:300
+keyMintSecurityLevel = ENUMERATED:0
+attestationChallenge = FORMAT:ASCII,OCTETSTRING:challenge
+uniqueId = FORMAT:ASCII,OCTETSTRING:
+softwareEnforced = SEQUENCE:software_enforced
+hardwareEnforced = SEQUENCE:hardware_enforced
+
+[software_enforced]
+purpose = EXPLICIT:1,SETWRAP,INTEGER:2
+algorithm = EXPLICIT:2,INTEGER:3
+keySize = EXPLICIT:3,INTEGER:256
+digest = EXPLICIT:5,SETWRAP,INTEGER:4
+ecCurve = EXPLICIT:10,INTEGER:1
+noAuthRequired = EXPLICIT:503,NULL
+creationDateTime = EXPLICIT:701,INTEGER:1752000000000
+origin = EXPLICIT:702,INTEGER:0
+rootOfTrust = EXPLICIT:704,SEQUENCE:root_of_trust
+osVersion = EXPLICIT:705,INTEGER:160000
+osPatchLevel = EXPLICIT:706,INTEGER:202608
+attestationApplicationId = EXPLICIT:709,FORMAT:ASCII,OCTETSTRING:application id
+
+[hardware_enforced]
+
+[root_of_trust]
+verifiedBootKey = FORMAT:ASCII,OCTETSTRING:
+deviceLocked = BOOLEAN:FALSE
+verifiedBootState = ENUMERATED:2
+verifiedBootHash = FORMAT:ASCII,OCTETSTRING:

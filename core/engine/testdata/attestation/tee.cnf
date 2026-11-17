@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: Apache-2.0
+# A trusted environment's attestation of a locked, verified phone, shaped as a KeyMint 3 device writes
+# it, written from the published schema
+# (https://source.android.com/docs/security/features/keystore/attestation#schema) for OpenSSL's
+# ASN1_generate_nconf. generate.sh turns it into tee.der.
+asn1 = OCTWRAP,SEQUENCE:key_description
+
+[key_description]
+attestationVersion = INTEGER:300
+attestationSecurityLevel = ENUMERATED:1
+keyMintVersion = INTEGER:300
+keyMintSecurityLevel = ENUMERATED:1
+attestationChallenge = FORMAT:ASCII,OCTETSTRING:challenge
+uniqueId = FORMAT:ASCII,OCTETSTRING:
+softwareEnforced = SEQUENCE:software_enforced
+hardwareEnforced = SEQUENCE:hardware_enforced
+
+[software_enforced]
+creationDateTime = EXPLICIT:701,INTEGER:1752000000000
+attestationApplicationId = EXPLICIT:709,FORMAT:ASCII,OCTETSTRING:application id
+
+[hardware_enforced]
+purpose = EXPLICIT:1,SETWRAP,INTEGER:2
+algorithm = EXPLICIT:2,INTEGER:3
+keySize = EXPLICIT:3,INTEGER:256
+digest = EXPLICIT:5,SETWRAP,INTEGER:4
+ecCurve = EXPLICIT:10,INTEGER:1
+noAuthRequired = EXPLICIT:503,NULL
+origin = EXPLICIT:702,INTEGER:0
+rootOfTrust = EXPLICIT:704,SEQUENCE:root_of_trust
+osVersion = EXPLICIT:705,INTEGER:150000
+osPatchLevel = EXPLICIT:706,INTEGER:202507
+vendorPatchLevel = EXPLICIT:718,INTEGER:20250705
+bootPatchLevel = EXPLICIT:719,INTEGER:20250705
+
+[root_of_trust]
+verifiedBootKey = FORMAT:HEX,OCTETSTRING:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+deviceLocked = BOOLEAN:TRUE
+verifiedBootState = ENUMERATED:0
+verifiedBootHash = FORMAT:HEX,OCTETSTRING:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb

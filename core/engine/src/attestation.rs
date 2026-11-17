@@ -773,6 +773,36 @@ mod tests {
         );
     }
 
+    #[test]
+    fn reads_extensions_that_openssl_encoded() {
+        // OpenSSL encoded these from configurations written from the published schema
+        // (testdata/attestation/generate.sh), with no code shared with these tests' encoder.
+        let tee = include_bytes!("../testdata/attestation/tee.der");
+        assert_eq!(
+            parse_key_description(tee),
+            Ok(description(
+                SecurityLevel::TrustedEnvironment,
+                Some(LOCKED_VERIFIED),
+                Some(202_507)
+            ))
+        );
+        // The tests' encoder writes the same bytes, so the extensions it builds are DER too.
+        assert_eq!(encode(&tee_device()), tee);
+        let software = include_bytes!("../testdata/attestation/software.der");
+        assert_eq!(
+            parse_key_description(software),
+            Ok(KeyDescription {
+                attestation_version: 300,
+                security_level: SecurityLevel::Software,
+                root_of_trust: Some(RootOfTrust {
+                    device_locked: false,
+                    verified_boot: VerifiedBootState::Unverified,
+                }),
+                os_patch_level: Some(202_608),
+            })
+        );
+    }
+
     // Which list a value comes from.
 
     #[test]
