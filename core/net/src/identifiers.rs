@@ -125,6 +125,18 @@ pub fn dns_fingerprint(port: u16, id: u16, question: &str) -> u64 {
     state.finish()
 }
 
+/// The fingerprint of a QUIC source connection ID the app sent to `port`, alone, of 4 bytes or more
+/// ([`quic::Ids::telling_source`]): every packet of the server's carries it as its destination, in the
+/// clear, so that an answer to a peer settled without keys still tells it is that peer's (ADR 0044, unit
+/// 9b, fix round 6).
+#[must_use]
+pub fn source_fingerprint(port: u16, source: &[u8]) -> u64 {
+    let mut state = KEYS.build_hasher();
+    port.hash(&mut state);
+    (4u8, source).hash(&mut state);
+    state.finish()
+}
+
 /// What `payload`, an app's datagram from its port `from` to `to`, asks an answer to carry: nothing when
 /// it is of no protocol read here, or does not read strictly as one. A QUIC Initial is opened and its tag
 /// checked ([`quic::asked`]), in a datagram of [`quic::LARGEST_DATAGRAM`] bytes at most.
@@ -293,6 +305,17 @@ impl<'a> Reading<'a> {
             return Some(fingerprint(port, &Asked::Ntp(origin)));
         }
         None
+    }
+
+    /// The fingerprints [`source_fingerprint`] would give the destination ID of its first QUIC packet, as
+    /// an answer on `port`, of whatever length a source ID that tells apart may have
+    /// ([`quic::addressed_to`]): at most 17, nothing opened.
+    #[must_use]
+    pub fn addressed(&self, port: u16) -> Vec<u64> {
+        quic::addressed_to(self.answer)
+            .into_iter()
+            .map(|id| source_fingerprint(port, id))
+            .collect()
     }
 
     /// Its method and transaction ID, when it is a STUN success or error response.

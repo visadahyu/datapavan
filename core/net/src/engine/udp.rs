@@ -604,6 +604,14 @@ impl Peer {
             for asked in read {
                 if let Some((told, ip)) = told.as_mut() {
                     self.tell(identifiers::fingerprint(port, &asked), (told, *ip));
+                    // A QUIC source ID that tells apart, alone: every packet of the server's carries
+                    // it, so that the contest spares this peer's answers once it keeps no keys (fix
+                    // round 6, review K's m2).
+                    if let identifiers::Asked::Quic(ids) = &asked
+                        && let Some(source) = ids.telling_source()
+                    {
+                        self.tell(identifiers::source_fingerprint(port, source), (told, *ip));
+                    }
                 }
                 if candidate {
                     self.keep(asked);
@@ -1591,7 +1599,9 @@ impl<'a> Scope<'a> {
         // address too, as for an address a stand-in was bound to. So also where the name's own peer
         // holds it, which is a stand-in too (fix round 5, review I's I2: it took the answer at once).
         if let Some(holder) = holder {
-            if self.contested(port, Some(holder), (now, shared.limits.udp_contest)) {
+            if self.contested(port, Some(holder), (now, shared.limits.udp_contest))
+                && !self.addressed_to(holder, read, port)
+            {
                 return UnderName::Done(LetIn::Unmatched);
             }
             return UnderName::Done(self.label_taken(holder, &key, answer, now));
@@ -1660,6 +1670,21 @@ impl<'a> Scope<'a> {
                     .is_some_and(|peer| peer.via == self.via)
                     .then_some(shown)
             })
+    }
+
+    /// Whether `read`, an answer on `port`, is addressed to a QUIC source ID of the peer the app knows as
+    /// `shown`, of 4 bytes or more ([`identifiers::Reading::addressed`]): its own, which a stand-in without
+    /// identifiers cannot have asked (fix round 6, review K's m2: once settled, a stand-in keeps no keys,
+    /// and the contest cut its QUIC answers). A client whose source ID is shorter, Chromium's and
+    /// Cronet's empty one, is not told so.
+    fn addressed_to(&self, shown: SocketAddr, read: &identifiers::Reading, port: u16) -> bool {
+        self.peers.get(&shown).is_some_and(|peer| {
+            !peer.told.is_empty()
+                && read
+                    .addressed(port)
+                    .iter()
+                    .any(|fingerprint| peer.told.contains(fingerprint))
+        })
     }
 
     /// Whether the app sent the peer it knows as `shown` the identifier of `fingerprint`, among the last
@@ -1736,6 +1761,7 @@ impl<'a> Scope<'a> {
             && !read
                 .answers(from.port())
                 .is_some_and(|fingerprint| self.was_sent(owner, fingerprint))
+            && !self.addressed_to(owner, read, from.port())
         {
             return LetIn::Unmatched;
         }
@@ -8016,6 +8042,65 @@ mod tests {
             .main()
             .relayed_answer(&shared, APP, (&by_a, &ntp(4, 24, stamp)), now);
         assert!(matches!(got, LetIn::Unmatched), "five were sent it");
+        Ok(())
+    }
+
+    /// The contest spares a holder's QUIC answers, which carry its client's source ID as their
+    /// destination, in the clear, once it keeps no keys (fix round 6, review K's m2): a stand-in settled
+    /// under its own label, as review K's probe has it, and one bound to its server's address; a long
+    /// header's answer and a short header's alike. A client whose source ID is empty, as Chromium's and
+    /// Cronet's are, is not told apart so: its answers are cut while the contest lasts, an accepted limit.
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_contest_spares_a_holders_quic_answers_by_its_source_id() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let a = SocketAddr::from(([198, 18, 0, 1], 443));
+        let c = SocketAddr::from(([198, 18, 0, 3], 443));
+        let by_a = Target::Name("a.test".into(), 443);
+        let server = Target::Address(SocketAddr::from(([192, 0, 2, 9], 443)));
+        let dcid = [0xa0; 8];
+        for (source, scid, spared) in [
+            (&by_a, &[0xa5u8; 8][..], true),
+            (&server, &[0xa5; 8][..], true),
+            (&by_a, &[][..], false),
+        ] {
+            let mut mapping = mapping(now).await?;
+            let initial = crate::quic::client_initial(1, (&dcid, scid), (0, &[0x01]), 1200)
+                .ok_or(io::ErrorKind::InvalidData)?;
+            mapping.peer(&shared, (APP, a), now, (false, tooled("a.test", 443)));
+            mapping.sent(a, &initial);
+            let answer = |pn| {
+                crate::quic::server_initial(1, &dcid, (scid, &[0x5a; 8]), (pn, &[0x02, 0, 0, 0, 0]))
+                    .ok_or(io::ErrorKind::InvalidData)
+            };
+            let got = mapping
+                .main()
+                .relayed_answer(&shared, APP, (source, &answer(0)?), now);
+            assert!(matches!(got, LetIn::Peer(shown, ..) if shown == a));
+            assert_eq!(mapping.peers[&a].standing, Standing::Settled);
+            mapping.peer(&shared, (APP, c), now, (false, tooled("c.test", 443)));
+            mapping.sent(c, b"no identifier");
+            // A short header's 1-RTT packet, its destination ID the client's source ID.
+            let mut short = vec![0x41];
+            short.extend_from_slice(scid);
+            short.extend_from_slice(&[0x77; 40]);
+            for answer in [answer(1)?, short] {
+                let got = mapping
+                    .main()
+                    .relayed_answer(&shared, APP, (source, &answer), now);
+                assert_eq!(
+                    matches!(got, LetIn::Peer(shown, ..) if shown == a),
+                    spared,
+                    "{source:?}, source ID of {} bytes, first byte {:#x}",
+                    scid.len(),
+                    answer[0]
+                );
+            }
+            let got = mapping
+                .main()
+                .relayed_answer(&shared, APP, (source, b"no identifier"), now);
+            assert!(matches!(got, LetIn::Unmatched), "the contest itself holds");
+        }
         Ok(())
     }
 }

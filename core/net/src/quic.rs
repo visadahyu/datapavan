@@ -503,6 +503,14 @@ impl std::fmt::Debug for Ids {
 }
 
 impl Ids {
+    /// Its source connection ID, when that tells a connection's packets apart by itself, of
+    /// [`TOLD_APART`] bytes or more: every packet of the server's carries it as its destination, in the
+    /// clear (RFC 9000 17.2, 17.3), a short header's too (ADR 0044, unit 9b, fix round 6).
+    #[must_use]
+    pub fn telling_source(&self) -> Option<&[u8]> {
+        self.source.tells().then(|| self.source.get())
+    }
+
     fn new(version: Version, destination: Cid, source: Cid) -> Self {
         Self {
             version,
@@ -530,6 +538,28 @@ impl Ids {
             .filter(|kept| kept.get().is_some())
             .count()
     }
+}
+
+/// What the destination connection ID of the first packet of `answer`, a server's datagram, may be, of
+/// [`TOLD_APART`] bytes or more, where a client's source ID that tells its packets apart would stand
+/// (ADR 0044, unit 9b, fix round 6): a long header's, which gives its length; for a short header, which
+/// does not, each length from [`TOLD_APART`] to 20 bytes it may have. Nothing is opened.
+#[must_use]
+pub fn addressed_to(answer: &[u8]) -> Vec<&[u8]> {
+    let Some(&first) = answer.first() else {
+        return Vec::new();
+    };
+    if first & 0x80 != 0 {
+        let length = answer.get(5).map_or(0, |&length| usize::from(length));
+        return answer
+            .get(6..6 + length)
+            .filter(|id| (TOLD_APART..=MAX_CID).contains(&id.len()))
+            .into_iter()
+            .collect();
+    }
+    (TOLD_APART..=MAX_CID)
+        .filter_map(|length| answer.get(1..1 + length))
+        .collect()
 }
 
 /// The connection IDs of each long-header packet in `datagram`, an app's, when the datagram holds a
