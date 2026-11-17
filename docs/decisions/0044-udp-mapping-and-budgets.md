@@ -1517,7 +1517,9 @@ an ADR (D25).
     resolved to: a stand-in alone on its own association is that first destination, and its answers then come by
     name, which matches them as before.
 - **Counters, appended:** `udp_identified`, the 48th: answers a stand-in took by its identifier where the address
-  alone could not tell, several stand-ins waiting on the port, or the address being another peer's; `udp_unidentified`,
+  alone could not tell, several stand-ins waiting on the port, or the address being another peer's (since fix round
+  4, also an answer under a relay's name that a peer other than the label's holder took by an identifier the app
+  sent it, a settled peer among them); `udp_unidentified`,
   the 49th: answers that only stand-ins with identifiers could have taken, and that carried none of theirs, a
   stranger's on port 53 among them, which unit 9 counted as filtered, or as unmatched from another port of a bound
   address; `udp_own_relays`, the 50th: associations of a stand-in's own opened; `udp_own_refused`, the 51st: those
@@ -1528,7 +1530,9 @@ an ADR (D25).
   that leaves by another association, and an answer from another port of an address the app knows already by that
   very address and port; since fix rounds 3 and 4, an answer under a name that names in the clear what several peers
   were sent, the label's holder not among them, and one under a label held by the stand-in bound beside it while a
-  stand-in without identifiers contests the port.
+  stand-in without identifiers contests the port; since fix round 5, the same under a label the name's own stand-in
+  holds, and an answer from an address the app never saw that names in the clear what a peer was sent, where a lone
+  stand-in without identifiers waits on the port.
 - **Not changed:** the direct path; a relay that gives back the name, matched by it (since fix round 1, unless the
   answer carries another stand-in's identifier); chained TCP; lookups to the tunnel's DNS address; `whose.rs`, the
   one rule of whose a datagram is; the budget's other places.
@@ -1723,7 +1727,8 @@ gets the best-in-class fix, or an accepted limit with its reason here.
   hello's reader computes too in a flow's first datagrams (fix round 3 found the worst case, a datagram of 16
   Initials of 4,000 bytes, at 200 us, and bounds it: below); and at most 64 fingerprints for each peer, 512 bytes, with
   one entry each in its association's count, 16 bytes and a control byte in a table whose buckets are at most 16/7
-  of its entries once it holds 8 or more: at most 3,008 bytes for a peer the app sent identifiers to, nothing for
+  of its entries once it holds 8 or more: at most 3,008 bytes for a peer the app sent identifiers to (fix round 5:
+  32 bytes an entry, with the exclusive-or of its peers' addresses, so 5,312), nothing for
   one it sent none, nothing on the direct path, where no stand-in waits. The count's table keeps the size it grew to
   until its association ends, as Rust's tables do, so an association holds at most what its peers held at once.
   **Accepted limit:** an identifier the app sent a peer more than 64
@@ -1839,7 +1844,7 @@ gets the best-in-class fix, or an accepted limit with its reason here.
   kernel picked at 127.0.0.2 as free at 127.0.0.1 too, which another socket may hold (8 runs of 256, 16 at once).
   It now takes a port free at both, and none of 256 fail; `docs/ci-flakes.md`, 2026-11-17. And the engine
   commit's message gave the fingerprints' cost as 2,560 bytes; a table's control bytes and its growth make it
-  3,008, as above and in `TOLD`'s comment.
+  3,008, as above and in `TOLD`'s comment (5,312 since fix round 5).
 - **Not done, stated:** the emulator step has not run, here as before; a peer's fingerprints cover the last 64
   identifiers the app sent it (above); the `counters-since` line has no test of its own but the emulator step that
   reads it; the name's label taken over is tested in the engine, not through the scripted relay; and nothing here
@@ -1896,11 +1901,12 @@ every finding gets the best-in-class fix, or an accepted limit with its reason h
   bytes, now bounded at 1,500 bytes, 0.81 us). On a phone's cores several times more. **The peers' bound,** which
   "pays for its own" did not state: peers are not capped, as before this unit. Each destination the app sent to within
   `udp_idle` is one, 296 bytes in place on x86-64 with its flow's record in the log, and a QUIC hello's reader of 960
-  bytes for its first datagrams; the fingerprints add at most 47 bytes for each identifier the app sends, 3,008 for
-  one peer. A cap on peers would refuse a peer-to-peer app's destinations, a DHT node talking to thousands from one
-  socket, which no NAT's mapping refuses; the budget caps sockets, and the cost of peers stays the app's own sending's
-  within `udp_idle`. **Accepted limit:** that the engine's memory grows with the destinations an app reaches, as it
-  did before this unit, at most by these bytes for the identifiers it sends them.
+  bytes for its first datagrams (1,904 after fix round 4; since fix round 5, 80, and 888 more for each QUIC version a
+  client's Initials use); the fingerprints add at most 47 bytes for each identifier the app sends, 3,008 for one peer
+  (83 and 5,312 since fix round 5). A cap on peers would refuse a peer-to-peer app's destinations, a DHT node talking
+  to thousands from one socket, which no NAT's mapping refuses; the budget caps sockets, and the cost of peers stays
+  the app's own sending's within `udp_idle`. **Accepted limit:** that the engine's memory grows with the destinations
+  an app reaches, as it did before this unit, at most by these bytes for the identifiers it sends them.
 - **Making room never ends the mapping it is made for** (review E, minor 5): `own_wanted`'s `room` could end the very
   mapping it was making room in, as an answered lookup (a resolver that answered, the app then asking the next name);
   it is no longer a candidate while its association of a stand-in's own is placed (fix round 4: nor is it one again
@@ -1980,42 +1986,48 @@ best-in-class fix, or an accepted limit with its reason here.
     the first bound beside an address holds that address once its holder ends (G1: the one beside took what came under
     the name only while no peer had the name at all, so that while the name lived on another port, its data without
     identifiers came in as a new flow of the name's stand-in on that port, which the app never opened);
-  - an answer carrying the identifier of a stand-in that waits on the port, or is bound beside under the label, is
-    that one's before the holder's, as beside an address, a waiting one being bound beside under the label by it; what
-    carries none is the holder's, dropped for `udp_contest` where the holder is the one beside and a stand-in without
-    identifiers waits on the port, as under an address a stand-in was bound to;
+  - an answer carrying the identifier of a stand-in that waits on the port, or is bound beside on it (by an address
+    or under any name, as the code has it and fix round 5 states: "under the label" said less), is that one's before
+    the holder's, as beside an address, a waiting one being bound beside under the label by it; what carries none is
+    the holder's, dropped for `udp_contest` where the holder is the one beside and a stand-in without identifiers waits
+    on the port, as under an address a stand-in was bound to (fix round 5: also where the holder is the name's own
+    peer, a stand-in too, review I's I2; and never what carries the holder's own identifier, I3);
   - with no holder, another port of a name the app sent to comes in as that name's stand-in's, as another port of a
     known address does; and a name no peer has is a source the app no longer sees, or never asked: a stand-in with
     identifiers is bound beside under it by an answer that carries one (G5: it was filtered before its identifier was
     read, so that `b.test` on a coturn host whose `a.test` had ended never bound).
 
-  The one difference, and why: the address behind a label is unknown, so any peer of the association may be at it. An
-  answer that names in the clear what the app sent (a STUN, DNS or NTP identifier, `Reading::answers`) is therefore
-  the holder's if the holder was sent it, else the one peer's that was (G4: fix round 3 dropped it, though that peer
-  alone asked it), and no one's where several were; and a stand-in bound beside under a label stays beside, keeping
-  its identifiers, since the name's own peer may come back, as the app asks the first name again. **Accepted limits,**
-  each the address's own: what carries no identifier goes to the holder; a QUIC answer, which names what it answers
-  only under keys, goes by its keys among the stand-ins that wait or are bound beside, else by the label; and a name
-  no peer has binds no stand-in without identifiers, where an address the app never saw binds a lone one by its first
-  answer: a name nobody asked for is dropped, as unit 9's second review decided (M21), and a name whose peers ended
-  cannot be told from one, short of remembering ended names. And a flow of the name that came in on a port before a
-  stand-in was bound beside under it there holds the label, as a peer holds its own address (review G's open point on
-  its sketch): the app has that flow, and an answer without identifiers is its as much as the other's.
+  The one difference, and why (fix round 5: not the only one; each is listed there): the address behind a label is
+  unknown, so any peer of the association may be at it. An answer that names in the clear what the app sent (a STUN,
+  DNS or NTP identifier, `Reading::answers`) is therefore the holder's if the holder was sent it, else the one peer's
+  that was (G4: fix round 3 dropped it, though that peer alone asked it), and no one's where several were; and a
+  stand-in bound beside under a label stays beside, keeping its identifiers, since the name's own peer may come back,
+  as the app asks the first name again. **Accepted limits,** each the address's own: what carries no identifier goes
+  to the holder; a QUIC answer, which names what it answers only under keys, goes by its keys among the stand-ins that
+  wait or are bound beside, else by the label; and a name no peer has binds no stand-in without identifiers, where an
+  address the app never saw binds a lone one by its first answer: a name nobody asked for is dropped, as unit 9's
+  second review decided (M21), and a name whose peers ended cannot be told from one, short of remembering ended names.
+  And a flow of the name that came in on a port before a stand-in was bound beside under it there holds the label, as
+  a peer holds its own address (review G's open point on its sketch): the app has that flow, and an answer without
+  identifiers is its as much as the other's.
 - **An answered lookup while its association of a stand-in's own opens** (review G, G3): fix round 3 took the mapping
   out of the ranks before making room, but an answer while the association opened put it back, and the next room ended
   it, with what was being opened. A mapping with an association of a stand-in's own, open or opening, is no answered
   lookup.
 - **What a STUN message costs to read** (review G, G6): its attributes were walked to its end, up to 64 KB, on every
   datagram through the tool to a settled peer since fix round 3, 36 us for 65,500 bytes of empty attributes. STUN over
-  UDP keeps within the path's MTU (RFC 8489 6.2.1): a message larger than 1,500 bytes is read no further, 0.81 us at
-  most. DNS's and NTP's reads are bounded already: a question's name and one OPT record, a response's question alone,
-  fixed fields.
+  UDP SHOULD keep within the path's MTU (RFC 8489 6.1, as fix round 5 corrects it, where this said 6.2.1 and "keeps"):
+  a message larger than 1,500 bytes was read no further, 0.81 us at most (fix round 5: which refused a response padded
+  to the server's MTU, RFC 5780's exception to the rule; its attributes are walked over 1,500 bytes now, see there).
+  DNS's and NTP's reads are bounded already: a question's name and one OPT record, a response's question alone, fixed
+  fields.
 - **An own association with nothing to send** (review G, G7): one that opened when nothing was left to send by it was
   dropped, and a mapping whose own association had closed meanwhile lingered with nothing open, holding its budget
   place, until `udp_idle`. It ends at once now, as fix round 3 has it for one that fails to open.
 - **The hello's reader, one key set for each version** (review H, minor 1): it kept one for both, so that 16 tiny
   Initials alternating versions to one destination ID derived keys for every packet, 23.6 us where fix round 3 gave
-  10.4 us at most; now 7.4 us, as `asked` keeps them (`named` on the same, 0.41 us).
+  10.4 us at most; now 7.4 us, as `asked` keeps them (`named` on the same, 0.41 us). (Fix round 5: kept in place,
+  the two sets made every peer's reader 1,904 bytes, QUIC or not; see there.)
 - **QUIC's size bound** (review H, doc point 13): `LARGEST_DATAGRAM` is the tunnel's largest MTU, Watch's
   `TunnelMtu.MOST`, which a test now holds it to. An app's larger datagram came in IP fragments, as a QUIC stack that
   cannot set "don't fragment", configured above the MTU, sends them and the engine puts together: **accepted limit**,
@@ -2053,3 +2065,119 @@ best-in-class fix, or an accepted limit with its reason here.
   (`identifiers` 3,228,988 runs, `quic` 5,134,324, `quic_answers` 604,939); `identifiers` alone, 120 s with `named`
   and `answers`, 6,714,676 runs, nothing.
 - **Not done, stated:** the emulator step has not run here; the accepted limits above.
+
+**Unit 9b, fix round 5 (2026-11-17).** Two fresh reviews of fix round 4, I of the engine and J of the tests, the
+parsers and the docs, after the Watch shard passed on Android 15 with `0a6a123`, the STUN step's 48th counter rising
+from 0 to 1 at its first sending. Neither found a major fault: the label read as a source held, case by case, against
+the rules of an address. The maintainer's rule again: every finding gets the best-in-class fix, or an accepted limit
+with its reason here.
+- **The holder's own answer among several sent one identifier** (review I, I1). Under a label, an answer that names in
+  the clear what the app sent is the holder's if the holder was sent it; fix round 4 found the peers sent it by a walk
+  that stopped at two, in the map's order, and asked whether the holder was among them, so that with three or more, as
+  a stub resolver retrying one query at two more servers makes, the holder's own answer was dropped at random (5 of 20
+  in the probe). The holder's own fingerprints are asked first now.
+- **What an answer under a label costs** (I4): the walk went through every peer of the mapping and each one's
+  fingerprints under the table's lock, 152 us for each answer with 4,000 peers on the port. Each association's
+  fingerprints keep now, beside how many peers were sent each, the exclusive-or of those peers' addresses: where one
+  peer was, that is its address, read without a walk; 159 ns for the same answer (release, x86-64). An entry grows
+  from 16 to 32 bytes, so that an identifier the app sends a peer through the tool costs at most 83 bytes, 5,312 for
+  one peer (corrected above). Kept so rather than as a list of peers for each fingerprint: the same answer, exact, in
+  a fixed 32 bytes, where a list costs an allocation for each identifier. The index is per association, as the counts
+  were: a peer of another association sent the same identifier, as a stand-in given one of its own for that very
+  identifier is, is in another's (review J's J14 asked for that case's test; it is in).
+- **The contest under a label its own stand-in holds** (I2): an address a stand-in holds has its answers without
+  identifiers cut for `udp_contest` while a stand-in without identifiers, asked meanwhile, waits on the port, as the
+  tool may have resolved both names there. A label held by the name's own stand-in was never contested, so that under
+  Xray's `freedom` a second name resolved to the same address had its answers given to the first at once. It is
+  contested as the stand-in beside it is: the holder of a label is a stand-in, whoever it is.
+- **The contest spares what the holder was sent** (I3): it cut answers that carry the holder's own identifier, which a
+  stand-in without identifiers cannot have asked: by an address, the holder's STUN response, a TURN refresh's, for 5
+  s; under a label, the beside holder's QUIC answer opened by its keys. Both are the holder's at once. **Accepted
+  limit:** by an address, a QUIC answer to the stand-in bound there is still cut while the contest lasts: once bound,
+  a stand-in keeps no keys (`ASKED`'s memory), and its fingerprints, of the IDs its client's Initials carry, tell
+  nothing of a server's answer but under keys; the contest lasts 5 s from the other stand-in's first datagram, within
+  which QUIC sends again.
+- **Another port of a handed address** (I7): once an address passed to the stand-in bound beside its holder, another
+  port of it, a STUN server's alternate port (RFC 5780), came in as a flow of the ended holder's stand-in, logged
+  under its name; so did one of an address two names were bound to on two ports, once the first ended. An address
+  keeps now every address the app knows its peers by, the stand-in beside its holder among them: it is shown as itself
+  while the app knows a peer by it, else as the oldest of its live peers' stand-ins.
+- **A clear answer to another binds no stand-in without identifiers** (I5): from an address the app never saw, an
+  answer that names in the clear what the app sent a peer bound a lone stand-in without identifiers, which cannot have
+  asked it, and every later answer from there went to it. It binds none now, and reaches no one: from an address the
+  app never saw nothing reaches a peer but a stand-in's first answer (unit 9), where under a label, which may stand
+  for the peer's own address, it is the peer's (G4). From another port of an address a stand-in was bound to, the
+  stand-in that waits there is the same name's other port, and the answer plausibly its own, as RFC 5780's CHANGE-PORT
+  answers: unchanged.
+- **Each app's share of the associations of a stand-in's own** (I8): `udp_own_relays`, 32 for every app together, had
+  no share for each, so that one app could hold all 32 (four sockets of 8) and every other app's stand-ins fell to
+  unit 9's floor. Each app, and the apps Android cannot name together, may hold a quarter now, `udp_own_share`, 8, by
+  the engine's `Budget`, as decision 3 shares its caps; the place is taken before room is made in the app's share of
+  mappings, and given back if none is made.
+- **A STUN message past 1,500 bytes** (review J, minor 2): fix round 4 refused one whole, inside `stun()`, which reads
+  answers too. RFC 8489 6.1 makes the MTU a SHOULD so that STUN may probe it, and RFC 5780's PADDING makes a Binding
+  response as large as the server's outgoing MTU (6.1, 7.6): a padded client's answer of some 1,524 bytes was refused,
+  and a strict stand-in's dropped as unidentified. A larger message is read again, its header, cookie, length and
+  transaction ID, which tell its answer apart; its attributes are walked over its first 1,500 bytes, those past them
+  taken to fit: 0.78 us for 65,500 bytes of empty attributes.
+- **The hello's reader's keys** (J, minor 3): fix round 4's two key sets, in place, made the reader, boxed for every
+  peer the app sends to that did not come in, the direct path's among them, 1,904 bytes, QUIC or not, where this ADR
+  says 960. Each set is made on the heap when an Initial of its version first comes: 80 bytes on x86-64, and 888 for
+  each version a client's Initials use (corrected above).
+- **What the label's rules are, in the code and here** (I's doc points 1 to 5): the code looks for what an opened
+  packet tells among every stand-in bound beside on the port, by an address or under any name, where `by_name`'s doc,
+  fix round 4's note and `docs/VPN.md` said "under the label". The code is right, for the reason a clear identifier
+  goes to any peer of the association: the address behind a label is unknown, and a stand-in bound beside an address
+  may be at it. The words follow it now. Fix round 4's "one difference" from an address was not the only one; each,
+  with its reason (`Scope::by_name`'s doc):
+  - an answer under a label that names in the clear what the app sent is the holder's if it was sent it, else the one
+    peer's of the association that was, and no one's where several were; and what an opened packet tells is looked for
+    among every stand-in bound beside on the port: the address is unknown;
+  - a stand-in bound beside under a label stays beside, keeping its identifiers, where the first bound beside an
+    address takes it once its holder ends: the name's own peer may come back, as the app asks the name again;
+  - with several stand-in addresses for the name, the newest with a peer on the port holds the label, the one the app
+    uses now;
+  - the name's own stand-in, waiting with identifiers, takes an answer under its name without them, where from an
+    address the app never saw it would take none: the relay names the address the name resolved to, which a stranger
+    reaching the relay's port from elsewhere is not;
+  - a name no peer has binds no lone stand-in without identifiers, where an address the app never saw binds one by its
+    first answer: a name nobody asked for is dropped (unit 9's M21), and one whose peers ended cannot be told from it.
+
+  The contest, a difference until this round, is none now (I2).
+- **What review J's mutants found untested** (14 of 29 survived): each is killed by a test now. J23 and J30, the
+  beside records per name and port, the first holding; J25 and J26, an association with nothing to send ending no
+  mapping with something open; J17 and J22, the counters under a label; J20, J21, J24 and J28, an answer under a label
+  with no holder on its port (J28 is no equivalent: with no holder, an answer naming what one settled peer was sent is
+  that peer's, which the mutant sent elsewhere); J8, `dns::answered` refusing a response with no question; J6, a hello
+  read across a new destination ID of one version, as after a Retry; J12, a peer of the name on another association
+  holding nothing; J14's code is gone (above).
+- **Fuzzing** (J's doc point): `Reading::answers` is held to `Reading::tells` in the `identifiers` target: it names an
+  identifier only where `tells` finds it, never a QUIC one, a STUN one wherever `tells` finds it, STUN being read
+  first, and for DNS and NTP something wherever `tells` finds one (a protocol read before may be named instead).
+- **Corrected:** fix round 4's note (the candidates, the contest, the differences, RFC 8489 6.1 for 6.2.1 and SHOULD
+  for "keeps", the reader's keys), the `udp_unmatched` list and `udp_identified`, which counts since fix round 4 an
+  answer under a label that a peer other than its holder took by an identifier it was sent; the fingerprints' and the
+  reader's bytes (above); review G's probes, kept as tests, describe fix round 3's faults in the past tense; a test
+  fix round 4 extended is renamed for what it holds; `dns::answered`'s test is placed after its module's helpers;
+  `TunnelMtu.MOST` says a Rust test ties it to `LARGEST_DATAGRAM`; the dump's KDoc; `docs/VPN.md` (the holder first,
+  the contest, "the relays read for this" where it said no tool's relay filters by sender); the CHANGELOG, rewritten
+  for what a user notices, the detail here; `docs/DESIGN.md`.
+- **Tests, each shown to fail once without its fix.** On the engine of `0a6a123`: review I's six probes (I1, I2, I3,
+  I3b, I5, I7), kept as tests, and the second case of I7's (two names bound to one address on two ports); the reader's
+  size (1,904 bytes), and a STUN request of 1,504 bytes and a padded response of 1,524 (refused). And each with its
+  fix undone as a mutant in the run below: the one keeper's address (V1, V2, V3, J13', J15'), the contest's (T9',
+  J19', V5, V6), the shown address (V7, V8, V9), the clear answer (V10), the share (V11, V12), the STUN walk (T11',
+  J1', V13), the reader's keys (J5', J6', V14), and review J's.
+- **The mutation runners** (review D's `run.py`, as review J extended it to several edits a mutant, pointed at a
+  worktree of `dda8e1c`): 182 mutants, every runner's of this unit again: fix round 4's 125 (`muts-all.json`: reviews
+  F, D and H, and fix rounds 2 to 4), review J's 29 (`muts-j.json`), and this round's 28 (`muts-r5.json`): 13 for its
+  fixes (V1 to V3, V5 to V14) and 15 that carry earlier mutants to where this round moved their code (F19', standing
+  for Q18 and H18 too; R1e', R6b', S5', T5', T6', standing for J16 too; T9', T11', standing for J2 too; J1', J5', J6',
+  J13', J15', J19', J20'); the 20 they stand for no longer apply, and J14's code is gone (above). Of the 160 run on
+  `dda8e1c`, 159 were killed; the one left, J13' (the fingerprints naming a peer wherever any keeps one, not one
+  alone), is killed by a test added after (`7053347`), five peers sent one timestamp, four of whose addresses cancel
+  out; J15' and J20', added then, are killed too. All 162 killed.
+- **Fuzzing:** `scripts/fuzz.sh 480`, as CI runs it, on `dda8e1c`: all twelve targets, 40 s each, found nothing
+  (`identifiers` 3,634,240 runs, `quic` 5,818,459, `quic_answers` 623,856); `identifiers` alone with the new property,
+  180 s, 13,850,433 runs, nothing.
+- **Not done, stated:** the emulator step has not run here; the accepted limits above and before.

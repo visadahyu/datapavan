@@ -921,7 +921,11 @@ relay's name in each round before, reads a name a relay puts on an answer as wha
 resolved to at the answer's port, by the rules an address is read by, so that a name's answers stay with the stand-in
 bound beside it on that port while the name's own peer is gone, and go back to that peer when the app asks it again;
 it also bounds STUN's reading to 1,500 bytes, keeps the hello's reader to one key set for each QUIC version, and fuzzes
-what every datagram through the tool is now read with. How it is built: [ADR
+what every datagram through the tool is now read with. A fifth round found no major fault in that reading: it finds
+the one peer an identifier was sent without a walk of every peer, holds a label its own stand-in holds under the same
+five-second contest as an address, spares what the holder itself was sent, gives each app a quarter of the tool's
+relays of a stand-in's own, reads a STUN message larger than 1,500 bytes again (its attributes walked over 1,500), and
+keeps the hello's reader's keys off every peer that sends no QUIC. How it is built: [ADR
 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 | # | Milestone | Done when |
