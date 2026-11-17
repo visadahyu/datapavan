@@ -32,6 +32,7 @@ enum class FindingKind(val severity: Severity) {
     ATTESTATION_SOFTWARE_ANSWER(Severity.HIGH),
     ATTESTATION_PUBLIC_ROOT(Severity.HIGH),
     ATTESTATION_TEST_ROOT(Severity.HIGH),
+    ATTESTATION_TEST_ROOT_BEFORE_12(Severity.HIGH),
     ATTESTATION_UNCONFIRMED(Severity.MEDIUM),
     ATTESTATION_INCOMPLETE(Severity.MEDIUM),
     ATTESTATION_OUT_OF_DATE(Severity.MEDIUM),
@@ -210,7 +211,8 @@ object Rules {
                         trust == AttestationTrust.OTHER_ROOT -> FindingKind.ATTESTATION_UNCONFIRMED
                         trust == AttestationTrust.REVOKED -> FindingKind.ATTESTATION_REVOKED
                         device.sdk >= ANDROID_12 -> FindingKind.ATTESTATION_SOFTWARE_ANDROID_12
-                        trust == AttestationTrust.TEST_ROOT -> FindingKind.ATTESTATION_TEST_ROOT
+                        // Key provisioning came with Android 12: before, only a system that fakes it answers so.
+                        trust == AttestationTrust.TEST_ROOT -> FindingKind.ATTESTATION_TEST_ROOT_BEFORE_12
                         else -> FindingKind.INTEGRITY_SOFTWARE_ONLY
                     },
                 )
@@ -225,7 +227,7 @@ object Rules {
                 // holds a key under it. An unregistered device on a test build can claim hardware so; no phone
                 // made for sale does.
                 if (trust == AttestationTrust.TEST_ROOT) {
-                    add(FindingKind.ATTESTATION_TEST_ROOT)
+                    add(if (device.sdk >= ANDROID_12) FindingKind.ATTESTATION_TEST_ROOT else FindingKind.ATTESTATION_TEST_ROOT_BEFORE_12)
                     return@let
                 }
                 when (trust) {

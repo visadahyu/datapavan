@@ -204,6 +204,7 @@ class RulesTest {
             FindingKind.ATTESTATION_SOFTWARE_ANSWER to Severity.HIGH,
             FindingKind.ATTESTATION_PUBLIC_ROOT to Severity.HIGH,
             FindingKind.ATTESTATION_TEST_ROOT to Severity.HIGH,
+            FindingKind.ATTESTATION_TEST_ROOT_BEFORE_12 to Severity.HIGH,
             FindingKind.ATTESTATION_UNCONFIRMED to Severity.MEDIUM,
             FindingKind.ATTESTATION_INCOMPLETE to Severity.MEDIUM,
             FindingKind.ATTESTATION_OUT_OF_DATE to Severity.MEDIUM,
@@ -291,14 +292,20 @@ class RulesTest {
             listOf(FindingKind.ATTESTATION_SOFTWARE_ANSWER),
             Rules.forDevice(emulator.copy(emulator = false, sdk = 30), nowYearMonth = 202_611),
         )
-        // Before Android 12 there was no key provisioning: only a system that fakes it answers so.
-        assertEquals(listOf(FindingKind.ATTESTATION_TEST_ROOT), Rules.forDevice(undeclared.copy(sdk = 30), nowYearMonth = 202_611))
+        // Before Android 12 there was no key provisioning: only a system that fakes it answers so, which the
+        // finding's own text says.
+        assertEquals(listOf(FindingKind.ATTESTATION_TEST_ROOT_BEFORE_12), Rules.forDevice(undeclared.copy(sdk = 30), nowYearMonth = 202_611))
         assertEquals(Severity.HIGH, FindingKind.ATTESTATION_TEST_ROOT.severity)
         // A claim of secure hardware under it: an unregistered device on a test build, or a forgery; anyone can
-        // obtain keys under it, so, as under AOSP's published root, nothing it says is used.
+        // obtain keys under it, so, as under AOSP's published root, nothing it says is used. Before Android 12,
+        // only a forgery.
         val hardware = test.copy(securityLevel = 1, deviceLocked = false, osPatchLevel = 201_001)
         for (device in listOf(undeclared, emulator)) {
             assertEquals(listOf(FindingKind.ATTESTATION_TEST_ROOT), Rules.forDevice(device.copy(integrity = hardware), nowYearMonth = 202_611))
+            assertEquals(
+                listOf(FindingKind.ATTESTATION_TEST_ROOT_BEFORE_12),
+                Rules.forDevice(device.copy(integrity = hardware, sdk = 30), nowYearMonth = 202_611),
+            )
         }
     }
 

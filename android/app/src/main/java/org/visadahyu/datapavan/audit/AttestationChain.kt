@@ -35,13 +35,16 @@ import javax.security.auth.x500.X500Principal
  *   or four when that certificate names neither. Each is issued by the next by name and signed by it, the root
  *   by itself ([AttestationTrust.BROKEN_CHAIN]).
  * - No certificate is on Google's revocation list ([AttestationTrust.REVOKED]), as of the day the list in
- *   the data pack was fetched ([revocationListDate]). The root holds one of Google's attestation root keys;
- *   AOSP's software attestation root, whose private key is published with Android's source code, is told
- *   apart from the root of a maker outside Google's programme ([AttestationTrust.SOFTWARE_ROOT],
- *   [AttestationTrust.OTHER_ROOT]).
+ *   the data pack was fetched ([revocationListDate]). The root holds one of Google's attestation root keys.
+ *   Two roots that vouch for nothing are told apart from the root of a maker outside Google's programme
+ *   ([AttestationTrust.OTHER_ROOT]): AOSP's software attestation root, whose private key is published with
+ *   Android's source code ([AttestationTrust.SOFTWARE_ROOT]), and Google's test root for unregistered devices,
+ *   under which anyone running Android's emulator holds a key, told by its name ([RKP_TEST_ROOT],
+ *   [AttestationTrust.TEST_ROOT]).
  * - Every certificate between the leaf and the root is valid at the phone's date, but for an expired one in
  *   a factory-provisioned chain, which Google exempts ([AttestationTrust.OUT_OF_DATE]). The leaf's dates are
- *   set on the phone and the root's are not used, as in Google's verifier.
+ *   set on the phone and the root's are not used, as in Google's verifier. The roots' verdicts come first, so
+ *   a chain under a root that is not Google's is that root's whatever its dates.
  *
  * Like Google's verifier, it does not require basicConstraints or keyUsage of the certificates above the
  * leaf: the attestation certificates of a Pixel 2 and a Sony Xperia 10 III in Google's test data are not

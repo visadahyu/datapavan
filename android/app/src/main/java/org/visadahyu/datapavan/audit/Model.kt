@@ -92,8 +92,8 @@ enum class AttestationTrust {
 
     /**
      * A valid chain to a root key that Google does not vouch for: a maker's or a system's own root, as on phones
-     * outside Google's programme, or a root that whoever hooks the keystore made. (The emulator's software
-     * keystore signs under AOSP's published root, [SOFTWARE_ROOT].)
+     * outside Google's programme, or a root that whoever hooks the keystore made. (Android's emulator signs under
+     * roots of its own verdicts: AOSP's published root, [SOFTWARE_ROOT], and Google's test root, [TEST_ROOT].)
      */
     OTHER_ROOT,
 
@@ -121,9 +121,11 @@ enum class AttestationTrust {
 
     /**
      * A valid chain to the root of the certificates that Google's key provisioning service gives to devices their
-     * maker did not register ("Droid Unregistered Device CA", Google Test LLC): Android's emulator from Android 12
-     * on, and test devices on debug builds. Anyone who runs the emulator holds keys under it, in software, so it
-     * vouches for nothing about a phone.
+     * maker did not register ("Droid Unregistered Device CA", Google Test LLC), as on test devices on debug builds,
+     * whatever its dates. What is known of Android's emulator: Android 15's image (API 35) answers under it, as
+     * captured here (core/engine/testdata/emulator), and Android 11's under AOSP's root; a third-party report that
+     * the final review cites has API 32 under AOSP's roots and API 34 under this one. Anyone who runs the
+     * emulator holds keys under it, in software, so it vouches for nothing about a phone.
      */
     TEST_ROOT,
 }

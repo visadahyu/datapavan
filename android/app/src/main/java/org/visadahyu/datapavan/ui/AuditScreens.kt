@@ -783,7 +783,7 @@ private fun title(kind: FindingKind) = when (kind) {
     FindingKind.ATTESTATION_SOFTWARE_ANDROID_12 -> R.string.finding_attestation_software_android12_title
     FindingKind.ATTESTATION_BROKEN -> R.string.finding_attestation_broken_title
     FindingKind.ATTESTATION_PUBLIC_ROOT -> R.string.finding_attestation_public_root_title
-    FindingKind.ATTESTATION_TEST_ROOT -> R.string.finding_attestation_test_root_title
+    FindingKind.ATTESTATION_TEST_ROOT, FindingKind.ATTESTATION_TEST_ROOT_BEFORE_12 -> R.string.finding_attestation_test_root_title
     FindingKind.ATTESTATION_SOFTWARE_ANSWER -> R.string.finding_attestation_software_answer_title
     FindingKind.ATTESTATION_OUT_OF_DATE -> R.string.finding_attestation_out_of_date_title
     FindingKind.ATTESTATION_UNCONFIRMED -> R.string.finding_attestation_unconfirmed_title
@@ -829,6 +829,7 @@ private fun body(kind: FindingKind) = when (kind) {
     FindingKind.ATTESTATION_BROKEN -> R.string.finding_attestation_broken_body
     FindingKind.ATTESTATION_PUBLIC_ROOT -> R.string.finding_attestation_public_root_body
     FindingKind.ATTESTATION_TEST_ROOT -> R.string.finding_attestation_test_root_body
+    FindingKind.ATTESTATION_TEST_ROOT_BEFORE_12 -> R.string.finding_attestation_test_root_before_12_body
     FindingKind.ATTESTATION_SOFTWARE_ANSWER -> R.string.finding_attestation_software_answer_body
     FindingKind.ATTESTATION_OUT_OF_DATE -> R.string.finding_attestation_out_of_date_body
     FindingKind.ATTESTATION_UNCONFIRMED -> R.string.finding_attestation_unconfirmed_body
