@@ -806,6 +806,15 @@ mod tests {
                 "{size} bytes, at {at}"
             );
         }
+        // Past the first 1,500 bytes nothing is walked: an attribute there that overruns the message is
+        // not seen, so that 65,500 bytes cost no more to read than 1,500.
+        let mut past = sized(0x0001, 65_500);
+        past[1_502..1_504].copy_from_slice(&0xfffcu16.to_be_bytes());
+        assert_eq!(
+            of((APP, 3_478), &past).len(),
+            1,
+            "an attribute past the walk was walked"
+        );
     }
 
     /// The most an identifier holds in place, beside a DNS question's name on the heap (at most 253
