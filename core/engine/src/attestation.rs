@@ -8,6 +8,27 @@
 //! Only the fields the audit needs are decoded. Schema:
 //! <https://source.android.com/docs/security/features/keystore/attestation#schema>
 //!
+//! # Encoding
+//!
+//! The schema requires DER, and every element the parser reads must be DER (X.690, section 10):
+//! lengths and tag numbers in their shortest form, integers without a redundant leading byte,
+//! INTEGER and ENUMERATED each where the schema puts it, a BOOLEAN of 0x00 or 0xFF, and no element
+//! beyond those the schema allows. DER gives each value one encoding, so this parser and any other
+//! strict one, such as a verifier on a server, cannot read the same bytes in two ways. Two
+//! tolerances follow Google's reference verifier, each for an encoding whose meaning is not in
+//! doubt:
+//!
+//! - `deviceLocked` as 0x01 is read as true. Google's verifier accepts it and only logs it
+//!   (`android/keyattestation`: the sample `testdata/invalid/malformed_rot_device_locked.pem`, a
+//!   chain of four certificates, and commit 2462d01 of 2026-09-23), which suggests that a keystore
+//!   in the field writes it; rejecting it would cost such a phone the whole check. Other values
+//!   that DER forbids stay errors.
+//! - The entries of an authorization list may come in any order, and the content of an entry the
+//!   audit does not use (such as the purposes' SET OF) is not read. Google's verifier checks the
+//!   order only on request and tolerates malformed entries it does not need (commits a6e9faf and
+//!   4198c45), and an error there would cost the user the check over a field the audit ignores. An
+//!   entry the audit reads that appears twice is an error, since the two could disagree.
+//!
 //! # Depth
 //!
 //! The parser descends by the schema, never by the input, and without recursion: the deepest
@@ -79,8 +100,12 @@ pub enum Error {
     ExtraData,
     /// An element had a tag other than the one the schema requires.
     UnexpectedTag,
-    /// A length or a value could not be represented.
+    /// An encoding that BER allows but DER, which the schema requires, does not.
+    NotDer,
+    /// A value outside its range, such as an unknown enumeration value or a negative number.
     InvalidValue,
+    /// A field that the audit reads appears twice in one authorization list.
+    DuplicateField,
 }
 
 impl fmt::Display for Error {
@@ -90,7 +115,9 @@ impl fmt::Display for Error {
             Self::MissingField => "missing field in attestation extension",
             Self::ExtraData => "unexpected data after a field of attestation extension",
             Self::UnexpectedTag => "unexpected element in attestation extension",
+            Self::NotDer => "attestation extension not in DER",
             Self::InvalidValue => "invalid value in attestation extension",
+            Self::DuplicateField => "repeated field in attestation extension",
         })
     }
 }
@@ -102,73 +129,108 @@ impl std::error::Error for Error {}
 ///
 /// # Errors
 ///
-/// Returns an [`Error`] when the input is not a well-formed `KeyDescription`.
+/// Returns an [`Error`] when the input is not a well-formed `KeyDescription` in DER.
 pub fn parse_key_description(extension: &[u8]) -> Result<KeyDescription, Error> {
-    let wrapper = Element::read_one(extension, Tag::universal(TAG_OCTET_STRING, false))?;
-    let sequence = Element::read_one(wrapper.content, Tag::universal(TAG_SEQUENCE, true))?;
-    let fields = sequence.children()?;
+    let wrapper = read_one(extension)?.expect(OCTET_STRING)?;
+    let mut fields = read_one(wrapper)?.contents(SEQUENCE)?;
 
-    let attestation_version = fields.first().ok_or(Error::MissingField)?.unsigned()?;
-    let security_level = match fields.get(1).ok_or(Error::MissingField)?.unsigned()? {
-        0 => SecurityLevel::Software,
-        1 => SecurityLevel::TrustedEnvironment,
-        2 => SecurityLevel::StrongBox,
-        _ => return Err(Error::InvalidValue),
-    };
-    let software = fields.get(6).ok_or(Error::MissingField)?.children()?;
-    let hardware = fields.get(7).ok_or(Error::MissingField)?.children()?;
+    let attestation_version = fields.required()?.integer()?;
+    let security_level = security_level(fields.required()?.enumerated()?)?;
+    // keyMintVersion and keyMintSecurityLevel: checked, but the audit does not use them.
+    fields.required()?.integer()?;
+    self::security_level(fields.required()?.enumerated()?)?;
+    // attestationChallenge and uniqueId.
+    fields.required()?.expect(OCTET_STRING)?;
+    fields.required()?.expect(OCTET_STRING)?;
+    let software = entries(fields.required()?.contents(SEQUENCE)?)?;
+    let hardware = entries(fields.required()?.contents(SEQUENCE)?)?;
+    fields.finish()?;
 
     // The hardware-enforced list is authoritative; software keystores fill only the other one.
-    let root_of_trust = match find(&hardware, TAG_ROOT_OF_TRUST) {
-        Some(element) => Some(root_of_trust(element)?),
-        None => find(&software, TAG_ROOT_OF_TRUST)
-            .map(root_of_trust)
-            .transpose()?,
-    };
-    let os_patch_level = find(&hardware, TAG_OS_PATCH_LEVEL)
-        .or_else(|| find(&software, TAG_OS_PATCH_LEVEL))
-        .map(|explicit| {
-            explicit
-                .children()?
-                .first()
-                .ok_or(Error::MissingField)?
-                .unsigned()
-        })
-        .transpose()?;
+    let root = hardware.root_of_trust.or(software.root_of_trust);
+    let patch = hardware.os_patch_level.or(software.os_patch_level);
 
     Ok(KeyDescription {
         attestation_version,
         security_level,
-        root_of_trust,
-        os_patch_level,
+        root_of_trust: root.map(root_of_trust).transpose()?,
+        os_patch_level: patch.map(|entry| explicit(entry)?.integer()).transpose()?,
     })
 }
 
-fn find<'l, 'a>(list: &'l [Element<'a>], tag: u32) -> Option<&'l Element<'a>> {
-    list.iter()
-        .find(|e| e.tag.class == CLASS_CONTEXT && e.tag.number == tag)
+/// The entries of an authorization list that the audit reads.
+#[derive(Default)]
+struct Entries<'a> {
+    root_of_trust: Option<Element<'a>>,
+    os_patch_level: Option<Element<'a>>,
 }
 
-fn root_of_trust(explicit: &Element<'_>) -> Result<RootOfTrust, Error> {
-    let inner = explicit.children()?;
-    let sequence = inner.first().ok_or(Error::MissingField)?;
-    let fields = sequence.children()?;
-    let locked = fields.get(1).ok_or(Error::MissingField)?;
-    if locked.tag != Tag::universal(TAG_BOOLEAN, false) {
-        return Err(Error::UnexpectedTag);
+/// Finds the entries the audit reads in `list`, each of which may appear once.
+fn entries(list: Elements<'_>) -> Result<Entries<'_>, Error> {
+    let mut found = Entries::default();
+    for entry in list {
+        let entry = entry?;
+        if entry.tag.class != CLASS_CONTEXT {
+            continue;
+        }
+        let slot = match entry.tag.number {
+            TAG_ROOT_OF_TRUST => &mut found.root_of_trust,
+            TAG_OS_PATCH_LEVEL => &mut found.os_patch_level,
+            _ => continue,
+        };
+        if slot.replace(entry).is_some() {
+            return Err(Error::DuplicateField);
+        }
     }
-    let device_locked = match locked.content {
-        [0] => false,
-        [_] => true,
+    Ok(found)
+}
+
+fn security_level(value: u32) -> Result<SecurityLevel, Error> {
+    match value {
+        0 => Ok(SecurityLevel::Software),
+        1 => Ok(SecurityLevel::TrustedEnvironment),
+        2 => Ok(SecurityLevel::StrongBox),
+        _ => Err(Error::InvalidValue),
+    }
+}
+
+/// The one element inside an entry of an authorization list, whose tags are all EXPLICIT.
+fn explicit(entry: Element<'_>) -> Result<Element<'_>, Error> {
+    let mut inner = entry.contents(Tag {
+        class: CLASS_CONTEXT,
+        constructed: true,
+        number: entry.tag.number,
+    })?;
+    let value = inner.required()?;
+    inner.finish()?;
+    Ok(value)
+}
+
+fn root_of_trust(entry: Element<'_>) -> Result<RootOfTrust, Error> {
+    let mut fields = explicit(entry)?.contents(SEQUENCE)?;
+    // verifiedBootKey: checked, but the audit does not use it.
+    fields.required()?.expect(OCTET_STRING)?;
+    let device_locked = match fields.required()?.expect(BOOLEAN)? {
+        [0x00] => false,
+        // 0x01 is not DER, but Google's verifier accepts it: see the module documentation.
+        [0xff | 0x01] => true,
+        [_] => return Err(Error::NotDer),
+        // X.690, 8.2.1: a BOOLEAN has exactly one content byte.
         _ => return Err(Error::InvalidValue),
     };
-    let verified_boot = match fields.get(2).ok_or(Error::MissingField)?.unsigned()? {
+    let verified_boot = match fields.required()?.enumerated()? {
         0 => VerifiedBootState::Verified,
         1 => VerifiedBootState::SelfSigned,
         2 => VerifiedBootState::Unverified,
         3 => VerifiedBootState::Failed,
         _ => return Err(Error::InvalidValue),
     };
+    // verifiedBootHash, from attestation version 3. Earlier versions have three fields, and a
+    // later keystore that leaves it out loses nothing the audit reads, so it is optional here.
+    if let Some(hash) = fields.next() {
+        hash?.expect(OCTET_STRING)?;
+    }
+    fields.finish()?;
     Ok(RootOfTrust {
         device_locked,
         verified_boot,
@@ -177,11 +239,11 @@ fn root_of_trust(explicit: &Element<'_>) -> Result<RootOfTrust, Error> {
 
 const CLASS_UNIVERSAL: u8 = 0;
 const CLASS_CONTEXT: u8 = 2;
-const TAG_BOOLEAN: u32 = 1;
-const TAG_INTEGER: u32 = 2;
-const TAG_OCTET_STRING: u32 = 4;
-const TAG_ENUMERATED: u32 = 10;
-const TAG_SEQUENCE: u32 = 16;
+const BOOLEAN: Tag = Tag::universal(1, false);
+const INTEGER: Tag = Tag::universal(2, false);
+const OCTET_STRING: Tag = Tag::universal(4, false);
+const ENUMERATED: Tag = Tag::universal(10, false);
+const SEQUENCE: Tag = Tag::universal(16, true);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Tag {
@@ -200,6 +262,15 @@ impl Tag {
     }
 }
 
+/// Reads one element that must fill `input` completely.
+fn read_one(input: &[u8]) -> Result<Element<'_>, Error> {
+    let (element, rest) = Element::read(input)?;
+    if !rest.is_empty() {
+        return Err(Error::ExtraData);
+    }
+    Ok(element)
+}
+
 /// One DER element: its tag and the bytes of its content.
 #[derive(Clone, Copy, Debug)]
 struct Element<'a> {
@@ -208,24 +279,18 @@ struct Element<'a> {
 }
 
 impl<'a> Element<'a> {
-    /// Reads one element that must fill `input` completely and carry `expected` as its tag.
-    fn read_one(input: &'a [u8], expected: Tag) -> Result<Self, Error> {
-        let (element, rest) = Self::read(input)?;
-        if element.tag != expected {
-            return Err(Error::UnexpectedTag);
-        }
-        if !rest.is_empty() {
-            return Err(Error::ExtraData);
-        }
-        Ok(element)
-    }
-
+    /// Reads the element at the start of `input`, and returns it with the bytes after it.
     fn read(input: &'a [u8]) -> Result<(Self, &'a [u8]), Error> {
         let (&first, mut rest) = input.split_first().ok_or(Error::Truncated)?;
         let class = first >> 6;
         let constructed = first & 0x20 != 0;
         let mut number = u32::from(first & 0x1f);
         if number == 0x1f {
+            // The high tag number form: base-128 digits, most significant first. DER uses it only
+            // from 31 on, and without a leading zero digit (X.690, 8.1.2.4).
+            if rest.first() == Some(&0x80) {
+                return Err(Error::NotDer);
+            }
             number = 0;
             loop {
                 let (&byte, tail) = rest.split_first().ok_or(Error::Truncated)?;
@@ -236,21 +301,36 @@ impl<'a> Element<'a> {
                     break;
                 }
             }
+            if number < 0x1f {
+                return Err(Error::NotDer);
+            }
         }
         let (&len_byte, tail) = rest.split_first().ok_or(Error::Truncated)?;
         rest = tail;
         let length = if len_byte & 0x80 == 0 {
             usize::from(len_byte)
         } else {
+            // The long form: DER uses it only from 128 on, in as few bytes as possible, and never
+            // the indefinite form 0x80 (X.690, 10.1).
             let count = usize::from(len_byte & 0x7f);
-            if count == 0 || count > 4 {
+            if count == 0 {
+                return Err(Error::NotDer);
+            }
+            if count > 4 {
                 return Err(Error::InvalidValue);
             }
             let (bytes, tail) = rest.split_at_checked(count).ok_or(Error::Truncated)?;
             rest = tail;
-            bytes
+            if bytes.first() == Some(&0) {
+                return Err(Error::NotDer);
+            }
+            let length = bytes
                 .iter()
-                .fold(0usize, |acc, &b| (acc << 8) | usize::from(b))
+                .fold(0usize, |acc, &b| (acc << 8) | usize::from(b));
+            if length < 0x80 {
+                return Err(Error::NotDer);
+            }
+            length
         };
         let (content, rest) = rest.split_at_checked(length).ok_or(Error::Truncated)?;
         Ok((
@@ -266,38 +346,91 @@ impl<'a> Element<'a> {
         ))
     }
 
-    /// The elements inside a constructed element.
-    fn children(&self) -> Result<Vec<Self>, Error> {
-        if !self.tag.constructed {
-            return Err(Error::UnexpectedTag);
+    /// The element's content, once its tag is known to be `expected`.
+    fn expect(self, expected: Tag) -> Result<&'a [u8], Error> {
+        if self.tag == expected {
+            Ok(self.content)
+        } else {
+            Err(Error::UnexpectedTag)
         }
-        let mut out = Vec::new();
-        let mut rest = self.content;
-        while !rest.is_empty() {
-            let (child, tail) = Self::read(rest)?;
-            out.push(child);
-            rest = tail;
-        }
-        Ok(out)
     }
 
-    /// A non-negative INTEGER or ENUMERATED that fits in a `u32`.
-    fn unsigned(&self) -> Result<u32, Error> {
-        let integer = Tag::universal(TAG_INTEGER, false);
-        let enumerated = Tag::universal(TAG_ENUMERATED, false);
-        if self.tag != integer && self.tag != enumerated {
-            return Err(Error::UnexpectedTag);
+    /// The elements inside this one, once its tag is known to be `expected`.
+    fn contents(self, expected: Tag) -> Result<Elements<'a>, Error> {
+        self.expect(expected).map(|rest| Elements { rest })
+    }
+
+    /// A non-negative INTEGER that fits in a `u32`.
+    fn integer(self) -> Result<u32, Error> {
+        unsigned(self.expect(INTEGER)?)
+    }
+
+    /// A non-negative ENUMERATED that fits in a `u32`.
+    fn enumerated(self) -> Result<u32, Error> {
+        unsigned(self.expect(ENUMERATED)?)
+    }
+}
+
+/// The value of the content of an INTEGER or ENUMERATED, which must be non-negative and fit in a
+/// `u32`.
+fn unsigned(content: &[u8]) -> Result<u32, Error> {
+    match content {
+        // X.690, 8.3.1: at least one content byte.
+        [] => return Err(Error::InvalidValue),
+        // X.690, 8.3.2: the first nine bits are never all zeros or all ones.
+        [0x00, next, ..] if next & 0x80 == 0 => return Err(Error::NotDer),
+        [0xff, next, ..] if next & 0x80 != 0 => return Err(Error::NotDer),
+        [first, ..] if first & 0x80 != 0 => return Err(Error::InvalidValue),
+        _ => {}
+    }
+    // A leading zero is left only before a byte from 0x80 on, as its sign.
+    let digits = content.strip_prefix(&[0]).unwrap_or(content);
+    if digits.len() > 4 {
+        return Err(Error::InvalidValue);
+    }
+    Ok(digits
+        .iter()
+        .fold(0u32, |acc, &b| (acc << 8) | u32::from(b)))
+}
+
+/// The elements inside a constructed element, read in order. After an error it yields nothing more.
+struct Elements<'a> {
+    rest: &'a [u8],
+}
+
+impl<'a> Elements<'a> {
+    /// The next element, which the schema requires.
+    fn required(&mut self) -> Result<Element<'a>, Error> {
+        self.next().ok_or(Error::MissingField)?
+    }
+
+    /// Checks that no element is left.
+    fn finish(&self) -> Result<(), Error> {
+        if self.rest.is_empty() {
+            Ok(())
+        } else {
+            Err(Error::ExtraData)
         }
-        let bytes = match self.content {
-            [] => return Err(Error::InvalidValue),
-            [first, ..] if first & 0x80 != 0 => return Err(Error::InvalidValue),
-            [0, rest @ ..] if !rest.is_empty() => rest,
-            all => all,
-        };
-        if bytes.len() > 4 {
-            return Err(Error::InvalidValue);
+    }
+}
+
+impl<'a> Iterator for Elements<'a> {
+    type Item = Result<Element<'a>, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.rest.is_empty() {
+            return None;
         }
-        Ok(bytes.iter().fold(0u32, |acc, &b| (acc << 8) | u32::from(b)))
+        match Element::read(self.rest) {
+            Ok((element, rest)) => {
+                self.rest = rest;
+                Some(Ok(element))
+            }
+            Err(error) => {
+                self.rest = &[];
+                Some(Err(error))
+            }
+        }
     }
 }
 
@@ -325,6 +458,9 @@ mod tests {
             children: Vec<Node>,
             required: usize,
         },
+        /// The whole element given as bytes, tag and length included, for encodings that the
+        /// other two forms would make canonical.
+        Raw(Vec<u8>),
     }
 
     /// The DER length octets of `len`.
@@ -344,12 +480,15 @@ mod tests {
 
     fn content(node: &Node) -> Vec<u8> {
         match &node.body {
-            Body::Bytes(bytes) => bytes.clone(),
+            Body::Bytes(bytes) | Body::Raw(bytes) => bytes.clone(),
             Body::Elements { children, .. } => children.iter().flat_map(encode).collect(),
         }
     }
 
     fn encode(node: &Node) -> Vec<u8> {
+        if let Body::Raw(bytes) = &node.body {
+            return bytes.clone();
+        }
         let content = content(node);
         [node.tag.clone(), length(content.len()), content].concat()
     }
@@ -366,6 +505,14 @@ mod tests {
         Node {
             tag: tag.to_vec(),
             body: Body::Elements { children, required },
+            read: true,
+        }
+    }
+
+    fn raw(bytes: &[u8]) -> Node {
+        Node {
+            tag: Vec::new(),
+            body: Body::Raw(bytes.to_vec()),
             read: true,
         }
     }
@@ -432,7 +579,7 @@ mod tests {
                 children: children.into_iter().map(unread).collect(),
                 required,
             },
-            body @ Body::Bytes(_) => body,
+            body => body,
         };
         Node {
             body,
@@ -504,8 +651,8 @@ mod tests {
         vec![
             integer(300),
             enumerated(levels.0.into()),
-            unread(integer(300)),
-            unread(enumerated(levels.1.into())),
+            integer(300),
+            enumerated(levels.1.into()),
             unread(octets(b"challenge")),
             unread(octets(&[])),
             sequence(software, 0),
@@ -558,9 +705,17 @@ mod tests {
     }
 
     /// Paths into `tee_device()`.
+    const VERSION: &[usize] = &[0, 0];
     const ATTESTATION_LEVEL: &[usize] = &[0, 1];
+    const CHALLENGE: &[usize] = &[0, 4];
+    const SOFTWARE: &[usize] = &[0, 6];
+    const HARDWARE: &[usize] = &[0, 7];
+    const HARDWARE_DIGEST: &[usize] = &[0, 7, 3];
+    const ROOT_ENTRY: &[usize] = &[0, 7, 7];
     const ROOT_SEQUENCE: &[usize] = &[0, 7, 7, 0];
+    const DEVICE_LOCKED: &[usize] = &[0, 7, 7, 0, 1];
     const BOOT_STATE: &[usize] = &[0, 7, 7, 0, 2];
+    const PATCH_ENTRY: &[usize] = &[0, 7, 9];
     const PATCH_VALUE: &[usize] = &[0, 7, 9, 0];
 
     fn description(
@@ -605,6 +760,223 @@ mod tests {
                 }),
                 Some(202_608)
             ))
+        );
+    }
+
+    // DER.
+
+    #[test]
+    fn rejects_lengths_that_are_not_the_shortest() {
+        // 300 as an INTEGER is 02 02 01 2c.
+        for encoding in [
+            &[0x02, 0x81, 0x02, 0x01, 0x2c][..],
+            &[0x02, 0x82, 0x00, 0x02, 0x01, 0x2c],
+            &[0x02, 0x84, 0x00, 0x00, 0x00, 0x02, 0x01, 0x2c],
+        ] {
+            assert_eq!(with(VERSION, raw(encoding)), Err(Error::NotDer));
+        }
+        // The indefinite form, with its end-of-contents octets.
+        let root = encode(&root(0xff, 0));
+        let fields = root.get(6..).unwrap_or_default();
+        let indefinite = [&[0x30, 0x80][..], fields, &[0x00, 0x00]].concat();
+        assert_eq!(with(ROOT_SEQUENCE, raw(&indefinite)), Err(Error::NotDer));
+        // A length too large for any extension.
+        assert_eq!(
+            with(VERSION, raw(&[0x02, 0x85, 0x01, 0x00, 0x00, 0x00, 0x00])),
+            Err(Error::InvalidValue)
+        );
+    }
+
+    #[test]
+    fn rejects_tag_numbers_that_are_not_the_shortest() {
+        // [5] in the high tag number form, which DER keeps for 31 and above.
+        let digest = encode(&explicit(5, set(vec![integer(4)])));
+        let long_form = [&[0xbf, 0x05][..], digest.get(1..).unwrap_or_default()].concat();
+        assert_eq!(with(HARDWARE_DIGEST, raw(&long_form)), Err(Error::NotDer));
+        // [704] with a leading zero digit.
+        let root = encode(&root(0xff, 0));
+        let padded = [
+            &[0xbf, 0x80, 0x85, 0x40][..],
+            root.get(3..).unwrap_or_default(),
+        ]
+        .concat();
+        assert_eq!(with(ROOT_ENTRY, raw(&padded)), Err(Error::NotDer));
+    }
+
+    #[test]
+    fn rejects_integers_that_are_not_the_shortest() {
+        assert_eq!(
+            with(PATCH_VALUE, primitive(&[0x02], &[0x00, 0x03, 0x17, 0x0b])),
+            Err(Error::NotDer)
+        );
+        assert_eq!(
+            with(VERSION, primitive(&[0x02], &[0x00, 0x01, 0x2c])),
+            Err(Error::NotDer)
+        );
+        assert_eq!(
+            with(ATTESTATION_LEVEL, primitive(&[0x0a], &[0x00, 0x01])),
+            Err(Error::NotDer)
+        );
+        assert_eq!(
+            with(VERSION, primitive(&[0x02], &[0xff, 0x80])),
+            Err(Error::NotDer)
+        );
+        // A sign byte where one is needed is the shortest form.
+        assert_eq!(
+            with(PATCH_VALUE, primitive(&[0x02], &[0x00, 0x80])).map(|d| d.os_patch_level),
+            Ok(Some(128))
+        );
+    }
+
+    #[test]
+    fn integer_and_enumerated_are_not_interchangeable() {
+        for (path, wrong) in [
+            (VERSION, enumerated(300)),
+            (ATTESTATION_LEVEL, integer(1)),
+            (BOOT_STATE, integer(0)),
+            (PATCH_VALUE, enumerated(202_507)),
+        ] {
+            assert_eq!(with(path, wrong), Err(Error::UnexpectedTag), "{path:?}");
+        }
+    }
+
+    #[test]
+    fn device_locked_is_der_but_for_one_tolerance() {
+        let read = |content: &[u8]| {
+            with(DEVICE_LOCKED, primitive(&[0x01], content))
+                .map(|d| d.root_of_trust.map(|r| r.device_locked))
+        };
+        assert_eq!(read(&[0x00]), Ok(Some(false)));
+        assert_eq!(read(&[0xff]), Ok(Some(true)));
+        // Google's verifier accepts 0x01; see the module documentation.
+        assert_eq!(read(&[0x01]), Ok(Some(true)));
+        for value in [0x02, 0x7f, 0x80, 0xfe] {
+            assert_eq!(read(&[value]), Err(Error::NotDer), "{value:#x}");
+        }
+        assert_eq!(read(&[]), Err(Error::InvalidValue));
+        assert_eq!(read(&[0xff, 0xff]), Err(Error::InvalidValue));
+    }
+
+    #[test]
+    fn root_of_trust_is_a_sequence_of_three_or_four_fields() {
+        let fields = || {
+            vec![
+                octets(&[0xaa; 32]),
+                primitive(&[0x01], &[0xff]),
+                enumerated(0),
+                octets(&[0xbb; 32]),
+            ]
+        };
+        assert_eq!(
+            with(ROOT_SEQUENCE, set(fields())),
+            Err(Error::UnexpectedTag)
+        );
+        let mut three = fields();
+        three.truncate(3);
+        assert_eq!(
+            with(ROOT_SEQUENCE, sequence(three, 3)).map(|d| d.root_of_trust),
+            Ok(Some(LOCKED_VERIFIED))
+        );
+        let mut five = fields();
+        five.push(octets(&[]));
+        assert_eq!(
+            with(ROOT_SEQUENCE, sequence(five, 3)),
+            Err(Error::ExtraData)
+        );
+        let mut hash_as_integer = fields();
+        hash_as_integer.truncate(3);
+        hash_as_integer.push(integer(1));
+        assert_eq!(
+            with(ROOT_SEQUENCE, sequence(hash_as_integer, 3)),
+            Err(Error::UnexpectedTag)
+        );
+    }
+
+    #[test]
+    fn an_entry_holds_exactly_one_element() {
+        let root_sequence = || {
+            sequence(
+                vec![
+                    octets(&[0xaa; 32]),
+                    primitive(&[0x01], &[0xff]),
+                    enumerated(0),
+                ],
+                3,
+            )
+        };
+        assert_eq!(
+            with(
+                ROOT_ENTRY,
+                constructed(
+                    &context_tag(TAG_ROOT_OF_TRUST),
+                    vec![root_sequence(), root_sequence()],
+                    1
+                )
+            ),
+            Err(Error::ExtraData)
+        );
+        assert_eq!(
+            with(
+                PATCH_ENTRY,
+                constructed(
+                    &context_tag(TAG_OS_PATCH_LEVEL),
+                    vec![integer(202_507), integer(202_611)],
+                    1
+                )
+            ),
+            Err(Error::ExtraData)
+        );
+        assert_eq!(
+            with(
+                ROOT_ENTRY,
+                constructed(&context_tag(TAG_ROOT_OF_TRUST), vec![], 1)
+            ),
+            Err(Error::MissingField)
+        );
+        // EXPLICIT tagging makes the entry constructed.
+        let primitive_root = primitive(&[0x9f, 0x85, 0x40], &encode(&root_sequence()));
+        assert_eq!(with(ROOT_ENTRY, primitive_root), Err(Error::UnexpectedTag));
+    }
+
+    #[test]
+    fn key_description_has_exactly_its_eight_fields() {
+        let tee = || fields(TEE, software(vec![]), hardware(Some(root(0xff, 0)), None));
+        let mut nine = tee();
+        nine.push(octets(&[]));
+        assert_eq!(parse(&wrap(nine)), Err(Error::ExtraData));
+        let mut seven = tee();
+        seven.pop();
+        assert_eq!(parse(&wrap(seven)), Err(Error::MissingField));
+    }
+
+    #[test]
+    fn fields_carry_the_types_of_the_schema() {
+        assert_eq!(with(CHALLENGE, integer(1)), Err(Error::UnexpectedTag));
+        assert_eq!(
+            with(HARDWARE, set(hardware(Some(root(0xff, 0)), None))),
+            Err(Error::UnexpectedTag)
+        );
+        assert_eq!(with(SOFTWARE, octets(&[])), Err(Error::UnexpectedTag));
+    }
+
+    #[test]
+    fn rejects_a_field_the_audit_reads_twice() {
+        let twice = |entries: Vec<Node>| extension(TEE, software(vec![]), entries);
+        let mut roots = hardware(Some(root(0xff, 0)), Some(patch(202_507)));
+        roots.push(root(0x00, 2));
+        assert_eq!(parse(&twice(roots)), Err(Error::DuplicateField));
+        let mut patches = hardware(Some(root(0xff, 0)), Some(patch(202_507)));
+        patches.push(patch(202_611));
+        assert_eq!(parse(&twice(patches)), Err(Error::DuplicateField));
+    }
+
+    #[test]
+    fn reads_entries_in_any_order() {
+        let mut list = hardware(Some(root(0xff, 0)), Some(patch(202_507)));
+        list.reverse();
+        assert_eq!(
+            parse(&extension(TEE, software(vec![]), list)),
+            parse(&tee_device())
         );
     }
 
@@ -676,8 +1048,8 @@ mod tests {
         for cut in 0..whole.len() {
             let expect = match &node.body {
                 _ if !node.read => Expect::Unchanged,
-                Body::Bytes(_) if cut == 0 => Expect::Rejected,
-                Body::Bytes(_) => Expect::Any,
+                Body::Bytes(_) | Body::Raw(_) if cut == 0 => Expect::Rejected,
+                Body::Bytes(_) | Body::Raw(_) => Expect::Any,
                 Body::Elements { children, required } => {
                     // The number of children left whole, if the cut falls between two.
                     let mut end = 0;
