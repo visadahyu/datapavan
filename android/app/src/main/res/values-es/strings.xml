@@ -13,6 +13,7 @@
     <string name="device_integrity_waiting">La comprobación de hardware está esperando a que este teléfono contacte con Google.</string>
     <string name="device_revocation_list">Comprobado con la lista de Google de claves revocadas del %1$s.</string>
     <string name="device_revocation_list_old">La lista de Google de claves revocadas que se usa aquí es del %1$s, hace más de tres meses, así que una clave revocada desde entonces no se detectaría. Importa un paquete de datos más reciente para actualizarla.</string>
+    <string name="device_revocation_list_undated">Se desconoce la fecha de la lista de Google de claves revocadas que se usa aquí, así que puede que una clave revocada desde entonces no se detecte. Importa un paquete de datos más reciente para actualizarla.</string>
     <string name="device_boot_key">Clave de arranque verificado: %1$s</string>
     <string name="device_patch_system">Parche de seguridad, según el sistema: %1$s</string>
     <string name="device_vendor_patch">Parche de seguridad de los proveedores: %1$s</string>

@@ -14,6 +14,7 @@
     <string name="device_integrity_waiting">Die Hardware-Prüfung wartet darauf, dass dieses Telefon Google erreicht.</string>
     <string name="device_revocation_list">Geprüft mit Googles Liste widerrufener Schlüssel vom %1$s.</string>
     <string name="device_revocation_list_old">Googles hier verwendete Liste widerrufener Schlüssel stammt vom %1$s, also von vor mehr als drei Monaten; ein seither widerrufener Schlüssel würde daher nicht erkannt. Importieren Sie ein neueres Datenpaket, um sie zu aktualisieren.</string>
+    <string name="device_revocation_list_undated">Das Datum von Googles hier verwendeter Liste widerrufener Schlüssel ist unbekannt; ein seither widerrufener Schlüssel wird daher möglicherweise nicht erkannt. Importieren Sie ein neueres Datenpaket, um sie zu aktualisieren.</string>
     <string name="device_boot_key">Schlüssel für den verifizierten Start: %1$s</string>
     <string name="device_patch_system">Sicherheitspatch laut System: %1$s</string>
     <string name="device_vendor_patch">Sicherheitspatch der Zulieferer: %1$s</string>

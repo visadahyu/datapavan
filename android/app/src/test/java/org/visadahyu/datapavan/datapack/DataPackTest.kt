@@ -66,6 +66,49 @@ class DataPackTest {
         assertEquals(emptyList<String>(), DataPackRules.trustedKeys(pack(1), null))
     }
 
+    /** A pack holding [files], by path. */
+    private fun pack(sequence: Int, files: Map<String, String>): DataPack {
+        var bytes = ByteArray(0)
+        val ranges = files.mapValues { (_, text) ->
+            val start = bytes.size
+            bytes += text.toByteArray()
+            start until bytes.size
+        }
+        return DataPack(bytes, 0, sequence, "2026-11-17", emptyList(), emptyList(), ranges)
+    }
+
+    @Test
+    fun `reads the day a dataset was retrieved`() {
+        assertEquals(java.time.LocalDate.of(2026, 10, 29), DataPackRules.retrieved("# x\nretrieved: 2026-10-29T15:10:29Z\n"))
+        assertEquals(java.time.LocalDate.of(2026, 11, 9), DataPackRules.retrieved("retrieved: 2026-11-09; 15 rows added on 2026-11-11\n"))
+        assertNull(DataPackRules.retrieved("retrieved: 29 October 2026\n"))
+        assertNull(DataPackRules.retrieved("retrieved:\n"))
+        assertNull(DataPackRules.retrieved("page: https://example.org\n"))
+        // Every dataset in the repository dates itself so.
+        for (source in java.io.File("../../data").listFiles()!!.map { java.io.File(it, "SOURCE") }.filter { it.isFile }) {
+            assertTrue(source.path, DataPackRules.retrieved(source.readText()) != null)
+        }
+    }
+
+    @Test
+    fun `refuses a pack whose revocation list is undated`() {
+        // The app tells the attestation revocation list's age from its SOURCE (ADR 0040), so a pack must date it.
+        val dated = mapOf("attestation/revoked-serials.txt" to "aa\n", "attestation/SOURCE" to "retrieved: 2026-10-29T15:10:29Z\n")
+        assertNull(DataPackRules.refusal(pack(4, dated), pack(3)))
+        assertEquals(java.time.LocalDate.of(2026, 10, 29), pack(4, dated).retrieved("attestation"))
+        for (undated in listOf(
+            dated + ("attestation/SOURCE" to "retrieved: 29 October 2026\n"),
+            dated - "attestation/SOURCE",
+            mapOf("attestation/google-roots.pem" to ""),
+        )) {
+            assertEquals("$undated", PackRefusal.UNDATED_DATASET, DataPackRules.refusal(pack(4, undated), pack(3)))
+        }
+        // A pack without the dataset leaves the APK's in use; other datasets' SOURCE is not judged here.
+        assertNull(DataPackRules.refusal(pack(4, mapOf("exodus/trackers.tsv" to "x")), pack(3)))
+        // An older pack is refused as older first.
+        assertEquals(PackRefusal.NOT_NEWER, DataPackRules.refusal(pack(3, dated - "attestation/SOURCE"), pack(3)))
+    }
+
     @Test
     fun `refuses a pack that is not newer`() {
         assertEquals(PackRefusal.NOT_NEWER, DataPackRules.refusal(pack(3), pack(3)))

@@ -14,6 +14,7 @@
     <string name="device_integrity_waiting">Le contrôle matériel attend que ce téléphone joigne Google.</string>
     <string name="device_revocation_list">Vérifié avec la liste des clés révoquées de Google datant du %1$s.</string>
     <string name="device_revocation_list_old">La liste des clés révoquées de Google utilisée ici date du %1$s, il y a plus de trois mois : une clé révoquée depuis ne serait pas détectée. Importez un paquet de données plus récent pour la mettre à jour.</string>
+    <string name="device_revocation_list_undated">La date de la liste des clés révoquées de Google utilisée ici est inconnue : une clé révoquée depuis pourrait ne pas être détectée. Importez un paquet de données plus récent pour la mettre à jour.</string>
     <string name="device_boot_key">Clé de démarrage vérifié : %1$s</string>
     <string name="device_patch_system">Correctif de sécurité, selon le système : %1$s</string>
     <string name="device_vendor_patch">Correctif de sécurité des fournisseurs : %1$s</string>

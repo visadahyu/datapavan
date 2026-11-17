@@ -103,6 +103,30 @@ class AttestationChainTest {
     }
 
     @Test
+    fun `root keys come from the newest pack that holds them`() {
+        // A data pack that rotates Google's roots must take effect: here the active pack holds only the root
+        // that did not sign the Sony's chain, so that chain is no longer Google's.
+        val roots = File(DATA, "google-roots.pem").readText()
+        val sony = corpus("sony-xperia10-iii/sdk33/TEE_EC.pem")
+        val blocks = roots.split("-----END CERTIFICATE-----").filter { "BEGIN CERTIFICATE" in it }
+            .map { it.substring(it.indexOf("-----BEGIN")) + "-----END CERTIFICATE-----\n" }
+        assertEquals(2, blocks.size)
+        val other = blocks.single { AttestationChain.load(it.byteInputStream(), "".byteInputStream()).trust(sony) != AttestationTrust.GOOGLE_ROOT }
+        val bundled = pack(
+            mapOf(
+                AttestationChain.ROOTS_PATH to roots,
+                AttestationChain.REVOKED_PATH to "# none\n",
+                AttestationChain.SOURCE_PATH to "retrieved: 2026-10-29T15:10:29Z\n",
+            ),
+        )
+        assertEquals(AttestationTrust.GOOGLE_ROOT, AttestationChain.load(bundled).trust(sony))
+        val rotated = AttestationChain.load(pack(mapOf(AttestationChain.ROOTS_PATH to other)), bundled)
+        assertEquals(AttestationTrust.OTHER_ROOT, rotated.trust(sony))
+        // The list and its date still come together from the pack that holds the list.
+        assertEquals(LocalDate.of(2026, 10, 29), rotated.revocationListDate)
+    }
+
+    @Test
     fun `the software keystore's chain is told by its root before its dates, after revocation`() {
         // The Pixel XL's software chain at the time of this test: its intermediate expired in January 2026, and
         // the chain is still the published root's, not merely out of date.

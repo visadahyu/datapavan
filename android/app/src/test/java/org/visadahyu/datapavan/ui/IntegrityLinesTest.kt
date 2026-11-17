@@ -17,11 +17,15 @@ class IntegrityLinesTest {
     private val today = LocalDate.of(2026, 11, 17)
     private fun lines(integrity: Integrity?, failure: IntegrityFailure? = null) = integrityLines(device(integrity, failure), today)
 
-    private val locked = Integrity(1, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_607, trust = AttestationTrust.GOOGLE_ROOT)
+    private val locked = Integrity(
+        1, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_607, trust = AttestationTrust.GOOGLE_ROOT,
+        revocationListDate = LocalDate.of(2026, 10, 29),
+    )
+    private val dated = R.string.device_revocation_list to "2026-10-29"
 
     @Test
     fun `a sound phone shows the check and the patch`() {
-        assertEquals(listOf(R.string.device_integrity_ok to null, R.string.device_patch to "2026-07"), lines(locked))
+        assertEquals(listOf(R.string.device_integrity_ok to null, R.string.device_patch to "2026-07", dated), lines(locked))
     }
 
     @Test
@@ -53,6 +57,33 @@ class IntegrityLinesTest {
         // Nothing confirmed, nothing to date; and nothing unconfirmed is dated.
         assertEquals(emptyList<Pair<Int, String?>>(), lines(unlocked.copy(osPatchLevel = null)))
         assertEquals(listOf(R.string.device_patch_system to "2026-07"), lines(own.copy(trust = AttestationTrust.OTHER_ROOT)))
+    }
+
+    @Test
+    fun `a list of unknown date is called so, as an old one would be`() {
+        // A pack whose SOURCE gives no date for the list: its age cannot be told, so it cannot be called fresh.
+        assertEquals(
+            listOf(R.string.device_integrity_ok to null, R.string.device_patch to "2026-07", R.string.device_revocation_list_undated to null),
+            lines(locked.copy(revocationListDate = null)),
+        )
+        // Not for values nothing confirmed.
+        assertEquals(listOf(R.string.device_patch_system to "2026-07"), lines(locked.copy(trust = AttestationTrust.OTHER_ROOT)))
+    }
+
+    @Test
+    fun `a clock set back does not make the list younger than the confirmed patch level allows`() {
+        // A phone whose system Google's key confirms as patched in July 2026 cannot be running before July 2026,
+        // whatever its clock says; the list's age is counted from then at the least.
+        val list = LocalDate.of(2026, 2, 1)
+        val setBack = integrityLines(device(locked.copy(revocationListDate = list)), LocalDate.of(2026, 3, 1))
+        assertEquals(R.string.device_revocation_list_old to "2026-02-01", setBack.last())
+        // 90 days before the patch month's first day is still fresh; 91 is old.
+        val july = LocalDate.of(2026, 7, 1)
+        assertEquals(R.string.device_revocation_list, integrityLines(device(locked.copy(revocationListDate = july.minusDays(90))), list).last().first)
+        assertEquals(R.string.device_revocation_list_old, integrityLines(device(locked.copy(revocationListDate = july.minusDays(91))), list).last().first)
+        // Without a confirmed patch level, the phone's date is all there is.
+        val noPatch = locked.copy(osPatchLevel = null, revocationListDate = list)
+        assertEquals(R.string.device_revocation_list, integrityLines(device(noPatch), LocalDate.of(2026, 3, 1)).last().first)
     }
 
     @Test
@@ -90,12 +121,12 @@ class IntegrityLinesTest {
     fun `a lagging vendor patch and an owner's boot key are shown where the hardware states them`() {
         val own = locked.copy(verifiedBoot = 1, verifiedBootKey = "ab12", vendorPatchLevel = 202_605)
         assertEquals(
-            listOf(R.string.device_patch to "2026-07", R.string.device_vendor_patch to "2026-05", R.string.device_boot_key to "ab12"),
+            listOf(R.string.device_patch to "2026-07", R.string.device_vendor_patch to "2026-05", R.string.device_boot_key to "ab12", dated),
             lines(own),
         )
         // A vendor patch as recent as the system's is not repeated, and the maker's key is not shown.
         assertEquals(
-            listOf(R.string.device_integrity_ok to null, R.string.device_patch to "2026-07"),
+            listOf(R.string.device_integrity_ok to null, R.string.device_patch to "2026-07", dated),
             lines(locked.copy(verifiedBootKey = "cd34", vendorPatchLevel = 202_607)),
         )
     }

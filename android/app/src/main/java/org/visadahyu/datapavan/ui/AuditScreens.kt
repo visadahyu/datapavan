@@ -517,10 +517,18 @@ internal fun integrityLines(device: DeviceFacts, today: LocalDate): List<Pair<In
     integrity.verifiedBootKey?.takeIf { confirmed && integrity.verifiedBoot == 1 }
         ?.let { lines += R.string.device_boot_key to it }
     // Every value above was confirmed against the revocation list as of its date, under them all: a key revoked
-    // since then would pass.
-    integrity.revocationListDate?.takeIf { confirmed && lines.isNotEmpty() }?.let { date ->
-        val old = ChronoUnit.DAYS.between(date, today) > REVOCATION_LIST_DAYS
-        lines += (if (old) R.string.device_revocation_list_old else R.string.device_revocation_list) to date.toString()
+    // since then would pass. A list of unknown date cannot be called fresh. The phone's date is set by its
+    // system, so a clock set back could make an old list look fresh; a system whose patch level Google's key
+    // confirms is not running before that month began, so the list's age is counted from then at the least.
+    if (confirmed && lines.isNotEmpty()) {
+        val date = integrity.revocationListDate
+        val patched = integrity.osPatchLevel?.takeIf { it % 100 in 1..12 }?.let { LocalDate.of(it / 100, it % 100, 1) }
+        val now = if (patched != null && patched.isAfter(today)) patched else today
+        lines += when {
+            date == null -> R.string.device_revocation_list_undated to null
+            ChronoUnit.DAYS.between(date, now) > REVOCATION_LIST_DAYS -> R.string.device_revocation_list_old to date.toString()
+            else -> R.string.device_revocation_list to date.toString()
+        }
     }
     return lines
 }

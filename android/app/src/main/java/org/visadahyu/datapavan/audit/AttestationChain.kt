@@ -1,6 +1,7 @@
 package org.visadahyu.datapavan.audit
 
 import org.visadahyu.datapavan.datapack.DataPack
+import org.visadahyu.datapavan.datapack.DataPackRules
 import java.io.IOException
 import java.io.InputStream
 import java.math.BigInteger
@@ -221,10 +222,7 @@ class AttestationChain(
             val serials = revoked.bufferedReader().useLines { lines ->
                 lines.map(String::trim).filter { it.isNotEmpty() && !it.startsWith("#") }.toSet()
             }
-            val retrieved = source?.bufferedReader()?.useLines { lines ->
-                lines.firstOrNull { it.startsWith("retrieved:") }?.substringAfter(":")?.trim()?.take(10)
-            }
-            val date = retrieved?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+            val date = source?.bufferedReader()?.use { it.readText() }?.let(DataPackRules::retrieved)
             return AttestationChain(keys, serials, date)
         }
 

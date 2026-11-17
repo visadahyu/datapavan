@@ -14,6 +14,7 @@
     <string name="device_integrity_waiting">ينتظر فحص العتاد أن يصل هذا الهاتف إلى Google.</string>
     <string name="device_revocation_list">جرت المقارنة بقائمة Google للمفاتيح المُبطَلة التي تعود إلى %1$s.</string>
     <string name="device_revocation_list_old">قائمة Google للمفاتيح المُبطَلة المستخدمة هنا تعود إلى %1$s، أي قبل أكثر من ثلاثة أشهر، لذا لن يُكتشف مفتاح أُبطل بعد ذلك. استورد حزمة بيانات أحدث لتحديثها.</string>
+    <string name="device_revocation_list_undated">تاريخ قائمة Google للمفاتيح المُبطَلة المستخدمة هنا غير معروف، لذا قد لا يُكتشف مفتاح أُبطل منذ ذلك الحين. استورد حزمة بيانات أحدث لتحديثها.</string>
     <string name="device_boot_key">مفتاح الإقلاع المتحقَّق منه: %1$s</string>
     <string name="device_patch_system">تصحيح الأمان، كما يذكره النظام: %1$s</string>
     <string name="device_vendor_patch">تصحيح الأمان من المورّدين: %1$s</string>

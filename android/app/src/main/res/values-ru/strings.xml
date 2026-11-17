@@ -13,6 +13,7 @@
     <string name="device_integrity_waiting">Аппаратная проверка ждёт, пока этот телефон свяжется с Google.</string>
     <string name="device_revocation_list">Проверено по списку отозванных ключей Google от %1$s.</string>
     <string name="device_revocation_list_old">Используемый здесь список отозванных ключей Google — от %1$s, то есть старше трёх месяцев, поэтому ключ, отозванный после этого, не был бы обнаружен. Импортируйте более новый пакет данных, чтобы обновить его.</string>
+    <string name="device_revocation_list_undated">Дата используемого здесь списка отозванных ключей Google неизвестна, поэтому ключ, отозванный с тех пор, может быть не обнаружен. Импортируйте более новый пакет данных, чтобы обновить его.</string>
     <string name="device_boot_key">Ключ проверенной загрузки: %1$s</string>
     <string name="device_patch_system">Обновление системы безопасности, по данным системы: %1$s</string>
     <string name="device_vendor_patch">Обновление системы безопасности от поставщиков: %1$s</string>

@@ -35,6 +35,9 @@ class DataPack internal constructor(
 
     fun text(path: String): String? = file(path)?.toString(Charsets.UTF_8)
 
+    /** The day [dataset]'s SOURCE says it was retrieved ([DataPackRules.retrieved]), or null. */
+    fun retrieved(dataset: String): LocalDate? = text("$dataset/SOURCE")?.let(DataPackRules::retrieved)
+
     /**
      * SHA-256 of the payload, in lowercase hex. It is published with every pack, so that anyone can
      * compare it with the one on their phone; a pack signed with a stolen key and given to a few
@@ -96,6 +99,9 @@ enum class PackRefusal(internal val code: Int) {
 
     /** The file could not be read. */
     UNREADABLE(102),
+
+    /** A dataset whose age the app shows has no date in its SOURCE. */
+    UNDATED_DATASET(103),
     ;
 
     internal companion object {
@@ -167,9 +173,19 @@ internal object DataPackRules {
         return (bundled.keys + installed?.keys.orEmpty()).distinct().filter { it !in revoked }
     }
 
-    /** A pack can only replace an older one, so an old pack with known problems cannot return. */
-    fun refusal(candidate: DataPack, active: DataPack): PackRefusal? =
-        if (candidate.sequence <= active.sequence) PackRefusal.NOT_NEWER else null
+    /**
+     * A pack can only replace an older one, so an old pack with known problems cannot return. A pack must also
+     * date each dataset whose age the app shows: the attestation revocation list, which the app calls old after
+     * 90 days (ADR 0040), and could not tell from a fresh one without its date.
+     */
+    fun refusal(candidate: DataPack, active: DataPack): PackRefusal? = when {
+        candidate.sequence <= active.sequence -> PackRefusal.NOT_NEWER
+        DATED_DATASETS.any { it in candidate.datasets && candidate.retrieved(it) == null } -> PackRefusal.UNDATED_DATASET
+        else -> null
+    }
+
+    /** The datasets whose age the app shows from their SOURCE. */
+    private val DATED_DATASETS = listOf("attestation")
 
     /** The chain of a pack signed by [signer], imported over a pack with [chain]. */
     fun chainAfter(bundled: DataPack, chain: List<String>, signer: String): List<String> = when {
@@ -189,6 +205,19 @@ internal object DataPackRules {
     }
 
     private const val STALE_MONTHS = 6L
+
+    /**
+     * The day that starts the `retrieved:` line of a dataset's SOURCE, as `YYYY-MM-DD` or a timestamp that
+     * starts with it; null when there is no such line or it starts with no date.
+     */
+    fun retrieved(source: String): LocalDate? {
+        val value = source.lineSequence().firstOrNull { it.startsWith("retrieved:") }?.substringAfter(':')?.trim()
+        return try {
+            value?.take(10)?.let(LocalDate::parse)
+        } catch (_: DateTimeParseException) {
+            null
+        }
+    }
 
     /** Whether an imported pack still applies, for example after an app update. */
     fun keep(bundled: DataPack, installed: DataPack, chain: List<String>): Boolean =
