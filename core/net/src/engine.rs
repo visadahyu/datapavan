@@ -203,6 +203,12 @@ pub struct Limits {
     /// A mapping that passed a datagram either way less than this long ago is never ended to make room,
     /// so that a call is never cut, unless it is an answered lookup, which carries nothing more.
     pub udp_quiet: Duration,
+    /// At most this many associations of a stand-in's own are open at once, for every app together (ADR
+    /// 0044, unit 9b): through the tool, each holds a socket and a connection to the tool, and a place
+    /// in its app's share. They are for the rare app that asks several names at once on one port in a
+    /// protocol without identifiers; beyond the cap, such a stand-in waits beside the others under unit
+    /// 9's floor.
+    pub udp_own_relays: usize,
     /// At most this many names hold a stand-in at once (ADR 0038, [`crate::standins::CAPACITY`]); the
     /// least recently used gives way to a new one. The tests hold fewer.
     pub stand_ins: usize,
@@ -300,6 +306,7 @@ impl Default for Limits {
             sweep_every: Duration::from_secs(60),
             tcp_idle: nat::TCP_IDLE,
             port_cooling: nat::PORT_COOLING,
+            udp_own_relays: 32,
             stand_ins: crate::standins::CAPACITY,
             echo_sockets: 32,
             echo_idle: Duration::from_secs(10),
@@ -461,7 +468,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 49;
+pub const COUNTERS: usize = 51;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -515,6 +522,8 @@ pub struct Counters {
     listener_recoveries: AtomicU64,
     udp_identified: AtomicU64,
     udp_unidentified: AtomicU64,
+    udp_own_relays: AtomicU64,
+    udp_own_refused: AtomicU64,
 }
 
 impl Counters {
@@ -570,7 +579,10 @@ impl Counters {
     /// that derive from it, a DNS query's ID and question, an NTP request's timestamp) where the address
     /// alone could not tell: several stand-ins waited on the port, or the address was another peer's,
     /// and the answers dropped because only stand-ins with identifiers could take them and they carried
-    /// none of theirs. None names a destination: they can be read on any phone. New counters are only
+    /// none of theirs; and the associations of a stand-in's own opened for a stand-in whose answers the
+    /// address alone could not have told from another's on its port, and those refused at a cap or for
+    /// want of a place in the budget, which left it beside the other under unit 9's floor. None names a
+    /// destination: they can be read on any phone. New counters are only
     /// ever appended, so that scripts reading a column by its place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
@@ -639,6 +651,8 @@ impl Counters {
             &self.listener_recoveries,
             &self.udp_identified,
             &self.udp_unidentified,
+            &self.udp_own_relays,
+            &self.udp_own_refused,
         ]
     }
 }

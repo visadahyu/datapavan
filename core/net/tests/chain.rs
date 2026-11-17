@@ -39,6 +39,7 @@ const UDP_CAME_IN_CAPPED: usize = 27;
 const UDP_RELAY_ELSEWHERE: usize = 28;
 const UDP_AMBIGUOUS: usize = 29;
 const UDP_LATE: usize = 30;
+const UDP_EVICTED: usize = 32;
 const UDP_IDENTIFIED: usize = 47;
 const UDP_UNIDENTIFIED: usize = 48;
 
@@ -698,54 +699,321 @@ async fn a_stand_in_gets_the_answer_from_the_real_address() -> Outcome {
     Ok(())
 }
 
-/// Two stand-ins waiting on one port: an answer from that port could be either name's, so it is
-/// dropped and counted rather than given to the app under the wrong name.
-#[tokio::test(flavor = "current_thread")]
-async fn an_answer_two_stand_ins_could_take_is_dropped() -> Outcome {
+/// Two servers on one port, at 127.0.0.1 and 127.0.0.2, each echoing every datagram, the first only
+/// once both were asked, so that both stand-ins wait when the first answers come.
+async fn two_echoes_on_one_port() -> io::Result<u16> {
     let (first, second) = same_port().await?;
     let port = first.local_addr()?.port();
-    // Each answers once both were asked, so that both stand-ins wait when the answers come.
     let both = Arc::new(Barrier::new(2));
     for server in [first, second] {
         let both = Arc::clone(&both);
         tokio::spawn(async move {
             let mut buffer = [0u8; 64];
-            if let Ok((n, relay)) = server.recv_from(&mut buffer).await {
-                both.wait().await;
+            let mut waited = false;
+            while let Ok((n, relay)) = server.recv_from(&mut buffer).await {
+                if !std::mem::replace(&mut waited, true) {
+                    both.wait().await;
+                }
                 let _ = server.send_to(&buffer[..n], relay).await;
             }
         });
     }
+    Ok(port)
+}
+
+/// The tool's settings for two names, `a.test` and `b.test`, reaching the two servers on `port` of
+/// [`two_echoes_on_one_port`]: by their own addresses, or in IPv6, by addresses the relay remaps to them
+/// and names the answers by.
+fn two_names(port: u16, ipv6: bool) -> Settings {
     let mut settings = Settings::default();
+    for (name, here, far) in [
+        ("a.test", Ipv4Addr::LOCALHOST, "2001:db8::a"),
+        ("b.test", Ipv4Addr::new(127, 0, 0, 2), "2001:db8::b"),
+    ] {
+        if ipv6 {
+            let far: IpAddr = far.parse().unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+            settings.names.insert(name.into(), far);
+            settings
+                .remap
+                .insert(SocketAddr::new(far, port), SocketAddr::from((here, port)));
+        } else {
+            settings.names.insert(name.into(), IpAddr::V4(here));
+        }
+    }
     settings
-        .names
-        .insert("a.test".into(), IpAddr::V4(Ipv4Addr::LOCALHOST));
-    settings
-        .names
-        .insert("b.test".into(), IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2)));
+}
+
+/// What reaches the app until it has `count` datagrams, in whatever order they came.
+async fn received(
+    tunnel: &UnixDatagram,
+    count: usize,
+) -> Result<HashSet<(SocketAddr, Vec<u8>)>, Box<dyn std::error::Error>> {
+    let mut seen = HashSet::new();
+    while seen.len() < count {
+        seen.insert(receive(tunnel).await?.ok_or("a datagram")?);
+    }
+    Ok(seen)
+}
+
+const OWN_RELAYS: usize = 49;
+const OWN_REFUSED: usize = 50;
+
+/// ADR 0044, unit 9b: two stand-ins without identifiers on one port at once. The second's datagram
+/// would share the port the first waits on, where the address alone could not tell their answers
+/// apart, so it leaves by a `UDP ASSOCIATE` of its own: the tool sees a second one, and each stand-in
+/// gets its own answer, from addresses the tool reached in IPv4 and in IPv6. Silent for `udp_idle`
+/// while the first goes on, the second's flow ends, and its association with it. Before unit 9b both
+/// answers were dropped.
+#[tokio::test(flavor = "current_thread")]
+async fn a_stand_in_without_identifiers_beside_a_waiting_one_gets_an_association_of_its_own()
+-> Outcome {
+    for ipv6 in [false, true] {
+        let port = two_echoes_on_one_port().await?;
+        let tool = proxy(two_names(port, ipv6)).await?;
+        let limits = Limits {
+            udp_idle: Duration::from_secs(1),
+            ..Limits::default()
+        };
+        let (engine, tunnel) = engine_with(chain(tool.address), &limits, Arc::new(ByPort))?;
+        let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, port));
+        let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, port));
+        // The second only once the first waits: both would otherwise wait for the mapping, and either
+        // could be the first to leave by it.
+        send(&tunnel, app(CHAINED_PORT), a, b"to a").await?;
+        until_a_flow_to(&engine, a).await?;
+        send(&tunnel, app(CHAINED_PORT), b, b"to b").await?;
+        let both = HashSet::from([(a, b"to a".to_vec()), (b, b"to b".to_vec())]);
+        assert_eq!(received(&tunnel, 2).await?, both, "IPv6: {ipv6}");
+        assert_eq!(tool.commands(), [3, 3], "a second association");
+        let counters = engine.counters();
+        assert_eq!(
+            (
+                counters[OWN_RELAYS],
+                counters[OWN_REFUSED],
+                counters[UDP_UNMATCHED]
+            ),
+            (1, 0, 0)
+        );
+        // The first goes on; the second, silent, ends with its association.
+        let until = std::time::Instant::now() + Duration::from_secs(4);
+        while tool.open_relays() > 1 {
+            if std::time::Instant::now() > until {
+                return Err(format!(
+                    "the second association is still open: {}",
+                    tool.open_relays()
+                )
+                .into());
+            }
+            echoed(&tunnel, a, b"a goes on").await?;
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+        echoed(&tunnel, a, b"a still").await?;
+        assert_eq!(tool.open_relays(), 1);
+    }
+    Ok(())
+}
+
+/// A stand-in whose datagram carries an identifier, beside one without that waits on its port, gets
+/// an association of its own too; two that carry identifiers share the mapping's. The scripted relay
+/// sees each association's datagrams from its own address at Watch.
+#[tokio::test(flavor = "current_thread")]
+async fn only_a_stand_in_beside_one_without_identifiers_gets_an_association_of_its_own() -> Outcome
+{
+    let ((stun_a, a_answer), (stun_b, b_answer)) = (binding(0xa1), binding(0xb2));
+    for (first, second, own) in [
+        (&b"plain"[..], &stun_b[..], true),
+        (&stun_a[..], &stun_b[..], false),
+    ] {
+        let (stand_ins, engine_ats, (engine, tunnel, relay, _, _script)) = asked_through(
+            &[
+                (b"\x01a\x04test\x00", first),
+                (b"\x01b\x04test\x00", second),
+            ],
+            3_478,
+        )
+        .await?;
+        assert_eq!(
+            engine_ats[0] != engine_ats[1],
+            own,
+            "an association of its own: {own}"
+        );
+        let (far_a, far_b) = far_pairs(3_478)[0];
+        let a_says = if own {
+            b"plain answer".to_vec()
+        } else {
+            a_answer.clone()
+        };
+        relay
+            .send_to(&relayed(header_by_address(far_b), &b_answer), engine_ats[1])
+            .await?;
+        relay
+            .send_to(&relayed(header_by_address(far_a), &a_says), engine_ats[0])
+            .await?;
+        let both = HashSet::from([(stand_ins[0], a_says), (stand_ins[1], b_answer.clone())]);
+        assert_eq!(received(&tunnel, 2).await?, both);
+        assert_eq!(engine.counters()[OWN_RELAYS], u64::from(own));
+    }
+    Ok(())
+}
+
+/// The caps on associations of a stand-in's own: 8 for a mapping, and `Limits::udp_own_relays` for the
+/// engine. A stand-in without identifiers beyond either waits beside the first on the mapping's
+/// association, under unit 9's floor: an answer there from an address the app never saw is dropped and
+/// counted, as either's, while those on the associations opened reach their own stand-ins.
+#[tokio::test(flavor = "current_thread")]
+async fn beyond_the_caps_a_stand_in_waits_beside_the_other_under_the_floor() -> Outcome {
+    for (cap, names) in [(32, 10usize), (1, 3)] {
+        let (proxy, relay, mut script) = scripted().await?;
+        let limits = Limits {
+            udp_own_relays: cap,
+            ..Limits::default()
+        };
+        let (engine, tunnel) = engine_with(chain(proxy), &limits, Arc::new(ByPort))?;
+        let mut stand_ins = Vec::new();
+        for n in 0..names {
+            let mut wire = vec![2, b'n', b'0' + u8::try_from(n)?];
+            wire.extend_from_slice(b"\x04test\x00");
+            stand_ins.push(SocketAddr::from((stand_in(&tunnel, &wire).await?, 4_000)));
+        }
+        let mut engine_ats = Vec::new();
+        for to in &stand_ins {
+            send(&tunnel, app(CHAINED_PORT), *to, b"no identifier").await?;
+            engine_ats.push(heard_from_engine(&mut script).await?);
+        }
+        let opened = names - 2;
+        let counters = engine.counters();
+        assert_eq!(
+            (counters[OWN_RELAYS], counters[OWN_REFUSED]),
+            (u64::try_from(opened)?, 1),
+            "cap {cap}"
+        );
+        let last = engine_ats[names - 1];
+        assert_eq!(last, engine_ats[0], "the last waits beside the first");
+        // The floor on the mapping's association; each association of its own its stand-in's.
+        for (n, at) in engine_ats.iter().enumerate().take(names - 1) {
+            let far = SocketAddr::from(([198, 51, 100, 20 + u8::try_from(n)?], 4_000));
+            relay
+                .send_to(&relayed(header_by_address(far), &[u8::try_from(n)?]), *at)
+                .await?;
+        }
+        let expected: HashSet<_> = (1..names - 1)
+            .map(|n| (stand_ins[n], vec![u8::try_from(n).unwrap_or(0)]))
+            .collect();
+        assert_eq!(received(&tunnel, names - 2).await?, expected, "cap {cap}");
+        assert!(silent(&tunnel).await, "the floor's answer reached the app");
+        assert_eq!(engine.counters()[UDP_UNMATCHED], 1, "cap {cap}");
+    }
+    Ok(())
+}
+
+/// An association of a stand-in's own takes a place in its app's share of the budget, as a mapping
+/// does (ADR 0044, decision 3), and never ends its own mapping to make room: with one place, the
+/// mapping's, a second stand-in without identifiers is refused one and waits beside the first, under
+/// unit 9's floor.
+#[tokio::test(flavor = "current_thread")]
+async fn with_no_place_in_the_budget_a_stand_in_waits_beside_the_other() -> Outcome {
+    // The mapping quiet for `udp_quiet` before the second stand-in's datagram, which would let it end
+    // to make room, were it not the one the app sends by.
+    for quiet in [None, Some(Duration::from_millis(100))] {
+        let (proxy, relay, mut script) = scripted().await?;
+        let limits = Limits {
+            udp_mappings: 1,
+            udp_share: 1,
+            udp_quiet: quiet.unwrap_or(Limits::default().udp_quiet),
+            ..Limits::default()
+        };
+        let (engine, tunnel) = engine_with(chain(proxy), &limits, Arc::new(ByPort))?;
+        let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, 4_000));
+        let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, 4_000));
+        let mut engine_ats = Vec::new();
+        for to in [a, b] {
+            send(&tunnel, app(CHAINED_PORT), to, b"no identifier").await?;
+            engine_ats.push(heard_from_engine(&mut script).await?);
+            if let Some(quiet) = quiet {
+                tokio::time::sleep(quiet * 2).await;
+            }
+        }
+        assert_eq!(
+            engine_ats[0], engine_ats[1],
+            "one association, quiet: {quiet:?}"
+        );
+        let far = SocketAddr::from(([198, 51, 100, 20], 4_000));
+        relay
+            .send_to(&relayed(header_by_address(far), b"either's"), engine_ats[0])
+            .await?;
+        assert!(
+            silent(&tunnel).await,
+            "an answer reached the app under a name"
+        );
+        let counters = engine.counters();
+        assert_eq!(
+            (
+                counters[OWN_RELAYS],
+                counters[OWN_REFUSED],
+                counters[UDP_UNMATCHED],
+                counters[UDP_EVICTED]
+            ),
+            (0, 1, 1, 0),
+            "quiet: {quiet:?}"
+        );
+    }
+    Ok(())
+}
+
+/// Xray and sing-box give back the name for answers from where the association's first destination
+/// resolved to: a stand-in alone on its own association is that first one, and its answers then come by
+/// name, which matches them on its association as on the mapping's.
+#[tokio::test(flavor = "current_thread")]
+async fn an_association_of_its_own_whose_relay_names_the_name_works() -> Outcome {
+    let port = two_echoes_on_one_port().await?;
+    let mut settings = two_names(port, false);
+    settings.headers = Headers::Name;
     let tool = proxy(settings).await?;
     let (engine, tunnel) = engine(chain(tool.address))?;
-    let a = stand_in(&tunnel, b"\x01a\x04test\x00").await?;
-    let b = stand_in(&tunnel, b"\x01b\x04test\x00").await?;
-    send(
-        &tunnel,
-        app(CHAINED_PORT),
-        SocketAddr::from((a, port)),
-        b"to a",
-    )
-    .await?;
-    send(
-        &tunnel,
-        app(CHAINED_PORT),
-        SocketAddr::from((b, port)),
-        b"to b",
-    )
-    .await?;
-    let mut buffer = [0u8; 2048];
-    let later = tokio::time::timeout(Duration::from_millis(500), tunnel.recv(&mut buffer)).await;
-    assert!(later.is_err(), "an answer reached the app under a name");
-    assert_eq!(engine.counters()[UDP_UNMATCHED], 2);
-    assert_eq!(tool.commands(), [3]);
+    let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, port));
+    let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, port));
+    send(&tunnel, app(CHAINED_PORT), a, b"to a").await?;
+    until_a_flow_to(&engine, a).await?;
+    send(&tunnel, app(CHAINED_PORT), b, b"to b").await?;
+    let both = HashSet::from([(a, b"to a".to_vec()), (b, b"to b".to_vec())]);
+    assert_eq!(received(&tunnel, 2).await?, both);
+    echoed(&tunnel, b, b"b again").await?;
+    assert_eq!(tool.commands(), [3, 3]);
+    let counters = engine.counters();
+    assert_eq!((counters[OWN_RELAYS], counters[UDP_FILTERED]), (1, 0));
+    Ok(())
+}
+
+/// What unit 9 holds for a mapping's association holds for an association of a stand-in's own: when
+/// the chain is set again with another tool, the mapping ends at its next datagram, and both of the
+/// first tool's relays close, the stand-in's own among them; the datagram goes through the new tool.
+#[tokio::test(flavor = "current_thread")]
+async fn an_association_of_its_own_ends_with_its_mapping_when_the_chain_changes() -> Outcome {
+    let port = two_echoes_on_one_port().await?;
+    let first = proxy(two_names(port, false)).await?;
+    let second = proxy(two_names(port, false)).await?;
+    let (engine, tunnel) = engine(chain(first.address))?;
+    let a = SocketAddr::from((stand_in(&tunnel, b"\x01a\x04test\x00").await?, port));
+    let b = SocketAddr::from((stand_in(&tunnel, b"\x01b\x04test\x00").await?, port));
+    send(&tunnel, app(CHAINED_PORT), a, b"to a").await?;
+    until_a_flow_to(&engine, a).await?;
+    send(&tunnel, app(CHAINED_PORT), b, b"to b").await?;
+    received(&tunnel, 2).await?;
+    assert_eq!(first.open_relays(), 2);
+    engine.chain(Some(chain(second.address)));
+    echoed(&tunnel, b, b"through the new tool").await?;
+    let until = std::time::Instant::now() + Duration::from_secs(2);
+    while first.open_relays() > 0 {
+        if std::time::Instant::now() > until {
+            return Err(format!(
+                "the first tool's relays still open: {}",
+                first.open_relays()
+            )
+            .into());
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert_eq!(second.commands(), [3]);
     Ok(())
 }
 
@@ -1521,9 +1789,12 @@ async fn another_port_of_a_bound_address_is_not_given_to_its_name_while_another_
 }
 
 /// Two names the tool resolves to one address, the first bound on one port, both then asked on a second
-/// port: an answer there could be either name's, even the bound one's, so it is dropped and counted.
+/// port without identifiers: an answer there could be either name's, even the bound one's. Since unit
+/// 9b the second name's datagram leaves by an association of its own, so that each answer reaches its
+/// own name: the first's on the mapping's, as another port of its bound name, the second's on its own.
+/// Before, both were dropped and counted.
 #[tokio::test(flavor = "current_thread")]
-async fn a_bound_name_does_not_take_a_port_another_name_also_waits_on() -> Outcome {
+async fn a_bound_name_and_another_asked_on_one_port_each_get_their_answer() -> Outcome {
     let one = udp_echo().await?;
     let second = UdpSocket::bind((one.ip(), 0)).await?;
     let two = second.local_addr()?;
@@ -1558,11 +1829,13 @@ async fn a_bound_name_does_not_take_a_port_another_name_also_waits_on() -> Outco
         )
         .await?;
     }
-    assert!(
-        silent(&tunnel).await,
-        "an answer reached the app under a name"
-    );
-    assert_eq!(engine.counters()[UDP_UNMATCHED], 2);
+    let both = HashSet::from([
+        (SocketAddr::from((a, two.port())), b"a again".to_vec()),
+        (SocketAddr::from((b, two.port())), b"to b".to_vec()),
+    ]);
+    assert_eq!(received(&tunnel, 2).await?, both);
+    assert_eq!(tool.commands(), [3, 3]);
+    assert_eq!(engine.counters()[UDP_UNMATCHED], 0);
     Ok(())
 }
 
@@ -4348,19 +4621,33 @@ async fn asked_by_script(
     names: &[(&[u8], &[u8])],
     port: u16,
 ) -> Result<(Vec<SocketAddr>, Scripted), Box<dyn std::error::Error>> {
+    let (stand_ins, _, scripted) = asked_through(names, port).await?;
+    Ok((stand_ins, scripted))
+}
+
+/// As [`asked_by_script`], with the engine's address each datagram came from at the relay: one for
+/// each association (ADR 0044, unit 9b).
+async fn asked_through(
+    names: &[(&[u8], &[u8])],
+    port: u16,
+) -> Result<(Vec<SocketAddr>, Vec<SocketAddr>, Scripted), Box<dyn std::error::Error>> {
     let (proxy, relay, mut script) = scripted().await?;
     let (engine, tunnel) = engine(chain(proxy))?;
     let mut stand_ins = Vec::new();
     for (name, _) in names {
         stand_ins.push(SocketAddr::from((stand_in(&tunnel, name).await?, port)));
     }
-    let mut engine_at = None;
+    let mut engine_ats = Vec::new();
     for (to, (_, payload)) in stand_ins.iter().zip(names) {
         send(&tunnel, app(CHAINED_PORT), *to, payload).await?;
-        engine_at = Some(heard_from_engine(&mut script).await?);
+        engine_ats.push(heard_from_engine(&mut script).await?);
     }
-    let engine_at = engine_at.ok_or("no datagram")?;
-    Ok((stand_ins, (engine, tunnel, relay, engine_at, script)))
+    let engine_at = *engine_ats.last().ok_or("no datagram")?;
+    Ok((
+        stand_ins,
+        engine_ats,
+        (engine, tunnel, relay, engine_at, script),
+    ))
 }
 
 /// Two stand-ins wait on one port with a STUN request each; their responses come from addresses the app
@@ -4576,7 +4863,8 @@ type Exchange<'a> = (u16, (&'a [u8], Vec<u8>), (&'a [u8], Vec<u8>));
 
 /// A DNS query to a port other than 53 that reads strictly as one, and an NTP request to port 123,
 /// each sent to two stand-ins at once: each answer reaches its own stand-in by the query's ID and
-/// question, or by the request's transmit timestamp; one with another ID is dropped and counted.
+/// question, or by the request's transmit timestamp, from IPv4 and IPv6 addresses; one with another
+/// ID is dropped and counted.
 #[tokio::test(flavor = "current_thread")]
 async fn dns_on_another_port_and_ntp_are_told_by_their_own_fields() -> Outcome {
     let dns_query = |id: u16, name: &[u8]| {
@@ -4612,43 +4900,45 @@ async fn dns_on_another_port_and_ntp_are_told_by_their_own_fields() -> Outcome {
             (&b_ntp, ntp(4, 24, 0xe9a1_0000_0000_0002)),
         ),
     ];
-    for (port, (a_asks, a_answer), (b_asks, b_answer)) in cases {
-        let (far_a, far_b) = far_pairs(port)[0];
-        let (stand_ins, (engine, tunnel, relay, engine_at, _script)) = asked_by_script(
-            &[
-                (b"\x01a\x04test\x00", a_asks),
-                (b"\x01b\x04test\x00", b_asks),
-            ],
-            port,
-        )
-        .await?;
-        if port != 123 {
-            let wrong = dns_response(&a_query, 0x0c0c);
-            relay
-                .send_to(&relayed(header_by_address(far_a), &wrong), engine_at)
-                .await?;
+    for (port, (a_asks, a_answer), (b_asks, b_answer)) in &cases {
+        let port = *port;
+        for (far_a, far_b) in far_pairs(port) {
+            let (stand_ins, (engine, tunnel, relay, engine_at, _script)) = asked_by_script(
+                &[
+                    (b"\x01a\x04test\x00", a_asks),
+                    (b"\x01b\x04test\x00", b_asks),
+                ],
+                port,
+            )
+            .await?;
+            if port != 123 {
+                let wrong = dns_response(&a_query, 0x0c0c);
+                relay
+                    .send_to(&relayed(header_by_address(far_a), &wrong), engine_at)
+                    .await?;
+            }
+            for (from, answer) in [(far_b, b_answer), (far_a, a_answer)] {
+                relay
+                    .send_to(&relayed(header_by_address(from), answer), engine_at)
+                    .await?;
+            }
+            assert_eq!(
+                receive(&tunnel).await?,
+                Some((stand_ins[1], b_answer.clone())),
+                "port {port}"
+            );
+            assert_eq!(
+                receive(&tunnel).await?,
+                Some((stand_ins[0], a_answer.clone())),
+                "port {port}"
+            );
+            let counters = engine.counters();
+            assert_eq!(
+                (counters[UDP_IDENTIFIED], counters[UDP_UNIDENTIFIED]),
+                (1, u64::from(port != 123)),
+                "port {port}"
+            );
         }
-        for (from, answer) in [(far_b, &b_answer), (far_a, &a_answer)] {
-            relay
-                .send_to(&relayed(header_by_address(from), answer), engine_at)
-                .await?;
-        }
-        assert_eq!(
-            receive(&tunnel).await?,
-            Some((stand_ins[1], b_answer.clone())),
-            "port {port}"
-        );
-        assert_eq!(
-            receive(&tunnel).await?,
-            Some((stand_ins[0], a_answer.clone())),
-            "port {port}"
-        );
-        let counters = engine.counters();
-        assert_eq!(
-            (counters[UDP_IDENTIFIED], counters[UDP_UNIDENTIFIED]),
-            (1, u64::from(port != 123)),
-            "port {port}"
-        );
     }
     Ok(())
 }
