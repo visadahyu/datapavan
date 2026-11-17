@@ -56,9 +56,11 @@ checked on Android 11 and 17 emulators and on Galaxy A40 and A56 phones.
 - **Device integrity.** The bootloader lock and verified-boot state from hardware key attestation of a
   key Datapavan generates with a challenge of its own, checked as Google's verifier checks it, against
   Google's attestation root certificates, and decoded by a parser in the Rust engine that takes them only
-  from the part the secure hardware enforces itself; and the age of the security patch. A system that hooks
-  the keystore can still fake the check with an attestation key that leaked and is not yet revoked, or by
-  passing it to another phone; only a check from a second phone can rule that out (planned). *Why:* on a phone with an unlocked bootloader or a modified system, no
+  from the part the secure hardware enforces itself, against Google's list of revoked keys as of the data
+  pack's date; and the age of the security patch. A system that hooks the keystore can still fake the check
+  with an attestation key that leaked and is not yet revoked, or by passing it to another phone, and a hook
+  inside Datapavan's own process can replay a check captured from any phone; only a check from a second phone
+  can rule those out (planned). *Why:* on a phone with an unlocked bootloader or a modified system, no
   app can be trusted, Datapavan included.
 - **Tracker scan.** The code of every installed app, in its base APK and every split, is read by a DEX
   parser in the Rust engine and matched against the εxodus tracker database. Trackers whose code the app

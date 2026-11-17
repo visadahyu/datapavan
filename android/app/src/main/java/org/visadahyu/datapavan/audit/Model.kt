@@ -57,9 +57,10 @@ data class AppFacts(
 )
 
 /**
- * Hardware key attestation, decoded by the Rust engine. Null fields were absent. With a [securityLevel]
- * of 1 or 2, [deviceLocked], [verifiedBoot] and [osPatchLevel] come from the list the secure hardware
- * enforces itself, never from the one the system writes; with 0, everything is the system's word.
+ * Hardware key attestation, decoded by the Rust engine. Null fields were absent. With a [securityLevel] of 1 or 2,
+ * [deviceLocked], [verifiedBoot], [osPatchLevel], [verifiedBootKey] and [vendorPatchLevel] come from the list the
+ * secure hardware enforces itself, never from the one the system writes; with 0, everything is the system's word.
+ * They are the hardware's word only when [trust] is [AttestationTrust.GOOGLE_ROOT] as well.
  */
 data class Integrity(
     /** 0 software, 1 trusted execution environment, 2 secure chip: the weaker of the attestation's and the key's. */

@@ -49,8 +49,10 @@ does.
 
    Each signal comes with what it means for what the app shows. The app keeps working, and nothing is sent
    anywhere.
-5. **The attestation verifier follows Google's rules.** It reads the KeyDescription only from its first
-   occurrence counted from the root, and allows one occurrence. It compares the challenge it sent. It reads the
+5. **The attestation verifier follows Google's rules.** It reads the KeyDescription from the leaf and allows
+   no other occurrence (amended on 2026-11-17: first written as "its first occurrence counted from the root",
+   but Google's validator requires the extension in the leaf and nowhere else, which also closes a chain
+   extended below the attested key). It compares the challenge it sent. It reads the
    root of trust from the hardware-enforced list for TEE and StrongBox. It checks the validity of Remote Key
    Provisioning certificates, while factory-key chains stay exempt as Google says. It reads the full root of
    trust, the OS version and the OS, vendor and boot patch levels. The project's own Rust parser stays, and CI
@@ -78,29 +80,59 @@ does.
 
 ## How it is built
 
-**The hardware check after two independent reviews (2026-11-17, decisions 5 and 7).** The first review read
-the parser, `core/engine/src/attestation.rs`; the second read the whole check, the chain included. Each fault
-was shown before its fix by a test that failed, or, where no test could fail, as stated below.
+**The hardware check after three independent reviews (2026-11-17, decisions 5 and 7).** The first review read
+the parser, `core/engine/src/attestation.rs`; the second the whole check, the chain included; the third the
+result, adversarially. Each fault was shown before its fix by a test that failed, by a mutant that a new test
+kills, or, where neither could be, as stated below.
 
 - **The attestation must answer the app's own request.** The chain check verified only signatures,
   revocation and the root, and the app read the first certificate, so a hooked keystore could append a
-  certificate with a forged "locked and verified" extension, signed by a genuine key of its own, and the check
-  trusted it; nor were the challenge, the leaf's key or any date checked, so any captured genuine chain from
-  any locked phone could be replayed. `AttestationChain.kt` now follows Google's reference verifier
-  (`android/keyattestation`, `KeyAttestationCertPathValidator.kt`): the KeyDescription occurs once, in the
-  leaf; the leaf certifies the key the app generated; the challenge is the app's; the chain has the shape of
-  its provisioning (four certificates, five for Remote Key Provisioning, three for a software keystore), each
-  issued by the next and signed by it; and every certificate between the leaf and the root is valid at the
-  phone's date, but for an expired one in a factory chain, which Google exempts. Like Google's verifier, it
-  does not require the certificates above the leaf to be marked as CAs: the attestation certificates of the
-  Pixel 2 and the Sony Xperia 10 III in Google's test data are not, and their chains are genuine.
-  The date is the phone's, set by its system: a wrong date can make a sound chain look out of date, and a
+  certificate with a forged "locked and verified" extension, signed by a genuine key of its own; nor were the
+  challenge or any date checked, so a captured genuine chain from any locked phone could be replayed.
+  `AttestationChain.kt` now follows Google's reference verifier (`android/keyattestation`,
+  `KeyAttestationCertPathValidator.kt`) rule by rule: the KeyDescription occurs once, in the leaf; the chain has
+  the shape Google tells from the certificate the root signed (four certificates for a factory key, five for
+  Remote Key Provisioning, three or four when that certificate names neither); each certificate is issued by the
+  next by name and signed by it, the root by itself; and every certificate between the leaf and the root is valid
+  at the phone's date, but for an expired one in a factory chain. The app compares the challenge. Like Google's
+  verifier, it does not require the certificates above the leaf to be marked as CAs: the attestation
+  certificates of the Pixel 2 and the Sony Xperia 10 III in Google's test data are not, and their chains are
+  genuine.
+- **The leaf's key.** The check also requires the leaf to certify the key the app generated. This costs
+  nothing but protects little: on Android 12 and later the keystore takes the generated key's public half from
+  the same answer's leaf, and on 10 and 11 from its own export, so a hooked keystore controls both; Google's
+  verifier does not check it. It catches a keystore that answers with another key's chain by mistake.
+- **The date** is the phone's, set by its system: a wrong date can make a sound chain look out of date, and a
   system that sets it back can make an expired one look valid, but cannot make a forged extension, another
-  key, another challenge or a revoked or unknown root pass.
-- **What a hooked keystore can still do.** Sign a whole chain with an attestation key that leaked and is not
-  yet revoked; or pass the challenge to another phone it controls, locked and sound, and show that phone's
-  answer as this one's. On the phone, no check can tell either from the truth; decision 6's check from a
-  second phone, which pins what it saw, is what closes them. The README and the changelog say so.
+  challenge or a revoked or unknown root pass.
+- **The revocation list** is the one in the data pack, fetched on the day its `SOURCE` names; a key revoked since
+  then passes. The "locked and verified" line names that day, and past 90 days says the list is old and asks for
+  a newer data pack, which is how the list is refreshed (DATA-PACKS.md): half the age at which the app calls the
+  whole pack stale, since a leaked attestation key, the usual way to fake this check, is caught only once Google
+  revokes it.
+- **What a hooked keystore can still do.** Sign a whole chain with an attestation key that leaked and is not yet
+  revoked; or pass the challenge to another phone it controls, locked and sound, and show that phone's answer as
+  this one's. **What a hook inside the app's own process can do besides:** make the challenge one it knows, so
+  that a captured genuine chain from any phone answers it, with no leaked key and no second phone; or hand back
+  certificate objects whose signature check lies. Doing the chain's arithmetic in the parsers' process on the
+  raw bytes would not help: the hook in the app's process feeds that process too. On the phone, no check can
+  tell these from the truth; decision 6's check from a second phone, which pins what it saw, closes them.
+- **A software answer.** A hook could also answer in software, with the app's challenge, under a chain it signs
+  itself or under AOSP's software attestation root, whose private key AOSP publishes; the check called that
+  "No hardware check available" (low), quieter than the unlocked bootloader it could hide. Now the chain is
+  judged at every security level. On a phone that declares secure hardware for its keys (`FEATURE_HARDWARE_KEYSTORE`
+  from Android 12, `FEATURE_STRONGBOX_KEYSTORE` from 9, both answered by the package manager, apart from the
+  keystore), a software answer is "Hardware check answered by software" (high). On Android 10 and 11 without a
+  secure chip, no public API says whether a phone has such hardware, so there the chain decides: under AOSP's
+  software root it is "No hardware check available" (low), with a text that names a modified system as well as
+  emulators and phones without such hardware; a broken chain, another root or a revoked key is reported as such.
+  A claim of secure hardware under AOSP's software root is "Hardware check signed with a public key" (high), and
+  nothing it says is used.
+- **One check at a time.** The check used one fixed key alias, and a rotation, a fold or a theme change recreates
+  the screen and starts a second check while the first waits on the keystore: the second could read the first's
+  key and call a sound phone's check tampered with. `HardwareCheck` now runs one check at a time in the process,
+  each under an alias of its own, and sweeps keys left by a check that did not finish. A fake keystore with real
+  phones' chains tests what the collector runs, two checks at once included.
 - **Each value comes from one list only.** The parser took `rootOfTrust` and `osPatchLevel` from the
   software-enforced list, which the system writes, whenever the hardware-enforced list lacked them. Now a
   trusted environment's or StrongBox attestation is read from its hardware-enforced list alone, and a
@@ -108,67 +140,76 @@ was shown before its fix by a test that failed, or, where no test could fail, as
   `attestationSecurityLevel` and `keyMintSecurityLevel`, as Google's verifier takes it; a precedence test
   shows the hardware list winning where both carry values, which passed before as well.
 - **Encoding: never a false "locked and verified", never a false failure.** The first review asked for DER
-  everywhere, and the parser became strict. The second asked to decide each difference from Google's
-  verifier, which reads through BouncyCastle, by that rule instead: once the chain check holds, every byte is
-  signed by the phone's attestation key for this request, so leniency lets nothing unsigned through, while
-  strictness could only fail a sound phone. So the parser reads lengths in any definite form, a BOOLEAN as
-  false only when 0x00 (a genuine chain in Google's test data writes `deviceLocked` as 0x01, and BER and
-  BouncyCastle read any other byte as true), entries in any order, and treats a malformed or contradicting
-  `rootOfTrust` or patch level as absent rather than failing the whole extension. It stays as strict as
-  BouncyCastle on tag numbers and integers, and as Google's verifier on the KeyDescription's eight fields.
-  Where it differs from Google's verifier, it says so in its documentation: it refuses the indefinite
-  length form (skipping such an element would need descent driven by the input, and no keystore writes it);
-  it treats two different copies of an entry as absent, where Google keeps the last; it treats every
-  malformed root of trust as absent, where Google fails on some; and it skips tags it does not know, where
-  Google fails. All nine chains of the corpus below are strict DER but for that one BOOLEAN.
+  everywhere; the second asked to decide each difference from Google's verifier, which reads through
+  BouncyCastle, by that rule instead: once the chain check holds, every byte is signed by the phone's attestation
+  key for this request, so leniency lets nothing unsigned through, while strictness could only fail a sound phone.
+  So the parser reads lengths in any definite form, a BOOLEAN as false only when 0x00 (a genuine chain in
+  Google's test data writes `deviceLocked` as 0x01, and BER and BouncyCastle read any non-zero byte as true),
+  entries in any order, and treats a malformed or contradicting `rootOfTrust` or patch level as absent rather than
+  failing the whole extension. It stays as strict as BouncyCastle on tag numbers and integers, and as Google's
+  verifier on the KeyDescription's eight fields. Where it differs from Google's verifier, it says so in its
+  documentation: it refuses the indefinite length form; it treats two different copies of an entry as absent,
+  where Google keeps the last; it treats every malformed root of trust as absent, where Google fails on some; and
+  it skips tags it does not know, where Google fails. All nine chains of the corpus are strict DER but for that
+  one BOOLEAN.
 - **The corpus of real chains.** The maintainer approved the download of 16 files of Google's test data
   (`android/keyattestation` at c391708, Apache-2.0), recorded in `core/engine/testdata/keyattestation/SOURCE`
   with each file's SHA-256: chains from a Pixel 2, a Pixel XL, a Pixel 3's StrongBox, a Sony Xperia 10 III, a
-  Pixel 8a, a Pixel 9 Pro and a Pixel 9, and two samples Google keeps as invalid. The Rust tests compare
-  every value the parser reads with the values Google's library decodes, on all seven; the JVM tests run the
-  whole chain check on all nine. One invalid sample is a genuine chain whose `deviceLocked` is 0x01, read as
-  true; the other's leaf was edited, and its chain is broken.
+  Pixel 8a, a Pixel 9 Pro and a Pixel 9, and two samples Google keeps as invalid. The Rust tests compare every
+  value the parser reads with the values Google's library decodes, on all seven; the JVM tests run the chain
+  check on all nine. One invalid sample is a genuine chain whose `deviceLocked` is 0x01, read as true; the
+  other's leaf was edited, and its chain is broken. Synthetic chains show the rules no real chain can.
 - **Every field of decision 5, and what the app shows of it.** The parser reads the challenge, the whole root
   of trust (`verifiedBootKey`, `verifiedBootHash`), `osVersion`, and the OS, vendor and boot patch levels (as
-  `YYYYMM`, from the six or eight digits keystores write; anything else is absent).
+  `YYYYMM`, from the six or eight digits keystores write; anything else is absent). A value is shown as the
+  hardware's only when Google's root confirms a hardware attestation; otherwise the patch level reads as the
+  system's word, and the vendor level and an owner's boot key are not shown, since a forger can show any key.
+- **Keys from Google.** On phones that get their attestation keys from Google's provisioning server, keys last
+  about two weeks; one that cannot reach Google, as on a network that blocks it, has none, and Android 13 and
+  later say so. That is "Hardware check waiting for Google" (medium, calm text), not a generic failure. It is not
+  low, since a hook could claim it too. Basic never connects; the phone fetches the keys itself.
 - **Tests.** The truncation test cut only the outer element; the tests now cut every element at every byte,
-  about 2,500 cases, and a parser that read a missing boot state as verified fails them. Two extensions encoded
-  by OpenSSL test the tests' own encoder. The fuzz target also puts its bytes inside a valid extension, as each
-  list and as a root of trust, and checks that the list the parser does not read never changes its result and
-  that a malformed root of trust never fails the rest. The second review's surviving mutants are pinned
-  (lengths `82 00 a1` and of exactly 128 bytes, tag numbers 30 and 31, each boot state, the types of
-  `uniqueId` and `verifiedBootKey`), and the record that carries the result across JNI is tested from both
-  sides.
+  about 2,500 cases. Two extensions encoded by OpenSSL test the tests' own encoder. The fuzz target also puts its
+  bytes inside a valid extension and checks that the list the parser does not read never changes its values and
+  makes the extension fail exactly when it is not well formed, and that a malformed root of trust never fails the
+  rest. The reviews' surviving mutants, in Rust and Kotlin, are each killed by a test, and the record that
+  carries the result across JNI is tested from both sides.
 - **Smaller.** The depth limit could not be shown by a failing test, since nothing reached it: nested
   SEQUENCEs put at every position the parser reads never produced it. It is gone, and the documentation names
   the real bound. Errors say whether a field was missing or data followed the last one.
 
 What the app shows, in each case:
 
-- a check that failed or could not be read: "Hardware check failed" (medium) and its own line. Android
-  requires attestation of phones launched with Android 8 or later; the keystore of an older one on Android 10
-  attests in software, as the Pixel XL in the corpus, launched with Android 7, does; and no public API says
-  which version a phone launched with. So a failure counts everywhere;
-- a forged attestation (another key or challenge, or a certificate below the attested key): "Hardware check
+- a check that failed or could not be read: "Hardware check failed" (medium). Android requires attestation of
+  phones launched with Android 8 or later; the keystore of an older one on Android 10 attests in software, as the
+  Pixel XL in the corpus, launched with Android 7, does; and no public API says which version a phone launched
+  with. So a failure counts everywhere;
+- a phone without attestation keys until it reaches Google: "Hardware check waiting for Google" (medium);
+- a forged attestation (another challenge or key, or a certificate below the attested key): "Hardware check
   tampered with" (high), and nothing else it says, not even its patch level;
-- a software attestation: "No hardware check available" (low), nothing about the bootloader, and its patch
-  level as "Security patch, as the system states it";
+- a software answer on a phone that declares secure hardware for keys: "Hardware check answered by software"
+  (high);
+- a claim of secure hardware under AOSP's software root: "Hardware check signed with a public key" (high);
+- a software attestation under AOSP's software root, on a phone that declares no such hardware: "No hardware
+  check available" (low), and its patch level as "Security patch, as the system states it";
+- a broken chain: "Hardware check broken" (medium); a chain to another root: "Hardware check not confirmed"
+  (medium); a revoked key: "Hardware check key revoked" (high); a certificate not valid at the phone's date:
+  "Hardware check out of date" (medium); each with its patch level as the system's word;
 - a hardware attestation without a root of trust in its hardware list: "Hardware check incomplete" (medium);
-- a chain to another root, or a broken one: "Hardware check not confirmed" (medium); a revoked key: "Hardware
-  check key revoked" (high); a certificate not valid at the phone's date: "Hardware check out of date"
-  (medium);
 - a locked phone whose boot state is self-signed: "System signed with its own key" (medium, as decision 7
-  rates a key that matches no published one, since the dataset of published keys does not exist yet), and
-  its verified boot key, to compare with the one its project publishes;
-- a vendor patch level more than a year old: "Vendor security updates are old" (medium), and the vendor's
-  level beside the system's where it lags behind;
-- otherwise, with Google's root, a locked bootloader and a verified boot: the "locked and verified" line.
+  rates a key that matches no published one, since the dataset of published keys does not exist yet), and, with
+  Google's root, its verified boot key, to compare with the one its project publishes;
+- otherwise, with Google's root, a locked bootloader and a verified boot: the "locked and verified" line, the
+  day of the revocation list it was checked against, the patch level, and the vendor's where it lags.
 
 Decoded but not shown, with the reason: `verifiedBootHash`, which nothing on the phone could be compared with
 (decision 6's check pins it); `osVersion`, until real phones show how often it differs from what the system
-reports; and the boot patch level, which equals the system's on every chain of the corpus.
+reports; the boot patch level, which equals the system's on every chain of the corpus. Shown but not judged: the
+vendor patch level. A Pixel 3 in the corpus, patched in August 2019, still stated its vendor level as September
+2018, so an old vendor level is no sign of an unpatched phone, and the finding that judged it is gone.
 
 Still open from decisions 5 and 7: the dataset of the boot keys that systems such as GrapheneOS publish
-(decision 7), which would turn the self-signed fact into a named one; a comparison of `osVersion` and the
-patch levels with what the system reports; the check from a second phone (decision 6); and a run on real
-phones of each vendor, since the corpus holds only Pixels and one Sony.
+(decision 7), which would name the system and make the self-signed fact informational; a comparison of
+`osVersion` and the patch levels with what the system reports; the check from a second phone (decision 6); and
+a run on real phones of each vendor, since the corpus holds only Pixels and one Sony, and the Galaxy A40 is the
+only phone this build has run on.

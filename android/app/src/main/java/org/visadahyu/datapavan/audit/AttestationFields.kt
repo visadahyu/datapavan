@@ -5,9 +5,10 @@ import java.nio.ByteBuffer
 
 /**
  * The fields of a key attestation's KeyDescription, as the Rust engine decodes them in the parsers' isolated
- * process (`core/jni`, `encode`). Absent values are null. With a [securityLevel] of 1 or 2, the values from
- * [deviceLocked] on come from the list the secure hardware enforces itself, never from the one the system
- * writes; with 0, everything is the system's word.
+ * process (`core/jni`, `encode`). Absent values are null. [challenge] is the KeyDescription's own field. The others
+ * after [securityLevel] (the lock and boot states, the OS version, the patch levels and the boot key and hash) come
+ * from one authorization list: with a [securityLevel] of 1 or 2, the one the secure hardware enforces itself, never
+ * the one the system writes; with 0, the system's, whose word they then are.
  */
 class AttestationFields(
     val attestationVersion: Long,
