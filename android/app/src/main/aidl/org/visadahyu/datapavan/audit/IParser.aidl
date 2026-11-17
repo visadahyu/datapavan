@@ -12,6 +12,6 @@ interface IParser {
      */
     Bundle scanApk(in ParcelFileDescriptor apk);
 
-    /** The fields of a KeyDescription extension (NativeCore.parseAttestation), or null when it is malformed. */
-    long[] parseAttestation(in byte[] extension);
+    /** The record of a KeyDescription extension (NativeCore.parseAttestation), or null when it is malformed. */
+    byte[] parseAttestation(in byte[] extension);
 }

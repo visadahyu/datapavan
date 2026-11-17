@@ -33,7 +33,7 @@ class ParserService : Service() {
 
         override fun scanApk(apk: ParcelFileDescriptor): Bundle = ApkScan.scan(apk)
 
-        override fun parseAttestation(extension: ByteArray): LongArray? = try {
+        override fun parseAttestation(extension: ByteArray): ByteArray? = try {
             NativeCore.parseAttestation(extension)
         } catch (_: RuntimeException) {
             null

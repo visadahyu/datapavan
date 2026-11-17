@@ -13,7 +13,7 @@ use datapavan_engine::datapack::{self, Payload, PublicKey};
 use datapavan_engine::trackers::Signatures;
 use jni::EnvUnowned;
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
-use jni::objects::{JByteArray, JClass, JIntArray, JLongArray, JString};
+use jni::objects::{JByteArray, JClass, JIntArray, JString};
 use jni::sys::{jint, jlong};
 use std::sync::{Arc, RwLock};
 
@@ -36,58 +36,77 @@ pub extern "system" fn Java_org_visadahyu_datapavan_core_NativeCore_version<'cal
 
 /// `org.visadahyu.datapavan.core.NativeCore.parseAttestation(byte[])`: decodes the `KeyDescription`
 /// extension of an attestation certificate, exactly as `X509Certificate.getExtensionValue` returns
-/// it. The result is `[attestationVersion, securityLevel, deviceLocked, verifiedBoot, osPatchLevel]`,
-/// with -1 for an absent value; malformed input throws a `RuntimeException`. `securityLevel` is the
-/// weaker of the attestation's and the key's levels. The other three come from the
-/// hardware-enforced list when it is 1 or 2, and from the software-enforced list only when it is 0,
-/// so a value the hardware left out is -1 even where the system wrote one into the other list
-/// (see the engine's `attestation` module).
+/// it; malformed input throws a `RuntimeException`. The result is the record [`encode`] writes.
+/// `securityLevel` is the weaker of the attestation's and the key's levels. The values after it come
+/// from the hardware-enforced list when it is 1 or 2, and from the software-enforced list only when
+/// it is 0, so a value the hardware left out is absent even where the system wrote one into the
+/// other list (see the engine's `attestation` module).
 // SAFETY: `no_mangle` exports this function under the JNI-mangled name the JVM resolves for
 // `NativeCore.parseAttestation`. The name is unique within this library, and the signature matches
-// the static Kotlin declaration `external fun parseAttestation(extension: ByteArray): LongArray`.
+// the static Kotlin declaration `external fun parseAttestation(extension: ByteArray): ByteArray`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_core_NativeCore_parseAttestation<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     extension: JByteArray<'caller>,
-) -> JLongArray<'caller> {
+) -> JByteArray<'caller> {
     unowned_env
         .with_env(|env| -> Result<_, Error> {
             let bytes = env.convert_byte_array(&extension)?;
             let description = attestation::parse_key_description(&bytes)
                 .map_err(|e| Error::ParseFailed(e.to_string()))?;
-            let fields = encode(&description);
-            let array = JLongArray::new(env, fields.len())?;
-            array.set_region(env, 0, &fields)?;
-            Ok(array)
+            env.byte_array_from_slice(&encode(&description))
         })
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
-/// Flattens a `KeyDescription` into the array layout documented on the export above.
-fn encode(description: &attestation::KeyDescription) -> [i64; 5] {
+/// Format of the record [`encode`] writes, which `AttestationFields.decode` in the app checks.
+const ATTESTATION_RECORD: u8 = 1;
+
+/// Writes a `KeyDescription` as the record `AttestationFields.decode` reads, big-endian: the format
+/// byte; eight 64-bit integers, -1 where absent: attestationVersion, securityLevel (0 software,
+/// 1 trusted environment, 2 `StrongBox`), deviceLocked (0 or 1), verifiedBoot (0 verified,
+/// 1 self-signed, 2 unverified, 3 failed), osVersion, then the OS, vendor and boot patch levels as
+/// `YYYYMM`; then three byte strings, each a 32-bit length, -1 where absent, and its bytes:
+/// attestationChallenge, verifiedBootKey and verifiedBootHash.
+fn encode(description: &attestation::KeyDescription<'_>) -> Vec<u8> {
     let level = match description.security_level {
         SecurityLevel::Software => 0,
         SecurityLevel::TrustedEnvironment => 1,
         SecurityLevel::StrongBox => 2,
     };
-    let (locked, boot) = description.root_of_trust.map_or((-1, -1), |root| {
-        let boot = match root.verified_boot {
-            VerifiedBootState::Verified => 0,
-            VerifiedBootState::SelfSigned => 1,
-            VerifiedBootState::Unverified => 2,
-            VerifiedBootState::Failed => 3,
-        };
-        (i64::from(root.device_locked), boot)
+    let root = description.root_of_trust;
+    let boot = root.map_or(-1, |root| match root.verified_boot {
+        VerifiedBootState::Verified => 0,
+        VerifiedBootState::SelfSigned => 1,
+        VerifiedBootState::Unverified => 2,
+        VerifiedBootState::Failed => 3,
     });
-    let patch = description.os_patch_level.map_or(-1, i64::from);
-    [
+    let number = |value: Option<u32>| value.map_or(-1, i64::from);
+    let mut out = vec![ATTESTATION_RECORD];
+    for value in [
         i64::from(description.attestation_version),
         level,
-        locked,
+        root.map_or(-1, |root| i64::from(root.device_locked)),
         boot,
-        patch,
-    ]
+        number(description.os_version),
+        number(description.os_patch_level),
+        number(description.vendor_patch_level),
+        number(description.boot_patch_level),
+    ] {
+        out.extend(value.to_be_bytes());
+    }
+    for bytes in [
+        Some(description.attestation_challenge),
+        root.map(|root| root.verified_boot_key),
+        root.and_then(|root| root.verified_boot_hash),
+    ] {
+        // An extension is far shorter than 2 GiB, so every length fits.
+        let length = bytes.map_or(-1, |b| i32::try_from(b.len()).unwrap_or(i32::MAX));
+        out.extend(length.to_be_bytes());
+        out.extend(bytes.unwrap_or_default());
+    }
+    out
 }
 
 /// `org.visadahyu.datapavan.core.NativeCore.loadTrackers(String)`: reads the tracker signatures
@@ -287,4 +306,104 @@ fn int_array<'local>(
     let array = JIntArray::new(env, values.len())?;
     array.set_region(env, 0, values)?;
     Ok(array)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use datapavan_engine::attestation::{KeyDescription, RootOfTrust};
+
+    /// The record `AttestationFieldsTest` in the app decodes: the two tests hold the layout to one
+    /// reading on both sides of the bridge.
+    const RECORD: &str = concat!(
+        "01",
+        "000000000000012c",
+        "0000000000000001",
+        "0000000000000001",
+        "0000000000000001",
+        "0000000000027100",
+        "000000000003170b",
+        "0000000000031706",
+        "ffffffffffffffff",
+        "00000003",
+        "616263",
+        "00000002",
+        "aabb",
+        "ffffffff",
+    );
+
+    fn hex(bytes: &[u8]) -> String {
+        use std::fmt::Write as _;
+        bytes.iter().fold(String::new(), |mut out, b| {
+            let _ = write!(out, "{b:02x}");
+            out
+        })
+    }
+
+    #[test]
+    fn encodes_the_record_the_app_decodes() {
+        let description = KeyDescription {
+            attestation_version: 300,
+            security_level: SecurityLevel::TrustedEnvironment,
+            attestation_challenge: b"abc",
+            root_of_trust: Some(RootOfTrust {
+                verified_boot_key: &[0xaa, 0xbb],
+                device_locked: true,
+                verified_boot: VerifiedBootState::SelfSigned,
+                verified_boot_hash: None,
+            }),
+            os_version: Some(160_000),
+            os_patch_level: Some(202_507),
+            vendor_patch_level: Some(202_502),
+            boot_patch_level: None,
+        };
+        assert_eq!(hex(&encode(&description)), RECORD);
+    }
+
+    #[test]
+    fn encodes_every_level_and_boot_state() {
+        let level_and_boot = |level, boot| {
+            let description = KeyDescription {
+                attestation_version: 1,
+                security_level: level,
+                attestation_challenge: &[],
+                root_of_trust: Some(RootOfTrust {
+                    verified_boot_key: &[],
+                    device_locked: false,
+                    verified_boot: boot,
+                    verified_boot_hash: Some(&[]),
+                }),
+                os_version: None,
+                os_patch_level: None,
+                vendor_patch_level: None,
+                boot_patch_level: None,
+            };
+            // The last byte of the level, deviceLocked and verifiedBoot integers.
+            let record = encode(&description);
+            (
+                record.get(16).copied(),
+                record.get(24).copied(),
+                record.get(32).copied(),
+            )
+        };
+        for (level, value) in [
+            (SecurityLevel::Software, 0),
+            (SecurityLevel::TrustedEnvironment, 1),
+            (SecurityLevel::StrongBox, 2),
+        ] {
+            assert_eq!(
+                level_and_boot(level, VerifiedBootState::Verified).0,
+                Some(value)
+            );
+        }
+        for (boot, value) in [
+            (VerifiedBootState::Verified, 0),
+            (VerifiedBootState::SelfSigned, 1),
+            (VerifiedBootState::Unverified, 2),
+            (VerifiedBootState::Failed, 3),
+        ] {
+            let (_, locked, state) = level_and_boot(SecurityLevel::Software, boot);
+            assert_eq!((locked, state), (Some(0), Some(value)));
+        }
+    }
 }

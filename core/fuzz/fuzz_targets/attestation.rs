@@ -90,16 +90,19 @@ fuzz_target!(|data: &[u8]| {
         (0, &software[..]),
         (0, &[][..]),
     ] {
-        let expected = parse_key_description(&build(level, read, &[]));
+        let alone = build(level, read, &[]);
+        let expected = parse_key_description(&alone);
         assert!(expected.is_ok());
         // Whatever the other list holds, the values are the authoritative list's.
-        let parsed = parse_key_description(&build(level, read, data));
+        let beside = build(level, read, data);
+        let parsed = parse_key_description(&beside);
         assert!(parsed.is_err() || parsed == expected, "{parsed:?}");
     }
 
     // The bytes as the list the parser reads, and as a rootOfTrust: a malformed root of trust is
     // absent, and never makes the rest of the extension fail.
     let _ = parse_key_description(&extension(1, &[], data));
-    let root = parse_key_description(&extension(1, &[], &root_of_trust(data)));
+    let with_root = extension(1, &[], &root_of_trust(data));
+    let root = parse_key_description(&with_root);
     assert!(root.is_ok(), "{root:?}");
 });

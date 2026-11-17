@@ -17,14 +17,11 @@ internal object NativeCore {
 
     /**
      * Decodes the `KeyDescription` extension of a key-attestation certificate (untrusted input,
-     * parsed in Rust). Returns `[attestationVersion, securityLevel, deviceLocked, verifiedBoot,
-     * osPatchLevel]` with -1 for an absent value, and throws a `RuntimeException` on malformed input.
-     * `securityLevel` is the weaker of the attestation's and the key's levels; the other three come
-     * from the hardware-enforced list when it is 1 or 2, and from the software-enforced list, which
-     * the system writes, only when it is 0.
+     * parsed in Rust), and throws a `RuntimeException` on malformed input. Returns the record that
+     * [org.visadahyu.datapavan.audit.AttestationFields.decode] reads.
      */
     @JvmStatic
-    external fun parseAttestation(extension: ByteArray): LongArray
+    external fun parseAttestation(extension: ByteArray): ByteArray
 
     /**
      * Reads the tracker signatures (`data/exodus/trackers.tsv`) into the engine for [scanDex],

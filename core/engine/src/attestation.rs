@@ -68,10 +68,12 @@
 
 use core::fmt;
 
-/// Context-specific tag of `rootOfTrust` in an `AuthorizationList`.
+/// Context-specific tags of the `AuthorizationList` entries the audit reads.
 const TAG_ROOT_OF_TRUST: u32 = 704;
-/// Context-specific tag of `osPatchLevel` in an `AuthorizationList`.
+const TAG_OS_VERSION: u32 = 705;
 const TAG_OS_PATCH_LEVEL: u32 = 706;
+const TAG_VENDOR_PATCH_LEVEL: u32 = 718;
+const TAG_BOOT_PATCH_LEVEL: u32 = 719;
 
 /// Where the attested key lives, and so how much the attestation can be trusted. Ordered from the
 /// weakest to the strongest.
@@ -98,30 +100,45 @@ pub enum VerifiedBootState {
     Failed,
 }
 
-/// Bootloader state from the `RootOfTrust` sequence.
+/// The `RootOfTrust` sequence: the bootloader's state, and what it verified the system with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RootOfTrust {
+pub struct RootOfTrust<'a> {
+    /// A digest of the key that verified the system, usually SHA-256 of the verified boot key:
+    /// the maker's key on a phone as sold, the owner's on one locked with a system of their own,
+    /// and zeros or empty where verification did not run.
+    pub verified_boot_key: &'a [u8],
     /// Whether the bootloader is locked.
     pub device_locked: bool,
     /// Result of verified boot.
     pub verified_boot: VerifiedBootState,
+    /// A digest of the verified boot images, from attestation version 3 on.
+    pub verified_boot_hash: Option<&'a [u8]>,
 }
 
 /// The fields of a `KeyDescription` that the audit uses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct KeyDescription {
+pub struct KeyDescription<'a> {
     /// Attestation format version, e.g. 3 for Keymaster 4 or 400 for `KeyMint` 4.
     pub attestation_version: u32,
     /// Where the attestation was produced: the weaker of the attestation's and the key's levels.
     pub security_level: SecurityLevel,
+    /// The challenge the app passed when it generated the key, so that the app can tell this
+    /// attestation answers its own request.
+    pub attestation_challenge: &'a [u8],
     /// Bootloader state, from the hardware-enforced list unless [`Self::security_level`] is
     /// [`SecurityLevel::Software`], and then from the software-enforced list; never from the other
     /// list. Absent when that list lacks it, holds it malformed, or holds two copies that differ
-    /// (see the module documentation).
-    pub root_of_trust: Option<RootOfTrust>,
-    /// Operating-system patch level as `YYYYMM`, from the same list as [`Self::root_of_trust`], and
-    /// absent in the same cases.
+    /// (see the module documentation). The values below come from the same list and are absent in
+    /// the same cases.
+    pub root_of_trust: Option<RootOfTrust<'a>>,
+    /// Android's version as `MMmmpp`, for example 160000 for Android 16.
+    pub os_version: Option<u32>,
+    /// The system's security patch level as `YYYYMM`.
     pub os_patch_level: Option<u32>,
+    /// The vendor image's security patch level as `YYYYMM`.
+    pub vendor_patch_level: Option<u32>,
+    /// The boot image's security patch level as `YYYYMM`.
+    pub boot_patch_level: Option<u32>,
 }
 
 /// Why a `KeyDescription` could not be decoded.
@@ -163,7 +180,7 @@ impl std::error::Error for Error {}
 /// # Errors
 ///
 /// Returns an [`Error`] when the input is not a well-formed `KeyDescription` in DER.
-pub fn parse_key_description(extension: &[u8]) -> Result<KeyDescription, Error> {
+pub fn parse_key_description(extension: &[u8]) -> Result<KeyDescription<'_>, Error> {
     let wrapper = read_one(extension)?.expect(OCTET_STRING)?;
     let mut fields = read_one(wrapper)?.contents(SEQUENCE)?;
 
@@ -172,8 +189,8 @@ pub fn parse_key_description(extension: &[u8]) -> Result<KeyDescription, Error> 
     // keyMintVersion: checked, but the audit does not use it.
     fields.required()?.integer()?;
     let keymint_level = security_level(fields.required()?.enumerated()?)?;
-    // attestationChallenge and uniqueId.
-    fields.required()?.expect(OCTET_STRING)?;
+    let attestation_challenge = fields.required()?.expect(OCTET_STRING)?;
+    // uniqueId: checked, but the audit does not use it.
     fields.required()?.expect(OCTET_STRING)?;
     let software = fields.required()?.contents(SEQUENCE)?;
     let hardware = fields.required()?.contents(SEQUENCE)?;
@@ -193,19 +210,38 @@ pub fn parse_key_description(extension: &[u8]) -> Result<KeyDescription, Error> 
     }
     let entries = entries(authoritative)?;
 
+    // A malformed entry counts as absent: see the module documentation.
+    let integer = |entry: Entry<'_>| {
+        entry
+            .value()
+            .and_then(|entry| explicit(entry).and_then(Element::integer).ok())
+    };
     Ok(KeyDescription {
         attestation_version,
         security_level,
-        // A malformed entry counts as absent: see the module documentation.
+        attestation_challenge,
         root_of_trust: entries
             .root_of_trust
             .value()
             .and_then(|entry| root_of_trust(entry).ok()),
-        os_patch_level: entries
-            .os_patch_level
-            .value()
-            .and_then(|entry| explicit(entry).and_then(Element::integer).ok()),
+        os_version: integer(entries.os_version),
+        os_patch_level: integer(entries.os_patch_level).and_then(patch_level),
+        vendor_patch_level: integer(entries.vendor_patch_level).and_then(patch_level),
+        boot_patch_level: integer(entries.boot_patch_level).and_then(patch_level),
     })
+}
+
+/// A patch level as `YYYYMM`, from `YYYYMM` or `YYYYMMDD`, the two forms keystores write (the
+/// vendor and boot levels carry the day since `KeyMint`, but some keystores leave it out). Any
+/// other value is malformed, as Google's verifier also reads it, and so absent; a month outside 1 to
+/// 12 too, since it could only be shown as a date that does not exist.
+fn patch_level(value: u32) -> Option<u32> {
+    let year_month = match value {
+        100_000..=999_999 => value,
+        10_000_000..=99_999_999 => value / 100,
+        _ => return None,
+    };
+    (1..=12).contains(&(year_month % 100)).then_some(year_month)
 }
 
 /// What an authorization list holds under one tag the audit reads.
@@ -241,7 +277,10 @@ impl<'a> Entry<'a> {
 #[derive(Default)]
 struct Entries<'a> {
     root_of_trust: Entry<'a>,
+    os_version: Entry<'a>,
     os_patch_level: Entry<'a>,
+    vendor_patch_level: Entry<'a>,
+    boot_patch_level: Entry<'a>,
 }
 
 /// Finds the entries the audit reads in `list`.
@@ -254,7 +293,10 @@ fn entries(list: Elements<'_>) -> Result<Entries<'_>, Error> {
         }
         match entry.tag.number {
             TAG_ROOT_OF_TRUST => found.root_of_trust.add(entry),
+            TAG_OS_VERSION => found.os_version.add(entry),
             TAG_OS_PATCH_LEVEL => found.os_patch_level.add(entry),
+            TAG_VENDOR_PATCH_LEVEL => found.vendor_patch_level.add(entry),
+            TAG_BOOT_PATCH_LEVEL => found.boot_patch_level.add(entry),
             _ => {}
         }
     }
@@ -282,10 +324,9 @@ fn explicit(entry: Element<'_>) -> Result<Element<'_>, Error> {
     Ok(value)
 }
 
-fn root_of_trust(entry: Element<'_>) -> Result<RootOfTrust, Error> {
+fn root_of_trust(entry: Element<'_>) -> Result<RootOfTrust<'_>, Error> {
     let mut fields = explicit(entry)?.contents(SEQUENCE)?;
-    // verifiedBootKey: checked, but the audit does not use it.
-    fields.required()?.expect(OCTET_STRING)?;
+    let verified_boot_key = fields.required()?.expect(OCTET_STRING)?;
     let device_locked = match fields.required()?.expect(BOOLEAN)? {
         [0x00] => false,
         // DER writes true as 0xFF only, but BER reads any other byte as true, and so do Google's
@@ -302,14 +343,19 @@ fn root_of_trust(entry: Element<'_>) -> Result<RootOfTrust, Error> {
         _ => return Err(Error::InvalidValue),
     };
     // verifiedBootHash, from attestation version 3. Earlier versions have three fields, and a
-    // later keystore that leaves it out loses nothing the audit reads, so it is optional here.
-    if let Some(hash) = fields.next() {
-        hash?.expect(OCTET_STRING)?;
-    }
+    // later keystore that leaves it out loses nothing else, so it is optional here, as in Google's
+    // verifier.
+    let verified_boot_hash = fields
+        .next()
+        .transpose()?
+        .map(|hash| hash.expect(OCTET_STRING))
+        .transpose()?;
     fields.finish()?;
     Ok(RootOfTrust {
+        verified_boot_key,
         device_locked,
         verified_boot,
+        verified_boot_hash,
     })
 }
 
@@ -523,6 +569,8 @@ mod tests {
         /// Whether a malformation here makes a value absent rather than the extension rejected: it
         /// sits in an entry the audit reads.
         lenient: bool,
+        /// Whether the parser returns the content as it is, so that any part of it is still read.
+        verbatim: bool,
     }
 
     #[derive(Clone, Debug)]
@@ -575,6 +623,7 @@ mod tests {
             body: Body::Bytes(content.to_vec()),
             read: true,
             lenient: false,
+            verbatim: false,
         }
     }
 
@@ -584,6 +633,7 @@ mod tests {
             body: Body::Elements { children, required },
             read: true,
             lenient: false,
+            verbatim: false,
         }
     }
 
@@ -593,6 +643,7 @@ mod tests {
             body: Body::Raw(bytes.to_vec()),
             read: true,
             lenient: false,
+            verbatim: false,
         }
     }
 
@@ -667,6 +718,14 @@ mod tests {
         }
     }
 
+    /// Marks an element whose content the parser returns as it is.
+    fn verbatim(node: Node) -> Node {
+        Node {
+            verbatim: true,
+            ..node
+        }
+    }
+
     /// Marks an element and everything in it as part of an entry the audit reads.
     fn lenient(node: Node) -> Node {
         let body = match node.body {
@@ -689,10 +748,10 @@ mod tests {
             TAG_ROOT_OF_TRUST,
             sequence(
                 vec![
-                    unread(octets(&[0xaa; 32])),
+                    verbatim(octets(&[0xaa; 32])),
                     primitive(&[0x01], &[locked]),
                     enumerated(boot.into()),
-                    unread(octets(&[0xbb; 32])),
+                    verbatim(octets(&[0xbb; 32])),
                 ],
                 3,
             ),
@@ -719,10 +778,13 @@ mod tests {
             unread(explicit(702, integer(0))),
         ];
         list.extend(root);
-        list.push(unread(explicit(705, integer(150_000))));
+        list.push(lenient(explicit(TAG_OS_VERSION, integer(150_000))));
         list.extend(patch);
-        list.push(unread(explicit(718, integer(20_250_705))));
-        list.push(unread(explicit(719, integer(20_250_705))));
+        list.push(lenient(explicit(
+            TAG_VENDOR_PATCH_LEVEL,
+            integer(20_250_705),
+        )));
+        list.push(lenient(explicit(TAG_BOOT_PATCH_LEVEL, integer(20_250_705))));
         list
     }
 
@@ -748,7 +810,7 @@ mod tests {
             enumerated(levels.0.into()),
             integer(300),
             enumerated(levels.1.into()),
-            unread(octets(b"challenge")),
+            verbatim(octets(b"challenge")),
             unread(octets(&[])),
             sequence(software, 0),
             sequence(hardware, 0),
@@ -761,9 +823,12 @@ mod tests {
     }
 
     const TEE: (u8, u8) = (1, 1);
-    const LOCKED_VERIFIED: RootOfTrust = RootOfTrust {
+    /// The root of trust `root(0xff, 0)` writes.
+    const LOCKED_VERIFIED: RootOfTrust<'static> = RootOfTrust {
+        verified_boot_key: &[0xaa; 32],
         device_locked: true,
         verified_boot: VerifiedBootState::Verified,
+        verified_boot_hash: Some(&[0xbb; 32]),
     };
 
     /// A trusted environment's attestation of a locked, verified phone, as a `KeyMint` device
@@ -776,13 +841,71 @@ mod tests {
         )
     }
 
-    fn parse(node: &Node) -> Result<KeyDescription, Error> {
-        parse_key_description(&encode(node))
+    /// The parser's result for `node`, with its bytes copied, so that it outlives the encoding.
+    fn parse(node: &Node) -> Result<Owned, Error> {
+        parse_key_description(&encode(node)).map(|d| Owned::from(&d))
+    }
+
+    /// A `KeyDescription` that owns its bytes.
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    struct Owned {
+        attestation_version: u32,
+        security_level: SecurityLevel,
+        attestation_challenge: Vec<u8>,
+        root_of_trust: Option<OwnedRoot>,
+        os_version: Option<u32>,
+        os_patch_level: Option<u32>,
+        vendor_patch_level: Option<u32>,
+        boot_patch_level: Option<u32>,
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    struct OwnedRoot {
+        verified_boot_key: Vec<u8>,
+        device_locked: bool,
+        verified_boot: VerifiedBootState,
+        verified_boot_hash: Option<Vec<u8>>,
+    }
+
+    impl From<&RootOfTrust<'_>> for OwnedRoot {
+        fn from(root: &RootOfTrust<'_>) -> Self {
+            Self {
+                verified_boot_key: root.verified_boot_key.to_vec(),
+                device_locked: root.device_locked,
+                verified_boot: root.verified_boot,
+                verified_boot_hash: root.verified_boot_hash.map(<[u8]>::to_vec),
+            }
+        }
+    }
+
+    impl From<&KeyDescription<'_>> for Owned {
+        fn from(d: &KeyDescription<'_>) -> Self {
+            Self {
+                attestation_version: d.attestation_version,
+                security_level: d.security_level,
+                attestation_challenge: d.attestation_challenge.to_vec(),
+                root_of_trust: d.root_of_trust.as_ref().map(OwnedRoot::from),
+                os_version: d.os_version,
+                os_patch_level: d.os_patch_level,
+                vendor_patch_level: d.vendor_patch_level,
+                boot_patch_level: d.boot_patch_level,
+            }
+        }
+    }
+
+    /// The parts of a result that say which list it was read from.
+    fn lock_and_patch(d: &Owned) -> (Option<(bool, VerifiedBootState)>, Option<u32>) {
+        (
+            d.root_of_trust
+                .as_ref()
+                .map(|r| (r.device_locked, r.verified_boot)),
+            d.os_patch_level,
+        )
     }
 
     /// What the parser makes of `tee_device()` with its element at `path` (child indices from the
     /// outer OCTET STRING) replaced by `replacement`.
-    fn with(path: &[usize], replacement: Node) -> Result<KeyDescription, Error> {
+    fn with(path: &[usize], replacement: Node) -> Result<Owned, Error> {
         fn replace(node: &mut Node, path: &[usize], replacement: Node) {
             match (path.split_first(), &mut node.body) {
                 (None, _) => *node = replacement,
@@ -813,30 +936,25 @@ mod tests {
     const BOOT_STATE: &[usize] = &[0, 7, 7, 0, 2];
     const PATCH_ENTRY: &[usize] = &[0, 7, 9];
     const PATCH_VALUE: &[usize] = &[0, 7, 9, 0];
+    const VENDOR_PATCH_ENTRY: &[usize] = &[0, 7, 10];
 
-    fn description(
-        security_level: SecurityLevel,
-        root_of_trust: Option<RootOfTrust>,
-        os_patch_level: Option<u32>,
-    ) -> KeyDescription {
-        KeyDescription {
+    /// What the parser reads from `tee_device()`.
+    fn tee_description() -> Owned {
+        Owned::from(&KeyDescription {
             attestation_version: 300,
-            security_level,
-            root_of_trust,
-            os_patch_level,
-        }
+            security_level: SecurityLevel::TrustedEnvironment,
+            attestation_challenge: b"challenge",
+            root_of_trust: Some(LOCKED_VERIFIED),
+            os_version: Some(150_000),
+            os_patch_level: Some(202_507),
+            vendor_patch_level: Some(202_507),
+            boot_patch_level: Some(202_507),
+        })
     }
 
     #[test]
     fn reads_locked_verified_tee_device() {
-        assert_eq!(
-            parse(&tee_device()),
-            Ok(description(
-                SecurityLevel::TrustedEnvironment,
-                Some(LOCKED_VERIFIED),
-                Some(202_507)
-            ))
-        );
+        assert_eq!(parse(&tee_device()), Ok(tee_description()));
     }
 
     #[test]
@@ -845,12 +963,8 @@ mod tests {
         // (testdata/attestation/generate.sh), with no code shared with these tests' encoder.
         let tee = include_bytes!("../testdata/attestation/tee.der");
         assert_eq!(
-            parse_key_description(tee),
-            Ok(description(
-                SecurityLevel::TrustedEnvironment,
-                Some(LOCKED_VERIFIED),
-                Some(202_507)
-            ))
+            parse_key_description(tee).map(|d| Owned::from(&d)),
+            Ok(tee_description())
         );
         // The tests' encoder writes the same bytes, so the extensions it builds are DER too.
         assert_eq!(encode(&tee_device()), tee);
@@ -860,11 +974,17 @@ mod tests {
             Ok(KeyDescription {
                 attestation_version: 300,
                 security_level: SecurityLevel::Software,
+                attestation_challenge: b"challenge",
                 root_of_trust: Some(RootOfTrust {
+                    verified_boot_key: &[],
                     device_locked: false,
                     verified_boot: VerifiedBootState::Unverified,
+                    verified_boot_hash: Some(&[]),
                 }),
+                os_version: Some(160_000),
                 os_patch_level: Some(202_608),
+                vendor_patch_level: None,
+                boot_patch_level: None,
             })
         );
     }
@@ -914,25 +1034,35 @@ mod tests {
     }
 
     /// What `parse_key_description` must return for a row of Google's expected values: the
-    /// weaker level, and the values of the list that level makes authoritative.
-    fn expected(columns: &[&str]) -> Option<KeyDescription> {
+    /// weaker level, and the values of the list that level makes authoritative, patch levels read
+    /// as Google's library reads them, by their first six digits.
+    fn expected(columns: &[&str]) -> Option<Owned> {
         let level = level(columns.get(1)?)?.min(level(columns.get(2)?)?);
         let list = match level {
             SecurityLevel::Software => columns.get(4..12)?,
             _ => columns.get(12..20)?,
         };
+        let present = |column: &str| (column != "-").then(|| hex(column));
         let root_of_trust = match (list.first()?, list.get(1)?) {
             (&"-", _) => None,
-            (locked, state) => Some(RootOfTrust {
+            (locked, state) => Some(OwnedRoot {
+                verified_boot_key: present(list.get(2)?)?,
                 device_locked: *locked == "true",
                 verified_boot: boot_state(state)?,
+                verified_boot_hash: present(list.get(3)?),
             }),
         };
-        Some(KeyDescription {
+        let number = |index: usize| list.get(index)?.parse().ok();
+        let year_month = |index: usize| list.get(index)?.get(..6)?.parse().ok();
+        Some(Owned {
             attestation_version: columns.first()?.parse().ok()?,
             security_level: level,
+            attestation_challenge: hex(columns.get(3)?),
             root_of_trust,
-            os_patch_level: list.get(5)?.parse().ok(),
+            os_version: number(4),
+            os_patch_level: year_month(5),
+            vendor_patch_level: year_month(6),
+            boot_patch_level: year_month(7),
         })
     }
 
@@ -942,7 +1072,7 @@ mod tests {
         assert_eq!(corpus.len(), 9);
         let mut compared = 0;
         for (path, extension, columns) in &corpus {
-            let parsed = parse_key_description(extension);
+            let parsed = parse_key_description(extension).map(|d| Owned::from(&d));
             if path.starts_with("invalid/") {
                 continue;
             }
@@ -970,8 +1100,9 @@ mod tests {
         assert_eq!(
             parsed("malformed_rot_device_locked.pem")
                 .and_then(Result::ok)
-                .and_then(|d| d.root_of_trust),
-            Some(LOCKED_VERIFIED)
+                .and_then(|d| d.root_of_trust)
+                .map(|r| (r.device_locked, r.verified_boot)),
+            Some((true, VerifiedBootState::Verified))
         );
         // Entries out of tag order are read; this sample's leaf signature does not verify, so the
         // chain check rejects it whatever its extension says.
@@ -996,7 +1127,13 @@ mod tests {
                 software(vec![root(0xff, 0), patch(202_611)]),
                 hardware(None, None),
             );
-            assert_eq!(parse(&forged), Ok(description(level, None, None)));
+            let parsed = parse(&forged);
+            assert_eq!(
+                parsed.as_ref().map(lock_and_patch),
+                Ok((None, None)),
+                "{level:?}"
+            );
+            assert_eq!(parsed.map(|d| d.security_level), Ok(level));
         }
     }
 
@@ -1008,15 +1145,8 @@ mod tests {
             hardware(Some(root(0x00, 2)), Some(patch(202_301))),
         );
         assert_eq!(
-            parse(&both),
-            Ok(description(
-                SecurityLevel::TrustedEnvironment,
-                Some(RootOfTrust {
-                    device_locked: false,
-                    verified_boot: VerifiedBootState::Unverified,
-                }),
-                Some(202_301)
-            ))
+            parse(&both).as_ref().map(lock_and_patch),
+            Ok((Some((false, VerifiedBootState::Unverified)), Some(202_301)))
         );
     }
 
@@ -1029,16 +1159,15 @@ mod tests {
             software(vec![root(0x00, 2), patch(202_608)]),
             hardware(Some(root(0xff, 0)), Some(patch(202_611))),
         );
+        let parsed = parse(&software_only);
         assert_eq!(
-            parse(&software_only),
-            Ok(description(
-                SecurityLevel::Software,
-                Some(RootOfTrust {
-                    device_locked: false,
-                    verified_boot: VerifiedBootState::Unverified,
-                }),
-                Some(202_608)
-            ))
+            parsed.as_ref().map(lock_and_patch),
+            Ok((Some((false, VerifiedBootState::Unverified)), Some(202_608)))
+        );
+        // The hardware list's other values are not read either.
+        assert_eq!(
+            parsed.map(|d| (d.os_version, d.vendor_patch_level, d.boot_patch_level)),
+            Ok((None, None, None))
         );
     }
 
@@ -1119,7 +1248,9 @@ mod tests {
             with(VERSION, raw(&[0x02, 0x85, 0x01, 0x00, 0x00, 0x00, 0x00])),
             Err(Error::InvalidValue)
         );
-        assert_eq!(with(VERSION, raw(&[0x02, 0xff])), Err(Error::InvalidValue));
+        // 0xff is reserved even where the 127 bytes after it would make a length.
+        let reserved = [&[0x02, 0xff][..], &[0; 126], &[0x02, 0x01, 0x2c]].concat();
+        assert_eq!(with(VERSION, raw(&reserved)), Err(Error::InvalidValue));
         // Leading zero bytes do not count against it.
         assert_eq!(
             with(
@@ -1204,8 +1335,8 @@ mod tests {
         );
         // A sign byte where one is needed is the shortest form.
         assert_eq!(
-            with(PATCH_VALUE, primitive(&[0x02], &[0x00, 0x80])).map(|d| d.os_patch_level),
-            Ok(Some(128))
+            with(VERSION, primitive(&[0x02], &[0x00, 0x80])).map(|d| d.attestation_version),
+            Ok(128)
         );
     }
 
@@ -1254,7 +1385,13 @@ mod tests {
         assert_eq!(read(set(fields())), Ok(None));
         let mut three = fields();
         three.truncate(3);
-        assert_eq!(read(sequence(three, 3)), Ok(Some(LOCKED_VERIFIED)));
+        assert_eq!(
+            read(sequence(three, 3)),
+            Ok(Some(OwnedRoot {
+                verified_boot_hash: None,
+                ..OwnedRoot::from(&LOCKED_VERIFIED)
+            }))
+        );
         let mut two = fields();
         two.truncate(2);
         assert_eq!(read(sequence(two, 3)), Ok(None));
@@ -1365,7 +1502,7 @@ mod tests {
         patches.push(patch(202_611));
         assert_eq!(
             parse(&twice(patches)).map(|d| (d.root_of_trust, d.os_patch_level)),
-            Ok((Some(LOCKED_VERIFIED), None))
+            Ok((Some(OwnedRoot::from(&LOCKED_VERIFIED)), None))
         );
         // In the list that is not read, it changes nothing.
         let ignored = extension(
@@ -1404,21 +1541,35 @@ mod tests {
     }
 
     #[test]
-    fn reads_patch_levels_of_any_size() {
-        for level in [0, 127, 128, 202_507, 20_250_705, u32::MAX] {
-            assert_eq!(
-                with(PATCH_VALUE, integer(level.into())).map(|d| d.os_patch_level),
-                Ok(Some(level))
-            );
+    fn reads_patch_levels_of_six_or_eight_digits() {
+        let read = |value: u64| with(PATCH_VALUE, integer(value)).map(|d| d.os_patch_level);
+        for (value, year_month) in [
+            (202_507, Some(202_507)),
+            (20_250_705, Some(202_507)),
+            (100_001, Some(100_001)),
+            (99_991_231, Some(999_912)),
+            // Not six or eight digits, or no month: malformed, so absent, as Google's verifier.
+            (0, None),
+            (99_999, None),
+            (1_000_000, None),
+            (100_000_000, None),
+            (202_500, None),
+            (202_513, None),
+            (20_251_305, None),
+            (u64::from(u32::MAX), None),
+            (u64::from(u32::MAX) + 1, None),
+        ] {
+            assert_eq!(read(value), Ok(year_month), "{value}");
         }
-        // Beyond 32 bits or negative: malformed, so absent.
-        assert_eq!(
-            with(PATCH_VALUE, integer(u64::from(u32::MAX) + 1)).map(|d| d.os_patch_level),
-            Ok(None)
-        );
         assert_eq!(
             with(PATCH_VALUE, primitive(&[0x02], &[0x80])).map(|d| d.os_patch_level),
             Ok(None)
+        );
+        // The vendor and boot levels are read alike, from the same list.
+        let vendor = lenient(explicit(TAG_VENDOR_PATCH_LEVEL, integer(202_406)));
+        assert_eq!(
+            with(VENDOR_PATCH_ENTRY, vendor).map(|d| d.vendor_patch_level),
+            Ok(Some(202_406))
         );
     }
 
@@ -1464,6 +1615,8 @@ mod tests {
         Consistent,
         /// Anything but a panic: a cut integer is still an integer, of another value.
         Any,
+        /// A description, of whatever value: the parser returns the element's content as it is.
+        Read,
     }
 
     /// Every way to cut one element's content short, each in the whole extension encoded again
@@ -1474,6 +1627,7 @@ mod tests {
         for cut in 0..whole.len() {
             let strict = match &node.body {
                 _ if !node.read => Expect::Unchanged,
+                Body::Bytes(_) | Body::Raw(_) if node.verbatim => Expect::Read,
                 Body::Bytes(_) | Body::Raw(_) if cut == 0 => Expect::Rejected,
                 Body::Bytes(_) | Body::Raw(_) => Expect::Any,
                 Body::Elements { children, required } => {
@@ -1535,7 +1689,7 @@ mod tests {
             let parsed = parse(cut);
             match expect {
                 Expect::Rejected => assert!(parsed.is_err(), "case {index}: {parsed:?}"),
-                Expect::Unchanged => assert_eq!(parsed, Ok(whole), "case {index}"),
+                Expect::Unchanged => assert_eq!(parsed.as_ref(), Ok(&whole), "case {index}"),
                 Expect::Consistent => {
                     let Ok(cut) = parsed else {
                         assert!(parsed.is_ok(), "case {index}: {parsed:?}");
@@ -1543,15 +1697,30 @@ mod tests {
                     };
                     assert_eq!(cut.attestation_version, whole.attestation_version);
                     assert_eq!(cut.security_level, whole.security_level);
+                    assert_eq!(cut.attestation_challenge, whole.attestation_challenge);
+                    // A root of trust is whole, or absent, or without its optional last field.
+                    let root = |hash| {
+                        whole.root_of_trust.clone().map(|r| OwnedRoot {
+                            verified_boot_hash: hash,
+                            ..r
+                        })
+                    };
                     assert!(
-                        cut.root_of_trust.is_none() || cut.root_of_trust == whole.root_of_trust,
+                        cut.root_of_trust.is_none()
+                            || cut.root_of_trust == whole.root_of_trust
+                            || cut.root_of_trust == root(None),
                         "case {index}: {cut:?}"
                     );
-                    assert!(
-                        cut.os_patch_level.is_none() || cut.os_patch_level == whole.os_patch_level,
-                        "case {index}: {cut:?}"
-                    );
+                    for (value, whole) in [
+                        (cut.os_version, whole.os_version),
+                        (cut.os_patch_level, whole.os_patch_level),
+                        (cut.vendor_patch_level, whole.vendor_patch_level),
+                        (cut.boot_patch_level, whole.boot_patch_level),
+                    ] {
+                        assert!(value.is_none() || value == whole, "case {index}: {cut:?}");
+                    }
                 }
+                Expect::Read => assert!(parsed.is_ok(), "case {index}: {parsed:?}"),
                 Expect::Any => {}
             }
         }

@@ -41,7 +41,8 @@ internal class Parsers(context: Context) : AutoCloseable {
     }
 
     /** The fields of a KeyDescription extension (NativeCore.parseAttestation), or null when it is malformed. */
-    fun parseAttestation(extension: ByteArray): LongArray? = call { it.parseAttestation(extension) }
+    fun parseAttestation(extension: ByteArray): AttestationFields? =
+        call { it.parseAttestation(extension) }?.let(AttestationFields::decode)
 
     override fun close() = synchronized(lock) { disconnect() }
 

@@ -426,10 +426,10 @@ class DeviceCollector(private val context: Context) {
             // Parsed in the parsers' isolated process (ParserService), like every untrusted input.
             val fields = Parsers(context).use { it.parseAttestation(extension) } ?: return null
             Integrity(
-                securityLevel = fields[1].toInt(),
-                deviceLocked = fields[2].takeIf { it >= 0 }?.let { it == 1L },
-                verifiedBoot = fields[3].takeIf { it >= 0 }?.toInt(),
-                osPatchLevel = fields[4].takeIf { it >= 0 }?.toInt(),
+                securityLevel = fields.securityLevel,
+                deviceLocked = fields.deviceLocked,
+                verifiedBoot = fields.verifiedBoot,
+                osPatchLevel = fields.osPatchLevel,
                 trust = attestationChain().trust(chain),
             )
         } catch (_: java.security.GeneralSecurityException) {
