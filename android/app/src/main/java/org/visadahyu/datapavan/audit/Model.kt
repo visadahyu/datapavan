@@ -138,6 +138,12 @@ data class DeviceFacts(
     val hardwareKeystore: Boolean = false,
     /** Whether the system reports this device as an emulator (DeviceCollector). */
     val emulator: Boolean = false,
+    /**
+     * The Android version the system runs (`Build.VERSION.SDK_INT`); 0 where unknown. Every phone that meets
+     * Android's requirements and runs Android 12 (API 31) or later has secure hardware for its keys, so on those
+     * versions the version is a second declaration of that hardware (Rules).
+     */
+    val sdk: Int = 0,
 )
 
 /** Why the hardware check gave no result. */

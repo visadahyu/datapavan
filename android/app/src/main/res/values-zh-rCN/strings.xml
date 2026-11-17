@@ -240,7 +240,7 @@
     <string name="finding_software_only_title">没有可用的硬件检查</string>
     <string name="finding_software_only_body">此手机的硬件检查来自软件，而软件受系统控制，因此无法确认引导加载程序或系统。这在模拟器上以及没有用于密钥的安全硬件的手机上是正常的；修改过的系统也可能这样回应。</string>
     <string name="finding_integrity_emulator_title">模拟器上没有硬件检查</string>
-    <string name="finding_integrity_emulator_body">此设备报告自己是模拟器，而模拟器将密钥保存在软件中，因此没有对引导加载程序或系统的硬件检查。如果这是一部手机，它没有如实说明自己的情况：其系统已被修改，因此请把这当作严重警告。</string>
+    <string name="finding_integrity_emulator_body">此设备报告自己是 Android 模拟器，即一种在电脑上运行 Android 的程序，通常用于测试应用。模拟器将密钥保存在软件中，因此没有对引导加载程序或系统的硬件检查。如果这是一部真实的手机，那么这一报告是虚假的：只有修改过的系统才会这样报告，而这样的系统可以借此隐藏已解锁的引导加载程序。请把这当作严重警告。</string>
     <string name="finding_attestation_revoked_title">硬件检查密钥已被吊销</string>
     <string name="finding_attestation_revoked_body">Google 已吊销此手机硬件检查中的一个密钥，例如因为该密钥已泄露。检查报告的引导加载程序和系统状态可能是伪造的。</string>
     <string name="finding_attestation_unconfirmed_title">硬件检查未得到确认</string>
@@ -251,6 +251,8 @@
     <string name="finding_attestation_forged_body">此手机的硬件检查在手机的安全硬件生成之后被更改过，或者它回应的不是 Datapavan 的请求，而是另一个请求。此手机上有某种东西在干扰检查，因此 Datapavan 不使用检查报告的内容。请把这当作严重警告：系统可能已被修改，以隐藏其状态。</string>
     <string name="finding_attestation_software_answer_title">硬件检查由软件回应</string>
     <string name="finding_attestation_software_answer_body">此手机声明有用于其密钥的安全硬件，但其硬件检查来自软件，而软件受系统控制。修改过的系统可能这样回应，以隐藏已解锁的引导加载程序；手机密钥库的故障，或声明了自身并不具备的硬件的手机，也可能如此。无法确认引导加载程序和系统状态。请把这当作严重警告。</string>
+    <string name="finding_attestation_software_undeclared_title">Android 12 或更高版本上没有用于密钥的安全硬件</string>
+    <string name="finding_attestation_software_undeclared_body">此设备运行 Android 12 或更高版本，但它没有声明用于其密钥的安全硬件，而且其硬件检查来自软件，而软件受系统控制。符合 Android 要求且运行 Android 12 或更高版本的手机都具备这种硬件。没有这种硬件，这很可能是在电脑上运行的 Android，或是不符合这些要求的手机；但修改过的系统也可能隐藏手机具备的硬件并这样回应，以隐藏已解锁的引导加载程序。无法确认引导加载程序和系统状态。</string>
     <string name="finding_attestation_public_root_title">硬件检查使用已公开的密钥签名</string>
     <string name="finding_attestation_public_root_body">此手机的硬件检查声称来自安全硬件，但它使用随 Android 源代码一起公开的密钥签名，因此任何人都可能生成它。Datapavan 不使用检查报告的内容。修改过的系统可能这样做；模拟器也可能如此。</string>
     <string name="finding_attestation_broken_title">硬件检查已损坏</string>

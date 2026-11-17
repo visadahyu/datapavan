@@ -194,8 +194,9 @@ class RulesTest {
     @Test
     fun `each finding of the hardware check is as severe as what it could hide`() {
         // What could hide an unlocked bootloader or a system not verified is high, as they are; what cannot be
-        // confirmed, or failed, is medium; a software answer where the phone declares no secure hardware, or
-        // on an emulator, is low.
+        // confirmed, or failed, is medium, as is every other answer a system with root can give, an emulator's
+        // claim included; only a software answer on Android 10 or 11 where the phone declares no secure hardware,
+        // as phones launched before Android 8 give, is low.
         val expected = mapOf(
             FindingKind.BOOTLOADER_UNLOCKED to Severity.HIGH,
             FindingKind.BOOT_NOT_VERIFIED to Severity.HIGH,
@@ -210,16 +211,74 @@ class RulesTest {
             FindingKind.ATTESTATION_KEYS_UNAVAILABLE to Severity.MEDIUM,
             FindingKind.ATTESTATION_UPDATE_REQUIRED to Severity.MEDIUM,
             FindingKind.ATTESTATION_KEYS_REFUSED to Severity.MEDIUM,
+            FindingKind.ATTESTATION_SOFTWARE_UNDECLARED to Severity.MEDIUM,
             FindingKind.ATTESTATION_FAILED to Severity.MEDIUM,
             FindingKind.SYSTEM_OWN_KEY to Severity.MEDIUM,
             FindingKind.OLD_SECURITY_PATCH to Severity.MEDIUM,
+            FindingKind.INTEGRITY_EMULATOR to Severity.MEDIUM,
             FindingKind.INTEGRITY_SOFTWARE_ONLY to Severity.LOW,
-            FindingKind.INTEGRITY_EMULATOR to Severity.LOW,
         )
         assertEquals(expected, expected.keys.associateWith { it.severity })
         // A new kind of the check is given a severity here too.
         val ofTheCheck = FindingKind.entries.filter { it.name.startsWith("ATTESTATION_") || it.name.startsWith("INTEGRITY_") }
         assertTrue(expected.keys.containsAll(ofTheCheck))
+    }
+
+    @Test
+    fun `the emulator's claim stands only for the answer Android's emulator gives`() {
+        // Android's emulator signs under AOSP's software root, whether or not its image declares a hardware
+        // keystore (the Android 11 image does not; Android 15's does). Any other software chain on a device that
+        // calls itself one is judged as on any other device.
+        val software = Integrity(0, deviceLocked = false, verifiedBoot = 2, osPatchLevel = 202_608, trust = AttestationTrust.SOFTWARE_ROOT)
+        val emulator = DeviceFacts(false, false, emptyList(), vpnActive = false, integrity = software, emulator = true)
+        assertEquals(listOf(FindingKind.INTEGRITY_EMULATOR), Rules.forDevice(emulator, nowYearMonth = 202_610))
+        assertEquals(listOf(FindingKind.INTEGRITY_EMULATOR), Rules.forDevice(emulator.copy(hardwareKeystore = true, sdk = 35), nowYearMonth = 202_610))
+        for ((trust, finding) in listOf(
+            AttestationTrust.REVOKED to FindingKind.ATTESTATION_REVOKED,
+            AttestationTrust.BROKEN_CHAIN to FindingKind.ATTESTATION_BROKEN,
+            AttestationTrust.OTHER_ROOT to FindingKind.ATTESTATION_UNCONFIRMED,
+        )) {
+            val claimed = emulator.copy(integrity = software.copy(trust = trust))
+            assertEquals("$trust", listOf(finding), Rules.forDevice(claimed, nowYearMonth = 202_610))
+            assertEquals(
+                "$trust",
+                listOf(FindingKind.ATTESTATION_SOFTWARE_ANSWER),
+                Rules.forDevice(claimed.copy(hardwareKeystore = true), nowYearMonth = 202_610),
+            )
+        }
+        // The claim leaves a check that failed, or waits, as it is.
+        for ((failure, finding) in listOf(
+            IntegrityFailure.FAILED to FindingKind.ATTESTATION_FAILED,
+            IntegrityFailure.KEYS_UNAVAILABLE to FindingKind.ATTESTATION_KEYS_UNAVAILABLE,
+            IntegrityFailure.UPDATE_REQUIRED to FindingKind.ATTESTATION_UPDATE_REQUIRED,
+            IntegrityFailure.KEYS_REFUSED to FindingKind.ATTESTATION_KEYS_REFUSED,
+        )) {
+            val failed = emulator.copy(integrity = null, integrityFailure = failure, hardwareKeystore = true)
+            assertEquals("$failure", listOf(finding), Rules.forDevice(failed, nowYearMonth = 202_610))
+        }
+    }
+
+    @Test
+    fun `Android 12 or later is a second declaration of secure hardware`() {
+        // Every phone that meets Android's requirements and runs Android 12 or later has secure hardware for its
+        // keys, so a software answer there, without the feature declared, is medium: Android on a computer, a phone
+        // that does not meet the requirements, or a system that hid the declaration.
+        val software = Integrity(0, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_608, trust = AttestationTrust.SOFTWARE_ROOT)
+        val android12 = DeviceFacts(false, false, emptyList(), vpnActive = false, integrity = software, sdk = 31)
+        assertEquals(listOf(FindingKind.ATTESTATION_SOFTWARE_UNDECLARED), Rules.forDevice(android12, nowYearMonth = 202_610))
+        assertEquals(listOf(FindingKind.ATTESTATION_SOFTWARE_UNDECLARED), Rules.forDevice(android12.copy(sdk = 37), nowYearMonth = 202_610))
+        // Android 10 and 11 run on phones that launched before attestation was required.
+        assertEquals(listOf(FindingKind.INTEGRITY_SOFTWARE_ONLY), Rules.forDevice(android12.copy(sdk = 30), nowYearMonth = 202_610))
+        // The declared feature, a chain's own verdict and the emulator's answer are judged as before.
+        assertEquals(listOf(FindingKind.ATTESTATION_SOFTWARE_ANSWER), Rules.forDevice(android12.copy(hardwareKeystore = true), nowYearMonth = 202_610))
+        assertEquals(
+            listOf(FindingKind.ATTESTATION_REVOKED),
+            Rules.forDevice(android12.copy(integrity = software.copy(trust = AttestationTrust.REVOKED)), nowYearMonth = 202_610),
+        )
+        assertEquals(listOf(FindingKind.INTEGRITY_EMULATOR), Rules.forDevice(android12.copy(emulator = true), nowYearMonth = 202_610))
+        // A hardware attestation is judged by its chain, whatever the version.
+        val hardware = software.copy(securityLevel = 1, trust = AttestationTrust.GOOGLE_ROOT)
+        assertEquals(emptyList<FindingKind>(), Rules.forDevice(android12.copy(integrity = hardware), nowYearMonth = 202_610))
     }
 
     @Test

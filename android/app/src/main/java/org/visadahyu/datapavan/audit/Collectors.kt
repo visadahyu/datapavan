@@ -375,6 +375,7 @@ class DeviceCollector(private val context: Context) {
             integrityFailure = check.failure,
             hardwareKeystore = hardwareKeystore(),
             emulator = Build.HARDWARE in EMULATOR_HARDWARE,
+            sdk = Build.VERSION.SDK_INT,
         )
     }
 
@@ -383,10 +384,11 @@ class DeviceCollector(private val context: Context) {
      * manager answers this from the system server, apart from the keystore, so a hook in the keystore does not
      * change it. It is a declaration, not proof: Android's emulator declares a keystore in a trusted environment
      * for its KeyMint, which runs in software, and so it is weighed with [EMULATOR_HARDWARE]; a system modified
-     * with root can also hide the declaration (the feature's file in the vendor partition). A phone upgraded to
-     * Android 12 or later whose vendor partition stayed as it shipped may not declare it, and on Android 10 and 11
-     * without a secure chip no public API says: there, the check cannot tell a software answer from a phone
-     * without such hardware.
+     * with root can also hide the declaration (the feature's file in the vendor partition), and a phone upgraded
+     * to Android 12 or later whose vendor partition stayed as it shipped may not make it. Android 12 and later
+     * are a second declaration (Rules): every phone that meets Android's requirements and runs them has such
+     * hardware. Only on Android 10 and 11 without a secure chip does nothing say, and there the check cannot
+     * tell a software answer from a phone launched before attestation was required.
      */
     private fun hardwareKeystore(): Boolean = HardwareCheck.declaresHardware(context.packageManager::hasSystemFeature)
 
@@ -436,13 +438,15 @@ class DeviceCollector(private val context: Context) {
      * captured genuine chain from any phone answers it, or hand back certificates whose signature check lies.
      * Only a check from outside the phone (ADR 0040, decision 6) closes all three.
      *
-     * On a phone that declares secure hardware for its keys ([hardwareKeystore]), a hook cannot make the answer
-     * quiet, but it can still make it medium where an unlocked bootloader is high: a chain at a hardware level
-     * under a root of its own (unconfirmed), a broken chain, a failed check, or the error that says the keys are
-     * unavailable (waiting for Google). With root, a modified system can also hide the declaration, the feature's
-     * file in the vendor partition, and a software answer then reads as on a phone without such hardware (low).
-     * Remembering an earlier sound check on the phone would not close these (ADR 0040: unlocking wipes the
-     * memory, and root can erase it); decision 6's check from a second phone, which pins what it saw, does.
+     * On a phone that declares secure hardware for its keys ([hardwareKeystore]), or runs Android 12 or later, a
+     * hook cannot make the answer quiet, but it can still make it medium where an unlocked bootloader is high: a
+     * chain at a hardware level under a root of its own (unconfirmed), a broken chain, a failed check, the errors
+     * that say the keys are unavailable, need a system update or were refused, or, with root, the declaration
+     * hidden (a software answer on Android 12 or later without it) or `ro.hardware` set to the emulator's (a
+     * software answer under AOSP's root on a device that calls itself an emulator). Only on Android 10 and 11
+     * can a hidden declaration bring a software answer down to low. Remembering an earlier sound check on the
+     * phone would not close these (ADR 0040: unlocking wipes that memory and makes the old keys unusable, and
+     * root can erase it); decision 6's check from a second phone, which pins what it saw, does.
      */
     private fun integrity(): IntegrityResult {
         val keystore = try {
@@ -489,8 +493,9 @@ class DeviceCollector(private val context: Context) {
 
         /**
          * `Build.HARDWARE` (ro.hardware) of Android's emulator: "ranchu" since 2015, "goldfish" before. The system
-         * sets it, so a modified one can claim it; a phone that does so is then told, in words, that it calls itself
-         * an emulator, which its owner can see is false.
+         * sets it, so a modified one can claim it on a phone. The claim counts only for the answer the emulator
+         * gives (software, under AOSP's root), and its finding is medium, level with the other answers a system
+         * with root can give, and says in words what the claim means on a real phone.
          */
         val EMULATOR_HARDWARE = setOf("ranchu", "goldfish")
     }
