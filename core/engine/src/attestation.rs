@@ -803,6 +803,118 @@ mod tests {
         );
     }
 
+    // Real devices: the test chains of Google's reference library, android/keyattestation
+    // (testdata/keyattestation: SOURCE, convert.py), with the values that library decodes.
+
+    fn hex(text: &str) -> Vec<u8> {
+        text.as_bytes()
+            .chunks(2)
+            .filter_map(|pair| u8::from_str_radix(core::str::from_utf8(pair).ok()?, 16).ok())
+            .collect()
+    }
+
+    fn level(name: &str) -> Option<SecurityLevel> {
+        match name {
+            "SOFTWARE" => Some(SecurityLevel::Software),
+            "TRUSTED_ENVIRONMENT" => Some(SecurityLevel::TrustedEnvironment),
+            "STRONG_BOX" => Some(SecurityLevel::StrongBox),
+            _ => None,
+        }
+    }
+
+    fn boot_state(name: &str) -> Option<VerifiedBootState> {
+        match name {
+            "VERIFIED" => Some(VerifiedBootState::Verified),
+            "SELF_SIGNED" => Some(VerifiedBootState::SelfSigned),
+            "UNVERIFIED" => Some(VerifiedBootState::Unverified),
+            "FAILED" => Some(VerifiedBootState::Failed),
+            _ => None,
+        }
+    }
+
+    /// The rows of vectors.tsv: the file, its leaf's extension, and the columns Google's library
+    /// decodes, as convert.py writes them.
+    fn corpus() -> Vec<(&'static str, Vec<u8>, Vec<&'static str>)> {
+        include_str!("../testdata/keyattestation/vectors.tsv")
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .filter_map(|line| {
+                let columns: Vec<&str> = line.split('\t').collect();
+                let (path, rest) = columns.split_first()?;
+                let (extension, expected) = rest.split_first()?;
+                Some((*path, hex(extension), expected.to_vec()))
+            })
+            .collect()
+    }
+
+    /// What `parse_key_description` must return for a row of Google's expected values: the
+    /// weaker level, and the values of the list that level makes authoritative.
+    fn expected(columns: &[&str]) -> Option<KeyDescription> {
+        let level = level(columns.get(1)?)?.min(level(columns.get(2)?)?);
+        let list = match level {
+            SecurityLevel::Software => columns.get(4..12)?,
+            _ => columns.get(12..20)?,
+        };
+        let root_of_trust = match (list.first()?, list.get(1)?) {
+            (&"-", _) => None,
+            (locked, state) => Some(RootOfTrust {
+                device_locked: *locked == "true",
+                verified_boot: boot_state(state)?,
+            }),
+        };
+        Some(KeyDescription {
+            attestation_version: columns.first()?.parse().ok()?,
+            security_level: level,
+            root_of_trust,
+            os_patch_level: list.get(5)?.parse().ok(),
+        })
+    }
+
+    #[test]
+    fn reads_every_real_device_as_googles_library_does() {
+        let corpus = corpus();
+        assert_eq!(corpus.len(), 9);
+        let mut compared = 0;
+        for (path, extension, columns) in &corpus {
+            let parsed = parse_key_description(extension);
+            if path.starts_with("invalid/") {
+                continue;
+            }
+            assert_eq!(
+                parsed,
+                expected(columns).ok_or(Error::InvalidValue),
+                "{path}"
+            );
+            compared += 1;
+        }
+        assert_eq!(compared, 7);
+    }
+
+    #[test]
+    fn reads_googles_invalid_samples_as_decided() {
+        let corpus = corpus();
+        let parsed = |name: &str| {
+            corpus
+                .iter()
+                .find(|(path, ..)| path.ends_with(name))
+                .map(|(_, extension, _)| parse_key_description(extension))
+        };
+        // A genuine chain (its signatures verify) whose deviceLocked is 0x01, not DER's 0xFF: read
+        // as true, as Google's library reads it.
+        assert_eq!(
+            parsed("malformed_rot_device_locked.pem")
+                .and_then(Result::ok)
+                .and_then(|d| d.root_of_trust),
+            Some(LOCKED_VERIFIED)
+        );
+        // Entries out of tag order are read; this sample's leaf signature does not verify, so the
+        // chain check rejects it whatever its extension says.
+        assert_eq!(
+            parsed("tags_not_in_ascending_order.pem").map(|d| d.map(|d| d.os_patch_level)),
+            Some(Ok(Some(202_408)))
+        );
+    }
+
     // Which list a value comes from.
 
     #[test]

@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: CC0-1.0
+retrieved: 2026-11-17
+repository: https://github.com/android/keyattestation
+commit: c391708adccdeff0ac12f51e81cebfe5de42a017
+path: testdata/ (the 16 files below, at their paths there)
+licence: Apache-2.0, Copyright Google LLC (https://github.com/android/keyattestation/blob/c391708adccdeff0ac12f51e81cebfe5de42a017/LICENSE)
+approved: by the maintainer, 2026-11-17, for these files only
+files: 16, 55819 bytes; sha256:
+  f07de8201fa0a87c9ea490a525986eb1adc0c4bdd532052f80f1b694a1c54a94  akita/sdk34/TEE_EC_NONE.json
+  9de2ca8e1cefe445d614c799b6d79babb044910ab4bdd0dd124fdf9d99cf8ff5  akita/sdk34/TEE_EC_NONE.pem
+  a2c2c675d07759a26dc5cffe2a7c569591edccee071a24c9c47c39bd7f61d3d0  blueline/sdk28/SB_RSA_NONE.json
+  8287049b40e6698feb8050d95f2fa6effbeb60aae26b06f9cca320d3b8bc7939  blueline/sdk28/SB_RSA_NONE.pem
+  e57a296d341c74a37ec51c96a0cbd08748172c21b355c4023b3f4ccdd3b6f2cb  caiman/sdk36/TEE_EC_RKP.json
+  6194cd75cea7bb635d898be13cb72880771f7192f90fa9507279c95c86a395ec  caiman/sdk36/TEE_EC_RKP.pem
+  24e848f2f6e0800fbc3cf4aba1a8d8353bb2180377a2b45ac97354d0991c8975  invalid/malformed_rot_device_locked.pem
+  1c197efacf1e0ca712ca5bf6d697930a5b9fb05ac7744053afcb8522890a16a3  invalid/tags_not_in_ascending_order.pem
+  b5095bf622a91883c47444072e060e3c54e4982ceb9b8d0c3dc4c9a02ccb93ef  marlin/sdk29/TEE_EC_NONE.json
+  231bd6d0d7fdd1b5fa58f8fb1d2f465977ec93b6f78ef173a0a615c9cf0c49dc  marlin/sdk29/TEE_EC_NONE.pem
+  2c5a581958a9f1adbaed572793e89058bb5eba41c25ed4a588d0171febbd9f2d  sony-xperia10-iii/sdk33/TEE_EC.json
+  1409326a4f1c7d1da760beefedd3757e73ad2cef9c48746d5d69fe67e8819f58  sony-xperia10-iii/sdk33/TEE_EC.pem
+  164fcb9ec20ab933f17467518bba34aa22022b1298d23db62a5c117fe3fa6a78  tokay/sdk37/TEE_MLDSA_RKP.json
+  b0dd61d791d94c8bc50225abdbb6d068c7339e3bf020cb7fcdcdee13b7522d76  tokay/sdk37/TEE_MLDSA_RKP.pem
+  8aeb49c3d6b6b8871a6f70706e173b8c258051f26bf98338d3b222d5575799be  walleye/sdk27/TEE_EC_NONE.json
+  b1648bd6aa54ebb6031600b08dffd6b8bc42297159812d7b0f66148ef293d60a  walleye/sdk27/TEE_EC_NONE.pem
+converted: convert.py writes vectors.tsv: each leaf's KeyDescription extension and the .json's values
