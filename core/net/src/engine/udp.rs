@@ -8419,4 +8419,102 @@ mod tests {
         }
         Ok(())
     }
+
+    /// An address is let in only while a peer has its answers come from it, and shows a live one's
+    /// stand-in (fix round 6, the round's surviving mutants of its records): a server known by its own
+    /// address, ended, lets no other port of it in; an address handed to the stand-in beside its holder,
+    /// that one ended too, lets nothing in; and one stand-in bound to an address on two ports, both ended,
+    /// leaves the address to the stand-in bound to it on a third.
+    #[tokio::test(flavor = "current_thread")]
+    async fn an_address_lets_in_only_while_a_peer_has_it() -> io::Result<()> {
+        let shared = shared();
+        let now = Instant::now();
+        let later = now + Duration::from_secs(200);
+        let server = |port| SocketAddr::from(([192, 0, 2, 9], port));
+        let from = |port| Target::Address(server(port));
+        // A server known by its own address, ended.
+        let mut known = mapping(now).await?;
+        let way = PeerWay::through_tool(Target::Address(server(3_478)));
+        known.peer(&shared, (APP, server(3_478)), now, (false, way));
+        known.sweep(now + Duration::from_secs(120), &shared);
+        let got = known
+            .main()
+            .relayed_answer(&shared, APP, (&from(3_479), b"another port"), later);
+        assert!(
+            matches!(got, LetIn::Filtered),
+            "an ended server's other port came in"
+        );
+        // Handed over beside, then the new holder ended too.
+        let mut handed = mapping(now).await?;
+        let a = SocketAddr::from(([198, 18, 0, 1], 3_478));
+        let b = SocketAddr::from(([198, 18, 0, 2], 3_478));
+        handed.peer(&shared, (APP, a), now, (false, tooled("a.test", 3_478)));
+        handed.sent(a, &binding(0xa1, false));
+        handed
+            .main()
+            .relayed_answer(&shared, APP, (&from(3_478), &binding(0xa1, true)), now);
+        handed.peer(&shared, (APP, b), now, (false, tooled("b.test", 3_478)));
+        handed.sent(b, &binding(0xb2, false));
+        let got =
+            handed
+                .main()
+                .relayed_answer(&shared, APP, (&from(3_478), &binding(0xb2, true)), now);
+        assert!(matches!(got, LetIn::Peer(shown, ..) if shown == b));
+        if let Some(peer) = handed.peers.get_mut(&b) {
+            peer.last = later;
+        }
+        handed.sweep(now + Duration::from_secs(120), &shared);
+        assert_eq!(
+            handed.sources.aliases.get(&server(3_478)),
+            Some(&b),
+            "handed to b"
+        );
+        handed.sweep(later + Duration::from_secs(1), &shared);
+        assert!(handed.peers.is_empty());
+        let got = handed
+            .main()
+            .relayed_answer(&shared, APP, (&from(3_478), b"late"), later);
+        assert!(
+            matches!(got, LetIn::Filtered),
+            "a handed address outlived its holders"
+        );
+        // One stand-in bound on two ports, another on a third.
+        let mut ports = mapping(now).await?;
+        let a_too = SocketAddr::from(([198, 18, 0, 1], 5_000));
+        let c = SocketAddr::from(([198, 18, 0, 3], 6_000));
+        ports.peer(&shared, (APP, a), now, (false, tooled("a.test", 3_478)));
+        ports.sent(a, b"no identifier");
+        ports
+            .main()
+            .relayed_answer(&shared, APP, (&from(3_478), b"a's"), now);
+        for (shown, name, id) in [(a_too, "a.test", 0xa2), (c, "c.test", 0xc3)] {
+            ports.peer(
+                &shared,
+                (APP, shown),
+                now,
+                (false, tooled(name, shown.port())),
+            );
+            ports.sent(shown, &binding(id, false));
+            let got = ports.main().relayed_answer(
+                &shared,
+                APP,
+                (&from(shown.port()), &binding(id, true)),
+                now,
+            );
+            assert!(matches!(got, LetIn::Peer(to, ..) if to == shown));
+        }
+        if let Some(peer) = ports.peers.get_mut(&c) {
+            peer.last = later;
+        }
+        ports.sweep(now + Duration::from_secs(120), &shared);
+        let got =
+            ports
+                .main()
+                .relayed_answer(&shared, APP, (&from(7_000), b"a fourth port"), later);
+        assert!(
+            matches!(got, LetIn::Peer(shown, ..) if shown.ip() == c.ip()),
+            "came in as a's stand-in, which ended on both its ports"
+        );
+        Ok(())
+    }
 }
