@@ -11,6 +11,10 @@
     <string name="device_integrity_ok">Hardware-Prüfung, signiert mit Googles Attestierungsschlüssel: Der Bootloader ist gesperrt und das System ist verifiziert.</string>
     <string name="device_integrity_unavailable">Die Hardware-Prüfung ist auf diesem Telefon nicht verfügbar.</string>
     <string name="device_patch">Sicherheitspatch: %1$s</string>
+    <string name="device_integrity_failed">Die Hardware-Prüfung ist auf diesem Telefon fehlgeschlagen.</string>
+    <string name="device_boot_key">Schlüssel für den verifizierten Start: %1$s</string>
+    <string name="device_patch_system">Sicherheitspatch laut System: %1$s</string>
+    <string name="device_vendor_patch">Sicherheitspatch der Zulieferer: %1$s</string>
     <string name="finding_and_more">%1$s (+%2$d)</string>
     <!-- Between the items of a list. -->
     <string name="list_separator">", "</string>
@@ -236,6 +240,8 @@
     <string name="finding_usb_debugging_body">Ein per Kabel verbundener Computer kann Apps installieren und Daten lesen, sobald Sie seinen Schlüssel akzeptieren. Schalten Sie es aus, wenn Sie es nicht brauchen.</string>
     <string name="finding_old_patch_title">Sicherheitsupdates sind alt</string>
     <string name="finding_old_patch_body">Der letzte Sicherheitspatch dieses Telefons ist über ein Jahr alt; bekannte Schwachstellen sind nicht behoben.</string>
+    <string name="finding_old_vendor_patch_title">Sicherheitsupdates der Zulieferer sind alt</string>
+    <string name="finding_old_vendor_patch_body">Die Teile der Software dieses Telefons, die von seinen Chip- und Hardware-Zulieferern stammen, wurden zuletzt vor mehr als einem Jahr gepatcht. Bekannte Schwachstellen darin sind möglicherweise nicht behoben.</string>
     <string name="finding_software_only_title">Keine Hardware-Prüfung verfügbar</string>
     <string name="finding_software_only_body">Dieses Telefon bestätigt nur per Software, die Hardware kann den Systemzustand also nicht bestätigen. Auf Emulatoren ist das normal.</string>
     <string name="finding_attestation_revoked_title">Schlüssel der Hardware-Prüfung widerrufen</string>
@@ -248,6 +254,10 @@
     <string name="finding_attestation_forged_body">Die Hardware-Prüfung dieses Telefons wurde verändert, nachdem die sichere Hardware des Telefons sie erstellt hat, oder sie beantwortet eine andere Anfrage als die von Datapavan. Etwas auf diesem Telefon greift in die Prüfung ein, daher verwendet Datapavan nicht, was sie meldet. Nehmen Sie diese Warnung ernst: Das System wurde möglicherweise verändert, um seinen Zustand zu verbergen.</string>
     <string name="finding_attestation_out_of_date_title">Hardware-Prüfung zeitlich ungültig</string>
     <string name="finding_attestation_out_of_date_body">Ein Zertifikat in der Hardware-Prüfung dieses Telefons ist für das vom Telefon angezeigte Datum nicht gültig, daher lässt sich die Prüfung nicht bestätigen. Die übliche Ursache ist ein falsches Datum auf dem Telefon: Stellen Sie das richtige Datum ein und öffnen Sie Datapavan erneut.</string>
+    <string name="finding_attestation_failed_title">Hardware-Prüfung fehlgeschlagen</string>
+    <string name="finding_attestation_failed_body">Datapavan konnte die Hardware-Prüfung auf diesem Telefon nicht abschließen oder ihre Antwort nicht lesen, daher lässt sich der Zustand von Bootloader und System nicht bestätigen. Alle Telefone, die mit Android 8 oder neuer auf den Markt kamen, unterstützen diese Prüfung. Ein Fehler in der Software des Telefons oder in Datapavan kann die Ursache sein; ebenso ein verändertes System, das den Zustand des Bootloaders verbirgt. Für sich allein bedeutet das nicht, dass das Telefon verändert wurde.</string>
+    <string name="finding_system_own_key_title">System mit eigenem Schlüssel signiert</string>
+    <string name="finding_system_own_key_body">Der Bootloader dieses Telefons ist mit einem Schlüssel gesperrt, der nicht vom Hersteller stammt, sein System wurde also von seinem Besitzer oder von jemand anderem installiert. Wenn Sie ein System wie GrapheneOS selbst installiert haben, vergleichen Sie den Schlüssel für den verifizierten Start, den Datapavan für dieses Telefon anzeigt, mit dem, den das Projekt dieses Systems für dieses Modell veröffentlicht. Wenn nicht, nehmen Sie diese Warnung ernst.</string>
     <string name="finding_vpn_active_title">Ein VPN ist aktiv</string>
     <string name="finding_vpn_active_body">Der gesamte Datenverkehr läuft gerade durch eine VPN-App. Vergewissern Sie sich, dass Sie ihr vertrauen.</string>
 

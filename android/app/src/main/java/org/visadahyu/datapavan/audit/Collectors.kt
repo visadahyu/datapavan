@@ -39,6 +39,7 @@ import java.security.KeyStore
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.util.Date
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 /** The sensor that a runtime permission gives access to, if any. */
@@ -362,13 +363,21 @@ class AppCollector(private val context: Context) {
 /** Reads device-wide settings, user certificate authorities and hardware key attestation. */
 class DeviceCollector(private val context: Context) {
 
-    fun collect(): DeviceFacts = DeviceFacts(
-        usbDebugging = global(Settings.Global.ADB_ENABLED) == "1",
-        wirelessDebugging = global(SETTING_ADB_WIFI) == "1",
-        userCertificateAuthorities = userCertificateAuthorities(),
-        vpnActive = vpnActive(),
-        integrity = integrity(),
-    )
+    fun collect(): DeviceFacts {
+        val integrity = integrity()
+        return DeviceFacts(
+            usbDebugging = global(Settings.Global.ADB_ENABLED) == "1",
+            wirelessDebugging = global(SETTING_ADB_WIFI) == "1",
+            userCertificateAuthorities = userCertificateAuthorities(),
+            vpnActive = vpnActive(),
+            // Every phone this app runs on can attest: Android requires it of phones that launched with Android 8
+            // or later, and the keystore of the few that launched earlier and run Android 10 attests in software,
+            // as the Pixel XL's chain in Google's test data shows. No public API says which version a phone
+            // launched with, so a failure counts everywhere.
+            integrity = integrity,
+            integrityFailed = integrity == null,
+        )
+    }
 
     /** Debugging and user certificate authorities only, read again after a system screen of the plan (ADR 0026). */
     fun planState(): ItemState = ItemState(
@@ -440,11 +449,14 @@ class DeviceCollector(private val context: Context) {
                 verifiedBoot = fields.verifiedBoot,
                 osPatchLevel = fields.osPatchLevel,
                 trust = AttestationChain.verdict(trust, fields.challenge, challenge),
+                verifiedBootKey = fields.verifiedBootKey?.joinToString("") { "%02x".format(Locale.ROOT, it) },
+                vendorPatchLevel = fields.vendorPatchLevel,
             )
         } catch (_: java.security.GeneralSecurityException) {
             null
         } catch (_: IOException) {
-            // The data pack lacks the roots or the revocation list; the smoke test catches this.
+            // The data pack lacks the roots or the revocation list; the smoke test catches this, and the
+            // user sees the check as failed.
             null
         } catch (_: android.os.RemoteException) {
             // The parsers' process could not be reached; the device is then reported as not checked.

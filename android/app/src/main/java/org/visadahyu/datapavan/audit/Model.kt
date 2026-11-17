@@ -69,6 +69,10 @@ data class Integrity(
     val osPatchLevel: Int?,
     /** Whether the attestation's certificate chain leads to Google's attestation root. */
     val trust: AttestationTrust,
+    /** The digest of the key that verified the system, in lowercase hex. */
+    val verifiedBootKey: String? = null,
+    /** The vendor image's security patch level as `YYYYMM`. */
+    val vendorPatchLevel: Int? = null,
 ) {
     companion object {
         /** An attestation that is not the hardware's answer to this app's request: nothing it says is used. */
@@ -110,4 +114,6 @@ data class DeviceFacts(
     val vpnActive: Boolean,
     /** Null when attestation is unavailable or failed. */
     val integrity: Integrity?,
+    /** Whether the hardware check was made and failed, or its answer could not be read (see DeviceCollector). */
+    val integrityFailed: Boolean = false,
 )

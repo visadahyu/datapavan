@@ -11,6 +11,10 @@
     <string name="device_integrity_ok">فحص العتاد، موقَّع بمفتاح الإثبات من Google: برنامج الإقلاع مقفل وتم التحقق من النظام.</string>
     <string name="device_integrity_unavailable">فحص العتاد غير متاح على هذا الهاتف.</string>
     <string name="device_patch">تصحيح الأمان: %1$s</string>
+    <string name="device_integrity_failed">فشل فحص العتاد على هذا الهاتف.</string>
+    <string name="device_boot_key">مفتاح الإقلاع المتحقَّق منه: %1$s</string>
+    <string name="device_patch_system">تصحيح الأمان، كما يذكره النظام: %1$s</string>
+    <string name="device_vendor_patch">تصحيح الأمان من المورّدين: %1$s</string>
     <string name="finding_and_more">%1$s (+%2$d)</string>
     <!-- Between the items of a list. -->
     <string name="list_separator">"، "</string>
@@ -257,6 +261,8 @@
     <string name="finding_usb_debugging_body">يمكن لجهاز كمبيوتر موصول بكابل تثبيت تطبيقات وقراءة بيانات بمجرد قبولك مفتاحه. أوقِفه عندما لا تحتاج إليه.</string>
     <string name="finding_old_patch_title">تحديثات الأمان قديمة</string>
     <string name="finding_old_patch_body">مضى أكثر من عام على آخر تصحيح أمان في هذا الهاتف، لذا فإن الثغرات المعروفة لم تُصلَح.</string>
+    <string name="finding_old_vendor_patch_title">تحديثات أمان المورّدين قديمة</string>
+    <string name="finding_old_vendor_patch_body">مضى أكثر من عام على آخر تصحيح لأجزاء برامج هذا الهاتف التي تأتي من مورّدي رقاقاته وعتاده. قد تكون فيها ثغرات معروفة لم تُصلَح.</string>
     <string name="finding_software_only_title">لا يتوفر فحص العتاد</string>
     <string name="finding_software_only_body">لا يقدّم هذا الهاتف إثباتًا إلا عبر البرامج، لذا لا يمكن للعتاد تأكيد حالة النظام. هذا طبيعي في المحاكيات.</string>
     <string name="finding_attestation_revoked_title">أُبطل مفتاح فحص العتاد</string>
@@ -269,6 +275,10 @@
     <string name="finding_attestation_forged_body">تم تغيير فحص العتاد في هذا الهاتف بعد أن أنشأه العتاد الآمن في الهاتف، أو أنه يجيب عن طلب غير طلب Datapavan. هناك شيء على هذا الهاتف يتدخّل في الفحص، لذا لا يستخدم Datapavan ما يُبلغ عنه الفحص. تعامل مع هذا كتحذير جدي: ربما عُدِّل النظام لإخفاء حالته.</string>
     <string name="finding_attestation_out_of_date_title">فحص العتاد غير صالح في تاريخ الهاتف</string>
     <string name="finding_attestation_out_of_date_body">إحدى الشهادات في فحص العتاد لهذا الهاتف غير صالحة في التاريخ الذي يعرضه الهاتف، لذا لا يمكن تأكيد الفحص. السبب المعتاد هو تاريخ خاطئ على الهاتف: اضبط التاريخ الصحيح ثم افتح Datapavan من جديد.</string>
+    <string name="finding_attestation_failed_title">فشل فحص العتاد</string>
+    <string name="finding_attestation_failed_body">لم يتمكن Datapavan من إكمال فحص العتاد على هذا الهاتف، أو من قراءة إجابته، لذا لا يمكن تأكيد حالة برنامج الإقلاع والنظام. كل الهواتف التي طُرحت مع Android 8 أو أحدث تدعم هذا الفحص. قد يكون السبب خللًا في برامج الهاتف أو في Datapavan، ويمكن أن يكون السبب أيضًا نظامًا معدَّلًا يُخفي حالة برنامج الإقلاع. وهذا وحده لا يعني أن الهاتف قد غُيِّر.</string>
+    <string name="finding_system_own_key_title">النظام موقَّع بمفتاحه الخاص</string>
+    <string name="finding_system_own_key_body">برنامج الإقلاع في هذا الهاتف مقفل بمفتاح ليس مفتاح الشركة المصنّعة، لذا فإن مالكه أو شخصًا آخر هو من ثبّت نظامه. إذا كنت أنت من ثبّت نظامًا مثل GrapheneOS، فقارن مفتاح الإقلاع المتحقَّق منه الذي يعرضه Datapavan لهذا الهاتف بالمفتاح الذي ينشره مشروع ذلك النظام لهذا الطراز. وإذا لم تكن أنت من ثبّته، فتعامل مع هذا كتحذير جدي.</string>
     <string name="finding_vpn_active_title">هناك شبكة VPN نشطة</string>
     <string name="finding_vpn_active_body">تمر كل حركة البيانات حاليًا عبر تطبيق VPN. تأكّد من أنه تطبيق تثق به.</string>
 

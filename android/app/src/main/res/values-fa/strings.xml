@@ -11,6 +11,10 @@
     <string name="device_integrity_ok">بررسی سخت‌افزاری، امضاشده با کلید گواهی گوگل: بوت‌لودر قفل است و سیستم تأیید شده است.</string>
     <string name="device_integrity_unavailable">بررسی سخت‌افزاری روی این گوشی در دسترس نیست.</string>
     <string name="device_patch">وصله امنیتی: %1$s</string>
+    <string name="device_integrity_failed">بررسی سخت‌افزاری روی این گوشی ناموفق بود.</string>
+    <string name="device_boot_key">کلید بوت تأییدشده: %1$s</string>
+    <string name="device_patch_system">وصله امنیتی، به گفته سیستم: %1$s</string>
+    <string name="device_vendor_patch">وصله امنیتی سازندگان قطعات: %1$s</string>
     <string name="finding_and_more">%1$s (+%2$d)</string>
     <!-- Between the items of a list. -->
     <string name="list_separator">"، "</string>
@@ -236,6 +240,8 @@
     <string name="finding_usb_debugging_body">رایانه‌ای که با کابل وصل شود، پس از پذیرفتن کلیدش، می‌تواند برنامه نصب کند و داده بخواند. وقتی لازم ندارید آن را خاموش کنید.</string>
     <string name="finding_old_patch_title">به‌روزرسانی‌های امنیتی قدیمی است</string>
     <string name="finding_old_patch_body">آخرین وصله امنیتی این گوشی بیش از یک سال پیش است، پس آسیب‌پذیری‌های شناخته‌شده رفع نشده‌اند.</string>
+    <string name="finding_old_vendor_patch_title">به‌روزرسانی‌های امنیتی سازندگان قطعات قدیمی است</string>
+    <string name="finding_old_vendor_patch_body">بخش‌های نرم‌افزار این گوشی که از سازندگان قطعات آن، یعنی تراشه و سخت‌افزار، آمده‌اند آخرین بار بیش از یک سال پیش وصله شده‌اند. ممکن است آسیب‌پذیری‌های شناخته‌شده در آن‌ها رفع نشده باشند.</string>
     <string name="finding_software_only_title">بررسی سخت‌افزاری در دسترس نیست</string>
     <string name="finding_software_only_body">این گوشی فقط به‌صورت نرم‌افزاری گواهی می‌دهد، پس سخت‌افزار نمی‌تواند وضعیت سیستم را تأیید کند. این در شبیه‌سازها عادی است.</string>
     <string name="finding_attestation_revoked_title">کلید بررسی سخت‌افزاری باطل شده است</string>
@@ -243,11 +249,15 @@
     <string name="finding_attestation_unconfirmed_title">بررسی سخت‌افزاری تأیید نشد</string>
     <string name="finding_attestation_unconfirmed_body">بررسی سخت‌افزاری این گوشی با کلید گواهی گوگل امضا نشده است، پس وضعیت بوت‌لودر و سیستم که این بررسی گزارش می‌دهد قابل تأیید نیست. برخی سازندگان بیرون از برنامه گوگل کلید خودشان را دارند؛ یک سیستم دستکاری‌شده هم می‌تواند علت آن باشد.</string>
     <string name="finding_attestation_incomplete_title">بررسی سخت‌افزاری کامل نیست</string>
-    <string name="finding_attestation_incomplete_body">بررسی سخت‌افزاری این گوشی نمی‌گوید که بوت‌لودر قفل است یا نه و سیستم تأیید شده است یا نه، پس هیچ‌کدام قابل تأیید نیست. هر گوشی که از قواعد اندروید پیروی کند همیشه هر دو را می‌گوید. خطای سازنده می‌تواند علت آن باشد؛ یک سیستم دستکاری‌شده هم می‌تواند.</string>
+    <string name="finding_attestation_incomplete_body">بررسی سخت‌افزاری این گوشی نه درباره قفل بودن بوت‌لودر چیزی می‌گوید و نه درباره تأیید شدن سیستم، پس هیچ‌کدام قابل تأیید نیست. هر گوشی که از قواعد اندروید پیروی کند همیشه هر دو را می‌گوید. خطای سازنده می‌تواند علت آن باشد؛ یک سیستم دستکاری‌شده هم می‌تواند.</string>
     <string name="finding_attestation_forged_title">بررسی سخت‌افزاری دستکاری شده است</string>
     <string name="finding_attestation_forged_body">بررسی سخت‌افزاری این گوشی پس از آنکه سخت‌افزار امن گوشی آن را ساخت، تغییر داده شده است، یا به درخواستی جز درخواست Datapavan پاسخ می‌دهد. چیزی روی این گوشی در این بررسی دخالت می‌کند، پس Datapavan از آنچه این بررسی گزارش می‌دهد استفاده نمی‌کند. این را هشداری جدی بدانید: ممکن است سیستم برای پنهان کردن وضعیتش دستکاری شده باشد.</string>
     <string name="finding_attestation_out_of_date_title">بررسی سخت‌افزاری در تاریخ گوشی معتبر نیست</string>
     <string name="finding_attestation_out_of_date_body">یک گواهی در بررسی سخت‌افزاری این گوشی، در تاریخی که گوشی نشان می‌دهد، معتبر نیست، پس این بررسی قابل تأیید نیست. علت معمول، تاریخ نادرست گوشی است: تاریخ درست را تنظیم کنید و Datapavan را دوباره باز کنید.</string>
+    <string name="finding_attestation_failed_title">بررسی سخت‌افزاری ناموفق بود</string>
+    <string name="finding_attestation_failed_body">برنامه Datapavan نتوانست بررسی سخت‌افزاری این گوشی را کامل کند یا پاسخ آن را بخواند، پس وضعیت بوت‌لودر و سیستم قابل تأیید نیست. همه گوشی‌هایی که با اندروید ۸ یا بالاتر عرضه شده‌اند از این بررسی پشتیبانی می‌کنند. خطایی در نرم‌افزار گوشی یا در Datapavan می‌تواند علت آن باشد؛ یک سیستم دستکاری‌شده که وضعیت بوت‌لودر را پنهان می‌کند هم می‌تواند علت آن باشد. این به‌تنهایی به این معنا نیست که گوشی تغییر داده شده است.</string>
+    <string name="finding_system_own_key_title">سیستم با کلید خودش امضا شده است</string>
+    <string name="finding_system_own_key_body">بوت‌لودر این گوشی با کلیدی قفل شده است که کلید سازنده نیست، پس سیستمش را مالک گوشی یا کس دیگری نصب کرده است. اگر خودتان سیستمی مانند GrapheneOS نصب کرده‌اید، کلید بوت تأییدشده را که Datapavan برای این گوشی نشان می‌دهد با کلیدی که پروژه آن سیستم برای این مدل منتشر می‌کند مقایسه کنید. اگر خودتان آن را نصب نکرده‌اید، این را هشداری جدی بدانید.</string>
     <string name="finding_vpn_active_title">یک وی‌پی‌ان فعال است</string>
     <string name="finding_vpn_active_body">همه ترافیک اکنون از یک برنامه وی‌پی‌ان می‌گذرد. مطمئن شوید که به آن اعتماد دارید.</string>
 

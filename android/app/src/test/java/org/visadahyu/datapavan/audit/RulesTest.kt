@@ -136,9 +136,34 @@ class RulesTest {
     }
 
     @Test
+    fun `a failed check is a finding only where the phone must support it`() {
+        val failed = DeviceFacts(false, false, emptyList(), vpnActive = false, integrity = null, integrityFailed = true)
+        assertEquals(listOf(FindingKind.ATTESTATION_FAILED), Rules.forDevice(failed, nowYearMonth = 202_610))
+        assertEquals(emptyList<FindingKind>(), Rules.forDevice(failed.copy(integrityFailed = false), nowYearMonth = 202_610))
+    }
+
+    @Test
+    fun `a system locked with its owner's key is a medium fact`() {
+        val ownKey = Integrity(1, deviceLocked = true, verifiedBoot = 1, osPatchLevel = 202_608, trust = AttestationTrust.GOOGLE_ROOT)
+        assertEquals(listOf(FindingKind.SYSTEM_OWN_KEY), Rules.forDevice(device(integrity = ownKey), nowYearMonth = 202_610))
+        // A software attestation's word on it is not taken.
+        assertEquals(listOf(FindingKind.INTEGRITY_SOFTWARE_ONLY), Rules.forDevice(device(integrity = ownKey.copy(securityLevel = 0)), nowYearMonth = 202_610))
+    }
+
+    @Test
+    fun `an old vendor patch is a finding of its own`() {
+        val integrity = Integrity(1, deviceLocked = true, verifiedBoot = 0, osPatchLevel = 202_608, trust = AttestationTrust.GOOGLE_ROOT)
+        assertEquals(
+            listOf(FindingKind.OLD_VENDOR_PATCH),
+            Rules.forDevice(device(integrity = integrity.copy(vendorPatchLevel = 202_509)), nowYearMonth = 202_610),
+        )
+        assertEquals(emptyList<FindingKind>(), Rules.forDevice(device(integrity = integrity.copy(vendorPatchLevel = 202_510)), nowYearMonth = 202_610))
+    }
+
+    @Test
     fun `a forged attestation is reported alone, whatever it says`() {
         // Not its unlocked bootloader, not its old patch: nothing a forged attestation says is used.
-        val integrity = Integrity(2, deviceLocked = false, verifiedBoot = 2, osPatchLevel = 201_001, trust = AttestationTrust.FORGED)
+        val integrity = Integrity(2, deviceLocked = false, verifiedBoot = 2, osPatchLevel = 201_001, trust = AttestationTrust.FORGED, vendorPatchLevel = 201_001)
         assertEquals(listOf(FindingKind.ATTESTATION_FORGED), Rules.forDevice(device(integrity = integrity), nowYearMonth = 202_610))
         assertEquals(listOf(FindingKind.ATTESTATION_FORGED), Rules.forDevice(device(integrity = Integrity.forged()), nowYearMonth = 202_610))
     }

@@ -13,6 +13,10 @@
     <string name="device_integrity_unavailable">The hardware check is not available on this phone.</string>
     <!-- %1$s is a date such as 2023-03, passed in already bidi-isolated. -->
     <string name="device_patch">Security patch: %1$s</string>
+    <string name="device_integrity_failed">The hardware check failed on this phone.</string>
+    <string name="device_boot_key">Verified boot key: %1$s</string>
+    <string name="device_patch_system">Security patch, as the system states it: %1$s</string>
+    <string name="device_vendor_patch">Vendor security patch: %1$s</string>
     <!-- Both values are counts. -->
     <!-- %1$s is a finding title; %2$d is the number of further findings, shown as "+2". -->
     <string name="finding_and_more">%1$s (+%2$d)</string>
@@ -255,6 +259,8 @@
     <string name="finding_usb_debugging_body">A computer connected by cable can install apps and read data once you accept its key. Turn it off when you do not need it.</string>
     <string name="finding_old_patch_title">Security updates are old</string>
     <string name="finding_old_patch_body">The last security patch on this phone is more than a year old, so known vulnerabilities are not fixed.</string>
+    <string name="finding_old_vendor_patch_title">Vendor security updates are old</string>
+    <string name="finding_old_vendor_patch_body">The parts of this phone\'s software that come from its chip and hardware makers were last patched more than a year ago. Known vulnerabilities in them may not be fixed.</string>
     <string name="finding_software_only_title">No hardware check available</string>
     <string name="finding_software_only_body">This phone attests only in software, so hardware cannot confirm the system state. This is normal for emulators.</string>
     <string name="finding_attestation_revoked_title">Hardware check key revoked</string>
@@ -267,6 +273,10 @@
     <string name="finding_attestation_forged_body">This phone\'s hardware check was changed after the phone\'s secure hardware made it, or it answers another request than Datapavan\'s. Something on this phone is interfering with the check, so Datapavan does not use what it reports. Treat this as a serious warning: the system may have been changed to hide its state.</string>
     <string name="finding_attestation_out_of_date_title">Hardware check out of date</string>
     <string name="finding_attestation_out_of_date_body">A certificate in this phone\'s hardware check is not valid on the date the phone shows, so the check cannot be confirmed. A wrong date on the phone is the usual cause: set the right date and open Datapavan again.</string>
+    <string name="finding_attestation_failed_title">Hardware check failed</string>
+    <string name="finding_attestation_failed_body">Datapavan could not complete the hardware check on this phone, or could not read its answer, so the bootloader and system state cannot be confirmed. Phones that launched with Android 8 or later all support this check. A fault in the phone\'s software or in Datapavan can cause this; so can a modified system that hides the bootloader state. On its own, it does not mean that the phone was changed.</string>
+    <string name="finding_system_own_key_title">System signed with its own key</string>
+    <string name="finding_system_own_key_body">This phone\'s bootloader is locked with a key that is not the maker\'s, so its system was installed by its owner or by someone else. If you installed a system such as GrapheneOS yourself, compare the verified boot key that Datapavan shows for this phone with the one its project publishes for this model. If you did not, treat this as a serious warning.</string>
     <string name="finding_vpn_active_title">A VPN is active</string>
     <string name="finding_vpn_active_body">All traffic currently passes through a VPN app. Make sure it is one you trust.</string>
 

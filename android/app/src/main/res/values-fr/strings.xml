@@ -11,6 +11,10 @@
     <string name="device_integrity_ok">Contrôle matériel, signé avec la clé d\'attestation de Google : le bootloader est verrouillé et le système est vérifié.</string>
     <string name="device_integrity_unavailable">Le contrôle matériel n\'est pas disponible sur ce téléphone.</string>
     <string name="device_patch">Correctif de sécurité : %1$s</string>
+    <string name="device_integrity_failed">Le contrôle matériel a échoué sur ce téléphone.</string>
+    <string name="device_boot_key">Clé de démarrage vérifié : %1$s</string>
+    <string name="device_patch_system">Correctif de sécurité, selon le système : %1$s</string>
+    <string name="device_vendor_patch">Correctif de sécurité des fournisseurs : %1$s</string>
     <string name="finding_and_more">%1$s (+%2$d)</string>
     <!-- Between the items of a list. -->
     <string name="list_separator">", "</string>
@@ -241,6 +245,8 @@
     <string name="finding_usb_debugging_body">Un ordinateur relié par câble peut installer des applis et lire des données une fois sa clé acceptée. Désactivez-le si vous n\'en avez pas besoin.</string>
     <string name="finding_old_patch_title">Mises à jour de sécurité anciennes</string>
     <string name="finding_old_patch_body">Le dernier correctif de sécurité de ce téléphone date de plus d\'un an : des failles connues ne sont pas corrigées.</string>
+    <string name="finding_old_vendor_patch_title">Mises à jour de sécurité des fournisseurs anciennes</string>
+    <string name="finding_old_vendor_patch_body">Les parties du logiciel de ce téléphone qui viennent des fournisseurs de ses puces et de son matériel ont reçu leur dernier correctif il y a plus d\'un an. Des failles connues dans ces parties ne sont peut-être pas corrigées.</string>
     <string name="finding_software_only_title">Aucun contrôle matériel disponible</string>
     <string name="finding_software_only_body">Ce téléphone ne fournit qu\'une attestation logicielle : le matériel ne peut pas confirmer l\'état du système. C\'est normal sur un émulateur.</string>
     <string name="finding_attestation_revoked_title">Clé du contrôle matériel révoquée</string>
@@ -253,6 +259,10 @@
     <string name="finding_attestation_forged_body">Le contrôle matériel de ce téléphone a été modifié après que le matériel sécurisé du téléphone l\'a produit, ou il répond à une autre demande que celle de Datapavan. Quelque chose sur ce téléphone interfère avec le contrôle : Datapavan n\'utilise donc pas ce qu\'il indique. Prenez cet avertissement au sérieux : le système a peut-être été modifié pour cacher son état.</string>
     <string name="finding_attestation_out_of_date_title">Contrôle matériel non valide à cette date</string>
     <string name="finding_attestation_out_of_date_body">Un certificat du contrôle matériel de ce téléphone n\'est pas valide à la date qu\'affiche le téléphone : le contrôle ne peut donc pas être confirmé. La cause habituelle est une date erronée sur le téléphone : réglez la bonne date et rouvrez Datapavan.</string>
+    <string name="finding_attestation_failed_title">Échec du contrôle matériel</string>
+    <string name="finding_attestation_failed_body">Datapavan n\'a pas pu terminer le contrôle matériel sur ce téléphone, ou n\'a pas pu lire sa réponse : l\'état du bootloader et du système ne peut donc pas être confirmé. Tous les téléphones sortis avec Android 8 ou une version ultérieure prennent en charge ce contrôle. Un défaut du logiciel du téléphone ou de Datapavan peut en être la cause ; un système modifié qui cache l\'état du bootloader peut aussi en être la cause. En soi, cela ne signifie pas que le téléphone a été modifié.</string>
+    <string name="finding_system_own_key_title">Système signé avec sa propre clé</string>
+    <string name="finding_system_own_key_body">Le bootloader de ce téléphone est verrouillé avec une clé qui n\'est pas celle du fabricant : son système a donc été installé par son propriétaire ou par quelqu\'un d\'autre. Si vous avez installé vous-même un système comme GrapheneOS, comparez la clé de démarrage vérifié que Datapavan affiche pour ce téléphone avec celle que le projet de ce système publie pour ce modèle. Sinon, prenez cet avertissement au sérieux.</string>
     <string name="finding_vpn_active_title">Un VPN est actif</string>
     <string name="finding_vpn_active_body">Tout le trafic passe actuellement par une appli VPN. Assurez-vous qu\'elle est digne de confiance.</string>
 

@@ -472,20 +472,38 @@ internal fun SectionTitle(@StringRes title: Int) {
 
 @Composable
 internal fun IntegrityLine(device: DeviceFacts) {
+    Column(Modifier.padding(vertical = 4.dp)) {
+        for ((text, argument) in integrityLines(device)) {
+            val line = if (argument == null) stringResource(text) else stringResource(text, isolateLtr(argument))
+            Text(line, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+/** What the hardware check's lines say on the phone's page: each a string and its argument, if it has one. */
+internal fun integrityLines(device: DeviceFacts): List<Pair<Int, String?>> {
     val integrity = device.integrity
-    val text = when {
-        integrity == null -> stringResource(R.string.device_integrity_unavailable)
+    val status = when {
+        integrity == null && device.integrityFailed -> R.string.device_integrity_failed
+        integrity == null -> R.string.device_integrity_unavailable
         integrity.deviceLocked == true && integrity.verifiedBoot == 0 && integrity.securityLevel > 0 &&
-            integrity.trust == AttestationTrust.GOOGLE_ROOT -> stringResource(R.string.device_integrity_ok)
+            integrity.trust == AttestationTrust.GOOGLE_ROOT -> R.string.device_integrity_ok
         else -> null
     }
-    // A forged attestation's patch level is not shown, like the rest of what it says.
-    val patch = integrity?.takeIf { it.trust != AttestationTrust.FORGED }?.osPatchLevel
-        ?.let { String.format(Locale.ROOT, "%04d-%02d", it / 100, it % 100) }
-    Column(Modifier.padding(vertical = 4.dp)) {
-        text?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-        patch?.let { Text(stringResource(R.string.device_patch, isolateLtr(it)), style = MaterialTheme.typography.bodyMedium) }
+    // Nothing a forged attestation says is shown.
+    val shown = integrity?.takeIf { it.trust != AttestationTrust.FORGED }
+    val yearMonth = { level: Int -> String.format(Locale.ROOT, "%04d-%02d", level / 100, level % 100) }
+    // A software attestation's patch level is only what the system says of itself.
+    val patch = shown?.osPatchLevel?.let {
+        (if (shown.securityLevel == 0) R.string.device_patch_system else R.string.device_patch) to yearMonth(it)
     }
+    // The vendor's patch level, where it lags behind the system's.
+    val vendor = shown?.vendorPatchLevel?.takeIf { shown.osPatchLevel == null || it < shown.osPatchLevel }
+        ?.let { R.string.device_vendor_patch to yearMonth(it) }
+    // The key that verified a system of the owner's own, to compare with the one its project publishes.
+    val bootKey = shown?.takeIf { it.securityLevel > 0 && it.verifiedBoot == 1 }?.verifiedBootKey
+        ?.let { R.string.device_boot_key to it }
+    return listOfNotNull(status?.let { it to null }, patch, vendor, bootKey)
 }
 
 @Composable
@@ -721,6 +739,9 @@ private fun title(kind: FindingKind) = when (kind) {
     FindingKind.BOOT_NOT_VERIFIED -> R.string.finding_boot_not_verified_title
     FindingKind.USB_DEBUGGING -> R.string.finding_usb_debugging_title
     FindingKind.OLD_SECURITY_PATCH -> R.string.finding_old_patch_title
+    FindingKind.OLD_VENDOR_PATCH -> R.string.finding_old_vendor_patch_title
+    FindingKind.ATTESTATION_FAILED -> R.string.finding_attestation_failed_title
+    FindingKind.SYSTEM_OWN_KEY -> R.string.finding_system_own_key_title
     FindingKind.INTEGRITY_SOFTWARE_ONLY -> R.string.finding_software_only_title
     FindingKind.ATTESTATION_REVOKED -> R.string.finding_attestation_revoked_title
     FindingKind.ATTESTATION_FORGED -> R.string.finding_attestation_forged_title
@@ -755,6 +776,9 @@ private fun body(kind: FindingKind) = when (kind) {
     FindingKind.BOOT_NOT_VERIFIED -> R.string.finding_boot_not_verified_body
     FindingKind.USB_DEBUGGING -> R.string.finding_usb_debugging_body
     FindingKind.OLD_SECURITY_PATCH -> R.string.finding_old_patch_body
+    FindingKind.OLD_VENDOR_PATCH -> R.string.finding_old_vendor_patch_body
+    FindingKind.ATTESTATION_FAILED -> R.string.finding_attestation_failed_body
+    FindingKind.SYSTEM_OWN_KEY -> R.string.finding_system_own_key_body
     FindingKind.INTEGRITY_SOFTWARE_ONLY -> R.string.finding_software_only_body
     FindingKind.ATTESTATION_REVOKED -> R.string.finding_attestation_revoked_body
     FindingKind.ATTESTATION_FORGED -> R.string.finding_attestation_forged_body

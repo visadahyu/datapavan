@@ -35,6 +35,9 @@ enum class FindingKind(val severity: Severity) {
     SYSTEM_KEY_LEAKED(Severity.MEDIUM),
     USB_DEBUGGING(Severity.MEDIUM),
     OLD_SECURITY_PATCH(Severity.MEDIUM),
+    OLD_VENDOR_PATCH(Severity.MEDIUM),
+    ATTESTATION_FAILED(Severity.MEDIUM),
+    SYSTEM_OWN_KEY(Severity.MEDIUM),
     INTEGRITY_SOFTWARE_ONLY(Severity.LOW),
     VPN_ACTIVE(Severity.INFO),
     SYSTEM_KEY_DEVELOPMENT(Severity.INFO),
@@ -146,6 +149,9 @@ object Rules {
         if (device.userCertificateAuthorities.isNotEmpty()) add(FindingKind.USER_CERTIFICATE_AUTHORITY)
         if (device.wirelessDebugging) add(FindingKind.WIRELESS_DEBUGGING)
         if (device.usbDebugging) add(FindingKind.USB_DEBUGGING)
+        // A check that should work and did not is reported, so that a system cannot hide the bootloader's
+        // state by breaking the check, and a fault on a sound phone comes to light.
+        if (device.integrity == null && device.integrityFailed) add(FindingKind.ATTESTATION_FAILED)
         device.integrity?.let { integrity ->
             // Nothing a forged attestation says is used: not its bootloader state, not its patch level.
             if (integrity.trust == AttestationTrust.FORGED) {
@@ -167,10 +173,15 @@ object Rules {
                 // system writes (ADR 0040, decision 5), so their absence is reported, not passed over.
                 if (integrity.deviceLocked == null || integrity.verifiedBoot == null) add(FindingKind.ATTESTATION_INCOMPLETE)
                 if (integrity.deviceLocked == false) add(FindingKind.BOOTLOADER_UNLOCKED)
+                // Locked with a key that is not the maker's (ADR 0040, decision 7): until a dataset of the keys
+                // that systems such as GrapheneOS publish exists, no such key can be named, so each is a medium fact.
+                if (integrity.deviceLocked == true && integrity.verifiedBoot == 1) add(FindingKind.SYSTEM_OWN_KEY)
                 if (integrity.deviceLocked == true && integrity.verifiedBoot in setOf(2, 3)) add(FindingKind.BOOT_NOT_VERIFIED)
             }
             val patch = integrity.osPatchLevel
             if (patch != null && months(nowYearMonth) - months(patch) > 12) add(FindingKind.OLD_SECURITY_PATCH)
+            val vendor = integrity.vendorPatchLevel
+            if (vendor != null && months(nowYearMonth) - months(vendor) > 12) add(FindingKind.OLD_VENDOR_PATCH)
         }
         if (device.vpnActive) add(FindingKind.VPN_ACTIVE)
     }.sortedBy { it.severity }
