@@ -333,8 +333,10 @@ open(sys.argv[1], "wb").write(b"\x16\x03\x01" + struct.pack("!H", len(handshake)
 PY
 adb push "$hello" "$HELLO_ON_DEVICE" >/dev/null 2>&1
 # The QUIC Initial packets are protected with Python's HMAC and OpenSSL's AES, apart from Watch's own
-# code (RFC 9001 5): the keys from the connection ID, AES-CTR with GCM's counter, a zero tag (Watch
-# does not check it), then the header protection.
+# code (RFC 9001 5): the keys from the connection ID, AES-CTR with GCM's counter, GCM's tag over the
+# header and the payload (Watch reads a hello only from a packet whose tag checks, ADR 0044, unit 9b),
+# then the header protection. OpenSSL's command line has no GCM, so GHASH is written out here from
+# NIST SP 800-38D, checked against its test cases 2 and 4 before any packet is built.
 python3 -I - "$hello" <<'PY'
 import hashlib, hmac, struct, subprocess, sys
 
@@ -348,6 +350,36 @@ def aes(key, data, mode, iv=b""):
     command += ["-iv", iv.hex()] if iv else []
     return subprocess.run(command, input=data, capture_output=True, check=True).stdout
 
+def gmul(x, y):
+    # Multiplication in GCM's field, its blocks read with the first bit the highest (SP 800-38D 6.3).
+    z = 0
+    for i in range(127, -1, -1):
+        if (x >> i) & 1:
+            z ^= y
+        y = (y >> 1) ^ (0xE1 << 120) if y & 1 else y >> 1
+    return z
+
+def gcm_tag(key, nonce, aad, ciphertext):
+    def blocks(data):
+        data += bytes(-len(data) % 16)
+        return [int.from_bytes(data[i:i + 16], "big") for i in range(0, len(data), 16)]
+    h = int.from_bytes(aes(key, bytes(16), "ecb"), "big")
+    s = 0
+    for block in blocks(aad) + blocks(ciphertext) + [(len(aad) * 8) << 64 | len(ciphertext) * 8]:
+        s = gmul(s ^ block, h)
+    j0 = int.from_bytes(aes(key, nonce + b"\x00\x00\x00\x01", "ecb"), "big")
+    return (j0 ^ s).to_bytes(16, "big")
+
+# SP 800-38D's test cases 2 and 4 (the GCM specification's own), so a fault here fails here.
+zero = aes(bytes(16), bytes(16), "ctr", bytes(12) + b"\x00\x00\x00\x02")
+assert gcm_tag(bytes(16), bytes(12), b"", zero).hex() == "ab6e47d42cec13bdf53a67b21257bddf"
+k4, n4 = bytes.fromhex("feffe9928665731c6d6a8f9467308308"), bytes.fromhex("cafebabefacedbaddecaf888")
+c4 = bytes.fromhex(
+    "42831ec2217774244b7221b784d0d49ce3aa212f2c02a4e035c17e2329aca12e"
+    "21d514b25466931c7d8f6a5aac84aa051ba30b396a0aac973d58e091")
+a4 = bytes.fromhex("feedfacedeadbeeffeedfacedeadbeefabaddad2")
+assert gcm_tag(k4, n4, a4, c4).hex() == "5bc94fbc3221a5db94fae95ae7121a47"
+
 cid = bytes.fromhex("5761746368517569")
 salt = bytes.fromhex("38762cf7f55934b34d179ae6a4c80cadccbb7f0a")
 secret = expand_label(hmac.new(salt, cid, hashlib.sha256).digest(), b"client in", 32)
@@ -360,8 +392,8 @@ def initial(pn, frames, size):
     at = len(header)
     header += struct.pack("!I", pn)
     nonce = bytes(a ^ b for a, b in zip(iv, struct.pack("!IQ", 0, pn)))
-    packet = bytearray(header + aes(key, frames.ljust(length, b"\x00"), "ctr", nonce + b"\x00\x00\x00\x02"))
-    packet += bytes(16)
+    payload = aes(key, frames.ljust(length, b"\x00"), "ctr", nonce + b"\x00\x00\x00\x02")
+    packet = bytearray(header + payload + gcm_tag(key, nonce, header, payload))
     mask = aes(hp, bytes(packet[at + 4:at + 20]), "ecb")
     packet[0] ^= mask[0] & 0x0F
     for i in range(4):
