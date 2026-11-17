@@ -82,7 +82,7 @@ does.
 
 **The hardware check after three independent reviews (2026-11-17, decisions 5 and 7).** The first review read
 the parser, `core/engine/src/attestation.rs`; the second the whole check, the chain included; the third the
-result, adversarially. Each fault was shown before its fix by a test that failed, by a mutant that a new test
+result, adversarially, twice. Each fault was shown before its fix by a test that failed, by a mutant that a new test
 kills, or, where neither could be, as stated below.
 
 - **The attestation must answer the app's own request.** The chain check verified only signatures,
@@ -106,10 +106,13 @@ kills, or, where neither could be, as stated below.
   system that sets it back can make an expired one look valid, but cannot make a forged extension, another
   challenge or a revoked or unknown root pass.
 - **The revocation list** is the one in the data pack, fetched on the day its `SOURCE` names; a key revoked since
-  then passes. The "locked and verified" line names that day, and past 90 days says the list is old and asks for
-  a newer data pack, which is how the list is refreshed (DATA-PACKS.md): half the age at which the app calls the
+  then passes. Every value the hardware confirms is shown with that day, after them (the "locked and verified"
+  line, the patch levels, an owner's boot key), and past 90 days the line says the list is old and asks for a
+  newer data pack, which is how the list is refreshed (DATA-PACKS.md): half the age at which the app calls the
   whole pack stale, since a leaked attestation key, the usual way to fake this check, is caught only once Google
-  revokes it.
+  revokes it. The list and its `SOURCE` are read from the same pack, the first that holds the list: the data
+  store falls back to the APK's pack file by file, which could have put a newer pack's date on the APK's older
+  list. A list without its `SOURCE` is undated, and no date is shown.
 - **What a hooked keystore can still do.** Sign a whole chain with an attestation key that leaked and is not yet
   revoked; or pass the challenge to another phone it controls, locked and sound, and show that phone's answer as
   this one's. **What a hook inside the app's own process can do besides:** make the challenge one it knows, so
@@ -122,12 +125,17 @@ kills, or, where neither could be, as stated below.
   "No hardware check available" (low), quieter than the unlocked bootloader it could hide. Now the chain is
   judged at every security level. On a phone that declares secure hardware for its keys (`FEATURE_HARDWARE_KEYSTORE`
   from Android 12, `FEATURE_STRONGBOX_KEYSTORE` from 9, both answered by the package manager, apart from the
-  keystore), a software answer is "Hardware check answered by software" (high). On Android 10 and 11 without a
-  secure chip, no public API says whether a phone has such hardware, so there the chain decides: under AOSP's
+  keystore), a software answer is "Hardware check answered by software" (high). The feature is a declaration,
+  not proof (the emulator, below, declares it too), and a phone upgraded to Android 12 or later whose vendor
+  partition stayed as it shipped may not declare it; such a phone, and one on Android 10 or 11 without a secure
+  chip, where no public API says whether a phone has such hardware, is judged by the chain: under AOSP's
   software root it is "No hardware check available" (low), with a text that names a modified system as well as
   emulators and phones without such hardware; a broken chain, another root or a revoked key is reported as such.
-  A claim of secure hardware under AOSP's software root is "Hardware check signed with a public key" (high), and
-  nothing it says is used.
+  A claim of secure hardware under AOSP's software root is "Hardware check signed with a published key" (high),
+  and, as with a forged attestation, nothing it says is used: no sound phone makes either, and what they say is
+  their maker's choice, or another phone's answer. The warnings of any other attestation, which a sound phone
+  could have made, are reported confirmed or not (an unlocked bootloader, an old patch level), since a forger
+  gains nothing by them.
 - **The emulator.** The hardware-keystore feature does not prove the hardware: Android 15's emulator (CI's
   `dp-api35-ci`) declares `android.hardware.hardware_keystore=300` for a KeyMint that runs in software and signs
   under AOSP's software root, so the rule above called it "answered by software" (high). Nothing else tells that
@@ -140,6 +148,29 @@ kills, or, where neither could be, as stated below.
   "answered by software" (high) into this low finding. What it cannot do: make that quiet. The phone then tells
   its owner, by name, that it is an emulator, which they can see is false, and the finding says what that means;
   and the claim changes nothing for a hardware attestation, which is judged as before.
+- **What a hook can still make of a phone that declares the hardware.** The rules above keep a hook from turning
+  such a phone's answer quiet; short of that, a hooked keystore can still give, in place of the high finding an
+  unlocked bootloader gets, a medium one: a chain at a hardware level under a root of its own ("Hardware check
+  not confirmed"), a broken chain ("Hardware check broken"), a failed check ("Hardware check failed"), or the
+  error that says the keys are unavailable ("Hardware check waiting for Google", whose text says that a modified
+  system could give this answer). Each says that the state cannot be confirmed, none shows a value as the
+  hardware's, and a sound phone gives each rarely, so none is made high. And with root, a modified system can
+  hide the declaration itself (the feature's file in the vendor partition, under `/vendor/etc/permissions`):
+  then a software answer reads as on a phone without such hardware, "No hardware check available" (low), whose
+  text names a modified system among its causes. The declaration is the system's word, as `ro.hardware` is.
+- **Not remembering earlier checks (trust on first use), with the reason.** The third review asked whether to
+  remember, locally, what an earlier sound check saw (Google's root, the provisioning, the boot key) and report a
+  weaker later answer as a change, high where it could hide an unlocked bootloader. It is not built on the phone,
+  for four reasons. Unlocking the bootloader wipes the phone's data (Android's verified boot: every change of the
+  lock state wipes the data partitions), this app's memory with it, so the memory is gone exactly when the
+  change it should catch happens; and a hook on a phone whose bootloader stays locked, as after an exploit, gains
+  nothing by hiding a locked and verified state. With root, the memory can be erased or rewritten, and an erased
+  memory looks like a first check. A phone whose keys run out, as they do after one to four weeks on a network
+  that blocks Google, or whose provisioning changes with a system update, would raise a false high alarm, which
+  teaches its owner to ignore the finding. And a stored boot key and state is more than the app keeps today
+  (PRIVACY.md). The memory belongs outside the phone, where neither a wipe nor root reaches it: decision 6's
+  check from a second phone pins what it saw, as GrapheneOS's Auditor does. What it would change: the four medium
+  routes and the hidden declaration above would show as a change on a phone checked before.
 - **One check at a time.** The check used one fixed key alias, and a rotation, a fold or a theme change recreates
   the screen and starts a second check while the first waits on the keystore: the second could read the first's
   key and call a sound phone's check tampered with. `HardwareCheck` now runs one check at a time in the process,
@@ -177,9 +208,13 @@ kills, or, where neither could be, as stated below.
   hardware's only when Google's root confirms a hardware attestation; otherwise the patch level reads as the
   system's word, and the vendor level and an owner's boot key are not shown, since a forger can show any key.
 - **Keys from Google.** On phones that get their attestation keys from Google's provisioning server, keys last
-  about two weeks; one that cannot reach Google, as on a network that blocks it, has none, and Android 13 and
-  later say so. That is "Hardware check waiting for Google" (medium, calm text), not a generic failure. It is not
-  low, since a hook could claim it too. Basic never connects; the phone fetches the keys itself.
+  one to four weeks (the corpus's: 28, 9 and 13 days); one that cannot reach Google, as on a network that blocks
+  it, has none, and Android 13 and later say so, with a retry policy (`KeyStoreException.getRetryPolicy`). Once
+  online, or keys unavailable and later, is "Hardware check waiting for Google" (medium, calm text, which says
+  that a modified system could claim it). A refusal for good, as when Google's server refused to issue keys to
+  this phone, which no connection mends, or a wait for a reboot or a system update, is "Hardware check failed";
+  so is anything before Android 13, which does not say. It is not low, since a hook could claim it too. Basic
+  never connects; the phone fetches the keys itself.
 - **Tests.** The truncation test cut only the outer element; the tests now cut every element at every byte,
   about 2,500 cases. Two extensions encoded by OpenSSL test the tests' own encoder. The fuzz target also puts its
   bytes inside a valid extension and checks that the list the parser does not read never changes its values and
@@ -203,7 +238,8 @@ What the app shows, in each case:
   (high);
 - a software answer on a device whose system reports it as Android's emulator: "No hardware check on an
   emulator" (low), which says that on a phone this would be false;
-- a claim of secure hardware under AOSP's software root: "Hardware check signed with a public key" (high);
+- a claim of secure hardware under AOSP's software root: "Hardware check signed with a published key" (high),
+  and nothing else it says;
 - a software attestation under AOSP's software root, on a phone that declares no such hardware: "No hardware
   check available" (low), and its patch level as "Security patch, as the system states it";
 - a broken chain: "Hardware check broken" (medium); a chain to another root: "Hardware check not confirmed"
@@ -214,7 +250,8 @@ What the app shows, in each case:
   rates a key that matches no published one, since the dataset of published keys does not exist yet), and, with
   Google's root, its verified boot key, to compare with the one its project publishes;
 - otherwise, with Google's root, a locked bootloader and a verified boot: the "locked and verified" line, the
-  day of the revocation list it was checked against, the patch level, and the vendor's where it lags.
+  patch level, and the vendor's where it lags;
+- under any value Google's root confirms: the day of the revocation list it was checked against.
 
 Decoded but not shown, with the reason: `verifiedBootHash`, which nothing on the phone could be compared with
 (decision 6's check pins it); `osVersion`, until real phones show how often it differs from what the system

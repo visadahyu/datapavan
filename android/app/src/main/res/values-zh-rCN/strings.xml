@@ -247,13 +247,13 @@
     <string name="finding_attestation_forged_title">硬件检查遭到篡改</string>
     <string name="finding_attestation_forged_body">此手机的硬件检查在手机的安全硬件生成之后被更改过，或者它回应的不是 Datapavan 的请求，而是另一个请求。此手机上有某种东西在干扰检查，因此 Datapavan 不使用检查报告的内容。请把这当作严重警告：系统可能已被修改，以隐藏其状态。</string>
     <string name="finding_attestation_software_answer_title">硬件检查由软件回应</string>
-    <string name="finding_attestation_software_answer_body">此手机有用于其密钥的安全硬件，但其硬件检查来自软件，而软件受系统控制。修改过的系统可能这样回应，以隐藏已解锁的引导加载程序；手机密钥库的故障也可能如此。无法确认引导加载程序和系统状态。请把这当作严重警告。</string>
+    <string name="finding_attestation_software_answer_body">此手机声明有用于其密钥的安全硬件，但其硬件检查来自软件，而软件受系统控制。修改过的系统可能这样回应，以隐藏已解锁的引导加载程序；手机密钥库的故障，或声明了自身并不具备的硬件的手机，也可能如此。无法确认引导加载程序和系统状态。请把这当作严重警告。</string>
     <string name="finding_attestation_public_root_title">硬件检查使用已公开的密钥签名</string>
     <string name="finding_attestation_public_root_body">此手机的硬件检查声称来自安全硬件，但它使用随 Android 源代码一起公开的密钥签名，因此任何人都可能生成它。Datapavan 不使用检查报告的内容。修改过的系统可能这样做；模拟器也可能如此。</string>
     <string name="finding_attestation_broken_title">硬件检查已损坏</string>
     <string name="finding_attestation_broken_body">此手机硬件检查中的证书彼此对不上，因此该检查无法证明引导加载程序或系统的任何情况。正常的手机绝不会这样回应；修改过的系统或手机密钥库的故障则可能如此。</string>
     <string name="finding_attestation_keys_unavailable_title">硬件检查正在等待 Google</string>
-    <string name="finding_attestation_keys_unavailable_body">此手机的安全硬件目前没有用于此检查的密钥。Android 通过互联网从 Google 获取这些密钥，它们的有效期约为两周。此手机很可能最近没有连接到 Google，例如因为它的网络屏蔽了 Google。Datapavan 本身从不建立连接。手机连接到 Google 之后，检查就会恢复。在此之前，无法确认引导加载程序和系统状态；仅凭这一点，并不意味着手机被改动过。</string>
+    <string name="finding_attestation_keys_unavailable_body">此手机的安全硬件目前没有用于此检查的密钥。Android 通过互联网从 Google 获取这些密钥，它们的有效期为一到四周。此手机很可能最近没有连接到 Google，例如因为它的网络屏蔽了 Google。Datapavan 本身从不建立连接。手机连接到 Google 之后，检查就会恢复。在此之前，无法确认引导加载程序和系统状态。仅凭这一点，并不意味着手机被改动过，但修改过的系统可能给出这样的回应，以隐藏引导加载程序的状态。</string>
     <string name="finding_attestation_out_of_date_title">硬件检查不在有效期内</string>
     <string name="finding_attestation_out_of_date_body">此手机硬件检查中的一个证书在手机显示的日期无效，因此无法确认该检查。通常的原因是手机上的日期不对：请设置正确的日期，然后重新打开 Datapavan。</string>
     <string name="finding_attestation_failed_title">硬件检查失败</string>
