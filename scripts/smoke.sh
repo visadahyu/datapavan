@@ -80,8 +80,19 @@ tap_text "About" || fail "settings have no About"
 within 5 screen_has "Newer versions" || scroll_to "Newer versions" || fail "About does not say where newer versions are"
 screen_has "datapavan.org" || fail "About does not show the website's address"
 echo "ok: About says where newer versions are"
-adb shell input keyevent KEYCODE_BACK
-adb shell input keyevent KEYCODE_BACK
+# Back from About, then from the settings, to the summary. Two presses sent at once can lose the
+# second while the first screen's transition runs, which left the settings open on the emulator
+# (2026-11-17); so each press waits for its screen, and none goes past the summary, which would close
+# the app.
+back_to_summary() {
+    local press
+    for press in 1 2 3; do
+        adb shell input keyevent KEYCODE_BACK
+        within 3 has_id settings && return 0
+    done
+    return 1
+}
+back_to_summary || fail "Back from About and the settings did not return to the summary"
 
 # Every screen is protected (ADR 0040): Android lists the app's window as secure; the settings allow
 # screenshots, and leaving the screen protects it again at once, without waiting for the minute.
