@@ -5761,6 +5761,21 @@ mod tests {
         );
         mapping.sent(direct, &ntp(3, 40, 7));
         assert_eq!(mapping.peers[&direct].told, Vec::<u64>::new());
+        // A settled peer's QUIC Initial is noted from its headers, unopened (fix round 3): one whose
+        // tag fails is noted too, as a stand-in's, opened, never is.
+        let quic = SocketAddr::from(([192, 0, 2, 11], 443));
+        let way = PeerWay::through_tool(Target::Address(quic));
+        mapping.peer(&shared, (APP, quic), now, (false, way));
+        let mut initial =
+            crate::quic::client_initial(1, (&[9; 8], &[]), (0, &[0x01]), 1200).unwrap_or_default();
+        let ids = identifiers::of((APP.port(), 443), &initial).remove(0);
+        let last = initial.len() - 1;
+        initial[last] ^= 1;
+        mapping.sent(quic, &initial);
+        assert_eq!(
+            mapping.peers[&quic].told,
+            vec![identifiers::fingerprint(443, &ids)]
+        );
         Ok(())
     }
 

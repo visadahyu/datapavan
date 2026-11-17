@@ -1785,6 +1785,10 @@ pub(crate) mod tests {
             let last = broken.len() - 1;
             broken[last] ^= 1;
             assert!(!carries(Some(broken)), "{n}: an Initial whose tag fails");
+            // Its length running past the datagram's end (review F's surviving mutant F6).
+            let mut cut = sealed((0, &[]), &[0x01]).unwrap_or_default();
+            cut.pop();
+            assert!(!carries(Some(cut)), "{n}: an Initial cut short");
             let retry = |version, (from, token): (&[u8], &[u8])| {
                 retry(version, &[0x42; 8], (source, from), token)
             };
