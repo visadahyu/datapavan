@@ -603,7 +603,8 @@ this ADR left room, and why. Part 3 builds the screens on it.
   the Android 15 emulator, 2026-11-18, every count matched what the workload apps logged, to the byte: 75,000
   bytes sent in the background, from a job, on a connection opened on screen and on a timer; the 3,046 before
   them in use; 8,000 from a foreground service with its notification; 24,000 from the app on screen in use;
-  and without usage access, a flow's bytes in no state. The emulators of Android 10, 11 and 17 that decision 6
+  and without usage access, a flow's bytes in no state. After the fix round the same shard passed again on the
+  Android 15 emulator, every count again to the byte. The emulators of Android 10, 11 and 17 that decision 6
   names, and the A40, are still to run it.
 - **Accepted limits.** An activity whose `ACTIVITY_STOPPED` never comes stays visible while the screen is on; so
   does one whose process dies just after it was resumed over a pause of its own class, since Android then reports
