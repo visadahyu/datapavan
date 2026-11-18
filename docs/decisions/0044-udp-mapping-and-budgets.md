@@ -2377,8 +2377,11 @@ are its mechanisms; ADR 0037 holds the log's row.
   differing DNS name beside a flow's own: never for each packet. Measured on the development machine (x86-64,
   vDSO, release build, 2026-11-18): `SystemTime::now` 22.8 ns, `CLOCK_REALTIME_COARSE` 7.9 ns, `CLOCK_BOOTTIME`
   20.4 ns, an `Arc` cloned and dropped 2.8 ns, an atomic addition 1.4 ns. So the log reads the coarse wall
-  clock, as the fresh review 2 offered: its steps here are 4 ms (the kernel's tick, at most 10 ms on Android's
-  kernels), it follows the wall clock when it is set, and it is read in the vDSO also on phones whose kernels
-  read the fine clock through a system call. A byte counted within a tick after a quarter hour then falls in the
-  quarter hour before, which ADR 0037's note accepts: the bounds there are seconds. A count of no bytes of the
+  clock, as the fresh review 2 offered: its steps here are 4 ms (the kernel's tick at 250 Hz), and it lags the
+  wall clock by less than two ticks, since the kernel's timekeeping adds whole ticks and is updated at each:
+  under 8 ms at 250 Hz, the default, under 20 ms at 100 Hz, the lowest Linux offers (3.3 to 7.3 ms measured
+  here; review 3, nit 2, corrected "one tick, at most 10 ms", which no record grounded for Android's kernels).
+  It follows the wall clock when it is set, and is read in the vDSO also on phones whose kernels read the fine
+  clock through a system call. A byte counted within that lag after a quarter hour then falls in the quarter
+  hour before, which ADR 0037's note accepts: the bounds there are seconds. A count of no bytes of the
   app's own, as a tunnel packet's, adds nothing to them. ADR 0037's note says how many reads a packet costs.

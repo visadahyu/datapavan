@@ -27,11 +27,13 @@ pub trait Clock: Send + Sync {
 pub struct SystemClock;
 
 impl Clock for SystemClock {
-    /// `clock_gettime(CLOCK_REALTIME_COARSE)`, through nix's safe function: the wall clock as of the
-    /// kernel's last tick, read in the vDSO also where the kernel reads the fine clock through a system
-    /// call, and a third of the fine one's cost on the development machine (ADR 0044's cost note; the fresh
-    /// review 2 of W5's first part, nit 6). It lags the wall clock by less than a tick, at most 10 ms, and
-    /// follows it when it is set. Were it to fail, the fine clock is read.
+    /// `clock_gettime(CLOCK_REALTIME_COARSE)`, through nix's safe function: the wall clock as the kernel's
+    /// timekeeping last updated it, read in the vDSO also where the kernel reads the fine clock through a
+    /// system call, and a third of the fine one's cost on the development machine (ADR 0044's cost note;
+    /// the fresh review 2 of W5's first part, nit 6). It lags the wall clock by less than two of the
+    /// kernel's ticks, since timekeeping adds whole ticks and is updated at each: under 8 ms at 250 Hz, the
+    /// default, under 20 ms at 100 Hz, the lowest Linux offers (3.3 to 7.3 ms measured at 250 Hz; review 3,
+    /// nit 2). It follows the wall clock when it is set. Were it to fail, the fine clock is read.
     fn wall_ms(&self) -> u64 {
         use nix::time::{ClockId, clock_gettime};
         clock_gettime(ClockId::CLOCK_REALTIME_COARSE).map_or_else(
@@ -112,8 +114,8 @@ impl Clock for ManualClock {
 mod tests {
     use super::*;
 
-    /// The phone's clocks: the wall clock is past 2026, within a tick of the fine one, and the time since
-    /// start runs on.
+    /// The phone's clocks: the wall clock is past 2026, behind the fine one by less than two ticks at
+    /// 100 Hz, and the time since start runs on.
     #[test]
     fn the_system_clock_reads_the_phones_clocks() {
         assert!(SystemClock.wall_ms() > 1_767_225_600_000, "before 2026");

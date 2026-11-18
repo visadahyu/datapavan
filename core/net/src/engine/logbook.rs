@@ -29,8 +29,9 @@
 //!   lookups. Counting them at their arrival would need a segment before the flow's own start.
 //! - A count costs one reading of the coarse wall clock (ADR 0044's cost note): one for each UDP datagram,
 //!   and for TCP one for each read the relay hands on and one for each packet of the tunnel, about two
-//!   for a small packet. The coarse clock lags the wall clock by less than a tick of the kernel, at most
-//!   10 ms, so a byte counted in that moment after a quarter hour falls in the quarter hour before.
+//!   for a small packet. The coarse clock lags the wall clock by less than two of the kernel's ticks,
+//!   under 8 ms at 250 Hz, the default, under 20 ms at 100 Hz, the lowest, so a byte counted in that
+//!   moment after a quarter hour falls in the quarter hour before.
 
 use super::{Counters, DnsUse, Ech, Flow, LOG_DELAY, NamedBy, Outcome, Shared, lock};
 use crate::log;

@@ -86,8 +86,10 @@ Option 3.
    as it hands each read on and by the tunnel packet by packet, so about two reads for a small TCP packet and 1.1
    for bulk, against the one read for each packet the brief set; merging the two counts would place one in the
    other's quarter hour. Since W5's second fix round the reading is the coarse wall clock (ADR 0044's cost note),
-   which lags the wall clock by less than one of the kernel's ticks, at most 10 ms: a byte counted in that moment
-   after a quarter hour falls in the quarter hour before, well within the bounds above. A flow's outcome or name that changes in a quarter hour
+   which lags the wall clock by less than two of the kernel's ticks, under 8 ms at 250 Hz, the default, and under
+   20 ms at 100 Hz, the lowest Linux offers (corrected after review 3 of W5's first part, nit 2; it said one tick):
+   a byte counted in that moment after a quarter hour falls in the quarter hour before, well within the bounds
+   above. A flow's outcome or name that changes in a quarter hour
    after the last count changes after the cut, so the segment before keeps the outcome and name it had.)
 2. **Keys.** At the first record of a day Watch draws a 256-bit day key, keeps it in memory for that day, and
    stores it only wrapped with the Keystore public key (RSA-OAEP). At midnight the old day key is cleared from
