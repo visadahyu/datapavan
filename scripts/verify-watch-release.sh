@@ -17,11 +17,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 UNSIGNED="${1:-$ROOT/android/app/build-advanced/outputs/apk/release/app-release-unsigned.apk}"
 PKG=org.visadahyu.datapavan.advanced
 HOST=10.0.2.2
-# The ports of this computer the test servers take, found free first (scripts/host-ports.sh): WATCH_TEST_PORT,
-# or one picked from 8790 up.
+# The test server, started on ports of this computer found free and held until the check ends
+# (scripts/host-ports.sh): WATCH_TEST_PORT, or a base picked from 8790 up.
 # shellcheck source=scripts/host-ports.sh
 . "$ROOT/scripts/host-ports.sh"
-host_ports 0 1 || exit 1
 # Watch's memory budget, PSS in MB: about twice what it used on the Android 15 emulator on 2026-11-10
 # (23 MB, with the screen open and with the service alone).
 BUDGET_MB=${WATCH_MEMORY_BUDGET_MB:-48}
@@ -41,6 +40,7 @@ cleanup() {
     rm -rf "$WORK"
 }
 trap cleanup EXIT
+host_server || exit 1
 
 # What a tap on "Turn on" met, when the tunnel did not come up (CI, 2026-11-11 and 12: no crash, and the
 # service never started): the screen's texts, the window in front, and Android's own lines about Watch
@@ -95,8 +95,6 @@ keytool -genkeypair -keystore "$WORK/throwaway.jks" -storepass throwaway -keypas
 "$tools/zipalign" -f -p 16 "$UNSIGNED" "$WORK/aligned.apk"
 "$tools/apksigner" sign --ks "$WORK/throwaway.jks" --ks-pass pass:throwaway --out "$WORK/watch-release.apk" "$WORK/aligned.apk" 2>/dev/null
 
-python3 -I "$ROOT/scripts/watch-lab/server.py" "$PORT" &
-SERVER=$!
 adb uninstall "$PKG" >/dev/null 2>&1 || true
 adb install "$WORK/watch-release.apk" >/dev/null
 allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"

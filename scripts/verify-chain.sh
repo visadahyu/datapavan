@@ -39,11 +39,10 @@ SHELL_UID=2000
 
 is_emulator || { echo "verify-chain.sh runs on an emulator only" >&2; exit 2; }
 HOST=10.0.2.2
-# The ports of this computer the test servers take, found free first (scripts/host-ports.sh): WATCH_TEST_PORT,
-# or one picked from 8790 up.
+# The test server, started on ports of this computer found free and held until the check ends
+# (scripts/host-ports.sh): WATCH_TEST_PORT, or a base picked from 8790 up.
 # shellcheck source=scripts/host-ports.sh
 . "$ROOT/scripts/host-ports.sh"
-host_ports 0 1 3 || exit 1
 PASSWORD="$(python3 -I -c 'import secrets;print(secrets.token_urlsafe(15))')"
 WORK="$(mktemp -d)"
 SERVER=""
@@ -57,6 +56,7 @@ cleanup() {
     rm -rf "$WORK"
 }
 trap cleanup EXIT
+host_server --sentinel "$WORK/sentinel.log" || exit 1
 
 dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" "$@" | tr -d '\r'; }
 # When the engine's counters began, then its counter at place $1, counting from 1, as Watch's dump prints
@@ -114,8 +114,6 @@ adb install "$ROOT/build/test-tool/test-tool.apk" >/dev/null
 TOOL_UID=$(adb shell cmd package list packages -U "$TOOL" | tr -d '\r' | sed -n "s/^package:$TOOL uid:\([0-9]*\)$/\1/p")
 [ -n "$TOOL_UID" ] || fail "the test tool did not install"
 
-python3 -I "$ROOT/scripts/watch-lab/server.py" "$PORT" &
-SERVER=$!
 adb logcat -c
 adb shell am start-foreground-service -n "$TOOL/.ToolService" --ei port "$TOOL_PORT" \
     --es user watch --es password "$PASSWORD" --es map "watch.test=$HOST" >/dev/null
@@ -184,35 +182,19 @@ chained=$(dump chain 127.0.0.1 "$TOOL_PORT" "$TOOL_UID" udp "$SHELL_UID" watch "
 grep -q "chain on" <<<"$chained" || fail "the chain did not turn on again; Watch's dump said: ${chained:-nothing}"
 adb shell am force-stop "$TOOL"
 SENTINEL_PORT=$((PORT + 3))
-python3 -I - "$SENTINEL_PORT" >"$WORK/sentinel.log" <<'PY' &
-# Prints "tcp" for each connection and "udp" for each datagram that reaches the port, at once.
-import selectors, socket, sys
-port = int(sys.argv[1])
-tcp = socket.create_server(("0.0.0.0", port))
-udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-udp.bind(("0.0.0.0", port))
-watch = selectors.DefaultSelector()
-watch.register(tcp, selectors.EVENT_READ, "tcp")
-watch.register(udp, selectors.EVENT_READ, "udp")
-while True:
-    for key, _ in watch.select():
-        if key.data == "tcp":
-            key.fileobj.accept()[0].close()
-        else:
-            key.fileobj.recvfrom(65535)
-        print(key.data, flush=True)
-PY
-SENTINEL=$!
+# The test server's sentinel, held since the check began, writes a line for each connection and datagram;
+# only those after this mark count.
+SENTINEL_MARK=$(wc -l <"$WORK/sentinel.log")
+sentinel_since() { tail -n +$((SENTINEL_MARK + 1)) "$WORK/sentinel.log"; }
 sleep 1
 grep -q pong <<<"$(ping_from_shell "$HOST")" && fail "with the tool stopped, the shell still reached the server"
 device 6 "toybox nc -w 2 $HOST $SENTINEL_PORT </dev/null" >/dev/null
 device 5 "echo stopped-udp | toybox nc -u -w 2 $HOST $SENTINEL_PORT" >/dev/null
 sleep 1
-[ ! -s "$WORK/sentinel.log" ] || { kill "$SENTINEL"; fail "with the tool stopped, the shell reached this computer directly: $(tr '\n' ' ' <"$WORK/sentinel.log")"; }
+[ -z "$(sentinel_since)" ] || fail "with the tool stopped, the shell reached this computer directly: $(sentinel_since | tr '\n' ' ')"
 device 6 "run-as $PKG toybox nc -w 2 $HOST $SENTINEL_PORT </dev/null" >/dev/null
 sleep 1
-kill "$SENTINEL"
-grep -q '^tcp$' "$WORK/sentinel.log" || fail "the sentinel did not see the control's direct connection: the check proves nothing"
+grep -q '^tcp$' <<<"$(sentinel_since)" || fail "the sentinel did not see the control's direct connection: the check proves nothing"
 echo "ok: with the tool stopped, the shell's TCP and UDP failed, and a sentinel on this computer saw none of them, only the control's direct connection"
 
 unchained=$(dump unchain)

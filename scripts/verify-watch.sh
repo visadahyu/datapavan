@@ -15,6 +15,12 @@
 # The emulator reaches this computer at 10.0.2.2. On a phone, set WATCH_TEST_HOST to the computer's
 # address on the same Wi-Fi; the network switch is then skipped, since it would cut the phone off.
 #
+# The test server holds ports of this computer for the whole check: TCP 8790, UDP 8791, and TCP 8791 bound
+# without listening, which the check needs refused (scripts/host-ports.sh). WATCH_TEST_PORT names another
+# base. On the emulator, a base another program holds is passed for the next free one; on a phone it is
+# not, since the computer's firewall must let the phone reach those ports: a held one stops the check at
+# once, naming the program, and WATCH_TEST_PORT names the base the firewall was opened for.
+#
 #   scripts/verify-watch.sh [path/to/Datapavan-Advanced-debug.apk]
 set -euo pipefail
 
@@ -27,12 +33,17 @@ SHELL_UID=2000
 # shellcheck source=scripts/adb-ui.sh
 . "$ROOT/scripts/adb-ui.sh"
 
-if is_emulator; then HOST=${WATCH_TEST_HOST:-10.0.2.2}; else HOST=${WATCH_TEST_HOST:?set WATCH_TEST_HOST to this computer's address on the phone's Wi-Fi}; fi
-# The ports of this computer the test servers take, found free first (scripts/host-ports.sh): WATCH_TEST_PORT,
-# or one picked from 8790 up.
+if is_emulator; then
+    HOST=${WATCH_TEST_HOST:-10.0.2.2}
+else
+    HOST=${WATCH_TEST_HOST:?set WATCH_TEST_HOST to this computer's address on the phone's Wi-Fi}
+    # The computer's firewall lets the phone through to the ports it was opened for: never moved.
+    HOST_PORTS_FIXED=1
+fi
+# The test server, started on ports of this computer found free and held until the check ends
+# (scripts/host-ports.sh): WATCH_TEST_PORT, or a base picked from 8790 up.
 # shellcheck source=scripts/host-ports.sh
 . "$ROOT/scripts/host-ports.sh"
-host_ports 0 1 || exit 1
 
 SERVER=""
 # The emulator's Private DNS setting before the test changed it, restored at the end.
@@ -89,6 +100,7 @@ cleanup() {
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
 }
 trap cleanup EXIT
+host_server || exit 1
 
 fail() {
     echo "WATCH CHECK FAILED: $*" >&2
@@ -322,8 +334,6 @@ PY
 
 echo "== Watch's engine, end to end, on $(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
 adb wait-for-device
-python3 -I "$ROOT/scripts/watch-lab/server.py" "$PORT" &
-SERVER=$!
 adb install -r "$APK" >/dev/null
 hello=$(mktemp)
 python3 -I - "$hello" <<'PY'

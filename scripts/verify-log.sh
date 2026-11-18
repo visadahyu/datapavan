@@ -32,11 +32,10 @@ is_emulator || {
     exit 2
 }
 HOST=10.0.2.2
-# The ports of this computer the test servers take, found free first (scripts/host-ports.sh): WATCH_TEST_PORT,
-# or one picked from 8790 up.
+# The test server, started on ports of this computer found free and held until the check ends
+# (scripts/host-ports.sh): WATCH_TEST_PORT, or a base picked from 8790 up.
 # shellcheck source=scripts/host-ports.sh
 . "$ROOT/scripts/host-ports.sh"
-host_ports 0 1 || exit 1
 
 SERVER=""
 PIN_SET=""
@@ -47,6 +46,7 @@ cleanup() {
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
 }
 trap cleanup EXIT
+host_server || exit 1
 
 fail() {
     echo "LOG CHECK FAILED: $*" >&2
@@ -140,8 +140,6 @@ local_day() {
 
 echo "== Watch's connection log, end to end, on $(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
 adb wait-for-device
-python3 -I "$ROOT/scripts/watch-lab/server.py" "$PORT" &
-SERVER=$!
 adb install -r "$APK" >/dev/null
 # As a new install: the log's default is then what a new user gets (ADR 0040).
 adb shell pm clear "$PKG" >/dev/null

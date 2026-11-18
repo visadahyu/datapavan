@@ -4,7 +4,15 @@
 # UDP on the next port echoes every datagram. The emulator reaches it at 10.0.2.2, a phone on the
 # same Wi-Fi at the computer's address. Nothing it receives is kept.
 #
-#   python3 -I scripts/watch-lab/server.py [port, default 8790]
+# It holds every port the checks use for as long as it runs, so that no other program can take one
+# after the checks found it free (review 4 of W5's first part, minor 2): TCP on the next port too, bound
+# without listening, so that a connection there is refused, as the checks want, and no other program can
+# listen there; and with --sentinel, TCP and UDP three ports on, where each connection and datagram is
+# written as "tcp" or "udp" to FILE, for verify-chain.sh. Once every port is bound it prints "ready PORT";
+# a port it cannot bind ends it at once, with the error.
+#
+#   python3 -I scripts/watch-lab/server.py [port, default 8790] [--sentinel FILE]
+import selectors
 import socket
 import sys
 import threading
@@ -64,17 +72,60 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
-def echo_udp(port):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 << 20)
-    sock.bind(("0.0.0.0", port))
+def echo_udp(sock):
     while True:
         data, peer = sock.recvfrom(65535)
         sock.sendto(data, peer)
 
 
+def sentinel(tcp, udp, log):
+    """Writes "tcp" for each connection and "udp" for each datagram that reaches the sentinel's port."""
+    watch = selectors.DefaultSelector()
+    watch.register(tcp, selectors.EVENT_READ, "tcp")
+    watch.register(udp, selectors.EVENT_READ, "udp")
+    with open(log, "a", encoding="utf-8") as out:
+        while True:
+            for key, _ in watch.select():
+                if key.data == "tcp":
+                    key.fileobj.accept()[0].close()
+                else:
+                    key.fileobj.recvfrom(65535)
+                print(key.data, file=out, flush=True)
+
+
+def main(args):
+    sentinel_log = None
+    if "--sentinel" in args:
+        at = args.index("--sentinel")
+        sentinel_log = args[at + 1]
+        del args[at:at + 2]
+    port = int(args[0]) if args else 8790
+    try:
+        ThreadingHTTPServer.daemon_threads = True
+        http = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+        echo = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        echo.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 << 20)
+        echo.bind(("0.0.0.0", port + 1))
+        # Bound and not listening: refused, and held from any other program that would listen.
+        refused = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        refused.bind(("0.0.0.0", port + 1))
+        if sentinel_log is not None:
+            guard_tcp = socket.create_server(("0.0.0.0", port + 3))
+            guard_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            guard_udp.bind(("0.0.0.0", port + 3))
+    except OSError as error:
+        print(f"the test server could not hold its ports from {port}: {error}", file=sys.stderr, flush=True)
+        return 1
+    threading.Thread(target=echo_udp, args=(echo,), daemon=True).start()
+    if sentinel_log is not None:
+        threading.Thread(target=sentinel, args=(guard_tcp, guard_udp, sentinel_log), daemon=True).start()
+    print(f"ready {port}", flush=True)
+    try:
+        http.serve_forever()
+    finally:
+        refused.close()
+    return 0
+
+
 if __name__ == "__main__":
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8790
-    threading.Thread(target=echo_udp, args=(port + 1,), daemon=True).start()
-    ThreadingHTTPServer.daemon_threads = True
-    ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
+    sys.exit(main(sys.argv[1:]))
