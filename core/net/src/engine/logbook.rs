@@ -157,6 +157,12 @@ impl Shared {
     /// in a segment of another quarter hour. One reading of the wall clock (a vDSO call) and one atomic
     /// load; the cut itself only when a quarter hour passed.
     pub(super) fn log_now(&self) -> u64 {
+        debug_assert!(
+            self.engine_thread
+                .get()
+                .is_none_or(|engine| *engine == std::thread::current().id()),
+            "the log's clock was read off the engine's thread"
+        );
         let now = self.clock.wall_ms();
         if now / SEGMENT_MS != self.quarter.load(Ordering::Acquire) {
             self.cut_all(now);
@@ -1177,26 +1183,54 @@ mod tests {
         seen
     }
 
-    /// No race is left (the module's comment): a flush asked from another thread, here as the clock
-    /// passes 22:15, is made on the engine's thread between its counts, so every byte falls in the
-    /// quarter hour of the reading it was counted on, to the byte. The counts here stand for a relay's,
-    /// one at each of its turns on the engine's thread.
+    /// A clock that notes the thread of every reading once the engine's thread has begun.
+    struct Probe {
+        clock: Arc<ManualClock>,
+        on: std::sync::atomic::AtomicBool,
+        threads: Mutex<std::collections::HashSet<std::thread::ThreadId>>,
+    }
+
+    impl super::super::Clock for Probe {
+        fn wall_ms(&self) -> u64 {
+            if self.on.load(Ordering::SeqCst) {
+                lock(&self.threads).insert(std::thread::current().id());
+            }
+            self.clock.wall_ms()
+        }
+
+        fn since_boot(&self) -> Duration {
+            self.clock.since_boot()
+        }
+    }
+
+    /// No race is left (the module's comment), since the log reads its clock on the engine's thread
+    /// alone: a flush asked from another thread, here as the clock passes 22:15, is made there between
+    /// its counts. The clock notes the thread of each reading, which must be the engine's; and each byte
+    /// falls in the quarter hour of the reading it was counted on, to the byte. The counts here stand
+    /// for a relay's, one at each of its turns on the engine's thread.
     #[test]
     fn a_flush_asked_from_another_thread_is_made_between_the_engines_counts() -> std::io::Result<()>
     {
         const COUNTS: u64 = 4_000;
         let platform = Arc::new(Kept::default());
         let clock = ManualClock::at(at(22, 15) - 50);
+        let probe = Arc::new(Probe {
+            clock: clock.clone(),
+            on: false.into(),
+            threads: Mutex::default(),
+        });
         let mut shared = shared_with(platform.clone());
-        shared.clock = clock.clone();
+        shared.clock = probe.clone();
         let shared = Arc::new(shared);
         let bytes = open(&shared, 1);
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_time()
             .build()?;
         let engine = {
-            let (shared, bytes) = (Arc::clone(&shared), Arc::clone(&bytes));
+            let (shared, bytes, probe) = (Arc::clone(&shared), Arc::clone(&bytes), probe.clone());
             std::thread::spawn(move || {
+                let _ = shared.engine_thread.set(std::thread::current().id());
+                probe.on.store(true, Ordering::SeqCst);
                 runtime.block_on(async move {
                     let (end, ending) = watch::channel(false);
                     let logging = tokio::spawn(logger(Arc::clone(&shared), ending));
@@ -1255,6 +1289,16 @@ mod tests {
         );
         // The flush cut at 22:15:00.030, after the quarter hour's cut at 22:15.
         assert!(seen.iter().any(|s| s.1 == at(22, 15) + 30), "{seen:?}");
+        let engine_thread = shared.engine_thread.get().copied();
+        assert_eq!(
+            lock(&probe.threads)
+                .iter()
+                .copied()
+                .map(Some)
+                .collect::<Vec<_>>(),
+            vec![engine_thread],
+            "the log's clock read off the engine's thread"
+        );
         Ok(())
     }
 

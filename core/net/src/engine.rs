@@ -749,6 +749,9 @@ struct Shared {
     next_id: AtomicU64,
     /// The clock the log reads ([`Platform::clock`]).
     clock: Arc<dyn Clock>,
+    /// The thread the engine runs on, once `run` starts: the log reads its clock only there, which is
+    /// what leaves no race between a cut and a count (`logbook`'s comment), and debug builds check it.
+    engine_thread: std::sync::OnceLock<std::thread::ThreadId>,
     /// The quarter hour of the wall clock (milliseconds since 1970 over [`logbook::SEGMENT_MS`]) that
     /// every open segment and each app's lookups are in, since the log's last cut ([`Shared::log_now`]).
     quarter: AtomicU64,
@@ -906,6 +909,7 @@ impl Engine {
             owners: Owners::bundled(),
             next_id: AtomicU64::new(0),
             clock,
+            engine_thread: std::sync::OnceLock::new(),
             quarter: AtomicU64::new(quarter),
             live: Mutex::default(),
             lookups: Mutex::default(),
@@ -1142,6 +1146,8 @@ async fn run(
     // never gives the tunnel an MTU above 1,500 (ADR 0044, decision 5 as amended).
     let mut buffer = vec![0u8; usize::from(mtu).max(1500) + 64];
     let mut swept = Instant::now();
+    // Every task of the engine runs on this thread: the log reads its clock here alone.
+    let _ = state.shared.engine_thread.set(std::thread::current().id());
     let (end_logging, logging_ends) = watch::channel(false);
     let logging = tokio::spawn(logger(Arc::clone(&state.shared), logging_ends));
     loop {
@@ -1437,6 +1443,7 @@ mod tests {
             owners: Owners::default(),
             next_id: AtomicU64::new(0),
             clock: Arc::new(SystemClock),
+            engine_thread: std::sync::OnceLock::new(),
             quarter: AtomicU64::new(0),
             live: Mutex::default(),
             lookups: Mutex::default(),
