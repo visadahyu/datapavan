@@ -24,15 +24,16 @@
 //! [`WINDOW`] of them, belong to the new part; never before a second already placed. A segment cut at a
 //! quarter hour or at the flow's end before its seconds are placed is held as a [`Piece`] until they are,
 //! and written then, each part with its state, before the live flows' parts of the same reading so that a
-//! flow's records reach the log in time order. A segment with no count takes the state of its last moment.
+//! flow's records reach the log in time order. A segment with no count takes the state of its last moment,
+//! and one that went quiet after its app's state changed ends with a part of no bytes in its end's state.
 //!
 //! **The window.** Each flow, and each app's lookups, holds at most [`WINDOW`] seconds with counts not
-//! placed yet, and all of them together at most [`MARKS`]; past either, the oldest are placed in no state,
-//! "told too late". The engine asks for a reading once a second has waited [`ASK_EVERY`] seconds, and at
-//! most that often; Watch's Kotlin side reads at most every 5 seconds with the screen on and every minute
-//! with it off (ADR 0046, decision 1), so while traffic runs a second waits about a minute at most, and
-//! the window holds twice that. A second never ages out by time: across a sleep it waits for the reading
-//! the next traffic or the screen brings, and the logger asks again while segments wait.
+//! placed yet, and all of them together at most [`MARKS`], each app a quarter of it; past either, the
+//! oldest are placed in no state, "told too late", of the app past its share or holding the most. The
+//! engine asks for a reading at each new second counted, at most every [`ASK_EVERY`] seconds; Watch's
+//! Kotlin side reads at most every 5 seconds with the screen on and every minute with it off (ADR 0046,
+//! decision 1), making an ask in its turn, so a second waits about a minute at most, and the window holds
+//! twice that. A second never ages out by time: in deep sleep it waits for the phone to wake.
 //!
 //! **A wall clock set back** by a second or more places every second held at once, by what was told of it
 //! or in no state ("not told"), so that the seconds of two clocks never wait for one reading
@@ -126,8 +127,7 @@ impl Waiting {
     }
 }
 
-/// The engine asks for a reading once a second has waited this many seconds for its state, and at most
-/// this often.
+/// The engine asks for a reading at most this often, in seconds of the wall clock.
 pub(super) const ASK_EVERY: u64 = 5;
 
 /// A flow's second when it has no mark yet, as after a cut, or once it has ended.

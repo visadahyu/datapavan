@@ -7,9 +7,10 @@
 //!   from, ECH, the app's own DNS, flags (bit 0: the flow continues; bit 1: it came in), the
 //!   destination's address (length 4 or 16, then the bytes) and port, the AS number (0 none) and what its
 //!   owner is, then the name, the resolver and the DNS name where it differs from the name, each a length
-//!   byte and UTF-8, and last the state its app had throughout the segment ([`Placed::code`]).
+//!   byte and UTF-8, and last the state of its app over the segment ([`Placed::code`]): its bytes' seconds', or,
+//!   for a part with no bytes, its end's (ADR 0046, "How it is built").
 //! - lookups an app sent to Watch's own DNS address: version, kind 2, the UID, start and end, their
-//!   count, their packets' bytes up and down on the tunnel, and last the app's state throughout.
+//!   count, their packets' bytes up and down on the tunnel, and last the app's state over them, as a segment's.
 //!
 //! A batch is a count (u32), then each record after its length (u16).
 //!
@@ -44,7 +45,8 @@ pub enum Record {
         bytes: [u64; 4],
         /// Whether the flow was still open at the segment's end.
         continues: bool,
-        /// The state its app had throughout the segment, or why it has none (ADR 0046, decision 1).
+        /// The state of its app over the segment, or why it has none (ADR 0046, decision 1): its bytes'
+        /// seconds', or for a part with no bytes its end's.
         state: Placed,
     },
     /// Lookups an app sent to Watch's own DNS address between `start` and `end`.
@@ -61,7 +63,7 @@ pub enum Record {
         wire_up: u64,
         /// The answers' bytes on the tunnel.
         wire_down: u64,
-        /// The state the app had throughout, or why it has none.
+        /// The state of the app over them, as a segment's, or why it has none.
         state: Placed,
     },
 }

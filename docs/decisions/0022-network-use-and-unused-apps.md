@@ -58,9 +58,10 @@ of the Android 17 emulator and the A40 (Android 11) show:
    Advanced's Watch also reads the event stream (`queryEvents`), in its own process, with the same
    usage access, to tell for each connection whether its app was in use, ran with its notification, or
    neither. It reads which app was on screen and when, which apps ran a foreground service, and when the
-   screen turned on or off and the lock screen showed, up to a day back after a start. It holds the events
-   in memory for seconds, keeps the states it derives in memory for "Now", for an hour at most, and, if the
-   user keeps a connection log, as the state of each record, for the days the user chose; and Advanced has
+   screen turned on or off and the lock screen showed, back to the phone's start (at most 30 days) after a
+   start of Watch. It holds the events in memory for seconds, keeps the states it derives in memory for "Now",
+   over the last hour and since the screen last came on, until it next comes on, and, if the user keeps a
+   connection log, as the state of each record, for the days the user chose; and Advanced has
    network access, for its apps' traffic. Basic, which has no Watch, reads only totals as above, and its
    screens keep this decision's words; Advanced's screens and the privacy policy say what Advanced reads.
 3. **Periods are fixed and named.** The default is the last 30 days, and the last 7 days can be

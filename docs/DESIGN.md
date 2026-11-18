@@ -984,13 +984,22 @@ foreground service with its notification, a chained app's destinations kept out,
 access. How it is built: ADR 0046, "How it is built"; ADR 0037 and 0044 carry dated notes.
 
 W5, part 2, fix round 1, 2026-11-18, after two reviews: turning "Log where these apps connect" off drops the chained
-apps' destinations from "Now" at once; each app has a share of the seconds and segments that wait for their
-states, so that one app's flood never pushes another's out; segments are cut where the timeline's state changed;
-"Now" keeps every byte across a placing in its second and a clock set back, and looks organisations up out of the
-engine's locks; a second instance of one screen, or Back to the first, keeps its app in use; before the first
-unlock the tracker says so rather than "in the background"; a reading that leaves seconds waiting asks for the
-next. Datapavan Advanced's own texts say that it reads which app was on screen and when (ADR 0022 as amended). A
-model test checks every byte's state against a true timeline in `cargo test`.
+apps' destinations from "Now" at once; each app has a share of the seconds and segments that wait for their states,
+so that one app's flood never pushes another's out; segments are cut where the timeline's state changed; "Now" keeps
+every byte counted after a placing in its second or after a clock set back (a set back still forgets the minutes
+later than the new clock's, with their bytes), and looks organisations up out of the engine's locks; a second
+instance of one screen, or Back to the first, keeps its app in use; before the first unlock the tracker says so
+rather than "in the background"; a reading that leaves seconds waiting asks for the next. Datapavan Advanced's own
+texts say that it reads which app was on screen and when (ADR 0022 as amended). A model test checks every byte's
+state against a true timeline in `cargo test`.
+
+W5, part 2, fix round 2, 2026-11-18, after two more reviews: past its share an app gives up only its oldest
+seconds, so a busy app with the screen off keeps most of its states; a lone burst asks for a reading; a direct
+connection from before a chain is not marked through the tool; a segment quiet after a change ends with a part in
+its end's state; an app that dies after a pause and resume of its screen is no longer kept in use; a first reading
+reads back to the phone's start, so a foreground service started earlier is seen; a clock set back keeps the grace
+of an app just left. Datapavan Advanced's "Is this copy genuine?" page and About say what ADR 0045 decision 4 sets
+for it. The model test now checks where segments are cut, in tenths of a second, with a reading without access.
 
 | # | Milestone | Done when |
 |---|---|---|
