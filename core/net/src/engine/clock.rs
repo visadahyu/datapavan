@@ -27,10 +27,25 @@ pub trait Clock: Send + Sync {
 pub struct SystemClock;
 
 impl Clock for SystemClock {
+    /// `clock_gettime(CLOCK_REALTIME_COARSE)`, through nix's safe function: the wall clock as of the
+    /// kernel's last tick, read in the vDSO also where the kernel reads the fine clock through a system
+    /// call, and a third of the fine one's cost on the development machine (ADR 0044's cost note; the fresh
+    /// review 2 of W5's first part, nit 6). It lags the wall clock by less than a tick, at most 10 ms, and
+    /// follows it when it is set. Were it to fail, the fine clock is read.
     fn wall_ms(&self) -> u64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
+        use nix::time::{ClockId, clock_gettime};
+        clock_gettime(ClockId::CLOCK_REALTIME_COARSE).map_or_else(
+            |_| {
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
+            },
+            |t| {
+                let seconds = u64::try_from(t.tv_sec()).unwrap_or(0);
+                let millis = u64::try_from(t.tv_nsec()).unwrap_or(0) / 1_000_000;
+                seconds.saturating_mul(1_000).saturating_add(millis)
+            },
+        )
     }
 
     /// `clock_gettime(CLOCK_BOOTTIME)`, through nix's safe function. It cannot fail on Linux since
@@ -97,10 +112,21 @@ impl Clock for ManualClock {
 mod tests {
     use super::*;
 
-    /// The phone's clocks: the wall clock is past 2026, and the time since start runs on.
+    /// The phone's clocks: the wall clock is past 2026, within a tick of the fine one, and the time since
+    /// start runs on.
     #[test]
     fn the_system_clock_reads_the_phones_clocks() {
         assert!(SystemClock.wall_ms() > 1_767_225_600_000, "before 2026");
+        let fine = |()| {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
+        };
+        let (before, coarse, after) = (fine(()), SystemClock.wall_ms(), fine(()));
+        assert!(
+            coarse <= after && coarse + 20 >= before,
+            "{before} {coarse} {after}"
+        );
         let boot = SystemClock.since_boot();
         assert!(boot > Duration::ZERO && boot < Duration::MAX);
         assert!(SystemClock.since_boot() >= boot);

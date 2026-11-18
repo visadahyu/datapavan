@@ -27,8 +27,10 @@
 //!   lookups until Android names their app, are counted when the flow opens, in its first segment: by at
 //!   most the connect wait for TCP (60 seconds awake), and the owner question and the socket for UDP and
 //!   lookups. Counting them at their arrival would need a segment before the flow's own start.
-//! - A count costs one reading of the wall clock: one for each UDP datagram, and for TCP one for each
-//!   read the relay hands on and one for each packet of the tunnel, about two for a small packet.
+//! - A count costs one reading of the coarse wall clock (ADR 0044's cost note): one for each UDP datagram,
+//!   and for TCP one for each read the relay hands on and one for each packet of the tunnel, about two
+//!   for a small packet. The coarse clock lags the wall clock by less than a tick of the kernel, at most
+//!   10 ms, so a byte counted in that moment after a quarter hour falls in the quarter hour before.
 
 use super::{Counters, DnsUse, Ech, Flow, LOG_DELAY, NamedBy, Outcome, Shared, lock};
 use crate::log;
@@ -47,7 +49,7 @@ use tokio::sync::watch;
 /// midnight on one (since 1979: Africa/Monrovia at -0:44:30 and Pacific/Kiritimati at -10:40 left theirs in
 /// 1972 and 1979), and every change of offset that changes the date falls on one (since 2011:
 /// Newfoundland, Goose Bay and Moncton changed theirs at 00:01 local time until 2010 and 2006, so that the
-/// date changed at 02:31 UTC). Watch's Kotlin side checks it of the zones it knows, by their rules ahead
+/// date changed at 02:31 or 03:01 UTC). Watch's Kotlin side checks it of the zones it knows, by their rules ahead
 /// (`LogDaysTest`; review 1 of W5's first part, names, finding 5).
 pub(super) const SEGMENT_MS: u64 = 15 * 60 * 1000;
 
@@ -115,15 +117,23 @@ impl FlowBytes {
     /// segment at any quarter hour passed since: the bytes fall in the quarter hour they were counted in.
     pub(super) fn up(&self, log: &Shared, app: usize, wire: usize) {
         let now = log.log_now();
-        self.up.fetch_add(app as u64, Ordering::Relaxed);
+        Self::add(&self.up, app);
         self.wire(&self.wire_up, wire, now);
     }
 
     /// Counts what the app received, as [`FlowBytes::up`] counts what it sent.
     pub(super) fn down(&self, log: &Shared, app: usize, wire: usize) {
         let now = log.log_now();
-        self.down.fetch_add(app as u64, Ordering::Relaxed);
+        Self::add(&self.down, app);
         self.wire(&self.wire_down, wire, now);
+    }
+
+    /// Adds `n` to `counter`; nothing for no bytes, as a tunnel packet's of the app's own (the fresh
+    /// review 2 of W5's first part, nit 6).
+    fn add(counter: &AtomicU64, n: usize) {
+        if n > 0 {
+            counter.fetch_add(n as u64, Ordering::Relaxed);
+        }
     }
 
     fn wire(&self, counter: &AtomicU64, n: usize, now: u64) {
