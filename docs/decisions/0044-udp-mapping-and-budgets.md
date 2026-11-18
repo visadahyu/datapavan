@@ -2397,4 +2397,9 @@ are its mechanisms; ADR 0037 holds the log's row.
   second notes a mark under the lock of the flow's own marks, and a clock set back by a second or more, found by
   the same reading, places what waits. Measured the same way: a count costs 12.5 to 13.2 ns with the apps'
   states told and without, no difference within the measurement, and one that notes a mark 45 to 96 ns, the
-  readings of the states every minute included. The test `what_a_count_costs` measures it.)
+  readings of the states every minute included. The test `what_a_count_costs` measures it. Its fix round, the same
+  day: the seconds and segments that wait for their states are shared out per app as this ADR shares its other
+  bounds, a quarter of each to one app, the heaviest giving way past the bound itself; `told_late`, the 52nd
+  counter, counts the seconds, and segments with no count, placed as told too late. `COUNTERS` is 52. A mark now
+  also takes the lock of the waiting seconds' count, which it took as an atomic before, once a second per flow: a
+  count that notes a mark costs 106 to 116 ns, measured the same way.)

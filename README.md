@@ -90,9 +90,11 @@ checked on Android 11 and 17 emulators and on Galaxy A40 and A56 phones.
 - **Network use per app.** With usage access, which the user grants and nothing requires: what each app
   received and sent on mobile data and Wi-Fi in the last 30 or 7 days, and how much in the background,
   in the same units as the phone's own Settings. Apps not opened for 90 days that still hold a
-  permission, special access or background data are listed. Only totals are read, never which app was
-  opened when, and nothing is kept. *Why:* an app the user forgot can still send data, and Android's
-  own clean-up skips some apps and all special access.
+  permission, special access or background data are listed. Datapavan Basic reads only totals, never
+  which app was opened when, and keeps nothing. Datapavan Advanced also reads which app was on screen and
+  when, to tell whether you were using an app when it connected, and keeps what it learns only in memory
+  and in the connection log you choose to keep (ADR 0046). *Why:* an app the user forgot can still send
+  data, and Android's own clean-up skips some apps and all special access.
 - **Checking one activity.** On an app's page, the user names what they will do (watch, scroll,
   download, send), Datapavan reads Android's counts, opens the app, and reads again when the user comes
   back, checking that the count is up to date. For activities that only receive, sent bytes appear as

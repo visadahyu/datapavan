@@ -3,8 +3,9 @@
 - Status: Accepted (by the maintainer on 2026-11-15)
 - Date: 2026-11-14
 - Amends: [ADR 0025](0025-guided-check-and-traffic-facts.md) decision 1, for Advanced's live
-  surfaces only; [ADR 0034](0034-watch-permissions.md), by one exported component (the widget); DESIGN.md's W5
-  row; the roadmap's line on the widget.
+  surfaces only; [ADR 0034](0034-watch-permissions.md), by one exported component (the widget), and its line on
+  `PACKAGE_USAGE_STATS`; [ADR 0022](0022-network-use-and-unused-apps.md) decision 2, for Advanced only, which now
+  reads the event stream (noted 2026-11-18); DESIGN.md's W5 row; the roadmap's line on the widget.
 
 ## Context
 
@@ -89,11 +90,17 @@ only when traffic runs. There is no timer that wakes the phone. The screen's sta
 
 **What breaks, and how Watch says so:**
 
-- **Before the first unlock after a restart, `queryEvents` returns null** (Android 11 and later) [doc]. Flows of
-  that time get no state. With always-on, Android starts Watch only after the unlock anyway (ADR 0034).
-- **Without usage access**, flows have no state. The view then shows each app's traffic without the mark, and
-  offers the grant. The summary of decision 2 stays off, since it would count nothing. Android 17 locks usage access
-  for apps installed from a file until the user allows restricted settings (roadmap, M4 checks); onboarding says so.
+- **Before the first unlock after a restart, `queryEvents` gives an app an empty record** (Android 11 and later).
+  Its documentation speaks of null, but `UsageStatsManager` turns the service's null into an empty result, for
+  a user not unlocked yet, for a caller without access and for a range not valid alike [code: `UsageStatsManager`,
+  `android-11.0.0_r1` and `main`; `UsageStatsService`]. So Watch asks `UserManager.isUserUnlocked` first, and flows
+  of that time get no state, "no events" (corrected 2026-11-18, after the second review of W5's second part). With
+  always-on, Android starts Watch only after the unlock anyway (ADR 0034).
+- **Without usage access**, flows have no state. Access taken away between Watch's check and its query gives an
+  empty record too, so Watch asks again after a query that found nothing, and tells such a reading as no access. The
+  view then shows each app's traffic without the mark, and offers the grant. The summary of decision 2 stays off,
+  since it would count nothing. Android 17 locks usage access for apps installed from a file until the user allows
+  restricted settings (roadmap, M4 checks); onboarding says so.
 - **Events only reach a few days back** ("Events are only kept by the system for a few days" [doc]). The live view
   needs seconds; the history needs only what Watch recorded at the time.
 - **Vendors.** Split screen, floating windows (Samsung's pop-up view), picture in picture and vendors' own launchers
@@ -118,7 +125,9 @@ only when traffic runs. There is no timer that wakes the phone. The screen's sta
   - `registerAppUsageObserver` is `@SystemApi` and needs `OBSERVE_APP_USAGE`, whose protection level is
     signature, privileged or role [code: `UsageStatsManager`, `core/res/AndroidManifest.xml`].
 
-  Usage events are the public route, and the one the audit already uses (ADR 0022).
+  Usage events are the public route. The audit itself reads only totals (`queryAndAggregateUsageStats` and
+  `NetworkStatsManager`, ADR 0022, decision 2), never the event stream: Advanced is the first of Datapavan to read
+  it, and ADR 0022 carries a note for it (corrected 2026-11-18; this sentence said the audit already used it).
 
 ### 2. Where it shows
 
@@ -177,6 +186,10 @@ the user asks, so nothing moves under a finger or a screen reader's focus.
 | Widget | at most every 5 minutes, when its numbers change | never; once when the screen comes on |
 | Tile | when the panel opens | when the panel opens (state only) |
 | "Now" | every second while open | not open |
+
+*Noted 2026-11-18, W5's second part:* the screen coming on, a clock set, and Watch's start and stop each read at
+once, so such a reading can come within 5 seconds of the one before; the screen turning off reads once more, past
+the readings' margin, at the screen-on rate; and an ask that comes too soon is made in its turn, not dropped.
 
 Nothing here wakes the phone: work happens while traffic already runs or the screen is on. The budget is Watch's
 own, not an addition: Watch with the summary on still meets W9's bar of at most 3 % of a day's battery (DESIGN §7).
@@ -307,6 +320,14 @@ A short section "What this view cannot see" sits at the end of "Now", in plain w
   loopback never enters the tunnel.
 - **Sizes** are what the apps sent and received through Watch. Android's data-usage screen also counts headers and
   resent packets, so it shows a little more.
+- **"In use" is what Android records of activities** (noted 2026-11-18, after the second review of W5's second part).
+  Two things real apps meet follow from it. The feed left of the home screen on Google's launchers is the Google
+  app's window over the launcher, not an activity of the Google app, so its traffic while the user scrolls it
+  counts as in the background [source: Launcher3's `LauncherOverlayManager`; to check on a Google Play emulator
+  image in the lab run]. And an app that Android lets start activities from the background, such as one with an
+  accessibility service the system binds or with "display over other apps", can resume an activity, even an
+  invisible one, just before it sends, so that its sending counts as in use for the grace after; such access is
+  what stalkerware holds, and the audit flags it.
 
 ### 6. Tests, and when it is done
 
@@ -458,7 +479,9 @@ this ADR left room, and why. Part 3 builds the screens on it.
   atomic load, and takes no lock; the first count of a second takes the lock of the flow's own marks. Measured on the
   development machine (x86-64, release build, 2026-11-18): a count costs 12.5 to 13.2 ns with states told and
   without, no difference within the measurement; a count that notes a mark costs 45 to 96 ns, the minute's
-  readings included (the higher figure while other builds ran on the machine). ADR 0044's cost note says the same.
+  readings included (the higher figure while other builds ran on the machine), and 106 to 116 ns since the fix
+  round, which counts each app's waiting seconds under a lock for its share, once a second per flow. ADR 0044's
+  cost note says the same.
 - **A second is placed** once a reading covers all of it: in use if the app was in use at any moment of it, else
   with its notification if it was so at any moment, else in the background, so that a second is in the
   background only when the app was in the background throughout. Where a reading knew nothing, the second has no
@@ -466,22 +489,36 @@ this ADR left room, and why. Part 3 builds the screens on it.
   Android named no app for), or not told (before Watch's first reading, in a gap a clock set back left, or when
   Watch stopped before a reading came). One byte carries the state and the reason, in the log's records and in
   the snapshot (`states.rs`, `Placed::code`).
-- **A segment is cut where its app's state changes,** at the start of the first second of the new state, as far
-  back as its marks reach. A segment cut at a quarter hour or at its flow's end before its seconds are placed
-  waits, held, and is written once they are; a segment with no count, as a refused connection's, takes the state
-  of its last moment. So the log's records now reach it once their states are told: within about a minute while
-  traffic runs, where they waited 30 seconds before. Held records are handed to the next engine when the tunnel
-  is set up again; when Watch stops, its tracker reads once more first, and what is still not told is written as
-  "not told". Lookups' records are cut the same way and carry their app's state.
-- **The window.** Each flow, and each app's lookups, holds at most 120 seconds with counts not placed yet, all of
-  them together at most 65,536, and at most 4,096 cut segments wait; past a bound the oldest are placed as "told
-  too late". The engine asks Watch's Kotlin side for a reading when a flow opens and once a second has waited 5
-  seconds, at most every 5 seconds; the logger asks again while segments wait. Watch reads at most every 5 seconds
-  with the screen on and once a minute with it off, so while traffic runs a second waits about a minute at most:
-  the window holds twice that. A second never ages out by time: across a sleep it waits for the reading the next
-  traffic or the screen brings. A wall clock set back by a second or more places every second held at once, and
-  the engine forgets the readings of the old clock, whose spans could cover the new clock's next seconds: those
-  wait for readings of their own, so that the seconds of two clocks never meet one reading.
+- **A segment is cut where its app's state changes,** as far back as its marks reach, where the timeline's state
+  changed: the engine walks back over the seconds of the new state, at most 120 of them and never before the
+  second after the last it placed in that segment (which a later, overlapping reading may tell otherwise), so that
+  a quiet stretch after a change belongs to the new part (fix round 1, engine nit 2; it was cut at the first
+  second with bytes in the new state). The timeline keeps the 120 seconds before the end of what was told, for
+  that walk. A segment cut at a quarter hour or at its flow's end before its seconds are placed waits, held, and
+  is written once they are, before the live flows' parts of the same reading, so that a flow's records reach the
+  log in time order (nit 1); a segment with no count, as a refused connection's, takes the state of its last
+  moment. Held records are handed to the next engine when the tunnel is set up again; when Watch stops, its
+  tracker reads once more first, and what is still not told is written as "not told". Lookups' records are cut
+  the same way and carry their app's state.
+- **The window and each app's share.** Each flow, and each app's lookups, holds at most 120 seconds with counts
+  not placed yet, all of them together at most 65,536, and at most 4,096 cut segments wait. Each app may hold a
+  quarter of the two bounds, 16,384 seconds and 1,024 segments: past its share its own oldest are placed as
+  "told too late", and past a bound itself the app that holds the most gives way, so that one app's flood of
+  short flows never pushes another's states out, as ADR 0044 already shares the engine's other bounds (fix round
+  1, engine finding 2). What is told too late is counted, in the engine's last counter. The engine asks Watch's
+  Kotlin side for a reading when a flow opens, once a second has waited 5 seconds (at most every 5 seconds), when
+  the logger finds segments waiting, and after a reading that left seconds or segments waiting; Watch reads at
+  most every 5 seconds with the screen on and once a minute with it off, and makes an ask that comes sooner in
+  its turn. A wall clock set back by a second or more places every second held at once, and the engine forgets
+  the readings of the old clock, whose spans could cover the new clock's next seconds: those wait for readings of
+  their own, so that the seconds of two clocks never meet one reading.
+- **How long a record waits, and what is lost.** While Watch runs and the phone is awake, a second waits at most
+  one reading's period after it, 5 seconds with the screen on and a minute with it off, plus the 2 seconds a
+  reading leaves for events not reported yet; the window of 120 holds twice that, and the screen turning off
+  reads once more, so that what was sent while it was on is placed then. A record then waits the log's usual 30
+  seconds of gathering. In deep sleep nothing runs, since no alarm is set, so what waits is placed when the phone
+  wakes. If Watch's process dies meanwhile, what waits is lost with it: the held segments and the live flows' open
+  segments, as any record not yet handed to the log is (ADR 0044's table).
 - **The tracker lives in `:watch`** (`android/watch/.../activity/`), in Watch's process beside the engine it
   feeds: `:watch` cannot depend on `:app`, and needs of the audit only the rule of usage access, which moved to
   `android/shared` for both. A pure core (`UsageStates`) places the events and is tested on the JVM, one test
@@ -489,20 +526,32 @@ this ADR left room, and why. Part 3 builds the screens on it.
   - an activity is visible from its `ACTIVITY_RESUMED` to its `ACTIVITY_STOPPED` (paused but not stopped, as in
     split screen, it still is), while the screen is interactive, and while the lock screen is not over it unless
     the activity was resumed after the lock screen showed (a camera or a call over it);
+  - an activity is known by its package and class only, since the instance is `@SystemApi`: a `STOPPED` that
+    comes after a `RESUMED` of the same class that itself followed a `PAUSED`, with no `PAUSED` since, is another
+    instance's stop and ends nothing. When a screen starts another of its own class, as AOSP Settings opens each
+    sub-page, or Back returns to a first instance, Android pauses the one, resumes the other and then stops the
+    first [doc: "Coordinating activities"]; that stop ended the app's use before (fix round 1, Kotlin finding 1).
+    Events within one millisecond keep the order Android gave them;
   - the default keyboard is in use while the screen is interactive and in the background while it is not, as
     decision 5 says, with no grace;
   - the grace is `UsageStates.GRACE_MS`, 30 seconds, one constant for the lab run to set;
   - each reading ends 2 seconds before the wall clock, for events not reported yet, and reads again the last 10
     seconds of the one before, so that an event late or out of order within them places its moment again; the
-    first reading, and the first after a time with no events, reads back a day to find what is open;
+    first reading, and the first after one without access or one the engine did not take, reads back a day to
+    find what is open, while a reading that finds no events keeps what is open (corrected 2026-11-18);
   - a wall clock set back is found against the time since the phone started, and by `ACTION_TIME_CHANGED`;
-    readings begin anew from the moment it was found, carrying what is open;
-  - it reads when the engine asks, within decision 1's rates, when the screen comes on (the view may open), when
-    the clock is set, and when Watch stops; `ACTION_SCREEN_ON`, `ACTION_SCREEN_OFF` and `ACTION_TIME_CHANGED`
-    are received while the tunnel runs. The engine's asking adds to decision 1's "when a flow starts" the case of
-    a long connection with no new flow: the same rates, and only while its traffic runs. No timer wakes the phone.
-  Without usage access, or with no events before the first unlock, it tells the engine that nothing is known, and
-  the debug dump and the snapshot say which.
+    readings begin anew from the moment it was found, carrying what is open, an activity resumed before the lock
+    screen showed staying before it;
+  - it reads when the engine asks, within decision 1's rates, an ask that comes sooner made in its turn; once
+    when the screen turns off; and at once when Watch starts, when the screen comes on (the view may open), when
+    the clock is set, and when Watch stops (`ReadingRules`, tested at its edges, with the rule for a clock set
+    back). `ACTION_SCREEN_ON`, `ACTION_SCREEN_OFF` and `ACTION_TIME_CHANGED` are received while the tunnel runs.
+    The engine's asking adds to decision 1's "when a flow starts" the case of a long connection with no new flow,
+    and of seconds a reading left waiting: the same rates. No alarm wakes the phone;
+  - each reading reads each package's UID again, since a package installed again gets a new UID in the same boot;
+    from Android 15 the query asks for the twelve kinds of event only (`UsageEventsQuery`).
+  Without usage access, or before the first unlock (`UserManager.isUserUnlocked`), it tells the engine that
+  nothing is known, and the debug dump and the snapshot say which.
 - **The live counters** (`engine/now.rs`) keep each placed second's bytes, as the app sent and received them (a
   little less than Android's count, decision 5), by state in whole minutes and since the screen came on, by the
   time of the `SCREEN_INTERACTIVE` event or the broadcast. The window of 10 minutes is the current minute and the
@@ -510,9 +559,15 @@ this ADR left room, and why. Part 3 builds the screens on it.
   placed yet count apart, "not told yet", so that the view needs no reading to show them. Each destination is the
   flow's name, where it came from, the DNS name beside it and the app's own DNS (by address where it has no name),
   with ECH, the known resolver, came-in, and the organisation behind its network from the offline table, looked
-  up once. A chained app's flow whose destination stays out of the log adds to its app's bytes only, marked as
-  through the tool; the tool's own app is marked. Memory only, kept with retention "none", handed to the next
-  engine, gone when Watch stops.
+  up out of the engine's locks, at most 64 addresses for one snapshot, and kept for at most 4,096 addresses (fix
+  round 1, engine finding 7: the first snapshot after a busy hour looked them all up under the activity lock,
+  108 ms for 2,048 destinations with the real table on the review's machine). A chained app's flow whose
+  destination stays out of the log adds to its app's bytes only, marked as through the tool; the tool's own app
+  is marked; turning "Log where these apps connect" off, or a chain that leaves an app out, drops its destinations
+  at once, from the counts and from its flows and segments still waiting (finding 1). A flow of no app waits for
+  its second to be over before it is placed, and a clock set back forgets the minutes later than the new clock's,
+  each flow noting its next second anew, so that no byte is lost from the windows (findings 3 to 5). Memory only,
+  kept with retention "none", handed to the next engine, gone when Watch stops.
 - **Bounds.** At most 512 apps, each with at most 60 minutes of counts (about 4.4 KB); at most 2,048
   destinations, 128 for one app, each with its flow (names at their longest, 253 bytes, about 1 KB) and 60
   minutes (1.4 KB): together about 7 MB at the very worst, and some hundreds of kilobytes on a busy phone. Marks:
@@ -523,26 +578,46 @@ this ADR left room, and why. Part 3 builds the screens on it.
   version 1), read by `activity/Snapshot.kt`, from a fixture the engine writes; the readings go the other way
   (`core/net/src/states.rs`, version 1), from a fixture the Kotlin side writes, read by the engine's test and
   fuzzed. Building and encoding the snapshot of 100 apps with 20 destinations each, over the hour, took 0.82 ms on
-  the development machine (202 KB).
-- **Tests.** In the engine, 41 tests: the placing of seconds, each reading's span, the cuts back in time, the
-  window and the bounds at their edges, the clock set back, the asking, the counts by window, destinations, the
-  snapshot's layout, the log's version 3, and an engine handing what it holds to the next; the readings' reader
-  is fuzzed (`core/fuzz/fuzz_targets/states.rs`, with seeds): its first run found that it read a time the screen
-  came on for a screen not on, which wrote back otherwise, and it now refuses one. In Watch's Kotlin side, 23: one for each rule of
-  the tracker's core, its readings' layout, the snapshot's and the log's readers. Hand mutants in cargo-mutants'
-  manner on the code this part adds: of 80 in the engine all are killed but one, argued equivalent (the timeline
-  forgets before the oldest or the newest second held: every held second lies past what was told); of 21 in
-  the Kotlin core, 18 are killed, one does not build, and two are equivalent (an event at the start of the
-  overlap, or at a reading's end, applied once more: each event's effect is idempotent). The emulator's watch
+  the development machine (202 KB), without the organisation table; its at most 64 lookups add about 3 ms at the
+  review's 53 µs each, with no lock held.
+- **Tests.** In the engine, 62 tests: the placing of seconds, each reading's span, the cuts back in time, the
+  window, the bounds and each app's share at their edges, the clock set back, the asking, the counts by window,
+  destinations and their organisations, the chain's switch, the snapshot's layout, the log's version 3, and an
+  engine handing what it holds to the next; the readings' reader is fuzzed (`core/fuzz/fuzz_targets/states.rs`,
+  with seeds): its first run found that it read a time the screen came on for a screen not on, which wrote back
+  otherwise, and it now refuses one. A model test (`core/net/src/engine/model.rs`, in `cargo test`) drives 200
+  random runs of two apps' flows and flows of no app, with counts, ends, readings told from a true timeline of
+  states and two quarter hours, and 100 more with clocks set back, and checks against the truth each byte's state,
+  each flow's records end to end and in time order, and "Now"'s hour. In Watch's Kotlin side, 32: one for each
+  rule of the tracker's core, the reading rules at their edges, its readings' layout, the snapshot's and the log's
+  readers. Hand mutants in cargo-mutants' manner, rerun after the fix round on the code as it is: of 105 in the
+  engine (this part's 80, the four the second review found surviving, and 21 on the fix round's code), all are
+  killed but one, argued equivalent (the timeline forgets from the oldest or the newest second held, less 120
+  seconds: every held second lies past what was told, so both are its end); the first run of this sweep found three
+  more surviving, an empty reading kept as a span, the bound of all seconds taken one early, and the hiding at an
+  engine's start, and each now has a test. Of 41 in the Kotlin core (this part's, the second review's and the fix
+  round's), 36 are killed, one does not build, and four are equivalent: an event at the start of the overlap, or
+  at a reading's end, applied once more, since each event's effect is idempotent and one read again is matched
+  once; and the lock screen kept at a restart that clears every activity. The emulator's watch
   shard runs `scripts/verify-activity.sh` (decision 6, items 1 and 6) and checks item 5 in `verify-chain.sh`. On
   the Android 15 emulator, 2026-11-18, every count matched what the workload apps logged, to the byte: 75,000
   bytes sent in the background, from a job, on a connection opened on screen and on a timer; the 3,046 before
   them in use; 8,000 from a foreground service with its notification; 24,000 from the app on screen in use;
   and without usage access, a flow's bytes in no state. The emulators of Android 10, 11 and 17 that decision 6
   names, and the A40, are still to run it.
-- **Accepted limits.** An activity whose `ACTIVITY_STOPPED` never comes stays visible while the screen is on.
-  An event that comes more than 10 seconds late is not read. A second that holds a moment in use is in use whole.
-  A reading the engine did not take, as in the moment the tunnel is set up again, leaves its span "not told" in
-  the engine, while the tracker tells the next one afresh. The log's records wait in memory for their states,
-  up to about a minute while traffic runs and until the next reading after a sleep, and are lost if the process
-  dies meanwhile, as any record waiting is (ADR 0044's table).
+- **Accepted limits.** An activity whose `ACTIVITY_STOPPED` never comes stays visible while the screen is on; so
+  does one whose process dies just after it was resumed over a pause of its own class, since Android then reports
+  a stop with no pause, which the rule for a second instance takes as another's. An event that comes more than 10
+  seconds late is not read. A second that holds a moment in use is in use whole. A quiet stretch of more than 120
+  seconds after a change of state belongs, beyond its last 120 seconds, to the segment before. A reading the
+  engine did not take, as in the moment the tunnel is set up again, leaves its span "not told" in the engine,
+  while the tracker tells the next one afresh. The log's records wait in memory for their states, as above, and
+  are lost if the process dies meanwhile.
+- **Open for part 3 and W9.**
+  - [ADR 0047](0047-profile-for-phones-that-may-be-searched.md), decision 3: under the profile for phones that may
+    be searched, this run's flows in memory are cleared also when the screen turns off. The live counters keep the
+    windows of 10 minutes and an hour, with destinations, across a screen-off, and no call clears them yet: the
+    profile needs one, or "Now" shows only "since the screen came on" and the memory is still cleared (the second
+    review of W5's second part, Kotlin, nit 11). Not built in part 2; part 3 and W9 settle it.
+  - The feed left of the home screen on Google's launchers (decision 5) is checked on a Google Play emulator
+    image in the lab run.

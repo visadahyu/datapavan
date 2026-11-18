@@ -53,6 +53,16 @@ of the Android 17 emulator and the A40 (Android 11) show:
    stream, keeps no history of its own and writes none of these numbers to storage. They exist in
    memory while the audit is on screen (ADR 0016), and the app has no network access to send them
    anywhere.
+
+   *Amended 2026-11-18, for Datapavan Advanced only, by [ADR 0046](0046-live-activity.md), decision 1:*
+   Advanced's Watch also reads the event stream (`queryEvents`), in its own process, with the same
+   usage access, to tell for each connection whether its app was in use, ran with its notification, or
+   neither. It reads which app was on screen and when, which apps ran a foreground service, and when the
+   screen turned on or off and the lock screen showed, up to a day back after a start. It holds the events
+   in memory for seconds, keeps the states it derives in memory for "Now", for an hour at most, and, if the
+   user keeps a connection log, as the state of each record, for the days the user chose; and Advanced has
+   network access, for its apps' traffic. Basic, which has no Watch, reads only totals as above, and its
+   screens keep this decision's words; Advanced's screens and the privacy policy say what Advanced reads.
 3. **Periods are fixed and named.** The default is the last 30 days, and the last 7 days can be
    chosen. Each screen shows the dates. Datapavan cannot read the billing cycle that the user set in
    Settings, so it never claims to match it; mobile use is for all SIMs together.

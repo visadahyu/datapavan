@@ -239,7 +239,10 @@ Datapavan Lite (ADR 0031) is signed by Google's key and so gets nothing from Wat
 - **`ACCESS_WIFI_STATE`, location, `READ_PHONE_STATE`.** Rules per Wi-Fi network or for roaming belong
   to v0.3 and would need an amendment (Wi-Fi names need location access).
 - **`NEARBY_WIFI_DEVICES`.** Only Android 16's deprecated test mode used it.
-- **`PACKAGE_USAGE_STATS`.** Foreground or background per flow is worked out in the audit app.
+- **`PACKAGE_USAGE_STATS`.** Not declared by Watch. Foreground or background per flow was to be worked
+  out in the audit app; since [ADR 0046](0046-live-activity.md) (amended 2026-11-18), Watch works it out
+  itself in Datapavan Advanced, from the usage access the audit's manifest already declares for the
+  package, which the user grants or not.
 - **`INTERACT_ACROSS_USERS`, `SYSTEM_ALERT_WINDOW`, `REQUEST_INSTALL_PACKAGES`.** A work profile or
   Private Space has its own VPN; Watch draws no overlays and does not update itself (F-Droid and
   Obtainium do).
