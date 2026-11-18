@@ -1233,6 +1233,23 @@ pub(super) mod tests {
         assert!(timeline.intervals.is_empty());
     }
 
+    /// A reading of no span, as one told again at its own end, keeps no span: however many come, what was
+    /// told before stays.
+    #[test]
+    fn a_reading_of_no_span_keeps_none() {
+        let mut timeline = Timeline::default();
+        timeline.tell(&told(T, T + 3_000, &[(T, T + 2_000, State::InUse)]));
+        for _ in 0..=SPANS {
+            timeline.tell(&Told {
+                known: Known::NoAccess,
+                intervals: Vec::new(),
+                ..told(T + 3_000, T + 3_000, &[])
+            });
+        }
+        assert_eq!(timeline.spans.len(), 1);
+        assert_eq!(timeline.place(UID, T / 1000 + 1), Some(IN_USE));
+    }
+
     /// A reading that knew the states replaces the overlap of one before that knew nothing, as when
     /// usage access is granted between two readings (review b1 of W5's second part, engine, finding 8).
     #[test]
@@ -1850,6 +1867,46 @@ pub(super) mod tests {
         for app in [1, 2, 3, 5] {
             assert!(!late_of(&shared, UID + app), "app {app} gave way");
         }
+    }
+
+    /// Exactly [`MARKS`] seconds held for all apps together are all kept; one more makes the heaviest
+    /// app give way.
+    #[test]
+    fn exactly_the_bound_of_all_seconds_is_kept() {
+        let (shared, clock, _) = telling_at(T);
+        let mut flows = Vec::new();
+        let mut id = 0;
+        // Four apps of 16,000 seconds each and a fifth of 1,500: 65,500.
+        for (app, count) in [(1, 160), (2, 160), (3, 160), (4, 160), (5, 15)] {
+            for _ in 0..count {
+                id += 1;
+                flows.push(open_of(&shared, id, UID + app));
+            }
+        }
+        for second in 0..100 {
+            clock.set(T + second * 1_000);
+            for bytes in &flows {
+                bytes.up(&shared, 1, 0);
+            }
+        }
+        let last = open_of(&shared, id + 1, UID + 5);
+        for second in 100..136 {
+            clock.set(T + second * 1_000);
+            last.up(&shared, 1, 0);
+        }
+        assert_eq!(shared.waiting_marks(), MARKS);
+        assert!(
+            (1..=5).all(|app| !late_of(&shared, UID + app)),
+            "none gave way"
+        );
+        clock.set(T + 136_000);
+        last.up(&shared, 1, 0);
+        assert!(shared.waiting_marks() <= MARKS);
+        assert!(
+            (1..=4).any(|app| late_of(&shared, UID + app)),
+            "the heaviest gave way"
+        );
+        assert!(!late_of(&shared, UID + 5));
     }
 
     /// Past its share of [`HELD`], an app's own oldest segment is written as told too late, never another
