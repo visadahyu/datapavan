@@ -465,7 +465,7 @@ private class Run(private val context: Context, private val seed: Long, private 
     /** A batch as the engine hands it over: lookup records (core/net/src/log.rs), the id in place of the count. */
     private fun encode(records: List<Expected>): ByteArray {
         val encoded = records.map {
-            ByteBuffer.allocate(42).order(ByteOrder.LITTLE_ENDIAN).put(1).put(2).putInt(it.uid ?: -1)
+            ByteBuffer.allocate(42).order(ByteOrder.LITTLE_ENDIAN).put(LogRecord.VERSION).put(2).putInt(it.uid ?: -1)
                 .putLong(it.start).putLong(it.start).putInt(it.id.toInt()).putLong(it.id * 3).putLong(it.id * 5).array()
         }
         val batch = ByteBuffer.allocate(4 + encoded.sumOf { 2 + it.size }).order(ByteOrder.LITTLE_ENDIAN).putInt(encoded.size)

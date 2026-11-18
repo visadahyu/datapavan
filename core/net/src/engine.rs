@@ -447,6 +447,9 @@ pub struct Flow {
     /// The name a DNS answer gave the destination's address, where the connection's own name, which
     /// names the flow ([`NamedBy`]), differs from it: kept beside it, since either can be wrong.
     pub dns_name: Option<String>,
+    /// Whether the flow came in: datagrams from another port of an address the app had sent to, which
+    /// the app did not send to first (ADR 0044, decision 1).
+    pub came_in: bool,
     /// Whether the hello hid the real name.
     pub ech: Ech,
     /// Whether the flow carries the app's own DNS.
@@ -1475,6 +1478,7 @@ mod tests {
             name,
             named_by,
             dns_name: None,
+            came_in: false,
             ech: Ech::Absent,
             dns,
             resolver,
@@ -1659,6 +1663,7 @@ mod tests {
             name: None,
             named_by: NamedBy::Unknown,
             dns_name: None,
+            came_in: false,
             ech: Ech::Absent,
             dns: DnsUse::None,
             resolver: None,
@@ -3089,6 +3094,7 @@ mod tests {
             name: None,
             named_by: NamedBy::Unknown,
             dns_name: None,
+            came_in: false,
             ech: Ech::Absent,
             dns: DnsUse::None,
             resolver: None,

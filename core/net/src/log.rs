@@ -1,16 +1,21 @@
 //! The records Watch's connection log stores (W4, ADR 0037), in the form the engine hands them to
-//! Watch's Kotlin side, which seals each one under the day's key. Version 1, little-endian:
+//! Watch's Kotlin side, which seals each one under the day's key. Version 2, little-endian:
 //!
 //! - a flow segment: version, kind 1, the flow's number, the app's UID (`u32::MAX` unknown), start and
 //!   end in milliseconds since 1970 (UTC), bytes up and down as the app sent and received them, bytes
 //!   up and down as IP packets on the tunnel (what Android counts), protocol, outcome, where the name came
-//!   from, ECH, the app's own DNS, flags (bit 0: the flow continues), the destination's address
-//!   (length 4 or 16, then the bytes) and port, the AS number (0 none) and what its owner is, then the
-//!   name and the resolver, each a length byte and UTF-8.
+//!   from, ECH, the app's own DNS, flags (bit 0: the flow continues; bit 1: it came in), the
+//!   destination's address (length 4 or 16, then the bytes) and port, the AS number (0 none) and what its
+//!   owner is, then the name, the resolver and the DNS name where it differs from the name, each a length
+//!   byte and UTF-8.
 //! - lookups an app sent to Watch's own DNS address: version, kind 2, the UID, start and end, their
 //!   count, and their packets' bytes up and down on the tunnel.
 //!
 //! A batch is a count (u32), then each record after its length (u16).
+//!
+//! Version 2 (2026-11-18, W5's first part, ADR 0044's decision 4) added the DNS name and the flag of a
+//! flow that came in; version 1 had neither, and was never in a release. A DNS name is written only where
+//! it differs from the name, so a flag for that would say the same twice.
 
 use std::net::{IpAddr, SocketAddr};
 
@@ -18,7 +23,7 @@ use crate::engine::{DnsUse, Ech, Flow, NamedBy, Outcome};
 use crate::owners::NetworkKind;
 
 /// The version of the record format.
-pub const VERSION: u8 = 1;
+pub const VERSION: u8 = 2;
 
 /// One record of the log.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -97,7 +102,7 @@ impl Record {
                     DnsUse::Plain => 1,
                     DnsUse::Encrypted => 2,
                 });
-                out.push(u8::from(*continues));
+                out.push(u8::from(*continues) | u8::from(flow.came_in) << 1);
                 push_address(&mut out, flow.destination);
                 let (asn, kind) = flow.network.map_or((0, 0), |n| {
                     (
@@ -113,6 +118,7 @@ impl Record {
                 out.push(kind);
                 push_text(&mut out, flow.name.as_deref());
                 push_text(&mut out, flow.resolver.as_deref());
+                push_text(&mut out, flow.dns_name.as_deref());
             }
             Self::Lookups {
                 uid,
@@ -198,6 +204,7 @@ mod tests {
             name: Some("Meta Platforms, Inc.".into()),
             named_by: NamedBy::Organisation,
             dns_name: None,
+            came_in: false,
             ech: Ech::Offered,
             dns: DnsUse::None,
             resolver: None,
@@ -218,7 +225,7 @@ mod tests {
             continues: true,
         };
         let bytes = record.encode();
-        let mut expected = vec![1, 1];
+        let mut expected = vec![2, 1];
         expected.extend_from_slice(&7u64.to_le_bytes());
         expected.extend_from_slice(&10_123u32.to_le_bytes());
         for v in [1_000u64, 2_000, 300, 40_000, 820, 42_900] {
@@ -230,8 +237,32 @@ mod tests {
         expected.push(1);
         expected.push(20);
         expected.extend_from_slice(b"Meta Platforms, Inc.");
-        expected.push(0);
+        expected.extend_from_slice(&[0, 0]);
         assert_eq!(bytes, expected);
+    }
+
+    /// Version 2's additions: the flag of a flow that came in, beside the one of a flow that continues,
+    /// and the DNS name last.
+    #[test]
+    fn encodes_the_dns_name_and_a_flow_that_came_in() {
+        let mut both = flow();
+        both.name = Some("other.example".into());
+        both.named_by = NamedBy::Tls;
+        both.dns_name = Some("www.example.com".into());
+        both.came_in = true;
+        let record = |continues| Record::Segment {
+            flow: both.clone(),
+            start: 1_000,
+            end: 2_000,
+            bytes: [0; 4],
+            continues,
+        };
+        let bytes = record(false).encode();
+        // Version, kind, number, UID, six times; protocol, outcome, named by, ECH, DNS, flags.
+        let flags = 1 + 1 + 8 + 4 + 6 * 8 + 5;
+        assert_eq!((bytes[0], bytes[flags]), (2, 0b10));
+        assert_eq!(record(true).encode()[flags], 0b11);
+        assert!(bytes.ends_with(b"\x0dother.example\x00\x0fwww.example.com"));
     }
 
     #[test]
@@ -249,7 +280,8 @@ mod tests {
             continues: false,
         };
         let bytes = record.encode();
-        let name_at = bytes.len() - 1 - 254 - 1;
+        // The name, then an empty resolver and no DNS name.
+        let name_at = bytes.len() - 1 - 1 - 254 - 1;
         assert_eq!(bytes[name_at], 254, "127 two-byte characters");
         let lookups = Record::Lookups {
             uid: Some(10_123),

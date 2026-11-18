@@ -661,7 +661,8 @@ class WatchVpnService : VpnService() {
         val counts = log.counts()
         writer.println(
             "log retention ${log.retentionDays} days ${counts.days} records ${counts.records} key-rows ${counts.keys} " +
-                "key ${log.hasKey} lock ${log.lockNow().name.lowercase().replace('_', '-')} failures ${log.failures}",
+                "key ${log.hasKey} lock ${log.lockNow().name.lowercase().replace('_', '-')} failures ${log.failures} " +
+                "skipped ${log.skippedRecords}",
         )
         if (debuggable) {
             // W6's DNS spike (docs/spikes/2026-11-shared-dns-cache.md): answers with a time to live of 0.
@@ -783,7 +784,7 @@ class WatchVpnService : VpnService() {
             testDay != null -> {
                 val noon = java.time.LocalDate.ofEpochDay(testDay).atTime(12, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
                 val record = java.nio.ByteBuffer.allocate(1 + 1 + 4 + 8 + 8 + 4 + 8 + 8).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-                    .put(1).put(2).putInt(-1).putLong(noon).putLong(noon).putInt(1).putLong(0).putLong(0).array()
+                    .put(LogRecord.VERSION).put(2).putInt(-1).putLong(noon).putLong(noon).putInt(1).putLong(0).putLong(0).array()
                 val batch = java.nio.ByteBuffer.allocate(4 + 2 + record.size).order(java.nio.ByteOrder.LITTLE_ENDIAN)
                     .putInt(1).putShort(record.size.toShort()).put(record).array()
                 log.write(batch, pastRetention = "log-put-day" in args)

@@ -525,6 +525,7 @@ impl Peer {
         (came_in, way): (bool, PeerWay),
     ) -> Self {
         let (mut opened, mut flow) = begin_udp(shared, app, address, uid);
+        flow.came_in = came_in;
         // A stand-in whose name gave way in the map keeps it in the log, as long as a peer of its app
         // stands for it: its datagrams still go to that name (seventh review of unit 9, finding 4).
         if flow.name.is_none()
@@ -1482,8 +1483,8 @@ impl<'a> Scope<'a> {
             return LetIn::Capped;
         }
         let way = way(self.sources);
-        // A flow the app did not start, logged as any other: the log's flag for a flow that came in
-        // waits for its new record format (ADR 0044, decision 4).
+        // A flow the app did not start, logged with the flag of a flow that came in (ADR 0044,
+        // decision 4).
         let peer = self
             .reborrow()
             .into_peer(shared, (app, shown), now, (true, way));
@@ -4817,6 +4818,7 @@ fn begin_udp(
         name,
         named_by,
         dns_name: None,
+        came_in: false,
         ech: Ech::Absent,
         dns,
         resolver,

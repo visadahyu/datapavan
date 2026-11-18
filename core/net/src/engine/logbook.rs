@@ -499,6 +499,7 @@ mod tests {
             name: None,
             named_by: NamedBy::Unknown,
             dns_name: None,
+            came_in: false,
             ech: Ech::Absent,
             dns: DnsUse::None,
             resolver: None,
@@ -670,6 +671,145 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Where Watch's Kotlin side keeps the fixture its tests read (`LogTest`, `LogDaysTest`).
+    const FIXTURE: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../android/watch/src/test/resources/org/visadahyu/datapavan/watch/log/engine-records.hex"
+    );
+
+    /// The fixture's records: a segment of each kind the reader must tell apart, an app's lookups, and
+    /// the segments the engine cuts around the midnights of Kathmandu (+5:45), the Chatham Islands (+13:45
+    /// in their summer) and Eucla (+8:45), between 2026-11-17 and 2026-11-18, local time.
+    fn fixture_records() -> Vec<Record> {
+        use super::super::Network;
+        use crate::owners::NetworkKind;
+        let tls = Flow {
+            id: 7,
+            destination: SocketAddr::from(([93, 184, 216, 34], 443)),
+            name: Some("other.example".into()),
+            named_by: NamedBy::Tls,
+            dns_name: Some("www.example.com".into()),
+            ech: Ech::Offered,
+            network: Some(Network {
+                asn: 15_133,
+                kind: NetworkKind::Hosting,
+            }),
+            ..flow(7)
+        };
+        let came_in = Flow {
+            id: 8,
+            protocol: crate::packet::UDP,
+            app: SocketAddr::from((
+                std::net::Ipv6Addr::new(0xfd00, 1, 0xfd00, 1, 0xfd00, 1, 0xfd00, 1),
+                40_001,
+            )),
+            destination: SocketAddr::from((
+                std::net::Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 0x53),
+                853,
+            )),
+            uid: None,
+            outcome: Outcome::Unreachable,
+            name: Some("quic.example".into()),
+            named_by: NamedBy::Quic,
+            came_in: true,
+            ech: Ech::Hidden,
+            dns: DnsUse::Encrypted,
+            resolver: Some("sample".into()),
+            ..flow(8)
+        };
+        let organisation = Flow {
+            id: 9,
+            outcome: Outcome::Failed,
+            name: Some("Société Générale".into()),
+            named_by: NamedBy::Organisation,
+            dns: DnsUse::Plain,
+            network: Some(Network {
+                asn: 29_084,
+                kind: NetworkKind::Unlisted,
+            }),
+            ..flow(9)
+        };
+        let mut records = vec![
+            Record::Segment {
+                flow: tls,
+                start: at(22, 10),
+                end: at(22, 15),
+                bytes: [300, 40_000, 820, 42_900],
+                continues: true,
+            },
+            Record::Segment {
+                flow: came_in,
+                start: at(22, 16),
+                end: at(22, 16),
+                bytes: [0; 4],
+                continues: false,
+            },
+            Record::Segment {
+                flow: organisation,
+                start: at(22, 17),
+                end: at(22, 17),
+                bytes: [0; 4],
+                continues: false,
+            },
+            Record::Lookups {
+                uid: Some(10_123),
+                start: at(22, 10),
+                end: at(22, 15),
+                count: 3,
+                wire_up: 210,
+                wire_down: 540,
+            },
+        ];
+        // Kathmandu's, the Chatham Islands' and Eucla's midnights, in UTC: a flow opened ten minutes
+        // before, a count on each side, its end ten minutes after.
+        for (id, midnight) in [(11, at(18, 15)), (12, at(10, 15)), (13, at(15, 15))] {
+            let (shared, clock) = log_at(midnight - 10 * MINUTE);
+            let bytes = open(&shared, id);
+            bytes.up(&shared, 100, 140);
+            clock.set(midnight + 10 * MINUTE);
+            bytes.down(&shared, 200, 240);
+            shared.finish(id);
+            records.extend(taken(&shared));
+        }
+        records
+    }
+
+    /// The fixture Watch's Kotlin side reads is what the engine writes, byte for byte, so that the two
+    /// cannot drift apart unseen: a change of the format fails here until the fixture is written anew
+    /// (`DATAPAVAN_WRITE_FIXTURE=1`), and then the Kotlin tests read it. The engine's own cuts are in
+    /// it: midnight in Kathmandu ends a segment there.
+    #[test]
+    fn the_kotlin_sides_fixture_is_what_the_engine_writes() -> std::io::Result<()> {
+        let records = fixture_records();
+        assert_eq!(
+            segments(&records[4..6]),
+            vec![
+                (11, at(18, 5), at(18, 15), [100, 0, 140, 0], true),
+                (11, at(18, 15), at(18, 25), [0, 200, 0, 240], false),
+            ]
+        );
+        let mut text = String::from(
+            "# Watch's connection log: one batch of records as the engine writes them (core/net/src/log.rs,\n\
+             # version 2), in hex. Written by the engine's test the_kotlin_sides_fixture_is_what_the_engine_writes\n\
+             # (core/net/src/engine/logbook.rs), which fails when the engine writes otherwise; run it with\n\
+             # DATAPAVAN_WRITE_FIXTURE=1 to write it anew. Read by LogTest and LogDaysTest. Not edited by hand.\n",
+        );
+        for line in log::batch(&records).chunks(48) {
+            text.extend(line.iter().map(|b| format!("{b:02x}")));
+            text.push('\n');
+        }
+        if std::env::var_os("DATAPAVAN_WRITE_FIXTURE").is_some() {
+            std::fs::write(FIXTURE, &text)?;
+        }
+        let kept = std::fs::read_to_string(FIXTURE)?;
+        assert!(
+            kept == text,
+            "{FIXTURE} is not what the engine writes: run this test with DATAPAVAN_WRITE_FIXTURE=1, then \
+             the Kotlin side's LogTest"
+        );
+        Ok(())
     }
 
     /// The bytes before a night's sleep stay in their quarter hour when the app's packet ends it.

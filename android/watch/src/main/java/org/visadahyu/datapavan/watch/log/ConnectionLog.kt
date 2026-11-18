@@ -9,7 +9,6 @@ import android.database.sqlite.SQLiteOpenHelper
 import android.util.Log
 import androidx.core.content.edit
 import androidx.core.database.sqlite.transaction
-import java.time.Instant
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
@@ -55,6 +54,7 @@ class ConnectionLog internal constructor(
     private var expiredBefore: Long? = null
     private var jobAsked = false
     private val failed = AtomicInteger()
+    private val skipped = AtomicInteger()
 
     private val lockFlow = MutableStateFlow(Lock.NO_KEY_YET)
 
@@ -85,6 +85,12 @@ class ConnectionLog internal constructor(
 
     /** What failed on the log's thread since the process made the log: none means every record offered was kept. */
     val failures: Int get() = failed.get()
+
+    /**
+     * Records skipped since the process made the log, written or read: of a version this does not read
+     * ([LogRecord.parse]), or malformed. Never a failure of the log itself, and never a crash.
+     */
+    val skippedRecords: Int get() = skipped.get()
 
     /** Writes a batch of records from the engine (core/net/src/log.rs). */
     fun write(batch: ByteArray) = write(batch, pastRetention = false)
@@ -178,7 +184,7 @@ class ConnectionLog internal constructor(
     fun today(): Long = dayOf(clock.now())
 
     /** The local day of a moment, as days since 1970. */
-    fun dayOf(millis: Long): Long = Instant.ofEpochMilli(millis).atZone(clock.zone()).toLocalDate().toEpochDay()
+    fun dayOf(millis: Long): Long = clock.dayOf(millis)
 
     /**
      * Debug builds: runs [sql] on the log's own connection, which pragmas such as max_page_count need,
@@ -215,8 +221,13 @@ class ConnectionLog internal constructor(
                         Sealer(key, day, keyId).also { key.fill(0) }
                     }
                 } ?: return null
-                val record = sealer.open(it.getBlob(3), it.getBlob(2))?.let(LogRecord::parse)
-                if (record == null) failure("A record did not open") else records += record
+                val opened = sealer.open(it.getBlob(3), it.getBlob(2))
+                val record = opened?.let(LogRecord::parse)
+                when {
+                    opened == null -> failure("A record did not open")
+                    record == null -> skipped.incrementAndGet()
+                    else -> records += record
+                }
             }
         }
         return records
@@ -226,16 +237,20 @@ class ConnectionLog internal constructor(
         tidyOrCount()
         if (retentionDays == 0) return
         val first = firstKept()
-        val records = LogRecord.batch(batch).filter { (record, _) -> pastRetention || dayOf(record.start) >= first }
+        // Each record's day, in the zone read once for the batch: a zone that changes meanwhile cannot
+        // file one record of it under a day the next lines did not reckon with.
+        val zone = clock.zone()
+        val records = LogRecord.batch(batch) { skipped.incrementAndGet() }
+            .map { (record, bytes) -> Triple(record, bytes, clock.dayOf(record.start, zone)) }
+            .filter { (_, _, day) -> pastRetention || day >= first }
         if (records.isEmpty()) return
         val db = open().writableDatabase
         // Each new day key's row is committed on its own before the batch: a batch that fails then
         // leaves no key in memory whose row the database does not have. A key row with no records is
         // harmless and goes with its day.
-        val byDay = records.map { (record, _) -> dayOf(record.start) }.distinct().associateWith { sealerFor(db, it) }
+        val byDay = records.map { (_, _, day) -> day }.distinct().associateWith { sealerFor(db, it) }
         db.transaction {
-            for ((record, bytes) in records) {
-                val day = dayOf(record.start)
+            for ((record, bytes, day) in records) {
                 val sealer = byDay.getValue(day)
                 val token = sealer.token(record.uid)
                 beforeRecord()
