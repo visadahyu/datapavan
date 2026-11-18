@@ -97,6 +97,22 @@ impl Placed {
         }
     }
 
+    /// The state a byte of [`Placed::code`] codes, `None` for a byte it never writes.
+    #[must_use]
+    pub fn from_code(code: u8) -> Option<Self> {
+        Some(match code {
+            1 => Self::Known(State::InUse),
+            2 => Self::Known(State::Notification),
+            3 => Self::Known(State::Background),
+            0x10 => Self::Unknown(Unknown::NoAccess),
+            0x20 => Self::Unknown(Unknown::Locked),
+            0x30 => Self::Unknown(Unknown::Late),
+            0x40 => Self::Unknown(Unknown::NoApp),
+            0x50 => Self::Unknown(Unknown::NotTold),
+            _ => return None,
+        })
+    }
+
     /// Where the live view counts it: 0 no state, 1 in use, 2 with its notification, 3 in the
     /// background.
     #[must_use]
@@ -380,6 +396,14 @@ mod tests {
         assert_eq!(Placed::Unknown(Unknown::NoApp).code(), 0x40);
         assert_eq!(Placed::Unknown(Unknown::NotTold).code(), 0x50);
         assert_eq!(Placed::Unknown(Unknown::NotTold).column(), 0);
+        for code in 0..=u8::MAX {
+            assert_eq!(
+                Placed::from_code(code).map(Placed::code),
+                Placed::from_code(code).map(|_| code)
+            );
+        }
+        assert_eq!(Placed::from_code(0), None);
+        assert_eq!(Placed::from_code(4), None);
         assert_eq!(Placed::Known(State::Background).column(), 3);
         assert!(State::InUse.rank() > State::Notification.rank());
         assert!(State::Notification.rank() > State::Background.rank());

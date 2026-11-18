@@ -38,6 +38,7 @@ class LogTest {
         assertEquals("93.184.216.34" to 443, tls.address.hostAddress to tls.port)
         assertEquals(15_133L to 2, tls.asn to tls.network)
         assertEquals(listOf("other.example", "", "www.example.com"), listOf(tls.name, tls.resolver, tls.dnsName))
+        assertEquals(AppState.IN_USE, tls.state)
 
         val cameIn = records[1] as LogRecord.Segment
         assertEquals(8L to null, cameIn.flow to cameIn.uid)
@@ -46,14 +47,17 @@ class LogTest {
         assertEquals(false to true, cameIn.continues to cameIn.cameIn)
         assertEquals("2001:db8:0:0:0:0:0:53" to 853, cameIn.address.hostAddress to cameIn.port)
         assertEquals(listOf("quic.example", "sample", ""), listOf(cameIn.name, cameIn.resolver, cameIn.dnsName))
+        assertEquals(AppState.NO_APP, cameIn.state)
+        assertEquals(AppState.NONE to AppState.NO_APP, AppState.of(cameIn.state) to AppState.why(cameIn.state))
 
         val organisation = records[2] as LogRecord.Segment
         // Failed, named by the organisation table, plain DNS of its own, a network of an unlisted owner.
         assertEquals(listOf(3, 3, 0, 1), listOf(organisation.outcome, organisation.namedBy, organisation.ech, organisation.dns))
         assertEquals(29_084L to 3, organisation.asn to organisation.network)
         assertEquals("Société Générale" to "", organisation.name to organisation.dnsName)
+        assertEquals(AppState.BACKGROUND, organisation.state)
 
-        assertEquals(LogRecord.Lookups(10_123, at(22, 10), at(22, 15), 3, 210, 540), records[3])
+        assertEquals(LogRecord.Lookups(10_123, at(22, 10), at(22, 15), 3, 210, 540, AppState.NOTIFICATION), records[3])
         // The engine's cuts around Kathmandu's midnight: unnamed, opened, the bytes on each side.
         val (before, after) = records[4] as LogRecord.Segment to records[5] as LogRecord.Segment
         assertEquals(listOf(11L, 11L), listOf(before.flow, after.flow))
@@ -63,6 +67,8 @@ class LogTest {
         assertEquals(listOf(4, 4), listOf(before.namedBy, after.namedBy))
         assertEquals(true to false, before.continues to after.continues)
         assertEquals("" to "", before.name to after.dnsName)
+        // The engine's own cuts, by a platform that tells no states.
+        assertEquals(listOf(AppState.NOT_TOLD, AppState.NOT_TOLD), listOf(before.state, after.state))
 
         // The codes the others leave out: named by DNS, refused, a network of a known owner, both flags.
         val byDns = records[10] as LogRecord.Segment
@@ -71,6 +77,33 @@ class LogTest {
         assertEquals(true to true, byDns.continues to byDns.cameIn)
         assertEquals(listOf(1L, 2L, 3L, 4L), listOf(byDns.up, byDns.down, byDns.wireUp, byDns.wireDown))
         assertEquals("www.example.com" to "", byDns.name to byDns.dnsName)
+        assertEquals(AppState.LATE, byDns.state)
+        assertEquals(listOf("in-use", "none-late"), listOf(AppState.name(tls.state), AppState.name(byDns.state)))
+    }
+
+    /** Version 3's state is the record's last byte: a code the engine never writes, or a byte after it, is malformed. */
+    @Test
+    fun refusesAStateTheEngineNeverWritesAndBytesAfterIt() {
+        val (_, engines) = EngineRecords.records[3]
+        assertEquals(AppState.NOTIFICATION, LogRecord.parse(engines)?.state)
+        for (code in listOf(0, 4, 5, 0x11, 0x60, 0xff)) {
+            assertNull("code $code", LogRecord.parse(engines.copyOf().also { it[it.size - 1] = code.toByte() }))
+        }
+        for (code in listOf(1, 2, 3, 0x10, 0x20, 0x30, 0x40, 0x50)) {
+            assertEquals(code, LogRecord.parse(engines.copyOf().also { it[it.size - 1] = code.toByte() })?.state)
+        }
+        assertNull(LogRecord.parse(engines + 0))
+        assertNull(LogRecord.parse(engines.copyOf(engines.size - 1)))
+    }
+
+    /** A version 2 record, as debug builds wrote them in W5's first part: the engine's, without the state. */
+    @Test
+    fun readsAVersion2RecordAsNotTold() {
+        val (_, engines) = EngineRecords.records[0]
+        val version2 = engines.copyOf(engines.size - 1).also { it[0] = 2 }
+        val record = LogRecord.parse(version2) as LogRecord.Segment
+        assertEquals("other.example" to "www.example.com", record.name to record.dnsName)
+        assertEquals(AppState.NOT_TOLD, record.state)
     }
 
     /** No record, cut short anywhere or with any byte changed, makes the reader throw: it reads it or skips it. */
@@ -90,7 +123,7 @@ class LogTest {
     @Test
     fun skipsAndCountsARecordOfAnotherVersion() {
         val (_, engines) = EngineRecords.records[0]
-        val newer = engines.copyOf().also { it[0] = 3 }
+        val newer = engines.copyOf().also { it[0] = 4 }
         val batch = ByteBuffer.allocate(4 + 3 * 2 + newer.size + segment.size + engines.size).order(ByteOrder.LITTLE_ENDIAN)
             .putInt(3).putShort(newer.size.toShort()).put(newer).putShort(segment.size.toShort()).put(segment)
             .putShort(engines.size.toShort()).put(engines).array()
@@ -118,6 +151,7 @@ class LogTest {
         assertEquals("Meta Platforms, Inc.", record.name)
         assertEquals("", record.resolver)
         assertEquals("" to false, record.dnsName to record.cameIn)
+        assertEquals(AppState.NOT_TOLD, record.state)
     }
 
     @Test

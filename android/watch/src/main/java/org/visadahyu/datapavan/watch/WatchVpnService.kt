@@ -783,8 +783,9 @@ class WatchVpnService : VpnService() {
             }
             testDay != null -> {
                 val noon = java.time.LocalDate.ofEpochDay(testDay).atTime(12, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
-                val record = java.nio.ByteBuffer.allocate(1 + 1 + 4 + 8 + 8 + 4 + 8 + 8).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-                    .put(LogRecord.VERSION).put(2).putInt(-1).putLong(noon).putLong(noon).putInt(1).putLong(0).putLong(0).array()
+                val record = java.nio.ByteBuffer.allocate(1 + 1 + 4 + 8 + 8 + 4 + 8 + 8 + 1).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                    .put(LogRecord.VERSION).put(2).putInt(-1).putLong(noon).putLong(noon).putInt(1).putLong(0).putLong(0)
+                    .put(org.visadahyu.datapavan.watch.log.AppState.NO_APP.toByte()).array()
                 val batch = java.nio.ByteBuffer.allocate(4 + 2 + record.size).order(java.nio.ByteOrder.LITTLE_ENDIAN)
                     .putInt(1).putShort(record.size.toShort()).put(record).array()
                 log.write(batch, pastRetention = "log-put-day" in args)
@@ -811,7 +812,8 @@ class WatchVpnService : VpnService() {
 
     /**
      * A record as `log-today` prints it: the DNS answer's name, where it differs from the connection's own,
-     * and whether the flow came in, last, so that the fields before keep their places.
+     * whether the flow came in, and the app's state (ADR 0046) last, so that the fields before keep their
+     * places, and the record's start and end, in milliseconds since 1970, after them.
      */
     private fun describe(record: LogRecord): String = when (record) {
         is LogRecord.Segment -> listOfNotNull(
@@ -819,8 +821,11 @@ class WatchVpnService : VpnService() {
             "up=${record.up}", "down=${record.down}", if (record.continues) "continues" else "ended",
             "wire=${record.wireUp}/${record.wireDown}", record.name.ifEmpty { "-" }, "flow=${record.flow}",
             record.dnsName.takeIf { it.isNotEmpty() }?.let { "dns-name=$it" }, "came-in".takeIf { record.cameIn },
+            "state=${org.visadahyu.datapavan.watch.log.AppState.name(record.state)}", "at=${record.start}-${record.end}",
         ).joinToString(" ")
-        is LogRecord.Lookups -> "lookups ${record.uid ?: "-"} ${record.count} wire=${record.wireUp}/${record.wireDown}"
+        is LogRecord.Lookups ->
+            "lookups ${record.uid ?: "-"} ${record.count} wire=${record.wireUp}/${record.wireDown} " +
+                "state=${org.visadahyu.datapavan.watch.log.AppState.name(record.state)}"
     }
 
     companion object {

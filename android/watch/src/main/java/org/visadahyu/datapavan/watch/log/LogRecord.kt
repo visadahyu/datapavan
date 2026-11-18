@@ -5,10 +5,11 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * One record of the connection log, as the engine writes it (core/net/src/log.rs, version 2). The
- * bytes are kept as they are, sealed; this reads them back, and reads version 1 too, which no release
- * wrote but debug builds on test phones did, as ADR 0044's decision 4 asked: a day sealed then stays
- * readable until it expires. A record of another version is skipped and counted, never read as this one.
+ * One record of the connection log, as the engine writes it (core/net/src/log.rs, version 3). The
+ * bytes are kept as they are, sealed; this reads them back, and reads versions 1 and 2 too, which no
+ * release wrote but debug builds on test phones did, as ADR 0044's decision 4 asked: a day sealed then
+ * stays readable until it expires. A record of another version is skipped and counted, never read as
+ * this one.
  */
 sealed interface LogRecord {
     /** The app's UID, or null when Android did not name it. */
@@ -17,6 +18,13 @@ sealed interface LogRecord {
     /** Start and end, in milliseconds since 1970 (UTC). */
     val start: Long
     val end: Long
+
+    /**
+     * The state the app had throughout the record (ADR 0046, decision 1), as one byte ([AppState]): in
+     * use, with its notification, in the background, or none and why. Records of versions 1 and 2, written
+     * before Watch told states, have none: "not told".
+     */
+    val state: Int
 
     /** A flow, or the part of it from [start] to [end]. */
     data class Segment(
@@ -48,6 +56,7 @@ sealed interface LogRecord {
          * from it (version 2; finding 20 of the independent review of 2026-11-09); empty otherwise.
          */
         val dnsName: String,
+        override val state: Int = AppState.NOT_TOLD,
     ) : LogRecord
 
     /** Lookups the app sent to Watch's own DNS address, and their packets' bytes on the tunnel. */
@@ -58,11 +67,12 @@ sealed interface LogRecord {
         val count: Long,
         val wireUp: Long,
         val wireDown: Long,
+        override val state: Int = AppState.NOT_TOLD,
     ) : LogRecord
 
     companion object {
         /** The version the engine writes. */
-        const val VERSION: Byte = 2
+        const val VERSION: Byte = 3
         private const val UNKNOWN_UID = -1
 
         /**
@@ -86,11 +96,14 @@ sealed interface LogRecord {
             return records
         }
 
-        /** One record in its stored form, or null if it is not one this reads: of another version, or malformed. */
+        /**
+         * One record in its stored form, or null if it is not one this reads: of another version, or malformed,
+         * bytes left over after it included.
+         */
         fun parse(bytes: ByteArray): LogRecord? = try {
             val b = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
             val version = b.get()
-            if (version != VERSION && version != VERSION_1) {
+            if (version != VERSION && version != VERSION_2 && version != VERSION_1) {
                 null
             } else {
                 when (b.get().toInt()) {
@@ -114,13 +127,15 @@ sealed interface LogRecord {
                             dns = fields[4], continues = fields[5] and 1 != 0, cameIn = fields[5] and 2 != 0,
                             address = InetAddress.getByAddress(address), port = port, asn = asn, network = network,
                             name = text(b), resolver = text(b), dnsName = if (version == VERSION_1) "" else text(b),
+                            state = state(b, version),
                         )
                     }
                     2 -> Lookups(
                         b.int.takeIf { it != UNKNOWN_UID }, b.long, b.long, b.int.toLong() and 0xffffffffL, b.long, b.long,
+                        state = state(b, version),
                     )
                     else -> null
-                }
+                }?.takeIf { it.state >= 0 && !b.hasRemaining() }
             }
         } catch (e: java.nio.BufferUnderflowException) {
             null
@@ -131,9 +146,74 @@ sealed interface LogRecord {
         /** The version before the DNS name and the flag of a flow that came in. */
         private const val VERSION_1: Byte = 1
 
+        /** The version before the app's state. */
+        private const val VERSION_2: Byte = 2
+
+        /**
+         * The record's last byte, its app's state, from version 3; "not told" before. A code the engine never
+         * writes gives -1, and the record is read as malformed.
+         */
+        private fun state(b: ByteBuffer, version: Byte): Int {
+            if (version < VERSION) return AppState.NOT_TOLD
+            return (b.get().toInt() and 0xff).takeIf(AppState::isCode) ?: -1
+        }
+
         private fun text(b: ByteBuffer): String {
             val bytes = ByteArray(b.get().toInt() and 0xff).also { b.get(it) }
             return String(bytes, Charsets.UTF_8)
         }
+    }
+}
+
+/**
+ * An app's state as the engine places it, one byte (core/net/src/states.rs, `Placed::code`): the low four
+ * bits the state, the high four why there is none. The same byte in the log's records and the live
+ * view's snapshot.
+ */
+object AppState {
+    const val NONE = 0
+    const val IN_USE = 1
+    const val NOTIFICATION = 2
+    const val BACKGROUND = 3
+
+    /** Only in the live view: a second its state was not told for yet, which may still come. */
+    const val NOT_YET = 4
+
+    /** Why there is none: Watch has no usage access. */
+    const val NO_ACCESS = 0x10
+
+    /** Android gave no usage events, as before the first unlock after a restart. */
+    const val LOCKED = 0x20
+
+    /** Its state was not told while the engine kept the second. */
+    const val LATE = 0x30
+
+    /** Android did not name the flow's app. */
+    const val NO_APP = 0x40
+
+    /** Nothing was told for it: before Watch's first reading, in a gap a clock set back left, or when Watch stopped first. */
+    const val NOT_TOLD = 0x50
+
+    /** The state of a code: [NONE], [IN_USE], [NOTIFICATION], [BACKGROUND] or [NOT_YET]. */
+    fun of(code: Int): Int = code and 0x0f
+
+    /** Why a code has no state: one of the codes above from [NO_ACCESS] to [NOT_TOLD], or 0 for one that has. */
+    fun why(code: Int): Int = code and 0xf0
+
+    /** Whether the engine writes this code. */
+    fun isCode(code: Int): Boolean = code in IN_USE..BACKGROUND || code in setOf(NO_ACCESS, LOCKED, LATE, NO_APP, NOT_TOLD)
+
+    /** The code as `log-today` and the dump print it. */
+    fun name(code: Int): String = when (code) {
+        IN_USE -> "in-use"
+        NOTIFICATION -> "notification"
+        BACKGROUND -> "background"
+        NOT_YET -> "not-yet"
+        NO_ACCESS -> "none-no-access"
+        LOCKED -> "none-locked"
+        LATE -> "none-late"
+        NO_APP -> "none-no-app"
+        NOT_TOLD -> "none-not-told"
+        else -> "none"
     }
 }

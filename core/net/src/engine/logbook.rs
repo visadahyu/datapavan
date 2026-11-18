@@ -938,7 +938,8 @@ mod tests {
 
     /// The fixture's records: a segment of each kind the reader must tell apart, an app's lookups, and
     /// the segments the engine cuts around the midnights of Kathmandu (+5:45), the Chatham Islands (+13:45
-    /// in their summer) and Eucla (+8:45), between 2026-11-17 and 2026-11-18, local time.
+    /// in their summer) and Eucla (+8:45), between 2026-11-17 and 2026-11-18, local time; with the states
+    /// of version 3, each kind, and among those with none, no app, told too late and not told.
     fn fixture_records() -> Vec<Record> {
         use super::super::Network;
         use crate::owners::NetworkKind;
@@ -995,7 +996,7 @@ mod tests {
                 end: at(22, 15),
                 bytes: [300, 40_000, 820, 42_900],
                 continues: true,
-                state: NOT_TOLD,
+                state: Placed::Known(crate::states::State::InUse),
             },
             Record::Segment {
                 flow: came_in,
@@ -1003,7 +1004,7 @@ mod tests {
                 end: at(22, 16),
                 bytes: [0; 4],
                 continues: false,
-                state: NOT_TOLD,
+                state: Placed::Unknown(Unknown::NoApp),
             },
             Record::Segment {
                 flow: organisation,
@@ -1011,7 +1012,7 @@ mod tests {
                 end: at(22, 17),
                 bytes: [0; 4],
                 continues: false,
-                state: NOT_TOLD,
+                state: Placed::Known(crate::states::State::Background),
             },
             Record::Lookups {
                 uid: Some(10_123),
@@ -1020,7 +1021,7 @@ mod tests {
                 count: 3,
                 wire_up: 210,
                 wire_down: 540,
-                state: NOT_TOLD,
+                state: Placed::Known(crate::states::State::Notification),
             },
         ];
         // Kathmandu's, the Chatham Islands' and Eucla's midnights, in UTC: a flow opened ten minutes
@@ -1039,7 +1040,7 @@ mod tests {
     }
 
     /// The fixture's segment of the codes the others leave out (review 1 of W5's first part, names, finding
-    /// 7): named by DNS, refused, a network of a known owner, and both flags.
+    /// 7): named by DNS, refused, a network of a known owner, both flags, and told too late.
     fn fixture_codes() -> Record {
         use super::super::Network;
         use crate::owners::NetworkKind;
@@ -1060,7 +1061,7 @@ mod tests {
             end: at(22, 19),
             bytes: [1, 2, 3, 4],
             continues: true,
-            state: NOT_TOLD,
+            state: Placed::Unknown(Unknown::Late),
         }
     }
 
@@ -1080,7 +1081,7 @@ mod tests {
         );
         let mut text = String::from(
             "# Watch's connection log: one batch of records as the engine writes them (core/net/src/log.rs,\n\
-             # version 2), in hex. Written by the engine's test the_kotlin_sides_fixture_is_what_the_engine_writes\n\
+             # version 3), in hex. Written by the engine's test the_kotlin_sides_fixture_is_what_the_engine_writes\n\
              # (core/net/src/engine/logbook.rs), which fails when the engine writes otherwise; run it with\n\
              # DATAPAVAN_WRITE_FIXTURE=1 to write it anew. Read by LogTest and LogDaysTest. Not edited by hand.\n",
         );

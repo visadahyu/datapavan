@@ -1358,6 +1358,113 @@ mod tests {
         println!("a count that notes a mark, with a reading told every minute: {each:.1} ns");
     }
 
+    /// A platform that tells states, with a clock of the test's, keeping the log's batches.
+    struct Engined {
+        clock: Arc<ManualClock>,
+        batches: std::sync::Mutex<Vec<Vec<u8>>>,
+    }
+
+    impl Platform for Engined {
+        fn owner(&self, _: u8, _: SocketAddr, _: SocketAddr) -> Option<u32> {
+            Some(UID)
+        }
+
+        fn protect(&self, _: RawFd) -> bool {
+            true
+        }
+
+        fn log(&self, batch: &[u8]) {
+            lock(&self.batches).push(batch.to_vec());
+        }
+
+        fn clock(&self) -> Arc<dyn super::super::Clock> {
+            self.clock.clone()
+        }
+
+        fn tells_states(&self) -> bool {
+            true
+        }
+    }
+
+    /// The states each segment in the log's batches was written with, in order.
+    fn states_logged(platform: &Engined) -> Vec<Placed> {
+        lock(&platform.batches)
+            .iter()
+            .flat_map(|batch| crate::log::states_in(batch))
+            .collect()
+    }
+
+    /// An engine whose datagram reaches a local server, then stops. Handed over, the segment that waits
+    /// for its state goes to the next engine, which writes it once told; stopped, it is written as not
+    /// told.
+    #[test]
+    fn a_segment_waiting_for_its_state_goes_to_the_next_engine_or_is_written_as_not_told()
+    -> std::io::Result<()> {
+        use super::super::{Addresses, Config, Engine, Limits};
+        let start = |platform: Arc<Engined>,
+                     handover|
+         -> std::io::Result<(Engine, std::os::unix::net::UnixDatagram)> {
+            let (engine_end, app) = std::os::unix::net::UnixDatagram::pair()?;
+            engine_end.set_nonblocking(true)?;
+            let config = Config {
+                mtu: 1_500,
+                keep_flows: 0,
+                addresses: Addresses::COMMON,
+                limits: Limits::default(),
+            };
+            let engine = Engine::start_with(
+                std::os::fd::OwnedFd::from(engine_end),
+                config,
+                platform,
+                None,
+                (handover, None),
+            )?;
+            Ok((engine, app))
+        };
+        let send = |app: &std::os::unix::net::UnixDatagram| -> std::io::Result<()> {
+            let server = std::net::UdpSocket::bind((std::net::Ipv4Addr::LOCALHOST, 0))?;
+            server.set_read_timeout(Some(std::time::Duration::from_secs(5)))?;
+            let me = SocketAddr::from((Addresses::COMMON.tun4, 40_000));
+            let Some(datagram) = crate::packet::udp(me, server.local_addr()?, b"evening") else {
+                unreachable!("a small datagram")
+            };
+            app.send(&datagram)?;
+            server.recv_from(&mut [0u8; 64])?;
+            Ok(())
+        };
+        let clock = ManualClock::at(T);
+        let first = Arc::new(Engined {
+            clock: clock.clone(),
+            batches: std::sync::Mutex::default(),
+        });
+        let (engine, app) = start(first.clone(), None)?;
+        send(&app)?;
+        clock.set(T + 3_000);
+        let handover = engine.hand_over();
+        assert_eq!(states_logged(&first), vec![], "nothing written before told");
+        let second = Arc::new(Engined {
+            clock: clock.clone(),
+            batches: std::sync::Mutex::default(),
+        });
+        let (mut engine, _app) = start(second.clone(), Some(handover))?;
+        assert!(!engine.states(b"not a reading"));
+        assert!(engine.states(&crate::states::write(&told(T, T + 4_000, &[]))));
+        engine.flush_log();
+        engine.stop();
+        assert_eq!(states_logged(&second), vec![BACKGROUND]);
+
+        // Stopped with nothing told, the segment is written as not told.
+        let third = Arc::new(Engined {
+            clock: clock.clone(),
+            batches: std::sync::Mutex::default(),
+        });
+        let (mut engine, app) = start(third.clone(), None)?;
+        send(&app)?;
+        engine.stop();
+        assert_eq!(states_logged(&third), vec![NOT_TOLD]);
+        Ok(())
+    }
+
     /// Without Watch's Kotlin side telling states, no mark is noted and every segment is written at
     /// once, not told.
     #[test]
