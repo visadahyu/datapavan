@@ -384,11 +384,22 @@ impl Shared {
     /// ([`super::Engine::flush_log`]). The logger makes the flush between counts, on the thread that
     /// makes them (the module's comment). False if it did not in time, or the engine stopped first,
     /// after it handed its last records on.
+    ///
+    /// When no logger is there to make it, as before the engine's tunnel is up or once it has stopped,
+    /// it waits for nothing (the fresh review 2 of W5's first part, nit 7: the debug flush held Watch's
+    /// lock on the engine for the whole wait then).
     pub(super) fn ask_flush(&self, wait: Duration) -> bool {
-        let (done, flushed) = std::sync::mpsc::sync_channel(1);
-        lock(&self.flushes).push(done);
+        let answer = {
+            let mut asked = lock(&self.flushes);
+            if !asked.logging {
+                return false;
+            }
+            let (done, answer) = std::sync::mpsc::sync_channel(1);
+            asked.waiting.push(done);
+            answer
+        };
         self.flush_wanted.notify_one();
-        flushed.recv_timeout(wait).is_ok()
+        answer.recv_timeout(wait).is_ok()
     }
 
     /// Writes every live flow's segment up to now, as a quarter hour would, and the lookups counted so
@@ -461,6 +472,26 @@ pub(super) fn delta(now: [u64; 4], base: [u64; 4]) -> [u64; 4] {
     [0, 1, 2, 3].map(|i| now[i].saturating_sub(base[i]))
 }
 
+/// Who waits for a flush of the log, and whether a logger is there to make one ([`Shared::ask_flush`]).
+#[derive(Default)]
+pub(super) struct Flushes {
+    /// Whether a logger runs, or is about to, to answer.
+    pub(super) logging: bool,
+    /// Who waits, told once the flush is done.
+    pub(super) waiting: Vec<std::sync::mpsc::SyncSender<()>>,
+}
+
+/// The logger's end, however it comes: no flush is waited for any more, and who waits is let go.
+struct Ended<'a>(&'a Shared);
+
+impl Drop for Ended<'_> {
+    fn drop(&mut self) {
+        let mut flushes = lock(&self.0.flushes);
+        flushes.logging = false;
+        flushes.waiting.clear();
+    }
+}
+
 /// Hands finished records to Watch's log: gathered for [`LOG_DELAY`] after the first one, and at every
 /// quarter hour the segments of the flows still open, and at once when a flush is asked
 /// ([`Shared::ask_flush`]). With nothing open and nothing waiting it sleeps without a timer, so an idle
@@ -470,6 +501,9 @@ pub(super) fn delta(now: [u64; 4], base: [u64; 4]) -> [u64; 4] {
 /// then hands the last batch after it, so that the log gets them in order (fourth check of unit 12, a
 /// nit).
 pub(super) async fn logger(shared: Arc<Shared>, mut end: watch::Receiver<bool>) {
+    lock(&shared.flushes).logging = true;
+    // However it returns, no flush is waited for any more: who waits is let go.
+    let _ended = Ended(&shared);
     loop {
         let open = !lock(&shared.live).is_empty() || !lock(&shared.lookups).is_empty();
         let next = open.then(|| {
@@ -490,7 +524,7 @@ pub(super) async fn logger(shared: Arc<Shared>, mut end: watch::Receiver<bool>) 
             () = sleep_for(next) => {}
         }
         shared.log_now();
-        let asked = std::mem::take(&mut *lock(&shared.flushes));
+        let asked = std::mem::take(&mut lock(&shared.flushes).waiting);
         if !asked.is_empty() {
             shared.flush();
         }
@@ -1578,13 +1612,38 @@ mod tests {
         Ok(())
     }
 
+    /// A flush asked when no logger is there to make it, as before the engine's tunnel is up, waits for
+    /// nothing (the fresh review 2 of W5's first part, nit 7); nor does one asked once the logger ended.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_flush_asked_with_no_logger_waits_for_nothing() {
+        let shared = Arc::new(shared());
+        let asked = std::time::Instant::now();
+        assert!(!shared.ask_flush(Duration::from_secs(10)));
+        assert!(
+            asked.elapsed() < Duration::from_secs(1),
+            "waited for no logger"
+        );
+        let (end, ending) = watch::channel(false);
+        let logging = tokio::spawn(logger(Arc::clone(&shared), ending));
+        tokio::task::yield_now().await;
+        assert!(lock(&shared.flushes).logging);
+        let _ = end.send(true);
+        let _ = logging.await;
+        let asked = std::time::Instant::now();
+        assert!(!shared.ask_flush(Duration::from_secs(10)));
+        assert!(
+            asked.elapsed() < Duration::from_secs(1),
+            "waited for an ended logger"
+        );
+    }
+
     /// A flush asked while the engine stops is answered by its last records: its loop lets every one
     /// who waits go once it has handed them on.
     #[tokio::test(flavor = "current_thread")]
     async fn a_flush_asked_as_the_engine_stops_is_let_go() -> std::io::Result<()> {
         let shared = Arc::new(shared());
         let (done, flushed) = std::sync::mpsc::sync_channel(1);
-        lock(&shared.flushes).push(done);
+        lock(&shared.flushes).waiting.push(done);
         let (engine_end, _app) = std::os::unix::net::UnixDatagram::pair()?;
         engine_end.set_nonblocking(true)?;
         let (stop, stopped) = watch::channel(false);

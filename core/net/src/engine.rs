@@ -786,8 +786,9 @@ struct Shared {
     pending_log: Mutex<Vec<Record>>,
     /// Woken when a record waits or a flow opens.
     log_ready: Notify,
-    /// Who waits for a flush of the log ([`Shared::ask_flush`]), told once it is done.
-    flushes: Mutex<Vec<std::sync::mpsc::SyncSender<()>>>,
+    /// Who waits for a flush of the log ([`Shared::ask_flush`]), told once it is done, and whether a
+    /// logger is there to make one.
+    flushes: Mutex<logbook::Flushes>,
     /// Woken when a flush is asked.
     flush_wanted: Notify,
     /// Whether the answers of Watch's own DNS address go to the apps with a time to live of 0
@@ -1171,6 +1172,8 @@ async fn run(
     // Every task of the engine runs on this thread: the log reads its clock here alone.
     let _ = state.shared.engine_thread.set(std::thread::current().id());
     let (end_logging, logging_ends) = watch::channel(false);
+    // From here a logger is there to answer a flush.
+    lock(&state.shared.flushes).logging = true;
     let logging = tokio::spawn(logger(Arc::clone(&state.shared), logging_ends));
     loop {
         // Polled in this order, not at random: a stop, then a new tunnel, which their callers wait for,
@@ -1211,7 +1214,7 @@ async fn run(
         state.shared.platform.log(&batch);
     }
     // A flush asked meanwhile is answered by what was just handed on.
-    lock(&state.shared.flushes).clear();
+    lock(&state.shared.flushes).waiting.clear();
 }
 
 impl Loop {
