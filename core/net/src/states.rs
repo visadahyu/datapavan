@@ -385,6 +385,71 @@ mod tests {
         });
     }
 
+    /// Where Watch's Kotlin side keeps the readings it writes (`StatesTest`), one a line in hex.
+    const FIXTURE: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../android/watch/src/test/resources/org/visadahyu/datapavan/watch/activity/states.hex"
+    );
+
+    /// The engine reads what Watch's Kotlin side writes (`States.kt`), byte for byte: its test writes the
+    /// fixture and fails when it writes otherwise, and this one reads it, so that the two cannot drift
+    /// apart unseen.
+    #[test]
+    fn the_kotlin_sides_states_are_read_as_written() -> std::io::Result<()> {
+        let text = std::fs::read_to_string(FIXTURE)?;
+        let messages: Vec<Vec<u8>> = text
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .map(|line| {
+                (0..line.len() / 2)
+                    .filter_map(|i| u8::from_str_radix(line.get(2 * i..2 * i + 2)?, 16).ok())
+                    .collect()
+            })
+            .collect();
+        let t = 1_794_953_400_000;
+        let read: Vec<_> = messages.iter().map(|m| read(m)).collect();
+        assert_eq!(
+            read,
+            vec![
+                Some(Told {
+                    from: t,
+                    until: t + 60_000,
+                    known: Known::States,
+                    screen: Screen::On(Some(t - 5_000)),
+                    intervals: vec![
+                        Interval {
+                            uid: 10_123,
+                            from: t,
+                            until: t + 30_000,
+                            state: State::InUse,
+                        },
+                        Interval {
+                            uid: 10_124,
+                            from: t + 2_000,
+                            until: t + 60_000,
+                            state: State::Notification,
+                        },
+                    ],
+                }),
+                Some(Told {
+                    from: t + 60_000,
+                    until: t + 120_000,
+                    known: Known::NoAccess,
+                    screen: Screen::Off,
+                    intervals: Vec::new(),
+                }),
+                Some(Told {
+                    from: t + 120_000,
+                    until: t + 180_000,
+                    known: Known::Locked,
+                    screen: Screen::Unknown,
+                    intervals: Vec::new(),
+                }),
+            ]
+        );
+        Ok(())
+    }
+
     #[test]
     fn a_state_codes_in_one_byte_and_in_use_wins_within_a_second() {
         assert_eq!(Placed::Known(State::InUse).code(), 1);

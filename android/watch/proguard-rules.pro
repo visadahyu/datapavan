@@ -7,4 +7,5 @@
     public int ownerUid(int, byte[], int, byte[], int);
     public boolean protectSocket(int);
     public void logRecords(byte[]);
+    public void statesWanted();
 }

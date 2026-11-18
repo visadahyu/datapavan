@@ -1,6 +1,7 @@
 //! Thin JNI bridge between Datapavan Watch and [`datapavan_net`], as `datapavan-jni` is for the audit
 //! app: `org.visadahyu.datapavan.watch.Engine` starts and stops the engine, and the engine calls back
-//! into `WatchVpnService` for `getConnectionOwnerUid` and `protect`, and to hand over the log's records. Every export converts its
+//! into `WatchVpnService` for `getConnectionOwnerUid` and `protect`, to hand over the log's records, and
+//! to ask for a reading of the apps' states. Every export converts its
 //! arguments, calls the engine and converts the result; all logic is in the engine, which holds no
 //! unsafe code (ADR 0006).
 
@@ -24,8 +25,10 @@ use jni::{EnvUnowned, JValue, JavaVM, jni_sig, jni_str};
 /// The running engine, if any.
 ///
 /// Never held while the engine's thread is joined (take the engine out, then stop it), and never held
-/// across a call into Kotlin that could call back into this file: `ownerUid`, `protectSocket` and
-/// `logRecords`, reached from the engine, must not call a native method of `Engine` while they run.
+/// across a call into Kotlin that could call back into this file: `ownerUid`, `protectSocket`,
+/// `logRecords` and `statesWanted`, reached from the engine, must not call a native method of `Engine`
+/// while they run (`statesWanted` only hands a reading to the tracker's own thread, which calls
+/// `nativeStates` later, holding nothing of the engine's).
 /// Two exceptions are kept on purpose, both waits for the engine's thread under the lock:
 /// `nativeFlushLog` holds it while that thread flushes the log and hands the records to `logRecords`,
 /// at most ten seconds (finding 4: the flush is made between the engine's counts), and
@@ -176,6 +179,25 @@ impl Platform for Service {
                 jni_str!("logRecords"),
                 jni_sig!("([B)V"),
                 &[JValue::Object(&records)],
+            )?;
+            Ok(())
+        });
+    }
+
+    /// Watch's Kotlin side tells the apps' states (ADR 0046, decision 1).
+    fn tells_states(&self) -> bool {
+        true
+    }
+
+    /// `WatchVpnService.statesWanted`, which hands a reading to its tracker's own thread when its rules
+    /// allow one, and returns at once.
+    fn wants_states(&self) {
+        let _ = self.vm.attach_current_thread(|env| -> Result<(), Error> {
+            env.call_method(
+                &self.service,
+                jni_str!("statesWanted"),
+                jni_sig!("()V"),
+                &[],
             )?;
             Ok(())
         });

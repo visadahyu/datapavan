@@ -1,12 +1,9 @@
 package org.visadahyu.datapavan.audit
 
-import android.Manifest
-import android.app.AppOpsManager
 import android.app.usage.NetworkStats
 import android.app.usage.NetworkStatsManager
 import android.app.usage.UsageStatsManager
 import android.content.Context
-import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.TrafficStats
 import android.os.Process
@@ -127,13 +124,8 @@ object Dormancy {
  */
 class UsageReader(private val context: Context) {
 
-    /** The rule system Settings uses: an explicit allow, or the default mode with the permission granted. */
-    fun hasAccess(): Boolean {
-        val mode = context.getSystemService(AppOpsManager::class.java)
-            .unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
-        return mode == AppOpsManager.MODE_ALLOWED ||
-            mode == AppOpsManager.MODE_DEFAULT && context.checkSelfPermission(Manifest.permission.PACKAGE_USAGE_STATS) == PackageManager.PERMISSION_GRANTED
-    }
+    /** The rule system Settings uses: an explicit allow, or the default mode with the permission granted (android/shared). */
+    fun hasAccess(): Boolean = hasUsageAccess(context)
 
     /**
      * Null without usage access. [periods] are lengths in days, ending at [now]; they must include

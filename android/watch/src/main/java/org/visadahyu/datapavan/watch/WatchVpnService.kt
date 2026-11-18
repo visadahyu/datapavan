@@ -97,6 +97,13 @@ class WatchVpnService : VpnService() {
      */
     private var countersSince = 0L
 
+    /**
+     * Reads the apps' states for the engine while the tunnel runs (ADR 0046, decision 1); null while it does
+     * not. Set on the main thread, read from the engine's ([statesWanted]).
+     */
+    @Volatile
+    private var tracker: org.visadahyu.datapavan.watch.activity.StateTracker? = null
+
     /** The token of the measure posted for when a rise held back may be taken; [close] drops it. */
     private val riseCheck = Any()
 
@@ -369,6 +376,7 @@ class WatchVpnService : VpnService() {
         countersSince = setUpAt
         active = true
         state.value = true
+        tracker = org.visadahyu.datapavan.watch.activity.StateTracker(this) { Engine.nativeStates(it) }.also { it.start() }
         refreshChain()
         ConnectionLog.of(this).expire()
         val request = NetworkRequest.Builder()
@@ -579,6 +587,9 @@ class WatchVpnService : VpnService() {
                 }
             }
         }
+        // A last reading of the states, so that what the engine holds is placed before it stops.
+        tracker?.stop()
+        tracker = null
         Engine.nativeStop()
         main.removeCallbacksAndMessages(riseCheck)
         setup = null
@@ -628,6 +639,16 @@ class WatchVpnService : VpnService() {
     /** Called by the engine with a batch of finished records for the connection log (ADR 0037). */
     @Suppress("unused")
     fun logRecords(batch: ByteArray) = ConnectionLog.of(this).write(batch)
+
+    /**
+     * Called by the engine, from its thread, when it would have the apps' states read: a flow opened, or
+     * bytes have waited for their state (ADR 0046, decision 1). The tracker reads when its rules allow,
+     * on its own thread; this returns at once.
+     */
+    @Suppress("unused")
+    fun statesWanted() {
+        tracker?.wanted()
+    }
 
     /**
      * `adb shell dumpsys activity service org.visadahyu.datapavan.watch/.WatchVpnService`: the
