@@ -5556,6 +5556,38 @@ mod tests {
         assert_eq!(kept, [1, 0, 1, 0]);
     }
 
+    /// A flow that came in carries its flag into the log's records (ADR 0044, decision 4); one the app
+    /// sent to does not.
+    #[test]
+    fn a_flow_that_came_in_is_marked_so_in_the_log() {
+        let shared = shared();
+        let now = Instant::now();
+        let server = SocketAddr::from(([192, 0, 2, 9], 3_478));
+        let alternate = SocketAddr::from(([192, 0, 2, 9], 3_479));
+        let _sent = Peer::new(
+            &shared,
+            APP,
+            server,
+            None,
+            now,
+            (false, PeerWay::direct(server)),
+        );
+        let _came_in = Peer::new(
+            &shared,
+            APP,
+            alternate,
+            None,
+            now,
+            (true, PeerWay::direct(alternate)),
+        );
+        let mut marked: Vec<_> = lock(&shared.live)
+            .values()
+            .map(|live| (live.flow.destination, live.flow.came_in))
+            .collect();
+        marked.sort_unstable();
+        assert_eq!(marked, vec![(server, false), (alternate, true)]);
+    }
+
     /// A stand-in bound to the address of its first answer keeps none of the queries it waited on.
     #[tokio::test(flavor = "current_thread")]
     async fn a_bound_stand_in_forgets_the_queries_it_waited_on() -> io::Result<()> {

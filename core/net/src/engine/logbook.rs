@@ -1042,6 +1042,65 @@ mod tests {
         assert_eq!(open_segment(&shared, 1), (at(30, 16), [0; 4]));
     }
 
+    /// A count within the quarter hour of the last cut takes no lock: one reading of the clock and one
+    /// atomic load. The test holds the open flows' lock while another thread counts, which ends all
+    /// the same.
+    #[test]
+    fn a_count_within_the_quarter_hour_takes_no_lock() {
+        let (shared, clock) = log_at(at(22, 10));
+        let shared = Arc::new(shared);
+        let bytes = open(&shared, 1);
+        clock.pass(MINUTE);
+        let held = lock(&shared.live);
+        let (done, counted) = std::sync::mpsc::channel();
+        {
+            let (shared, bytes) = (Arc::clone(&shared), Arc::clone(&bytes));
+            std::thread::spawn(move || {
+                bytes.up(&shared, 10, 0);
+                let _ = done.send(());
+            });
+        }
+        let quick = counted.recv_timeout(Duration::from_secs(5)).is_ok();
+        drop(held);
+        assert!(quick, "the count waited for the open flows' lock");
+    }
+
+    /// A closed flow's last segment ends within its own quarter hour: at its last packet where that
+    /// passed in the segment, else at its start, as after a flush, which begins a segment after the last
+    /// packet, or after a clock set back, which begins one in the quarter hour before.
+    #[test]
+    fn a_closed_flows_last_segment_ends_within_its_quarter_hour() {
+        let (shared, clock) = log_at(at(22, 10));
+        open(&shared, 1).down(&shared, 0, 52);
+        clock.set(at(22, 12));
+        shared.flush();
+        clock.set(at(22, 13));
+        shared.finish_closed(1);
+        clock.set(at(22, 20));
+        open(&shared, 2).down(&shared, 0, 52);
+        clock.set(at(22, 5));
+        shared.finish_closed(2);
+        assert_eq!(
+            segments(&taken(&shared)),
+            vec![
+                (1, at(22, 10), at(22, 12), [0, 0, 0, 52], true),
+                (1, at(22, 12), at(22, 12), [0; 4], false),
+                (2, at(22, 20), at(22, 30), [0, 0, 0, 52], true),
+                (2, at(22, 0), at(22, 0), [0; 4], false),
+            ]
+        );
+    }
+
+    /// A second flush in the same millisecond writes nothing: no segment begins and ends at once.
+    #[test]
+    fn a_flush_in_the_same_millisecond_writes_nothing_more() {
+        let (shared, _clock) = log_at(at(22, 10) + 1);
+        open(&shared, 1).up(&shared, 10, 0);
+        let _ = taken(&shared);
+        shared.flush();
+        assert_eq!(taken(&shared), vec![]);
+    }
+
     /// Watch's log, as the logger hands it batches.
     #[derive(Default)]
     struct Kept(Mutex<Vec<Vec<u8>>>);
@@ -1156,11 +1215,24 @@ mod tests {
                 })
             })
         };
+        let waited = std::time::Instant::now();
         while bytes.now()[0] < COUNTS / 2 {
+            assert!(
+                waited.elapsed() < Duration::from_secs(10),
+                "the engine counts nothing"
+            );
             std::thread::yield_now();
         }
         clock.set(at(22, 15) + 30);
         assert!(shared.ask_flush(Duration::from_secs(10)), "no flush");
+        // Handed over by the time the flush is said done.
+        assert!(
+            lock(&platform.0)
+                .iter()
+                .flat_map(|b| segments_in(b))
+                .any(|s| s.1 == at(22, 15) + 30),
+            "the flush's records were not handed over yet"
+        );
         let Ok(early) = engine.join() else {
             unreachable!("the engine's thread panicked")
         };
@@ -1183,6 +1255,163 @@ mod tests {
         );
         // The flush cut at 22:15:00.030, after the quarter hour's cut at 22:15.
         assert!(seen.iter().any(|s| s.1 == at(22, 15) + 30), "{seen:?}");
+        Ok(())
+    }
+
+    /// What a count cuts after a sleep reaches the log within the 30 seconds records gather, not at the
+    /// logger's own timer, which the sleep left minutes behind.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn what_a_count_cuts_reaches_the_log_within_the_gathering_wait() {
+        let platform = Arc::new(Kept::default());
+        let clock = ManualClock::at(at(22, 10));
+        let mut shared = shared_with(platform.clone());
+        shared.clock = clock.clone();
+        let shared = Arc::new(shared);
+        let bytes = open(&shared, 1);
+        bytes.down(&shared, 300, 340);
+        let (_end, ending) = watch::channel(false);
+        tokio::spawn(logger(Arc::clone(&shared), ending));
+        // The new flow's records gather; then the timer is set for 22:15, five minutes on.
+        tokio::time::sleep(LOG_DELAY + Duration::from_secs(1)).await;
+        clock.set(at(30, 16));
+        bytes.down(&shared, 0, 52);
+        tokio::time::sleep(LOG_DELAY + Duration::from_secs(1)).await;
+        for _ in 0..100 {
+            if !lock(&platform.0).is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        let seen: Vec<_> = lock(&platform.0)
+            .iter()
+            .flat_map(|b| segments_in(b))
+            .collect();
+        assert_eq!(seen, vec![(at(22, 10), at(22, 15), 0)]);
+    }
+
+    /// An answer that opens an app's count of lookups anew, its lookup's count gone out with a flush,
+    /// wakes the logger, which then sets its timer and cuts the count at the quarter hour.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn an_answer_that_opens_a_count_wakes_the_logger() {
+        let platform = Arc::new(Kept::default());
+        let clock = ManualClock::at(at(22, 10));
+        let mut shared = shared_with(platform.clone());
+        shared.clock = clock.clone();
+        let shared = Arc::new(shared);
+        shared.lookup(Some(10_123), 70);
+        shared.flush();
+        let (_end, ending) = watch::channel(false);
+        tokio::spawn(logger(Arc::clone(&shared), ending));
+        tokio::time::sleep(LOG_DELAY + Duration::from_secs(1)).await;
+        clock.set(at(22, 11));
+        shared.lookup_answered(Some(10_123), 300);
+        tokio::time::sleep(LOG_DELAY + Duration::from_secs(1)).await;
+        clock.set(at(22, 15));
+        tokio::time::sleep(Duration::from_mins(4)).await;
+        for _ in 0..100 {
+            if lock(&platform.0).len() == 2 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        let answered = Record::Lookups {
+            uid: Some(10_123),
+            start: at(22, 11),
+            end: at(22, 15),
+            count: 0,
+            wire_up: 0,
+            wire_down: 300,
+        };
+        assert_eq!(lock(&platform.0).get(1), Some(&log::batch(&[answered])));
+    }
+
+    /// The engine's flush, asked from another thread while the engine runs, hands each open flow's
+    /// segment on before it returns; asked once the engine has stopped, it returns at once. The engine
+    /// reads the clock its platform hands it.
+    #[test]
+    fn the_engines_flush_hands_the_records_on_while_it_runs() -> std::io::Result<()> {
+        /// The log's platform, with a clock of the test's.
+        struct Clocked(Arc<Kept>, Arc<ManualClock>);
+        impl Platform for Clocked {
+            fn owner(&self, _: u8, _: SocketAddr, _: SocketAddr) -> Option<u32> {
+                Some(10_123)
+            }
+            fn protect(&self, _: RawFd) -> bool {
+                true
+            }
+            fn log(&self, batch: &[u8]) {
+                self.0.log(batch);
+            }
+            fn clock(&self) -> Arc<dyn super::super::Clock> {
+                self.1.clone()
+            }
+        }
+        let kept = Arc::new(Kept::default());
+        let clock = ManualClock::at(at(22, 10));
+        let server = std::net::UdpSocket::bind((std::net::Ipv4Addr::LOCALHOST, 0))?;
+        server.set_read_timeout(Some(Duration::from_secs(5)))?;
+        let (engine_end, app) = std::os::unix::net::UnixDatagram::pair()?;
+        engine_end.set_nonblocking(true)?;
+        let config = super::super::Config {
+            mtu: 1_500,
+            keep_flows: 0,
+            addresses: super::super::Addresses::COMMON,
+            limits: super::super::Limits::default(),
+        };
+        let mut engine = super::super::Engine::start(
+            std::os::fd::OwnedFd::from(engine_end),
+            config,
+            Arc::new(Clocked(Arc::clone(&kept), clock.clone())),
+            None,
+        )?;
+        let me = SocketAddr::from((super::super::Addresses::COMMON.tun4, 40_000));
+        let Some(datagram) = crate::packet::udp(me, server.local_addr()?, b"evening") else {
+            unreachable!("a small datagram")
+        };
+        app.send(&datagram)?;
+        let mut buffer = [0u8; 64];
+        server.recv_from(&mut buffer)?;
+        clock.set(at(22, 12));
+        engine.flush_log();
+        let seen: Vec<_> = lock(&kept.0).iter().flat_map(|b| segments_in(b)).collect();
+        assert_eq!(seen, vec![(at(22, 10), at(22, 12), 7)]);
+        engine.stop();
+        let asked = std::time::Instant::now();
+        engine.flush_log();
+        assert!(
+            asked.elapsed() < Duration::from_secs(1),
+            "waited for a stopped engine"
+        );
+        Ok(())
+    }
+
+    /// A flush asked while the engine stops is answered by its last records: its loop lets every one
+    /// who waits go once it has handed them on.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_flush_asked_as_the_engine_stops_is_let_go() -> std::io::Result<()> {
+        let shared = Arc::new(shared());
+        let (done, flushed) = std::sync::mpsc::sync_channel(1);
+        lock(&shared.flushes).push(done);
+        let (engine_end, _app) = std::os::unix::net::UnixDatagram::pair()?;
+        engine_end.set_nonblocking(true)?;
+        let (stop, stopped) = watch::channel(false);
+        let (_network, network) = watch::channel(0);
+        let (_swaps, swaps) = tokio::sync::mpsc::unbounded_channel();
+        let running = tokio::spawn(super::super::run(
+            crate::tun::Tun::new(std::os::fd::OwnedFd::from(engine_end))?,
+            1_500,
+            Arc::clone(&shared),
+            stopped,
+            network,
+            swaps,
+        ));
+        tokio::task::yield_now().await;
+        let _ = stop.send(true);
+        let _ = running.await;
+        assert_eq!(
+            flushed.try_recv(),
+            Err(std::sync::mpsc::TryRecvError::Disconnected)
+        );
         Ok(())
     }
 }
