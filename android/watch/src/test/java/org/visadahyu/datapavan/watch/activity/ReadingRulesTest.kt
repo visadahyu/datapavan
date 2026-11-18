@@ -57,6 +57,18 @@ class ReadingRulesTest {
         assertEquals(null, next("gone"))
     }
 
+    /** Each reading reads the notification grants again: one the user gave or took back is seen at the next. */
+    @Test
+    fun eachReadingReadsTheGrantsAgain() {
+        var allowed = false
+        val grants = Grants { it == "a" && allowed }
+        val first = grants.forReading()
+        assertFalse(first("a"))
+        allowed = true
+        assertFalse("kept within a reading", first("a"))
+        assertTrue(grants.forReading()("a"))
+    }
+
     /**
      * What a reading knows: nothing without access or before the first unlock, without asking Android for
      * events; the events otherwise; and nothing when the query found none and access was taken away

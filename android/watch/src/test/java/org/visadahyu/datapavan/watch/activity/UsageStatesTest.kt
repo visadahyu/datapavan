@@ -159,9 +159,9 @@ class UsageStatesTest {
         assertEquals(listOf(inUse(A, at(10), at(100) + grace), serving(B, at(150), at(160)), serving(C, at(20), at(100))), reading.intervals)
     }
 
-    /** Watch starting again reads back a day: a service started three hours before, still running, is with its notification from Watch's start. */
+    /** Watch starting again reads back to the phone's start: a service started three hours before, still running, is with its notification from Watch's start. */
     @Test
-    fun aRestartOfWatchFindsWhatIsOpenFromADayBack() {
+    fun aRestartOfWatchFindsWhatIsOpenFromThePhonesStart() {
         val states = UsageStates()
         assertEquals(at(600) - UsageStates.LOOKBACK_MS, states.queryFrom(at(600)))
         val reading = read(listOf(event(-3 * 3_600, Kind.SERVICE_START, "c", "Player"), event(-3_000, Kind.RESUMED, "a", "Main")), states = states)
@@ -465,6 +465,162 @@ class UsageStatesTest {
         read(sequence, until = 25, states = states)
         val again = states.read(sequence, at(60), uidOf, null, startedAt = t)
         assertEquals(listOf(inUse(A, at(15), at(60))), again.intervals)
+    }
+
+    /**
+     * A foreground service is "with its notification" only where Android can show it: from 10 seconds after
+     * its start on Android 12 and later, so a service shorter than that is not; and only for an app whose
+     * notifications can show (review b3 of W5's second part, fresh, M1).
+     */
+    @Test
+    fun aServiceIsWithItsNotificationOnlyWhereAndroidShowsIt() {
+        val delayed = UsageStates(notificationDelay = 10_000)
+        val reading = delayed.read(
+            listOf(
+                event(10, Kind.SERVICE_START, "c", "Upload"),
+                event(18, Kind.SERVICE_STOP, "c", "Upload"),
+                event(100, Kind.SERVICE_START, "c", "Player"),
+                event(200, Kind.SERVICE_STOP, "c", "Player"),
+            ),
+            at(600), uidOf, null, startedAt = t,
+        )
+        assertEquals(listOf(serving(C, at(110), at(200))), reading.intervals)
+        val refused = UsageStates().read(
+            listOf(event(100, Kind.SERVICE_START, "c", "Player"), event(100, Kind.SERVICE_START, "b", "Player")),
+            at(600), uidOf, null, startedAt = t, notifies = { it != "c" },
+        )
+        assertEquals(listOf(serving(B, at(100), at(600))), refused.intervals)
+    }
+
+    /**
+     * The rule for a second instance holds for a stop within 30 seconds of the resume, the idle timeout's 10
+     * and a margin: a stop the timeout drives, 10.3 s after, is another instance's; one after 30 s is the
+     * screen's own (review b3 of W5's second part, R1 and R5).
+     */
+    @Test
+    fun theRuleForASecondInstanceHoldsWithinItsBound() {
+        fun stoppedAfter(ms: Long) = read(
+            listOf(
+                event(10, Kind.RESUMED, "a", "Sub"),
+                event(20, Kind.PAUSED, "a", "Sub"),
+                Event(at(20) + 50, Kind.RESUMED, "a", "Sub"),
+                Event(at(20) + 50 + ms, Kind.STOPPED, "a", "Sub"),
+            ),
+        ).intervals
+        assertEquals(listOf(inUse(A, at(10), at(600))), stoppedAfter(10_300))
+        assertEquals(listOf(inUse(A, at(10), at(600))), stoppedAfter(UsageStates.INSTANCE_STOP_MS))
+        val past = UsageStates.INSTANCE_STOP_MS + 1
+        assertEquals(listOf(inUse(A, at(10), at(20) + 50 + past + grace)), stoppedAfter(past))
+    }
+
+    /**
+     * In split screen, a screen kept through another instance's stop stays in use when the other window
+     * resumes a screen later; one paused under another app's dialog right after that stop stays too (review
+     * b3 of W5's second part, R1, R5).
+     */
+    @Test
+    fun aScreenKeptBesideAnotherWindowStaysInUse() {
+        val split = read(
+            listOf(
+                event(5, Kind.RESUMED, "b", "Main"),
+                event(10, Kind.RESUMED, "a", "Sub"),
+                event(20, Kind.PAUSED, "a", "Sub"),
+                Event(at(20) + 50, Kind.RESUMED, "a", "Sub"),
+                Event(at(20) + 400, Kind.STOPPED, "a", "Sub"),
+                event(100, Kind.PAUSED, "b", "Main"),
+                Event(at(100) + 50, Kind.RESUMED, "b", "Detail"),
+            ),
+        )
+        assertEquals(listOf(inUse(A, at(10), at(600))), split.intervals.filter { it.uid == A })
+        val dialog = read(
+            listOf(
+                event(10, Kind.RESUMED, "a", "Sub"),
+                event(20, Kind.PAUSED, "a", "Sub"),
+                Event(at(20) + 50, Kind.RESUMED, "a", "Sub"),
+                Event(at(20) + 400, Kind.STOPPED, "a", "Sub"),
+                Event(at(20) + 500, Kind.PAUSED, "a", "Sub"),
+                Event(at(20) + 600, Kind.RESUMED, "b", "Dialog"),
+            ),
+        )
+        assertEquals(listOf(inUse(A, at(10), at(600))), dialog.intervals.filter { it.uid == A })
+    }
+
+    /**
+     * A screen kept through another instance's stop whose process then died with no screen resumed after it,
+     * as in split screen, ends when the screen turns off, which stops every screen shown (review b3 of W5's
+     * second part, R1).
+     */
+    @Test
+    fun aKeptScreenEndsWhenTheScreenTurnsOff() {
+        val reading = read(
+            listOf(
+                event(10, Kind.RESUMED, "a", "Sub"),
+                event(20, Kind.PAUSED, "a", "Sub"),
+                Event(at(20) + 50, Kind.RESUMED, "a", "Sub"),
+                Event(at(20) + 400, Kind.STOPPED, "a", "Sub"),
+                event(300, Kind.SCREEN_OFF, "android"),
+                event(400, Kind.SCREEN_ON, "android"),
+            ),
+        )
+        assertEquals(listOf(inUse(A, at(10), at(300) + grace)), reading.intervals.filter { it.uid == A })
+    }
+
+    /**
+     * After a clock set back, a reading that must rebuild what is open, after one the engine did not take or
+     * one without access, rebuilds it from what the set back carried, not from nothing (review b3 of W5's
+     * second part, R3).
+     */
+    @Test
+    fun aReadingAfterASetBackRebuildsFromWhatItCarried() {
+        val day = 24 * 3_600L
+        val states = UsageStates()
+        val bootedAt = at(-4 * day)
+        val first = states.read(
+            listOf(event(-3 * day, Kind.SERVICE_START, "c", "Player")), at(600), uidOf, null, startedAt = t, bootedAt = bootedAt,
+        )
+        assertEquals(listOf(serving(C, t, at(600))), first.intervals)
+        val back = at(590)
+        states.clockSetBack(back, at(602) - back, uidOf, null)
+        states.read(emptyList(), back + 30_000, uidOf, null, startedAt = t, bootedAt = bootedAt)
+        states.untold(back + 30_000)
+        assertEquals(back, states.queryFrom(back + 60_000, bootedAt))
+        val again = states.read(emptyList(), back + 60_000, uidOf, null, startedAt = t, bootedAt = bootedAt)
+        assertEquals(listOf(serving(C, back + 30_000, back + 60_000)), again.intervals)
+        states.nothing(back + 90_000, startedAt = t)
+        val after = states.read(emptyList(), back + 120_000, uidOf, null, startedAt = t, bootedAt = bootedAt)
+        assertEquals(listOf(serving(C, back + 90_000, back + 120_000)), after.intervals)
+    }
+
+    /**
+     * A reading that rebuilds what is open and finds no change of the screen in Android's record takes the
+     * screen as it is now, not as on; one that finds a change takes the other state before it (review b3 of
+     * W5's second part, fresh, n4).
+     */
+    @Test
+    fun theScreenWithNoChangeInTheRecordIsAsItIsNow() {
+        val off = UsageStates().read(
+            listOf(event(10, Kind.RESUMED, "a", "Main")), at(600), uidOf, KEYBOARD, startedAt = t, screenNow = false,
+        )
+        assertEquals(emptyList<Interval>(), off.intervals)
+        val on = UsageStates().read(
+            listOf(event(10, Kind.RESUMED, "a", "Main")), at(600), uidOf, null, startedAt = t, screenNow = true,
+        )
+        assertEquals(listOf(inUse(A, at(10), at(600))), on.intervals)
+        val turnedOn = UsageStates().read(
+            listOf(event(10, Kind.RESUMED, "a", "Main"), event(100, Kind.SCREEN_ON, "android")),
+            at(600), uidOf, null, startedAt = t, screenNow = true,
+        )
+        assertEquals(listOf(inUse(A, at(100), at(600))), turnedOn.intervals)
+    }
+
+    /** An event that comes into Android's record after the reading that covered its moment is counted late, with by how much. */
+    @Test
+    fun anEventReadAfterItsMomentWasToldIsCountedLate() {
+        val states = UsageStates()
+        read(listOf(event(10, Kind.RESUMED, "a", "Main")), until = 60, states = states)
+        assertEquals(0 to 0L, states.late)
+        states.read(listOf(event(10, Kind.RESUMED, "a", "Main"), event(55, Kind.STOPPED, "a", "Main")), at(120), uidOf, null, startedAt = t)
+        assertEquals(1 to 5_000L + UsageStates.MARGIN_MS, states.late)
     }
 
     /** Intervals of one app and state are joined where they meet or overlap. */

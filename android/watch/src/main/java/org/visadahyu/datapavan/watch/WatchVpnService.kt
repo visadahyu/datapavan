@@ -733,7 +733,8 @@ class WatchVpnService : VpnService() {
      * Debug builds only, for scripts/verify-activity.sh (ADR 0046): `activity-read` has the tracker read the
      * apps' states now and waits until the engine has them. Then, always, what the live view would draw,
      * with no destination: `activity-states` says what the last reading knew (`states`, `no-access`,
-     * `locked`, or `none-yet`), how far it told, how many readings the tracker told, and the screen; one
+     * `locked`, or `none-yet`), how far it told, how many readings the tracker told, and the screen;
+     * `activity-late` how many usage events came later than a reading's margin, and the latest by how much; one
      * `activity-app` line for each app, its UID (`-` for flows of no app), its state now (an
      * [org.visadahyu.datapavan.watch.log.AppState] name, which says why where there is none), whether it is
      * the user's tool and whether it went through it, how many destinations it reached, and its bytes up and
@@ -760,6 +761,10 @@ class WatchVpnService : VpnService() {
             "activity-states $known told-until ${snapshot.toldUntil} readings ${tracker?.readings ?: 0} " +
                 "screen $screen since ${snapshot.screenOnSince}",
         )
+        // The usage events that came into Android's record later than a reading's margin, and the latest by
+        // how much, for the lab's measure of how late they come (review b3 of W5's second part, fresh, m1).
+        val (late, latest) = tracker?.late ?: (0 to 0L)
+        writer.println("activity-late $late latest-ms $latest")
         val windows = listOf("10m", "1h", "screen")
         for (app in snapshot.apps) {
             val bytes = windows.indices.joinToString(" ") { window ->

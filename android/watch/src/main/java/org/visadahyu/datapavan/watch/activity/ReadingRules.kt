@@ -88,6 +88,25 @@ internal class Turns {
 }
 
 /**
+ * Whether each package may post its notifications, read once per reading, as [Uids] are: the user may allow
+ * or refuse them at any time (review b3 of W5's second part, fresh, M1).
+ */
+internal class Grants(private val lookup: (String) -> Boolean) {
+    private val known = HashMap<String, Boolean>()
+
+    /** A new reading's lookup: every grant is read again for it. */
+    fun forReading(): (String) -> Boolean {
+        known.clear()
+        return { packageName ->
+            known.getOrPut(packageName) {
+                if (known.size >= 1_024) known.clear()
+                lookup(packageName)
+            }
+        }
+    }
+}
+
+/**
  * Each package's UID, read once per reading: a package removed and installed again gets a new UID in the
  * same boot, which a cache kept longer would miss (review b1 of W5's second part, Kotlin, finding 4).
  */

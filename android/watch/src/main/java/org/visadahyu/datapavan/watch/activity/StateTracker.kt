@@ -1,5 +1,6 @@
 package org.visadahyu.datapavan.watch.activity
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.usage.UsageEvents
 import android.app.usage.UsageEventsQuery
@@ -45,7 +46,14 @@ import org.visadahyu.datapavan.audit.hasUsageAccess
  */
 internal class StateTracker(private val context: Context, private val tell: (ByteArray) -> Boolean) {
     private val usage = context.getSystemService(UsageStatsManager::class.java)
-    private val core = UsageStates()
+    /**
+     * From Android 12, Android may wait up to 10 seconds before it shows a foreground service's notification
+     * [doc: Android 12 behavior changes, "UX delay for foreground service notifications"]: a service counts
+     * as "with its notification" only after that (review b3 of W5's second part, fresh, M1).
+     */
+    private val core = UsageStates(
+        notificationDelay = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) NOTIFICATION_DELAY_MS else 0,
+    )
     private val worker = ScheduledThreadPoolExecutor(1) { task -> Thread(task, "watch-states").apply { isDaemon = true } }.apply {
         // A reading waiting for its turn is dropped at the stop, which reads a last time itself.
         executeExistingDelayedTasksAfterShutdownPolicy = false
@@ -74,6 +82,19 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
     private var screenOnSince: Long? = null
 
     /** Each package's UID, read again each reading, the worker's own: a package no longer installed has none. */
+    /**
+     * Whether each package may post notifications, read again each reading: from Android 13 an app's
+     * notifications are off until the user allows them, and a foreground service's then shows only in the
+     * task manager [doc: "Notification runtime permission"], so such an app's service is not "with its
+     * notification". Below Android 13 notifications are on unless the user turned them off, which another
+     * app cannot see.
+     */
+    private val notifying = Grants { packageName ->
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            context.packageManager.checkPermission(Manifest.permission.POST_NOTIFICATIONS, packageName) ==
+            PackageManager.PERMISSION_GRANTED
+    }
+
     private val uids = Uids { packageName ->
         try {
             context.packageManager.getPackageUid(packageName, 0)
@@ -94,6 +115,11 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
 
     @Volatile
     var toldUntil = 0L
+        private set
+
+    /** The events found late, as [UsageStates.late] counts them, for the debug dump. */
+    @Volatile
+    var late = 0 to 0L
         private set
 
     private val receiver = object : BroadcastReceiver() {
@@ -216,13 +242,17 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
         val message = if (what != States.KNOWN) {
             nothing(until, what)
         } else {
-            val reading = core.read(events, until, uidOf, keyboard(uidOf), startedAt, bootedAt)
+            val reading = core.read(
+                events, until, uidOf, keyboard(uidOf), startedAt, bootedAt,
+                notifies = notifying.forReading(), screenNow = screenOn,
+            )
             known = States.KNOWN
             val screen = if (reading.screen.on == null) UsageStates.Screen(screenOn, screenOnSince) else reading.screen
             States.encode(reading.copy(screen = screen))
         }
         if (tell(message)) {
             readings++
+            late = core.late
             toldUntil = until
         } else {
             // No engine took it: the next reading tells again from the end of the last one taken.
@@ -257,7 +287,9 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
         } catch (e: SecurityException) {
             null
         } catch (e: IllegalArgumentException) {
-            return emptyList()
+            // Refused as not valid: nothing is known of the span, told as such, never as no events (review b3,
+            // R9). The guard above keeps it from happening on AOSP.
+            null
         } ?: return null
         val read = mutableListOf<UsageStates.Event>()
         val event = UsageEvents.Event()
@@ -281,6 +313,9 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
     companion object {
         /** How far before the tracker's start its first reading tells, to cover the engine started just before. */
         private const val START_SLACK_MS = 10_000L
+
+        /** The longest Android 12 and later may wait before it shows a foreground service's notification. */
+        private const val NOTIFICATION_DELAY_MS = 10_000L
 
         /** How long Watch's stop waits for its last reading. */
         private const val STOP_WAIT_MS = 2_000L
