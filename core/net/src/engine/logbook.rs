@@ -41,26 +41,47 @@ pub(super) const SEGMENT_MS: u64 = 15 * 60 * 1000;
 /// Where an open segment ends, and where the next begins ([`cut`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct Cut {
-    /// The end of the segment's own quarter hour.
+    /// Where the segment ends, within its own quarter hour.
     pub(super) end: u64,
-    /// The start of the quarter hour the wall clock reads now.
+    /// Where the next begins, within the quarter hour the wall clock reads now.
     pub(super) next: u64,
 }
 
-/// Where an open segment that began at `start` is cut, now that the wall clock reads `now`: nowhere while
-/// both are in one quarter hour. Otherwise the segment ends at the end of its own quarter hour and the
-/// next begins at the start of now's, whichever way the clock moved: forward, as across a phone's sleep or
-/// to a clock set ahead by days, or back past the segment's start. Every count cuts before it counts
-/// ([`Shared::log_now`]), so the bytes a segment holds were all counted in its own quarter hour, and the
-/// quarter hours a sleep passed had none. A segment's start is where the last cut left it, so no other
-/// reading is needed.
+/// Where an open segment that began at `start` is cut, now that the wall clock reads `now`, `last` being
+/// the log's reading of it before: nowhere while `start` and `now` are in one quarter hour. Every count
+/// cuts before it counts ([`Shared::log_now`]), so the bytes a segment holds were all counted in its own
+/// quarter hour.
+///
+/// - The clock moved forward, as across a phone's sleep or to a clock set ahead by days: the segment
+///   ends at the end of its quarter hour, and the next begins at the start of now's. The flow was open
+///   across every quarter hour passed, and those a sleep passed had no count.
+/// - The clock was set back past the segment's quarter hour: the segment ends at `last`, the old
+///   clock's last reading, and the next begins at `now`, the new clock's first, so that neither claims a
+///   time no clock read, and no segment begins before its flow opened by the new clock (review 1 of
+///   W5's first part, engine, finding 6).
 #[must_use]
-pub(super) fn cut(start: u64, now: u64) -> Option<Cut> {
+pub(super) fn cut(start: u64, now: u64, last: u64) -> Option<Cut> {
     let (quarter, now_quarter) = (start / SEGMENT_MS, now / SEGMENT_MS);
-    (quarter != now_quarter).then(|| Cut {
-        end: quarter.saturating_add(1).saturating_mul(SEGMENT_MS),
-        next: now_quarter * SEGMENT_MS,
+    if quarter == now_quarter {
+        return None;
+    }
+    let end_of_quarter = quarter.saturating_add(1).saturating_mul(SEGMENT_MS);
+    Some(if now_quarter > quarter {
+        Cut {
+            end: end_of_quarter,
+            next: now_quarter * SEGMENT_MS,
+        }
+    } else {
+        Cut {
+            end: last.max(start).min(end_of_quarter),
+            next: now,
+        }
     })
+}
+
+/// Whether two readings of the wall clock are in one quarter hour.
+fn same_quarter(a: u64, b: u64) -> bool {
+    a / SEGMENT_MS == b / SEGMENT_MS
 }
 
 /// The bytes of one open flow, counted as they pass: what the app sent and received, and the IP
@@ -164,21 +185,22 @@ impl Shared {
             "the log's clock was read off the engine's thread"
         );
         let now = self.clock.wall_ms();
+        let last = self.last_reading.swap(now, Ordering::Relaxed);
         if now / SEGMENT_MS != self.quarter.load(Ordering::Acquire) {
-            self.cut_all(now);
+            self.cut_all(now, last);
         }
         now
     }
 
     /// Cuts every open segment and each app's lookups that are not in `now`'s quarter hour, and then
     /// says they all are. Only on the engine's thread, as every count, so nothing is counted meanwhile.
-    fn cut_all(&self, now: u64) {
+    fn cut_all(&self, now: u64, last: u64) {
         let quarter = now / SEGMENT_MS;
         let mut records = Vec::new();
         {
             let mut live = lock(&self.live);
             for live in live.values_mut() {
-                if let Some(Cut { end, next }) = cut(live.start, now) {
+                if let Some(Cut { end, next }) = cut(live.start, now, last) {
                     let counts = live.bytes.now();
                     records.push(Record::Segment {
                         flow: live.flow.clone(),
@@ -191,7 +213,7 @@ impl Shared {
                     live.base = counts;
                 }
             }
-            lock(&self.lookups).retain(|&uid, lookups| match cut(lookups.start, now) {
+            lock(&self.lookups).retain(|&uid, lookups| match cut(lookups.start, now, last) {
                 Some(Cut { end, .. }) => {
                     records.push(lookups.record(uid, end));
                     false
@@ -336,7 +358,7 @@ impl Shared {
         let last = live.bytes.last.load(Ordering::Relaxed);
         let end = if last == 0 {
             now.max(live.start)
-        } else if last >= live.start && cut(live.start, last).is_none() {
+        } else if last >= live.start && same_quarter(live.start, last) {
             last
         } else {
             live.start
@@ -567,11 +589,11 @@ mod tests {
 
     #[test]
     fn a_segment_in_one_quarter_hour_is_not_cut() {
-        assert_eq!(cut(at(22, 10), at(22, 15) - 1), None);
+        assert_eq!(cut(at(22, 10), at(22, 15) - 1, at(22, 11)), None);
         // A segment that starts on a quarter hour is in it.
-        assert_eq!(cut(at(22, 15), at(22, 29)), None);
+        assert_eq!(cut(at(22, 15), at(22, 29), at(22, 20)), None);
         // A clock set back within the quarter hour moves nothing.
-        assert_eq!(cut(at(22, 12), at(22, 10)), None);
+        assert_eq!(cut(at(22, 12), at(22, 10), at(22, 13)), None);
     }
 
     #[test]
@@ -580,11 +602,11 @@ mod tests {
             end: at(22, 15),
             next: at(22, 15),
         });
-        assert_eq!(cut(at(22, 10), at(22, 16)), at_22_15);
+        assert_eq!(cut(at(22, 10), at(22, 16), at(22, 14)), at_22_15);
         // Exactly on it.
-        assert_eq!(cut(at(22, 10), at(22, 15)), at_22_15);
+        assert_eq!(cut(at(22, 10), at(22, 15), at(22, 14)), at_22_15);
         assert_eq!(
-            cut(at(22, 15), at(22, 30)),
+            cut(at(22, 15), at(22, 30), at(22, 29)),
             Some(Cut {
                 end: at(22, 30),
                 next: at(22, 30),
@@ -597,7 +619,7 @@ mod tests {
     #[test]
     fn several_quarter_hours_passed_cut_at_the_first_and_go_on_from_the_last() {
         assert_eq!(
-            cut(at(22, 10), at(30, 16)),
+            cut(at(22, 10), at(30, 16), at(22, 12)),
             Some(Cut {
                 end: at(22, 15),
                 next: at(30, 15),
@@ -605,22 +627,38 @@ mod tests {
         );
     }
 
-    /// A wall clock set back, past the segment's start, cuts it at the end of its own quarter hour; the
-    /// next begins in the quarter hour the clock reads.
+    /// A wall clock set back, past the segment's quarter hour, ends the segment at the old clock's last
+    /// reading and begins the next at the new clock's first: bounds no clock read, such as the end of
+    /// the old quarter hour, or the start of the new one before the flow opened, are left out. A last
+    /// reading before the segment, as no count has made, ends it at its start.
     #[test]
-    fn a_clock_set_back_before_the_segment_cuts_it_at_its_own_quarter_hour() {
+    fn a_clock_set_back_ends_the_segment_at_the_last_reading_and_begins_the_next_now() {
         assert_eq!(
-            cut(at(22, 10), at(21, 50)),
+            cut(at(22, 10), at(21, 50), at(22, 12)),
             Some(Cut {
-                end: at(22, 15),
-                next: at(21, 45),
+                end: at(22, 12),
+                next: at(21, 50),
             })
         );
         assert_eq!(
-            cut(at(22, 10), 0),
+            cut(at(22, 10), 0, at(22, 10)),
+            Some(Cut {
+                end: at(22, 10),
+                next: 0,
+            })
+        );
+        assert_eq!(
+            cut(at(22, 10), at(21, 50), 0),
+            Some(Cut {
+                end: at(22, 10),
+                next: at(21, 50),
+            })
+        );
+        assert_eq!(
+            cut(at(22, 10), at(21, 50), at(23, 0)),
             Some(Cut {
                 end: at(22, 15),
-                next: 0,
+                next: at(21, 50),
             })
         );
     }
@@ -629,7 +667,7 @@ mod tests {
     fn a_clock_set_forward_by_days_cuts_as_a_long_sleep() {
         let days = 40 * 24 * HOUR;
         assert_eq!(
-            cut(at(22, 10), at(22, 10) + days),
+            cut(at(22, 10), at(22, 10) + days, at(22, 11)),
             Some(Cut {
                 end: at(22, 15),
                 next: at(22, 0) + days,
@@ -637,7 +675,7 @@ mod tests {
         );
         // The end of time does not overflow.
         assert_eq!(
-            cut(u64::MAX - 1, 0),
+            cut(u64::MAX - 1, 0, u64::MAX),
             Some(Cut {
                 end: u64::MAX,
                 next: 0,
@@ -657,7 +695,7 @@ mod tests {
             };
             assert_eq!(midnight % SEGMENT_MS, 0, "{offset}");
             assert_eq!(
-                cut(midnight - MINUTE, midnight + MINUTE),
+                cut(midnight - MINUTE, midnight + MINUTE, midnight - MINUTE),
                 Some(Cut {
                     end: midnight,
                     next: midnight,
@@ -670,12 +708,13 @@ mod tests {
                     start + 9 * HOUR,
                     start - HOUR,
                 ] {
-                    if let Some(Cut { end, next }) = cut(start, now) {
+                    if let Some(Cut { end, next }) = cut(start, now, start) {
                         assert!(
                             !(start < midnight && midnight < end),
                             "{offset}: {start}..{end} holds {midnight}"
                         );
                         assert!(next <= now && now - next < SEGMENT_MS);
+                        assert!(start <= end && (end == start || same_quarter(start, end - 1)));
                     }
                 }
             }
@@ -867,8 +906,8 @@ mod tests {
         assert_eq!(
             segments(&taken(&shared)),
             vec![
-                (1, at(22, 10), at(22, 15), [10, 0, 0, 0], true),
-                (1, at(21, 45), at(22, 0), [20, 0, 0, 0], true),
+                (1, at(22, 10), at(22, 10), [10, 0, 0, 0], true),
+                (1, at(21, 50), at(22, 0), [20, 0, 0, 0], true),
             ]
         );
         assert_eq!(open_segment(&shared, 1), (at(22, 15), [30, 0, 0, 0]));
@@ -882,8 +921,17 @@ mod tests {
         );
         clock.set(at(22, 40));
         other.up(&shared, 5, 0);
-        assert_eq!(open_segment(&shared, 2), (at(22, 30), [5, 0, 0, 0]));
-        assert_eq!(open_segment(&shared, 1).0, at(22, 30));
+        let mut seen = segments(&taken(&shared));
+        seen.sort_unstable();
+        assert_eq!(
+            seen,
+            vec![
+                (1, at(30, 15), at(30, 16), [0; 4], true),
+                (2, at(30, 16), at(30, 16), [0; 4], true),
+            ]
+        );
+        assert_eq!(open_segment(&shared, 2), (at(22, 40), [5, 0, 0, 0]));
+        assert_eq!(open_segment(&shared, 1).0, at(22, 40));
     }
 
     #[test]
@@ -1136,8 +1184,8 @@ mod tests {
             vec![
                 (1, at(22, 10), at(22, 12), [0, 0, 0, 52], true),
                 (1, at(22, 12), at(22, 12), [0; 4], false),
-                (2, at(22, 20), at(22, 30), [0, 0, 0, 52], true),
-                (2, at(22, 0), at(22, 0), [0; 4], false),
+                (2, at(22, 20), at(22, 20), [0, 0, 0, 52], true),
+                (2, at(22, 5), at(22, 5), [0; 4], false),
             ]
         );
     }

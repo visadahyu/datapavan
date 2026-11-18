@@ -755,6 +755,8 @@ struct Shared {
     /// The quarter hour of the wall clock (milliseconds since 1970 over [`logbook::SEGMENT_MS`]) that
     /// every open segment and each app's lookups are in, since the log's last cut ([`Shared::log_now`]).
     quarter: AtomicU64,
+    /// The log's last reading of the wall clock, where a segment ends when the clock is set back.
+    last_reading: AtomicU64,
     /// The flows open now, for the log.
     live: Mutex<HashMap<u64, Live>>,
     /// Lookups each app sent to Watch's own DNS address since the last segment.
@@ -911,6 +913,7 @@ impl Engine {
             clock,
             engine_thread: std::sync::OnceLock::new(),
             quarter: AtomicU64::new(quarter),
+            last_reading: AtomicU64::new(0),
             live: Mutex::default(),
             lookups: Mutex::default(),
             wire: Mutex::default(),
@@ -1445,6 +1448,7 @@ mod tests {
             clock: Arc::new(SystemClock),
             engine_thread: std::sync::OnceLock::new(),
             quarter: AtomicU64::new(0),
+            last_reading: AtomicU64::new(0),
             live: Mutex::default(),
             lookups: Mutex::default(),
             wire: Mutex::default(),
