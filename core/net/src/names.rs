@@ -411,23 +411,35 @@ mod tests {
     }
 
     /// An app's own tables go once every name in them has expired, at the engine's sweep; another app's,
-    /// with a name still kept, and Android's stay (review 3 of W5's first part, nit 3).
+    /// with one name expired beside one still kept, stay whole, and so do Android's (review 3 of W5's
+    /// first part, nit 3; review 4, minor 1: a table that went at its first expired name passed before).
     #[test]
     fn an_apps_own_tables_go_once_every_name_in_them_has_expired() {
         let mut names = Names::default();
         let now = Instant::now();
         let later = now + Duration::from_hours(2);
         let a = IpAddr::V4(Ipv4Addr::new(93, 184, 216, 34));
+        let b = IpAddr::V4(Ipv4Addr::new(93, 184, 216, 35));
         names.insert(a, None, "www.example.com", 60, (now, BOOT));
         names.insert(a, Some(10_123), "gone.example", 60, (now, BOOT));
         names.insert_public("gone.example", Some(10_123), 60, now);
-        names.insert(a, Some(10_456), "kept.example", 60, (now, BOOT));
+        names.insert(b, Some(10_456), "expired.example", 60, (now, BOOT));
         names.insert(a, Some(10_456), "kept.example", 60, (later, BOOT));
-        names.forget_expired(now + MIN_KEEP + Duration::from_secs(1));
+        names.insert_public("expired-cover.example", Some(10_456), 60, now);
+        names.insert_public("kept-cover.example", Some(10_456), 60, later);
+        let after = now + MIN_KEEP + Duration::from_secs(1);
+        names.forget_expired(after);
         assert!(!names.addresses.own.contains_key(&10_123));
         assert!(!names.public.own.contains_key(&10_123));
         assert!(names.addresses.own.contains_key(&10_456));
-        assert_eq!(names.len(), 2, "Android's and the app's still kept");
+        assert!(names.public.own.contains_key(&10_456));
+        assert_eq!(names.get(a, Some(10_456), after), Some("kept.example"));
+        assert!(names.is_public("kept-cover.example", Some(10_456), after));
+        assert_eq!(
+            names.len(),
+            3,
+            "Android's and both of the app's, one expired"
+        );
     }
 
     /// At most [`OWN_SCOPES`] apps keep tables of their own: one more takes the place of the app whose

@@ -2185,6 +2185,50 @@ mod tests {
         Ok(())
     }
 
+    /// The engine's sweep drops an app's own tables of names once every name in them has expired (review 4
+    /// of W5's first part, nit 3): here the sweep runs at every read of the tunnel, and one datagram,
+    /// whatever it holds, makes it run over a name learned three hours ago.
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_sweep_drops_an_apps_tables_of_expired_names() -> io::Result<()> {
+        let mut shared = shared();
+        shared.limits.sweep_every = Duration::ZERO;
+        let Some(then) = Instant::now().checked_sub(Duration::from_hours(3)) else {
+            unreachable!("an instant three hours back")
+        };
+        let when = (then, shared.clock.since_boot());
+        lock(&shared.names).insert(
+            IpAddr::V4(Ipv4Addr::new(93, 184, 216, 34)),
+            Some(UID),
+            "own.example",
+            60,
+            when,
+        );
+        assert_eq!(lock(&shared.names).len(), 1);
+        let shared = Arc::new(shared);
+        let (engine_end, app_end) = std::os::unix::net::UnixDatagram::pair()?;
+        engine_end.set_nonblocking(true)?;
+        let (_stop, stop) = watch::channel(false);
+        let (_network, network) = watch::channel(0);
+        let (_swaps, swaps) = mpsc::unbounded_channel();
+        tokio::spawn(run(
+            Tun::new(OwnedFd::from(engine_end))?,
+            1500,
+            Arc::clone(&shared),
+            stop,
+            network,
+            swaps,
+        ));
+        app_end.send(b"not a packet")?;
+        for _ in 0..200 {
+            if lock(&shared.names).is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(lock(&shared.names).is_empty(), "the expired table stayed");
+        Ok(())
+    }
+
     /// Unit 12b: a tunnel handed to the running engine takes the old one's place for reading and for
     /// the tasks that write to the apps, here a mapping's, which began before; a datagram still queued
     /// on the old tunnel when the new one comes is handled first, on the mapping it had, and its answer
