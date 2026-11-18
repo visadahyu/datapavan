@@ -47,4 +47,22 @@ class OwnCopyTest {
         // This build's own list is its edition's.
         assertEquals(if (BuildConfig.ADVANCED) neverInAdvanced else neverInBasic, neverRequested())
     }
+
+    /**
+     * A copy that asks for any permission beyond its edition's allowlist is not genuine, as a repackaged one
+     * that adds the phone's state, installing apps or drawing over others (review b3 of W5's second part,
+     * R11); the genuine copy of each edition asks for none beyond it.
+     */
+    @Test
+    fun aCopyThatAsksBeyondItsAllowlistIsNotGenuine() {
+        val allowed = allowedPermissions()
+        assertTrue(allowed.isNotEmpty())
+        assertFalse(asksBeyond(allowed, allowed))
+        assertFalse(asksBeyond(allowed.take(2), allowed))
+        for (added in listOf("READ_PHONE_STATE", "REQUEST_INSTALL_PACKAGES", "SYSTEM_ALERT_WINDOW")) {
+            assertTrue(added, asksBeyond(allowed + "android.permission.$added", allowed))
+        }
+        assertEquals(BuildConfig.ADVANCED, "android.permission.INTERNET" in allowed)
+        assertTrue(neverRequested().none { it in allowed })
+    }
 }

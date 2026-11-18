@@ -37,7 +37,10 @@ import java.util.Locale
 @Composable
 internal fun OwnCopyScreen(signing: AppSigning?, verdict: SignatureVerdict?, insets: PaddingValues, onBack: () -> Unit) {
     val context = LocalContext.current
-    val refused = remember { asksForWhatItNever(requestedPermissions(context), neverRequested()) }
+    val requested = remember { requestedPermissions(context) }
+    val refused = asksForWhatItNever(requested, neverRequested())
+    // Advanced also compares the whole list with its build's allowlist; Basic's page changes with 0.2.0.
+    val beyond = BuildConfig.ADVANCED && asksBeyond(requested, allowedPermissions())
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(insets),
         contentPadding = PaddingValues(16.dp),
@@ -56,6 +59,7 @@ internal fun OwnCopyScreen(signing: AppSigning?, verdict: SignatureVerdict?, ins
         item {
             val check = when {
                 BuildConfig.ADVANCED && refused -> R.string.own_permissions_present_advanced
+                beyond -> R.string.own_permissions_extra
                 BuildConfig.ADVANCED -> R.string.own_permissions_none_advanced
                 refused -> R.string.own_internet_present
                 else -> R.string.own_internet_none
@@ -63,7 +67,7 @@ internal fun OwnCopyScreen(signing: AppSigning?, verdict: SignatureVerdict?, ins
             Text(
                 stringResource(check),
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (refused) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                color = if (refused || beyond) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
             )
         }
         item {
@@ -102,6 +106,13 @@ internal fun fingerprint(sha256: String): String =
 
 /** What this edition never asks for, the build's own list: its build fails if anything adds one of them. */
 internal fun neverRequested(): List<String> = BuildConfig.NEVER_REQUESTED.split(',').filter { it.isNotEmpty() }
+
+/** All this edition may ask for, the build's allowlist, which its build checks the manifest against. */
+internal fun allowedPermissions(): List<String> = BuildConfig.ALLOWED_PERMISSIONS.split(',').filter { it.isNotEmpty() }
+
+/** Whether `requested` asks for any permission beyond `allowed`, as a repackaged copy that adds one would. */
+internal fun asksBeyond(requested: Collection<String>, allowed: Collection<String>): Boolean =
+    requested.any { it !in allowed }
 
 /** Whether `requested`, the permissions a copy's manifest asks for, holds any of `never`. */
 internal fun asksForWhatItNever(requested: Collection<String>, never: Collection<String>): Boolean =

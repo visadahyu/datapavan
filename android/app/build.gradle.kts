@@ -132,6 +132,9 @@ android {
         // What users are taught this edition never asks for, the build's own list, for the page "Is this copy
         // genuine?" (ADR 0045, decision 4).
         buildConfigField("String", "NEVER_REQUESTED", "\"${neverRequested.joinToString(",")}\"")
+        // And all it may ask for, the build's allowlist: in Advanced, a copy that asks for anything else is not
+        // genuine (review b3 of W5's second part, R11).
+        buildConfigField("String", "ALLOWED_PERMISSIONS", "\"${allowedPermissions.keys.joinToString(",")}\"")
         // Every edition's name carries Datapavan and the edition, in Latin letters in every language,
         // Google Play included, so that no one takes Basic for the full app (ADR 0045, decision 1).
         resValue("string", "app_name", if (advanced) "Datapavan Advanced" else "Datapavan Basic")
