@@ -998,21 +998,28 @@ impl Engine {
         let (stop, stopped) = watch::channel(false);
         let (network, changes) = watch::channel(0);
         let (swaps, swapped) = mpsc::unbounded_channel();
-        let runtime = tokio::runtime::Builder::new_current_thread()
+        // An engine that cannot start, or whose tunnel never comes, writes off at once what the engine before
+        // handed over, segments waiting for their states among them (review b2 of W5's second part, fresh).
+        let state = Arc::clone(&shared);
+        let thread = tokio::runtime::Builder::new_current_thread()
             .enable_io()
             .enable_time()
-            .build()?;
-        let state = Arc::clone(&shared);
-        let thread = std::thread::Builder::new()
-            .name("watch-engine".into())
-            .spawn(move || {
-                runtime.block_on(async move {
-                    match Tun::waiting(fd, config.limits.tunnel_wait) {
-                        Ok(tun) => run(tun, config.mtu, state, stopped, changes, swapped).await,
-                        Err(_) => Counters::add(&state.counters.failed, 1),
-                    }
-                });
-            })?;
+            .build()
+            .and_then(|runtime| {
+                std::thread::Builder::new()
+                    .name("watch-engine".into())
+                    .spawn(move || {
+                        runtime.block_on(async move {
+                            if let Ok(tun) = Tun::waiting(fd, config.limits.tunnel_wait) {
+                                run(tun, config.mtu, state, stopped, changes, swapped).await;
+                            } else {
+                                Counters::add(&state.counters.failed, 1);
+                                state.write_off();
+                            }
+                        });
+                    })
+            })
+            .inspect_err(|_| shared.write_off())?;
         Ok(Self {
             shared,
             stop,

@@ -632,6 +632,15 @@ impl Shared {
         let records = std::mem::take(&mut *lock(&self.pending_log));
         (!records.is_empty()).then(|| log::batch(&records))
     }
+
+    /// Writes what waits for its states as not told, and hands it to the log at once: for an engine with
+    /// no thread of its own to write it.
+    pub(super) fn write_off(&self) {
+        self.settle(Some(Force::ALL));
+        if let Some(batch) = self.take_log() {
+            self.platform.log(&batch);
+        }
+    }
 }
 
 /// A flow with its destination left out, as the log keeps a chained app's ([`Shared::hides`]): no

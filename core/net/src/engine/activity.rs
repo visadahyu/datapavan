@@ -2303,6 +2303,66 @@ pub(super) mod tests {
         assert!(lock(&shared.activity).held.is_empty());
     }
 
+    /// An engine whose tunnel never comes, as one on a descriptor tokio cannot wait on, writes the segments
+    /// the engine before handed it as not told, at once, rather than dropping them (review b2 of W5's
+    /// second part, fresh, nit).
+    #[test]
+    fn an_engine_that_fails_to_start_writes_off_what_it_was_handed() -> std::io::Result<()> {
+        use super::super::{Addresses, Config, Engine, Limits};
+        let config = Config {
+            mtu: 1_500,
+            keep_flows: 0,
+            addresses: Addresses::COMMON,
+            limits: Limits::default(),
+        };
+        let clock = ManualClock::at(T);
+        let first = Arc::new(Engined {
+            clock: clock.clone(),
+            batches: std::sync::Mutex::default(),
+        });
+        let (engine_end, app) = std::os::unix::net::UnixDatagram::pair()?;
+        engine_end.set_nonblocking(true)?;
+        let engine = Engine::start_with(
+            std::os::fd::OwnedFd::from(engine_end),
+            config,
+            first.clone(),
+            None,
+            (None, None),
+        )?;
+        let server = std::net::UdpSocket::bind((std::net::Ipv4Addr::LOCALHOST, 0))?;
+        server.set_read_timeout(Some(std::time::Duration::from_secs(5)))?;
+        let me = SocketAddr::from((Addresses::COMMON.tun4, 40_000));
+        let Some(datagram) = crate::packet::udp(me, server.local_addr()?, b"evening") else {
+            unreachable!("a small datagram")
+        };
+        app.send(&datagram)?;
+        server.recv_from(&mut [0u8; 64])?;
+        clock.set(T + 3_000);
+        let handover = engine.hand_over();
+        let second = Arc::new(Engined {
+            clock: clock.clone(),
+            batches: std::sync::Mutex::default(),
+        });
+        // A regular file: epoll refuses it, so the tunnel never comes.
+        let file = std::fs::File::open(std::env::current_exe()?)?;
+        let mut engine = Engine::start_with(
+            std::os::fd::OwnedFd::from(file),
+            config,
+            second.clone(),
+            None,
+            (Some(handover), None),
+        )?;
+        for _ in 0..100 {
+            if !states_logged(&second).is_empty() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        engine.stop();
+        assert_eq!(states_logged(&second), vec![NOT_TOLD]);
+        Ok(())
+    }
+
     /// An engine started with what the one before held, and a chain that leaves an app's destinations out
     /// of the log, shows none of them in "Now" (review b1 of W5's second part, engine, finding 1).
     #[test]
