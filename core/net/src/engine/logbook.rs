@@ -1345,7 +1345,8 @@ mod tests {
     #[test]
     fn a_flush_asked_from_another_thread_is_made_between_the_engines_counts() -> std::io::Result<()>
     {
-        const COUNTS: u64 = 4_000;
+        /// The counts before the flush is asked, and after it is done.
+        const COUNTS: u64 = 2_000;
         let platform = Arc::new(Kept::default());
         let clock = ManualClock::at(at(22, 15) - 50);
         let probe = Arc::new(Probe {
@@ -1360,31 +1361,40 @@ mod tests {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_time()
             .build()?;
+        // The engine counts until the flush is done, then a fixed number more: however the threads are
+        // scheduled, its logger is there to make the flush (the fresh review 2, finding 3: with a fixed
+        // count, a thread descheduled until the logger had gone waited ten seconds for nothing).
+        let flushed = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let engine = {
             let (shared, bytes, probe) = (Arc::clone(&shared), Arc::clone(&bytes), probe.clone());
+            let flushed = Arc::clone(&flushed);
             std::thread::spawn(move || {
                 let _ = shared.engine_thread.set(std::thread::current().id());
                 probe.on.store(true, Ordering::SeqCst);
                 runtime.block_on(async move {
                     let (end, ending) = watch::channel(false);
                     let logging = tokio::spawn(logger(Arc::clone(&shared), ending));
-                    let mut early = 0;
-                    for _ in 0..COUNTS {
+                    let (mut early, mut counted, mut after) = (0, 0, 0);
+                    while after < COUNTS {
                         bytes.up(&shared, 1, 1);
+                        counted += 1;
                         if bytes.last.load(Ordering::Relaxed) < at(22, 15) {
                             early += 1;
+                        }
+                        if flushed.load(Ordering::SeqCst) {
+                            after += 1;
                         }
                         tokio::task::yield_now().await;
                     }
                     let _ = end.send(true);
                     let _ = logging.await;
                     shared.finish_all();
-                    early
+                    (early, counted)
                 })
             })
         };
         let waited = std::time::Instant::now();
-        while bytes.now()[0] < COUNTS / 2 {
+        while bytes.now()[0] < COUNTS {
             assert!(
                 waited.elapsed() < Duration::from_secs(10),
                 "the engine counts nothing"
@@ -1392,7 +1402,9 @@ mod tests {
             std::thread::yield_now();
         }
         clock.set(at(22, 15) + 30);
-        assert!(shared.ask_flush(Duration::from_secs(10)), "no flush");
+        let asked = shared.ask_flush(Duration::from_secs(10));
+        flushed.store(true, Ordering::SeqCst);
+        assert!(asked, "no flush");
         // Handed over by the time the flush is said done.
         assert!(
             lock(&platform.0)
@@ -1401,7 +1413,7 @@ mod tests {
                 .any(|s| s.1 == at(22, 15) + 30),
             "the flush's records were not handed over yet"
         );
-        let Ok(early) = engine.join() else {
+        let Ok((early, counted)) = engine.join() else {
             unreachable!("the engine's thread panicked")
         };
         let mut seen: Vec<_> = lock(&platform.0)
@@ -1415,10 +1427,13 @@ mod tests {
                 .map(|s| s.2)
                 .sum()
         };
-        assert!((COUNTS / 2..COUNTS).contains(&early), "{early}");
+        assert!(
+            early >= COUNTS && counted >= early + COUNTS,
+            "{early} of {counted}"
+        );
         assert_eq!(
             (held(true), held(false)),
-            (early, COUNTS - early),
+            (early, counted - early),
             "{seen:?}"
         );
         // The flush cut at 22:15:00.030, after the quarter hour's cut at 22:15.
