@@ -384,6 +384,17 @@ grep -q pong <<<"$(ping_from_shell "$HOST")" || fail "adb's shell, not picked, d
 [ "$(tool_log | grep -c "^connect $HOST $PORT$")" = "$through" ] || fail "adb's shell, not picked, went through the tool"
 echo "ok: on the chain screen: Watch's password set in the tool, one picked app's lookup and TCP through the tool, its UDP nowhere until allowed, the shell directly"
 
+# The live view "Now" (ADR 0046, decision 6, item 5): with "Log where these apps connect" off, it keeps no
+# destination of the picked app, only its bytes, marked as through the tool; it marks the tool; and it keeps
+# the destinations of the shell, which goes directly. Watch's debug dump prints counts, no destination.
+grep -q 'activity-read true' <<<"$(dump activity-read)" || fail "the tracker of the apps' states did not read"
+activity_line() { grep "^activity-app $1 " <<<"$(dump | sed 's/^ *//')" || true; }
+chained=$(activity_line "$WORKLOAD_UID")
+grep -q " through-tool=1 places=0 " <<<"$chained" || fail "the live view keeps a destination of the picked app: $chained"
+grep -q " tool=1 " <<<"$(activity_line "$TOOL_UID")" || fail "the live view does not mark the tool: $(activity_line "$TOOL_UID")"
+grep -qE " places=[1-9]" <<<"$(activity_line 2000)" || fail "the live view keeps no destination of the shell: $(activity_line 2000)"
+echo "ok: the live view keeps no destination of the picked app while its destinations are not logged, and marks the tool"
+
 # Back on the screen, which looks for the tool again: its proxy now asks for a password. The user then
 # allows UDP, and the picked app's datagrams go through the tool's relay.
 adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null

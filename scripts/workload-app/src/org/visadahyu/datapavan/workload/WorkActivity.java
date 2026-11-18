@@ -20,9 +20,19 @@ import java.nio.charset.StandardCharsets;
  * again as a STUN client does until it is answered, and waits for both responses, each from the name's own
  * address with its own transaction ID (ADR 0044, unit 9b). Each result is one line of logcat under the tag
  * DatapavanWorkload, and "done" ends them.
+ *
+ * For W5's live view (ADR 0046, scripts/verify-activity.sh): "background" (host:port,seconds,bytes) opens a
+ * connection that sends while this screen shows, and then in the background from {@link SendJob}, and the
+ * screen stays three seconds and a half; "stay" (seconds) with "udp-every" (host:port) keeps the screen up that long,
+ * sending a datagram of 300 bytes each second; "service" (host:port,seconds,bytes) starts
+ * {@link NoticeService}, a foreground service with its notification, and the screen leaves at once. Their
+ * lines begin with the app's package name, as several copies of it run side by side.
  */
 public final class WorkActivity extends Activity {
-    private static final String TAG = "DatapavanWorkload";
+    static final String TAG = "DatapavanWorkload";
+
+    /** When this screen last stopped being visible, in milliseconds since 1970; 0 while it has not. */
+    static volatile long stoppedAt;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -31,14 +41,57 @@ public final class WorkActivity extends Activity {
         String tcp = getIntent().getStringExtra("tcp");
         String udp = getIntent().getStringExtra("udp");
         String stun = getIntent().getStringExtra("stun");
+        String background = getIntent().getStringExtra("background");
+        String stay = getIntent().getStringExtra("stay");
+        String udpEvery = getIntent().getStringExtra("udp-every");
+        String service = getIntent().getStringExtra("service");
+        stoppedAt = 0;
+        if (background != null) SendJob.begin(this, background);
+        if (service != null) {
+            startForegroundService(new android.content.Intent(this, NoticeService.class).putExtra("service", service));
+        }
         new Thread(() -> {
             if (name != null) resolve(name);
             if (tcp != null) tcp(tcp);
             if (udp != null) udp(udp);
             if (stun != null) stun(stun);
+            if (background != null) pause(3_500);
+            if (stay != null && udpEvery != null) stay(Integer.parseInt(stay), udpEvery);
             Log.i(TAG, "done");
             runOnUiThread(this::finish);
         }, "workload").start();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        stoppedAt = System.currentTimeMillis();
+    }
+
+    static void pause(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** Sends a datagram of 300 bytes to `target` (host:port) each second for `seconds`, while on screen. */
+    private void stay(int seconds, String target) {
+        String[] hostPort = target.split(":", 2);
+        long sent = 0;
+        try (DatagramSocket socket = new DatagramSocket()) {
+            InetAddress host = InetAddress.getByName(hostPort[0]);
+            byte[] out = new byte[300];
+            for (int i = 0; i < seconds; i++) {
+                socket.send(new DatagramPacket(out, out.length, host, Integer.parseInt(hostPort[1])));
+                sent += out.length;
+                pause(1_000);
+            }
+            Log.i(TAG, getPackageName() + " stay-sent " + sent);
+        } catch (Exception e) {
+            Log.i(TAG, getPackageName() + " stay failed: " + e);
+        }
     }
 
     private static void resolve(String name) {
