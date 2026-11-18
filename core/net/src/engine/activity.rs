@@ -58,6 +58,10 @@ pub(super) const MARKS: usize = 65_536;
 /// other caps): an app past its share has its own oldest told too late, never another app's.
 pub(super) const MARKS_SHARE: usize = MARKS / 4;
 
+/// How far below a bound an app that passed it is brought back, by its oldest seconds: so that a busy
+/// app gives way a little at a time, not a second at a time (review b2 of W5's second part, N1).
+const GIVE_WAY: usize = MARKS_SHARE / 64;
+
 /// At most this many cut segments wait for their state; past it, the oldest of the app that holds the
 /// most is written with its seconds not told yet as told too late.
 pub(super) const HELD: usize = 4_096;
@@ -728,13 +732,15 @@ impl Activity {
 
 impl Shared {
     /// A flow, or an app's lookups, of the app `uid` noted a new second, `second`, whose seconds held
-    /// now number `held`, the oldest `oldest`: counted with all marks and the app's; the app's oldest
-    /// placed as told too late past the window or past its share, and the oldest of the app holding the
-    /// most past the bound of all; and a reading asked for once the oldest has waited [`ASK_EVERY`]
-    /// seconds. One app's seconds never push another's out (review b1 of W5's second part, engine,
-    /// finding 2).
+    /// now number `held`: counted with all marks and the app's. Past the flow's window, the app's seconds
+    /// before the window are placed as told too late; past its share, only as many of its own oldest as
+    /// bring it [`GIVE_WAY`] below it, and past the bound of all, as many of the oldest of the app that
+    /// holds the most (review b2 of W5's second part, N1: all of them went before). One app's seconds
+    /// never push another's out (review b1, engine, finding 2). A reading is asked for, at most every
+    /// [`ASK_EVERY`] seconds, so that a lone burst waits no longer than one reading's period (review b2,
+    /// fresh, m2).
     #[cold]
-    pub(super) fn marked(&self, uid: Option<u32>, (held, oldest): (usize, u64), second: u64) {
+    pub(super) fn marked(&self, uid: Option<u32>, held: usize, second: u64) {
         let (all, mine) = lock(&self.waiting).add(uid);
         if held > WINDOW {
             self.settle(Some(Force::late(
@@ -742,16 +748,39 @@ impl Shared {
                 second.saturating_sub(WINDOW as u64 - 1),
             )));
         } else if mine > MARKS_SHARE {
-            self.settle(Some(Force::late(uid, second)));
+            self.give_way(uid, mine - (MARKS_SHARE - GIVE_WAY));
         } else if all > MARKS {
             let heaviest = lock(&self.waiting).heaviest();
-            if let Some((heaviest, _)) = heaviest {
-                self.settle(Some(Force::late(heaviest, second)));
+            if let Some((heaviest, holds)) = heaviest {
+                self.give_way(heaviest, (all - (MARKS - GIVE_WAY)).min(holds));
             }
         }
-        if second >= oldest.saturating_add(ASK_EVERY) {
-            self.ask(second);
+        self.ask(second);
+    }
+
+    /// Places as told too late at least `n` of the app `uid`'s seconds waiting, its oldest: every one of
+    /// its seconds before the `n`-th oldest's, and that second's. On the cold path only, past a bound.
+    fn give_way(&self, uid: Option<u32>, n: usize) {
+        let mut seconds = Vec::new();
+        {
+            let live = lock(&self.live);
+            let lookups = lock(&self.lookups);
+            let activity = lock(&self.activity);
+            for live in live.values().filter(|live| live.flow.uid == uid) {
+                seconds.extend(lock(&live.bytes.marks).iter().map(|mark| mark.second));
+            }
+            if let Some(entry) = lookups.get(&uid) {
+                seconds.extend(entry.marks.iter().map(|mark| mark.second));
+            }
+            for piece in activity.held.iter().filter(|piece| piece.uid == uid) {
+                seconds.extend(piece.marks.iter().map(|mark| mark.second));
+            }
         }
+        let Some(nth) = n.min(seconds.len()).checked_sub(1) else {
+            return;
+        };
+        let (_, &mut last, _) = seconds.select_nth_unstable(nth);
+        self.settle(Some(Force::late(uid, last.saturating_add(1))));
     }
 
     /// How many seconds not placed yet all flows and lookups hold.
@@ -941,7 +970,11 @@ impl Shared {
         if written {
             lock(&self.pending_log).extend(records);
         }
-        // The logger hands the records on, and asks again for the states of what waits.
+        // The logger hands the records on; a segment that waits asks for its states now, not after the
+        // logger's gathering (review b2 of W5's second part, fresh, m2).
+        if waiting {
+            self.ask(self.clock.wall_ms() / 1000);
+        }
         if written || waiting {
             self.log_ready.notify_one();
         }
@@ -1755,12 +1788,13 @@ pub(super) mod tests {
         clock.set(T + 10_000);
         tokio::time::sleep(super::super::LOG_DELAY + std::time::Duration::from_secs(1)).await;
         assert_eq!(asked(), 1);
-        // A segment waits: woken, the logger asks.
+        // A segment waits: its new second asked, and the logger asks again while it waits.
         bytes.up(&shared, 10, 0);
         shared.finish(1);
+        assert_eq!(asked(), 2);
         clock.set(T + 20_000);
         tokio::time::sleep(super::super::LOG_DELAY + std::time::Duration::from_secs(1)).await;
-        assert_eq!(asked(), 2);
+        assert_eq!(asked(), 3);
     }
 
     /// A flow's marks give their room back once settled.
@@ -1839,6 +1873,79 @@ pub(super) mod tests {
         assert!(!late_of(&shared, UID), "told too late within the share");
     }
 
+    /// A busy app with the screen off, read once a minute: past its share it gives up only as many of its
+    /// oldest seconds as bring it back under, so most of its seconds keep their state (review b2 of W5's
+    /// second part, N1, and the fresh review's m1: with 280 flows 97 % were told too late, with 300, 90 %).
+    #[test]
+    fn a_busy_app_with_the_screen_off_keeps_most_of_its_states() {
+        for (flows, most) in [(250, 0.0), (280, 0.08), (300, 0.15)] {
+            let (shared, clock, _) = telling_at(T);
+            let bytes: Vec<_> = (0..flows)
+                .map(|i| open_of(&shared, i + 1, UID + 1))
+                .collect();
+            let mut told_until = T;
+            for second in 1..=600_u64 {
+                clock.set(T + second * 1_000);
+                for flow in &bytes {
+                    flow.up(&shared, 1, 0);
+                }
+                if second % 60 == 0 {
+                    let until = T + second * 1_000 - 2_000;
+                    shared.tell(&told(told_until.saturating_sub(10_000).max(T), until, &[]));
+                    told_until = until;
+                }
+            }
+            let late = shared.counters.told_late.load(Ordering::Relaxed);
+            #[allow(clippy::cast_precision_loss)]
+            let part = late as f64 / (flows * 600) as f64;
+            assert!(part <= most, "{flows} flows: {late} seconds told too late");
+            assert!(shared.waiting_marks() <= MARKS_SHARE);
+        }
+    }
+
+    /// Past its share, an app gives up its oldest seconds, and only enough to come [`GIVE_WAY`] under it.
+    #[test]
+    fn past_its_share_an_app_gives_up_only_its_oldest() {
+        let (shared, clock, _) = telling_at(T);
+        let bytes: Vec<_> = (0..164).map(|i| open_of(&shared, i + 1, UID + 1)).collect();
+        for second in 0..100_u64 {
+            clock.set(T + second * 1_000);
+            for flow in &bytes {
+                flow.up(&shared, 1, 0);
+            }
+        }
+        // 16,400 seconds: 16 past the share. The oldest seconds go, all of their flows' at once.
+        let late = shared.counters.told_late.load(Ordering::Relaxed);
+        assert!(late > 0, "it gave way");
+        assert!(late <= (GIVE_WAY + 2 * 164) as u64, "{late} told too late");
+        for flow in &bytes {
+            let marks = lock(&flow.marks);
+            assert!(
+                marks.back().is_some_and(|m| m.second == T / 1000 + 99),
+                "the newest stay"
+            );
+        }
+        assert!(shared.waiting_marks() <= MARKS_SHARE);
+    }
+
+    /// A flow's window places only its own app's seconds as told too late: another app's, as old, wait
+    /// (review b2 of W5's second part, N6: widened to every app, the force survived the tests).
+    #[test]
+    fn a_flows_window_places_only_its_own_apps_seconds() {
+        let (shared, clock, _) = telling_at(T);
+        let other = open_of(&shared, 1, UID + 2);
+        let busy = open_of(&shared, 2, UID + 1);
+        for second in 0..=WINDOW as u64 {
+            if second < 10 {
+                up_at(&shared, &clock, &other, second * 1_000, 1);
+            }
+            up_at(&shared, &clock, &busy, second * 1_000, 1);
+        }
+        assert!(late_of(&shared, UID + 1), "the busy app's oldest");
+        assert!(!late_of(&shared, UID + 2), "the other app's wait");
+        assert_eq!(lock(&other.marks).len(), 10);
+    }
+
     /// Past [`MARKS`] for all apps together, each within its share, the app that holds the most gives
     /// way, and none other.
     #[test]
@@ -1907,6 +2014,14 @@ pub(super) mod tests {
             "the heaviest gave way"
         );
         assert!(!late_of(&shared, UID + 5));
+        // It gave up its oldest seconds, enough to come under the bound, not all of them (review b2 of W5's
+        // second part, N1).
+        let late = shared.counters.told_late.load(Ordering::Relaxed);
+        assert!(
+            (1..=(GIVE_WAY + 2 * 160) as u64).contains(&late),
+            "{late} told too late"
+        );
+        assert!(shared.waiting_marks() >= MARKS - GIVE_WAY - 2 * 160);
     }
 
     /// Past its share of [`HELD`], an app's own oldest segment is written as told too late, never another
@@ -2042,8 +2157,8 @@ pub(super) mod tests {
         assert!(lock(&shared.activity).held.is_empty());
     }
 
-    /// The engine asks for the states when a flow opens and once a second has waited five seconds, at
-    /// most every five seconds; and the logger asks again while segments wait.
+    /// The engine asks for the states when a flow opens and at each new second counted, at most every
+    /// five seconds; and the logger asks again while segments wait.
     #[test]
     fn the_engine_asks_for_states_when_a_flow_opens_and_when_seconds_wait() {
         let (shared, clock, platform) = telling_at(T);
@@ -2055,11 +2170,10 @@ pub(super) mod tests {
         for second in 1..=4 {
             up_at(&shared, &clock, &bytes, second * 1_000, 1);
         }
-        assert_eq!(asked(), 1);
+        assert_eq!(asked(), 1, "within five seconds of the last ask");
         up_at(&shared, &clock, &bytes, 5_000, 1);
-        assert_eq!(asked(), 1, "the oldest mark, at 1 s, waited four seconds");
+        assert_eq!(asked(), 2, "five seconds after it");
         up_at(&shared, &clock, &bytes, 6_000, 1);
-        assert_eq!(asked(), 2, "it waited five");
         up_at(&shared, &clock, &bytes, 7_000, 1);
         assert_eq!(asked(), 2, "not again within five seconds");
         up_at(&shared, &clock, &bytes, 11_000, 1);
@@ -2073,6 +2187,26 @@ pub(super) mod tests {
         untold.ask(T / 1000);
         assert!(untold.record(flow(1, Some(UID))).is_some());
         assert_eq!(counting.asked.load(Ordering::Relaxed), 0);
+    }
+
+    /// A lone burst on a long connection asks for a reading, so that it waits no longer than one reading's
+    /// period (review b2 of W5's second part, fresh, m2: it asked for nothing, and waited for other
+    /// traffic or the screen).
+    #[test]
+    fn a_lone_burst_asks_for_a_reading() {
+        let (shared, clock, platform) = telling_at(T);
+        let asked = || platform.asked.load(Ordering::Relaxed);
+        let bytes = open(&shared, 1);
+        clock.set(T + 3_000);
+        shared.tell(&told(T, T + 1_000, &[]));
+        assert_eq!(asked(), 1, "the opening's");
+        up_at(&shared, &clock, &bytes, 100_000, 5);
+        up_at(&shared, &clock, &bytes, 100_500, 5);
+        up_at(&shared, &clock, &bytes, 101_000, 5);
+        assert_eq!(asked(), 2, "the burst's");
+        clock.set(T + 104_000);
+        shared.tell(&told(T + 1_000, T + 102_000, &[]));
+        assert_eq!(shared.waiting_marks(), 0);
     }
 
     /// A reading that leaves seconds or segments waiting asks for the next at once, even with no traffic

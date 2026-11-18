@@ -176,12 +176,12 @@ impl FlowBytes {
         }
         self.second.store(second, Ordering::Relaxed);
         let counts = self.now();
-        let (held, oldest) = {
+        let held = {
             let mut marks = lock(&self.marks);
             marks.push_back(Mark { second, counts });
-            (marks.len(), marks.front().map_or(second, |m| m.second))
+            marks.len()
         };
-        log.marked(self.uid, (held, oldest), second);
+        log.marked(self.uid, held, second);
     }
 
     /// The next count notes its second anew, even the second of the latest mark, as after a clock set back.
@@ -268,9 +268,8 @@ impl Lookups {
     }
 
     /// Counts `count` lookups and their packets' bytes up and down, in the wall clock's second `second`:
-    /// its mark first, if it is the first count in it. The marks held and the oldest's second, when it
-    /// noted one.
-    fn count(&mut self, second: Option<u64>, [count, up, down]: [u64; 3]) -> Option<(usize, u64)> {
+    /// its mark first, if it is the first count in it. The marks held, when it noted one.
+    fn count(&mut self, second: Option<u64>, [count, up, down]: [u64; 3]) -> Option<usize> {
         let marked = match second {
             Some(second) if second != self.second => {
                 self.second = second;
@@ -278,10 +277,7 @@ impl Lookups {
                     second,
                     counts: self.counts,
                 });
-                Some((
-                    self.marks.len(),
-                    self.marks.front().map_or(second, |m| m.second),
-                ))
+                Some(self.marks.len())
             }
             _ => None,
         };
