@@ -16,9 +16,11 @@ interface LogClock {
     fun zone(): ZoneId
 
     /**
-     * The local day of [millis] in [zone], as days since 1970. The engine cuts every record at the quarter
-     * hours of UTC (core/net/src/engine/logbook.rs), and every zone is a whole number of quarter hours from
-     * UTC, so a record filed by the day of its start lies within that day, in any zone (`LogDaysTest`).
+     * The local day of [millis] in [zone], as days since 1970. The engine cuts every record within one
+     * quarter hour of UTC (core/net/src/engine/logbook.rs), and in every zone every change of the local
+     * date falls on a quarter hour of UTC, the zone's offsets and the instants it changes them alike (since
+     * 2011, by every zone's rules ahead: `LogDaysTest`), so a record filed by the day of its start lies
+     * within that day, in any zone.
      */
     fun dayOf(millis: Long, zone: ZoneId = zone()): Long = Instant.ofEpochMilli(millis).atZone(zone).toLocalDate().toEpochDay()
 

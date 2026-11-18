@@ -67,16 +67,18 @@ sealed interface LogRecord {
 
         /**
          * The records of a batch, each with its bytes; a batch that does not parse gives what came before.
-         * [skipped] is called for each record that is not one this reads: of another version, or malformed.
+         * [skipped] is called for each record that is not one this reads: of another version, or malformed;
+         * and once for the rest of a batch cut short, whose count, from the engine of this process, says
+         * nothing to trust.
          */
         fun batch(bytes: ByteArray, skipped: () -> Unit = {}): List<Pair<LogRecord, ByteArray>> {
             val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
             val records = mutableListOf<Pair<LogRecord, ByteArray>>()
-            if (buffer.remaining() < 4) return records
+            if (buffer.remaining() < 4) return records.also { if (bytes.isNotEmpty()) skipped() }
             repeat(buffer.int.coerceAtLeast(0)) {
-                if (buffer.remaining() < 2) return records
+                if (buffer.remaining() < 2) return records.also { skipped() }
                 val length = buffer.short.toInt() and 0xffff
-                if (buffer.remaining() < length) return records
+                if (buffer.remaining() < length) return records.also { skipped() }
                 val record = ByteArray(length).also { buffer.get(it) }
                 val read = parse(record)
                 if (read == null) skipped() else records += read to record

@@ -6,14 +6,16 @@ import org.junit.Test
 import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneId
-import java.time.ZoneOffset
 
 /**
  * The connection log files each record under the local day of its start (ADR 0037). The engine cuts every
- * record at the quarter hours of UTC (finding 4 of the independent review of 2026-11-09), so no record
- * crosses a local midnight in any zone that is a whole number of quarter hours from UTC: every zone this
- * runtime's tzdata knows, which these tests check, Kathmandu (+5:45), the Chatham Islands (+12:45 and
- * +13:45) and Eucla (+8:45) included, also when the zone changes while Watch runs.
+ * record within one quarter hour of UTC (finding 4 of the independent review of 2026-11-09), so no record
+ * crosses a change of the local date in any zone where every such change falls on a quarter hour of UTC:
+ * the zone's offsets, which put its midnights there, and the instants at which it changes them alike
+ * (review 1 of W5's first part, names, finding 5). These tests check that of every zone this runtime's
+ * tzdata knows, since 2012 and by every zone's rules ahead, Kathmandu (+5:45), the Chatham Islands (+12:45
+ * and +13:45) and Eucla (+8:45) included, and that the log files a batch in one zone when the zone changes
+ * while it is written.
  */
 class LogDaysTest {
     private val zones = ZoneId.getAvailableZoneIds().sorted().map(ZoneId::of)
@@ -32,32 +34,44 @@ class LogDaysTest {
     private fun LogClock.withinItsDay(start: Long, end: Long, zone: ZoneId = zone()) =
         dayOf(start, zone) == dayOf(maxOf(start, end - 1), zone)
 
-    /** Every offset each zone has used since 1980, and will by its rules, is a whole number of quarter hours. */
+    /**
+     * In every zone, every instant at which the local date changes falls on a quarter hour of UTC, from 2012
+     * to 2100: every offset the zone uses then is a whole number of quarter hours, which puts its midnights
+     * on one, and every change of offset that changes the local date falls on one. tzdata's own rules give
+     * the changes ahead. Until 2010, Newfoundland's and Moncton's did not: they changed the date at 02:31
+     * and 03:01 UTC.
+     */
     @Test
-    fun everyZoneIsAWholeNumberOfQuarterHoursFromUtc() {
-        val since = Instant.parse("1980-01-01T00:00:00Z")
-        val odd = mutableListOf<String>()
+    fun everyChangeOfTheLocalDateFallsOnAQuarterHourOfUtc() {
+        val from = Instant.parse("2012-01-01T00:00:00Z")
+        val until = Instant.parse("2100-01-01T00:00:00Z")
+        val quarter = 15 * 60
+        val off = mutableListOf<String>()
+        var changes = 0
         for (zone in zones) {
             val rules = zone.rules
-            val offsets = mutableListOf<ZoneOffset>(rules.getOffset(Instant.now()), rules.getOffset(since))
-            for (transition in rules.transitions.filter { !it.instant.isBefore(since) }) {
-                offsets += transition.offsetBefore
-                offsets += transition.offsetAfter
+            if (rules.getOffset(from).totalSeconds % quarter != 0) off += "${zone.id} at $from"
+            var transition = rules.nextTransition(from)
+            while (transition != null && transition.instant.isBefore(until)) {
+                val at = transition.instant
+                if (transition.offsetAfter.totalSeconds % quarter != 0) off += "${zone.id}: ${transition.offsetAfter} from $at"
+                val before = at.minusNanos(1).atOffset(transition.offsetBefore).toLocalDate()
+                val after = at.atOffset(transition.offsetAfter).toLocalDate()
+                if (before != after) {
+                    changes++
+                    if (at.epochSecond % quarter != 0L) off += "${zone.id}: the date changes at $at"
+                }
+                transition = rules.nextTransition(at)
             }
-            for (rule in rules.transitionRules) {
-                offsets += rule.offsetBefore
-                offsets += rule.offsetAfter
-                offsets += rule.standardOffset
-            }
-            if (offsets.any { it.totalSeconds % (15 * 60) != 0 }) odd += zone.id
         }
-        assertEquals(emptyList<String>(), odd)
+        assertEquals(emptyList<String>(), off)
         assertTrue("this runtime knows only ${zones.size} zones", zones.size > 400)
+        assertTrue("no change of offset changed a date: $changes", changes > 0)
     }
 
     /** The engine's own cuts, around Kathmandu's, the Chatham Islands' and Eucla's midnights, each lie within one local day of every zone. */
     @Test
-    fun noRecordOfTheEngineCrossesALocalMidnightOfAnyZone() {
+    fun noRecordOfTheEngineCrossesAChangeOfTheLocalDateInAnyZone() {
         val clock = Travel(ZoneId.of("UTC"))
         for (zone in zones) {
             for ((start, end) in spans) assertTrue("$start..$end in ${zone.id}", clock.withinItsDay(start, end, zone))
@@ -72,12 +86,11 @@ class LogDaysTest {
     }
 
     /**
-     * The zone changes while Watch runs, between one record and the next, as on a journey or when the user
-     * sets it: each record is filed by the zone the clock reads when it is written, and lies within that
-     * zone's day.
+     * The zone changes between batches, as on a journey or when the user sets it: each record is filed by
+     * the zone the clock reads when it is written, and lies within that zone's day.
      */
     @Test
-    fun aZoneChangedWhileWatchRunsFilesEachRecordWithinOneDayOfItsZone() {
+    fun aZoneChangedBetweenBatchesFilesEachRecordWithinOneDayOfItsZone() {
         val journey = listOf(
             "Asia/Kathmandu", "Pacific/Chatham", "Australia/Eucla", "America/St_Johns", "Australia/Lord_Howe",
             "Asia/Tehran", "Pacific/Kiritimati", "Africa/Monrovia", "Europe/Istanbul",
@@ -89,5 +102,35 @@ class LogDaysTest {
             assertTrue("$start..$end filed in ${clock.zone}", clock.withinItsDay(start, end))
             assertEquals(Instant.ofEpochMilli(start).atZone(clock.zone).toLocalDate().toEpochDay(), clock.dayOf(start))
         }
+    }
+
+    /**
+     * The zone changes while a batch is written ([ConnectionLog.file], which `writeNow` files every batch
+     * with): the batch is filed in the zone read once at its start, so that no record of it goes under a
+     * day whose key the batch did not draw. Here the clock gives another zone at each reading.
+     */
+    @Test
+    fun aBatchIsFiledInTheOneZoneReadAsItIsWritten() {
+        val journey = listOf("Pacific/Chatham", "Pacific/Kiritimati", "Asia/Kathmandu", "America/St_Johns").map(ZoneId::of)
+        val clock = object : LogClock {
+            var read = 0
+
+            override fun now(): Long = 0
+
+            override fun zone(): ZoneId = journey[read++ % journey.size]
+        }
+        var skipped = 0
+        val filed = ConnectionLog.file(EngineRecords.batch, clock, Long.MIN_VALUE, pastRetention = false) { skipped++ }
+        assertEquals(1, clock.read)
+        assertEquals(0, skipped)
+        assertEquals(EngineRecords.records.size, filed.size)
+        for ((record, _, day) in filed) {
+            assertEquals(Instant.ofEpochMilli(record.start).atZone(journey[0]).toLocalDate().toEpochDay(), day)
+        }
+        // Days before the first kept are left out, unless kept by hand.
+        val first = filed.maxOf { it.day }
+        val kept = ConnectionLog.file(EngineRecords.batch, LogClock.Phone, first, pastRetention = false) {}
+        assertTrue(kept.all { LogClock.Phone.dayOf(it.record.start) >= first })
+        assertEquals(EngineRecords.records.size, ConnectionLog.file(EngineRecords.batch, LogClock.Phone, Long.MAX_VALUE, pastRetention = true) {}.size)
     }
 }

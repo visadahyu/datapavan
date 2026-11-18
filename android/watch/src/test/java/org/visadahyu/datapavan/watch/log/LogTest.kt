@@ -25,7 +25,7 @@ class LogTest {
     @Test
     fun readsWhatTheEngineWrites() {
         val records = EngineRecords.records.map { it.first }
-        assertEquals(10, records.size)
+        assertEquals(11, records.size)
         val day = 1_794_873_600_000L
         fun at(hours: Int, minutes: Int) = day + (hours * 60L + minutes) * 60_000
         val tls = records[0] as LogRecord.Segment
@@ -63,6 +63,14 @@ class LogTest {
         assertEquals(listOf(4, 4), listOf(before.namedBy, after.namedBy))
         assertEquals(true to false, before.continues to after.continues)
         assertEquals("" to "", before.name to after.dnsName)
+
+        // The codes the others leave out: named by DNS, refused, a network of a known owner, both flags.
+        val byDns = records[10] as LogRecord.Segment
+        assertEquals(listOf(0, 1), listOf(byDns.namedBy, byDns.outcome))
+        assertEquals(32_934L to 1, byDns.asn to byDns.network)
+        assertEquals(true to true, byDns.continues to byDns.cameIn)
+        assertEquals(listOf(1L, 2L, 3L, 4L), listOf(byDns.up, byDns.down, byDns.wireUp, byDns.wireDown))
+        assertEquals("www.example.com" to "", byDns.name to byDns.dnsName)
     }
 
     /** No record, cut short anywhere or with any byte changed, makes the reader throw: it reads it or skips it. */
@@ -122,7 +130,14 @@ class LogTest {
         assertEquals(2, records.size)
         assertEquals(LogRecord.Lookups(null, 5, 6, 3, 210, 540), records[1].first)
         assertArrayEquals(segment, records[0].second)
-        assertEquals(1, LogRecord.batch(batch.copyOf(batch.size - 3)).size)
+        // Cut short: what came before is read, and the rest counted once as skipped.
+        var skipped = 0
+        assertEquals(1, LogRecord.batch(batch.copyOf(batch.size - 3)) { skipped++ }.size)
+        assertEquals(1, skipped)
+        assertEquals(0, LogRecord.batch(batch.copyOf(3)) { skipped++ }.size)
+        assertEquals(2, skipped)
+        assertEquals(2, LogRecord.batch(batch) { skipped++ }.size)
+        assertEquals(2, skipped)
         assertNull(LogRecord.parse(segment.copyOf(30)))
         assertNull(LogRecord.parse(byteArrayOf(2, 1)))
     }

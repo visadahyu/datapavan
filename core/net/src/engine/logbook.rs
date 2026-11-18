@@ -31,11 +31,15 @@ use std::time::Duration;
 use tokio::sync::watch;
 
 /// A flow still open is written as a segment at every quarter of an hour of the wall clock, UTC (ADR
-/// 0037, decision 1). Every zone of tzdata (2026f, read on 2026-11-18) is a whole number of quarter hours
-/// from UTC, and has been since 1979: the last two that were not, Africa/Monrovia at -0:44:30 and
-/// Pacific/Kiritimati at -10:40, left those offsets in 1972 and 1979. So a local midnight is always a
-/// quarter hour of UTC, Kathmandu's (+5:45), the Chatham Islands' (+12:45 and +13:45) and Eucla's (+8:45)
-/// included, and no segment spans one. Watch's Kotlin side checks the zones it knows (`LogDaysTest`).
+/// 0037, decision 1), and every segment lies within one quarter hour. In every zone of tzdata (2026f, read
+/// on 2026-11-18), every change of the local date since 2011 falls on a quarter hour of UTC, so no segment
+/// spans one, Kathmandu's (+5:45), the Chatham Islands' (+12:45 and +13:45) and Eucla's (+8:45) included.
+/// Both of what that takes hold: every offset is a whole number of quarter hours from UTC, which puts every
+/// midnight on one (since 1979: Africa/Monrovia at -0:44:30 and Pacific/Kiritimati at -10:40 left theirs in
+/// 1972 and 1979), and every change of offset that changes the date falls on one (since 2011:
+/// Newfoundland, Goose Bay and Moncton changed theirs at 00:01 local time until 2010 and 2006, so that the
+/// date changed at 02:31 UTC). Watch's Kotlin side checks it of the zones it knows, by their rules ahead
+/// (`LogDaysTest`; review 1 of W5's first part, names, finding 5).
 pub(super) const SEGMENT_MS: u64 = 15 * 60 * 1000;
 
 /// Where an open segment ends, and where the next begins ([`cut`]).
@@ -821,7 +825,33 @@ mod tests {
             shared.finish(id);
             records.extend(taken(&shared));
         }
+        records.push(fixture_codes());
         records
+    }
+
+    /// The fixture's segment of the codes the others leave out (review 1 of W5's first part, names, finding
+    /// 7): named by DNS, refused, a network of a known owner, and both flags.
+    fn fixture_codes() -> Record {
+        use super::super::Network;
+        use crate::owners::NetworkKind;
+        Record::Segment {
+            flow: Flow {
+                id: 10,
+                outcome: Outcome::Refused,
+                name: Some("www.example.com".into()),
+                named_by: NamedBy::Dns,
+                came_in: true,
+                network: Some(Network {
+                    asn: 32_934,
+                    kind: NetworkKind::Own,
+                }),
+                ..flow(10)
+            },
+            start: at(22, 18),
+            end: at(22, 19),
+            bytes: [1, 2, 3, 4],
+            continues: true,
+        }
     }
 
     /// The fixture Watch's Kotlin side reads is what the engine writes, byte for byte, so that the two

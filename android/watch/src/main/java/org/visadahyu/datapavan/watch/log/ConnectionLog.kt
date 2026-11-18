@@ -236,19 +236,13 @@ class ConnectionLog internal constructor(
     private fun writeNow(batch: ByteArray, pastRetention: Boolean) {
         tidyOrCount()
         if (retentionDays == 0) return
-        val first = firstKept()
-        // Each record's day, in the zone read once for the batch: a zone that changes meanwhile cannot
-        // file one record of it under a day the next lines did not reckon with.
-        val zone = clock.zone()
-        val records = LogRecord.batch(batch) { skipped.incrementAndGet() }
-            .map { (record, bytes) -> Triple(record, bytes, clock.dayOf(record.start, zone)) }
-            .filter { (_, _, day) -> pastRetention || day >= first }
+        val records = file(batch, clock, firstKept(), pastRetention) { skipped.incrementAndGet() }
         if (records.isEmpty()) return
         val db = open().writableDatabase
         // Each new day key's row is committed on its own before the batch: a batch that fails then
         // leaves no key in memory whose row the database does not have. A key row with no records is
         // harmless and goes with its day.
-        val byDay = records.map { (_, _, day) -> day }.distinct().associateWith { sealerFor(db, it) }
+        val byDay = records.map { it.day }.distinct().associateWith { sealerFor(db, it) }
         db.transaction {
             for ((record, bytes, day) in records) {
                 val sealer = byDay.getValue(day)
@@ -430,6 +424,15 @@ class ConnectionLog internal constructor(
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
     }
 
+    /** A record of a batch, its bytes, and the day it is filed under. */
+    internal class Filed(val record: LogRecord, val bytes: ByteArray, val day: Long) {
+        operator fun component1() = record
+
+        operator fun component2() = bytes
+
+        operator fun component3() = day
+    }
+
     companion object {
         private const val TAG = "WatchLog"
         private const val NAME = "log.db"
@@ -446,6 +449,20 @@ class ConnectionLog internal constructor(
         @SuppressLint("StaticFieldLeak")
         @Volatile
         private var instance: ConnectionLog? = null
+
+        /**
+         * The records of [batch] that the log keeps, each with the day it is filed under: the local day of
+         * its start, in the zone [clock] gives, read once for the batch, so that a zone that changes while
+         * the batch is written, as on a journey or when the user sets it, cannot file one record under a day
+         * whose key the batch did not draw (review 1 of W5's first part, names, finding 6). Days before
+         * [first] are left out unless [pastRetention]; [skipped] is called for each record not read.
+         */
+        internal fun file(batch: ByteArray, clock: LogClock, first: Long, pastRetention: Boolean, skipped: () -> Unit): List<Filed> {
+            val zone = clock.zone()
+            return LogRecord.batch(batch, skipped)
+                .map { (record, bytes) -> Filed(record, bytes, clock.dayOf(record.start, zone)) }
+                .filter { pastRetention || it.day >= first }
+        }
 
         /** The process's one log. */
         fun of(context: Context): ConnectionLog = instance ?: synchronized(this) {
