@@ -4816,6 +4816,7 @@ fn begin_udp(
         outcome: Outcome::Opened,
         name,
         named_by,
+        dns_name: None,
         ech: Ech::Absent,
         dns,
         resolver,

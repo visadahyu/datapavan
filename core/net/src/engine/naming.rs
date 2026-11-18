@@ -21,7 +21,7 @@ pub(super) struct Begun {
 impl Shared {
     /// A new flow's number and its first name: from the DNS answers the app was given, else from the
     /// organisation of the destination's network, as the company people know when the owners' table
-    /// names it. A TLS or QUIC server name may come later.
+    /// names it. A TLS or QUIC server name read later names it instead ([`NamedBy`]).
     pub(super) fn begin(&self, destination: SocketAddr, uid: Option<u32>) -> Begun {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed) + 1;
         // A stand-in is named by the lookup it answered (ADR 0038), and has no network of its own.
@@ -94,9 +94,14 @@ impl Shared {
         }
     }
 
-    /// Notes what a flow's TLS or QUIC hello said: its server name names the flow by W3's order,
-    /// unless it is the public name of an ECH configuration, behind which the real name is hidden. A
-    /// known resolver's host name marks the flow as the app's own encrypted DNS.
+    /// Notes what a flow's TLS or QUIC hello said: its server name names the flow by W3's order
+    /// ([`NamedBy`]), and a DNS name it differs from stays beside it, unless it is the public name of
+    /// an ECH configuration, behind which the real name is hidden: a DNS name stays the flow's then. A
+    /// flow the organisation table named, or none, takes the hello's name too: its network, the AS
+    /// number and what its owner is, stays in the flow and its records, while the organisation's name,
+    /// which names who runs the network rather than the server, gives way, as before. A chained app's
+    /// flow, whose destination stays out of the log, takes no name in it. A known resolver's host name
+    /// marks the flow as the app's own encrypted DNS.
     pub(super) fn hello(&self, opened: Opened, hello: &Hello, by: NamedBy) {
         let id = opened.id;
         let hidden = hello.ech && lock(&self.names).is_public(&hello.name, Instant::now());
@@ -146,6 +151,13 @@ impl Shared {
                 flow.resolver.get_or_insert_with(|| resolver.clone());
             }
             if !hidden && flow.named_by.yields_to(by) {
+                // Finding 20: a DNS name the connection's own differs from stays beside it.
+                if flow.named_by == NamedBy::Dns
+                    && let Some(dns) = flow.name.take()
+                    && !same_name(&dns, &hello.name)
+                {
+                    flow.dns_name = Some(dns);
+                }
                 flow.name = Some(hello.name.clone());
                 flow.named_by = by;
             }

@@ -284,6 +284,7 @@ mod tests {
             outcome: Outcome::Opened,
             name: Some("example.com".into()),
             named_by: NamedBy::Dns,
+            dns_name: None,
             ech: Ech::Absent,
             dns: DnsUse::None,
             resolver: None,

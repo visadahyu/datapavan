@@ -363,15 +363,24 @@ pub enum Outcome {
     Failed,
 }
 
-/// Where a flow's name came from, in the order W3 prefers them.
+/// Where a flow's name came from. W3's order, written here and only here ([`NamedBy::yields_to`]): the
+/// server name the connection itself sent, in its TLS or QUIC hello; then a DNS answer Watch passed to
+/// the app for the destination's address; then the organisation of the address's network; then none.
+///
+/// The connection's own name comes first: the engine read it from the flow itself, while a DNS answer
+/// is tied to the flow by its address alone, and on an address that serves many names another app's
+/// lookup may have named it last (finding 20 of the independent review of 2026-11-09; ADR 0044, decision
+/// 4). Either can be wrong, the connection's own when an app sends a front, so a DNS name it differs
+/// from stays beside it ([`Flow::dns_name`]). A hello's name that is the public name of an ECH
+/// configuration never names a flow ([`Ech::Hidden`]): a DNS name stays the flow's then.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NamedBy {
-    /// A DNS answer Watch passed to the app for the destination's address.
-    Dns,
     /// The server name of the TLS connection.
     Tls,
     /// The server name of the QUIC connection's Initial packets.
     Quic,
+    /// A DNS answer Watch passed to the app for the destination's address.
+    Dns,
     /// The organisation whose network the address is in, from the offline table (ADR 0036).
     Organisation,
     /// Not named.
@@ -379,15 +388,14 @@ pub enum NamedBy {
 }
 
 impl NamedBy {
-    /// Whether a name from this source gives way to one from `other`: W3's order is DNS, TLS, QUIC,
-    /// then the organisation.
+    /// Whether a name from this source gives way to one from `other`, by W3's order. TLS and QUIC share
+    /// a place: a flow is one or the other, and keeps the name of its first hello.
     fn yields_to(self, other: Self) -> bool {
         let rank = |by: Self| match by {
-            Self::Dns => 0,
-            Self::Tls => 1,
-            Self::Quic => 2,
-            Self::Organisation => 3,
-            Self::Unknown => 4,
+            Self::Tls | Self::Quic => 0,
+            Self::Dns => 1,
+            Self::Organisation => 2,
+            Self::Unknown => 3,
         };
         rank(other) < rank(self)
     }
@@ -436,6 +444,9 @@ pub struct Flow {
     pub name: Option<String>,
     /// Where the name came from.
     pub named_by: NamedBy,
+    /// The name a DNS answer gave the destination's address, where the connection's own name, which
+    /// names the flow ([`NamedBy`]), differs from it: kept beside it, since either can be wrong.
+    pub dns_name: Option<String>,
     /// Whether the hello hid the real name.
     pub ech: Ech,
     /// Whether the flow carries the app's own DNS.
@@ -1463,6 +1474,7 @@ mod tests {
             outcome: Outcome::Opened,
             name,
             named_by,
+            dns_name: None,
             ech: Ech::Absent,
             dns,
             resolver,
@@ -1505,20 +1517,28 @@ mod tests {
         assert_eq!(shared.counters.snapshot()[20..22], [2, 1]);
     }
 
+    /// Finding 20: the connection's own name names the flow, and a DNS name it differs from stays beside
+    /// it, in the flow kept and in the log's; an ECH public name names nothing, and a DNS name stays the
+    /// flow's then; a flow keeps its first hello's name.
     #[test]
-    fn a_hello_names_a_flow_in_w3s_order_unless_ech_hides_the_name() {
+    fn a_hello_names_a_flow_and_a_dns_name_it_differs_from_stays_beside_it() {
         let shared = shared();
         let now = Instant::now();
         let asked = SocketAddr::from(([93, 184, 216, 34], 443));
         lock(&shared.names).insert(asked.ip(), None, "www.example.com", 60, now);
         lock(&shared.names).insert_public("cover.example", 60, now);
         let by_dns = open_flow(&shared, asked);
+        let same = open_flow(&shared, asked);
         let by_quic = open_flow(&shared, SocketAddr::from(([203, 0, 113, 9], 443)));
         let hidden = open_flow(&shared, SocketAddr::from(([203, 0, 113, 10], 443)));
         let hidden_after_dns = open_flow(&shared, asked);
 
-        // DNS comes first: a TLS name does not replace it.
+        // The connection's own name comes first; the DNS name it differs from stays beside it.
         shared.hello(by_dns, &hello("other.example", false), NamedBy::Tls);
+        // A later hello does not rename it.
+        shared.hello(by_dns, &hello("late.example", false), NamedBy::Quic);
+        // The same name, in another case and with a trailing dot: nothing beside it.
+        shared.hello(same, &hello("WWW.Example.com.", false), NamedBy::Tls);
         // A QUIC name names a flow without one; ECH offered, perhaps GREASE, does not stop it.
         shared.hello(by_quic, &hello("quic.example", true), NamedBy::Quic);
         // A public name under ECH never names a flow, and the real name stays as DNS gave it.
@@ -1529,22 +1549,38 @@ mod tests {
             NamedBy::Quic,
         );
 
-        let flows = lock(&shared.flows);
-        let seen: Vec<_> = flows
-            .iter()
-            .map(|f| (f.name.as_deref(), f.named_by, f.ech))
-            .collect();
-        assert_eq!(
-            seen,
-            vec![
-                (Some("www.example.com"), NamedBy::Dns, Ech::Absent),
-                (Some("quic.example"), NamedBy::Quic, Ech::Offered),
-                (None, NamedBy::Unknown, Ech::Hidden),
-                (Some("www.example.com"), NamedBy::Dns, Ech::Hidden),
-            ]
-        );
+        let expected = [
+            (
+                Some("other.example"),
+                NamedBy::Tls,
+                Some("www.example.com"),
+                Ech::Absent,
+            ),
+            (Some("WWW.Example.com."), NamedBy::Tls, None, Ech::Absent),
+            (Some("quic.example"), NamedBy::Quic, None, Ech::Offered),
+            (None, NamedBy::Unknown, None, Ech::Hidden),
+            (Some("www.example.com"), NamedBy::Dns, None, Ech::Hidden),
+        ];
+        let seen = |flow: &Flow| {
+            (
+                flow.name.clone(),
+                flow.named_by,
+                flow.dns_name.clone(),
+                flow.ech,
+            )
+        };
+        let owned = |e: &(Option<&str>, NamedBy, Option<&str>, Ech)| {
+            (e.0.map(str::to_owned), e.1, e.2.map(str::to_owned), e.3)
+        };
+        let expected: Vec<_> = expected.iter().map(owned).collect();
+        let kept: Vec<_> = lock(&shared.flows).iter().map(seen).collect();
+        assert_eq!(kept, expected);
+        let live = lock(&shared.live);
+        let logged: Vec<_> = (1..=5).map(|id| seen(&live[&id].flow)).collect();
+        assert_eq!(logged, expected);
+        drop(live);
         // TLS and QUIC names read, QUIC unread, ECH offered, ECH hidden.
-        assert_eq!(shared.counters.snapshot()[11..16], [2, 2, 0, 3, 2]);
+        assert_eq!(shared.counters.snapshot()[11..16], [3, 3, 0, 3, 2]);
     }
 
     #[test]
@@ -1622,6 +1658,7 @@ mod tests {
             outcome,
             name: None,
             named_by: NamedBy::Unknown,
+            dns_name: None,
             ech: Ech::Absent,
             dns: DnsUse::None,
             resolver: None,
@@ -3051,6 +3088,7 @@ mod tests {
             outcome: Outcome::Opened,
             name: None,
             named_by: NamedBy::Unknown,
+            dns_name: None,
             ech: Ech::Absent,
             dns: DnsUse::None,
             resolver: None,
@@ -3099,12 +3137,17 @@ mod tests {
     }
 
     #[test]
-    fn w3s_order_is_dns_tls_quic_then_the_organisation() {
+    fn w3s_order_is_the_connections_own_name_then_dns_then_the_organisation() {
         use NamedBy::{Dns, Organisation, Quic, Tls, Unknown};
-        let order = [Dns, Tls, Quic, Organisation, Unknown];
-        for (i, &better) in order.iter().enumerate() {
-            for &worse in &order[i + 1..] {
-                assert!(worse.yields_to(better) && !better.yields_to(worse));
+        let order: [&[NamedBy]; 4] = [&[Tls, Quic], &[Dns], &[Organisation], &[Unknown]];
+        for (i, &place) in order.iter().enumerate() {
+            for &better in place {
+                for &worse in order[i + 1..].iter().flat_map(|p| p.iter()) {
+                    assert!(worse.yields_to(better) && !better.yields_to(worse));
+                }
+                for &alike in place {
+                    assert!(!alike.yields_to(better), "{alike:?} and {better:?}");
+                }
             }
         }
     }

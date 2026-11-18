@@ -197,6 +197,7 @@ mod tests {
             outcome: Outcome::Opened,
             name: Some("Meta Platforms, Inc.".into()),
             named_by: NamedBy::Organisation,
+            dns_name: None,
             ech: Ech::Offered,
             dns: DnsUse::None,
             resolver: None,
