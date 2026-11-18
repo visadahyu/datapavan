@@ -102,6 +102,12 @@ impl Shared {
         matches!(self.route(uid, destination), Route::Tool(chain) if !chain.log_destinations)
     }
 
+    /// Whether the app `uid` goes through the tool with its destinations left out: what the live view
+    /// keeps of it is its bytes, with no destination (ADR 0046, decision 6, item 5).
+    pub(super) fn hides_app(&self, uid: Option<u32>) -> bool {
+        matches!(self.app_route(uid), Route::Tool(chain) if !chain.log_destinations)
+    }
+
     /// What to ask the tool for: the name behind a stand-in address, or the address itself. `None` for
     /// a stand-in the map no longer holds.
     pub(super) fn tool_target(&self, destination: SocketAddr) -> Option<Target> {

@@ -148,6 +148,18 @@ impl Counts {
         }
     }
 
+    /// Leaves out the destinations of the apps that `hidden` names, keeping their bytes, marked as through
+    /// the tool from their last second with bytes.
+    pub(super) fn hide(&mut self, hidden: impl Fn(Option<u32>) -> bool) {
+        for (uid, app) in &mut self.apps {
+            if !app.places.is_empty() && hidden(*uid) {
+                self.places -= app.places.len();
+                app.places.clear();
+                app.through_tool = Some(app.through_tool.map_or(app.last, |s| s.max(app.last)));
+            }
+        }
+    }
+
     /// Counts one placed second of the app `uid`, `bytes` its counts (as the app sent and received
     /// them, then the tunnel's), for the live view.
     pub(super) fn count(
@@ -732,6 +744,73 @@ mod tests {
         let tool = app_of(&snapshot, Some(10_200)).map(|a| (a.tool, a.places.len()));
         assert_eq!(tool, Some((true, 1)));
         assert_eq!(lock(&shared.activity).counts.places, 4);
+    }
+
+    /// A chain that sends `uid` through the tool, its destinations logged or not.
+    fn chain_of(uid: u32, log_destinations: bool) -> Arc<crate::engine::Chain> {
+        Arc::new(crate::engine::Chain {
+            proxy: SocketAddr::from(([127, 0, 0, 1], 10_808)),
+            credentials: None,
+            tool: 10_200,
+            apps: Some(std::collections::HashSet::from([uid])),
+            udp: true,
+            log_destinations,
+        })
+    }
+
+    /// Turning "Log where these apps connect" off drops a chained app's destinations from "Now" at once,
+    /// keeping its bytes, marked as through the tool; a flow opened while it was on, still open or
+    /// waiting for its state, adds no destination after, and its records after carry none (ADR 0046,
+    /// decision 6, item 5; review b1 of W5's second part, engine, finding 1).
+    #[test]
+    fn turning_the_switch_off_drops_a_chained_apps_destinations_at_once() {
+        let (shared, clock, _) = telling_at(T);
+        *lock(&shared.chain) = Some(chain_of(UID, true));
+        let open_flow = open(&shared, 1);
+        let ended = open(&shared, 2);
+        up_at(&shared, &clock, &open_flow, 500, 50);
+        up_at(&shared, &clock, &ended, 600, 5);
+        shared.finish(2);
+        shared.tell(&told(T, T + 1_000, &[]));
+        let places = |shared: &Shared, at| {
+            let snapshot = shared.now_view(at);
+            app_of(&snapshot, Some(UID)).map(|a| (a.places.len(), a.through_tool))
+        };
+        assert_eq!(
+            places(&shared, T + 1_000),
+            Some((1, false)),
+            "logged while on"
+        );
+        // The second flow's segment waits for a second not told yet; the switch goes off.
+        up_at(&shared, &clock, &open_flow, 1_500, 0);
+        let other = open(&shared, 3);
+        up_at(&shared, &clock, &other, 1_600, 7);
+        shared.finish(3);
+        *lock(&shared.chain) = Some(chain_of(UID, false));
+        shared.hide_chained();
+        assert_eq!(
+            places(&shared, T + 2_000),
+            Some((0, true)),
+            "a destination left after the switch went off"
+        );
+        up_at(&shared, &clock, &open_flow, 2_500, 70);
+        shared.tell(&told(T + 1_000, T + 3_000, &[]));
+        assert_eq!(places(&shared, T + 3_000), Some((0, true)));
+        let snapshot = shared.now_view(T + 3_000);
+        let bytes = app_of(&snapshot, Some(UID)).map(|a| a.bytes[1][3]);
+        assert_eq!(bytes, Some([50 + 5 + 7 + 70, 0]), "the bytes stay");
+        clock.set(T + 4_000);
+        shared.flush();
+        for record in std::mem::take(&mut *lock(&shared.pending_log)) {
+            if let crate::log::Record::Segment { flow, start, .. } = record
+                && start >= T + 1_000
+            {
+                assert!(
+                    flow.name.is_none() && flow.destination.ip().is_unspecified(),
+                    "{flow:?}"
+                );
+            }
+        }
     }
 
     /// Bounded: one app more than [`APPS`] takes the place of the one with bytes the longest ago; one

@@ -987,6 +987,8 @@ impl Engine {
             tool_answers: Mutex::default(),
             kept: Mutex::default(),
         });
+        // What the engine before held may name chained apps' destinations that the chain set now leaves out.
+        shared.hide_chained();
         let (stop, stopped) = watch::channel(false);
         let (network, changes) = watch::channel(0);
         let (swaps, swapped) = mpsc::unbounded_channel();
@@ -1105,6 +1107,8 @@ impl Engine {
         // A kept connection goes through the tool it was opened through: those answer the questions
         // already sent, then end.
         lock(&self.shared.kept).clear();
+        // What the new chain leaves out of the log leaves "Now" too, at once (ADR 0046, decision 6, item 5).
+        self.shared.hide_chained();
     }
 
     /// Whether the answers of Watch's own DNS address reach the apps with a time to live of 0, so that

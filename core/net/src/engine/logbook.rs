@@ -380,20 +380,10 @@ impl Shared {
             return None;
         }
         let hidden = self.hides(flow.uid, flow.destination);
-        let without_destination;
+        let stripped;
         let flow = if hidden {
-            without_destination = Flow {
-                destination: packet::unspecified_like(&flow.destination),
-                name: None,
-                named_by: NamedBy::Unknown,
-                dns_name: None,
-                ech: Ech::Absent,
-                dns: DnsUse::None,
-                resolver: None,
-                network: None,
-                ..flow.clone()
-            };
-            &without_destination
+            stripped = without_destination(flow);
+            &stripped
         } else {
             flow
         };
@@ -607,6 +597,51 @@ impl Shared {
     pub(super) fn take_log(&self) -> Option<Vec<u8>> {
         let records = std::mem::take(&mut *lock(&self.pending_log));
         (!records.is_empty()).then(|| log::batch(&records))
+    }
+}
+
+/// A flow with its destination left out, as the log keeps a chained app's ([`Shared::hides`]): no
+/// address, port, name or network.
+pub(super) fn without_destination(flow: &Flow) -> Flow {
+    Flow {
+        destination: packet::unspecified_like(&flow.destination),
+        name: None,
+        named_by: NamedBy::Unknown,
+        dns_name: None,
+        ech: Ech::Absent,
+        dns: DnsUse::None,
+        resolver: None,
+        network: None,
+        ..flow.clone()
+    }
+}
+
+impl Shared {
+    /// The chain was set anew (`Engine::chain`): the flows it now sends through the tool with their
+    /// destinations left out, as when "Log where these apps connect" is turned off, lose them at once,
+    /// in their open segments, in the segments that wait for their states, and in the live view, which
+    /// keeps of such an app only its bytes, marked as through the tool (ADR 0046, decision 6, item 5).
+    /// A flow opened while the switch was on adds no destination after. What the log already wrote stays,
+    /// for the retention the user chose.
+    pub(super) fn hide_chained(&self) {
+        let mut live = lock(&self.live);
+        for live in live.values_mut() {
+            if !live.hidden && self.hides(live.flow.uid, live.flow.destination) {
+                live.hidden = true;
+                live.flow = without_destination(&live.flow);
+            }
+        }
+        let mut activity = lock(&self.activity);
+        for piece in &mut activity.held {
+            if let Of::Flow { flow, hidden } = &mut piece.of
+                && !*hidden
+                && self.hides(flow.uid, flow.destination)
+            {
+                *hidden = true;
+                *flow = without_destination(flow);
+            }
+        }
+        activity.counts.hide(|uid| self.hides_app(uid));
     }
 }
 
