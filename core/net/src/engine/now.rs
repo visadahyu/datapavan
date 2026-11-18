@@ -570,6 +570,10 @@ mod tests {
         reading.screen = crate::states::Screen::On(Some(T + 2 * MINUTE + 30_000));
         shared.tell(&reading);
         bytes.down(&shared, 0, 0);
+        // A later reading with the same moment the screen came on keeps the window as it is.
+        let mut same = told(T + 3 * MINUTE, T + 3 * MINUTE + 1_000, &[]);
+        same.screen = crate::states::Screen::On(Some(T + 2 * MINUTE + 30_000));
+        shared.tell(&same);
         // At 22:14: every second in both windows; the one not told yet apart.
         let snapshot = shared.now_view(T + 4 * MINUTE + 1);
         let all = bytes_of(&snapshot, Some(UID));
@@ -796,6 +800,106 @@ mod tests {
             counts.count(Some(UID), minute * 60, [1, 0, 0, 0], IN_USE, Seen::Hidden);
         }
         assert_eq!(counts.apps[&Some(UID)].minutes.len(), 60);
+    }
+
+    /// What the live view costs to build and encode, with 100 apps of 20 destinations each over the
+    /// hour and seconds not told yet in 200 open flows: printed, for ADR 0046's "How it is built". Run it
+    /// in a release build: `cargo test -p datapavan-net --release --lib -- --ignored --nocapture
+    /// what_the_live_view_costs`.
+    #[test]
+    #[ignore = "a measurement, not a check: run it in a release build"]
+    fn what_the_live_view_costs() {
+        use std::time::Instant;
+        let (shared, clock, _) = telling_at(T);
+        {
+            let mut activity = lock(&shared.activity);
+            for uid in 0..100u32 {
+                for place in 0..20u64 {
+                    let flow = Flow {
+                        name: Some(format!("host{place}.example{uid}.com")),
+                        ..flow(place, Some(10_000 + uid))
+                    };
+                    for minute in 0..60 {
+                        let second = T / 1000 + minute * 60 + place;
+                        activity.counts.count(
+                            Some(10_000 + uid),
+                            second,
+                            [100, 1_000, 0, 0],
+                            BACKGROUND,
+                            Seen::Flow(&flow),
+                        );
+                    }
+                }
+            }
+        }
+        let flows: Vec<_> = (1..=200).map(|id| open(&shared, id)).collect();
+        for second in 0..5u64 {
+            clock.set(T + 3_600_000 + second * 1_000);
+            for bytes in &flows {
+                bytes.up(&shared, 100, 140);
+            }
+        }
+        let started = Instant::now();
+        let mut size = 0;
+        for _ in 0..100 {
+            size = crate::snapshot::encode(&shared.now_view(T + 3_605_000)).len();
+        }
+        let each = started.elapsed().as_secs_f64() * 1e3 / 100.0;
+        println!("the live view: {each:.2} ms to build and encode, {size} bytes");
+    }
+
+    /// Seconds not told yet that hold only the tunnel's bytes, no byte of the app's own, show no app.
+    #[test]
+    fn seconds_of_the_tunnels_bytes_alone_show_no_app() {
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 1_000, 0);
+        bytes.down(&shared, 0, 52);
+        assert_eq!(lock(&bytes.marks).len(), 1);
+        assert!(app_of(&shared.now_view(T + 2_000), Some(UID)).is_none());
+    }
+
+    /// A destination's network that changes, as a later flow to the same organisation's name in another
+    /// network, has its organisation read again.
+    #[test]
+    fn a_destination_whose_network_changes_is_named_again() {
+        use crate::owners::NetworkKind;
+        let mut counts = Counts::default();
+        let organisation = |asn| Flow {
+            name: Some("Example Org".into()),
+            named_by: NamedBy::Organisation,
+            network: Some(Network {
+                asn,
+                kind: NetworkKind::Unlisted,
+            }),
+            ..flow(1, Some(UID))
+        };
+        let (shared, _, _) = telling_at(T);
+        counts.count(
+            Some(UID),
+            T / 1000,
+            [1, 0, 0, 0],
+            BACKGROUND,
+            Seen::Flow(&organisation(64_500)),
+        );
+        *lock(&shared.activity) = {
+            let mut activity = super::super::activity::Activity::new(true);
+            activity.counts = counts;
+            activity
+        };
+        let asn = |snapshot: &Snapshot| {
+            app_of(snapshot, Some(UID))
+                .and_then(|a| a.places[0].organisation.as_ref().map(|o| o.0.asn))
+        };
+        assert_eq!(asn(&shared.now_view(T + 1_000)), Some(64_500));
+        lock(&shared.activity).counts.count(
+            Some(UID),
+            T / 1000 + 1,
+            [1, 0, 0, 0],
+            BACKGROUND,
+            Seen::Flow(&organisation(64_501)),
+        );
+        assert_eq!(asn(&shared.now_view(T + 2_000)), Some(64_501));
     }
 
     /// Minutes counted out of order are kept in order.

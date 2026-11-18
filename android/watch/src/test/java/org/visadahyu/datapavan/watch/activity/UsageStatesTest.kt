@@ -126,6 +126,13 @@ class UsageStatesTest {
         assertEquals(UsageStates.Screen(true, at(200)), reading.screen)
     }
 
+    /** An activity resumed in the moment the lock screen shows is over it. */
+    @Test
+    fun anActivityResumedAsTheLockScreenShowsIsOverIt() {
+        val reading = read(listOf(event(100, Kind.KEYGUARD_SHOWN, "android"), event(100, Kind.RESUMED, "b", "Call")))
+        assertEquals(listOf(inUse(B, at(100), at(600))), reading.intervals)
+    }
+
     /** The default keyboard is in use while the screen is on, since it may be shown, and in the background while it is off. */
     @Test
     fun theKeyboardIsInUseWhileTheScreenIsOn() {
@@ -199,6 +206,21 @@ class UsageStatesTest {
         )
         assertEquals(back to back + 60_000, after.from to after.until)
         assertEquals(listOf(inUse(A, back, back + 5_000 + grace), serving(C, back, back + 60_000)), after.intervals)
+    }
+
+    /** A clock set back before the first reading: nothing before the moment it was found is read, of either clock. */
+    @Test
+    fun aWallClockSetBackBeforeAnyReadingReadsOnlyAfterIt() {
+        val states = UsageStates()
+        val back = at(-3_600)
+        states.clockSetBack(back, uidOf, null)
+        assertEquals(back, states.queryFrom(back + 60_000))
+        val after = states.read(
+            listOf(Event(back - 60_000, Kind.RESUMED, "a", "Old"), Event(back + 10_000, Kind.INTERACTION, "b")),
+            back + 60_000, uidOf, null, startedAt = t,
+        )
+        assertEquals(back to back + 60_000, after.from to after.until)
+        assertEquals(listOf(inUse(B, back + 10_000, back + 10_000 + grace)), after.intervals)
     }
 
     /** Without usage access or events, nothing is known; the next reading with them reads back a day from its end. */

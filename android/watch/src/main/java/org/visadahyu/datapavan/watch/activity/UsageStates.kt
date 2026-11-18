@@ -246,12 +246,11 @@ class UsageStates(
         }
 
         /**
-         * What is carried from here, as of `time`: the apps visible now count as in use until it, and what
-         * the grace no longer reaches from it is dropped.
+         * What is carried from here, as of `time`, what the grace no longer reaches from it dropped. The apps
+         * visible now need no more: the next pass finds them visible from its start.
          */
         fun snapshot(time: Long): Base {
-            val inUse = lastInUse.filterValues { it + grace > time }.toMutableMap()
-            for (uid in visibleSince.keys) inUse[uid] = time
+            val inUse = lastInUse.filterValues { it + grace > time }
             return Base(time, activities.toMap(), services.toMap(), screenOn, screenOnSince, keyguard, keyguardSince, inUse)
         }
 

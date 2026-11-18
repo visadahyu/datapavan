@@ -307,6 +307,13 @@ mod tests {
             let other = Told { screen, ..told() };
             assert_eq!(read(&write(&other)), Some(other));
         }
+        // A span with no length, as a reading that tells nothing new, is one too.
+        let empty = Told {
+            until: 1_000,
+            intervals: Vec::new(),
+            ..told()
+        };
+        assert_eq!(read(&write(&empty)), Some(empty));
         for known in [Known::NoAccess, Known::Locked] {
             let nothing = Told {
                 known,

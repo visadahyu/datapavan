@@ -206,6 +206,14 @@ fn settle_marks(
     settled
 }
 
+/// Gives back the room of marks settled: a flow that once held the window's 120 does not keep 5 KB for
+/// the rest of its life, so that what all flows hold stays near what [`MARKS`] counts.
+fn give_back(marks: &mut VecDeque<Mark>) {
+    if marks.capacity() > 16 && marks.len() < marks.capacity() / 4 {
+        marks.shrink_to(marks.len().max(8));
+    }
+}
+
 fn delta(now: [u64; 4], base: [u64; 4]) -> [u64; 4] {
     [0, 1, 2, 3].map(|i| now[i].saturating_sub(base[i]))
 }
@@ -574,10 +582,13 @@ impl Shared {
     }
 
     /// The wall clock was set back by a second or more (`logbook`'s `log_now`, before the count that
-    /// read it): every second held is placed at once, by what was told of it or as not told.
+    /// read it): every second held is placed at once, by what was told of it or as not told, and what was
+    /// told is forgotten, since its spans, of the old clock, may cover the seconds the new clock reads next;
+    /// those wait for the readings of the new clock.
     #[cold]
     pub(super) fn clock_set_back(&self) {
         self.settle(Some(Force::ALL));
+        lock(&self.activity).timeline = Timeline::default();
     }
 
     /// Places every second held that what was told places, or `force`: in the live flows, the apps'
@@ -612,6 +623,7 @@ impl Shared {
                         },
                     );
                 }
+                give_back(&mut marks);
                 if let Some(mark) = marks.front() {
                     oldest = Some(oldest.map_or(mark.second, |o| o.min(mark.second)));
                 }
@@ -634,6 +646,7 @@ impl Shared {
                         records.push(lookups_record(uid, (start, end), bytes, state));
                     },
                 );
+                give_back(&mut entry.marks);
                 if let Some(mark) = entry.marks.front() {
                     oldest = Some(oldest.map_or(mark.second, |o| o.min(mark.second)));
                 }
@@ -916,6 +929,11 @@ pub(super) mod tests {
             timeline.place(UID, T / 1000 + 3),
             Some(Placed::Unknown(Unknown::Locked))
         );
+        // A span that ends where a second begins says nothing of it.
+        assert_eq!(
+            timeline.place(UID, T / 1000 + 2),
+            Some(Placed::Unknown(Unknown::Locked))
+        );
         assert_eq!(timeline.place(UID, T / 1000 + 4), Some(NOT_TOLD), "a gap");
         assert_eq!(timeline.place(UID, T / 1000 + 5), Some(BACKGROUND));
         assert_eq!(
@@ -947,6 +965,14 @@ pub(super) mod tests {
             T + 12_000,
             &[(T + 10_000, T + 11_000, State::Notification)],
         ));
+        assert_eq!(timeline.spans.len(), 2);
+        // A reading from where another began replaces it whole, leaving no empty span.
+        timeline.tell(&told(
+            T + 6_000,
+            T + 12_000,
+            &[(T + 10_000, T + 11_000, State::Notification)],
+        ));
+        assert_eq!(timeline.spans.len(), 2);
         assert_eq!(timeline.place(UID, T / 1000 + 5), Some(IN_USE));
         assert_eq!(
             timeline.place(UID, T / 1000 + 7),
@@ -1107,23 +1133,32 @@ pub(super) mod tests {
     #[test]
     fn a_segment_with_no_count_takes_the_state_of_its_last_moment() {
         let (shared, clock, _) = telling_at(T + 1_500);
-        assert!(
-            shared
-                .record(Flow {
-                    outcome: Outcome::Refused,
-                    ..flow(1, Some(UID))
-                })
-                .is_none()
-        );
+        let refused = |id| Flow {
+            outcome: Outcome::Refused,
+            ..flow(id, Some(UID))
+        };
+        assert!(shared.record(refused(1)).is_none());
         assert_eq!(taken(&shared), vec![]);
         open(&shared, 2);
+        // On a second's boundary: an instant is in the second it begins, a span in the second its end
+        // closes.
+        clock.set(T + 2_000);
+        assert!(shared.record(refused(3)).is_none());
         clock.set(T + 4_000);
         shared.finish(2);
-        shared.tell(&told(T, T + 5_000, &[(T + 1_000, T + 2_000, State::InUse)]));
+        shared.tell(&told(
+            T,
+            T + 5_000,
+            &[
+                (T + 1_000, T + 2_000, State::InUse),
+                (T + 4_000, T + 4_500, State::InUse),
+            ],
+        ));
         assert_eq!(
             segments(&taken(&shared)),
             vec![
                 (1, T + 1_500, T + 1_500, 0, false, IN_USE),
+                (3, T + 2_000, T + 2_000, 0, false, BACKGROUND),
                 (2, T + 1_500, T + 4_000, 0, false, BACKGROUND),
             ]
         );
@@ -1193,12 +1228,97 @@ pub(super) mod tests {
             assert_eq!(live.state, Some(Placed::Unknown(Unknown::Late)));
         }
         assert_eq!(shared.marks.load(Ordering::Relaxed), WINDOW);
+        // Exactly the window's 120 seconds held, spread over more of the clock, are all kept.
+        let (wide, clock_wide, _) = telling_at(T);
+        let other = open(&wide, 2);
+        for second in (0..=WINDOW as u64).filter(|&s| s != 1) {
+            up_at(&wide, &clock_wide, &other, second * 1_000, 1);
+        }
+        assert_eq!(lock(&other.marks).len(), WINDOW);
+        assert_eq!(lock(&wide.live)[&2].state, None, "none told too late");
         // Told now, the rest are placed as told, and the segment cut where told too late ends.
         shared.tell(&told(T, T + 200_000, &[]));
         assert_eq!(
             segments(&taken(&shared)),
             vec![(1, T, T + 1_000, 1, true, Placed::Unknown(Unknown::Late))]
         );
+    }
+
+    /// A count of no bytes notes no second: it cuts no segment where its app's state changed.
+    #[test]
+    fn a_count_of_nothing_notes_no_second() {
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 1_000, 10);
+        clock.set(T + 5_000);
+        bytes.up(&shared, 0, 0);
+        bytes.down(&shared, 0, 0);
+        assert_eq!(lock(&bytes.marks).len(), 1);
+        clock.set(T + 6_000);
+        shared.finish(1);
+        shared.tell(&told(T, T + 7_000, &[(T + 1_000, T + 2_000, State::InUse)]));
+        assert_eq!(
+            segments(&taken(&shared)),
+            vec![(1, T, T + 6_000, 10, false, IN_USE)]
+        );
+    }
+
+    /// A segment cut in the middle of a second, as by a flush, leaves the next to begin its own mark in
+    /// that second.
+    #[test]
+    fn a_cut_in_a_second_lets_the_next_segment_mark_it() {
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 1_000, 10);
+        clock.set(T + 1_500);
+        shared.flush();
+        up_at(&shared, &clock, &bytes, 1_700, 20);
+        let marks = lock(&bytes.marks);
+        assert_eq!(
+            marks
+                .iter()
+                .map(|m| (m.second, m.counts[0]))
+                .collect::<Vec<_>>(),
+            vec![(T / 1000 + 1, 10)]
+        );
+    }
+
+    /// The logger asks again for the states while cut segments wait for theirs, and not while none do.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn the_logger_asks_again_while_segments_wait() {
+        let (shared, clock, platform) = telling_at(T);
+        let shared = Arc::new(shared);
+        let asked = || platform.asked.load(Ordering::Relaxed);
+        let (_end, ending) = tokio::sync::watch::channel(false);
+        tokio::spawn(super::super::logbook::logger(Arc::clone(&shared), ending));
+        tokio::task::yield_now().await;
+        // Nothing waits: the logger, woken by a flow, asks nothing of its own.
+        let bytes = open(&shared, 1);
+        assert_eq!(asked(), 1, "the flow's opening asked");
+        clock.set(T + 10_000);
+        tokio::time::sleep(super::super::LOG_DELAY + std::time::Duration::from_secs(1)).await;
+        assert_eq!(asked(), 1);
+        // A segment waits: woken, the logger asks.
+        bytes.up(&shared, 10, 0);
+        shared.finish(1);
+        clock.set(T + 20_000);
+        tokio::time::sleep(super::super::LOG_DELAY + std::time::Duration::from_secs(1)).await;
+        assert_eq!(asked(), 2);
+    }
+
+    /// A flow's marks give their room back once settled.
+    #[test]
+    fn settled_marks_give_their_room_back() {
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        for second in 0..100 {
+            up_at(&shared, &clock, &bytes, second * 1_000, 1);
+        }
+        assert!(lock(&bytes.marks).capacity() >= 100);
+        shared.tell(&told(T, T + 99_000, &[]));
+        let marks = lock(&bytes.marks);
+        assert_eq!(marks.len(), 1);
+        assert!(marks.capacity() <= 16, "{}", marks.capacity());
     }
 
     /// All flows together hold at most [`MARKS`] seconds not placed: past it, every one held is placed
@@ -1220,6 +1340,26 @@ pub(super) mod tests {
             .filter(|live| live.state == Some(Placed::Unknown(Unknown::Late)))
             .count();
         assert!(late > 0, "none placed as told too late");
+    }
+
+    /// Exactly [`MARKS`] seconds held, by all flows together, are all kept.
+    #[test]
+    fn exactly_the_bound_of_all_flows_is_kept() {
+        let (shared, clock, _) = telling_at(T);
+        let flows: Vec<_> = (1..=656).map(|id| open(&shared, id)).collect();
+        for second in 0..100u64 {
+            clock.set(T + second * 1_000);
+            for (i, bytes) in flows.iter().enumerate() {
+                if i < 655 || second < 36 {
+                    bytes.up(&shared, 1, 0);
+                }
+            }
+        }
+        assert_eq!(shared.marks.load(Ordering::Relaxed), MARKS);
+        let late = lock(&shared.live)
+            .values()
+            .any(|live| live.state == Some(Placed::Unknown(Unknown::Late)));
+        assert!(!late, "placed as told too late within the bound");
     }
 
     /// Past [`HELD`] segments waiting, the oldest is written, its seconds not told as told too late.
@@ -1247,21 +1387,34 @@ pub(super) mod tests {
         let (shared, clock, _) = telling_at(T);
         let bytes = open(&shared, 1);
         up_at(&shared, &clock, &bytes, 1_000, 10);
-        up_at(&shared, &clock, &bytes, 3_000, 20);
+        up_at(&shared, &clock, &bytes, 3_000, 19);
         shared.tell(&told(T, T + 2_000, &[(T, T + 2_000, State::InUse)]));
         assert_eq!(taken(&shared), vec![]);
-        // Back by half a second: nothing.
-        up_at(&shared, &clock, &bytes, 2_600, 30);
+        // Back by less than a second: nothing.
+        up_at(&shared, &clock, &bytes, 3_500, 1);
+        up_at(&shared, &clock, &bytes, 2_501, 0);
         assert_eq!(taken(&shared), vec![]);
-        // Back by a second and more.
-        up_at(&shared, &clock, &bytes, 1_500, 40);
+        up_at(&shared, &clock, &bytes, 3_500, 0);
+        up_at(&shared, &clock, &bytes, 2_600, 29);
+        assert_eq!(taken(&shared), vec![]);
+        // Back by exactly a second.
+        up_at(&shared, &clock, &bytes, 1_600, 40);
         assert_eq!(
             segments(&taken(&shared)),
             vec![(1, T, T + 3_000, 10, true, IN_USE)]
         );
+        {
+            let live = &lock(&shared.live)[&1];
+            assert_eq!(live.state, Some(NOT_TOLD));
+            assert_eq!(lock(&live.bytes.marks).len(), 1, "the count after it waits");
+        }
+        // The reading of the old clock is forgotten: the count at 1.5 s, which it covered, is not placed by
+        // it, in use, but waits for the new clock's, and one that begins after it leaves it not told.
+        shared.tell(&told(T + 1_800, T + 2_500, &[]));
+        assert_eq!(taken(&shared), vec![]);
         let live = &lock(&shared.live)[&1];
         assert_eq!(live.state, Some(NOT_TOLD));
-        assert_eq!(lock(&live.bytes.marks).len(), 1, "the count after it waits");
+        assert!(lock(&live.bytes.marks).is_empty());
     }
 
     /// The engine asks for the states when a flow opens and once a second has waited five seconds, at
@@ -1286,10 +1439,37 @@ pub(super) mod tests {
         assert_eq!(asked(), 2, "not again within five seconds");
         up_at(&shared, &clock, &bytes, 11_000, 1);
         assert_eq!(asked(), 3);
+        // A clock set back asks at once.
+        shared.ask(T / 1000 + 5);
+        assert_eq!(asked(), 4);
         // Without states told, the engine never asks.
-        let untold = super::super::tests::shared();
+        let counting = Arc::new(Untelling::default());
+        let untold = shared_with(counting.clone());
         untold.ask(T / 1000);
         assert!(untold.record(flow(1, Some(UID))).is_some());
+        assert_eq!(counting.asked.load(Ordering::Relaxed), 0);
+    }
+
+    /// A platform whose Kotlin side tells no states, noting whether the engine asked all the same.
+    #[derive(Default)]
+    struct Untelling {
+        asked: AtomicUsize,
+    }
+
+    impl Platform for Untelling {
+        fn owner(&self, _: u8, _: SocketAddr, _: SocketAddr) -> Option<u32> {
+            None
+        }
+
+        fn protect(&self, _: RawFd) -> bool {
+            true
+        }
+
+        fn log(&self, _: &[u8]) {}
+
+        fn wants_states(&self) {
+            self.asked.fetch_add(1, Ordering::Relaxed);
+        }
     }
 
     /// Flushed, every second not told is written in no state, "not told", and nothing waits.
