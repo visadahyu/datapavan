@@ -101,3 +101,10 @@ path = "fuzz_targets/quic_answers.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "states"
+path = "fuzz_targets/states.rs"
+test = false
+doc = false
+bench = false

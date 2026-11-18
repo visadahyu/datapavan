@@ -21,6 +21,7 @@ use std::net::{IpAddr, SocketAddr};
 
 use crate::engine::{DnsUse, Ech, Flow, NamedBy, Outcome};
 use crate::owners::NetworkKind;
+use crate::states::Placed;
 
 /// The version of the record format.
 pub const VERSION: u8 = 2;
@@ -41,6 +42,8 @@ pub enum Record {
         bytes: [u64; 4],
         /// Whether the flow was still open at the segment's end.
         continues: bool,
+        /// The state its app had throughout the segment, or why it has none (ADR 0046, decision 1).
+        state: Placed,
     },
     /// Lookups an app sent to Watch's own DNS address between `start` and `end`.
     Lookups {
@@ -56,6 +59,8 @@ pub enum Record {
         wire_up: u64,
         /// The answers' bytes on the tunnel.
         wire_down: u64,
+        /// The state the app had throughout, or why it has none.
+        state: Placed,
     },
 }
 
@@ -71,6 +76,7 @@ impl Record {
                 end,
                 bytes,
                 continues,
+                state: _,
             } => {
                 out.push(1);
                 out.extend_from_slice(&flow.id.to_le_bytes());
@@ -127,6 +133,7 @@ impl Record {
                 count,
                 wire_up,
                 wire_down,
+                state: _,
             } => {
                 out.push(2);
                 out.extend_from_slice(&uid.unwrap_or(u32::MAX).to_le_bytes());
@@ -191,7 +198,10 @@ pub fn batch(records: &[Record]) -> Vec<u8> {
 mod tests {
     use super::*;
     use crate::engine::Network;
+    use crate::states::Unknown;
     use std::net::Ipv4Addr;
+
+    const NOT_TOLD: Placed = Placed::Unknown(Unknown::NotTold);
 
     fn flow() -> Flow {
         Flow {
@@ -223,6 +233,7 @@ mod tests {
             end: 2_000,
             bytes: [300, 40_000, 820, 42_900],
             continues: true,
+            state: NOT_TOLD,
         };
         let bytes = record.encode();
         let mut expected = vec![2, 1];
@@ -256,6 +267,7 @@ mod tests {
             end: 2_000,
             bytes: [0; 4],
             continues,
+            state: NOT_TOLD,
         };
         let bytes = record(false).encode();
         // Version, kind, number, UID, six times; protocol, outcome, named by, ECH, DNS, flags.
@@ -278,6 +290,7 @@ mod tests {
             end: 0,
             bytes: [0; 4],
             continues: false,
+            state: NOT_TOLD,
         };
         let bytes = record.encode();
         // The name, then an empty resolver and no DNS name.
@@ -290,6 +303,7 @@ mod tests {
             count: 3,
             wire_up: 210,
             wire_down: 540,
+            state: NOT_TOLD,
         };
         let all = batch(&[record.clone(), lookups.clone()]);
         assert_eq!(all[..4], 2u32.to_le_bytes());

@@ -61,6 +61,7 @@ use crate::standins::StandIns;
 use crate::tls::Hello;
 use crate::tun::Tun;
 
+mod activity;
 mod budget;
 mod chain;
 mod clock;
@@ -348,6 +349,18 @@ pub trait Platform: Send + Sync + 'static {
     fn clock(&self) -> Arc<dyn Clock> {
         Arc::new(SystemClock)
     }
+
+    /// Whether Watch's Kotlin side tells the engine the apps' states ([`Engine::states`], ADR 0046,
+    /// decision 1): then each second's bytes wait for their app's state, and the log's segments are cut
+    /// where it changes. Without it, every segment is written at once in no state.
+    fn tells_states(&self) -> bool {
+        false
+    }
+
+    /// The engine would have the apps' states read: a flow opened, or bytes have waited for their state
+    /// for five seconds. Watch's Kotlin side reads when its own rules allow (ADR 0046, decision 1), off
+    /// the engine's thread: this must not block.
+    fn wants_states(&self) {}
 }
 
 /// How a flow went, for the counters and the flows kept for tests.
@@ -728,6 +741,8 @@ pub struct Handover {
     stand_ins: StandIns,
     names: Names,
     counters: [u64; COUNTERS],
+    /// The states told and the segments that wait for theirs (`activity`).
+    activity: activity::Activity,
 }
 
 /// What the engine's thread and its controller share.
@@ -784,6 +799,19 @@ struct Shared {
     wire: Mutex<HashMap<u16, Arc<FlowBytes>>>,
     /// Records waiting to go to Watch's log.
     pending_log: Mutex<Vec<Record>>,
+    /// Whether Watch's Kotlin side tells the apps' states ([`Platform::tells_states`]).
+    tracks: bool,
+    /// The seconds not placed in a state yet, of every flow and app's lookups together
+    /// ([`activity::MARKS`]).
+    marks: AtomicUsize,
+    /// The wall clock's second at which the engine last asked for the apps' states
+    /// ([`activity::NO_SECOND`] for never).
+    asked: AtomicU64,
+    /// The states told, and the segments cut that wait for theirs (`activity`).
+    activity: Mutex<activity::Activity>,
+    /// Whether the engine stops to hand over to the next one ([`Engine::hand_over`]): the segments that
+    /// wait for their states go with it, rather than being written in none.
+    handing_over: AtomicBool,
     /// Woken when a record waits or a flow opens.
     log_ready: Notify,
     /// Who waits for a flush of the log ([`Shared::ask_flush`]), told once it is done, and whether a
@@ -890,6 +918,7 @@ impl Engine {
         organisations: Option<Organisations>,
         (handover, setting): (Option<Handover>, Option<ChainSetting>),
     ) -> io::Result<Self> {
+        let tracks = platform.tells_states();
         let Handover {
             mut chain,
             upstream_dns,
@@ -897,6 +926,7 @@ impl Engine {
             stand_ins,
             names,
             counters,
+            activity,
         } = handover.unwrap_or_else(|| Handover {
             chain: None,
             upstream_dns: None,
@@ -904,7 +934,9 @@ impl Engine {
             stand_ins: StandIns::with_capacity(config.limits.stand_ins),
             names: Names::default(),
             counters: [0; COUNTERS],
+            activity: activity::Activity::new(tracks),
         });
+        let held_marks = activity.held_marks();
         if let Some(setting) = setting {
             chain = setting.chain.map(Arc::new);
             uncached_answers = setting.uncached_answers;
@@ -938,6 +970,11 @@ impl Engine {
             lookups: Mutex::default(),
             wire: Mutex::default(),
             pending_log: Mutex::default(),
+            tracks,
+            marks: AtomicUsize::new(held_marks),
+            asked: AtomicU64::new(activity::NO_SECOND),
+            activity: Mutex::new(activity),
+            handing_over: AtomicBool::new(false),
             log_ready: Notify::new(),
             flushes: Mutex::default(),
             flush_wanted: Notify::new(),
@@ -1018,8 +1055,10 @@ impl Engine {
     /// after.
     #[must_use]
     pub fn hand_over(mut self) -> Handover {
+        self.shared.handing_over.store(true, Ordering::Relaxed);
         self.stop();
         let shared = &self.shared;
+        let tracks = shared.tracks;
         Handover {
             chain: lock(&shared.chain).clone(),
             upstream_dns: *lock(&shared.upstream_dns),
@@ -1027,6 +1066,10 @@ impl Engine {
             stand_ins: std::mem::replace(&mut *lock(&shared.stand_ins), StandIns::with_capacity(0)),
             names: std::mem::take(&mut *lock(&shared.names)),
             counters: shared.counters.snapshot(),
+            activity: std::mem::replace(
+                &mut *lock(&shared.activity),
+                activity::Activity::new(tracks),
+            ),
         }
     }
 
@@ -1092,6 +1135,20 @@ impl Engine {
     pub fn flush_log(&self) {
         if self.thread.as_ref().is_some_and(|t| !t.is_finished()) {
             let _ = self.shared.ask_flush(Duration::from_secs(10));
+        }
+    }
+
+    /// Takes a reading of the apps' states from Watch's Kotlin side, a message of [`crate::states`]:
+    /// every second held that it covers is placed, and the log's segments cut where an app's state
+    /// changed. False for a message that is not one of its version, which changes nothing.
+    #[must_use]
+    pub fn states(&self, message: &[u8]) -> bool {
+        match crate::states::read(message) {
+            Some(told) => {
+                self.shared.tell(&told);
+                true
+            }
+            None => false,
         }
     }
 
@@ -1445,6 +1502,7 @@ mod tests {
     }
 
     pub(super) fn shared_with(platform: Arc<dyn Platform>) -> Shared {
+        let tracks = platform.tells_states();
         Shared {
             platform,
             addresses: Addresses::COMMON,
@@ -1477,6 +1535,11 @@ mod tests {
             lookups: Mutex::default(),
             wire: Mutex::default(),
             pending_log: Mutex::default(),
+            tracks,
+            marks: AtomicUsize::new(0),
+            asked: AtomicU64::new(activity::NO_SECOND),
+            activity: Mutex::new(activity::Activity::new(tracks)),
+            handing_over: AtomicBool::new(false),
             log_ready: Notify::new(),
             flushes: Mutex::default(),
             flush_wanted: Notify::new(),

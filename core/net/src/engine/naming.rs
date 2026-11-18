@@ -6,7 +6,7 @@ use crate::dns;
 use crate::owners::NetworkKind;
 use crate::standins::is_stand_in;
 use crate::tls::Hello;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
@@ -53,24 +53,14 @@ impl Shared {
                 held_until,
             };
         }
-        match self
-            .organisations
-            .as_ref()
-            .and_then(|table| table.lookup(destination.ip()))
-        {
-            Some(organisation) => {
-                let owner = self.owners.of(organisation.asn);
-                Begun {
-                    id,
-                    network: Some(Network {
-                        asn: organisation.asn,
-                        kind: owner.map_or(NetworkKind::Unlisted, |o| o.kind),
-                    }),
-                    name: Some(owner.map_or(organisation.name, |o| o.name.clone())),
-                    named_by: NamedBy::Organisation,
-                    held_until: Duration::ZERO,
-                }
-            }
+        match self.organisation(destination.ip()) {
+            Some((network, name)) => Begun {
+                id,
+                network: Some(network),
+                name: Some(name),
+                named_by: NamedBy::Organisation,
+                held_until: Duration::ZERO,
+            },
             None => Begun {
                 id,
                 name: None,
@@ -79,6 +69,23 @@ impl Shared {
                 held_until: Duration::ZERO,
             },
         }
+    }
+
+    /// The network of `address` and the organisation behind it, as the company people know where the
+    /// owners' table names it, if Watch has the organisation table and it names the address.
+    pub(super) fn organisation(&self, address: IpAddr) -> Option<(Network, String)> {
+        let organisation = self
+            .organisations
+            .as_ref()
+            .and_then(|table| table.lookup(address))?;
+        let owner = self.owners.of(organisation.asn);
+        Some((
+            Network {
+                asn: organisation.asn,
+                kind: owner.map_or(NetworkKind::Unlisted, |o| o.kind),
+            },
+            owner.map_or(organisation.name, |o| o.name.clone()),
+        ))
     }
 
     /// Whether a flow to `destination`, named `name` by DNS if at all, carries the app's own DNS, and

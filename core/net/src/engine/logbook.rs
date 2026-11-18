@@ -33,12 +33,14 @@
 //!   under 8 ms at 250 Hz, the default, under 20 ms at 100 Hz, the lowest, so a byte counted in that
 //!   moment after a quarter hour falls in the quarter hour before.
 
+use super::activity::{Force, Mark, NO_SECOND, Of, Piece};
 use super::{Counters, DnsUse, Ech, Flow, LOG_DELAY, NamedBy, Outcome, Shared, lock};
 use crate::log;
-use crate::log::Record;
 use crate::packet;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use crate::states::Placed;
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::watch;
 
@@ -102,7 +104,7 @@ fn same_quarter(a: u64, b: u64) -> bool {
 
 /// The bytes of one open flow, counted as they pass: what the app sent and received, and the IP
 /// packets the tunnel carried for it, headers included, which is what Android counts for the app.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct FlowBytes {
     up: AtomicU64,
     down: AtomicU64,
@@ -110,14 +112,39 @@ pub(crate) struct FlowBytes {
     wire_down: AtomicU64,
     /// When the tunnel last carried a packet of the flow, in milliseconds since 1970; 0 for never.
     pub(super) last: AtomicU64,
+    /// The second of the wall clock of the flow's latest mark, [`NO_SECOND`] for none since its
+    /// segment began (`activity`).
+    second: AtomicU64,
+    /// Its seconds not placed in a state yet: the first count of each, with the counts before it.
+    pub(super) marks: Mutex<VecDeque<Mark>>,
+    /// Whether the flow's segments are all cut and handed to the log: a count after, as of a packet the
+    /// tunnel carries once the relay has ended, notes no mark.
+    ended: AtomicBool,
+}
+
+impl Default for FlowBytes {
+    fn default() -> Self {
+        Self {
+            up: AtomicU64::new(0),
+            down: AtomicU64::new(0),
+            wire_up: AtomicU64::new(0),
+            wire_down: AtomicU64::new(0),
+            last: AtomicU64::new(0),
+            second: AtomicU64::new(NO_SECOND),
+            marks: Mutex::default(),
+            ended: AtomicBool::new(false),
+        }
+    }
 }
 
 impl FlowBytes {
     /// Counts what the app sent: `app` bytes as the app sent them, and `wire` bytes of the tunnel's IP
     /// packets, 0 for none. The log reads the time first ([`Shared::log_now`]), which cuts the flow's
-    /// segment at any quarter hour passed since: the bytes fall in the quarter hour they were counted in.
+    /// segment at any quarter hour passed since: the bytes fall in the quarter hour they were counted in,
+    /// and in the second, whose mark comes before them.
     pub(super) fn up(&self, log: &Shared, app: usize, wire: usize) {
         let now = log.log_now();
+        self.mark(log, now, app + wire);
         Self::add(&self.up, app);
         self.wire(&self.wire_up, wire, now);
     }
@@ -125,8 +152,44 @@ impl FlowBytes {
     /// Counts what the app received, as [`FlowBytes::up`] counts what it sent.
     pub(super) fn down(&self, log: &Shared, app: usize, wire: usize) {
         let now = log.log_now();
+        self.mark(log, now, app + wire);
         Self::add(&self.down, app);
         self.wire(&self.wire_down, wire, now);
+    }
+
+    /// Notes the first count of a second of the wall clock, `now` in milliseconds, before `bytes` are
+    /// added: within a second, one division, one comparison and one atomic load.
+    fn mark(&self, log: &Shared, now: u64, bytes: usize) {
+        let second = now / 1000;
+        if bytes > 0 && self.second.load(Ordering::Relaxed) != second && log.tracks {
+            self.mark_anew(log, second);
+        }
+    }
+
+    #[cold]
+    fn mark_anew(&self, log: &Shared, second: u64) {
+        if self.ended.load(Ordering::Relaxed) {
+            return;
+        }
+        self.second.store(second, Ordering::Relaxed);
+        let counts = self.now();
+        let (held, oldest) = {
+            let mut marks = lock(&self.marks);
+            marks.push_back(Mark { second, counts });
+            (marks.len(), marks.front().map_or(second, |m| m.second))
+        };
+        log.marked(held, oldest, second);
+    }
+
+    /// Takes the marks of the segment cut now: the next count begins one anew, in whatever second. With
+    /// `ended`, the flow notes none any more.
+    fn take_marks(&self, ended: bool) -> VecDeque<Mark> {
+        let mut marks = lock(&self.marks);
+        if ended {
+            self.ended.store(true, Ordering::Relaxed);
+        }
+        self.second.store(NO_SECOND, Ordering::Relaxed);
+        std::mem::take(&mut *marks)
     }
 
     /// Adds `n` to `counter`; nothing for no bytes, as a tunnel packet's of the app's own (the fresh
@@ -158,18 +221,25 @@ pub(super) struct Live {
     pub(super) start: u64,
     /// The counts at the segment's start.
     pub(super) base: [u64; 4],
+    /// The state of the segment's seconds placed so far (`activity`).
+    pub(super) state: Option<Placed>,
     /// Whether its destination stays out of the log (a chained app's flow, [`Shared::hides`]): its
     /// record holds no address, port or name, and no hello names it later.
     pub(super) hidden: bool,
 }
 
-/// An app's lookups to Watch's own DNS address: since when, how many, and the tunnel's bytes for them.
-#[derive(Debug, Clone, Copy)]
+/// An app's lookups to Watch's own DNS address: since when, and since the first, how many and the
+/// tunnel's bytes for them, as counts: lookups, nought, bytes up, bytes down.
+#[derive(Debug)]
 pub(super) struct Lookups {
     pub(super) start: u64,
-    pub(super) count: u32,
-    pub(super) wire_up: u64,
-    pub(super) wire_down: u64,
+    /// The counts where the part not written yet starts, and the state of its seconds placed so far.
+    pub(super) base: [u64; 4],
+    pub(super) state: Option<Placed>,
+    pub(super) counts: [u64; 4],
+    /// The second of the latest mark, and the seconds not placed yet (`activity`).
+    second: u64,
+    pub(super) marks: VecDeque<Mark>,
 }
 
 impl Lookups {
@@ -177,20 +247,50 @@ impl Lookups {
     fn since(start: u64) -> Self {
         Self {
             start,
-            count: 0,
-            wire_up: 0,
-            wire_down: 0,
+            base: [0; 4],
+            state: None,
+            counts: [0; 4],
+            second: NO_SECOND,
+            marks: VecDeque::new(),
         }
     }
 
-    pub(super) fn record(self, uid: Option<u32>, end: u64) -> Record {
-        Record::Lookups {
+    /// Counts `count` lookups and their packets' bytes up and down, in the wall clock's second `second`:
+    /// its mark first, if it is the first count in it. The marks held and the oldest's second, when it
+    /// noted one.
+    fn count(&mut self, second: Option<u64>, [count, up, down]: [u64; 3]) -> Option<(usize, u64)> {
+        let marked = match second {
+            Some(second) if second != self.second => {
+                self.second = second;
+                self.marks.push_back(Mark {
+                    second,
+                    counts: self.counts,
+                });
+                Some((
+                    self.marks.len(),
+                    self.marks.front().map_or(second, |m| m.second),
+                ))
+            }
+            _ => None,
+        };
+        self.counts[0] += count;
+        self.counts[2] += up;
+        self.counts[3] += down;
+        marked
+    }
+
+    /// Its segment, from its start to `end`, held for its state ([`Shared::hold`]).
+    fn piece(self, uid: Option<u32>, end: u64) -> Piece {
+        Piece {
+            of: Of::Lookups,
             uid,
             start: self.start,
+            base: self.base,
+            state: self.state,
             end: end.max(self.start),
-            count: self.count,
-            wire_up: self.wire_up,
-            wire_down: self.wire_down,
+            last: self.counts,
+            continues: false,
+            marks: self.marks,
         }
     }
 }
@@ -200,7 +300,9 @@ impl Shared {
     /// quarter hours it passed since the last cut, back or forward ([`cut`]). Every path that counts a
     /// byte or a lookup, opens a flow or ends one reads the time here first, so that nothing is counted
     /// in a segment of another quarter hour. One reading of the wall clock (a vDSO call) and one atomic
-    /// load; the cut itself only when a quarter hour passed.
+    /// load; the cut itself only when a quarter hour passed. A clock set back by a second or more first
+    /// places every second held for its state (`activity`, [`Shared::clock_set_back`]), so that the
+    /// seconds of two clocks never wait for one reading.
     pub(super) fn log_now(&self) -> u64 {
         debug_assert!(
             self.engine_thread
@@ -210,6 +312,9 @@ impl Shared {
         );
         let now = self.clock.wall_ms();
         let last = self.last_reading.swap(now, Ordering::Relaxed);
+        if now.saturating_add(1000) <= last && self.tracks {
+            self.clock_set_back();
+        }
         if now / SEGMENT_MS != self.quarter.load(Ordering::Acquire) {
             self.cut_all(now, last);
         }
@@ -218,43 +323,49 @@ impl Shared {
 
     /// Cuts every open segment and each app's lookups that are not in `now`'s quarter hour, and then
     /// says they all are. Only on the engine's thread, as every count, so nothing is counted meanwhile.
+    /// Each segment cut waits for the states of its seconds ([`Shared::hold`]).
     fn cut_all(&self, now: u64, last: u64) {
         let quarter = now / SEGMENT_MS;
-        let mut records = Vec::new();
+        let mut pieces = Vec::new();
         {
             let mut live = lock(&self.live);
             for live in live.values_mut() {
                 if let Some(Cut { end, next }) = cut(live.start, now, last) {
+                    let marks = live.bytes.take_marks(false);
                     let counts = live.bytes.now();
-                    records.push(Record::Segment {
-                        flow: live.flow.clone(),
+                    pieces.push(Piece {
+                        of: Of::Flow(live.flow.clone()),
+                        uid: live.flow.uid,
                         start: live.start,
+                        base: live.base,
+                        state: live.state.take(),
                         end,
-                        bytes: delta(counts, live.base),
+                        last: counts,
                         continues: true,
+                        marks,
                     });
                     live.start = next;
                     live.base = counts;
                 }
             }
-            lock(&self.lookups).retain(|&uid, lookups| match cut(lookups.start, now, last) {
-                Some(Cut { end, .. }) => {
-                    records.push(lookups.record(uid, end));
-                    false
+            let mut lookups = lock(&self.lookups);
+            let cuts: Vec<_> = lookups
+                .iter()
+                .filter_map(|(&uid, l)| cut(l.start, now, last).map(|Cut { end, .. }| (uid, end)))
+                .collect();
+            for (uid, end) in cuts {
+                if let Some(entry) = lookups.remove(&uid) {
+                    pieces.push(entry.piece(uid, end));
                 }
-                None => true,
-            });
+            }
             self.quarter.store(quarter, Ordering::Release);
         }
-        if !records.is_empty() {
-            lock(&self.pending_log).extend(records);
-            self.log_ready.notify_one();
-        }
+        self.hold(pieces);
     }
 
     /// Counts a new flow and keeps it for tests. For the log, a flow that opened becomes live and gets
-    /// its byte counts; one that did not is written at once. Lookups to Watch's own DNS address are
-    /// counted per app instead.
+    /// its byte counts; one that did not is written once its moment's state is told. Lookups to Watch's
+    /// own DNS address are counted per app instead.
     pub(super) fn record(&self, flow: Flow) -> Option<Arc<FlowBytes>> {
         let logged = self.log_flow(&flow);
         self.keep(flow);
@@ -284,14 +395,20 @@ impl Shared {
             flow
         };
         let now = self.log_now();
+        // A flow opened, or tried: its app's state is wanted (ADR 0046, decision 1).
+        self.ask(now / 1000);
         if flow.outcome != Outcome::Opened {
-            self.write(Record::Segment {
-                flow: flow.clone(),
+            self.hold(vec![Piece {
+                of: Of::Flow(flow.clone()),
+                uid: flow.uid,
                 start: now,
+                base: [0; 4],
+                state: None,
                 end: now,
-                bytes: [0; 4],
+                last: [0; 4],
                 continues: false,
-            });
+                marks: VecDeque::new(),
+            }]);
             return None;
         }
         let bytes = Arc::new(FlowBytes::default());
@@ -302,6 +419,7 @@ impl Shared {
                 bytes: Arc::clone(&bytes),
                 start: now,
                 base: [0; 4],
+                state: None,
                 hidden,
             },
         );
@@ -311,37 +429,45 @@ impl Shared {
 
     /// Counts a lookup an app sent to Watch's own DNS address, `packet` bytes on the tunnel.
     pub(super) fn lookup(&self, uid: Option<u32>, packet: usize) {
-        let now = self.log_now();
-        let mut lookups = lock(&self.lookups);
-        let entry = lookups.entry(uid).or_insert(Lookups::since(now));
-        entry.count += 1;
-        entry.wire_up += packet as u64;
-        drop(lookups);
+        self.count_lookups(uid, [1, packet as u64, 0]);
         self.log_ready.notify_one();
     }
 
     /// Counts an answer to an app's lookup, `packet` bytes on the tunnel. An answer whose lookup was
     /// counted in a quarter hour already cut is counted in its own, with no lookup.
     pub(super) fn lookup_answered(&self, uid: Option<u32>, packet: usize) {
-        let now = self.log_now();
-        let mut lookups = lock(&self.lookups);
-        let new = !lookups.contains_key(&uid);
-        lookups.entry(uid).or_insert(Lookups::since(now)).wire_down += packet as u64;
-        drop(lookups);
-        if new {
+        if self.count_lookups(uid, [0, 0, packet as u64]) {
             self.log_ready.notify_one();
         }
     }
 
+    /// Counts lookups and their packets' bytes up and down for the app `uid`, after the cut and the
+    /// mark of the second: whether the app's count began anew.
+    fn count_lookups(&self, uid: Option<u32>, counts: [u64; 3]) -> bool {
+        let now = self.log_now();
+        let second = (self.tracks && counts.iter().any(|&c| c > 0)).then_some(now / 1000);
+        let mut lookups = lock(&self.lookups);
+        let new = !lookups.contains_key(&uid);
+        let marked = lookups
+            .entry(uid)
+            .or_insert_with(|| Lookups::since(now))
+            .count(second, counts);
+        drop(lookups);
+        if let (Some((held, oldest)), Some(second)) = (marked, second) {
+            self.marked(held, oldest, second);
+        }
+        new
+    }
+
     /// A live flow ended: its segment is cut at any quarter hour passed, as a count would cut it, and its
-    /// last segment written.
+    /// last segment written once its seconds' states are told.
     pub(super) fn finish(&self, id: u64) {
         let now = self.log_now();
         let Some(live) = lock(&self.live).remove(&id) else {
             return;
         };
         let end = now.max(live.start);
-        self.write(segment(live, end, false));
+        self.hold(vec![piece(live, end, false)]);
     }
 
     /// A TCP flow the engine ended itself before its relay began, recorded as opened when its server
@@ -387,7 +513,7 @@ impl Shared {
         } else {
             live.start
         };
-        self.write(segment(live, end, false));
+        self.hold(vec![piece(live, end, false)]);
     }
 
     /// Asks the engine's thread to flush the log ([`Shared::flush`]) and hand its records on, and waits
@@ -415,51 +541,57 @@ impl Shared {
     }
 
     /// Writes every live flow's segment up to now, as a quarter hour would, and the lookups counted so
-    /// far.
+    /// far, each second whose state was not told yet in no state, "not told".
     pub(super) fn flush(&self) {
         let now = self.log_now();
-        let mut records = Vec::new();
+        let mut pieces = Vec::new();
         for live in lock(&self.live).values_mut() {
             if live.start >= now {
                 continue;
             }
+            let marks = live.bytes.take_marks(false);
             let counts = live.bytes.now();
-            records.push(Record::Segment {
-                flow: live.flow.clone(),
+            pieces.push(Piece {
+                of: Of::Flow(live.flow.clone()),
+                uid: live.flow.uid,
                 start: live.start,
+                base: live.base,
+                state: live.state.take(),
                 end: now,
-                bytes: delta(counts, live.base),
+                last: counts,
                 continues: true,
+                marks,
             });
             live.start = now;
             live.base = counts;
         }
         for (uid, lookups) in lock(&self.lookups).drain() {
-            records.push(lookups.record(uid, now));
+            pieces.push(lookups.piece(uid, now));
         }
-        lock(&self.pending_log).extend(records);
+        self.hold(pieces);
+        self.settle(Some(Force::ALL));
     }
 
-    /// Ends every live flow now, as when the engine stops, after the cut a count would make.
+    /// Ends every live flow now, as when the engine stops, after the cut a count would make. Each second
+    /// whose state was not told yet is written in no state, "not told", unless the engine hands what it
+    /// holds to the next one, on a tunnel set up again ([`super::Engine::hand_over`]).
     pub(super) fn finish_all(&self) {
         let now = self.log_now();
         let live: Vec<Live> = lock(&self.live).drain().map(|(_, l)| l).collect();
-        let mut records: Vec<Record> = live
+        let mut pieces: Vec<Piece> = live
             .into_iter()
             .map(|l| {
                 let end = now.max(l.start);
-                segment(l, end, false)
+                piece(l, end, false)
             })
             .collect();
         for (uid, lookups) in lock(&self.lookups).drain() {
-            records.push(lookups.record(uid, now));
+            pieces.push(lookups.piece(uid, now));
         }
-        lock(&self.pending_log).extend(records);
-    }
-
-    pub(super) fn write(&self, record: Record) {
-        lock(&self.pending_log).push(record);
-        self.log_ready.notify_one();
+        self.hold(pieces);
+        if !self.handing_over.load(Ordering::Relaxed) {
+            self.settle(Some(Force::ALL));
+        }
     }
 
     /// The records waiting, as one batch, if there are any.
@@ -469,17 +601,24 @@ impl Shared {
     }
 }
 
-/// A live flow's segment from its start to `end`.
-pub(super) fn segment(live: Live, end: u64, continues: bool) -> Record {
-    Record::Segment {
+/// A live flow's last segment, from its start to `end`, held for its state ([`Shared::hold`]): it notes
+/// no mark any more.
+fn piece(live: Live, end: u64, continues: bool) -> Piece {
+    let marks = live.bytes.take_marks(true);
+    Piece {
+        uid: live.flow.uid,
         start: live.start,
+        base: live.base,
+        state: live.state,
         end,
-        bytes: delta(live.bytes.now(), live.base),
-        flow: live.flow,
+        last: live.bytes.now(),
         continues,
+        marks,
+        of: Of::Flow(live.flow),
     }
 }
 
+#[cfg(test)]
 pub(super) fn delta(now: [u64; 4], base: [u64; 4]) -> [u64; 4] {
     [0, 1, 2, 3].map(|i| now[i].saturating_sub(base[i]))
 }
@@ -536,7 +675,11 @@ pub(super) async fn logger(shared: Arc<Shared>, mut end: watch::Receiver<bool>) 
             }
             () = sleep_for(next) => {}
         }
-        shared.log_now();
+        let now = shared.log_now();
+        // Segments that wait for their states: asked for again, as traffic ran a moment ago.
+        if !lock(&shared.activity).held.is_empty() {
+            shared.ask(now / 1000);
+        }
         let asked = std::mem::take(&mut lock(&shared.flushes).waiting);
         if !asked.is_empty() {
             shared.flush();
@@ -565,9 +708,14 @@ mod tests {
     use super::super::tests::{shared, shared_with};
     use super::super::{Platform, TCP};
     use super::*;
+    use crate::log::Record;
+    use crate::states::Unknown;
     use std::net::SocketAddr;
     use std::os::fd::RawFd;
     use std::sync::Mutex;
+
+    /// Where a segment of a platform that tells no states is placed.
+    const NOT_TOLD: Placed = Placed::Unknown(Unknown::NotTold);
 
     /// 2026-11-17, 00:00 UTC.
     const DAY: u64 = 1_794_873_600_000;
@@ -632,6 +780,7 @@ mod tests {
                     end,
                     bytes,
                     continues,
+                    ..
                 } => Some((flow.id, *start, *end, *bytes, *continues)),
                 Record::Lookups { .. } => None,
             })
@@ -846,6 +995,7 @@ mod tests {
                 end: at(22, 15),
                 bytes: [300, 40_000, 820, 42_900],
                 continues: true,
+                state: NOT_TOLD,
             },
             Record::Segment {
                 flow: came_in,
@@ -853,6 +1003,7 @@ mod tests {
                 end: at(22, 16),
                 bytes: [0; 4],
                 continues: false,
+                state: NOT_TOLD,
             },
             Record::Segment {
                 flow: organisation,
@@ -860,6 +1011,7 @@ mod tests {
                 end: at(22, 17),
                 bytes: [0; 4],
                 continues: false,
+                state: NOT_TOLD,
             },
             Record::Lookups {
                 uid: Some(10_123),
@@ -868,6 +1020,7 @@ mod tests {
                 count: 3,
                 wire_up: 210,
                 wire_down: 540,
+                state: NOT_TOLD,
             },
         ];
         // Kathmandu's, the Chatham Islands' and Eucla's midnights, in UTC: a flow opened ten minutes
@@ -907,6 +1060,7 @@ mod tests {
             end: at(22, 19),
             bytes: [1, 2, 3, 4],
             continues: true,
+            state: NOT_TOLD,
         }
     }
 
@@ -1173,6 +1327,7 @@ mod tests {
                 count: 1,
                 wire_up: 70,
                 wire_down: 0,
+                state: NOT_TOLD,
             }]
         );
     }
@@ -1199,6 +1354,7 @@ mod tests {
                     count: 1,
                     wire_up: 70,
                     wire_down: 0,
+                    state: NOT_TOLD,
                 },
                 Record::Lookups {
                     uid: Some(10_123),
@@ -1207,6 +1363,7 @@ mod tests {
                     count: 1,
                     wire_up: 72,
                     wire_down: 300,
+                    state: NOT_TOLD,
                 },
             ]
         );
@@ -1339,6 +1496,7 @@ mod tests {
             end: at(22, 15),
             bytes: [0, 300, 0, 340],
             continues: true,
+            state: NOT_TOLD,
         };
         assert_eq!(*lock(&platform.0), vec![log::batch(&[expected])]);
         assert_eq!(open_segment(&shared, 1), (at(30, 15), [0; 4]));
@@ -1561,6 +1719,7 @@ mod tests {
             count: 0,
             wire_up: 0,
             wire_down: 300,
+            state: NOT_TOLD,
         };
         assert_eq!(lock(&platform.0).get(1), Some(&log::batch(&[answered])));
     }
