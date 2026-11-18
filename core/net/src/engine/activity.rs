@@ -695,22 +695,34 @@ impl Activity {
         if !piece.marks.is_empty() {
             return (false, settled);
         }
-        let state = piece.state.or_else(|| {
-            let placed = self.place(uid, piece.instant(), force);
-            if placed == Some(Placed::Unknown(Unknown::Late)) {
-                self.late += 1;
-            }
-            placed
-        });
-        let Some(state) = state else {
+        // The state of its last moment: the whole segment's when it has no bytes, and the end's part's
+        // when the app's state changed after its last bytes (review b2 of W5's second part, fresh, m4:
+        // the segment took its last bytes' state over its whole span).
+        let instant = piece.instant();
+        let Some(at_end) = self.place(uid, instant, force) else {
             return (false, settled);
         };
-        records.push(piece.record(
-            (piece.start, piece.end.max(piece.start)),
-            delta(piece.last, piece.base),
-            piece.continues,
-            state,
-        ));
+        let (start, end) = (piece.start, piece.end.max(piece.start));
+        let state = piece.state.unwrap_or(at_end);
+        if state == Placed::Unknown(Unknown::Late) {
+            self.late += 1;
+        }
+        let bytes = delta(piece.last, piece.base);
+        let cut = match at_end {
+            Placed::Known(_) if at_end != state => {
+                let place = |second| self.place(uid, second, force);
+                let after = piece.after.max(start.div_ceil(1000));
+                Some(change(&place, instant, at_end, (start, after)).saturating_mul(1000))
+                    .filter(|&cut| cut > start && cut < end)
+            }
+            _ => None,
+        };
+        if let Some(cut) = cut {
+            records.push(piece.record((start, cut), bytes, true, state));
+            records.push(piece.record((cut, end), [0; 4], piece.continues, at_end));
+        } else {
+            records.push(piece.record((start, end), bytes, piece.continues, state));
+        }
         (true, settled)
     }
 
@@ -1754,9 +1766,57 @@ pub(super) mod tests {
         clock.set(T + 6_000);
         shared.finish(1);
         shared.tell(&told(T, T + 7_000, &[(T + 1_000, T + 2_000, State::InUse)]));
+        // The bytes' part in use; the quiet end, in the background, a part of its own with no bytes.
         assert_eq!(
             segments(&taken(&shared)),
-            vec![(1, T, T + 6_000, 10, false, IN_USE)]
+            vec![
+                (1, T, T + 2_000, 10, true, IN_USE),
+                (1, T + 2_000, T + 6_000, 0, false, BACKGROUND)
+            ]
+        );
+    }
+
+    /// A flow that goes quiet after its app's state changed and then ends, or is cut at a quarter hour,
+    /// ends with a part of no bytes in the state of its end, cut where the state changed: the history
+    /// does not draw the app in use after the user left it (review b2 of W5's second part, fresh, m4).
+    #[test]
+    fn a_quiet_end_after_a_change_has_a_part_of_its_own() {
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 10_000, 10);
+        clock.set(T + 100_000);
+        shared.finish(1);
+        shared.tell(&told(T, T + 101_000, &[(T, T + 50_000, State::InUse)]));
+        assert_eq!(
+            segments(&taken(&shared)),
+            vec![
+                (1, T, T + 50_000, 10, true, IN_USE),
+                (1, T + 50_000, T + 100_000, 0, false, BACKGROUND)
+            ]
+        );
+        // Quiet in the same state to its end: one part.
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 10_000, 10);
+        clock.set(T + 40_000);
+        shared.finish(1);
+        shared.tell(&told(T, T + 41_000, &[(T, T + 50_000, State::InUse)]));
+        assert_eq!(
+            segments(&taken(&shared)),
+            vec![(1, T, T + 40_000, 10, false, IN_USE)]
+        );
+        // Cut at a quarter hour, quiet after a change: the quarter's segment ends so too, and goes on.
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 10_000, 10);
+        up_at(&shared, &clock, &bytes, 301_000, 5);
+        shared.tell(&told(T, T + 305_000, &[(T, T + 200_000, State::InUse)]));
+        assert_eq!(
+            segments(&taken(&shared))[..2],
+            [
+                (1, T, T + 200_000, 10, true, IN_USE),
+                (1, T + 200_000, T + 300_000, 0, true, BACKGROUND)
+            ]
         );
     }
 
@@ -2293,6 +2353,13 @@ pub(super) mod tests {
                 .find(|a| a.uid == Some(UID))
                 .map(|a| (a.places.len(), a.through_tool))
         };
+        // The engine's thread counts the datagram as it passes it on: wait for the count to show.
+        for _ in 0..100 {
+            if places(&engine).is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
         assert_eq!(places(&engine), Some((1, false)));
         clock.set(T + 3_000);
         let handover = engine.hand_over();
