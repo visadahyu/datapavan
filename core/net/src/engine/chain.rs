@@ -313,6 +313,52 @@ mod tests {
         assert_eq!(lock(&shared.live)[&3].flow.destination, server);
     }
 
+    /// A chained app's flow, whose destination stays out of the log, takes no name from its hello: not
+    /// the hello's, nor a DNS name beside it (review 1 of W5's first part, names, finding 2).
+    #[test]
+    fn a_chained_flows_hello_names_nothing_in_the_log() {
+        use super::super::{DnsUse, Ech, Flow, NamedBy, Opened, Outcome};
+        let shared = shared();
+        *lock(&shared.chain) = Some(Arc::new(chain(Some(&[CHAINED]))));
+        let flow = |id, uid| Flow {
+            id,
+            protocol: crate::packet::TCP,
+            app: SocketAddr::from(([10, 215, 173, 1], 40_000)),
+            destination: SocketAddr::from(([93, 184, 216, 34], 443)),
+            uid: Some(uid),
+            outcome: Outcome::Opened,
+            name: Some("example.com".into()),
+            named_by: NamedBy::Dns,
+            dns_name: None,
+            came_in: false,
+            ech: Ech::Absent,
+            dns: DnsUse::None,
+            resolver: None,
+            network: None,
+        };
+        let hello = crate::tls::Hello {
+            name: "other.example".into(),
+            ech: false,
+        };
+        for (id, uid) in [(1, CHAINED), (2, DIRECT)] {
+            assert!(shared.record(flow(id, uid)).is_some());
+            let opened = Opened {
+                id,
+                port: 443,
+                dns: DnsUse::None,
+                uid: Some(uid),
+            };
+            shared.hello(opened, &hello, NamedBy::Tls);
+        }
+        let live = lock(&shared.live);
+        let named = |id: u64| {
+            let flow = &live[&id].flow;
+            (flow.name.as_deref(), flow.dns_name.as_deref())
+        };
+        assert_eq!(named(1), (None, None));
+        assert_eq!(named(2), (Some("other.example"), Some("example.com")));
+    }
+
     #[test]
     fn tells_the_app_a_refusal_or_an_unreachable_destination() {
         assert_eq!(
