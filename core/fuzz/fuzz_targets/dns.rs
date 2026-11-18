@@ -7,7 +7,7 @@
 #![no_main]
 
 use datapavan_net::{answers, dns, dnscache::DnsCache};
-use std::time::Instant;
+use std::time::Duration;
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
@@ -18,9 +18,12 @@ fuzz_target!(|data: &[u8]| {
         assert_eq!(uncached, out);
     }
     // Watch's cache of direct answers takes any answer, and answers a query only with its own ID.
+    // The cache reads the time since the phone started (CLOCK_BOOTTIME); any reading that is not a
+    // failed one (Duration::MAX) will do here.
+    let since_boot = Duration::from_secs(3600);
     let mut cache = DnsCache::default();
-    cache.insert(data, Instant::now());
-    if let Some(out) = cache.answer(data, Instant::now()) {
+    cache.insert(data, since_boot);
+    if let Some(out) = cache.answer(data, since_boot) {
         assert_eq!(out.get(..2), data.get(..2));
     }
     if let Some(question) = answers::question(data) {
