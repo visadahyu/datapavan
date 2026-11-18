@@ -92,6 +92,9 @@ an ADR (D25).
    - The log's record format moves to version 2, with a flag where the names differ, a flag for a flow that came
      in, and the DNS name. Watch's Kotlin side reads versions 1 and 2, so sealed records stay readable.
    - ADR 0037 is amended to match. Counters measure how often the names differ before the format changes.
+   - (Built 2026-11-18, in W5's first part: the DNS name is written only where the names differ, so its presence
+     is that flag, and no bit of its own says it twice; a flow that came in is bit 1 of the record's flags. The
+     order of names is written once, in the engine's `NamedBy`.)
 5. **The smaller gaps:**
    - **Resets:** an upstream that ends in an error ends the other side with a reset (linger zero), both ways.
    - **ICMP echo:** carried through unprivileged ICMP sockets, protected, at most 32. Its owner cannot be asked of

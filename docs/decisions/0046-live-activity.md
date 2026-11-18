@@ -152,6 +152,8 @@ be pulled down on a locked phone.
 **(d) "Now", inside the app**, reached from the summary, the tile, the network page and each app's page:
 - one row per app that used the network in the window (10 minutes, 1 hour, or since the screen came on), with its
   state, bytes up and down, and its destinations as W3 names them, each with where the name came from;
+  (2026-11-18: each destination shows the name the connection itself sent and, where it differs, the DNS name
+  beside it, in "Now" and in the history alike: ADR 0044, decision 4, built in W5's first part.)
 - apps "in the background" first, then "with its notification", then "in use"; within each, by bytes sent;
 - tracker destinations marked from the εxodus network signatures already in `data/exodus/trackers.tsv`, and nothing
   else (W5's plan);

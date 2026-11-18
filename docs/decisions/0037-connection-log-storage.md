@@ -47,6 +47,13 @@ Option 3.
    are append-only. Each row holds the day, a token of the app (HMAC-SHA-256 of the UID under a key derived
    from that day's key, so it links an app's rows within a day and not across days), and the sealed record:
    all other fields, with the day and the token as associated data. A fresh 96-bit nonce per record.
+   (Amended 2026-11-18, W5's first part, after finding 20 of an independent review of 2026-11-09: the record's
+   format is version 2. A flow's name is the server name the connection itself sent, where it sent one, and
+   the name a DNS answer gave its address is kept beside it where the two differ, since either can be wrong;
+   bit 1 of its flags says the flow came in (ADR 0044, decision 4). Version 1, never in a release, stays
+   readable, since debug builds on test phones sealed days in it; a record of a version the reader does not know
+   is skipped and counted, never read as another. Both sides read one fixture the engine writes, so that the
+   format cannot drift between them unseen.)
    (Amended 2026-11-18, W5's first part, after finding 4 of an independent review of 2026-11-09: the quarter
    hours were a timer's, and the timer stands still while the phone sleeps, so a flow open at 22:10 and next
    written at 06:15 became one segment of eight hours, filed under the evening's day, and a flow that ended in the
@@ -106,7 +113,11 @@ Option 3.
 - **Day boundaries** follow the phone's time zone at the time of writing; a change of zone can make one day
   shorter or longer. Accepted. (Amended 2026-11-18: so does the wall clock. Set back, a flow's later records begin
   before its earlier ones end; each record lies in the quarter hour the clock read when its bytes were counted.
-  Accepted: the log follows the clock the user sees.)
+  Accepted: the log follows the clock the user sees. Whatever zone a record is filed in, it lies within that zone's
+  day, since it lies within one quarter hour of UTC: Watch's Kotlin side reads the zone once for each batch it
+  writes, where it read it for each record, so that a zone changed in between could file a record under a day
+  whose key was not drawn and fail the batch. Its tests check every zone the runtime knows against the engine's
+  own cuts, and records filed while the zone changes between them, as on a journey.)
 - **Keystore behaviour on real phones.** Unlocked-device keys and RSA-OAEP have had vendor bugs. W4 checks them
   on the emulators with Android 10, 11 and 17 and on the A40; where a phone refuses the unlocked-device flag,
   Watch makes the key without it and says so in its health check.

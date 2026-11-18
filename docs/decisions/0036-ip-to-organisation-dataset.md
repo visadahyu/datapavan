@@ -8,6 +8,13 @@
 Watch names every flow. W3 sets the order: the DNS answers Watch served, the TLS server name, the QUIC
 server name, and last an offline table that maps an IP address to its network (AS number) and the
 organisation behind it, such as "AS32934 Meta" ([DESIGN.md §13.2](../DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools)).
+(Amended 2026-11-18, in W5's first part: the server name the connection itself sent, TLS or QUIC, now comes
+first, then the DNS answer, then this table. A DNS answer is tied to a flow by its address alone, and on an
+address that serves many names another app's lookup may have given it, while the engine reads the server name
+from the flow itself; either can be wrong, the server name when an app sends a front, so a DNS name that differs
+is kept beside it, in the flow and in the log. An independent review of 2026-11-09, finding 20; ADR 0044,
+decision 4. The table's place, last, is unchanged; a hello's name still names a flow the table named, whose
+network stays in its record.)
 The table ships in the APK and is updated through signed data packs ([ADR 0017](0017-data-pack-format.md)).
 It must meet [ADR 0015](0015-dataset-licences.md): commercial use allowed, a converter that checks the
 licence before the data, evidence for every entry that names a company.
