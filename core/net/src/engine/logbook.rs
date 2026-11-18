@@ -391,20 +391,35 @@ impl Shared {
     /// its byte counts; one that did not is written once its moment's state is told. Lookups to Watch's
     /// own DNS address are counted per app instead.
     pub(super) fn record(&self, flow: Flow) -> Option<Arc<FlowBytes>> {
-        let logged = self.log_flow(&flow);
+        let via = match self.route(flow.uid, flow.destination) {
+            super::chain::Route::Tool(chain) => Some(chain),
+            super::chain::Route::Direct | super::chain::Route::Refused => None,
+        };
+        self.record_via(flow, via.as_deref())
+    }
+
+    /// Counts a new flow that went the way it was routed, `via` the chain whose tool it went through, or
+    /// directly: a connection routed before a chain was set, or turned off, and recorded after, is shown
+    /// the way it went (review b3 of W5's second part, R2).
+    pub(super) fn record_via(
+        &self,
+        flow: Flow,
+        via: Option<&super::Chain>,
+    ) -> Option<Arc<FlowBytes>> {
+        let logged = self.log_flow(&flow, via);
         self.keep(flow);
         logged
     }
 
-    pub(super) fn log_flow(&self, flow: &Flow) -> Option<Arc<FlowBytes>> {
+    /// The log's part of [`Shared::record_via`]. Its destination stays out of the log when the chain it
+    /// went through said so, or the chain now does: the switch is honoured either way.
+    fn log_flow(&self, flow: &Flow, via: Option<&super::Chain>) -> Option<Arc<FlowBytes>> {
         if self.is_tunnel_dns(flow.destination.ip()) {
             return None;
         }
-        let hidden = self.hides(flow.uid, flow.destination);
-        let direct = !matches!(
-            self.route(flow.uid, flow.destination),
-            super::chain::Route::Tool(_)
-        );
+        let hidden = via.is_some_and(|chain| !chain.log_destinations)
+            || self.hides(flow.uid, flow.destination);
+        let direct = via.is_none();
         let stripped;
         let flow = if hidden {
             stripped = without_destination(flow);

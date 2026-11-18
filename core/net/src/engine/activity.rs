@@ -384,8 +384,12 @@ impl Timeline {
         }
         for interval in &told.intervals {
             let list = self.intervals.entry(interval.uid).or_default();
-            if list.len() == INTERVALS {
-                list.remove(0);
+            // The one that ended first gives way: a reading lists an app's intervals by state, not by time,
+            // so the first inserted may be the newest (review b3 of W5's second part, fresh, n3).
+            if list.len() == INTERVALS
+                && let Some(oldest) = (0..list.len()).min_by_key(|&k| list[k].until)
+            {
+                list.remove(oldest);
             }
             list.push(*interval);
         }
@@ -870,6 +874,7 @@ impl Shared {
     /// lookups and the segments held. The log gets the parts written.
     pub(super) fn settle(&self, force: Option<Force>) {
         let mut records = Vec::new();
+        let written;
         let mut settled = ByApp::new();
         // The second the clock reads, and the one before, which the engine's coarser clock may still be
         // counting in: not placed in live flows of no app, unless everything is.
@@ -944,10 +949,16 @@ impl Shared {
             }
             activity.forget_told_before(oldest);
             self.count_late(&mut activity);
+            written = !records.is_empty();
+            // Handed to the log under the activity's lock, so that a segment that `hold` writes on the
+            // engine's thread meanwhile does not reach it before the parts cut here (review b3 of W5's
+            // second part, fresh, n1). Nothing takes the activity's lock while it holds the log's.
+            if !records.is_empty() {
+                lock(&self.pending_log).extend(records.drain(..));
+            }
         }
         lock(&self.waiting).sub(&settled);
-        if !records.is_empty() {
-            lock(&self.pending_log).extend(records);
+        if written {
             self.log_ready.notify_one();
         }
     }
@@ -962,6 +973,7 @@ impl Shared {
         let mut records = Vec::new();
         let mut settled = ByApp::new();
         let mut waiting = false;
+        let written;
         {
             let mut activity = lock(&self.activity);
             for mut piece in pieces {
@@ -983,12 +995,13 @@ impl Shared {
                 activity.evict(heaviest, &mut records, &mut settled);
             }
             self.count_late(&mut activity);
+            // Under the activity's lock, as `settle` does, for the log's order.
+            written = !records.is_empty();
+            if written {
+                lock(&self.pending_log).extend(records.drain(..));
+            }
         }
         lock(&self.waiting).sub(&settled);
-        let written = !records.is_empty();
-        if written {
-            lock(&self.pending_log).extend(records);
-        }
         // The logger hands the records on; a segment that waits asks for its states now, not after the
         // logger's gathering (review b2 of W5's second part, fresh, m2).
         if waiting {
@@ -1300,6 +1313,26 @@ pub(super) mod tests {
         }
         assert_eq!(timeline.spans.len(), 1);
         assert_eq!(timeline.place(UID, T / 1000 + 1), Some(IN_USE));
+    }
+
+    /// Past [`INTERVALS`] intervals of one app, the one that ended first gives way, not the first a reading
+    /// listed: a reading lists an app's intervals in use before those with its notification (review b3 of
+    /// W5's second part, fresh, n3: the recent use went, and its second was told "in the background").
+    #[test]
+    fn past_the_bound_of_intervals_the_oldest_give_way() {
+        let mut timeline = Timeline::default();
+        let mut intervals = vec![(T + 600_000, T + 601_000, State::InUse)];
+        for k in 0..INTERVALS as u64 {
+            intervals.push((T + k * 2_000, T + k * 2_000 + 1_000, State::Notification));
+        }
+        timeline.tell(&told(T, T + 602_000, &intervals));
+        assert_eq!(timeline.place(UID, T / 1000 + 600), Some(IN_USE));
+        assert_eq!(
+            timeline.place(UID, T / 1000),
+            Some(BACKGROUND),
+            "the oldest gave way"
+        );
+        assert_eq!(timeline.place(UID, T / 1000 + 2), Some(NOTIFICATION));
     }
 
     /// A reading that knew the states replaces the overlap of one before that knew nothing, as when
@@ -2274,6 +2307,28 @@ pub(super) mod tests {
         clock.set(T + 104_000);
         shared.tell(&told(T + 1_000, T + 102_000, &[]));
         assert_eq!(shared.waiting_marks(), 0);
+    }
+
+    /// A segment held with all its seconds placed, waiting only for the state of its end, asks for a reading
+    /// at once, not after the logger's gathering (review b3 of W5's second part, R5).
+    #[test]
+    fn a_segment_held_for_its_end_asks_at_once() {
+        let (shared, clock, platform) = telling_at(T);
+        let asked = || platform.asked.load(Ordering::Relaxed);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 1_000, 10);
+        clock.set(T + 4_000);
+        shared.tell(&told(T, T + 3_000, &[]));
+        assert_eq!(shared.waiting_marks(), 0);
+        let before = asked();
+        clock.set(T + 10_000);
+        shared.finish(1);
+        assert_eq!(
+            lock(&shared.activity).held.len(),
+            1,
+            "it waits for the state of its end"
+        );
+        assert_eq!(asked(), before + 1);
     }
 
     /// A reading that leaves seconds or segments waiting asks for the next at once, even with no traffic

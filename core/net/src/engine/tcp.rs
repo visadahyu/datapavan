@@ -392,7 +392,7 @@ async fn open(
     pending: Pending,
 ) {
     let (app, destination) = (held.parsed.source, held.parsed.destination);
-    let Some((uid, upstream, _share)) = upstream(&shared, app, destination).await else {
+    let Some((uid, upstream, _share, via)) = upstream(&shared, app, destination).await else {
         return refused(&held, &shared, &nat);
     };
     // The listener now: one bound anew while the server was asked may be on another port, and none
@@ -424,22 +424,26 @@ async fn open(
         uid,
         dns_held_until: held_until,
     };
-    let bytes = shared.record(Flow {
-        id,
-        protocol: TCP,
-        app,
-        destination,
-        uid,
-        outcome,
-        name,
-        named_by,
-        dns_name: None,
-        came_in: false,
-        ech: Ech::Absent,
-        dns,
-        resolver,
-        network,
-    });
+    // Recorded the way it was routed, not by the chain as it is now (review b3 of W5's second part, R2).
+    let bytes = shared.record_via(
+        Flow {
+            id,
+            protocol: TCP,
+            app,
+            destination,
+            uid,
+            outcome,
+            name,
+            named_by,
+            dns_name: None,
+            came_in: false,
+            ech: Ech::Absent,
+            dns,
+            resolver,
+            network,
+        },
+        via.as_deref(),
+    );
     let answer = match upstream {
         Ok(stream) if listener.port == 0 => {
             // No listener now, as when its port was taken and none can be bound: the app is refused,
@@ -532,7 +536,12 @@ async fn upstream(
     shared: &Arc<Shared>,
     app: SocketAddr,
     destination: SocketAddr,
-) -> Option<(Option<u32>, io::Result<TcpStream>, Option<Place>)> {
+) -> Option<(
+    Option<u32>,
+    io::Result<TcpStream>,
+    Option<Place>,
+    Option<Arc<super::Chain>>,
+)> {
     let direct = async {
         match shared.target(destination) {
             Some(target) => connect_tcp(shared, target).await,
@@ -545,12 +554,15 @@ async fn upstream(
         // one its app's share may refuse.
         let uid = owner(shared, TCP, app, destination).await;
         let share = shared.tcp_shares.take(uid).ok()?;
-        let upstream = match shared.route(uid, destination) {
-            Route::Direct => direct.await,
-            Route::Tool(chain) => connect_through(shared, &chain, destination).await,
-            Route::Refused => Err(io::ErrorKind::ConnectionRefused.into()),
+        let (upstream, via) = match shared.route(uid, destination) {
+            Route::Direct => (direct.await, None),
+            Route::Tool(chain) => (
+                connect_through(shared, &chain, destination).await,
+                Some(chain),
+            ),
+            Route::Refused => (Err(io::ErrorKind::ConnectionRefused.into()), None),
         };
-        return Some((uid, upstream, Some(share)));
+        return Some((uid, upstream, Some(share), via));
     }
     // The server is asked at once, beside Android. One that answered first leaves nothing waiting.
     let mut direct = std::pin::pin!(direct);
@@ -561,10 +573,10 @@ async fn upstream(
         uid = &mut asked => Err(uid),
     };
     match first {
-        Ok(upstream) => Some((asked.await, upstream, None)),
+        Ok(upstream) => Some((asked.await, upstream, None, None)),
         Err(uid) => {
             let share = shared.tcp_shares.force(uid);
-            Some((uid, direct.await, Some(share)))
+            Some((uid, direct.await, Some(share), None))
         }
     }
 }

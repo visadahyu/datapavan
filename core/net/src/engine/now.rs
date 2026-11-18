@@ -113,8 +113,8 @@ struct Place {
     session: Ways,
     /// The last second with bytes to it.
     last: u64,
-    /// Whether a flow to it went through the user's tool.
-    routed: bool,
+    /// The last second a flow to it that went through the user's tool counted, if one did.
+    routed: Option<u64>,
 }
 
 /// Whether two flows reach one destination as the live view shows it: by name, where the name came
@@ -201,7 +201,7 @@ impl Counts {
     pub(super) fn hide(&mut self, hidden: impl Fn(Option<u32>) -> bool) {
         for (uid, app) in &mut self.apps {
             if !app.places.is_empty() && hidden(*uid) {
-                let routed = app.places.iter().filter(|p| p.routed).map(|p| p.last).max();
+                let routed = app.places.iter().filter_map(|p| p.routed).max();
                 self.places -= app.places.len();
                 app.places.clear();
                 if let Some(last) = routed {
@@ -284,7 +284,7 @@ impl Counts {
                     minutes: VecDeque::new(),
                     session: Ways::default(),
                     last: second,
-                    routed,
+                    routed: None,
                 });
                 self.places += 1;
                 app.places.len() - 1
@@ -297,6 +297,10 @@ impl Counts {
         else {
             return;
         };
+        // Any flow through the tool marks it, not only the first (review b3 of W5's second part, R6).
+        if routed {
+            place.routed = Some(place.routed.map_or(second, |s| s.max(second)));
+        }
         // The latest flow's address, ECH, resolver and network, for a destination named alike.
         place.flow.destination = flow.destination;
         place.flow.protocol = flow.protocol;
@@ -938,6 +942,93 @@ mod tests {
         assert_eq!(view(&shared, T + 3_000), Some((0, true, [75, 0])));
     }
 
+    /// A destination reached first directly and then through the tool, under one name, marks its app
+    /// through the tool when the switch hides it, from the last second through the tool (review b3 of W5's
+    /// second part, R6: only the first flow's way was kept).
+    #[test]
+    fn a_destination_reached_later_through_the_tool_marks_it_so() {
+        let (shared, clock, _) = telling_at(T);
+        let direct = open(&shared, 1);
+        up_at(&shared, &clock, &direct, 500, 10);
+        *lock(&shared.chain) = Some(chain_of(UID, true));
+        let routed = open(&shared, 2);
+        up_at(&shared, &clock, &routed, 1_500, 30);
+        shared.tell(&told(T, T + 2_000, &[]));
+        let view = |shared: &Shared| {
+            let snapshot = shared.now_view(T + 2_000);
+            app_of(&snapshot, Some(UID)).map(|a| (a.places.len(), a.through_tool))
+        };
+        assert_eq!(view(&shared), Some((1, false)), "one destination, logged");
+        *lock(&shared.chain) = Some(chain_of(UID, false));
+        shared.hide_chained();
+        assert_eq!(view(&shared), Some((0, true)));
+    }
+
+    /// A connection is shown the way it was routed, not by the chain when it is recorded: one routed directly
+    /// and recorded after a chain was set for its app, with its destinations left out, has no destination and
+    /// is not through the tool; one routed through the tool and recorded after the chain was turned off is
+    /// through it, and its records keep no destination (review b3 of W5's second part, R2).
+    #[test]
+    fn a_flow_is_shown_the_way_it_was_routed() {
+        let (shared, clock, _) = telling_at(T);
+        let view = |shared: &Shared, at| {
+            let snapshot = shared.now_view(at);
+            app_of(&snapshot, Some(UID)).map(|a| (a.places.len(), a.through_tool))
+        };
+        *lock(&shared.chain) = Some(chain_of(UID, false));
+        let Some(direct) = shared.record_via(flow(1, Some(UID)), None) else {
+            unreachable!("an open flow is live")
+        };
+        up_at(&shared, &clock, &direct, 500, 10);
+        shared.tell(&told(T, T + 1_000, &[]));
+        assert_eq!(
+            view(&shared, T + 1_000),
+            Some((0, false)),
+            "direct, not through the tool"
+        );
+        *lock(&shared.chain) = None;
+        let chain = chain_of(UID, false);
+        let Some(routed) = shared.record_via(flow(2, Some(UID)), Some(&chain)) else {
+            unreachable!("an open flow is live")
+        };
+        up_at(&shared, &clock, &routed, 1_500, 5);
+        shared.tell(&told(T + 1_000, T + 2_000, &[]));
+        assert_eq!(
+            view(&shared, T + 2_000),
+            Some((0, true)),
+            "through the tool"
+        );
+        clock.set(T + 3_000);
+        shared.flush();
+        for record in std::mem::take(&mut *lock(&shared.pending_log)) {
+            if let crate::log::Record::Segment { flow, .. } = record {
+                assert!(flow.destination.ip().is_unspecified(), "{flow:?}");
+            }
+        }
+    }
+
+    /// Two flows to one name whose DNS answers named their addresses otherwise are two destinations (review
+    /// b3 of W5's second part, fresh, n7: no test held the DNS name's part).
+    #[test]
+    fn one_name_with_two_dns_names_is_two_destinations() {
+        let mut counts = Counts::default();
+        for (id, dns_name) in [(1, "a.example"), (2, "b.example"), (3, "a.example")] {
+            let to = Flow {
+                named_by: NamedBy::Tls,
+                dns_name: Some(dns_name.into()),
+                ..flow(id, Some(UID))
+            };
+            counts.count(
+                Some(UID),
+                T / 1000,
+                [1, 0, 0, 0],
+                BACKGROUND,
+                Seen::Flow(&to),
+            );
+        }
+        assert_eq!(counts.apps[&Some(UID)].places.len(), 2);
+    }
+
     /// "Through the tool" leaves with the windows: an app chained more than an hour ago, with no flow
     /// through the tool since, is no longer marked (review b2 of W5's second part, fresh, m7).
     #[test]
@@ -1095,6 +1186,25 @@ mod tests {
             [50, 0],
             "since the screen came on, by the new clock"
         );
+        // With no new moment the screen came on, the window since it came on, on the old clock, is forgotten
+        // with what it held (review b3 of W5's second part, fresh, n7).
+        let (shared, clock, _) = telling_at(T);
+        let a = open(&shared, 1);
+        up_at(&shared, &clock, &a, 100, 10);
+        clock.set(T + 3_000);
+        shared.tell(&told(T, T + 1_000, &[]));
+        assert_eq!(
+            bytes_of(&shared.now_view(T + 3_000), Some(UID))[2][3],
+            [10, 0]
+        );
+        clock.set(back);
+        a.up(&shared, 50, 0);
+        clock.set(back + 3_000);
+        let mut reading = told(back, back + 1_000, &[]);
+        reading.screen = crate::states::Screen::On(None);
+        shared.tell(&reading);
+        let all = bytes_of(&shared.now_view(back + 3_000), Some(UID));
+        assert_eq!((all[1][3], all[2][3]), ([50, 0], [0, 0]));
     }
 
     /// Bounded: one app more than [`APPS`] takes the place of the one with bytes the longest ago; one
