@@ -724,7 +724,53 @@ class WatchVpnService : VpnService() {
                 writer.println(found?.let(::describe) ?: "tool searching")
             }
             Engine.nativeFlows().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("flow $it") }
+            debugActivity(args.orEmpty().toList(), writer)
             debugLog(log, args.orEmpty().toList(), writer)
+        }
+    }
+
+    /**
+     * Debug builds only, for scripts/verify-activity.sh (ADR 0046): `activity-read` has the tracker read the
+     * apps' states now and waits until the engine has them. Then, always, what the live view would draw,
+     * with no destination: `activity-states` says what the last reading knew (`states`, `no-access`,
+     * `locked`, or `none-yet`), how far it told, how many readings the tracker told, and the screen; one
+     * `activity-app` line for each app, its UID (`-` for flows of no app), its state now (an
+     * [org.visadahyu.datapavan.watch.log.AppState] name, which says why where there is none), whether it is
+     * the user's tool and whether it went through it, how many destinations it reached, and its bytes up and
+     * down in each window (`10m`, `1h`, `screen`), for each column: no state, in use, with its notification,
+     * in the background, not told yet.
+     */
+    private fun debugActivity(args: List<String>, writer: PrintWriter) {
+        if ("activity-read" in args) {
+            writer.println("activity-read ${tracker?.readNow(ACTIVITY_READ_WAIT_MS) ?: false}")
+        }
+        val snapshot = org.visadahyu.datapavan.watch.activity.Snapshot.parse(Engine.nativeActivity()) ?: return
+        val known = when (snapshot.known) {
+            org.visadahyu.datapavan.watch.activity.Snapshot.STATES -> "states"
+            org.visadahyu.datapavan.watch.activity.Snapshot.NO_ACCESS -> "no-access"
+            org.visadahyu.datapavan.watch.activity.Snapshot.LOCKED -> "locked"
+            else -> "none-yet"
+        }
+        val screen = when (snapshot.screen) {
+            org.visadahyu.datapavan.watch.activity.Snapshot.SCREEN_ON -> "on"
+            org.visadahyu.datapavan.watch.activity.Snapshot.SCREEN_OFF -> "off"
+            else -> "unknown"
+        }
+        writer.println(
+            "activity-states $known told-until ${snapshot.toldUntil} readings ${tracker?.readings ?: 0} " +
+                "screen $screen since ${snapshot.screenOnSince}",
+        )
+        val windows = listOf("10m", "1h", "screen")
+        for (app in snapshot.apps) {
+            val bytes = windows.indices.joinToString(" ") { window ->
+                windows[window] + "=" + (0 until org.visadahyu.datapavan.watch.activity.Snapshot.COLUMNS)
+                    .joinToString(",") { "${app.up(window, it)}/${app.down(window, it)}" }
+            }
+            writer.println(
+                "activity-app ${app.uid ?: "-"} now=${org.visadahyu.datapavan.watch.log.AppState.name(app.now)} " +
+                    "tool=${if (app.isTool) 1 else 0} through-tool=${if (app.throughTool) 1 else 0} " +
+                    "places=${app.destinations.size} $bytes",
+            )
         }
     }
 
@@ -858,6 +904,9 @@ class WatchVpnService : VpnService() {
 
         /** From Watch's screen: the apps left out changed, so the tunnel is set up again if it is up. */
         const val ACTION_APPLY_LEFT_OUT = "org.visadahyu.datapavan.watch.APPLY_LEFT_OUT"
+
+        /** How long the debug command `activity-read` waits for the reading. */
+        private const val ACTIVITY_READ_WAIT_MS = 10_000L
 
         /** How long the debug command `find-tool` waits for the search. */
         private const val SEARCH_WAIT_MS = 10_000L
