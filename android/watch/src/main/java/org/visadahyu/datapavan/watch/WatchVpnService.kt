@@ -809,11 +809,16 @@ class WatchVpnService : VpnService() {
         }
     }
 
+    /**
+     * A record as `log-today` prints it: the DNS answer's name, where it differs from the connection's own,
+     * and whether the flow came in, last, so that the fields before keep their places.
+     */
     private fun describe(record: LogRecord): String = when (record) {
-        is LogRecord.Segment -> listOf(
+        is LogRecord.Segment -> listOfNotNull(
             if (record.protocol == 6) "tcp" else "udp", record.uid ?: "-", "${record.address.hostAddress}:${record.port}",
             "up=${record.up}", "down=${record.down}", if (record.continues) "continues" else "ended",
             "wire=${record.wireUp}/${record.wireDown}", record.name.ifEmpty { "-" }, "flow=${record.flow}",
+            record.dnsName.takeIf { it.isNotEmpty() }?.let { "dns-name=$it" }, "came-in".takeIf { record.cameIn },
         ).joinToString(" ")
         is LogRecord.Lookups -> "lookups ${record.uid ?: "-"} ${record.count} wire=${record.wireUp}/${record.wireDown}"
     }

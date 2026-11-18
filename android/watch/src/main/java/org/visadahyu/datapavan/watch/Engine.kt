@@ -106,6 +106,9 @@ internal object Engine {
      */
     external fun nativeUncacheAnswers(on: Boolean)
 
-    /** The flows kept, one per line as `protocol app destination uid outcome named-by ech dns network name`; debug builds only. */
+    /**
+     * The flows kept, one per line as `protocol app destination uid outcome named-by ech dns network dns-name name`,
+     * `dns-name` being the DNS answer's name where it differs from the connection's own; debug builds only.
+     */
     external fun nativeFlows(): String
 }

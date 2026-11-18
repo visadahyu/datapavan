@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use datapavan_net::organisations::{FilePart, Organisations};
 use datapavan_net::socks5::Credentials;
 use datapavan_net::{
-    Addresses, Chain, ChainSetting, Config, DnsUse, Ech, Engine, Handover, Limits, NamedBy,
+    Addresses, Chain, ChainSetting, Config, DnsUse, Ech, Engine, Flow, Handover, Limits, NamedBy,
     NetworkKind, Outcome, Platform,
 };
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
@@ -498,10 +498,8 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeCounters<
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
-/// `Engine.nativeFlows()`: the flows the engine kept, one per line as
-/// `protocol app destination uid outcome named-by ech dns network name` (`-` for none; `dns` is
-/// `plain` or `encrypted`, with `:resolver` when it is a known one; `network` is `as<number>:own`,
-/// `:hosting` or `:unlisted`; the name may hold spaces), for debug builds and the end-to-end test. Empty when the engine keeps none, as in release builds.
+/// `Engine.nativeFlows()`: the flows the engine kept, one per line as [`flow_line`] writes it, for debug
+/// builds and the end-to-end test. Empty when the engine keeps none, as in release builds.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlows(): String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlows<'caller>(
@@ -511,62 +509,67 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlows<'ca
     unowned_env
         .with_env(|env| -> Result<_, Error> {
             let flows = engine().as_ref().map_or_else(Vec::new, Engine::flows);
-            let lines: Vec<String> = flows
-                .iter()
-                .map(|f| {
-                    let protocol = if f.protocol == datapavan_net::packet::TCP {
-                        "tcp"
-                    } else {
-                        "udp"
-                    };
-                    let uid = f.uid.map_or_else(|| "-".to_owned(), |u| u.to_string());
-                    let outcome = match f.outcome {
-                        Outcome::Opened => "opened",
-                        Outcome::Refused => "refused",
-                        Outcome::Unreachable => "unreachable",
-                        Outcome::Failed => "failed",
-                    };
-                    let name = f.name.as_deref().unwrap_or("-");
-                    let named_by = match f.named_by {
-                        NamedBy::Dns => "dns",
-                        NamedBy::Tls => "tls",
-                        NamedBy::Quic => "quic",
-                        NamedBy::Organisation => "org",
-                        NamedBy::Unknown => "-",
-                    };
-                    let ech = match f.ech {
-                        Ech::Absent => "-",
-                        Ech::Offered => "ech",
-                        Ech::Hidden => "hidden",
-                    };
-                    let dns = match (f.dns, f.resolver.as_deref()) {
-                        (DnsUse::None, _) => "-".to_owned(),
-                        (DnsUse::Plain, None) => "plain".to_owned(),
-                        (DnsUse::Plain, Some(r)) => format!("plain:{r}"),
-                        (DnsUse::Encrypted, None) => "encrypted".to_owned(),
-                        (DnsUse::Encrypted, Some(r)) => format!("encrypted:{r}"),
-                    };
-                    let network = f.network.map_or_else(
-                        || "-".to_owned(),
-                        |n| {
-                            let kind = match n.kind {
-                                NetworkKind::Own => "own",
-                                NetworkKind::Hosting => "hosting",
-                                NetworkKind::Unlisted => "unlisted",
-                            };
-                            format!("as{}:{kind}", n.asn)
-                        },
-                    );
-                    // The name last: an organisation's may hold spaces.
-                    format!(
-                        "{protocol} {} {} {uid} {outcome} {named_by} {ech} {dns} {network} {name}",
-                        f.app, f.destination
-                    )
-                })
-                .collect();
+            let lines: Vec<String> = flows.iter().map(flow_line).collect();
             JString::from_str(env, lines.join("\n"))
         })
         .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// A flow kept, as `protocol app destination uid outcome named-by ech dns network dns-name name` (`-` for
+/// none; `dns` is `plain` or `encrypted`, with `:resolver` when it is a known one; `network` is
+/// `as<number>:own`, `:hosting` or `:unlisted`; `dns-name` is the name a DNS answer gave the address,
+/// where the connection's own, which names the flow, differs from it (finding 20 of the independent
+/// review of 2026-11-09); the name may hold spaces, and comes last).
+fn flow_line(f: &Flow) -> String {
+    let protocol = if f.protocol == datapavan_net::packet::TCP {
+        "tcp"
+    } else {
+        "udp"
+    };
+    let uid = f.uid.map_or_else(|| "-".to_owned(), |u| u.to_string());
+    let outcome = match f.outcome {
+        Outcome::Opened => "opened",
+        Outcome::Refused => "refused",
+        Outcome::Unreachable => "unreachable",
+        Outcome::Failed => "failed",
+    };
+    let name = f.name.as_deref().unwrap_or("-");
+    // A DNS name holds no space.
+    let dns_name = f.dns_name.as_deref().unwrap_or("-");
+    let named_by = match f.named_by {
+        NamedBy::Dns => "dns",
+        NamedBy::Tls => "tls",
+        NamedBy::Quic => "quic",
+        NamedBy::Organisation => "org",
+        NamedBy::Unknown => "-",
+    };
+    let ech = match f.ech {
+        Ech::Absent => "-",
+        Ech::Offered => "ech",
+        Ech::Hidden => "hidden",
+    };
+    let dns = match (f.dns, f.resolver.as_deref()) {
+        (DnsUse::None, _) => "-".to_owned(),
+        (DnsUse::Plain, None) => "plain".to_owned(),
+        (DnsUse::Plain, Some(r)) => format!("plain:{r}"),
+        (DnsUse::Encrypted, None) => "encrypted".to_owned(),
+        (DnsUse::Encrypted, Some(r)) => format!("encrypted:{r}"),
+    };
+    let network = f.network.map_or_else(
+        || "-".to_owned(),
+        |n| {
+            let kind = match n.kind {
+                NetworkKind::Own => "own",
+                NetworkKind::Hosting => "hosting",
+                NetworkKind::Unlisted => "unlisted",
+            };
+            format!("as{}:{kind}", n.asn)
+        },
+    );
+    format!(
+        "{protocol} {} {} {uid} {outcome} {named_by} {ech} {dns} {network} {dns_name} {name}",
+        f.app, f.destination
+    )
 }
 
 #[cfg(test)]
@@ -596,6 +599,47 @@ mod tests {
         }
 
         fn log(&self, _: &[u8]) {}
+    }
+
+    /// The dump's flows show the DNS answer's name beside the connection's own where the two differ, and
+    /// `-` where they do not, so that a run can read both; the name, which may hold spaces, stays last.
+    #[test]
+    fn a_flow_line_shows_both_names_where_they_differ() {
+        let flow = Flow {
+            id: 1,
+            protocol: datapavan_net::packet::TCP,
+            app: SocketAddr::from(([10, 1, 10, 1], 40_000)),
+            destination: SocketAddr::from(([93, 184, 216, 34], 443)),
+            uid: Some(2_000),
+            outcome: Outcome::Opened,
+            name: Some("other.example".into()),
+            named_by: NamedBy::Tls,
+            dns_name: Some("www.example.com".into()),
+            came_in: false,
+            ech: Ech::Offered,
+            dns: DnsUse::None,
+            resolver: None,
+            network: None,
+        };
+        assert_eq!(
+            flow_line(&flow),
+            "tcp 10.1.10.1:40000 93.184.216.34:443 2000 opened tls ech - - www.example.com other.example"
+        );
+        let organisation = Flow {
+            name: Some("Google LLC".into()),
+            named_by: NamedBy::Organisation,
+            dns_name: None,
+            ech: Ech::Absent,
+            network: Some(datapavan_net::Network {
+                asn: 15_169,
+                kind: NetworkKind::Hosting,
+            }),
+            ..flow
+        };
+        assert_eq!(
+            flow_line(&organisation),
+            "tcp 10.1.10.1:40000 93.184.216.34:443 2000 opened org - - as15169:hosting - Google LLC"
+        );
     }
 
     fn a_chain(port: u16) -> Chain {

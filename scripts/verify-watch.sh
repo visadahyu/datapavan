@@ -113,7 +113,7 @@ fail() {
 }
 
 # The flows the engine kept, one per line: protocol app destination uid outcome named-by ech dns network
-# name.
+# dns-name name (dns-name: the DNS answer's name where it differs from the connection's own, else -).
 flows() {
     adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" | tr -d '\r' | sed -n 's/^ *flow //p'
 }
@@ -147,7 +147,7 @@ has_flow() {
 # Whether a flow of the shell, by protocol $1 to any address on port $2, is named $3 by $4 (W3), with
 # the ECH column $5 (any if not given).
 has_named_flow() {
-    flow_listed "^$1 [^ ]+ [^ ]+:$2 $SHELL_UID opened $4 ${5:-[^ ]+} [^ ]+ [^ ]+ ${3//./\\.}\$"
+    flow_listed "^$1 [^ ]+ [^ ]+:$2 $SHELL_UID opened $4 ${5:-[^ ]+} [^ ]+ [^ ]+ [^ ]+ ${3//./\\.}\$"
 }
 
 # What Watch says of Private DNS on its network: plain, network, or strict and the provider (debug).
@@ -303,12 +303,12 @@ PY
         # would come first (Android or an app may look up dns.google, which names 8.8.8.8).
         device 6 "echo watch | nc -u -w 1 216.239.32.10 9" >/dev/null
         has_named_flow udp 9 'Google LLC' org || fail "$round: a flow to 216.239.32.10 was not named after Google's network"
-        flow_listed "^udp [^ ]+ 216\.239\.32\.10:9 $SHELL_UID opened org [^ ]+ [^ ]+ as15169:hosting Google LLC$" ||
+        flow_listed "^udp [^ ]+ 216\.239\.32\.10:9 $SHELL_UID opened org [^ ]+ [^ ]+ as15169:hosting - Google LLC$" ||
             fail "$round: Google's network was not marked as one that hosts other companies' servers"
         echo "ok: $round: a flow named from the organisation table"
         # The owners' table names the company people know, not the registry's "Facebook, Inc.".
         device 6 "echo watch | nc -u -w 1 157.240.1.35 9" >/dev/null
-        flow_listed "^udp [^ ]+ 157\.240\.1\.35:9 $SHELL_UID opened org [^ ]+ [^ ]+ as32934:own Meta Platforms, Inc\.$" ||
+        flow_listed "^udp [^ ]+ 157\.240\.1\.35:9 $SHELL_UID opened org [^ ]+ [^ ]+ as32934:own - Meta Platforms, Inc\.$" ||
             fail "$round: a flow to Meta's network was not named after Meta"
         echo "ok: $round: a network named after the company that owns it"
     else
