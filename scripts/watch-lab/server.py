@@ -78,19 +78,18 @@ def echo_udp(sock):
         sock.sendto(data, peer)
 
 
-def sentinel(tcp, udp, log):
+def sentinel(tcp, udp, out):
     """Writes "tcp" for each connection and "udp" for each datagram that reaches the sentinel's port."""
     watch = selectors.DefaultSelector()
     watch.register(tcp, selectors.EVENT_READ, "tcp")
     watch.register(udp, selectors.EVENT_READ, "udp")
-    with open(log, "a", encoding="utf-8") as out:
-        while True:
-            for key, _ in watch.select():
-                if key.data == "tcp":
-                    key.fileobj.accept()[0].close()
-                else:
-                    key.fileobj.recvfrom(65535)
-                print(key.data, file=out, flush=True)
+    while True:
+        for key, _ in watch.select():
+            if key.data == "tcp":
+                key.fileobj.accept()[0].close()
+            else:
+                key.fileobj.recvfrom(65535)
+            print(key.data, file=out, flush=True)
 
 
 def main(args):
@@ -113,12 +112,14 @@ def main(args):
             guard_tcp = socket.create_server(("0.0.0.0", port + 3))
             guard_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             guard_udp.bind(("0.0.0.0", port + 3))
+            # Made before "ready", so that the check can mark it at once.
+            guard_log = open(sentinel_log, "a", encoding="utf-8")
     except OSError as error:
         print(f"the test server could not hold its ports from {port}: {error}", file=sys.stderr, flush=True)
         return 1
     threading.Thread(target=echo_udp, args=(echo,), daemon=True).start()
     if sentinel_log is not None:
-        threading.Thread(target=sentinel, args=(guard_tcp, guard_udp, sentinel_log), daemon=True).start()
+        threading.Thread(target=sentinel, args=(guard_tcp, guard_udp, guard_log), daemon=True).start()
     print(f"ready {port}", flush=True)
     try:
         http.serve_forever()

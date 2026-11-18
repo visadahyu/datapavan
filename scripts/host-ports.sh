@@ -123,7 +123,7 @@ host_server() {
 # The self-test: throwaway listeners hold ports, which host_port_holder must name and host_server pass by,
 # or stop at; and the server, once ready, holds every port it should, the refused one refused.
 host_ports_self_test() {
-    local failures=0 base out holders=() pid
+    local failures=0 base out holders=() pid mark
     unset WATCH_TEST_PORT HOST_PORTS_FIXED
     fail_test() {
         echo "self-test: $*" >&2
@@ -152,9 +152,12 @@ time.sleep(60)' "$1" "$2" "$3" "$4")
     }
     # A free base well away from the checks' own, and below the kernel's range of ports for outgoing
     # connections (32768 up), found by starting the real server there.
-    HOST_PORTS_FIRST=$((20000 + RANDOM % 10000)) HOST_PORTS_TRIES=50 host_server --sentinel /dev/null 2>/dev/null ||
+    mark=$(mktemp -u)
+    HOST_PORTS_FIRST=$((20000 + RANDOM % 10000)) HOST_PORTS_TRIES=50 host_server --sentinel "$mark" 2>/dev/null ||
         { echo "self-test: the server started nowhere" >&2; return 1; }
     base=$PORT
+    # The sentinel's file is there once the server is ready, for verify-chain.sh to count its lines at once.
+    [ -f "$mark" ] || fail_test "the sentinel's file is not there once the server is ready"
     # The server holds its ports: HTTP answers, the next port is refused and held, the echo echoes, and the
     # sentinel's are held.
     python3 -I - "$base" <<'PY' || fail_test "the server does not hold its ports as it should"
@@ -185,7 +188,11 @@ for kind in (socket.SOCK_STREAM, socket.SOCK_DGRAM):
         raise SystemExit("the sentinel's port is not held")
     except OSError:
         pass
+socket.create_connection(("127.0.0.1", base + 3), timeout=5).close()
 PY
+    for _ in $(seq 1 50); do grep -qx tcp "$mark" 2>/dev/null && break; sleep 0.1; done
+    grep -qx tcp "$mark" 2>/dev/null || fail_test "the sentinel did not write a connection to its file"
+    rm -f "$mark"
     kill "$SERVER" 2>/dev/null || true
     wait "$SERVER" 2>/dev/null || true
     sleep 0.2
