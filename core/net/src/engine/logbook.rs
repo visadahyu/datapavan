@@ -392,12 +392,13 @@ impl Shared {
     /// Asks the engine's thread to flush the log ([`Shared::flush`]) and hand its records on, and waits
     /// until it has, at most `wait`: from another thread, for the end-to-end test, which cannot wait
     /// ([`super::Engine::flush_log`]). The logger makes the flush between counts, on the thread that
-    /// makes them (the module's comment). False if it did not in time, or the engine stopped first,
-    /// after it handed its last records on.
+    /// makes them (the module's comment). False if it did not in time, or the engine stopped first: then
+    /// once the engine has handed its last records on.
     ///
     /// When no logger is there to make it, as before the engine's tunnel is up or once it has stopped,
     /// it waits for nothing (the fresh review 2 of W5's first part, nit 7: the debug flush held Watch's
-    /// lock on the engine for the whole wait then).
+    /// lock on the engine for the whole wait then). A waiter asked of a logger that then ends without its
+    /// engine's loop, as only tests run it, waits out `wait`.
     pub(super) fn ask_flush(&self, wait: Duration) -> bool {
         let answer = {
             let mut asked = lock(&self.flushes);
@@ -491,14 +492,15 @@ pub(super) struct Flushes {
     pub(super) waiting: Vec<std::sync::mpsc::SyncSender<()>>,
 }
 
-/// The logger's end, however it comes: no flush is waited for any more, and who waits is let go.
+/// The logger's end, however it comes: no flush can be asked of it any more. Who waits already is let
+/// go by the engine's loop once it has handed its last records on (`run`'s end), so that a flush asked
+/// as the engine stops is answered by them (review 3 of W5's first part, finding 1: let go here, it was
+/// answered before them).
 struct Ended<'a>(&'a Shared);
 
 impl Drop for Ended<'_> {
     fn drop(&mut self) {
-        let mut flushes = lock(&self.0.flushes);
-        flushes.logging = false;
-        flushes.waiting.clear();
+        lock(&self.0.flushes).logging = false;
     }
 }
 
@@ -1647,12 +1649,39 @@ mod tests {
         );
     }
 
+    /// The log, as it is handed its batches, noting at each whether a flush asked is still waited for.
+    struct Watched {
+        flushed: Mutex<std::sync::mpsc::Receiver<()>>,
+        seen: Mutex<Vec<Result<(), std::sync::mpsc::TryRecvError>>>,
+    }
+
+    impl Platform for Watched {
+        fn owner(&self, _: u8, _: SocketAddr, _: SocketAddr) -> Option<u32> {
+            None
+        }
+
+        fn protect(&self, _: RawFd) -> bool {
+            true
+        }
+
+        fn log(&self, _: &[u8]) {
+            let state = lock(&self.flushed).try_recv();
+            lock(&self.seen).push(state);
+        }
+    }
+
     /// A flush asked while the engine stops is answered by its last records: its loop lets every one
-    /// who waits go once it has handed them on.
+    /// who waits go once it has handed them on, and not before (review 3 of W5's first part, finding 1):
+    /// at the last batch, the flush is still waited for.
     #[tokio::test(flavor = "current_thread")]
     async fn a_flush_asked_as_the_engine_stops_is_let_go() -> std::io::Result<()> {
-        let shared = Arc::new(shared());
         let (done, flushed) = std::sync::mpsc::sync_channel(1);
+        let platform = Arc::new(Watched {
+            flushed: Mutex::new(flushed),
+            seen: Mutex::default(),
+        });
+        let shared = Arc::new(shared_with(platform.clone()));
+        open(&shared, 1).up(&shared, 10, 0);
         lock(&shared.flushes).waiting.push(done);
         let (engine_end, _app) = std::os::unix::net::UnixDatagram::pair()?;
         engine_end.set_nonblocking(true)?;
@@ -1671,7 +1700,12 @@ mod tests {
         let _ = stop.send(true);
         let _ = running.await;
         assert_eq!(
-            flushed.try_recv(),
+            *lock(&platform.seen),
+            vec![Err(std::sync::mpsc::TryRecvError::Empty)],
+            "the last batch came after the flush was let go"
+        );
+        assert_eq!(
+            lock(&platform.flushed).try_recv(),
             Err(std::sync::mpsc::TryRecvError::Disconnected)
         );
         Ok(())

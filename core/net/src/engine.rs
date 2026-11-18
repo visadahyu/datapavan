@@ -1213,7 +1213,7 @@ async fn run(
     if let Some(batch) = state.shared.take_log() {
         state.shared.platform.log(&batch);
     }
-    // A flush asked meanwhile is answered by what was just handed on.
+    // A flush asked meanwhile is answered by what was just handed on: only now is who waits let go.
     lock(&state.shared.flushes).waiting.clear();
 }
 

@@ -535,8 +535,6 @@ impl Peer {
             flow.named_by = NamedBy::Dns;
             (flow.dns, flow.resolver) = shared.dns_use(address, Some(name));
             opened.dns = flow.dns;
-            // A stand-in's name names its address alone: held while the stand-in lives.
-            opened.dns_held_until = std::time::Duration::MAX;
         }
         Self {
             opened,
