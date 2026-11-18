@@ -107,6 +107,21 @@ internal object Engine {
     external fun nativeUncacheAnswers(on: Boolean)
 
     /**
+     * Hands the running engine a reading of the apps' states ([org.visadahyu.datapavan.watch.activity.States],
+     * ADR 0046, decision 1): it places every second the reading covers and cuts the log's segments where an
+     * app's state changed. Whether an engine took it; false when none runs or the message is not one of its
+     * version.
+     */
+    external fun nativeStates(message: ByteArray): Boolean
+
+    /**
+     * What the live view "Now" draws ([org.visadahyu.datapavan.watch.activity.Snapshot]): each app's bytes by
+     * state in the last 10 minutes, the last hour and since the screen came on, and its destinations, from
+     * the engine's memory. Empty when no engine runs. Cheap: read every second while the view is open.
+     */
+    external fun nativeActivity(): ByteArray
+
+    /**
      * The flows kept, one per line as `protocol app destination uid outcome named-by ech dns network dns-name name`,
      * `dns-name` being the DNS answer's name where it differs from the connection's own; debug builds only.
      */

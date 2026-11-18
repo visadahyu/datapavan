@@ -39,9 +39,10 @@
 //! **Without Watch's Kotlin side telling states** ([`super::Platform::tells_states`], as in tests that do
 //! not), no mark is noted and every segment is written at once in no state, "not told".
 
+use super::now::{Counts, Seen};
 use super::{Flow, Shared, lock};
 use crate::log::Record;
-use crate::states::{Interval, Known, Placed, State, Told, Unknown};
+use crate::states::{Interval, Known, Placed, Screen, State, Told, Unknown};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::Ordering;
 
@@ -92,8 +93,8 @@ impl Force {
 
 /// What a segment held for its state is: a flow's, or an app's lookups'.
 pub(super) enum Of {
-    /// A flow, as it was when cut.
-    Flow(Flow),
+    /// A flow, as it was when cut, and whether its destination stays out of the log.
+    Flow { flow: Flow, hidden: bool },
     /// An app's lookups to Watch's own DNS address: its counts are the lookups, nought, and their bytes
     /// up and down on the tunnel.
     Lookups,
@@ -134,7 +135,7 @@ impl Piece {
         state: Placed,
     ) -> Record {
         match &self.of {
-            Of::Flow(flow) => Record::Segment {
+            Of::Flow { flow, .. } => Record::Segment {
                 flow: flow.clone(),
                 start,
                 end,
@@ -334,13 +335,18 @@ impl Timeline {
     }
 }
 
-/// The states told and the segments that wait for theirs.
+/// The states told, the segments that wait for theirs, and each app's counts by state for the live
+/// view ([`super::now`]).
 pub(super) struct Activity {
     /// Whether Watch's Kotlin side tells the states ([`super::Platform::tells_states`]); without it
     /// every second is placed at once in no state, "not told".
     tracked: bool,
     timeline: Timeline,
     pub(super) held: VecDeque<Piece>,
+    pub(super) counts: Counts,
+    /// The screen, and what the latest reading knew, as last told.
+    screen: Screen,
+    known: Option<Known>,
 }
 
 impl Activity {
@@ -349,7 +355,34 @@ impl Activity {
             tracked,
             timeline: Timeline::default(),
             held: VecDeque::new(),
+            counts: Counts::default(),
+            screen: Screen::Unknown,
+            known: None,
         }
+    }
+
+    /// The screen as last told.
+    pub(super) fn screen(&self) -> Screen {
+        self.screen
+    }
+
+    /// What the latest reading knew, if one came.
+    pub(super) fn known(&self) -> Option<Known> {
+        self.known
+    }
+
+    /// The end of what was told.
+    pub(super) fn told_until(&self) -> u64 {
+        self.timeline.until()
+    }
+
+    /// The state of the app `uid` in the last second told, `None` while it does not place it.
+    pub(super) fn now(&self, uid: Option<u32>) -> Option<Placed> {
+        let until = self.timeline.until();
+        if uid.is_some() && self.tracked && until < 1000 {
+            return None;
+        }
+        self.place(uid, (until / 1000).saturating_sub(1), None)
     }
 
     /// How many marks the segments held keep, for the count of all marks.
@@ -357,8 +390,14 @@ impl Activity {
         self.held.iter().map(|piece| piece.marks.len()).sum()
     }
 
-    /// Takes a reading.
+    /// Takes a reading: the screen first, so that the seconds it places count since the screen came on
+    /// where they do, then the states.
     fn tell(&mut self, told: &Told) {
+        if let Screen::On(Some(since)) = told.screen {
+            self.counts.screen_on(since);
+        }
+        self.screen = told.screen;
+        self.known = Some(told.known);
         self.timeline.tell(told);
     }
 
@@ -378,18 +417,32 @@ impl Activity {
         })
     }
 
-    /// Settles a live flow's, or an app's lookups', marks: its segment cut where the state changes, the
-    /// parts before to `cut`. How many marks it settled.
+    /// Settles a live flow's, or an app's lookups', marks: each second to its app's counts, and its
+    /// segment cut where the state changes, the parts before to `cut`. How many marks it settled.
     pub(super) fn settle_open(
         &mut self,
-        uid: Option<u32>,
+        (uid, seen): (Option<u32>, Seen<'_>),
         open: (&mut u64, &mut [u64; 4], &mut Option<Placed>),
         (marks, now): (&mut VecDeque<Mark>, [u64; 4]),
         force: Option<Force>,
         cut: impl FnMut(u64, u64, [u64; 4], Placed),
     ) -> usize {
-        let place = |second| self.place(uid, second, force);
-        settle_marks(&place, open, marks, (now, u64::MAX), |_, _, _| {}, cut)
+        let mut seconds = Vec::new();
+        let settled = {
+            let place = |second| self.place(uid, second, force);
+            settle_marks(
+                &place,
+                open,
+                marks,
+                (now, u64::MAX),
+                |second, bytes, placed| seconds.push((second, bytes, placed)),
+                cut,
+            )
+        };
+        for (second, bytes, placed) in seconds {
+            self.counts.count(uid, second, bytes, placed, seen);
+        }
+        settled
     }
 
     /// Settles the segments held: each whose seconds are all placed is written, cut where its state
@@ -416,6 +469,7 @@ impl Activity {
     ) -> (bool, usize) {
         let uid = piece.uid;
         let mut parts = Vec::new();
+        let mut seconds = Vec::new();
         let settled = {
             let place = |second| self.place(uid, second, force);
             let Piece {
@@ -432,10 +486,14 @@ impl Activity {
                 (start, base, state),
                 marks,
                 (*last, *end),
-                |_, _, _| {},
+                |second, bytes, placed| seconds.push((second, bytes, placed)),
                 |from, to, bytes, placed| parts.push((from, to, bytes, placed)),
             )
         };
+        let seen = Seen::of(&piece.of);
+        for (second, bytes, placed) in seconds {
+            self.counts.count(uid, second, bytes, placed, seen);
+        }
         // The parts before a change of state, each written with the flow as it was cut.
         for (from, to, bytes, placed) in parts {
             records.push(piece.record((from, to), bytes, true, placed));
@@ -538,7 +596,7 @@ impl Shared {
                     let now = live.bytes.now();
                     let flow = &live.flow;
                     settled += activity.settle_open(
-                        flow.uid,
+                        (flow.uid, Seen::live(flow, live.hidden)),
                         (&mut live.start, &mut live.base, &mut live.state),
                         (&mut marks, now),
                         force,
@@ -568,7 +626,7 @@ impl Shared {
                     ..
                 } = entry;
                 settled += activity.settle_open(
-                    uid,
+                    (uid, Seen::Lookups),
                     (start, base, state),
                     (marks, counts),
                     force,
@@ -632,7 +690,7 @@ impl Shared {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::super::clock::ManualClock;
     use super::super::tests::shared_with;
     use super::super::{DnsUse, Ech, NamedBy, Outcome, Platform, TCP};
@@ -645,17 +703,17 @@ mod tests {
 
     /// 2026-11-17, 22:10 UTC: within a quarter hour, so that no quarter-hour cut comes into these tests
     /// unless they move the clock past 22:15.
-    const T: u64 = 1_794_873_600_000 + 22 * 3_600_000 + 10 * 60_000;
-    const UID: u32 = 10_123;
-    const IN_USE: Placed = Placed::Known(State::InUse);
-    const NOTIFICATION: Placed = Placed::Known(State::Notification);
-    const BACKGROUND: Placed = Placed::Known(State::Background);
-    const NOT_TOLD: Placed = Placed::Unknown(Unknown::NotTold);
+    pub(crate) const T: u64 = 1_794_873_600_000 + 22 * 3_600_000 + 10 * 60_000;
+    pub(crate) const UID: u32 = 10_123;
+    pub(crate) const IN_USE: Placed = Placed::Known(State::InUse);
+    pub(crate) const NOTIFICATION: Placed = Placed::Known(State::Notification);
+    pub(crate) const BACKGROUND: Placed = Placed::Known(State::Background);
+    pub(crate) const NOT_TOLD: Placed = Placed::Unknown(Unknown::NotTold);
 
     /// A platform whose Kotlin side tells the states, noting how often the engine asked for them.
     #[derive(Default)]
-    struct Telling {
-        asked: AtomicUsize,
+    pub(crate) struct Telling {
+        pub(crate) asked: AtomicUsize,
     }
 
     impl Platform for Telling {
@@ -679,7 +737,7 @@ mod tests {
     }
 
     /// An engine's shared state whose platform tells the states, its clock at `wall`, and both.
-    fn telling_at(wall: u64) -> (Shared, Arc<ManualClock>, Arc<Telling>) {
+    pub(crate) fn telling_at(wall: u64) -> (Shared, Arc<ManualClock>, Arc<Telling>) {
         let platform = Arc::new(Telling::default());
         let clock = ManualClock::at(wall);
         let mut shared = shared_with(platform.clone());
@@ -691,7 +749,7 @@ mod tests {
         (shared, clock, platform)
     }
 
-    fn flow(id: u64, uid: Option<u32>) -> Flow {
+    pub(crate) fn flow(id: u64, uid: Option<u32>) -> Flow {
         Flow {
             id,
             protocol: TCP,
@@ -710,7 +768,7 @@ mod tests {
         }
     }
 
-    fn open(shared: &Shared, id: u64) -> Arc<super::super::logbook::FlowBytes> {
+    pub(crate) fn open(shared: &Shared, id: u64) -> Arc<super::super::logbook::FlowBytes> {
         let Some(bytes) = shared.record(flow(id, Some(UID))) else {
             unreachable!("an open flow is live")
         };
@@ -718,7 +776,7 @@ mod tests {
     }
 
     /// A reading from `from` to `until` that knows the states, with these intervals of [`UID`].
-    fn told(from: u64, until: u64, intervals: &[(u64, u64, State)]) -> Told {
+    pub(crate) fn told(from: u64, until: u64, intervals: &[(u64, u64, State)]) -> Told {
         Told {
             from,
             until,
@@ -736,7 +794,7 @@ mod tests {
         }
     }
 
-    fn taken(shared: &Shared) -> Vec<Record> {
+    pub(crate) fn taken(shared: &Shared) -> Vec<Record> {
         std::mem::take(&mut *lock(&shared.pending_log))
     }
 
@@ -759,7 +817,7 @@ mod tests {
     }
 
     /// `n` bytes up at `at` milliseconds after [`T`].
-    fn up_at(
+    pub(crate) fn up_at(
         shared: &Shared,
         clock: &ManualClock,
         bytes: &super::super::logbook::FlowBytes,

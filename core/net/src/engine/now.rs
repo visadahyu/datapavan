@@ -1,0 +1,914 @@
+//! The live counters behind "Now" (ADR 0046, decision 2 (d)): each placed second's bytes, as the app sent
+//! and received them, go to its app's counts by state, in whole minutes over the last hour and since
+//! the screen last came on, and to the destination its flow reached, named as W3 names it. A chained
+//! app's flow whose destination stays out of the log adds to its app's counts only, with the mark that it
+//! went through the user's tool ("Log where these apps connect" off). Lookups to Watch's own DNS address
+//! are the log's only.
+//!
+//! All of it is memory only, written to no file, kept with retention "none" too, handed to the next
+//! engine when the tunnel is set up again, and gone when Watch stops. It is bounded: at most [`APPS`]
+//! apps, each with at most 61 minutes of counts, and [`PLACES`] destinations for all apps together and
+//! [`PLACES_PER_APP`] for one, each with at most 61 minutes of counts and names of at most 253 bytes;
+//! past a bound, the app or destination with bytes the longest ago gives way (ADR 0046's "How it is
+//! built" gives the bytes).
+//!
+//! The seconds not placed yet count in the snapshot in a column of their own, "not told yet", from the
+//! flows' and the held segments' marks, so that the view needs no reading to show them.
+
+use super::activity::{Mark, Of};
+use super::{Flow, NamedBy, Network, Shared, lock};
+use crate::snapshot::{AppNow, PlaceNow, Snapshot, Ways};
+use crate::states::Placed;
+use std::collections::{BTreeMap, HashMap, VecDeque};
+
+/// At most this many apps have counts kept; one more takes the place of the one with bytes the
+/// longest ago.
+pub(super) const APPS: usize = 512;
+
+/// At most this many destinations are kept for all apps together.
+pub(super) const PLACES: usize = 2_048;
+
+/// At most this many destinations are kept for one app.
+pub(super) const PLACES_PER_APP: usize = 128;
+
+/// The windows of the live view in whole minutes: the current one and the 9, or the 59, before it.
+pub(super) const WINDOWS: [u64; 2] = [10, 60];
+
+/// Bytes up and down by column: no state, in use, with its notification, in the background.
+type ByState = [Ways; 4];
+
+/// Counts in whole minutes: the minute (of the wall clock, since 1970), and its counts.
+type Minutes<T> = VecDeque<(u64, T)>;
+
+/// Adds to the count of `minute`, kept in order, and forgets the minutes no window reaches from the
+/// newest.
+fn add_minute<T: Default>(minutes: &mut Minutes<T>, minute: u64, add: impl FnOnce(&mut T)) {
+    let at = minutes.iter().rposition(|(m, _)| *m <= minute);
+    match at {
+        Some(i) if minutes[i].0 == minute => add(&mut minutes[i].1),
+        _ => {
+            let mut counts = T::default();
+            add(&mut counts);
+            minutes.insert(at.map_or(0, |i| i + 1), (minute, counts));
+        }
+    }
+    let newest = minutes.back().map_or(minute, |(m, _)| *m);
+    while minutes
+        .front()
+        .is_some_and(|(m, _)| m + WINDOWS[1] <= newest)
+    {
+        minutes.pop_front();
+    }
+}
+
+/// How a placed second's bytes were seen: on a flow to a destination, on a chained flow whose
+/// destination stays out of the log, or as lookups, which the live view does not count.
+#[derive(Clone, Copy)]
+pub(super) enum Seen<'a> {
+    Flow(&'a Flow),
+    Hidden,
+    Lookups,
+}
+
+impl<'a> Seen<'a> {
+    pub(super) fn of(of: &'a Of) -> Self {
+        match of {
+            Of::Flow { hidden: true, .. } => Self::Hidden,
+            Of::Flow { flow, .. } => Self::Flow(flow),
+            Of::Lookups => Self::Lookups,
+        }
+    }
+
+    /// A live flow, by whether its destination stays out of the log.
+    pub(super) fn live(flow: &'a Flow, hidden: bool) -> Self {
+        if hidden {
+            Self::Hidden
+        } else {
+            Self::Flow(flow)
+        }
+    }
+}
+
+/// A destination an app reached: the latest flow to it, as it was named, and its bytes.
+struct Place {
+    flow: Flow,
+    /// The network and organisation behind its address, once `looked` up for the view.
+    organisation: Option<(Network, String)>,
+    looked: bool,
+    minutes: Minutes<Ways>,
+    session: Ways,
+    /// The last second with bytes to it.
+    last: u64,
+}
+
+/// Whether two flows reach one destination as the live view shows it: by name, where the name came
+/// from, the DNS name beside it and the app's own DNS; and by address where neither has a name.
+fn same_place(a: &Flow, b: &Flow) -> bool {
+    a.name == b.name
+        && a.named_by == b.named_by
+        && a.dns_name == b.dns_name
+        && a.dns == b.dns
+        && (a.name.is_some() || a.destination.ip() == b.destination.ip())
+}
+
+/// One app's counts.
+#[derive(Default)]
+struct App {
+    minutes: Minutes<ByState>,
+    session: ByState,
+    /// The last second a flow of it went through the user's tool with its destination left out.
+    through_tool: Option<u64>,
+    /// The last second it sent or received.
+    last: u64,
+    places: Vec<Place>,
+}
+
+/// Each app's counts by state, and the window since the screen came on.
+#[derive(Default)]
+pub(super) struct Counts {
+    apps: HashMap<Option<u32>, App>,
+    /// How many destinations all apps keep together.
+    places: usize,
+    /// When the screen last came on, in milliseconds since 1970: the window "since the screen came on".
+    session: Option<u64>,
+}
+
+impl Counts {
+    /// The screen came on at `since`: the window since it did begins anew.
+    pub(super) fn screen_on(&mut self, since: u64) {
+        if self.session == Some(since) {
+            return;
+        }
+        self.session = Some(since);
+        for app in self.apps.values_mut() {
+            app.session = ByState::default();
+            for place in &mut app.places {
+                place.session = Ways::default();
+            }
+        }
+    }
+
+    /// Counts one placed second of the app `uid`, `bytes` its counts (as the app sent and received
+    /// them, then the tunnel's), for the live view.
+    pub(super) fn count(
+        &mut self,
+        uid: Option<u32>,
+        second: u64,
+        bytes: [u64; 4],
+        placed: Placed,
+        seen: Seen<'_>,
+    ) {
+        let (up, down) = (bytes[0], bytes[1]);
+        if (up == 0 && down == 0) || matches!(seen, Seen::Lookups) {
+            return;
+        }
+        if !self.apps.contains_key(&uid) && self.apps.len() >= APPS {
+            let oldest = self
+                .apps
+                .iter()
+                .min_by_key(|(_, app)| app.last)
+                .map(|(uid, _)| *uid);
+            if let Some(gone) = oldest.and_then(|uid| self.apps.remove(&uid)) {
+                self.places -= gone.places.len();
+            }
+        }
+        let in_session = self
+            .session
+            .is_some_and(|since| second.saturating_mul(1000) >= since);
+        let column = placed.column();
+        let minute = second / 60;
+        let app = self.apps.entry(uid).or_default();
+        add_minute(&mut app.minutes, minute, |counts: &mut ByState| {
+            counts[column][0] += up;
+            counts[column][1] += down;
+        });
+        if in_session {
+            app.session[column][0] += up;
+            app.session[column][1] += down;
+        }
+        app.last = app.last.max(second);
+        let flow = match seen {
+            Seen::Flow(flow) => flow,
+            Seen::Hidden => {
+                app.through_tool = Some(app.through_tool.map_or(second, |s| s.max(second)));
+                return;
+            }
+            Seen::Lookups => return,
+        };
+        let known = app
+            .places
+            .iter()
+            .position(|place| same_place(&place.flow, flow));
+        let at = if let Some(at) = known {
+            at
+        } else {
+            {
+                if app.places.len() >= PLACES_PER_APP {
+                    if let Some(oldest) = oldest_place(&app.places) {
+                        app.places.swap_remove(oldest);
+                        self.places -= 1;
+                    }
+                } else if self.places >= PLACES {
+                    self.forget_oldest_place();
+                }
+                let Some(app) = self.apps.get_mut(&uid) else {
+                    return;
+                };
+                app.places.push(Place {
+                    flow: flow.clone(),
+                    organisation: None,
+                    looked: false,
+                    minutes: VecDeque::new(),
+                    session: Ways::default(),
+                    last: second,
+                });
+                self.places += 1;
+                app.places.len() - 1
+            }
+        };
+        let Some(place) = self
+            .apps
+            .get_mut(&uid)
+            .and_then(|app| app.places.get_mut(at))
+        else {
+            return;
+        };
+        // The latest flow's address, ECH, resolver and network, for a destination named alike.
+        place.flow.destination = flow.destination;
+        place.flow.protocol = flow.protocol;
+        place.flow.ech = flow.ech;
+        place.flow.came_in = flow.came_in;
+        if place.flow.network != flow.network {
+            place.flow.network = flow.network;
+            place.looked = false;
+        }
+        if place.flow.resolver != flow.resolver {
+            place.flow.resolver.clone_from(&flow.resolver);
+        }
+        add_minute(&mut place.minutes, minute, |counts: &mut Ways| {
+            counts[0] += up;
+            counts[1] += down;
+        });
+        if in_session {
+            place.session[0] += up;
+            place.session[1] += down;
+        }
+        place.last = place.last.max(second);
+    }
+
+    /// Forgets the destination, of any app, with bytes the longest ago.
+    fn forget_oldest_place(&mut self) {
+        let oldest = self
+            .apps
+            .iter()
+            .filter_map(|(uid, app)| {
+                oldest_place(&app.places).map(|at| (app.places[at].last, *uid, at))
+            })
+            .min();
+        if let Some((_, uid, at)) = oldest
+            && let Some(app) = self.apps.get_mut(&uid)
+        {
+            app.places.swap_remove(at);
+            self.places -= 1;
+        }
+    }
+
+    /// Forgets what no window reaches any more at `now`, in milliseconds since 1970: minutes past the
+    /// longest window, and apps and destinations with no bytes left in it nor since the screen came on.
+    fn forget_old(&mut self, now: u64) {
+        let first = (now / 60_000).saturating_sub(WINDOWS[1] - 1);
+        let mut gone = 0;
+        self.apps.retain(|_, app| {
+            app.minutes.retain(|(minute, _)| *minute >= first);
+            app.places.retain_mut(|place| {
+                place.minutes.retain(|(minute, _)| *minute >= first);
+                let keep = !place.minutes.is_empty() || place.session != Ways::default();
+                gone += usize::from(!keep);
+                keep
+            });
+            let keep = !app.minutes.is_empty() || app.session != ByState::default();
+            if !keep {
+                gone += app.places.len();
+            }
+            keep
+        });
+        self.places -= gone;
+    }
+}
+
+/// Where the destination with bytes the longest ago is in `places`.
+fn oldest_place(places: &[Place]) -> Option<usize> {
+    places
+        .iter()
+        .enumerate()
+        .min_by_key(|(_, place)| place.last)
+        .map(|(at, _)| at)
+}
+
+impl Shared {
+    /// What the live view "Now" draws at the wall clock's `now`: each app's bytes by state in each
+    /// window, the seconds not placed yet in a column apart, and its destinations with theirs.
+    pub(super) fn now_view(&self, now: u64) -> Snapshot {
+        let tool = self.chain().map(|chain| chain.tool);
+        let live = lock(&self.live);
+        let mut activity = lock(&self.activity);
+        activity.counts.forget_old(now);
+        let mut view = View::new(now, activity.counts.session);
+        for (&uid, app) in &activity.counts.apps {
+            view.settled(uid, app);
+        }
+        // The seconds not placed yet: in the live flows and the segments held.
+        for live in live.values() {
+            let marks = lock(&live.bytes.marks);
+            let seen = Seen::live(&live.flow, live.hidden);
+            view.waiting(live.flow.uid, &marks, live.bytes.now(), seen);
+        }
+        for piece in &activity.held {
+            view.waiting(piece.uid, &piece.marks, piece.last, Seen::of(&piece.of));
+        }
+        drop(live);
+        // Each destination's organisation, looked up once.
+        for app in activity.counts.apps.values_mut() {
+            for place in &mut app.places {
+                if !place.looked {
+                    place.organisation = self.organisation_of(&place.flow);
+                    place.looked = true;
+                }
+            }
+        }
+        let apps = view
+            .apps
+            .into_iter()
+            .map(|(uid, app)| {
+                let kept = activity.counts.apps.get(&uid);
+                let places = app
+                    .places
+                    .into_iter()
+                    .map(|(flow, bytes)| {
+                        let organisation = match kept
+                            .and_then(|a| a.places.iter().find(|p| same_place(&p.flow, &flow)))
+                        {
+                            Some(place) => place.organisation.clone(),
+                            None => self.organisation_of(&flow),
+                        };
+                        PlaceNow {
+                            flow,
+                            organisation,
+                            bytes,
+                        }
+                    })
+                    .collect();
+                AppNow {
+                    uid,
+                    now: activity.now(uid),
+                    tool: uid.is_some() && uid == tool,
+                    through_tool: app.through_tool,
+                    bytes: app.bytes,
+                    places,
+                }
+            })
+            .collect();
+        Snapshot {
+            taken: now,
+            known: activity.known(),
+            told_until: activity.told_until(),
+            screen: activity.screen(),
+            session: activity.counts.session,
+            apps,
+        }
+    }
+
+    /// The network and organisation behind a destination: the flow's own where the organisation table
+    /// named it, else the table's for its address, if Watch has the table.
+    fn organisation_of(&self, flow: &Flow) -> Option<(Network, String)> {
+        if flow.named_by == NamedBy::Organisation
+            && let (Some(network), Some(name)) = (flow.network, &flow.name)
+        {
+            return Some((network, name.clone()));
+        }
+        self.organisation(flow.destination.ip())
+    }
+}
+
+/// The live view as it is built: each app's bytes by window and column, and its destinations'.
+struct View {
+    /// The first minute of each window of whole minutes.
+    firsts: [u64; 2],
+    session: Option<u64>,
+    apps: BTreeMap<Option<u32>, AppView>,
+}
+
+#[derive(Default)]
+struct AppView {
+    /// By window (10 minutes, an hour, since the screen came on), then by column (no state, in use,
+    /// with its notification, in the background, not told yet).
+    bytes: [[Ways; 5]; 3],
+    through_tool: bool,
+    places: Vec<(Flow, [Ways; 3])>,
+}
+
+impl View {
+    fn new(now: u64, session: Option<u64>) -> Self {
+        let minute = now / 60_000;
+        Self {
+            firsts: WINDOWS.map(|w| minute.saturating_sub(w - 1)),
+            session,
+            apps: BTreeMap::new(),
+        }
+    }
+
+    /// The windows a second falls in: the 10 minutes, the hour, since the screen came on.
+    fn windows(&self, second: u64) -> [bool; 3] {
+        let minute = second / 60;
+        [
+            minute >= self.firsts[0],
+            minute >= self.firsts[1],
+            self.session
+                .is_some_and(|since| second.saturating_mul(1000) >= since),
+        ]
+    }
+
+    /// An app's counts placed.
+    fn settled(&mut self, uid: Option<u32>, app: &App) {
+        let mut view = AppView {
+            through_tool: app
+                .through_tool
+                .is_some_and(|second| self.windows(second).iter().any(|&w| w)),
+            ..AppView::default()
+        };
+        for (minute, counts) in &app.minutes {
+            let windows = self.windows(minute * 60);
+            for (w, inside) in windows.into_iter().take(2).enumerate() {
+                if inside {
+                    add_columns(&mut view.bytes[w], counts);
+                }
+            }
+        }
+        add_columns(&mut view.bytes[2], &app.session);
+        for place in &app.places {
+            let mut bytes = [Ways::default(); 3];
+            for (minute, counts) in &place.minutes {
+                let windows = self.windows(minute * 60);
+                for (w, inside) in windows.into_iter().take(2).enumerate() {
+                    if inside {
+                        add(&mut bytes[w], *counts);
+                    }
+                }
+            }
+            add(&mut bytes[2], place.session);
+            if bytes != [Ways::default(); 3] {
+                view.places.push((place.flow.clone(), bytes));
+            }
+        }
+        if view.bytes != [[Ways::default(); 5]; 3] || view.through_tool {
+            self.apps.insert(uid, view);
+        }
+    }
+
+    /// The seconds not placed yet of one flow or segment, in its marks, `now` its counts after the
+    /// last.
+    fn waiting(&mut self, uid: Option<u32>, marks: &VecDeque<Mark>, now: [u64; 4], seen: Seen<'_>) {
+        if matches!(seen, Seen::Lookups) {
+            return;
+        }
+        for (i, mark) in marks.iter().enumerate() {
+            let next = marks.get(i + 1).map_or(now, |m| m.counts);
+            let ways = [
+                next[0].saturating_sub(mark.counts[0]),
+                next[1].saturating_sub(mark.counts[1]),
+            ];
+            if ways == Ways::default() {
+                continue;
+            }
+            let windows = self.windows(mark.second);
+            let app = self.apps.entry(uid).or_default();
+            for (w, inside) in windows.into_iter().enumerate() {
+                if inside {
+                    add(&mut app.bytes[w][4], ways);
+                }
+            }
+            let flow = match seen {
+                Seen::Hidden => {
+                    app.through_tool = true;
+                    continue;
+                }
+                Seen::Flow(flow) => flow,
+                Seen::Lookups => continue,
+            };
+            let known = app.places.iter().position(|(f, _)| same_place(f, flow));
+            let at = match known {
+                Some(at) => at,
+                None if app.places.len() < PLACES_PER_APP => {
+                    app.places.push((flow.clone(), [Ways::default(); 3]));
+                    app.places.len() - 1
+                }
+                None => continue,
+            };
+            for (w, inside) in windows.into_iter().enumerate() {
+                if inside {
+                    add(&mut app.places[at].1[w], ways);
+                }
+            }
+        }
+    }
+}
+
+fn add(to: &mut Ways, more: Ways) {
+    to[0] += more[0];
+    to[1] += more[1];
+}
+
+fn add_columns(to: &mut [Ways; 5], more: &ByState) {
+    for (column, ways) in more.iter().enumerate() {
+        add(&mut to[column], *ways);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::activity::tests::{
+        BACKGROUND, IN_USE, NOTIFICATION, T, Telling, UID, flow, open, telling_at, told, up_at,
+    };
+    use super::super::tests::shared_with;
+    use super::*;
+    use crate::states::{Interval, Known, State, Told};
+    use std::net::SocketAddr;
+    use std::sync::Arc;
+
+    const MINUTE: u64 = 60_000;
+
+    /// The bytes of `uid` in `snapshot`, by window and column.
+    fn bytes_of(snapshot: &Snapshot, uid: Option<u32>) -> [[Ways; 5]; 3] {
+        snapshot
+            .apps
+            .iter()
+            .find(|app| app.uid == uid)
+            .map_or([[[0; 2]; 5]; 3], |app| app.bytes)
+    }
+
+    fn app_of(snapshot: &Snapshot, uid: Option<u32>) -> Option<&AppNow> {
+        snapshot.apps.iter().find(|app| app.uid == uid)
+    }
+
+    /// An app's bytes, placed by state, count in each window that reaches the minute they were counted
+    /// in: the 10 minutes reach back at least 9 and at most 10 whole minutes, the hour 59 and 60; the
+    /// seconds not told yet count apart; and "since the screen came on" from the second it came on.
+    #[test]
+    fn an_apps_bytes_count_by_state_in_each_window() {
+        // T is 22:10; the screen came on at 22:12:30.
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 0, 100);
+        up_at(&shared, &clock, &bytes, 2 * MINUTE + 29_000, 20);
+        up_at(&shared, &clock, &bytes, 2 * MINUTE + 31_000, 30);
+        up_at(&shared, &clock, &bytes, 4 * MINUTE, 7);
+        let mut reading = told(
+            T,
+            T + 3 * MINUTE,
+            &[(T + 2 * MINUTE + 30_000, T + 3 * MINUTE, State::InUse)],
+        );
+        reading.screen = crate::states::Screen::On(Some(T + 2 * MINUTE + 30_000));
+        shared.tell(&reading);
+        bytes.down(&shared, 0, 0);
+        // At 22:14: every second in both windows; the one not told yet apart.
+        let snapshot = shared.now_view(T + 4 * MINUTE + 1);
+        let all = bytes_of(&snapshot, Some(UID));
+        for window in [0, 1] {
+            assert_eq!(all[window][3], [120, 0], "background, window {window}");
+            assert_eq!(all[window][1], [30, 0], "in use, window {window}");
+            assert_eq!(all[window][4], [7, 0], "not told yet, window {window}");
+        }
+        assert_eq!(all[2][1], [30, 0], "since the screen came on: in use");
+        assert_eq!(
+            all[2][3],
+            [0, 0],
+            "since the screen came on: the background was before"
+        );
+        assert_eq!(all[2][4], [7, 0]);
+        // At 22:19:59, the minute of 22:10 is still in the 10 minutes; at 22:20, it is not.
+        let at = |now| bytes_of(&shared.now_view(now), Some(UID));
+        assert_eq!(at(T + 9 * MINUTE + 59_999)[0][3], [120, 0]);
+        assert_eq!(at(T + 10 * MINUTE)[0][3], [20, 0]);
+        assert_eq!(at(T + 10 * MINUTE)[1][3], [120, 0]);
+        // At 23:10 the minute of 22:10 has left the hour too; the screen's window keeps what it had.
+        let late = at(T + 60 * MINUTE);
+        assert_eq!(
+            (late[1][3], late[1][1], late[2][1]),
+            ([20, 0], [30, 0], [30, 0])
+        );
+        // The screen comes on again: its window begins anew.
+        let mut again = told(T + 3 * MINUTE, T + 61 * MINUTE, &[]);
+        again.screen = crate::states::Screen::On(Some(T + 61 * MINUTE));
+        shared.tell(&again);
+        let snapshot = shared.now_view(T + 61 * MINUTE);
+        assert_eq!(bytes_of(&snapshot, Some(UID))[2], [[0; 2]; 5]);
+        assert_eq!(
+            bytes_of(&snapshot, Some(UID))[1][3],
+            [27, 0],
+            "the 7 told since"
+        );
+        assert_eq!(snapshot.session, Some(T + 61 * MINUTE));
+    }
+
+    /// An app with no bytes left in any window is forgotten; its state now is read from the last second
+    /// told.
+    #[test]
+    fn an_app_with_no_bytes_left_in_any_window_is_forgotten() {
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 0, 10);
+        let mut reading = told(T, T + 2_000, &[(T + 1_000, T + 2_000, State::Notification)]);
+        reading.screen = crate::states::Screen::Off;
+        shared.tell(&reading);
+        let snapshot = shared.now_view(T + 2_000);
+        let app = app_of(&snapshot, Some(UID));
+        assert_eq!(app.map(|a| a.now), Some(Some(NOTIFICATION)));
+        assert_eq!(snapshot.known, Some(Known::States));
+        assert_eq!(snapshot.told_until, T + 2_000);
+        assert!(app_of(&shared.now_view(T + 59 * MINUTE), Some(UID)).is_some());
+        assert!(app_of(&shared.now_view(T + 60 * MINUTE), Some(UID)).is_none());
+        assert!(lock(&shared.activity).counts.apps.is_empty());
+        // With the screen on since before, its window keeps the app.
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 0, 10);
+        shared.tell(&told(T, T + 2_000, &[]));
+        assert!(app_of(&shared.now_view(T + 600 * MINUTE), Some(UID)).is_some());
+    }
+
+    /// Each destination an app reached, as W3 named it, with its bytes in each window; flows to one name
+    /// at several addresses are one destination, unnamed flows one per address; a chained app's flow
+    /// whose destination stays out of the log adds to its app's bytes only, marked as through the tool.
+    #[test]
+    fn destinations_are_named_as_w3_names_them_and_a_chained_apps_are_not_kept() {
+        let (shared, clock, _) = telling_at(T);
+        let second = |id, destination: [u8; 4], name: Option<&str>| {
+            let Some(bytes) = shared.record(Flow {
+                destination: SocketAddr::from((destination, 443)),
+                name: name.map(str::to_owned),
+                named_by: if name.is_some() {
+                    NamedBy::Dns
+                } else {
+                    NamedBy::Unknown
+                },
+                ..flow(id, Some(UID))
+            }) else {
+                unreachable!("an open flow is live")
+            };
+            bytes
+        };
+        let a = second(1, [198, 51, 100, 9], Some("www.example.com"));
+        let b = second(2, [198, 51, 100, 10], Some("www.example.com"));
+        let c = second(3, [192, 0, 2, 1], None);
+        let d = second(4, [192, 0, 2, 2], None);
+        for (bytes, n) in [(&a, 10), (&b, 20), (&c, 30), (&d, 40)] {
+            up_at(&shared, &clock, bytes, 500, n);
+        }
+        clock.set(T + 1_000);
+        a.down(&shared, 5, 0);
+        // A chained app, its destinations left out of the log ("Log where these apps connect" off).
+        let chained = 10_300;
+        *lock(&shared.chain) = Some(Arc::new(crate::engine::Chain {
+            proxy: SocketAddr::from(([127, 0, 0, 1], 10_808)),
+            credentials: None,
+            tool: 10_200,
+            apps: Some(std::collections::HashSet::from([chained])),
+            udp: true,
+            log_destinations: false,
+        }));
+        let Some(hidden) = shared.record(flow(5, Some(chained))) else {
+            unreachable!("an open flow is live")
+        };
+        up_at(&shared, &clock, &hidden, 1_200, 50);
+        let Some(tool) = shared.record(flow(6, Some(10_200))) else {
+            unreachable!("an open flow is live")
+        };
+        up_at(&shared, &clock, &tool, 1_300, 60);
+        // Before any reading, the destinations show with their bytes not told yet.
+        let early = shared.now_view(T + 1_500);
+        let mine = app_of(&early, Some(UID)).map(|a| a.places.len());
+        assert_eq!(mine, Some(3));
+        let mut reading = told(T, T + 3_000, &[]);
+        reading.intervals.push(Interval {
+            uid: chained,
+            from: T,
+            until: T + 3_000,
+            state: State::InUse,
+        });
+        shared.tell(&reading);
+        let snapshot = shared.now_view(T + 3_000);
+        let Some(app) = app_of(&snapshot, Some(UID)) else {
+            unreachable!("the app is in the view")
+        };
+        // One name at two addresses is one destination, at the address of the flow placed last.
+        let mut places: Vec<_> = app
+            .places
+            .iter()
+            .map(|p| {
+                let unnamed = p.flow.name.is_none();
+                let address = unnamed.then(|| p.flow.destination.ip().to_string());
+                (p.flow.name.clone(), address, p.bytes[0])
+            })
+            .collect();
+        places.sort();
+        assert_eq!(
+            places,
+            vec![
+                (None, Some("192.0.2.1".into()), [30, 0]),
+                (None, Some("192.0.2.2".into()), [40, 0]),
+                (Some("www.example.com".into()), None, [30, 5]),
+            ]
+        );
+        assert!(!app.tool && !app.through_tool);
+        let Some(chained) = app_of(&snapshot, Some(chained)) else {
+            unreachable!("the chained app is in the view")
+        };
+        assert!(chained.through_tool && chained.places.is_empty());
+        assert_eq!(chained.bytes[0][1], [50, 0]);
+        let tool = app_of(&snapshot, Some(10_200)).map(|a| (a.tool, a.places.len()));
+        assert_eq!(tool, Some((true, 1)));
+        assert_eq!(lock(&shared.activity).counts.places, 4);
+    }
+
+    /// Bounded: one app more than [`APPS`] takes the place of the one with bytes the longest ago; one
+    /// destination more than an app keeps, or all apps keep, takes the place of the one with bytes the
+    /// longest ago.
+    #[test]
+    fn the_counts_stay_within_their_bounds() {
+        let mut counts = Counts::default();
+        let named = |id: u64, name: String| Flow {
+            name: Some(name),
+            ..flow(id, Some(UID))
+        };
+        for uid in 0..=u32::try_from(APPS).unwrap_or(u32::MAX) {
+            let place = named(1, format!("app{uid}.example"));
+            counts.count(
+                Some(uid),
+                1_000 + u64::from(uid),
+                [1, 0, 0, 0],
+                BACKGROUND,
+                Seen::Flow(&place),
+            );
+        }
+        assert_eq!(counts.apps.len(), APPS);
+        assert!(!counts.apps.contains_key(&Some(0)), "the oldest gave way");
+        assert_eq!(counts.places, APPS);
+        let mut counts = Counts::default();
+        for i in 0..=PLACES_PER_APP as u64 {
+            let place = named(i, format!("{i}.example"));
+            counts.count(
+                Some(UID),
+                1_000 + i,
+                [1, 0, 0, 0],
+                BACKGROUND,
+                Seen::Flow(&place),
+            );
+        }
+        let app = &counts.apps[&Some(UID)];
+        assert_eq!(
+            (app.places.len(), counts.places),
+            (PLACES_PER_APP, PLACES_PER_APP)
+        );
+        assert!(
+            !app.places
+                .iter()
+                .any(|p| p.flow.name.as_deref() == Some("0.example"))
+        );
+        let mut counts = Counts::default();
+        for i in 0..=PLACES as u64 {
+            let uid = u32::try_from(i / 100).unwrap_or(0);
+            let place = named(i, format!("{i}.example"));
+            counts.count(
+                Some(uid),
+                1_000 + i,
+                [1, 0, 0, 0],
+                BACKGROUND,
+                Seen::Flow(&place),
+            );
+        }
+        assert_eq!(counts.places, PLACES);
+        let total: usize = counts.apps.values().map(|a| a.places.len()).sum();
+        assert_eq!(total, PLACES);
+        // An app's minutes reach back an hour at most.
+        let mut counts = Counts::default();
+        for minute in 0..200u64 {
+            counts.count(Some(UID), minute * 60, [1, 0, 0, 0], IN_USE, Seen::Lookups);
+            counts.count(Some(UID), minute * 60, [1, 0, 0, 0], IN_USE, Seen::Hidden);
+        }
+        assert_eq!(counts.apps[&Some(UID)].minutes.len(), 60);
+    }
+
+    /// Minutes counted out of order are kept in order.
+    #[test]
+    fn minutes_added_out_of_order_stay_in_order() {
+        let mut minutes: Minutes<u64> = VecDeque::new();
+        for minute in [5, 3, 7, 3, 6, 1] {
+            add_minute(&mut minutes, minute, |n| *n += 1);
+        }
+        assert_eq!(
+            minutes,
+            VecDeque::from([(1, 1), (3, 2), (5, 1), (6, 1), (7, 1)])
+        );
+        add_minute(&mut minutes, 61, |n| *n += 1);
+        assert_eq!(
+            minutes,
+            VecDeque::from([(3, 2), (5, 1), (6, 1), (7, 1), (61, 1)])
+        );
+    }
+
+    /// Where the fixture Watch's Kotlin side reads is kept (`SnapshotTest`).
+    const FIXTURE: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../android/watch/src/test/resources/org/visadahyu/datapavan/watch/activity/snapshot.hex"
+    );
+
+    /// The fixture Watch's Kotlin side reads is what the engine writes, byte for byte, as for the log
+    /// (`logbook`): from an engine's own counts, of an app placed in each state, a chained app, the tool
+    /// and flows of no app, read with no usage access at the end.
+    #[test]
+    fn the_kotlin_sides_snapshot_fixture_is_what_the_engine_writes() -> std::io::Result<()> {
+        let platform = Arc::new(Telling::default());
+        let clock = super::super::clock::ManualClock::at(T);
+        let mut shared = shared_with(platform);
+        shared.clock = clock.clone();
+        let bytes = open(&shared, 1);
+        for (at, n) in [(0, 100), (1_000, 200), (2_000, 300), (3_000, 400)] {
+            up_at(&shared, &clock, &bytes, at, n);
+        }
+        clock.set(T + 3_500);
+        bytes.down(&shared, 1_000, 0);
+        let Some(none) = shared.record(Flow {
+            destination: SocketAddr::from(([192, 0, 2, 7], 853)),
+            name: Some("dns.example".into()),
+            named_by: NamedBy::Tls,
+            dns_name: Some("other.example".into()),
+            ech: crate::engine::Ech::Offered,
+            dns: crate::engine::DnsUse::Encrypted,
+            resolver: Some("sample".into()),
+            protocol: crate::packet::UDP,
+            came_in: true,
+            ..flow(2, None)
+        }) else {
+            unreachable!("an open flow is live")
+        };
+        none.up(&shared, 50, 0);
+        shared.tell(&Told {
+            from: T,
+            until: T + 3_000,
+            known: Known::States,
+            screen: crate::states::Screen::On(Some(T + 1_000)),
+            intervals: vec![
+                Interval {
+                    uid: UID,
+                    from: T,
+                    until: T + 1_000,
+                    state: State::InUse,
+                },
+                Interval {
+                    uid: UID,
+                    from: T + 1_000,
+                    until: T + 2_000,
+                    state: State::Notification,
+                },
+            ],
+        });
+        shared.tell(&Told {
+            from: T + 3_000,
+            until: T + 3_000,
+            known: Known::NoAccess,
+            screen: crate::states::Screen::Off,
+            intervals: Vec::new(),
+        });
+        let snapshot = shared.now_view(T + 4_000);
+        let all = bytes_of(&snapshot, Some(UID));
+        assert_eq!(
+            (all[0][1], all[0][2], all[0][3], all[0][4]),
+            ([100, 0], [200, 0], [300, 0], [400, 1_000])
+        );
+        assert_eq!(all[2][1], [0, 0], "before the screen came on");
+        assert_eq!(bytes_of(&snapshot, None)[0][0], [50, 0]);
+        let mut text = String::from(
+            "# Watch's live view: one snapshot as the engine writes it (core/net/src/snapshot.rs, version 1), in\n\
+             # hex. Written by the engine's test the_kotlin_sides_snapshot_fixture_is_what_the_engine_writes\n\
+             # (core/net/src/engine/now.rs), which fails when the engine writes otherwise; run it with\n\
+             # DATAPAVAN_WRITE_FIXTURE=1 to write it anew. Read by SnapshotTest. Not edited by hand.\n",
+        );
+        for line in crate::snapshot::encode(&snapshot).chunks(48) {
+            text.extend(line.iter().map(|b| format!("{b:02x}")));
+            text.push('\n');
+        }
+        if std::env::var_os("DATAPAVAN_WRITE_FIXTURE").is_some() {
+            if let Some(folder) = std::path::Path::new(FIXTURE).parent() {
+                std::fs::create_dir_all(folder)?;
+            }
+            std::fs::write(FIXTURE, &text)?;
+        }
+        let kept = std::fs::read_to_string(FIXTURE)?;
+        assert!(
+            kept == text,
+            "{FIXTURE} is not what the engine writes: run this test with DATAPAVAN_WRITE_FIXTURE=1, then \
+             the Kotlin side's SnapshotTest"
+        );
+        Ok(())
+    }
+}

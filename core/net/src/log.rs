@@ -21,7 +21,7 @@
 
 use std::net::{IpAddr, SocketAddr};
 
-use crate::engine::{DnsUse, Ech, Flow, NamedBy, Outcome};
+use crate::engine::{DnsUse, Ech, Flow, NamedBy, Network, Outcome};
 use crate::owners::NetworkKind;
 use crate::states::Placed;
 
@@ -93,37 +93,12 @@ impl Record {
                     Outcome::Unreachable => 2,
                     Outcome::Failed => 3,
                 });
-                out.push(match flow.named_by {
-                    NamedBy::Dns => 0,
-                    NamedBy::Tls => 1,
-                    NamedBy::Quic => 2,
-                    NamedBy::Organisation => 3,
-                    NamedBy::Unknown => 4,
-                });
-                out.push(match flow.ech {
-                    Ech::Absent => 0,
-                    Ech::Offered => 1,
-                    Ech::Hidden => 2,
-                });
-                out.push(match flow.dns {
-                    DnsUse::None => 0,
-                    DnsUse::Plain => 1,
-                    DnsUse::Encrypted => 2,
-                });
+                out.push(named_by_code(flow.named_by));
+                out.push(ech_code(flow.ech));
+                out.push(dns_code(flow.dns));
                 out.push(u8::from(*continues) | u8::from(flow.came_in) << 1);
                 push_address(&mut out, flow.destination);
-                let (asn, kind) = flow.network.map_or((0, 0), |n| {
-                    (
-                        n.asn,
-                        match n.kind {
-                            NetworkKind::Own => 1,
-                            NetworkKind::Hosting => 2,
-                            NetworkKind::Unlisted => 3,
-                        },
-                    )
-                });
-                out.extend_from_slice(&asn.to_le_bytes());
-                out.push(kind);
+                push_network(&mut out, flow.network);
                 push_text(&mut out, flow.name.as_deref());
                 push_text(&mut out, flow.resolver.as_deref());
                 push_text(&mut out, flow.dns_name.as_deref());
@@ -152,7 +127,54 @@ impl Record {
     }
 }
 
-fn push_address(out: &mut Vec<u8>, address: SocketAddr) {
+/// Where a flow's name came from, as the log and the live view's snapshot write it.
+pub(crate) fn named_by_code(named_by: NamedBy) -> u8 {
+    match named_by {
+        NamedBy::Dns => 0,
+        NamedBy::Tls => 1,
+        NamedBy::Quic => 2,
+        NamedBy::Organisation => 3,
+        NamedBy::Unknown => 4,
+    }
+}
+
+/// What a flow's hello said of ECH, as the log and the snapshot write it.
+pub(crate) fn ech_code(ech: Ech) -> u8 {
+    match ech {
+        Ech::Absent => 0,
+        Ech::Offered => 1,
+        Ech::Hidden => 2,
+    }
+}
+
+/// Whether a flow carries the app's own DNS, as the log and the snapshot write it.
+pub(crate) fn dns_code(dns: DnsUse) -> u8 {
+    match dns {
+        DnsUse::None => 0,
+        DnsUse::Plain => 1,
+        DnsUse::Encrypted => 2,
+    }
+}
+
+/// A network's AS number (0 for none) and what its owner is (0 none, 1 a company's own, 2 hosting, 3
+/// not listed).
+pub(crate) fn push_network(out: &mut Vec<u8>, network: Option<Network>) {
+    let (asn, kind) = network.map_or((0, 0), |n| {
+        (
+            n.asn,
+            match n.kind {
+                NetworkKind::Own => 1,
+                NetworkKind::Hosting => 2,
+                NetworkKind::Unlisted => 3,
+            },
+        )
+    });
+    out.extend_from_slice(&asn.to_le_bytes());
+    out.push(kind);
+}
+
+/// An address: its length (4 or 16), its bytes, and the port.
+pub(crate) fn push_address(out: &mut Vec<u8>, address: SocketAddr) {
     match address.ip() {
         IpAddr::V4(ip) => {
             out.push(4);
@@ -167,7 +189,7 @@ fn push_address(out: &mut Vec<u8>, address: SocketAddr) {
 }
 
 /// A length byte and at most 255 bytes of UTF-8, cut at a character boundary.
-fn push_text(out: &mut Vec<u8>, text: Option<&str>) {
+pub(crate) fn push_text(out: &mut Vec<u8>, text: Option<&str>) {
     let text = text.unwrap_or("");
     let mut end = text.len().min(255);
     while !text.is_char_boundary(end) {
@@ -220,7 +242,6 @@ pub(crate) fn states_in(batch: &[u8]) -> Vec<Placed> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::Network;
     use crate::states::Unknown;
     use std::net::Ipv4Addr;
 

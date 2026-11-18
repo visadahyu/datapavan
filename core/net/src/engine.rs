@@ -72,6 +72,7 @@ mod kept;
 mod logbook;
 mod lookups;
 mod naming;
+mod now;
 mod tcp;
 mod udp;
 mod upstream;
@@ -1136,6 +1137,14 @@ impl Engine {
         if self.thread.as_ref().is_some_and(|t| !t.is_finished()) {
             let _ = self.shared.ask_flush(Duration::from_secs(10));
         }
+    }
+
+    /// What the live view "Now" draws (ADR 0046, decision 2 (d)), in the form of [`crate::snapshot`]:
+    /// each app's bytes by state in the last 10 minutes, the last hour and since the screen came on, and
+    /// its destinations. From memory only; cheap enough to read every second while the view is open.
+    #[must_use]
+    pub fn activity(&self) -> Vec<u8> {
+        crate::snapshot::encode(&self.shared.now_view(self.shared.clock.wall_ms()))
     }
 
     /// Takes a reading of the apps' states from Watch's Kotlin side, a message of [`crate::states`]:

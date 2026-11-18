@@ -20,6 +20,7 @@ pub mod owners;
 pub mod packet;
 pub mod quic;
 pub mod resolvers;
+pub mod snapshot;
 pub mod socks5;
 pub mod standins;
 pub mod states;

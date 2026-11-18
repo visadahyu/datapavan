@@ -334,7 +334,10 @@ impl Shared {
                     let marks = live.bytes.take_marks(false);
                     let counts = live.bytes.now();
                     pieces.push(Piece {
-                        of: Of::Flow(live.flow.clone()),
+                        of: Of::Flow {
+                            flow: live.flow.clone(),
+                            hidden: live.hidden,
+                        },
                         uid: live.flow.uid,
                         start: live.start,
                         base: live.base,
@@ -399,7 +402,10 @@ impl Shared {
         self.ask(now / 1000);
         if flow.outcome != Outcome::Opened {
             self.hold(vec![Piece {
-                of: Of::Flow(flow.clone()),
+                of: Of::Flow {
+                    flow: flow.clone(),
+                    hidden,
+                },
                 uid: flow.uid,
                 start: now,
                 base: [0; 4],
@@ -552,7 +558,10 @@ impl Shared {
             let marks = live.bytes.take_marks(false);
             let counts = live.bytes.now();
             pieces.push(Piece {
-                of: Of::Flow(live.flow.clone()),
+                of: Of::Flow {
+                    flow: live.flow.clone(),
+                    hidden: live.hidden,
+                },
                 uid: live.flow.uid,
                 start: live.start,
                 base: live.base,
@@ -614,7 +623,10 @@ fn piece(live: Live, end: u64, continues: bool) -> Piece {
         last: live.bytes.now(),
         continues,
         marks,
-        of: Of::Flow(live.flow),
+        of: Of::Flow {
+            flow: live.flow,
+            hidden: live.hidden,
+        },
     }
 }
 

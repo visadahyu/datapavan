@@ -1,6 +1,6 @@
 //! Thin JNI bridge between Datapavan Watch and [`datapavan_net`], as `datapavan-jni` is for the audit
 //! app: `org.visadahyu.datapavan.watch.Engine` starts and stops the engine, and the engine calls back
-//! into `WatchVpnService` for `getConnectionOwnerUid` and `protect`. Every export converts its
+//! into `WatchVpnService` for `getConnectionOwnerUid` and `protect`, and to hand over the log's records. Every export converts its
 //! arguments, calls the engine and converts the result; all logic is in the engine, which holds no
 //! unsafe code (ADR 0006).
 
@@ -494,6 +494,43 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeCounters<
             let array = JLongArray::new(env, values.len())?;
             array.set_region(env, 0, &values)?;
             Ok(array)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `Engine.nativeStates(message)`: a reading of the apps' states (`datapavan_net::states`, ADR 0046,
+/// decision 1) for the running engine, which places every second it covers. Whether an engine took it:
+/// false when none runs or the message is not one of its version.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeStates(message:
+// ByteArray): Boolean`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStates<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    message: JByteArray<'caller>,
+) -> jboolean {
+    unowned_env
+        .with_env(|env| -> Result<jboolean, Error> {
+            let message = env.convert_byte_array(&message)?;
+            Ok(engine()
+                .as_ref()
+                .is_some_and(|running| running.states(&message)))
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `Engine.nativeActivity()`: what the live view "Now" draws (`datapavan_net::snapshot`), from the
+/// running engine's memory, or an empty array when none runs.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeActivity(): ByteArray`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeActivity<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) -> JByteArray<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let snapshot = engine().as_ref().map_or_else(Vec::new, Engine::activity);
+            env.byte_array_from_slice(&snapshot)
         })
         .resolve::<ThrowRuntimeExAndDefault>()
 }

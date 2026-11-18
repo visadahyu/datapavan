@@ -1,0 +1,159 @@
+package org.visadahyu.datapavan.watch.activity
+
+import java.net.InetAddress
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import org.visadahyu.datapavan.watch.log.AppState
+
+/**
+ * What the live view "Now" draws (ADR 0046, decision 2 (d)), as the engine hands it over
+ * ([org.visadahyu.datapavan.watch.Engine.nativeActivity]; core/net/src/snapshot.rs, version 1): each app
+ * that sent or received in a window, with its bytes by state, and the destinations it reached. From the
+ * engine's memory only; nothing of it is kept.
+ */
+data class Snapshot(
+    /** When it was taken, in milliseconds since 1970 (UTC). */
+    val taken: Long,
+    /** What the latest reading of the states knew: one of [NOTHING_YET], [STATES], [NO_ACCESS], [LOCKED]. */
+    val known: Int,
+    /** The end of what was told of the states. */
+    val toldUntil: Long,
+    /** The screen as last told: [SCREEN_OFF], [SCREEN_ON] or [SCREEN_UNKNOWN]. */
+    val screen: Int,
+    /** When the screen last came on, the start of the window [SINCE_SCREEN_ON]; 0 when not known. */
+    val screenOnSince: Long,
+    val apps: List<App>,
+) {
+    /** An app, by UID; null for flows Android named no app for. */
+    data class App(
+        val uid: Int?,
+        /** Its state in the last second told, an [AppState] code; [AppState.NOT_YET] while not told. */
+        val now: Int,
+        /** Whether it is the user's circumvention tool, which carries the chained apps' traffic. */
+        val isTool: Boolean,
+        /** Whether it went through the tool with its destinations not kept ("Log where these apps connect" off). */
+        val throughTool: Boolean,
+        /**
+         * Its bytes up and down: by window ([TEN_MINUTES], [HOUR], [SINCE_SCREEN_ON]), then by column
+         * ([AppState.NONE], [AppState.IN_USE], [AppState.NOTIFICATION], [AppState.BACKGROUND],
+         * [AppState.NOT_YET]), then up and down: 30 numbers.
+         */
+        val bytes: LongArray,
+        val destinations: List<Destination>,
+    ) {
+        fun up(window: Int, column: Int): Long = bytes[(window * COLUMNS + column) * 2]
+        fun down(window: Int, column: Int): Long = bytes[(window * COLUMNS + column) * 2 + 1]
+
+        override fun equals(other: Any?) = other is App && uid == other.uid && now == other.now &&
+            isTool == other.isTool && throughTool == other.throughTool && bytes.contentEquals(other.bytes) &&
+            destinations == other.destinations
+
+        override fun hashCode() = listOf(uid, now, isTool, throughTool, bytes.contentHashCode(), destinations).hashCode()
+    }
+
+    /** A destination as W3 names it, with its bytes up and down in each window. */
+    data class Destination(
+        val protocol: Int,
+        /** Where the name came from, as the log codes it (LogRecord.Segment.namedBy). */
+        val namedBy: Int,
+        val ech: Int,
+        val dns: Int,
+        val cameIn: Boolean,
+        val address: InetAddress,
+        val port: Int,
+        val asn: Long,
+        val network: Int,
+        val name: String,
+        /** The name a DNS answer gave the address, where it differs from [name]; empty otherwise. */
+        val dnsName: String,
+        val resolver: String,
+        /** The organisation behind the address's network, where the organisation table names it. */
+        val organisation: String,
+        /** Up and down in each window: 6 numbers. */
+        val bytes: List<Long>,
+    )
+
+    companion object {
+        const val VERSION: Byte = 1
+
+        const val NOTHING_YET = 0
+        const val STATES = 1
+        const val NO_ACCESS = 2
+        const val LOCKED = 3
+
+        const val SCREEN_OFF = 0
+        const val SCREEN_ON = 1
+        const val SCREEN_UNKNOWN = 2
+
+        const val TEN_MINUTES = 0
+        const val HOUR = 1
+        const val SINCE_SCREEN_ON = 2
+        const val COLUMNS = 5
+
+        /** The snapshot, or null for bytes that are not exactly one of this version, as when no engine runs. */
+        fun parse(bytes: ByteArray): Snapshot? = try {
+            val b = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+            if (b.get() != VERSION) {
+                null
+            } else {
+                val taken = b.long
+                val known = b.get().toInt() and 0xff
+                val toldUntil = b.long
+                val screen = b.get().toInt() and 0xff
+                val since = b.long
+                val apps = List(count(b.int, b.remaining())) { app(b) }
+                Snapshot(taken, known, toldUntil, screen, since, apps).takeIf {
+                    !b.hasRemaining() && known <= LOCKED && screen <= SCREEN_UNKNOWN
+                }
+            }
+        } catch (e: java.nio.BufferUnderflowException) {
+            null
+        } catch (e: java.net.UnknownHostException) {
+            null
+        } catch (e: IllegalArgumentException) {
+            null
+        }
+
+        /** A count read, refused where it says more than the bytes left could hold. */
+        private fun count(count: Int, remaining: Int): Int {
+            require(count in 0..remaining)
+            return count
+        }
+
+        private fun app(b: ByteBuffer): App {
+            val uid = b.int.takeIf { it != -1 }
+            val now = b.get().toInt() and 0xff
+            require(now == AppState.NOT_YET || AppState.isCode(now))
+            val flags = b.get().toInt()
+            val bytes = LongArray(3 * COLUMNS * 2) { b.long }
+            val destinations = List(count(b.short.toInt() and 0xffff, b.remaining())) { destination(b) }
+            return App(uid, now, flags and 1 != 0, flags and 2 != 0, bytes, destinations)
+        }
+
+        private fun destination(b: ByteBuffer): Destination {
+            val protocol = b.get().toInt() and 0xff
+            val namedBy = b.get().toInt() and 0xff
+            val ech = b.get().toInt() and 0xff
+            val dns = b.get().toInt() and 0xff
+            val flags = b.get().toInt()
+            val address = InetAddress.getByAddress(ByteArray(b.get().toInt() and 0xff).also { b.get(it) })
+            val port = b.short.toInt() and 0xffff
+            val asn = b.int.toLong() and 0xffffffffL
+            val network = b.get().toInt() and 0xff
+            val name = text(b)
+            val dnsName = text(b)
+            val resolver = text(b)
+            val organisation = text(b)
+            val bytes = List(6) { b.long }
+            return Destination(
+                protocol, namedBy, ech, dns, flags and 1 != 0, address, port, asn, network,
+                name, dnsName, resolver, organisation, bytes,
+            )
+        }
+
+        private fun text(b: ByteBuffer): String {
+            val bytes = ByteArray(b.get().toInt() and 0xff).also { b.get(it) }
+            return String(bytes, Charsets.UTF_8)
+        }
+    }
+}
