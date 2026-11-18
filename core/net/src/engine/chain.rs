@@ -360,6 +360,18 @@ mod tests {
         };
         assert_eq!(named(1), (None, None));
         assert_eq!(named(2), (Some("other.example"), Some("example.com")));
+        drop(live);
+        // The flows kept for debug builds and tests hold a chained app's destination, and its names, as
+        // they always did.
+        let kept: Vec<_> = lock(&shared.flows)
+            .iter()
+            .map(|f| (f.name.clone(), f.dns_name.clone()))
+            .collect();
+        let both = (
+            Some("other.example".to_owned()),
+            Some("example.com".to_owned()),
+        );
+        assert_eq!(kept, vec![both.clone(), both]);
     }
 
     #[test]

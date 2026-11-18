@@ -187,6 +187,8 @@ mod tests {
             (minute, BOOT + Duration::from_mins(59))
         ));
         assert!(!names.held(a, None, "other.example", (minute, BOOT)));
+        // Held until its hold ends, not at its end.
+        assert!(!names.held(a, None, "www.example.com", (minute, BOOT + MIN_KEEP)));
         let night = BOOT + Duration::from_hours(8);
         assert_eq!(names.get(a, None, minute), Some("www.example.com"));
         assert!(!names.held(a, None, "www.example.com", (minute, night)));
