@@ -55,7 +55,7 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
 
     /** The reading waiting for its turn, and when it is due by elapsed time; guarded by `this`. */
     private var later: ScheduledFuture<*>? = null
-    private var laterAt = Long.MAX_VALUE
+    private val turns = Turns()
     /** From when the first reading tells the states: a little before the engine it serves began. */
     private val startedAt = System.currentTimeMillis() - START_SLACK_MS
 
@@ -173,16 +173,15 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
         }
     }
 
-    /** A reading in `delayMs`, unless one is waiting that comes sooner. Any thread. */
+    /** A reading in `delayMs`, unless one is waiting that comes as soon ([Turns]). Any thread. */
     private fun readIn(delayMs: Long) {
-        val at = SystemClock.elapsedRealtime() + delayMs
         synchronized(this) {
-            if (later != null && laterAt <= at) return
+            val wait = turns.ask(SystemClock.elapsedRealtime(), delayMs) ?: return
             later?.cancel(false)
-            laterAt = at
             later = try {
-                worker.schedule({ read() }, delayMs, TimeUnit.MILLISECONDS)
+                worker.schedule({ read() }, wait, TimeUnit.MILLISECONDS)
             } catch (e: java.util.concurrent.RejectedExecutionException) {
+                turns.read()
                 null
             }
         }
@@ -194,31 +193,33 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
         synchronized(this) {
             later?.cancel(false)
             later = null
-            laterAt = Long.MAX_VALUE
+            turns.read()
         }
-        uids.newReading()
+        val uidOf = uids.forReading()
         val elapsed = SystemClock.elapsedRealtime()
         val now = System.currentTimeMillis()
         // A clock set back by a second or more, against the time since the last reading.
-        if (ReadingRules.setBack(lastWall, lastRead, now, elapsed)) core.clockSetBack(now, uids::get, keyboard())
+        val wall = lastWall
+        if (ReadingRules.setBack(wall, lastRead, now, elapsed) && wall != null) {
+            core.clockSetBack(now, wall + (elapsed - lastRead) - now, uidOf, keyboard(uidOf))
+        }
         lastRead = elapsed
         lastWall = now
         val until = now - UsageStates.MARGIN_MS
-        val message = if (!hasUsageAccess(context)) {
-            nothing(until, States.NO_ACCESS)
-        } else if (!context.getSystemService(UserManager::class.java).isUserUnlocked) {
-            nothing(until, States.LOCKED)
+        // The phone's start by the wall clock: a first reading reads back to it (review b2, fresh, M1).
+        val bootedAt = now - elapsed
+        val (what, events) = ReadingRules.know(
+            access = { hasUsageAccess(context) },
+            unlocked = { context.getSystemService(UserManager::class.java).isUserUnlocked },
+            query = { events(core.queryFrom(until, bootedAt), until) },
+        )
+        val message = if (what != States.KNOWN) {
+            nothing(until, what)
         } else {
-            val events = events(core.queryFrom(until), until)
-            if (events == null || (events.isEmpty() && !hasUsageAccess(context))) {
-                // Access taken away while reading: Android gave an empty record, not the states.
-                nothing(until, States.NO_ACCESS)
-            } else {
-                val reading = core.read(events, until, uids::get, keyboard(), startedAt)
-                known = States.KNOWN
-                val screen = if (reading.screen.on == null) UsageStates.Screen(screenOn, screenOnSince) else reading.screen
-                States.encode(reading.copy(screen = screen))
-            }
+            val reading = core.read(events, until, uidOf, keyboard(uidOf), startedAt, bootedAt)
+            known = States.KNOWN
+            val screen = if (reading.screen.on == null) UsageStates.Screen(screenOn, screenOnSince) else reading.screen
+            States.encode(reading.copy(screen = screen))
         }
         if (tell(message)) {
             readings++
@@ -244,6 +245,9 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
      */
     @SuppressLint("MissingPermission")
     private fun events(from: Long, until: Long): List<UsageStates.Event>? {
+        // Right after a clock set back the span can be empty, which Android 15's query refuses (review b2 of
+        // W5's second part, fresh, nit): an empty span has no events.
+        if (from >= until) return emptyList()
         val events = try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
                 usage.queryEvents(UsageEventsQuery.Builder(from, until).setEventTypes(*EVENT_TYPES).build())
@@ -252,6 +256,8 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
             }
         } catch (e: SecurityException) {
             null
+        } catch (e: IllegalArgumentException) {
+            return emptyList()
         } ?: return null
         val read = mutableListOf<UsageStates.Event>()
         val event = UsageEvents.Event()
@@ -263,13 +269,13 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
     }
 
     /** The default keyboard's UID (decision 5: in use while the screen is on), if Android says which it is. */
-    private fun keyboard(): Int? {
+    private fun keyboard(uidOf: (String) -> Int?): Int? {
         val component = try {
             Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
         } catch (e: SecurityException) {
             null
         } ?: return null
-        return uids[component.substringBefore('/')]
+        return uidOf(component.substringBefore('/'))
     }
 
     companion object {

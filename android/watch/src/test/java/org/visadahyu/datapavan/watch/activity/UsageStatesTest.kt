@@ -11,7 +11,7 @@ class UsageStatesTest {
     private val t = 1_794_953_400_000L
     private val grace = UsageStates.GRACE_MS
 
-    private val apps = mapOf("a" to A, "a.helper" to A, "b" to B, "c" to C, "kb" to KEYBOARD)
+    private val apps = mapOf("a" to A, "a.helper" to A, "b" to B, "c" to C, "kb" to KEYBOARD, "l" to LAUNCHER)
     private val uidOf: (String) -> Int? = { apps[it] }
 
     private fun at(seconds: Long) = t + seconds * 1_000
@@ -198,7 +198,7 @@ class UsageStatesTest {
         val states = UsageStates()
         read(listOf(event(10, Kind.RESUMED, "a", "Main"), event(20, Kind.SERVICE_START, "c", "Player")), until = 60, states = states)
         val back = at(-3_600)
-        states.clockSetBack(back, uidOf, null)
+        states.clockSetBack(back, at(62) - back, uidOf, null)
         assertEquals(back, states.queryFrom(back + 30_000))
         val after = states.read(
             listOf(event(-3_700, Kind.RESUMED, "b", "Old"), Event(back + 5_000, Kind.STOPPED, "a", "Main")),
@@ -213,7 +213,7 @@ class UsageStatesTest {
     fun aWallClockSetBackBeforeAnyReadingReadsOnlyAfterIt() {
         val states = UsageStates()
         val back = at(-3_600)
-        states.clockSetBack(back, uidOf, null)
+        states.clockSetBack(back, at(0) - back, uidOf, null)
         assertEquals(back, states.queryFrom(back + 60_000))
         val after = states.read(
             listOf(Event(back - 60_000, Kind.RESUMED, "a", "Old"), Event(back + 10_000, Kind.INTERACTION, "b")),
@@ -333,15 +333,138 @@ class UsageStatesTest {
             until = 60, states = states,
         )
         val back = at(-3_600)
-        states.clockSetBack(back, uidOf, null)
+        states.clockSetBack(back, at(62) - back, uidOf, null)
         val after = states.read(listOf(Event(back + 5_000, Kind.RESUMED, "b", "Camera")), back + 60_000, uidOf, null, startedAt = t)
-        assertEquals(listOf(inUse(B, back + 5_000, back + 60_000)), after.intervals)
+        // The app hidden by the lock screen at 50 s keeps its grace onto the new clock, 18 s of it left.
+        assertEquals(listOf(inUse(A, back, back + 18_000), inUse(B, back + 5_000, back + 60_000)), after.intervals)
         // An activity resumed on the old clock, later than the new one, is hidden by a lock screen shown after the set back.
         val other = UsageStates()
         read(listOf(event(10, Kind.RESUMED, "a", "Main")), until = 60, states = other)
-        other.clockSetBack(back, uidOf, null)
+        other.clockSetBack(back, at(62) - back, uidOf, null)
         val locked = other.read(listOf(Event(back + 3_000, Kind.KEYGUARD_SHOWN, "android")), back + 60_000, uidOf, null, startedAt = t)
         assertEquals(listOf(inUse(A, back, back + 3_000 + grace)), locked.intervals)
+    }
+
+    /**
+     * A clock set back keeps the grace of an app the user just left: its times move onto the new clock by
+     * how far it went back (review b2 of W5's second part, fresh, m3: the grace was dropped).
+     */
+    @Test
+    fun aClockSetBackKeepsTheGraceOfAnAppJustLeft() {
+        val states = UsageStates()
+        read(
+            listOf(event(10, Kind.RESUMED, "a", "Main"), event(99, Kind.PAUSED, "a", "Main"), event(100, Kind.STOPPED, "a", "Main")),
+            until = 102, states = states,
+        )
+        val back = at(-3_600)
+        // Found when the old clock would read 105 s.
+        states.clockSetBack(back, at(105) - back, uidOf, null)
+        val after = states.read(emptyList(), back + 60_000, uidOf, null, startedAt = t)
+        assertEquals(listOf(inUse(A, back, back + 25_000)), after.intervals)
+    }
+
+    /**
+     * A first reading reads back to the phone's start, so that a foreground service started a day or more
+     * before Watch is seen; so do the readings after one that knew nothing and after one the engine did not
+     * take (review b2 of W5's second part, fresh, M1: it read back a day).
+     */
+    @Test
+    fun aFirstReadingReadsBackToThePhonesStart() {
+        val hour = 3_600L
+        for (since in listOf(23 * hour, 25 * hour, 3 * 24 * hour)) {
+            val states = UsageStates()
+            val bootedAt = at(-4 * 24 * hour)
+            assertEquals(bootedAt, states.queryFrom(at(600), bootedAt))
+            val reading = states.read(
+                listOf(event(-since, Kind.SERVICE_START, "c", "Player")), at(600), uidOf, null, startedAt = t, bootedAt = bootedAt,
+            )
+            assertEquals("a service started $since s before", listOf(serving(C, t, at(600))), reading.intervals)
+        }
+        // Never before the phone's start, and at most what Android keeps.
+        val states = UsageStates()
+        assertEquals(at(-2 * 24 * hour), states.queryFrom(at(0), at(-2 * 24 * hour)))
+        assertEquals(at(0) - UsageStates.LOOKBACK_MS, states.queryFrom(at(0), at(-90 * 24 * hour)))
+        val booted = states.read(
+            listOf(event(-3 * 24 * hour, Kind.SERVICE_START, "c", "Player")), at(600), uidOf, null, startedAt = t,
+            bootedAt = at(-2 * 24 * hour),
+        )
+        assertEquals(emptyList<Interval>(), booted.intervals)
+        // After a reading that knew nothing, and after one the engine did not take, back to the start again.
+        states.nothing(at(700), startedAt = t)
+        assertEquals(at(-2 * 24 * hour), states.queryFrom(at(800), at(-2 * 24 * hour)))
+        states.read(emptyList(), at(800), uidOf, null, startedAt = t, bootedAt = at(-2 * 24 * hour))
+        states.untold(at(700))
+        assertEquals(at(-2 * 24 * hour), states.queryFrom(at(900), at(-2 * 24 * hour)))
+    }
+
+    /**
+     * An app whose process dies after a pause and resume of its own screen, as after a permission dialog, is
+     * not in use for ever: the stop comes long after the resume, so it is its own (review b2 of W5's second
+     * part, N2).
+     */
+    @Test
+    fun anAppThatDiesAfterADialogIsNotInUseForEver() {
+        val reading = read(
+            listOf(
+                event(10, Kind.RESUMED, "a", "Main"),
+                event(20, Kind.PAUSED, "a", "Main"),
+                event(25, Kind.RESUMED, "a", "Main"),
+                event(300, Kind.STOPPED, "a", "Main"),
+                Event(at(300) + 100, Kind.RESUMED, "l", "Home"),
+            ),
+        )
+        assertEquals(listOf(inUse(A, at(10), at(300) + grace)), reading.intervals.filter { it.uid == A })
+    }
+
+    /**
+     * An app that kills itself just after a pause and resume of its own screen (a translucent screen of its
+     * own shown and closed): its stop, with no pause, comes within the instance rule's time, but the launcher
+     * resumed while it was not paused ends it (review b2 of W5's second part, N2).
+     */
+    @Test
+    fun anAppThatKillsItselfAfterItsOwnTranslucentScreenIsNotKept() {
+        val reading = read(
+            listOf(
+                event(10, Kind.RESUMED, "a", "Main"),
+                event(20, Kind.PAUSED, "a", "Main"),
+                Event(at(20) + 50, Kind.RESUMED, "a", "Clear"),
+                event(21, Kind.PAUSED, "a", "Clear"),
+                Event(at(21) + 50, Kind.RESUMED, "a", "Main"),
+                Event(at(21) + 400, Kind.STOPPED, "a", "Clear"),
+                Event(at(21) + 500, Kind.STOPPED, "a", "Main"),
+                Event(at(21) + 600, Kind.RESUMED, "l", "Home"),
+            ),
+        )
+        assertEquals(listOf(inUse(A, at(10), at(21) + 600 + grace)), reading.intervals.filter { it.uid == A })
+        // The second-instance sequence is unchanged by it: no other screen resumed.
+        val second = read(
+            listOf(
+                event(10, Kind.RESUMED, "a", "Sub"),
+                event(20, Kind.PAUSED, "a", "Sub"),
+                Event(at(20) + 50, Kind.RESUMED, "a", "Sub"),
+                Event(at(20) + 400, Kind.STOPPED, "a", "Sub"),
+            ),
+        )
+        assertEquals(listOf(inUse(A, at(10), at(600))), second.intervals)
+    }
+
+    /**
+     * The second-instance sequence read twice, as every reading reads its overlap again, stays in use: an
+     * event read again is applied once, so a resume read twice does not undo the pause before it (review b2
+     * of W5's second part, N6).
+     */
+    @Test
+    fun theSecondInstanceSequenceReadTwiceStaysInUse() {
+        val states = UsageStates()
+        val sequence = listOf(
+            event(10, Kind.RESUMED, "a", "Sub"),
+            event(20, Kind.PAUSED, "a", "Sub"),
+            Event(at(20) + 50, Kind.RESUMED, "a", "Sub"),
+            Event(at(20) + 400, Kind.STOPPED, "a", "Sub"),
+        )
+        read(sequence, until = 25, states = states)
+        val again = states.read(sequence, at(60), uidOf, null, startedAt = t)
+        assertEquals(listOf(inUse(A, at(15), at(60))), again.intervals)
     }
 
     /** Intervals of one app and state are joined where they meet or overlap. */
@@ -358,5 +481,6 @@ class UsageStatesTest {
         const val B = 10_102
         const val C = 10_103
         const val KEYBOARD = 10_104
+        const val LAUNCHER = 10_105
     }
 }

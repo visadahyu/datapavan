@@ -48,11 +48,52 @@ class ReadingRulesTest {
     fun eachReadingReadsTheUidsAgain() {
         var installed = 10_200
         val uids = Uids { if (it == "a") installed else null }
-        assertEquals(10_200, uids["a"])
+        val first = uids.forReading()
+        assertEquals(10_200, first("a"))
         installed = 10_250
-        assertEquals(10_200, uids["a"])
-        uids.newReading()
-        assertEquals(10_250, uids["a"])
-        assertEquals(null, uids["gone"])
+        assertEquals("kept within a reading", 10_200, first("a"))
+        val next = uids.forReading()
+        assertEquals(10_250, next("a"))
+        assertEquals(null, next("gone"))
+    }
+
+    /**
+     * What a reading knows: nothing without access or before the first unlock, without asking Android for
+     * events; the events otherwise; and nothing when the query found none and access was taken away
+     * meanwhile (review b2 of W5's second part, N6).
+     */
+    @Test
+    fun aReadingKnowsTheStatesOnlyWithAccessAndOnceUnlocked() {
+        var queried = 0
+        fun query(events: List<Int>?): () -> List<Int>? = { queried++; events }
+        assertEquals(States.NO_ACCESS to emptyList<Int>(), ReadingRules.know({ false }, { true }, query(listOf(1))))
+        assertEquals(States.LOCKED to emptyList<Int>(), ReadingRules.know({ true }, { false }, query(listOf(1))))
+        assertEquals(0, queried)
+        assertEquals(States.KNOWN to listOf(1), ReadingRules.know({ true }, { true }, query(listOf(1))))
+        assertEquals(States.NO_ACCESS to emptyList<Int>(), ReadingRules.know({ true }, { true }, query(null)))
+        assertEquals(States.KNOWN to emptyList<Int>(), ReadingRules.know({ true }, { true }, query(emptyList())))
+        var asked = 0
+        val taken = { asked++ == 0 }
+        assertEquals(States.NO_ACCESS to emptyList<Int>(), ReadingRules.know(taken, { true }, query(emptyList())))
+        assertEquals("access asked again after an empty query", 2, asked)
+    }
+
+    /**
+     * A reading asked for too soon waits for its turn; the soonest of those asked for is kept; one made serves
+     * them all (review b2 of W5's second part, N6).
+     */
+    @Test
+    fun readingsWaitForTheirTurnAndTheSoonestIsKept() {
+        val turns = Turns()
+        assertEquals(0L, turns.ask(1_000, 0))
+        assertEquals(null, turns.due)
+        assertEquals(55_000L, turns.ask(1_000, 55_000))
+        assertEquals(56_000L, turns.due)
+        assertEquals("a later one waits for the one already waiting", null, turns.ask(2_000, 60_000))
+        assertEquals("a sooner one, as at screen off, takes its place", 3_000L, turns.ask(10_000, 3_000))
+        assertEquals(13_000L, turns.due)
+        turns.read()
+        assertEquals(null, turns.due)
+        assertEquals(5_000L, turns.ask(14_000, 5_000))
     }
 }

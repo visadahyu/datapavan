@@ -12,9 +12,13 @@ package org.visadahyu.datapavan.watch.activity
  *   was resumed over it; several apps can be in use at once. The default keyboard counts as in use while
  *   the screen is interactive, since it may be shown (decision 5);
  * - an activity is known by its package and class only, since Android keeps the instance to itself: a
- *   `STOPPED` that comes after a `RESUMED` of the same class that itself followed a `PAUSED`, with no
- *   `PAUSED` since, is the stop of another instance, as when a second instance of one screen opens over the
- *   first or Back returns to it, and ends nothing (review b1 of W5's second part, Kotlin, finding 1);
+ *   `STOPPED` that comes within [INSTANCE_STOP_MS] after a `RESUMED` of the same class that itself
+ *   followed a `PAUSED`, with no `PAUSED` since, is the stop of another instance, as when a second instance
+ *   of one screen opens over the first or Back returns to it, and ends nothing (review b1 of W5's second
+ *   part, Kotlin, finding 1). An activity kept so ends when another activity is resumed while it was not
+ *   paused, since a screen is always paused before another takes its place: an app whose process dies
+ *   after a pause and resume of its own screen, or that kills itself so, does not stay in use (review b2,
+ *   N2);
  * - **with its notification** from a `FOREGROUND_SERVICE_START` of it to its `FOREGROUND_SERVICE_STOP`;
  * - **in the background** otherwise.
  *
@@ -65,9 +69,15 @@ class UsageStates(
     /**
      * One activity class of a package: when it was last resumed, null while it is not open; whether it was
      * paused since; whether that resume followed a pause, so that a stop with no pause since is another
-     * instance's; and the time of its last event.
+     * instance's; whether it is kept so, through another instance's stop; and the time of its last event.
      */
-    private data class Activity(val resumedAt: Long?, val paused: Boolean, val reopened: Boolean, val at: Long)
+    private data class Activity(
+        val resumedAt: Long?,
+        val paused: Boolean,
+        val reopened: Boolean,
+        val at: Long,
+        val kept: Boolean = false,
+    )
 
     private var base: Base? = null
 
@@ -84,18 +94,32 @@ class UsageStates(
     /** Where a reading after a clock set back begins: events before it are of the old clock. */
     private var floor = Long.MIN_VALUE
 
-    /** Where the next query of events begins, `now` being the wall clock. */
-    fun queryFrom(now: Long): Long = maxOf(base?.time ?: (now - LOOKBACK_MS), floor)
+    /**
+     * Where the next query of events begins, `now` being the wall clock: from the last reading's overlap, or,
+     * on a first reading and after one that knew nothing or was not taken, from the phone's start, `bootedAt`
+     * by the wall clock, at most [LOOKBACK_MS] back, so that a foreground service started since the phone
+     * started is found (review b2 of W5's second part, fresh, M1: a day back missed one older than that).
+     */
+    fun queryFrom(now: Long, bootedAt: Long = Long.MIN_VALUE): Long =
+        maxOf(base?.time ?: maxOf(bootedAt, now - LOOKBACK_MS), floor)
 
     /**
      * Places the events of one reading, ending at `until` (the wall clock, less [MARGIN_MS] for events not
      * reported yet): `events` in any order, those seen before included; `uidOf` names a package's UID, null
-     * for one no longer installed; `keyboard` is the default keyboard's UID. The states from the start of
-     * the overlap, or from `startedAt` on a first reading, to `until`.
+     * for one no longer installed; `keyboard` is the default keyboard's UID; `bootedAt`, the phone's start by
+     * the wall clock, as for [queryFrom]. The states from the start of the overlap, or from `startedAt` on a
+     * first reading, to `until`.
      */
-    fun read(events: Collection<Event>, until: Long, uidOf: (String) -> Int?, keyboard: Int?, startedAt: Long): Reading {
+    fun read(
+        events: Collection<Event>,
+        until: Long,
+        uidOf: (String) -> Int?,
+        keyboard: Int?,
+        startedAt: Long,
+        bootedAt: Long = Long.MIN_VALUE,
+    ): Reading {
         val start = base ?: Base(
-            time = queryFrom(until),
+            time = queryFrom(until, bootedAt),
             activities = emptyMap(), services = emptyMap(), screenOn = null, screenOnSince = null,
             keyguard = false, keyguardSince = Long.MIN_VALUE, lastInUse = emptyMap(),
         )
@@ -140,7 +164,7 @@ class UsageStates(
 
     /**
      * Nothing is known up to `until`, as without usage access or before the first unlock: the reading to
-     * tell, from the end of the last; the next with events rebuilds what is open from [LOOKBACK_MS] back.
+     * tell, from the end of the last; the next with events rebuilds what is open from the phone's start.
      */
     fun nothing(until: Long, startedAt: Long): Pair<Long, Long> {
         val from = maxOf(toldUntil ?: startedAt, floor).coerceAtMost(until)
@@ -161,32 +185,35 @@ class UsageStates(
     }
 
     /**
-     * The wall clock was set back, found at `at` on the new clock: what is open is carried, as of `at`,
-     * every event read so far applied; readings begin at `at`, and events before it, of the old clock or
-     * the moment between, are not read.
+     * The wall clock was set back by `by` milliseconds, found at `at` on the new clock: what is open is
+     * carried, as of `at`, every event read so far applied, its times moved back by `by` onto the new clock,
+     * so that the grace of an app just left runs on (review b2 of W5's second part, fresh, m3: it was
+     * dropped); readings begin at `at`, and events before it, of the old clock or the moment between, are
+     * not read.
      */
-    fun clockSetBack(at: Long, uidOf: (String) -> Int?, keyboard: Int?) {
+    fun clockSetBack(at: Long, by: Long, uidOf: (String) -> Int?, keyboard: Int?) {
         floor = at
         toldUntil = at
         val start = base ?: return
         val run = Run(start, uidOf, keyboard)
         for (event in pending) run.apply(event)
-        val carried = run.snapshot(Long.MAX_VALUE)
-        // Times of the old clock later than `at` become `at`, but an activity resumed before the lock screen
-        // showed stays before it, so that it stays hidden under it.
-        val keyguardSince = minOf(carried.keyguardSince, at)
+        val carried = run.snapshot(at + by)
+        // Each time on the new clock, and none past `at`; an activity resumed before the lock screen showed
+        // stays before it, so that it stays hidden under it.
+        val moved = { time: Long -> minOf(time - by, at) }
+        val keyguardSince = moved(carried.keyguardSince)
         base = carried.copy(
             time = at,
             activities = carried.activities.mapValues { (_, a) ->
                 val resumedAt = a.resumedAt?.let { r ->
-                    if (carried.keyguard && r < carried.keyguardSince) minOf(r, keyguardSince - 1) else minOf(r, at)
+                    if (carried.keyguard && r < carried.keyguardSince) minOf(moved(r), keyguardSince - 1) else moved(r)
                 }
-                a.copy(resumedAt = resumedAt, at = minOf(a.at, at))
+                a.copy(resumedAt = resumedAt, at = moved(a.at))
             },
-            services = carried.services.mapValues { minOf(it.value, at) },
-            screenOnSince = carried.screenOnSince?.let { minOf(it, at) },
+            services = carried.services.mapValues { moved(it.value) },
+            screenOnSince = carried.screenOnSince?.let(moved),
             keyguardSince = keyguardSince,
-            lastInUse = carried.lastInUse.mapValues { minOf(it.value, at) },
+            lastInUse = carried.lastInUse.mapValues { moved(it.value) },
         )
         pending.clear()
     }
@@ -258,15 +285,21 @@ class UsageStates(
             now = maxOf(now, event.time)
             val key = event.packageName to event.className
             when (event.kind) {
-                Kind.RESUMED -> activities[key] =
-                    Activity(event.time, paused = false, reopened = activities[key]?.paused == true, at = event.time)
+                Kind.RESUMED -> {
+                    // A screen kept through another instance's stop, and not paused since, is not on screen
+                    // once another is resumed: it would have been paused first.
+                    activities.entries.removeAll { (other, a) -> other != key && a.kept && !a.paused }
+                    activities[key] =
+                        Activity(event.time, paused = false, reopened = activities[key]?.paused == true, at = event.time)
+                }
                 Kind.PAUSED -> activities[key] =
                     activities[key]?.copy(paused = true, at = event.time) ?: Activity(null, paused = true, reopened = false, at = event.time)
                 Kind.STOPPED -> {
                     val open = activities[key]
-                    if (open?.resumedAt != null && !open.paused && open.reopened) {
+                    val resumedAt = open?.resumedAt
+                    if (resumedAt != null && !open.paused && open.reopened && event.time - resumedAt <= INSTANCE_STOP_MS) {
                         // Another instance's stop: the one resumed after the pause stays.
-                        activities[key] = open.copy(reopened = false, at = event.time)
+                        activities[key] = open.copy(reopened = false, kept = true, at = event.time)
                     } else {
                         activities.remove(key)
                     }
@@ -339,8 +372,17 @@ class UsageStates(
         /** Each reading reads again this much of the last, for events that come late or out of order. */
         const val LATE_MS = 10_000L
 
-        /** A first reading, or one after a time with no events, reads this far back to find what is open. */
-        const val LOOKBACK_MS = 24 * 60 * 60 * 1000L
+        /**
+         * A first reading, or one after a reading that knew nothing or that the engine did not take, reads
+         * back to the phone's start, at most this far: Android keeps its events for a few days.
+         */
+        const val LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000L
+
+        /**
+         * Android stops the screen a new one replaced once the new one is idle, or after its idle timeout,
+         * 10 seconds on a phone: a stop later than this after the resume is the instance's own, not another's.
+         */
+        const val INSTANCE_STOP_MS = 10_000L
 
         /** The intervals of one app and state, joined where they meet or overlap, in order. */
         fun merged(intervals: List<Interval>): List<Interval> =
