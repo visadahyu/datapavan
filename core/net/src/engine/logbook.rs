@@ -158,7 +158,7 @@ impl FlowBytes {
     }
 
     /// Notes the first count of a second of the wall clock, `now` in milliseconds, before `bytes` are
-    /// added: within a second, one division, one comparison and one atomic load.
+    /// added: within a second, a division, a few comparisons and one atomic load.
     fn mark(&self, log: &Shared, now: u64, bytes: usize) {
         let second = now / 1000;
         if bytes > 0 && self.second.load(Ordering::Relaxed) != second && log.tracks {

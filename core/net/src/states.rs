@@ -5,10 +5,10 @@
 //! - version (1), the span's start and end in milliseconds since 1970 (UTC), what is known over it (0:
 //!   the states below; 1: nothing, Watch has no usage access; 2: nothing, Android gave no events, as
 //!   before the first unlock after a restart), the screen at the span's end (0 off, 1 on, 2 not known)
-//!   and when it last came on (0 for not known), then a count (u32) of intervals, each an app's UID (u32),
-//!   its start and end, and its state in it (1 in use, 2 with its notification). An app with no interval
-//!   in a known span was in the background throughout it; intervals of one app may overlap, and "in use"
-//!   wins where they do.
+//!   and when it last came on (0 for not known, and always 0 for a screen not on), then a count (u32) of
+//!   intervals, each an app's UID (u32), its start and end, and its state in it (1 in use, 2 with its
+//!   notification). An app with no interval in a known span was in the background throughout it;
+//!   intervals of one app may overlap, and "in use" wins where they do.
 //!
 //! Nothing in it names a destination: UIDs, times and states only. The engine reads it with [`read`],
 //! which takes any bytes and refuses what is not exactly one message of this version.
@@ -189,10 +189,11 @@ pub fn read(bytes: &[u8]) -> Option<Told> {
         _ => return None,
     };
     let since = u64_at(head, 19)?;
-    let screen = match head[18] {
-        0 => Screen::Off,
-        1 => Screen::On((since != 0).then_some(since)),
-        2 => Screen::Unknown,
+    // When the screen came on is told only for a screen that is on: anything else is not one message.
+    let screen = match (head[18], since) {
+        (0, 0) => Screen::Off,
+        (1, since) => Screen::On((since != 0).then_some(since)),
+        (2, 0) => Screen::Unknown,
         _ => return None,
     };
     let count = usize::try_from(u32::from_le_bytes(head[27..31].try_into().ok()?)).ok()?;
@@ -356,6 +357,16 @@ mod tests {
         let mut longer = good.clone();
         longer.push(0);
         assert_eq!(read(&longer), None);
+        // When the screen came on, told for a screen off or not known (the fuzzer's first find).
+        for screen in [0, 2] {
+            let mut bad = write(&Told {
+                screen: Screen::Off,
+                ..told()
+            });
+            bad[18] = screen;
+            bad[19] = 1;
+            assert_eq!(read(&bad), None, "screen {screen} with a time it came on");
+        }
         // Another version, an unknown kind or screen, an unknown state.
         for (at, value) in [(0, 2), (17, 3), (18, 3), (31 + 20, 0), (31 + 20, 3)] {
             let mut bad = good.clone();

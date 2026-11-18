@@ -5,9 +5,9 @@
 //! first (`logbook`, the cut before the count), and the first count in each second of the clock notes a
 //! *mark*: the second, and the flow's counts before it. The marks are the flow's one-second slots: the
 //! bytes of a second are the counts from its mark to the next. An app's slots are its flows' marks, so
-//! an app with no traffic holds none, and a count within a second takes no lock: one division, one
-//! comparison and one atomic load more than before, and the lock of the flow's own marks once a second
-//! (ADR 0044's cost note). An app's lookups to Watch's own DNS address are marked the same way, under the
+//! an app with no traffic holds none, and a count within a second takes no lock: a division, an
+//! addition, a few comparisons and one atomic load more than before, and the lock of the flow's own marks
+//! once a second (ADR 0044's cost note). An app's lookups to Watch's own DNS address are marked the same way, under the
 //! lock they already take.
 //!
 //! **States come from Watch's Kotlin side** ([`crate::states`]): a reading of Android's usage events, as

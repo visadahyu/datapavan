@@ -7,7 +7,8 @@ import java.nio.ByteOrder
  * A reading of the apps' states as Watch hands it to the engine ([org.visadahyu.datapavan.watch.Engine.nativeStates];
  * core/net/src/states.rs, version 1, little-endian): version, the span's start and end in milliseconds
  * since 1970, what is known over it ([KNOWN], [NO_ACCESS], [LOCKED]), the screen at its end (0 off, 1 on,
- * 2 not known) and when it last came on (0 not known), then the count of intervals and each: UID, start,
+ * 2 not known) and when it last came on (0 not known, and always 0 for a screen not on, which the engine
+ * refuses otherwise), then the count of intervals and each: UID, start,
  * end, state ([IN_USE], [NOTIFICATION]). An app with no interval in a known span was in the background
  * throughout. UIDs, times and states only: nothing names a destination.
  */
