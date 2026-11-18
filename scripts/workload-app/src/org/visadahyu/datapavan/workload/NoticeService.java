@@ -13,9 +13,9 @@ import java.net.InetAddress;
 
 /**
  * A foreground service, which Android shows the user with its notification (W5, ADR 0046, decision 6, item
- * 1: "with its notification"): begun while {@link WorkActivity} shows, which then leaves; 35 seconds later,
- * past the grace in which the app still counts as in use, it sends a datagram of "bytes" each second for
- * "seconds" to the test server's echo, logs "PACKAGE service-sent N", and stops.
+ * 1: "with its notification"): begun while {@link WorkActivity} shows, which then leaves; 35 seconds after
+ * that screen stopped, past the grace in which the app still counts as in use, it sends a datagram of
+ * "bytes" each second for "seconds" to the test server's echo, logs "PACKAGE service-sent N", and stops.
  */
 public final class NoticeService extends Service {
     private static final String CHANNEL = "workload";
@@ -49,7 +49,11 @@ public final class NoticeService extends Service {
         int seconds = Integer.parseInt(parts[1]);
         int bytes = Integer.parseInt(parts[2]);
         String app = getPackageName();
-        WorkActivity.pause(35_000);
+        // 35 seconds after the screen stopped, as SendJob waits: Android stops a screen left only once the
+        // next is idle, up to 10 seconds later on a slow phone, and the grace runs from the stop.
+        while (WorkActivity.stoppedAt == 0 || System.currentTimeMillis() < WorkActivity.stoppedAt + 35_000) {
+            WorkActivity.pause(200);
+        }
         long sent = 0;
         try (DatagramSocket socket = new DatagramSocket()) {
             InetAddress host = InetAddress.getByName(hostPort[0]);

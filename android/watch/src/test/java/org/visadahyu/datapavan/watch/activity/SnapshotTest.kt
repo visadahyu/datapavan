@@ -59,6 +59,28 @@ class SnapshotTest {
         assertEquals(listOf(1_000L, 1_000L, 1_000L, 1_000L, 900L, 1_000L), web.bytes)
     }
 
+    /**
+     * A code the engine never writes, for what the last reading knew, the screen or an app's state now, is
+     * refused, and the highest of each it writes is read (review b1 of W5's second part, Kotlin, finding 6).
+     */
+    @Test
+    fun refusesACodeTheEngineNeverWrites() {
+        // Version, taken (8), known; told until (8), screen; since (8), the apps' count (4); the first app's UID (4), now.
+        val known = 1 + 8
+        val screen = known + 1 + 8
+        val now = screen + 1 + 8 + 4 + 4
+        val with = { at: Int, value: Int -> Snapshot.parse(fixture.copyOf().also { it[at] = value.toByte() }) }
+        assertEquals(Snapshot.LOCKED, with(known, Snapshot.LOCKED)?.known)
+        assertNull(with(known, Snapshot.LOCKED + 1))
+        assertEquals(Snapshot.SCREEN_UNKNOWN, with(screen, Snapshot.SCREEN_UNKNOWN)?.screen)
+        assertNull(with(screen, Snapshot.SCREEN_UNKNOWN + 1))
+        assertEquals(AppState.NOT_YET, with(now, AppState.NOT_YET)?.apps?.get(0)?.now)
+        assertEquals(AppState.NOT_TOLD, with(now, AppState.NOT_TOLD)?.apps?.get(0)?.now)
+        for (code in listOf(AppState.NONE, AppState.NOT_YET + 1, 0x0f, AppState.NO_ACCESS or AppState.IN_USE, 0x60, 0xff)) {
+            assertNull("state $code", with(now, code))
+        }
+    }
+
     /** No snapshot, cut short anywhere or with any byte changed, makes the reader throw: it reads it or refuses it. */
     @Test
     fun noSnapshotCrashesTheReader() {
