@@ -19,10 +19,12 @@
 //! gap between readings, or for a flow with no app. A reading that begins before the end of the last one
 //! replaces what it covers; seconds already placed stay as they were.
 //!
-//! **A segment is cut where its app's state changes,** at the start of the first second of the new
-//! state, back in time for as long as its marks reach ([`settle_marks`]). A segment cut at a quarter hour
-//! or at the flow's end before its seconds are placed is held as a [`Piece`] until they are, and written
-//! then, each part with its state. A segment with no count takes the state of its last moment.
+//! **A segment is cut where its app's state changes,** back in time for as long as its marks reach
+//! ([`settle_marks`]): where the timeline's state changed, so that quiet seconds after a change, up to
+//! [`WINDOW`] of them, belong to the new part; never before a second already placed. A segment cut at a
+//! quarter hour or at the flow's end before its seconds are placed is held as a [`Piece`] until they are,
+//! and written then, each part with its state, before the live flows' parts of the same reading so that a
+//! flow's records reach the log in time order. A segment with no count takes the state of its last moment.
 //!
 //! **The window.** Each flow, and each app's lookups, holds at most [`WINDOW`] seconds with counts not
 //! placed yet, and all of them together at most [`MARKS`]; past either, the oldest are placed in no state,
@@ -187,10 +189,12 @@ pub(super) enum Of {
 pub(super) struct Piece {
     pub(super) of: Of,
     pub(super) uid: Option<u32>,
-    /// Where the part not written yet starts, its counts there, and the state of its seconds placed.
+    /// Where the part not written yet starts, its counts there, the state of its seconds placed, and the
+    /// second after the last of them.
     pub(super) start: u64,
     pub(super) base: [u64; 4],
     pub(super) state: Option<Placed>,
+    pub(super) after: u64,
     /// Where the segment ends, its counts there, and whether the flow goes on after it.
     pub(super) end: u64,
     pub(super) last: [u64; 4],
@@ -251,12 +255,14 @@ pub(super) fn lookups_record(
 
 /// Settles the marks at the front of `marks` that `place` places, oldest first: each second's bytes go
 /// to `each`, and the segment that starts at `start` with the counts `base` is cut where the state
-/// changes, at the start of the first second of the new state, no later than `end`, each part before
-/// going to `cut` as its start, end, bytes and state. `now` holds the counts after the last mark. Stops
-/// at the first second not placed yet. How many marks it settled.
+/// changes, no later than `end`, each part before going to `cut` as its start, end, bytes and state.
+/// The cut is where the timeline's state changed, not at the first second with bytes in the new state:
+/// quiet seconds of the new state before it belong to the new part, up to [`WINDOW`] of them (review b1
+/// of W5's second part, engine, nit 2). `now` holds the counts after the last mark. Stops at the first
+/// second not placed yet. How many marks it settled.
 fn settle_marks(
     place: &impl Fn(u64) -> Option<Placed>,
-    (start, base, state): (&mut u64, &mut [u64; 4], &mut Option<Placed>),
+    (start, base, state, after): (&mut u64, &mut [u64; 4], &mut Option<Placed>, &mut u64),
     marks: &mut VecDeque<Mark>,
     (now, end): ([u64; 4], u64),
     mut each: impl FnMut(u64, [u64; 4], Placed),
@@ -273,8 +279,7 @@ fn settle_marks(
             None => *state = Some(placed),
             Some(was) if was == placed => {}
             Some(was) => {
-                let at = mark
-                    .second
+                let at = change(place, mark.second, placed, (*start, *after))
                     .saturating_mul(1000)
                     .clamp(*start, end.max(*start));
                 cut(*start, at, delta(mark.counts, *base), was);
@@ -283,10 +288,32 @@ fn settle_marks(
                 *state = Some(placed);
             }
         }
+        *after = mark.second.saturating_add(1);
         marks.pop_front();
         settled += 1;
     }
     settled
+}
+
+/// The second the run of `placed` that holds `second` began: walking back over the seconds of the same
+/// state, no further than [`WINDOW`] seconds, not before the first whole second from `start`, and not
+/// before `after`, the second after the last placed in the segment (which a later reading may tell
+/// otherwise than it was placed).
+fn change(
+    place: &impl Fn(u64) -> Option<Placed>,
+    second: u64,
+    placed: Placed,
+    (start, after): (u64, u64),
+) -> u64 {
+    let first = start
+        .div_ceil(1000)
+        .max(after)
+        .max(second.saturating_sub(WINDOW as u64));
+    let mut at = second;
+    while at > first && place(at - 1) == Some(placed) {
+        at -= 1;
+    }
+    at
 }
 
 /// Gives back the room of marks settled: a flow that once held the window's 120 does not keep 5 KB for
@@ -390,10 +417,8 @@ impl Timeline {
         }
         let mut covered = from;
         let mut nothing = None;
-        for span in &self.spans {
-            if span.until <= from {
-                continue;
-            }
+        let first = self.spans.partition_point(|span| span.until <= from);
+        for span in self.spans.range(first..) {
             if span.from >= until {
                 break;
             }
@@ -563,7 +588,7 @@ impl Activity {
     pub(super) fn settle_open(
         &mut self,
         (uid, seen): (Option<u32>, Seen<'_>),
-        open: (&mut u64, &mut [u64; 4], &mut Option<Placed>),
+        open: (&mut u64, &mut [u64; 4], &mut Option<Placed>, &mut u64),
         (marks, now, running): (&mut VecDeque<Mark>, [u64; 4], u64),
         force: Option<Force>,
         cut: impl FnMut(u64, u64, [u64; 4], Placed),
@@ -631,6 +656,7 @@ impl Activity {
                 start,
                 base,
                 state,
+                after,
                 marks,
                 last,
                 end,
@@ -638,13 +664,15 @@ impl Activity {
             } = piece;
             settle_marks(
                 &place,
-                (start, base, state),
+                (start, base, state, after),
                 marks,
                 (*last, *end),
                 |second, bytes, placed| seconds.push((second, bytes, placed)),
                 |from, to, bytes, placed| parts.push((from, to, bytes, placed)),
             )
         };
+        // A segment held gives back its marks' room as a live flow does (review b1, engine, nit 5).
+        give_back(&mut piece.marks);
         let seen = Seen::of(&piece.of);
         for (second, bytes, placed) in seconds {
             if placed == Placed::Unknown(Unknown::Late) {
@@ -686,9 +714,16 @@ impl Activity {
             .iter()
             .map(|piece| piece.marks.front().map_or(piece.instant(), |m| m.second))
             .min();
-        let oldest = [oldest_mark, held].into_iter().flatten().min();
+        // The seconds of the window before the oldest second still waiting, or before the end of what
+        // was told, stay for the cuts ([`change`]).
+        let oldest = [oldest_mark, held]
+            .into_iter()
+            .flatten()
+            .min()
+            .map_or(u64::MAX, |second| second.saturating_mul(1000));
+        let keep = (WINDOW as u64).saturating_mul(1000);
         self.timeline
-            .forget_before(oldest.map_or(u64::MAX, |second| second.saturating_mul(1000)));
+            .forget_before(oldest.min(self.timeline.until()).saturating_sub(keep));
     }
 }
 
@@ -792,6 +827,9 @@ impl Shared {
             let mut lookups = lock(&self.lookups);
             let mut activity = lock(&self.activity);
             let mut oldest: Option<u64> = None;
+            // The segments held first: they are older than the live flows' parts, so that the log gets a
+            // flow's records in time order (review b1 of W5's second part, engine, nit 1).
+            activity.settle_held(force, &mut records, &mut settled);
             for live in live.values_mut() {
                 let mut marks = lock(&live.bytes.marks);
                 if !marks.is_empty() {
@@ -799,7 +837,12 @@ impl Shared {
                     let flow = &live.flow;
                     *settled.entry(flow.uid).or_default() += activity.settle_open(
                         (flow.uid, Seen::live(flow, live.hidden)),
-                        (&mut live.start, &mut live.base, &mut live.state),
+                        (
+                            &mut live.start,
+                            &mut live.base,
+                            &mut live.state,
+                            &mut live.after,
+                        ),
                         (&mut marks, now, running),
                         force,
                         |start, end, bytes, state| {
@@ -825,12 +868,13 @@ impl Shared {
                     start,
                     base,
                     state,
+                    after,
                     marks,
                     ..
                 } = entry;
                 *settled.entry(uid).or_default() += activity.settle_open(
                     (uid, Seen::Lookups),
-                    (start, base, state),
+                    (start, base, state, after),
                     (marks, counts, running),
                     force,
                     |start, end, bytes, state| {
@@ -842,7 +886,6 @@ impl Shared {
                     oldest = Some(oldest.map_or(mark.second, |o| o.min(mark.second)));
                 }
             }
-            activity.settle_held(force, &mut records, &mut settled);
             activity.forget_told_before(oldest);
             self.count_late(&mut activity);
         }
@@ -1182,6 +1225,35 @@ pub(super) mod tests {
         assert!(timeline.intervals.is_empty());
     }
 
+    /// A reading that knew the states replaces the overlap of one before that knew nothing, as when
+    /// usage access is granted between two readings (review b1 of W5's second part, engine, finding 8).
+    #[test]
+    fn a_reading_that_knows_replaces_the_overlap_of_one_that_did_not() {
+        let mut timeline = Timeline::default();
+        timeline.tell(&Told {
+            known: Known::NoAccess,
+            intervals: Vec::new(),
+            ..told(T, T + 10_000, &[])
+        });
+        timeline.tell(&told(
+            T + 5_000,
+            T + 15_000,
+            &[(T + 5_000, T + 12_000, State::InUse)],
+        ));
+        assert_eq!(
+            timeline.place(UID, T / 1000 + 4),
+            Some(Placed::Unknown(Unknown::NoAccess))
+        );
+        for second in 5..12 {
+            assert_eq!(
+                timeline.place(UID, T / 1000 + second),
+                Some(IN_USE),
+                "{second}"
+            );
+        }
+        assert_eq!(timeline.place(UID, T / 1000 + 12), Some(BACKGROUND));
+    }
+
     /// The timeline forgets what no second held needs, but keeps its last span; and it keeps at most
     /// [`SPANS`] spans and [`INTERVALS`] intervals of an app.
     #[test]
@@ -1227,7 +1299,7 @@ pub(super) mod tests {
     }
 
     /// A flow's bytes counted in the background, then in use, then in the background again, told only
-    /// afterwards: the segment is cut back in time at the first second of each new state, each part with
+    /// afterwards: the segment is cut back in time where each new state began, each part with
     /// its bytes to the byte (ADR 0046, decision 1: the bytes an app sends after the user leaves it count
     /// as background, even on a connection opened while it was on screen).
     #[test]
@@ -1251,18 +1323,159 @@ pub(super) mod tests {
             segments(&taken(&shared)),
             vec![
                 (1, T, T + 1_000, 10, true, BACKGROUND),
-                (1, T + 1_000, T + 9_000, 20 + 30 + 40, true, IN_USE),
+                (1, T + 1_000, T + 4_000, 20 + 30 + 40, true, IN_USE),
             ]
         );
         {
             let live = &lock(&shared.live)[&1];
             assert_eq!(
                 (live.start, live.base[0], live.state),
-                (T + 9_000, 100, Some(BACKGROUND))
+                (T + 4_000, 100, Some(BACKGROUND))
             );
             assert_eq!(lock(&live.bytes.marks).len(), 1, "12 s waits");
         }
         assert_eq!(shared.waiting_marks(), 1);
+    }
+
+    /// Bytes received as the first count of a second take that second's state: a download after the
+    /// user left the app is not "in use" (review b1 of W5's second part, engine, finding 8).
+    #[test]
+    fn bytes_received_first_in_a_second_take_its_state() {
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 100, 10);
+        clock.set(T + 3_500);
+        bytes.down(&shared, 40, 80);
+        shared.tell(&told(T, T + 5_000, &[(T, T + 3_000, State::InUse)]));
+        let written: Vec<_> = taken(&shared)
+            .into_iter()
+            .filter_map(|r| match r {
+                Record::Segment {
+                    start,
+                    end,
+                    bytes,
+                    state,
+                    ..
+                } => Some((start, end, bytes[0], bytes[1], state)),
+                Record::Lookups { .. } => None,
+            })
+            .collect();
+        assert_eq!(written, vec![(T, T + 3_000, 10, 0, IN_USE)]);
+        let live = &lock(&shared.live)[&1];
+        assert_eq!(
+            (live.start, live.base[1], live.state),
+            (T + 3_000, 0, Some(BACKGROUND))
+        );
+    }
+
+    /// A segment is cut where its app's state changed by the timeline, not at the first second with
+    /// bytes in the new state: quiet seconds after a change belong to the new part, up to the window's
+    /// 120; and never before a second already placed, even when a later reading tells it otherwise
+    /// (review b1 of W5's second part, engine, nit 2).
+    #[test]
+    fn a_segment_is_cut_where_the_timeline_changed_not_at_the_next_bytes() {
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 39_500, 10);
+        up_at(&shared, &clock, &bytes, 50_000, 20);
+        shared.tell(&told(T, T + 55_000, &[(T, T + 40_000, State::InUse)]));
+        assert_eq!(
+            segments(&taken(&shared)),
+            vec![(1, T, T + 40_000, 10, true, IN_USE)]
+        );
+        // A second placed stays where it was: a later reading that ends the use earlier moves no cut
+        // before it.
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 39_500, 10);
+        shared.tell(&told(T, T + 45_000, &[(T, T + 40_000, State::InUse)]));
+        up_at(&shared, &clock, &bytes, 50_000, 20);
+        shared.tell(&told(
+            T + 35_000,
+            T + 55_000,
+            &[(T + 35_000, T + 38_000, State::InUse)],
+        ));
+        assert_eq!(
+            segments(&taken(&shared)),
+            vec![(1, T, T + 40_000, 10, true, IN_USE)]
+        );
+        // The timeline keeps what it was told of the window before its end: the quiet stretch, told by a
+        // reading of its own, still finds the change in the one before.
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 39_500, 10);
+        shared.tell(&told(T, T + 41_000, &[(T, T + 40_000, State::InUse)]));
+        shared.tell(&told(T + 41_000, T + 46_000, &[]));
+        up_at(&shared, &clock, &bytes, 50_000, 20);
+        shared.tell(&told(T + 46_000, T + 55_000, &[]));
+        assert_eq!(
+            segments(&taken(&shared)),
+            vec![(1, T, T + 40_000, 10, true, IN_USE)]
+        );
+        // A quiet stretch longer than the window: the cut is the window's 120 seconds before the bytes.
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 10_000, 10);
+        up_at(&shared, &clock, &bytes, 210_000, 20);
+        shared.tell(&told(T, T + 215_000, &[(T, T + 11_000, State::InUse)]));
+        assert_eq!(
+            segments(&taken(&shared)),
+            vec![(1, T, T + 90_000, 10, true, IN_USE)]
+        );
+    }
+
+    /// One reading that places a flow's held segment and its live parts writes them in time order
+    /// (review b1 of W5's second part, engine, nit 1).
+    #[test]
+    fn a_flows_records_reach_the_log_in_time_order() {
+        let (shared, clock, _) = telling_at(T);
+        clock.set(T + 295_000);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 296_000, 10);
+        up_at(&shared, &clock, &bytes, 301_000, 20);
+        up_at(&shared, &clock, &bytes, 305_000, 30);
+        assert_eq!(
+            lock(&shared.activity).held.len(),
+            1,
+            "the quarter's segment waits"
+        );
+        shared.tell(&told(
+            T + 290_000,
+            T + 310_000,
+            &[(T + 290_000, T + 303_000, State::InUse)],
+        ));
+        assert_eq!(
+            segments(&taken(&shared)),
+            vec![
+                (1, T + 295_000, T + 300_000, 10, true, IN_USE),
+                (1, T + 300_000, T + 303_000, 20, true, IN_USE),
+            ]
+        );
+    }
+
+    /// A segment held gives back its marks' room once most of them are settled (review b1 of W5's second
+    /// part, engine, nit 5).
+    #[test]
+    fn a_held_segment_gives_its_marks_room_back() {
+        let (shared, clock, _) = telling_at(T);
+        clock.set(T + 199_000);
+        let bytes = open(&shared, 1);
+        for second in 199..300 {
+            up_at(&shared, &clock, &bytes, second * 1_000, 1);
+        }
+        up_at(&shared, &clock, &bytes, 300_500, 1);
+        {
+            let activity = lock(&shared.activity);
+            assert!(activity.held[0].marks.capacity() >= 100);
+        }
+        shared.tell(&told(T + 190_000, T + 290_000, &[]));
+        let activity = lock(&shared.activity);
+        assert_eq!(activity.held[0].marks.len(), 10);
+        assert!(
+            activity.held[0].marks.capacity() <= 16,
+            "{}",
+            activity.held[0].marks.capacity()
+        );
     }
 
     /// A flow that ended before its seconds were told is held, and written once they are, cut where
@@ -1322,6 +1535,30 @@ pub(super) mod tests {
         );
         let live = &lock(&shared.live)[&1];
         assert_eq!((live.start, live.state), (quarter, Some(NOTIFICATION)));
+    }
+
+    /// A segment cut at a quarter hour takes its state with it: the next begins with none, and takes the
+    /// state of its first second with bytes, with no empty record before it (review b1 of W5's second
+    /// part, engine, finding 8).
+    #[test]
+    fn the_next_quarters_segment_begins_with_no_state() {
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 299_000, 10);
+        shared.tell(&told(T, T + 300_000, &[(T, T + 300_000, State::InUse)]));
+        assert_eq!(taken(&shared), vec![]);
+        up_at(&shared, &clock, &bytes, 305_000, 20);
+        shared.tell(&told(
+            T + 300_000,
+            T + 310_000,
+            &[(T + 300_000, T + 302_000, State::InUse)],
+        ));
+        assert_eq!(
+            segments(&taken(&shared)),
+            vec![(1, T, T + 300_000, 10, true, IN_USE)]
+        );
+        let live = &lock(&shared.live)[&1];
+        assert_eq!((live.start, live.state), (T + 300_000, Some(BACKGROUND)));
     }
 
     /// A segment with no count, as a refused connection's, takes the state of its last moment.
@@ -1390,7 +1627,7 @@ pub(super) mod tests {
             taken(&shared),
             vec![lookups_record(
                 Some(UID),
-                (T, T + 2_000),
+                (T, T + 1_000),
                 [1, 0, 70, 0],
                 IN_USE
             )]
@@ -1401,7 +1638,7 @@ pub(super) mod tests {
             taken(&shared),
             vec![lookups_record(
                 Some(UID),
-                (T + 2_000, T + 4_500),
+                (T + 1_000, T + 4_500),
                 [1, 0, 72, 610],
                 BACKGROUND
             )]
@@ -1693,11 +1930,11 @@ pub(super) mod tests {
         up_at(&shared, &clock, &bytes, 3_500, 0);
         up_at(&shared, &clock, &bytes, 2_600, 29);
         assert_eq!(taken(&shared), vec![]);
-        // Back by exactly a second.
+        // Back by exactly a second: the segment is cut where what was told ends.
         up_at(&shared, &clock, &bytes, 1_600, 40);
         assert_eq!(
             segments(&taken(&shared)),
-            vec![(1, T, T + 3_000, 10, true, IN_USE)]
+            vec![(1, T, T + 2_000, 10, true, IN_USE)]
         );
         {
             let live = &lock(&shared.live)[&1];
@@ -1834,11 +2071,11 @@ pub(super) mod tests {
         let states = [IN_USE, IN_USE, BACKGROUND, NOTIFICATION];
         let place = |second: u64| states.get(usize::try_from(second - 10).ok()?).copied();
         let mut held = marks(&[(10, 0), (11, 5), (12, 9), (13, 20), (14, 33)]);
-        let (mut start, mut base, mut state) = (10_200, [0; 4], None);
+        let (mut start, mut base, mut state, mut after) = (10_200, [0; 4], None, 0);
         let (mut each, mut parts) = (Vec::new(), Vec::new());
         let settled = settle_marks(
             &place,
-            (&mut start, &mut base, &mut state),
+            (&mut start, &mut base, &mut state, &mut after),
             &mut held,
             ([40, 0, 0, 0], 13_500),
             |second, bytes, placed| each.push((second, bytes[0], placed)),
@@ -1861,15 +2098,18 @@ pub(super) mod tests {
                 (12_000, 13_000, 11, BACKGROUND)
             ]
         );
-        assert_eq!((start, base[0], state), (13_000, 20, Some(NOTIFICATION)));
+        assert_eq!(
+            (start, base[0], state, after),
+            (13_000, 20, Some(NOTIFICATION), 14)
+        );
         assert_eq!(held, marks(&[(14, 33)]));
         // A change in the segment's first second, or past its end, cuts within it.
         let mut held = marks(&[(10, 0), (11, 5)]);
-        let (mut start, mut base, mut state) = (11_400, [0; 4], Some(BACKGROUND));
+        let (mut start, mut base, mut state, mut after) = (11_400, [0; 4], Some(BACKGROUND), 0);
         let mut parts = Vec::new();
         settle_marks(
             &place,
-            (&mut start, &mut base, &mut state),
+            (&mut start, &mut base, &mut state, &mut after),
             &mut held,
             ([9, 0, 0, 0], 11_300),
             |_, _, _| {},

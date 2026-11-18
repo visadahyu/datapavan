@@ -847,6 +847,22 @@ mod tests {
         })
     }
 
+    /// The seconds not told yet of a chained app whose destinations are not logged count its bytes as
+    /// through the tool, with no destination (review b1 of W5's second part, engine, finding 8).
+    #[test]
+    fn a_chained_apps_seconds_not_told_yet_show_no_destination() {
+        let (shared, clock, _) = telling_at(T);
+        *lock(&shared.chain) = Some(chain_of(UID, false));
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 500, 50);
+        let snapshot = shared.now_view(T + 1_000);
+        let app = app_of(&snapshot, Some(UID));
+        assert_eq!(
+            app.map(|a| (a.places.len(), a.through_tool, a.bytes[0][4])),
+            Some((0, true, [50, 0]))
+        );
+    }
+
     /// Turning "Log where these apps connect" off drops a chained app's destinations from "Now" at once,
     /// keeping its bytes, marked as through the tool; a flow opened while it was on, still open or
     /// waiting for its state, adds no destination after, and its records after carry none (ADR 0046,

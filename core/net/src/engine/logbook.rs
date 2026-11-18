@@ -229,8 +229,10 @@ pub(super) struct Live {
     pub(super) start: u64,
     /// The counts at the segment's start.
     pub(super) base: [u64; 4],
-    /// The state of the segment's seconds placed so far (`activity`).
+    /// The state of the segment's seconds placed so far (`activity`), and the second after the last of
+    /// them, before which no cut falls.
     pub(super) state: Option<Placed>,
+    pub(super) after: u64,
     /// Whether its destination stays out of the log (a chained app's flow, [`Shared::hides`]): its
     /// record holds no address, port or name, and no hello names it later.
     pub(super) hidden: bool,
@@ -244,6 +246,7 @@ pub(super) struct Lookups {
     /// The counts where the part not written yet starts, and the state of its seconds placed so far.
     pub(super) base: [u64; 4],
     pub(super) state: Option<Placed>,
+    pub(super) after: u64,
     pub(super) counts: [u64; 4],
     /// The second of the latest mark, and the seconds not placed yet (`activity`).
     second: u64,
@@ -257,6 +260,7 @@ impl Lookups {
             start,
             base: [0; 4],
             state: None,
+            after: 0,
             counts: [0; 4],
             second: NO_SECOND,
             marks: VecDeque::new(),
@@ -300,6 +304,7 @@ impl Lookups {
             start: self.start,
             base: self.base,
             state: self.state,
+            after: self.after,
             end: end.max(self.start),
             last: self.counts,
             continues: false,
@@ -357,6 +362,7 @@ impl Shared {
                         start: live.start,
                         base: live.base,
                         state: live.state.take(),
+                        after: live.after,
                         end,
                         last: counts,
                         continues: true,
@@ -415,6 +421,7 @@ impl Shared {
                 start: now,
                 base: [0; 4],
                 state: None,
+                after: 0,
                 end: now,
                 last: [0; 4],
                 continues: false,
@@ -434,6 +441,7 @@ impl Shared {
                 start: now,
                 base: [0; 4],
                 state: None,
+                after: 0,
                 hidden,
             },
         );
@@ -574,6 +582,7 @@ impl Shared {
                 start: live.start,
                 base: live.base,
                 state: live.state.take(),
+                after: live.after,
                 end: now,
                 last: counts,
                 continues: true,
@@ -672,6 +681,7 @@ fn piece(live: Live, end: u64, continues: bool) -> Piece {
         start: live.start,
         base: live.base,
         state: live.state,
+        after: live.after,
         end,
         last: live.bytes.now(),
         continues,
