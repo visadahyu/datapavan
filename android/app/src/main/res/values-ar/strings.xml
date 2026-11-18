@@ -557,8 +557,11 @@
     <!-- Whether this copy is genuine (ADR 0024). -->
     <string name="own_title">هل هذه النسخة أصلية؟</string>
     <string name="own_teach">لا يملك Datapavan الأصلي وصولًا إلى الإنترنت ولا يطلبه أبدًا. النسخة التي تطلبه ليست أصلية.</string>
+    <string name="own_teach_advanced">لا يملك Datapavan Basic الأصلي وصولًا إلى الإنترنت أبدًا. ولا يستخدم Datapavan Advanced الأصلي الإنترنت إلا لحركة بيانات تطبيقاتك الخاصة وللخوادم التي تختارها. ولا يطلب أبدًا الوصول إلى الكاميرا أو الميكروفون أو الموقع الجغرافي أو جهات الاتصال أو الرسائل أو سجل المكالمات. ولا يطلب منك أي تطبيق من Datapavan مالًا أبدًا.</string>
     <string name="own_internet_none">لا تملك هذه النسخة وصولًا إلى الإنترنت.</string>
     <string name="own_internet_present">تطلب هذه النسخة الوصول إلى الإنترنت، لذا فهي ليست Datapavan الأصلي. ألغِ تثبيتها وثبّت Datapavan من قناة تثق بها.</string>
+    <string name="own_permissions_none_advanced">لا تطلب هذه النسخة أيًّا منها.</string>
+    <string name="own_permissions_present_advanced">تطلب هذه النسخة واحدًا منها على الأقل، لذا فهي ليست Datapavan Advanced الأصلي. ألغِ تثبيتها وثبّت Datapavan من قناة تثق بها.</string>
     <string name="own_key_label">مفتاح التوقيع لهذه النسخة (SHA-256)</string>
     <string name="own_key_unknown">لا يذكر Android المفتاح الذي وقّع هذه النسخة.</string>
     <string name="own_genuine">يطابق مفتاح Datapavan الرسمي في القائمة التي تحملها هذه النسخة.</string>
@@ -599,6 +602,7 @@
     <!-- Where newer versions are: the app has no internet access and cannot check. -->
     <string name="about_updates_title">الإصدارات الأحدث</string>
     <string name="about_updates">لا يستطيع Datapavan التحقق بنفسه من وجود إصدار أحدث، لأنه لا يملك وصولًا إلى الإنترنت. يوجد أحدث إصدار وما تغيّر فيه على موقعه الإلكتروني. وإذا لم يُفتح الموقع، فالملفات نفسها موجودة على GitHub.</string>
+    <string name="about_updates_advanced">لا يتحقق Datapavan Advanced بنفسه من وجود إصدار أحدث، فهو لا يستخدم الإنترنت إلا لحركة بيانات تطبيقاتك الخاصة وللخوادم التي تختارها. يوجد أحدث إصدار وما تغيّر فيه على موقعه الإلكتروني. وإذا لم يُفتح الموقع، فالملفات نفسها موجودة على GitHub.</string>
     <string name="about_copy_hint">لفتح عنوان في متصفّح آخر، مثل Tor Browser، انقر مع الاستمرار عليه لنسخه.</string>
     <string name="about_open_website">فتح الموقع الإلكتروني</string>
     <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->

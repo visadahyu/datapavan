@@ -532,8 +532,11 @@
     <!-- Whether this copy is genuine (ADR 0024). -->
     <string name="own_title">Ist diese Kopie echt?</string>
     <string name="own_teach">Echtes Datapavan hat keinen Internetzugriff und fragt nie danach. Eine Kopie, die danach fragt, ist nicht echt.</string>
+    <string name="own_teach_advanced">Echtes Datapavan Basic hat nie Internetzugriff. Echtes Datapavan Advanced nutzt das Internet nur für den Datenverkehr Ihrer eigenen Apps und für die Server, die Sie auswählen. Es fragt nie nach Ihrer Kamera, Ihrem Mikrofon, Ihrem Standort, Ihren Kontakten, Nachrichten oder Ihrer Anrufliste. Keine Datapavan-App verlangt je Geld von Ihnen.</string>
     <string name="own_internet_none">Diese Kopie hat keinen Internetzugriff.</string>
     <string name="own_internet_present">Diese Kopie fragt nach Internetzugriff, sie ist also kein echtes Datapavan. Deinstallieren Sie sie und installieren Sie Datapavan aus einer Quelle, der Sie vertrauen.</string>
+    <string name="own_permissions_none_advanced">Diese Kopie fragt nach keinem davon.</string>
+    <string name="own_permissions_present_advanced">Diese Kopie fragt nach mindestens einem davon, sie ist also kein echtes Datapavan Advanced. Deinstallieren Sie sie und installieren Sie Datapavan aus einer Quelle, der Sie vertrauen.</string>
     <string name="own_key_label">Signaturschlüssel dieser Kopie (SHA-256)</string>
     <string name="own_key_unknown">Android sagt nicht, welcher Schlüssel diese Kopie signiert hat.</string>
     <string name="own_genuine">Er stimmt mit dem offiziellen Schlüssel von Datapavan in der Liste überein, die diese Kopie mitbringt.</string>
@@ -574,6 +577,7 @@
     <!-- Where newer versions are: the app has no internet access and cannot check. -->
     <string name="about_updates_title">Neuere Versionen</string>
     <string name="about_updates">Datapavan kann nicht selbst prüfen, ob es eine neuere Version gibt, weil es keinen Internetzugriff hat. Auf seiner Website stehen die neueste Version und was sich geändert hat. Wenn sich die Website nicht öffnen lässt, liegen dieselben Dateien auf GitHub.</string>
+    <string name="about_updates_advanced">Datapavan Advanced prüft nicht selbst, ob es eine neuere Version gibt: Es nutzt das Internet nur für den Datenverkehr Ihrer eigenen Apps und für die Server, die Sie auswählen. Auf seiner Website stehen die neueste Version und was sich geändert hat. Wenn sich die Website nicht öffnen lässt, liegen dieselben Dateien auf GitHub.</string>
     <string name="about_copy_hint">Wenn Sie eine Adresse in einem anderen Browser öffnen möchten, etwa im Tor Browser, halten Sie sie gedrückt, um sie zu kopieren.</string>
     <string name="about_open_website">Website öffnen</string>
     <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->

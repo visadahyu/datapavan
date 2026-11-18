@@ -563,8 +563,12 @@
     <!-- Whether this copy is genuine (ADR 0024). -->
     <string name="own_title">Is this copy genuine?</string>
     <string name="own_teach">Genuine Datapavan has no internet access and never asks for it. A copy that asks for it is not genuine.</string>
+    <!-- Datapavan Advanced's, picked by BuildConfig.ADVANCED: ADR 0045, decision 4's sentence, and the check of what it never asks for. -->
+    <string name="own_teach_advanced">Genuine Datapavan Basic never has internet access. Genuine Datapavan Advanced uses it only for your own apps\' traffic and the servers you choose. It never asks for your camera, microphone, location, contacts, messages or call log. No Datapavan app ever asks you for money.</string>
     <string name="own_internet_none">This copy has no internet access.</string>
     <string name="own_internet_present">This copy asks for internet access, so it is not genuine Datapavan. Uninstall it and install Datapavan from a channel you trust.</string>
+    <string name="own_permissions_none_advanced">This copy asks for none of them.</string>
+    <string name="own_permissions_present_advanced">This copy asks for at least one of them, so it is not genuine Datapavan Advanced. Uninstall it and install Datapavan from a channel you trust.</string>
     <string name="own_key_label">This copy\'s signing key (SHA-256)</string>
     <string name="own_key_unknown">Android does not say which key signed this copy.</string>
     <string name="own_genuine">It matches Datapavan\'s official key in the list this copy carries.</string>
@@ -606,6 +610,7 @@
     <!-- Where newer versions are: the app has no internet access and cannot check. -->
     <string name="about_updates_title">Newer versions</string>
     <string name="about_updates">Datapavan cannot check for a newer version itself, because it has no internet access. The newest version and what changed are on its website. If the website does not open, the same files are on GitHub.</string>
+    <string name="about_updates_advanced">Datapavan Advanced does not check for a newer version itself: it uses the internet only for your own apps\' traffic and the servers you choose. The newest version and what changed are on its website. If the website does not open, the same files are on GitHub.</string>
     <string name="about_copy_hint">To open an address in another browser, such as Tor Browser, touch and hold it to copy it.</string>
     <string name="about_open_website">Open the website</string>
     <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->

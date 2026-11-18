@@ -528,8 +528,11 @@
 
     <string name="own_title">¿Es auténtica esta copia?</string>
     <string name="own_teach">El Datapavan auténtico no tiene acceso a internet y nunca lo pide. Una copia que lo pida no es auténtica.</string>
+    <string name="own_teach_advanced">El Datapavan Basic auténtico nunca tiene acceso a internet. El Datapavan Advanced auténtico solo lo usa para el tráfico de tus propias apps y para los servidores que elijas. Nunca pide tu cámara, tu micrófono, tu ubicación, tus contactos, tus mensajes ni tu registro de llamadas. Ninguna app de Datapavan te pide nunca dinero.</string>
     <string name="own_internet_none">Esta copia no tiene acceso a internet.</string>
     <string name="own_internet_present">Esta copia pide acceso a internet, así que no es un Datapavan auténtico. Desinstálala e instala Datapavan desde un canal de confianza.</string>
+    <string name="own_permissions_none_advanced">Esta copia no pide ninguno de ellos.</string>
+    <string name="own_permissions_present_advanced">Esta copia pide al menos uno de ellos, así que no es un Datapavan Advanced auténtico. Desinstálala e instala Datapavan desde un canal de confianza.</string>
     <string name="own_key_label">Clave de firma de esta copia (SHA-256)</string>
     <string name="own_key_unknown">Android no indica qué clave firmó esta copia.</string>
     <string name="own_genuine">Coincide con la clave oficial de Datapavan en la lista que lleva esta copia.</string>
@@ -569,6 +572,7 @@
     <!-- Where newer versions are: the app has no internet access and cannot check. -->
     <string name="about_updates_title">Versiones más recientes</string>
     <string name="about_updates">Datapavan no puede comprobar por sí mismo si hay una versión más reciente, porque no tiene acceso a internet. La última versión y lo que cambió están en su sitio web. Si el sitio web no se abre, los mismos archivos están en GitHub.</string>
+    <string name="about_updates_advanced">Datapavan Advanced no comprueba por sí mismo si hay una versión más reciente: usa internet solo para el tráfico de tus propias apps y para los servidores que elijas. La última versión y lo que cambió están en su sitio web. Si el sitio web no se abre, los mismos archivos están en GitHub.</string>
     <string name="about_copy_hint">Para abrir una dirección en otro navegador, como Tor Browser, mantenla pulsada para copiarla.</string>
     <string name="about_open_website">Abrir el sitio web</string>
     <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->

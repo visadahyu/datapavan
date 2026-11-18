@@ -1,6 +1,5 @@
 package org.visadahyu.datapavan.ui
 
-import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -21,6 +20,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
+import org.visadahyu.datapavan.BuildConfig
 import org.visadahyu.datapavan.R
 import org.visadahyu.datapavan.audit.AppSigning
 import org.visadahyu.datapavan.audit.SignatureVerdict
@@ -28,14 +28,16 @@ import java.util.Locale
 
 /**
  * Whether this copy of Datapavan is genuine (ADR 0024): its own signing key, judged against its
- * own entry in `data/app-signers` like any other app, and whether it asks for internet access, which
- * genuine v0.1 never does. Both are a speed bump only, since a forger controls this screen too; the
- * screen says that the real check compares the key from outside.
+ * own entry in `data/app-signers` like any other app, and whether it asks for what its edition never
+ * asks for: the internet in Basic; the camera, microphone, location, contacts, messages or call log in
+ * Advanced, which has the internet for its apps' traffic (ADR 0045, decision 4; review b2 of W5's second
+ * part, fresh, M0: Advanced's genuine copy was told it was not). Both are a speed bump only, since a
+ * forger controls this screen too; the screen says that the real check compares the key from outside.
  */
 @Composable
 internal fun OwnCopyScreen(signing: AppSigning?, verdict: SignatureVerdict?, insets: PaddingValues, onBack: () -> Unit) {
     val context = LocalContext.current
-    val internet = remember { asksForInternet(context) }
+    val refused = remember { asksForWhatItNever(requestedPermissions(context), neverRequested()) }
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(insets),
         contentPadding = PaddingValues(16.dp),
@@ -45,12 +47,23 @@ internal fun OwnCopyScreen(signing: AppSigning?, verdict: SignatureVerdict?, ins
             TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
             Text(stringResource(R.string.own_title), style = MaterialTheme.typography.headlineSmall)
         }
-        item { Text(stringResource(R.string.own_teach), style = MaterialTheme.typography.bodyLarge) }
         item {
             Text(
-                stringResource(if (internet) R.string.own_internet_present else R.string.own_internet_none),
+                stringResource(if (BuildConfig.ADVANCED) R.string.own_teach_advanced else R.string.own_teach),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        }
+        item {
+            val check = when {
+                BuildConfig.ADVANCED && refused -> R.string.own_permissions_present_advanced
+                BuildConfig.ADVANCED -> R.string.own_permissions_none_advanced
+                refused -> R.string.own_internet_present
+                else -> R.string.own_internet_none
+            }
+            Text(
+                stringResource(check),
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (internet) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                color = if (refused) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
             )
         }
         item {
@@ -87,13 +100,20 @@ internal fun OwnCopyScreen(signing: AppSigning?, verdict: SignatureVerdict?, ins
 internal fun fingerprint(sha256: String): String =
     sha256.uppercase(Locale.ROOT).chunked(2).chunked(8).joinToString(":\n") { it.joinToString(":") }
 
-/** Whether this copy's manifest asks for internet access. Genuine v0.1 does not, and its build fails if anything adds it. */
-private fun asksForInternet(context: Context): Boolean {
+/** What this edition never asks for, the build's own list: its build fails if anything adds one of them. */
+internal fun neverRequested(): List<String> = BuildConfig.NEVER_REQUESTED.split(',').filter { it.isNotEmpty() }
+
+/** Whether `requested`, the permissions a copy's manifest asks for, holds any of `never`. */
+internal fun asksForWhatItNever(requested: Collection<String>, never: Collection<String>): Boolean =
+    requested.any { it in never }
+
+/** The permissions this copy's manifest asks for. */
+private fun requestedPermissions(context: Context): List<String> {
     val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         context.packageManager.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(PackageManager.GET_PERMISSIONS.toLong()))
     } else {
         @Suppress("DEPRECATION")
         context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
     }
-    return info.requestedPermissions?.contains(Manifest.permission.INTERNET) == true
+    return info.requestedPermissions?.toList().orEmpty()
 }

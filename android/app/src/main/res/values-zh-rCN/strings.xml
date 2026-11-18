@@ -524,8 +524,11 @@
     <!-- Whether this copy is genuine (ADR 0024). -->
     <string name="own_title">此副本是正版吗？</string>
     <string name="own_teach">正版 Datapavan 没有互联网访问权限，也从不请求。请求此权限的副本不是正版。</string>
+    <string name="own_teach_advanced">正版 Datapavan Basic 始终没有互联网访问权限。正版 Datapavan Advanced 仅将互联网用于传输您自己的应用的流量，以及连接您选择的服务器。它从不请求访问您的相机、麦克风、位置信息、通讯录、短信或通话记录。任何 Datapavan 应用都不会向您要钱。</string>
     <string name="own_internet_none">此副本没有互联网访问权限。</string>
     <string name="own_internet_present">此副本请求互联网访问权限，因此不是正版 Datapavan。请卸载它，然后从您信任的渠道安装 Datapavan。</string>
+    <string name="own_permissions_none_advanced">此副本没有请求其中任何一项。</string>
+    <string name="own_permissions_present_advanced">此副本请求了其中至少一项，因此不是正版 Datapavan Advanced。请卸载它，然后从您信任的渠道安装 Datapavan。</string>
     <string name="own_key_label">此副本的签名密钥（SHA-256）</string>
     <string name="own_key_unknown">Android 没有说明此副本是用哪个密钥签名的。</string>
     <string name="own_genuine">它与此副本自带列表中 Datapavan 的官方密钥一致。</string>
@@ -566,6 +569,7 @@
     <!-- Where newer versions are: the app has no internet access and cannot check. -->
     <string name="about_updates_title">较新版本</string>
     <string name="about_updates">Datapavan 无法自行检查是否有较新版本，因为它没有互联网访问权限。最新版本及更改内容都在其网站上。如果网站打不开，GitHub 上也有相同的文件。</string>
+    <string name="about_updates_advanced">Datapavan Advanced 不会自行检查是否有较新版本：它仅将互联网用于传输您自己的应用的流量，以及连接您选择的服务器。最新版本及更改内容都在其网站上。如果网站打不开，GitHub 上也有相同的文件。</string>
     <string name="about_copy_hint">若要在其他浏览器（例如 Tor Browser）中打开某个地址，请轻触并按住该地址以复制。</string>
     <string name="about_open_website">打开网站</string>
     <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->

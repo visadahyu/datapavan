@@ -532,8 +532,11 @@
     <!-- Whether this copy is genuine (ADR 0024). -->
     <string name="own_title">آیا این نسخه اصل است؟</string>
     <string name="own_teach">نسخه اصل Datapavan به اینترنت دسترسی ندارد و هرگز آن را نمی‌خواهد. نسخه‌ای که آن را بخواهد اصل نیست.</string>
+    <string name="own_teach_advanced">نسخه اصل Datapavan Basic هرگز به اینترنت دسترسی ندارد. نسخه اصل Datapavan Advanced از اینترنت فقط برای ترافیک برنامه‌های خودتان و سرورهایی که انتخاب می‌کنید استفاده می‌کند. هرگز دسترسی به دوربین، میکروفون، مکان، مخاطبان، پیامک‌ها یا فهرست تماس‌های شما را نمی‌خواهد. هیچ برنامه Datapavan هرگز از شما پول نمی‌خواهد.</string>
     <string name="own_internet_none">این نسخه به اینترنت دسترسی ندارد.</string>
     <string name="own_internet_present">این نسخه دسترسی به اینترنت می‌خواهد، پس نسخه اصل Datapavan نیست. حذفش کنید و Datapavan را از منبعی که به آن اعتماد دارید نصب کنید.</string>
+    <string name="own_permissions_none_advanced">این نسخه هیچ‌کدام از این‌ها را نمی‌خواهد.</string>
+    <string name="own_permissions_present_advanced">این نسخه دست‌کم یکی از این‌ها را می‌خواهد، پس نسخه اصل Datapavan Advanced نیست. حذفش کنید و Datapavan را از منبعی که به آن اعتماد دارید نصب کنید.</string>
     <string name="own_key_label">کلید امضای این نسخه (SHA-256)</string>
     <string name="own_key_unknown">اندروید نمی‌گوید کدام کلید این نسخه را امضا کرده است.</string>
     <string name="own_genuine">با کلید رسمی Datapavan در فهرستی که همین نسخه همراه دارد جور است.</string>
@@ -574,6 +577,7 @@
     <!-- Where newer versions are: the app has no internet access and cannot check. -->
     <string name="about_updates_title">نسخه‌های تازه‌تر</string>
     <string name="about_updates">این برنامه خودش نمی‌تواند بررسی کند که نسخه تازه‌تری آمده است یا نه، چون به اینترنت دسترسی ندارد. تازه‌ترین نسخه و تغییراتش در وب‌سایت برنامه است. اگر وب‌سایت باز نشد، همین فایل‌ها در GitHub هم هست.</string>
+    <string name="about_updates_advanced">Datapavan Advanced خودش بررسی نمی‌کند که نسخه تازه‌تری آمده است یا نه، چون از اینترنت فقط برای ترافیک برنامه‌های خودتان و سرورهایی که انتخاب می‌کنید استفاده می‌کند. تازه‌ترین نسخه و تغییراتش در وب‌سایت برنامه است. اگر وب‌سایت باز نشد، همین فایل‌ها در GitHub هم هست.</string>
     <string name="about_copy_hint">برای باز کردن یک نشانی در مرورگری دیگر، مثل Tor Browser، آن را لمس کنید و نگه دارید تا کپی شود.</string>
     <string name="about_open_website">باز کردن وب‌سایت</string>
     <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->

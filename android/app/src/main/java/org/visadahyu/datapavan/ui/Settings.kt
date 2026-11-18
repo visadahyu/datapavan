@@ -279,7 +279,9 @@ internal fun AboutPage(engineVersion: String, insets: PaddingValues, onBack: () 
             // Google Play updates Lite, so Lite says nothing of newer versions and links the website's main page.
             if (!BuildConfig.PLAY) {
                 Text(stringResource(R.string.about_updates_title), style = MaterialTheme.typography.titleMedium)
-                Text(stringResource(R.string.about_updates), style = MaterialTheme.typography.bodyLarge)
+                // Advanced has the internet, for its apps' traffic only (ADR 0045, decision 4).
+                val updates = if (BuildConfig.ADVANCED) R.string.about_updates_advanced else R.string.about_updates
+                Text(stringResource(updates), style = MaterialTheme.typography.bodyLarge)
             }
             val address = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Ltr)
             SelectionContainer {
