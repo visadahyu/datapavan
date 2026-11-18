@@ -138,6 +138,11 @@ rust_gates() {
     # The fuzz crate has a lockfile of its own, which a new dependency of the engine must reach too
     # (CI's fuzz run, 2026-11-12: nix came in and only the workspace's lockfile had it).
     (cd "$ROOT/core/fuzz" && cargo metadata --locked --format-version 1 >/dev/null)
+    # And its targets must still build against the engine's API, which only CI's fuzz run used to find
+    # (W5's first part, 2026-11-18: the DNS cache came to take the time since start). On stable Rust a
+    # check is enough; the sanitizers and cargo-fuzz stay in CI.
+    echo "== Rust: the fuzz targets build against the engine"
+    (cd "$ROOT/core/fuzz" && cargo check --locked --bins --quiet)
     # Basic's native code (core/jni) holds no network crate (ADR 0045, decision 9): Android keeps an app
     # without INTERNET off the network, and this keeps the code from even trying. Read whole: under
     # pipefail, a grep that stops reading early fails the pipe.
