@@ -557,6 +557,13 @@ impl Counters {
         counter.fetch_add(n, Ordering::Relaxed);
     }
 
+    /// Takes back `n` counted before, as a mark a flow loses; never below nought.
+    fn take_back(counter: &AtomicU64, n: u64) {
+        let _ = counter.try_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
+            Some(v.saturating_sub(n))
+        });
+    }
+
     /// TCP flows, UDP flows, bytes up, bytes down, flows without an owner, refused, unreachable,
     /// failed, packets skipped, packets in, packets out, server names read from TLS and from QUIC, QUIC
     /// flows whose name could not be read, hellos that offered ECH, hellos whose name was an ECH public
@@ -1522,7 +1529,13 @@ mod tests {
         let shared = shared();
         let now = Instant::now();
         let asked = SocketAddr::from(([93, 184, 216, 34], 443));
-        lock(&shared.names).insert(asked.ip(), None, "www.example.com", 60, now);
+        lock(&shared.names).insert(
+            asked.ip(),
+            None,
+            "www.example.com",
+            60,
+            (now, shared.clock.since_boot()),
+        );
         lock(&shared.names).insert_public("cover.example", None, 60, now);
         let same = open_flow(&shared, asked);
         let other = open_flow(&shared, asked);
@@ -1548,7 +1561,13 @@ mod tests {
         let shared = shared();
         let now = Instant::now();
         let asked = SocketAddr::from(([93, 184, 216, 34], 443));
-        lock(&shared.names).insert(asked.ip(), None, "www.example.com", 60, now);
+        lock(&shared.names).insert(
+            asked.ip(),
+            None,
+            "www.example.com",
+            60,
+            (now, shared.clock.since_boot()),
+        );
         lock(&shared.names).insert_public("cover.example", None, 60, now);
         let by_dns = open_flow(&shared, asked);
         let same = open_flow(&shared, asked);
@@ -1642,6 +1661,111 @@ mod tests {
             };
             assert_eq!(seen(other.id), others, "{scope:?}");
         }
+    }
+
+    /// A DNS name stands beside the connection's own only while it is current (review 1 of W5's first
+    /// part, engine finding 7, names finding 9): an answer's while it is held in time since the phone
+    /// started, so that one kept through a night shows no difference that is only its age, though it
+    /// still names a flow that sends no name; a stand-in's, which names that address alone, always.
+    #[test]
+    fn a_dns_name_stands_beside_the_connections_own_only_while_current() {
+        let clock = clock::ManualClock::at(1_794_873_600_000);
+        let mut shared = shared();
+        shared.clock = clock.clone();
+        let asked = SocketAddr::from(([93, 184, 216, 34], 443));
+        let when = (Instant::now(), shared.clock.since_boot());
+        lock(&shared.names).insert(asked.ip(), None, "www.example.com", 60, when);
+        let stand_in = SocketAddr::from((lock(&shared.stand_ins).address("chained.example"), 443));
+        let fresh = open_flow(&shared, asked);
+        shared.hello(fresh, &hello("other.example", false), NamedBy::Tls);
+        // A night's sleep: the monotonic clock stood still, the time since start did not.
+        clock.pass(8 * 3_600_000);
+        let after_the_night = open_flow(&shared, asked);
+        let unnamed_after = open_flow(&shared, asked);
+        let by_stand_in = open_flow(&shared, stand_in);
+        shared.hello(
+            after_the_night,
+            &hello("other.example", false),
+            NamedBy::Tls,
+        );
+        shared.hello(by_stand_in, &hello("other.example", false), NamedBy::Tls);
+        let live = lock(&shared.live);
+        let names = |id: u64| {
+            let flow = &live[&id].flow;
+            (
+                flow.name.as_deref(),
+                flow.named_by,
+                flow.dns_name.as_deref(),
+            )
+        };
+        assert_eq!(
+            names(fresh.id),
+            (Some("other.example"), NamedBy::Tls, Some("www.example.com"))
+        );
+        assert_eq!(
+            names(after_the_night.id),
+            (Some("other.example"), NamedBy::Tls, None)
+        );
+        assert_eq!(
+            names(unnamed_after.id),
+            (Some("www.example.com"), NamedBy::Dns, None)
+        );
+        assert_eq!(
+            names(by_stand_in.id),
+            (Some("other.example"), NamedBy::Tls, Some("chained.example"))
+        );
+    }
+
+    /// The mark of an app's own encrypted DNS follows the name that names the flow (review 1 of W5's
+    /// first part, names, finding 10): given by a resolver's host name in a DNS answer alone, it goes
+    /// when the hello names another server, and the count with it; given by the resolver's address, it
+    /// stays; and a hello naming a resolver's host gives it.
+    #[test]
+    fn the_mark_of_an_apps_own_dns_follows_the_name_that_names_the_flow() {
+        let shared = shared();
+        let when = (Instant::now(), shared.clock.since_boot());
+        let elsewhere = SocketAddr::from(([198, 51, 100, 7], 443));
+        let resolver = SocketAddr::from(([192, 0, 2, 53], 443));
+        let web = SocketAddr::from(([198, 51, 100, 8], 443));
+        for (address, name) in [
+            (elsewhere, "doh.sample.example"),
+            (resolver, "doh.sample.example"),
+            (web, "www.example.com"),
+        ] {
+            lock(&shared.names).insert(address.ip(), None, name, 60, when);
+        }
+        let by_name = open_flow(&shared, elsewhere);
+        let by_address = open_flow(&shared, resolver);
+        let to_web = open_flow(&shared, web);
+        assert_eq!(
+            shared.counters.snapshot()[17],
+            2,
+            "two marked as they opened"
+        );
+        shared.hello(by_name, &hello("www.example.com", false), NamedBy::Tls);
+        shared.hello(by_address, &hello("www.example.com", false), NamedBy::Tls);
+        shared.hello(to_web, &hello("doh.sample.example", false), NamedBy::Tls);
+        let live = lock(&shared.live);
+        let marks: Vec<_> = [by_name, by_address, to_web]
+            .iter()
+            .map(|o| {
+                let flow = &live[&o.id].flow;
+                (flow.dns, flow.resolver.as_deref())
+            })
+            .collect();
+        assert_eq!(
+            marks,
+            vec![
+                (DnsUse::None, None),
+                (DnsUse::Encrypted, Some("sample")),
+                (DnsUse::Encrypted, Some("sample")),
+            ]
+        );
+        assert_eq!(
+            shared.counters.snapshot()[17],
+            2,
+            "one taken back, one given"
+        );
     }
 
     #[test]

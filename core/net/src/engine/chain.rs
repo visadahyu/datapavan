@@ -340,6 +340,9 @@ mod tests {
             name: "other.example".into(),
             ech: false,
         };
+        let server = std::net::IpAddr::from([93, 184, 216, 34]);
+        let when = (std::time::Instant::now(), shared.clock.since_boot());
+        lock(&shared.names).insert(server, None, "example.com", 60, when);
         for (id, uid) in [(1, CHAINED), (2, DIRECT)] {
             assert!(shared.record(flow(id, uid)).is_some());
             let opened = Opened {
