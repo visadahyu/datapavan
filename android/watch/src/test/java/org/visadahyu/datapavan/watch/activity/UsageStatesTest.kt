@@ -251,6 +251,99 @@ class UsageStatesTest {
         assertEquals(listOf(inUse(A, at(60), at(130))), again.intervals)
     }
 
+    /**
+     * A second instance of one screen opened over the first: Android pauses the first, resumes the second and
+     * then stops the first, all of one class; the stop is the first instance's and ends nothing (review b1 of
+     * W5's second part, Kotlin, finding 1).
+     */
+    @Test
+    fun aSecondInstanceOfOneScreenKeepsTheAppInUse() {
+        val reading = read(
+            listOf(
+                event(10, Kind.RESUMED, "a", "Sub"),
+                event(20, Kind.PAUSED, "a", "Sub"),
+                Event(at(20) + 50, Kind.RESUMED, "a", "Sub"),
+                Event(at(20) + 400, Kind.STOPPED, "a", "Sub"),
+            ),
+        )
+        assertEquals(listOf(inUse(A, at(10), at(600))), reading.intervals)
+        // Leaving it after: paused, then stopped, it ends with the grace.
+        val left = read(
+            listOf(
+                event(10, Kind.RESUMED, "a", "Sub"),
+                event(20, Kind.PAUSED, "a", "Sub"),
+                Event(at(20) + 50, Kind.RESUMED, "a", "Sub"),
+                Event(at(20) + 400, Kind.STOPPED, "a", "Sub"),
+                event(100, Kind.PAUSED, "a", "Sub"),
+                event(101, Kind.STOPPED, "a", "Sub"),
+            ),
+        )
+        assertEquals(listOf(inUse(A, at(10), at(101) + grace)), left.intervals)
+    }
+
+    /** Back to a first instance of one screen: the second is paused, the first resumed, the second stopped; the app stays in use. */
+    @Test
+    fun backToAFirstInstanceKeepsTheAppInUse() {
+        val reading = read(
+            listOf(
+                event(100, Kind.PAUSED, "a", "Sub"),
+                Event(at(100) + 50, Kind.RESUMED, "a", "Sub"),
+                Event(at(100) + 400, Kind.STOPPED, "a", "Sub"),
+            ),
+        )
+        assertEquals(listOf(inUse(A, at(100) + 50, at(600))), reading.intervals)
+        // A pause before the next reading's overlap, and the resume and stop within it, still match.
+        val states = UsageStates()
+        states.read(listOf(event(100, Kind.PAUSED, "a", "Sub")), at(110) + 30, uidOf, null, startedAt = t)
+        val next = states.read(
+            listOf(Event(at(100) + 50, Kind.RESUMED, "a", "Sub"), Event(at(100) + 400, Kind.STOPPED, "a", "Sub")),
+            at(160), uidOf, null, startedAt = t,
+        )
+        assertEquals(listOf(inUse(A, at(100) + 50, at(160))), next.intervals)
+    }
+
+    /**
+     * A rotation whose new instance resumes in the millisecond the old one stopped keeps Android's order within
+     * that millisecond, and so the app in use; an event read again is placed once.
+     */
+    @Test
+    fun eventsWithinOneMillisecondKeepAndroidsOrder() {
+        val rotation = listOf(
+            event(10, Kind.RESUMED, "a", "Main"),
+            event(60, Kind.PAUSED, "a", "Main"),
+            event(60, Kind.STOPPED, "a", "Main"),
+            event(60, Kind.RESUMED, "a", "Main"),
+        )
+        assertEquals(listOf(inUse(A, at(10), at(600))), read(rotation).intervals)
+        val states = UsageStates()
+        read(rotation, until = 65, states = states)
+        val again = states.read(rotation + event(70, Kind.INTERACTION, "b"), at(120), uidOf, null, startedAt = t)
+        assertEquals(listOf(inUse(A, at(55), at(120)), inUse(B, at(70), at(70) + grace)), again.intervals)
+    }
+
+    /**
+     * A clock set back while the lock screen shows: an activity resumed before it stays hidden under it, and the
+     * camera opened over it on the new clock is shown (review b1, Kotlin, finding 6).
+     */
+    @Test
+    fun aClockSetBackKeepsTheLockScreensOrder() {
+        val states = UsageStates()
+        read(
+            listOf(event(10, Kind.RESUMED, "a", "Main"), event(50, Kind.KEYGUARD_SHOWN, "android")),
+            until = 60, states = states,
+        )
+        val back = at(-3_600)
+        states.clockSetBack(back, uidOf, null)
+        val after = states.read(listOf(Event(back + 5_000, Kind.RESUMED, "b", "Camera")), back + 60_000, uidOf, null, startedAt = t)
+        assertEquals(listOf(inUse(B, back + 5_000, back + 60_000)), after.intervals)
+        // An activity resumed on the old clock, later than the new one, is hidden by a lock screen shown after the set back.
+        val other = UsageStates()
+        read(listOf(event(10, Kind.RESUMED, "a", "Main")), until = 60, states = other)
+        other.clockSetBack(back, uidOf, null)
+        val locked = other.read(listOf(Event(back + 3_000, Kind.KEYGUARD_SHOWN, "android")), back + 60_000, uidOf, null, startedAt = t)
+        assertEquals(listOf(inUse(A, back, back + 3_000 + grace)), locked.intervals)
+    }
+
     /** Intervals of one app and state are joined where they meet or overlap. */
     @Test
     fun intervalsThatMeetAreJoined() {

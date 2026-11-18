@@ -11,6 +11,10 @@ package org.visadahyu.datapavan.watch.activity
  *   visible), while the screen is interactive, and while the lock screen is not shown unless the activity
  *   was resumed over it; several apps can be in use at once. The default keyboard counts as in use while
  *   the screen is interactive, since it may be shown (decision 5);
+ * - an activity is known by its package and class only, since Android keeps the instance to itself: a
+ *   `STOPPED` that comes after a `RESUMED` of the same class that itself followed a `PAUSED`, with no
+ *   `PAUSED` since, is the stop of another instance, as when a second instance of one screen opens over the
+ *   first or Back returns to it, and ends nothing (review b1 of W5's second part, Kotlin, finding 1);
  * - **with its notification** from a `FOREGROUND_SERVICE_START` of it to its `FOREGROUND_SERVICE_STOP`;
  * - **in the background** otherwise.
  *
@@ -45,8 +49,8 @@ class UsageStates(
     /** What is carried from one reading to the next, as of [time]: every event before it applied. */
     private data class Base(
         val time: Long,
-        /** Activities resumed and not stopped, with when each was last resumed. */
-        val activities: Map<Pair<String, String?>, Long>,
+        /** Activities resumed and not stopped, and those paused a moment ago, by package and class. */
+        val activities: Map<Pair<String, String?>, Activity>,
         /** Foreground services started and not stopped, with when each started. */
         val services: Map<Pair<String, String?>, Long>,
         val screenOn: Boolean?,
@@ -58,10 +62,21 @@ class UsageStates(
         val lastInUse: Map<Int, Long>,
     )
 
+    /**
+     * One activity class of a package: when it was last resumed, null while it is not open; whether it was
+     * paused since; whether that resume followed a pause, so that a stop with no pause since is another
+     * instance's; and the time of its last event.
+     */
+    private data class Activity(val resumedAt: Long?, val paused: Boolean, val reopened: Boolean, val at: Long)
+
     private var base: Base? = null
 
-    /** The events at or after the base's time, in order, for readings to place again. */
-    private val pending = sortedSetOf(compareBy<Event>({ it.time }, { it.kind }, { it.packageName }, { it.className ?: "" }))
+    /**
+     * The events at or after the base's time, in time order and, within one millisecond, in the order
+     * Android gave them, for readings to place again (review b1, Kotlin, finding 1: a rotation whose new
+     * instance resumes in the millisecond the old one stopped).
+     */
+    private val pending = mutableListOf<Event>()
 
     /** Where the next reading tells the engine from: the end of the last one told, after its overlap. */
     private var toldUntil: Long? = null
@@ -84,9 +99,7 @@ class UsageStates(
             activities = emptyMap(), services = emptyMap(), screenOn = null, screenOnSince = null,
             keyguard = false, keyguardSince = Long.MIN_VALUE, lastInUse = emptyMap(),
         )
-        for (event in events) {
-            if (event.time >= maxOf(start.time, floor) && event.time < until) pending.add(event)
-        }
+        add(events.filter { it.time >= maxOf(start.time, floor) && it.time < until })
         // From the overlap with the last reading, or the end of what was told before, or the start.
         val from = minOf(until, maxOf(floor, if (base != null) start.time else toldUntil ?: startedAt))
         val run = Run(start, uidOf, keyboard)
@@ -104,6 +117,25 @@ class UsageStates(
         base = next
         toldUntil = until
         return Reading(from, until, intervals, Screen(run.screenOn, run.screenOnSince))
+    }
+
+    /**
+     * Adds the events read to [pending], each once: an event read again, as in the overlap, is the one
+     * already there, matched by its fields, as many times as it came; the new ones follow those of their
+     * millisecond, in the order read.
+     */
+    private fun add(read: List<Event>) {
+        val seen = HashMap<Event, Int>()
+        for (event in pending) seen[event] = (seen[event] ?: 0) + 1
+        val new = read.filter { event ->
+            val left = seen[event] ?: 0
+            if (left > 0) seen[event] = left - 1
+            left == 0
+        }
+        if (new.isEmpty()) return
+        val all = (pending + new).sortedBy { it.time }
+        pending.clear()
+        pending += all
     }
 
     /**
@@ -140,12 +172,20 @@ class UsageStates(
         val run = Run(start, uidOf, keyboard)
         for (event in pending) run.apply(event)
         val carried = run.snapshot(Long.MAX_VALUE)
+        // Times of the old clock later than `at` become `at`, but an activity resumed before the lock screen
+        // showed stays before it, so that it stays hidden under it.
+        val keyguardSince = minOf(carried.keyguardSince, at)
         base = carried.copy(
             time = at,
-            activities = carried.activities.mapValues { minOf(it.value, at) },
+            activities = carried.activities.mapValues { (_, a) ->
+                val resumedAt = a.resumedAt?.let { r ->
+                    if (carried.keyguard && r < carried.keyguardSince) minOf(r, keyguardSince - 1) else minOf(r, at)
+                }
+                a.copy(resumedAt = resumedAt, at = minOf(a.at, at))
+            },
             services = carried.services.mapValues { minOf(it.value, at) },
             screenOnSince = carried.screenOnSince?.let { minOf(it, at) },
-            keyguardSince = minOf(carried.keyguardSince, at),
+            keyguardSince = keyguardSince,
             lastInUse = carried.lastInUse.mapValues { minOf(it.value, at) },
         )
         pending.clear()
@@ -180,7 +220,8 @@ class UsageStates(
 
         private fun visibleUids(): Set<Int> = buildSet {
             if (screen()) {
-                for ((key, resumedAt) in activities) {
+                for ((key, activity) in activities) {
+                    val resumedAt = activity.resumedAt ?: continue
                     if (!keyguard || resumedAt >= keyguardSince) uidOf(key.first)?.let(::add)
                 }
             }
@@ -217,9 +258,19 @@ class UsageStates(
             now = maxOf(now, event.time)
             val key = event.packageName to event.className
             when (event.kind) {
-                Kind.RESUMED -> activities[key] = event.time
-                Kind.PAUSED -> {}
-                Kind.STOPPED -> activities.remove(key)
+                Kind.RESUMED -> activities[key] =
+                    Activity(event.time, paused = false, reopened = activities[key]?.paused == true, at = event.time)
+                Kind.PAUSED -> activities[key] =
+                    activities[key]?.copy(paused = true, at = event.time) ?: Activity(null, paused = true, reopened = false, at = event.time)
+                Kind.STOPPED -> {
+                    val open = activities[key]
+                    if (open?.resumedAt != null && !open.paused && open.reopened) {
+                        // Another instance's stop: the one resumed after the pause stays.
+                        activities[key] = open.copy(reopened = false, at = event.time)
+                    } else {
+                        activities.remove(key)
+                    }
+                }
                 Kind.SERVICE_START -> services[key] = event.time
                 Kind.SERVICE_STOP -> services.remove(key)
                 Kind.INTERACTION -> uidOf(event.packageName)?.let { uid ->
@@ -251,7 +302,9 @@ class UsageStates(
          */
         fun snapshot(time: Long): Base {
             val inUse = lastInUse.filterValues { it + grace > time }
-            return Base(time, activities.toMap(), services.toMap(), screenOn, screenOnSince, keyguard, keyguardSince, inUse)
+            // A pause not followed by a resume yet is kept for as long as a reading reads again.
+            val kept = activities.filterValues { it.resumedAt != null || it.at >= time - LATE_MS }
+            return Base(time, kept, services.toMap(), screenOn, screenOnSince, keyguard, keyguardSince, inUse)
         }
 
         /**
