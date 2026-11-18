@@ -86,6 +86,7 @@ lab_gates() {
     java -cp "$ROOT/build/gaps-tools/classes" org.visadahyu.lab.gapstools.GapsTable check \
         "$ROOT/docs/platform-gaps/results.csv" "$ROOT/docs/platform-gaps/README.md"
     echo "== Lab: no published run holds an address or a name of the network that ran it"
+    python3 -I "$ROOT/scripts/check-lab-privacy.py" --self-test
     python3 -I "$ROOT/scripts/check-lab-privacy.py"
     echo "== Lab: the release check's lab strings cover every lab app"
     python3 -I "$ROOT/scripts/check-lab-classes.py" --self-test --lab "$ROOT/lab"
