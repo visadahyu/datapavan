@@ -20,9 +20,11 @@ sealed interface LogRecord {
     val end: Long
 
     /**
-     * The state the app had throughout the record (ADR 0046, decision 1), as one byte ([AppState]): in
-     * use, with its notification, in the background, or none and why. Records of versions 1 and 2, written
-     * before Watch told states, have none: "not told".
+     * The state of the app over the record (ADR 0046, decision 1), as one byte ([AppState]): in use, with
+     * its notification, in the background, or none and why. It is the state of the seconds its bytes were
+     * counted in, a second with a moment of use being in use whole, or for a part with no bytes the state of
+     * its end; quiet seconds of another state beyond the 120 that a cut walks back are not cut out (ADR 0037's
+     * note). Records of versions 1 and 2, written before Watch told states, have none: "not told".
      */
     val state: Int
 

@@ -9,7 +9,8 @@
 # - item 1: one app sends in the background, on a long connection it opened while on screen and on a timer,
 #   while another app is on screen sending: the first's bytes in the background are within 5 % of what it
 #   logged it sent after the grace, its bytes before in use; the app on screen is in use; a third app's
-#   foreground service sends with its notification, within 5 % of what it logged, after its own grace;
+#   foreground service sends with its notification, within 5 % of what it logged, after its own grace, and,
+#   from Android 13, in the background once the app's notifications are refused;
 # - the log's records of the first app's connection carry both states, cut where it left the screen;
 # - item 6: without usage access, the dump says so, and a flow's bytes have no state.
 #
@@ -167,6 +168,28 @@ within_5 "$(up "$notice" 10m 2)" "$notice_sent" ||
     fail "the foreground service's app has $(up "$notice" 10m 2) bytes up with its notification, not within 5 % of the $notice_sent it sent"
 [ "$(up "$notice" 10m 3)" = 0 ] || fail "the foreground service's app has bytes in the background: $notice"
 echo "ok: a foreground service's bytes are with its notification"
+# From Android 13 an app's notifications are off until the user allows them, and its foreground service then
+# shows no notification: the same service, its notifications refused, is in the background (ADR 0046).
+if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 33 ]; then
+    adb shell pm revoke "$NOTICE_APP" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
+    with_notification=$(up "$notice" 10m 2)
+    adb logcat -c
+    adb shell am start -W -n "$NOTICE_APP/$WORK" --es service "$HOST:$((PORT + 1)),20,400" >/dev/null
+    silent_sent() { [ -n "$(logged "$NOTICE_APP" service-sent)" ]; }
+    within 120 silent_sent || fail "the service of the app whose notifications are off did not log what it sent"
+    silent=$(logged "$NOTICE_APP" service-sent)
+    sleep 4
+    grep -q '^activity-read true$' <<<"$(watch_dump activity-read)" || fail "the tracker did not read the states"
+    notice=$(app_line "$NOTICE_UID")
+    echo "  $notice"
+    within_5 "$(up "$notice" 10m 3)" "$silent" ||
+        fail "the service of the app whose notifications are off has $(up "$notice" 10m 3) bytes up in the background, not within 5 % of the $silent it sent"
+    [ "$(up "$notice" 10m 2)" = "$with_notification" ] ||
+        fail "the service of an app whose notifications are off added bytes with its notification: $notice"
+    echo "ok: a foreground service of an app whose notifications are off is in the background"
+fi
+# How late the usage events came into Android's record; a reading leaves them 2 seconds (ADR 0046).
+echo "  $(grep '^activity-late ' <<<"$(watch_dump)")"
 grep -q " now=in-use " <<<"$screen" || fail "the app on screen is not in use now: $screen"
 
 # The log's records of the long connection: in use, then in the background, cut where it left the screen.
