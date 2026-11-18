@@ -63,6 +63,7 @@ use crate::tun::Tun;
 
 mod budget;
 mod chain;
+mod clock;
 mod echo;
 mod errors;
 mod hops;
@@ -77,8 +78,9 @@ mod whose;
 
 use budget::Budget;
 pub use chain::Chain;
+pub use clock::{Clock, SystemClock};
 use echo::Echoes;
-use logbook::{FlowBytes, Live, Lookups, logger, now_ms};
+use logbook::{FlowBytes, Live, Lookups, logger};
 #[cfg(test)]
 use naming::Begun;
 use tcp::{Listening, Pending, listen};
@@ -328,11 +330,8 @@ impl Default for Limits {
 }
 /// How long finished records gather before they go to Watch's log together (ADR 0037).
 const LOG_DELAY: Duration = Duration::from_secs(30);
-/// A flow still open is written as a segment at every quarter of an hour, UTC. Every time zone is a
-/// whole number of quarter hours from UTC, so no segment spans a local midnight.
-const SEGMENT_MS: u64 = 15 * 60 * 1000;
 
-/// What the engine asks of Android, through Watch's Kotlin side.
+/// What the engine asks of Android, through Watch's Kotlin side, and the clock it reads.
 pub trait Platform: Send + Sync + 'static {
     /// `ConnectivityManager.getConnectionOwnerUid`: the UID of the app with a socket from `local` to
     /// `remote`, or `None` when Android does not know.
@@ -343,6 +342,12 @@ pub trait Platform: Send + Sync + 'static {
 
     /// Hands a batch of records to Watch's connection log ([`crate::log::batch`]).
     fn log(&self, batch: &[u8]);
+
+    /// The clock the engine reads for the log's times ([`Clock`]): the phone's own, unless a test hands
+    /// in one it moves.
+    fn clock(&self) -> Arc<dyn Clock> {
+        Arc::new(SystemClock)
+    }
 }
 
 /// How a flow went, for the counters and the flows kept for tests.
@@ -728,6 +733,11 @@ struct Shared {
     /// The companies behind well-known networks.
     owners: Owners,
     next_id: AtomicU64,
+    /// The clock the log reads ([`Platform::clock`]).
+    clock: Arc<dyn Clock>,
+    /// The quarter hour of the wall clock (milliseconds since 1970 over [`logbook::SEGMENT_MS`]) that
+    /// every open segment and each app's lookups are in, since the log's last cut ([`Shared::log_now`]).
+    quarter: AtomicU64,
     /// The flows open now, for the log.
     live: Mutex<HashMap<u64, Live>>,
     /// Lookups each app sent to Watch's own DNS address since the last segment.
@@ -738,6 +748,10 @@ struct Shared {
     pending_log: Mutex<Vec<Record>>,
     /// Woken when a record waits or a flow opens.
     log_ready: Notify,
+    /// Who waits for a flush of the log ([`Shared::ask_flush`]), told once it is done.
+    flushes: Mutex<Vec<std::sync::mpsc::SyncSender<()>>>,
+    /// Woken when a flush is asked.
+    flush_wanted: Notify,
     /// Whether the answers of Watch's own DNS address go to the apps with a time to live of 0
     /// ([`crate::dns::uncache`]), so that Android's resolver keeps none of them.
     uncached_answers: AtomicBool,
@@ -856,6 +870,8 @@ impl Engine {
             chain = setting.chain.map(Arc::new);
             uncached_answers = setting.uncached_answers;
         }
+        let clock = platform.clock();
+        let quarter = clock.wall_ms() / logbook::SEGMENT_MS;
         let shared = Arc::new(Shared {
             platform,
             addresses: config.addresses,
@@ -875,11 +891,15 @@ impl Engine {
             resolvers: Resolvers::bundled(),
             owners: Owners::bundled(),
             next_id: AtomicU64::new(0),
+            clock,
+            quarter: AtomicU64::new(quarter),
             live: Mutex::default(),
             lookups: Mutex::default(),
             wire: Mutex::default(),
             pending_log: Mutex::default(),
             log_ready: Notify::new(),
+            flushes: Mutex::default(),
+            flush_wanted: Notify::new(),
             uncached_answers: AtomicBool::new(uncached_answers),
             chain: Mutex::new(chain),
             chains: AtomicU64::new(0),
@@ -1025,11 +1045,12 @@ impl Engine {
     }
 
     /// Hands the log every waiting record now, with a segment of each open flow up to now, as the
-    /// quarter hour would: for the end-to-end test, which cannot wait.
+    /// quarter hour would: for the end-to-end test, which cannot wait. The engine's thread makes the
+    /// flush, between its counts, and this waits until it has handed the records on, at most ten
+    /// seconds; nothing is left to flush once the engine has stopped.
     pub fn flush_log(&self) {
-        self.shared.checkpoint(now_ms());
-        if let Some(batch) = self.shared.take_log() {
-            self.shared.platform.log(&batch);
+        if self.thread.as_ref().is_some_and(|t| !t.is_finished()) {
+            let _ = self.shared.ask_flush(Duration::from_secs(10));
         }
     }
 
@@ -1147,6 +1168,8 @@ async fn run(
     if let Some(batch) = state.shared.take_log() {
         state.shared.platform.log(&batch);
     }
+    // A flush asked meanwhile is answered by what was just handed on.
+    lock(&state.shared.flushes).clear();
 }
 
 impl Loop {
@@ -1374,7 +1397,7 @@ mod tests {
         shared_with(Arc::new(NoPlatform))
     }
 
-    fn shared_with(platform: Arc<dyn Platform>) -> Shared {
+    pub(super) fn shared_with(platform: Arc<dyn Platform>) -> Shared {
         Shared {
             platform,
             addresses: Addresses::COMMON,
@@ -1399,11 +1422,15 @@ mod tests {
             ),
             owners: Owners::default(),
             next_id: AtomicU64::new(0),
+            clock: Arc::new(SystemClock),
+            quarter: AtomicU64::new(0),
             live: Mutex::default(),
             lookups: Mutex::default(),
             wire: Mutex::default(),
             pending_log: Mutex::default(),
             log_ready: Notify::new(),
+            flushes: Mutex::default(),
+            flush_wanted: Notify::new(),
             uncached_answers: AtomicBool::new(false),
             chain: Mutex::new(None),
             chains: AtomicU64::new(0),
@@ -1582,7 +1609,10 @@ mod tests {
 
     #[test]
     fn the_log_gets_segments_of_open_flows_their_ends_and_lookups() {
-        let shared = shared();
+        // 2026-11-17, 22:10 UTC.
+        let clock = clock::ManualClock::at(1_794_873_600_000 + (22 * 60 + 10) * 60_000);
+        let mut shared = shared();
+        shared.clock = clock.clone();
         let flow = |id: u64, destination: SocketAddr, outcome| Flow {
             id,
             protocol: TCP,
@@ -1614,14 +1644,11 @@ mod tests {
         shared.lookup(Some(UID), 70);
         shared.lookup(Some(UID), 72);
         shared.lookup_answered(Some(UID), 300);
-        bytes.add_up(100);
-        bytes.add_wire_up(140);
-        bytes.add_down(5_000);
-        bytes.add_wire_down(5_200);
-        let started = lock(&shared.live)[&1].start;
-        // A quarter hour passes: the open flow's first segment, and the lookups.
-        shared.checkpoint(started + 1);
-        bytes.add_down(700);
+        bytes.up(&shared, 100, 140);
+        bytes.down(&shared, 5_000, 5_200);
+        // A quarter hour passes: the next count cuts the open flow's first segment, and the lookups.
+        clock.pass(5 * 60_000);
+        bytes.down(&shared, 700, 0);
         shared.finish(1);
         shared.finish(1);
         let records = std::mem::take(&mut *lock(&shared.pending_log));
@@ -1766,6 +1793,97 @@ mod tests {
             (&b"slow 1"[..], &b"slow 2"[..])
         );
         assert!(started.elapsed() >= delay);
+        Ok(())
+    }
+
+    /// A night's sleep on a UDP flow through the engine's loop and its mapping (finding 4): the evening's
+    /// datagram and answer stay in their quarter hour, 22:00 to 22:15, when the morning's datagram from
+    /// the app ends the sleep, or the server's answer does, and the morning's bytes go in the segment of
+    /// 06:15. The app's datagram is counted by the loop as it leaves; the server's by the mapping's task,
+    /// as it comes in.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_sleep_ended_by_a_udp_datagram_either_way_is_cut_before_it_is_counted()
+    -> io::Result<()> {
+        for apps_first in [true, false] {
+            let server = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+            let to = server.local_addr()?;
+            let evening = 1_794_873_600_000 + (22 * 60 + 10) * 60_000;
+            let morning = evening + (8 * 60 + 6) * 60_000;
+            let clock = clock::ManualClock::at(evening);
+            let mut shared = shared();
+            shared.clock = clock.clone();
+            let shared = Arc::new(shared);
+            let (engine_end, app_end) = std::os::unix::net::UnixDatagram::pair()?;
+            engine_end.set_nonblocking(true)?;
+            app_end.set_nonblocking(true)?;
+            let app = tokio::net::UnixDatagram::from_std(app_end)?;
+            let (_stop, stop) = watch::channel(false);
+            let (_network, network) = watch::channel(0);
+            let (_swaps, swaps) = mpsc::unbounded_channel();
+            tokio::spawn(run(
+                Tun::new(OwnedFd::from(engine_end))?,
+                1500,
+                Arc::clone(&shared),
+                stop,
+                network,
+                swaps,
+            ));
+            let me = SocketAddr::from((Addresses::COMMON.tun4, 40_000));
+            let datagram =
+                |payload: &[u8]| packet::udp(me, to, payload).ok_or(io::ErrorKind::InvalidData);
+            let mut buffer = [0u8; 512];
+            app.send(&datagram(b"evening")?).await?;
+            let (_, mapping) = server.recv_from(&mut buffer).await?;
+            server.send_to(b"answer", mapping).await?;
+            answer(&app).await?;
+            let Some(bytes) = lock(&shared.live)
+                .values()
+                .next()
+                .map(|l| Arc::clone(&l.bytes))
+            else {
+                unreachable!("the flow is live")
+            };
+            let evening_counts = bytes.now();
+            assert_eq!(evening_counts[..2], [7, 6]);
+
+            clock.set(morning);
+            let morning_counts = if apps_first {
+                let sent = datagram(b"good morning")?;
+                app.send(&sent).await?;
+                server.recv_from(&mut buffer).await?;
+                [12, 0, sent.len() as u64, 0]
+            } else {
+                server.send_to(b"push message", mapping).await?;
+                let (_, payload) = answer(&app).await?;
+                assert_eq!(payload, b"push message");
+                [0, 12, 0, 12 + 28]
+            };
+            let written: Vec<_> = lock(&shared.pending_log)
+                .iter()
+                .map(|r| match r {
+                    Record::Segment {
+                        start, end, bytes, ..
+                    } => (*start, *end, *bytes),
+                    Record::Lookups { .. } => (0, 0, [0; 4]),
+                })
+                .collect();
+            let quarter = |t: u64| t / logbook::SEGMENT_MS * logbook::SEGMENT_MS;
+            assert_eq!(
+                written,
+                vec![(
+                    evening,
+                    quarter(evening) + logbook::SEGMENT_MS,
+                    evening_counts
+                )],
+                "the app's first: {apps_first}"
+            );
+            let live = lock(&shared.live);
+            let Some(open) = live.values().next() else {
+                unreachable!("the flow is live")
+            };
+            assert_eq!(open.start, quarter(morning));
+            assert_eq!(logbook::delta(open.bytes.now(), open.base), morning_counts);
+        }
         Ok(())
     }
 
@@ -2921,7 +3039,9 @@ mod tests {
     /// reaches the flow's last segment, which ends at the last packet, not when the rewriting went.
     #[test]
     fn a_closed_flows_last_segment_holds_what_the_tunnel_carried_after_its_relay() {
-        let shared = shared();
+        let clock = clock::ManualClock::at(1_794_873_600_000 + (22 * 60 + 10) * 60_000);
+        let mut shared = shared();
+        shared.clock = clock.clone();
         let Some(bytes) = shared.record(Flow {
             id: 1,
             protocol: TCP,
@@ -2938,15 +3058,16 @@ mod tests {
         }) else {
             unreachable!("an open flow is live")
         };
-        bytes.add_down(2_000_000);
-        bytes.add_wire_down(1_500_000);
+        bytes.down(&shared, 2_000_000, 1_500_000);
         // The relay is done; the rest of the download is still on its way to the app.
-        bytes.add_wire_down(570_000);
-        bytes.add_wire_up(19_000);
+        clock.pass(30);
+        bytes.down(&shared, 0, 570_000);
+        clock.pass(30);
+        bytes.up(&shared, 0, 19_000);
         let last = bytes.last.load(Ordering::Relaxed);
-        assert!(last > 0);
+        assert_eq!(last, clock.wall_ms());
         // The rewriting lingers on, silent, before it goes.
-        std::thread::sleep(Duration::from_millis(20));
+        clock.pass(5_000);
         shared.finish_closed(1);
         shared.finish_closed(1);
         let records = std::mem::take(&mut *lock(&shared.pending_log));

@@ -175,8 +175,9 @@ impl Loop {
         let lookup = lock(&self.nat).lookup(parsed.source, parsed.destination, syn, now);
         match lookup {
             Lookup::Open { port, to, relayed } if relayed || to == listener => {
-                if let Some(bytes) = lock(&self.shared.wire).get(&port) {
-                    bytes.add_wire_up(packet.len());
+                let bytes = lock(&self.shared.wire).get(&port).cloned();
+                if let Some(bytes) = bytes {
+                    bytes.up(&self.shared, 0, packet.len());
                 }
                 // To the listener the connection was rewritten to: a relayed one stays on its port
                 // when a listener is bound anew.
@@ -290,8 +291,9 @@ impl Loop {
         // connection from the sweep: one dropped above leaves it to be forgotten.
         if packet::set_ends(packet, parsed, entry.destination, entry.app).is_some() {
             lock(&self.nat).seen(port, now);
-            if let Some(bytes) = lock(&self.shared.wire).get(&port) {
-                bytes.add_wire_down(packet.len());
+            let bytes = lock(&self.shared.wire).get(&port).cloned();
+            if let Some(bytes) = bytes {
+                bytes.down(&self.shared, 0, packet.len());
             }
             if reset && !entry.relayed {
                 self.reset_before_the_relay(port, now, None);
@@ -480,7 +482,7 @@ fn rewritten(
     (shared, nat, pending): (&Shared, &Mutex<Nat>, &Pending),
 ) -> Option<Vec<u8>> {
     if let Some(bytes) = &bytes {
-        bytes.add_wire_up(held.packet.len());
+        bytes.up(shared, 0, held.packet.len());
         lock(&shared.wire).insert(held.port, Arc::clone(bytes));
     }
     lock(pending).insert(
@@ -796,7 +798,7 @@ async fn relay(mut app: TcpStream, mut upstream: Upstream, shared: &Arc<Shared>)
                 }
                 Counters::add(&shared.counters.bytes_up, n as u64);
                 if let Some(bytes) = bytes {
-                    bytes.add_up(n);
+                    bytes.up(shared, n, 0);
                 }
             }
             let _ = up_write.shutdown().await;
@@ -815,7 +817,7 @@ async fn relay(mut app: TcpStream, mut upstream: Upstream, shared: &Arc<Shared>)
                 }
                 Counters::add(&shared.counters.bytes_down, n as u64);
                 if let Some(bytes) = bytes {
-                    bytes.add_down(n);
+                    bytes.down(shared, n, 0);
                 }
             }
             let _ = app_write.shutdown().await;
@@ -876,7 +878,141 @@ async fn drain(stream: &TcpStream) {
 
 #[cfg(test)]
 mod tests {
+    use super::super::clock::ManualClock;
+    use super::super::tests::shared;
+    use super::super::{DnsUse, logbook::SEGMENT_MS};
     use super::*;
+    use crate::log::Record;
+
+    /// 2026-11-17, 22:10 UTC.
+    const EVENING: u64 = 1_794_873_600_000 + (22 * 60 + 10) * 60_000;
+    /// 06:16 the next morning, after a night's sleep.
+    const MORNING: u64 = EVENING + (8 * 60 + 6) * 60_000;
+
+    /// A relayed connection between two pairs of loopback sockets: the app's end, the server's, and
+    /// the flow's bytes, with the log's clock at 22:10.
+    async fn relayed(shared: &Arc<Shared>) -> io::Result<(TcpStream, TcpStream, Arc<FlowBytes>)> {
+        let pair = || async {
+            let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
+            let near = TcpStream::connect(listener.local_addr()?).await?;
+            let (far, _) = listener.accept().await?;
+            io::Result::Ok((near, far))
+        };
+        let (app, app_end) = pair().await?;
+        let (upstream, server) = pair().await?;
+        let destination = server.local_addr()?;
+        let Some(bytes) = shared.record(Flow {
+            id: 1,
+            protocol: TCP,
+            app: app.local_addr()?,
+            destination,
+            uid: Some(10_123),
+            outcome: Outcome::Opened,
+            name: None,
+            named_by: NamedBy::Unknown,
+            ech: Ech::Absent,
+            dns: DnsUse::None,
+            resolver: None,
+            network: None,
+        }) else {
+            unreachable!("an open flow is live")
+        };
+        let upstream = Upstream {
+            stream: upstream,
+            opened: Opened {
+                id: 1,
+                port: destination.port(),
+                dns: DnsUse::None,
+            },
+            bytes: Some(Arc::clone(&bytes)),
+        };
+        let shared = Arc::clone(shared);
+        tokio::spawn(async move { relay(app_end, upstream, &shared).await });
+        Ok((app, server, bytes))
+    }
+
+    /// The log's segments written so far, as (start, end, bytes), and where the open one starts.
+    fn cut_so_far(shared: &Shared) -> (Vec<(u64, u64, [u64; 4])>, u64) {
+        let written = lock(&shared.pending_log)
+            .iter()
+            .filter_map(|r| match r {
+                Record::Segment {
+                    start, end, bytes, ..
+                } => Some((*start, *end, *bytes)),
+                Record::Lookups { .. } => None,
+            })
+            .collect();
+        (written, lock(&shared.live)[&1].start)
+    }
+
+    /// A night's sleep ended by the server's bytes on a relayed connection, as by a push message: the
+    /// relay cuts the flow's segment at 22:15 before it counts them, and they go in the segment of 06:15.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_sleep_ended_by_the_servers_bytes_is_cut_by_the_relay_before_it_counts()
+    -> io::Result<()> {
+        let clock = ManualClock::at(EVENING);
+        let mut shared = shared();
+        shared.clock = clock.clone();
+        let shared = Arc::new(shared);
+        let (mut app, mut server, bytes) = relayed(&shared).await?;
+        let mut got = [0u8; 64];
+        server.write_all(b"evening").await?;
+        app.read_exact(&mut got[..7]).await?;
+        clock.set(MORNING);
+        server.write_all(b"push message").await?;
+        app.read_exact(&mut got[..12]).await?;
+        for _ in 0..100 {
+            if bytes.now()[1] == 19 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let quarter = |t: u64| t / SEGMENT_MS * SEGMENT_MS;
+        assert_eq!(
+            cut_so_far(&shared),
+            (
+                vec![(EVENING, quarter(EVENING) + SEGMENT_MS, [0, 7, 0, 0])],
+                quarter(MORNING)
+            )
+        );
+        assert_eq!(bytes.now(), [0, 19, 0, 0]);
+        Ok(())
+    }
+
+    /// The same, ended by the app's bytes.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_sleep_ended_by_the_apps_bytes_is_cut_by_the_relay_before_it_counts() -> io::Result<()>
+    {
+        let clock = ManualClock::at(EVENING);
+        let mut shared = shared();
+        shared.clock = clock.clone();
+        let shared = Arc::new(shared);
+        let (mut app, mut server, bytes) = relayed(&shared).await?;
+        let mut got = [0u8; 64];
+        app.write_all(b"evening").await?;
+        server.read_exact(&mut got[..7]).await?;
+        clock.set(MORNING);
+        app.write_all(b"good morning").await?;
+        server.read_exact(&mut got[..12]).await?;
+        // The relay counts after its write, which the server's read can come before: it is counted by
+        // the time the relay waits for the app again.
+        for _ in 0..100 {
+            if bytes.now()[0] == 19 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let quarter = |t: u64| t / SEGMENT_MS * SEGMENT_MS;
+        assert_eq!(
+            cut_so_far(&shared),
+            (
+                vec![(EVENING, quarter(EVENING) + SEGMENT_MS, [7, 0, 0, 0])],
+                quarter(MORNING)
+            )
+        );
+        assert_eq!(bytes.now(), [19, 0, 0, 0]);
+        Ok(())
+    }
 
     /// A lack of descriptors or memory pauses the accept loop; an error of one connection, which took
     /// that connection off the queue, does not (second round, nit 1).

@@ -3215,8 +3215,7 @@ fn count_sent(
         Ok(n) => {
             Counters::add(&shared.counters.bytes_up, n as u64);
             if let Some(bytes) = bytes {
-                bytes.add_up(n);
-                bytes.add_wire_up(packet.len());
+                bytes.up(shared, n, packet.len());
             }
             None
         }
@@ -4397,7 +4396,7 @@ fn read_mapped(
         match told_to((app, destination), &error, &sent) {
             Some(packet) => {
                 if let Some(bytes) = &bytes {
-                    bytes.add_wire_down(packet.len());
+                    bytes.down(shared, 0, packet.len());
                 }
                 read.told.passed(error.told);
                 read.packets.push(packet);
@@ -4521,19 +4520,18 @@ fn deliver(
     learns: bool,
 ) -> Option<Vec<u8>> {
     Counters::add(&shared.counters.bytes_down, answer.len() as u64);
-    if let Some(bytes) = bytes {
-        bytes.add_down(answer.len());
-    }
     // An app's own resolver names only that app's flows.
     if learns && from.port() == 53 && uid.is_some() {
         shared.learn(answer, uid);
     }
-    let mut packet = packet::udp(from, app, answer)?;
+    let packet = packet::udp(from, app, answer);
+    // The answer, and its packet if one could be made: setting the hop limit keeps its length.
+    if let Some(bytes) = bytes {
+        bytes.down(shared, answer.len(), packet.as_ref().map_or(0, Vec::len));
+    }
+    let mut packet = packet?;
     if let Some(hops) = arrived {
         packet::set_hops(&mut packet, hops);
-    }
-    if let Some(bytes) = bytes {
-        bytes.add_wire_down(packet.len());
     }
     Some(packet)
 }
@@ -4665,7 +4663,7 @@ async fn open_lookups(
             table.put(key, UdpEntry::Open(open));
         }
     }
-    // Counted before the answers can be: an answer is counted only for a lookup already counted.
+    // Counted before the answers can be, so that an answer is counted with its lookup.
     for length in lookups {
         shared.lookup(uid, length);
     }

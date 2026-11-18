@@ -26,12 +26,13 @@ use jni::{EnvUnowned, JValue, JavaVM, jni_sig, jni_str};
 /// Never held while the engine's thread is joined (take the engine out, then stop it), and never held
 /// across a call into Kotlin that could call back into this file: `ownerUid`, `protectSocket` and
 /// `logRecords`, reached from the engine, must not call a native method of `Engine` while they run.
-/// One exception is kept on purpose: `nativeFlushLog` hands records to `logRecords` under the lock,
-/// which writes them and returns. `nativeSwapTunnel` holds it while the engine's thread takes the new
-/// tunnel, so that the engine stays in place and a chain set meanwhile reaches it after: that thread
-/// never takes this lock, and the Kotlin code it reaches, the three callbacks above, from tokio's
-/// blocking threads or from the engine's own thread as its loop ends (`logRecords`), never calls a
-/// native method of `Engine`.
+/// Two exceptions are kept on purpose, both waits for the engine's thread under the lock:
+/// `nativeFlushLog` holds it while that thread flushes the log and hands the records to `logRecords`,
+/// at most ten seconds (finding 4: the flush is made between the engine's counts), and
+/// `nativeSwapTunnel` while it takes the new tunnel, so that the engine stays in place and a chain set
+/// meanwhile reaches it after. That thread never takes this lock, and the Kotlin code it reaches, the
+/// three callbacks above, from tokio's blocking threads or from the engine's own thread as its loop ends
+/// (`logRecords`), never calls a native method of `Engine`.
 static ENGINE: Mutex<Option<Engine>> = Mutex::new(None);
 
 fn engine() -> MutexGuard<'static, Option<Engine>> {
