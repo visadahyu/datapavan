@@ -9,8 +9,10 @@
 //! reconnects after a night to an address it got before it is named by the name it asked for. But a
 //! name kept so through a night is old in real time, and set beside the name a connection itself sent
 //! it would show as a difference what is only its age. So each entry also keeps when it ends in time
-//! since the phone started, sleep included, and only an entry still held by that clock stands beside a
-//! connection's own name ([`Names::held`]; review 1 of W5's first part, engine, finding 7).
+//! since the phone started, sleep included, which a flow named by it carries: only while that answer is
+//! still held by that clock does its name stand beside a connection's own ([`Names::get_held`]; review 1
+//! of W5's first part, engine, finding 7). A later answer for the address does not end it: on an address
+//! that serves many names, another app's lookup re-points it often (review 2).
 //!
 //! The answers Android's resolver gave through Watch name every app's flows. The answers an app got
 //! from a resolver of its own, past Watch's (plain DNS to another server), name only that app's flows:
@@ -165,10 +167,17 @@ impl Names {
         (now, boot): (Instant, Duration),
     ) {
         let keep = Duration::from_secs(u64::from(ttl)).clamp(MIN_KEEP, MAX_KEEP);
+        // A failed reading of the time since start (the longest time there is) holds the name for no time:
+        // it names flows still, and stands beside none (review 2 of W5's first part).
+        let held_until = if boot == Duration::MAX {
+            Duration::ZERO
+        } else {
+            boot.saturating_add(keep)
+        };
         let given = Given {
             name: name.to_owned(),
             until: now + keep,
-            held_until: boot.saturating_add(keep),
+            held_until,
         };
         self.addresses.insert(scope, address, given);
     }
@@ -197,19 +206,18 @@ impl Names {
             .map(|given| given.name.as_str())
     }
 
-    /// Whether the name [`Names::get`] gives for `address` and the app with `uid` is `name`, and is
-    /// still held in time since the phone started (`boot`), its sleep included: whether it may stand
-    /// beside the name a connection sent, as a difference that is not only its age.
+    /// The name [`Names::get`] gives, and until when, in time since the phone started, its answer is
+    /// held: while it is, the name may stand beside the name a connection sent, as a difference that is
+    /// not only its age.
     #[must_use]
-    pub fn held(
+    pub fn get_held(
         &self,
         address: IpAddr,
         uid: Option<u32>,
-        name: &str,
-        (now, boot): (Instant, Duration),
-    ) -> bool {
+        now: Instant,
+    ) -> Option<(&str, Duration)> {
         self.given(address, uid, now)
-            .is_some_and(|given| given.name == name && given.held_until > boot)
+            .map(|given| (given.name.as_str(), given.held_until))
     }
 
     fn given(&self, address: IpAddr, uid: Option<u32>, now: Instant) -> Option<&Given> {
@@ -245,28 +253,25 @@ mod tests {
     /// An hour after the phone started.
     const BOOT: Duration = Duration::from_hours(1);
 
-    /// A name is held beside a connection's own for its keep in time since start, sleep included: after
-    /// a night, though the monotonic clock moved a minute, it names flows still and is held no more; a
-    /// name the address was not given is not held.
+    /// A name's answer is held for its keep in time since start, sleep included: after a night, though the
+    /// monotonic clock moved a minute, it names flows still, held until a time long past; a failed
+    /// reading of the time since start holds it for none.
     #[test]
-    fn a_name_kept_through_a_night_names_flows_but_stands_beside_none() {
+    fn an_answer_is_held_for_its_keep_in_time_since_start() {
         let mut names = Names::default();
         let now = Instant::now();
         let a = IpAddr::V4(Ipv4Addr::new(93, 184, 216, 34));
         names.insert(a, None, "www.example.com", 60, (now, BOOT));
         let minute = now + Duration::from_mins(1);
-        assert!(names.held(
-            a,
-            Some(10_123),
-            "www.example.com",
-            (minute, BOOT + Duration::from_mins(59))
-        ));
-        assert!(!names.held(a, None, "other.example", (minute, BOOT)));
-        // Held until its hold ends, not at its end.
-        assert!(!names.held(a, None, "www.example.com", (minute, BOOT + MIN_KEEP)));
-        let night = BOOT + Duration::from_hours(8);
-        assert_eq!(names.get(a, None, minute), Some("www.example.com"));
-        assert!(!names.held(a, None, "www.example.com", (minute, night)));
+        assert_eq!(
+            names.get_held(a, Some(10_123), minute),
+            Some(("www.example.com", BOOT + MIN_KEEP))
+        );
+        names.insert(a, None, "www.example.com", 60, (now, Duration::MAX));
+        assert_eq!(
+            names.get_held(a, None, minute),
+            Some(("www.example.com", Duration::ZERO))
+        );
     }
 
     #[test]

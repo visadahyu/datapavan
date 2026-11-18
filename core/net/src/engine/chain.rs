@@ -350,6 +350,8 @@ mod tests {
                 port: 443,
                 dns: DnsUse::None,
                 uid: Some(uid),
+                // As the answer that named it gave it: held an hour.
+                dns_held_until: when.1 + std::time::Duration::from_hours(1),
             };
             shared.hello(opened, &hello, NamedBy::Tls);
         }

@@ -372,8 +372,9 @@ pub enum Outcome {
 /// lookup may have named it last (finding 20 of the independent review of 2026-11-09; ADR 0044, decision
 /// 4). Either can be wrong, the connection's own when an app sends a front, so a DNS name it differs
 /// from stays beside it ([`Flow::dns_name`]), while it is current: a stand-in's, tied to its address
-/// alone, always; an answer's while the answer is held in time since the phone started, so that a name
-/// kept through a night does not show its age as a difference. A stand-in's flow is named by its hello
+/// alone, always; an answer's while the answer that named the flow is held in time since the phone
+/// started, so that a name kept through a night does not show its age as a difference, while a later
+/// answer for the address does not end it ([`Opened::dns_held_until`]). A stand-in's flow is named by its hello
 /// too, one rule for every flow: the hello says which server the app spoke to at the address the tool
 /// reached. A hello's name that is the public name of an ECH configuration Watch saw, in Android's
 /// resolver's answers or the app's own, never names a flow ([`Ech::Hidden`]): a DNS name stays the
@@ -482,6 +483,10 @@ struct Opened {
     dns: DnsUse,
     /// The app's UID, if Android named it: whose ECH public names hide the hello's name.
     uid: Option<u32>,
+    /// Until when, in time since the phone started, the answer that gave the flow its DNS name is held:
+    /// while it is, that name stands beside a differing name its hello sends. The longest time there is
+    /// for a stand-in's name, which names its address alone; nought for no DNS name.
+    dns_held_until: Duration,
 }
 
 /// The engine's settings.
@@ -1493,6 +1498,7 @@ mod tests {
             name,
             named_by,
             network,
+            held_until,
         } = shared.begin(destination, Some(uid));
         let by_dns = (named_by == NamedBy::Dns)
             .then_some(name.as_deref())
@@ -1519,6 +1525,7 @@ mod tests {
             port: destination.port(),
             dns,
             uid: Some(uid),
+            dns_held_until: held_until,
         }
     }
 
@@ -1718,6 +1725,26 @@ mod tests {
         assert_eq!(
             names(by_stand_in.id),
             (Some("other.example"), NamedBy::Tls, Some("chained.example"))
+        );
+    }
+
+    /// The answer that named the flow decides whether its name stands beside the hello's (review 2 of W5's
+    /// first part): another lookup that re-points the address to another name between the flow's start
+    /// and its hello, as on an address that serves many names, does not drop it.
+    #[test]
+    fn a_later_answer_for_the_address_leaves_the_flows_dns_name_beside() {
+        let shared = shared();
+        let asked = SocketAddr::from(([93, 184, 216, 34], 443));
+        let when = (Instant::now(), shared.clock.since_boot());
+        lock(&shared.names).insert(asked.ip(), None, "www.example.com", 60, when);
+        let opened = open_flow(&shared, asked);
+        lock(&shared.names).insert(asked.ip(), None, "cdn-tenant.example", 60, when);
+        shared.hello(opened, &hello("other.example", false), NamedBy::Tls);
+        let live = lock(&shared.live);
+        let flow = &live[&opened.id].flow;
+        assert_eq!(
+            (flow.name.as_deref(), flow.dns_name.as_deref()),
+            (Some("other.example"), Some("www.example.com"))
         );
     }
 

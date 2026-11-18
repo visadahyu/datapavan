@@ -535,6 +535,8 @@ impl Peer {
             flow.named_by = NamedBy::Dns;
             (flow.dns, flow.resolver) = shared.dns_use(address, Some(name));
             opened.dns = flow.dns;
+            // A stand-in's name names its address alone: held while the stand-in lives.
+            opened.dns_held_until = std::time::Duration::MAX;
         }
         Self {
             opened,
@@ -4798,6 +4800,7 @@ fn begin_udp(
         name,
         named_by,
         network,
+        held_until,
     } = shared.begin(destination, uid);
     let by_dns = (named_by == NamedBy::Dns)
         .then_some(name.as_deref())
@@ -4808,6 +4811,7 @@ fn begin_udp(
         port: destination.port(),
         dns,
         uid,
+        dns_held_until: held_until,
     };
     let flow = Flow {
         id,

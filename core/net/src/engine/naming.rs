@@ -8,7 +8,7 @@ use crate::standins::is_stand_in;
 use crate::tls::Hello;
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// A new flow's number and first name.
 pub(super) struct Begun {
@@ -16,6 +16,8 @@ pub(super) struct Begun {
     pub(super) name: Option<String>,
     pub(super) named_by: NamedBy,
     pub(super) network: Option<Network>,
+    /// Until when, in time since the phone started, the DNS name is held ([`Opened::dns_held_until`]).
+    pub(super) held_until: Duration,
 }
 
 impl Shared {
@@ -37,14 +39,18 @@ impl Shared {
                 name,
                 named_by,
                 network: None,
+                held_until: Duration::MAX,
             };
         }
-        if let Some(name) = lock(&self.names).get(destination.ip(), uid, Instant::now()) {
+        if let Some((name, held_until)) =
+            lock(&self.names).get_held(destination.ip(), uid, Instant::now())
+        {
             return Begun {
                 id,
                 name: Some(name.to_owned()),
                 named_by: NamedBy::Dns,
                 network: None,
+                held_until,
             };
         }
         match self
@@ -62,6 +68,7 @@ impl Shared {
                     }),
                     name: Some(owner.map_or(organisation.name, |o| o.name.clone())),
                     named_by: NamedBy::Organisation,
+                    held_until: Duration::ZERO,
                 }
             }
             None => Begun {
@@ -69,6 +76,7 @@ impl Shared {
                 name: None,
                 named_by: NamedBy::Unknown,
                 network: None,
+                held_until: Duration::ZERO,
             },
         }
     }
@@ -102,10 +110,12 @@ impl Shared {
     /// which names who runs the network rather than the server, gives way, as before. A chained app's
     /// flow, whose destination stays out of the log, takes no name in it.
     ///
-    /// A DNS name stands beside the connection's own only while it is current ([`Shared::current_dns`]):
-    /// a stand-in's always, an answer's while it is held in time since the phone started. A name kept
-    /// through a night on the monotonic clock still names a flow that sends no name of its own, but beside
-    /// another it would show its age as a difference (review 1 of W5's first part, engine, finding 7).
+    /// A DNS name stands beside the connection's own only while the answer that named the flow is held,
+    /// in time since the phone started, as the flow carries it from its start
+    /// ([`Opened::dns_held_until`]): a stand-in's always. A name kept through a night on the monotonic
+    /// clock still names a flow that sends no name of its own, but beside another it would show its age as
+    /// a difference (review 1 of W5's first part, engine, finding 7); a later answer for the address
+    /// does not end it (review 2).
     ///
     /// The mark of the app's own DNS follows the name that names the flow: renamed by its hello, the flow
     /// is marked again from its port, its address and the hello's name, so that a mark its DNS name alone
@@ -235,10 +245,10 @@ impl Shared {
                 .as_ref()
                 .is_some_and(|(_, named_by, _)| named_by.yields_to(by));
         let beside = match &state {
-            Some((destination, NamedBy::Dns, Some(dns)))
+            Some((_, NamedBy::Dns, Some(dns)))
                 if renames
                     && !same_name(dns, &hello.name)
-                    && self.current_dns(*destination, opened.uid, dns) =>
+                    && opened.dns_held_until > self.clock.since_boot() =>
             {
                 Some(dns.clone())
             }
@@ -253,20 +263,6 @@ impl Shared {
             beside,
             mark,
         }
-    }
-
-    /// Whether the DNS name `dns` that named the flow of the app with `uid` to `destination` is current,
-    /// and may stand beside the name its connection sent: a stand-in's, which names that address alone
-    /// while the stand-in lives (ADR 0038), always; an answer's while the answer that gave it is held in
-    /// time since the phone started, sleep included ([`crate::names::Names::held`]).
-    fn current_dns(&self, destination: SocketAddr, uid: Option<u32>, dns: &str) -> bool {
-        is_stand_in(destination.ip())
-            || lock(&self.names).held(
-                destination.ip(),
-                uid,
-                dns,
-                (Instant::now(), self.clock.since_boot()),
-            )
     }
 
     /// Learns the names in a DNS answer passed back to an app, and the public names of its ECH

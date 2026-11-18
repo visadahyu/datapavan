@@ -411,6 +411,7 @@ async fn open(
         name,
         named_by,
         network,
+        held_until,
     } = shared.begin(destination, uid);
     let by_dns = (named_by == NamedBy::Dns)
         .then_some(name.as_deref())
@@ -421,6 +422,7 @@ async fn open(
         port: destination.port(),
         dns,
         uid,
+        dns_held_until: held_until,
     };
     let bytes = shared.record(Flow {
         id,
@@ -929,6 +931,7 @@ mod tests {
                 port: destination.port(),
                 dns: DnsUse::None,
                 uid: Some(10_123),
+                dns_held_until: Duration::ZERO,
             },
             bytes: Some(Arc::clone(&bytes)),
         };
