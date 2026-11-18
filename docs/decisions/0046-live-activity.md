@@ -78,7 +78,13 @@ app is then in one of three states:
   interacted with it, at that moment or within a grace period before it. The grace covers an upload that finishes
   after the user leaves the app. It starts at 30 seconds, and the lab run of decision 4 sets it;
 - **with its notification:** the app ran a foreground service, which Android shows the user (music, navigation,
-  an upload it announced);
+  an upload it announced). *Corrected 2026-11-18, fix round 3 of W5's second part:* only where Android shows that
+  notification. From Android 12 it may wait 10 seconds before it shows one [doc: Android 12 behavior changes, "UX
+  delay for foreground service notifications"], and from Android 13 it shows none in the drawer for an app whose
+  notifications are off, the default for an app until the user allows them [doc: "Notification runtime
+  permission"]. So a service counts from 10 seconds after its start on Android 12 and later, and only for an app
+  that holds `POST_NOTIFICATIONS` on Android 13 and later, read at each reading; otherwise its app is in the
+  background;
 - **in the background:** neither. Push syncs, jobs, widgets' updates and anything else the user did not start.
 
 Datapavan's minimum is Android 10 (API 29, ADR 0003), so every event above exists on every supported version.
@@ -320,6 +326,12 @@ A short section "What this view cannot see" sits at the end of "Now", in plain w
   loopback never enters the tunnel.
 - **Sizes** are what the apps sent and received through Watch. Android's data-usage screen also counts headers and
   resent packets, so it shows a little more.
+- **"With its notification" is what Android allows, not what the user saw** (noted 2026-11-18, fix round 3 of W5's
+  second part). A channel the user turned off, a vendor that hides some notifications, and below Android 13 an app
+  whose notifications the user turned off, which another app cannot see, still count "with its notification". A
+  media notification shows without the permission, so a player not allowed notifications counts in the background
+  while its notification shows. On Android 12 and later a service shorter than 10 seconds is in the background,
+  though Android shows some notifications at once.
 - **"In use" is what Android records of activities** (noted 2026-11-18, after the second review of W5's second part).
   Two things real apps meet follow from it. The feed left of the home screen on Google's launchers is the Google
   app's window over the launcher, not an activity of the Google app, so its traffic while the user scrolls it
@@ -515,7 +527,11 @@ this ADR left room, and why. Part 3 builds the screens on it.
   so that one app with about 273 busy flows and the screen off, read once a minute, lost 90 to 97 % of its
   states. Now 280 such flows lose 7.8 %, 300 lose 14.5 %, near what the share itself allows, and 250 none. What
   an app can still do to itself: past about 273 flows each counting every second with the screen off, or 17
-  short flows ending each second, part of its own traffic has no state, "told too late"; never another app's.
+  short flows ending each second, part of its own traffic has no state, "told too late"; never another app's. With
+  the screen off and a reading a minute, 400 busy flows lose 38 % of their states, 1,000 lose 78 % and 2,000 lose
+  92 % (measured in a release build, fix round 3, R10): a torrent client's peers on one mapping reach such counts.
+  A compact mark per flow, a map of its 120 seconds with the counts at the cuts, would let the bound hold far more;
+  it is left for the lab run to show the need.
   What is told too late is counted, in the engine's last counter, for all apps together: "Now" shows such bytes
   in no state without saying why (open for part 3, below). The engine asks Watch's Kotlin side for a reading when
   a flow opens, at each new second counted and when a segment is held for its states (at most every 5 seconds;
@@ -532,9 +548,12 @@ this ADR left room, and why. Part 3 builds the screens on it.
   leaves for events not reported yet, and the second itself, since a reading made at once after the second's ask may
   end before it and the next comes a period later. The window of 120 holds twice that, and the screen turning off
   reads once more, so that what was sent while it was on is placed then. A record then waits the log's usual 30
-  seconds of gathering. A flow open but idle is cut at each quarter hour, and its segment asks for its state, so the
-  tracker reads once a quarter hour while such a flow stays open and the phone is awake, beyond decision 1's "only
-  when traffic runs" (accepted: no alarm, and one reading in 15 minutes). In deep sleep nothing runs, since no alarm
+  seconds of gathering. A flow open but idle is cut at each quarter hour, and its segment asks for its state: the
+  reading made at once ends 2 seconds before the cut, so a second follows a reading's period later, two readings
+  each quarter hour while such a flow stays open and the phone is awake (fix round 3, the fresh review's n2). A UDP
+  flow ended by its timer, 120 seconds after its last datagram, waits the same way for the state of its end, and
+  asks (fix round 3, R7). Both go beyond decision 1's "only when traffic runs" (accepted: no alarm, and at most a
+  reading a minute with the screen off). In deep sleep nothing runs, since no alarm
   is set, so what waits is placed when the phone wakes. If Watch's process dies meanwhile, what waits is lost with
   it: the held segments and the live flows' open segments, as any record not yet handed to the log is (ADR 0044's
   table).
@@ -546,26 +565,41 @@ this ADR left room, and why. Part 3 builds the screens on it.
     split screen, it still is), while the screen is interactive, and while the lock screen is not over it unless
     the activity was resumed after the lock screen showed (a camera or a call over it);
   - an activity is known by its package and class only, since the instance is `@SystemApi`: a `STOPPED` that
-    comes within 10 seconds after a `RESUMED` of the same class that itself followed a `PAUSED`, with no `PAUSED`
+    comes within 30 seconds after a `RESUMED` of the same class that itself followed a `PAUSED`, with no `PAUSED`
     since, is another instance's stop and ends nothing. When a screen starts another of its own class, as AOSP
     Settings opens each sub-page, or Back returns to a first instance, Android pauses the one, resumes the other
     and then stops the first [doc: "Coordinating activities"], once the new one is idle or at its idle timeout,
-    10 seconds on a phone [code: `ActivityTaskSupervisor`]; that stop ended the app's use before (fix round 1,
-    Kotlin finding 1). An activity kept so ends as soon as another activity is resumed while it was not paused,
-    since a screen is always paused before another takes its place: an app whose process dies after a pause and
-    resume of its own screen (a permission dialog, a share sheet), or that kills itself so on purpose, stays in
-    use for its grace only, not until the phone restarts (fix round 2, N2). Events within one millisecond keep the
+    10 seconds on a phone, counted after the resume and before the stop's own round trip, so a stop the timeout
+    drives always comes after 10 seconds [code: `ActivityTaskSupervisor`, `completeResumeLocked`]: the 30 cover a
+    timeout multiplied by two and the round trip (fix round 3, R1; it was 10). That stop ended the app's use
+    before (fix round 1, Kotlin finding 1). An activity kept so ends when another activity is resumed within 2
+    seconds of that stop while it was not paused, as Android resumes the next screen at once when a process dies,
+    and when the screen turns off, which stops every screen shown and resumes it after: an app whose process dies
+    after a pause and resume of its own screen (a permission dialog, a share sheet), or that kills itself so on
+    purpose, stays in use for its grace only, not until the phone restarts (fix round 2, N2). A later resume
+    beside it, in another window of a split screen, ends nothing (fix round 3, R1: it ended a screen still shown). Events within one millisecond keep the
     order Android gave them, and an event read again in the overlap is matched once by its fields, so that a
     resume read twice does not undo the pause before it;
   - the default keyboard is in use while the screen is interactive and in the background while it is not, as
     decision 5 says, with no grace;
   - the grace is `UsageStates.GRACE_MS`, 30 seconds, one constant for the lab run to set;
   - each reading ends 2 seconds before the wall clock, for events not reported yet, and reads again the last 10
-    seconds of the one before, so that an event late or out of order within them places its moment again; the
+    seconds of the one before: an event late or out of order within them corrects the intervals told, which the
+    engine uses for seconds it has not placed yet, for its cuts and for the state now, but not for seconds it
+    placed already. For bytes, an event counts only if it was in Android's record 2 seconds after its moment
+    (corrected in fix round 3, the fresh review's m1: this said the overlap placed such moments again). AOSP
+    reports usage events to its service as they happen [code: `ActivityTaskManagerService`,
+    `UsageStatsService.reportEvent`], and the emulator's check counts those that came later than the margin
+    (`activity-late` in the debug dump). Waiting 10 seconds more before placing each second would cost "Now" and
+    the log as much, for a case the emulator does not show; the lab run measures it on phones. Past 256 intervals
+    of one app in the timeline, the one that ended first gives way (fix round 3, n3: the first a reading listed
+    did, which may be its newest). The
     first reading, and the first after one without access or one the engine did not take, reads back to the
     phone's start, at most 30 days, so that a foreground service started before Watch, as a messenger's or the
-    user's own tool's, is found (fix round 2, the fresh review's M1: it read back a day), while a reading that
-    finds no events keeps what is open;
+    user's own tool's, is found (fix round 2, the fresh review's M1: it read back a day), and after a clock set back
+    from what the set back carried (fix round 3, R3), while a reading that finds no events keeps what is open. One
+    that finds no change of the screen in Android's record takes the screen as the broadcasts last told it, not as
+    on (fix round 3, n4);
   - a wall clock set back is found against the time since the phone started, and by `ACTION_TIME_CHANGED`;
     readings begin anew from the moment it was found, carrying what is open with its times moved back by how far
     the clock went, so that the grace of an app just left runs on and the lock screen keeps its order (fix round
@@ -596,7 +630,9 @@ this ADR left room, and why. Part 3 builds the screens on it.
   is marked; turning "Log where these apps connect" off, or a chain that leaves an app out, drops its destinations
   at once, from the counts, from its flows and segments still waiting and from the organisations looked up
   (finding 1; fix round 2, N8), and marks the app through the tool only for flows that went through it, not for a
-  connection opened directly before the chain, which goes on directly (N3). A flow of no app waits for its second
+  connection opened directly before the chain, which goes on directly (N3). A TCP connection carries the route its
+  connect took into its record, so one whose connect straddles a chain switched on or off is shown, and logged,
+  the way it went (fix round 3, R2); any flow through the tool to a destination marks it so (R6). A flow of no app waits for its second
   to be over before it is placed, and a clock set back makes each flow note its next second anew, so that no byte
   counted after it is lost (findings 3 and 4). A clock set back by a second or more forgets the minutes later
   than the new clock's, and with them the bytes the old clock counted in them: the old clock's later minutes
@@ -617,7 +653,7 @@ this ADR left room, and why. Part 3 builds the screens on it.
   fuzzed. Building and encoding the snapshot of 100 apps with 20 destinations each, over the hour, took 0.82 ms on
   the development machine (202 KB), without the organisation table; its at most 64 lookups add about 3 ms at the
   review's 53 µs each, with no lock held.
-- **Tests.** In the engine, 70 tests: the placing of seconds, each reading's span, the cuts back in time and at a
+- **Tests.** In the engine, 75 tests: the placing of seconds, each reading's span, the cuts back in time and at a
   quiet end, the window, the bounds and each app's share at their edges, a busy app with the screen off, the clock
   set back, the asking, the counts by window, destinations and their organisations, the chain's switch, the
   snapshot's layout, the log's version 3, and an engine handing what it holds to the next, or failing to start
@@ -627,7 +663,7 @@ this ADR left room, and why. Part 3 builds the screens on it.
   flows of no app, with counts, ends, readings told from a true timeline of states in tenths of a second, two
   quarter hours, and in one run in six a reading without usage access, and 100 more with clocks set back; it
   checks against the truth each byte's state, where each cut falls, each segment's last state, each flow's records
-  end to end and in time order, and "Now"'s hour. In Watch's Kotlin side, 39: one for each rule of the tracker's
+  end to end and in time order, and "Now"'s hour. In Watch's Kotlin side, 47: one for each rule of the tracker's
   core, what a reading knows and when it is made, the reading rules at their edges, its readings' layout, the
   snapshot's and the log's readers. Hand mutants in cargo-mutants' manner, rerun after fix round 2 on the code as
   it is: of 114 in the engine (this part's 80, the four the second review found surviving, and 30 on the fix
@@ -638,7 +674,8 @@ this ADR left room, and why. Part 3 builds the screens on it.
   where the overlap's matching keeps one of each and the reading's end leaves it for the next; the overlap's start
   read once more, likewise; and the lock screen kept at a restart that clears every activity. (Fix round 1's
   "each event's effect is idempotent" was not true: a resume read twice undid the pause before it, which the
-  matching, now tested, prevents.) The emulator's watch
+  matching, now tested, prevents.) Each fix of fix round 3, reverted alone, fails a test (18 reverts: 7 in the
+  engine, 11 in the tracker's core); the hand mutants were not rerun in full for it. The emulator's watch
   shard runs `scripts/verify-activity.sh` (decision 6, items 1 and 6) and checks item 5 in `verify-chain.sh`. On
   the Android 15 emulator, 2026-11-18, every count matched what the workload apps logged, to the byte: 75,000
   bytes sent in the background, from a job, on a connection opened on screen and on a timer; the 3,046 before
@@ -647,20 +684,23 @@ this ADR left room, and why. Part 3 builds the screens on it.
   Android 15 emulator, every count again to the byte (the second at `a094f50`; `b926b94` after it only drops a
   rule of the set back's carry that could no longer matter, held by the JVM tests). The emulators of Android 10, 11 and 17 that decision 6
   names, and the A40, are still to run it.
-- **Accepted limits.** An activity whose `ACTIVITY_STOPPED` never comes stays visible while the screen is on (one
-  kept by the rule for a second instance ends at another screen's resume). Two windows of one app's same screen class resumed side by side in split screen end
-  when the other app's window resumes a screen, since Android does not tell instances apart: the rule for a second
-  instance holds only for a stop within 10 seconds of a resume, and ends at another screen's resume (N2). Android
-  stops a screen later than 10 seconds on a slow device, or one whose idle timeout is multiplied, and a second
-  instance there ends the app's use after its grace, as before fix round 1. No emulator check holds the self-kill:
-  the workload app would need a second process to send after its own died; the JVM tests hold the sequences. Watch's
-  stop waits up to 2 seconds on its main thread for the tracker's last reading, so that the engine has it before its
-  last flush: once, at stop, below Android's limits for a service. An event that comes more than 10 seconds late is
-  not read. A second that holds a moment in use is in use whole. A quiet stretch of more than 120 seconds after a
-  change of state belongs, beyond its last 120 seconds, to the segment before. A reading the engine did not take, as
-  in the moment the tunnel is set up again, leaves its span "not told" in the engine, while the tracker tells the
-  next one afresh. The log's records wait in memory for their states, as above, and are lost if the process dies
-  meanwhile.
+- **Accepted limits.** An activity whose `ACTIVITY_STOPPED` never comes stays visible while the screen is on, as
+  one whose process died while it was resumed with no pause before. A screen kept by the rule for a second
+  instance whose process then dies with no screen resumed within 2 seconds, as in split screen, stays in use until
+  the screen turns off. A stop of another instance later than 30 seconds after the resume, as with an idle timeout
+  multiplied more than twice, ends the app's use after its grace, as before fix round 1. No emulator check holds
+  the self-kill: the workload app would need a second process to send after its own died; the JVM tests hold the
+  sequences. Watch's stop waits up to 2 seconds on its main thread for the tracker's last reading, so that the
+  engine has it before its last flush: once, at stop, below Android's limits for a service. An event that comes
+  into Android's record more than 2 seconds late does not move bytes already placed, and one more than 10 seconds
+  late is not read at all. A second that holds a moment in use is in use whole. A quiet stretch of more than 120
+  seconds after a change of state belongs, beyond its last 120 seconds, to the segment before. A reading the engine
+  did not take, as in the moment the tunnel is set up again, leaves its span "not told" in the engine, while the
+  tracker tells the next one afresh. A foreground service started before the oldest event Android keeps, on a phone
+  not restarted since (Android prunes its record of events after some days), is never seen, and its app counts in
+  the background while it runs: the record is all an app may read, and the lab run checks whether Android hands an
+  app the day-rollover event of a running service (fix round 3, R3). The log's records wait in memory for their
+  states, as above, and are lost if the process dies meanwhile.
 - **Open for part 3 and W9.**
   - [ADR 0047](0047-profile-for-phones-that-may-be-searched.md), decision 3: under the profile for phones that may
     be searched, this run's flows in memory are cleared also when the screen turns off. The live counters keep the
@@ -679,3 +719,7 @@ this ADR left room, and why. Part 3 builds the screens on it.
     back an hour). Part 3 adds it with the summary (fix round 2, the fresh review's m6).
   - "Now" shows the bytes told too late in no state, without saying so; part 3 needs the reason by app, which
     the counters keep for all apps together only (N1).
+  - The lab run measures, on the A40 (Android 11) and the A56: how late usage events come into Android's record
+    (the dump's `activity-late`), which decides whether a second should wait for the overlap before it is placed
+    (fix round 3, the fresh review's m1); and what the first reading costs below Android 15, which reads every
+    kind of event back to the phone's start (R12).

@@ -61,6 +61,10 @@ Watch and the audit app, and the gap between Lite and Watch.
      ([Lookout](https://security.lookout.com/threat-intelligence/article/lookout-discovers-iranian-dchsy-surveillanceware)).
    - The older sentence, "Genuine Datapavan has no internet access", stays true of Basic. The release notes and the
      website say that the sentence changed.
+   - *Decided by the maintainer on 2026-11-18:* Basic's page "Is this copy genuine?" takes this two-edition
+     sentence with the release of Advanced's 0.2.0, not before. A Basic 0.1.3 released earlier keeps the current
+     sentence, since it would otherwise speak of an edition not yet out. Basic's own check line, "This copy has no
+     internet access", does not change. DESIGN.md's W9 row holds it as a gate of 0.2.0, with the texts it names.
 5. **Free.** Basic and Advanced are free for everyone, and no app takes payment. Enterprise is sold by contract,
    never in an app.
 6. **One family of icons, told apart by shape as well as colour, and by the name under the icon:**
