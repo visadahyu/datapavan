@@ -1190,6 +1190,8 @@ async fn run(
                 }
                 if swept.elapsed() > state.shared.limits.sweep_every {
                     state.sweep();
+                    // An app's own tables of names, once every name in them has expired.
+                    lock(&state.shared.names).forget_expired(Instant::now());
                     let dropped = lock(&state.fragments).sweep(Instant::now());
                     Counters::add(&state.shared.counters.fragments, dropped);
                     swept = Instant::now();

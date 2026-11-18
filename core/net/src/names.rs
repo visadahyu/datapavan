@@ -29,8 +29,10 @@
 //! [`CAPACITY`] addresses and [`PUBLIC_CAPACITY`] public names, and each app's own [`OWN_CAPACITY`] and
 //! [`OWN_PUBLIC_CAPACITY`]. So an app's own resolver can push out only that app's names, never Android's
 //! nor another app's (review 2 of W5's first part: in one table, an app's answers could push Android's
-//! public names out, and the provider's cover name named every other app's flows again). The memory grows
-//! with the apps that use a resolver of their own, by at most their own tables each.
+//! public names out, and the provider's cover name named every other app's flows again). At most
+//! [`OWN_SCOPES`] apps keep tables of their own: past that, the app whose own resolver answered last the
+//! longest ago loses its tables, and the engine's sweep drops an app's tables once every name in them has
+//! expired (review 3, nit 3). ADR 0044's decision 4 gives the memory this takes.
 
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hash;
@@ -44,11 +46,13 @@ pub const MAX_KEEP: Duration = Duration::from_hours(24);
 /// The most addresses kept from Android's resolver's answers.
 pub const CAPACITY: usize = 8192;
 /// The most addresses kept from one app's own resolver's answers.
-pub const OWN_CAPACITY: usize = 1024;
+pub const OWN_CAPACITY: usize = 512;
 /// The most public names kept from Android's resolver's answers.
 pub const PUBLIC_CAPACITY: usize = 256;
 /// The most public names kept from one app's own resolver's answers.
 pub const OWN_PUBLIC_CAPACITY: usize = 64;
+/// The most apps that keep tables of their own.
+pub const OWN_SCOPES: usize = 32;
 
 /// Whose flows a name may name: every app's, or only the app with this UID.
 pub type Scope = Option<u32>;
@@ -96,7 +100,10 @@ impl<K: Hash + Eq + Clone, V> Fifo<K, V> {
 #[derive(Debug)]
 struct Scoped<K, V> {
     shared: Fifo<K, V>,
-    own: HashMap<u32, Fifo<K, V>>,
+    /// Each app's table, with the number of the last write to it.
+    own: HashMap<u32, (Fifo<K, V>, u64)>,
+    /// How many writes to the apps' tables there were.
+    writes: u64,
     /// The most entries of the shared table, and of each app's.
     caps: (usize, usize),
 }
@@ -106,26 +113,44 @@ impl<K: Hash + Eq + Clone, V> Scoped<K, V> {
         Self {
             shared: Fifo::default(),
             own: HashMap::new(),
+            writes: 0,
             caps,
         }
     }
 
     fn insert(&mut self, scope: Scope, key: K, value: V) {
-        match scope {
-            None => self.shared.insert(key, value, self.caps.0),
-            Some(uid) => self
+        let Some(uid) = scope else {
+            self.shared.insert(key, value, self.caps.0);
+            return;
+        };
+        // A table for one more app than may have one: the app written to the longest ago loses its own.
+        if !self.own.contains_key(&uid)
+            && self.own.len() >= OWN_SCOPES
+            && let Some(oldest) = self
                 .own
-                .entry(uid)
-                .or_default()
-                .insert(key, value, self.caps.1),
+                .iter()
+                .min_by_key(|(_, (_, written))| *written)
+                .map(|(uid, _)| *uid)
+        {
+            self.own.remove(&oldest);
         }
+        self.writes += 1;
+        let (table, written) = self.own.entry(uid).or_insert_with(|| (Fifo::default(), 0));
+        table.insert(key, value, self.caps.1);
+        *written = self.writes;
+    }
+
+    /// Drops each app's table none of whose entries is `alive` any more.
+    fn forget(&mut self, alive: impl Fn(&V) -> bool) {
+        self.own
+            .retain(|_, (table, _)| table.entries.values().any(&alive));
     }
 
     /// The entries for the flows of the app with `uid`: its own first, then every app's.
     fn for_app(&self, key: &K, uid: Option<u32>) -> impl Iterator<Item = &V> {
         let own = uid
             .and_then(|uid| self.own.get(&uid))
-            .and_then(|table| table.entries.get(key));
+            .and_then(|(table, _)| table.entries.get(key));
         own.into_iter().chain(self.shared.entries.get(key))
     }
 
@@ -135,7 +160,12 @@ impl<K: Hash + Eq + Clone, V> Scoped<K, V> {
     }
 
     fn len(&self) -> usize {
-        self.shared.entries.len() + self.own.values().map(|t| t.entries.len()).sum::<usize>()
+        self.shared.entries.len()
+            + self
+                .own
+                .values()
+                .map(|(table, _)| table.entries.len())
+                .sum::<usize>()
     }
 }
 
@@ -224,6 +254,13 @@ impl Names {
         self.addresses
             .for_app(&address, uid)
             .find(|given| given.until > now)
+    }
+
+    /// Drops each app's own tables once every name in them has expired by `now`, as the engine's sweep
+    /// does: an app that stopped asking its own resolver keeps nothing.
+    pub fn forget_expired(&mut self, now: Instant) {
+        self.addresses.forget(|given| given.until > now);
+        self.public.forget(|until| *until > now);
     }
 
     /// Forgets everything, as when the user wipes the log.
@@ -352,10 +389,12 @@ mod tests {
         names.insert_public("mine.example", Some(10_123), 300, now);
         names.insert(a, None, "www.example.com", 300, (now, BOOT));
         names.insert(a, Some(10_456), "own.example", 300, (now, BOOT));
-        for i in 0..PUBLIC_CAPACITY + OWN_PUBLIC_CAPACITY {
+        // More than Android's tables and the app's own hold: written as numbers, so that a capacity
+        // changed by mistake fails here (review 3 of W5's first part, nit 4).
+        for i in 0..320 {
             names.insert_public(&format!("p{i}.example"), Some(10_999), 300, now);
         }
-        for i in 0..u32::try_from(CAPACITY + OWN_CAPACITY).unwrap_or(0) {
+        for i in 0..9_000 {
             let other = IpAddr::V4(Ipv4Addr::from(0x0a00_0000 + i));
             names.insert(other, Some(10_999), "x.example", 300, (now, BOOT));
         }
@@ -363,11 +402,56 @@ mod tests {
         assert!(names.is_public("mine.example", Some(10_123), now));
         assert_eq!(names.get(a, Some(10_123), now), Some("www.example.com"));
         assert_eq!(names.get(a, Some(10_456), now), Some("own.example"));
-        // The flooding app's own tables keep only their newest.
+        // The flooding app's own tables keep only their newest: 64 public names and 512 addresses.
         assert!(!names.is_public("p0.example", Some(10_999), now));
-        let last = PUBLIC_CAPACITY + OWN_PUBLIC_CAPACITY - 1;
-        assert!(names.is_public(&format!("p{last}.example"), Some(10_999), now));
-        assert_eq!(names.len(), 2 + OWN_CAPACITY);
+        assert!(!names.is_public("p255.example", Some(10_999), now));
+        assert!(names.is_public("p256.example", Some(10_999), now));
+        assert!(names.is_public("p319.example", Some(10_999), now));
+        assert_eq!(names.len(), 2 + 512);
+    }
+
+    /// An app's own tables go once every name in them has expired, at the engine's sweep; another app's,
+    /// with a name still kept, and Android's stay (review 3 of W5's first part, nit 3).
+    #[test]
+    fn an_apps_own_tables_go_once_every_name_in_them_has_expired() {
+        let mut names = Names::default();
+        let now = Instant::now();
+        let later = now + Duration::from_hours(2);
+        let a = IpAddr::V4(Ipv4Addr::new(93, 184, 216, 34));
+        names.insert(a, None, "www.example.com", 60, (now, BOOT));
+        names.insert(a, Some(10_123), "gone.example", 60, (now, BOOT));
+        names.insert_public("gone.example", Some(10_123), 60, now);
+        names.insert(a, Some(10_456), "kept.example", 60, (now, BOOT));
+        names.insert(a, Some(10_456), "kept.example", 60, (later, BOOT));
+        names.forget_expired(now + MIN_KEEP + Duration::from_secs(1));
+        assert!(!names.addresses.own.contains_key(&10_123));
+        assert!(!names.public.own.contains_key(&10_123));
+        assert!(names.addresses.own.contains_key(&10_456));
+        assert_eq!(names.len(), 2, "Android's and the app's still kept");
+    }
+
+    /// At most [`OWN_SCOPES`] apps keep tables of their own: one more takes the place of the app whose
+    /// own resolver answered last the longest ago, which then falls back to Android's names.
+    #[test]
+    fn at_most_so_many_apps_keep_tables_of_their_own() {
+        let mut names = Names::default();
+        let now = Instant::now();
+        let a = IpAddr::V4(Ipv4Addr::new(93, 184, 216, 34));
+        names.insert(a, None, "www.example.com", 300, (now, BOOT));
+        let apps: Vec<u32> = (0..=u32::try_from(OWN_SCOPES).unwrap_or(0))
+            .map(|i| 10_100 + i)
+            .collect();
+        for &app in &apps[..OWN_SCOPES] {
+            names.insert(a, Some(app), &format!("{app}.example"), 300, (now, BOOT));
+        }
+        // The first app answers itself again, so the second has answered last the longest ago.
+        names.insert(a, Some(apps[0]), "again.example", 300, (now, BOOT));
+        let newest = apps[OWN_SCOPES];
+        names.insert(a, Some(newest), "newest.example", 300, (now, BOOT));
+        assert_eq!(names.addresses.own.len(), 32);
+        assert_eq!(names.get(a, Some(apps[1]), now), Some("www.example.com"));
+        assert_eq!(names.get(a, Some(apps[0]), now), Some("again.example"));
+        assert_eq!(names.get(a, Some(newest), now), Some("newest.example"));
     }
 
     /// An app's own resolver's public names hide names in that app's flows only.
