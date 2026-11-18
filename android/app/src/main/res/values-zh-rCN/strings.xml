@@ -89,7 +89,7 @@
     <string name="owner_shut_down">%1$s 背后的服务已于 %2$s 关闭。</string>
     <string name="usage_access_title">网络使用情况和您未打开的应用</string>
     <string name="usage_access_body">有了使用情况访问权限，Datapavan 可以显示每个应用使用了多少数据，以及哪些应用您已很久没有打开。同样的权限也能让一个应用看到您打开过哪些应用以及打开的时间。Datapavan 只读取总量和每个应用上次使用的日期，不保留任何这些信息，也无法将其发送到任何地方，因为它没有网络访问权限。没有此权限，其他功能都能正常使用。</string>
-    <string name="usage_access_body_advanced">有了使用情况访问权限，Datapavan 可以显示每个应用使用了多少数据，以及哪些应用您已很久没有打开。同样的权限也能让一个应用看到您打开过哪些应用以及打开的时间。Datapavan Advanced 还会读取哪个应用在何时显示在屏幕上，以便针对每个连接判断您当时是否在使用该应用。它得知的内容只保存在内存中，供“Now”使用；以及在您保留连接日志时，作为每条记录的状态，保存您所选的天数。它不会把这些内容发送到任何地方。没有此权限，其他功能都能正常使用。</string>
+    <string name="usage_access_body_advanced">有了使用情况访问权限，Datapavan 可以显示每个应用使用了多少数据，以及哪些应用您已很久没有打开。同样的权限也能让一个应用看到您打开过哪些应用以及打开的时间。Datapavan Advanced 还会读取哪个应用在何时显示在屏幕上，以便针对每个连接判断您当时是否在使用该应用。它得知的内容只保存在两个地方：内存中，供“Now”使用；以及在您保留连接日志时，作为每条记录的状态，保存您所选的天数。它不会把这些内容发送到任何地方。没有此权限，其他功能都能正常使用。</string>
     <string name="usage_access_phone_warning">您开启此权限时，有些手机会显示自己的强烈警告，有时还带有倒计时。任何应用请求使用情况访问权限时，这些手机都会显示这一警告。</string>
     <string name="usage_access_button">授予使用情况访问权限</string>
     <!-- Shown only when Datapavan was installed from a file (Android 13 and later), before the two steps below. -->
@@ -552,9 +552,9 @@
     <string name="privacy_no_network">此版本没有使用互联网的权限，因此 Android 本身就会阻止它发送任何内容。</string>
     <string name="privacy_no_network_advanced">Datapavan Advanced 仅将互联网用于把您的应用的流量转发到它们发往的地方，以及查询它们要查找的名称。其中没有任何内容发往我们。</string>
     <string name="privacy_kept">在手机上，它只保留计划的日志、您的传感器检查记录、跟踪器扫描结果，以及您导入的数据包。这些内容绝不会被备份或发送，卸载时会将其删除。</string>
-    <string name="privacy_kept_advanced">在手机上，它只保留计划的日志、您的传感器检查记录、跟踪器扫描结果，以及您导入的数据包。Datapavan Advanced 还会保留您用来绕过网络限制的工具的设置、您选择保留的连接日志，以及在内存中供“Now”使用的每个应用最近的流量。这些内容绝不会被备份或发送，卸载时会将其删除。</string>
+    <string name="privacy_kept_advanced">在手机上，它只保留计划的日志、您的传感器检查记录、跟踪器扫描结果，以及您导入的数据包。Datapavan Advanced 还会保留您用来绕过网络限制的工具的设置、连接日志（如果您选择保留），以及在内存中供“Now”使用的每个应用最近的流量。这些内容绝不会被备份或发送，卸载时会将其删除。</string>
     <string name="privacy_usage">有了使用情况访问权限，它只读取总量和每个应用上次使用的时间，绝不读取您在何时打开了哪个应用，也不保留任何这些信息。</string>
-    <string name="privacy_usage_advanced">有了使用情况访问权限，它会读取总量、每个应用上次使用的时间，以及哪个应用在何时显示在屏幕上。它得知的内容只保存在内存中，供“Now”使用；以及在您保留连接日志时，作为每条记录的状态，保存您所选的天数。</string>
+    <string name="privacy_usage_advanced">有了使用情况访问权限，它会读取总量、每个应用上次使用的时间，以及哪个应用在何时显示在屏幕上。它得知的内容只保存在两个地方：内存中，供“Now”使用；以及在您保留连接日志时，作为每条记录的状态，保存您所选的天数。</string>
     <string name="licences_title">开源许可</string>
     <string name="licences_intro">Datapavan 由这些开源组件构建而成。它所带的数据在“数据来源”下注明了各自的许可。</string>
     <string name="about_title">关于</string>
