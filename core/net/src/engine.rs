@@ -71,6 +71,8 @@ mod hops;
 mod kept;
 mod logbook;
 mod lookups;
+#[cfg(test)]
+mod model;
 mod naming;
 mod now;
 mod tcp;
