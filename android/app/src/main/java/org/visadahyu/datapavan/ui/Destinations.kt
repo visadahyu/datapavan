@@ -388,13 +388,13 @@ private fun useLine(app: AppFacts, usage: UsageState): String = when (usage) {
     }
 }
 
-/** The privacy summary in the app, from PRIVACY.md. */
+/** The privacy summary in the app, from PRIVACY.md: Datapavan Advanced's has its own lines for what it adds. */
 @Composable
 internal fun privacyParagraphs(): List<String> = listOf(
     stringResource(R.string.privacy_none),
-    stringResource(R.string.privacy_no_network),
-    stringResource(R.string.privacy_kept),
-    stringResource(R.string.privacy_usage),
+    stringResource(if (BuildConfig.ADVANCED) R.string.privacy_no_network_advanced else R.string.privacy_no_network),
+    stringResource(if (BuildConfig.ADVANCED) R.string.privacy_kept_advanced else R.string.privacy_kept),
+    stringResource(if (BuildConfig.ADVANCED) R.string.privacy_usage_advanced else R.string.privacy_usage),
 )
 
 @Composable

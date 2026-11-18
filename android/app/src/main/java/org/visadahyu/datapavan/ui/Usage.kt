@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
+import org.visadahyu.datapavan.BuildConfig
 import org.visadahyu.datapavan.R
 import org.visadahyu.datapavan.audit.AppFacts
 import org.visadahyu.datapavan.audit.Dormancy
@@ -84,7 +85,9 @@ internal fun UsageAccessCard() {
         Column(Modifier.padding(12.dp)) {
             Text(stringResource(R.string.usage_access_title), style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(4.dp))
-            Text(stringResource(R.string.usage_access_body), style = MaterialTheme.typography.bodyMedium)
+            // Advanced also reads which app was on screen and when, for Watch (ADR 0046): its own text says so.
+            val body = if (BuildConfig.ADVANCED) R.string.usage_access_body_advanced else R.string.usage_access_body
+            Text(stringResource(body), style = MaterialTheme.typography.bodyMedium)
             // Some vendors' settings put their own alarming screen in front of the switch (seen on Xiaomi).
             Note(stringResource(R.string.usage_access_phone_warning))
             if (fromFile) {
