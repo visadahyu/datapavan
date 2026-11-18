@@ -528,7 +528,7 @@
 
     <string name="own_title">¿Es auténtica esta copia?</string>
     <string name="own_teach">El Datapavan auténtico no tiene acceso a internet y nunca lo pide. Una copia que lo pida no es auténtica.</string>
-    <string name="own_teach_advanced">El Datapavan Basic auténtico nunca tiene acceso a internet. El Datapavan Advanced auténtico solo lo usa para el tráfico de tus propias apps y para los servidores que elijas. Nunca pide tu cámara, tu micrófono, tu ubicación, tus contactos, tus mensajes ni tu registro de llamadas. Ninguna app de Datapavan te pide nunca dinero.</string>
+    <string name="own_teach_advanced">El Datapavan Basic auténtico nunca tiene acceso a internet. El Datapavan Advanced auténtico solo lo usa para el tráfico de tus propias apps y para los servidores que elijas. Nunca pide acceso a tu cámara, tu micrófono, tu ubicación, tus contactos, tus mensajes ni tu registro de llamadas. Ninguna app de Datapavan te pide nunca dinero.</string>
     <string name="own_internet_none">Esta copia no tiene acceso a internet.</string>
     <string name="own_internet_present">Esta copia pide acceso a internet, así que no es un Datapavan auténtico. Desinstálala e instala Datapavan desde un canal de confianza.</string>
     <string name="own_permissions_none_advanced">Esta copia no pide ninguno de ellos.</string>

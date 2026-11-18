@@ -532,7 +532,7 @@
     <!-- Whether this copy is genuine (ADR 0024). -->
     <string name="own_title">Ist diese Kopie echt?</string>
     <string name="own_teach">Echtes Datapavan hat keinen Internetzugriff und fragt nie danach. Eine Kopie, die danach fragt, ist nicht echt.</string>
-    <string name="own_teach_advanced">Echtes Datapavan Basic hat nie Internetzugriff. Echtes Datapavan Advanced nutzt das Internet nur für den Datenverkehr Ihrer eigenen Apps und für die Server, die Sie auswählen. Es fragt nie nach Ihrer Kamera, Ihrem Mikrofon, Ihrem Standort, Ihren Kontakten, Nachrichten oder Ihrer Anrufliste. Keine Datapavan-App verlangt je Geld von Ihnen.</string>
+    <string name="own_teach_advanced">Echtes Datapavan Basic hat nie Internetzugriff. Echtes Datapavan Advanced nutzt das Internet nur für den Datenverkehr Ihrer eigenen Apps und für die Server, die Sie auswählen. Es fragt nie nach Zugriff auf Ihre Kamera, Ihr Mikrofon, Ihren Standort, Ihre Kontakte, Ihre Nachrichten oder Ihre Anrufliste. Keine Datapavan-App verlangt je Geld von Ihnen.</string>
     <string name="own_internet_none">Diese Kopie hat keinen Internetzugriff.</string>
     <string name="own_internet_present">Diese Kopie fragt nach Internetzugriff, sie ist also kein echtes Datapavan. Deinstallieren Sie sie und installieren Sie Datapavan aus einer Quelle, der Sie vertrauen.</string>
     <string name="own_permissions_none_advanced">Diese Kopie fragt nach keinem davon.</string>

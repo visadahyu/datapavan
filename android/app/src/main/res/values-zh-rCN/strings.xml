@@ -524,7 +524,7 @@
     <!-- Whether this copy is genuine (ADR 0024). -->
     <string name="own_title">此副本是正版吗？</string>
     <string name="own_teach">正版 Datapavan 没有互联网访问权限，也从不请求。请求此权限的副本不是正版。</string>
-    <string name="own_teach_advanced">正版 Datapavan Basic 始终没有互联网访问权限。正版 Datapavan Advanced 仅将互联网用于传输您自己的应用的流量，以及连接您选择的服务器。它从不请求访问您的相机、麦克风、位置信息、通讯录、短信或通话记录。任何 Datapavan 应用都不会向您要钱。</string>
+    <string name="own_teach_advanced">正版 Datapavan Basic 始终没有互联网访问权限。正版 Datapavan Advanced 仅将互联网用于传输您自己的应用的流量，以及连接您选择的服务器。它从不请求访问您的相机、麦克风、位置信息、通讯录、短信或通话记录。任何 Datapavan 应用都从不向您索要钱款。</string>
     <string name="own_internet_none">此副本没有互联网访问权限。</string>
     <string name="own_internet_present">此副本请求互联网访问权限，因此不是正版 Datapavan。请卸载它，然后从您信任的渠道安装 Datapavan。</string>
     <string name="own_permissions_none_advanced">此副本没有请求其中任何一项。</string>

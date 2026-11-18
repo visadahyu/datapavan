@@ -577,7 +577,7 @@
     <!-- Where newer versions are: the app has no internet access and cannot check. -->
     <string name="about_updates_title">نسخه‌های تازه‌تر</string>
     <string name="about_updates">این برنامه خودش نمی‌تواند بررسی کند که نسخه تازه‌تری آمده است یا نه، چون به اینترنت دسترسی ندارد. تازه‌ترین نسخه و تغییراتش در وب‌سایت برنامه است. اگر وب‌سایت باز نشد، همین فایل‌ها در GitHub هم هست.</string>
-    <string name="about_updates_advanced">Datapavan Advanced خودش بررسی نمی‌کند که نسخه تازه‌تری آمده است یا نه، چون از اینترنت فقط برای ترافیک برنامه‌های خودتان و سرورهایی که انتخاب می‌کنید استفاده می‌کند. تازه‌ترین نسخه و تغییراتش در وب‌سایت برنامه است. اگر وب‌سایت باز نشد، همین فایل‌ها در GitHub هم هست.</string>
+    <string name="about_updates_advanced">Datapavan Advanced خودش بررسی نمی‌کند که نسخه تازه‌تری آمده است یا نه: از اینترنت فقط برای ترافیک برنامه‌های خودتان و سرورهایی که انتخاب می‌کنید استفاده می‌کند. تازه‌ترین نسخه و تغییراتش در وب‌سایت برنامه است. اگر وب‌سایت باز نشد، همین فایل‌ها در GitHub هم هست.</string>
     <string name="about_copy_hint">برای باز کردن یک نشانی در مرورگری دیگر، مثل Tor Browser، آن را لمس کنید و نگه دارید تا کپی شود.</string>
     <string name="about_open_website">باز کردن وب‌سایت</string>
     <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->
