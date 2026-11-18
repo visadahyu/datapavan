@@ -163,7 +163,7 @@ impl Shared {
                 {
                     flow.dns_name = Some(dns);
                 }
-                flow.name = Some(hello.name.clone());
+                flow.name = Some(written(&hello.name));
                 flow.named_by = by;
             }
         };
@@ -196,9 +196,30 @@ impl Shared {
     }
 }
 
+/// A host name as a flow keeps it: in lower case, without the trailing dot that only marks it as fully
+/// qualified, so that one server is one name in the log, however the app spelled it (review 1 of W5's
+/// first part, names, finding 11). A name of dots alone stays as it is.
+fn written(name: &str) -> String {
+    let trimmed = name.trim_end_matches('.');
+    if trimmed.is_empty() { name } else { trimmed }.to_ascii_lowercase()
+}
+
 /// Whether two host names are the same name: DNS names ignore case, and a trailing dot only marks a name
 /// as fully qualified.
 fn same_name(a: &str, b: &str) -> bool {
     a.trim_end_matches('.')
         .eq_ignore_ascii_case(b.trim_end_matches('.'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_flow_keeps_a_host_name_in_lower_case_without_its_trailing_dot() {
+        assert_eq!(written("WWW.Example.COM."), "www.example.com");
+        assert_eq!(written("cdn.example.net"), "cdn.example.net");
+        assert_eq!(written("."), ".");
+        assert!(same_name("WWW.Example.COM.", "www.example.com"));
+    }
 }

@@ -1560,7 +1560,8 @@ mod tests {
         shared.hello(by_dns, &hello("other.example", false), NamedBy::Tls);
         // A later hello does not rename it.
         shared.hello(by_dns, &hello("late.example", false), NamedBy::Quic);
-        // The same name, in another case and with a trailing dot: nothing beside it.
+        // The same name, in another case and with a trailing dot: nothing beside it, and the flow's name
+        // written in lower case without the dot.
         shared.hello(same, &hello("WWW.Example.com.", false), NamedBy::Tls);
         // A QUIC name names a flow without one; ECH offered, perhaps GREASE, does not stop it.
         shared.hello(by_quic, &hello("quic.example", true), NamedBy::Quic);
@@ -1579,7 +1580,7 @@ mod tests {
                 Some("www.example.com"),
                 Ech::Absent,
             ),
-            (Some("WWW.Example.com."), NamedBy::Tls, None, Ech::Absent),
+            (Some("www.example.com"), NamedBy::Tls, None, Ech::Absent),
             (Some("quic.example"), NamedBy::Quic, None, Ech::Offered),
             (None, NamedBy::Unknown, None, Ech::Hidden),
             (Some("www.example.com"), NamedBy::Dns, None, Ech::Hidden),
