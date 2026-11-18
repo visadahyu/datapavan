@@ -34,8 +34,8 @@ impl Clock for SystemClock {
     }
 
     /// `clock_gettime(CLOCK_BOOTTIME)`, through nix's safe function. It cannot fail on Linux since
-    /// 2.6.39; were it to, the answer is the longest time there is, so that a cache keeps nothing rather
-    /// than an answer for ever.
+    /// 2.6.39 but with a bad clock or address; were it to, the answer is the longest time there is: a
+    /// cache keeps nothing it is given then (`DnsCache::insert`) and serves nothing while it fails.
     fn since_boot(&self) -> Duration {
         use nix::time::{ClockId, clock_gettime};
         clock_gettime(ClockId::CLOCK_BOOTTIME).map_or(Duration::MAX, |t| {

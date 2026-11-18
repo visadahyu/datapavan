@@ -36,8 +36,13 @@ pub struct DnsCache {
 
 impl DnsCache {
     /// Keeps `answer` for its shortest time to live (for "no such name", the SOA record's, bounded by
-    /// its minimum field, RFC 2308), if it is one to keep. `now` is the time since the phone started.
+    /// its minimum field, RFC 2308), if it is one to keep. `now` is the time since the phone started; the
+    /// longest time there is, as a failed reading gives, keeps nothing, since a later reading that works
+    /// would find the answer kept for ever.
     pub fn insert(&mut self, answer: &[u8], now: Duration) {
+        if now == Duration::MAX {
+            return;
+        }
         let Some((key, keep)) = keepable(answer) else {
             return;
         };
@@ -192,8 +197,11 @@ mod tests {
         cache.insert(&answer(&q, 300), NOW);
         assert!(cache.answer(&q, NOW + Duration::from_mins(4)).is_some());
         assert_eq!(cache.answer(&q, NOW + Duration::from_hours(8)), None);
+        // A failed reading of the clock keeps nothing, also once readings work again.
+        let mut cache = DnsCache::default();
         cache.insert(&answer(&q, 300), Duration::MAX);
-        assert_eq!(cache.answer(&q, Duration::MAX), None, "kept for no time");
+        assert!(cache.is_empty());
+        assert_eq!(cache.answer(&q, NOW), None);
     }
 
     #[test]
