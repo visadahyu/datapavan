@@ -181,8 +181,13 @@ impl Force {
 
 /// What a segment held for its state is: a flow's, or an app's lookups'.
 pub(super) enum Of {
-    /// A flow, as it was when cut, and whether its destination stays out of the log.
-    Flow { flow: Flow, hidden: bool },
+    /// A flow, as it was when cut, whether its destination stays out of the log, and whether it went
+    /// directly, not through the user's tool.
+    Flow {
+        flow: Flow,
+        hidden: bool,
+        direct: bool,
+    },
     /// An app's lookups to Watch's own DNS address: its counts are the lookups, nought, and their bytes
     /// up and down on the tunnel.
     Lookups,
@@ -818,7 +823,9 @@ impl Shared {
     pub(super) fn tell(&self, told: &Told) {
         lock(&self.activity).tell(told);
         self.settle(None);
-        let waits = lock(&self.waiting).total() > 0 || !lock(&self.activity).held.is_empty();
+        // One lock at a time: `waiting` is not held while `activity` is waited for (review b2, N7).
+        let marks = lock(&self.waiting).total();
+        let waits = marks > 0 || !lock(&self.activity).held.is_empty();
         if waits && self.tracks {
             self.asked
                 .store(self.clock.wall_ms() / 1000, Ordering::Relaxed);
@@ -873,7 +880,7 @@ impl Shared {
                     let now = live.bytes.now();
                     let flow = &live.flow;
                     *settled.entry(flow.uid).or_default() += activity.settle_open(
-                        (flow.uid, Seen::live(flow, live.hidden)),
+                        (flow.uid, Seen::live(flow, live.hidden, live.direct)),
                         (
                             &mut live.start,
                             &mut live.base,
@@ -2301,7 +2308,8 @@ pub(super) mod tests {
             uncached_answers: false,
         };
         let (mut engine, _app) = start(platform(), Some(handover), Some(setting))?;
-        assert_eq!(places(&engine), Some((0, true)));
+        // No destination; and not through the tool, which that flow never went through (review b2, N3).
+        assert_eq!(places(&engine), Some((0, false)));
         engine.stop();
         Ok(())
     }

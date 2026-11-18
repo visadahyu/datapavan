@@ -69,30 +69,39 @@ fn add_minute<T: Default>(minutes: &mut Minutes<T>, minute: u64, add: impl FnOnc
     }
 }
 
-/// How a placed second's bytes were seen: on a flow to a destination, on a chained flow whose
-/// destination stays out of the log, or as lookups, which the live view does not count.
+/// How a placed second's bytes were seen: on a flow to a destination, directly or through the user's
+/// tool; on a chained flow whose destination stays out of the log; on a flow that went directly and
+/// whose destination a chain set after it opened leaves out; or as lookups, which the live view does
+/// not count.
 #[derive(Clone, Copy)]
 pub(super) enum Seen<'a> {
     Flow(&'a Flow),
+    Routed(&'a Flow),
     Hidden,
+    HiddenDirect,
     Lookups,
 }
 
 impl<'a> Seen<'a> {
     pub(super) fn of(of: &'a Of) -> Self {
         match of {
-            Of::Flow { hidden: true, .. } => Self::Hidden,
-            Of::Flow { flow, .. } => Self::Flow(flow),
+            Of::Flow {
+                flow,
+                hidden,
+                direct,
+            } => Self::live(flow, *hidden, *direct),
             Of::Lookups => Self::Lookups,
         }
     }
 
-    /// A live flow, by whether its destination stays out of the log.
-    pub(super) fn live(flow: &'a Flow, hidden: bool) -> Self {
-        if hidden {
-            Self::Hidden
-        } else {
-            Self::Flow(flow)
+    /// A live flow, by whether its destination stays out of the log and whether it went directly: only
+    /// a flow that went through the tool marks its app so (review b2 of W5's second part, N3).
+    pub(super) fn live(flow: &'a Flow, hidden: bool, direct: bool) -> Self {
+        match (hidden, direct) {
+            (true, false) => Self::Hidden,
+            (true, true) => Self::HiddenDirect,
+            (false, true) => Self::Flow(flow),
+            (false, false) => Self::Routed(flow),
         }
     }
 }
@@ -104,6 +113,8 @@ struct Place {
     session: Ways,
     /// The last second with bytes to it.
     last: u64,
+    /// Whether a flow to it went through the user's tool.
+    routed: bool,
 }
 
 /// Whether two flows reach one destination as the live view shows it: by name, where the name came
@@ -185,15 +196,20 @@ impl Counts {
     }
 
     /// Leaves out the destinations of the apps that `hidden` names, keeping their bytes, marked as through
-    /// the tool from their last second with bytes.
+    /// the tool from the last second with bytes to a destination reached through it; and forgets the
+    /// organisations looked up, which name destinations too (review b2 of W5's second part, N8).
     pub(super) fn hide(&mut self, hidden: impl Fn(Option<u32>) -> bool) {
         for (uid, app) in &mut self.apps {
             if !app.places.is_empty() && hidden(*uid) {
+                let routed = app.places.iter().filter(|p| p.routed).map(|p| p.last).max();
                 self.places -= app.places.len();
                 app.places.clear();
-                app.through_tool = Some(app.through_tool.map_or(app.last, |s| s.max(app.last)));
+                if let Some(last) = routed {
+                    app.through_tool = Some(app.through_tool.map_or(last, |s| s.max(last)));
+                }
             }
         }
+        self.organisations.clear();
     }
 
     /// Counts one placed second of the app `uid`, `bytes` its counts (as the app sent and received
@@ -235,13 +251,14 @@ impl Counts {
             app.session[column][1] += down;
         }
         app.last = app.last.max(second);
-        let flow = match seen {
-            Seen::Flow(flow) => flow,
+        let (flow, routed) = match seen {
+            Seen::Flow(flow) => (flow, false),
+            Seen::Routed(flow) => (flow, true),
             Seen::Hidden => {
                 app.through_tool = Some(app.through_tool.map_or(second, |s| s.max(second)));
                 return;
             }
-            Seen::Lookups => return,
+            Seen::HiddenDirect | Seen::Lookups => return,
         };
         let known = app
             .places
@@ -267,6 +284,7 @@ impl Counts {
                     minutes: VecDeque::new(),
                     session: Ways::default(),
                     last: second,
+                    routed,
                 });
                 self.places += 1;
                 app.places.len() - 1
@@ -364,7 +382,7 @@ impl Shared {
             // The seconds not placed yet: in the live flows and the segments held.
             for live in live.values() {
                 let marks = lock(&live.bytes.marks);
-                let seen = Seen::live(&live.flow, live.hidden);
+                let seen = Seen::live(&live.flow, live.hidden, live.direct);
                 view.waiting(live.flow.uid, &marks, live.bytes.now(), seen);
             }
             for piece in &activity.held {
@@ -587,8 +605,8 @@ impl View {
                     app.through_tool = true;
                     continue;
                 }
-                Seen::Flow(flow) => flow,
-                Seen::Lookups => continue,
+                Seen::Flow(flow) | Seen::Routed(flow) => flow,
+                Seen::HiddenDirect | Seen::Lookups => continue,
             };
             // The flow's destination, found once for all its marks (review b1, engine, nit 3).
             let at = *place.get_or_insert_with(|| {
@@ -870,6 +888,79 @@ mod tests {
         assert_eq!(places(&engine), Some((1, false)));
         engine.chain(Some((*chain_of(UID, false)).clone()));
         assert_eq!(places(&engine), Some((0, true)));
+    }
+
+    /// A connection that went directly, opened before its app was chained with its destinations left
+    /// out, loses its destination in "Now" but is not marked as through the tool, which it never went
+    /// through; the flows opened after the chain are (review b2 of W5's second part, N3). And the
+    /// organisations looked up for the view are forgotten with the destinations (N8).
+    #[test]
+    fn a_direct_connection_from_before_the_chain_is_not_through_the_tool() {
+        let (mut shared, clock, _) = telling_at(T);
+        shared.organisations = Some(
+            crate::organisations::Organisations::open(Box::new(
+                crate::organisations::tests::sample(),
+            ))
+            .unwrap_or_else(|e| unreachable!("{e}")),
+        );
+        let direct = shared.record(Flow {
+            destination: SocketAddr::from(([93, 184, 216, 34], 443)),
+            ..flow(1, Some(UID))
+        });
+        let Some(direct) = direct else {
+            unreachable!("an open flow is live")
+        };
+        up_at(&shared, &clock, &direct, 500, 50);
+        shared.tell(&told(T, T + 1_000, &[]));
+        let view = |shared: &Shared, at| {
+            let snapshot = shared.now_view(at);
+            app_of(&snapshot, Some(UID)).map(|a| (a.places.len(), a.through_tool, a.bytes[1][3]))
+        };
+        assert_eq!(view(&shared, T + 1_000), Some((1, false, [50, 0])));
+        assert!(!lock(&shared.activity).counts.organisations.is_empty());
+        *lock(&shared.chain) = Some(chain_of(UID, false));
+        shared.hide_chained();
+        assert!(
+            lock(&shared.activity).counts.organisations.is_empty(),
+            "forgotten"
+        );
+        up_at(&shared, &clock, &direct, 1_500, 20);
+        shared.tell(&told(T + 1_000, T + 2_000, &[]));
+        assert_eq!(
+            view(&shared, T + 2_000),
+            Some((0, false, [70, 0])),
+            "direct, not through the tool"
+        );
+        // A flow opened now goes through the tool.
+        let routed = open(&shared, 2);
+        up_at(&shared, &clock, &routed, 2_500, 5);
+        shared.tell(&told(T + 2_000, T + 3_000, &[]));
+        assert_eq!(view(&shared, T + 3_000), Some((0, true, [75, 0])));
+    }
+
+    /// "Through the tool" leaves with the windows: an app chained more than an hour ago, with no flow
+    /// through the tool since, is no longer marked (review b2 of W5's second part, fresh, m7).
+    #[test]
+    fn through_the_tool_leaves_with_the_windows() {
+        let (shared, clock, _) = telling_at(T);
+        *lock(&shared.chain) = Some(chain_of(UID, false));
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 500, 5);
+        shared.tell(&told(T, T + 1_000, &[]));
+        // The screen came on again just after: the window since then holds no second through the tool.
+        let mut later = told(T + 1_000, T + 2_000, &[]);
+        later.screen = crate::states::Screen::On(Some(T + 2_000));
+        shared.tell(&later);
+        let marked = |at| app_of(&shared.now_view(at), Some(UID)).map(|a| a.through_tool);
+        assert_eq!(marked(T + 1_000), Some(true));
+        assert_eq!(marked(T + 9 * MINUTE), Some(true), "within the 10 minutes");
+        assert_eq!(marked(T + 59 * MINUTE), Some(true), "within the hour");
+        // Unchained, it sends directly at 59 minutes: past the hour it is in "Now" for those bytes alone.
+        *lock(&shared.chain) = None;
+        let direct = open(&shared, 2);
+        up_at(&shared, &clock, &direct, 59 * MINUTE, 7);
+        shared.tell(&told(T + 59 * MINUTE - 1_000, T + 59 * MINUTE + 1_000, &[]));
+        assert_eq!(marked(T + 61 * MINUTE), Some(false), "past the hour");
     }
 
     /// The seconds not told yet of a chained app whose destinations are not logged count its bytes as

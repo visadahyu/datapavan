@@ -236,6 +236,9 @@ pub(super) struct Live {
     /// Whether its destination stays out of the log (a chained app's flow, [`Shared::hides`]): its
     /// record holds no address, port or name, and no hello names it later.
     pub(super) hidden: bool,
+    /// Whether it went directly, not through the user's tool, when it opened: a flow hidden by a chain
+    /// set after it opened goes on directly (review b2 of W5's second part, N3).
+    pub(super) direct: bool,
 }
 
 /// An app's lookups to Watch's own DNS address: since when, and since the first, how many and the
@@ -353,6 +356,7 @@ impl Shared {
                         of: Of::Flow {
                             flow: live.flow.clone(),
                             hidden: live.hidden,
+                            direct: live.direct,
                         },
                         uid: live.flow.uid,
                         start: live.start,
@@ -397,6 +401,10 @@ impl Shared {
             return None;
         }
         let hidden = self.hides(flow.uid, flow.destination);
+        let direct = !matches!(
+            self.route(flow.uid, flow.destination),
+            super::chain::Route::Tool(_)
+        );
         let stripped;
         let flow = if hidden {
             stripped = without_destination(flow);
@@ -412,6 +420,7 @@ impl Shared {
                 of: Of::Flow {
                     flow: flow.clone(),
                     hidden,
+                    direct,
                 },
                 uid: flow.uid,
                 start: now,
@@ -439,6 +448,7 @@ impl Shared {
                 state: None,
                 after: 0,
                 hidden,
+                direct,
             },
         );
         self.log_ready.notify_one();
@@ -573,6 +583,7 @@ impl Shared {
                 of: Of::Flow {
                     flow: live.flow.clone(),
                     hidden: live.hidden,
+                    direct: live.direct,
                 },
                 uid: live.flow.uid,
                 start: live.start,
@@ -656,7 +667,7 @@ impl Shared {
         }
         let mut activity = lock(&self.activity);
         for piece in &mut activity.held {
-            if let Of::Flow { flow, hidden } = &mut piece.of
+            if let Of::Flow { flow, hidden, .. } = &mut piece.of
                 && !*hidden
                 && self.hides(flow.uid, flow.destination)
             {
@@ -685,6 +696,7 @@ fn piece(live: Live, end: u64, continues: bool) -> Piece {
         of: Of::Flow {
             flow: live.flow,
             hidden: live.hidden,
+            direct: live.direct,
         },
     }
 }
