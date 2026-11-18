@@ -315,7 +315,7 @@ fn ech_public_names(record: &[u8], names: &mut Vec<String>) -> Option<()> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// A response for `www.Example.com`: a CNAME to `edge.cdn.net`, its A and AAAA records, and an A
@@ -390,7 +390,7 @@ mod tests {
 
     /// [`sample`] with an HTTPS record for the question after the others, whose `ech` parameter holds
     /// an `ECHConfig` with the public name `public`, after an `alpn` parameter.
-    fn with_https(public: &str) -> Vec<u8> {
+    pub(crate) fn with_https(public: &str) -> Vec<u8> {
         let mut config = vec![7, 0, 0x20, 0, 32];
         config.extend_from_slice(&[9; 32]);
         config.extend_from_slice(&[0, 4, 0, 1, 0, 1, 0]);

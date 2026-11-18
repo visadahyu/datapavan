@@ -4807,6 +4807,7 @@ fn begin_udp(
         id,
         port: destination.port(),
         dns,
+        uid,
     };
     let flow = Flow {
         id,

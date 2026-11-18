@@ -1035,6 +1035,7 @@ mod tests {
             id: 1,
             port: 443,
             dns: DnsUse::None,
+            uid: Some(10_123),
         };
         let hello = crate::tls::Hello {
             name: "other.example".into(),

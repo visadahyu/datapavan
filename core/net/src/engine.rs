@@ -475,6 +475,8 @@ struct Opened {
     id: u64,
     port: u16,
     dns: DnsUse,
+    /// The app's UID, if Android named it: whose ECH public names hide the hello's name.
+    uid: Option<u32>,
 }
 
 /// The engine's settings.
@@ -1469,12 +1471,17 @@ mod tests {
     const UID: u32 = 10_123;
 
     fn open_flow(shared: &Shared, destination: SocketAddr) -> Opened {
+        open_flow_of(shared, destination, UID)
+    }
+
+    /// A flow of the app with `uid` to `destination`, opened and recorded as the engine does.
+    fn open_flow_of(shared: &Shared, destination: SocketAddr, uid: u32) -> Opened {
         let Begun {
             id,
             name,
             named_by,
             network,
-        } = shared.begin(destination, Some(UID));
+        } = shared.begin(destination, Some(uid));
         let by_dns = (named_by == NamedBy::Dns)
             .then_some(name.as_deref())
             .flatten();
@@ -1484,7 +1491,7 @@ mod tests {
             protocol: TCP,
             app: SocketAddr::from(([10, 215, 173, 1], 40_000)),
             destination,
-            uid: Some(UID),
+            uid: Some(uid),
             outcome: Outcome::Opened,
             name,
             named_by,
@@ -1499,6 +1506,7 @@ mod tests {
             id,
             port: destination.port(),
             dns,
+            uid: Some(uid),
         }
     }
 
@@ -1515,7 +1523,7 @@ mod tests {
         let now = Instant::now();
         let asked = SocketAddr::from(([93, 184, 216, 34], 443));
         lock(&shared.names).insert(asked.ip(), None, "www.example.com", 60, now);
-        lock(&shared.names).insert_public("cover.example", 60, now);
+        lock(&shared.names).insert_public("cover.example", None, 60, now);
         let same = open_flow(&shared, asked);
         let other = open_flow(&shared, asked);
         let hidden = open_flow(&shared, asked);
@@ -1541,7 +1549,7 @@ mod tests {
         let now = Instant::now();
         let asked = SocketAddr::from(([93, 184, 216, 34], 443));
         lock(&shared.names).insert(asked.ip(), None, "www.example.com", 60, now);
-        lock(&shared.names).insert_public("cover.example", 60, now);
+        lock(&shared.names).insert_public("cover.example", None, 60, now);
         let by_dns = open_flow(&shared, asked);
         let same = open_flow(&shared, asked);
         let by_quic = open_flow(&shared, SocketAddr::from(([203, 0, 113, 9], 443)));
@@ -1596,6 +1604,43 @@ mod tests {
         drop(live);
         // TLS and QUIC names read, QUIC unread, ECH offered, ECH hidden.
         assert_eq!(shared.counters.snapshot()[11..16], [3, 3, 0, 3, 2]);
+    }
+
+    /// Review 1 of W5's first part, names, finding 1: an ECH public name never names a flow wherever Watch
+    /// saw it in an ECH configuration. From Android's resolver it hides names in every app's flows; from
+    /// an app's own plain resolver, past Watch's, in that app's flows only, so that no app hides another's
+    /// names (ADR 0038): there another app's hello names its flow.
+    #[test]
+    fn an_ech_public_name_hides_the_name_in_the_flows_of_the_answers_scope() {
+        const OTHER: u32 = 10_456;
+        let answer = crate::dns::tests::with_https("cover.example");
+        let address = SocketAddr::from(([93, 184, 216, 34], 443));
+        for scope in [None, Some(UID)] {
+            let shared = shared();
+            shared.learn(&answer, scope);
+            let own = open_flow(&shared, address);
+            let other = open_flow_of(&shared, address, OTHER);
+            shared.hello(own, &hello("cover.example", true), NamedBy::Tls);
+            shared.hello(other, &hello("cover.example", true), NamedBy::Tls);
+            let live = lock(&shared.live);
+            let seen = |id: u64| {
+                let flow = &live[&id].flow;
+                (
+                    flow.name.as_deref(),
+                    flow.named_by,
+                    flow.dns_name.as_deref(),
+                    flow.ech,
+                )
+            };
+            let hidden = (Some("www.example.com"), NamedBy::Dns, None, Ech::Hidden);
+            assert_eq!(seen(own.id), hidden, "{scope:?}");
+            let others = if scope.is_none() {
+                hidden
+            } else {
+                (Some("cover.example"), NamedBy::Tls, None, Ech::Offered)
+            };
+            assert_eq!(seen(other.id), others, "{scope:?}");
+        }
     }
 
     #[test]

@@ -11,7 +11,10 @@
 //!
 //! It also keeps the public names of the ECH configurations in the DNS answers, as long as the
 //! addresses, at most [`PUBLIC_CAPACITY`] of them: a hello that offers ECH and names one of them hides
-//! the real name.
+//! the real name. They are scoped as the addresses are: those in Android's resolver's answers hide names
+//! in every app's flows, those an app got from a resolver of its own in that app's flows only, so that
+//! a public name never names a flow wherever Watch saw its configuration, and no app can hide the names
+//! of another's (review 1 of W5's first part, names, finding 1).
 
 use std::collections::{HashMap, VecDeque};
 use std::net::IpAddr;
@@ -34,8 +37,8 @@ pub type Scope = Option<u32>;
 pub struct Names {
     by_address: HashMap<(IpAddr, Scope), (String, Instant)>,
     order: VecDeque<(IpAddr, Scope)>,
-    public: HashMap<String, Instant>,
-    public_order: VecDeque<String>,
+    public: HashMap<(String, Scope), Instant>,
+    public_order: VecDeque<(String, Scope)>,
 }
 
 impl Names {
@@ -57,11 +60,13 @@ impl Names {
         }
     }
 
-    /// Remembers that a DNS answer gave an ECH configuration with the public name `name`.
-    pub fn insert_public(&mut self, name: &str, ttl: u32, now: Instant) {
+    /// Remembers that a DNS answer gave an ECH configuration with the public name `name`, for the flows
+    /// of `scope`.
+    pub fn insert_public(&mut self, name: &str, scope: Scope, ttl: u32, now: Instant) {
         let keep = Duration::from_secs(u64::from(ttl)).clamp(MIN_KEEP, MAX_KEEP);
-        if self.public.insert(name.to_owned(), now + keep).is_none() {
-            self.public_order.push_back(name.to_owned());
+        let key = (name.to_owned(), scope);
+        if self.public.insert(key.clone(), now + keep).is_none() {
+            self.public_order.push_back(key);
         }
         while self.public_order.len() > PUBLIC_CAPACITY {
             if let Some(oldest) = self.public_order.pop_front() {
@@ -70,10 +75,16 @@ impl Names {
         }
     }
 
-    /// Whether `name` is the public name of an ECH configuration still kept.
+    /// Whether `name` is the public name of an ECH configuration still kept for the flows of the app with
+    /// `uid`: from Android's resolver, or from that app's own.
     #[must_use]
-    pub fn is_public(&self, name: &str, now: Instant) -> bool {
-        self.public.get(name).is_some_and(|until| *until > now)
+    pub fn is_public(&self, name: &str, uid: Option<u32>, now: Instant) -> bool {
+        let live = |scope: Scope| {
+            self.public
+                .get(&(name.to_owned(), scope))
+                .is_some_and(|until| *until > now)
+        };
+        live(None) || uid.is_some_and(|uid| live(Some(uid)))
     }
 
     /// The name last given for `address` to the app with `uid`, if it is still kept: from that app's own
@@ -160,18 +171,34 @@ mod tests {
     fn keeps_public_names_for_a_while_and_the_newest_ones() {
         let mut names = Names::default();
         let now = Instant::now();
-        names.insert_public("cover.example", 300, now);
-        assert!(names.is_public("cover.example", now));
-        assert!(!names.is_public("other.example", now));
-        assert!(!names.is_public("cover.example", now + MIN_KEEP + Duration::from_secs(1)));
+        names.insert_public("cover.example", None, 300, now);
+        assert!(names.is_public("cover.example", Some(10_123), now));
+        assert!(names.is_public("cover.example", None, now));
+        assert!(!names.is_public("other.example", Some(10_123), now));
+        assert!(!names.is_public(
+            "cover.example",
+            Some(10_123),
+            now + MIN_KEEP + Duration::from_secs(1)
+        ));
         for i in 0..PUBLIC_CAPACITY {
-            names.insert_public(&format!("p{i}.example"), 300, now);
+            names.insert_public(&format!("p{i}.example"), None, 300, now);
         }
         assert!(
-            !names.is_public("cover.example", now),
+            !names.is_public("cover.example", Some(10_123), now),
             "the oldest went first"
         );
         names.clear();
-        assert!(!names.is_public("p1.example", now));
+        assert!(!names.is_public("p1.example", None, now));
+    }
+
+    /// An app's own resolver's public names hide names in that app's flows only.
+    #[test]
+    fn an_apps_own_resolvers_public_names_hide_only_in_its_flows() {
+        let mut names = Names::default();
+        let now = Instant::now();
+        names.insert_public("cover.example", Some(10_123), 300, now);
+        assert!(names.is_public("cover.example", Some(10_123), now));
+        assert!(!names.is_public("cover.example", Some(10_456), now));
+        assert!(!names.is_public("cover.example", None, now));
     }
 }

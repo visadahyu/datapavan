@@ -420,6 +420,7 @@ async fn open(
         id,
         port: destination.port(),
         dns,
+        uid,
     };
     let bytes = shared.record(Flow {
         id,
@@ -927,6 +928,7 @@ mod tests {
                 id: 1,
                 port: destination.port(),
                 dns: DnsUse::None,
+                uid: Some(10_123),
             },
             bytes: Some(Arc::clone(&bytes)),
         };

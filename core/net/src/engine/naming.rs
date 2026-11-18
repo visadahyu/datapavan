@@ -108,7 +108,8 @@ impl Shared {
     pub(super) fn hello(&self, opened: Opened, hello: &Hello, by: NamedBy) {
         self.log_now();
         let id = opened.id;
-        let hidden = hello.ech && lock(&self.names).is_public(&hello.name, Instant::now());
+        let hidden =
+            hello.ech && lock(&self.names).is_public(&hello.name, opened.uid, Instant::now());
         let resolver = matches!(opened.port, 443 | 853)
             .then(|| self.resolvers.named(&hello.name))
             .flatten()
@@ -178,9 +179,9 @@ impl Shared {
         }
     }
 
-    /// Learns the names in a DNS answer passed back to an app: for every app's flows from Android's
-    /// resolver, or for one app's flows from a resolver of its own. ECH public names are taken only
-    /// from Android's: they hide names in every app's flows.
+    /// Learns the names in a DNS answer passed back to an app, and the public names of its ECH
+    /// configurations: for every app's flows from Android's resolver, or for one app's flows from a
+    /// resolver of its own, so that no app can rename or hide another's flows (ADR 0038).
     pub(super) fn learn(&self, answer: &[u8], scope: Option<u32>) {
         if let Some(response) = dns::response(answer) {
             let now = Instant::now();
@@ -188,10 +189,8 @@ impl Shared {
             for (address, ttl) in response.addresses {
                 names.insert(address, scope, &response.question, ttl, now);
             }
-            if scope.is_none() {
-                for (public, ttl) in response.public_names {
-                    names.insert_public(&public, ttl, now);
-                }
+            for (public, ttl) in response.public_names {
+                names.insert_public(&public, scope, ttl, now);
             }
         }
     }
