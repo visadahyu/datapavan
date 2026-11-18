@@ -656,34 +656,36 @@ this ADR left room, and why. Part 3 builds the screens on it.
 - **Tests.** In the engine, 75 tests: the placing of seconds, each reading's span, the cuts back in time and at a
   quiet end, the window, the bounds and each app's share at their edges, a busy app with the screen off, the clock
   set back, the asking, the counts by window, destinations and their organisations, the chain's switch, the
-  snapshot's layout, the log's version 3, and an engine handing what it holds to the next, or failing to start
-  with it; the readings' reader is fuzzed (`core/fuzz/fuzz_targets/states.rs`, with seeds): its first run found
-  that it read a time the screen came on for a screen not on, which wrote back otherwise, and it now refuses one.
-  A model test (`core/net/src/engine/model.rs`, in `cargo test`) drives 240 random runs of two apps' flows and
-  flows of no app, with counts, ends, readings told from a true timeline of states in tenths of a second, two
-  quarter hours, and in one run in six a reading without usage access, and 100 more with clocks set back; it
-  checks against the truth each byte's state, where each cut falls, each segment's last state, each flow's records
-  end to end and in time order, and "Now"'s hour. In Watch's Kotlin side, 47: one for each rule of the tracker's
-  core, what a reading knows and when it is made, the reading rules at their edges, its readings' layout, the
-  snapshot's and the log's readers. Hand mutants in cargo-mutants' manner, rerun after fix round 2 on the code as
-  it is: of 114 in the engine (this part's 80, the four the second review found surviving, and 30 on the fix
-  rounds' code), all are killed but one, argued equivalent (the timeline forgets from the oldest or the newest
-  second held, less 120 seconds: every held second lies past what was told, so both are its end). Of 48 in the
-  Kotlin core (this part's, the reviews' and the fix rounds'), 43 are killed, one does not build, and four are
-  equivalent: an event at the start of the overlap, or at a reading's end, taken once more into the events read,
-  where the overlap's matching keeps one of each and the reading's end leaves it for the next; the overlap's start
-  read once more, likewise; and the lock screen kept at a restart that clears every activity. (Fix round 1's
-  "each event's effect is idempotent" was not true: a resume read twice undid the pause before it, which the
-  matching, now tested, prevents.) Each fix of fix round 3, reverted alone, fails a test (18 reverts: 7 in the
-  engine, 11 in the tracker's core); the hand mutants were not rerun in full for it. The emulator's watch
-  shard runs `scripts/verify-activity.sh` (decision 6, items 1 and 6) and checks item 5 in `verify-chain.sh`. On
-  the Android 15 emulator, 2026-11-18, every count matched what the workload apps logged, to the byte: 75,000
-  bytes sent in the background, from a job, on a connection opened on screen and on a timer; the 3,046 before
-  them in use; 8,000 from a foreground service with its notification; 24,000 from the app on screen in use;
-  and without usage access, a flow's bytes in no state. After each fix round the same shard passed again on the
-  Android 15 emulator, every count again to the byte (the second at `a094f50`; `b926b94` after it only drops a
-  rule of the set back's carry that could no longer matter, held by the JVM tests). The emulators of Android 10, 11 and 17 that decision 6
-  names, and the A40, are still to run it.
+  snapshot's layout, the log's version 3, and an engine handing what it holds to the next, or failing to start with
+  it; the readings' reader is fuzzed (`core/fuzz/fuzz_targets/states.rs`, with seeds): its first run found that it
+  read a time the screen came on for a screen not on, which wrote back otherwise, and it now refuses one. A model
+  test (`core/net/src/engine/model.rs`, in `cargo test`) drives 240 random runs of two apps' flows and flows of no
+  app, with counts, ends, readings told from a true timeline of states in tenths of a second, two quarter hours, and
+  in one run in six a reading without usage access, and 100 more with clocks set back; it checks against the truth
+  each byte's state, where each cut falls, each segment's last state, each flow's records end to end and in time
+  order, and "Now"'s hour. In Watch's Kotlin side, 47: one for each rule of the tracker's core, what a reading knows
+  and when it is made, the reading rules at their edges, its readings' layout, the snapshot's and the log's readers.
+  Hand mutants in cargo-mutants' manner, rerun after fix round 2 on the code as it is: of 114 in the engine (this
+  part's 80, the four the second review found surviving, and 30 on the fix rounds' code), all are killed but one,
+  argued equivalent (the timeline forgets from the oldest or the newest second held, less 120 seconds: every held
+  second lies past what was told, so both are its end). Of 48 in the Kotlin core (this part's, the reviews' and the
+  fix rounds'), 43 are killed, one does not build, and four are equivalent: an event at the start of the overlap, or
+  at a reading's end, taken once more into the events read, where the overlap's matching keeps one of each and the
+  reading's end leaves it for the next; the overlap's start read once more, likewise; and the lock screen kept at a
+  restart that clears every activity. (Fix round 1's "each event's effect is idempotent" was not true: a resume read
+  twice undid the pause before it, which the matching, now tested, prevents.) Each fix of fix round 3, reverted
+  alone, fails a test (18 reverts: 7 in the engine, 11 in the tracker's core); the hand mutants were not rerun in
+  full for it. The emulator's watch shard runs `scripts/verify-activity.sh` (decision 6, items 1 and 6) and checks
+  item 5 in `verify-chain.sh`. On the Android 15 emulator, 2026-11-18, every count matched what the workload apps
+  logged, to the byte: 75,000 bytes sent in the background, from a job, on a connection opened on screen and on a
+  timer; the 3,046 before them in use; 8,000 from a foreground service with its notification; 24,000 from the app on
+  screen in use; and without usage access, a flow's bytes in no state. After each fix round the same shard passed
+  again on the Android 15 emulator, every count again to the byte (the second at `a094f50`; `b926b94` after it only
+  drops a rule of the set back's carry that could no longer matter, held by the JVM tests) After fix round 3 it
+  passed again, and two checks were added: the same foreground service, its app's notifications refused, put its
+  8,000 bytes in the background and none with its notification; and of the usage events the run read, none came into
+  Android's record later than a reading's 2 seconds (`activity-late 0`). The emulators of Android 10, 11 and 17 that
+  decision 6 names, and the A40, are still to run it.
 - **Accepted limits.** An activity whose `ACTIVITY_STOPPED` never comes stays visible while the screen is on, as
   one whose process died while it was resumed with no pause before. A screen kept by the rule for a second
   instance whose process then dies with no screen resumed within 2 seconds, as in split screen, stays in use until
