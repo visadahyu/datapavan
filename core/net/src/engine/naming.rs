@@ -122,27 +122,34 @@ impl Shared {
     /// gave goes with that name; a flow the hello does not rename may gain a mark from the hello's name
     /// (review 1 of W5's first part, names, finding 10).
     ///
+    /// The counter of flows of an app's own encrypted DNS moves by what the hello does to the live flow,
+    /// as in release builds, never by the flows kept for debug builds and tests (review 2 of W5's first
+    /// part, of the fixes, nit 4).
+    ///
+    /// The hello's name is read written as a flow keeps it, without a trailing dot, for every use: the
+    /// flow's name, ECH's public names and the known resolvers (review 2, of the fixes, nit 5).
+    ///
     /// The log's segments are cut first, at any quarter hour passed, so that a segment of a quarter hour
     /// before keeps the name the flow had then, whoever cuts it.
     pub(super) fn hello(&self, opened: Opened, hello: &Hello, by: NamedBy) {
         self.log_now();
         let id = opened.id;
-        let hidden =
-            hello.ech && lock(&self.names).is_public(&hello.name, opened.uid, Instant::now());
+        let own = written(&hello.name);
+        let hidden = hello.ech && lock(&self.names).is_public(&own, opened.uid, Instant::now());
         let resolver = matches!(opened.port, 443 | 853)
-            .then(|| self.resolvers.named(&hello.name))
+            .then(|| self.resolvers.named(&own))
             .flatten()
             .map(str::to_owned);
-        let own = written(&hello.name);
         let Renaming {
             renames,
             beside,
             mark,
+            live,
         } = self.renaming(&opened, hello, by, hidden, &own);
         let counters = &self.counters;
         let encrypted = match &mark {
-            Some((dns, _)) => *dns == DnsUse::Encrypted,
-            None => resolver.is_some() || opened.dns == DnsUse::Encrypted,
+            Some((dns, _)) if live => *dns == DnsUse::Encrypted,
+            _ => resolver.is_some() || opened.dns == DnsUse::Encrypted,
         };
         match (opened.dns == DnsUse::Encrypted, encrypted) {
             (false, true) => Counters::add(&counters.dns_encrypted, 1),
@@ -213,8 +220,8 @@ impl Shared {
     }
 
     /// What a hello does to the names of the flow `opened` ([`Shared::hello`]), its own name written
-    /// `own`, from the flow as it is: the live one, or the one kept for tests where the live one hides
-    /// its destination or is none.
+    /// `own`, from the flow as it is: the live one, or the one kept for debug builds and tests where the
+    /// live one hides its destination or is none, which says so (`live` false).
     fn renaming(
         &self,
         opened: &Opened,
@@ -223,7 +230,7 @@ impl Shared {
         hidden: bool,
         own: &str,
     ) -> Renaming {
-        let state = lock(&self.live)
+        let from_live = lock(&self.live)
             .get(&opened.id)
             .filter(|live| !live.hidden)
             .map(|live| {
@@ -232,14 +239,15 @@ impl Shared {
                     live.flow.named_by,
                     live.flow.name.clone(),
                 )
-            })
-            .or_else(|| {
-                lock(&self.flows)
-                    .iter()
-                    .rev()
-                    .find(|flow| flow.id == opened.id)
-                    .map(|flow| (flow.destination, flow.named_by, flow.name.clone()))
             });
+        let live = from_live.is_some();
+        let state = from_live.or_else(|| {
+            lock(&self.flows)
+                .iter()
+                .rev()
+                .find(|flow| flow.id == opened.id)
+                .map(|flow| (flow.destination, flow.named_by, flow.name.clone()))
+        });
         let renames = !hidden
             && state
                 .as_ref()
@@ -262,6 +270,7 @@ impl Shared {
             renames,
             beside,
             mark,
+            live,
         }
     }
 
@@ -289,6 +298,8 @@ struct Renaming {
     renames: bool,
     beside: Option<String>,
     mark: Option<(DnsUse, Option<String>)>,
+    /// Whether it is read from the live flow, by which alone the counters move.
+    live: bool,
 }
 
 /// A host name as a flow keeps it: in lower case, without the trailing dot that only marks it as fully

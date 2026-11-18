@@ -376,6 +376,58 @@ mod tests {
         assert_eq!(kept, vec![both.clone(), both]);
     }
 
+    /// A chained app's hello moves the counter of flows of an app's own encrypted DNS as in release
+    /// builds, by the live flow, whose destination is hidden, and not by the flow kept for debug builds and
+    /// tests (review 2 of W5's first part, of the fixes, nit 4): a flow to a resolver's host name, renamed
+    /// by its hello, stays counted.
+    #[test]
+    fn a_chained_flows_hello_moves_no_counter_by_the_flow_kept_for_tests() {
+        use super::super::{DnsUse, Ech, Flow, NamedBy, Opened, Outcome};
+        let shared = shared();
+        *lock(&shared.chain) = Some(Arc::new(chain(Some(&[CHAINED]))));
+        let destination = SocketAddr::from(([198, 51, 100, 7], 443));
+        assert!(
+            shared
+                .record(Flow {
+                    id: 1,
+                    protocol: crate::packet::TCP,
+                    app: SocketAddr::from(([10, 215, 173, 1], 40_000)),
+                    destination,
+                    uid: Some(CHAINED),
+                    outcome: Outcome::Opened,
+                    name: Some("doh.sample.example".into()),
+                    named_by: NamedBy::Dns,
+                    dns_name: None,
+                    came_in: false,
+                    ech: Ech::Absent,
+                    dns: DnsUse::Encrypted,
+                    resolver: Some("sample".into()),
+                    network: None,
+                })
+                .is_some()
+        );
+        assert_eq!(shared.counters.snapshot()[17], 1);
+        let opened = Opened {
+            id: 1,
+            port: 443,
+            dns: DnsUse::Encrypted,
+            uid: Some(CHAINED),
+            dns_held_until: std::time::Duration::MAX,
+        };
+        let hello = crate::tls::Hello {
+            name: "www.example.com".into(),
+            ech: false,
+        };
+        shared.hello(opened, &hello, NamedBy::Tls);
+        assert_eq!(shared.counters.snapshot()[17], 1, "counted as in release");
+        // The flow kept for tests is renamed and loses its mark, as a direct app's would.
+        let kept = lock(&shared.flows);
+        assert_eq!(
+            (kept[0].name.as_deref(), kept[0].dns),
+            (Some("www.example.com"), DnsUse::None)
+        );
+    }
+
     #[test]
     fn tells_the_app_a_refusal_or_an_unreachable_destination() {
         assert_eq!(

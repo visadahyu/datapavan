@@ -1748,6 +1748,44 @@ mod tests {
         );
     }
 
+    /// A hello's name is read without its trailing dot for ECH's public names and the known resolvers, as
+    /// for the flow's name (review 2 of W5's first part, of the fixes, nit 5).
+    #[test]
+    fn a_hellos_name_with_a_trailing_dot_is_read_as_without() {
+        let shared = shared();
+        let now = Instant::now();
+        let asked = SocketAddr::from(([93, 184, 216, 34], 443));
+        let when = (now, shared.clock.since_boot());
+        lock(&shared.names).insert(asked.ip(), None, "www.example.com", 60, when);
+        lock(&shared.names).insert_public("cover.example", None, 60, now);
+        let hidden = open_flow(&shared, asked);
+        shared.hello(hidden, &hello("cover.example.", true), NamedBy::Tls);
+        let doh = open_flow(&shared, SocketAddr::from(([198, 51, 100, 2], 443)));
+        shared.hello(doh, &hello("doh.sample.example.", false), NamedBy::Tls);
+        // A resolver's host that is also an ECH public name: the hello renames nothing, and marks it.
+        lock(&shared.names).insert_public("doh.sample.example", None, 60, now);
+        let hidden_doh = open_flow(&shared, SocketAddr::from(([198, 51, 100, 3], 443)));
+        shared.hello(
+            hidden_doh,
+            &hello("doh.sample.example.", true),
+            NamedBy::Tls,
+        );
+        let live = lock(&shared.live);
+        let first = &live[&hidden.id].flow;
+        assert_eq!(
+            (first.name.as_deref(), first.ech),
+            (Some("www.example.com"), Ech::Hidden)
+        );
+        for id in [doh.id, hidden_doh.id] {
+            let flow = &live[&id].flow;
+            assert_eq!(
+                (flow.dns, flow.resolver.as_deref()),
+                (DnsUse::Encrypted, Some("sample"))
+            );
+        }
+        assert_eq!(live[&hidden_doh.id].flow.ech, Ech::Hidden);
+    }
+
     /// The mark of an app's own encrypted DNS follows the name that names the flow (review 1 of W5's
     /// first part, names, finding 10): given by a resolver's host name in a DNS answer alone, it goes
     /// when the hello names another server, and the count with it; given by the resolver's address, it
