@@ -2,18 +2,22 @@ package org.visadahyu.datapavan.watch.activity
 
 import android.annotation.SuppressLint
 import android.app.usage.UsageEvents
+import android.app.usage.UsageEventsQuery
 import android.app.usage.UsageStatsManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.PowerManager
 import android.os.SystemClock
+import android.os.UserManager
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import java.util.concurrent.ExecutionException
-import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
@@ -26,20 +30,32 @@ import org.visadahyu.datapavan.audit.hasUsageAccess
  * holds for both.
  *
  * It reads incrementally, from the end of its last reading less its overlap, and only when asked: when
- * the engine asks ([wanted]: a flow opened, or bytes have waited five seconds for their state), at most
- * every 5 seconds with the screen on and once a minute with it off; when the screen comes on, as the
- * live view may open; when the wall clock is set; and when Watch stops. No timer wakes the phone. The
- * screen's state comes from the events and from `ACTION_SCREEN_ON` and `ACTION_SCREEN_OFF`, received while
- * the tunnel runs, which need no permission.
+ * the engine asks ([wanted]: a flow opened, bytes have waited five seconds for their state, or a reading
+ * left some still waiting), at most every 5 seconds with the screen on and once a minute with it off, an
+ * ask that comes sooner waiting for its turn ([ReadingRules]); once when the screen turns off, for what was
+ * sent while it was on; at once when the screen comes on, as the live view may open, when the wall clock is
+ * set, and when Watch starts and stops. No alarm wakes the phone: a reading waiting for its turn is made
+ * when the phone is awake. The screen's state comes from the events and from `ACTION_SCREEN_ON` and
+ * `ACTION_SCREEN_OFF`, received while the tunnel runs, which need no permission.
  *
- * Without usage access, and when Android gives no events, as before the first unlock after a restart, it
- * tells the engine that nothing is known: those seconds have no state, and [known] says which.
+ * Without usage access, and before the user's first unlock after a restart, it tells the engine that
+ * nothing is known: those seconds have no state, and [known] says which. Android itself gives an app an
+ * empty record in both cases, never none, so the tracker asks [UserManager.isUserUnlocked] first, and asks
+ * for access again after a query that found nothing (review b1 of W5's second part, Kotlin, finding 3).
  */
 internal class StateTracker(private val context: Context, private val tell: (ByteArray) -> Boolean) {
     private val usage = context.getSystemService(UsageStatsManager::class.java)
     private val core = UsageStates()
-    private val worker = Executors.newSingleThreadExecutor { task -> Thread(task, "watch-states").apply { isDaemon = true } }
+    private val worker = ScheduledThreadPoolExecutor(1) { task -> Thread(task, "watch-states").apply { isDaemon = true } }.apply {
+        // A reading waiting for its turn is dropped at the stop, which reads a last time itself.
+        executeExistingDelayedTasksAfterShutdownPolicy = false
+        removeOnCancelPolicy = true
+    }
     private val queued = AtomicBoolean(false)
+
+    /** The reading waiting for its turn, and when it is due by elapsed time; guarded by `this`. */
+    private var later: ScheduledFuture<*>? = null
+    private var laterAt = Long.MAX_VALUE
     /** From when the first reading tells the states: a little before the engine it serves began. */
     private val startedAt = System.currentTimeMillis() - START_SLACK_MS
 
@@ -57,8 +73,14 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
     @Volatile
     private var screenOnSince: Long? = null
 
-    /** Each package's UID, the worker's own: a package no longer installed has none. */
-    private val uids = HashMap<String, Int?>()
+    /** Each package's UID, read again each reading, the worker's own: a package no longer installed has none. */
+    private val uids = Uids { packageName ->
+        try {
+            context.packageManager.getPackageUid(packageName, 0)
+        } catch (e: PackageManager.NameNotFoundException) {
+            null
+        }
+    }
 
     /** What the last reading knew, for the dump: [States.KNOWN], [States.NO_ACCESS], [States.LOCKED], or -1 before the first. */
     @Volatile
@@ -82,7 +104,10 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
                     screenOnSince = System.currentTimeMillis()
                     post(force = true)
                 }
-                Intent.ACTION_SCREEN_OFF -> screenOn = false
+                Intent.ACTION_SCREEN_OFF -> {
+                    screenOn = false
+                    readIn(ReadingRules.screenOffWait(SystemClock.elapsedRealtime(), lastRead))
+                }
                 Intent.ACTION_TIME_CHANGED -> post(force = true)
             }
         }
@@ -129,11 +154,14 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
         false
     }
 
-    /** At most every 5 seconds with the screen on, every minute with it off (decision 1). */
-    private fun due() = SystemClock.elapsedRealtime() - lastRead >= if (screenOn) SCREEN_ON_EVERY_MS else SCREEN_OFF_EVERY_MS
-
+    /** A reading now when forced or due; one asked for too soon is made when its turn comes (decision 1). */
     private fun post(force: Boolean) {
-        if ((force || due()) && queued.compareAndSet(false, true)) {
+        val wait = if (force) 0L else ReadingRules.wait(SystemClock.elapsedRealtime(), lastRead, screenOn)
+        if (wait > 0) {
+            readIn(wait)
+            return
+        }
+        if (queued.compareAndSet(false, true)) {
             try {
                 worker.execute {
                     queued.set(false)
@@ -145,24 +173,48 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
         }
     }
 
+    /** A reading in `delayMs`, unless one is waiting that comes sooner. Any thread. */
+    private fun readIn(delayMs: Long) {
+        val at = SystemClock.elapsedRealtime() + delayMs
+        synchronized(this) {
+            if (later != null && laterAt <= at) return
+            later?.cancel(false)
+            laterAt = at
+            later = try {
+                worker.schedule({ read() }, delayMs, TimeUnit.MILLISECONDS)
+            } catch (e: java.util.concurrent.RejectedExecutionException) {
+                null
+            }
+        }
+    }
+
     /** One reading, on the worker: the events since the last, placed, and told to the engine. */
     private fun read() {
+        // This reading serves whatever waited for its turn.
+        synchronized(this) {
+            later?.cancel(false)
+            later = null
+            laterAt = Long.MAX_VALUE
+        }
+        uids.newReading()
         val elapsed = SystemClock.elapsedRealtime()
         val now = System.currentTimeMillis()
         // A clock set back by a second or more, against the time since the last reading.
-        val expected = lastWall?.let { it + (elapsed - lastRead) }
-        if (expected != null && now + 1_000 <= expected) core.clockSetBack(now, ::uidOf, keyboard())
+        if (ReadingRules.setBack(lastWall, lastRead, now, elapsed)) core.clockSetBack(now, uids::get, keyboard())
         lastRead = elapsed
         lastWall = now
         val until = now - UsageStates.MARGIN_MS
         val message = if (!hasUsageAccess(context)) {
             nothing(until, States.NO_ACCESS)
+        } else if (!context.getSystemService(UserManager::class.java).isUserUnlocked) {
+            nothing(until, States.LOCKED)
         } else {
             val events = events(core.queryFrom(until), until)
-            if (events == null) {
-                nothing(until, States.LOCKED)
+            if (events == null || (events.isEmpty() && !hasUsageAccess(context))) {
+                // Access taken away while reading: Android gave an empty record, not the states.
+                nothing(until, States.NO_ACCESS)
             } else {
-                val reading = core.read(events, until, ::uidOf, keyboard(), startedAt)
+                val reading = core.read(events, until, uids::get, keyboard(), startedAt)
                 known = States.KNOWN
                 val screen = if (reading.screen.on == null) UsageStates.Screen(screenOn, screenOnSince) else reading.screen
                 States.encode(reading.copy(screen = screen))
@@ -184,15 +236,20 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
     }
 
     /**
-     * The usage events from `from` to `until`, of the kinds the states need; null when Android gives none,
-     * as before the first unlock. Called only once [hasUsageAccess] said yes: usage access is the package's,
-     * declared by the audit's manifest (`:app`, ADR 0022), which Watch's process shares, so Watch's library
-     * declares nothing new (ADR 0046: "No new permission").
+     * The usage events from `from` to `until`, of the kinds the states need; null when Android refuses them.
+     * From Android 15 the query asks for those kinds only, so that the day read back after a start copies no
+     * other event across (review b1, Kotlin, nit 10). Called only once [hasUsageAccess] said yes: usage
+     * access is the package's, declared by the audit's manifest (`:app`, ADR 0022), which Watch's process
+     * shares, so Watch's library declares nothing new (ADR 0046: "No new permission").
      */
     @SuppressLint("MissingPermission")
     private fun events(from: Long, until: Long): List<UsageStates.Event>? {
         val events = try {
-            usage.queryEvents(from, until)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                usage.queryEvents(UsageEventsQuery.Builder(from, until).setEventTypes(*EVENT_TYPES).build())
+            } else {
+                usage.queryEvents(from, until)
+            }
         } catch (e: SecurityException) {
             null
         } ?: return null
@@ -205,16 +262,6 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
         return read
     }
 
-    /** A package's UID, kept once read; null for one not installed. */
-    private fun uidOf(packageName: String): Int? = uids.getOrPut(packageName) {
-        if (uids.size >= MAX_PACKAGES) uids.clear()
-        try {
-            context.packageManager.getPackageUid(packageName, 0)
-        } catch (e: PackageManager.NameNotFoundException) {
-            null
-        }
-    }
-
     /** The default keyboard's UID (decision 5: in use while the screen is on), if Android says which it is. */
     private fun keyboard(): Int? {
         val component = try {
@@ -222,21 +269,15 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
         } catch (e: SecurityException) {
             null
         } ?: return null
-        return uidOf(component.substringBefore('/'))
+        return uids[component.substringBefore('/')]
     }
 
     companion object {
-        const val SCREEN_ON_EVERY_MS = 5_000L
-        const val SCREEN_OFF_EVERY_MS = 60_000L
-
         /** How far before the tracker's start its first reading tells, to cover the engine started just before. */
         private const val START_SLACK_MS = 10_000L
 
         /** How long Watch's stop waits for its last reading. */
         private const val STOP_WAIT_MS = 2_000L
-
-        /** At most this many packages' UIDs are kept; past it the list starts anew. */
-        private const val MAX_PACKAGES = 1_024
 
         private val KINDS = mapOf(
             UsageEvents.Event.ACTIVITY_RESUMED to UsageStates.Kind.RESUMED,
@@ -252,5 +293,7 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
             UsageEvents.Event.DEVICE_SHUTDOWN to UsageStates.Kind.SHUTDOWN,
             UsageEvents.Event.DEVICE_STARTUP to UsageStates.Kind.STARTUP,
         )
+
+        private val EVENT_TYPES = KINDS.keys.toIntArray()
     }
 }
