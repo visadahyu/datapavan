@@ -189,6 +189,7 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 <main><section><div class="w prose"><h1>Politique de confidentialité</h1><p>Ceci est une traduction. Le <a href="https://datapavan.org/privacy/index.html">texte anglais</a> est celui qui s’applique.</p>
 <ul>
 <li><strong>En vigueur :</strong> 2026-11-07</li>
+<li><strong>Mise à jour :</strong> 2026-11-18, avec les lignes de Datapavan Advanced pour la 0.2.0, qui n’est pas encore publiée</li>
 <li><strong>Responsable :</strong> le mainteneur de Datapavan (mehdashti), jusqu’à ce que la fondation Visadahyu soit établie</li>
 </ul>
 <p><strong>Datapavan ne collecte aucune donnée sur vous.</strong></p>
@@ -209,9 +210,17 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 <li><strong>Les résultats de la recherche de traceurs,</strong> pour que les applis inchangées ne soient pas analysées à nouveau, et les <strong>paquets de données</strong> que vous avez importés.</li>
 </ul>
 <p>Tout cela reste dans le stockage privé de l’appli et n’est jamais sauvegardé ni envoyé. Toute personne qui peut ouvrir Datapavan sur votre téléphone déverrouillé peut le voir, comme elle peut voir le reste de l’appli.</p>
+<p><strong>Datapavan Advanced, à partir de la 0.2.0, garde aussi :</strong></p>
+<ul>
+<li><strong>Un journal des connexions, seulement si vous choisissez d’en tenir un.</strong> Vous choisissez : ne rien conserver, 1, 7 ou 30 jours ; tant que vous n’avez pas choisi, il ne garde rien. Chaque entrée contient l’appli, l’endroit où elle s’est connectée (l’adresse, le port et le nom, avec la source d’où Datapavan tient le nom), les octets dans chaque sens, l’heure, et si vous utilisiez l’appli à ce moment-là, si elle tournait avec sa notification, ou ni l’un ni l’autre. Chaque entrée est chiffrée avec une clé propre à son jour, que protège le keystore d’Android ; sur un téléphone doté d’un verrouillage de l’écran, les jours précédents ne peuvent être lus que pendant qu’il est déverrouillé. Les jours au-delà de votre choix sont supprimés avec leurs clés, et un seul appui supprime tout. Pour les applis que vous faites passer par votre outil de contournement, le journal ne garde aucune destination, sauf si vous activez cette option.</li>
+<li><strong>Le trafic récent de chaque appli, pour la vue « Now »,</strong> en mémoire seulement. Il disparaît quand le pare-feu s’arrête.</li>
+<li><strong>Les paramètres de votre outil de contournement :</strong> si des applis passent par lui et lesquelles, l’hôte et le port de l’outil, et le mot de passe que Datapavan a créé pour lui ; ce mot de passe est chiffré avec une clé que protège le keystore d’Android.</li>
+</ul>
 <h2 id="la-version-01-ne-peut-pas-ouvrir-de-connexions-réseau">La version 0.1 ne peut pas ouvrir de connexions réseau</h2>
 <p>Datapavan Basic 0.1 ne demande pas l’autorisation INTERNET : Android lui-même l’empêche donc d’ouvrir des connexions réseau. La compilation échoue si un composant essaie d’ajouter cette autorisation. Comme toute appli, elle peut quand même transmettre des informations à une autre appli quand vous le lui demandez, par exemple quand vous ouvrez un lien.</p>
-<p>Ce que fait Android lui-même échappe à Datapavan. Sur les téléphones dotés des services de Google, Play Protect peut donner à Google des informations sur les applis que vous installez depuis n’importe quelle source, Datapavan compris, et peut lui envoyer une appli inconnue pour vérification. Vous pouvez désactiver une partie de cela dans les paramètres de Play Protect, sur le Play Store.</p>
+<p>Ce que fait Android lui-même échappe à Datapavan. Sur les téléphones dotés des services de Google, Play Protect peut donner à Google des informations sur les applis que vous installez depuis n’importe quelle source, Datapavan compris, et peut lui envoyer une appli inconnue pour vérification. Vous pouvez désactiver une partie de cela dans les paramètres de Play Protect, sur le Play Store. Le contrôle matériel de Datapavan peut aussi amener Android à contacter Google : sur les téléphones qui obtiennent leurs clés d’attestation auprès du serveur de provisionnement de Google, un contrôle qui n’en trouve plus aucune en demande d’autres à Android (Android 13 prévient le service de provisionnement, et à partir d’Android 14 c’est le keystore qui le sollicite), et Android les récupère par sa propre connexion. Datapavan n’envoie rien lui-même.</p>
+<h2 id="ce-à-quoi-datapavan-advanced-se-connecte">Ce à quoi Datapavan Advanced se connecte</h2>
+<p>Datapavan Advanced, à partir de la 0.2.0, transmet le trafic de vos applis là où elles l’envoient, en passant par le pare-feu sur le téléphone ; rien de ce trafic ne nous parvient. De lui-même, il demande au résolveur DNS de votre réseau les noms que les applis recherchent, comme le ferait le téléphone sans Datapavan Advanced, par une connexion chiffrée là où le téléphone en utilisait une. Quand vous faites passer des applis par votre outil de contournement, leurs recherches de noms vont à l’outil, et leurs autres requêtes DNS passent par l’outil jusqu’à Quad9, une fondation suisse qui n’enregistre pas les adresses, si bien que Quad9 voit l’adresse de l’outil, pas la vôtre.</p>
 <h2 id="autorisations-et-pourquoi-elles-sont-nécessaires">Autorisations et pourquoi elles sont nécessaires</h2>
 <table>
 	<thead>
@@ -229,8 +238,13 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 			</tr>
 			<tr>
 					<td>Accès aux données d’utilisation (accordé par vous dans les Paramètres ; facultatif)</td>
-					<td>Montrer combien de données chaque appli a envoyées et reçues, et quelles applis vous n’avez pas ouvertes depuis longtemps. Datapavan ne lit que des totaux et la date de dernière utilisation de chaque appli, jamais quelle appli vous avez ouverte et quand, et n’en garde rien. Quand vous vérifiez une activité dans une appli, il lit aussi les compteurs de trafic totaux du téléphone, qui ne nécessitent aucune autorisation, pour voir si le décompte d’Android est à jour ; ces chiffres restent en mémoire pendant que la vérification est à l’écran</td>
+					<td>Montrer combien de données chaque appli a envoyées et reçues, et quelles applis vous n’avez pas ouvertes depuis longtemps. Pour cela, Datapavan ne lit que des totaux et la date de dernière utilisation de chaque appli, et n’en garde rien ; Datapavan Basic ne lit jamais quelle appli vous avez ouverte et quand. Quand vous vérifiez une activité dans une appli, il lit aussi les compteurs de trafic totaux du téléphone, qui ne nécessitent aucune autorisation, pour voir si le décompte d’Android est à jour ; ces chiffres restent en mémoire pendant que la vérification est à l’écran</td>
 					<td>v0.1</td>
+			</tr>
+			<tr>
+					<td>Accès aux données d’utilisation, dans Datapavan Advanced</td>
+					<td>Savoir, pour chaque connexion, si vous utilisiez son appli à ce moment-là, si elle tournait avec sa notification (musique, navigation), ou ni l’un ni l’autre. Pour cela, Advanced lit aussi l’historique où Android note quelle appli était à l’écran et quand. Ce qu’il en apprend, il ne le garde qu’à deux endroits : en mémoire pour la vue « Now » et, si vous tenez un journal des connexions, sous la forme de l’état de chaque entrée, pendant les jours que vous avez choisis</td>
+					<td>Datapavan Advanced, à partir de la 0.2.0</td>
 			</tr>
 			<tr>
 					<td>État du réseau</td>

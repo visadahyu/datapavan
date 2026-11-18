@@ -189,6 +189,7 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 <main><section><div class="w prose"><h1>Hinweise zum Datenschutz</h1><p>Dies ist eine Übersetzung. Maßgeblich ist der <a href="https://datapavan.org/privacy/index.html">englische Text</a>.</p>
 <ul>
 <li><strong>Gültig ab:</strong> 2026-11-07</li>
+<li><strong>Aktualisiert:</strong> 2026-11-18, mit den Zeilen zu Datapavan Advanced für Version 0.2.0, die noch nicht veröffentlicht ist</li>
 <li><strong>Verantwortlich:</strong> der Maintainer von Datapavan (mehdashti), bis die Visadahyu-Stiftung gegründet ist</li>
 </ul>
 <p><strong>Datapavan sammelt keine Daten über Sie.</strong></p>
@@ -215,12 +216,35 @@ importierte <strong>Datenpakete</strong>.</li>
 </ul>
 <p>All das bleibt im privaten Speicher der App und wird nie gesichert oder gesendet. Wer Datapavan auf Ihrem
 entsperrten Telefon öffnen kann, kann es sehen, genau wie den Rest der App.</p>
+<p><strong>Datapavan Advanced behält ab 0.2.0 außerdem:</strong></p>
+<ul>
+<li><strong>Ein Verbindungsprotokoll, nur wenn Sie sich entscheiden, eines zu führen.</strong> Sie wählen: nichts behalten, 1, 7 oder
+30 Tage; bis Sie wählen, behält es nichts. Jeder Eintrag enthält die App, wohin sie eine Verbindung aufgebaut hat (die
+Adresse, den Port und den Namen, mit der Angabe, woher Datapavan den Namen kennt), die Bytes in jede Richtung, den
+Zeitpunkt und ob Sie die App in dem Moment benutzt haben, sie mit ihrer Benachrichtigung lief oder keines von beiden.
+Jeder Eintrag ist mit einem Schlüssel für seinen Tag verschlüsselt, den der Keystore von Android schützt; auf einem
+Telefon mit Displaysperre lassen sich frühere Tage nur lesen, solange es entsperrt ist. Tage, die über Ihre Wahl
+hinausgehen, werden mit ihren Schlüsseln gelöscht, und ein Tippen löscht alles. Für Apps, die Sie durch Ihr Tool zum
+Umgehen von Netzsperren senden, behält das Protokoll kein Ziel, es sei denn, Sie schalten das ein.</li>
+<li><strong>Der jüngste Datenverkehr jeder App, für die Ansicht „Now“,</strong> nur im Arbeitsspeicher. Er verschwindet, wenn die
+Firewall beendet wird.</li>
+<li><strong>Die Einstellungen Ihres Tools zum Umgehen von Netzsperren:</strong> ob Apps durch das Tool gehen und welche, Host und Port
+des Tools sowie das Passwort, das Datapavan dafür erstellt hat und das mit einem Schlüssel verschlüsselt ist, den der
+Keystore von Android schützt.</li>
+</ul>
 <h2 id="version-01-kann-keine-netzwerkverbindungen-öffnen">Version 0.1 kann keine Netzwerkverbindungen öffnen</h2>
 <p>Datapavan Basic 0.1 fordert die Berechtigung INTERNET nicht an, daher verhindert Android selbst, dass sie
 Netzwerkverbindungen öffnet. Der Build schlägt fehl, wenn eine Komponente versucht, diese Berechtigung hinzuzufügen.
 Wie jede App kann sie trotzdem Informationen an eine andere App übergeben, wenn Sie sie darum bitten, zum Beispiel
 wenn Sie einen Link öffnen.</p>
-<p>Was Android selbst tut, liegt außerhalb der Kontrolle von Datapavan. Auf Telefonen mit Googles Diensten kann Play Protect Google Informationen über die Apps geben, die Sie aus beliebigen Quellen installieren, auch über Datapavan, und ihm eine unbekannte App zur Prüfung senden. Einen Teil davon können Sie in den Einstellungen von Play Protect im Play Store ausschalten.</p>
+<p>Was Android selbst tut, liegt außerhalb der Kontrolle von Datapavan. Auf Telefonen mit Googles Diensten kann Play Protect Google Informationen über die Apps geben, die Sie aus beliebigen Quellen installieren, auch über Datapavan, und ihm eine unbekannte App zur Prüfung senden. Einen Teil davon können Sie in den Einstellungen von Play Protect im Play Store ausschalten. Auch die Hardware-Prüfung von Datapavan kann Android dazu bringen, Google zu kontaktieren: Auf Telefonen, die ihre Attestierungsschlüssel vom Provisioning-Server von Google beziehen, bittet eine Prüfung, die keine mehr vorfindet, Android um weitere (Android 13 benachrichtigt den Provisioning-Dienst, und ab Android 14 wendet sich der Keystore an ihn), und Android lädt sie über seine eigene Verbindung. Datapavan selbst sendet nichts.</p>
+<h2 id="womit-sich-datapavan-advanced-verbindet">Womit sich Datapavan Advanced verbindet</h2>
+<p>Datapavan Advanced leitet ab 0.2.0 den Datenverkehr Ihrer Apps dorthin weiter, wohin sie ihn senden, durch die
+Firewall auf dem Telefon; nichts davon geht an uns. Von sich aus fragt es den DNS-Resolver Ihres Netzwerks nach den
+Namen, die Apps nachschlagen, wie es das Telefon ohne Datapavan Advanced täte, über eine verschlüsselte Verbindung,
+wo das Telefon eine solche nutzte. Wenn Sie Apps durch Ihr Tool zum Umgehen von Netzsperren senden, gehen ihre
+Namensabfragen an das Tool, und ihre übrigen DNS-Anfragen gehen durch das Tool an Quad9, eine Schweizer Stiftung,
+die keine Adressen protokolliert, sodass Quad9 die Adresse des Tools sieht, nicht Ihre.</p>
 <h2 id="berechtigungen-und-wofür-sie-nötig-sind">Berechtigungen und wofür sie nötig sind</h2>
 <table>
 	<thead>
@@ -238,8 +262,13 @@ wenn Sie einen Link öffnen.</p>
 			</tr>
 			<tr>
 					<td>Zugriff auf Nutzungsdaten (von Ihnen in den Einstellungen erteilt; optional)</td>
-					<td>Zeigen, wie viele Daten jede App gesendet und empfangen hat und welche Apps Sie lange nicht geöffnet haben. Datapavan liest nur Summen und das Datum, an dem jede App zuletzt genutzt wurde, nie welche App Sie wann geöffnet haben, und behält nichts davon. Wenn Sie eine einzelne Aktivität in einer App prüfen, liest es außerdem die Gesamtzähler des Datenverkehrs des Telefons, für die keine Berechtigung nötig ist, um zu sehen, ob die Zählung von Android aktuell ist; diese Zahlen bleiben im Arbeitsspeicher, solange die Prüfung auf dem Bildschirm ist</td>
+					<td>Zeigen, wie viele Daten jede App gesendet und empfangen hat und welche Apps Sie lange nicht geöffnet haben. Dafür liest Datapavan nur Summen und das Datum, an dem jede App zuletzt genutzt wurde, und behält nichts davon; Datapavan Basic liest nie, welche App Sie wann geöffnet haben. Wenn Sie eine einzelne Aktivität in einer App prüfen, liest es außerdem die Gesamtzähler des Datenverkehrs des Telefons, für die keine Berechtigung nötig ist, um zu sehen, ob die Zählung von Android aktuell ist; diese Zahlen bleiben im Arbeitsspeicher, solange die Prüfung auf dem Bildschirm ist</td>
 					<td>v0.1</td>
+			</tr>
+			<tr>
+					<td>Zugriff auf Nutzungsdaten, in Datapavan Advanced</td>
+					<td>Für jede Verbindung erkennen, ob Sie ihre App in dem Moment benutzt haben, sie mit ihrer Benachrichtigung lief (Musik, Navigation) oder keines von beiden. Dafür liest Advanced außerdem die Aufzeichnung von Android darüber, welche App wann auf dem Bildschirm war. Was es dabei erfährt, behält es nur an zwei Stellen: im Arbeitsspeicher für die Ansicht „Now“ und, wenn Sie ein Verbindungsprotokoll führen, als Zustand jedes Eintrags, für die von Ihnen gewählten Tage</td>
+					<td>Datapavan Advanced, ab 0.2.0</td>
 			</tr>
 			<tr>
 					<td>Netzwerkstatus</td>

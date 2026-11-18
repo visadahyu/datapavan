@@ -188,6 +188,7 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 <details class="lng"><summary aria-label="Language">English</summary><ul><li><a href="../privacy/index.html" hreflang="en" lang="en" aria-current="true">English</a></li><li><a href="../fr/privacy/index.html" hreflang="fr" lang="fr">Français</a></li><li><a href="../de/privacy/index.html" hreflang="de" lang="de">Deutsch</a></li><li><a href="../es/privacy/index.html" hreflang="es" lang="es">Español</a></li><li><a href="../ru/privacy/index.html" hreflang="ru" lang="ru">Русский</a></li><li><a href="../zh/privacy/index.html" hreflang="zh" lang="zh">简体中文</a></li><li><a href="../ar/privacy/index.html" hreflang="ar" lang="ar">العربية</a></li><li><a href="../fa/privacy/index.html" hreflang="fa" lang="fa">فارسی</a></li></ul></details></header></div>
 <main><section><div class="w prose"><h1>Privacy policy</h1><ul>
 <li><strong>Effective:</strong> 2026-11-07</li>
+<li><strong>Updated:</strong> 2026-11-18, with Datapavan Advanced&rsquo;s lines for 0.2.0, which is not yet released</li>
 <li><strong>Responsible:</strong> the Datapavan maintainer (mehdashti), until the Visadahyu Foundation is established</li>
 </ul>
 <p><strong>Datapavan collects no data about you.</strong></p>
@@ -213,11 +214,30 @@ imported.</li>
 </ul>
 <p>All of it stays in app-private storage and is never backed up or sent. Anyone who can open Datapavan on
 your unlocked phone can see it, as they can see the rest of the app.</p>
+<p><strong>Datapavan Advanced, from 0.2.0, also keeps:</strong></p>
+<ul>
+<li><strong>A connection log, only if you choose to keep one.</strong> You choose none, 1, 7 or 30 days; until you choose, it
+keeps nothing. Each record holds the app, where it connected (the address, the port and the name, with where
+Datapavan learned the name), the bytes each way, the time, and whether you were using the app then, it ran with
+its notification, or neither. Each record is encrypted under a key for its day that Android&rsquo;s keystore protects;
+on a phone with a screen lock, earlier days can be read only while it is unlocked. Days past your choice are
+deleted with their keys, and one tap deletes everything. For apps you send through your circumvention tool, the
+log keeps no destination unless you turn that on.</li>
+<li><strong>Each app&rsquo;s recent traffic, for the &ldquo;Now&rdquo; view,</strong> in memory only. It is gone when the firewall stops.</li>
+<li><strong>Your circumvention tool&rsquo;s settings:</strong> whether apps go through it and which ones, the tool&rsquo;s host and port, and
+the password Datapavan made for it, which is encrypted under a key that Android&rsquo;s keystore protects.</li>
+</ul>
 <h2 id="version-01-cannot-open-network-connections">Version 0.1 cannot open network connections</h2>
 <p>Datapavan Basic 0.1 does not request the INTERNET permission, so Android itself prevents it from
 opening network connections. The build fails if any component tries to add that permission. Like any
 app, it can still hand information to another app when you ask it to, for example when you open a link.</p>
 <p>What Android itself does is outside Datapavan&rsquo;s control. On phones with Google&rsquo;s services, Play Protect may give Google information about the apps you install from any source, Datapavan included, and may send it an unknown app to check. You can turn part of this off in Play Protect&rsquo;s settings in the Play Store. Datapavan&rsquo;s hardware check can also make Android contact Google: on phones that get their attestation keys from Google&rsquo;s provisioning server, a check that finds none left asks Android for more (Android 13 tells the provisioning service, and from Android 14 the keystore asks it), and Android fetches them over its own connection. Datapavan sends nothing itself.</p>
+<h2 id="what-datapavan-advanced-connects-to">What Datapavan Advanced connects to</h2>
+<p>Datapavan Advanced, from 0.2.0, passes your apps&rsquo; traffic on to where they send it, through the firewall on the
+phone; none of it goes to us. Of its own, it asks your network&rsquo;s DNS resolver for the names apps look up, as the
+phone would without it, over an encrypted connection where the phone used one. When you send apps through your
+circumvention tool, their lookups go to the tool, and their other DNS questions go through the tool to Quad9, a
+Swiss foundation that does not log addresses, so Quad9 sees the tool&rsquo;s address, not yours.</p>
 <h2 id="permissions-and-why-they-are-needed">Permissions and why they are needed</h2>
 <table>
 	<thead>
@@ -235,8 +255,13 @@ app, it can still hand information to another app when you ask it to, for exampl
 			</tr>
 			<tr>
 					<td>Usage access (granted by you in Settings; optional)</td>
-					<td>Showing how much data each app has sent and received, and which apps you have not opened for a long time. Datapavan reads only totals and the date each app was last used, never which app you opened when, and keeps none of it. When you check one activity in an app, it also reads the phone&rsquo;s total traffic counters, which need no permission, to see whether Android&rsquo;s count is up to date; these numbers stay in memory while the check is on screen</td>
+					<td>Showing how much data each app has sent and received, and which apps you have not opened for a long time. For this, Datapavan reads only totals and the date each app was last used, and keeps none of it; Datapavan Basic never reads which app you opened when. When you check one activity in an app, it also reads the phone&rsquo;s total traffic counters, which need no permission, to see whether Android&rsquo;s count is up to date; these numbers stay in memory while the check is on screen</td>
 					<td>v0.1</td>
+			</tr>
+			<tr>
+					<td>Usage access, in Datapavan Advanced</td>
+					<td>Telling, for each connection, whether you were using its app at that moment, it ran with its notification (music, navigation), or neither. For this, Advanced also reads Android&rsquo;s record of which app was on screen and when. It keeps what it learns in two places only: in memory for the &ldquo;Now&rdquo; view, and, if you keep a connection log, as the state of each record, for the days you chose</td>
+					<td>Datapavan Advanced, from 0.2.0</td>
 			</tr>
 			<tr>
 					<td>Network state</td>
