@@ -371,8 +371,13 @@ pub enum Outcome {
 /// is tied to the flow by its address alone, and on an address that serves many names another app's
 /// lookup may have named it last (finding 20 of the independent review of 2026-11-09; ADR 0044, decision
 /// 4). Either can be wrong, the connection's own when an app sends a front, so a DNS name it differs
-/// from stays beside it ([`Flow::dns_name`]). A hello's name that is the public name of an ECH
-/// configuration never names a flow ([`Ech::Hidden`]): a DNS name stays the flow's then.
+/// from stays beside it ([`Flow::dns_name`]), while it is current: a stand-in's, tied to its address
+/// alone, always; an answer's while the answer is held in time since the phone started, so that a name
+/// kept through a night does not show its age as a difference. A stand-in's flow is named by its hello
+/// too, one rule for every flow: the hello says which server the app spoke to at the address the tool
+/// reached. A hello's name that is the public name of an ECH configuration Watch saw, in Android's
+/// resolver's answers or the app's own, never names a flow ([`Ech::Hidden`]): a DNS name stays the
+/// flow's then.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NamedBy {
     /// The server name of the TLS connection.

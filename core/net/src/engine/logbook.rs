@@ -15,11 +15,20 @@
 //! the logger, which makes it on the engine's thread ([`Shared::ask_flush`]). Made from the other thread,
 //! it let a count that had read the clock before it add after it, in the next quarter hour's segment, and
 //! a flow or an app's lookups begun on such a reading start in the quarter hour before, and take every
-//! count until the next cut.
+//! count until the next cut. The engine notes its thread as its loop starts, and debug builds check that
+//! the log's clock is read there alone ([`Shared::log_now`]).
 //!
-//! What is counted twice is placed twice: the bytes a relay hands on are counted as it hands them, and
-//! their packets as they cross the tunnel, each in the quarter hour it is counted in. A quarter hour that
-//! passes between the two splits them, by what is in flight between the relay and the tunnel.
+//! **What is counted when.** Each byte falls in the quarter hour of the reading it was counted on; what
+//! that reading is stays the engine's choice, named here (review 1 of W5's first part, engine, finding 3):
+//! - What is counted twice is placed twice: the bytes a relay hands on are counted as it hands them, and
+//!   their packets as they cross the tunnel, each in the quarter hour it is counted in. A quarter hour that
+//!   passes between the two splits them, by what is in flight between the relay and the tunnel.
+//! - The packets the engine holds before a flow opens, a TCP SYN until its server accepts, datagrams and
+//!   lookups until Android names their app, are counted when the flow opens, in its first segment: by at
+//!   most the connect wait for TCP (60 seconds awake), and the owner question and the socket for UDP and
+//!   lookups. Counting them at their arrival would need a segment before the flow's own start.
+//! - A count costs one reading of the wall clock: one for each UDP datagram, and for TCP one for each
+//!   read the relay hands on and one for each packet of the tunnel, about two for a small packet.
 
 use super::{Counters, DnsUse, Ech, Flow, LOG_DELAY, NamedBy, Outcome, Shared, lock};
 use crate::log;
