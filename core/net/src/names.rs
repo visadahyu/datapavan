@@ -17,13 +17,21 @@
 //! an app chooses that resolver, and must not be able to rename other apps' connections through it.
 //!
 //! It also keeps the public names of the ECH configurations in the DNS answers, as long as the
-//! addresses, at most [`PUBLIC_CAPACITY`] of them: a hello that offers ECH and names one of them hides
-//! the real name. They are scoped as the addresses are: those in Android's resolver's answers hide names
-//! in every app's flows, those an app got from a resolver of its own in that app's flows only, so that
-//! a public name never names a flow wherever Watch saw its configuration, and no app can hide the names
-//! of another's (review 1 of W5's first part, names, finding 1).
+//! addresses: a hello that offers ECH and names one of them hides the real name. They are scoped as the
+//! addresses are: those in Android's resolver's answers hide names in every app's flows, those an app got
+//! from a resolver of its own in that app's flows only, so that a public name never names a flow wherever
+//! Watch saw its configuration, and no app can hide the names of another's (review 1 of W5's first part,
+//! names, finding 1).
+//!
+//! Each scope has a table of its own, the oldest going first when it is full: Android's resolver's holds
+//! [`CAPACITY`] addresses and [`PUBLIC_CAPACITY`] public names, and each app's own [`OWN_CAPACITY`] and
+//! [`OWN_PUBLIC_CAPACITY`]. So an app's own resolver can push out only that app's names, never Android's
+//! nor another app's (review 2 of W5's first part: in one table, an app's answers could push Android's
+//! public names out, and the provider's cover name named every other app's flows again). The memory grows
+//! with the apps that use a resolver of their own, by at most their own tables each.
 
 use std::collections::{HashMap, VecDeque};
+use std::hash::Hash;
 use std::net::IpAddr;
 use std::time::{Duration, Instant};
 
@@ -31,10 +39,14 @@ use std::time::{Duration, Instant};
 pub const MIN_KEEP: Duration = Duration::from_secs(3600);
 /// How long an entry lives at most.
 pub const MAX_KEEP: Duration = Duration::from_hours(24);
-/// The most addresses kept.
+/// The most addresses kept from Android's resolver's answers.
 pub const CAPACITY: usize = 8192;
-/// The most public names kept.
+/// The most addresses kept from one app's own resolver's answers.
+pub const OWN_CAPACITY: usize = 1024;
+/// The most public names kept from Android's resolver's answers.
 pub const PUBLIC_CAPACITY: usize = 256;
+/// The most public names kept from one app's own resolver's answers.
+pub const OWN_PUBLIC_CAPACITY: usize = 64;
 
 /// Whose flows a name may name: every app's, or only the app with this UID.
 pub type Scope = Option<u32>;
@@ -48,13 +60,97 @@ struct Given {
     held_until: Duration,
 }
 
+/// The entries of one scope, the oldest first.
+#[derive(Debug)]
+struct Fifo<K, V> {
+    entries: HashMap<K, V>,
+    order: VecDeque<K>,
+}
+
+impl<K, V> Default for Fifo<K, V> {
+    fn default() -> Self {
+        Self {
+            entries: HashMap::new(),
+            order: VecDeque::new(),
+        }
+    }
+}
+
+impl<K: Hash + Eq + Clone, V> Fifo<K, V> {
+    /// Keeps `value` for `key`, and at most `cap` entries, the oldest going first.
+    fn insert(&mut self, key: K, value: V, cap: usize) {
+        if self.entries.insert(key.clone(), value).is_none() {
+            self.order.push_back(key);
+        }
+        while self.order.len() > cap {
+            if let Some(oldest) = self.order.pop_front() {
+                self.entries.remove(&oldest);
+            }
+        }
+    }
+}
+
+/// Entries for every app's flows, and for each app's own, each scope in a table of its own.
+#[derive(Debug)]
+struct Scoped<K, V> {
+    shared: Fifo<K, V>,
+    own: HashMap<u32, Fifo<K, V>>,
+    /// The most entries of the shared table, and of each app's.
+    caps: (usize, usize),
+}
+
+impl<K: Hash + Eq + Clone, V> Scoped<K, V> {
+    fn new(caps: (usize, usize)) -> Self {
+        Self {
+            shared: Fifo::default(),
+            own: HashMap::new(),
+            caps,
+        }
+    }
+
+    fn insert(&mut self, scope: Scope, key: K, value: V) {
+        match scope {
+            None => self.shared.insert(key, value, self.caps.0),
+            Some(uid) => self
+                .own
+                .entry(uid)
+                .or_default()
+                .insert(key, value, self.caps.1),
+        }
+    }
+
+    /// The entries for the flows of the app with `uid`: its own first, then every app's.
+    fn for_app(&self, key: &K, uid: Option<u32>) -> impl Iterator<Item = &V> {
+        let own = uid
+            .and_then(|uid| self.own.get(&uid))
+            .and_then(|table| table.entries.get(key));
+        own.into_iter().chain(self.shared.entries.get(key))
+    }
+
+    fn clear(&mut self) {
+        self.shared = Fifo::default();
+        self.own.clear();
+    }
+
+    fn len(&self) -> usize {
+        self.shared.entries.len() + self.own.values().map(|t| t.entries.len()).sum::<usize>()
+    }
+}
+
 /// Names by address.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Names {
-    by_address: HashMap<(IpAddr, Scope), Given>,
-    order: VecDeque<(IpAddr, Scope)>,
-    public: HashMap<(String, Scope), Instant>,
-    public_order: VecDeque<(String, Scope)>,
+    addresses: Scoped<IpAddr, Given>,
+    public: Scoped<String, Instant>,
+}
+
+impl Default for Names {
+    fn default() -> Self {
+        Self {
+            addresses: Scoped::new((CAPACITY, OWN_CAPACITY)),
+            public: Scoped::new((PUBLIC_CAPACITY, OWN_PUBLIC_CAPACITY)),
+        }
+    }
 }
 
 impl Names {
@@ -74,41 +170,23 @@ impl Names {
             until: now + keep,
             held_until: boot.saturating_add(keep),
         };
-        if self.by_address.insert((address, scope), given).is_none() {
-            self.order.push_back((address, scope));
-        }
-        while self.order.len() > CAPACITY {
-            if let Some(oldest) = self.order.pop_front() {
-                self.by_address.remove(&oldest);
-            }
-        }
+        self.addresses.insert(scope, address, given);
     }
 
     /// Remembers that a DNS answer gave an ECH configuration with the public name `name`, for the flows
     /// of `scope`.
     pub fn insert_public(&mut self, name: &str, scope: Scope, ttl: u32, now: Instant) {
         let keep = Duration::from_secs(u64::from(ttl)).clamp(MIN_KEEP, MAX_KEEP);
-        let key = (name.to_owned(), scope);
-        if self.public.insert(key.clone(), now + keep).is_none() {
-            self.public_order.push_back(key);
-        }
-        while self.public_order.len() > PUBLIC_CAPACITY {
-            if let Some(oldest) = self.public_order.pop_front() {
-                self.public.remove(&oldest);
-            }
-        }
+        self.public.insert(scope, name.to_owned(), now + keep);
     }
 
     /// Whether `name` is the public name of an ECH configuration still kept for the flows of the app with
     /// `uid`: from Android's resolver, or from that app's own.
     #[must_use]
     pub fn is_public(&self, name: &str, uid: Option<u32>, now: Instant) -> bool {
-        let live = |scope: Scope| {
-            self.public
-                .get(&(name.to_owned(), scope))
-                .is_some_and(|until| *until > now)
-        };
-        live(None) || uid.is_some_and(|uid| live(Some(uid)))
+        self.public
+            .for_app(&name.to_owned(), uid)
+            .any(|until| *until > now)
     }
 
     /// The name last given for `address` to the app with `uid`, if it is still kept: from that app's own
@@ -135,30 +213,27 @@ impl Names {
     }
 
     fn given(&self, address: IpAddr, uid: Option<u32>, now: Instant) -> Option<&Given> {
-        let own = uid.and_then(|uid| self.by_address.get(&(address, Some(uid))));
-        own.into_iter()
-            .chain(self.by_address.get(&(address, None)))
+        self.addresses
+            .for_app(&address, uid)
             .find(|given| given.until > now)
     }
 
     /// Forgets everything, as when the user wipes the log.
     pub fn clear(&mut self) {
-        self.by_address.clear();
-        self.order.clear();
+        self.addresses.clear();
         self.public.clear();
-        self.public_order.clear();
     }
 
-    /// How many addresses are kept.
+    /// How many addresses are kept, of every scope.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.by_address.len()
+        self.addresses.len()
     }
 
     /// Whether none is kept.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.by_address.is_empty()
+        self.len() == 0
     }
 }
 
@@ -259,6 +334,35 @@ mod tests {
         );
         names.clear();
         assert!(!names.is_public("p1.example", None, now));
+    }
+
+    /// Review 2 of W5's first part: one app's own resolver can push out only its own names, never
+    /// Android's nor another app's, public names and addresses alike.
+    #[test]
+    fn an_apps_own_resolver_pushes_out_only_its_own_names() {
+        let mut names = Names::default();
+        let now = Instant::now();
+        let a = IpAddr::V4(Ipv4Addr::new(93, 184, 216, 34));
+        names.insert_public("cover.example", None, 300, now);
+        names.insert_public("mine.example", Some(10_123), 300, now);
+        names.insert(a, None, "www.example.com", 300, (now, BOOT));
+        names.insert(a, Some(10_456), "own.example", 300, (now, BOOT));
+        for i in 0..PUBLIC_CAPACITY + OWN_PUBLIC_CAPACITY {
+            names.insert_public(&format!("p{i}.example"), Some(10_999), 300, now);
+        }
+        for i in 0..u32::try_from(CAPACITY + OWN_CAPACITY).unwrap_or(0) {
+            let other = IpAddr::V4(Ipv4Addr::from(0x0a00_0000 + i));
+            names.insert(other, Some(10_999), "x.example", 300, (now, BOOT));
+        }
+        assert!(names.is_public("cover.example", Some(10_456), now));
+        assert!(names.is_public("mine.example", Some(10_123), now));
+        assert_eq!(names.get(a, Some(10_123), now), Some("www.example.com"));
+        assert_eq!(names.get(a, Some(10_456), now), Some("own.example"));
+        // The flooding app's own tables keep only their newest.
+        assert!(!names.is_public("p0.example", Some(10_999), now));
+        let last = PUBLIC_CAPACITY + OWN_PUBLIC_CAPACITY - 1;
+        assert!(names.is_public(&format!("p{last}.example"), Some(10_999), now));
+        assert_eq!(names.len(), 2 + OWN_CAPACITY);
     }
 
     /// An app's own resolver's public names hide names in that app's flows only.
