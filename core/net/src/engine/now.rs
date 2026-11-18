@@ -31,6 +31,14 @@ pub(super) const PLACES: usize = 2_048;
 /// At most this many destinations are kept for one app.
 pub(super) const PLACES_PER_APP: usize = 128;
 
+/// At most this many addresses' organisations are kept for the view; past it they are looked up anew.
+const ORGANISATIONS: usize = 4_096;
+
+/// At most this many addresses' organisations are looked up for one snapshot, out of every lock, so that
+/// the first snapshot after a busy hour neither holds the engine nor waits long (review b1 of W5's
+/// second part, engine, finding 7); the others come in the next.
+const LOOKUPS_PER_VIEW: usize = 64;
+
 /// The windows of the live view in whole minutes: the current one and the 9, or the 59, before it.
 pub(super) const WINDOWS: [u64; 2] = [10, 60];
 
@@ -92,9 +100,6 @@ impl<'a> Seen<'a> {
 /// A destination an app reached: the latest flow to it, as it was named, and its bytes.
 struct Place {
     flow: Flow,
-    /// The network and organisation behind its address, once `looked` up for the view.
-    organisation: Option<(Network, String)>,
-    looked: bool,
     minutes: Minutes<Ways>,
     session: Ways,
     /// The last second with bytes to it.
@@ -129,6 +134,8 @@ pub(super) struct Counts {
     apps: HashMap<Option<u32>, App>,
     /// How many destinations all apps keep together.
     places: usize,
+    /// The organisation behind each address the view looked up, at most [`ORGANISATIONS`] of them.
+    organisations: HashMap<std::net::IpAddr, Option<(Network, String)>>,
     /// When the screen last came on, in milliseconds since 1970: the window "since the screen came on".
     session: Option<u64>,
 }
@@ -257,8 +264,6 @@ impl Counts {
                 };
                 app.places.push(Place {
                     flow: flow.clone(),
-                    organisation: None,
-                    looked: false,
                     minutes: VecDeque::new(),
                     session: Ways::default(),
                     last: second,
@@ -279,10 +284,7 @@ impl Counts {
         place.flow.protocol = flow.protocol;
         place.flow.ech = flow.ech;
         place.flow.came_in = flow.came_in;
-        if place.flow.network != flow.network {
-            place.flow.network = flow.network;
-            place.looked = false;
-        }
+        place.flow.network = flow.network;
         if place.flow.resolver != flow.resolver {
             place.flow.resolver.clone_from(&flow.resolver);
         }
@@ -351,46 +353,61 @@ impl Shared {
     /// window, the seconds not placed yet in a column apart, and its destinations with theirs.
     pub(super) fn now_view(&self, now: u64) -> Snapshot {
         let tool = self.chain().map(|chain| chain.tool);
-        let live = lock(&self.live);
-        let mut activity = lock(&self.activity);
-        activity.counts.forget_old(now);
-        let mut view = View::new(now, activity.counts.session);
-        for (&uid, app) in &activity.counts.apps {
-            view.settled(uid, app);
-        }
-        // The seconds not placed yet: in the live flows and the segments held.
-        for live in live.values() {
-            let marks = lock(&live.bytes.marks);
-            let seen = Seen::live(&live.flow, live.hidden);
-            view.waiting(live.flow.uid, &marks, live.bytes.now(), seen);
-        }
-        for piece in &activity.held {
-            view.waiting(piece.uid, &piece.marks, piece.last, Seen::of(&piece.of));
-        }
-        drop(live);
-        // Each destination's organisation, looked up once.
-        for app in activity.counts.apps.values_mut() {
-            for place in &mut app.places {
-                if !place.looked {
-                    place.organisation = self.organisation_of(&place.flow);
-                    place.looked = true;
+        let (view, head, mut found) = {
+            let live = lock(&self.live);
+            let mut activity = lock(&self.activity);
+            activity.counts.forget_old(now);
+            let mut view = View::new(now, activity.counts.session);
+            for (&uid, app) in &activity.counts.apps {
+                view.settled(uid, app);
+            }
+            // The seconds not placed yet: in the live flows and the segments held.
+            for live in live.values() {
+                let marks = lock(&live.bytes.marks);
+                let seen = Seen::live(&live.flow, live.hidden);
+                view.waiting(live.flow.uid, &marks, live.bytes.now(), seen);
+            }
+            for piece in &activity.held {
+                view.waiting(piece.uid, &piece.marks, piece.last, Seen::of(&piece.of));
+            }
+            let head = (
+                activity.known(),
+                activity.told_until(),
+                activity.screen(),
+                activity.counts.session,
+                view.apps
+                    .keys()
+                    .map(|&uid| (uid, activity.now(uid)))
+                    .collect::<HashMap<_, _>>(),
+            );
+            // The organisations already known; the others to look up, out of the locks.
+            let mut found = HashMap::new();
+            for app in view.apps.values() {
+                for (flow, _) in &app.places {
+                    let address = flow.destination.ip();
+                    if flow.named_by != NamedBy::Organisation
+                        && let Some(known) = activity.counts.organisations.get(&address)
+                    {
+                        found.insert(address, known.clone());
+                    }
                 }
             }
-        }
+            (view, head, found)
+        };
+        self.look_up(&view, &mut found);
+        let (known, told_until, screen, session, states) = head;
         let apps = view
             .apps
             .into_iter()
             .map(|(uid, app)| {
-                let kept = activity.counts.apps.get(&uid);
                 let places = app
                     .places
                     .into_iter()
                     .map(|(flow, bytes)| {
-                        let organisation = match kept
-                            .and_then(|a| a.places.iter().find(|p| same_place(&p.flow, &flow)))
-                        {
-                            Some(place) => place.organisation.clone(),
-                            None => self.organisation_of(&flow),
+                        let organisation = if flow.named_by == NamedBy::Organisation {
+                            self.organisation_of(&flow)
+                        } else {
+                            found.get(&flow.destination.ip()).cloned().flatten()
                         };
                         PlaceNow {
                             flow,
@@ -401,7 +418,7 @@ impl Shared {
                     .collect();
                 AppNow {
                     uid,
-                    now: activity.now(uid),
+                    now: states.get(&uid).copied().flatten(),
                     tool: uid.is_some() && uid == tool,
                     through_tool: app.through_tool,
                     bytes: app.bytes,
@@ -411,12 +428,48 @@ impl Shared {
             .collect();
         Snapshot {
             taken: now,
-            known: activity.known(),
-            told_until: activity.told_until(),
-            screen: activity.screen(),
-            session: activity.counts.session,
+            known,
+            told_until,
+            screen,
+            session,
             apps,
         }
+    }
+
+    /// Looks up, with no lock held, the organisations of at most [`LOOKUPS_PER_VIEW`] of the view's
+    /// destinations not `found` yet, keeps them for the next snapshots and adds them to `found`.
+    fn look_up(
+        &self,
+        view: &View,
+        found: &mut HashMap<std::net::IpAddr, Option<(Network, String)>>,
+    ) {
+        let wanted: Vec<_> = view
+            .apps
+            .values()
+            .flat_map(|app| app.places.iter())
+            .filter(|(flow, _)| flow.named_by != NamedBy::Organisation)
+            .map(|(flow, _)| flow.destination.ip())
+            .filter(|address| !found.contains_key(address))
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .take(LOOKUPS_PER_VIEW)
+            .collect();
+        if wanted.is_empty() {
+            return;
+        }
+        let looked: Vec<_> = wanted
+            .into_iter()
+            .map(|address| (address, self.organisation(address)))
+            .collect();
+        {
+            let mut activity = lock(&self.activity);
+            let kept = &mut activity.counts.organisations;
+            if kept.len() + looked.len() > ORGANISATIONS {
+                kept.clear();
+            }
+            kept.extend(looked.iter().cloned());
+        }
+        found.extend(looked);
     }
 
     /// The network and organisation behind a destination: the flow's own where the organisation table
@@ -512,6 +565,7 @@ impl View {
         if matches!(seen, Seen::Lookups) {
             return;
         }
+        let mut place: Option<Option<usize>> = None;
         for (i, mark) in marks.iter().enumerate() {
             let next = marks.get(i + 1).map_or(now, |m| m.counts);
             let ways = [
@@ -536,14 +590,20 @@ impl View {
                 Seen::Flow(flow) => flow,
                 Seen::Lookups => continue,
             };
-            let known = app.places.iter().position(|(f, _)| same_place(f, flow));
-            let at = match known {
-                Some(at) => at,
-                None if app.places.len() < PLACES_PER_APP => {
-                    app.places.push((flow.clone(), [Ways::default(); 3]));
-                    app.places.len() - 1
-                }
-                None => continue,
+            // The flow's destination, found once for all its marks (review b1, engine, nit 3).
+            let at = *place.get_or_insert_with(|| {
+                app.places
+                    .iter()
+                    .position(|(f, _)| same_place(f, flow))
+                    .or_else(|| {
+                        (app.places.len() < PLACES_PER_APP).then(|| {
+                            app.places.push((flow.clone(), [Ways::default(); 3]));
+                            app.places.len() - 1
+                        })
+                    })
+            });
+            let Some(at) = at else {
+                continue;
             };
             for (w, inside) in windows.into_iter().enumerate() {
                 if inside {
@@ -1071,6 +1131,90 @@ mod tests {
             Seen::Flow(&organisation(64_501)),
         );
         assert_eq!(asn(&shared.now_view(T + 2_000)), Some(64_501));
+    }
+
+    /// The organisation table read by a snapshot: how often, and how often while the engine's flows or
+    /// counts were held.
+    struct Probe {
+        table: Vec<u8>,
+        shared: std::sync::OnceLock<std::sync::Weak<Shared>>,
+        reads: std::sync::atomic::AtomicUsize,
+        held: std::sync::atomic::AtomicUsize,
+    }
+
+    impl crate::organisations::Source for Arc<Probe> {
+        fn read_exact_at(&self, buffer: &mut [u8], offset: u64) -> std::io::Result<()> {
+            use std::sync::atomic::Ordering::Relaxed;
+            if let Some(shared) = self.shared.get().and_then(std::sync::Weak::upgrade) {
+                self.reads.fetch_add(1, Relaxed);
+                if shared.activity.try_lock().is_err() || shared.live.try_lock().is_err() {
+                    self.held.fetch_add(1, Relaxed);
+                }
+            }
+            self.table.read_exact_at(buffer, offset)
+        }
+
+        fn size(&self) -> std::io::Result<u64> {
+            self.table.size()
+        }
+    }
+
+    /// A snapshot looks organisations up with no lock of the engine held, at most
+    /// [`LOOKUPS_PER_VIEW`] addresses at a time, and never again an address it looked up already (review
+    /// b1 of W5's second part, engine, finding 7).
+    #[test]
+    fn a_snapshot_looks_organisations_up_outside_the_locks_a_few_at_a_time() {
+        use std::sync::atomic::Ordering::Relaxed;
+        let probe = Arc::new(Probe {
+            table: crate::organisations::tests::sample(),
+            shared: std::sync::OnceLock::new(),
+            reads: std::sync::atomic::AtomicUsize::new(0),
+            held: std::sync::atomic::AtomicUsize::new(0),
+        });
+        let (mut shared, _, _) = telling_at(T);
+        shared.organisations = Some(
+            crate::organisations::Organisations::open(Box::new(probe.clone()))
+                .unwrap_or_else(|e| unreachable!("{e}")),
+        );
+        // 100 destinations of one app in the sample's network of Example Net.
+        {
+            let mut activity = lock(&shared.activity);
+            for i in 0..100u8 {
+                let to = Flow {
+                    destination: SocketAddr::from(([93, 184, 216, i], 443)),
+                    name: None,
+                    named_by: NamedBy::Unknown,
+                    ..flow(u64::from(i), Some(UID))
+                };
+                activity.counts.count(
+                    Some(UID),
+                    T / 1000,
+                    [1, 0, 0, 0],
+                    BACKGROUND,
+                    Seen::Flow(&to),
+                );
+            }
+        }
+        let shared = Arc::new(shared);
+        assert!(probe.shared.set(Arc::downgrade(&shared)).is_ok());
+        let named = |snapshot: &Snapshot| {
+            app_of(snapshot, Some(UID)).map_or(0, |app| {
+                app.places
+                    .iter()
+                    .filter(|place| {
+                        place.organisation.as_ref().map(|o| o.1.as_str())
+                            == Some("Example Net, Inc.")
+                    })
+                    .count()
+            })
+        };
+        assert_eq!(named(&shared.now_view(T + 1_000)), LOOKUPS_PER_VIEW);
+        assert!(probe.reads.load(Relaxed) > 0);
+        assert_eq!(named(&shared.now_view(T + 2_000)), 100);
+        let reads = probe.reads.load(Relaxed);
+        assert_eq!(named(&shared.now_view(T + 3_000)), 100);
+        assert_eq!(probe.reads.load(Relaxed), reads, "looked up once");
+        assert_eq!(probe.held.load(Relaxed), 0, "no read under a lock");
     }
 
     /// Minutes counted out of order are kept in order.
