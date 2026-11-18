@@ -3,6 +3,8 @@ package org.visadahyu.datapavan.watch.log
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneId
@@ -38,8 +40,8 @@ class LogDaysTest {
      * In every zone, every instant at which the local date changes falls on a quarter hour of UTC, from 2012
      * to 2100: every offset the zone uses then is a whole number of quarter hours, which puts its midnights
      * on one, and every change of offset that changes the local date falls on one. tzdata's own rules give
-     * the changes ahead. Until 2010, Newfoundland's and Moncton's did not: they changed the date at 02:31
-     * and 03:01 UTC.
+     * the changes ahead. Until 2010, Newfoundland's, Goose Bay's and Moncton's did not: they changed the
+     * date at 02:31, 03:01 and 03:01 UTC.
      */
     @Test
     fun everyChangeOfTheLocalDateFallsOnAQuarterHourOfUtc() {
@@ -86,8 +88,9 @@ class LogDaysTest {
     }
 
     /**
-     * The zone changes between batches, as on a journey or when the user sets it: each record is filed by
-     * the zone the clock reads when it is written, and lies within that zone's day.
+     * The zone changes between batches, as on a journey or when the user sets it: the log files each batch
+     * ([ConnectionLog.file], as `writeNow` does) by the zone the clock reads when it is written, and each
+     * record lies within that zone's day.
      */
     @Test
     fun aZoneChangedBetweenBatchesFilesEachRecordWithinOneDayOfItsZone() {
@@ -96,11 +99,17 @@ class LogDaysTest {
             "Asia/Tehran", "Pacific/Kiritimati", "Africa/Monrovia", "Europe/Istanbul",
         ).map(ZoneId::of)
         val clock = Travel(journey[0])
-        for ((i, span) in spans.withIndex()) {
+        for ((i, written) in EngineRecords.records.withIndex()) {
             clock.zone = journey[i % journey.size]
-            val (start, end) = span
-            assertTrue("$start..$end filed in ${clock.zone}", clock.withinItsDay(start, end))
-            assertEquals(Instant.ofEpochMilli(start).atZone(clock.zone).toLocalDate().toEpochDay(), clock.dayOf(start))
+            val (record, bytes) = written
+            val batch = ByteBuffer.allocate(4 + 2 + bytes.size).order(ByteOrder.LITTLE_ENDIAN)
+                .putInt(1).putShort(bytes.size.toShort()).put(bytes).array()
+            val filed = ConnectionLog.file(batch, clock, Long.MIN_VALUE, pastRetention = false) {}
+            assertEquals(1, filed.size)
+            val day = filed[0].day
+            assertEquals(Instant.ofEpochMilli(record.start).atZone(clock.zone).toLocalDate().toEpochDay(), day)
+            assertTrue("${record.start}..${record.end} filed in ${clock.zone}", clock.withinItsDay(record.start, record.end))
+            assertEquals(day, clock.dayOf(maxOf(record.start, record.end - 1)))
         }
     }
 
