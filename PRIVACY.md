@@ -40,7 +40,7 @@ your unlocked phone can see it, as they can see the rest of the app.
   log keeps no destination unless you turn that on.
 - **Each app's recent traffic, for the "Now" view,** in memory only. It is gone when the firewall stops.
 - **Your circumvention tool's settings:** whether apps go through it and which ones, the tool's host and port, and
-  the password Datapavan made for it, encrypted under a key that Android's keystore protects.
+  the password Datapavan made for it, which is encrypted under a key that Android's keystore protects.
 
 ## Version 0.1 cannot open network connections
 
