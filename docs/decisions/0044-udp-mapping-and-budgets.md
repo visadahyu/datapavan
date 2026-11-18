@@ -95,6 +95,22 @@ an ADR (D25).
    - (Built 2026-11-18, in W5's first part: the DNS name is written only where the names differ, so its presence
      is that flag, and no bit of its own says it twice; a flow that came in is bit 1 of the record's flags. The
      order of names is written once, in the engine's `NamedBy`.)
+   - (Decided in its first fix round, 2026-11-18, after review 1 of W5's first part.
+     - ECH public names in the answers of an app's own plain resolver are kept as its addresses are, for that app's
+       flows only, so a public name names no flow wherever Watch saw its configuration, and no app hides another's
+       names (names, finding 1).
+     - A DNS name stands beside the connection's own only while it is current: a name from an answer is kept, to
+       name flows, on the monotonic clock, and through a night it would show W5's users a difference that is only
+       its age, so it stands beside another only while the answer is held in time since the phone started, with the
+       same hold (at least an hour, at most a day). The answer's own time to live would hide a real difference
+       after a minute, since apps keep addresses longer than DNS says (engine, finding 7).
+     - A stand-in's name is the name the tool was asked to reach, tied to that address alone, so it is current while
+       the stand-in lives and stands beside the hello's name; the hello's name names the flow, one rule for every
+       flow, since the hello says which server the app spoke to at the address the tool reached, and both names are
+       kept (names, finding 9).
+     - The mark of an app's own encrypted DNS follows the name that names the flow: a hello that renames a flow
+       marks it again from its port, its address and the hello's name, so a mark that only its DNS name gave goes
+       with that name, and the counter of such flows takes it back (names, finding 10).)
 5. **The smaller gaps:**
    - **Resets:** an upstream that ends in an error ends the other side with a reset (linger zero), both ways.
    - **ICMP echo:** carried through unprivileged ICMP sockets, protected, at most 32. Its owner cannot be asked of
@@ -2336,8 +2352,8 @@ are its mechanisms; ADR 0037 holds the log's row.
 |---|---|---|---|---|---|---|
 | The log's times and quarter hours: each count of a flow's bytes, each lookup and answer counted, a flow's start and end, the flush, the logger's wake | `logbook.rs` (`Shared::log_now`), from `tcp.rs` and `udp.rs` | Wall, handed in | Before: the timer woke late, and a night's bytes went into one segment from the evening, filed under its day, through the timer or a flow's end | Before: a segment ending before it began, its end set to its start | A flow's bytes in another quarter hour, and another day | Fixed: each count cuts first, at the quarter hours passed either way (ADR 0037, decision 1 as amended) |
 | The logger's waits: 30 s gathering, the sleep to the next quarter hour | `logbook.rs` (`logger`) | Monotonic (tokio) | It wakes late; records already cut wait in memory until it does, and are lost if the process dies first, as any record waiting is | None | Nothing now: no segment depends on it | Accepted |
-| DNS answers kept for apps that go directly while a chain is on, and for chained apps' questions through the tool (ADR 0038) | `dnscache.rs`, `udp.rs` (`cached_answer`), `lookups.rs` | Was monotonic; now `CLOCK_BOOTTIME` | Before: an answer of five minutes kept before a night was served in the morning, for as long again as the phone had been awake; Android's own resolver, which this cache stands in for, would have dropped it | None | An app given an address past its time to live | Fixed |
-| Names from DNS answers, and ECH public names (at least an hour, at most a day) | `names.rs`, `naming.rs` | Monotonic | A name is kept longer in real time | None | A DNS name kept through a night can name a flow that sends no name of its own, or stand beside its own name | Accepted: apps reconnect after a night to addresses they got before it (a browser's own cache, a pool of connections), and the name they asked for names those flows; a newer answer for the address replaces it; and the connection's own name now names a flow that sends one (finding 20) |
+| DNS answers kept for apps that go directly while a chain is on, and for chained apps' questions through the tool (ADR 0038) | `dnscache.rs`, `udp.rs` (`cached_answer`), `lookups.rs` | Was monotonic; now `CLOCK_BOOTTIME` | Before: an answer of five minutes kept before a night was served in the morning, for as long again as the phone had been awake; Android's own resolver, which this cache stands in for, would have dropped it | None | An app given an address past its time to live | Fixed. A reading that fails keeps nothing (fix round 1, engine, finding 4) |
+| Names from DNS answers, and ECH public names (at least an hour, at most a day) | `names.rs`, `naming.rs` | Monotonic; and `CLOCK_BOOTTIME` to stand beside a connection's own name | A name is kept longer in real time | None | A DNS name kept through a night can name a flow that sends no name of its own; beside its own name it would show its age as a difference | Accepted for naming: apps reconnect after a night to addresses they got before it (a browser's own cache, a pool of connections), and the name they asked for names those flows; a newer answer for the address replaces it; and the connection's own name now names a flow that sends one (finding 20). Fixed beside: a name stands beside a connection's own only while held in time since the phone started (fix round 1, engine, finding 7) |
 | TCP rewriting: idle limit (10 min), port cooling (60 s), the sweep (60 s), the linger after a relay (30 s) | `nat.rs`, `tcp.rs`, `engine.rs` (`run`) | Monotonic | An idle connection is kept across the night, as the app's kernel keeps it, whose TCP timers stand still too | None | None; on `CLOCK_BOOTTIME` the engine would forget a push connection the app still holds, and reset it at its first packet in the morning | Correct as it is |
 | UDP mappings: idle end (120 s), quiet (5 s), asking Android again (1 s, and every 30 s), the contest (5 s), Android's answers near datagrams | `udp.rs`, `whose.rs` | Monotonic | A mapping idle across the night stays, as the app's socket does; no app opens or closes a socket while the phone sleeps, so time awake is the time in which a port can change hands | None | None | Correct as it is |
 | Waits: a TCP connect (60 s), a tool's handshake, lookups through the tool, connections kept to its resolvers, the tunnel's write in a swap (200 ms), the listener's pauses, a reset's drain (2 s), pings (idle 10 s, quiet 2 s), fragments (5 s) | `upstream.rs`, `chain.rs`, `lookups.rs`, `kept.rs`, `tun.rs`, `tcp.rs`, `echo.rs`, `fragments.rs`, `engine.rs` | Monotonic (tokio or `Instant`) | A wait lasts longer in real time, as the kernel's own retransmission timers do | None | None: nothing is recorded from them | Correct as it is |
@@ -2346,3 +2362,9 @@ are its mechanisms; ADR 0037 holds the log's row.
 - **Tests.** The log's: ADR 0037's note of the same day. The caches': an answer kept for five minutes answers for
   four and is gone after a night's sleep, in the cache (`dnscache.rs`), for a direct app while a chain is on
   (`udp.rs`) and for a chained app's question through the tool (`lookups.rs`), each with a clock the test moves.
+  No unit test can tell `CLOCK_BOOTTIME` from `CLOCK_MONOTONIC` on a machine that has not slept since it started:
+  the clock the engine reads there is checked by reading, and the tests move the clock the engine is handed (fix
+  round 1, a mutant review 1 left alive).
+- **Cost** (fix round 1, engine, finding 5): each count of the log reads the wall clock once, a vDSO call of about
+  20 ns, and takes no lock within a quarter hour; `CLOCK_BOOTTIME` is read once for each DNS answer a cache keeps or
+  looks up, never for each packet. ADR 0037's note says how many reads a packet costs.

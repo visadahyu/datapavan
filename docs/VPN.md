@@ -31,7 +31,10 @@ Watch, the part of Datapavan planned for v0.2, is a service of Datapavan Advance
    2. the TLS ClientHello SNI of the connection;
    3. the QUIC Initial SNI (harder, later);
    4. an offline IP → ASN/organisation database.
-   When none applies, the UI says "unknown" plainly.
+   When none applies, the UI says "unknown" plainly. (Amended 2026-11-18, in W5's first part: the connection's own
+   server name, TLS or QUIC, now comes first, then the DNS answer, whose name is kept beside it where the two
+   differ, then the organisation. A DNS answer is tied to a flow by its address alone, and either name can be
+   wrong. [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), decision 4.)
 5. **Decision.** The rule engine returns allow, block or log-only.
 6. **Forwarding.** Android's own TCP stack, reached through rewritten addresses, terminates each connection locally ([ADR 0012](decisions/0012-packet-engine.md)). The app's SYN is held until the owner lookup and the real, `protect()`-ed connection to the destination are done, then bytes are relayed. UDP leaves through one mapping per app socket, whatever the destination: one protected socket, or for an app chained through the user's tool one SOCKS5 `UDP ASSOCIATE`, each datagram with a header that names its destination. Answers come in only from addresses that app sent to; through the tool, the header of each answer says where it came from (endpoint-independent mapping with address-dependent filtering, [ADR 0044](decisions/0044-udp-mapping-and-budgets.md)). A mapping silent both ways for two minutes ends, and so does one that the chain, set again, sends another way. Each destination is still its own flow in the log, and a new flow's first datagrams wait in it, in order, while its owner is found and its socket opened off the event loop.
 7. **Recording.** Per-flow statistics go to app-private, encrypted SQLite (key in the Android Keystore). Retention is the user's choice at onboarding: none, 1 day, 7 days or 30 days, with no default and none kept until the user chooses ([ADR 0040](decisions/0040-own-safety-in-an-untrusted-environment.md)), and a one-tap wipe. Flows chained through a circumvention proxy are counted but their destinations are **not** recorded by default, because a log of them is evidence in a phone search.

@@ -48,8 +48,9 @@ Option 3.
    from that day's key, so it links an app's rows within a day and not across days), and the sealed record:
    all other fields, with the day and the token as associated data. A fresh 96-bit nonce per record.
    (Amended 2026-11-18, W5's first part, after finding 20 of an independent review of 2026-11-09: the record's
-   format is version 2. A flow's name is the server name the connection itself sent, where it sent one, and
-   the name a DNS answer gave its address is kept beside it where the two differ, since either can be wrong;
+   format is version 2. A flow's name is the server name the connection itself sent, where it sent one that is
+   not the public name of an ECH configuration Watch saw, and the name a DNS answer gave its address is kept
+   beside it where the two differ and that answer is current, since either can be wrong;
    bit 1 of its flags says the flow came in (ADR 0044, decision 4). Version 1, never in a release, stays
    readable, since debug builds on test phones sealed days in it; a record of a version the reader does not know
    is skipped and counted, never read as another. Both sides read one fixture the engine writes, so that the
@@ -62,13 +63,29 @@ Option 3.
    whichever way the clock moved: the segment carries its bytes to the end of its own quarter hour, and the next
    begins at the start of the quarter hour the clock reads. So no byte is counted in a segment of another quarter
    hour, and the quarter hours of a sleep, which had none, have no record. The flush the end-to-end test asks for
-   is made on the engine's thread too, between counts. Every zone of tzdata is a whole number of quarter hours from
-   UTC, and has been since 1979 (2026f, read on 2026-11-18; the last two that were not, Africa/Monrovia and
-   Pacific/Kiritimati, left those offsets in 1972 and 1979), Kathmandu's +5:45, the Chatham Islands' +12:45 and
-   +13:45 and Eucla's +8:45 included, so no record spans a local midnight. The engine reads its clock through one
+   is made on the engine's thread too, between counts, and debug builds check that the log's clock is read there
+   alone. In every zone of tzdata, every change of the local date since 2011 falls on a quarter hour of UTC (2026f,
+   read on 2026-11-18): every offset is a whole number of quarter hours, which puts every midnight on one, and has
+   been since 1979 (Africa/Monrovia and Pacific/Kiritimati left the last others in 1972 and 1979); and every
+   change of offset that changes the date falls on one, as it has since 2011 (Newfoundland, Goose Bay and Moncton
+   changed theirs at 00:01 local time until 2010 and 2006, so that the date changed at 02:31 or 03:01 UTC).
+   Kathmandu's +5:45, the Chatham Islands' +12:45 and +13:45 and Eucla's +8:45 included, no record therefore
+   spans a change of the local date; a clock set to before 2011 in those three zones could make one span it, and
+   is accepted. (Corrected 2026-11-18 after review 1 of W5's first part, names, finding 5: the first wording
+   rested the conclusion on the offsets alone.) The engine reads its clock through one
    it is handed, which tests move: a sleep of hours ended by no packet, by the app's or by the server's, a jump
    back, a jump forward, and each way a flow ends after the gap. The engine's other clocks are in ADR 0044's table
-   of the same day.)
+   of the same day.
+   Two limits stay, named after review 1 of W5's first part (engine, findings 3 and 5). The packets the engine holds
+   before a flow opens, a TCP SYN until its server accepts, datagrams and lookups until Android names their app,
+   are counted when the flow opens, in its first segment: by at most the connect wait for TCP (60 seconds awake,
+   longer in real time if the phone sleeps meanwhile), and the owner question and the socket for UDP and lookups
+   (milliseconds). Counting them at their arrival would need a segment before the flow's own start. And each count
+   reads the wall clock once (a vDSO call, about 20 ns): one read for each UDP datagram, but a relayed TCP
+   connection is counted by the relay as it hands each read on and by the tunnel packet by packet, so about two
+   reads for a small TCP packet and 1.1 for bulk, against the one read for each packet the brief set; merging the
+   two counts would place one in the other's quarter hour. A flow's outcome or name that changes in a quarter hour
+   after the last count changes after the cut, so the segment before keeps the outcome and name it had.)
 2. **Keys.** At the first record of a day Watch draws a 256-bit day key, keeps it in memory for that day, and
    stores it only wrapped with the Keystore public key (RSA-OAEP). At midnight the old day key is cleared from
    memory (best effort: the JVM may hold copies). The private key is generated in the Keystore and never
@@ -113,11 +130,16 @@ Option 3.
 - **Day boundaries** follow the phone's time zone at the time of writing; a change of zone can make one day
   shorter or longer. Accepted. (Amended 2026-11-18: so does the wall clock. Set back, a flow's later records begin
   before its earlier ones end; each record lies in the quarter hour the clock read when its bytes were counted.
-  Accepted: the log follows the clock the user sees. Whatever zone a record is filed in, it lies within that zone's
-  day, since it lies within one quarter hour of UTC: Watch's Kotlin side reads the zone once for each batch it
-  writes, where it read it for each record, so that a zone changed in between could file a record under a day
-  whose key was not drawn and fail the batch. Its tests check every zone the runtime knows against the engine's
-  own cuts, and records filed while the zone changes between them, as on a journey.)
+  A segment the clock's setting back cuts ends at the old clock's last reading, and the next begins at the new
+  clock's first, so that neither claims a time no clock read (corrected the same day, after review 1 of W5's first
+  part, engine, finding 6). Accepted: the log follows the clock the user sees. Whatever zone a record is filed in,
+  it lies within that zone's day, since it lies within one quarter hour of UTC and every change of the local date
+  falls on one (decision 1, as amended): Watch's Kotlin side reads the zone once for each batch it writes, where it
+  read it for each record, so that a zone changed in between could file a record under a day whose key was not
+  drawn and fail the batch. Its tests check, of every zone the runtime knows, every change of the local date from
+  2012 and by the zones' rules ahead, the engine's own cuts in every zone, records filed while the zone changes
+  between batches, and a batch filed while the zone changes at every reading, in the function the log files
+  every batch with.)
 - **Keystore behaviour on real phones.** Unlocked-device keys and RSA-OAEP have had vendor bugs. W4 checks them
   on the emulators with Android 10, 11 and 17 and on the A40; where a phone refuses the unlocked-device flag,
   Watch makes the key without it and says so in its health check.

@@ -162,6 +162,11 @@ holds `INTERNET` and reads its own log, and Datapavan Basic never holds `INTERNE
   2. The TLS ClientHello SNI of each new connection gives the hostname directly.
   3. QUIC Initial packets carry SNI too, but parsing them is harder (later).
   4. If no hostname is known, an offline IP-to-ASN lookup gives at least the organisation.
+
+  (Amended 2026-11-18, in W5's first part: the connection's own server name, TLS or QUIC, now comes first, then
+  the DNS answer, whose name is kept beside it where the two differ, then the organisation. A DNS answer is tied to
+  a flow by its address alone, and either name can be wrong. [ADR 0044](decisions/0044-udp-mapping-and-budgets.md),
+  decision 4.)
 - **Shrinking visibility:** Encrypted Client Hello (ECH), apps with their own DNS-over-HTTPS, and Android Private DNS all hide hostnames. Step 4 is the fallback, and the UI must show plainly when a destination is "unknown".
 
 ### 6.3 DNS handling
@@ -937,8 +942,12 @@ W5, part 1, on `watch-w5a`, 2026-11-18, before anything reads the log: the two f
 phone sleeps, so a connection open across a night became one segment from the evening, filed under its day. The
 engine now reads the wall clock, through a clock it is handed and tests move, before it counts any byte or lookup,
 opens a flow or ends one, and first cuts every open segment at the quarter hours passed, either way: no byte is in
-another quarter hour, and no record spans a local midnight, since every zone has been a whole number of quarter hours
-from UTC since 1979; the end-to-end test's flush is made on the engine's thread, so no race is left. The caches of
+another quarter hour, and no record spans a change of the local date, since in every zone every such change has
+fallen on a quarter hour of UTC since 2011, by the zone's offsets and by the instants it changes them alike; the
+end-to-end test's flush is made on the engine's thread, so no race is left. A first fix round, after two
+independent reviews the same day, made a scoped ECH public name from an app's own resolver hide names in that app's
+flows, set a DNS name beside the connection's own only while the answer is held in real time, let the mark of an
+app's own DNS follow the flow's name, and cut before a flow's outcome or name changes. The caches of
 DNS answers kept while a chain is on now run on the time since the phone started, sleep included, and ADR 0044 lists
 every clock the engine reads, with what a sleep or a jump of the clock does to each. A flow is now named by the
 server name its connection sent, before the DNS answer, whose name stays beside it where the two differ; the log's
