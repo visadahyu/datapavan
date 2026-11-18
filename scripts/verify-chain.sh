@@ -39,7 +39,11 @@ SHELL_UID=2000
 
 is_emulator || { echo "verify-chain.sh runs on an emulator only" >&2; exit 2; }
 HOST=10.0.2.2
-PORT=${WATCH_TEST_PORT:-8790}
+# The ports of this computer the test servers take, found free first (scripts/host-ports.sh): WATCH_TEST_PORT,
+# or one picked from 8790 up.
+# shellcheck source=scripts/host-ports.sh
+. "$ROOT/scripts/host-ports.sh"
+host_ports 0 1 3 || exit 1
 PASSWORD="$(python3 -I -c 'import secrets;print(secrets.token_urlsafe(15))')"
 WORK="$(mktemp -d)"
 SERVER=""

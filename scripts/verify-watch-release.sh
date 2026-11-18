@@ -17,7 +17,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 UNSIGNED="${1:-$ROOT/android/app/build-advanced/outputs/apk/release/app-release-unsigned.apk}"
 PKG=org.visadahyu.datapavan.advanced
 HOST=10.0.2.2
-PORT=${WATCH_TEST_PORT:-8790}
+# The ports of this computer the test servers take, found free first (scripts/host-ports.sh): WATCH_TEST_PORT,
+# or one picked from 8790 up.
+# shellcheck source=scripts/host-ports.sh
+. "$ROOT/scripts/host-ports.sh"
+host_ports 0 1 || exit 1
 # Watch's memory budget, PSS in MB: about twice what it used on the Android 15 emulator on 2026-11-10
 # (23 MB, with the screen open and with the service alone).
 BUDGET_MB=${WATCH_MEMORY_BUDGET_MB:-48}
