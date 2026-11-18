@@ -231,6 +231,8 @@ Firewall beendet wird.</li>
 <li><strong>Die Einstellungen Ihres Tools zum Umgehen von Netzsperren:</strong> ob Apps durch das Tool gehen und welche, Host und Port
 des Tools sowie das Passwort, das Datapavan dafür erstellt hat und das mit einem Schlüssel verschlüsselt ist, den der
 Keystore von Android schützt.</li>
+<li><strong>Die Apps, die Sie von der Firewall ausschließen,</strong> die dann ohne die Firewall ins Internet gehen: ihre Namen,
+bis Sie sie wieder einbeziehen.</li>
 </ul>
 <h2 id="version-01-kann-keine-netzwerkverbindungen-öffnen">Version 0.1 kann keine Netzwerkverbindungen öffnen</h2>
 <p>Datapavan Basic 0.1 fordert die Berechtigung INTERNET nicht an, daher verhindert Android selbst, dass sie
@@ -267,7 +269,7 @@ die keine Adressen protokolliert, sodass Quad9 die Adresse des Tools sieht, nich
 			</tr>
 			<tr>
 					<td>Zugriff auf Nutzungsdaten, in Datapavan Advanced</td>
-					<td>Für jede Verbindung erkennen, ob Sie ihre App in dem Moment benutzt haben, sie mit ihrer Benachrichtigung lief (Musik, Navigation) oder keines von beiden. Dafür liest Advanced außerdem die Aufzeichnung von Android darüber, welche App wann auf dem Bildschirm war. Was es dabei erfährt, behält es nur an zwei Stellen: im Arbeitsspeicher für die Ansicht „Now“ und, wenn Sie ein Verbindungsprotokoll führen, als Zustand jedes Eintrags, für die von Ihnen gewählten Tage</td>
+					<td>Für jede Verbindung erkennen, ob Sie ihre App in dem Moment benutzt haben, sie mit einer Benachrichtigung lief, die Android anzeigte (Musik, Navigation), oder keines von beiden. Dafür liest Advanced außerdem die Aufzeichnung von Android seit dem Start des Telefons darüber, welche App wann auf dem Bildschirm war, welche Apps einen Vordergrunddienst ausführten, welche Sie auf andere Weise benutzt haben (etwa durch Tippen auf ihre Benachrichtigung) und wann sich der Bildschirm ein- oder ausschaltete und der Sperrbildschirm erschien; und ob jede App Benachrichtigungen anzeigen darf. Was es dabei erfährt, behält es nur an zwei Stellen: im Arbeitsspeicher für die Ansicht „Now“ und, wenn Sie ein Verbindungsprotokoll führen, als Zustand jedes Eintrags, für die von Ihnen gewählten Tage</td>
 					<td>Datapavan Advanced, ab 0.2.0</td>
 			</tr>
 			<tr>
