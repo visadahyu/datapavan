@@ -120,6 +120,8 @@ pub(crate) struct FlowBytes {
     /// Whether the flow's segments are all cut and handed to the log: a count after, as of a packet the
     /// tunnel carries once the relay has ended, notes no mark.
     ended: AtomicBool,
+    /// The flow's app, whose share of what waits its marks count in (`activity`).
+    uid: Option<u32>,
 }
 
 impl Default for FlowBytes {
@@ -133,6 +135,7 @@ impl Default for FlowBytes {
             second: AtomicU64::new(NO_SECOND),
             marks: Mutex::default(),
             ended: AtomicBool::new(false),
+            uid: None,
         }
     }
 }
@@ -178,7 +181,7 @@ impl FlowBytes {
             marks.push_back(Mark { second, counts });
             (marks.len(), marks.front().map_or(second, |m| m.second))
         };
-        log.marked(held, oldest, second);
+        log.marked(self.uid, (held, oldest), second);
     }
 
     /// Takes the marks of the segment cut now: the next count begins one anew, in whatever second. With
@@ -407,7 +410,10 @@ impl Shared {
             }]);
             return None;
         }
-        let bytes = Arc::new(FlowBytes::default());
+        let bytes = Arc::new(FlowBytes {
+            uid: flow.uid,
+            ..FlowBytes::default()
+        });
         lock(&self.live).insert(
             flow.id,
             Live {
@@ -449,8 +455,8 @@ impl Shared {
             .or_insert_with(|| Lookups::since(now))
             .count(second, counts);
         drop(lookups);
-        if let (Some((held, oldest)), Some(second)) = (marked, second) {
-            self.marked(held, oldest, second);
+        if let (Some(held), Some(second)) = (marked, second) {
+            self.marked(uid, held, second);
         }
         new
     }

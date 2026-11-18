@@ -70,7 +70,9 @@ internal object Engine {
      * refused, unsupported or dropped (ADR 0044, decisions 3 and 5), and last the datagrams put together
      * from the apps' fragments, those the engine's kernel refused to send as too long, dropped, and the
      * routers' "fragmentation needed" and "packet too big" passed on to the apps (decision 5 as amended;
-     * the 20th counts the fragments dropped). New ones are only appended. None names a destination.
+     * the 20th counts the fragments dropped); and last the seconds, and segments with no count, placed in no
+     * state because their app's state was told too late (W5, ADR 0046). New ones are only appended. None
+     * names a destination.
      * Empty when no engine runs.
      */
     external fun nativeCounters(): LongArray

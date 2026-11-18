@@ -518,7 +518,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 51;
+pub const COUNTERS: usize = 52;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -574,6 +574,7 @@ pub struct Counters {
     udp_unidentified: AtomicU64,
     udp_own_relays: AtomicU64,
     udp_own_refused: AtomicU64,
+    told_late: AtomicU64,
 }
 
 impl Counters {
@@ -638,8 +639,10 @@ impl Counters {
     /// and the answers dropped because only stand-ins with identifiers could take them and they carried
     /// none of theirs; and the associations of a stand-in's own opened for a stand-in whose answers the
     /// address alone could not have told from another's on its port, and those refused at a cap or for
-    /// want of a place in the budget, which left it beside the other under unit 9's floor. None names a
-    /// destination: they can be read on any phone. New counters are only
+    /// want of a place in the budget, which left it beside the other under unit 9's floor; then (W5's
+    /// second part) the seconds, and segments with no count, placed in no state because their state was
+    /// told too late: past a flow's window, past their app's share of what waits, or past the bound of
+    /// all (ADR 0046, "How it is built"). None names a destination: they can be read on any phone. New counters are only
     /// ever appended, so that scripts reading a column by its place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
@@ -710,6 +713,7 @@ impl Counters {
             &self.udp_unidentified,
             &self.udp_own_relays,
             &self.udp_own_refused,
+            &self.told_late,
         ]
     }
 }
@@ -802,9 +806,9 @@ struct Shared {
     pending_log: Mutex<Vec<Record>>,
     /// Whether Watch's Kotlin side tells the apps' states ([`Platform::tells_states`]).
     tracks: bool,
-    /// The seconds not placed in a state yet, of every flow and app's lookups together
-    /// ([`activity::MARKS`]).
-    marks: AtomicUsize,
+    /// The seconds not placed in a state yet, of every flow and app's lookups together and of each app
+    /// ([`activity::MARKS`], [`activity::MARKS_SHARE`]).
+    waiting: Mutex<activity::Waiting>,
     /// The wall clock's second at which the engine last asked for the apps' states
     /// ([`activity::NO_SECOND`] for never).
     asked: AtomicU64,
@@ -937,7 +941,7 @@ impl Engine {
             counters: [0; COUNTERS],
             activity: activity::Activity::new(tracks),
         });
-        let held_marks = activity.held_marks();
+        let waiting = activity::Waiting::of_held(&activity.held);
         if let Some(setting) = setting {
             chain = setting.chain.map(Arc::new);
             uncached_answers = setting.uncached_answers;
@@ -972,7 +976,7 @@ impl Engine {
             wire: Mutex::default(),
             pending_log: Mutex::default(),
             tracks,
-            marks: AtomicUsize::new(held_marks),
+            waiting: Mutex::new(waiting),
             asked: AtomicU64::new(activity::NO_SECOND),
             activity: Mutex::new(activity),
             handing_over: AtomicBool::new(false),
@@ -1549,7 +1553,7 @@ mod tests {
             wire: Mutex::default(),
             pending_log: Mutex::default(),
             tracks,
-            marks: AtomicUsize::new(0),
+            waiting: Mutex::default(),
             asked: AtomicU64::new(activity::NO_SECOND),
             activity: Mutex::new(activity::Activity::new(tracks)),
             handing_over: AtomicBool::new(false),

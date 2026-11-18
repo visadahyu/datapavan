@@ -52,9 +52,74 @@ pub(super) const WINDOW: usize = 120;
 /// At most this many seconds not placed yet all flows and lookups hold together: 2.5 MB of marks.
 pub(super) const MARKS: usize = 65_536;
 
-/// At most this many cut segments wait for their state; past it, the oldest is written with the seconds
-/// not told yet as told too late.
+/// At most this many of them are one app's (a quarter, as ADR 0044's decision 3 shares the engine's
+/// other caps): an app past its share has its own oldest told too late, never another app's.
+pub(super) const MARKS_SHARE: usize = MARKS / 4;
+
+/// At most this many cut segments wait for their state; past it, the oldest of the app that holds the
+/// most is written with its seconds not told yet as told too late.
 pub(super) const HELD: usize = 4_096;
+
+/// At most this many of them are one app's; past it, the app's own oldest is written so.
+pub(super) const HELD_SHARE: usize = HELD / 4;
+
+/// A count by app, `None` for flows Android named no app for.
+pub(super) type ByApp = HashMap<Option<u32>, usize>;
+
+/// What all flows and lookups, and each app's, hold of seconds not placed yet ([`MARKS`],
+/// [`MARKS_SHARE`]).
+#[derive(Default)]
+pub(super) struct Waiting {
+    total: usize,
+    by_app: ByApp,
+}
+
+impl Waiting {
+    /// What the segments handed over from the engine before hold.
+    pub(super) fn of_held(held: &VecDeque<Piece>) -> Self {
+        let mut waiting = Self::default();
+        for piece in held {
+            *waiting.by_app.entry(piece.uid).or_default() += piece.marks.len();
+            waiting.total += piece.marks.len();
+        }
+        waiting
+    }
+
+    /// One more of `uid`'s: what all hold now, and what the app holds.
+    fn add(&mut self, uid: Option<u32>) -> (usize, usize) {
+        self.total += 1;
+        let mine = self.by_app.entry(uid).or_default();
+        *mine += 1;
+        (self.total, *mine)
+    }
+
+    /// Those placed, by app.
+    fn sub(&mut self, settled: &ByApp) {
+        for (uid, n) in settled {
+            self.total = self.total.saturating_sub(*n);
+            if let Some(mine) = self.by_app.get_mut(uid) {
+                *mine = mine.saturating_sub(*n);
+                if *mine == 0 {
+                    self.by_app.remove(uid);
+                }
+            }
+        }
+    }
+
+    /// The app that holds the most, and how many.
+    fn heaviest(&self) -> Option<(Option<u32>, usize)> {
+        self.by_app
+            .iter()
+            .max_by_key(|(_, n)| **n)
+            .map(|(uid, n)| (*uid, *n))
+    }
+
+    /// All of them.
+    #[cfg(test)]
+    pub(super) fn total(&self) -> usize {
+        self.total
+    }
+}
 
 /// The engine asks for a reading once a second has waited this many seconds for its state, and at most
 /// this often.
@@ -76,11 +141,19 @@ pub(super) struct Mark {
 }
 
 /// Which seconds are placed now in no state, whatever was told: those before `before` not placed yet,
-/// as `why`.
+/// as `why`, of every app, or of the one app `of` names.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Force {
     pub(super) before: u64,
     pub(super) why: Unknown,
+    pub(super) of: Whose,
+}
+
+/// Whose seconds a [`Force`] places: every app's, or one app's (`None` for flows of no app).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Whose {
+    Every,
+    App(Option<u32>),
 }
 
 impl Force {
@@ -88,7 +161,17 @@ impl Force {
     pub(super) const ALL: Self = Self {
         before: u64::MAX,
         why: Unknown::NotTold,
+        of: Whose::Every,
     };
+
+    /// The seconds of the app `uid` before `before`, told too late.
+    fn late(uid: Option<u32>, before: u64) -> Self {
+        Self {
+            before,
+            why: Unknown::Late,
+            of: Whose::App(uid),
+        }
+    }
 }
 
 /// What a segment held for its state is: a flow's, or an app's lookups'.
@@ -351,10 +434,15 @@ pub(super) struct Activity {
     tracked: bool,
     timeline: Timeline,
     pub(super) held: VecDeque<Piece>,
+    /// How many of the segments held are each app's ([`HELD_SHARE`]).
+    held_by: ByApp,
     pub(super) counts: Counts,
     /// The screen, and what the latest reading knew, as last told.
     screen: Screen,
     known: Option<Known>,
+    /// Seconds, and segments with no count, placed as told too late since the engine last took the
+    /// count for its counters.
+    late: u64,
 }
 
 impl Activity {
@@ -363,10 +451,54 @@ impl Activity {
             tracked,
             timeline: Timeline::default(),
             held: VecDeque::new(),
+            held_by: ByApp::new(),
             counts: Counts::default(),
             screen: Screen::Unknown,
             known: None,
+            late: 0,
         }
+    }
+
+    /// The seconds and segments placed as told too late since the last call.
+    fn take_late(&mut self) -> u64 {
+        std::mem::take(&mut self.late)
+    }
+
+    /// Holds a segment for its state.
+    fn push_held(&mut self, piece: Piece) {
+        *self.held_by.entry(piece.uid).or_default() += 1;
+        self.held.push_back(piece);
+    }
+
+    /// One segment held less of `uid`'s.
+    fn unheld(&mut self, uid: Option<u32>) {
+        if let Some(n) = self.held_by.get_mut(&uid) {
+            *n -= 1;
+            if *n == 0 {
+                self.held_by.remove(&uid);
+            }
+        }
+    }
+
+    /// Writes the oldest segment `uid` holds, its seconds not told yet as told too late.
+    fn evict(&mut self, uid: Option<u32>, records: &mut Vec<Record>, settled: &mut ByApp) {
+        let Some(at) = self.held.iter().position(|piece| piece.uid == uid) else {
+            return;
+        };
+        let Some(mut piece) = self.held.remove(at) else {
+            return;
+        };
+        self.unheld(uid);
+        let (_, marks) = self.settle_piece(&mut piece, Some(Force::late(uid, u64::MAX)), records);
+        *settled.entry(uid).or_default() += marks;
+    }
+
+    /// The app that holds the most segments, and how many.
+    fn heaviest_held(&self) -> Option<(Option<u32>, usize)> {
+        self.held_by
+            .iter()
+            .max_by_key(|(_, n)| **n)
+            .map(|(uid, n)| (*uid, *n))
     }
 
     /// The screen as last told.
@@ -393,11 +525,6 @@ impl Activity {
         self.place(uid, (until / 1000).saturating_sub(1), None)
     }
 
-    /// How many marks the segments held keep, for the count of all marks.
-    pub(super) fn held_marks(&self) -> usize {
-        self.held.iter().map(|piece| piece.marks.len()).sum()
-    }
-
     /// Takes a reading: the screen first, so that the seconds it places count since the screen came on
     /// where they do, then the states.
     fn tell(&mut self, told: &Told) {
@@ -420,7 +547,9 @@ impl Activity {
         }
         self.timeline.place(uid, second).or_else(|| {
             force
-                .filter(|f| second < f.before)
+                .filter(|f| {
+                    second < f.before && (f.of == Whose::Every || f.of == Whose::App(Some(uid)))
+                })
                 .map(|f| Placed::Unknown(f.why))
         })
     }
@@ -448,23 +577,32 @@ impl Activity {
             )
         };
         for (second, bytes, placed) in seconds {
+            if placed == Placed::Unknown(Unknown::Late) {
+                self.late += 1;
+            }
             self.counts.count(uid, second, bytes, placed, seen);
         }
         settled
     }
 
     /// Settles the segments held: each whose seconds are all placed is written, cut where its state
-    /// changed. How many marks it settled.
-    pub(super) fn settle_held(&mut self, force: Option<Force>, records: &mut Vec<Record>) -> usize {
+    /// changed. The marks it settled go to `settled`, by app.
+    pub(super) fn settle_held(
+        &mut self,
+        force: Option<Force>,
+        records: &mut Vec<Record>,
+        settled: &mut ByApp,
+    ) {
         let mut held = std::mem::take(&mut self.held);
-        let mut settled = 0;
         held.retain_mut(|piece| {
             let (done, marks) = self.settle_piece(piece, force, records);
-            settled += marks;
+            *settled.entry(piece.uid).or_default() += marks;
+            if done {
+                self.unheld(piece.uid);
+            }
             !done
         });
         self.held = held;
-        settled
     }
 
     /// Settles one segment cut before its seconds were placed: whether it is written, and how many marks
@@ -500,6 +638,9 @@ impl Activity {
         };
         let seen = Seen::of(&piece.of);
         for (second, bytes, placed) in seconds {
+            if placed == Placed::Unknown(Unknown::Late) {
+                self.late += 1;
+            }
             self.counts.count(uid, second, bytes, placed, seen);
         }
         // The parts before a change of state, each written with the flow as it was cut.
@@ -509,9 +650,13 @@ impl Activity {
         if !piece.marks.is_empty() {
             return (false, settled);
         }
-        let state = piece
-            .state
-            .or_else(|| self.place(uid, piece.instant(), force));
+        let state = piece.state.or_else(|| {
+            let placed = self.place(uid, piece.instant(), force);
+            if placed == Some(Placed::Unknown(Unknown::Late)) {
+                self.late += 1;
+            }
+            placed
+        });
         let Some(state) = state else {
             return (false, settled);
         };
@@ -539,25 +684,44 @@ impl Activity {
 }
 
 impl Shared {
-    /// A flow, or an app's lookups, noted a new second, `second`, whose seconds held now number `held`,
-    /// the oldest `oldest`: counted with all marks, placed as told too late past the window or the bound
-    /// of all marks, and a reading asked for once the oldest has waited [`ASK_EVERY`] seconds.
+    /// A flow, or an app's lookups, of the app `uid` noted a new second, `second`, whose seconds held
+    /// now number `held`, the oldest `oldest`: counted with all marks and the app's; the app's oldest
+    /// placed as told too late past the window or past its share, and the oldest of the app holding the
+    /// most past the bound of all; and a reading asked for once the oldest has waited [`ASK_EVERY`]
+    /// seconds. One app's seconds never push another's out (review b1 of W5's second part, engine,
+    /// finding 2).
     #[cold]
-    pub(super) fn marked(&self, held: usize, oldest: u64, second: u64) {
-        let all = self.marks.fetch_add(1, Ordering::Relaxed) + 1;
+    pub(super) fn marked(&self, uid: Option<u32>, (held, oldest): (usize, u64), second: u64) {
+        let (all, mine) = lock(&self.waiting).add(uid);
         if held > WINDOW {
-            self.settle(Some(Force {
-                before: second.saturating_sub(WINDOW as u64 - 1),
-                why: Unknown::Late,
-            }));
+            self.settle(Some(Force::late(
+                uid,
+                second.saturating_sub(WINDOW as u64 - 1),
+            )));
+        } else if mine > MARKS_SHARE {
+            self.settle(Some(Force::late(uid, second)));
         } else if all > MARKS {
-            self.settle(Some(Force {
-                before: second,
-                why: Unknown::Late,
-            }));
+            let heaviest = lock(&self.waiting).heaviest();
+            if let Some((heaviest, _)) = heaviest {
+                self.settle(Some(Force::late(heaviest, second)));
+            }
         }
         if second >= oldest.saturating_add(ASK_EVERY) {
             self.ask(second);
+        }
+    }
+
+    /// How many seconds not placed yet all flows and lookups hold.
+    #[cfg(test)]
+    pub(super) fn waiting_marks(&self) -> usize {
+        lock(&self.waiting).total()
+    }
+
+    /// Counts the seconds and segments the activity placed as told too late.
+    fn count_late(&self, activity: &mut Activity) {
+        let late = activity.take_late();
+        if late > 0 {
+            super::Counters::add(&self.counters.told_late, late);
         }
     }
 
@@ -595,7 +759,7 @@ impl Shared {
     /// lookups and the segments held. The log gets the parts written.
     pub(super) fn settle(&self, force: Option<Force>) {
         let mut records = Vec::new();
-        let mut settled = 0;
+        let mut settled = ByApp::new();
         {
             let mut live = lock(&self.live);
             let mut lookups = lock(&self.lookups);
@@ -606,7 +770,7 @@ impl Shared {
                 if !marks.is_empty() {
                     let now = live.bytes.now();
                     let flow = &live.flow;
-                    settled += activity.settle_open(
+                    *settled.entry(flow.uid).or_default() += activity.settle_open(
                         (flow.uid, Seen::live(flow, live.hidden)),
                         (&mut live.start, &mut live.base, &mut live.state),
                         (&mut marks, now),
@@ -637,7 +801,7 @@ impl Shared {
                     marks,
                     ..
                 } = entry;
-                settled += activity.settle_open(
+                *settled.entry(uid).or_default() += activity.settle_open(
                     (uid, Seen::Lookups),
                     (start, base, state),
                     (marks, counts),
@@ -651,46 +815,50 @@ impl Shared {
                     oldest = Some(oldest.map_or(mark.second, |o| o.min(mark.second)));
                 }
             }
-            settled += activity.settle_held(force, &mut records);
+            activity.settle_held(force, &mut records, &mut settled);
             activity.forget_told_before(oldest);
+            self.count_late(&mut activity);
         }
-        self.marks.fetch_sub(settled, Ordering::Relaxed);
+        lock(&self.waiting).sub(&settled);
         if !records.is_empty() {
             lock(&self.pending_log).extend(records);
             self.log_ready.notify_one();
         }
     }
 
-    /// Holds cut segments until their seconds are placed, writing at once those whose are. Past
-    /// [`HELD`] segments held, the oldest is written with the seconds not told yet as told too late.
+    /// Holds cut segments until their seconds are placed, writing at once those whose are. Past its
+    /// share of [`HELD`], an app's own oldest segment is written with its seconds not told yet as told
+    /// too late; past [`HELD`] itself, the oldest of the app that holds the most.
     pub(super) fn hold(&self, pieces: Vec<Piece>) {
         if pieces.is_empty() {
             return;
         }
         let mut records = Vec::new();
-        let mut settled = 0;
+        let mut settled = ByApp::new();
         let mut waiting = false;
         {
             let mut activity = lock(&self.activity);
             for mut piece in pieces {
+                let uid = piece.uid;
                 let (done, marks) = activity.settle_piece(&mut piece, None, &mut records);
-                settled += marks;
+                *settled.entry(uid).or_default() += marks;
                 if !done {
-                    activity.held.push_back(piece);
+                    activity.push_held(piece);
                     waiting = true;
+                    if activity.held_by.get(&uid).is_some_and(|n| *n > HELD_SHARE) {
+                        activity.evict(uid, &mut records, &mut settled);
+                    }
                 }
             }
-            let late = Some(Force {
-                before: u64::MAX,
-                why: Unknown::Late,
-            });
             while activity.held.len() > HELD {
-                if let Some(mut oldest) = activity.held.pop_front() {
-                    settled += activity.settle_piece(&mut oldest, late, &mut records).1;
-                }
+                let Some((heaviest, _)) = activity.heaviest_held() else {
+                    break;
+                };
+                activity.evict(heaviest, &mut records, &mut settled);
             }
+            self.count_late(&mut activity);
         }
-        self.marks.fetch_sub(settled, Ordering::Relaxed);
+        lock(&self.waiting).sub(&settled);
         let written = !records.is_empty();
         if written {
             lock(&self.pending_log).extend(records);
@@ -1067,7 +1235,7 @@ pub(super) mod tests {
             );
             assert_eq!(lock(&live.bytes.marks).len(), 1, "12 s waits");
         }
-        assert_eq!(shared.marks.load(Ordering::Relaxed), 1);
+        assert_eq!(shared.waiting_marks(), 1);
     }
 
     /// A flow that ended before its seconds were told is held, and written once they are, cut where
@@ -1093,11 +1261,11 @@ pub(super) mod tests {
             ]
         );
         assert!(lock(&shared.activity).held.is_empty());
-        assert_eq!(shared.marks.load(Ordering::Relaxed), 0);
+        assert_eq!(shared.waiting_marks(), 0);
         // A count after the flow ended, as of a packet the tunnel carries after the relay, notes nothing.
         up_at(&shared, &clock, &bytes, 4_000, 5);
         assert!(lock(&bytes.marks).is_empty());
-        assert_eq!(shared.marks.load(Ordering::Relaxed), 0);
+        assert_eq!(shared.waiting_marks(), 0);
     }
 
     /// A segment cut at a quarter hour before its seconds were told waits for them; the flow's next
@@ -1227,7 +1395,7 @@ pub(super) mod tests {
             assert_eq!(lock(&live.bytes.marks).len(), WINDOW);
             assert_eq!(live.state, Some(Placed::Unknown(Unknown::Late)));
         }
-        assert_eq!(shared.marks.load(Ordering::Relaxed), WINDOW);
+        assert_eq!(shared.waiting_marks(), WINDOW);
         // Exactly the window's 120 seconds held, spread over more of the clock, are all kept.
         let (wide, clock_wide, _) = telling_at(T);
         let other = open(&wide, 2);
@@ -1321,63 +1489,164 @@ pub(super) mod tests {
         assert!(marks.capacity() <= 16, "{}", marks.capacity());
     }
 
-    /// All flows together hold at most [`MARKS`] seconds not placed: past it, every one held is placed
-    /// as told too late but the newest.
+    /// A flow of the app `uid`, opened now.
+    fn open_of(shared: &Shared, id: u64, uid: u32) -> Arc<super::super::logbook::FlowBytes> {
+        let Some(bytes) = shared.record(flow(id, Some(uid))) else {
+            unreachable!("an open flow is live")
+        };
+        bytes
+    }
+
+    /// Whether any live flow of `uid` has seconds told too late.
+    fn late_of(shared: &Shared, uid: u32) -> bool {
+        lock(&shared.live).values().any(|live| {
+            live.flow.uid == Some(uid) && live.state == Some(Placed::Unknown(Unknown::Late))
+        })
+    }
+
+    /// An app past its share of [`MARKS`] has its own oldest seconds told too late, never another
+    /// app's, and each is counted (review b1 of W5's second part, engine, finding 2).
     #[test]
-    fn seconds_past_the_bound_of_all_flows_are_placed_as_told_too_late() {
+    fn seconds_past_an_apps_share_are_its_own_told_too_late() {
         let (shared, clock, _) = telling_at(T);
-        let flows = MARKS / 100 + 1;
-        let all: Vec<_> = (1..=flows as u64).map(|id| open(&shared, id)).collect();
+        let other = open_of(&shared, 1, UID + 1);
+        let flood: Vec<_> = (2..=201).map(|id| open_of(&shared, id, UID)).collect();
         for second in 0..100 {
             clock.set(T + second * 1_000);
-            for bytes in &all {
+            other.up(&shared, 1, 0);
+            for bytes in &flood {
                 bytes.up(&shared, 1, 0);
             }
         }
-        assert!(shared.marks.load(Ordering::Relaxed) <= MARKS);
-        let late = lock(&shared.live)
-            .values()
-            .filter(|live| live.state == Some(Placed::Unknown(Unknown::Late)))
-            .count();
-        assert!(late > 0, "none placed as told too late");
+        assert!(
+            late_of(&shared, UID),
+            "the flooding app's own seconds were not told too late"
+        );
+        assert!(
+            !late_of(&shared, UID + 1),
+            "another app's seconds were told too late"
+        );
+        assert_eq!(lock(&other.marks).len(), 100);
+        assert!(
+            shared.counters.snapshot()[super::super::COUNTERS - 1] > 0,
+            "not counted"
+        );
     }
 
-    /// Exactly [`MARKS`] seconds held, by all flows together, are all kept.
+    /// Exactly an app's share is kept.
     #[test]
-    fn exactly_the_bound_of_all_flows_is_kept() {
+    fn exactly_an_apps_share_is_kept() {
         let (shared, clock, _) = telling_at(T);
-        let flows: Vec<_> = (1..=656).map(|id| open(&shared, id)).collect();
+        let flows: Vec<_> = (1..=164).map(|id| open_of(&shared, id, UID)).collect();
         for second in 0..100u64 {
             clock.set(T + second * 1_000);
             for (i, bytes) in flows.iter().enumerate() {
-                if i < 655 || second < 36 {
+                if i < 163 || second < 84 {
                     bytes.up(&shared, 1, 0);
                 }
             }
         }
-        assert_eq!(shared.marks.load(Ordering::Relaxed), MARKS);
-        let late = lock(&shared.live)
-            .values()
-            .any(|live| live.state == Some(Placed::Unknown(Unknown::Late)));
-        assert!(!late, "placed as told too late within the bound");
+        assert_eq!(shared.waiting_marks(), MARKS_SHARE);
+        assert!(!late_of(&shared, UID), "told too late within the share");
     }
 
-    /// Past [`HELD`] segments waiting, the oldest is written, its seconds not told as told too late.
+    /// Past [`MARKS`] for all apps together, each within its share, the app that holds the most gives
+    /// way, and none other.
     #[test]
-    fn segments_held_past_the_bound_are_written_as_told_too_late() {
+    fn past_the_bound_of_all_seconds_the_heaviest_app_gives_way() {
         let (shared, clock, _) = telling_at(T);
-        for id in 1..=HELD as u64 + 1 {
-            let bytes = open(&shared, id);
-            bytes.up(&shared, 1, 0);
-            shared.finish(id);
+        let mut flows = Vec::new();
+        let mut id = 0;
+        // Three apps of 16,000 seconds each, one of 16,300 and a fifth of 1,500: 65,800 in all.
+        for (app, count) in [(1, 160), (2, 160), (3, 160), (4, 163), (5, 15)] {
+            for _ in 0..count {
+                id += 1;
+                flows.push((app, open_of(&shared, id, UID + app)));
+            }
         }
-        clock.set(T + 1);
-        assert_eq!(lock(&shared.activity).held.len(), HELD);
-        assert_eq!(
-            segments(&taken(&shared)),
-            vec![(1, T, T, 1, false, Placed::Unknown(Unknown::Late))]
+        for second in 0..100 {
+            clock.set(T + second * 1_000);
+            for (_, bytes) in &flows {
+                bytes.up(&shared, 1, 0);
+            }
+        }
+        assert!(shared.waiting_marks() <= MARKS);
+        assert!(
+            late_of(&shared, UID + 4),
+            "the heaviest app did not give way"
         );
-        assert_eq!(shared.marks.load(Ordering::Relaxed), HELD);
+        for app in [1, 2, 3, 5] {
+            assert!(!late_of(&shared, UID + app), "app {app} gave way");
+        }
+    }
+
+    /// Past its share of [`HELD`], an app's own oldest segment is written as told too late, never another
+    /// app's: an app that ends short flows by the hundred while the screen is off does not blind Watch
+    /// for others (review b1 of W5's second part, engine, finding 2).
+    #[test]
+    fn segments_past_an_apps_share_are_its_own_written_as_told_too_late() {
+        let (shared, clock, _) = telling_at(T);
+        let other = open_of(&shared, 1, UID + 1);
+        other.up(&shared, 500, 0);
+        shared.finish(1);
+        let mut id = 1;
+        for second in 0..23 {
+            clock.set(T + second * 1_000);
+            for _ in 0..200 {
+                id += 1;
+                open_of(&shared, id, UID).up(&shared, 1, 0);
+                shared.finish(id);
+            }
+        }
+        let held = lock(&shared.activity).held.len();
+        assert_eq!(
+            held,
+            HELD_SHARE + 1,
+            "the flooding app's share and the other's segment"
+        );
+        let written = segments(&taken(&shared));
+        assert!(
+            written.iter().all(|s| s.0 != 1),
+            "another app's segment was pushed out"
+        );
+        assert!(
+            written
+                .iter()
+                .all(|s| s.5 == Placed::Unknown(Unknown::Late))
+        );
+        // The minute's reading tells the other app's seconds: its record is in the background.
+        let mut reading = told(T, T + 30_000, &[]);
+        reading.intervals.clear();
+        shared.tell(&reading);
+        let other_record: Vec<_> = segments(&taken(&shared))
+            .into_iter()
+            .filter(|s| s.0 == 1)
+            .collect();
+        assert_eq!(other_record, vec![(1, T, T, 500, false, BACKGROUND)]);
+    }
+
+    /// Past [`HELD`] for all apps together, each within its share, the app that holds the most gives
+    /// way, and none other.
+    #[test]
+    fn past_the_bound_of_all_segments_the_heaviest_app_gives_way() {
+        let (shared, _, _) = telling_at(T);
+        let mut id = 0;
+        for (app, count) in [(1, 1_000), (2, 1_000), (3, 1_000), (4, 1_024), (5, 73)] {
+            for _ in 0..count {
+                id += 1;
+                open_of(&shared, id, UID + app).up(&shared, 1, 0);
+                shared.finish(id);
+            }
+        }
+        assert_eq!(lock(&shared.activity).held.len(), HELD);
+        let written = segments(&taken(&shared));
+        assert_eq!(written.len(), 1, "{written:?}");
+        let gone = written[0].0;
+        assert!(
+            (3_001..=4_024).contains(&gone),
+            "flow {gone} of another app than the heaviest gave way"
+        );
+        assert_eq!(shared.waiting_marks(), HELD);
     }
 
     /// A wall clock set back by a second or more places every second held at once, by what was told of
@@ -1491,7 +1760,7 @@ pub(super) mod tests {
             ]
         );
         assert!(lock(&shared.activity).held.is_empty());
-        assert_eq!(shared.marks.load(Ordering::Relaxed), 0);
+        assert_eq!(shared.waiting_marks(), 0);
     }
 
     /// Settling a segment's marks: each second's bytes, to the byte, with its state; parts cut at the
