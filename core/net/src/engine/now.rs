@@ -847,6 +847,31 @@ mod tests {
         })
     }
 
+    /// A chain set on the engine that leaves an app's destinations out of the log drops them from "Now" at
+    /// once (ADR 0046, decision 6, item 5; review b1 of W5's second part, engine, finding 1).
+    #[test]
+    fn a_chain_set_on_the_engine_drops_its_apps_destinations_at_once() {
+        let (shared, clock, _) = telling_at(T);
+        *lock(&shared.chain) = Some(chain_of(UID, true));
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 500, 50);
+        shared.tell(&told(T, T + 1_000, &[]));
+        let engine = crate::engine::Engine {
+            shared: Arc::new(shared),
+            stop: tokio::sync::watch::channel(false).0,
+            network: tokio::sync::watch::channel(0).0,
+            swaps: tokio::sync::mpsc::unbounded_channel().0,
+            thread: None,
+        };
+        let places = |engine: &crate::engine::Engine| {
+            let snapshot = engine.shared.now_view(T + 1_000);
+            app_of(&snapshot, Some(UID)).map(|a| (a.places.len(), a.through_tool))
+        };
+        assert_eq!(places(&engine), Some((1, false)));
+        engine.chain(Some((*chain_of(UID, false)).clone()));
+        assert_eq!(places(&engine), Some((0, true)));
+    }
+
     /// The seconds not told yet of a chained app whose destinations are not logged count its bytes as
     /// through the tool, with no destination (review b1 of W5's second part, engine, finding 8).
     #[test]
