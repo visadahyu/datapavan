@@ -117,7 +117,6 @@ impl Waiting {
     }
 
     /// All of them.
-    #[cfg(test)]
     pub(super) fn total(&self) -> usize {
         self.total
     }
@@ -783,10 +782,19 @@ impl Shared {
         }
     }
 
-    /// Takes a reading of the states, and places every second it covers.
+    /// Takes a reading of the states, and places every second it covers. Seconds or segments it left
+    /// waiting, as those of the moments after its end, ask for the next reading at once: Watch's Kotlin
+    /// side makes it when its turn comes, so that they are placed within a reading's period even when no
+    /// traffic asks again (review b1 of W5's second part, engine, on how long a record can wait).
     pub(super) fn tell(&self, told: &Told) {
         lock(&self.activity).tell(told);
         self.settle(None);
+        let waits = lock(&self.waiting).total() > 0 || !lock(&self.activity).held.is_empty();
+        if waits && self.tracks {
+            self.asked
+                .store(self.clock.wall_ms() / 1000, Ordering::Relaxed);
+            self.platform.wants_states();
+        }
     }
 
     /// The wall clock was set back by a second or more, to `now` (`logbook`'s `log_now`, after the cut and
@@ -2008,6 +2016,33 @@ pub(super) mod tests {
         untold.ask(T / 1000);
         assert!(untold.record(flow(1, Some(UID))).is_some());
         assert_eq!(counting.asked.load(Ordering::Relaxed), 0);
+    }
+
+    /// A reading that leaves seconds or segments waiting asks for the next at once, even with no traffic
+    /// after it, and one that leaves nothing waiting asks for none (review b1 of W5's second part, engine:
+    /// with no traffic, what waited was placed only with the next traffic or the screen coming on).
+    #[test]
+    fn a_reading_that_leaves_seconds_waiting_asks_for_the_next() {
+        let (shared, clock, platform) = telling_at(T);
+        let asked = || platform.asked.load(Ordering::Relaxed);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 1_000, 10);
+        up_at(&shared, &clock, &bytes, 4_000, 10);
+        assert_eq!(asked(), 1, "the flow's opening");
+        clock.set(T + 6_000);
+        shared.tell(&told(T, T + 4_000, &[]));
+        assert_eq!(asked(), 2, "the second at 4 s waits");
+        shared.tell(&told(T + 4_000, T + 5_000, &[]));
+        assert_eq!(asked(), 2, "nothing waits");
+        // A segment held for its state asks too.
+        up_at(&shared, &clock, &bytes, 7_000, 10);
+        clock.set(T + 8_000);
+        shared.finish(1);
+        shared.tell(&told(T + 5_000, T + 7_000, &[]));
+        assert_eq!(asked(), 3, "the ended flow's last second waits");
+        shared.tell(&told(T + 7_000, T + 9_000, &[]));
+        assert_eq!(asked(), 3);
+        assert!(lock(&shared.activity).held.is_empty());
     }
 
     /// A platform whose Kotlin side tells no states, noting whether the engine asked all the same.

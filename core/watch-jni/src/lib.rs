@@ -28,7 +28,8 @@ use jni::{EnvUnowned, JValue, JavaVM, jni_sig, jni_str};
 /// across a call into Kotlin that could call back into this file: `ownerUid`, `protectSocket`,
 /// `logRecords` and `statesWanted`, reached from the engine, must not call a native method of `Engine`
 /// while they run (`statesWanted` only hands a reading to the tracker's own thread, which calls
-/// `nativeStates` later, holding nothing of the engine's).
+/// `nativeStates` later, holding nothing of the engine's; it is also reached from `nativeStates` itself,
+/// under this lock, when a reading left seconds waiting, and returns at once there too).
 /// Two exceptions are kept on purpose, both waits for the engine's thread under the lock:
 /// `nativeFlushLog` holds it while that thread flushes the log and hands the records to `logRecords`,
 /// at most ten seconds (finding 4: the flush is made between the engine's counts), and
