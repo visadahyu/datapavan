@@ -951,7 +951,10 @@ app's own DNS follow the flow's name, and cut before a flow's outcome or name ch
 reviews, gave each scope of names a table of its own, so that an app's own resolver pushes out only its names;
 carried the hold of the answer that named a flow from its start to its hello; made the test of the flush asked from
 another thread deterministic; let the debug flush wait for nothing when no logger runs; and read the coarse wall
-clock, measured at a third of the fine one's cost. The caches of
+clock, measured at a third of the fine one's cost. A third let a flush asked as the engine stops go only after its
+last records, bounded the apps' own tables of names, and made the emulator checks find the ports of this computer
+their test servers take free before they start (`scripts/host-ports.sh`), after a program on 127.0.0.1:8791 made
+verify-watch.sh's "refused" step fail as if Watch were at fault. The caches of
 DNS answers kept while a chain is on now run on the time since the phone started, sleep included, and ADR 0044 lists
 every clock the engine reads, with what a sleep or a jump of the clock does to each. A flow is now named by the
 server name its connection sent, before the DNS answer, whose name stays beside it where the two differ; the log's
