@@ -488,6 +488,18 @@ if is_emulator; then
             sleep 2
         done
     }
+    # The emulator's Wi-Fi did not come up before Watch started once (CI, 2026-11-14), and did not come back
+    # after the switch turned it on again twice (CI, 2026-11-16 and 2026-11-18): Android listed mobile data
+    # and no Wi-Fi, and the next attempt passed. So before either check fails, Wi-Fi is turned off and on once
+    # more, waited for again within the same bound, and the run says so (docs/ci-flakes.md). Only when Wi-Fi
+    # is not up: networks that are up and still changing are waited for, not toggled.
+    wifi_again() {
+        up WIFI && return 0
+        echo "  no Wi-Fi after $1 s ($(networks)): turning the emulator's Wi-Fi off and on once more"
+        adb shell svc wifi disable
+        sleep 2
+        adb shell svc wifi enable
+    }
     # Mobile data stays up beside Wi-Fi, as on most phones, so that the switch has a network to go to: on
     # CI, mobile data brought up only after Wi-Fi went off was not there 40 s later ("Active default
     # network: none"). It is brought up here, before Watch starts, where restarting the radios touches no
@@ -509,8 +521,11 @@ if is_emulator; then
         adb shell cmd connectivity airplane-mode disable
         AIRPLANE=""
     fi
-    wait_up 90 wifi ||
-        fail "the emulator did not have both Wi-Fi and mobile data before Watch started ($(networks)), even after airplane mode, so the network switch would have nowhere to go; this is the emulator, not Watch"
+    if ! wait_up 90 wifi; then
+        wifi_again 90
+        wait_up 90 wifi ||
+            fail "the emulator did not have both Wi-Fi and mobile data before Watch started ($(networks)), even after airplane mode and turning Wi-Fi off and on once more, so the network switch would have nowhere to go; this is the emulator, not Watch"
+    fi
     wait_settled 60 ||
         fail "the emulator's networks kept changing for 60 s before Watch started ($(networks)); this is the emulator, not Watch"
     echo "  networks before Watch starts: $(networks)"
@@ -858,7 +873,11 @@ if is_emulator; then
     # Wi-Fi comes back beneath the tunnel. The Private DNS check below once ran while it did, and Android
     # kept the provider on the tunnel's network after the restore (CI, 2026-11-14): it waits until Wi-Fi
     # is up again and the networks have settled.
-    wait_settled 90 || fail "Wi-Fi did not come back, or the networks did not settle, within 90 s ($(networks)); this is the emulator, not Watch"
+    if ! wait_settled 90; then
+        wifi_again 90
+        wait_settled 90 ||
+            fail "Wi-Fi did not come back, or the networks did not settle, within 90 s, nor in 90 s more after Wi-Fi was turned off and on once more ($(networks)); this is the emulator, not Watch"
+    fi
 else
     echo "skipped: the network switch, on a phone"
 fi
