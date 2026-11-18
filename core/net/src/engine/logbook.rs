@@ -301,8 +301,11 @@ impl Shared {
     /// A TCP flow the engine ended itself before its relay began, recorded as opened when its server
     /// accepted, which the app saw end otherwise (ADR 0044, unit 12b, third round): refused, or reset
     /// (`Outcome::Failed`). Its outcome becomes `outcome` in its last segment, the counters and the
-    /// flows kept, and its last segment is written, as [`Shared::finish_closed`] writes it.
+    /// flows kept, and its last segment is written, as [`Shared::finish_closed`] writes it. The cut
+    /// comes first, so that a segment of a quarter hour before keeps the outcome the flow had then,
+    /// whoever cuts it (review 1 of W5's first part, engine, finding 2).
     pub(super) fn finish_as(&self, id: u64, outcome: Outcome) {
+        self.log_now();
         match lock(&self.live).get_mut(&id) {
             Some(live) => live.flow.outcome = outcome,
             None => return,
@@ -956,10 +959,52 @@ mod tests {
                 (1, at(30, 15), at(30, 16), [0; 4], false),
             ]
         );
-        assert!(matches!(
-            &records[1],
-            Record::Segment { flow, .. } if flow.outcome == Outcome::Refused
-        ));
+        let outcomes: Vec<_> = records
+            .iter()
+            .filter_map(|r| match r {
+                Record::Segment { flow, .. } => Some(flow.outcome),
+                Record::Lookups { .. } => None,
+            })
+            .collect();
+        assert_eq!(outcomes, vec![Outcome::Opened, Outcome::Refused]);
+    }
+
+    /// A hello read after a sleep names the flow from then on: the segment of the quarter hour before
+    /// is cut first, with the name it had then, whether or not a count cuts it before the hello.
+    #[test]
+    fn a_hello_after_a_sleep_leaves_the_name_of_the_segment_before() {
+        let (shared, clock) = log_at(at(22, 10));
+        let Some(bytes) = shared.record(Flow {
+            name: Some("www.example.com".into()),
+            named_by: NamedBy::Dns,
+            ..flow(1)
+        }) else {
+            unreachable!("an open flow is live")
+        };
+        bytes.up(&shared, 517, 557);
+        clock.set(at(30, 16));
+        let opened = super::super::Opened {
+            id: 1,
+            port: 443,
+            dns: DnsUse::None,
+        };
+        let hello = crate::tls::Hello {
+            name: "other.example".into(),
+            ech: false,
+        };
+        shared.hello(opened, &hello, NamedBy::Tls);
+        let named: Vec<_> = taken(&shared)
+            .iter()
+            .filter_map(|r| match r {
+                Record::Segment { flow, start, .. } => Some((*start, flow.name.clone())),
+                Record::Lookups { .. } => None,
+            })
+            .collect();
+        assert_eq!(named, vec![(at(22, 10), Some("www.example.com".into()))]);
+        assert_eq!(
+            lock(&shared.live)[&1].flow.name.as_deref(),
+            Some("other.example")
+        );
     }
 
     /// The engine stops after a sleep: every flow's bytes and every app's lookups stay in their quarter

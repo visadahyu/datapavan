@@ -102,7 +102,11 @@ impl Shared {
     /// which names who runs the network rather than the server, gives way, as before. A chained app's
     /// flow, whose destination stays out of the log, takes no name in it. A known resolver's host name
     /// marks the flow as the app's own encrypted DNS.
+    ///
+    /// The log's segments are cut first, at any quarter hour passed, so that a segment of a quarter hour
+    /// before keeps the name the flow had then, whoever cuts it.
     pub(super) fn hello(&self, opened: Opened, hello: &Hello, by: NamedBy) {
+        self.log_now();
         let id = opened.id;
         let hidden = hello.ech && lock(&self.names).is_public(&hello.name, Instant::now());
         let resolver = matches!(opened.port, 443 | 853)
