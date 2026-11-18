@@ -6,11 +6,17 @@
 //!
 //! It holds answers ("no error", and "no such name" with an SOA record) to one question, never a
 //! truncated one, at most [`CAPACITY`] of them, the oldest going first. It lives in memory only.
+//!
+//! Its time is the time since the phone started, its sleep included (`CLOCK_BOOTTIME`, the engine's
+//! `Clock::since_boot`): an answer whose time to live runs out while the phone sleeps is gone when it
+//! wakes, as from Android's own resolver, and a wall clock set back or forward changes nothing. On the
+//! monotonic clock, which stands still in a sleep, an answer of five minutes cached before a night was
+//! served the next morning (finding 4 of the independent review of 2026-11-09).
 
 use crate::answers;
 use crate::dns::{ttl_offsets, u16_at, u32_at};
 use std::collections::{HashMap, VecDeque};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// The most answers kept.
 pub const CAPACITY: usize = 4096;
@@ -21,23 +27,23 @@ const TYPE_SOA: u16 = 6;
 /// A question: its name in lower case, type and class.
 type Key = (String, u16, u16);
 
-/// Answers by question.
+/// Answers by question, each with the time since the phone started until which it is kept.
 #[derive(Debug, Default)]
 pub struct DnsCache {
-    entries: HashMap<Key, (Vec<u8>, Instant)>,
+    entries: HashMap<Key, (Vec<u8>, Duration)>,
     order: VecDeque<Key>,
 }
 
 impl DnsCache {
     /// Keeps `answer` for its shortest time to live (for "no such name", the SOA record's, bounded by
-    /// its minimum field, RFC 2308), if it is one to keep.
-    pub fn insert(&mut self, answer: &[u8], now: Instant) {
+    /// its minimum field, RFC 2308), if it is one to keep. `now` is the time since the phone started.
+    pub fn insert(&mut self, answer: &[u8], now: Duration) {
         let Some((key, keep)) = keepable(answer) else {
             return;
         };
         if self
             .entries
-            .insert(key.clone(), (answer.to_vec(), now + keep))
+            .insert(key.clone(), (answer.to_vec(), now.saturating_add(keep)))
             .is_none()
         {
             self.order.push_back(key);
@@ -49,9 +55,9 @@ impl DnsCache {
         }
     }
 
-    /// The answer kept for `query`'s question, if it has not run out: with the query's ID, and its
-    /// question as the query wrote it.
-    pub fn answer(&mut self, query: &[u8], now: Instant) -> Option<Vec<u8>> {
+    /// The answer kept for `query`'s question, if it has not run out by `now`, the time since the phone
+    /// started: with the query's ID, and its question as the query wrote it.
+    pub fn answer(&mut self, query: &[u8], now: Duration) -> Option<Vec<u8>> {
         let question = answers::question(query)?;
         let key = (question.name, question.kind, question.class);
         let (kept, until) = self.entries.get(&key)?;
@@ -152,10 +158,13 @@ mod tests {
         a
     }
 
+    /// An hour after the phone started.
+    const NOW: Duration = Duration::from_hours(1);
+
     #[test]
     fn answers_the_same_question_until_its_time_to_live_runs_out() {
         let mut cache = DnsCache::default();
-        let now = Instant::now();
+        let now = NOW;
         let first = query(1, b"\x07example\x03com\x00");
         cache.insert(&answer(&first, 300), now);
         assert_eq!(cache.len(), 1);
@@ -174,10 +183,23 @@ mod tests {
         );
     }
 
+    /// Kept before a night's sleep for five minutes, an answer is gone in the morning, though the phone
+    /// was awake for less; and the time since start never ends a cache.
+    #[test]
+    fn an_answer_whose_time_to_live_ran_out_in_a_sleep_is_gone() {
+        let mut cache = DnsCache::default();
+        let q = query(1, b"\x07example\x03com\x00");
+        cache.insert(&answer(&q, 300), NOW);
+        assert!(cache.answer(&q, NOW + Duration::from_mins(4)).is_some());
+        assert_eq!(cache.answer(&q, NOW + Duration::from_hours(8)), None);
+        cache.insert(&answer(&q, 300), Duration::MAX);
+        assert_eq!(cache.answer(&q, Duration::MAX), None, "kept for no time");
+    }
+
     #[test]
     fn keeps_no_answer_without_a_time_to_live_and_no_failure() {
         let mut cache = DnsCache::default();
-        let now = Instant::now();
+        let now = NOW;
         let q = query(1, b"\x07example\x03com\x00");
         cache.insert(&answer(&q, 0), now);
         let mut failed = answer(&q, 300);
@@ -197,7 +219,7 @@ mod tests {
     #[test]
     fn keeps_no_such_name_for_the_soa_minimum() {
         let mut cache = DnsCache::default();
-        let now = Instant::now();
+        let now = NOW;
         let q = query(1, b"\x04nope\x07example\x03com\x00");
         let mut a = q.clone();
         a[2] = 0x81;
@@ -217,7 +239,7 @@ mod tests {
     #[test]
     fn holds_at_most_its_capacity() {
         let mut cache = DnsCache::default();
-        let now = Instant::now();
+        let now = NOW;
         for i in 0..=CAPACITY {
             let name = format!("n{i}");
             let mut wire = vec![u8::try_from(name.len()).unwrap_or(0)];

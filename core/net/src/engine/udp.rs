@@ -4738,7 +4738,7 @@ fn cached_answer(shared: &Shared, destination: SocketAddr, query: &[u8]) -> Opti
     if !shared.is_tunnel_dns(destination.ip()) || !shared.uncached_answers.load(Ordering::Relaxed) {
         return None;
     }
-    let mut answer = lock(&shared.direct_answers).answer(query, Instant::now())?;
+    let mut answer = lock(&shared.direct_answers).answer(query, shared.clock.since_boot())?;
     dns::uncache(&mut answer);
     Some(answer)
 }
@@ -4938,7 +4938,7 @@ fn relayed(
                 if destination.port() == 53 {
                     shared.learn(answer, None);
                     if shared.uncached_answers.load(Ordering::Relaxed) {
-                        lock(&shared.direct_answers).insert(answer, Instant::now());
+                        lock(&shared.direct_answers).insert(answer, shared.clock.since_boot());
                         dns::uncache(answer);
                     }
                 }
@@ -4987,6 +4987,27 @@ mod tests {
 
     const APP: SocketAddr =
         SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::new(10, 1, 10, 1)), 40_000);
+
+    /// While a chain is on, Watch's cache answers a direct app's question for its time to live in time
+    /// since the phone started, its sleep included (finding 4): after a night's sleep, though the phone
+    /// was awake for less, it answers no more, and the question goes to the network's resolver.
+    #[test]
+    fn a_direct_apps_cached_answer_runs_out_in_a_sleep() {
+        let clock = super::super::clock::ManualClock::at(1_794_873_600_000);
+        let mut shared = shared();
+        shared.clock = clock.clone();
+        shared.uncached_answers.store(true, Ordering::Relaxed);
+        let question = query(7, b"\x07example\x03com\x00");
+        let mut answer = response(&question);
+        answer[7] = 1;
+        answer.extend_from_slice(&[0xc0, 12, 0, 1, 0, 1, 0, 0, 1, 0x2c, 0, 4, 93, 184, 216, 34]);
+        lock(&shared.direct_answers).insert(&answer, shared.clock.since_boot());
+        let dns = SocketAddr::new(IpAddr::V4(shared.addresses.dns4), 53);
+        clock.pass(299_000);
+        assert!(cached_answer(&shared, dns, &question).is_some(), "kept");
+        clock.pass(8 * 3_600_000);
+        assert_eq!(cached_answer(&shared, dns, &question), None);
+    }
 
     fn waiting_stand_in() -> PeerWay {
         PeerWay {

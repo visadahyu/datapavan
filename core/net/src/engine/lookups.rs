@@ -10,7 +10,7 @@ use crate::standins::is_stand_in;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// Quad9's service without blocking, `quad9-unsecured` in `data/resolvers`: the resolver of chained
 /// apps' other questions until the user chooses one (ADR 0038, decided by the maintainer).
@@ -54,13 +54,13 @@ pub(super) async fn answer(
     }
     // Asked before: the answer Watch keeps for the tool's route, for its time to live, so that each name
     // costs one trip through the tool, not one per lookup (ADR 0038).
-    let kept = lock(&shared.tool_answers).answer(query, Instant::now());
+    let kept = lock(&shared.tool_answers).answer(query, shared.clock.since_boot());
     if let Some(kept) = kept {
         return answers::rebuilt(&kept).or_else(|| answers::failure(query));
     }
     match through_tool(shared, chain, query).await {
         Ok(answer) => {
-            lock(&shared.tool_answers).insert(&answer, Instant::now());
+            lock(&shared.tool_answers).insert(&answer, shared.clock.since_boot());
             answers::rebuilt(&answer).or_else(|| answers::failure(query))
         }
         Err(_) => answers::failure(query),
@@ -153,6 +153,37 @@ mod tests {
             unreachable!("an answer")
         };
         assert!(reverse.ends_with(b"\x07example\x03com\x00"));
+    }
+
+    /// An answer kept for a chained app is kept for its time to live in time since the phone started,
+    /// its sleep included (finding 4): it answers the question until then, and after a night's sleep,
+    /// though the phone was awake for less, the question goes to the tool again, here stopped.
+    #[tokio::test(flavor = "current_thread")]
+    async fn an_answer_kept_through_the_tool_runs_out_in_a_sleep() {
+        let clock = super::super::clock::ManualClock::at(1_794_873_600_000);
+        let mut shared = shared();
+        shared.clock = clock.clone();
+        let shared = Arc::new(shared);
+        let txt = query(b"\x07example\x03com\x00", 16);
+        let mut kept = txt.clone();
+        kept[2] = 0x81;
+        kept[3] = 0x80;
+        kept[7] = 1;
+        kept.extend_from_slice(&[0xc0, 12, 0, 16, 0, 1, 0, 0, 1, 0x2c, 0, 3, 2, b'h', b'i']);
+        lock(&shared.tool_answers).insert(&kept, shared.clock.since_boot());
+        let rcode = |answer: Option<Vec<u8>>| answer.and_then(|a| a.get(3).map(|f| f & 0x0f));
+        clock.pass(299_000);
+        assert_eq!(
+            rcode(answer(&shared, &chain(), &txt).await),
+            Some(0),
+            "kept"
+        );
+        clock.pass(8 * 3_600_000);
+        assert_eq!(
+            rcode(answer(&shared, &chain(), &txt).await),
+            Some(2),
+            "asked of the stopped tool"
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]
