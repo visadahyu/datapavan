@@ -226,6 +226,8 @@ log keeps no destination unless you turn that on.</li>
 <li><strong>Each app&rsquo;s recent traffic, for the &ldquo;Now&rdquo; view,</strong> in memory only. It is gone when the firewall stops.</li>
 <li><strong>Your circumvention tool&rsquo;s settings:</strong> whether apps go through it and which ones, the tool&rsquo;s host and port, and
 the password Datapavan made for it, which is encrypted under a key that Android&rsquo;s keystore protects.</li>
+<li><strong>The apps you leave out of the firewall,</strong> which then go to the internet without it: their names, until you take
+them back.</li>
 </ul>
 <h2 id="version-01-cannot-open-network-connections">Version 0.1 cannot open network connections</h2>
 <p>Datapavan Basic 0.1 does not request the INTERNET permission, so Android itself prevents it from
@@ -260,7 +262,7 @@ Swiss foundation that does not log addresses, so Quad9 sees the tool&rsquo;s add
 			</tr>
 			<tr>
 					<td>Usage access, in Datapavan Advanced</td>
-					<td>Telling, for each connection, whether you were using its app at that moment, it ran with its notification (music, navigation), or neither. For this, Advanced also reads Android&rsquo;s record of which app was on screen and when. It keeps what it learns in two places only: in memory for the &ldquo;Now&rdquo; view, and, if you keep a connection log, as the state of each record, for the days you chose</td>
+					<td>Telling, for each connection, whether you were using its app at that moment, it ran with a notification Android showed (music, navigation), or neither. For this, Advanced also reads Android&rsquo;s record, back to the phone&rsquo;s start, of which app was on screen and when, which apps ran a foreground service, which ones you used in other ways (as by tapping their notification), and when the screen turned on or off and the lock screen showed; and whether each app may show notifications. It keeps what it learns in two places only: in memory for the &ldquo;Now&rdquo; view, and, if you keep a connection log, as the state of each record, for the days you chose</td>
 					<td>Datapavan Advanced, from 0.2.0</td>
 			</tr>
 			<tr>
