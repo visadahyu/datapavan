@@ -2311,3 +2311,35 @@ finding gets the best-in-class fix, or an accepted limit with its reason, now in
   (`identifiers` 2,986,146 runs, `quic` 5,382,560, `quic_answers` 611,333); `identifiers` alone with this round's
   properties and seed, 180 s, 11,289,887 runs, nothing.
 - **Not done, stated:** nothing beyond unit 9b's list of accepted limits.
+
+**W5, part 1: the engine's clocks (2026-11-18, finding 4 of the review of 2026-11-09).** The review found that the
+log's quarter hours followed a timer that stands still while the phone sleeps (ADR 0037's decision 1, amended the
+same day), and asked beyond the repair for one table: every reading of time in the engine, what a sleep of hours and
+a jump of the wall clock do to each, and whether the user can see a wrong result from it. It is here, not in ADR
+0037, because this ADR holds the engine's own gaps and its tests that drive time (decision 6), and all but one row
+are its mechanisms; ADR 0037 holds the log's row.
+
+- **Three clocks.** The wall clock runs on in a sleep and can be set back or forward by the user or the network.
+  The monotonic clock, which tokio's timers and `std::time::Instant` read on Android and Linux, stands still in a
+  sleep and never jumps, as the kernel's own timers (TCP's among them) and the apps' do. `CLOCK_BOOTTIME` runs on
+  in a sleep and never jumps.
+- **The engine is handed a clock** with its platform (`Platform::clock`, the phone's own by default:
+  `core/net/src/engine/clock.rs`) with two readings, the wall clock in milliseconds and the time since the phone
+  started, sleep included, so that tests move both: a sleep of hours, a jump back, a jump forward. The rest reads
+  the monotonic clock, which tokio's paused time moves in tests. `CLOCK_BOOTTIME` is read with nix's safe
+  `clock_gettime`, through its `time` feature, which brings no other crate; `cargo deny` passes.
+
+| What reads the time | Where | Clock | A sleep of hours | A jump of the wall clock | What the user could see | Now |
+|---|---|---|---|---|---|---|
+| The log's times and quarter hours: each count of a flow's bytes, each lookup and answer counted, a flow's start and end, the flush, the logger's wake | `logbook.rs` (`Shared::log_now`), from `tcp.rs` and `udp.rs` | Wall, handed in | Before: the timer woke late, and a night's bytes went into one segment from the evening, filed under its day, through the timer or a flow's end | Before: a segment ending before it began, its end set to its start | A flow's bytes in another quarter hour, and another day | Fixed: each count cuts first, at the quarter hours passed either way (ADR 0037, decision 1 as amended) |
+| The logger's waits: 30 s gathering, the sleep to the next quarter hour | `logbook.rs` (`logger`) | Monotonic (tokio) | It wakes late; records already cut wait in memory until it does, and are lost if the process dies first, as any record waiting is | None | Nothing now: no segment depends on it | Accepted |
+| DNS answers kept for apps that go directly while a chain is on, and for chained apps' questions through the tool (ADR 0038) | `dnscache.rs`, `udp.rs` (`cached_answer`), `lookups.rs` | Was monotonic; now `CLOCK_BOOTTIME` | Before: an answer of five minutes kept before a night was served in the morning, for as long again as the phone had been awake; Android's own resolver, which this cache stands in for, would have dropped it | None | An app given an address past its time to live | Fixed |
+| Names from DNS answers, and ECH public names (at least an hour, at most a day) | `names.rs`, `naming.rs` | Monotonic | A name is kept longer in real time | None | A DNS name kept through a night can name a flow that sends no name of its own, or stand beside its own name | Accepted: apps reconnect after a night to addresses they got before it (a browser's own cache, a pool of connections), and the name they asked for names those flows; a newer answer for the address replaces it; and the connection's own name now names a flow that sends one (finding 20) |
+| TCP rewriting: idle limit (10 min), port cooling (60 s), the sweep (60 s), the linger after a relay (30 s) | `nat.rs`, `tcp.rs`, `engine.rs` (`run`) | Monotonic | An idle connection is kept across the night, as the app's kernel keeps it, whose TCP timers stand still too | None | None; on `CLOCK_BOOTTIME` the engine would forget a push connection the app still holds, and reset it at its first packet in the morning | Correct as it is |
+| UDP mappings: idle end (120 s), quiet (5 s), asking Android again (1 s, and every 30 s), the contest (5 s), Android's answers near datagrams | `udp.rs`, `whose.rs` | Monotonic | A mapping idle across the night stays, as the app's socket does; no app opens or closes a socket while the phone sleeps, so time awake is the time in which a port can change hands | None | None | Correct as it is |
+| Waits: a TCP connect (60 s), a tool's handshake, lookups through the tool, connections kept to its resolvers, the tunnel's write in a swap (200 ms), the listener's pauses, a reset's drain (2 s), pings (idle 10 s, quiet 2 s), fragments (5 s) | `upstream.rs`, `chain.rs`, `lookups.rs`, `kept.rs`, `tun.rs`, `tcp.rs`, `echo.rs`, `fragments.rs`, `engine.rs` | Monotonic (tokio or `Instant`) | A wait lasts longer in real time, as the kernel's own retransmission timers do | None | None: nothing is recorded from them | Correct as it is |
+| The owner rule's model, and the tests' own waits | `whose/model.rs`, tests | Monotonic | Test only | Test only | None | Test only |
+
+- **Tests.** The log's: ADR 0037's note of the same day. The caches': an answer kept for five minutes answers for
+  four and is gone after a night's sleep, in the cache (`dnscache.rs`), for a direct app while a chain is on
+  (`udp.rs`) and for a chained app's question through the tool (`lookups.rs`), each with a clock the test moves.

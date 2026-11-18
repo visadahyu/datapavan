@@ -47,6 +47,21 @@ Option 3.
    are append-only. Each row holds the day, a token of the app (HMAC-SHA-256 of the UID under a key derived
    from that day's key, so it links an app's rows within a day and not across days), and the sealed record:
    all other fields, with the day and the token as associated data. A fresh 96-bit nonce per record.
+   (Amended 2026-11-18, W5's first part, after finding 4 of an independent review of 2026-11-09: the quarter
+   hours were a timer's, and the timer stands still while the phone sleeps, so a flow open at 22:10 and next
+   written at 06:15 became one segment of eight hours, filed under the evening's day, and a flow that ended in the
+   gap the same. Now the engine reads the wall clock before it counts any byte or lookup, opens a flow or ends one,
+   and first cuts every open segment, and each app's lookups, at the quarter hours passed since the last cut,
+   whichever way the clock moved: the segment carries its bytes to the end of its own quarter hour, and the next
+   begins at the start of the quarter hour the clock reads. So no byte is counted in a segment of another quarter
+   hour, and the quarter hours of a sleep, which had none, have no record. The flush the end-to-end test asks for
+   is made on the engine's thread too, between counts. Every zone of tzdata is a whole number of quarter hours from
+   UTC, and has been since 1979 (2026f, read on 2026-11-18; the last two that were not, Africa/Monrovia and
+   Pacific/Kiritimati, left those offsets in 1972 and 1979), Kathmandu's +5:45, the Chatham Islands' +12:45 and
+   +13:45 and Eucla's +8:45 included, so no record spans a local midnight. The engine reads its clock through one
+   it is handed, which tests move: a sleep of hours ended by no packet, by the app's or by the server's, a jump
+   back, a jump forward, and each way a flow ends after the gap. The engine's other clocks are in ADR 0044's table
+   of the same day.)
 2. **Keys.** At the first record of a day Watch draws a 256-bit day key, keeps it in memory for that day, and
    stores it only wrapped with the Keystore public key (RSA-OAEP). At midnight the old day key is cleared from
    memory (best effort: the JVM may hold copies). The private key is generated in the Keystore and never
@@ -89,7 +104,9 @@ Option 3.
 ## Left open
 
 - **Day boundaries** follow the phone's time zone at the time of writing; a change of zone can make one day
-  shorter or longer. Accepted.
+  shorter or longer. Accepted. (Amended 2026-11-18: so does the wall clock. Set back, a flow's later records begin
+  before its earlier ones end; each record lies in the quarter hour the clock read when its bytes were counted.
+  Accepted: the log follows the clock the user sees.)
 - **Keystore behaviour on real phones.** Unlocked-device keys and RSA-OAEP have had vendor bugs. W4 checks them
   on the emulators with Android 10, 11 and 17 and on the A40; where a phone refuses the unlocked-device flag,
   Watch makes the key without it and says so in its health check.
