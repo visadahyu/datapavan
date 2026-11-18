@@ -947,7 +947,11 @@ fallen on a quarter hour of UTC since 2011, by the zone's offsets and by the ins
 end-to-end test's flush is made on the engine's thread, so no race is left. A first fix round, after two
 independent reviews the same day, made a scoped ECH public name from an app's own resolver hide names in that app's
 flows, set a DNS name beside the connection's own only while the answer is held in real time, let the mark of an
-app's own DNS follow the flow's name, and cut before a flow's outcome or name changes. The caches of
+app's own DNS follow the flow's name, and cut before a flow's outcome or name changes. A second, after two fresh
+reviews, gave each scope of names a table of its own, so that an app's own resolver pushes out only its names;
+carried the hold of the answer that named a flow from its start to its hello; made the test of the flush asked from
+another thread deterministic; let the debug flush wait for nothing when no logger runs; and read the coarse wall
+clock, measured at a third of the fine one's cost. The caches of
 DNS answers kept while a chain is on now run on the time since the phone started, sleep included, and ADR 0044 lists
 every clock the engine reads, with what a sleep or a jump of the clock does to each. A flow is now named by the
 server name its connection sent, before the DNS answer, whose name stays beside it where the two differ; the log's

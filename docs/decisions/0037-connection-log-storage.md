@@ -50,7 +50,8 @@ Option 3.
    (Amended 2026-11-18, W5's first part, after finding 20 of an independent review of 2026-11-09: the record's
    format is version 2. A flow's name is the server name the connection itself sent, where it sent one that is
    not the public name of an ECH configuration Watch saw, and the name a DNS answer gave its address is kept
-   beside it where the two differ and that answer is current, since either can be wrong;
+   beside it where the two differ, while the answer that gave the flow that name when it started is still held in
+   time since the phone started (a stand-in's name always is), since either can be wrong;
    bit 1 of its flags says the flow came in (ADR 0044, decision 4). Version 1, never in a release, stays
    readable, since debug builds on test phones sealed days in it; a record of a version the reader does not know
    is skipped and counted, never read as another. Both sides read one fixture the engine writes, so that the
@@ -70,8 +71,8 @@ Option 3.
    change of offset that changes the date falls on one, as it has since 2011 (Newfoundland, Goose Bay and Moncton
    changed theirs at 00:01 local time until 2010 and 2006, so that the date changed at 02:31 or 03:01 UTC).
    Kathmandu's +5:45, the Chatham Islands' +12:45 and +13:45 and Eucla's +8:45 included, no record therefore
-   spans a change of the local date; a clock set to before 2011 in those three zones could make one span it, and
-   is accepted. (Corrected 2026-11-18 after review 1 of W5's first part, names, finding 5: the first wording
+   spans a change of the local date; a clock set to before 2011 in Newfoundland, Goose Bay or Moncton could make
+   one span it, and is accepted. (Corrected 2026-11-18 after review 1 of W5's first part, names, finding 5: the first wording
    rested the conclusion on the offsets alone.) The engine reads its clock through one
    it is handed, which tests move: a sleep of hours ended by no packet, by the app's or by the server's, a jump
    back, a jump forward, and each way a flow ends after the gap. The engine's other clocks are in ADR 0044's table
@@ -81,10 +82,12 @@ Option 3.
    are counted when the flow opens, in its first segment: by at most the connect wait for TCP (60 seconds awake,
    longer in real time if the phone sleeps meanwhile), and the owner question and the socket for UDP and lookups
    (milliseconds). Counting them at their arrival would need a segment before the flow's own start. And each count
-   reads the wall clock once (a vDSO call, about 20 ns): one read for each UDP datagram, but a relayed TCP
-   connection is counted by the relay as it hands each read on and by the tunnel packet by packet, so about two
-   reads for a small TCP packet and 1.1 for bulk, against the one read for each packet the brief set; merging the
-   two counts would place one in the other's quarter hour. A flow's outcome or name that changes in a quarter hour
+   reads the wall clock once: one read for each UDP datagram, but a relayed TCP connection is counted by the relay
+   as it hands each read on and by the tunnel packet by packet, so about two reads for a small TCP packet and 1.1
+   for bulk, against the one read for each packet the brief set; merging the two counts would place one in the
+   other's quarter hour. Since W5's second fix round the reading is the coarse wall clock (ADR 0044's cost note),
+   which lags the wall clock by less than one of the kernel's ticks, at most 10 ms: a byte counted in that moment
+   after a quarter hour falls in the quarter hour before, well within the bounds above. A flow's outcome or name that changes in a quarter hour
    after the last count changes after the cut, so the segment before keeps the outcome and name it had.)
 2. **Keys.** At the first record of a day Watch draws a 256-bit day key, keeps it in memory for that day, and
    stores it only wrapped with the Keystore public key (RSA-OAEP). At midnight the old day key is cleared from

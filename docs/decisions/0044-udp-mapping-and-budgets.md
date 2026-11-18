@@ -98,12 +98,17 @@ an ADR (D25).
    - (Decided in its first fix round, 2026-11-18, after review 1 of W5's first part.
      - ECH public names in the answers of an app's own plain resolver are kept as its addresses are, for that app's
        flows only, so a public name names no flow wherever Watch saw its configuration, and no app hides another's
-       names (names, finding 1).
+       names (names, finding 1). Since the second fix round, each scope has a table of its own, Android's
+       resolver's of 8,192 addresses and 256 public names, each app's of 1,024 and 64, so an app's own resolver
+       pushes out only that app's names (review 2: in one table it could push Android's out).
      - A DNS name stands beside the connection's own only while it is current: a name from an answer is kept, to
        name flows, on the monotonic clock, and through a night it would show W5's users a difference that is only
-       its age, so it stands beside another only while the answer is held in time since the phone started, with the
-       same hold (at least an hour, at most a day). The answer's own time to live would hide a real difference
-       after a minute, since apps keep addresses longer than DNS says (engine, finding 7).
+       its age, so it stands beside another only while the answer that named the flow when it started is held in
+       time since the phone started, with the same hold (at least an hour, at most a day). The flow carries that
+       hold from its start, so a later answer for the address, as another app's lookup of a name on the same CDN
+       address, does not end it (second fix round). The answer's own time to live would hide a real difference
+       after a minute, since apps keep addresses longer than DNS says (engine, finding 7). A failed reading of
+       the time since start holds a name for no time.
      - A stand-in's name is the name the tool was asked to reach, tied to that address alone, so it is current while
        the stand-in lives and stands beside the hello's name; the hello's name names the flow, one rule for every
        flow, since the hello says which server the app spoke to at the address the tool reached, and both names are
@@ -2365,6 +2370,15 @@ are its mechanisms; ADR 0037 holds the log's row.
   No unit test can tell `CLOCK_BOOTTIME` from `CLOCK_MONOTONIC` on a machine that has not slept since it started:
   the clock the engine reads there is checked by reading, and the tests move the clock the engine is handed (fix
   round 1, a mutant review 1 left alive).
-- **Cost** (fix round 1, engine, finding 5): each count of the log reads the wall clock once, a vDSO call of about
-  20 ns, and takes no lock within a quarter hour; `CLOCK_BOOTTIME` is read once for each DNS answer a cache keeps or
-  looks up, never for each packet. ADR 0037's note says how many reads a packet costs.
+- **Cost** (fix round 1, engine, finding 5; second fix round). Each count of the log reads the wall clock once. A
+  count of a flow's bytes takes no lock within a quarter hour; a count of an app's lookups locks its count, and a
+  TCP packet on the tunnel the map of its flow's bytes, as before W5. `CLOCK_BOOTTIME` is read for each DNS answer
+  a cache keeps or looks up, for each DNS answer whose names Watch learns, and for each hello that would set a
+  differing DNS name beside a flow's own: never for each packet. Measured on the development machine (x86-64,
+  vDSO, release build, 2026-11-18): `SystemTime::now` 22.8 ns, `CLOCK_REALTIME_COARSE` 7.9 ns, `CLOCK_BOOTTIME`
+  20.4 ns, an `Arc` cloned and dropped 2.8 ns, an atomic addition 1.4 ns. So the log reads the coarse wall
+  clock, as the fresh review 2 offered: its steps here are 4 ms (the kernel's tick, at most 10 ms on Android's
+  kernels), it follows the wall clock when it is set, and it is read in the vDSO also on phones whose kernels
+  read the fine clock through a system call. A byte counted within a tick after a quarter hour then falls in the
+  quarter hour before, which ADR 0037's note accepts: the bounds there are seconds. A count of no bytes of the
+  app's own, as a tunnel packet's, adds nothing to them. ADR 0037's note says how many reads a packet costs.
