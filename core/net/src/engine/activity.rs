@@ -2102,6 +2102,76 @@ pub(super) mod tests {
         assert!(lock(&shared.activity).held.is_empty());
     }
 
+    /// An engine started with what the one before held, and a chain that leaves an app's destinations out
+    /// of the log, shows none of them in "Now" (review b1 of W5's second part, engine, finding 1).
+    #[test]
+    fn a_chain_the_next_engine_starts_with_hides_what_the_last_held() -> std::io::Result<()> {
+        use super::super::{Addresses, Chain, ChainSetting, Config, Engine, Handover, Limits};
+        let start = |platform: Arc<Engined>,
+                     handover: Option<Handover>,
+                     setting: Option<ChainSetting>|
+         -> std::io::Result<(Engine, std::os::unix::net::UnixDatagram)> {
+            let (engine_end, app) = std::os::unix::net::UnixDatagram::pair()?;
+            engine_end.set_nonblocking(true)?;
+            let config = Config {
+                mtu: 1_500,
+                keep_flows: 0,
+                addresses: Addresses::COMMON,
+                limits: Limits::default(),
+            };
+            let engine = Engine::start_with(
+                std::os::fd::OwnedFd::from(engine_end),
+                config,
+                platform,
+                None,
+                (handover, setting),
+            )?;
+            Ok((engine, app))
+        };
+        let clock = ManualClock::at(T);
+        let platform = || {
+            Arc::new(Engined {
+                clock: clock.clone(),
+                batches: std::sync::Mutex::default(),
+            })
+        };
+        let (engine, app) = start(platform(), None, None)?;
+        let server = std::net::UdpSocket::bind((std::net::Ipv4Addr::LOCALHOST, 0))?;
+        server.set_read_timeout(Some(std::time::Duration::from_secs(5)))?;
+        let me = SocketAddr::from((Addresses::COMMON.tun4, 40_000));
+        let Some(datagram) = crate::packet::udp(me, server.local_addr()?, b"evening") else {
+            unreachable!("a small datagram")
+        };
+        app.send(&datagram)?;
+        server.recv_from(&mut [0u8; 64])?;
+        let places = |engine: &Engine| {
+            let snapshot = engine.shared.now_view(T + 3_000);
+            snapshot
+                .apps
+                .iter()
+                .find(|a| a.uid == Some(UID))
+                .map(|a| (a.places.len(), a.through_tool))
+        };
+        assert_eq!(places(&engine), Some((1, false)));
+        clock.set(T + 3_000);
+        let handover = engine.hand_over();
+        let setting = ChainSetting {
+            chain: Some(Chain {
+                proxy: SocketAddr::from(([127, 0, 0, 1], 9)),
+                credentials: None,
+                tool: 10_200,
+                apps: Some(std::collections::HashSet::from([UID])),
+                udp: true,
+                log_destinations: false,
+            }),
+            uncached_answers: false,
+        };
+        let (mut engine, _app) = start(platform(), Some(handover), Some(setting))?;
+        assert_eq!(places(&engine), Some((0, true)));
+        engine.stop();
+        Ok(())
+    }
+
     /// A platform whose Kotlin side tells no states, noting whether the engine asked all the same.
     #[derive(Default)]
     struct Untelling {
