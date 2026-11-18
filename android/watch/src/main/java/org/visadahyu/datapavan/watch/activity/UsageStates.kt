@@ -198,21 +198,15 @@ class UsageStates(
         val run = Run(start, uidOf, keyboard)
         for (event in pending) run.apply(event)
         val carried = run.snapshot(at + by)
-        // Each time on the new clock, and none past `at`; an activity resumed before the lock screen showed
-        // stays before it, so that it stays hidden under it.
-        val moved = { time: Long -> minOf(time - by, at) }
-        val keyguardSince = moved(carried.keyguardSince)
+        // Each time on the new clock, none past `at`: moved all by one step, they keep their order, so that an
+        // activity resumed before the lock screen showed stays hidden under it.
+        val moved = { time: Long -> if (time == Long.MIN_VALUE) time else minOf(time - by, at) }
         base = carried.copy(
             time = at,
-            activities = carried.activities.mapValues { (_, a) ->
-                val resumedAt = a.resumedAt?.let { r ->
-                    if (carried.keyguard && r < carried.keyguardSince) minOf(moved(r), keyguardSince - 1) else moved(r)
-                }
-                a.copy(resumedAt = resumedAt, at = moved(a.at))
-            },
+            activities = carried.activities.mapValues { (_, a) -> a.copy(resumedAt = a.resumedAt?.let(moved), at = moved(a.at)) },
             services = carried.services.mapValues { moved(it.value) },
             screenOnSince = carried.screenOnSince?.let(moved),
-            keyguardSince = keyguardSince,
+            keyguardSince = moved(carried.keyguardSince),
             lastInUse = carried.lastInUse.mapValues { moved(it.value) },
         )
         pending.clear()
