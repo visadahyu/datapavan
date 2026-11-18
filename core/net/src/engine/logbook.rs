@@ -184,6 +184,11 @@ impl FlowBytes {
         log.marked(self.uid, (held, oldest), second);
     }
 
+    /// The next count notes its second anew, even the second of the latest mark, as after a clock set back.
+    pub(super) fn forget_second(&self) {
+        self.second.store(NO_SECOND, Ordering::Relaxed);
+    }
+
     /// Takes the marks of the segment cut now: the next count begins one anew, in whatever second. With
     /// `ended`, the flow notes none any more.
     fn take_marks(&self, ended: bool) -> VecDeque<Mark> {
@@ -282,6 +287,11 @@ impl Lookups {
         marked
     }
 
+    /// The next count notes its second anew, even the second of the latest mark.
+    pub(super) fn forget_second(&mut self) {
+        self.second = NO_SECOND;
+    }
+
     /// Its segment, from its start to `end`, held for its state ([`Shared::hold`]).
     fn piece(self, uid: Option<u32>, end: u64) -> Piece {
         Piece {
@@ -315,11 +325,13 @@ impl Shared {
         );
         let now = self.clock.wall_ms();
         let last = self.last_reading.swap(now, Ordering::Relaxed);
-        if now.saturating_add(1000) <= last && self.tracks {
-            self.clock_set_back();
-        }
+        // The cut first: the segments it cuts are then held when a clock set back places what waits
+        // (review b1 of W5's second part, engine, finding 6).
         if now / SEGMENT_MS != self.quarter.load(Ordering::Acquire) {
             self.cut_all(now, last);
+        }
+        if now.saturating_add(1000) <= last && self.tracks {
+            self.clock_set_back(now);
         }
         now
     }

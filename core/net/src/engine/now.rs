@@ -148,6 +148,35 @@ impl Counts {
         }
     }
 
+    /// The wall clock was set back to `now`: the minutes later than its own are of the old clock, and so
+    /// is the moment the screen came on if it is later too; both are forgotten, so that the windows hold
+    /// the new clock's bytes (review b1 of W5's second part, engine, finding 5).
+    pub(super) fn set_back(&mut self, now: u64) {
+        let minute = now / 60_000;
+        let mut gone = 0;
+        for app in self.apps.values_mut() {
+            app.minutes.retain(|(m, _)| *m <= minute);
+            for place in &mut app.places {
+                place.minutes.retain(|(m, _)| *m <= minute);
+            }
+            app.places.retain(|place| {
+                let keep = !place.minutes.is_empty() || place.session != Ways::default();
+                gone += usize::from(!keep);
+                keep
+            });
+        }
+        self.places -= gone;
+        if self.session.is_some_and(|since| since > now) {
+            self.session = None;
+            for app in self.apps.values_mut() {
+                app.session = ByState::default();
+                for place in &mut app.places {
+                    place.session = Ways::default();
+                }
+            }
+        }
+    }
+
     /// Leaves out the destinations of the apps that `hidden` names, keeping their bytes, marked as through
     /// the tool from their last second with bytes.
     pub(super) fn hide(&mut self, hidden: impl Fn(Option<u32>) -> bool) {
@@ -813,6 +842,69 @@ mod tests {
         }
     }
 
+    /// A flow of no app, placed with no reading, keeps every byte counted in a second after a placing in
+    /// that second (review b1 of W5's second part, engine, finding 3).
+    #[test]
+    fn a_flow_of_no_app_keeps_the_bytes_counted_after_a_placing_in_its_second() {
+        let (shared, clock, _) = telling_at(T);
+        let Some(bytes) = shared.record(flow(1, None)) else {
+            unreachable!("an open flow is live")
+        };
+        up_at(&shared, &clock, &bytes, 100, 10);
+        clock.set(T + 200);
+        shared.tell(&told(T - 10_000, T - 2_000, &[]));
+        up_at(&shared, &clock, &bytes, 300, 20);
+        up_at(&shared, &clock, &bytes, 1_500, 30);
+        clock.set(T + 4_000);
+        shared.tell(&told(T - 2_000, T + 2_000, &[]));
+        clock.set(T + 5_000);
+        shared.flush();
+        let snapshot = shared.now_view(T + 5_000);
+        assert_eq!(bytes_of(&snapshot, None)[0][0], [60, 0]);
+    }
+
+    /// A clock set back into the second of a flow's latest mark: the bytes counted after reach "Now" too
+    /// (finding 4); and set back by more than the windows, the windows hold the new clock's bytes, not the
+    /// old clock's (finding 5).
+    #[test]
+    fn a_clock_set_back_keeps_the_new_bytes_in_the_windows() {
+        let (shared, clock, _) = telling_at(T);
+        let a = open(&shared, 1);
+        let b = open(&shared, 2);
+        up_at(&shared, &clock, &a, 100, 5);
+        up_at(&shared, &clock, &b, 1_500, 7);
+        up_at(&shared, &clock, &a, 400, 20);
+        clock.set(T + 3_000);
+        shared.flush();
+        let snapshot = shared.now_view(T + 3_000);
+        assert_eq!(
+            bytes_of(&snapshot, Some(UID))[0][0],
+            [32, 0],
+            "a byte lost from the second set back into"
+        );
+        // Two hours back: the old clock's minute leaves the windows.
+        let (shared, clock, _) = telling_at(T);
+        let a = open(&shared, 1);
+        up_at(&shared, &clock, &a, 100, 10);
+        clock.set(T + 3_000);
+        shared.tell(&told(T, T + 1_000, &[]));
+        let back = T - 2 * 3_600_000;
+        clock.set(back);
+        a.up(&shared, 50, 0);
+        clock.set(back + 3_000);
+        let mut reading = told(back, back + 1_000, &[]);
+        reading.screen = crate::states::Screen::On(Some(back));
+        shared.tell(&reading);
+        let snapshot = shared.now_view(back + 3_000);
+        let all = bytes_of(&snapshot, Some(UID));
+        assert_eq!((all[0][3], all[1][3]), ([50, 0], [50, 0]));
+        assert_eq!(
+            all[2][3],
+            [50, 0],
+            "since the screen came on, by the new clock"
+        );
+    }
+
     /// Bounded: one app more than [`APPS`] takes the place of the one with bytes the longest ago; one
     /// destination more than an app keeps, or all apps keep, takes the place of the one with bytes the
     /// longest ago.
@@ -1035,6 +1127,8 @@ mod tests {
             unreachable!("an open flow is live")
         };
         none.up(&shared, 50, 0);
+        // The readings come once those seconds are over.
+        clock.set(T + 6_000);
         shared.tell(&Told {
             from: T,
             until: T + 3_000,

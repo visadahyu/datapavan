@@ -555,18 +555,27 @@ impl Activity {
     }
 
     /// Settles a live flow's, or an app's lookups', marks: each second to its app's counts, and its
-    /// segment cut where the state changes, the parts before to `cut`. How many marks it settled.
+    /// segment cut where the state changes, the parts before to `cut`. A flow of no app is placed with no
+    /// reading, so its seconds from `running` on, which may still be counted in, wait (review b1 of W5's
+    /// second part, engine, finding 3: it lost the bytes counted after a placing in the same second); a
+    /// second a reading told is over by the clock of the reading, two seconds before it ended. How many
+    /// marks it settled.
     pub(super) fn settle_open(
         &mut self,
         (uid, seen): (Option<u32>, Seen<'_>),
         open: (&mut u64, &mut [u64; 4], &mut Option<Placed>),
-        (marks, now): (&mut VecDeque<Mark>, [u64; 4]),
+        (marks, now, running): (&mut VecDeque<Mark>, [u64; 4], u64),
         force: Option<Force>,
         cut: impl FnMut(u64, u64, [u64; 4], Placed),
     ) -> usize {
         let mut seconds = Vec::new();
         let settled = {
-            let place = |second| self.place(uid, second, force);
+            let place = |second| {
+                if uid.is_none() && second >= running {
+                    return None;
+                }
+                self.place(uid, second, force)
+            };
             settle_marks(
                 &place,
                 open,
@@ -745,14 +754,25 @@ impl Shared {
         self.settle(None);
     }
 
-    /// The wall clock was set back by a second or more (`logbook`'s `log_now`, before the count that
-    /// read it): every second held is placed at once, by what was told of it or as not told, and what was
-    /// told is forgotten, since its spans, of the old clock, may cover the seconds the new clock reads next;
-    /// those wait for the readings of the new clock.
+    /// The wall clock was set back by a second or more, to `now` (`logbook`'s `log_now`, after the cut and
+    /// before the count that read it): every second held is placed at once, by what was told of it or as
+    /// not told, and what was told is forgotten, since its spans, of the old clock, may cover the seconds
+    /// the new clock reads next; those wait for the readings of the new clock. Each flow and app's
+    /// lookups notes its next second anew, even one it had noted on the old clock (review b1 of W5's
+    /// second part, engine, finding 4), and the live view forgets the old clock's minutes later than the
+    /// new clock's, and the moment the screen came on if that is later too (finding 5).
     #[cold]
-    pub(super) fn clock_set_back(&self) {
+    pub(super) fn clock_set_back(&self, now: u64) {
         self.settle(Some(Force::ALL));
-        lock(&self.activity).timeline = Timeline::default();
+        for live in lock(&self.live).values() {
+            live.bytes.forget_second();
+        }
+        for entry in lock(&self.lookups).values_mut() {
+            entry.forget_second();
+        }
+        let mut activity = lock(&self.activity);
+        activity.timeline = Timeline::default();
+        activity.counts.set_back(now);
     }
 
     /// Places every second held that what was told places, or `force`: in the live flows, the apps'
@@ -760,6 +780,13 @@ impl Shared {
     pub(super) fn settle(&self, force: Option<Force>) {
         let mut records = Vec::new();
         let mut settled = ByApp::new();
+        // The second the clock reads, and the one before, which the engine's coarser clock may still be
+        // counting in: not placed in live flows of no app, unless everything is.
+        let running = if force.is_some_and(|f| f.before == u64::MAX) {
+            u64::MAX
+        } else {
+            (self.clock.wall_ms() / 1000).saturating_sub(1)
+        };
         {
             let mut live = lock(&self.live);
             let mut lookups = lock(&self.lookups);
@@ -773,7 +800,7 @@ impl Shared {
                     *settled.entry(flow.uid).or_default() += activity.settle_open(
                         (flow.uid, Seen::live(flow, live.hidden)),
                         (&mut live.start, &mut live.base, &mut live.state),
-                        (&mut marks, now),
+                        (&mut marks, now, running),
                         force,
                         |start, end, bytes, state| {
                             records.push(Record::Segment {
@@ -804,7 +831,7 @@ impl Shared {
                 *settled.entry(uid).or_default() += activity.settle_open(
                     (uid, Seen::Lookups),
                     (start, base, state),
-                    (marks, counts),
+                    (marks, counts, running),
                     force,
                     |start, end, bytes, state| {
                         records.push(lookups_record(uid, (start, end), bytes, state));
@@ -1684,6 +1711,33 @@ pub(super) mod tests {
         let live = &lock(&shared.live)[&1];
         assert_eq!(live.state, Some(NOT_TOLD));
         assert!(lock(&live.bytes.marks).is_empty());
+    }
+
+    /// A segment with no count cut by a clock set back across a quarter hour is written at once, as not
+    /// told, rather than waiting for the new clock to reach its moment (review b1 of W5's second part,
+    /// engine, finding 6).
+    #[test]
+    fn a_segment_cut_by_a_clock_set_back_is_written_at_once() {
+        let (shared, clock, _) = telling_at(T);
+        open(&shared, 1);
+        let other = open(&shared, 2);
+        let back = T - 2 * 3_600_000;
+        clock.set(back);
+        other.up(&shared, 10, 0);
+        shared.finish(1);
+        shared.finish(2);
+        clock.set(back + 4_000);
+        shared.tell(&told(back, back + 2_000, &[]));
+        let written = segments(&taken(&shared));
+        assert!(
+            written.contains(&(1, T, T, 0, true, NOT_TOLD)),
+            "{written:?}"
+        );
+        assert!(
+            written.contains(&(2, T, T, 0, true, NOT_TOLD)),
+            "{written:?}"
+        );
+        assert!(lock(&shared.activity).held.is_empty());
     }
 
     /// The engine asks for the states when a flow opens and once a second has waited five seconds, at
