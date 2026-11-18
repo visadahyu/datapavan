@@ -954,7 +954,10 @@ another thread deterministic; let the debug flush wait for nothing when no logge
 clock, measured at a third of the fine one's cost. A third let a flush asked as the engine stops go only after its
 last records, bounded the apps' own tables of names, and made the emulator checks find the ports of this computer
 their test servers take free before they start (`scripts/host-ports.sh`), after a program on 127.0.0.1:8791 made
-verify-watch.sh's "refused" step fail as if Watch were at fault. The caches of
+verify-watch.sh's "refused" step fail as if Watch were at fault. A fourth made the test server hold every one of
+those ports from before the check starts to its end, the refused one bound but not listening, so that no other
+program can take one in between; stopped a phone's check rather than move it to ports the computer's firewall was
+not opened for; and gave the memory of the names' tables with names at their longest. The caches of
 DNS answers kept while a chain is on now run on the time since the phone started, sleep included, and ADR 0044 lists
 every clock the engine reads, with what a sleep or a jump of the clock does to each. A flow is now named by the
 server name its connection sent, before the DNS answer, whose name stays beside it where the two differ; the log's

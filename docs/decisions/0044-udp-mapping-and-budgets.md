@@ -103,9 +103,11 @@ an ADR (D25).
        names (review 2: in one table it could push Android's out). Since the third, each app's holds 512
        addresses and 64 public names, at most 32 apps keep tables of their own (one more takes the place of the
        app whose own resolver answered last the longest ago), and the engine's sweep, every minute with
-       traffic, drops an app's tables once every name in them has expired (review 3, nit 3). By the types'
-       sizes, an app's full tables take about 130 KB, so 32 apps about 4 MB, beside Android's about 2 MB; an app
-       that sends no plain DNS of its own past Watch's takes nothing.
+       traffic, drops an app's tables once every name in them has expired (review 3, nit 3). The names are the
+       app's to choose, up to 253 bytes each, and the bound is given with them at their longest: by what the
+       tables ask of the allocator, an app's full tables take up to about 270 KB, so 32 apps about 8.5 MB, beside
+       Android's about 3.7 MB, or about half that with names of 15 bytes (115 KB, 3.6 MB and 1.7 MB; review 4,
+       nit 4). An app that sends no plain DNS of its own past Watch's takes nothing.
      - A DNS name stands beside the connection's own only while it is current: a name from an answer is kept, to
        name flows, on the monotonic clock, and through a night it would show W5's users a difference that is only
        its age, so it stands beside another only while the answer that named the flow when it started is held in
