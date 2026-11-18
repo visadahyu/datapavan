@@ -48,6 +48,8 @@ ver el resto de la app.
 - **Los ajustes de tu herramienta para eludir bloqueos:** si las apps pasan por ella y cuáles, el host y el puerto de la
   herramienta, y la contraseña que Datapavan creó para ella; esta contraseña está cifrada con una clave protegida por el
   almacén de claves de Android.
+- **Las apps que dejas fuera del firewall,** que entonces se conectan a internet sin pasar por él: sus nombres, hasta
+  que las vuelvas a incluir.
 
 ## La versión 0.1 no puede abrir conexiones de red
 
@@ -72,7 +74,7 @@ Quad9 ve la dirección de la herramienta, no la tuya.
 |---|---|---|
 | Ver las apps instaladas | Listar las apps y sus permisos | v0.1 |
 | Acceso a datos de uso (lo permites tú en Ajustes; opcional) | Mostrar cuántos datos ha enviado y recibido cada app, y qué apps llevas mucho tiempo sin abrir. Para ello, Datapavan solo lee los totales y la fecha en que se usó cada app por última vez, y no guarda nada de ello; Datapavan Basic nunca lee qué app abriste y cuándo. Cuando compruebas una actividad en una app, también lee los contadores de tráfico totales del teléfono, que no necesitan ningún permiso, para ver si el recuento de Android está actualizado; estos números se quedan en memoria mientras la comprobación está en pantalla | v0.1 |
-| Acceso a datos de uso, en Datapavan Advanced | Saber, para cada conexión, si estabas usando su app en ese momento, si se ejecutaba con su notificación (música, navegación) o ninguna de las dos cosas. Para ello, Advanced también lee el historial de Android sobre qué app estaba en pantalla y cuándo. Lo que averigua lo guarda solo en dos sitios: en memoria para la vista «Now» y, si llevas un registro de conexiones, como el estado de cada entrada, durante los días que elegiste | Datapavan Advanced, desde la 0.2.0 |
+| Acceso a datos de uso, en Datapavan Advanced | Saber, para cada conexión, si estabas usando su app en ese momento, si se ejecutaba con una notificación que mostraba Android (música, navegación) o ninguna de las dos cosas. Para ello, Advanced también lee el historial de Android, desde el arranque del teléfono, sobre qué app estaba en pantalla y cuándo, qué apps ejecutaban un servicio en primer plano, cuáles usaste de otras formas (por ejemplo, tocando su notificación) y cuándo se encendió o apagó la pantalla y apareció la pantalla de bloqueo; y si cada app puede mostrar notificaciones. Lo que averigua lo guarda solo en dos sitios: en memoria para la vista «Now» y, si llevas un registro de conexiones, como el estado de cada entrada, durante los días que elegiste | Datapavan Advanced, desde la 0.2.0 |
 | Estado de la red | Saber si hay una VPN activa. No permite ninguna conexión | v0.1 |
 | Ocultar las superposiciones de otras apps | Desde Android 12: mientras Datapavan está en la pantalla, otras apps no pueden mostrarse encima. No permite ninguna conexión | Datapavan Basic posterior a la 0.1.2 y Datapavan Advanced |
 | VPN (lo permites tú) | El firewall **local**. El tráfico se filtra en el teléfono y nunca se nos envía | Datapavan Advanced, desde la 0.2.0 |
