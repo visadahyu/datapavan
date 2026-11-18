@@ -441,3 +441,108 @@ All read on 2026-11-14.
 - **Checked since the first draft:** the public routes to another app's state (decision 1) and iOS's App Privacy
   Report (decision 7), against the sources below. Both held; `getRunningTasks` may also return the home screen's
   task, which the text now says.
+
+## How it is built
+
+**W5, part 2: the data behind "Now" and the history (2026-11-18, decisions 1 and 2 (d)).** What was chosen where
+this ADR left room, and why. Part 3 builds the screens on it.
+
+- **The one-second slots are each flow's own** (`core/net/src/engine/activity.rs`). The first count in each
+  second of the wall clock notes a mark: the second, and the flow's counts before it; a second's bytes are the
+  counts from its mark to the next. An app's slots are its flows' marks, so an app with no traffic holds none.
+  Slots kept per app alone could not cut a flow's segment at the second its app's state changed, which needs that
+  flow's own bytes on each side. The mark is taken after the log's cut at the quarter hours (ADR 0037, decision 1
+  as amended), so a mark never spans two segments; an app's lookups to Watch's own DNS address are marked the
+  same way, under the lock they already take.
+- **The cost on the hot path.** Within a second a count adds a division, an addition, a few comparisons and one
+  atomic load, and takes no lock; the first count of a second takes the lock of the flow's own marks. Measured on the
+  development machine (x86-64, release build, 2026-11-18): a count costs 12.5 to 13.2 ns with states told and
+  without, no difference within the measurement; a count that notes a mark costs 45 to 96 ns, the minute's
+  readings included (the higher figure while other builds ran on the machine). ADR 0044's cost note says the same.
+- **A second is placed** once a reading covers all of it: in use if the app was in use at any moment of it, else
+  with its notification if it was so at any moment, else in the background, so that a second is in the
+  background only when the app was in the background throughout. Where a reading knew nothing, the second has no
+  state and its reason: no usage access, no events (as before the first unlock), told too late, no app (a flow
+  Android named no app for), or not told (before Watch's first reading, in a gap a clock set back left, or when
+  Watch stopped before a reading came). One byte carries the state and the reason, in the log's records and in
+  the snapshot (`states.rs`, `Placed::code`).
+- **A segment is cut where its app's state changes,** at the start of the first second of the new state, as far
+  back as its marks reach. A segment cut at a quarter hour or at its flow's end before its seconds are placed
+  waits, held, and is written once they are; a segment with no count, as a refused connection's, takes the state
+  of its last moment. So the log's records now reach it once their states are told: within about a minute while
+  traffic runs, where they waited 30 seconds before. Held records are handed to the next engine when the tunnel
+  is set up again; when Watch stops, its tracker reads once more first, and what is still not told is written as
+  "not told". Lookups' records are cut the same way and carry their app's state.
+- **The window.** Each flow, and each app's lookups, holds at most 120 seconds with counts not placed yet, all of
+  them together at most 65,536, and at most 4,096 cut segments wait; past a bound the oldest are placed as "told
+  too late". The engine asks Watch's Kotlin side for a reading when a flow opens and once a second has waited 5
+  seconds, at most every 5 seconds; the logger asks again while segments wait. Watch reads at most every 5 seconds
+  with the screen on and once a minute with it off, so while traffic runs a second waits about a minute at most:
+  the window holds twice that. A second never ages out by time: across a sleep it waits for the reading the next
+  traffic or the screen brings. A wall clock set back by a second or more places every second held at once, and
+  the engine forgets the readings of the old clock, whose spans could cover the new clock's next seconds: those
+  wait for readings of their own, so that the seconds of two clocks never meet one reading.
+- **The tracker lives in `:watch`** (`android/watch/.../activity/`), in Watch's process beside the engine it
+  feeds: `:watch` cannot depend on `:app`, and needs of the audit only the rule of usage access, which moved to
+  `android/shared` for both. A pure core (`UsageStates`) places the events and is tested on the JVM, one test
+  for each rule; `StateTracker` reads them. The rules as built:
+  - an activity is visible from its `ACTIVITY_RESUMED` to its `ACTIVITY_STOPPED` (paused but not stopped, as in
+    split screen, it still is), while the screen is interactive, and while the lock screen is not over it unless
+    the activity was resumed after the lock screen showed (a camera or a call over it);
+  - the default keyboard is in use while the screen is interactive and in the background while it is not, as
+    decision 5 says, with no grace;
+  - the grace is `UsageStates.GRACE_MS`, 30 seconds, one constant for the lab run to set;
+  - each reading ends 2 seconds before the wall clock, for events not reported yet, and reads again the last 10
+    seconds of the one before, so that an event late or out of order within them places its moment again; the
+    first reading, and the first after a time with no events, reads back a day to find what is open;
+  - a wall clock set back is found against the time since the phone started, and by `ACTION_TIME_CHANGED`;
+    readings begin anew from the moment it was found, carrying what is open;
+  - it reads when the engine asks, within decision 1's rates, when the screen comes on (the view may open), when
+    the clock is set, and when Watch stops; `ACTION_SCREEN_ON`, `ACTION_SCREEN_OFF` and `ACTION_TIME_CHANGED`
+    are received while the tunnel runs. The engine's asking adds to decision 1's "when a flow starts" the case of
+    a long connection with no new flow: the same rates, and only while its traffic runs. No timer wakes the phone.
+  Without usage access, or with no events before the first unlock, it tells the engine that nothing is known, and
+  the debug dump and the snapshot say which.
+- **The live counters** (`engine/now.rs`) keep each placed second's bytes, as the app sent and received them (a
+  little less than Android's count, decision 5), by state in whole minutes and since the screen came on, by the
+  time of the `SCREEN_INTERACTIVE` event or the broadcast. The window of 10 minutes is the current minute and the
+  9 before, so it reaches back at least 9 and never more than 10 minutes; the hour likewise 59 to 60. Seconds not
+  placed yet count apart, "not told yet", so that the view needs no reading to show them. Each destination is the
+  flow's name, where it came from, the DNS name beside it and the app's own DNS (by address where it has no name),
+  with ECH, the known resolver, came-in, and the organisation behind its network from the offline table, looked
+  up once. A chained app's flow whose destination stays out of the log adds to its app's bytes only, marked as
+  through the tool; the tool's own app is marked. Memory only, kept with retention "none", handed to the next
+  engine, gone when Watch stops.
+- **Bounds.** At most 512 apps, each with at most 60 minutes of counts (about 4.4 KB); at most 2,048
+  destinations, 128 for one app, each with its flow (names at their longest, 253 bytes, about 1 KB) and 60
+  minutes (1.4 KB): together about 7 MB at the very worst, and some hundreds of kilobytes on a busy phone. Marks:
+  65,536 of 40 bytes, 2.6 MB, and up to twice that in room their deques keep, which they give back once settled;
+  held segments: 4,096, each with its flow, under 4 MB with names at their longest. Past a bound, the app or destination
+  with bytes the longest ago gives way.
+- **One call for the screens:** `Engine.nativeActivity`, a versioned binary snapshot (`core/net/src/snapshot.rs`,
+  version 1), read by `activity/Snapshot.kt`, from a fixture the engine writes; the readings go the other way
+  (`core/net/src/states.rs`, version 1), from a fixture the Kotlin side writes, read by the engine's test and
+  fuzzed. Building and encoding the snapshot of 100 apps with 20 destinations each, over the hour, took 0.82 ms on
+  the development machine (202 KB).
+- **Tests.** In the engine, 41 tests: the placing of seconds, each reading's span, the cuts back in time, the
+  window and the bounds at their edges, the clock set back, the asking, the counts by window, destinations, the
+  snapshot's layout, the log's version 3, and an engine handing what it holds to the next; the readings' reader
+  is fuzzed (`core/fuzz/fuzz_targets/states.rs`, with seeds): its first run found that it read a time the screen
+  came on for a screen not on, which wrote back otherwise, and it now refuses one. In Watch's Kotlin side, 23: one for each rule of
+  the tracker's core, its readings' layout, the snapshot's and the log's readers. Hand mutants in cargo-mutants'
+  manner on the code this part adds: of 80 in the engine all are killed but one, argued equivalent (the timeline
+  forgets before the oldest or the newest second held: every held second lies past what was told); of 21 in
+  the Kotlin core, 18 are killed, one does not build, and two are equivalent (an event at the start of the
+  overlap, or at a reading's end, applied once more: each event's effect is idempotent). The emulator's watch
+  shard runs `scripts/verify-activity.sh` (decision 6, items 1 and 6) and checks item 5 in `verify-chain.sh`. On
+  the Android 15 emulator, 2026-11-18, every count matched what the workload apps logged, to the byte: 75,000
+  bytes sent in the background, from a job, on a connection opened on screen and on a timer; the 3,046 before
+  them in use; 8,000 from a foreground service with its notification; 24,000 from the app on screen in use;
+  and without usage access, a flow's bytes in no state. The emulators of Android 10, 11 and 17 that decision 6
+  names, and the A40, are still to run it.
+- **Accepted limits.** An activity whose `ACTIVITY_STOPPED` never comes stays visible while the screen is on.
+  An event that comes more than 10 seconds late is not read. A second that holds a moment in use is in use whole.
+  A reading the engine did not take, as in the moment the tunnel is set up again, leaves its span "not told" in
+  the engine, while the tracker tells the next one afresh. The log's records wait in memory for their states,
+  up to about a minute while traffic runs and until the next reading after a sleep, and are lost if the process
+  dies meanwhile, as any record waiting is (ADR 0044's table).

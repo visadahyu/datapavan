@@ -2392,3 +2392,9 @@ are its mechanisms; ADR 0037 holds the log's row.
   clock through a system call. A byte counted within that lag after a quarter hour then falls in the quarter
   hour before, which ADR 0037's note accepts: the bounds there are seconds. A count of no bytes of the
   app's own, as a tunnel packet's, adds nothing to them. ADR 0037's note says how many reads a packet costs.
+  (W5's second part, 2026-11-18, ADR 0046's decision 1: each count now also compares the second it read with
+  its flow's last, a division, an addition, a few comparisons and one atomic load, and takes no lock; the first count of a
+  second notes a mark under the lock of the flow's own marks, and a clock set back by a second or more, found by
+  the same reading, places what waits. Measured the same way: a count costs 12.5 to 13.2 ns with the apps'
+  states told and without, no difference within the measurement, and one that notes a mark 45 to 96 ns, the
+  readings of the states every minute included. The test `what_a_count_costs` measures it.)

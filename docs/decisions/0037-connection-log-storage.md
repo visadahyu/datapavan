@@ -91,6 +91,17 @@ Option 3.
    a byte counted in that moment after a quarter hour falls in the quarter hour before, well within the bounds
    above. A flow's outcome or name that changes in a quarter hour
    after the last count changes after the cut, so the segment before keeps the outcome and name it had.)
+   (Amended 2026-11-18, W5's second part, ADR 0046's decision 1: the record's format is version 3. Each record, a
+   segment or an app's lookups, ends with one byte of its app's state throughout it: in use, with its
+   notification, in the background, or none and why (no usage access, no events before the first unlock, told
+   too late, no app, not told). A segment is also cut where its app's state changes, at the start of the first
+   second of the new state, back in time as far as the engine still holds that flow's bytes second by second; so
+   a segment cut at a quarter hour or at its flow's end waits until its seconds' states are told, and reaches the
+   log within about a minute while traffic runs, or, after a sleep, with the next reading; when Watch stops,
+   what is still not told is written as "not told". A clock set back by a second or more writes what waits at
+   once. Watch's Kotlin side reads versions 1, 2 and 3, the first two as "not told"; a state byte the engine
+   never writes, or a byte after it, makes the record malformed, skipped and counted. ADR 0046's "How it is
+   built" gives the rules.)
 2. **Keys.** At the first record of a day Watch draws a 256-bit day key, keeps it in memory for that day, and
    stores it only wrapped with the Keystore public key (RSA-OAEP). At midnight the old day key is cleared from
    memory (best effort: the JVM may hold copies). The private key is generated in the Keystore and never
