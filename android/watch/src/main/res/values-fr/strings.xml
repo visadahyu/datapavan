@@ -79,4 +79,119 @@
     </plurals>
     <string name="left_out_choose">Choisir les applis à laisser de côté</string>
     <string name="left_out_done">Terminé</string>
+
+    <!-- W5, part 3 (ADR 0046): "Now" and each app's history. -->
+    <!-- Watch's screen: the way into "Now". -->
+    <string name="now_open">Voir ce que les applis envoient maintenant</string>
+
+    <string name="now_title">Now</string>
+    <string name="now_intro">Les applis qui ont utilisé le réseau, et si vous les utilisiez à ce moment-là.</string>
+    <string name="now_watch_off">Watch est désactivé, il ne voit donc aucun trafic. Activez-le sur l\'écran de Watch.</string>
+    <string name="now_no_access">Watch ne peut pas savoir quelle appli vous utilisez, car il n\'a pas accès aux données d\'utilisation. Les applis s\'affichent sans état.</string>
+    <string name="now_allow_access">Autoriser l\'accès aux données d\'utilisation</string>
+    <string name="now_locked">L\'appli que vous utilisez s\'affiche après le premier déverrouillage depuis le démarrage du téléphone.</string>
+    <string name="now_reading">Lecture des applis que vous utilisez.</string>
+    <string name="now_window">Afficher le trafic de</string>
+    <string name="now_window_ten">Les 10 dernières minutes</string>
+    <string name="now_window_hour">La dernière heure</string>
+    <string name="now_window_screen">Depuis que l\'écran s\'est allumé</string>
+    <string name="now_sort">Trier à nouveau</string>
+    <string name="now_sort_note">Les lignes restent en place pendant que vous regardez. Les nouvelles applis s\'ajoutent à la fin.</string>
+    <string name="now_empty">Aucune appli n\'a utilisé le réseau sur cette période.</string>
+    <string name="now_one_app">Une seule appli affichée.</string>
+    <string name="now_all_apps">Afficher toutes les applis</string>
+
+    <!-- The window while the screen was off: %1$s its length, %2$s a count of apps, %3$s a size. -->
+    <string name="now_off_window">Pendant que l\'écran était éteint (%1$s), %3$s envoyés par %2$s.</string>
+    <string name="now_off_none">Pendant que l\'écran était éteint (%1$s), aucune appli que vous n\'utilisiez pas n\'a envoyé de données.</string>
+    <plurals name="now_off_apps">
+        <item quantity="one">%d appli que vous n\'utilisiez pas</item>
+        <item quantity="many">%d applis que vous n\'utilisiez pas</item>
+        <item quantity="other">%d applis que vous n\'utilisiez pas</item>
+    </plurals>
+    <string name="now_duration_hours">%1$d h %2$d min</string>
+    <string name="now_duration_minutes">%1$d min</string>
+    <string name="now_duration_short">moins d\'une minute</string>
+
+    <!-- An app's row. -->
+    <string name="now_app_removed">Une appli désinstallée depuis</string>
+    <string name="now_app_system">Système Android</string>
+    <string name="now_app_unnamed">Trafic pour lequel Android n\'a nommé aucune appli</string>
+    <string name="now_app_together">Comptées ensemble : %1$s</string>
+    <string name="now_state_now">En ce moment : %1$s</string>
+    <string name="now_state_in_use">en cours d\'utilisation</string>
+    <string name="now_state_notification">avec sa notification</string>
+    <string name="now_state_background">en arrière-plan</string>
+    <string name="now_state_none">sans état</string>
+    <string name="now_state_not_yet">pas encore connu</string>
+    <string name="now_bytes_background">%1$s envoyés et %2$s reçus pendant que vous ne l\'utilisiez pas.</string>
+    <string name="now_bytes_notification">%1$s envoyés et %2$s reçus pendant que sa notification pouvait s\'afficher.</string>
+    <string name="now_bytes_in_use">%1$s envoyés et %2$s reçus pendant que vous l\'utilisiez.</string>
+    <string name="now_bytes_none">%1$s envoyés et %2$s reçus, sans état. %3$s</string>
+    <string name="now_bytes_not_yet">%1$s envoyés et %2$s reçus, état pas encore connu.</string>
+    <string name="now_why_no_access">Watch n\'avait pas accès aux données d\'utilisation.</string>
+    <string name="now_why_locked">Le téléphone n\'avait pas encore été déverrouillé depuis son démarrage.</string>
+    <string name="now_why_late">Watch a appris l\'état trop tard.</string>
+    <string name="now_why_no_app">Android n\'a pas indiqué de quelle appli il s\'agissait.</string>
+    <string name="now_why_not_told">Watch n\'avait pas encore lu l\'état, ou s\'était arrêté.</string>
+    <string name="now_through_tool">Trafic passé par votre outil de contournement. Les endroits où l\'appli s\'est connectée ne sont pas affichés, car « Enregistrer où ces applis se connectent » est désactivé.</string>
+    <string name="now_is_tool">Votre outil de contournement. Son trafic comprend celui des applis que vous faites passer par cet outil.</string>
+    <string name="now_tool_hidden">Les endroits où il se connecte ne sont pas affichés, car « Enregistrer où ces applis se connectent » est désactivé.</string>
+    <string name="now_history">Voir son historique</string>
+
+    <!-- A destination: where its name came from, and what is known of it. -->
+    <string name="now_named_tls">nom envoyé par la connexion</string>
+    <string name="now_named_quic">nom envoyé par la connexion (QUIC)</string>
+    <string name="now_named_dns">nom tiré d\'une réponse DNS</string>
+    <string name="now_named_organisation">propriétaire du réseau</string>
+    <string name="now_named_unknown">aucun nom connu</string>
+    <string name="now_dns_name">Réponse DNS : %1$s</string>
+    <string name="now_organisation">Réseau : %1$s</string>
+    <string name="now_tracker">Traceur de la liste εxodus : %1$s</string>
+    <string name="now_tracker_company">Traceurs de %1$s dans la liste εxodus</string>
+    <string name="now_same_company">Même entreprise que l\'appli : %1$s</string>
+    <string name="now_destination_bytes">%1$s envoyés, %2$s reçus</string>
+    <plurals name="now_more_destinations">
+        <item quantity="one">Afficher %d autre endroit</item>
+        <item quantity="many">Afficher %d autres endroits</item>
+        <item quantity="other">Afficher %d autres endroits</item>
+    </plurals>
+
+    <!-- What this view cannot see (ADR 0046, decision 5). -->
+    <string name="cannot_see_title">Ce que cette vue ne voit pas</string>
+    <string name="cannot_see_sender">Le trafic envoyé pour le compte d\'une appli s\'affiche sous l\'appli qui l\'a envoyé. Les messages push passent par les services Google Play, et les téléchargements par le gestionnaire de téléchargement d\'Android. Certaines applis envoient par l\'intermédiaire d\'une autre appli.</string>
+    <string name="cannot_see_content">Watch ne voit pas le contenu. Pour le trafic chiffré, il en voit la taille, l\'endroit et l\'heure, jamais ce qui a été envoyé.</string>
+    <string name="cannot_see_device">Watch ne voit pas ce qu\'une appli fait sur le téléphone, comme lire vos contacts, vos fichiers ou vos photos. Seul l\'envoi est visible.</string>
+    <string name="cannot_see_together">Certaines applis ne peuvent pas être distinguées. Les applis qui partagent un numéro sont comptées ensemble. Un clavier compte comme en cours d\'utilisation tant que l\'écran est allumé, et en arrière-plan quand il est éteint. Les fonds d\'écran animés n\'ont pas d\'écran propre. Votre outil de contournement transporte le trafic des applis que vous faites passer par cet outil.</string>
+    <string name="cannot_see_gaps">Watch ne voit rien quand un autre VPN est activé, ni rien qui vienne des applis que vous avez laissées de côté, d\'un profil professionnel, d\'un espace privé ou d\'un autre utilisateur. Il ne voit rien non plus avant le premier déverrouillage après un redémarrage, ni quand le trafic contourne le VPN. Le trafic entre les applis du téléphone ne lui parvient jamais.</string>
+    <string name="cannot_see_sizes">Les tailles sont ce que les applis ont envoyé et reçu en passant par Watch. L\'écran de consommation des données d\'Android compte aussi les en-têtes et les données retransmises, il affiche donc un peu plus.</string>
+    <string name="cannot_see_notification">« Avec sa notification » signifie qu\'Android permet à l\'appli d\'en afficher une, pas que vous l\'avez vue. Une catégorie de notifications que vous avez désactivée compte quand même. Il en va de même d\'un téléphone qui masque certaines notifications et, jusqu\'à Android 12, d\'une appli dont vous avez désactivé les notifications. Un lecteur de musique non autorisé à afficher des notifications compte en arrière-plan pendant que sa notification s\'affiche. À partir d\'Android 12, un service qui s\'exécute moins de 10 secondes compte lui aussi en arrière-plan.</string>
+    <string name="cannot_see_in_use">« En cours d\'utilisation » correspond à ce qu\'Android enregistre des écrans de chaque appli. Sur certains téléphones, le fil d\'actualité à gauche de l\'écran d\'accueil peut compter comme en arrière-plan. Une appli autorisée à ouvrir des écrans depuis l\'arrière-plan peut sembler en cours d\'utilisation.</string>
+
+    <!-- Each app's history. -->
+    <string name="history_title">Historique de %1$s</string>
+    <string name="history_back">Retour à Now</string>
+    <string name="history_through_tool">Trafic passé par votre outil de contournement. Les endroits où l\'appli s\'est connectée n\'ont pas été enregistrés, car « Enregistrer où ces applis se connectent » était désactivé.</string>
+    <string name="history_tool_hidden">Les endroits où il s\'est connecté n\'ont pas été enregistrés, car « Enregistrer où ces applis se connectent » était désactivé.</string>
+    <string name="history_intro">Chaque connexion que Watch a conservée pour cette appli, de la plus récente à la plus ancienne, jour par jour.</string>
+    <string name="history_keep">Pour conserver un historique, choisissez sur l\'écran de Watch pendant combien de jours conserver les entrées.</string>
+    <string name="history_nothing_yet">Rien n\'a encore été conservé.</string>
+    <string name="history_closed">Ce jour ne peut pas être ouvert pour l\'instant.</string>
+    <string name="history_empty">Aucune connexion ce jour-là.</string>
+    <string name="history_earlier">Jour précédent</string>
+    <string name="history_later">Jour suivant</string>
+    <string name="history_reading">Ouverture du journal.</string>
+    <string name="history_time">%1$s à %2$s</string>
+    <string name="history_state">État : %1$s</string>
+    <string name="history_continues">La connexion s\'est poursuivie après cela.</string>
+    <plurals name="history_lookups">
+        <item quantity="one">%d nom recherché via Watch.</item>
+        <item quantity="many">%d noms recherchés via Watch.</item>
+        <item quantity="other">%d noms recherchés via Watch.</item>
+    </plurals>
+    <plurals name="history_before_install">
+        <item quantity="one">%d entrée sous le numéro de cette appli est plus ancienne que l\'appli. Elle appartient à une appli désinstallée depuis.</item>
+        <item quantity="many">%d entrées sous le numéro de cette appli sont plus anciennes que l\'appli. Elles appartiennent à une appli désinstallée depuis.</item>
+        <item quantity="other">%d entrées sous le numéro de cette appli sont plus anciennes que l\'appli. Elles appartiennent à une appli désinstallée depuis.</item>
+    </plurals>
 </resources>

@@ -77,4 +77,115 @@
     </plurals>
     <string name="left_out_choose">انتخاب برنامه‌هایی که کنار گذاشته می‌شوند</string>
     <string name="left_out_done">تمام</string>
+
+    <!-- W5, part 3 (ADR 0046): "Now" and each app's history. -->
+    <!-- Watch's screen: the way into "Now". -->
+    <string name="now_open">ببینید برنامه‌ها الان چه می‌فرستند</string>
+
+    <string name="now_title">Now</string>
+    <string name="now_intro">برنامه‌هایی که از شبکه استفاده کردند، و اینکه آن موقع از آن‌ها استفاده می‌کردید یا نه.</string>
+    <string name="now_watch_off">سرویس Watch خاموش است، پس هیچ ترافیکی نمی‌بیند. آن را در صفحهٔ Watch روشن کنید.</string>
+    <string name="now_no_access">سرویس Watch نمی‌تواند بفهمد از کدام برنامه استفاده می‌کنید، چون دسترسی به داده‌های مصرف ندارد. برنامه‌ها بدون وضعیت نشان داده می‌شوند.</string>
+    <string name="now_allow_access">اجازه دسترسی به داده‌های مصرف</string>
+    <string name="now_locked">پس از اولین باز کردن قفل گوشی بعد از روشن شدنش، نشان داده می‌شود که از کدام برنامه استفاده می‌کنید.</string>
+    <string name="now_reading">در حال خواندن اینکه از کدام برنامه‌ها استفاده می‌کنید.</string>
+    <string name="now_window">نمایش ترافیک</string>
+    <string name="now_window_ten">۱۰ دقیقهٔ گذشته</string>
+    <string name="now_window_hour">یک ساعت گذشته</string>
+    <string name="now_window_screen">از وقتی صفحه روشن شد</string>
+    <string name="now_sort">مرتب کردن دوباره</string>
+    <string name="now_sort_note">تا وقتی نگاه می‌کنید، ردیف‌ها سر جایشان می‌مانند. برنامه‌های تازه به انتها اضافه می‌شوند.</string>
+    <string name="now_empty">در این مدت هیچ برنامه‌ای از شبکه استفاده نکرد.</string>
+    <string name="now_one_app">در حال نمایش یک برنامه.</string>
+    <string name="now_all_apps">نمایش همه برنامه‌ها</string>
+
+    <!-- The window while the screen was off: %1$s its length, %2$s a count of apps, %3$s a size. -->
+    <string name="now_off_window">در مدتی که صفحه خاموش بود (%1$s)، %3$s از سوی %2$s ارسال شد.</string>
+    <string name="now_off_none">در مدتی که صفحه خاموش بود (%1$s)، هیچ برنامه‌ای که از آن استفاده نمی‌کردید داده نفرستاد.</string>
+    <plurals name="now_off_apps">
+        <item quantity="one">%d برنامه‌ای که از آن استفاده نمی‌کردید</item>
+        <item quantity="other">%d برنامه‌ای که از آن‌ها استفاده نمی‌کردید</item>
+    </plurals>
+    <string name="now_duration_hours">%1$d ساعت و %2$d دقیقه</string>
+    <string name="now_duration_minutes">%1$d دقیقه</string>
+    <string name="now_duration_short">کمتر از یک دقیقه</string>
+
+    <!-- An app's row. -->
+    <string name="now_app_removed">برنامه‌ای که بعداً حذف شده است</string>
+    <string name="now_app_system">سیستم اندروید</string>
+    <string name="now_app_unnamed">ترافیکی که اندروید نگفت از کدام برنامه است</string>
+    <string name="now_app_together">با هم شمرده شده‌اند: %1$s</string>
+    <string name="now_state_now">الان: %1$s</string>
+    <string name="now_state_in_use">در حال استفاده</string>
+    <string name="now_state_notification">با اعلانش</string>
+    <string name="now_state_background">در پس‌زمینه</string>
+    <string name="now_state_none">بدون وضعیت</string>
+    <string name="now_state_not_yet">هنوز معلوم نیست</string>
+    <string name="now_bytes_background">در زمانی که از آن استفاده نمی‌کردید، %1$s فرستاد و %2$s دریافت کرد.</string>
+    <string name="now_bytes_notification">در زمانی که اعلانش می‌توانست نشان داده شود، %1$s فرستاد و %2$s دریافت کرد.</string>
+    <string name="now_bytes_in_use">در زمانی که از آن استفاده می‌کردید، %1$s فرستاد و %2$s دریافت کرد.</string>
+    <string name="now_bytes_none">بدون وضعیت، %1$s فرستاد و %2$s دریافت کرد. %3$s</string>
+    <string name="now_bytes_not_yet">%1$s فرستاد و %2$s دریافت کرد؛ وضعیتش هنوز معلوم نیست.</string>
+    <string name="now_why_no_access">سرویس Watch دسترسی به داده‌های مصرف نداشت.</string>
+    <string name="now_why_locked">قفل گوشی پس از روشن شدنش هنوز باز نشده بود.</string>
+    <string name="now_why_late">سرویس Watch وضعیت را خیلی دیر فهمید.</string>
+    <string name="now_why_no_app">اندروید نگفت کدام برنامه بود.</string>
+    <string name="now_why_not_told">سرویس Watch هنوز وضعیت را نخوانده بود، یا متوقف شده بود.</string>
+    <string name="now_through_tool">از فیلترشکن شما فرستاده شد. اینکه به کجا وصل شد نشان داده نمی‌شود، چون «ثبت مقصد اتصال این برنامه‌ها» خاموش است.</string>
+    <string name="now_is_tool">فیلترشکن شما. ترافیکش شامل ترافیک برنامه‌هایی است که از آن عبور می‌دهید.</string>
+    <string name="now_tool_hidden">اینکه به کجا وصل می‌شود نشان داده نمی‌شود، چون «ثبت مقصد اتصال این برنامه‌ها» خاموش است.</string>
+    <string name="now_history">دیدن تاریخچه‌اش</string>
+
+    <!-- A destination: where its name came from, and what is known of it. -->
+    <string name="now_named_tls">نامی که خود اتصال فرستاد</string>
+    <string name="now_named_quic">نامی که خود اتصال فرستاد (QUIC)</string>
+    <string name="now_named_dns">نام از پاسخ DNS</string>
+    <string name="now_named_organisation">صاحب شبکه</string>
+    <string name="now_named_unknown">هیچ نامی معلوم نیست</string>
+    <string name="now_dns_name">پاسخ DNS: %1$s</string>
+    <string name="now_organisation">شبکه: %1$s</string>
+    <string name="now_tracker">ردیاب در فهرست εxodus: %1$s</string>
+    <string name="now_tracker_company">ردیاب‌های %1$s در فهرست εxodus</string>
+    <string name="now_same_company">از همان شرکت صاحب برنامه: %1$s</string>
+    <string name="now_destination_bytes">%1$s ارسال، %2$s دریافت</string>
+    <plurals name="now_more_destinations">
+        <item quantity="one">نمایش %d مقصد دیگر</item>
+        <item quantity="other">نمایش %d مقصد دیگر</item>
+    </plurals>
+
+    <!-- What this view cannot see (ADR 0046, decision 5). -->
+    <string name="cannot_see_title">آنچه این صفحه نمی‌تواند ببیند</string>
+    <string name="cannot_see_sender">ترافیکی که برای یک برنامه فرستاده می‌شود، زیر برنامه‌ای نشان داده می‌شود که آن را فرستاده است. پیام‌های پوش از راه سرویس‌های گوگل پلی می‌آیند، و دانلودها از راه مدیر دانلود اندروید. بعضی برنامه‌ها از راه برنامهٔ دیگری می‌فرستند.</string>
+    <string name="cannot_see_content">سرویس Watch محتوا را نمی‌بیند. از ترافیک رمزگذاری‌شده، اندازه، مقصد و زمان را می‌بیند، ولی هرگز نمی‌بیند چه چیزی فرستاده شده است.</string>
+    <string name="cannot_see_device">سرویس Watch نمی‌بیند یک برنامه روی گوشی چه می‌کند، مثلاً خواندن مخاطبان، فایل‌ها یا عکس‌های شما. فقط فرستادن دیده می‌شود.</string>
+    <string name="cannot_see_together">بعضی برنامه‌ها را نمی‌شود از هم جدا کرد. برنامه‌هایی که یک شماره مشترک دارند، با هم شمرده می‌شوند. صفحه‌کلید تا وقتی صفحه روشن است در حال استفاده شمرده می‌شود، و وقتی خاموش است در پس‌زمینه. کاغذدیواری‌های زنده صفحه‌ای از خودشان ندارند. فیلترشکن شما ترافیک برنامه‌هایی را که از آن عبور می‌دهید جابه‌جا می‌کند.</string>
+    <string name="cannot_see_gaps">سرویس Watch وقتی وی‌پی‌ان دیگری روشن است هیچ چیز نمی‌بیند، همین‌طور از برنامه‌هایی که کنار گذاشته‌اید، یا از نمایهٔ کاری، فضای خصوصی یا کاربر دیگر. پیش از اولین باز کردن قفل پس از راه‌اندازی دوباره، یا وقتی ترافیک بدون عبور از وی‌پی‌ان می‌رود، هم هیچ چیز نمی‌بیند. ترافیک میان برنامه‌های روی گوشی هرگز به آن نمی‌رسد.</string>
+    <string name="cannot_see_sizes">اندازه‌ها همان چیزی است که برنامه‌ها از راه Watch فرستادند و دریافت کردند. صفحهٔ مصرف داده اندروید سرآیندها و داده‌های دوباره‌فرستاده‌شده را هم می‌شمارد، پس کمی بیشتر نشان می‌دهد.</string>
+    <string name="cannot_see_notification">«با اعلانش» یعنی اندروید به برنامه اجازه می‌دهد اعلانی نشان دهد، نه اینکه شما آن را دیده‌اید. کانال اعلانی که خاموش کرده‌اید باز هم شمرده می‌شود. همین‌طور است برای گوشی‌ای که بعضی اعلان‌ها را پنهان می‌کند، و در اندروید ۱۲ و پیش از آن، برای برنامه‌ای که اعلان‌هایش را خاموش کرده‌اید. پخش‌کنندهٔ موسیقی‌ای که اجازهٔ اعلان ندارد، تا وقتی اعلانش نشان داده می‌شود، در پس‌زمینه شمرده می‌شود. از اندروید ۱۲ به بعد، سرویسی که کمتر از ۱۰ ثانیه کار کند هم در پس‌زمینه شمرده می‌شود.</string>
+    <string name="cannot_see_in_use">«در حال استفاده» همان چیزی است که اندروید از صفحه‌های هر برنامه ثبت می‌کند. در بعضی گوشی‌ها، فید سمت چپ صفحهٔ اصلی ممکن است در پس‌زمینه شمرده شود. برنامه‌ای که اجازه دارد از پس‌زمینه صفحه باز کند، می‌تواند در حال استفاده به نظر برسد.</string>
+
+    <!-- Each app's history. -->
+    <string name="history_title">تاریخچهٔ %1$s</string>
+    <string name="history_back">بازگشت به «Now»</string>
+    <string name="history_through_tool">از فیلترشکن شما فرستاده شد. اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد اتصال این برنامه‌ها» خاموش بود.</string>
+    <string name="history_tool_hidden">اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد اتصال این برنامه‌ها» خاموش بود.</string>
+    <string name="history_intro">هر اتصالی که Watch برای این برنامه نگه داشته است، از تازه‌ترین به قدیمی‌ترین، هر بار یک روز.</string>
+    <string name="history_keep">برای داشتن تاریخچه، در صفحهٔ Watch انتخاب کنید سابقه برای چند روز نگه داشته شود.</string>
+    <string name="history_nothing_yet">هنوز چیزی نگه داشته نشده است.</string>
+    <string name="history_closed">این روز الان باز نمی‌شود.</string>
+    <string name="history_empty">در این روز هیچ اتصالی نبود.</string>
+    <string name="history_earlier">روز قبل</string>
+    <string name="history_later">روز بعد</string>
+    <string name="history_reading">در حال باز کردن سابقهٔ اتصال‌ها.</string>
+    <string name="history_time">%1$s تا %2$s</string>
+    <string name="history_state">وضعیت: %1$s</string>
+    <string name="history_continues">این اتصال پس از این هم ادامه داشت.</string>
+    <plurals name="history_lookups">
+        <item quantity="one">%d نام را از راه Watch جست‌وجو کرد.</item>
+        <item quantity="other">%d نام را از راه Watch جست‌وجو کرد.</item>
+    </plurals>
+    <plurals name="history_before_install">
+        <item quantity="one">%d رکورد زیر شمارهٔ این برنامه از خود برنامه قدیمی‌تر است. این رکورد به برنامه‌ای تعلق دارد که بعداً حذف شده است.</item>
+        <item quantity="other">%d رکورد زیر شمارهٔ این برنامه از خود برنامه قدیمی‌تر است. این رکوردها به برنامه‌ای تعلق دارند که بعداً حذف شده است.</item>
+    </plurals>
 </resources>

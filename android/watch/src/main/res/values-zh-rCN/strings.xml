@@ -75,4 +75,111 @@
     </plurals>
     <string name="left_out_choose">选择要排除的应用</string>
     <string name="left_out_done">完成</string>
+
+    <!-- W5, part 3 (ADR 0046): "Now" and each app's history. -->
+    <!-- Watch's screen: the way into "Now". -->
+    <string name="now_open">查看应用此刻在发送什么</string>
+
+    <string name="now_title">Now</string>
+    <string name="now_intro">使用过网络的应用，以及当时您是否在使用它们。</string>
+    <string name="now_watch_off">Watch 已关闭，因此看不到任何流量。请在 Watch 的页面中开启它。</string>
+    <string name="now_no_access">Watch 无法得知您正在使用哪个应用，因为它没有使用情况访问权限。各应用显示时不带状态。</string>
+    <string name="now_allow_access">授予使用情况访问权限</string>
+    <string name="now_locked">手机启动后首次解锁之后，才会显示您正在使用哪个应用。</string>
+    <string name="now_reading">正在读取您在使用哪些应用。</string>
+    <string name="now_window">显示以下时间段的流量</string>
+    <string name="now_window_ten">过去 10 分钟</string>
+    <string name="now_window_hour">过去一小时</string>
+    <string name="now_window_screen">自屏幕亮起以来</string>
+    <string name="now_sort">重新排序</string>
+    <string name="now_sort_note">您查看时，各行保持原位。新的应用会添加到末尾。</string>
+    <string name="now_empty">这段时间内没有应用使用网络。</string>
+    <string name="now_one_app">正在显示一个应用。</string>
+    <string name="now_all_apps">显示所有应用</string>
+
+    <!-- The window while the screen was off: %1$s its length, %2$s a count of apps, %3$s a size. -->
+    <string name="now_off_window">屏幕关闭期间（%1$s），%2$s发送了 %3$s。</string>
+    <string name="now_off_none">屏幕关闭期间（%1$s），在您当时没有在使用的应用中，没有哪个发送了数据。</string>
+    <plurals name="now_off_apps">
+        <item quantity="other">%d 个您当时没有在使用的应用</item>
+    </plurals>
+    <string name="now_duration_hours">%1$d 小时 %2$d 分钟</string>
+    <string name="now_duration_minutes">%1$d 分钟</string>
+    <string name="now_duration_short">不到一分钟</string>
+
+    <!-- An app's row. -->
+    <string name="now_app_removed">已移除的应用</string>
+    <string name="now_app_system">Android 系统</string>
+    <string name="now_app_unnamed">Android 未指明所属应用的流量</string>
+    <string name="now_app_together">合并统计：%1$s</string>
+    <string name="now_state_now">当前：%1$s</string>
+    <string name="now_state_in_use">使用中</string>
+    <string name="now_state_notification">伴有通知</string>
+    <string name="now_state_background">在后台</string>
+    <string name="now_state_none">无状态</string>
+    <string name="now_state_not_yet">尚未得知</string>
+    <string name="now_bytes_background">在您没有使用它时，发送了 %1$s，接收了 %2$s。</string>
+    <string name="now_bytes_notification">在其通知可以显示时，发送了 %1$s，接收了 %2$s。</string>
+    <string name="now_bytes_in_use">在您使用它时，发送了 %1$s，接收了 %2$s。</string>
+    <string name="now_bytes_none">发送了 %1$s，接收了 %2$s，无状态。%3$s</string>
+    <string name="now_bytes_not_yet">发送了 %1$s，接收了 %2$s，状态尚未得知。</string>
+    <string name="now_why_no_access">Watch 当时没有使用情况访问权限。</string>
+    <string name="now_why_locked">当时手机启动后还未解锁。</string>
+    <string name="now_why_late">Watch 得知状态时已经太晚。</string>
+    <string name="now_why_no_app">Android 没有说明这是哪个应用。</string>
+    <string name="now_why_not_told">Watch 当时还没有读取状态，或已经停止。</string>
+    <string name="now_through_tool">通过您用来绕过网络限制的工具发送。未显示它连接到了哪里，因为“记录这些应用连接到哪里”已关闭。</string>
+    <string name="now_is_tool">您用来绕过网络限制的工具。它的流量包括您设置为通过它连接的应用的流量。</string>
+    <string name="now_tool_hidden">未显示它连接到哪里，因为“记录这些应用连接到哪里”已关闭。</string>
+    <string name="now_history">查看其历史记录</string>
+
+    <!-- A destination: where its name came from, and what is known of it. -->
+    <string name="now_named_tls">连接发送的名称</string>
+    <string name="now_named_quic">连接发送的名称（QUIC）</string>
+    <string name="now_named_dns">来自 DNS 应答的名称</string>
+    <string name="now_named_organisation">网络的所有者</string>
+    <string name="now_named_unknown">名称未知</string>
+    <string name="now_dns_name">DNS 应答：%1$s</string>
+    <string name="now_organisation">网络：%1$s</string>
+    <string name="now_tracker">εxodus 列表中的跟踪器：%1$s</string>
+    <string name="now_tracker_company">εxodus 列表中 %1$s 的跟踪器</string>
+    <string name="now_same_company">与此应用属于同一公司：%1$s</string>
+    <string name="now_destination_bytes">发送 %1$s，接收 %2$s</string>
+    <plurals name="now_more_destinations">
+        <item quantity="other">再显示 %d 个目的地</item>
+    </plurals>
+
+    <!-- What this view cannot see (ADR 0046, decision 5). -->
+    <string name="cannot_see_title">此视图看不到的内容</string>
+    <string name="cannot_see_sender">代某个应用发送的流量，显示在实际发送它的应用下。推送消息经由 Google Play 服务传送，下载经由 Android 的下载管理器进行。有些应用通过另一个应用发送数据。</string>
+    <string name="cannot_see_content">Watch 看不到内容。对于加密流量，它能看到大小、目的地和时间，但从来看不到发送了什么。</string>
+    <string name="cannot_see_device">Watch 看不到应用在手机上做了什么，例如读取您的通讯录、文件或照片。只有发送会显示出来。</string>
+    <string name="cannot_see_together">有些应用无法区分开来。共用同一个编号的应用会合并统计。屏幕开启时，键盘计为使用中；屏幕关闭时，计为在后台。动态壁纸没有自己的界面。您用来绕过网络限制的工具承载着您设置为通过它连接的应用的流量。</string>
+    <string name="cannot_see_gaps">另一个 VPN 开启时，Watch 什么也看不到；它也看不到您排除的应用，以及工作资料、私密空间或其他用户中的流量。重启后首次解锁之前，或流量绕过 VPN 时，它同样什么也看不到。手机上应用之间的流量永远不会到达它。</string>
+    <string name="cannot_see_sizes">大小是指应用通过 Watch 发送和接收的数据量。Android 的流量使用情况页面还会计入标头和重新发送的数据，因此显示的数值会略多一些。</string>
+    <string name="cannot_see_notification">“伴有通知”是指 Android 允许该应用显示通知，而不是指您看到了通知。您关闭的通知类别仍计为伴有通知。会隐藏部分通知的手机也是如此；在 Android 12 及更低版本上，您关闭了通知的应用也是如此。不被允许显示通知的音乐播放器，在其通知显示时计为在后台。从 Android 12 起，运行不到 10 秒的服务也计为在后台。</string>
+    <string name="cannot_see_in_use">“使用中”依据的是 Android 对每个应用界面的记录。在某些手机上，主屏幕左侧的信息流可能计为在后台。获准从后台打开界面的应用，可能看起来像在使用中。</string>
+
+    <!-- Each app's history. -->
+    <string name="history_title">%1$s 的历史记录</string>
+    <string name="history_back">返回 Now</string>
+    <string name="history_through_tool">通过您用来绕过网络限制的工具发送。未记录它连接到了哪里，因为当时“记录这些应用连接到哪里”已关闭。</string>
+    <string name="history_tool_hidden">未记录它连接到了哪里，因为当时“记录这些应用连接到哪里”已关闭。</string>
+    <string name="history_intro">Watch 为此应用保留的每一次连接，最新的在前，每次显示一天。</string>
+    <string name="history_keep">要保留历史记录，请在 Watch 的页面中选择记录保留的天数。</string>
+    <string name="history_nothing_yet">尚未保留任何记录。</string>
+    <string name="history_closed">现在无法打开这一天的记录。</string>
+    <string name="history_empty">这一天没有连接。</string>
+    <string name="history_earlier">前一天</string>
+    <string name="history_later">后一天</string>
+    <string name="history_reading">正在打开日志。</string>
+    <string name="history_time">%1$s 至 %2$s</string>
+    <string name="history_state">状态：%1$s</string>
+    <string name="history_continues">此后连接仍在继续。</string>
+    <plurals name="history_lookups">
+        <item quantity="other">通过 Watch 查询了 %d 个名称。</item>
+    </plurals>
+    <plurals name="history_before_install">
+        <item quantity="other">此应用编号下有 %d 条记录早于此应用的安装，属于一个已移除的应用。</item>
+    </plurals>
 </resources>

@@ -691,4 +691,8 @@
     <!-- Datapavan Advanced only: the way from the network page to Watch (ui/WatchEntry.kt, ADR 0045). -->
     <string name="watch_entry_body">اعرف إلى أين يتصل كل تطبيق على هاتفك، لحظة بلحظة. يعمل Watch كشبكة VPN على هذا الهاتف. ولا يستخدم الإنترنت إلا لتمرير حركة بيانات كل تطبيق إلى وجهتها، ولا يرسل أي شيء إلى Datapavan.</string>
     <string name="watch_entry_open">فتح Watch</string>
+
+    <!-- W5, part 3 (ADR 0046): the way into Watch's "Now" from an app's page, Advanced only. -->
+    <!-- Datapavan Advanced, on an app's page: opens Watch's view "Now" for that app. -->
+    <string name="watch_now_open">عرض ما يرسله هذا التطبيق الآن</string>
 </resources>

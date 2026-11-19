@@ -688,4 +688,8 @@
     <string name="watch_entry_title" translatable="false">Watch</string>
     <string name="watch_entry_body">See where each app on your phone connects, as it happens. Watch works as a VPN on this phone. It uses the internet only to pass each app\'s traffic on, and sends nothing to Datapavan.</string>
     <string name="watch_entry_open">Open Watch</string>
+
+    <!-- W5, part 3 (ADR 0046): the way into Watch's "Now" from an app's page, Advanced only. -->
+    <!-- Datapavan Advanced, on an app's page: opens Watch's view "Now" for that app. -->
+    <string name="watch_now_open">See what this app sends now</string>
 </resources>

@@ -85,4 +85,131 @@
     </plurals>
     <string name="left_out_choose">اختر التطبيقات التي تريد استثناءها</string>
     <string name="left_out_done">تم</string>
+
+    <!-- W5, part 3 (ADR 0046): "Now" and each app's history. -->
+    <!-- Watch's screen: the way into "Now". -->
+    <string name="now_open">عرض ما ترسله التطبيقات الآن</string>
+
+    <string name="now_title">Now</string>
+    <string name="now_intro">التطبيقات التي استخدمت الشبكة، وهل كنت تستخدمها في ذلك الوقت.</string>
+    <string name="now_watch_off">خدمة Watch متوقفة، لذا لا ترى أي حركة بيانات. شغّلها من شاشة Watch.</string>
+    <string name="now_no_access">لا يستطيع Watch معرفة التطبيق الذي تستخدمه، لأنه لا يملك الوصول إلى بيانات الاستخدام. تظهر التطبيقات بلا حالة.</string>
+    <string name="now_allow_access">السماح بالوصول إلى بيانات الاستخدام</string>
+    <string name="now_locked">يظهر التطبيق الذي تستخدمه بعد أول فتح لقفل الهاتف منذ تشغيله.</string>
+    <string name="now_reading">جارٍ قراءة التطبيقات التي تستخدمها.</string>
+    <string name="now_window">عرض حركة البيانات</string>
+    <string name="now_window_ten">آخر عشر دقائق</string>
+    <string name="now_window_hour">آخر ساعة</string>
+    <string name="now_window_screen">منذ تشغيل الشاشة</string>
+    <string name="now_sort">إعادة الترتيب</string>
+    <string name="now_sort_note">تبقى الصفوف في أماكنها ما دمت تنظر إليها. تُضاف التطبيقات الجديدة في النهاية.</string>
+    <string name="now_empty">لم يستخدم أي تطبيق الشبكة خلال هذه المدة.</string>
+    <string name="now_one_app">يُعرض تطبيق واحد.</string>
+    <string name="now_all_apps">عرض كل التطبيقات</string>
+
+    <!-- The window while the screen was off: %1$s its length, %2$s a count of apps, %3$s a size. -->
+    <string name="now_off_window">بينما كانت الشاشة مطفأة (%1$s)، أرسل %2$s ما مجموعه %3$s.</string>
+    <string name="now_off_none">بينما كانت الشاشة مطفأة (%1$s)، لم يرسل أي تطبيق لم تكن تستخدمه بيانات.</string>
+    <plurals name="now_off_apps">
+        <item quantity="zero">%d تطبيق لم تكن تستخدمها</item>
+        <item quantity="one">تطبيق واحد لم تكن تستخدمه</item>
+        <item quantity="two">تطبيقان لم تكن تستخدمهما</item>
+        <item quantity="few">%d تطبيقات لم تكن تستخدمها</item>
+        <item quantity="many">%d تطبيقًا لم تكن تستخدمها</item>
+        <item quantity="other">%d تطبيق لم تكن تستخدمها</item>
+    </plurals>
+    <string name="now_duration_hours">%1$d س %2$d د</string>
+    <string name="now_duration_minutes">%1$d د</string>
+    <string name="now_duration_short">أقل من دقيقة</string>
+
+    <!-- An app's row. -->
+    <string name="now_app_removed">تطبيق مُزال</string>
+    <string name="now_app_system">نظام Android</string>
+    <string name="now_app_unnamed">حركة بيانات لم يُسمِّ Android لها أي تطبيق</string>
+    <string name="now_app_together">تُحسب معًا: %1$s</string>
+    <string name="now_state_now">الآن: %1$s</string>
+    <string name="now_state_in_use">قيد الاستخدام</string>
+    <string name="now_state_notification">مع إشعاره</string>
+    <string name="now_state_background">في الخلفية</string>
+    <string name="now_state_none">بلا حالة</string>
+    <string name="now_state_not_yet">غير معروفة بعد</string>
+    <string name="now_bytes_background">أرسل %1$s واستلم %2$s بينما لم تكن تستخدمه.</string>
+    <string name="now_bytes_notification">أرسل %1$s واستلم %2$s بينما كان يمكن أن يظهر إشعاره.</string>
+    <string name="now_bytes_in_use">أرسل %1$s واستلم %2$s بينما كنت تستخدمه.</string>
+    <string name="now_bytes_none">أرسل %1$s واستلم %2$s بلا حالة. %3$s</string>
+    <string name="now_bytes_not_yet">أرسل %1$s واستلم %2$s، والحالة غير معروفة بعد.</string>
+    <string name="now_why_no_access">لم يكن لدى Watch الوصول إلى بيانات الاستخدام.</string>
+    <string name="now_why_locked">لم يكن قفل الهاتف قد فُتح بعدُ منذ تشغيله.</string>
+    <string name="now_why_late">علم Watch بالحالة بعد فوات الأوان.</string>
+    <string name="now_why_no_app">لم يحدّد Android أيّ تطبيق هو.</string>
+    <string name="now_why_not_told">لم يكن Watch قد قرأ الحالة بعد، أو كان قد توقف.</string>
+    <string name="now_through_tool">أُرسل عبر أداتك لتجاوز الحجب. لا تظهر الجهات التي اتصل بها، لأن «تسجيل الجهات التي تتصل بها هذه التطبيقات» متوقف.</string>
+    <string name="now_is_tool">أداتك لتجاوز الحجب. تشمل حركة بياناتها حركة بيانات التطبيقات التي تمرّرها عبرها.</string>
+    <string name="now_tool_hidden">لا تظهر الجهات التي تتصل بها، لأن «تسجيل الجهات التي تتصل بها هذه التطبيقات» متوقف.</string>
+    <string name="now_history">عرض سجله الزمني</string>
+
+    <!-- A destination: where its name came from, and what is known of it. -->
+    <string name="now_named_tls">الاسم الذي أرسله الاتصال</string>
+    <string name="now_named_quic">الاسم الذي أرسله الاتصال (QUIC)</string>
+    <string name="now_named_dns">اسم من ردّ DNS</string>
+    <string name="now_named_organisation">مالك الشبكة</string>
+    <string name="now_named_unknown">لا يُعرف له اسم</string>
+    <string name="now_dns_name">ردّ DNS: %1$s</string>
+    <string name="now_organisation">الشبكة: %1$s</string>
+    <string name="now_tracker">أداة تتبّع في قائمة εxodus: %1$s</string>
+    <string name="now_tracker_company">أدوات تتبّع تابعة لـ %1$s في قائمة εxodus</string>
+    <string name="now_same_company">الشركة نفسها التي يتبع لها التطبيق: %1$s</string>
+    <string name="now_destination_bytes">أُرسل %1$s، واستُلم %2$s</string>
+    <plurals name="now_more_destinations">
+        <item quantity="zero">عرض %d جهة أخرى</item>
+        <item quantity="one">عرض جهة أخرى</item>
+        <item quantity="two">عرض جهتين أخريين</item>
+        <item quantity="few">عرض %d جهات أخرى</item>
+        <item quantity="many">عرض %d جهةً أخرى</item>
+        <item quantity="other">عرض %d جهة أخرى</item>
+    </plurals>
+
+    <!-- What this view cannot see (ADR 0046, decision 5). -->
+    <string name="cannot_see_title">ما لا يستطيع هذا العرض رؤيته</string>
+    <string name="cannot_see_sender">تظهر حركة البيانات المرسلة نيابةً عن تطبيق تحت التطبيق الذي أرسلها. تصل الإشعارات الفورية عبر خدمات Google Play، والتنزيلات عبر مدير التنزيلات في Android. وبعض التطبيقات ترسل عبر تطبيق آخر.</string>
+    <string name="cannot_see_content">لا يرى Watch المحتوى. في حركة البيانات المشفّرة يرى الحجم والجهة والوقت، ولا يرى أبدًا ما أُرسل.</string>
+    <string name="cannot_see_device">لا يرى Watch ما يفعله التطبيق على الهاتف، مثل قراءة جهات الاتصال أو الملفات أو الصور. لا يظهر إلا الإرسال.</string>
+    <string name="cannot_see_together">بعض التطبيقات لا يمكن التمييز بينها. التطبيقات التي تشترك في رقم واحد تُحسب معًا. تُحسب لوحة المفاتيح قيد الاستخدام ما دامت الشاشة مشغّلة، وفي الخلفية ما دامت مطفأة. وليس لخلفيات الشاشة المتحركة شاشات خاصة بها. وتنقل أداتك لتجاوز الحجب حركة بيانات التطبيقات التي تمرّرها عبرها.</string>
+    <string name="cannot_see_gaps">لا يرى Watch شيئًا ما دامت شبكة VPN أخرى تعمل، ولا من التطبيقات التي استثنيتها، ولا من ملف العمل أو المساحة الخاصة أو مستخدم آخر. ولا يرى شيئًا كذلك قبل أول فتح لقفل الهاتف بعد إعادة تشغيله، أو عندما تمرّ حركة البيانات خارج شبكة VPN. أما حركة البيانات بين التطبيقات داخل الهاتف فلا تصل إليه أبدًا.</string>
+    <string name="cannot_see_sizes">الأحجام هي ما أرسلته التطبيقات واستلمته عبر Watch. أما شاشة استخدام البيانات في Android فتحسب أيضًا الترويسات والبيانات المُعاد إرسالها، لذا تعرض أكثر بقليل.</string>
+    <string name="cannot_see_notification">«مع إشعاره» تعني أن Android يسمح للتطبيق بعرض إشعار، لا أنك رأيته. قناة الإشعارات التي أوقفتها تظل تُحسب. وكذلك الهاتف الذي يُخفي بعض الإشعارات، والتطبيق الذي أوقفت إشعاراته في Android 12 وما قبله. ومشغّل الموسيقى غير المسموح له بالإشعارات يُحسب في الخلفية ما دام إشعاره ظاهرًا. ومن Android 12 فصاعدًا، تُحسب في الخلفية كذلك الخدمة التي تعمل أقل من عشر ثوانٍ.</string>
+    <string name="cannot_see_in_use">«قيد الاستخدام» هو ما يسجّله Android من شاشات كل تطبيق. في بعض الهواتف، قد تُحسب صفحة الموجز التي على يسار الشاشة الرئيسية في الخلفية. والتطبيق المسموح له بفتح شاشات من الخلفية قد يبدو قيد الاستخدام.</string>
+
+    <!-- Each app's history. -->
+    <string name="history_title">السجل الزمني لـ %1$s</string>
+    <string name="history_back">العودة إلى «Now»</string>
+    <string name="history_through_tool">أُرسل عبر أداتك لتجاوز الحجب. لم تُسجَّل الجهات التي اتصل بها، لأن «تسجيل الجهات التي تتصل بها هذه التطبيقات» كان متوقفًا.</string>
+    <string name="history_tool_hidden">لم تُسجَّل الجهات التي اتصل بها، لأن «تسجيل الجهات التي تتصل بها هذه التطبيقات» كان متوقفًا.</string>
+    <string name="history_intro">كل اتصال احتفظ به Watch لهذا التطبيق، الأحدث أولًا، يومًا بيوم.</string>
+    <string name="history_keep">للاحتفاظ بسجل زمني، اختر في شاشة Watch عدد أيام الاحتفاظ بالسجلات.</string>
+    <string name="history_nothing_yet">لم يُحتفظ بأي شيء بعد.</string>
+    <string name="history_closed">لا يمكن فتح هذا اليوم الآن.</string>
+    <string name="history_empty">لا اتصالات في هذا اليوم.</string>
+    <string name="history_earlier">اليوم السابق</string>
+    <string name="history_later">اليوم التالي</string>
+    <string name="history_reading">جارٍ فتح السجل.</string>
+    <string name="history_time">من %1$s إلى %2$s</string>
+    <string name="history_state">الحالة: %1$s</string>
+    <string name="history_continues">استمر الاتصال بعد ذلك.</string>
+    <plurals name="history_lookups">
+        <item quantity="zero">بحث التطبيق عن %d اسم عبر Watch.</item>
+        <item quantity="one">بحث التطبيق عن اسم واحد عبر Watch.</item>
+        <item quantity="two">بحث التطبيق عن اسمين عبر Watch.</item>
+        <item quantity="few">بحث التطبيق عن %d أسماء عبر Watch.</item>
+        <item quantity="many">بحث التطبيق عن %d اسمًا عبر Watch.</item>
+        <item quantity="other">بحث التطبيق عن %d اسم عبر Watch.</item>
+    </plurals>
+    <plurals name="history_before_install">
+        <item quantity="zero">%d سجل تحت رقم هذا التطبيق أقدم من التطبيق. وهي تعود إلى تطبيق مُزال.</item>
+        <item quantity="one">سجل واحد تحت رقم هذا التطبيق أقدم من التطبيق. وهو يعود إلى تطبيق مُزال.</item>
+        <item quantity="two">سجلان تحت رقم هذا التطبيق أقدم من التطبيق. وهما يعودان إلى تطبيق مُزال.</item>
+        <item quantity="few">%d سجلات تحت رقم هذا التطبيق أقدم من التطبيق. وهي تعود إلى تطبيق مُزال.</item>
+        <item quantity="many">%d سجلًا تحت رقم هذا التطبيق أقدم من التطبيق. وهي تعود إلى تطبيق مُزال.</item>
+        <item quantity="other">%d سجل تحت رقم هذا التطبيق أقدم من التطبيق. وهي تعود إلى تطبيق مُزال.</item>
+    </plurals>
 </resources>

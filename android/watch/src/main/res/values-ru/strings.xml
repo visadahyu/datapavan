@@ -81,4 +81,123 @@
     </plurals>
     <string name="left_out_choose">Выбрать приложения для исключения</string>
     <string name="left_out_done">Готово</string>
+
+    <!-- W5, part 3 (ADR 0046): "Now" and each app's history. -->
+    <!-- Watch's screen: the way into "Now". -->
+    <string name="now_open">Посмотреть, что приложения отправляют сейчас</string>
+
+    <string name="now_title">Now</string>
+    <string name="now_intro">Приложения, которые использовали сеть, и пользовались ли вы ими в это время.</string>
+    <string name="now_watch_off">Watch выключен, поэтому не видит трафика. Включите его на экране Watch.</string>
+    <string name="now_no_access">Watch не может определить, каким приложением вы пользуетесь, потому что у него нет доступа к данным об использовании. Приложения показаны без состояния.</string>
+    <string name="now_allow_access">Разрешить доступ к данным об использовании</string>
+    <string name="now_locked">Каким приложением вы пользуетесь, будет видно после первой разблокировки с момента включения телефона.</string>
+    <string name="now_reading">Определяем, какими приложениями вы пользуетесь.</string>
+    <string name="now_window">Показать трафик</string>
+    <string name="now_window_ten">За последние 10 минут</string>
+    <string name="now_window_hour">За последний час</string>
+    <string name="now_window_screen">С момента включения экрана</string>
+    <string name="now_sort">Отсортировать заново</string>
+    <string name="now_sort_note">Строки остаются на месте, пока вы смотрите. Новые приложения добавляются в конец.</string>
+    <string name="now_empty">За это время ни одно приложение не использовало сеть.</string>
+    <string name="now_one_app">Показано одно приложение.</string>
+    <string name="now_all_apps">Показать все приложения</string>
+
+    <!-- The window while the screen was off: %1$s its length, %2$s a count of apps, %3$s a size. -->
+    <string name="now_off_window">Пока экран был выключен (%1$s), %2$s %3$s.</string>
+    <string name="now_off_none">Пока экран был выключен (%1$s), ни одно приложение, которым вы не пользовались, не отправляло данных.</string>
+    <plurals name="now_off_apps">
+        <item quantity="one">%d приложение, которым вы не пользовались, отправило</item>
+        <item quantity="few">%d приложения, которыми вы не пользовались, отправили</item>
+        <item quantity="many">%d приложений, которыми вы не пользовались, отправили</item>
+        <item quantity="other">%d приложения, которыми вы не пользовались, отправили</item>
+    </plurals>
+    <string name="now_duration_hours">%1$d ч %2$d мин</string>
+    <string name="now_duration_minutes">%1$d мин</string>
+    <string name="now_duration_short">меньше минуты</string>
+
+    <!-- An app's row. -->
+    <string name="now_app_removed">Удалённое приложение</string>
+    <string name="now_app_system">Система Android</string>
+    <string name="now_app_unnamed">Трафик, для которого Android не указал приложение</string>
+    <string name="now_app_together">Считаются вместе: %1$s</string>
+    <string name="now_state_now">Сейчас: %1$s</string>
+    <string name="now_state_in_use">используется</string>
+    <string name="now_state_notification">с уведомлением</string>
+    <string name="now_state_background">в фоновом режиме</string>
+    <string name="now_state_none">без состояния</string>
+    <string name="now_state_not_yet">пока неизвестно</string>
+    <string name="now_bytes_background">Отправлено %1$s и получено %2$s, пока вы им не пользовались.</string>
+    <string name="now_bytes_notification">Отправлено %1$s и получено %2$s, пока могло показываться его уведомление.</string>
+    <string name="now_bytes_in_use">Отправлено %1$s и получено %2$s, пока вы им пользовались.</string>
+    <string name="now_bytes_none">Отправлено %1$s и получено %2$s без состояния. %3$s</string>
+    <string name="now_bytes_not_yet">Отправлено %1$s и получено %2$s, состояние пока неизвестно.</string>
+    <string name="now_why_no_access">У Watch не было доступа к данным об использовании.</string>
+    <string name="now_why_locked">Телефон ещё не разблокировали после его включения.</string>
+    <string name="now_why_late">Watch узнал состояние слишком поздно.</string>
+    <string name="now_why_no_app">Android не сообщил, какое это было приложение.</string>
+    <string name="now_why_not_told">Watch ещё не прочитал состояние или уже остановился.</string>
+    <string name="now_through_tool">Отправлено через ваш инструмент обхода блокировок. Куда подключалось приложение, не показано, потому что настройка «Записывать, куда подключаются эти приложения» выключена.</string>
+    <string name="now_is_tool">Ваш инструмент обхода блокировок. Его трафик включает трафик приложений, которые вы направляете через него.</string>
+    <string name="now_tool_hidden">Куда он подключается, не показано, потому что настройка «Записывать, куда подключаются эти приложения» выключена.</string>
+    <string name="now_history">Посмотреть историю</string>
+
+    <!-- A destination: where its name came from, and what is known of it. -->
+    <string name="now_named_tls">имя, отправленное подключением</string>
+    <string name="now_named_quic">имя, отправленное подключением (QUIC)</string>
+    <string name="now_named_dns">имя из ответа DNS</string>
+    <string name="now_named_organisation">владелец сети</string>
+    <string name="now_named_unknown">имя неизвестно</string>
+    <string name="now_dns_name">Ответ DNS: %1$s</string>
+    <string name="now_organisation">Сеть: %1$s</string>
+    <string name="now_tracker">Трекер в списке εxodus: %1$s</string>
+    <string name="now_tracker_company">Трекеры компании %1$s в списке εxodus</string>
+    <string name="now_same_company">Та же компания, что и у приложения: %1$s</string>
+    <string name="now_destination_bytes">Отправлено %1$s, получено %2$s</string>
+    <plurals name="now_more_destinations">
+        <item quantity="one">Показать ещё %d место</item>
+        <item quantity="few">Показать ещё %d места</item>
+        <item quantity="many">Показать ещё %d мест</item>
+        <item quantity="other">Показать ещё %d места</item>
+    </plurals>
+
+    <!-- What this view cannot see (ADR 0046, decision 5). -->
+    <string name="cannot_see_title">Чего не видит этот экран</string>
+    <string name="cannot_see_sender">Трафик, отправленный для приложения, показан под приложением, которое его отправило. Push-сообщения приходят через сервисы Google Play, а загрузки — через диспетчер загрузок Android. Некоторые приложения отправляют данные через другое приложение.</string>
+    <string name="cannot_see_content">Watch не видит содержимое. У зашифрованного трафика он видит размер, место и время, но никогда не то, что было отправлено.</string>
+    <string name="cannot_see_device">Watch не видит действий приложения на телефоне, например чтения ваших контактов, файлов или фото. Видна только отправка.</string>
+    <string name="cannot_see_together">Некоторые приложения нельзя различить. Приложения с общим идентификатором считаются вместе. Клавиатура считается используемой, пока экран включён, и работающей в фоновом режиме, пока он выключен. У живых обоев нет собственного экрана. Ваш инструмент обхода блокировок передаёт трафик приложений, которые вы направляете через него.</string>
+    <string name="cannot_see_gaps">Watch ничего не видит, пока включён другой VPN, а также от приложений, которые вы исключили, из рабочего профиля, частного пространства или от другого пользователя. Он также ничего не видит до первой разблокировки после перезапуска или когда трафик идёт в обход VPN. Трафик между приложениями на телефоне никогда до него не доходит.</string>
+    <string name="cannot_see_sizes">Размеры — это то, что приложения отправили и получили через Watch. Экран передачи данных в Android учитывает ещё заголовки и повторно отправленные данные, поэтому показывает немного больше.</string>
+    <string name="cannot_see_notification">«С уведомлением» значит, что Android разрешает приложению показывать уведомление, а не что вы его видели. Приложение считается «с уведомлением», даже если вы отключили канал его уведомлений или телефон скрывает некоторые уведомления, а до Android 12 включительно — даже если вы отключили его уведомления. Музыкальный плеер без разрешения на уведомления считается работающим в фоновом режиме, пока показывается его уведомление. Начиная с Android 12, работающей в фоновом режиме считается и служба, которая выполняется меньше 10 секунд.</string>
+    <string name="cannot_see_in_use">«Используется» — это то, что Android записывает об экранах каждого приложения. На некоторых телефонах лента слева от главного экрана может считаться работающей в фоновом режиме. Приложение, которому разрешено открывать экраны из фона, может выглядеть используемым.</string>
+
+    <!-- Each app's history. -->
+    <string name="history_title">История приложения %1$s</string>
+    <string name="history_back">Назад к «Now»</string>
+    <string name="history_through_tool">Отправлено через ваш инструмент обхода блокировок. Куда подключалось приложение, не записано, потому что настройка «Записывать, куда подключаются эти приложения» была выключена.</string>
+    <string name="history_tool_hidden">Куда подключался ваш инструмент обхода блокировок, не записано, потому что настройка «Записывать, куда подключаются эти приложения» была выключена.</string>
+    <string name="history_intro">Подключения этого приложения, которые сохранил Watch: сначала новые, по одному дню.</string>
+    <string name="history_keep">Чтобы вести историю, выберите на экране Watch, сколько дней хранить записи.</string>
+    <string name="history_nothing_yet">Пока ничего не сохранено.</string>
+    <string name="history_closed">Этот день сейчас нельзя открыть.</string>
+    <string name="history_empty">В этот день подключений не было.</string>
+    <string name="history_earlier">Предыдущий день</string>
+    <string name="history_later">Следующий день</string>
+    <string name="history_reading">Открываем журнал.</string>
+    <string name="history_time">С %1$s до %2$s</string>
+    <string name="history_state">Состояние: %1$s</string>
+    <string name="history_continues">После этого подключение продолжалось.</string>
+    <plurals name="history_lookups">
+        <item quantity="one">Приложение искало через Watch %d имя.</item>
+        <item quantity="few">Приложение искало через Watch %d имени.</item>
+        <item quantity="many">Приложение искало через Watch %d имён.</item>
+        <item quantity="other">Приложение искало через Watch %d имени.</item>
+    </plurals>
+    <plurals name="history_before_install">
+        <item quantity="one">%d запись под идентификатором этого приложения старше самого приложения. Она относится к приложению, которое с тех пор удалено.</item>
+        <item quantity="few">%d записи под идентификатором этого приложения старше самого приложения. Они относятся к приложению, которое с тех пор удалено.</item>
+        <item quantity="many">%d записей под идентификатором этого приложения старше самого приложения. Они относятся к приложению, которое с тех пор удалено.</item>
+        <item quantity="other">%d записи под идентификатором этого приложения старше самого приложения. Они относятся к приложению, которое с тех пор удалено.</item>
+    </plurals>
 </resources>
