@@ -2,13 +2,17 @@
 //! target ... against a truth timeline"): random runs of two apps' flows and flows of no app, with counts,
 //! ends, readings told from a true timeline of the apps' states in tenths of a second, quarter hours and,
 //! in variants, a reading without usage access or clocks set back, checked against the records the
-//! engine wrote, where it cut them, and what "Now" shows (review b2, N5). It runs in `cargo test`.
+//! engine wrote, where it cut them, and what "Now" shows (review b2, N5). Since W5's third part's fix
+//! round (review c1, engine, finding 8) also the screen turning off and on, the window while it was off
+//! and a clear of the live memory, runs longer than an hour with clocks set back, and the bytes in no
+//! state by why against their column in every window. It runs in `cargo test`.
 
 use super::activity::WINDOW;
 use super::activity::tests::{T, flow, taken, telling_at};
 use super::logbook::{FlowBytes, SEGMENT_MS};
 use super::{Shared, lock};
 use crate::log::Record;
+use crate::snapshot::{COLUMNS, OFF, Snapshot};
 use crate::states::{Interval, Known, Placed, Screen, State, Told, Unknown};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -19,8 +23,8 @@ const APPS: [u32; 2] = [10_123, 10_124];
 /// A run: from [`T`] (22:10) past the quarter hours of 22:15 and 22:30.
 const LENGTH_MS: u64 = 1_300_000;
 
-/// The tenths of a second of the truth, a little more than a run.
-const TICKS: usize = 14_000;
+/// A long run: an hour and a quarter, past the hour that "Now" keeps.
+const LONG_MS: u64 = 4_500_000;
 
 /// A small deterministic generator (xorshift64*), so that a failing run can be run again by its seed.
 struct Rng(u64);
@@ -43,18 +47,22 @@ impl Rng {
 }
 
 /// The truth: each app's state tenth of a second by tenth from [`T`], in runs from a tenth to 90
-/// seconds, and the span a reading without usage access told, if one did.
+/// seconds, the span a reading without usage access told, if one did, and the moments the screen went off
+/// (false) and came on (true), in order; it is on from [`T`].
 struct Truth {
     ticks: HashMap<u32, Vec<State>>,
     no_access: Option<(u64, u64)>,
+    screen: Vec<(u64, bool)>,
 }
 
-fn truth(rng: &mut Rng) -> Truth {
+/// The truth of a run of `length` milliseconds.
+fn truth(rng: &mut Rng, length: u64) -> Truth {
+    let ticks = usize::try_from(length / 100 + 1_000).unwrap_or(usize::MAX);
     let ticks = APPS
         .iter()
         .map(|&uid| {
-            let mut states = Vec::with_capacity(TICKS + 900);
-            while states.len() < TICKS {
+            let mut states = Vec::with_capacity(ticks + 900);
+            while states.len() < ticks {
                 let state = match rng.below(3) {
                     0 => State::InUse,
                     1 => State::Notification,
@@ -76,6 +84,7 @@ fn truth(rng: &mut Rng) -> Truth {
     Truth {
         ticks,
         no_access: None,
+        screen: Vec::new(),
     }
 }
 
@@ -145,12 +154,23 @@ impl Truth {
                 });
             }
         }
+        let last = |on: bool| {
+            self.screen
+                .iter()
+                .rev()
+                .find(|&&(at, is)| at <= until && is == on)
+                .map(|&(at, _)| at)
+        };
+        let (screen, screen_off) = match self.screen.iter().rev().find(|&&(at, _)| at <= until) {
+            Some(&(_, false)) => (Screen::Off, last(false)),
+            _ => (Screen::On(Some(last(true).unwrap_or(T))), last(false)),
+        };
         Told {
             from,
             until,
             known: Known::States,
-            screen: Screen::On(Some(T)),
-            screen_off: None,
+            screen,
+            screen_off,
             intervals,
         }
     }
@@ -169,21 +189,25 @@ struct Flowing {
     gone: Vec<bool>,
 }
 
-/// One run: what the engine wrote, the flows, the truth, and where the clock ended.
+/// One run: what the engine wrote, the flows, the truth, where the clock ended, and the first second
+/// counted after the clear, if the run cleared.
 struct Run {
     shared: Shared,
     records: Vec<Record>,
     flows: HashMap<u64, Flowing>,
     truth: Truth,
     now: u64,
+    cleared: Option<u64>,
 }
 
-/// What a run adds to the plain one: a reading without usage access, or clocks set back now and then.
+/// What a run adds to the plain one: a reading without usage access, clocks set back now and then, or
+/// the screen turning off and on with a clear of the live memory among it.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Variant {
     Plain,
     NoAccess,
     SetBack,
+    Screen,
 }
 
 /// One step at `now`: a flow opens (always when none is open), one ends, or one counts bytes up and down.
@@ -249,8 +273,46 @@ fn act(
 /// nothing is known, and the next tells from its end, as Watch's tracker does; with set backs, the clock
 /// goes back by 1 to 5 seconds now and then.
 fn run(seed: u64, variant: Variant) -> Run {
+    run_for(seed, variant, LENGTH_MS)
+}
+
+/// The screen's moments for a run of the screen variant: off and on by turns from the first minute, some
+/// close enough for one reading to hold both, and last an off and an on after the clear, so that the run
+/// ends with the screen on and a window while it was off after the clear; and the clear's moment.
+fn screen_of(rng: &mut Rng) -> (Vec<(u64, bool)>, u64) {
+    let mut moments = Vec::new();
+    let mut at = T + 60_000;
+    let mut on = false;
+    while at < T + 900_000 {
+        moments.push((at, on));
+        on = !on;
+        at += if rng.below(3) == 0 {
+            1 + rng.below(2_500)
+        } else {
+            5_000 + rng.below(120_000)
+        };
+    }
+    if !on {
+        moments.push((at, true));
+    }
+    let clear = T + 950_000 + rng.below(50_000);
+    let off = T + 1_010_000 + rng.below(60_000);
+    moments.push((off, false));
+    moments.push((off + 1 + rng.below(100_000), true));
+    (moments, clear)
+}
+
+/// Runs the model for `length` milliseconds.
+fn run_for(seed: u64, variant: Variant, length: u64) -> Run {
     let mut rng = Rng::new(seed);
-    let mut truth = truth(&mut rng);
+    let mut truth = truth(&mut rng, length);
+    let mut clear = None;
+    if variant == Variant::Screen {
+        let (screen, at) = screen_of(&mut rng);
+        truth.screen = screen;
+        clear = Some(at);
+    }
+    let mut cleared = None;
     let (shared, clock, _) = telling_at(T);
     let mut flows: HashMap<u64, Flowing> = HashMap::new();
     let mut records = Vec::new();
@@ -261,7 +323,7 @@ fn run(seed: u64, variant: Variant) -> Run {
     let tell = |shared: &Shared, truth: &Truth, from: u64, until: u64, floor: u64| {
         shared.tell(&truth.reading(from.saturating_sub(10_000).max(floor), until));
     };
-    while now < T + LENGTH_MS {
+    while now < T + length {
         let last = now;
         now += 1 + rng.below(1_500);
         if variant == Variant::SetBack && rng.below(150) == 0 {
@@ -283,6 +345,11 @@ fn run(seed: u64, variant: Variant) -> Run {
             clock.set(now);
         }
         clock.set(now);
+        if clear.is_some_and(|at| now >= at) {
+            lock(&shared.activity).counts.clear(now);
+            cleared = Some(now.div_ceil(1000));
+            clear = None;
+        }
         act(&mut rng, &shared, &mut flows, &mut next_id, now);
         if now >= next_reading {
             let until = now - 2_000;
@@ -324,6 +391,24 @@ fn run(seed: u64, variant: Variant) -> Run {
         flows,
         truth,
         now,
+        cleared,
+    }
+}
+
+/// In every window of every app, the bytes in no state by why add up to its column of no state, as the
+/// Kotlin reader requires of a snapshot.
+fn check_whys(seed: u64, snapshot: &Snapshot) {
+    for app in &snapshot.apps {
+        for (window, columns) in app.bytes.iter().enumerate() {
+            let whys = columns[5..COLUMNS]
+                .iter()
+                .fold([0, 0], |[u, d], w| [u + w[0], d + w[1]]);
+            assert_eq!(
+                whys, columns[0],
+                "seed {seed}, app {:?}, window {window}: whys",
+                app.uid
+            );
+        }
     }
 }
 
@@ -470,6 +555,7 @@ fn the_engine_places_every_byte_in_its_true_state() {
         assert!(lock(&run.shared.activity).held.is_empty(), "seed {seed}");
         // "Now": the hour holds the whole run, each app's bytes by its state, and those in no state by why.
         let snapshot = run.shared.now_view(run.now);
+        check_whys(seed, &snapshot);
         let mut expected: HashMap<Option<u32>, [[u64; 2]; 10]> = HashMap::new();
         for f in run.flows.values() {
             for &(at, up, down) in &f.counts {
@@ -520,7 +606,9 @@ fn the_engine_places_every_byte_in_its_true_state() {
 #[test]
 fn a_clock_set_back_loses_no_byte() {
     for seed in 0..100 {
-        let run = run(1_000 + seed, Variant::SetBack);
+        // One run in ten lasts longer than the hour "Now" keeps (review c1, engine, finding 8).
+        let length = if seed % 10 == 9 { LONG_MS } else { LENGTH_MS };
+        let run = run_for(1_000 + seed, Variant::SetBack, length);
         let written = segments(&run.records);
         for (id, f) in &run.flows {
             let parts = written.get(id).map_or(&[][..], Vec::as_slice);
@@ -540,10 +628,13 @@ fn a_clock_set_back_loses_no_byte() {
         assert_eq!(run.shared.waiting_marks(), 0, "seed {seed}");
         assert!(lock(&run.shared.activity).held.is_empty(), "seed {seed}");
         let snapshot = run.shared.now_view(run.now);
+        check_whys(seed, &snapshot);
         let mut expected: HashMap<Option<u32>, [u64; 2]> = HashMap::new();
+        // The hour: the current minute and the 59 before.
+        let first = (run.now / 60_000).saturating_sub(59);
         for f in run.flows.values() {
-            for (&(_, up, down), &gone) in f.counts.iter().zip(&f.gone) {
-                if !gone {
+            for (&(at, up, down), &gone) in f.counts.iter().zip(&f.gone) {
+                if !gone && at / 60_000 >= first {
                     let ways = expected.entry(f.uid).or_default();
                     ways[0] += up;
                     ways[1] += down;
@@ -563,6 +654,89 @@ fn a_clock_set_back_loses_no_byte() {
                         .fold([0, 0], |[u, d], w| [u + w[0], d + w[1]])
                 });
             assert_eq!(shown, ways, "seed {seed}, app {uid:?}: \"Now\"");
+        }
+    }
+}
+
+/// With the screen turning off and on, a clear among it: the window while the screen was off and the
+/// window since it came on again hold, between them, every byte counted from the screen's last going off,
+/// each in its true state, and none from before the clear; and the whys add up in every window (review c1
+/// of W5's third part, engine, finding 8).
+#[test]
+fn the_window_while_the_screen_was_off_holds_every_byte_after_a_clear() {
+    for seed in 0..60 {
+        let run = run(2_000 + seed, Variant::Screen);
+        let truth = &run.truth;
+        let snapshot = run.shared.now_view(run.now);
+        check_whys(seed, &snapshot);
+        let Some(cleared) = run.cleared else {
+            unreachable!("seed {seed}: the run cleared")
+        };
+        let [(off, false), (on, true)] = truth.screen[truth.screen.len() - 2..] else {
+            unreachable!("seed {seed}: the run ends with an off and an on")
+        };
+        assert_eq!(
+            snapshot.off,
+            Some((off, Some(on))),
+            "seed {seed}: the window"
+        );
+        let mut expected: HashMap<Option<u32>, [[[u64; 2]; 4]; 2]> = HashMap::new();
+        // Flows of no app are placed at once, without waiting for the reading that tells the screen's
+        // moments, so their seconds near a change of the screen can count in the window before it (an
+        // accepted limit, ADR 0046): the apps' seconds are checked here.
+        for f in run.flows.values().filter(|f| f.uid.is_some()) {
+            for &(at, up, down) in &f.counts {
+                let second = at / 1000;
+                let start = second * 1000;
+                if second < cleared || start < off {
+                    continue;
+                }
+                let column = match truth.placed(f.uid, at) {
+                    Placed::Known(State::InUse) => 1,
+                    Placed::Known(State::Notification) => 2,
+                    Placed::Known(State::Background) => 3,
+                    Placed::Unknown(_) => 0,
+                };
+                let window = usize::from(start >= on);
+                let ways = &mut expected.entry(f.uid).or_default()[window][column];
+                ways[0] += up;
+                ways[1] += down;
+            }
+        }
+        for (uid, windows) in &expected {
+            let app = snapshot.apps.iter().find(|app| app.uid == *uid);
+            let shown = app.map_or([[[0; 2]; 4]; 2], |app| {
+                let four = |w: usize| {
+                    [
+                        app.bytes[w][0],
+                        app.bytes[w][1],
+                        app.bytes[w][2],
+                        app.bytes[w][3],
+                    ]
+                };
+                [four(OFF), four(2)]
+            });
+            assert_eq!(
+                &shown, windows,
+                "seed {seed}, app {uid:?}: off, then since on"
+            );
+        }
+        // Nothing before the clear: the hour holds only what the windows above and the time between hold.
+        for app in &snapshot.apps {
+            let hour: u64 = app.bytes[1][..5].iter().map(|w| w[0] + w[1]).sum();
+            let after: u64 = run
+                .flows
+                .values()
+                .filter(|f| f.uid == app.uid)
+                .flat_map(|f| f.counts.iter())
+                .filter(|c| c.0 / 1000 >= cleared)
+                .map(|c| c.1 + c.2)
+                .sum();
+            assert_eq!(
+                hour, after,
+                "seed {seed}, app {:?}: the hour after the clear",
+                app.uid
+            );
         }
     }
 }
