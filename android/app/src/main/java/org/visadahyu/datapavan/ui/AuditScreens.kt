@@ -105,6 +105,7 @@ import org.visadahyu.datapavan.audit.TrackerScanner
 import org.visadahyu.datapavan.audit.UsageFacts
 import org.visadahyu.datapavan.audit.UsageReader
 import org.visadahyu.datapavan.datapack.DataPackRules
+import org.visadahyu.datapavan.core.NativePacks
 import org.visadahyu.datapavan.datapack.DataPackStore
 import java.text.DateFormat
 import java.time.LocalDate
@@ -176,7 +177,7 @@ internal class ServiceStates(val states: Map<String, ServiceState>, val names: M
 private suspend fun runAudit(context: Context): AuditResult = coroutineScope {
     val device = async(Dispatchers.IO) { DeviceCollector(context).collect() }
     val collector = AppCollector(context)
-    val data = DataPackStore.get(context)
+    val data = DataPackStore.get(context, NativePacks)
     val signers = AppSigners.parse(data.text(AppSigners.APPS_PATH).orEmpty(), data.text(AppSigners.SIGNERS_PATH).orEmpty())
     val fresh = !DataPackRules.isStale(data.active.date, LocalDate.now())
     val collected = collector.collect()

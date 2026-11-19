@@ -38,6 +38,7 @@ import java.time.LocalDate
 import org.visadahyu.datapavan.R
 import org.visadahyu.datapavan.datapack.DataPack
 import org.visadahyu.datapavan.datapack.DataPackRules
+import org.visadahyu.datapavan.core.NativePacks
 import org.visadahyu.datapavan.datapack.DataPackStore
 import org.visadahyu.datapavan.datapack.ImportResult
 import org.visadahyu.datapavan.datapack.PackRefusal
@@ -51,7 +52,7 @@ import org.visadahyu.datapavan.datapack.reflow
 @Composable
 internal fun DataSources(insets: PaddingValues, onBack: () -> Unit, onImported: () -> Unit) {
     val context = LocalContext.current.applicationContext
-    val store = remember { DataPackStore.get(context) }
+    val store = remember { DataPackStore.get(context, NativePacks) }
     var pack by remember { mutableStateOf(store.active) }
     var imported by remember { mutableStateOf(store.isImported) }
     var outcome by remember { mutableStateOf<ImportResult?>(null) }

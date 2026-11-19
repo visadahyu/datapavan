@@ -32,6 +32,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import org.visadahyu.datapavan.core.NativePacks
 import org.visadahyu.datapavan.datapack.DataPackStore
 import java.io.IOException
 import java.security.KeyPairGenerator
@@ -518,7 +519,7 @@ class DeviceCollector(private val context: Context) {
     }
 
     private fun attestationChain(): AttestationChain {
-        val data = DataPackStore.get(context)
+        val data = DataPackStore.get(context, NativePacks)
         return AttestationChain.load(data.active, data.bundled)
     }
 

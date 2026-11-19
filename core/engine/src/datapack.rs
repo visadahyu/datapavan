@@ -449,6 +449,65 @@ fn sextet(b: u8) -> Option<u8> {
     }
 }
 
+/// Checks the signature of `pack` against the trusted keys in `keys` (`signify` public key lines separated
+/// by `\n`), and only then reads its header: the result of [`layout`], or the error's code alone. What both
+/// JNI bridges hand the apps' Kotlin side (`PackReader`), the audit's and Watch's.
+#[must_use]
+pub fn read_signed(pack: &[u8], keys: &str) -> Vec<i32> {
+    let result = keys
+        .lines()
+        .map(|line| PublicKey::parse(line.as_bytes()))
+        .collect::<Result<Vec<_>, _>>()
+        .and_then(|trusted| verify(pack, &trusted))
+        .and_then(|verified| {
+            let payload = pack.get(verified.payload_start..).unwrap_or_default();
+            Payload::parse(payload).map(|header| (verified, header))
+        });
+    match result {
+        Ok((verified, header)) => layout(&header, Some(verified.signer), verified.payload_start),
+        Err(error) => vec![error.code()],
+    }
+}
+
+/// Reads the header of a bare payload, the app's own copy from the APK: the result of [`layout`], or the
+/// error's code alone.
+#[must_use]
+pub fn read_payload(payload: &[u8]) -> Vec<i32> {
+    match Payload::parse(payload) {
+        Ok(header) => layout(&header, None, 0),
+        Err(error) => vec![error.code()],
+    }
+}
+
+/// Flattens a pack header for the apps: `[0, signer, payloadStart, sequence, dateStart, dateLength, k,
+/// k × (start, length), r, r × (start, length), f, f × (pathStart, pathLength, dataStart, dataLength)]`,
+/// for the keys, revoked keys and files, where `signer` is the index of the trusted key that signed the
+/// pack, or -1 for a bare payload. Every start counts from `offset`, the payload's start in the array the
+/// app passed in.
+#[must_use]
+pub fn layout(header: &Payload, signer: Option<usize>, offset: usize) -> Vec<i32> {
+    // Packs are at most 32 MiB, so every number fits.
+    let int = |value: usize| i32::try_from(value).unwrap_or(i32::MAX);
+    let range = |r: &Range<usize>| [int(offset + r.start), int(r.len())];
+    let mut out = vec![
+        0,
+        signer.map_or(-1, int),
+        int(offset),
+        i32::try_from(header.sequence).unwrap_or(i32::MAX),
+    ];
+    out.extend(range(&header.date));
+    for list in [&header.keys, &header.revoked] {
+        out.push(int(list.len()));
+        out.extend(list.iter().flat_map(range));
+    }
+    out.push(int(header.files.len()));
+    for file in &header.files {
+        out.extend(range(&file.path));
+        out.extend(range(&file.data));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Error, Payload, PublicKey, base64_decode, verify};

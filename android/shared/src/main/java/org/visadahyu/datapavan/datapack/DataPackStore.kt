@@ -14,17 +14,19 @@ import java.io.InputStream
  * system file picker (ADR 0015, decision 11). Datapavan has no network access, so this is the only
  * way data changes between app updates. An imported pack is stored as it arrived, signature and all,
  * in app-private storage that backups exclude, and its signature is checked again whenever it is
- * loaded.
+ * loaded. [native] is the Rust reader of the process: the audit's, or Watch's in Watch's process, which
+ * reads the same files with the same rules (W5's third part).
  */
 class DataPackStore private constructor(
     private val assets: AssetManager,
     private val resolver: ContentResolver,
     private val directory: File,
+    private val native: PackNative,
 ) {
     /** The pack in the APK. A build that cannot read its own data is broken, so this fails loudly. */
     val bundled: DataPack by lazy {
         val bytes = assets.open(BUNDLED_ASSET).use { it.readBytes() }
-        when (val reading = PackReader.payload(bytes)) {
+        when (val reading = PackReader.payload(native, bytes)) {
             is PackReading.Read -> reading.pack
             is PackReading.Refused -> error("$BUNDLED_ASSET: ${reading.reason}")
         }
@@ -67,7 +69,7 @@ class DataPackStore private constructor(
         if (bytes.size > MAX_PACK_BYTES) return ImportResult.Refused(PackRefusal.TOO_LARGE)
         val trusted = trustedKeys
         if (trusted.isEmpty()) return ImportResult.Refused(PackRefusal.NO_TRUSTED_KEYS)
-        val reading = when (val read = PackReader.signed(bytes, trusted)) {
+        val reading = when (val read = PackReader.signed(native, bytes, trusted)) {
             is PackReading.Refused -> return ImportResult.Refused(read.reason)
             is PackReading.Read -> read
         }
@@ -97,7 +99,7 @@ class DataPackStore private constructor(
         if (!packFile.exists()) return null
         val found = try {
             val chain = chainFile.readLines().filter { it.isNotEmpty() }
-            val reading = chain.lastOrNull()?.let { PackReader.signed(packFile.readBytes(), listOf(it)) }
+            val reading = chain.lastOrNull()?.let { PackReader.signed(native, packFile.readBytes(), listOf(it)) }
             (reading as? PackReading.Read)?.pack
                 ?.takeIf { DataPackRules.keep(bundled, it, chain) }
                 ?.let { Installed(it, chain) }
@@ -130,13 +132,20 @@ class DataPackStore private constructor(
         @Volatile
         private var instance: DataPackStore? = null
 
-        fun get(context: Context): DataPackStore = instance ?: synchronized(this) {
-            instance ?: DataPackStore(context.assets, context.contentResolver, File(context.noBackupFilesDir, "datapack"))
-                .also { instance = it }
+        /** The process's store, read through [native], kept for the process's life (the audit's). */
+        fun get(context: Context, native: PackNative): DataPackStore = instance ?: synchronized(this) {
+            instance ?: read(context, native).also { instance = it }
         }
 
+        /**
+         * A store of its own, which reads the pack again and is gone with its last reference: for Watch, which
+         * needs one file of the pack now and then and keeps no copy of the pack in its memory.
+         */
+        fun read(context: Context, native: PackNative): DataPackStore =
+            DataPackStore(context.assets, context.contentResolver, File(context.noBackupFilesDir, "datapack"), native)
+
         /** Reads at most [limit] + 1 bytes, so that a larger file is recognised without reading it all. */
-        internal fun readAtMost(input: InputStream, limit: Int): ByteArray {
+        fun readAtMost(input: InputStream, limit: Int): ByteArray {
             val buffer = ByteArrayOutputStream()
             val chunk = ByteArray(64 shl 10)
             while (buffer.size() <= limit) {

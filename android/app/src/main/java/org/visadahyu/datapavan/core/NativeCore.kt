@@ -58,3 +58,10 @@ internal object NativeCore {
     @JvmStatic
     external fun readDataPayload(payload: ByteArray): IntArray
 }
+
+/** The audit's Rust reader of data packs, for [org.visadahyu.datapavan.datapack.DataPackStore] in the shared module. */
+internal object NativePacks : org.visadahyu.datapavan.datapack.PackNative {
+    override fun readDataPack(pack: ByteArray, keys: String): IntArray = NativeCore.readDataPack(pack, keys)
+
+    override fun readDataPayload(payload: ByteArray): IntArray = NativeCore.readDataPayload(payload)
+}

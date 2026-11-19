@@ -108,3 +108,10 @@ path = "fuzz_targets/states.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "network_signatures"
+path = "fuzz_targets/network_signatures.rs"
+test = false
+doc = false
+bench = false

@@ -13,6 +13,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import org.visadahyu.datapavan.core.NativePacks
 import org.visadahyu.datapavan.datapack.DataPackStore
 import java.io.File
 import java.io.IOException
@@ -57,7 +58,7 @@ object TrackerData {
  * of a phone reads several gigabytes.
  */
 class TrackerScanner(private val context: Context) {
-    private val data = DataPackStore.get(context)
+    private val data = DataPackStore.get(context, NativePacks)
 
     /** Traffic-sharing, remote-support and screen-recording SDKs, found in the same pass (ADR 0019). */
     val sdkList: SdkList by lazy { SdkList.parse(data.text(SdkList.SDKS_PATH).orEmpty(), data.text(SdkList.SIGNATURES_PATH).orEmpty()) }

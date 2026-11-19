@@ -11,8 +11,10 @@ use std::net::{IpAddr, SocketAddr};
 use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd, RawFd};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+use datapavan_engine::datapack;
 use datapavan_net::organisations::{FilePart, Organisations};
 use datapavan_net::socks5::Credentials;
+use datapavan_net::trackers::NetworkSignatures;
 use datapavan_net::{
     Addresses, Chain, ChainSetting, Config, DnsUse, Ech, Engine, Flow, Handover, Limits, NamedBy,
     NetworkKind, Outcome, Platform,
@@ -556,6 +558,129 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeActivity<
             env.byte_array_from_slice(&snapshot)
         })
         .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// The network signatures of the trackers table Watch's Kotlin side last handed over, read from the data
+/// pack the audit verifies (`Engine.nativeTrackers`), for "Now" and each app's history; none before.
+static TRACKERS: Mutex<Option<Arc<NetworkSignatures>>> = Mutex::new(None);
+
+/// `Engine.nativeReadDataPack(pack, keys)`: checks a data pack's signature against the trusted keys
+/// (`signify` public key lines separated by `\n`), then reads its header, as the audit's bridge does
+/// (`datapack::read_signed`), so that Watch reads the pack the audit verifies, not a copy of its own.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeReadDataPack(pack: ByteArray,
+// keys: String): IntArray`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeReadDataPack<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    pack: JByteArray<'caller>,
+    keys: JString<'caller>,
+) -> JIntArray<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let bytes = env.convert_byte_array(&pack)?;
+            let keys = keys.try_to_string(env)?;
+            int_array(env, &datapack::read_signed(&bytes, &keys))
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `Engine.nativeReadDataPayload(payload)`: reads the header of the APK's own data payload
+/// (`datapack::read_payload`).
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeReadDataPayload(payload:
+// ByteArray): IntArray`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeReadDataPayload<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    payload: JByteArray<'caller>,
+) -> JIntArray<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let bytes = env.convert_byte_array(&payload)?;
+            int_array(env, &datapack::read_payload(&bytes))
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `Engine.nativeTrackers(table)`: reads the network signatures of `trackers.tsv` and keeps them for
+/// `nativeTrackersOf`, in place of any before. Returns how many trackers have one, how many alternatives
+/// were read and how many refused as outside the subset (`datapavan_net::trackers`); empty for a table
+/// that is not one, which keeps none.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTrackers(table: ByteArray):
+// IntArray`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTrackers<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    table: JByteArray<'caller>,
+) -> JIntArray<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let bytes = env.convert_byte_array(&table)?;
+            let read = std::str::from_utf8(&bytes)
+                .ok()
+                .and_then(|text| NetworkSignatures::parse(text).ok());
+            let counts = read.as_ref().map_or_else(Vec::new, |read| {
+                let int = |n: usize| jint::try_from(n).unwrap_or(jint::MAX);
+                vec![
+                    int(read.trackers().len()),
+                    int(read.alternatives()),
+                    int(read.refused().len()),
+                ]
+            });
+            *TRACKERS.lock().unwrap_or_else(PoisonError::into_inner) = read.map(Arc::new);
+            int_array(env, &counts)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `Engine.nativeTrackersOf(hosts)`: for each line `host\tport` (a name, or an address as text), the names
+/// of the trackers whose network signature matches it, separated by tabs, one line each, empty for none
+/// or before any table was handed over.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTrackersOf(hosts: String):
+// String`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTrackersOf<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    hosts: JString<'caller>,
+) -> JString<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let hosts = hosts.try_to_string(env)?;
+            let table = TRACKERS
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone();
+            let lines: Vec<String> = hosts
+                .lines()
+                .map(|line| {
+                    let (host, port) = line.split_once('\t').unwrap_or((line, ""));
+                    let port = port.parse().unwrap_or(0);
+                    table.as_ref().map_or_else(String::new, |table| {
+                        let found = table.find(host, port);
+                        let names: Vec<&str> = found
+                            .iter()
+                            .filter_map(|&i| table.trackers().get(i))
+                            .map(|tracker| tracker.name.as_str())
+                            .collect();
+                        names.join("\t")
+                    })
+                })
+                .collect();
+            JString::from_str(env, lines.join("\n"))
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+fn int_array<'local>(
+    env: &mut jni::Env<'local>,
+    values: &[jint],
+) -> Result<JIntArray<'local>, Error> {
+    let array = JIntArray::new(env, values.len())?;
+    array.set_region(env, 0, values)?;
+    Ok(array)
 }
 
 /// `Engine.nativeClearActivity()`: forgets everything the live view holds, in the running engine

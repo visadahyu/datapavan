@@ -1,6 +1,5 @@
 package org.visadahyu.datapavan.datapack
 
-import org.visadahyu.datapavan.core.NativeCore
 import java.security.MessageDigest
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
@@ -8,11 +7,12 @@ import java.util.Locale
 
 /**
  * The datasets of one data pack (ADR 0015 and 0017, docs/DATA-PACKS.md): the files under `data/`
- * in the repository, by path, for example `exodus/trackers.tsv`.
+ * in the repository, by path, for example `exodus/trackers.tsv`. In the shared module since W5's third
+ * part, so that Watch reads the table of trackers from the pack the audit verifies, with the same rules.
  */
-class DataPack internal constructor(
+class DataPack(
     /** The pack as read, which the ranges below point into. */
-    internal val bytes: ByteArray,
+    private val bytes: ByteArray,
     /** Where the signed payload starts in [bytes]; 0 for the APK's bare payload. */
     private val payloadStart: Int,
     /** Raised by one for every published pack. */
@@ -115,14 +115,30 @@ sealed interface PackReading {
     data class Refused(val reason: PackRefusal) : PackReading
 }
 
+/**
+ * The Rust reader of packs, which checks a pack's signature before anything else (core/engine's
+ * `datapack`): the audit's library (`NativeCore`) in the audit's process, Watch's (`Engine`) in Watch's,
+ * both built from the same code.
+ */
+interface PackNative {
+    /**
+     * Checks the signature of [pack] (untrusted input) against [keys], signify public key lines separated by
+     * `\n`, and only then reads its header: the layout [PackReader.decode] reads, or `[code]` for a refused pack.
+     */
+    fun readDataPack(pack: ByteArray, keys: String): IntArray
+
+    /** Reads the header of a bare payload, the app's own data from the APK; as [readDataPack]. */
+    fun readDataPayload(payload: ByteArray): IntArray
+}
+
 /** Reads packs through the Rust engine, which checks a pack's signature before anything else. */
-internal object PackReader {
+object PackReader {
     /** Checks that one of [trusted] signed [pack], then reads it. */
-    fun signed(pack: ByteArray, trusted: List<String>): PackReading =
-        decode(pack, NativeCore.readDataPack(pack, trusted.joinToString("\n")))
+    fun signed(native: PackNative, pack: ByteArray, trusted: List<String>): PackReading =
+        decode(pack, native.readDataPack(pack, trusted.joinToString("\n")))
 
     /** Reads the bare payload from the APK, whose own signature covers it. */
-    fun payload(payload: ByteArray): PackReading = decode(payload, NativeCore.readDataPayload(payload))
+    fun payload(native: PackNative, payload: ByteArray): PackReading = decode(payload, native.readDataPayload(payload))
 
     /**
      * Decodes the engine's layout: `[0, signer, payloadStart, sequence, dateStart, dateLength, k, k ×
@@ -166,7 +182,7 @@ internal object PackReader {
  * that introduced its key, back to a key pinned in the APK. After an app update, an imported pack is
  * kept only while its chain starts at a key the new build still pins and contains no key it revokes.
  */
-internal object DataPackRules {
+object DataPackRules {
     fun trustedKeys(bundled: DataPack, installed: DataPack?): List<String> {
         val revoked = (bundled.revoked + installed?.revoked.orEmpty()).toSet()
         return (bundled.keys + installed?.keys.orEmpty()).distinct().filter { it !in revoked }

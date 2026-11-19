@@ -191,6 +191,7 @@ dependencies = [
 name = "datapavan-watch-jni"
 version = "0.1.0"
 dependencies = [
+ "datapavan-engine",
  "datapavan-net",
  "jni",
  "libc",

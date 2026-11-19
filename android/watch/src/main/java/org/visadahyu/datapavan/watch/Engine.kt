@@ -124,6 +124,29 @@ internal object Engine {
     external fun nativeActivity(): ByteArray
 
     /**
+     * Checks a data pack's signature against [keys] and reads its header, with the same Rust code as the audit
+     * ([org.visadahyu.datapavan.datapack.PackNative]), so that Watch reads the pack the audit verifies.
+     */
+    external fun nativeReadDataPack(pack: ByteArray, keys: String): IntArray
+
+    /** Reads the header of the APK's own data payload; as [nativeReadDataPack]. */
+    external fun nativeReadDataPayload(payload: ByteArray): IntArray
+
+    /**
+     * Reads the εxodus network signatures of the data pack's `exodus/trackers.tsv` ([table]) and keeps them for
+     * [nativeTrackersOf], in place of any before: how many trackers have one, how many alternatives were read
+     * and how many were refused as outside the subset Watch matches; empty for a table that is not one. No
+     * engine needs to run.
+     */
+    external fun nativeTrackers(table: ByteArray): IntArray
+
+    /**
+     * For each line `host<TAB>port` of [hosts] (a name, or an address as text), the names of the trackers whose
+     * network signature matches it, separated by tabs, one line each, empty for none.
+     */
+    external fun nativeTrackersOf(hosts: String): String
+
+    /**
      * Forgets everything the live view holds: every app's bytes in every window, its destinations, the window
      * while the screen was off and the organisations looked up; seconds before now stay out of the view when
      * they are placed later. ADR 0047's profile will call it at each screen-off (W9); for now only debug
@@ -137,4 +160,11 @@ internal object Engine {
      * `dns-name` being the DNS answer's name where it differs from the connection's own; debug builds only.
      */
     external fun nativeFlows(): String
+}
+
+/** Watch's Rust reader of data packs (core/engine's `datapack`, through Watch's own library). */
+internal object WatchPacks : org.visadahyu.datapavan.datapack.PackNative {
+    override fun readDataPack(pack: ByteArray, keys: String): IntArray = Engine.nativeReadDataPack(pack, keys)
+
+    override fun readDataPayload(payload: ByteArray): IntArray = Engine.nativeReadDataPayload(payload)
 }
