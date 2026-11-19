@@ -570,6 +570,7 @@ async fn a_chain_set_during_the_swap_is_the_new_engines() -> Outcome {
     let setting = ChainSetting {
         chain: Some(chain(new_tool.address)),
         uncached_answers: true,
+        tunnels: datapavan_net::TunnelSetting::default(),
     };
     let (_second, tunnel) = set_up_again_with(first, Some(setting))?;
     echoed(&tunnel, echo, b"after").await?;

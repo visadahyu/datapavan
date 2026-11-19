@@ -567,7 +567,7 @@ async fn carry(
     let Some(held) = held else {
         return;
     };
-    if shared.chains_any_app() {
+    if shared.chains_any_app() || shared.tunnels.any() {
         // A chain came on while the socket was made: what waited for it does not leave either. Its
         // app asked before the chain, so it is not answered; its ping finds no reply.
         Counters::add(&shared.counters.echo_refused, held.len() as u64);
@@ -606,7 +606,7 @@ async fn carry(
                     (queued, receive(&socket.socket, buffer, key, target))
                 });
                 // While a chain is on, nothing comes in on the direct path either.
-                if shared.chains_any_app() {
+                if shared.chains_any_app() || shared.tunnels.any() {
                     break;
                 }
                 // What the socket read as the network beneath moved, an error about the old network's

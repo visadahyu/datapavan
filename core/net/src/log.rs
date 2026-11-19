@@ -268,6 +268,7 @@ mod tests {
                 asn: 32934,
                 kind: NetworkKind::Own,
             }),
+            via: crate::engine::Via::Direct,
         }
     }
 

@@ -207,8 +207,10 @@ impl Loop {
                 self.reset(packet, parsed, flags).await;
             }
             // No listener now: refused at once, as Android's stack refuses a SYN no listener takes,
-            // and a listener bound again at once rather than at the end of its pause.
-            Lookup::New(port) if listener.port == 0 => {
+            // and a listener bound again at once rather than at the end of its pause. While any app goes
+            // through a WireGuard tunnel, whose connections need no listener, the route decides first
+            // (`open` refuses a direct one there the same way).
+            Lookup::New(port) if listener.port == 0 && !self.shared.tunnels.any() => {
                 lock(&self.nat).release(port);
                 listening.want();
                 self.reset(packet, parsed, flags).await;
@@ -392,9 +394,22 @@ async fn open(
     pending: Pending,
 ) {
     let (app, destination) = (held.parsed.source, held.parsed.destination);
-    let Some((uid, upstream, _share, via)) = upstream(&shared, app, destination).await else {
+    let Some((uid, upstream, _share, via, tunnel)) = upstream(&shared, app, destination).await
+    else {
         return refused(&held, &shared, &nat);
     };
+    // Through a WireGuard tunnel (W7): no upstream connection, and the SYN never reaches Android's stack.
+    // Its packets go into the tunnel, its own TCP end to end with the server.
+    if let Some(t) = tunnel {
+        lock(&nat).release(held.port);
+        if let Some(answer) =
+            super::tunnels::open_tcp(&shared, (uid, t), (held.packet, held.parsed))
+            && tun.send(&answer).await.is_ok()
+        {
+            Counters::add(&shared.counters.packets_out, 1);
+        }
+        return;
+    }
     // The listener now: one bound anew while the server was asked may be on another port, and none
     // may be bound, which the app then sees as a refusal, and the log records so (third round, nit 2).
     let listening = shared.listener(app.is_ipv4());
@@ -441,6 +456,7 @@ async fn open(
             dns,
             resolver,
             network,
+            via: crate::engine::Via::Direct,
         },
         via.as_deref(),
     );
@@ -541,6 +557,7 @@ async fn upstream(
     io::Result<TcpStream>,
     Option<Place>,
     Option<Arc<super::Chain>>,
+    Option<u32>,
 )> {
     let direct = async {
         match shared.target(destination) {
@@ -549,9 +566,10 @@ async fn upstream(
         }
     };
     let crowded = shared.tcp_waiting.load(Ordering::Acquire) > shared.limits.tcp_share;
-    if shared.chain().is_some() || is_stand_in(destination.ip()) || crowded {
-        // The route waits for the app's name: a chained app's connection must not start directly, nor
-        // one its app's share may refuse.
+    if shared.chain().is_some() || shared.tunnels.any() || is_stand_in(destination.ip()) || crowded
+    {
+        // The route waits for the app's name: a chained or tunnelled app's connection must not start
+        // directly, nor one its app's share may refuse.
         let uid = owner(shared, TCP, app, destination).await;
         let share = shared.tcp_shares.take(uid).ok()?;
         let (upstream, via) = match shared.route(uid, destination) {
@@ -560,9 +578,18 @@ async fn upstream(
                 connect_through(shared, &chain, destination).await,
                 Some(chain),
             ),
+            Route::Tunnel(t) => {
+                return Some((
+                    uid,
+                    Err(io::ErrorKind::Other.into()),
+                    Some(share),
+                    None,
+                    Some(t),
+                ));
+            }
             Route::Refused => (Err(io::ErrorKind::ConnectionRefused.into()), None),
         };
-        return Some((uid, upstream, Some(share), via));
+        return Some((uid, upstream, Some(share), via, None));
     }
     // The server is asked at once, beside Android. One that answered first leaves nothing waiting.
     let mut direct = std::pin::pin!(direct);
@@ -573,10 +600,10 @@ async fn upstream(
         uid = &mut asked => Err(uid),
     };
     match first {
-        Ok(upstream) => Some((asked.await, upstream, None, None)),
+        Ok(upstream) => Some((asked.await, upstream, None, None, None)),
         Err(uid) => {
             let share = shared.tcp_shares.force(uid);
-            Some((uid, direct.await, Some(share), None))
+            Some((uid, direct.await, Some(share), None, None))
         }
     }
 }
@@ -933,6 +960,7 @@ mod tests {
             dns: DnsUse::None,
             resolver: None,
             network: None,
+            via: crate::engine::Via::Direct,
         }) else {
             unreachable!("an open flow is live")
         };

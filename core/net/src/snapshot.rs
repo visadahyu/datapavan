@@ -199,6 +199,7 @@ mod tests {
                 dns: DnsUse::Encrypted,
                 resolver: Some("sample".into()),
                 network: None,
+                via: crate::engine::Via::Direct,
             },
             organisation: Some((
                 Network {

@@ -76,6 +76,7 @@ mod model;
 mod naming;
 mod now;
 mod tcp;
+mod tunnels;
 mod udp;
 mod upstream;
 mod whose;
@@ -90,6 +91,7 @@ use naming::Begun;
 use tcp::{Listening, Pending, listen};
 #[cfg(test)]
 use tcp::{Upstream, accept};
+pub use tunnels::{Configured, TunnelSetting, TunnelState};
 use udp::UdpFlows;
 
 /// The tunnel's addresses (ADR 0041, decision 3): its own address, a /32 or a /128 (ADR 0034: a wider
@@ -480,6 +482,20 @@ pub struct Flow {
     pub resolver: Option<String>,
     /// The network of its address, when the organisation table named it.
     pub network: Option<Network>,
+    /// The way it went: directly, through the user's tool, or through one `WireGuard` configuration.
+    pub via: Via,
+}
+
+/// The way a flow went (W6, W7): its route when it opened, which the log's records and the live view say.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Via {
+    /// Out on the network beneath, from a protected socket.
+    #[default]
+    Direct,
+    /// Through the user's circumvention tool (W6).
+    Tool,
+    /// Through the `WireGuard` configuration of this number (W7, ADR 0035).
+    Tunnel(u32),
 }
 
 /// The network a flow's address is in, when the organisation table named the flow (ADR 0036).
@@ -520,7 +536,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 52;
+pub const COUNTERS: usize = 61;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -577,6 +593,15 @@ pub struct Counters {
     udp_own_relays: AtomicU64,
     udp_own_refused: AtomicU64,
     told_late: AtomicU64,
+    tunnel_up: AtomicU64,
+    tunnel_down: AtomicU64,
+    tunnel_filtered: AtomicU64,
+    tunnel_unmatched: AtomicU64,
+    tunnel_refused: AtomicU64,
+    tunnel_too_big: AtomicU64,
+    tunnel_lost: AtomicU64,
+    tunnel_handshakes: AtomicU64,
+    tunnel_rejected: AtomicU64,
 }
 
 impl Counters {
@@ -644,8 +669,14 @@ impl Counters {
     /// want of a place in the budget, which left it beside the other under unit 9's floor; then (W5's
     /// second part) the seconds, and segments with no count, placed in no state because their state was
     /// told too late: past a flow's window, past their app's share of what waits, or past the bound of
-    /// all (ADR 0046, "How it is built"). None names a destination: they can be read on any phone. New counters are only
-    /// ever appended, so that scripts reading a column by its place keep reading the same one.
+    /// all (ADR 0046, "How it is built"); then (W7, ADR 0035) the apps' packets handed to a `WireGuard` tunnel, and
+    /// the packets from tunnels handed to the apps, those a tunnel decrypted that were dropped because they came
+    /// from outside the peer's `AllowedIPs` or not to the configuration's address, and those dropped because no
+    /// flow a local app started was theirs, the apps' packets refused because their tunnel could not carry them
+    /// (outside `AllowedIPs`, or IPv6 without an IPv6 address), those answered as too big for the tunnel's MTU,
+    /// those lost in a core's queue or for want of a socket, the handshake initiations sent, and the datagrams
+    /// from a server that the core refused. None names a destination: they can be read on any phone. New
+    /// counters are only ever appended, so that scripts reading a column by its place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
         self.each().map(|c| c.load(Ordering::Relaxed))
@@ -716,6 +747,15 @@ impl Counters {
             &self.udp_own_relays,
             &self.udp_own_refused,
             &self.told_late,
+            &self.tunnel_up,
+            &self.tunnel_down,
+            &self.tunnel_filtered,
+            &self.tunnel_unmatched,
+            &self.tunnel_refused,
+            &self.tunnel_too_big,
+            &self.tunnel_lost,
+            &self.tunnel_handshakes,
+            &self.tunnel_rejected,
         ]
     }
 }
@@ -731,6 +771,8 @@ pub struct ChainSetting {
     pub chain: Option<Chain>,
     /// Whether the answers of the tunnel's DNS address go to the apps with a time to live of 0.
     pub uncached_answers: bool,
+    /// The `WireGuard` tunnels and the apps sent through them (W7), as set last ([`Engine::tunnels`]).
+    pub tunnels: TunnelSetting,
 }
 
 /// What an engine hands the next when the tunnel is set up again (ADR 0044, decision 5 as amended): what
@@ -750,6 +792,8 @@ pub struct Handover {
     counters: [u64; COUNTERS],
     /// The states told and the segments that wait for theirs (`activity`).
     activity: activity::Activity,
+    /// The `WireGuard` tunnels and their routes, set anew in the next engine: its tunnels begin new sessions.
+    tunnels: TunnelSetting,
 }
 
 /// What the engine's thread and its controller share.
@@ -842,6 +886,8 @@ struct Shared {
     tool_answers: Mutex<DnsCache>,
     /// The connections to those resolvers through the tool, kept open between questions.
     kept: Mutex<Vec<kept::Kept>>,
+    /// The `WireGuard` tunnels, their routes and their flows (W7).
+    tunnels: tunnels::Tunnels,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -918,6 +964,7 @@ impl Engine {
     ///
     /// # Errors
     /// When the thread or its event loop cannot be made.
+    #[allow(clippy::too_many_lines)]
     pub fn start_with(
         fd: OwnedFd,
         config: Config,
@@ -934,6 +981,7 @@ impl Engine {
             names,
             counters,
             mut activity,
+            mut tunnels,
         } = handover.unwrap_or_else(|| Handover {
             chain: None,
             upstream_dns: None,
@@ -942,11 +990,13 @@ impl Engine {
             names: Names::default(),
             counters: [0; COUNTERS],
             activity: activity::Activity::new(tracks),
+            tunnels: TunnelSetting::default(),
         });
         let waiting = activity::Waiting::of_held(&activity.held);
         if let Some(setting) = setting {
             chain = setting.chain.map(Arc::new);
             uncached_answers = setting.uncached_answers;
+            tunnels = setting.tunnels;
         }
         let clock = platform.clock();
         // The live view counts from now on; a handed-over view keeps the moment its first engine began.
@@ -994,7 +1044,13 @@ impl Engine {
             direct_answers: Mutex::default(),
             tool_answers: Mutex::default(),
             kept: Mutex::default(),
+            tunnels: tunnels::Tunnels::default(),
         });
+        // In place before the thread reads its first packet: a tunnelled app's first SYN never goes directly.
+        shared.tunnels.set(&tunnels, &shared);
+        if shared.tunnels.any() {
+            shared.uncached_answers.store(true, Ordering::Relaxed);
+        }
         // What the engine before held may name chained apps' destinations that the chain set now leaves out.
         shared.hide_chained();
         let (stop, stopped) = watch::channel(false);
@@ -1088,6 +1144,7 @@ impl Engine {
                 &mut *lock(&shared.activity),
                 activity::Activity::new(tracks),
             ),
+            tunnels: shared.tunnels.setting(),
         }
     }
 
@@ -1112,7 +1169,7 @@ impl Engine {
     /// 1); one through the same tool, reached the same way, stays. While a chain is on, every answer
     /// of Watch's DNS address reaches the apps with a time to live of 0 (ADR 0038).
     pub fn chain(&self, chain: Option<Chain>) {
-        let on = chain.is_some();
+        let on = chain.is_some() || self.shared.tunnels.any();
         *lock(&self.shared.chain) = chain.map(Arc::new);
         // After the chain itself: a mapping that reads the new count reads the new chain too.
         self.shared.chains.fetch_add(1, Ordering::Release);
@@ -1124,6 +1181,27 @@ impl Engine {
         lock(&self.shared.kept).clear();
         // What the new chain leaves out of the log leaves "Now" too, at once (ADR 0046, decision 6, item 5).
         self.shared.hide_chained();
+    }
+
+    /// Sets the `WireGuard` tunnels and the apps sent through them (W7, ADR 0035): each app's new flows follow
+    /// its route from now on; an app whose tunnel changed has its UDP flows end at once, so that its next
+    /// datagram takes its new route, and keeps its TCP connections' way, as the chain does. A tunnel whose
+    /// configuration is the same keeps its session. While any app goes through a tunnel, every answer of
+    /// Watch's DNS address reaches the apps with a time to live of 0 (ADR 0035, question 4).
+    pub fn tunnels(&self, setting: &TunnelSetting) {
+        self.shared.tunnels.set(setting, &self.shared);
+        // As after a chain set anew: a UDP mapping or flow of lookups asks again whether its way still holds.
+        self.shared.chains.fetch_add(1, Ordering::Release);
+        let on = self.shared.tunnels.any() || self.shared.chain().is_some();
+        self.shared.uncached_answers.store(on, Ordering::Relaxed);
+        lock(&self.shared.direct_answers).clear();
+        self.shared.hide_chained();
+    }
+
+    /// Each tunnel's state, in the order set: no key, no address, no endpoint.
+    #[must_use]
+    pub fn tunnel_states(&self) -> Vec<TunnelState> {
+        self.shared.tunnels.states()
     }
 
     /// Whether the answers of Watch's own DNS address reach the apps with a time to live of 0, so that
@@ -1248,8 +1326,10 @@ async fn run(
         &nat,
     );
     let limits = shared.limits;
+    let tun = Arc::new(tun);
+    shared.tunnels.attach(&tun, &changes);
     let state = Loop {
-        tun: Arc::new(tun),
+        tun,
         shared,
         nat,
         pending,
@@ -1274,6 +1354,8 @@ async fn run(
     // From here a logger is there to answer a flush.
     lock(&state.shared.flushes).logging = true;
     let logging = tokio::spawn(logger(Arc::clone(&state.shared), logging_ends));
+    // A tunnel that keeps itself alive starts at once.
+    state.tunnels_changed();
     loop {
         // Polled in this order, not at random: a stop, then a new tunnel, which their callers wait for,
         // before another batch of reads. What is still queued on the old tunnel is then read by
@@ -1282,6 +1364,7 @@ async fn run(
             biased;
             _ = stop.changed() => break,
             Some(swap) = swaps.recv() => state.take_tunnel(swap, &mut buffer).await,
+            () = state.shared.tunnels.changed.notified() => state.tunnels_changed(),
             read = state.tun.recv(&mut buffer) => {
                 let Ok(n) = read else { break };
                 if n == 0 {
@@ -1289,6 +1372,7 @@ async fn run(
                 }
                 if swept.elapsed() > state.shared.limits.sweep_every {
                     state.sweep();
+                    state.sweep_tunnels();
                     // An app's own tables of names, once every name in them has expired.
                     lock(&state.shared.names).forget_expired(Instant::now());
                     let dropped = lock(&state.fragments).sweep(Instant::now());
@@ -1362,21 +1446,38 @@ impl Loop {
                 if let Some(mut whole) = whole {
                     Counters::add(&self.shared.counters.reassembled, 1);
                     let parsed = packet::parse(&whole);
-                    self.forward(&mut whole, parsed).await;
+                    self.forward(&mut whole, parsed, true).await;
                 }
             }
-            parsed => self.forward(packet, parsed).await,
+            parsed => self.forward(packet, parsed, false).await,
         }
     }
 
-    /// One whole packet, as `parse` read it: TCP, UDP, an echo request, or skipped.
-    async fn forward(&self, packet: &mut [u8], parsed: Result<packet::Packet, Skip>) {
+    /// One whole packet, as `parse` read it: TCP, UDP, an echo request, or skipped; `reassembled` when the
+    /// engine put it together from the app's fragments. A packet of a tunnelled flow goes into its tunnel.
+    async fn forward(
+        &self,
+        packet: &mut [u8],
+        parsed: Result<packet::Packet, Skip>,
+        reassembled: bool,
+    ) {
+        if let Ok(parsed) = &parsed
+            && self
+                .tunnelled(&mut packet[..parsed.length], parsed, reassembled)
+                .await
+        {
+            return;
+        }
         match parsed {
             Ok(parsed) if parsed.protocol == TCP => {
                 self.tcp(&mut packet[..parsed.length], &parsed).await;
             }
             Ok(parsed) => self.udp(&packet[..parsed.length], &parsed).await,
             Err(Skip::Other(packet::ICMP | packet::ICMPV6)) => match packet::echo_request(packet) {
+                Ok(request) if self.shared.tunnels.any() => {
+                    self.tunnel_echo(&mut packet[..request.length], &request)
+                        .await;
+                }
                 Ok(request) => self.echo(&packet[..request.length], &request).await,
                 // Any other ICMP an app sends, as its kernel's errors, stays skipped.
                 Err(_) => Counters::add(&self.shared.counters.skipped, 1),
@@ -1592,6 +1693,7 @@ mod tests {
             direct_answers: Mutex::default(),
             tool_answers: Mutex::default(),
             kept: Mutex::default(),
+            tunnels: tunnels::Tunnels::default(),
         }
     }
 
@@ -1629,6 +1731,7 @@ mod tests {
             dns,
             resolver,
             network,
+            via: crate::engine::Via::Direct,
         });
         Opened {
             id,
@@ -2029,6 +2132,7 @@ mod tests {
             dns: DnsUse::None,
             resolver: None,
             network: None,
+            via: crate::engine::Via::Direct,
         };
         let server = SocketAddr::from(([198, 51, 100, 9], 443));
         let Some(bytes) = shared.record(flow(1, server, Outcome::Opened)) else {
@@ -3504,6 +3608,7 @@ mod tests {
             dns: DnsUse::None,
             resolver: None,
             network: None,
+            via: crate::engine::Via::Direct,
         }) else {
             unreachable!("an open flow is live")
         };

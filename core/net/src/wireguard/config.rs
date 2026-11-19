@@ -250,13 +250,20 @@ impl Config {
     /// to reach it from; else the first it can reach from either.
     #[must_use]
     pub fn dns_like(&self, address: IpAddr) -> Option<IpAddr> {
-        let reachable = |dns: &&IpAddr| self.addresses.like(**dns).is_some();
+        let reachable = |dns: &&IpAddr| self.reaches(**dns);
         self.dns
             .iter()
             .filter(reachable)
             .find(|dns| dns.is_ipv4() == address.is_ipv4())
             .or_else(|| self.dns.iter().find(reachable))
             .copied()
+    }
+
+    /// Whether a DNS server at `dns` can be reached through the tunnel: the configuration has an address of
+    /// its version, and it is inside the peer's `AllowedIPs`, so that its answers pass the back path.
+    #[must_use]
+    pub fn reaches(&self, dns: IpAddr) -> bool {
+        self.addresses.like(dns).is_some() && self.peer.allows(dns)
     }
 
     /// Reads a configuration from `text`.
@@ -344,7 +351,8 @@ pub enum Refusal {
     /// No `DNS`: its names would have nowhere private to go (ADR 0035, question 9; W8 routes them to the
     /// user's own encrypted resolver instead).
     NoDns,
-    /// DNS servers only of a version the configuration has no address of.
+    /// No DNS server the tunnel reaches: none of a version the configuration has an address of and inside
+    /// the peer's `AllowedIPs`, whose answers alone pass the way back.
     DnsUnreachable,
     /// No `PublicKey`.
     NoPublicKey,
@@ -648,9 +656,6 @@ fn finish(read: Read) -> Result<Config, Refusal> {
     if read.dns.is_empty() {
         return Err(Refusal::NoDns);
     }
-    if !read.dns.iter().any(|dns| addresses.like(*dns).is_some()) {
-        return Err(Refusal::DnsUnreachable);
-    }
     if let Some(mtu) = read.mtu
         && (!MTU_RANGE.contains(&mtu) || (addresses.v6.is_some() && mtu < 1_280))
     {
@@ -664,6 +669,13 @@ fn finish(read: Read) -> Result<Config, Refusal> {
         .any(|n| addresses.like(n.address).is_some())
     {
         return Err(Refusal::NoAllowedIps);
+    }
+    // Its names go through the tunnel, and their answers come back only from inside `AllowedIPs`.
+    let reachable = |dns: &IpAddr| {
+        addresses.like(*dns).is_some() && read.allowed_ips.iter().any(|n| n.contains(*dns))
+    };
+    if !read.dns.iter().any(reachable) {
+        return Err(Refusal::DnsUnreachable);
     }
     Ok(Config {
         private_key,
@@ -915,7 +927,9 @@ mod tests {
 
     #[test]
     fn allowed_ips_are_masked_and_a_narrower_set_is_kept() {
-        let text = proton_like().replace("0.0.0.0/0", "10.77.0.9/24, 192.0.2.1");
+        let text = proton_like()
+            .replace("0.0.0.0/0", "10.77.0.9/24, 192.0.2.1")
+            .replace("DNS = 10.2.0.1", "DNS = 10.77.0.1");
         let Ok(config) = Config::parse(text.as_bytes()) else {
             unreachable!("refused")
         };
@@ -1182,6 +1196,10 @@ mod tests {
                 Refusal::DnsUnreachable,
             ),
             (
+                base.replace("0.0.0.0/0", "192.0.2.0/24"),
+                Refusal::DnsUnreachable,
+            ),
+            (
                 base.replace("DNS = 10.2.0.1", "DNS = 10.2.0.1\nMTU = 575"),
                 Refusal::BadMtu,
             ),
@@ -1281,7 +1299,8 @@ mod tests {
     fn the_dns_server_is_the_one_of_the_querys_version_where_there_is_one() {
         let text = proton_like()
             .replace("10.2.0.2/32", "10.2.0.2/32, fd00::2/128")
-            .replace("DNS = 10.2.0.1", "DNS = 2001:db8::53, 10.2.0.1, 192.0.2.53");
+            .replace("DNS = 10.2.0.1", "DNS = 2001:db8::53, 10.2.0.1, 192.0.2.53")
+            .replace("0.0.0.0/0", "0.0.0.0/0, ::/0");
         let Ok(config) = Config::parse(text.as_bytes()) else {
             unreachable!("refused")
         };

@@ -262,7 +262,8 @@ impl Exit {
         match route {
             Route::Direct => Some(Self::Direct),
             Route::Tool(chain) if chain.udp => Some(Self::Tool(chain)),
-            Route::Tool(_) | Route::Refused => None,
+            // A tunnelled app's UDP leaves by its tunnel, never by a mapping (`into_tunnel`).
+            Route::Tool(_) | Route::Tunnel(_) | Route::Refused => None,
         }
     }
 
@@ -3331,7 +3332,11 @@ async fn open_mapped(key: (SocketAddr, SocketAddr), uid: Option<u32>, context: C
     loop {
         // Read before the route, so that a chain set meanwhile makes the mapping ask again.
         let chains = shared.chains.load(Ordering::Acquire);
-        let Some(exit) = Exit::of(shared.route(uid, destination)) else {
+        let route = shared.route(uid, destination);
+        if let Route::Tunnel(t) = route {
+            return into_tunnel(key, uid, t, context).await;
+        }
+        let Some(exit) = Exit::of(route) else {
             // A flow whose app Android cannot name while a chain is on, a stand-in outside the chain,
             // or a chained app's UDP through a tool without UDP (VPN.md).
             let (_, mut flow) = begin_udp(shared, app, destination, uid);
@@ -3343,6 +3348,32 @@ async fn open_mapped(key: (SocketAddr, SocketAddr), uid: Option<u32>, context: C
         if let Made::Done = open_peer(key, wanted, context).await {
             return;
         }
+    }
+}
+
+/// What the rule says the app `uid` sent to `key`'s destination, whose app goes through the tunnel `t`
+/// (W7): it goes into the tunnel, and the destination's flow with it ([`super::tunnels::open_udp`]); those
+/// the rule drops are dropped and counted, and another app's wait on. Nothing awaits between the sorting
+/// and the flow being noted, so that no datagram the app sends meanwhile overtakes those that waited.
+async fn into_tunnel(
+    key: (SocketAddr, SocketAddr),
+    uid: Option<u32>,
+    t: u32,
+    (tun, shared, flows, _): Context<'_>,
+) {
+    let waiting: Vec<Vec<u8>> = {
+        let mut table = lock(flows);
+        let settled = table.settle(key, uid, shared.limits.udp_reask);
+        table.forget(key.0);
+        count_drops(shared, settled.drops());
+        settled
+            .leave
+            .into_iter()
+            .map(|waiter| waiter.item)
+            .collect()
+    };
+    if !waiting.is_empty() {
+        super::tunnels::open_udp(shared, tun, (key, uid, t), waiting).await;
     }
 }
 
@@ -4568,6 +4599,7 @@ fn told_to(
 /// the rule says the app sent go by it; those it drops are dropped and counted; from the first of
 /// another app's, or undecided, all wait on, and the flow then gives way at once, still handing the app
 /// the answers it owes. It opens only for the app the newest answer about the socket names.
+#[allow(clippy::too_many_lines)]
 async fn open_lookups(
     key: (SocketAddr, SocketAddr),
     uid: Option<u32>,
@@ -4577,6 +4609,11 @@ async fn open_lookups(
     // Read before the route, so that a chain set meanwhile is seen below.
     let chains = shared.chains.load(Ordering::Acquire);
     let route = shared.route(uid, destination);
+    // A tunnelled app's lookups go to its configuration's DNS server through its tunnel (W7).
+    if let Route::Tunnel(t) = route {
+        into_tunnel(key, uid, t, (tun, shared, flows, changes)).await;
+        return Made::Done;
+    }
     // On the direct path a flow of lookups holds a socket of its own, and so a place in the budget, for
     // as long as it waits for answers; a chained app's lookups, which Watch answers, hold none.
     let place = if let Route::Direct = route {
@@ -4760,7 +4797,7 @@ async fn way_for(
             None => Err(io::ErrorKind::NetworkUnreachable.into()),
         },
         Route::Tool(chain) => Ok(UdpWay::Lookups(chain)),
-        Route::Refused => Err(io::ErrorKind::HostUnreachable.into()),
+        Route::Tunnel(_) | Route::Refused => Err(io::ErrorKind::HostUnreachable.into()),
     }
 }
 
@@ -4826,6 +4863,7 @@ fn begin_udp(
         dns,
         resolver,
         network,
+        via: crate::engine::Via::Direct,
     };
     (opened, flow)
 }

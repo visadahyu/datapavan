@@ -70,9 +70,9 @@ pub enum Timers {
     Idle,
     /// A datagram for the server: a handshake retry, a rekey, a keepalive.
     Send(Vec<u8>),
-    /// The handshake gave up, or every key expired: no session, nothing queued. The next packet begins
-    /// anew.
-    Expired,
+    /// The handshake gave up, or every key expired: no session, and the packets that waited for it, as
+    /// many as this says, are lost. The next packet begins anew.
+    Expired(usize),
 }
 
 /// A `WireGuard` protocol core for one peer.
@@ -232,10 +232,7 @@ impl Core for GotaTun {
         match self.tunn.update_timers() {
             Ok(Some(datagram)) => Timers::Send(bytes_of(datagram)),
             Ok(None) => Timers::Idle,
-            Err(_) => {
-                self.queued = 0;
-                Timers::Expired
-            }
+            Err(_) => Timers::Expired(std::mem::take(&mut self.queued)),
         }
     }
 

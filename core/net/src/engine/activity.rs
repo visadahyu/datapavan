@@ -1093,6 +1093,7 @@ pub(super) mod tests {
             dns: DnsUse::None,
             resolver: None,
             network: None,
+            via: crate::engine::Via::Direct,
         }
     }
 
@@ -1936,6 +1937,8 @@ pub(super) mod tests {
     /// app's, and each is counted (review b1 of W5's second part, engine, finding 2).
     #[test]
     fn seconds_past_an_apps_share_are_its_own_told_too_late() {
+        // The place of `told_late` in the counters, the last before W7's appended theirs.
+        const TOLD_LATE: usize = 51;
         let (shared, clock, _) = telling_at(T);
         let other = open_of(&shared, 1, UID + 1);
         let flood: Vec<_> = (2..=201).map(|id| open_of(&shared, id, UID)).collect();
@@ -1955,10 +1958,7 @@ pub(super) mod tests {
             "another app's seconds were told too late"
         );
         assert_eq!(lock(&other.marks).len(), 100);
-        assert!(
-            shared.counters.snapshot()[super::super::COUNTERS - 1] > 0,
-            "not counted"
-        );
+        assert!(shared.counters.snapshot()[TOLD_LATE] > 0, "not counted");
     }
 
     /// Exactly an app's share is kept.
@@ -2493,6 +2493,7 @@ pub(super) mod tests {
                 log_destinations: false,
             }),
             uncached_answers: false,
+            tunnels: super::super::TunnelSetting::default(),
         };
         let (mut engine, _app) = start(platform(), Some(handover), Some(setting))?;
         // No destination; and not through the tool, which that flow never went through (review b2, N3).

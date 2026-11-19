@@ -53,6 +53,8 @@ pub(super) enum Route {
     Direct,
     /// Through the tool's proxy.
     Tool(Arc<Chain>),
+    /// Through the `WireGuard` tunnel of this number (W7).
+    Tunnel(u32),
     /// Nowhere: the app gets a reset or an ICMP error.
     Refused,
 }
@@ -67,7 +69,11 @@ impl Shared {
     /// the tool: from any other app, it can only be one left over from a chain that ended.
     pub(super) fn route(&self, uid: Option<u32>, destination: SocketAddr) -> Route {
         match self.app_route(uid) {
-            Route::Direct if is_stand_in(destination.ip()) => Route::Refused,
+            Route::Direct | Route::Tunnel(_) if is_stand_in(destination.ip()) => Route::Refused,
+            // "Local network directly" (W7, ADR 0035, question 8): a tunnelled app's printer or NAS.
+            Route::Tunnel(t) if self.tunnels.local_directly(t, destination.ip(), self) => {
+                Route::Direct
+            }
             route => route,
         }
     }
@@ -81,8 +87,14 @@ impl Shared {
             .is_some_and(|chain| chain.apps.as_ref().is_none_or(|apps| !apps.is_empty()))
     }
 
-    /// Where the flows of the app `uid` go, to any address but a stand-in.
+    /// Where the flows of the app `uid` go, to any address but a stand-in. An app sent through a tunnel
+    /// goes there, whatever the chain says (each app has one route, W7); and while any app goes through a
+    /// tunnel, a flow whose app Android cannot name goes through the default one, never directly (ADR 0035,
+    /// question 7 as settled).
     pub(super) fn app_route(&self, uid: Option<u32>) -> Route {
+        if let Some(t) = self.tunnels.route_of(uid) {
+            return Route::Tunnel(t);
+        }
         let Some(chain) = self.chain() else {
             return Route::Direct;
         };
@@ -101,16 +113,23 @@ impl Shared {
     /// 2026-11-19), unless the user asked for chained destinations. The flow is still counted, with its app
     /// and bytes.
     pub(super) fn hides(&self, uid: Option<u32>, destination: SocketAddr) -> bool {
-        matches!(self.route(uid, destination), Route::Tool(chain) if !chain.log_destinations)
-            || self.hides_tool(uid)
+        match self.route(uid, destination) {
+            Route::Tool(chain) => !chain.log_destinations || self.hides_tool(uid),
+            // A tunnelled app's, as a chained app's, and the switch is the same (ADR 0035, routes).
+            Route::Tunnel(_) => !self.tunnels.logs_destinations() || self.hides_tool(uid),
+            Route::Direct | Route::Refused => self.hides_tool(uid),
+        }
     }
 
     /// Whether the app `uid` goes through the tool with its destinations left out, or is the tool itself
     /// with them left out: what the live view keeps of it is its bytes, with no destination (ADR 0046,
     /// decision 6, item 5, and decision 3's tool row).
     pub(super) fn hides_app(&self, uid: Option<u32>) -> bool {
-        matches!(self.app_route(uid), Route::Tool(chain) if !chain.log_destinations)
-            || self.hides_tool(uid)
+        match self.app_route(uid) {
+            Route::Tool(chain) => !chain.log_destinations || self.hides_tool(uid),
+            Route::Tunnel(_) => !self.tunnels.logs_destinations() || self.hides_tool(uid),
+            Route::Direct | Route::Refused => self.hides_tool(uid),
+        }
     }
 
     /// Whether `uid` is the user's tool and "Log where these apps connect" is off: its own flows, to its
@@ -308,6 +327,7 @@ mod tests {
             dns: DnsUse::None,
             resolver: None,
             network: None,
+            via: crate::engine::Via::Direct,
         };
         assert!(shared.record(flow(1, CHAINED)).is_some(), "still counted");
         assert!(shared.record(flow(2, DIRECT)).is_some());
@@ -353,6 +373,7 @@ mod tests {
             dns: DnsUse::None,
             resolver: None,
             network: None,
+            via: crate::engine::Via::Direct,
         };
         let hello = crate::tls::Hello {
             name: "other.example".into(),
@@ -421,6 +442,7 @@ mod tests {
                     dns: DnsUse::Encrypted,
                     resolver: Some("sample".into()),
                     network: None,
+                    via: crate::engine::Via::Direct,
                 })
                 .is_some()
         );

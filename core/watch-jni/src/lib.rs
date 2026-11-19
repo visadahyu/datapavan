@@ -62,9 +62,11 @@ fn setting() -> MutexGuard<'static, Option<ChainSetting>> {
 fn set_chain(chain: Option<Chain>) -> bool {
     let mut set = setting();
     let on = chain.is_some();
+    let tunnels = set.as_ref().map(|s| s.tunnels.clone()).unwrap_or_default();
     *set = Some(ChainSetting {
         chain: chain.clone(),
         uncached_answers: on,
+        tunnels,
     });
     match engine().as_ref() {
         Some(running) => {
@@ -829,6 +831,7 @@ mod tests {
             dns: DnsUse::None,
             resolver: None,
             network: None,
+            via: datapavan_net::Via::Direct,
         };
         assert_eq!(
             flow_line(&flow),

@@ -393,7 +393,9 @@ impl Shared {
     pub(super) fn record(&self, flow: Flow) -> Option<Arc<FlowBytes>> {
         let via = match self.route(flow.uid, flow.destination) {
             super::chain::Route::Tool(chain) => Some(chain),
-            super::chain::Route::Direct | super::chain::Route::Refused => None,
+            super::chain::Route::Direct
+            | super::chain::Route::Tunnel(_)
+            | super::chain::Route::Refused => None,
         };
         self.record_via(flow, via.as_deref())
     }
@@ -850,6 +852,7 @@ mod tests {
             dns: DnsUse::None,
             resolver: None,
             network: None,
+            via: crate::engine::Via::Direct,
         }
     }
 
