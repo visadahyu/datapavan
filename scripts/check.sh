@@ -160,6 +160,10 @@ android_gates() {
     echo "== Android: plain English strings (scripts/plain-language.py)"
     python3 -I "$ROOT/scripts/plain-language.py" "$ROOT/android/app/src/main/res/values/strings.xml"
     python3 -I "$ROOT/scripts/plain-language.py" "$ROOT/android/watch/src/main/res/values/strings.xml"
+    # Strings in English only until ADR 0030's translation and review moves them into strings.xml.
+    for pending in "$ROOT"/android/*/src/main/res/values/strings_untranslated.xml; do
+        [ ! -f "$pending" ] || python3 -I "$ROOT/scripts/plain-language.py" "$pending"
+    done
     echo "== Android: Watch's colours are the audit app's (watch/.../ui/Theme.kt)"
     diff <(grep -o 'Color(0x[0-9A-F]*)' "$ROOT/android/app/src/main/java/org/visadahyu/datapavan/ui/Theme.kt") \
         <(grep -o 'Color(0x[0-9A-F]*)' "$ROOT/android/watch/src/main/java/org/visadahyu/datapavan/watch/ui/Theme.kt")

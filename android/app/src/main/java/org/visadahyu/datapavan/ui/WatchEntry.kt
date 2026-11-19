@@ -42,3 +42,21 @@ internal fun WatchEntry() {
 
 /** Watch's screen, in the :watch library. */
 private const val WATCH_SCREEN = "org.visadahyu.datapavan.watch.MainActivity"
+
+/**
+ * Datapavan Advanced only: from the audit's page of an app, Watch's view "Now" for that app (ADR 0046, decision
+ * 2 (d)), which says what it sent and whether the user was using it. Opened by class name with the app's package
+ * name and nothing else, as [WatchEntry] opens Watch's screen.
+ */
+@Composable
+internal fun WatchNowEntry(packageName: String) {
+    val context = LocalContext.current
+    OutlinedButton(
+        onClick = { context.startActivity(Intent().setClassName(context, WATCH_NOW).putExtra(WATCH_NOW_PACKAGE, packageName)) },
+        modifier = Modifier.padding(vertical = 8.dp).testTag("open-watch-now"),
+    ) { Text(stringResource(R.string.watch_now_open)) }
+}
+
+/** Watch's view "Now", in the :watch library, and the one extra it reads: a package name. */
+private const val WATCH_NOW = "org.visadahyu.datapavan.watch.NowActivity"
+private const val WATCH_NOW_PACKAGE = "package"

@@ -77,6 +77,17 @@
             android:launchMode="singleTop"
             android:theme="@style/Theme.Watch" />
 
+        <!--
+            "Now" and each app's history (ADR 0046, decision 2 (d)), in Watch's process: opened from Watch's
+            screen, and from the audit's page of an app with a package name and nothing else. Not exported;
+            W9's summary and tile open it the same way.
+        -->
+        <activity
+            android:name=".NowActivity"
+            android:exported="false"
+            android:process=":watch"
+            android:theme="@style/Theme.Watch" />
+
         <!-- Only Android may bind to it (BIND_VPN_SERVICE). -->
         <service
             android:name=".WatchVpnService"

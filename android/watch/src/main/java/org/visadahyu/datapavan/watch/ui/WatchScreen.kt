@@ -66,6 +66,7 @@ internal fun WatchScreen(
     choices: List<AppChoice>,
     onLoadApps: () -> Unit,
     onLeaveOut: (String, Boolean) -> Unit,
+    onNow: () -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -93,6 +94,8 @@ internal fun WatchScreen(
             } else {
                 Button(onClick = onStart) { Text(stringResource(R.string.turn_on)) }
             }
+            // "Now" (ADR 0046, decision 2 (d)): what apps sent, and whether the user was using them.
+            OutlinedButton(onClick = onNow) { Text(stringResource(R.string.now_open)) }
             if (running && privateDns != null && privateDns != PrivateDns.Plain) {
                 PrivateDnsNote(privateDns)
             }

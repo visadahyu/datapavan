@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    W5, part 3 (ADR 0046): the audit's strings for Watch's view "Now", in English only. They are translated
+    into the seven other languages after the review, by ADR 0030's process, and then move into strings.xml,
+    which scripts/check-translations.py reads and holds to every language. Until then this file is held to
+    the plain-language gate (scripts/check.sh), and lint's check for missing translations is lifted for it
+    alone. A release needs it empty (RELEASE.md).
+-->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <!-- Datapavan Advanced, on an app's page: opens Watch's view "Now" for that app. -->
+    <string name="watch_now_open">See what this app sends now</string>
+</resources>

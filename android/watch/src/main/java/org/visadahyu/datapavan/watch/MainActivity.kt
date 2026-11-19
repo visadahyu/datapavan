@@ -99,6 +99,7 @@ class MainActivity : ComponentActivity() {
                     choices = chain.value.choices,
                     onLoadApps = { if (chain.value.choices.isEmpty()) loadChoices() },
                     onLeaveOut = ::leaveOut,
+                    onNow = { startActivity(NowActivity.intent(this)) },
                 )
             }
         }
@@ -110,6 +111,19 @@ class MainActivity : ComponentActivity() {
             requestStart()
         }
         if (debuggable && intent.getBooleanExtra(EXTRA_STOP, false)) stopTunnel()
+        if (debuggable) openNow(intent)
+    }
+
+    /**
+     * Debug builds only: the emulator checks open "Now" through this screen, which debug builds export, with
+     * `now` true and, for one app, `now_package`; the screenshot switch goes along.
+     */
+    private fun openNow(intent: Intent) {
+        if (!intent.getBooleanExtra(EXTRA_NOW, false)) return
+        startActivity(
+            NowActivity.intent(this, intent.getStringExtra(EXTRA_NOW_PACKAGE))
+                .putExtra(NowActivity.EXTRA_SCREENSHOTS, intent.getBooleanExtra(EXTRA_SCREENSHOTS, false)),
+        )
     }
 
     /** The screen opens: the log deletes what retention no longer keeps, whether or not traffic flows. */
@@ -259,6 +273,7 @@ class MainActivity : ComponentActivity() {
             requestStart()
         }
         if (intent.getBooleanExtra(EXTRA_STOP, false)) stopTunnel()
+        openNow(intent)
     }
 
     /** Asks for Android's VPN consent the first time, then starts the tunnel. */
@@ -295,5 +310,9 @@ class MainActivity : ComponentActivity() {
 
         /** Debug builds: stop the tunnel, so that the engine hands its last records to the log (scripts/verify-log.sh). */
         const val EXTRA_STOP = "stop"
+
+        /** Debug builds: open "Now" (scripts/verify-activity.sh), for the app [EXTRA_NOW_PACKAGE] names if given. */
+        const val EXTRA_NOW = "now"
+        const val EXTRA_NOW_PACKAGE = "now_package"
     }
 }

@@ -63,6 +63,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
+import org.visadahyu.datapavan.BuildConfig
 import org.visadahyu.datapavan.R
 import org.visadahyu.datapavan.audit.AppCollector
 import org.visadahyu.datapavan.audit.AppFacts
@@ -629,7 +630,11 @@ private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<
             }
         }
         item { GroupHeader(DetailGroup.NETWORK, DetailGroup.NETWORK.name in open, toggle) }
-        if (DetailGroup.NETWORK.name in open) item { usage() }
+        if (DetailGroup.NETWORK.name in open) {
+            item { usage() }
+            // Datapavan Advanced: what this app sends now, and whether the user was using it (ADR 0046).
+            if (BuildConfig.ADVANCED) item { WatchNowEntry(app.packageName) }
+        }
         if (signature != null || showKeys) {
             item { GroupHeader(DetailGroup.SIGNATURE, DetailGroup.SIGNATURE.name in open, toggle) }
             if (DetailGroup.SIGNATURE.name in open) {
