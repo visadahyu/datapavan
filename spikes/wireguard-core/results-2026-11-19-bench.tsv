@@ -1,0 +1,28 @@
+# spikes/wireguard-core/bench (cd599ec), 2026-11-19. Development machine: AMD Ryzen 9 7900X, core 5 (its sibling idle), Linux 7.3, other sessions' load about 3.
+# round	backend	arch	core	size	encap_ns	decap_ns	both_ns	ms_per_MB	cpu_over_wall	packets
+1	ring	x86_64	5	1280	532	561	1093	0.854	1.00	2278144
+1	ring	x86_64	5	1420	608	577	1185	0.835	1.00	2061568
+1	aws-lc-rs	x86_64	5	1280	555	579	1134	0.886	1.00	2199296
+1	aws-lc-rs	x86_64	5	1420	606	570	1176	0.828	1.00	2084096
+2	ring	x86_64	5	1280	533	563	1096	0.856	1.00	2271232
+2	ring	x86_64	5	1420	598	567	1165	0.820	1.00	2098432
+2	aws-lc-rs	x86_64	5	1280	542	569	1111	0.868	1.00	2249472
+2	aws-lc-rs	x86_64	5	1420	606	569	1175	0.827	1.00	2087680
+3	ring	x86_64	5	1280	531	561	1092	0.853	1.00	2280192
+3	ring	x86_64	5	1420	597	566	1163	0.819	1.00	2101504
+3	aws-lc-rs	x86_64	5	1280	543	569	1112	0.869	1.00	2246400
+3	aws-lc-rs	x86_64	5	1420	626	583	1209	0.851	1.00	2039040
+# Emulator: bench-on-device.sh 3 on dp-api30 (Android 11, x86_64, 4 vCPUs pinned to host cores 10, 11 and their siblings).
+device	android	abi	round	backend	arch	core	size	encap_ns	decap_ns	both_ns	ms_per_MB	cpu_over_wall	packets
+sdk_gphone_x86_64	11	x86_64	1	ring	x86_64	0	1280	921	919	1840	1.438	1.00	1601024
+sdk_gphone_x86_64	11	x86_64	1	ring	x86_64	0	1420	1035	1050	2085	1.468	1.00	1415424
+sdk_gphone_x86_64	11	x86_64	1	aws-lc-rs	x86_64	0	1280	928	921	1849	1.444	1.00	1593856
+sdk_gphone_x86_64	11	x86_64	1	aws-lc-rs	x86_64	0	1420	1056	1038	2094	1.474	1.00	1409024
+sdk_gphone_x86_64	11	x86_64	2	ring	x86_64	0	1280	939	927	1866	1.458	1.00	1576704
+sdk_gphone_x86_64	11	x86_64	2	ring	x86_64	0	1420	1079	1039	2119	1.492	1.00	1391104
+sdk_gphone_x86_64	11	x86_64	2	aws-lc-rs	x86_64	0	1280	953	920	1873	1.463	1.00	1573888
+sdk_gphone_x86_64	11	x86_64	2	aws-lc-rs	x86_64	0	1420	1050	1050	2100	1.479	1.00	1405440
+sdk_gphone_x86_64	11	x86_64	3	ring	x86_64	0	1280	918	934	1851	1.446	1.00	1591552
+sdk_gphone_x86_64	11	x86_64	3	ring	x86_64	0	1420	1037	1033	2069	1.457	1.00	1425408
+sdk_gphone_x86_64	11	x86_64	3	aws-lc-rs	x86_64	0	1280	928	920	1849	1.444	1.00	1593856
+sdk_gphone_x86_64	11	x86_64	3	aws-lc-rs	x86_64	0	1420	1062	1038	2100	1.479	1.00	1404672
