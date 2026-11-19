@@ -28,8 +28,6 @@ class AppNamesTest {
         // Read once per UID while the view is open.
         names.of(1_000)
         assertEquals(3, asked)
-        assertEquals(10_123, names.uidOf("org.example.mail"))
-        assertEquals(null, names.uidOf("org.example.other"))
     }
 
     /** A package with no label is listed by its name. */

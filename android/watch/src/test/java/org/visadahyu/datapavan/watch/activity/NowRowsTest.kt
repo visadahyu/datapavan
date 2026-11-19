@@ -59,6 +59,9 @@ class NowRowsTest {
         )
         val order = NowRows.sorted(apps, ten, ::label).map { it.uid }
         assertEquals(listOf(5, 3, 2, 4, 1, null, 6), order)
+        // Equal bytes sent: by bytes received, most first, before the name.
+        val received = listOf(app(1, AppState.BACKGROUND to (20L to 0L)), app(4, AppState.BACKGROUND to (20L to 9L)))
+        assertEquals(listOf(4, 1), NowRows.sorted(received, ten, ::label).map { it.uid })
         // Equal bytes: by name, then UID.
         val tied = listOf(app(4, AppState.IN_USE to (1L to 1L)), app(1, AppState.IN_USE to (1L to 1L)), app(9, AppState.IN_USE to (1L to 1L)))
         assertEquals(listOf(9, 1, 4), NowRows.sorted(tied, ten, ::label).map { it.uid })

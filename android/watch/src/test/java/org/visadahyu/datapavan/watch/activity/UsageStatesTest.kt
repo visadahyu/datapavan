@@ -209,6 +209,20 @@ class UsageStatesTest {
         assertEquals(listOf(inUse(A, back, back + 5_000 + grace), serving(C, back, back + 60_000)), after.intervals)
     }
 
+    /**
+     * A clock set back moves the moments the screen came on and went off with what is open, by the same step, so
+     * that the window while the screen was off stays before the new clock's now (W5's third part).
+     */
+    @Test
+    fun aWallClockSetBackMovesTheMomentsOfTheScreen() {
+        val states = UsageStates()
+        read(listOf(event(0, Kind.SCREEN_ON, "android"), event(30, Kind.SCREEN_OFF, "android")), until = 60, states = states)
+        val back = at(-3_600)
+        states.clockSetBack(back, at(62) - back, uidOf, null)
+        val after = states.read(emptyList(), back + 60_000, uidOf, null, startedAt = t)
+        assertEquals(UsageStates.Screen(false, back - 62_000, back - 32_000), after.screen)
+    }
+
     /** A clock set back before the first reading: nothing before the moment it was found is read, of either clock. */
     @Test
     fun aWallClockSetBackBeforeAnyReadingReadsOnlyAfterIt() {

@@ -20,9 +20,6 @@ internal class AppNames(
 
     fun of(uid: Int?): Named = known.getOrPut(uid) { read(uid) }
 
-    /** The UID of [packageName] among those named so far, or null. */
-    fun uidOf(packageName: String): Int? = known.values.firstOrNull { packageName in it.packages }?.uid
-
     private fun read(uid: Int?): Named {
         if (uid == null) return Named(null, null, emptyList(), null)
         val packages = packagesFor(uid).sorted()
