@@ -1,0 +1,13 @@
+[Interface]
+PrivateKey=yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=
+Address=10.77.0.3/24
+Address=fd77::3/64
+DNS=fd77::1,10.77.0.1
+MTU=1420
+[Peer]
+PublicKey=xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=
+PresharedKey=FpCyhws9cxwWoV4xELtfJvjJN+zQVRPISllRWgeopVE=
+Endpoint=wg.example.net:443
+AllowedIPs=10.77.0.0/24
+AllowedIPs=fd77::/64
+PersistentKeepalive=25

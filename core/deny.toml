@@ -1,5 +1,7 @@
 # cargo-deny policy: which licences, sources and advisories the Rust dependency tree may have.
-# The enterprise flavour will be commercial, so only permissive, commercial-friendly licences pass.
+# The enterprise flavour will be commercial, so only licences that allow it pass: permissive ones, and
+# since W7 MPL-2.0, a file-level copyleft that GotaTun alone carries (ADR 0035): Watch stays Apache-2.0,
+# and a change to one of GotaTun's own files would be published under MPL-2.0.
 
 [graph]
 targets = ["aarch64-linux-android", "armv7-linux-androideabi", "x86_64-linux-android", "x86_64-unknown-linux-gnu"]
@@ -8,8 +10,10 @@ targets = ["aarch64-linux-android", "armv7-linux-androideabi", "x86_64-linux-and
 yanked = "deny"
 
 [licenses]
-# Keep this list to licences actually present. Adding one is a deliberate, reviewed decision.
-allow = ["Apache-2.0", "MIT", "Unicode-3.0"]
+# Keep this list to licences actually present. Adding one is a deliberate, reviewed decision. The last four
+# came with GotaTun in W7 (ADR 0035, Consequences): BSD-3-Clause (x25519-dalek, curve25519-dalek, subtle),
+# BSD-2-Clause (ip_network, ip_network_table), ISC (aws-lc-rs, aws-lc-sys, untrusted) and MPL-2.0 (gotatun).
+allow = ["Apache-2.0", "MIT", "Unicode-3.0", "BSD-3-Clause", "BSD-2-Clause", "ISC", "MPL-2.0"]
 confidence-threshold = 0.93
 
 [bans]

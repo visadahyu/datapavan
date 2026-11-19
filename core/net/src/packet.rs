@@ -94,14 +94,14 @@ pub enum Skip {
 }
 
 /// What an IP header says of its packet.
-struct Ip {
-    protocol: u8,
+pub(crate) struct Ip {
+    pub(crate) protocol: u8,
     /// Where the upper-layer header starts.
-    transport: usize,
-    length: usize,
-    source: IpAddr,
-    destination: IpAddr,
-    hops: u8,
+    pub(crate) transport: usize,
+    pub(crate) length: usize,
+    pub(crate) source: IpAddr,
+    pub(crate) destination: IpAddr,
+    pub(crate) hops: u8,
 }
 
 pub(crate) fn u16_at(bytes: &[u8], at: usize) -> Option<u16> {
@@ -212,7 +212,7 @@ pub fn echo_request(packet: &[u8]) -> Result<Echo, Skip> {
 }
 
 /// Reads the IP header of a packet from the tunnel, IPv4 or IPv6, following IPv6's extension headers.
-fn ip(packet: &[u8]) -> Result<Ip, Skip> {
+pub(crate) fn ip(packet: &[u8]) -> Result<Ip, Skip> {
     let first = *packet.first().ok_or(Skip::Malformed)?;
     let (protocol, transport, length, source, destination, hops) = match first >> 4 {
         4 => {
@@ -389,7 +389,7 @@ fn octets(address: IpAddr) -> Vec<u8> {
 }
 
 /// RFC 1624: the one's-complement checksum after the 16-bit words `old` became `new`.
-fn adjust(checksum: u16, old: &[u8], new: &[u8]) -> u16 {
+pub(crate) fn adjust(checksum: u16, old: &[u8], new: &[u8]) -> u16 {
     let mut sum = u32::from(!checksum);
     for (o, n) in old.as_chunks::<2>().0.iter().zip(new.as_chunks::<2>().0) {
         sum += u32::from(!u16::from_be_bytes([o[0], o[1]]));
@@ -398,7 +398,7 @@ fn adjust(checksum: u16, old: &[u8], new: &[u8]) -> u16 {
     !fold(sum)
 }
 
-fn fold(mut sum: u32) -> u16 {
+pub(crate) fn fold(mut sum: u32) -> u16 {
     while sum >> 16 != 0 {
         sum = (sum & 0xffff) + (sum >> 16);
     }
@@ -463,7 +463,7 @@ pub fn set_ends(
 }
 
 /// The sum over the pseudo-header of TCP, UDP or `ICMPv6` (RFC 9293, RFC 8200).
-fn pseudo_sum(from: IpAddr, to: IpAddr, protocol: u8, length: usize) -> u32 {
+pub(crate) fn pseudo_sum(from: IpAddr, to: IpAddr, protocol: u8, length: usize) -> u32 {
     let mut sum = sum_words(&octets(from)) + sum_words(&octets(to));
     sum += u32::from(protocol);
     let length = u32::try_from(length).unwrap_or(u32::MAX);
@@ -471,7 +471,7 @@ fn pseudo_sum(from: IpAddr, to: IpAddr, protocol: u8, length: usize) -> u32 {
     sum
 }
 
-fn sum_words(bytes: &[u8]) -> u32 {
+pub(crate) fn sum_words(bytes: &[u8]) -> u32 {
     let (words, rest) = bytes.as_chunks::<2>();
     let mut sum = 0u32;
     for word in words {

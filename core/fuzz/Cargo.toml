@@ -115,3 +115,17 @@ path = "fuzz_targets/network_signatures.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "wireguard"
+path = "fuzz_targets/wireguard.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "wireguard_back"
+path = "fuzz_targets/wireguard_back.rs"
+test = false
+doc = false
+bench = false

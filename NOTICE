@@ -1,0 +1,23 @@
+Datapavan
+Copyright the Datapavan authors. Licensed under the Apache License, Version 2.0 (LICENSE).
+
+This product includes software developed by others, under the licences named here. Each crate's own
+licence text ships in its package on crates.io; `core/Cargo.lock` pins every version.
+
+Datapavan Advanced's Watch, WireGuard upstream (W7, docs/decisions/0035-wireguard-upstream.md):
+
+- GotaTun 0.10.3, Mullvad VPN AB, and Cloudflare, Inc. for the BoringTun code it began as.
+  Mozilla Public License 2.0 (MPL-2.0); code from before 2026-03-05 also BSD-3-Clause.
+  Source: https://github.com/mullvad/gotatun and https://crates.io/crates/gotatun/0.10.3
+  Watch uses GotaTun unmodified. Its source is available at those addresses, as MPL-2.0, section 3.2,
+  asks; a change to one of GotaTun's own files would be published under MPL-2.0.
+- x25519-dalek, curve25519-dalek, subtle (the dalek-cryptography authors): BSD-3-Clause.
+- ip_network, ip_network_table (Jakub Onderka): BSD-2-Clause.
+- aws-lc-rs and aws-lc-sys (Amazon.com, Inc. and its affiliates): ISC AND (Apache-2.0 OR ISC); AWS-LC
+  itself carries ISC, Apache-2.0, MIT and BSD-3-Clause notices, from BoringSSL and OpenSSL.
+- untrusted (Brian Smith): ISC.
+
+"WireGuard" is a registered trademark of Jason A. Donenfeld.
+
+Every other crate in the native libraries is under Apache-2.0, MIT or Unicode-3.0 (`core/deny.toml`
+lists the licences allowed, and `cargo deny check licenses` holds the tree to them).

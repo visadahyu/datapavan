@@ -38,6 +38,18 @@ nix = { version = "0.31.3", default-features = false, features = ["net", "poll",
 # already given to a side (engine/tcp.rs, `drain`).
 socket2 = { version = "0.6.5", features = ["all"] }
 
+# WireGuard's protocol core for W7 (ADR 0035): Mullvad's GotaTun, pinned exactly, its `noise::Tunn` alone, with
+# no device, TUN, socket or DAITA code, and `aws-lc-rs` for ChaCha20-Poly1305 (the maintainer's choice after the
+# spike, 2026-11-19). MPL-2.0; its crates add BSD-3-Clause, BSD-2-Clause and ISC (core/deny.toml, NOTICE). It is
+# reached only through `wireguard::core`, a small trait another core can replace in one module. Each upgrade
+# is a reviewed step: its 0.x minor versions may break the API.
+gotatun = { version = "=0.10.3", default-features = false, features = ["aws-lc-rs"] }
+# GotaTun's packets are `bytes` buffers: the version its lock already brings.
+bytes = "=1.12.1"
+# Zeroes a configuration's keys when they are dropped (`wireguard::config`), with writes the compiler keeps.
+# Already in the tree through GotaTun's `x25519-dalek`; Apache-2.0 OR MIT.
+zeroize = "=1.9.2"
+
 [dev-dependencies]
 # Checks the packets the engine builds against an independent implementation, in tests only.
 etherparse = "0.21.0"

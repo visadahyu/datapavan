@@ -27,6 +27,7 @@ pub mod states;
 pub mod tls;
 pub mod trackers;
 pub mod tun;
+pub mod wireguard;
 
 pub use engine::{
     Addresses, Chain, ChainSetting, Config, DnsUse, Ech, Engine, Flow, Handover, Limits, NamedBy,

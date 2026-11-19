@@ -133,8 +133,13 @@ rust_gates() {
     cd "$ROOT/core"
     cargo fmt --all --check
     cargo clippy --workspace --all-targets --locked -- -D warnings
-    for target in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android; do
-        cargo clippy --workspace --all-targets --locked --target "$target" -- -D warnings
+    # For Android through cargo-ndk, as Gradle builds the library: since W7, GotaTun's aws-lc-sys compiles C
+    # for the target, which needs the NDK's clang (ADR 0035). The NDK is the version the app builds with.
+    local ndk
+    ndk=$(sed -n 's/^ *ndkVersion = "\(.*\)"/\1/p' "$ROOT/android/app/build.gradle.kts")
+    export ANDROID_NDK_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/sdk}}/ndk/$ndk"
+    for abi in arm64-v8a armeabi-v7a x86_64; do
+        cargo ndk -t "$abi" --platform 29 clippy --workspace --all-targets --locked -- -D warnings
     done
     cargo test --workspace --locked
     # The fuzz crate has a lockfile of its own, which a new dependency of the engine must reach too
