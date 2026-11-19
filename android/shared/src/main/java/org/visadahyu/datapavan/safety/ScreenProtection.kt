@@ -49,6 +49,14 @@ object ScreenProtection {
         protect()
         activity.lifecycle.addObserver(
             object : DefaultLifecycleObserver {
+                // The window on screen is the one the setting acts on: a process with two screens, as Watch's
+                // with "Now", takes back the first's when it comes back (review c1 of W5's third part, screens,
+                // m1: the second's end left the setting acting on no window).
+                override fun onResume(owner: LifecycleOwner) {
+                    window = activity.window
+                    neverProtect = screenshotsForTests
+                }
+
                 // From the first moment the app starts to leave the screen: before Android takes the
                 // recent apps' thumbnail, and also when the app comes back before it was stopped.
                 override fun onPause(owner: LifecycleOwner) = protect()
