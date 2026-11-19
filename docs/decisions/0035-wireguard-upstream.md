@@ -277,7 +277,9 @@ in one tunnel. No research is needed; the spike is.
    The spike's size and CPU decide. *Spike, 2026-11-19 ([spike](../spikes/2026-11-wireguard-core.md)):
    `ring`, unless the A40's run shows `aws-lc-rs` 10 % faster or more on ARM. On x86_64 the two are equal
    within 2 % (both ways about 0.85 ms per MB on the development machine, 1.45 on the emulator); `ring` is
-   21 KB smaller on arm64; both builds are reproducible and need the same four licences.*
+   21 KB smaller on arm64; both builds are reproducible and need the same four licences. The A40's run
+   (the coordinator, 2026-11-19): equal within 1 % in 64-bit code on both core classes (11 to 19 ms per MB),
+   `aws-lc-rs` 7 to 11 % faster in 32-bit code; the line sits on the threshold, so the maintainer decides.*
 3. **Size:** does the engine stay under 1 MB per ABI with WireGuard in it? Unverified. *Spike,
    2026-11-19: no, and it is over already: Watch's library is 1.38 MB on arm64 today (1.22 on armv7, 1.59
    on x86_64), and 1.53 MB with GotaTun on `ring` (1.34, 1.78). The spike proposes a measured budget with a

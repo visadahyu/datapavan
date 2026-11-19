@@ -120,8 +120,23 @@ cost 6.9 ms of CPU per MB of QUIC-sized UDP and 9.7 ms per MB of TCP on the deve
 (the packet-engine spike, 2026-11-07, its process's CPU for whole transfers), so GotaTun adds roughly 7 to 11 % there,
 before the address swap and the extra copy W7 adds. Per packet it is about 40 times one of the engine's per-packet
 counts (12.5 to 13.2 ns on this machine, ADR 0046 part 2; 9 to 12 ns for ADR 0044's identifier reading). On the Galaxy
-A40 the engine cost 111 ms per MB of TCP (40 s for 360 MB); GotaTun's cost on its A73 and A53 cores, in 64-bit and
-32-bit code, is what `bench-on-device.sh` measures there.
+A40 the engine cost 111 ms per MB of TCP (40 s for 360 MB).
+
+**On the Galaxy A40** (Samsung SM-A405FN, Android 11; the coordinator ran `bench-on-device.sh` on 2026-11-19, the
+phone not in a call; core 6 is a Cortex-A73 at 1.77 GHz, core 0 a Cortex-A53 at 1.59 GHz; three rounds, which
+agreed within 1 %; [results](../../spikes/wireguard-core/results-2026-11-19-bench-a40.tsv)), ms per MB for
+encapsulation plus the peer's decapsulation, round 2:
+
+| ABI, core | 1280 B, `ring` | 1280 B, `aws-lc-rs` | 1420 B, `ring` | 1420 B, `aws-lc-rs` |
+|---|---|---|---|---|
+| arm64-v8a, A73 | 12.75 | 12.85 | 11.11 | 11.21 |
+| arm64-v8a, A53 | 18.60 | 18.82 | 15.92 | 16.06 |
+| armeabi-v7a, A73 | 15.09 | 13.92 | 13.12 | 11.79 |
+| armeabi-v7a, A53 | 24.71 | 23.08 | 20.72 | 18.52 |
+
+In 64-bit code the two are equal within 1 %. In 32-bit code `aws-lc-rs` takes 7 to 11 % less time. A tunnelled byte
+costs about half a row: 6 to 9 ms per MB on the A40's cores in 64-bit code, about 5 to 8 % on top of the engine's
+111 ms per MB of TCP there.
 
 ## 4. Interoperation with WireGuard itself
 
@@ -211,8 +226,10 @@ rounded to the second. Everything else it says of GotaTun holds: no TUN, socket 
 
 ## Recommendation for question 2: `ring` or `aws-lc-rs`
 
-**`ring`,** as ADR 0035 proposed, unless the A40's run shows `aws-lc-rs` clearly faster on ARM (10 % or more on
-either core class, which would outweigh the rest):
+**The builder's recommendation was `ring`,** as ADR 0035 proposed, unless the A40's run showed `aws-lc-rs` clearly
+faster on ARM (10 % or more on either core class). The A40's run: equal in 64-bit code, `aws-lc-rs` 7 to 11 % faster
+in 32-bit code (above), so the line sits on the threshold, and the choice is the maintainer's (ADR 0035, question
+2). What weighs:
 
 - CPU: equal within 2 % on x86_64.
 - Size: `ring` is smaller by 21 KB on arm64, 8 KB on armv7 and 23 KB on x86_64.
@@ -260,15 +277,11 @@ what the field mostly lacks; the number itself is the maintainer's call.
 - **Reproducible builds:** GotaTun lives inside `core`'s workspace, as `ring-in-core` did; a path dependency outside
   the workspace makes the library depend on the checkout's path.
 - **Size:** the budget question 3 settles, and a gate that fails a build above it.
-- **CPU on phones:** the A40's run of `bench-on-device.sh` (arm64 and armv7, both backends) before the backend is
-  fixed, and W7's own measurement of the whole path (TUN, address swap, `Tunn`, socket) on the A40, as ADR 0035
-  asks for the MTU.
+- **CPU on phones:** W7's own measurement of the whole path (TUN, address swap, `Tunn`, socket) on the A40, as ADR
+  0035 asks for the MTU; the A40's run of `bench-on-device.sh` measured `Tunn` alone (above).
 
 ## Still open
 
-- **CPU on ARM:** `ANDROID_SERIAL=R58M78HAETB spikes/wireguard-core/bench-on-device.sh` from the repository's root,
-  on the Galaxy A40, for the coordinator to run (this spike sent nothing to the A40): arm64 and armv7, both backends,
-  its fastest and slowest core, three rounds, about six minutes after the build.
 - **Not covered by the lab:** a cookie reply under load, an IPv6 outer address, wireguard-go as the peer (for runners
   without the kernel module), a provider's server (question 11, the maintainer's Proton configuration on the A40).
 - **`opt-level = "z"`:** saves about 250 KB on arm64 (the other ABIs not measured); what it costs the engine and
