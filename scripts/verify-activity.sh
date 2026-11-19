@@ -49,8 +49,12 @@ HOST=10.0.2.2
 
 SERVER=""
 SCREENS=$(mktemp -d)
+# The screen's rotation as found, put back at the end: the history's check turns the screen.
+ROTATION=$(adb shell settings get system accelerometer_rotation | tr -d '\r')
 cleanup() {
     rm -rf "$SCREENS"
+    adb shell settings put system user_rotation 0 >/dev/null 2>&1 || true
+    adb shell settings put system accelerometer_rotation "${ROTATION:-0}" >/dev/null 2>&1 || true
     adb shell appops set "$PKG" GET_USAGE_STATS default >/dev/null 2>&1 || true
     adb shell svc power stayon false >/dev/null 2>&1 || true
     for app in "$SCREEN_APP" "$BACKGROUND_APP" "$NOTICE_APP"; do adb uninstall "$app" >/dev/null 2>&1 || true; done
@@ -242,9 +246,30 @@ grep -q " state=in-use " <<<"$records" && grep -q " state=background " <<<"$reco
     fail "the log's records of the connection opened on screen do not carry both states: $(tr '\n' ';' <<<"$records")"
 echo "ok: the log's records of the connection carry its app's state, in use and then in the background"
 
+# Whether the window of "Now" named $1 is the one chosen: its row, or a node around its text, selected.
+window_chosen() {
+    dump_screen || return 1
+    adb shell cat "$DUMP" >"$SCREENS/window.xml" 2>/dev/null || return 1
+    python3 -I -c '
+import sys, xml.etree.ElementTree as ET
+root = ET.parse(sys.argv[1]).getroot()
+parents = {child: parent for parent in root.iter() for child in parent}
+for node in root.iter("node"):
+    if node.get("text") == sys.argv[2]:
+        while node is not None:
+            if "true" in (node.get("selected"), node.get("checked")):
+                sys.exit(0)
+            node = parents.get(node)
+sys.exit(1)' "$SCREENS/window.xml" "$1"
+}
+
 # The app's history, from the log (retention 30 days): a tap on its row in "Now" opens it, and it holds the
 # run's segments of the connection with their states, in use and in the background, and their destination.
+# "Now" is on the window of an hour first: the history, a rotation over it, and the way back keep that window
+# (review c1 of W5's third part, screens, M2: they reset it to 10 minutes and sorted the rows anew).
 now_screen "$BACKGROUND_APP" >/dev/null
+tap_text "The last hour" || fail "no window of an hour in \"Now\""
+within 10 window_chosen "The last hour" || fail "the window of an hour is not chosen"
 tap_holding "$BACKGROUND_APP" || fail "no row of the app to tap in \"Now\""
 within 15 screen_has "History of" || fail "the app's history did not open"
 scroll_to "State: in the background" || fail "the history holds no segment in the background"
@@ -253,7 +278,23 @@ grep -q '^place 10\.0\.2\.2$' <<<"$(python3 -I "$ROOT/scripts/now-screen.py" "$S
     fail "the history does not name the run's destination"
 scroll_to "State: in use" || fail "the history holds no segment in use"
 echo "ok: the app's history holds the run's segments of its connection, in use and in the background, with their destination"
+adb shell settings put system accelerometer_rotation 0
+adb shell settings put system user_rotation 1
+sleep 3
+within 15 screen_has "History of" || fail "a rotation closed the app's history"
+adb shell settings put system user_rotation 0
+sleep 3
+within 15 screen_has "History of" || fail "a rotation back closed the app's history"
 adb shell input keyevent KEYCODE_BACK
+within 10 window_chosen "The last hour" || fail "back from the history, \"Now\" lost the window chosen"
+echo "ok: the history stays open over a rotation, and \"Now\" keeps its window after it"
+# Back on Watch's screen, its screenshot setting acts on its own window, after "Now" closed (review c1, m1).
+adb shell input keyevent KEYCODE_BACK
+within 10 window_secure "$PKG" || fail "Watch's screen is not protected from screenshots after \"Now\" closed"
+tap_text "Allow screenshots for one minute" || fail "no screenshot setting on Watch's screen"
+within 10 window_unprotected "$PKG" || fail "allowing screenshots left Watch's screen protected after \"Now\" closed"
+tap_text "Block screenshots now" >/dev/null 2>&1 || true
+echo "ok: Watch's screen allows screenshots on its own window after \"Now\" closed"
 
 # The window while the screen was off (the open list's fourth item): the screen turns off soon after the app
 # leaves it, the app sends in the background meanwhile, and the screen comes on again. The window holds those
@@ -281,7 +322,19 @@ within_5 "$(up "$background" off 3)" "$sent_off" ||
 [ "$(up "$background" off 1)" = 0 ] || fail "the window while the screen was off holds bytes in use: $background"
 off_screen=$(now_screen "$BACKGROUND_APP")
 read -r _ off_apps off_bytes <<<"$(grep '^off ' <<<"$off_screen")"
-[ "${off_apps:-0}" -ge 1 ] && [ "${off_bytes:-0}" -ge $((sent_off * 95 / 100)) ] ||
+# The line holds what the dump holds, and no more: the apps but the tool that sent in the background while
+# the screen was off, and their bytes sent (review c1 of W5's third part, screens, m6: checked from below only).
+read -r dump_apps dump_bytes <<<"$(watch_dump | python3 -I -c '
+import sys
+apps = total = 0
+for line in sys.stdin:
+    fields = dict(f.split("=", 1) for f in line.split() if "=" in f)
+    if line.startswith("activity-app ") and fields.get("tool") == "0":
+        sent = int(fields["off"].split(",")[3].split("/")[0])
+        apps += sent > 0
+        total += sent
+print(apps, total)')"
+[ "${off_apps:-0}" = "$dump_apps" ] && within_5 "${off_bytes:-0}" "$dump_bytes" && [ "${off_bytes:-0}" -ge $((sent_off * 95 / 100)) ] ||
     fail "\"Now\" does not say what apps sent while the screen was off: $(grep '^off' <<<"$off_screen")"
 echo "ok: the window while the screen was off holds the app's bytes in the background, and \"Now\" says so"
 
@@ -327,6 +380,12 @@ tap_text "See what this app sends now" || fail "the app's page does not offer \"
 within 15 screen_has "Showing one app." || fail "\"Now\" did not open for one app"
 adb shell cat "$DUMP" >"$SCREENS/one.xml"
 grep -qx row <<<"$(python3 -I "$ROOT/scripts/now-screen.py" "$SCREENS/one.xml" "$page")" || fail "\"Now\" opened from the app's page does not show $page"
+# And no other app: the other workload apps sent in this run too (review c1, screens, m6).
+for other in "$SCREEN_APP" "$BACKGROUND_APP" "$NOTICE_APP"; do
+    [ "$other" = "$page" ] && continue
+    grep -qx no-row <<<"$(python3 -I "$ROOT/scripts/now-screen.py" "$SCREENS/one.xml" "$other")" ||
+        fail "\"Now\" opened for $page shows $other too"
+done
 echo "ok: the audit's page of $page opens \"Now\" for that app"
 adb shell am start -W -n "$PKG/$WATCH_SCREEN" --activity-clear-top >/dev/null
 
@@ -348,6 +407,7 @@ echo "ok: without usage access, the dump says so, and a flow's bytes have no sta
 shell_screen=$(now_screen com.android.shell)
 grep -qx 'now no state' <<<"$shell_screen" || fail "\"Now\" does not show the shell with no state: $(tr '\n' ';' <<<"$shell_screen" | cut -c1-800)"
 grep -qx 'why Watch had no usage access.' <<<"$shell_screen" || fail "\"Now\" does not say why the shell's bytes have no state"
+grep -q 'Allow usage access' <<<"$(grep '^texts ' <<<"$shell_screen")" || fail "\"Now\" does not offer usage access without it"
 [ "$(screen_bytes "$shell_screen" none)" -gt 0 ] || fail "\"Now\" shows no bytes in no state for the shell"
 echo "ok: on the screen, without usage access, the app's row has no state and says why"
 

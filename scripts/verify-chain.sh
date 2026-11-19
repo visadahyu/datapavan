@@ -391,18 +391,29 @@ grep -q 'activity-read true' <<<"$(dump activity-read)" || fail "the tracker of 
 activity_line() { grep "^activity-app $1 " <<<"$(dump | sed 's/^ *//')" || true; }
 chained=$(activity_line "$WORKLOAD_UID")
 grep -q " through-tool=1 places=0 " <<<"$chained" || fail "the live view keeps a destination of the picked app: $chained"
-grep -q " tool=1 " <<<"$(activity_line "$TOOL_UID")" || fail "the live view does not mark the tool: $(activity_line "$TOOL_UID")"
+grep -q " tool=1 through-tool=0 places=0 " <<<"$(activity_line "$TOOL_UID")" ||
+    fail "the live view does not mark the tool, or keeps its servers while they are not logged: $(activity_line "$TOOL_UID")"
 grep -qE " places=[1-9]" <<<"$(activity_line 2000)" || fail "the live view keeps no destination of the shell: $(activity_line 2000)"
 echo "ok: the live view keeps no destination of the picked app while its destinations are not logged, and marks the tool"
 # The same from the screen (W5's third part): "Now" shows the picked app's bytes as sent through the tool, and
-# no place it reached.
+# no place it reached; and the tool's own row its bytes, as the tool's, with none of its servers (decision 3,
+# 2026-11-19). The run's names and addresses are looked for in every text of the screen too, so that a place
+# read as something else still fails the check (review c1 of W5's third part, screens, M1).
 screens=$(mktemp -d)
 chained_screen=$(watch_now "$PKG" "$WORKLOAD" "$screens/now.xml")
+tool_screen=$(watch_now "$PKG" "$TOOL" "$screens/tool.xml")
 rm -rf "$screens"
 adb shell input keyevent KEYCODE_BACK
 grep -qx through-tool <<<"$chained_screen" || fail "\"Now\" does not show the picked app as sent through the tool: $(tr '\n' ';' <<<"$chained_screen" | cut -c1-800)"
-! grep -q '^place ' <<<"$chained_screen" || fail "\"Now\" names a place the picked app reached: $(grep '^place ' <<<"$chained_screen")"
-echo "ok: on the screen, \"Now\" shows the picked app through the tool, with no place it reached"
+grep -qx tool <<<"$tool_screen" || fail "\"Now\" does not show the tool's row as the tool's: $(tr '\n' ';' <<<"$tool_screen" | cut -c1-800)"
+grep -qx tool-hidden <<<"$tool_screen" || fail "\"Now\" does not say why the tool's servers are not shown: $(tr '\n' ';' <<<"$tool_screen" | cut -c1-800)"
+for read in "$chained_screen" "$tool_screen"; do
+    ! grep -q '^place ' <<<"$read" || fail "\"Now\" names a place: $(grep '^place ' <<<"$read")"
+    for name in watch.test "$HOST"; do
+        ! grep -qF "$name" <<<"$(grep '^texts ' <<<"$read")" || fail "\"Now\" shows $name while it is not logged"
+    done
+done
+echo "ok: on the screen, \"Now\" shows the picked app through the tool and the tool's own row, with no place either reached"
 
 # Back on the screen, which looks for the tool again: its proxy now asks for a password. The user then
 # allows UDP, and the picked app's datagrams go through the tool's relay.

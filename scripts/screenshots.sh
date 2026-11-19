@@ -80,7 +80,7 @@ now_screens() {
     # shellcheck source=scripts/host-ports.sh
     . "$ROOT/scripts/host-ports.sh"
     host_server || exit 1
-    trap 'adb shell appops set "$PKG" GET_USAGE_STATS default >/dev/null 2>&1 || true; kill "$SERVER" 2>/dev/null || true; adb shell cmd uimode night no >/dev/null 2>&1 || true; adb shell cmd locale set-app-locales "$PKG" --locales en >/dev/null 2>&1 || true; adb shell rm -f "$DUMP" >/dev/null 2>&1 || true' EXIT
+    trap 'adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" log-retention 0 >/dev/null 2>&1 || true; adb shell appops set "$PKG" GET_USAGE_STATS default >/dev/null 2>&1 || true; kill "$SERVER" 2>/dev/null || true; adb shell cmd uimode night no >/dev/null 2>&1 || true; adb shell cmd locale set-app-locales "$PKG" --locales en >/dev/null 2>&1 || true; adb shell rm -f "$DUMP" >/dev/null 2>&1 || true' EXIT
     allow_vpn "$PKG" || { echo "SCREENSHOTS FAILED: no VPN consent for $PKG" >&2; exit 1; }
     adb shell appops set "$PKG" GET_USAGE_STATS allow
     for mode in light dark; do
@@ -90,6 +90,10 @@ now_screens() {
             adb shell am force-stop "$PKG"
             adb shell am start -W -n "$PKG/$watch" --ez start true >/dev/null
             within 20 watch_running || { echo "SCREENSHOTS FAILED: Watch's tunnel did not come up in $locale" >&2; exit 1; }
+            # The log kept for a week, so that the history shows the shell's entries and the days' buttons, not
+            # only the line of a log that keeps nothing (review c1 of W5's third part, screens, nit 13).
+            grep -q '^log-retention 7 set$' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" log-retention 7 | tr -d '\r' | sed 's/^ *//')" ||
+                { echo "SCREENSHOTS FAILED: the log's retention could not be set in $locale" >&2; exit 1; }
             # The request again until Watch counts it: just after the tunnel starts, Android may not route it yet.
             within 30 shell_counted || { echo "SCREENSHOTS FAILED: Watch did not count the shell's request in $locale" >&2; exit 1; }
             # "Now" for the shell alone, whose row is the first below the view's top.
