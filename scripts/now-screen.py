@@ -11,11 +11,13 @@ then of it scrolled, are read as one, in order.
 
 Prints, one a line: `row` or `no-row`; `now STATE` (its words); for each state with traffic,
 `bytes STATE SENT RECEIVED` in bytes (STATE one of background, notification, in-use, none, not-yet); `why
-TEXT` for each reason bytes have no state; `through-tool` and `tool` where the row says so; `place NAME` for
+TEXT` for each reason bytes have no state; `through-tool`, `tool` and `tool-hidden` (the tool's servers not
+shown) where the row says so; `place NAME` for
 each destination shown; `state STATE` for each entry of a history; `off APPS BYTES` for the line on the
 window while the screen was off; and `texts` with every text of the screen, joined by ` | `. Sizes are read
 as Android writes them in English (SI units: 1 kB = 1,000 bytes); the isolates around them are dropped.
 """
+import os
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -47,6 +49,64 @@ def texts(path):
     return found
 
 
+# Where a destination's name came from: the line under each destination's own.
+NAMED = ("name the connection sent", "name from a DNS answer", "owner of the network", "no name known")
+
+
+def row_end(lines, first, whole):
+    """Where the row that holds lines[first] ends: before the next app's label, the line before the line
+    before the next "Now: ...", since each row is its label, its package line and its state now; or at the
+    section after the rows. A destination's name, however much it looks like a package, ends nothing (review
+    c1 of W5's third part, screens, M1: a row ended at `watch.test`, so a chained app's place went unseen)."""
+    for i in range(first + 1, len(lines)):
+        if lines[i].startswith("What this view cannot see"):
+            return i
+        # The row's own state line is the one after its package line; a later one is the next row's.
+        if not whole and lines[i].startswith("Now: ") and i - 2 > first:
+            return i - 2
+    return len(lines)
+
+
+def self_test():
+    """The reader against dumps it must read, among them a row whose destination looks like a package."""
+    import tempfile
+
+    def dump(texts):
+        nodes = "".join(f'<node text="{t}" content-desc="" bounds="[0,0][1,1]"/>' for t in texts)
+        folder = tempfile.mkdtemp()
+        path = os.path.join(folder, "dump.xml")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(f"<hierarchy>{nodes}</hierarchy>")
+        return path
+
+    def read(paths, package):
+        import contextlib
+        import io
+
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            main(paths, package)
+        return [line for line in out.getvalue().splitlines() if not line.startswith("texts ")]
+
+    chained = ["Now", "Workload", "org.example.w", "Now: in use", "Sent 22 B and received 142 B while you were using it.",
+               "Sent through your circumvention tool. Where it connected is not shown, because x is off."]
+    # A chained app's row that shows a place named like a package: the check of item 5 must see it.
+    shown = read([dump(chained + ["watch.test", "name the connection sent", "Sent 1 B, received 2 B"])], "org.example.w")
+    assert "place watch.test" in shown, shown
+    assert "through-tool" in shown and "bytes in-use 22 142" in shown, shown
+    # The same row with no place: none read.
+    assert not any(line.startswith("place ") for line in read([dump(chained)], "org.example.w"))
+    # Two rows: the first's places are its own, the second's not among them.
+    two = chained + ["example.org", "name from a DNS answer", "Maps", "org.example.maps", "Now: in the background",
+                     "maps.example", "name the connection sent", "What this view cannot see"]
+    first = read([dump(two)], "org.example.w")
+    assert "place example.org" in first and "place maps.example" not in first, first
+    second = read([dump(two)], "org.example.maps")
+    assert "place maps.example" in second and "now in the background" in second, second
+    print("now-screen.py: self-test passed")
+    return 0
+
+
 def main(paths, package):
     every = [text for path in paths for text in texts(path)]
     text = "\n".join(every)
@@ -58,15 +118,17 @@ def main(paths, package):
         out.append("off 0 0")
     # "-": the whole screen, as an app's history, which names the app in its title. Of a screen read twice, the
     # second time scrolled, the row is read from the last dump that names the app.
-    start = 0 if package == "-" else text.rfind(package)
-    if start < 0:
+    lines = every
+    if package == "-":
+        first = 0
+    else:
+        at = [i for i, line in enumerate(lines) if package in line]
+        first = at[-1] if at else -1
+    if first < 0:
         out.append("no-row")
     else:
         out.append("row")
-        # The row runs to the next app's row, which begins with its label, or to the section after the rows.
-        rest = text[start + len(package):]
-        ends = [m.start() for m in re.finditer(r"\n[a-z][a-z0-9_]*(\.[a-z0-9_]+)+\n|What this view cannot see", rest)]
-        row = text[start: start + len(package) + (ends[0] if ends else len(rest))]
+        row = "\n".join(lines[first:row_end(lines, first, package == "-")])
         now = re.search(r"Now: ([a-z ]+)", row)
         if now:
             out.append(f"now {now.group(1).strip()}")
@@ -80,9 +142,9 @@ def main(paths, package):
             out.append("through-tool")
         if "Your circumvention tool." in row:
             out.append("tool")
-        for match in re.finditer(
-            r"(?:\n|, )([^\n,]+)(?:\n|, )(name the connection sent|name from a DNS answer|owner of the network|no name known)", "\n" + row
-        ):
+        if "Where it connects is not shown, because" in row:
+            out.append("tool-hidden")
+        for match in re.finditer(r"(?:\n|, )([^\n,]+)(?:\n|, )(" + "|".join(NAMED) + ")", "\n" + row):
             out.append(f"place {match.group(1)}")
         for match in re.finditer(r"State: ([a-z ]+)", row):
             out.append(f"state {match.group(1).strip()}")
@@ -92,4 +154,6 @@ def main(paths, package):
 
 
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--self-test"]:
+        sys.exit(self_test())
     sys.exit(main(sys.argv[1:-1], sys.argv[-1]))
