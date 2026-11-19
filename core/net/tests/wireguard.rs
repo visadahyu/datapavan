@@ -7,7 +7,7 @@
 //!
 //! The interoperation with `WireGuard` itself, the kernel's, is `wglab.rs`, which `scripts/check.sh lab`
 //! runs against the lab's peer.
-#![cfg(target_os = "linux")]
+#![cfg(any(target_os = "linux", target_os = "android"))]
 
 use datapavan_net::engine::{Addresses, Configured, Limits, TunnelSetting};
 use datapavan_net::wireguard::config::Config as WgConfig;
@@ -763,5 +763,80 @@ async fn a_network_change_makes_the_socket_anew_and_tells_the_server_at_once() -
     assert_ne!(from.port(), before.port(), "a new socket");
     assert_eq!(buffer[0], 4, "a data message: the keepalive");
     let _ = tunnel;
+    Ok(())
+}
+
+/// The CPU time of the engine's thread so far, from `/proc`, in clock ticks of 10 ms.
+fn engine_ticks() -> Result<u64, Box<dyn std::error::Error>> {
+    for task in std::fs::read_dir("/proc/self/task")? {
+        let path = task?.path();
+        if std::fs::read_to_string(path.join("comm"))?.trim() == "watch-engine" {
+            let stat = std::fs::read_to_string(path.join("stat"))?;
+            let after = stat.rsplit_once(") ").ok_or("stat")?.1;
+            let fields: Vec<&str> = after.split(' ').collect();
+            return Ok(fields[11].parse::<u64>()? + fields[12].parse::<u64>()?);
+        }
+    }
+    Err("no engine thread".into())
+}
+
+/// The engine's CPU time for one UDP packet of `size` bytes from an app, through a tunnel (`GotaTun`'s
+/// encryption, the swap, the socket) or directly (a mapping's socket), to a server on the loopback that
+/// only reads them; `cargo test --release -- --ignored per_packet --nocapture` prints both. Run on the
+/// development machine and, built for Android, on the emulator (ADR 0035, "How it is built").
+#[tokio::test(flavor = "current_thread")]
+#[ignore = "a measurement, not a check: run it by name"]
+async fn per_packet_cost() -> Outcome {
+    const PACKETS: usize = 200_000;
+    let mut server = Server::new(SERVER_KEY).await?;
+    let setting = one(&server, &[FIRST], "10.77.0.2/32", "0.0.0.0/0")?;
+    let (_engine, tunnel) = engine(&setting)?;
+    let sink = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+    let sink_at = sink.local_addr()?;
+    // The tunnel's session first, then the server only reads what comes.
+    let web = SocketAddr::from((WEB4, 9));
+    tunnel
+        .send(&packet::udp(tun4(40_100), web, b"first").ok_or("datagram")?)
+        .await?;
+    let _ = server.next().await?;
+    let drain = |socket: UdpSocket| {
+        tokio::spawn(async move {
+            let mut buffer = vec![0u8; 2_048];
+            while tokio::time::timeout(Duration::from_secs(2), socket.recv(&mut buffer))
+                .await
+                .is_ok()
+            {}
+        })
+    };
+    let readers = [drain(server.socket), drain(sink)];
+    for (name, to, from) in [
+        ("tunnelled", web, tun4(40_101)),
+        ("direct", sink_at, tun4(42_101)),
+    ] {
+        for size in [1_280usize, 100] {
+            let datagram = packet::udp(from, to, &vec![7u8; size - 28]).ok_or("datagram")?;
+            tunnel.send(&datagram).await?;
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            let before = engine_ticks()?;
+            let started = std::time::Instant::now();
+            for i in 0..PACKETS {
+                tunnel.send(&datagram).await?;
+                if i % 64 == 63 {
+                    tokio::task::yield_now().await;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            let ticks = engine_ticks()? - before;
+            #[allow(clippy::cast_precision_loss)]
+            let ns = ticks as f64 * 10_000_000.0 / PACKETS as f64;
+            println!(
+                "{name} {size} B: {ns:.0} ns of the engine's CPU per packet ({:.2} s wall)",
+                started.elapsed().as_secs_f64()
+            );
+        }
+    }
+    for reader in readers {
+        reader.abort();
+    }
     Ok(())
 }

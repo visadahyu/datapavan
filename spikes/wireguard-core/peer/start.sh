@@ -10,7 +10,7 @@ if ! ip link add wg0 type wireguard; then
 fi
 mkdir -p /run/wglab
 # The container's files outlive a stop: a ready mark from the last start must not count.
-rm -f /run/wglab/ready
+rm -f /run/wglab/ready /run/wglab/seen
 umask 077
 wg genkey >/run/wglab/private
 wg set wg0 listen-port 51820 private-key /run/wglab/private
