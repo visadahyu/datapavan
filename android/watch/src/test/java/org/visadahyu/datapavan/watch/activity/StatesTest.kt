@@ -67,7 +67,7 @@ class StatesTest {
     fun theScreenOffTimeIsToldOnlyWhereTheEngineTakesIt() {
         assertEquals(10L, States.offSince(UsageStates.Screen(false, null, 10)))
         assertEquals(10L, States.offSince(UsageStates.Screen(true, 10, 10)))
-        assertEquals(10L, States.offSince(UsageStates.Screen(true, null, 10)))
+        assertEquals(null, States.offSince(UsageStates.Screen(true, null, 10)))
         assertEquals(null, States.offSince(UsageStates.Screen(true, 9, 10)))
         assertEquals(null, States.offSince(UsageStates.Screen(null, null, 10)))
         assertEquals(null, States.offSince(UsageStates.Screen(false, null, null)))

@@ -47,11 +47,12 @@ object States {
     }
 
     /**
-     * When the screen went off, as the engine takes it: for a screen whose state is known, and for one on,
-     * not after it came on (as events within one millisecond could have it).
+     * When the screen went off, as the engine takes it: for a screen off, and for one on since a moment told,
+     * not after it (as events within one millisecond could have it); never for one on since a moment not
+     * known, for which the engine would open a window running while the screen is on (review c1, engine, nit 6).
      */
     internal fun offSince(screen: UsageStates.Screen): Long? = screen.offSince?.takeIf {
-        screen.on == false || (screen.on == true && it <= (screen.since ?: Long.MAX_VALUE))
+        screen.on == false || (screen.on == true && screen.since != null && it <= screen.since)
     }
 
     /** A reading that knows the states: its intervals. */

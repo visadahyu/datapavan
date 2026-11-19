@@ -6,7 +6,8 @@
 //!   the states below; 1: nothing, Watch has no usage access; 2: nothing, Android gave no events, as
 //!   before the first unlock after a restart), the screen at the span's end (0 off, 1 on, 2 not known),
 //!   when it last came on (0 for not known, and always 0 for a screen not on) and when it last went off
-//!   (0 for not known, always 0 for a screen not known, and for a screen on never after it came on), then
+//!   (0 for not known, always 0 for a screen not known or on since a moment not known, and for a screen on
+//!   never after it came on), then
 //!   a count (u32) of intervals, each an app's UID (u32), its start and end, and its state in it (1 in
 //!   use, 2 with its notification). An app with no interval in a known span was in the background
 //!   throughout it; intervals of one app may overlap, and "in use" wins where they do.
@@ -215,7 +216,7 @@ pub fn read(bytes: &[u8]) -> Option<Told> {
     let off = u64_at(head, 27)?;
     let screen_off = match (screen, off) {
         (_, 0) => None,
-        (Screen::Unknown, _) => return None,
+        (Screen::Unknown | Screen::On(None), _) => return None,
         (Screen::On(Some(on)), off) if off > on => return None,
         (_, off) => Some(off),
     };
@@ -333,7 +334,7 @@ mod tests {
         for (screen, screen_off) in [
             (Screen::Off, Some(900)),
             (Screen::Off, None),
-            (Screen::On(None), Some(900)),
+            (Screen::On(None), None),
             (Screen::On(Some(500)), Some(500)),
             (Screen::On(Some(500)), None),
             (Screen::Unknown, None),
@@ -407,7 +408,13 @@ mod tests {
             bad[19] = 1;
             assert_eq!(read(&bad), None, "screen {screen} with a time it came on");
         }
-        // When it went off, told for a screen not known, or after a screen on came on.
+        // When it went off, told for a screen on since a moment not known (review c1 of W5's third part, engine,
+        // nit 6: a window then opened that ran while the screen was on), for one not known, or after it came on.
+        bad(Told {
+            screen: Screen::On(None),
+            screen_off: Some(400),
+            ..told()
+        });
         let mut unknown = write(&Told {
             screen: Screen::Unknown,
             screen_off: None,

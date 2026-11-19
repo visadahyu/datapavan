@@ -1,8 +1,8 @@
 //! Fuzzing of the engine's reader of the apps' states that Watch's Kotlin side tells it
 //! (`datapavan_net::states`, ADR 0046, decision 1). Any bytes: a message that is read must write back
 //! to the same bytes, with its span forward, every interval inside it and of a state other than the
-//! background, none where nothing is known, and a time the screen went off only for a screen whose state
-//! is known, and for one on, not after it came on; anything else is refused without a panic.
+//! background, none where nothing is known, and a time the screen went off only for a screen off, or on
+//! since a moment told and not after it; anything else is refused without a panic.
 #![no_main]
 
 use datapavan_net::states::{self, Known, Screen, State};
@@ -14,7 +14,7 @@ fuzz_target!(|data: &[u8]| {
         assert!(told.from <= told.until);
         assert!(told.known == Known::States || told.intervals.is_empty());
         match (told.screen, told.screen_off) {
-            (Screen::Unknown, off) => assert!(off.is_none()),
+            (Screen::Unknown | Screen::On(None), off) => assert!(off.is_none()),
             (Screen::On(Some(on)), Some(off)) => assert!(off <= on),
             _ => {}
         }
