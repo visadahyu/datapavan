@@ -6,7 +6,9 @@ description, or one of its children's), and must be at least the minimum touch s
 directions. Elements cut off by the edge of a scrolling list are skipped: the dump measures only their
 visible part and leaves out the children that are off screen, label included.
 
-    python3 -I scripts/a11y-check.py DUMP.xml MIN_SIZE_PX
+    python3 -I scripts/a11y-check.py DUMP.xml MIN_SIZE_PX [PACKAGE]
+
+PACKAGE is Basic's by default; Datapavan Advanced's screens, Watch's "Now" included, give their own.
 """
 import re
 import sys
@@ -21,11 +23,12 @@ def bounds(node):
 
 def main() -> int:
     path, min_px = sys.argv[1], int(sys.argv[2])
+    package = sys.argv[3] if len(sys.argv) > 3 else PACKAGE
     root = ET.parse(path).getroot()
     parents = {child: parent for parent in root.iter() for child in parent}
     problems = []
     for node in root.iter("node"):
-        if node.get("clickable") != "true" or node.get("package") != PACKAGE:
+        if node.get("clickable") != "true" or node.get("package") != package:
             continue
         box = bounds(node)
         clipped = False

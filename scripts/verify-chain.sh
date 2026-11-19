@@ -394,6 +394,15 @@ grep -q " through-tool=1 places=0 " <<<"$chained" || fail "the live view keeps a
 grep -q " tool=1 " <<<"$(activity_line "$TOOL_UID")" || fail "the live view does not mark the tool: $(activity_line "$TOOL_UID")"
 grep -qE " places=[1-9]" <<<"$(activity_line 2000)" || fail "the live view keeps no destination of the shell: $(activity_line 2000)"
 echo "ok: the live view keeps no destination of the picked app while its destinations are not logged, and marks the tool"
+# The same from the screen (W5's third part): "Now" shows the picked app's bytes as sent through the tool, and
+# no place it reached.
+screens=$(mktemp -d)
+chained_screen=$(watch_now "$PKG" "$WORKLOAD" "$screens/now.xml")
+rm -rf "$screens"
+adb shell input keyevent KEYCODE_BACK
+grep -qx through-tool <<<"$chained_screen" || fail "\"Now\" does not show the picked app as sent through the tool: $(tr '\n' ';' <<<"$chained_screen" | cut -c1-800)"
+! grep -q '^place ' <<<"$chained_screen" || fail "\"Now\" names a place the picked app reached: $(grep '^place ' <<<"$chained_screen")"
+echo "ok: on the screen, \"Now\" shows the picked app through the tool, with no place it reached"
 
 # Back on the screen, which looks for the tool again: its proxy now asks for a password. The user then
 # allows UDP, and the picked app's datagrams go through the tool's relay.

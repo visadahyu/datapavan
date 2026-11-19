@@ -8,12 +8,20 @@
 # Needs Android 13 or newer for app-specific languages, and python3 for the check. Run
 # scripts/smoke.sh first, which installs the debug APK.
 #
-#   scripts/screenshots.sh [output directory, default build/screenshots]
+# With --now, Datapavan Advanced's view "Now" and an app's history (ADR 0046, W5's third part) instead, from
+# Advanced's debug APK, installed first: with the tunnel up, a request of adb's shell to a test server on this
+# computer, and usage access granted. Their strings are in English only until ADR 0030's translations come,
+# so they run in English and both pseudo-locales, light and dark; NOW_LOCALES may name others.
+#
+#   scripts/screenshots.sh [--now] [output directory, default build/screenshots]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+NOW=""
+if [ "${1:-}" = --now ]; then NOW=1; shift; fi
 OUT="${1:-$ROOT/build/screenshots}"
 PKG=org.visadahyu.datapavan
+[ -z "$NOW" ] || PKG=org.visadahyu.datapavan.advanced
 # shellcheck source=scripts/adb-ui.sh
 . "$ROOT/scripts/adb-ui.sh"
 
@@ -48,12 +56,50 @@ capture() {
     fi
     adb exec-out screencap -p >"$OUT/$1-$locale-$mode.png"
     adb shell cat "$DUMP" >"$OUT/$1-$locale-$mode.xml"
-    python3 -I "$ROOT/scripts/a11y-check.py" "$OUT/$1-$locale-$mode.xml" "$min_px" || passed=""
+    python3 -I "$ROOT/scripts/a11y-check.py" "$OUT/$1-$locale-$mode.xml" "$min_px" "$PKG" || passed=""
+}
+
+# Advanced's "Now" and an app's history (--now): Watch's tunnel up for adb's shell, which asks a test server on
+# this computer for a page, so that "Now" has a row to show and to open.
+now_screens() {
+    local watch=org.visadahyu.datapavan.watch.MainActivity
+    is_emulator || { echo "SCREENSHOTS FAILED: --now runs on an emulator only: it grants usage access and starts a VPN" >&2; exit 1; }
+    HOST=10.0.2.2
+    # shellcheck source=scripts/host-ports.sh
+    . "$ROOT/scripts/host-ports.sh"
+    host_server || exit 1
+    trap 'adb shell appops set "$PKG" GET_USAGE_STATS default >/dev/null 2>&1 || true; kill "$SERVER" 2>/dev/null || true; adb shell cmd uimode night no >/dev/null 2>&1 || true; adb shell cmd locale set-app-locales "$PKG" --locales en >/dev/null 2>&1 || true; adb shell rm -f "$DUMP" >/dev/null 2>&1 || true' EXIT
+    allow_vpn "$PKG" || { echo "SCREENSHOTS FAILED: no VPN consent for $PKG" >&2; exit 1; }
+    adb shell appops set "$PKG" GET_USAGE_STATS allow
+    for mode in light dark; do
+        if [ "$mode" = dark ]; then locales="en"; adb shell cmd uimode night yes >/dev/null; else locales="${NOW_LOCALES:-en en-XA ar-XB}"; adb shell cmd uimode night no >/dev/null; fi
+        for locale in $locales; do
+            adb shell cmd locale set-app-locales "$PKG" --locales "$locale"
+            adb shell am force-stop "$PKG"
+            adb shell am start -W -n "$PKG/$watch" --ez start true >/dev/null
+            sleep 5
+            adb shell "printf 'GET /ping HTTP/1.0\r\n\r\n' | nc -w 5 $HOST $PORT" >/dev/null 2>&1 || true
+            sleep 4
+            adb shell am start -n "$PKG/$watch" --activity-clear-top --ez now true --ez screenshots_for_tests true >/dev/null
+            passed=1
+            within 20 screen_has_holding com.android.shell || { echo "SCREENSHOTS FAILED: no row in \"Now\" in $locale" >&2; exit 1; }
+            capture now
+            tap_holding com.android.shell || { echo "SCREENSHOTS FAILED: no row to open in $locale" >&2; exit 1; }
+            sleep 2
+            capture history
+            adb shell input keyevent KEYCODE_BACK
+            if [ -n "$passed" ]; then echo "ok: now $locale ($mode)"; else echo "problems: now $locale ($mode)"; failed=1; fi
+        done
+    done
+    [ "$failed" -eq 0 ] || { echo "SCREENSHOTS FAILED: accessibility problems above" >&2; exit 1; }
+    echo "== screenshots of \"Now\" in ${OUT#"$ROOT/"}, accessibility check passed"
+    exit 0
 }
 
 echo "== Screenshots and accessibility check on Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
 adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
+[ -z "$NOW" ] || now_screens
 # Every destination, the settings, an app's page and the plan: light in every language and both
 # pseudo-locales, dark in English and Persian.
 for mode in light dark; do

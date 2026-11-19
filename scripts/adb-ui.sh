@@ -271,6 +271,50 @@ gone_id() {
     ! grep -q "resource-id=\"$1\"" <<<"$screen"
 }
 
+# Watch's view "Now" (ADR 0046) in the edition $1, a debug build, for the app $2 alone, opened through Watch's
+# screen and read from a uiautomator dump, kept in the file $3, by now-screen.py: its output once the app's row
+# shows with bytes, or the last reading after 20 s.
+watch_now() {
+    local read=""
+    adb shell am start -n "$1/org.visadahyu.datapavan.watch.MainActivity" --activity-clear-top --ez now true --es now_package "$2" >/dev/null
+    for _ in $(seq 1 20); do
+        sleep 1
+        dump_screen || continue
+        adb shell cat "$DUMP" >"$3" 2>/dev/null || continue
+        read=$(python3 -I "$(dirname "${BASH_SOURCE[0]}")/now-screen.py" "$3" "$2") || continue
+        grep -qx row <<<"$read" && grep -q '^bytes ' <<<"$read" && break
+        # The row may run below the screen's edge: the screen scrolled half a page is read after the top.
+        swipe_up
+        dump_screen || continue
+        adb shell cat "$DUMP" >"$3.more" 2>/dev/null || continue
+        read=$(python3 -I "$(dirname "${BASH_SOURCE[0]}")/now-screen.py" "$3" "$3.more" "$2") || continue
+        grep -qx row <<<"$read" && grep -q '^bytes ' <<<"$read" && break
+        scroll_to_top
+    done
+    printf '%s\n' "$read"
+}
+
+# True when an element of a new dump holds $1 in its text, the isolates around a package name dropped.
+screen_has_holding() {
+    local screen
+    dump_screen || return 1
+    # Read whole: under pipefail, a grep -q that stops reading early fails the pipe.
+    screen=$(adb shell cat "$DUMP" 2>/dev/null | LC_ALL=C sed 's/\xe2\x81[\xa6-\xa9]//g') || return 1
+    grep -q "text=\"[^\"]*$1" <<<"$screen"
+}
+
+# Taps the element of a new dump whose text holds $1, as a row of Watch's "Now", whose texts the screen may
+# read as one; the isolates around a package name are dropped first.
+tap_holding() {
+    local bounds
+    dump_screen || return 1
+    bounds=$(adb shell cat "$DUMP" | LC_ALL=C sed 's/\xe2\x81[\xa6-\xa9]//g' | grep -o "text=\"[^\"]*$1[^\"]*\"[^>]*bounds=\"[^\"]*\"" | sed -n 1p |
+        grep -o 'bounds="[^"]*"' | grep -o '[0-9]\+' | tr '\n' ' ') || return 1
+    [ -n "$bounds" ] || return 1
+    set -- $bounds
+    adb shell input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 ))
+}
+
 # Waits until the audit overview shows, in any language: the loading screen has nothing to tap.
 wait_for_overview() {
     for _ in $(seq 1 60); do
