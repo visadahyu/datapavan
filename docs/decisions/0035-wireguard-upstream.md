@@ -293,6 +293,38 @@ in one tunnel. No research is needed; the spike is.
     protected socket. To test.
 14. **Obfuscated variants** (AmneziaWG, a wireguard-go fork): later, if users' networks need them.
 
+## Settled with the maintainer (2026-11-19)
+
+Before W7 was built, the maintainer took these answers to the open questions, after a check of each against the
+field's best:
+
+- **Question 1:** MPL-2.0 stands, as accepted with this ADR; GotaTun it is.
+- **Question 2:** decided by the spike below (size, CPU, reproducible builds); `ring` unless the spike shows
+  otherwise.
+- **Question 7:** flows Android names no owner for, and ICMP echo, go through the tunnel while any app is chosen;
+  never directly.
+- **Question 8:** a switch "Local network directly" for the chosen apps (printers, a NAS: private, link-local and
+  unique-local ranges), off by default, as Mullvad's local network sharing and WireGuard's "Exclude private IPs".
+- **Question 9:** one interface and one peer; `PresharedKey` supported where the provider gives one (WireGuard's
+  only defence against a future quantum computer recording today's handshakes). An endpoint given as a host name is
+  resolved before the tunnel through a protected socket over encrypted DNS where Watch has it, and the user is told
+  when only plain DNS could resolve it (the network would learn which provider the user chose); most providers'
+  files, Proton's among them, give an address. AllowedIPs narrower than everything: the rest is refused, never sent
+  directly. A configuration with no `DNS` line is refused in W7 with a plain message: its names would otherwise have
+  nowhere private to go; W8, which brings the user's own encrypted resolver, routes them through the tunnel to it
+  instead.
+- **Question 10:** a QR code is read from a photo the system camera takes for Watch (`ACTION_IMAGE_CAPTURE`, which
+  needs no camera permission of Watch's own) or from a picked image, decoded with ZXing's core library
+  (Apache-2.0); Watch never holds `CAMERA`.
+- **Question 11 and the check from outside:** with a Proton VPN free configuration that the maintainer imports on
+  the A40 personally; no agent sees or moves its private key.
+- **Tests without a provider:** a WireGuard peer of the reference implementation (the Linux kernel's or
+  wireguard-go) in a container on the development machine and on CI, so that every run tests interoperation with
+  WireGuard itself, not GotaTun with GotaTun.
+
+**Frontier research is not needed:** every part is established; the spike and the interoperation tests answer
+what is open.
+
 ## Sources
 
 Read on 2026-11-09 unless marked otherwise.
