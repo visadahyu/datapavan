@@ -86,7 +86,7 @@
     <string name="cannot_see_gaps">Watch sees nothing while another VPN is on, from apps you left out, or from a work profile, a private space or another user. It also sees nothing before the first unlock after a restart, or when traffic goes around the VPN. Traffic between apps on the phone never reaches it.</string>
     <string name="cannot_see_sizes">Sizes are what the apps sent and received through Watch. Android\'s data usage screen also counts headers and resent data, so it shows a little more.</string>
     <string name="cannot_see_notification">\"With its notification\" means Android lets the app show one, not that you saw it. A channel you turned off still counts.</string>
-    <string name="cannot_see_in_use">\"In use\" is what Android records of each app\'s screens. The feed left of the home screen on some phones counts as in the background. An app allowed to open screens from the background can look in use.</string>
+    <string name="cannot_see_in_use">\"In use\" is what Android records of each app\'s screens. An app allowed to open screens from the background can look in use.</string>
 
     <!-- Each app's history. -->
     <string name="history_title">History of %1$s</string>
