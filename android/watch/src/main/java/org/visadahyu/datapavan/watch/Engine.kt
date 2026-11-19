@@ -102,6 +102,31 @@ internal object Engine {
     ): Boolean
 
     /**
+     * Sets the WireGuard configuration [text], in wg-quick's form, as the tunnel [id] (not 0), in place of the
+     * one of that number if any (W7, ADR 0035), with "Local network directly" as [localNetwork] says. The text
+     * is handed over unwrapped; the caller zeroes its array after. Returns "" when it is set, else why it is
+     * refused: a code, a line and a key, never a value (core/net/src/wireguard/config.rs, `Refusal`). Kept for
+     * the engines to come while none runs, as the chain is; stopping the tunnel forgets it.
+     */
+    external fun nativeTunnelSet(id: Int, text: ByteArray, localNetwork: Boolean): String
+
+    /** Removes the tunnel [id] and the routes to it (W7). */
+    external fun nativeTunnelRemove(id: Int)
+
+    /**
+     * Sends each app of [uids] through the tunnel at the same place in [tunnels], every other app its other way,
+     * and keeps their destinations only where [logDestinations] says ("Log where these apps connect", W6's
+     * switch). Replaces every route (W7).
+     */
+    external fun nativeTunnelRoutes(uids: IntArray, tunnels: IntArray, logDestinations: Boolean)
+
+    /**
+     * Each tunnel's state, one per line: `id handshake received error not-answering plain-dns connected flows`,
+     * the times in milliseconds ago and `-` for none. No key, no address, no endpoint. Empty when no engine runs.
+     */
+    external fun nativeTunnelStates(): String
+
+    /**
      * Whether the answers of the tunnel's DNS address reach the apps with a time to live of 0, so that
      * Android's resolver, which keeps one cache for all apps of a network, keeps none of them; debug
      * builds' DNS spike only, for now (W6).

@@ -1585,11 +1585,17 @@ mod tests {
         timers: Arc<AtomicUsize>,
         session: bool,
         keepalive: bool,
+        /// Whether its queue is full: every packet lost.
+        full: bool,
     }
 
     impl Core for Fake {
         fn send(&mut self, _: &[u8]) -> Sent {
-            Sent::Data(vec![4; 32])
+            if self.full {
+                Sent::Dropped
+            } else {
+                Sent::Data(vec![4; 32])
+            }
         }
         fn receive(&mut self, _: SocketAddr, _: &[u8]) -> Received {
             Received::Keepalive
@@ -1636,6 +1642,7 @@ mod tests {
             timers: Arc::clone(&timers),
             session,
             keepalive,
+            full: false,
         };
         (
             Tunnel::with_core(&configured(1, "0.0.0.0/0", false), Box::new(core), 1),
@@ -1679,6 +1686,23 @@ mod tests {
         let (mut data, _) = fake(false, false);
         data.out(vec![4; 32], &shared.counters);
         assert!(!data.ticks());
+    }
+
+    /// A packet the core's full queue drops is counted as lost, and still as handed to the tunnel.
+    #[test]
+    fn a_packet_the_cores_queue_drops_is_counted_lost() {
+        let shared = shared();
+        let core = Fake {
+            timers: Arc::new(AtomicUsize::new(0)),
+            session: false,
+            keepalive: false,
+            full: true,
+        };
+        let mut tunnel = Tunnel::with_core(&configured(1, "0.0.0.0/0", false), Box::new(core), 1);
+        tunnel.send(&[0x45; 20], &shared.counters);
+        let counters = shared.counters.snapshot();
+        assert_eq!((counters[52], counters[58]), (1, 1));
+        assert_eq!(tunnel.pending.len(), 0);
     }
 
     /// Datagrams made before the socket wait for it, a few at most; past that they are lost and counted.
@@ -1825,6 +1849,31 @@ mod tests {
         ] {
             assert!(!direct(&shared, tunnelled), "{tunnelled}");
         }
+        // A provider's DNS server at a private address outside the interface's own /32, as Proton's
+        // 10.2.0.1 beside 10.2.0.2/32: through the tunnel still.
+        let text = format!(
+            "[Interface]\nPrivateKey = {KEY}\nAddress = 10.2.0.2/32\nDNS = 10.2.0.1\n[Peer]\nPublicKey = {PEER}\n\
+             AllowedIPs = 0.0.0.0/0\nEndpoint = 192.0.2.1:51820\n"
+        );
+        let Ok(proton) = Config::parse(text.as_bytes()) else {
+            unreachable!("refused")
+        };
+        let proton = Configured {
+            id: 1,
+            config: Arc::new(proton),
+            local_network: true,
+        };
+        shared
+            .tunnels
+            .set(&setting(vec![proton], &[(10_300, 1)], false), &shared);
+        assert!(
+            !direct(&shared, IpAddr::from([10, 2, 0, 1])),
+            "its DNS server"
+        );
+        assert!(
+            direct(&shared, IpAddr::from([10, 2, 0, 9])),
+            "beside it, the local network"
+        );
     }
 
     /// A new flow is admitted inside `AllowedIPs`, of a version the configuration has an address of; a

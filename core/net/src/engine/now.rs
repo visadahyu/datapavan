@@ -89,7 +89,10 @@ pub(super) enum Seen<'a> {
     Flow(&'a Flow),
     Routed(&'a Flow),
     Hidden,
-    HiddenDirect,
+    /// A flow not through the tool whose destination stays out: through a `WireGuard` tunnel (W7) with
+    /// "Log where these apps connect" off, with its number, or one that went directly before a chain left
+    /// its destination out.
+    HiddenDirect(Option<u32>),
     Lookups,
 }
 
@@ -110,7 +113,10 @@ impl<'a> Seen<'a> {
     pub(super) fn live(flow: &'a Flow, hidden: bool, direct: bool) -> Self {
         match (hidden, direct) {
             (true, false) => Self::Hidden,
-            (true, true) => Self::HiddenDirect,
+            (true, true) => Self::HiddenDirect(match flow.via {
+                crate::engine::Via::Tunnel(t) => Some(t),
+                crate::engine::Via::Direct | crate::engine::Via::Tool => None,
+            }),
             (false, true) => Self::Flow(flow),
             (false, false) => Self::Routed(flow),
         }
@@ -149,6 +155,9 @@ struct App {
     session_reasons: ByReason,
     /// The last second a flow of it went through the user's tool with its destination left out.
     through_tool: Option<u64>,
+    /// The last second a flow of it went through a `WireGuard` tunnel with its destination left out, and
+    /// that tunnel's number (W7).
+    through_tunnel: Option<(u64, u32)>,
     /// The last second it sent or received.
     last: u64,
     places: Vec<Place>,
@@ -377,10 +386,21 @@ impl Counts {
         for (uid, app) in &mut self.apps {
             if !app.places.is_empty() && hidden(*uid) {
                 let routed = app.places.iter().filter_map(|p| p.routed).max();
+                let tunnelled = app
+                    .places
+                    .iter()
+                    .filter_map(|p| match p.flow.via {
+                        crate::engine::Via::Tunnel(t) => Some((p.last, t)),
+                        _ => None,
+                    })
+                    .max();
                 self.places -= app.places.len();
                 app.places.clear();
                 if let Some(last) = routed {
                     app.through_tool = Some(app.through_tool.map_or(last, |s| s.max(last)));
+                }
+                if let Some(seen) = tunnelled {
+                    app.through_tunnel = app.through_tunnel.max(Some(seen));
                 }
             }
         }
@@ -428,7 +448,11 @@ impl Counts {
                 app.through_tool = Some(app.through_tool.map_or(second, |s| s.max(second)));
                 return;
             }
-            Seen::HiddenDirect | Seen::Lookups => return,
+            Seen::HiddenDirect(Some(t)) => {
+                app.through_tunnel = app.through_tunnel.max(Some((second, t)));
+                return;
+            }
+            Seen::HiddenDirect(None) | Seen::Lookups => return,
         };
         let known = app
             .places
@@ -626,6 +650,7 @@ impl Shared {
                     now: states.get(&uid).copied().flatten(),
                     tool: uid.is_some() && uid == tool,
                     through_tool: app.through_tool,
+                    through_tunnel: app.through_tunnel,
                     servers_hidden: uid.is_some() && uid == hidden_tool,
                     bytes: app.bytes,
                     places,
@@ -716,6 +741,8 @@ struct AppView {
     /// then the no state's bytes by why).
     bytes: [[Ways; COLUMNS]; VIEW_WINDOWS],
     through_tool: bool,
+    /// The tunnel it went through with its destinations left out, in a window (W7).
+    through_tunnel: Option<u32>,
     places: Vec<(Flow, [Ways; 3])>,
 }
 
@@ -751,6 +778,10 @@ impl View {
             through_tool: app
                 .through_tool
                 .is_some_and(|second| self.windows(second).iter().any(|&w| w)),
+            through_tunnel: app
+                .through_tunnel
+                .filter(|(second, _)| self.windows(*second).iter().any(|&w| w))
+                .map(|(_, t)| t),
             ..AppView::default()
         };
         for (minute, counts) in &app.minutes {
@@ -781,7 +812,10 @@ impl View {
                 view.places.push((place.flow.clone(), bytes));
             }
         }
-        if view.bytes != [[Ways::default(); COLUMNS]; VIEW_WINDOWS] || view.through_tool {
+        if view.bytes != [[Ways::default(); COLUMNS]; VIEW_WINDOWS]
+            || view.through_tool
+            || view.through_tunnel.is_some()
+        {
             self.apps.insert(uid, view);
         }
     }
@@ -823,7 +857,11 @@ impl View {
                     continue;
                 }
                 Seen::Flow(flow) | Seen::Routed(flow) => flow,
-                Seen::HiddenDirect | Seen::Lookups => continue,
+                Seen::HiddenDirect(Some(t)) => {
+                    app.through_tunnel = Some(t);
+                    continue;
+                }
+                Seen::HiddenDirect(None) | Seen::Lookups => continue,
             };
             // The flow's destination, found once for all its marks (review b1, engine, nit 3).
             let at = *place.get_or_insert_with(|| {
@@ -1235,6 +1273,59 @@ mod tests {
         *lock(&shared.chain) = Some(chain_of(UID, false));
         shared.hide_chained();
         assert_eq!(view(&shared), Some((0, true)));
+    }
+
+    /// A flow through a `WireGuard` tunnel (W7) is shown with its route: its destination with the tunnel's
+    /// number while "Log where these apps connect" is on; with it off, no destination, and the app marked as
+    /// through that tunnel. Never as through the tool.
+    #[test]
+    fn a_tunnelled_flow_is_shown_through_its_tunnel() {
+        use super::super::{Configured, TunnelSetting};
+        let (shared, clock, _) = telling_at(T);
+        let text = "[Interface]\nPrivateKey = yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=\nAddress = 10.77.0.2/32\n\
+                    DNS = 10.77.0.1\n[Peer]\nPublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\n\
+                    AllowedIPs = 0.0.0.0/0\nEndpoint = 192.0.2.1:51820\n";
+        let Ok(config) = crate::wireguard::Config::parse(text.as_bytes()) else {
+            unreachable!("refused")
+        };
+        let set = |log| TunnelSetting {
+            tunnels: vec![Configured {
+                id: 3,
+                config: Arc::new(config.clone()),
+                local_network: false,
+            }],
+            routes: std::collections::HashMap::from([(UID, 3)]),
+            log_destinations: log,
+        };
+        shared.tunnels.set(&set(true), &shared);
+        let Some(kept) = shared.record_tunnelled(flow(1, Some(UID)), 3) else {
+            unreachable!("not live")
+        };
+        up_at(&shared, &clock, &kept, 500, 10);
+        shared.tell(&told(T, T + 1_000, &[]));
+        let snapshot = shared.now_view(T + 1_000);
+        let app = app_of(&snapshot, Some(UID)).map(|a| {
+            (
+                a.places.iter().map(|p| p.flow.via).collect::<Vec<_>>(),
+                a.through_tool,
+                a.through_tunnel,
+            )
+        });
+        assert_eq!(
+            app,
+            Some((vec![crate::engine::Via::Tunnel(3)], false, None))
+        );
+        shared.tunnels.set(&set(false), &shared);
+        shared.hide_chained();
+        let Some(hidden) = shared.record_tunnelled(flow(2, Some(UID)), 3) else {
+            unreachable!("not live")
+        };
+        up_at(&shared, &clock, &hidden, 1_500, 10);
+        shared.tell(&told(T + 1_000, T + 2_000, &[]));
+        let snapshot = shared.now_view(T + 2_000);
+        let app = app_of(&snapshot, Some(UID))
+            .map(|a| (a.places.len(), a.through_tool, a.through_tunnel));
+        assert_eq!(app, Some((0, false, Some(3))));
     }
 
     /// A connection is shown the way it was routed, not by the chain when it is recorded: one routed directly

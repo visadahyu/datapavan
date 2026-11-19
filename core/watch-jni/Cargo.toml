@@ -20,6 +20,8 @@ datapavan-engine = { path = "../engine" }
 jni = { version = "0.22.4", default-features = false }
 # fcntl, to make sure the tunnel's descriptor does not block.
 libc = "0.2"
+# Zeroes the copy of a WireGuard configuration's text once it is parsed (W7): already in the tree.
+zeroize = "=1.9.2"
 
 [lints.rust]
 # JNI exports and the hand-over of the tunnel's descriptor are unsafe; keep every block documented.

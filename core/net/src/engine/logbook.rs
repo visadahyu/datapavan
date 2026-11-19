@@ -408,6 +408,10 @@ impl Shared {
         flow: Flow,
         via: Option<&super::Chain>,
     ) -> Option<Arc<FlowBytes>> {
+        let mut flow = flow;
+        if via.is_some() {
+            flow.via = super::Via::Tool;
+        }
         let logged = self.log_flow(&flow, via);
         self.keep(flow);
         logged
@@ -1165,6 +1169,8 @@ mod tests {
                     asn: 32_934,
                     kind: NetworkKind::Own,
                 }),
+                // Through the WireGuard tunnel of number 7 (version 4).
+                via: super::super::Via::Tunnel(7),
                 ..flow(10)
             },
             start: at(22, 18),
@@ -1191,7 +1197,7 @@ mod tests {
         );
         let mut text = String::from(
             "# Watch's connection log: one batch of records as the engine writes them (core/net/src/log.rs,\n\
-             # version 3), in hex. Written by the engine's test the_kotlin_sides_fixture_is_what_the_engine_writes\n\
+             # version 4), in hex. Written by the engine's test the_kotlin_sides_fixture_is_what_the_engine_writes\n\
              # (core/net/src/engine/logbook.rs), which fails when the engine writes otherwise; run it with\n\
              # DATAPAVAN_WRITE_FIXTURE=1 to write it anew. Read by LogTest and LogDaysTest. Not edited by hand.\n",
         );

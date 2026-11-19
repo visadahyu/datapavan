@@ -5,8 +5,8 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * One record of the connection log, as the engine writes it (core/net/src/log.rs, version 3). The
- * bytes are kept as they are, sealed; this reads them back, and reads versions 1 and 2 too, which no
+ * One record of the connection log, as the engine writes it (core/net/src/log.rs, version 4). The
+ * bytes are kept as they are, sealed; this reads them back, and reads versions 1 to 3 too, which no
  * release wrote but debug builds on test phones did, as ADR 0044's decision 4 asked: a day sealed then
  * stays readable until it expires. A record of another version is skipped and counted, never read as
  * this one.
@@ -59,6 +59,13 @@ sealed interface LogRecord {
          */
         val dnsName: String,
         override val state: Int = AppState.NOT_TOLD,
+        /**
+         * Its route (version 4, W7): [VIA_DIRECT], [VIA_TOOL] or [VIA_TUNNEL], and for a tunnel its number,
+         * which Watch gave the configuration; records before version 4 went directly or through the tool,
+         * and say [VIA_DIRECT].
+         */
+        val via: Int = VIA_DIRECT,
+        val tunnel: Long = 0,
     ) : LogRecord
 
     /** Lookups the app sent to Watch's own DNS address, and their packets' bytes on the tunnel. */
@@ -74,7 +81,12 @@ sealed interface LogRecord {
 
     companion object {
         /** The version the engine writes. */
-        const val VERSION: Byte = 3
+        const val VERSION: Byte = 4
+
+        /** A segment's route (version 4). */
+        const val VIA_DIRECT = 0
+        const val VIA_TOOL = 1
+        const val VIA_TUNNEL = 2
         private const val UNKNOWN_UID = -1
 
         /**
@@ -105,7 +117,7 @@ sealed interface LogRecord {
         fun parse(bytes: ByteArray): LogRecord? = try {
             val b = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
             val version = b.get()
-            if (version != VERSION && version != VERSION_2 && version != VERSION_1) {
+            if (version != VERSION && version != VERSION_3 && version != VERSION_2 && version != VERSION_1) {
                 null
             } else {
                 when (b.get().toInt()) {
@@ -130,7 +142,16 @@ sealed interface LogRecord {
                             address = InetAddress.getByAddress(address), port = port, asn = asn, network = network,
                             name = text(b), resolver = text(b), dnsName = if (version == VERSION_1) "" else text(b),
                             state = state(b, version),
-                        )
+                        ).let { segment ->
+                            if (version < VERSION) {
+                                segment
+                            } else {
+                                val via = b.get().toInt() and 0xff
+                                val tunnel = b.int.toLong() and 0xffffffffL
+                                // A code the engine never writes, or a tunnel number beside no tunnel, is malformed.
+                                if (via > VIA_TUNNEL || (via == VIA_TUNNEL) != (tunnel != 0L)) null else segment.copy(via = via, tunnel = tunnel)
+                            }
+                        }
                     }
                     2 -> Lookups(
                         b.int.takeIf { it != UNKNOWN_UID }, b.long, b.long, b.int.toLong() and 0xffffffffL, b.long, b.long,
@@ -151,12 +172,15 @@ sealed interface LogRecord {
         /** The version before the app's state. */
         private const val VERSION_2: Byte = 2
 
+        /** The version before a segment's route. */
+        private const val VERSION_3: Byte = 3
+
         /**
          * The record's last byte, its app's state, from version 3; "not told" before. A code the engine never
          * writes gives -1, and the record is read as malformed.
          */
         private fun state(b: ByteBuffer, version: Byte): Int {
-            if (version < VERSION) return AppState.NOT_TOLD
+            if (version < VERSION_3) return AppState.NOT_TOLD
             return (b.get().toInt() and 0xff).takeIf(AppState::isCode) ?: -1
         }
 

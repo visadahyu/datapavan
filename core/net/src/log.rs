@@ -1,5 +1,5 @@
 //! The records Watch's connection log stores (W4, ADR 0037), in the form the engine hands them to
-//! Watch's Kotlin side, which seals each one under the day's key. Version 3, little-endian:
+//! Watch's Kotlin side, which seals each one under the day's key. Version 4, little-endian:
 //!
 //! - a flow segment: version, kind 1, the flow's number, the app's UID (`u32::MAX` unknown), start and
 //!   end in milliseconds since 1970 (UTC), bytes up and down as the app sent and received them, bytes
@@ -7,8 +7,10 @@
 //!   from, ECH, the app's own DNS, flags (bit 0: the flow continues; bit 1: it came in), the
 //!   destination's address (length 4 or 16, then the bytes) and port, the AS number (0 none) and what its
 //!   owner is, then the name, the resolver and the DNS name where it differs from the name, each a length
-//!   byte and UTF-8, and last the state of its app over the segment ([`Placed::code`]): its bytes' seconds', or,
-//!   for a part with no bytes, its end's (ADR 0046, "How it is built").
+//!   byte and UTF-8, then the state of its app over the segment ([`Placed::code`]): its bytes' seconds', or,
+//!   for a part with no bytes, its end's (ADR 0046, "How it is built"); and last its route: one byte (0
+//!   directly, 1 through the user's tool, 2 through a `WireGuard` tunnel) and the tunnel's number (u32, 0 for
+//!   none).
 //! - lookups an app sent to Watch's own DNS address: version, kind 2, the UID, start and end, their
 //!   count, their packets' bytes up and down on the tunnel, and last the app's state over them, as a segment's.
 //!
@@ -19,15 +21,17 @@
 //! it differs from the name, so a flag for that would say the same twice. Version 3 (W5's second part,
 //! ADR 0046's decision 1) added the state, one byte at the end of each kind: the low four bits the state
 //! (0 none, 1 in use, 2 with its notification, 3 in the background), the high four why there is none.
+//! Version 4 (W7, part 1, ADR 0035) added a segment's route after its state, so that the history says which
+//! flows went through which tunnel, or the tool; a lookups record is as in version 3.
 
 use std::net::{IpAddr, SocketAddr};
 
-use crate::engine::{DnsUse, Ech, Flow, NamedBy, Network, Outcome};
+use crate::engine::{DnsUse, Ech, Flow, NamedBy, Network, Outcome, Via};
 use crate::owners::NetworkKind;
 use crate::states::Placed;
 
 /// The version of the record format.
-pub const VERSION: u8 = 3;
+pub const VERSION: u8 = 4;
 
 /// One record of the log.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -105,6 +109,7 @@ impl Record {
                 push_text(&mut out, flow.resolver.as_deref());
                 push_text(&mut out, flow.dns_name.as_deref());
                 out.push(state.code());
+                push_via(&mut out, flow.via);
             }
             Self::Lookups {
                 uid,
@@ -127,6 +132,18 @@ impl Record {
         }
         out
     }
+}
+
+/// A flow's route, as the log and the live view's snapshot write it: a byte (0 directly, 1 through the
+/// tool, 2 through a tunnel), then the tunnel's number, 0 for none.
+pub(crate) fn push_via(out: &mut Vec<u8>, via: Via) {
+    let (code, tunnel) = match via {
+        Via::Direct => (0, 0),
+        Via::Tool => (1, 0),
+        Via::Tunnel(t) => (2, t),
+    };
+    out.push(code);
+    out.extend_from_slice(&tunnel.to_le_bytes());
 }
 
 /// Where a flow's name came from, as the log and the live view's snapshot write it.
@@ -232,7 +249,13 @@ pub(crate) fn states_in(batch: &[u8]) -> Vec<Placed> {
         let length = usize::from(u16::from_le_bytes([length[0], length[1]]));
         if let Some(record) = batch.get(at + 2..at + 2 + length)
             && record.get(1) == Some(&1)
-            && let Some(state) = record.last().copied().and_then(Placed::from_code)
+            // A segment's state comes before its route's five bytes.
+            && let Some(state) = record
+                .len()
+                .checked_sub(6)
+                .and_then(|at| record.get(at))
+                .copied()
+                .and_then(Placed::from_code)
         {
             states.push(state);
         }
@@ -283,7 +306,7 @@ mod tests {
             state: NOT_TOLD,
         };
         let bytes = record.encode();
-        let mut expected = vec![3, 1];
+        let mut expected = vec![4, 1];
         expected.extend_from_slice(&7u64.to_le_bytes());
         expected.extend_from_slice(&10_123u32.to_le_bytes());
         for v in [1_000u64, 2_000, 300, 40_000, 820, 42_900] {
@@ -297,10 +320,36 @@ mod tests {
         expected.extend_from_slice(b"Meta Platforms, Inc.");
         expected.extend_from_slice(&[0, 0]);
         expected.push(0x50);
+        expected.extend_from_slice(&[0, 0, 0, 0, 0]);
         assert_eq!(bytes, expected);
     }
 
-    /// Version 3's addition: the state, the last byte of each kind, every code the engine writes.
+    /// Version 4's addition: a segment's route after its state, each kind, with its tunnel's number.
+    #[test]
+    fn encodes_a_segments_route_after_its_state() {
+        for (via, end) in [
+            (Via::Direct, [0, 0, 0, 0, 0]),
+            (Via::Tool, [1, 0, 0, 0, 0]),
+            (Via::Tunnel(0x0102_0304), [2, 4, 3, 2, 1]),
+        ] {
+            let segment = Record::Segment {
+                flow: Flow { via, ..flow() },
+                start: 1_000,
+                end: 2_000,
+                bytes: [1, 2, 3, 4],
+                continues: false,
+                state: NOT_TOLD,
+            };
+            let bytes = segment.encode();
+            assert_eq!(
+                &bytes[bytes.len() - 6..],
+                &[&[NOT_TOLD.code()][..], &end].concat()[..]
+            );
+        }
+    }
+
+    /// Version 3's addition: the state, the last byte of a lookups record and of a segment before its route,
+    /// every code the engine writes.
     #[test]
     fn encodes_the_state_last_in_each_kind() {
         use crate::states::State;
@@ -331,10 +380,12 @@ mod tests {
                 wire_down: 3,
                 state,
             };
-            for record in [segment, lookups] {
-                let bytes = record.encode();
-                assert_eq!((bytes[0], bytes.last().copied()), (3, Some(state.code())));
-            }
+            let (segment, lookups) = (segment.encode(), lookups.encode());
+            assert_eq!((segment[0], segment[segment.len() - 6]), (4, state.code()));
+            assert_eq!(
+                (lookups[0], lookups.last().copied()),
+                (4, Some(state.code()))
+            );
             assert_eq!(Placed::from_code(state.code()), Some(state));
         }
         let lookups = Record::Lookups {
@@ -369,9 +420,9 @@ mod tests {
         let bytes = record(false).encode();
         // Version, kind, number, UID, six times; protocol, outcome, named by, ECH, DNS, flags.
         let flags = 1 + 1 + 8 + 4 + 6 * 8 + 5;
-        assert_eq!((bytes[0], bytes[flags]), (3, 0b10));
+        assert_eq!((bytes[0], bytes[flags]), (4, 0b10));
         assert_eq!(record(true).encode()[flags], 0b11);
-        assert!(bytes.ends_with(b"\x0dother.example\x00\x0fwww.example.com\x50"));
+        assert!(bytes.ends_with(b"\x0dother.example\x00\x0fwww.example.com\x50\0\0\0\0\0"));
     }
 
     #[test]
@@ -390,8 +441,8 @@ mod tests {
             state: NOT_TOLD,
         };
         let bytes = record.encode();
-        // The name, then an empty resolver, no DNS name and the state.
-        let name_at = bytes.len() - 1 - 1 - 1 - 254 - 1;
+        // The name, then an empty resolver, no DNS name, the state and the route.
+        let name_at = bytes.len() - 5 - 1 - 1 - 1 - 254 - 1;
         assert_eq!(bytes[name_at], 254, "127 two-byte characters");
         let lookups = Record::Lookups {
             uid: Some(10_123),

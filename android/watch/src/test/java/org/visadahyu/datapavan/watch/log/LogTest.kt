@@ -78,6 +78,9 @@ class LogTest {
         assertEquals(listOf(1L, 2L, 3L, 4L), listOf(byDns.up, byDns.down, byDns.wireUp, byDns.wireDown))
         assertEquals("www.example.com" to "", byDns.name to byDns.dnsName)
         assertEquals(AppState.LATE, byDns.state)
+        // Version 4: through the WireGuard tunnel numbered 7; the others went directly.
+        assertEquals(LogRecord.VIA_TUNNEL to 7L, byDns.via to byDns.tunnel)
+        assertEquals(LogRecord.VIA_DIRECT to 0L, before.via to before.tunnel)
         assertEquals(listOf("in-use", "none-late"), listOf(AppState.name(tls.state), AppState.name(byDns.state)))
     }
 
@@ -96,14 +99,31 @@ class LogTest {
         assertNull(LogRecord.parse(engines.copyOf(engines.size - 1)))
     }
 
-    /** A version 2 record, as debug builds wrote them in W5's first part: the engine's, without the state. */
+    /** A version 2 record, as debug builds wrote them in W5's first part: the engine's, without the state or the route. */
     @Test
     fun readsAVersion2RecordAsNotTold() {
         val (_, engines) = EngineRecords.records[0]
-        val version2 = engines.copyOf(engines.size - 1).also { it[0] = 2 }
+        val version2 = engines.copyOf(engines.size - 6).also { it[0] = 2 }
         val record = LogRecord.parse(version2) as LogRecord.Segment
         assertEquals("other.example" to "www.example.com", record.name to record.dnsName)
         assertEquals(AppState.NOT_TOLD, record.state)
+    }
+
+    /**
+     * A version 3 segment, as debug builds wrote them before W7: the engine's, without the route, which reads as
+     * direct; and version 4's route refused where it says what the engine never writes.
+     */
+    @Test
+    fun readsAVersion3SegmentAsDirectAndRefusesARouteTheEngineNeverWrites() {
+        val (_, engines) = EngineRecords.records[10]
+        val version3 = engines.copyOf(engines.size - 5).also { it[0] = 3 }
+        val record = LogRecord.parse(version3) as LogRecord.Segment
+        assertEquals(AppState.LATE to LogRecord.VIA_DIRECT, record.state to record.via)
+        val route = engines.size - 5
+        assertNull("no such route", LogRecord.parse(engines.copyOf().also { it[route] = 3 }))
+        assertNull("a tunnel of no number", LogRecord.parse(engines.copyOf().also { it.fill(0, route + 1, route + 5) }))
+        assertNull("a number beside no tunnel", LogRecord.parse(engines.copyOf().also { it[route] = 0 }))
+        assertEquals(LogRecord.VIA_TOOL, (LogRecord.parse(engines.copyOf().also { it[route] = 1; it.fill(0, route + 1, route + 5) }) as LogRecord.Segment).via)
     }
 
     /** No record, cut short anywhere or with any byte changed, makes the reader throw: it reads it or skips it. */
@@ -123,7 +143,7 @@ class LogTest {
     @Test
     fun skipsAndCountsARecordOfAnotherVersion() {
         val (_, engines) = EngineRecords.records[0]
-        val newer = engines.copyOf().also { it[0] = 4 }
+        val newer = engines.copyOf().also { it[0] = 5 }
         val batch = ByteBuffer.allocate(4 + 3 * 2 + newer.size + segment.size + engines.size).order(ByteOrder.LITTLE_ENDIAN)
             .putInt(3).putShort(newer.size.toShort()).put(newer).putShort(segment.size.toShort()).put(segment)
             .putShort(engines.size.toShort()).put(engines).array()

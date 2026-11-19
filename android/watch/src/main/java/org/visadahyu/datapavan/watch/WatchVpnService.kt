@@ -713,6 +713,7 @@ class WatchVpnService : VpnService() {
                 writer.println("setup-again")
             }
             debugChain(args.orEmpty().toList(), writer)
+            debugTunnels(args.orEmpty().toList(), writer)
             if ("find-tool" in args.orEmpty()) {
                 // Android runs dump on the main thread, where sockets are not allowed: the search runs
                 // on a thread of its own, and this debug command waits for it.
@@ -830,6 +831,51 @@ class WatchVpnService : VpnService() {
             logDestinations = false,
         )
         writer.println(if (on) "chain on" else "chain off")
+    }
+
+    /** Debug builds only: the apps routed through a tunnel by [debugTunnels], with their tunnels' numbers. */
+    private val debugRoutes = mutableMapOf<Int, Int>()
+
+    /**
+     * Debug builds only, for W7's emulator check (scripts/verify-wireguard.sh): `tunnel-add ID FILE [local]`
+     * sets the WireGuard configuration in the file FILE of Watch's private storage (its files directory,
+     * which `run-as` writes) as the tunnel ID, "Local network directly" on with `local`, and prints `tunnel-set
+     * ID` or `tunnel-refused ID WHY`; `tunnel-remove ID` removes it; `tunnel-route UID ID` sends the app UID
+     * through the tunnel ID, or its other way with ID 0, and prints `tunnel-routed UID ID`. Then, always, one
+     * `tunnel` line for each tunnel's state, with no key, address or endpoint. The file's bytes are zeroed
+     * once handed over; part 2 brings the import and the Keystore.
+     */
+    private fun debugTunnels(args: List<String>, writer: PrintWriter) {
+        fun after(command: String, n: Int) = args.indexOf(command).takeIf { it >= 0 }?.let { args.drop(it + 1).take(n) }
+        after("tunnel-add", 3)?.let { given ->
+            val id = given.getOrNull(0)?.toIntOrNull() ?: return@let
+            val name = given.getOrNull(1)?.takeIf { it.matches(Regex("[A-Za-z0-9._-]+")) } ?: return@let
+            val text = java.io.File(filesDir, name).takeIf { it.isFile }?.readBytes()
+            if (text == null) {
+                writer.println("tunnel-refused $id no-file")
+                return@let
+            }
+            val why = Engine.nativeTunnelSet(id, text, localNetwork = given.getOrNull(2) == "local")
+            text.fill(0)
+            writer.println(if (why.isEmpty()) "tunnel-set $id" else "tunnel-refused $id $why")
+        }
+        after("tunnel-remove", 1)?.firstOrNull()?.toIntOrNull()?.let { id ->
+            Engine.nativeTunnelRemove(id)
+            debugRoutes.values.removeAll { it == id }
+            writer.println("tunnel-removed $id")
+        }
+        after("tunnel-route", 2)?.takeIf { it.size == 2 }?.let { (uid, id) ->
+            val (app, tunnel) = (uid.toIntOrNull() ?: return@let) to (id.toIntOrNull() ?: return@let)
+            if (tunnel == 0) debugRoutes.remove(app) else debugRoutes[app] = tunnel
+            val routes = debugRoutes.entries.toList()
+            Engine.nativeTunnelRoutes(
+                routes.map { it.key }.toIntArray(),
+                routes.map { it.value }.toIntArray(),
+                logDestinations = false,
+            )
+            writer.println("tunnel-routed $app $tunnel")
+        }
+        Engine.nativeTunnelStates().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("tunnel $it") }
     }
 
     /**

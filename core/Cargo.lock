@@ -375,6 +375,7 @@ dependencies = [
  "datapavan-net",
  "jni",
  "libc",
+ "zeroize",
 ]
 
 [[package]]

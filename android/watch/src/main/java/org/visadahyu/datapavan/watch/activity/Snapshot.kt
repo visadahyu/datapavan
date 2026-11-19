@@ -7,10 +7,11 @@ import org.visadahyu.datapavan.watch.log.AppState
 
 /**
  * What the live view "Now" draws (ADR 0046, decision 2 (d)), as the engine hands it over
- * ([org.visadahyu.datapavan.watch.Engine.nativeActivity]; core/net/src/snapshot.rs, version 2): each app
+ * ([org.visadahyu.datapavan.watch.Engine.nativeActivity]; core/net/src/snapshot.rs, version 3): each app
  * that sent or received in a window, with its bytes by state, those in no state by why, the window while
- * the screen was off, and the destinations it reached. From the engine's memory only; nothing of it is
- * kept. Both sides ship in one build, so version 1 is refused.
+ * the screen was off, the destinations it reached with each one's route, and the WireGuard tunnel it went
+ * through with its destinations not kept (W7). From the engine's memory only; nothing of it is kept. Both
+ * sides ship in one build, so earlier versions are refused.
  */
 data class Snapshot(
     /** When it was taken, in milliseconds since 1970 (UTC). */
@@ -53,16 +54,19 @@ data class Snapshot(
          * off (ADR 0046, decision 3, as decided on 2026-11-19): the engine says so, the view does not guess it.
          */
         val serversHidden: Boolean = false,
+        /** The WireGuard tunnel it went through with its destinations not kept, by Watch's number; 0 for none. */
+        val throughTunnel: Long = 0,
     ) {
         fun up(window: Int, column: Int): Long = bytes[(window * COLUMNS + column) * 2]
         fun down(window: Int, column: Int): Long = bytes[(window * COLUMNS + column) * 2 + 1]
 
         override fun equals(other: Any?) = other is App && uid == other.uid && now == other.now &&
             isTool == other.isTool && throughTool == other.throughTool && bytes.contentEquals(other.bytes) &&
-            destinations == other.destinations && serversHidden == other.serversHidden
+            destinations == other.destinations && serversHidden == other.serversHidden &&
+            throughTunnel == other.throughTunnel
 
         override fun hashCode() =
-            listOf(uid, now, isTool, throughTool, bytes.contentHashCode(), destinations, serversHidden).hashCode()
+            listOf(uid, now, isTool, throughTool, bytes.contentHashCode(), destinations, serversHidden, throughTunnel).hashCode()
     }
 
     /** A destination as W3 names it, with its bytes up and down in each window. */
@@ -85,10 +89,13 @@ data class Snapshot(
         val organisation: String,
         /** Up and down in the windows [TEN_MINUTES], [HOUR] and [SINCE_SCREEN_ON]: 6 numbers. */
         val bytes: List<Long>,
+        /** Its route, as the log codes it (LogRecord.Segment.via), and for a tunnel its number. */
+        val via: Int = org.visadahyu.datapavan.watch.log.LogRecord.VIA_DIRECT,
+        val tunnel: Long = 0,
     )
 
     companion object {
-        const val VERSION: Byte = 2
+        const val VERSION: Byte = 3
 
         const val NOTHING_YET = 0
         const val STATES = 1
@@ -165,7 +172,11 @@ data class Snapshot(
                 }
             }
             val destinations = List(count(b.short.toInt() and 0xffff, b.remaining())) { destination(b) }
-            return App(uid, now, flags and 1 != 0, flags and 2 != 0, bytes, destinations, serversHidden = flags and 4 != 0)
+            val throughTunnel = b.int.toLong() and 0xffffffffL
+            return App(
+                uid, now, flags and 1 != 0, flags and 2 != 0, bytes, destinations, serversHidden = flags and 4 != 0,
+                throughTunnel = throughTunnel,
+            )
         }
 
         private fun destination(b: ByteBuffer): Destination {
@@ -183,9 +194,14 @@ data class Snapshot(
             val resolver = text(b)
             val organisation = text(b)
             val bytes = List(6) { b.long }
+            val via = b.get().toInt() and 0xff
+            val tunnel = b.int.toLong() and 0xffffffffL
+            // A code the engine never writes, or a tunnel number beside no tunnel, is refused.
+            require(via <= org.visadahyu.datapavan.watch.log.LogRecord.VIA_TUNNEL)
+            require((via == org.visadahyu.datapavan.watch.log.LogRecord.VIA_TUNNEL) == (tunnel != 0L))
             return Destination(
                 protocol, namedBy, ech, dns, flags and 1 != 0, address, port, asn, network,
-                name, dnsName, resolver, organisation, bytes,
+                name, dnsName, resolver, organisation, bytes, via, tunnel,
             )
         }
 

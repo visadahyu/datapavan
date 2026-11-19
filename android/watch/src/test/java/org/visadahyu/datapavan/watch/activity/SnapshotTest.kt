@@ -45,6 +45,9 @@ class SnapshotTest {
         assertEquals("192.0.2.7" to 853, encrypted.address.hostAddress to encrypted.port)
         assertEquals(listOf("dns.example", "other.example", "sample", ""), listOf(encrypted.name, encrypted.dnsName, encrypted.resolver, encrypted.organisation))
         assertEquals(listOf(50L, 0L, 50L, 0L, 50L, 0L), encrypted.bytes)
+        // Version 3: directly, and no app went through a WireGuard tunnel.
+        assertEquals(org.visadahyu.datapavan.watch.log.LogRecord.VIA_DIRECT to 0L, encrypted.via to encrypted.tunnel)
+        assertEquals(listOf(0L, 0L), snapshot.apps.map { it.throughTunnel })
 
         val app = snapshot.apps[1]
         assertEquals(AppState.BACKGROUND, app.now)
@@ -115,7 +118,7 @@ class SnapshotTest {
     @Test
     fun refusesAUidListedTwice() {
         val first = 1 + 8 + 1 + 8 + 1 + 3 * 8 + 4
-        val second = first + 4 + 1 + 1 + Snapshot.WINDOWS * Snapshot.COLUMNS * 2 * 8 + 2 + destinationsOf(0)
+        val second = first + 4 + 1 + 1 + Snapshot.WINDOWS * Snapshot.COLUMNS * 2 * 8 + 2 + destinationsOf(0) + 4
         val twice = fixture.copyOf().also { java.nio.ByteBuffer.wrap(it).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(second, -1) }
         assertNull(Snapshot.parse(twice))
         // The same place given another UID reads: it is the second app's UID.
@@ -131,11 +134,37 @@ class SnapshotTest {
     fun readsTheToolsServersHidden() {
         assertEquals(listOf(false, false), checkNotNull(Snapshot.parse(fixture)).apps.map { it.serversHidden })
         val first = 1 + 8 + 1 + 8 + 1 + 3 * 8 + 4
-        val second = first + 4 + 1 + 1 + Snapshot.WINDOWS * Snapshot.COLUMNS * 2 * 8 + 2 + destinationsOf(0)
+        val second = first + 4 + 1 + 1 + Snapshot.WINDOWS * Snapshot.COLUMNS * 2 * 8 + 2 + destinationsOf(0) + 4
         val hidden = fixture.copyOf().also { it[second + 5] = (it[second + 5].toInt() or 0b101).toByte() }
         val app = checkNotNull(Snapshot.parse(hidden)).apps
         assertEquals(listOf(false, true), app.map { it.serversHidden })
         assertEquals(true to false, app[1].isTool to app[1].throughTool)
+    }
+
+    /**
+     * Version 3: a destination's route and an app's tunnel (W7). The first app's one destination goes through tunnel
+     * 5, and the second app through tunnel 9 with its destinations not kept; a route the engine never writes, or a
+     * number beside no tunnel, is refused.
+     */
+    @Test
+    fun readsEachDestinationsRouteAndAnAppsTunnel() {
+        val buffer = { bytes: ByteArray -> java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN) }
+        val first = 1 + 8 + 1 + 8 + 1 + 3 * 8 + 4
+        val route = first + 4 + 1 + 1 + Snapshot.WINDOWS * Snapshot.COLUMNS * 2 * 8 + 2 + destinationsOf(0) - 5
+        val appTunnel = route + 5
+        val routed = fixture.copyOf().also {
+            it[route] = 2
+            buffer(it).putInt(route + 1, 5)
+            buffer(it).putInt(fixture.size - 4, 9)
+        }
+        val snapshot = checkNotNull(Snapshot.parse(routed))
+        val destination = snapshot.apps[0].destinations.single()
+        assertEquals(org.visadahyu.datapavan.watch.log.LogRecord.VIA_TUNNEL to 5L, destination.via to destination.tunnel)
+        assertEquals(listOf(0L, 9L), snapshot.apps.map { it.throughTunnel })
+        assertEquals(0, buffer(fixture).getInt(appTunnel))
+        assertNull("no such route", Snapshot.parse(fixture.copyOf().also { it[route] = 3 }))
+        assertNull("a tunnel of no number", Snapshot.parse(fixture.copyOf().also { it[route] = 2 }))
+        assertNull("a number beside no tunnel", Snapshot.parse(fixture.copyOf().also { buffer(it).putInt(route + 1, 5) }))
     }
 
     /** The bytes the first app's destinations take in the fixture. */
@@ -143,7 +172,7 @@ class SnapshotTest {
         val snapshot = checkNotNull(Snapshot.parse(fixture))
         return snapshot.apps[app].destinations.sumOf { d ->
             5 + 1 + d.address.address.size + 2 + 4 + 1 +
-                listOf(d.name, d.dnsName, d.resolver, d.organisation).sumOf { 1 + it.toByteArray().size } + 6 * 8
+                listOf(d.name, d.dnsName, d.resolver, d.organisation).sumOf { 1 + it.toByteArray().size } + 6 * 8 + 5
         }
     }
 
@@ -159,7 +188,8 @@ class SnapshotTest {
         assertNull(Snapshot.parse(fixture.copyOf(fixture.size - 1)))
         assertNull(Snapshot.parse(fixture + 0))
         assertNull("version 1", Snapshot.parse(fixture.copyOf().also { it[0] = 1 }))
-        assertNull(Snapshot.parse(fixture.copyOf().also { it[0] = 3 }))
+        assertNull("version 2", Snapshot.parse(fixture.copyOf().also { it[0] = 2 }))
+        assertNull(Snapshot.parse(fixture.copyOf().also { it[0] = 4 }))
         assertNull("no engine runs", Snapshot.parse(ByteArray(0)))
     }
 }

@@ -12,17 +12,20 @@ use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd, RawFd};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use datapavan_engine::datapack;
+use datapavan_net::engine::{Configured, TunnelState};
 use datapavan_net::organisations::{FilePart, Organisations};
 use datapavan_net::socks5::Credentials;
 use datapavan_net::trackers::NetworkSignatures;
+use datapavan_net::wireguard::Config as WgConfig;
 use datapavan_net::{
     Addresses, Chain, ChainSetting, Config, DnsUse, Ech, Engine, Flow, Handover, Limits, NamedBy,
-    NetworkKind, Outcome, Platform,
+    NetworkKind, Outcome, Platform, TunnelSetting,
 };
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
 use jni::objects::{JByteArray, JClass, JIntArray, JLongArray, JObject, JString};
 use jni::sys::{jboolean, jint, jlong};
 use jni::{EnvUnowned, JValue, JavaVM, jni_sig, jni_str};
+use zeroize::Zeroize;
 
 /// The running engine, if any.
 ///
@@ -75,6 +78,40 @@ fn set_chain(chain: Option<Chain>) -> bool {
         }
         None => false,
     }
+}
+
+/// Changes the `WireGuard` tunnels' setting (W7) for the engines to come, kept beside the chain, and sets it on
+/// the one that runs, if any.
+fn set_tunnels(change: impl FnOnce(&mut TunnelSetting)) {
+    let mut set = setting();
+    let kept = set.get_or_insert_with(|| ChainSetting {
+        chain: None,
+        uncached_answers: false,
+        tunnels: TunnelSetting::default(),
+    });
+    change(&mut kept.tunnels);
+    if let Some(running) = engine().as_ref() {
+        running.tunnels(&kept.tunnels);
+    }
+}
+
+/// A tunnel's state as `nativeTunnelStates` writes it: `id handshake received error not-answering plain-dns
+/// connected flows`, the times in milliseconds ago and `-` for none. No key, no address, no endpoint.
+fn state_line(state: &TunnelState) -> String {
+    let ms = |d: Option<std::time::Duration>| {
+        d.map_or_else(|| "-".to_owned(), |d| d.as_millis().to_string())
+    };
+    format!(
+        "{} {} {} {} {} {} {} {}",
+        state.id,
+        ms(state.handshake),
+        ms(state.received),
+        state.error.unwrap_or("-"),
+        u8::from(state.not_answering),
+        u8::from(state.plain_dns),
+        u8::from(state.connected),
+        state.flows,
+    )
 }
 
 /// Keeps whether answers go uncached, where a chain was set to keep it with, and sets it on the engine
@@ -481,6 +518,126 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeChain<'ca
                 _ => None,
             };
             Ok(set_chain(chain))
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `Engine.nativeTunnelSet(id, text, localNetwork)`: adds the `WireGuard` configuration `text`, in `wg-quick`'s
+/// form, as the tunnel `id` (not 0), or puts it in place of the one of that number (W7, ADR 0035), with "Local
+/// network directly" as `localNetwork` says. The text is handed over unwrapped (part 2 keeps it wrapped in the
+/// Keystore) and zeroed here once parsed. Returns "" when it is set, else why it is refused, as
+/// `datapavan_net::wireguard::Refusal`'s `Display` writes it: a code, a line, a key, never a value.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTunnelSet(id: Int, text:
+// ByteArray, localNetwork: Boolean): String`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelSet<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    id: jint,
+    text: JByteArray<'caller>,
+    local_network: jboolean,
+) -> JString<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let mut bytes = env.convert_byte_array(&text)?;
+            let parsed = WgConfig::parse(&bytes);
+            bytes.zeroize();
+            let answer = match (u32::try_from(id).ok().filter(|&id| id != 0), parsed) {
+                (None, _) => "bad-id".to_owned(),
+                (Some(_), Err(refusal)) => refusal.to_string(),
+                (Some(id), Ok(config)) => {
+                    let configured = Configured {
+                        id,
+                        config: Arc::new(config),
+                        local_network,
+                    };
+                    set_tunnels(
+                        |tunnels| match tunnels.tunnels.iter_mut().find(|t| t.id == id) {
+                            Some(place) => *place = configured,
+                            None => tunnels.tunnels.push(configured),
+                        },
+                    );
+                    String::new()
+                }
+            };
+            JString::from_str(env, answer)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `Engine.nativeTunnelRemove(id)`: removes the tunnel `id`, and the routes to it: its apps go their other way
+/// (W7).
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTunnelRemove(id: Int)`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelRemove<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    id: jint,
+) {
+    unowned_env
+        .with_env(|_env| -> Result<_, Error> {
+            if let Ok(id) = u32::try_from(id) {
+                set_tunnels(|tunnels| {
+                    tunnels.tunnels.retain(|t| t.id != id);
+                    tunnels.routes.retain(|_, t| *t != id);
+                });
+            }
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>();
+}
+
+/// `Engine.nativeTunnelRoutes(uids, tunnels, logDestinations)`: the apps sent through a tunnel, each UID in
+/// `uids` through the tunnel at the same place in `tunnels`, every other app its other way; and whether
+/// their destinations are kept ("Log where these apps connect", as for chained apps). Replaces every route.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTunnelRoutes(uids: IntArray,
+// tunnels: IntArray, logDestinations: Boolean)`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelRoutes<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    uids: JIntArray<'caller>,
+    tunnels: JIntArray<'caller>,
+    log_destinations: jboolean,
+) {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let read = |array: &JIntArray<'_>, env: &mut jni::Env<'_>| -> Result<Vec<i32>, Error> {
+                let mut values = vec![0; array.len(env)?];
+                array.get_region(env, 0, &mut values)?;
+                Ok(values)
+            };
+            let (uids, ids) = (read(&uids, env)?, read(&tunnels, env)?);
+            let routes = uids
+                .into_iter()
+                .zip(ids)
+                .filter_map(|(uid, id)| Some((u32::try_from(uid).ok()?, u32::try_from(id).ok()?)))
+                .filter(|(_, id)| *id != 0)
+                .collect();
+            set_tunnels(|tunnels| {
+                tunnels.routes = routes;
+                tunnels.log_destinations = log_destinations;
+            });
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>();
+}
+
+/// `Engine.nativeTunnelStates()`: each tunnel's state, one per line as [`state_line`] writes it, in the order
+/// set; empty when no engine runs.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTunnelStates(): String`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelStates<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) -> JString<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let states = engine()
+                .as_ref()
+                .map_or_else(Vec::new, Engine::tunnel_states);
+            let lines: Vec<String> = states.iter().map(state_line).collect();
+            JString::from_str(env, lines.join("\n"))
         })
         .resolve::<ThrowRuntimeExAndDefault>()
 }
@@ -944,6 +1101,63 @@ mod tests {
             "the chain set before the first start"
         );
         stop_running();
+    }
+
+    /// W7: tunnels set while no engine runs are the next engine's from its first packet, kept beside a chain set
+    /// after them; routes and removal reach the engine that runs, and its states name no key.
+    #[test]
+    fn tunnels_set_while_no_engine_runs_are_the_next_engines() {
+        let _process = process();
+        stop_running();
+        let text = "[Interface]\nPrivateKey = yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=\nAddress = 10.77.0.2/32\n\
+                    DNS = 10.77.0.1\n[Peer]\nPublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\n\
+                    AllowedIPs = 0.0.0.0/0\nEndpoint = 192.0.2.1:51820\n";
+        let Ok(config) = WgConfig::parse(text.as_bytes()) else {
+            unreachable!("refused")
+        };
+        let config = Arc::new(config);
+        set_tunnels(|tunnels| {
+            tunnels.tunnels.push(Configured {
+                id: 4,
+                config: Arc::clone(&config),
+                local_network: false,
+            });
+            tunnels.routes.insert(10_300, 4);
+        });
+        set_chain(Some(a_chain(10_808)));
+        let mut seen = Vec::new();
+        assert!(start_next(None, |given| started(&mut seen, given)));
+        let kept = seen.last().and_then(Option::as_ref).map(|s| {
+            (
+                s.tunnels.tunnels.len(),
+                s.tunnels.routes.get(&10_300).copied(),
+                s.chain.is_some(),
+            )
+        });
+        assert_eq!(
+            kept,
+            Some((1, Some(4), true)),
+            "the tunnel and the chain, both"
+        );
+        let states = engine()
+            .as_ref()
+            .map(Engine::tunnel_states)
+            .unwrap_or_default();
+        assert_eq!(states.iter().map(|s| s.id).collect::<Vec<_>>(), [4]);
+        let line = state_line(&states[0]);
+        assert_eq!(line, "4 - - - 0 0 0 0");
+        assert!(!line.contains("192.0.2.1") && !line.contains("yAnz"));
+        set_tunnels(|tunnels| {
+            tunnels.tunnels.retain(|t| t.id != 4);
+            tunnels.routes.retain(|_, t| *t != 4);
+        });
+        let states = engine()
+            .as_ref()
+            .map(Engine::tunnel_states)
+            .unwrap_or_default();
+        assert!(states.is_empty(), "removed from the engine that runs");
+        stop_running();
+        assert!(setting().is_none(), "nothing of the run kept for the next");
     }
 
     /// Unit 12b: a tunnel swapped in while no engine runs is refused, and its descriptor closed, so that

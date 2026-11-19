@@ -1,6 +1,6 @@
 //! What the live view "Now" draws (ADR 0046, decision 2 (d)), as the engine hands it to Watch's Kotlin
 //! side once a second while the view is open: each app's bytes by its state in each window, and the
-//! destinations it reached, from memory only. Version 2, little-endian:
+//! destinations it reached, from memory only. Version 3, little-endian:
 //!
 //! - version (2), when it was taken (milliseconds since 1970, UTC), what the latest reading of the
 //!   states knew (0 none came yet, 1 the states, 2 nothing: Watch has no usage access, 3 nothing: Android
@@ -20,7 +20,10 @@
 //!   came in), its address (length 4 or 16, then the bytes) and port, the AS number (0 none) and what its
 //!   owner is, then its name, the DNS name beside it where the two differ, the known resolver and the
 //!   organisation behind its network, each a length byte and UTF-8, and its bytes up and down for each
-//!   window: 6 numbers.
+//!   window: 6 numbers; then its route, as the log writes it: a byte (0 directly, 1 through the tool, 2
+//!   through a `WireGuard` tunnel) and the tunnel's number (u32, 0 for none);
+//! - after each app's destinations, the `WireGuard` tunnel it went through with its destinations left out
+//!   ("Log where these apps connect" off), in a window: its number (u32), 0 for none.
 //!
 //! The windows of 10 minutes and an hour are whole minutes: the current one and the 9, or the 59, before
 //! it, so that they reach back at least 9 and 59 minutes and never more than 10 and 60. The window while
@@ -28,14 +31,17 @@
 //! are the log's (`log.rs`).
 //!
 //! Version 2 (W5's third part) added the window while the screen was off and the bytes in no state by
-//! why. Both sides ship in one build, so the Kotlin side reads version 2 only.
+//! why; version 3 (W7, part 1) each destination's route and each app's tunnel. Both sides ship in one build,
+//! so the Kotlin side reads version 3 only.
 
 use crate::engine::{Flow, Network};
-use crate::log::{dns_code, ech_code, named_by_code, push_address, push_network, push_text};
+use crate::log::{
+    dns_code, ech_code, named_by_code, push_address, push_network, push_text, push_via,
+};
 use crate::states::{Known, Placed, Screen};
 
 /// The version of the snapshot.
-pub const VERSION: u8 = 2;
+pub const VERSION: u8 = 3;
 
 /// Bytes up and down.
 pub type Ways = [u64; 2];
@@ -82,6 +88,8 @@ pub struct AppNow {
     pub tool: bool,
     /// Whether it went through the tool with its destinations left out, in a window.
     pub through_tool: bool,
+    /// The `WireGuard` tunnel it went through with its destinations left out, in a window (W7).
+    pub through_tunnel: Option<u32>,
     /// Whether it is the user's tool with its own servers left out, as they are while "Log where these apps
     /// connect" is off (ADR 0046, decision 3, as decided on 2026-11-19), so that the view says why it shows
     /// none rather than guess it from an empty list.
@@ -164,7 +172,9 @@ pub fn encode(snapshot: &Snapshot) -> Vec<u8> {
             for ways in place.bytes {
                 push_ways(&mut out, ways);
             }
+            push_via(&mut out, flow.via);
         }
+        out.extend_from_slice(&app.through_tunnel.unwrap_or(0).to_le_bytes());
     }
     out
 }
@@ -230,13 +240,14 @@ mod tests {
                 now: Some(Placed::Known(State::Background)),
                 tool: false,
                 through_tool: true,
+                through_tunnel: None,
                 servers_hidden: false,
                 bytes,
                 places: vec![place()],
             }],
         };
         let out = encode(&snapshot);
-        let mut expected = vec![2];
+        let mut expected = vec![3];
         expected.extend_from_slice(&1_000u64.to_le_bytes());
         expected.push(2);
         expected.extend_from_slice(&900u64.to_le_bytes());
@@ -270,6 +281,9 @@ mod tests {
         for value in [1u64, 2, 3, 4, 5, 6] {
             expected.extend_from_slice(&value.to_le_bytes());
         }
+        // Version 3: the destination's route, directly, and the app's tunnel, none.
+        expected.extend_from_slice(&[0, 0, 0, 0, 0]);
+        expected.extend_from_slice(&0u32.to_le_bytes());
         assert_eq!(out, expected);
     }
 
@@ -290,6 +304,7 @@ mod tests {
                     now: Some(Placed::Unknown(Unknown::NoApp)),
                     tool: false,
                     through_tool: false,
+                    through_tunnel: None,
                     servers_hidden: false,
                     bytes: [[[0; 2]; COLUMNS]; WINDOWS],
                     places: Vec::new(),
@@ -299,6 +314,7 @@ mod tests {
                     now: None,
                     tool: true,
                     through_tool: false,
+                    through_tunnel: None,
                     servers_hidden: true,
                     bytes: [[[0; 2]; COLUMNS]; WINDOWS],
                     places: Vec::new(),
@@ -318,7 +334,8 @@ mod tests {
         );
         assert_eq!(&out[27..35], &700u64.to_le_bytes()[..]);
         let first = 1 + 8 + 1 + 8 + 1 + 8 + 8 + 8 + 4;
-        let app = 4 + 1 + 1 + 80 * 8 + 2;
+        // An app of no destinations ends with its tunnel's number, none (version 3).
+        let app = 4 + 1 + 1 + 80 * 8 + 2 + 4;
         assert_eq!(out[first..first + 6], [0xff, 0xff, 0xff, 0xff, 0x40, 0]);
         assert_eq!(
             out[first + app + 4..first + app + 6],
