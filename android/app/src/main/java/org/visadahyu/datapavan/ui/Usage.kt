@@ -1,7 +1,6 @@
 package org.visadahyu.datapavan.ui
 
 import android.app.LocaleManager
-import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
@@ -40,6 +39,7 @@ import org.visadahyu.datapavan.R
 import org.visadahyu.datapavan.audit.AppFacts
 import org.visadahyu.datapavan.audit.Dormancy
 import org.visadahyu.datapavan.audit.Dormant
+import org.visadahyu.datapavan.audit.openUsageAccess
 import org.visadahyu.datapavan.audit.QuietRole
 import org.visadahyu.datapavan.audit.StillHolds
 import org.visadahyu.datapavan.audit.Traffic
@@ -164,16 +164,6 @@ private fun installedFromFile(context: Context): Boolean {
         return false
     }
     return source == PackageInstaller.PACKAGE_SOURCE_LOCAL_FILE || source == PackageInstaller.PACKAGE_SOURCE_DOWNLOADED_FILE
-}
-
-/** The page for Datapavan itself where the system offers one; otherwise the list of all apps. */
-private fun openUsageAccess(context: Context) {
-    val own = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, Uri.fromParts("package", context.packageName, null))
-    try {
-        context.startActivity(own)
-    } catch (_: ActivityNotFoundException) {
-        context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-    }
 }
 
 /** The overview's network section: totals, the apps that used the most, and use under no installed app. */
