@@ -351,6 +351,17 @@ field's best:
   wireguard-go) in a container on the development machine and on CI, so that every run tests interoperation with
   WireGuard itself, not GotaTun with GotaTun.
 
+- **Routes, decided before W7 was built (the maintainer, 2026-11-19):** each app has one route: directly,
+  through the user's tool (W6), or through one WireGuard configuration; the tool's chain and WireGuard run at once,
+  for different apps, as RethinkDNS allows. **Several configurations** are kept and run at once, each app assigned
+  to one of them (the official WireGuard app keeps several but runs one; RethinkDNS runs several per app). The
+  destinations of apps sent through WireGuard are logged only under the switch that governs chained apps' ("Log where
+  these apps connect"), off by default, since a log of them is evidence in a phone search. **Routing by
+  destination** (a domain or a network directly, the rest through a tunnel, as sing-box's and Clash's rules do) is
+  left out of W7 for a unit of its own after W8, with its own ADR: it is a rule engine with privacy questions of
+  its own (IP-to-country data, its interplay with W8's resolver), and the users who most need it reach it today
+  through their own tool's rules over W6's chain.
+
 **Frontier research is not needed:** every part is established; the spike and the interoperation tests answer
 what is open.
 
