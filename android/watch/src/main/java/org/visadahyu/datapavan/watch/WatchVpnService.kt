@@ -743,7 +743,9 @@ class WatchVpnService : VpnService() {
      * why (no usage access, no events, told too late, no app, not told); and `activity-off` the window while
      * the screen was off, when the screen went off and came on again (0 for none, and while still off).
      * `activity-clear` first clears the live view's memory, as ADR 0047's profile will at each screen-off,
-     * and says so (W5's third part).
+     * and says so; `activity-tracker [HOST PORT]` reads the table of trackers from the data pack, says how many
+     * trackers, alternatives and refused alternatives it holds, and which trackers it finds for the host given,
+     * a test's own (W5's third part).
      */
     private fun debugActivity(args: List<String>, writer: PrintWriter) {
         if ("activity-read" in args) {
@@ -752,6 +754,18 @@ class WatchVpnService : VpnService() {
         if ("activity-clear" in args) {
             Engine.nativeClearActivity()
             writer.println("activity-cleared")
+        }
+        // The table of trackers from the data pack the audit verifies, as "Now" reads it, and what it finds for
+        // one host and port given (W5's third part): no destination of any app is printed.
+        val asked = args.indexOf("activity-tracker").takeIf { it >= 0 }
+        if (asked != null) {
+            val read = NowActivity.loadTrackers(this)
+            writer.println("activity-trackers ${read.joinToString(" ").ifEmpty { "none" }}")
+            val host = args.getOrNull(asked + 1)
+            val port = args.getOrNull(asked + 2)
+            if (host != null && port != null) {
+                writer.println("activity-tracker ${NowActivity.matchTrackers(listOf("$host\t$port")).values.flatten().joinToString(",").ifEmpty { "-" }}")
+            }
         }
         val snapshot = org.visadahyu.datapavan.watch.activity.Snapshot.parse(Engine.nativeActivity()) ?: return
         val known = when (snapshot.known) {

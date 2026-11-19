@@ -171,15 +171,16 @@ class NowActivity : ComponentActivity() {
         /**
          * Hands the engine's library the network signatures of `exodus/trackers.tsv` in the data pack the audit
          * verifies, the current one, once in the process's life and again after an import: it is read anew each
-         * time this screen opens, and no copy of the pack is kept.
+         * time this screen opens, and no copy of the pack is kept. Returns what the library read: how many trackers
+         * have a network signature, how many alternatives it read and how many it refused; empty for none.
          */
-        internal fun loadTrackers(context: Context) {
+        internal fun loadTrackers(context: Context): IntArray {
             val table = try {
                 DataPackStore.read(context, WatchPacks).file(TRACKERS)
             } catch (e: RuntimeException) {
                 null
-            } ?: return
-            trackersLoaded = Engine.nativeTrackers(table).isNotEmpty()
+            } ?: return IntArray(0)
+            return Engine.nativeTrackers(table).also { trackersLoaded = it.isNotEmpty() }
         }
 
         /** The text the engine's library matches for a destination: its name, the DNS name and its address, at its port. */
