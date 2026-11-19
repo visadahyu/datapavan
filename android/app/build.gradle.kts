@@ -104,6 +104,20 @@ val forbiddenLibraries = if (advanced) emptyList() else listOf("libdatapavan_wat
 // R8 must neither remove nor rename (watch/proguard-rules.pro).
 val jniCallbacks = if (advanced) listOf("ownerUid", "protectSocket", "logRecords", "statesWanted", "resolveEndpoint") else emptyList()
 
+// The licence texts every APK carries under assets/licences/ (NOTICE, W7's fix round, review M4): NOTICE, LICENSE,
+// and the texts of every crate inside its native libraries (licences/, scripts/licences.py); Advanced adds Watch's
+// library's, with GotaTun's, whose package carries none. scripts/check.sh android checks the release APKs hold them.
+val licenceFiles = buildList {
+    add("NOTICE")
+    add("LICENSE")
+    add("licences/native-core.txt")
+    if (advanced) {
+        add("licences/native-watch.txt")
+        add("licences/MPL-2.0.txt")
+        add("licences/gotatun-BSD-3-Clause.txt")
+    }
+}
+
 android {
     namespace = "org.visadahyu.datapavan"
     compileSdk = 37
@@ -282,6 +296,24 @@ abstract class CargoNdkTask : DefaultTask() {
             setEnvironment(environment)
             commandLine(args)
         }
+    }
+}
+
+/** Copies the licence texts ([licenceFiles]) into the assets, under `licences/`, each by its own name. */
+abstract class LicenceTexts : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val texts: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val out = outputDir.get().asFile.resolve("licences")
+        outputDir.get().asFile.deleteRecursively()
+        out.mkdirs()
+        texts.files.forEach { it.copyTo(out.resolve(it.name)) }
     }
 }
 
@@ -642,6 +674,11 @@ androidComponents {
             rustFlags.set(remappedRustFlags)
         }
         variant.sources.jniLibs?.addGeneratedSourceDirectory(cargoTask, CargoNdkTask::outputDir)
+
+        val licencesTask = tasks.register<LicenceTexts>("licenceTexts$suffix") {
+            texts.from(licenceFiles.map { repositoryRoot.file(it) })
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(licencesTask, LicenceTexts::outputDir)
 
         val dataTask = tasks.register<BundledDataTask>("bundledData$suffix") {
             dataDir.set(repositoryRoot.dir("data"))

@@ -162,6 +162,10 @@ rust_gates() {
     network=$(grep -xE 'datapavan-net|socket2|mio|tokio|nix|hyper|h2|reqwest|ureq|rustls|native-tls|openssl|quinn|smoltcp' <<<"$crates" || true)
     [ -z "$network" ] || { echo "Basic's native library depends on network crates: $network" >&2; exit 1; }
     netlab_gate
+    # The licence texts of the native libraries' crates, which the APKs carry (W7's fix round, review M4): what
+    # core/Cargo.lock gives, and no crate without one.
+    echo "== Rust: licences/ holds the texts of every crate inside the native libraries (scripts/licences.py)"
+    python3 -I "$ROOT/scripts/licences.py" --check
     # Needs network access to fetch the RustSec advisory database.
     cargo deny --locked check
 }
@@ -176,6 +180,18 @@ native_budget() {
         echo "  $abi: $size bytes"
         [ "$size" -le "$budget" ] || { echo "lib/$abi/$lib is $size bytes, over its budget of $budget" >&2; exit 1; }
     done
+}
+
+# Fails when the APK $1 does not carry, under assets/licences/, each of the files $2... as the repository has
+# them (NOTICE, W7's fix round, review M4).
+licence_texts() {
+    local apk=$1 file
+    shift
+    for file in "$@"; do
+        cmp -s <(unzip -p "$apk" "assets/licences/$(basename "$file")") "$ROOT/$file" ||
+            { echo "$apk does not carry $file as assets/licences/$(basename "$file")" >&2; exit 1; }
+    done
+    echo "  $(basename "$apk"): $*"
 }
 
 android_gates() {
@@ -211,6 +227,10 @@ android_gates() {
     # library grew past it unnoticed.
     echo "== Android: Watch's native library within 2 MB per ABI (ADR 0035)"
     native_budget "$out/build-advanced/outputs/apk/release/app-release-unsigned.apk" libdatapavan_watch.so 2097152
+    echo "== Android: the release APKs carry NOTICE and their native libraries' licence texts (licences/)"
+    licence_texts "$out/build/outputs/apk/release/app-release-unsigned.apk" NOTICE LICENSE licences/native-core.txt
+    licence_texts "$out/build-advanced/outputs/apk/release/app-release-unsigned.apk" NOTICE LICENSE \
+        licences/native-core.txt licences/native-watch.txt licences/MPL-2.0.txt licences/gotatun-BSD-3-Clause.txt
     lab_class_check "$ROOT/android" \
         "$out/build/outputs/apk/release/app-release-unsigned.apk" "$out/build/outputs/bundle/release/app-release.aab" \
         "$out/build/outputs/mapping/release/mapping.txt" \

@@ -12,7 +12,9 @@ yanked = "deny"
 [licenses]
 # Keep this list to licences actually present. Adding one is a deliberate, reviewed decision. The last four
 # came with GotaTun in W7 (ADR 0035, Consequences): BSD-3-Clause (x25519-dalek, curve25519-dalek, subtle),
-# BSD-2-Clause (ip_network, ip_network_table), ISC (aws-lc-rs, aws-lc-sys, untrusted) and MPL-2.0 (gotatun).
+# BSD-2-Clause (ip_network, ip_network_table), ISC (aws-lc-rs, aws-lc-sys, untrusted) and MPL-2.0 (gotatun);
+# aws-lc-sys also carries BSD-3-Clause, MIT and Apache-2.0 parts, from BoringSSL and OpenSSL. The texts of every
+# crate a native library ships are in licences/ (scripts/licences.py), which the APK carries.
 allow = ["Apache-2.0", "MIT", "Unicode-3.0", "BSD-3-Clause", "BSD-2-Clause", "ISC", "MPL-2.0"]
 confidence-threshold = 0.93
 
