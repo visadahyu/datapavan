@@ -61,7 +61,10 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    translations. If the interface changed, take the store images again with `scripts/store-images.sh`
    on an emulator with CI's image (`dp-api35-ci`) at a phone's size (`wm size 1080x2400; wm density 420`): the icon from the launcher
    icon's layers, and six screenshots per language in SystemUI's demo mode.
-2. **Checks.** `scripts/check.sh all`, the emulator scripts (`smoke.sh`, `verify-audit.sh`,
+2. **Strings.** No `strings_untranslated.xml` is left under `android/*/src/main/res/values/`: strings added in
+   English only wait there for ADR 0030's translations and review, and move into `strings.xml` with them, where
+   `scripts/check-translations.py` holds them to every language (W5's third part).
+3. **Checks.** `scripts/check.sh all`, the emulator scripts (`smoke.sh`, `verify-audit.sh`,
    `verify-plan.sh`, `verify-shortcuts.sh`, `verify-datapack.sh`, `screenshots.sh`) on the CI image
    `dp-api35-ci`, and `scripts/reproducible.sh`, which builds the release twice from clean checkouts in
    different directories and fails unless the two unsigned APKs are identical. Then
@@ -83,9 +86,9 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    and what is built, in SECURITY.md, RESTRICTED-REGIONS.md, DATA-PACKS.md, REMEDIATION.md, CHANNELS.md,
    the datasets' LICENSE files, the roadmap's status and the website. A statement that is not true yet
    is changed or dated before signing, never left for the next release.
-3. **Data pack.** If `data/` changed, raise the sequence in `data/PACK`, set its date, and sign the
+4. **Data pack.** If `data/` changed, raise the sequence in `data/PACK`, set its date, and sign the
    pack offline ([DATA-PACKS.md](DATA-PACKS.md#publishing-a-pack)).
-4. **Signing, offline.** `scripts/prepare-signing.sh <directory> [<edition>]` gathers what goes to the offline
+5. **Signing, offline.** `scripts/prepare-signing.sh <directory> [<edition>]` gathers what goes to the offline
    system for one edition, `basic` unless `advanced` is given, from a clean commit on `main`: the unsigned APK,
    once two builds agree, the data pack's payload, the notes and their hashes. Each edition is prepared in a
    directory of its own. Copy them over and sign the APK:
@@ -107,13 +110,13 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    alone, which tools that read only v2 cannot check, and it writes a v4 `.idsig` file that no channel
    publishes (found by the rehearsal on 2026-11-05). `--min-sdk-version 24` makes `verify` report v2
    too, which it otherwise skips for this minSdk.
-5. **Release notes, signed.** The notes name the version, the commit, the APK's SHA-256, the certificate's
+6. **Release notes, signed.** The notes name the version, the commit, the APK's SHA-256, the certificate's
    fingerprint and the sentence to teach (ADR 0045, decision 4: "Genuine Datapavan Basic never has internet
    access. Genuine Datapavan Advanced uses it only for your own apps' traffic and the servers you choose, …").
    Their first line is the edition's name and the version, "Datapavan Basic <version>". They are signed offline with the release notes key
    (`signify-openbsd -S -e -s datapavan-notes-1.sec -m notes.txt`), so that users and channel
    operators can check them with `signify -V -e` (ADR 0024, point 3).
-6. **Check what came back** on the main system, from the published keys only:
+7. **Check what came back** on the main system, from the published keys only:
    `python3 -I scripts/verify-signed.py <directory> [<commit>] [<edition>]` checks the signatures of the notes and the data
    pack, that the notes name the release commit, its version, the APK's hash and certificate and the
    pack's fingerprint, and that the pack holds the data the APK carries. Then
@@ -121,7 +124,7 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    check is still to build; `scripts/verify-watch-release.sh` runs its release build): it must
    know itself genuine and refuse a damaged copy of the pack. On `dp-api30`, put the signed APK
    through `INSTALL_ABI=armeabi-v7a scripts/smoke.sh <apk>` and `verify-shortcuts.sh`.
-7. **Publish** the signed APK, the notes and their signature on GitHub Releases and under `download/` on the
+8. **Publish** the signed APK, the notes and their signature on GitHub Releases and under `download/` on the
    website, where `site/hugo.toml` names the current APK, its hash, size, tag and `release_code`, whose
    store changelog the download section shows, and tag the commit
    (`v<version>`). The tag itself is not signed, since none of the offline keys can sign a Git tag. The

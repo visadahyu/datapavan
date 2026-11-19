@@ -155,6 +155,15 @@ ADR 0046's views exist to show activity at a glance, which is what a searcher lo
 show nothing of use (decision 3). ADR 0046 decides their shape; this ADR decides only what the profile turns off
 in them, and the profile's tests check them (decision 11).
 
+*Noted 2026-11-19, W5's third part:* the engine has the call the profile's switch needs at each screen-off,
+`Engine::clear_activity` (`Engine.nativeClearActivity`), built and tested but wired to no switch until W9. It
+forgets every app's bytes in every window of "Now", their destinations, the window while the screen was off and
+the organisations looked up, keeps only the moment the screen came on, and keeps out of the view every second
+before it that is placed later. It cannot clear the flows still open, which the engine needs to carry them, nor
+what waits for the log, which retention "none" under the profile already keeps from being written. W9 calls it at
+each screen-off, and may call it at the screen-on too, before the view can open, so that "Now" shows only this
+screen-on's traffic (ADR 0046, "How it is built", W5's third part).
+
 ### 7. Wiping: a panic trigger and a button
 
 - **In the app.** With the profile on, "Delete everything now" is in each app's main menu and on Watch's lock
