@@ -1,0 +1,43 @@
+# spikes/wireguard-core/lab.sh, lab/ and peer/ as committed in 975f9be, run 2026-11-19 on the development machine (Linux 7.3, kernel WireGuard module):
+# GotaTun 0.10.3 on ring against the kernel's WireGuard in datapavan-wglab. The peer's address is written PEER.
+== peer: kernel WireGuard in datapavan-wglab, iproute2-7.0.0-r0 python3-3.14.10-r1 wireguard-tools-wg-1.0.20260223-r0 
+== client plain: --v4 10.77.0.2 --v6 fd77::2 --scenario full --keepalive 5
+note: scenario full, peer PEER:51820, local port 47407, preshared key no, persistent keepalive Some(5)
+PASS handshake: 1 initiation(s), the queued echo answered after 512.297µs
+PASS icmp-v4: echo answered in 41.658µs
+PASS icmp-v6: echo answered in 44.023µs
+PASS udp-v4: 29 bytes echoed
+PASS udp-v6: 29 bytes echoed
+PASS tcp-v4: SYN-ACK acknowledging our ISN+1, then "HTTP/1.0 200 OK"
+PASS tcp-v6: SYN-ACK acknowledging our ISN+1, then "HTTP/1.0 200 OK"
+note: dropped a decrypted packet from 10.77.1.1, outside the peer's AllowedIPs
+PASS outside-allowed-ips-v4-dropped: 1 decrypted packet(s) from outside dropped, none passed
+note: dropped a decrypted packet from fd77:1::1, outside the peer's AllowedIPs
+PASS outside-allowed-ips-v6-dropped: 1 decrypted packet(s) from outside dropped, none passed
+PASS persistent-keepalive: 3 keepalives sent in 12 s of silence, 5 s apart in the configuration, gaps ["5.1 s", "5.1 s"]
+PASS roaming: local port 47407 -> 40152; the peer answered at the new port (IPv4 and IPv6)
+PASS rekey-after-time: second handshake Some("120.7 s") after the first, 11 of 11 echoes answered meanwhile, the new session carries IPv4 and IPv6: true
+note: Counts { handshakes_sent: 2, handshakes_completed: 2, keepalives_sent: 23, keepalives_received: 0, dropped_outside: 2, dropped_foreign_sender: 0, tunnel_errors: 0, data_sent: 28, data_received: 28 }
+local-port 40152
+PASS peer-endpoint-follows-roaming: the peer has the client at port 40152, the client's last local port
+note: the peer's last handshake with this client 8 s ago; transfer 3544 received, 3144 sent (bytes, the peer's view)
+== client psk: --v4 10.77.0.3 --v6 fd77::3 --scenario psk
+note: scenario psk, peer PEER:51820, local port 56546, preshared key yes, persistent keepalive None
+PASS handshake-with-psk: 1 initiation(s), the queued echo answered after 523.648µs
+PASS icmp-v4: echo answered in 46.668µs
+PASS icmp-v6: echo answered in 80.351µs
+PASS udp-v4: 29 bytes echoed
+PASS udp-v6: 29 bytes echoed
+PASS peer-keepalives-received: 2 keepalives from the peer in 8 s of silence
+note: Counts { handshakes_sent: 1, handshakes_completed: 1, keepalives_sent: 1, keepalives_received: 3, dropped_outside: 0, dropped_foreign_sender: 0, tunnel_errors: 0, data_sent: 5, data_received: 5 }
+local-port 56546
+== client wrong: --v4 10.77.0.4 --v6 fd77::4 --scenario wrong-psk
+note: scenario wrong-psk, peer PEER:51820, local port 40969, preshared key yes, persistent keepalive None
+note: tunnel: InvalidAeadTag
+note: tunnel: InvalidAeadTag
+PASS wrong-psk-refused: 2 initiations sent, 0 completed, 2 rejected by Tunn, echo unanswered
+note: Counts { handshakes_sent: 2, handshakes_completed: 0, keepalives_sent: 0, keepalives_received: 0, dropped_outside: 0, dropped_foreign_sender: 0, tunnel_errors: 2, data_sent: 0, data_received: 0 }
+local-port 40969
+PASS peer-wrong-psk-no-session: the peer has no completed handshake with the client of the wrong key
+== datapavan-wglab stopped
+== all lab checks passed
