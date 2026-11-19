@@ -140,7 +140,7 @@ impl NetworkSignatures {
                 id,
                 name: name.to_owned(),
             });
-            for alternative in signature.split('|') {
+            for alternative in alternatives(signature) {
                 match Pattern::new(tracker, alternative) {
                     Some(pattern) => table.patterns.push(pattern),
                     None => table.refused.push(Refused {
@@ -225,6 +225,28 @@ impl Pattern {
             port,
         })
     }
+}
+
+/// The alternatives of a signature: split on each bar that is not escaped, a backslash taking the next
+/// character with it, as Python's reader does (review c1 of W5's third part, engine, finding 4: `ads\|x\.com`
+/// is one alternative, refused for its `\|`, not `x\.com` matched alone).
+fn alternatives(signature: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut start = 0;
+    let mut escaped = false;
+    for (at, c) in signature.char_indices() {
+        match c {
+            _ if escaped => escaped = false,
+            '\\' => escaped = true,
+            '|' => {
+                parts.push(&signature[start..at]);
+                start = at + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(&signature[start..]);
+    parts
 }
 
 /// The atoms of a host part, or `None` where it lies outside the subset.
@@ -352,6 +374,25 @@ mod tests {
         // Runs may be empty, also in an empty name, as Python's search finds.
         assert!(marks("[0-9]*", "", 443));
         assert!(marks(r"a[0-9]*\.b", "a.b", 443));
+        // An escaped bar is a literal bar, outside the subset: the whole alternative is refused, never split
+        // into a signature of its own (re.search(r"ads\|x\.com", "x.com") is None).
+        assert!(!marks(r"ads\|x\.com", "x.com", 443));
+        // A backslash at the end escapes nothing, and is refused.
+        assert_eq!(table(&[r"tail\"]).refused().len(), 1);
+        let read = table(&[r"ads\|x\.com|y\.com"]);
+        assert_eq!(
+            read.refused()
+                .iter()
+                .map(|r| r.alternative.as_str())
+                .collect::<Vec<_>>(),
+            vec![r"ads\|x\.com"]
+        );
+        assert_eq!(read.alternatives(), 1);
+        assert_eq!(
+            alternatives(r"a\\|b"),
+            vec![r"a\\", "b"],
+            "an escaped backslash escapes no bar"
+        );
         // Case does not matter in a DNS name, nor in a signature.
         assert!(marks(r"flurry\.com", "DATA.Flurry.COM", 443));
         assert!(marks(r"Flurry\.com", "data.flurry.com", 443));
@@ -399,7 +440,6 @@ mod tests {
             "host:+80/x",
             "a b",
             "",
-            r"tail\",
         ] {
             let read = table(&[&format!("{outside}|kept\\.example")]);
             assert_eq!(
@@ -488,6 +528,23 @@ mod tests {
                 read.find(&yes, port).contains(&pattern.tracker),
                 "{pattern:?} on {yes}"
             );
+            // And with any one literal changed alone (review c1, engine, nit 3: changing all at once could not
+            // find one element misread, as `\.` read as `.`).
+            let spelt: Vec<char> = yes.chars().collect();
+            let mut at = 2;
+            for atom in &pattern.atoms {
+                let width = spelled(std::slice::from_ref(atom), false).chars().count();
+                if let Atom::Char(_) = atom {
+                    let mut one = spelt.clone();
+                    one[at] = if one[at] == '~' { '^' } else { '~' };
+                    assert!(
+                        !search(&pattern.atoms, &one),
+                        "{pattern:?} on {}",
+                        one.iter().collect::<String>()
+                    );
+                }
+                at += width;
+            }
             assert!(
                 !search(&pattern.atoms, &no.chars().collect::<Vec<_>>()),
                 "{pattern:?} on {no}"

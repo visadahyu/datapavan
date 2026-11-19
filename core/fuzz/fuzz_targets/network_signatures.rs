@@ -49,6 +49,27 @@ fn at_start(p: &[char], t: &[char]) -> bool {
     !t.is_empty() && test(t[0]) && at_start(rest, &t[1..])
 }
 
+/// A signature's alternatives as Python reads them, written apart from the matcher's: a backslash keeps the
+/// character after it, so an escaped bar separates nothing.
+fn bars(signature: &str) -> Vec<String> {
+    let mut parts = vec![String::new()];
+    let mut chars = signature.chars();
+    while let Some(c) = chars.next() {
+        let last = parts.len() - 1;
+        match c {
+            '|' => parts.push(String::new()),
+            '\\' => {
+                parts[last].push(c);
+                if let Some(next) = chars.next() {
+                    parts[last].push(next);
+                }
+            }
+            _ => parts[last].push(c),
+        }
+    }
+    parts
+}
+
 fn search(p: &[char], t: &[char]) -> bool {
     (0..=t.len()).any(|start| at_start(p, &t[start..]))
 }
@@ -67,7 +88,7 @@ fuzz_target!(|data: &[u8]| {
         .filter(|signature| signature.chars().count() > 3)
         .collect();
     assert_eq!(kept.len(), read.trackers().len());
-    let all: usize = kept.iter().map(|s| s.split('|').count()).sum();
+    let all: usize = kept.iter().map(|s| bars(s).len()).sum();
     assert_eq!(read.alternatives() + read.refused().len(), all);
     // Backtracking costs a power of the runs: keep the comparison to small inputs.
     let runs = tsv.matches('*').count();
@@ -81,7 +102,7 @@ fuzz_target!(|data: &[u8]| {
                 .iter()
                 .enumerate()
                 .filter(|(_, signature)| {
-                    signature.split('|').any(|alternative| {
+                    bars(signature).iter().map(String::as_str).any(|alternative| {
                         if read.refused().iter().any(|r| r.alternative == alternative) {
                             return false;
                         }
