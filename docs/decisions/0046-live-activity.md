@@ -999,4 +999,17 @@ decisions and two approvals of that day).** Each fix has a test or a check that 
   "Now" offered usage access without it. The first watch shard of the round failed there, on the reader's
   match by a part of a package name, fixed and run again. `scripts/screenshots.sh --now` passed the
   accessibility check in English, both pseudo-locales and dark mode, with the shell's history showing its
-  record and the days' buttons. Not run: the A40, which the maintainer measures himself.
+  record and the days' buttons. Not run on the A40; its panel left of the home screen was then read by hand (decision 5, as corrected).
+- **The translations (2026-11-19, after part 3's merge, on `w5-strings`).** The 85 strings of `:watch` and the one
+  of `:app` moved into `strings.xml`, and the untranslated files are gone. ADR 0030's process, once: an Opus
+  translator per language; Sonnet and Haiku each alone on three chunks of about 30 strings per language (42
+  reviews); an Opus settler per language, who accepted or rejected each finding against the English and the code
+  (records in the maintainer's notes). One English string was corrected on a reviewer's finding:
+  `cannot_see_notification` now says "From Android 12" for a service shorter than 10 seconds, as decision 5 does.
+  "Now" stays the screen's name in Latin letters in every language, as the app's strings already called it. The
+  German names of a notification channel and the private space are Android's own, read from the Android 15
+  emulator's Settings app ("Benachrichtigungskategorie", "Vertrauliches Profil"). `scripts/screenshots.sh --now`
+  now runs in every UI language, both pseudo-locales, and dark mode in English and Persian, and passed the
+  accessibility check in all of them (decision 6, item 9). Left as they are: the English of "What this view cannot
+  see" does not say that the summary leaves the tool out (the summary comes with W9), nor that a work profile, a
+  private space and another user have VPNs of their own.

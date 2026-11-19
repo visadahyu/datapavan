@@ -10,8 +10,8 @@
 #
 # With --now, Datapavan Advanced's view "Now" and an app's history (ADR 0046, W5's third part) instead, from
 # Advanced's debug APK, installed first: with the tunnel up, a request of adb's shell to a test server on this
-# computer, and usage access granted. Their strings are in English only until ADR 0030's translations come,
-# so they run in English and both pseudo-locales, light and dark; NOW_LOCALES may name others.
+# computer, and usage access granted, in every UI language and both pseudo-locales, and in dark mode in
+# English and Persian, as the audit's screens; NOW_LOCALES may name fewer.
 #
 #   scripts/screenshots.sh [--now] [output directory, default build/screenshots]
 set -euo pipefail
@@ -84,7 +84,7 @@ now_screens() {
     allow_vpn "$PKG" || { echo "SCREENSHOTS FAILED: no VPN consent for $PKG" >&2; exit 1; }
     adb shell appops set "$PKG" GET_USAGE_STATS allow
     for mode in light dark; do
-        if [ "$mode" = dark ]; then locales="en"; adb shell cmd uimode night yes >/dev/null; else locales="${NOW_LOCALES:-en en-XA ar-XB}"; adb shell cmd uimode night no >/dev/null; fi
+        if [ "$mode" = dark ]; then locales="${NOW_DARK_LOCALES:-en fa}"; adb shell cmd uimode night yes >/dev/null; else locales="${NOW_LOCALES:-en fr de es ru zh-CN ar fa en-XA ar-XB}"; adb shell cmd uimode night no >/dev/null; fi
         for locale in $locales; do
             adb shell cmd locale set-app-locales "$PKG" --locales "$locale"
             adb shell am force-stop "$PKG"
