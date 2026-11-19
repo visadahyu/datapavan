@@ -31,4 +31,5 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime)
+    testImplementation(libs.junit)
 }

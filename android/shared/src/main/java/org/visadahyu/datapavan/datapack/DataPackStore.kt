@@ -22,6 +22,12 @@ class DataPackStore private constructor(
     private val resolver: ContentResolver,
     private val directory: File,
     private val native: PackNative,
+    /**
+     * Whether this store deletes an imported pack that no longer applies: the audit's, which imports packs,
+     * does; Watch's, which only reads them in a process of its own, never does, so that it cannot delete a
+     * pack the audit is writing that moment (review c1 of W5's third part, engine, m5).
+     */
+    private val cleans: Boolean,
 ) {
     /** The pack in the APK. A build that cannot read its own data is broken, so this fails loudly. */
     val bundled: DataPack by lazy {
@@ -32,7 +38,7 @@ class DataPackStore private constructor(
         }
     }
 
-    private class Installed(val pack: DataPack, val chain: List<String>)
+    internal class Installed(val pack: DataPack, val chain: List<String>)
 
     @Volatile
     private var installed: Installed? = null
@@ -95,26 +101,10 @@ class DataPackStore private constructor(
     }
 
     /** The imported pack, checked again; one that no longer applies is deleted. */
-    private fun loadInstalled(): Installed? {
-        if (!packFile.exists()) return null
-        val found = try {
-            val chain = chainFile.readLines().filter { it.isNotEmpty() }
-            val reading = chain.lastOrNull()?.let { PackReader.signed(native, packFile.readBytes(), listOf(it)) }
-            (reading as? PackReading.Read)?.pack
-                ?.takeIf { DataPackRules.keep(bundled, it, chain) }
-                ?.let { Installed(it, chain) }
-        } catch (_: IOException) {
-            null
-        }
-        if (found == null) {
-            packFile.delete()
-            chainFile.delete()
-        }
-        return found
-    }
+    private fun loadInstalled(): Installed? = loadInstalled(directory, native, { bundled }, cleans)
 
-    private val packFile: File get() = File(directory, "installed.pack")
-    private val chainFile: File get() = File(directory, "installed.chain")
+    private val packFile: File get() = File(directory, PACK_FILE)
+    private val chainFile: File get() = File(directory, CHAIN_FILE)
 
     /** Writes through a temporary file, so a crash leaves the old file or the new one. */
     private fun write(file: File, bytes: ByteArray) {
@@ -126,6 +116,8 @@ class DataPackStore private constructor(
 
     companion object {
         const val BUNDLED_ASSET = "data/bundled.payload"
+        private const val PACK_FILE = "installed.pack"
+        private const val CHAIN_FILE = "installed.chain"
         /** As `MAX_PACK_BYTES` in the Rust engine. */
         const val MAX_PACK_BYTES = 32 shl 20
 
@@ -134,7 +126,8 @@ class DataPackStore private constructor(
 
         /** The process's store, read through [native], kept for the process's life (the audit's). */
         fun get(context: Context, native: PackNative): DataPackStore = instance ?: synchronized(this) {
-            instance ?: read(context, native).also { instance = it }
+            instance ?: DataPackStore(context.assets, context.contentResolver, File(context.noBackupFilesDir, "datapack"), native, cleans = true)
+                .also { instance = it }
         }
 
         /**
@@ -142,7 +135,32 @@ class DataPackStore private constructor(
          * needs one file of the pack now and then and keeps no copy of the pack in its memory.
          */
         fun read(context: Context, native: PackNative): DataPackStore =
-            DataPackStore(context.assets, context.contentResolver, File(context.noBackupFilesDir, "datapack"), native)
+            DataPackStore(context.assets, context.contentResolver, File(context.noBackupFilesDir, "datapack"), native, cleans = false)
+
+        /**
+         * The imported pack in [directory], checked again with [native] against the chain it was imported with
+         * and the rules of [DataPackRules.keep] over [bundled]; null for none or one that no longer applies,
+         * whose files are deleted only when [cleans].
+         */
+        internal fun loadInstalled(directory: File, native: PackNative, bundled: () -> DataPack, cleans: Boolean): Installed? {
+            val packFile = File(directory, PACK_FILE)
+            val chainFile = File(directory, CHAIN_FILE)
+            if (!packFile.exists()) return null
+            val found = try {
+                val chain = chainFile.readLines().filter { it.isNotEmpty() }
+                val reading = chain.lastOrNull()?.let { PackReader.signed(native, packFile.readBytes(), listOf(it)) }
+                (reading as? PackReading.Read)?.pack
+                    ?.takeIf { DataPackRules.keep(bundled(), it, chain) }
+                    ?.let { Installed(it, chain) }
+            } catch (_: IOException) {
+                null
+            }
+            if (found == null && cleans) {
+                packFile.delete()
+                chainFile.delete()
+            }
+            return found
+        }
 
         /** Reads at most [limit] + 1 bytes, so that a larger file is recognised without reading it all. */
         fun readAtMost(input: InputStream, limit: Int): ByteArray {
