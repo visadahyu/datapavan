@@ -792,4 +792,49 @@ mod tests {
             }
         }
     }
+
+    /// What both JNI bridges hand the apps (review c1 of W5's third part, engine, nit 2): a trusted key gives
+    /// the layout with the payload's offset in the pack and the signer's index; an untrusted key, a malformed
+    /// key line and a changed byte give their error's code alone; a bare payload gives its layout from 0.
+    #[test]
+    fn read_signed_and_read_payload_give_the_layout_or_the_error() {
+        use super::{layout, read_payload, read_signed};
+        let keys = |lines: &[&[u8]]| {
+            lines
+                .iter()
+                .map(|l| String::from_utf8_lossy(l).into_owned())
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        let read = read_signed(PACK, &keys(&[OTHER_KEY, TEST_KEY]));
+        let verified =
+            verify(PACK, &[key(OTHER_KEY), key(TEST_KEY)]).unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(
+            &read[..3],
+            &[0, 1, i32::try_from(verified.payload_start).unwrap_or(-1)]
+        );
+        let header =
+            Payload::parse(&PACK[verified.payload_start..]).unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(read, layout(&header, Some(1), verified.payload_start));
+        assert_eq!(
+            read_signed(PACK, &keys(&[OTHER_KEY])),
+            vec![Error::UnknownKey.code()]
+        );
+        assert_eq!(
+            read_signed(PACK, "not a key"),
+            vec![Error::InvalidKey.code()]
+        );
+        let mut changed = PACK.to_vec();
+        if let Some(last) = changed.last_mut() {
+            *last ^= 1;
+        }
+        assert_eq!(
+            read_signed(&changed, &keys(&[TEST_KEY])),
+            vec![Error::BadSignature.code()]
+        );
+        let bare = read_payload(&PACK[verified.payload_start..]);
+        assert_eq!(bare, layout(&header, None, 0));
+        assert_eq!(bare[1], -1);
+        assert_eq!(read_payload(b"not a pack"), vec![Error::NotPack.code()]);
+    }
 }
