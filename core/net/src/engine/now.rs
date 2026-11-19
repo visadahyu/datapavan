@@ -141,9 +141,10 @@ fn same_place(a: &Flow, b: &Flow) -> bool {
 /// One app's counts.
 #[derive(Default)]
 struct App {
-    minutes: Minutes<ByState>,
-    /// The bytes in no state by why, in the minutes that hold some only.
-    reasons: Minutes<ByReason>,
+    /// Each minute's bytes by state, and in no state by why where it holds some: one entry, so that a minute
+    /// leaves with both (review c1 of W5's third part, engine, finding 3: kept apart, the whys outlived their
+    /// minute, and after a clock set back exceeded the column of no state, which the reader refuses).
+    minutes: Minutes<Columns>,
     session: ByState,
     session_reasons: ByReason,
     /// The last second a flow of it went through the user's tool with its destination left out.
@@ -151,6 +152,13 @@ struct App {
     /// The last second it sent or received.
     last: u64,
     places: Vec<Place>,
+}
+
+/// One minute of an app: its bytes by state, and those in no state by why, only where it holds some.
+#[derive(Default)]
+struct Columns {
+    states: ByState,
+    reasons: Option<Box<ByReason>>,
 }
 
 /// One app's bytes in the window "while the screen was off".
@@ -203,14 +211,15 @@ impl App {
     /// Adds a placed second's bytes, in `minute`, to its column, and to its why where it has no state.
     fn add(&mut self, minute: u64, placed: Placed, ways: Ways, in_session: bool) {
         let column = placed.column();
-        add_minute(&mut self.minutes, minute, |counts: &mut ByState| {
-            add(&mut counts[column], ways);
+        add_minute(&mut self.minutes, minute, |counts: &mut Columns| {
+            add(&mut counts.states[column], ways);
+            if let Some(why) = placed.reason() {
+                add(
+                    &mut counts.reasons.get_or_insert_with(Box::default)[why],
+                    ways,
+                );
+            }
         });
-        if let Some(why) = placed.reason() {
-            add_minute(&mut self.reasons, minute, |counts: &mut ByReason| {
-                add(&mut counts[why], ways);
-            });
-        }
         if in_session {
             add(&mut self.session[column], ways);
             if let Some(why) = placed.reason() {
@@ -235,9 +244,14 @@ pub(super) struct Counts {
     /// The first second counted since the live memory was last cleared ([`Counts::clear`]), 0 for never:
     /// seconds before it, placed later, are not counted again.
     cleared: u64,
-    /// The moment the screen went off whose window the last clear forgot, so that a reading that tells it
-    /// again does not open it anew.
-    cleared_off: u64,
+    /// A moment at or before which no screen-off opens a window: that of a window the last clear forgot, or
+    /// the new clock's now when a clock set back forgot one, so that a reading that tells it again, as Watch's
+    /// Kotlin side does with its moments moved back, does not open it anew, empty (review c1 of W5's third
+    /// part, engine, finding 2).
+    off_floor: u64,
+    /// When the engine began counting, in milliseconds since 1970 (0 before it is told): the window while the
+    /// screen was off begins no earlier, so that it never claims hours Watch did not see (finding 6).
+    began: u64,
 }
 
 impl Counts {
@@ -264,17 +278,27 @@ impl Counts {
         }
     }
 
-    /// The screen went off at `at`: the window "while the screen was off" begins there, in place of the one
-    /// before, unless it is that one, or one before it, or one the last clear forgot.
+    /// The screen went off at `at`: the window "while the screen was off" begins there, or where the engine
+    /// began counting if that is later, in place of the one before, unless it is that one, or one before it,
+    /// or one the last clear or a clock set back forgot.
     pub(super) fn screen_off(&mut self, at: u64) {
-        if at <= self.cleared_off || self.off.as_ref().is_some_and(|off| off.from >= at) {
+        let from = at.max(self.began);
+        if at <= self.off_floor || self.off.as_ref().is_some_and(|off| off.from >= from) {
             return;
         }
         self.off = Some(Off {
-            from: at,
+            from,
             until: None,
             apps: HashMap::new(),
         });
+    }
+
+    /// The engine began counting at `now`, in milliseconds since 1970: kept from the first engine of the run,
+    /// as the counts are handed over.
+    pub(super) fn begin(&mut self, now: u64) {
+        if self.began == 0 {
+            self.began = now;
+        }
     }
 
     /// Forgets everything the live view holds, at the wall clock's `now`: every app's counts in every
@@ -284,11 +308,12 @@ impl Counts {
     /// names no app. What this cannot clear is not the live view's: the flows still open, which the engine
     /// needs to carry them, and the seconds and segments waiting for their states, which are the log's.
     pub(super) fn clear(&mut self, now: u64) {
-        let cleared_off = self.off.as_ref().map_or(self.cleared_off, |off| off.from);
+        let off_floor = self.off.as_ref().map_or(self.off_floor, |off| off.from);
         *self = Self {
             session: self.session,
             cleared: now.div_ceil(1000),
-            cleared_off: cleared_off.max(self.cleared_off),
+            off_floor: off_floor.max(self.off_floor),
+            began: now,
             ..Self::default()
         };
     }
@@ -300,13 +325,18 @@ impl Counts {
 
     /// The wall clock was set back to `now`: the minutes later than its own are of the old clock, and so
     /// is the moment the screen came on if it is later too; both are forgotten, so that the windows hold
-    /// the new clock's bytes (review b1 of W5's second part, engine, finding 5).
+    /// the new clock's bytes (review b1 of W5's second part, engine, finding 5). The moments of a clear, and
+    /// when counting began, come down to the new clock's now, so that what is counted after shows (review c1
+    /// of W5's third part, engine, finding 1: a clear before a set back blanked the view for the set back's
+    /// length).
     pub(super) fn set_back(&mut self, now: u64) {
+        self.cleared = self.cleared.min(now.div_ceil(1000));
+        self.off_floor = self.off_floor.min(now);
+        self.began = self.began.min(now);
         let minute = now / 60_000;
         let mut gone = 0;
         for app in self.apps.values_mut() {
             app.minutes.retain(|(m, _)| *m <= minute);
-            app.reasons.retain(|(m, _)| *m <= minute);
             for place in &mut app.places {
                 place.minutes.retain(|(m, _)| *m <= minute);
             }
@@ -324,6 +354,9 @@ impl Counts {
             .is_some_and(|off| off.until.unwrap_or(off.from) > now)
         {
             self.off = None;
+            // Watch's Kotlin side moves the window's moments back with the clock and tells them again: the
+            // window, forgotten with its bytes, is not opened anew from them, empty.
+            self.off_floor = now;
         }
         if self.session.is_some_and(|since| since > now) {
             self.session = None;
@@ -482,7 +515,6 @@ impl Counts {
         let mut gone = 0;
         self.apps.retain(|_, app| {
             app.minutes.retain(|(minute, _)| *minute >= first);
-            app.reasons.retain(|(minute, _)| *minute >= first);
             app.places.retain_mut(|place| {
                 place.minutes.retain(|(minute, _)| *minute >= first);
                 let keep = !place.minutes.is_empty() || place.session != Ways::default();
@@ -719,15 +751,10 @@ impl View {
             let windows = self.windows(minute * 60);
             for (w, inside) in windows.into_iter().take(2).enumerate() {
                 if inside {
-                    add_columns(&mut view.bytes[w], counts);
-                }
-            }
-        }
-        for (minute, reasons) in &app.reasons {
-            let windows = self.windows(minute * 60);
-            for (w, inside) in windows.into_iter().take(2).enumerate() {
-                if inside {
-                    add_reasons(&mut view.bytes[w], reasons);
+                    add_columns(&mut view.bytes[w], &counts.states);
+                    if let Some(reasons) = &counts.reasons {
+                        add_reasons(&mut view.bytes[w], reasons);
+                    }
                 }
             }
         }
@@ -1909,10 +1936,6 @@ mod tests {
         lock(&shared.activity).counts.screen_on(T + 500);
         let all = bytes_of(&shared.now_view(T + 1_000), Some(UID));
         assert_eq!(all[2], [[0; 2]; COLUMNS]);
-        // An hour on, the whys of the oldest minutes are forgotten with the minutes.
-        drop(shared.now_view(T + 46 * MINUTE));
-        let kept = lock(&shared.activity).counts.apps[&Some(UID)].reasons.len();
-        assert_eq!(kept, 1, "the minute 15 minutes before is still in the hour");
         // A clock set back forgets the whys of the minutes later than its own, and of the window since
         // the screen came on if that came on later.
         let (shared, _, _) = telling_at(T);
@@ -2038,6 +2061,136 @@ mod tests {
             Some(T + 5_500),
         ));
         assert_eq!(shared.now_view(T + 6_000).off, Some((T + 5_500, None)));
+    }
+
+    /// The whys never exceed the column of no state, in any window: after a clock set back to before the
+    /// app's newest minute, a minute in no state that left the app's minutes left its whys with it (review c1
+    /// of W5's third part, engine, finding 3: the hour's whys held 3 bytes, its column of no state 0).
+    #[test]
+    fn the_whys_leave_with_their_minute() {
+        let to = flow(1, Some(UID));
+        let (shared, _, _) = telling_at(T);
+        let mut counts = Counts::default();
+        let s = T / 1000;
+        counts.count(
+            Some(UID),
+            s - 3_600,
+            [3, 0, 0, 0],
+            NOT_TOLD,
+            Seen::Flow(&to),
+        );
+        counts.count(
+            Some(UID),
+            s - 1_800,
+            [4, 0, 0, 0],
+            BACKGROUND,
+            Seen::Flow(&to),
+        );
+        counts.count(Some(UID), s, [7, 0, 0, 0], BACKGROUND, Seen::Flow(&to));
+        counts.set_back(T - MINUTE);
+        lock(&shared.activity).counts = counts;
+        let all = bytes_of(&shared.now_view(T - MINUTE), Some(UID));
+        for (window, columns) in all.iter().enumerate() {
+            let whys: u64 = columns[REASONS..].iter().map(|ways| ways[0]).sum();
+            assert_eq!(whys, columns[0][0], "window {window}");
+        }
+    }
+
+    /// A clear, then a clock set back: what is counted after shows at once, and a screen-off after opens its
+    /// window (review c1 of W5's third part, engine, finding 1: both waited for the new clock to pass the
+    /// clear's moment, as long as the set back).
+    #[test]
+    fn a_clock_set_back_after_a_clear_keeps_counting() {
+        let to = flow(1, Some(UID));
+        let mut counts = Counts::default();
+        counts.screen_off(T + 50 * MINUTE);
+        counts.clear(T + 60 * MINUTE);
+        counts.set_back(T);
+        counts.count(
+            Some(UID),
+            T / 1000 + 10,
+            [5, 0, 0, 0],
+            BACKGROUND,
+            Seen::Flow(&to),
+        );
+        assert!(
+            counts.apps.contains_key(&Some(UID)),
+            "the bytes after the set back count"
+        );
+        counts.screen_off(T + 5 * MINUTE);
+        assert_eq!(
+            counts.off.as_ref().map(|off| off.from),
+            Some(T + 5 * MINUTE)
+        );
+    }
+
+    /// A window a clock set back forgot is not opened anew, empty, when the readings tell its moments again,
+    /// moved back with the clock; a later screen-off opens one (finding 2).
+    #[test]
+    fn a_window_a_clock_set_back_forgot_stays_forgotten() {
+        let to = flow(1, Some(UID));
+        let mut counts = Counts::default();
+        counts.screen_off(T);
+        counts.count(
+            Some(UID),
+            T / 1000 + 5,
+            [30, 0, 0, 0],
+            BACKGROUND,
+            Seen::Flow(&to),
+        );
+        counts.screen_on(T + 10 * MINUTE);
+        counts.set_back(T + 5 * MINUTE);
+        assert!(counts.off.is_none());
+        // Watch's Kotlin side moves both moments back by the set back, 15 minutes, and tells them again.
+        counts.screen_off(T - 15 * MINUTE);
+        counts.screen_on(T - 5 * MINUTE);
+        assert!(
+            counts.off.is_none(),
+            "an empty window, saying no app sent anything"
+        );
+        counts.screen_off(T + 6 * MINUTE);
+        assert_eq!(
+            counts.off.as_ref().map(|off| off.from),
+            Some(T + 6 * MINUTE)
+        );
+    }
+
+    /// The window while the screen was off begins no earlier than the engine began counting: Watch started
+    /// with the screen off, its first reading telling a screen-off long before (finding 6); and a screen-on
+    /// told before a running window's start does not end it (nit 1).
+    #[test]
+    fn the_window_begins_no_earlier_than_counting() {
+        let mut counts = Counts::default();
+        counts.begin(T + 4 * 60 * MINUTE);
+        counts.begin(T + 5 * 60 * MINUTE);
+        counts.screen_off(T);
+        assert_eq!(
+            counts.off.as_ref().map(|off| off.from),
+            Some(T + 4 * 60 * MINUTE),
+            "kept from the first engine"
+        );
+        counts.screen_off(T);
+        counts.screen_on(T + 60 * MINUTE);
+        assert_eq!(
+            counts.off.as_ref().map(|off| off.until),
+            Some(None),
+            "a screen-on before it began"
+        );
+        counts.screen_on(T + 8 * 60 * MINUTE);
+        assert_eq!(
+            counts.off.as_ref().map(|off| off.until),
+            Some(Some(T + 8 * 60 * MINUTE))
+        );
+        // A clear begins counting anew; a set back brings the moment down to the new clock.
+        counts.clear(T + 9 * 60 * MINUTE);
+        counts.screen_off(T + 9 * 60 * MINUTE + 1);
+        assert_eq!(
+            counts.off.as_ref().map(|off| off.from),
+            Some(T + 9 * 60 * MINUTE + 1)
+        );
+        counts.set_back(T);
+        counts.screen_off(T + 1);
+        assert_eq!(counts.off.as_ref().map(|off| off.from), Some(T + 1));
     }
 
     /// The first second counted after a clear is the first that begins at or after it: a second the clear

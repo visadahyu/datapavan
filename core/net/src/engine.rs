@@ -933,7 +933,7 @@ impl Engine {
             stand_ins,
             names,
             counters,
-            activity,
+            mut activity,
         } = handover.unwrap_or_else(|| Handover {
             chain: None,
             upstream_dns: None,
@@ -949,6 +949,8 @@ impl Engine {
             uncached_answers = setting.uncached_answers;
         }
         let clock = platform.clock();
+        // The live view counts from now on; a handed-over view keeps the moment its first engine began.
+        activity.counts.begin(clock.wall_ms());
         let quarter = clock.wall_ms() / logbook::SEGMENT_MS;
         let shared = Arc::new(Shared {
             platform,
