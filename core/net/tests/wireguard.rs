@@ -840,3 +840,48 @@ async fn per_packet_cost() -> Outcome {
     }
     Ok(())
 }
+
+/// An app taken off its tunnel while its UDP flow is open: the flow ends, in the log too, on the engine's
+/// own thread, where alone the log's clock is read (the watch shard on 2026-11-19: ended from Watch's thread,
+/// a debug build panicked), and the app's next datagram goes its new way, here directly to a local echo.
+#[tokio::test(flavor = "current_thread")]
+async fn an_app_taken_off_its_tunnel_ends_its_flows_on_the_engines_thread() -> Outcome {
+    let mut server = Server::new(SERVER_KEY).await?;
+    let setting = one(&server, &[FIRST], "10.77.0.2/32", "0.0.0.0/0")?;
+    let (engine, tunnel) = engine(&setting)?;
+    let echo = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+    let echo_at = echo.local_addr()?;
+    tokio::spawn(async move {
+        let mut buffer = vec![0u8; 2_048];
+        while let Ok((n, from)) = echo.recv_from(&mut buffer).await {
+            let _ = echo.send_to(&buffer[..n], from).await;
+        }
+    });
+    let app = tun4(40_200);
+    tunnel
+        .send(&packet::udp(app, echo_at, b"through").ok_or("datagram")?)
+        .await?;
+    let seen = server.next().await?;
+    assert_eq!(&seen[12..16], &PHONE4.octets(), "first through the tunnel");
+    // From this thread, as Watch's Kotlin side sets it from its own.
+    engine.tunnels(&TunnelSetting {
+        routes: HashMap::new(),
+        ..setting
+    });
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    tunnel
+        .send(&packet::udp(app, echo_at, b"direct").ok_or("datagram")?)
+        .await?;
+    let back = to_app(&tunnel).await?;
+    let parsed = packet::parse(&back).map_err(|e| format!("{e:?}"))?;
+    assert_eq!(
+        packet::udp_payload(&back, &parsed),
+        Some(&b"direct"[..]),
+        "now directly"
+    );
+    assert!(
+        server.quiet(Duration::from_millis(300)).await,
+        "nothing more through the tunnel"
+    );
+    Ok(())
+}

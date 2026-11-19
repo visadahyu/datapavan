@@ -379,10 +379,10 @@ provider. What was chosen where the decision left room, and why:
   BSD-2-Clause, ISC and MPL-2.0; `NOTICE` lists GotaTun, where its source is, and the new licences. `cargo deny`
   passes. Since `aws-lc-sys` compiles C for the target, `scripts/check.sh rust` runs the Android clippy
   through cargo-ndk.
-- **Size.** Watch's stripped library in Advanced's release APK: 1,644,168 bytes on arm64, 1,417,568 on armv7,
-  1,909,048 on x86_64, within the 2 MB gate (2,097,152), which `scripts/check.sh android` holds. Against the
-  spike's measure of the engine without WireGuard (1,384,656, 1,220,364, 1,590,136 at `f1127f3`): +259,512,
-  +197,204 and +318,912 bytes, GotaTun's 170 KB and W7's own code and tables.
+- **Size.** Watch's stripped library in Advanced's release APK: 1,644,296 bytes on arm64, 1,417,888 on armv7,
+  1,909,432 on x86_64, within the 2 MB gate (2,097,152), which `scripts/check.sh android` holds. Against the
+  spike's measure of the engine without WireGuard (1,384,656, 1,220,364, 1,590,136 at `f1127f3`): +259,640,
+  +197,524 and +319,296 bytes, GotaTun's 170 KB and W7's own code and tables.
 - **The configuration.** One `[Interface]` and one `[Peer]`, keys and sections in any case, `#` comments, a
   UTF-8 BOM, CRLF. Refused with a reason the screens can show (`Refusal`: a code, a line, a key, never a value):
   several peers or interfaces, an unknown section, `PostUp` and every other key it does not carry (among them
@@ -470,7 +470,9 @@ provider. What was chosen where the decision left room, and why:
   and UDP through the first peer from 10.77.0.2, IPv6 inside the tunnel from fd77::2, another app directly, a
   second configuration to the second peer at once, a connection kept across a network switch, and with the
   peers stopped, nothing of the routed apps reaching a sentinel directly while the tunnel says it does not
-  answer. Per packet, the engine's CPU for a UDP datagram from an app (`per_packet_cost`): through a tunnel
+  answer. The watch shard's first run found that a route changed from Watch's thread ended the app's open
+  flows there, reading the log's clock off the engine's thread, which a debug build refuses with a panic; they
+  are now ended on the engine's thread, and a test holds it. Per packet, the engine's CPU for a UDP datagram from an app (`per_packet_cost`): through a tunnel
   4.4 µs at 1,280 bytes and 4.1 µs at 100 on the development machine (directly 7.0 and 6.9), 4.2 and 3.3 µs on
   the emulator (directly 5.3 and 5.1); the A40's in part 3.
 - **Accepted limits.** A tunnelled UDP flow keeps the app Android named for it until it falls silent, where the

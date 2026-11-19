@@ -1047,7 +1047,7 @@ impl Engine {
             tunnels: tunnels::Tunnels::default(),
         });
         // In place before the thread reads its first packet: a tunnelled app's first SYN never goes directly.
-        shared.tunnels.set(&tunnels, &shared);
+        shared.tunnels.set(&tunnels);
         if shared.tunnels.any() {
             shared.uncached_answers.store(true, Ordering::Relaxed);
         }
@@ -1189,7 +1189,7 @@ impl Engine {
     /// configuration is the same keeps its session. While any app goes through a tunnel, every answer of
     /// Watch's DNS address reaches the apps with a time to live of 0 (ADR 0035, question 4).
     pub fn tunnels(&self, setting: &TunnelSetting) {
-        self.shared.tunnels.set(setting, &self.shared);
+        self.shared.tunnels.set(setting);
         // As after a chain set anew: a UDP mapping or flow of lookups asks again whether its way still holds.
         self.shared.chains.fetch_add(1, Ordering::Release);
         let on = self.shared.tunnels.any() || self.shared.chain().is_some();

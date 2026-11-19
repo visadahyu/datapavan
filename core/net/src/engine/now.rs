@@ -1297,7 +1297,7 @@ mod tests {
             routes: std::collections::HashMap::from([(UID, 3), (UID + 1, 3)]),
             log_destinations: log,
         };
-        shared.tunnels.set(&set(true), &shared);
+        shared.tunnels.set(&set(true));
         let Some(kept) = shared.record_tunnelled(flow(1, Some(UID)), 3) else {
             unreachable!("not live")
         };
@@ -1315,7 +1315,7 @@ mod tests {
             app,
             Some((vec![crate::engine::Via::Tunnel(3)], false, None))
         );
-        shared.tunnels.set(&set(false), &shared);
+        shared.tunnels.set(&set(false));
         shared.hide_chained();
         let snapshot = shared.now_view(T + 1_000);
         let app = app_of(&snapshot, Some(UID)).map(|a| (a.places.len(), a.through_tunnel));

@@ -316,6 +316,9 @@ struct Table {
     echo_back: HashMap<(u32, u16, IpAddr), EchoKey>,
     /// The number of the last generation handed out.
     generations: u64,
+    /// The log's numbers of flows the setting ended, for the engine's thread to end in the log: the log's
+    /// clock is read there alone (`logbook`), and `Tunnels::set` runs on Watch's.
+    ended: Vec<u64>,
     /// The engine's tunnel, for the tasks the table starts, and the network's changes they follow.
     tun: Option<(Arc<Tun>, watch::Receiver<u64>)>,
 }
@@ -352,7 +355,7 @@ impl Tunnels {
     /// before keeps its core, its session and its flows; one set anew, or gone, loses them, and its flows
     /// end. An app whose tunnel changed has its UDP flows end, so that its next datagram takes its new
     /// route, as the chain's are (ADR 0044, decision 1); its TCP connections keep their way.
-    pub(super) fn set(&self, setting: &TunnelSetting, shared: &Shared) {
+    pub(super) fn set(&self, setting: &TunnelSetting) {
         let ended = {
             let mut table = lock(&self.table);
             let mut tunnels = std::mem::take(&mut table.tunnels);
@@ -407,9 +410,9 @@ impl Tunnels {
                 replaced.contains(&flow.tunnel) || (protocol == UDP && moved.contains(&flow.uid))
             })
         };
-        for id in ended {
-            shared.finish(id);
-        }
+        // Ended in the log by the engine's thread, when it next turns (`Loop::tunnels_changed`): the log's clock is
+        // read there alone, and this runs on Watch's.
+        lock(&self.table).ended.extend(ended);
         self.update_carrying();
         self.changed.notify_one();
     }
@@ -1042,6 +1045,10 @@ impl super::Loop {
     /// once, as `WireGuard`'s own implementations start such a peer, once an app is sent through it.
     pub(super) fn tunnels_changed(&self) {
         let shared = &self.shared;
+        let ended = std::mem::take(&mut lock(&shared.tunnels.table).ended);
+        for id in ended {
+            shared.finish(id);
+        }
         let start: Vec<u32> = {
             let mut table = lock(&shared.tunnels.table);
             let used: Vec<u32> = table.routes.values().copied().collect();
@@ -1738,33 +1745,27 @@ mod tests {
             _ => false,
         };
         assert!(is(shared.route(None, web), None), "nothing set");
-        shared.tunnels.set(
-            &setting(
-                vec![
-                    configured(2, "0.0.0.0/0", false),
-                    configured(1, "0.0.0.0/0", false),
-                ],
-                &[],
-                false,
-            ),
-            &shared,
-        );
+        shared.tunnels.set(&setting(
+            vec![
+                configured(2, "0.0.0.0/0", false),
+                configured(1, "0.0.0.0/0", false),
+            ],
+            &[],
+            false,
+        ));
         assert!(!shared.tunnels.any());
         assert!(
             is(shared.route(None, web), None),
             "tunnels, but no app through one"
         );
-        shared.tunnels.set(
-            &setting(
-                vec![
-                    configured(2, "0.0.0.0/0", false),
-                    configured(1, "0.0.0.0/0", false),
-                ],
-                &[(10_300, 1), (10_301, 9)],
-                false,
-            ),
-            &shared,
-        );
+        shared.tunnels.set(&setting(
+            vec![
+                configured(2, "0.0.0.0/0", false),
+                configured(1, "0.0.0.0/0", false),
+            ],
+            &[(10_300, 1), (10_301, 9)],
+            false,
+        ));
         assert!(shared.tunnels.any());
         assert!(is(shared.route(Some(10_300), web), Some(1)));
         assert!(
@@ -1784,14 +1785,11 @@ mod tests {
         // Destinations stay out of the log unless the switch says otherwise.
         assert!(shared.hides(Some(10_300), web));
         assert!(!shared.hides(Some(10_400), web));
-        shared.tunnels.set(
-            &setting(
-                vec![configured(1, "0.0.0.0/0", false)],
-                &[(10_300, 1)],
-                true,
-            ),
-            &shared,
-        );
+        shared.tunnels.set(&setting(
+            vec![configured(1, "0.0.0.0/0", false)],
+            &[(10_300, 1)],
+            true,
+        ));
         assert!(!shared.hides(Some(10_300), web));
     }
 
@@ -1808,26 +1806,20 @@ mod tests {
                 Route::Direct
             )
         };
-        shared.tunnels.set(
-            &setting(
-                vec![configured(1, "0.0.0.0/0, ::/0", false)],
-                &[(10_300, 1)],
-                false,
-            ),
-            &shared,
-        );
+        shared.tunnels.set(&setting(
+            vec![configured(1, "0.0.0.0/0, ::/0", false)],
+            &[(10_300, 1)],
+            false,
+        ));
         assert!(
             !direct(&shared, IpAddr::from([192, 168, 1, 10])),
             "off by default"
         );
-        shared.tunnels.set(
-            &setting(
-                vec![configured(1, "0.0.0.0/0, ::/0", true)],
-                &[(10_300, 1)],
-                false,
-            ),
-            &shared,
-        );
+        shared.tunnels.set(&setting(
+            vec![configured(1, "0.0.0.0/0, ::/0", true)],
+            &[(10_300, 1)],
+            false,
+        ));
         for local in [
             IpAddr::from([192, 168, 1, 10]),
             IpAddr::from([172, 16, 0, 9]),
@@ -1865,7 +1857,7 @@ mod tests {
         };
         shared
             .tunnels
-            .set(&setting(vec![proton], &[(10_300, 1)], false), &shared);
+            .set(&setting(vec![proton], &[(10_300, 1)], false));
         assert!(
             !direct(&shared, IpAddr::from([10, 2, 0, 1])),
             "its DNS server"
@@ -1881,14 +1873,11 @@ mod tests {
     #[test]
     fn a_flow_is_admitted_only_where_the_tunnel_carries_it() {
         let shared = shared();
-        shared.tunnels.set(
-            &setting(
-                vec![configured(1, "10.77.0.0/24, 93.184.216.0/24", false)],
-                &[(10_300, 1)],
-                false,
-            ),
-            &shared,
-        );
+        shared.tunnels.set(&setting(
+            vec![configured(1, "10.77.0.0/24, 93.184.216.0/24", false)],
+            &[(10_300, 1)],
+            false,
+        ));
         let app = SocketAddr::from((shared.addresses.tun4, 40_000));
         let admitted = shared.tunnels.admit(
             1,
@@ -1948,10 +1937,9 @@ mod tests {
     fn a_tunnel_set_again_unchanged_keeps_its_core() {
         let shared = shared();
         let first = configured(1, "0.0.0.0/0", false);
-        shared.tunnels.set(
-            &setting(vec![first.clone()], &[(10_300, 1)], false),
-            &shared,
-        );
+        shared
+            .tunnels
+            .set(&setting(vec![first.clone()], &[(10_300, 1)], false));
         let generation = |shared: &Shared| {
             lock(&shared.tunnels.table)
                 .tunnels
@@ -1961,20 +1949,15 @@ mod tests {
         let before = generation(&shared);
         shared
             .tunnels
-            .set(&setting(vec![first], &[(10_300, 1)], false), &shared);
+            .set(&setting(vec![first], &[(10_300, 1)], false));
         assert_eq!(generation(&shared), before, "kept");
-        shared.tunnels.set(
-            &setting(
-                vec![configured(1, "10.0.0.0/8", false)],
-                &[(10_300, 1)],
-                false,
-            ),
-            &shared,
-        );
+        shared.tunnels.set(&setting(
+            vec![configured(1, "10.0.0.0/8", false)],
+            &[(10_300, 1)],
+            false,
+        ));
         assert_ne!(generation(&shared), before, "set anew");
-        shared
-            .tunnels
-            .set(&setting(vec![], &[(10_300, 1)], false), &shared);
+        shared.tunnels.set(&setting(vec![], &[(10_300, 1)], false));
         assert!(!shared.tunnels.any(), "a route to a tunnel gone is none");
     }
 
