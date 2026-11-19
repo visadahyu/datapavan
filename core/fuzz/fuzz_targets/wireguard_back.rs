@@ -1,8 +1,9 @@
 //! Fuzzing of what W7's back path reads (`datapavan_net::wireguard::swap`): any packet a `WireGuard` server,
 //! or anyone behind it, can have the tunnel decrypt, and any packet an app sends into it. What is read lies
 //! inside the input; a swap that is made reads back with the addresses it was given, its ports or echo
-//! identifier kept, and an error's quote reads back with the addresses given for it. An MSS clamped is never
-//! above its bound, and nothing is read or written past the packet.
+//! identifier kept, and an error's quote reads back with the addresses given for it. An MSS clamped reads back
+//! no larger than its bound, with the segment's checksum still right where it was right, and nothing is read or
+//! written past the packet.
 #![no_main]
 
 use datapavan_net::packet;
@@ -16,6 +17,59 @@ fn tun(v4: bool) -> IpAddr {
     } else {
         IpAddr::from([0xfd00, 1, 0xfd00, 1, 0xfd00, 1, 0xfd00, 1])
     }
+}
+
+/// The MSS option of the TCP segment at `transport` in `packet`, if it has one.
+fn mss(packet: &[u8], transport: usize) -> Option<u16> {
+    let offset = usize::from(packet.get(transport + 12)? >> 4) * 4;
+    let mut at = transport + 20;
+    let end = transport + offset;
+    while at < end {
+        match *packet.get(at)? {
+            0 => return None,
+            1 => at += 1,
+            kind => {
+                let length = usize::from(*packet.get(at + 1)?);
+                if kind == 2 && length == 4 {
+                    return Some(u16::from_be_bytes([*packet.get(at + 2)?, *packet.get(at + 3)?]));
+                }
+                at += length.max(2);
+            }
+        }
+    }
+    None
+}
+
+/// Whether the TCP segment's checksum is right, over its pseudo-header, IPv4's or IPv6's.
+fn checksum_right(packet: &[u8], parsed: &packet::Packet) -> bool {
+    let Some(segment) = packet.get(parsed.transport..parsed.length) else {
+        return false;
+    };
+    let mut sum = 0u32;
+    let mut add = |bytes: &[u8]| {
+        for pair in bytes.chunks(2) {
+            sum += u32::from(u16::from_be_bytes([pair[0], *pair.get(1).unwrap_or(&0)]));
+        }
+    };
+    match (parsed.source.ip(), parsed.destination.ip()) {
+        (IpAddr::V4(s), IpAddr::V4(d)) => {
+            add(&s.octets());
+            add(&d.octets());
+        }
+        (IpAddr::V6(s), IpAddr::V6(d)) => {
+            add(&s.octets());
+            add(&d.octets());
+        }
+        _ => return false,
+    }
+    let length = u32::try_from(segment.len()).unwrap_or(u32::MAX);
+    add(&length.to_be_bytes());
+    add(&[0, 0, 0, packet::TCP]);
+    add(segment);
+    while sum >> 16 != 0 {
+        sum = (sum & 0xffff) + (sum >> 16);
+    }
+    sum == 0xffff
 }
 
 fuzz_target!(|data: &[u8]| {
@@ -36,8 +90,13 @@ fuzz_target!(|data: &[u8]| {
             }
             if parsed.protocol == packet::TCP {
                 let mut clamped = data.to_vec();
+                let right = checksum_right(data, &parsed);
                 if swap::clamp_mss(&mut clamped, &parsed, 1_000) {
                     assert_eq!(clamped.len(), data.len());
+                    assert!(mss(&clamped, parsed.transport).is_some_and(|n| n <= 1_000));
+                    assert!(!right || checksum_right(&clamped, &parsed), "the checksum went wrong");
+                } else {
+                    assert_eq!(clamped, data, "an MSS not clamped changes nothing");
                 }
             }
         }
