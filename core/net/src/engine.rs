@@ -366,6 +366,23 @@ pub trait Platform: Send + Sync + 'static {
     /// for five seconds. Watch's Kotlin side reads when its own rules allow (ADR 0046, decision 1), off
     /// the engine's thread: this must not block.
     fn wants_states(&self) {}
+
+    /// The addresses of a `WireGuard` endpoint's host name (W7), from Android's own resolver on the network
+    /// beneath the tunnel, which uses the user's Private DNS where it is on, and whether it did so encrypted
+    /// (the maintainer's answer 4, 2026-11-19); called off the event loop. `None` where the platform has
+    /// no resolver to offer: the engine then asks the network's resolver itself, over plain DNS.
+    fn resolve(&self, _name: &str) -> Option<Resolution> {
+        None
+    }
+}
+
+/// What Android's resolver said of a host name ([`Platform::resolve`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Resolution {
+    /// Its addresses, in the resolver's order; empty where the name does not resolve.
+    pub addresses: Vec<IpAddr>,
+    /// Whether the question went over encrypted DNS (Private DNS active on that network).
+    pub encrypted: bool,
 }
 
 /// How a flow went, for the counters and the flows kept for tests.
@@ -1198,10 +1215,17 @@ impl Engine {
         self.shared.hide_chained();
     }
 
+    /// Whether the answers of Watch's own DNS address reach the apps with a time to live of 0 now: while a chain
+    /// or a tunnel takes any app, or as set by [`Engine::uncache_answers`].
+    #[must_use]
+    pub fn answers_uncached(&self) -> bool {
+        self.shared.uncached_answers.load(Ordering::Relaxed)
+    }
+
     /// Each tunnel's state, in the order set: no key, no address, no endpoint.
     #[must_use]
     pub fn tunnel_states(&self) -> Vec<TunnelState> {
-        self.shared.tunnels.states()
+        self.shared.tunnels.states(self.shared.clock.since_boot())
     }
 
     /// Whether the answers of Watch's own DNS address reach the apps with a time to live of 0, so that
@@ -1475,7 +1499,7 @@ impl Loop {
             Ok(parsed) => self.udp(&packet[..parsed.length], &parsed).await,
             Err(Skip::Other(packet::ICMP | packet::ICMPV6)) => match packet::echo_request(packet) {
                 Ok(request) if self.shared.tunnels.any() => {
-                    self.tunnel_echo(&mut packet[..request.length], &request)
+                    self.tunnel_echo(&mut packet[..request.length], &request, reassembled)
                         .await;
                 }
                 Ok(request) => self.echo(&packet[..request.length], &request).await,

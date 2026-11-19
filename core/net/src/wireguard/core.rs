@@ -22,6 +22,7 @@ use gotatun::x25519::{PublicKey, StaticSecret};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
+use zeroize::Zeroize;
 
 /// How many handshakes a second the rate limiter takes before it asks for cookies: `WireGuard`'s own
 /// device's limit.
@@ -109,17 +110,25 @@ impl GotaTun {
     /// noted (3.5) and wireguard-go does too.
     #[must_use]
     pub fn new(config: &Config) -> Self {
-        let private = StaticSecret::from(*config.private_key.bytes());
+        // The copies made on the way into GotaTun's types are written over once handed in (the engine's
+        // review, nit 16).
+        let mut bytes = *config.private_key.bytes();
+        let private = StaticSecret::from(bytes);
+        bytes.zeroize();
         let public = PublicKey::from(&private);
         let limiter = Arc::new(RateLimiter::new(&public, HANDSHAKES_PER_SECOND));
+        let mut preshared = config.peer.preshared_key.as_ref().map(|key| *key.bytes());
         let tunn = Tunn::new(
             private,
             PublicKey::from(config.peer.public_key),
-            config.peer.preshared_key.as_ref().map(|key| *key.bytes()),
+            preshared,
             config.peer.persistent_keepalive,
             IndexTable::from_os_rng(),
             Arc::clone(&limiter),
         );
+        if let Some(key) = preshared.as_mut() {
+            key.zeroize();
+        }
         Self {
             tunn,
             limiter,

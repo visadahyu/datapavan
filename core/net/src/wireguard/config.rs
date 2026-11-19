@@ -2,7 +2,7 @@
 //! settled on 2026-11-19): one `[Interface]` with `PrivateKey`, `Address` (IPv4, IPv6 or both), `DNS`,
 //! which W7 requires, and `MTU`; one `[Peer]` with `PublicKey`, `PresharedKey`, `Endpoint` (an address or
 //! a host name, with its port), `AllowedIPs` and `PersistentKeepalive`. Anything else is refused with a
-//! [`Refusal`] the screens can show: several peers, `PostUp`, `Table`, `ListenPort`, a key it does not
+//! [`Refusal`] the screens can show: several peers, `PostUp`, `Table`, `SaveConfig`, a key it does not
 //! know, a value it cannot read.
 //!
 //! The parser holds no state and does no IO, so that it can be fuzzed with any bytes (`core/fuzz`). The
@@ -29,9 +29,23 @@ pub const MTU_RANGE: std::ops::RangeInclusive<u16> = 576..=1_500;
 pub const DEFAULT_MTU: u16 = 1_280;
 
 /// A key that must stay secret: the private key or the preshared key. Zeroed when dropped; its `Debug`
-/// shows no byte of it.
-#[derive(Clone, PartialEq, Eq)]
+/// shows no byte of it, and two are compared in constant time.
+#[derive(Clone)]
 pub struct Secret([u8; 32]);
+
+impl PartialEq for Secret {
+    /// Every byte looked at, whatever differs first (the engine's review, nit 16).
+    fn eq(&self, other: &Self) -> bool {
+        let differ = self
+            .0
+            .iter()
+            .zip(other.0.iter())
+            .fold(0u8, |differ, (a, b)| differ | (a ^ b));
+        std::hint::black_box(differ) == 0
+    }
+}
+
+impl Eq for Secret {}
 
 impl Secret {
     /// The key's bytes, for the protocol core alone.
@@ -224,6 +238,22 @@ pub struct Config {
     pub mtu: Option<u16>,
     /// The peer.
     pub peer: Peer,
+    /// The apps `WireGuard`'s own app exports with a configuration (`IncludedApplications`,
+    /// `ExcludedApplications`): kept for the import to offer as the choice of apps, for the user to
+    /// confirm (the maintainer's answer 2, 2026-11-19). Watch routes by its own choice of apps alone.
+    pub applications: Applications,
+}
+
+/// The apps a configuration names for its tunnel, as `WireGuard`'s app exports them.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum Applications {
+    /// It names none.
+    #[default]
+    Unnamed,
+    /// Only these packages (`IncludedApplications`).
+    Only(Vec<String>),
+    /// Every package but these (`ExcludedApplications`).
+    Except(Vec<String>),
 }
 
 impl fmt::Debug for Config {
@@ -235,6 +265,7 @@ impl fmt::Debug for Config {
             .field("dns", &self.dns.len())
             .field("mtu", &self.mtu)
             .field("peer", &self.peer)
+            .field("applications", &self.applications)
             .finish_non_exhaustive()
     }
 }
@@ -308,8 +339,9 @@ pub enum Refusal {
         /// The line, counting from 1.
         line: usize,
     },
-    /// A key Watch does not carry out, named when it is a plain word: `PostUp`, `Table`, `ListenPort`,
-    /// `FwMark`, `SaveConfig`, `IncludedApplications` and the like, or one it does not know.
+    /// A key Watch does not carry out, named when it is a plain word: `PostUp`, `Table`, `SaveConfig`,
+    /// `PreUp`, `PostDown` and the like, or one it does not know. `ListenPort` and `FwMark` are read and
+    /// ignored, and `IncludedApplications` and `ExcludedApplications` kept ([`Applications`]).
     Unsupported {
         /// The line, counting from 1.
         line: usize,
@@ -362,6 +394,11 @@ pub enum Refusal {
     NoAllowedIps,
     /// An `MTU` outside [`MTU_RANGE`], or below 1,280 with an IPv6 address.
     BadMtu,
+    /// Both `IncludedApplications` and `ExcludedApplications`, which `WireGuard`'s app refuses too.
+    BothApplicationLists {
+        /// The line, counting from 1.
+        line: usize,
+    },
 }
 
 impl Refusal {
@@ -391,6 +428,7 @@ impl Refusal {
             Self::NoEndpoint => "no-endpoint",
             Self::NoAllowedIps => "no-allowed-ips",
             Self::BadMtu => "bad-mtu",
+            Self::BothApplicationLists { .. } => "both-application-lists",
         }
     }
 
@@ -407,7 +445,8 @@ impl Refusal {
             | Self::Repeated { line, .. }
             | Self::BadValue { line, .. }
             | Self::SeveralAddresses { line }
-            | Self::SearchDomain { line } => Some(*line),
+            | Self::SearchDomain { line }
+            | Self::BothApplicationLists { line } => Some(*line),
             _ => None,
         }
     }
@@ -464,6 +503,9 @@ struct Read {
     allowed_seen: bool,
     keepalive_seen: bool,
     keepalive: Option<u16>,
+    applications: Applications,
+    listen_port_seen: bool,
+    fwmark_seen: bool,
 }
 
 fn parse(text: &[u8]) -> Result<Config, Refusal> {
@@ -520,6 +562,7 @@ fn parse(text: &[u8]) -> Result<Config, Refusal> {
 }
 
 /// A key of `[Interface]`.
+#[allow(clippy::too_many_lines)]
 fn interface(read: &mut Read, line: usize, key: &str, value: &str) -> Result<(), Refusal> {
     match key.to_ascii_lowercase().as_str() {
         "privatekey" => {
@@ -573,6 +616,52 @@ fn interface(read: &mut Read, line: usize, key: &str, value: &str) -> Result<(),
             }
             let mtu = number(value).ok_or(Refusal::BadValue { line, key })?;
             read.mtu = Some(mtu);
+        }
+        // Read and ignored (the maintainer's answer 2): Watch picks its own socket, and marks nothing.
+        "listenport" => {
+            let key = "ListenPort";
+            if std::mem::replace(&mut read.listen_port_seen, true) {
+                return Err(Refusal::Repeated { line, key });
+            }
+            number(value).ok_or(Refusal::BadValue { line, key })?;
+        }
+        "fwmark" => {
+            let key = "FwMark";
+            if std::mem::replace(&mut read.fwmark_seen, true) {
+                return Err(Refusal::Repeated { line, key });
+            }
+            if !value.eq_ignore_ascii_case("off") && fwmark(value).is_none() {
+                return Err(Refusal::BadValue { line, key });
+            }
+        }
+        "includedapplications" | "excludedapplications" => {
+            let included = key.eq_ignore_ascii_case("includedapplications");
+            let key = if included {
+                "IncludedApplications"
+            } else {
+                "ExcludedApplications"
+            };
+            let mut names = match std::mem::take(&mut read.applications) {
+                Applications::Unnamed => Vec::new(),
+                Applications::Only(names) if included => names,
+                Applications::Except(names) if !included => names,
+                Applications::Only(_) | Applications::Except(_) => {
+                    return Err(Refusal::BothApplicationLists { line });
+                }
+            };
+            for item in list(value) {
+                if !package_name(item) || names.len() == MAX_APPLICATIONS {
+                    return Err(Refusal::BadValue { line, key });
+                }
+                if !names.iter().any(|n| n == item) {
+                    names.push(item.to_owned());
+                }
+            }
+            read.applications = if included {
+                Applications::Only(names)
+            } else {
+                Applications::Except(names)
+            };
         }
         _ => return Err(unsupported(line, key)),
     }
@@ -689,6 +778,7 @@ fn finish(read: Read) -> Result<Config, Refusal> {
             allowed_ips: read.allowed_ips,
             persistent_keepalive: read.keepalive,
         },
+        applications: read.applications,
     })
 }
 
@@ -753,24 +843,59 @@ fn network(item: &str, masked: bool) -> Option<Network> {
     }
 }
 
-/// `host:port`, `v4:port` or `[v6]:port`.
+/// `host:port`, `v4:port` or `[v6]:port`. An address must be one a server can have: unicast, and in IPv6
+/// not link-local, which would need a scope this format has no room for (the engine's review, nit 12). The
+/// loopback stays allowed: a local relay that wraps `WireGuard` to pass a network that blocks it (wstunnel,
+/// udp2raw) listens there, and Watch's own socket reaches it outside the tunnel.
 fn endpoint(value: &str) -> Option<Endpoint> {
+    let server = |address: IpAddr| {
+        crate::packet::unicast(address)
+            && !matches!(address, IpAddr::V6(a) if a.is_unicast_link_local())
+    };
     let (host, port) = if let Some(rest) = value.strip_prefix('[') {
         let (host, rest) = rest.split_once(']')?;
         let port = rest.strip_prefix(':')?;
-        let address: Ipv6Addr = host.parse().ok()?;
+        let address = IpAddr::V6(host.parse::<Ipv6Addr>().ok()?);
         return port_of(port)
-            .map(|port| Endpoint::Address(SocketAddr::new(IpAddr::V6(address), port)));
+            .filter(|_| server(address))
+            .map(|port| Endpoint::Address(SocketAddr::new(address, port)));
     } else {
         value.rsplit_once(':')?
     };
     let port = port_of(port)?;
     if let Ok(address) = host.parse::<Ipv4Addr>() {
         let address = IpAddr::V4(address);
-        return crate::packet::unicast(address)
-            .then_some(Endpoint::Address(SocketAddr::new(address, port)));
+        return server(address).then_some(Endpoint::Address(SocketAddr::new(address, port)));
     }
     host_name(host).map(|name| Endpoint::Name(name, port))
+}
+
+/// At most this many packages in `IncludedApplications` or `ExcludedApplications`.
+pub const MAX_APPLICATIONS: usize = 512;
+
+/// An Android package name: at least two segments of ASCII letters, digits and underscores, separated by
+/// dots, each beginning with a letter; at most 255 bytes.
+fn package_name(name: &str) -> bool {
+    let segment = |s: &str| {
+        s.bytes().next().is_some_and(|b| b.is_ascii_alphabetic())
+            && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+    };
+    name.len() <= 255 && name.contains('.') && name.split('.').all(segment)
+}
+
+/// `FwMark`'s value as `wg` reads it: decimal, or hexadecimal after `0x`, of 32 bits.
+fn fwmark(value: &str) -> Option<u32> {
+    if let Some(hex) = value
+        .strip_prefix("0x")
+        .or_else(|| value.strip_prefix("0X"))
+    {
+        return (!hex.is_empty() && hex.len() <= 8)
+            .then(|| u32::from_str_radix(hex, 16).ok())
+            .flatten();
+    }
+    let digits =
+        !value.is_empty() && value.len() <= 10 && value.bytes().all(|b| b.is_ascii_digit());
+    digits.then(|| value.parse().ok()).flatten()
 }
 
 fn port_of(port: &str) -> Option<u16> {
@@ -994,10 +1119,31 @@ mod tests {
                 },
             ),
             (
-                base.replace("DNS = 10.2.0.1", "DNS = 10.2.0.1\nListenPort = 51820"),
-                Refusal::Unsupported {
+                base.replace("DNS = 10.2.0.1", "DNS = 10.2.0.1\nListenPort = x"),
+                Refusal::BadValue {
                     line: 6,
-                    key: Some("ListenPort".into()),
+                    key: "ListenPort",
+                },
+            ),
+            (
+                base.replace("DNS = 10.2.0.1", "DNS = 10.2.0.1\nFwMark = 0xzz"),
+                Refusal::BadValue {
+                    line: 6,
+                    key: "FwMark",
+                },
+            ),
+            (
+                base.replace(
+                    "DNS = 10.2.0.1",
+                    "DNS = 10.2.0.1\nIncludedApplications = org.a.b\nExcludedApplications = org.c.d",
+                ),
+                Refusal::BothApplicationLists { line: 7 },
+            ),
+            (
+                base.replace("DNS = 10.2.0.1", "DNS = 10.2.0.1\nIncludedApplications = org.a.b, 1bad.name"),
+                Refusal::BadValue {
+                    line: 6,
+                    key: "IncludedApplications",
                 },
             ),
             (
@@ -1154,6 +1300,27 @@ mod tests {
                 },
             ),
             (
+                base.replace("198.51.100.7", "[::]"),
+                Refusal::BadValue {
+                    line: 11,
+                    key: "Endpoint",
+                },
+            ),
+            (
+                base.replace("198.51.100.7", "[fe80::1]"),
+                Refusal::BadValue {
+                    line: 11,
+                    key: "Endpoint",
+                },
+            ),
+            (
+                base.replace("198.51.100.7", "[ff02::1]"),
+                Refusal::BadValue {
+                    line: 11,
+                    key: "Endpoint",
+                },
+            ),
+            (
                 base.replace("0.0.0.0/0", "0.0.0.0/x"),
                 Refusal::BadValue {
                     line: 10,
@@ -1243,6 +1410,57 @@ mod tests {
             refusal(&proton_like().replace(&format!("PrivateKey = {PRIVATE}"), PRIVATE));
         // A line of the key alone reads as a key that is no plain word: named by its line alone.
         assert_eq!(unreadable.to_string(), "unsupported line 3");
+    }
+
+    /// `ListenPort` and `FwMark` are read and ignored; the application lists of `WireGuard`'s app are kept,
+    /// for the import to offer (the maintainer's answer 2, 2026-11-19).
+    #[test]
+    fn listen_port_and_fwmark_are_ignored_and_the_application_lists_kept() {
+        let base = proton_like();
+        let text = base.replace(
+            "DNS = 10.2.0.1",
+            "DNS = 10.2.0.1\nListenPort = 51820\nFwMark = 0xca6c\n\
+             ExcludedApplications = org.example.bank, com.example.game, org.example.bank",
+        );
+        let Ok(config) = Config::parse(text.as_bytes()) else {
+            unreachable!("refused")
+        };
+        assert_eq!(
+            config.applications,
+            Applications::Except(vec!["org.example.bank".into(), "com.example.game".into()])
+        );
+        let text = base.replace(
+            "DNS = 10.2.0.1",
+            "DNS = 10.2.0.1\nIncludedApplications = org.example.browser\nFwMark = off",
+        );
+        let Ok(config) = Config::parse(text.as_bytes()) else {
+            unreachable!("refused")
+        };
+        assert_eq!(
+            config.applications,
+            Applications::Only(vec!["org.example.browser".into()])
+        );
+        let Ok(plain) = Config::parse(base.as_bytes()) else {
+            unreachable!("refused")
+        };
+        assert_eq!(plain.applications, Applications::Unnamed);
+        assert!(fwmark("4294967296").is_none() && fwmark("0x100000000").is_none());
+        assert_eq!(
+            (fwmark("51820"), fwmark("0xCA6C")),
+            (Some(51_820), Some(0xca6c))
+        );
+    }
+
+    /// Two secrets compare by every byte.
+    #[test]
+    fn secrets_compare_by_every_byte() {
+        let (a, mut b) = (Secret([7; 32]), [7; 32]);
+        assert_eq!(a, Secret(b));
+        b[31] = 8;
+        assert_ne!(a, Secret(b));
+        b[31] = 7;
+        b[0] = 0;
+        assert_ne!(a, Secret(b));
     }
 
     /// No key reaches a `Debug` output.

@@ -117,7 +117,10 @@ impl Shared {
             Route::Tool(chain) => !chain.log_destinations || self.hides_tool(uid),
             // A tunnelled app's, as a chained app's, and the switch is the same (ADR 0035, routes).
             Route::Tunnel(_) => !self.tunnels.logs_destinations() || self.hides_tool(uid),
-            Route::Direct | Route::Refused => self.hides_tool(uid),
+            // A flow that went directly is hidden as its app is: a tunnelled app's local network, which
+            // "Local network directly" sends past its tunnel, as the live view hides that app's places
+            // (W7's fix round, the engine reviewer's nit 13).
+            Route::Direct | Route::Refused => self.hides_app(uid),
         }
     }
 

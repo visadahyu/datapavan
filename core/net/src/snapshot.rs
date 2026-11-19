@@ -2,7 +2,7 @@
 //! side once a second while the view is open: each app's bytes by its state in each window, and the
 //! destinations it reached, from memory only. Version 3, little-endian:
 //!
-//! - version (2), when it was taken (milliseconds since 1970, UTC), what the latest reading of the
+//! - version (3), when it was taken (milliseconds since 1970, UTC), what the latest reading of the
 //!   states knew (0 none came yet, 1 the states, 2 nothing: Watch has no usage access, 3 nothing: Android
 //!   gave no events, as before the first unlock after a restart), the end of what was told, the screen
 //!   (0 off, 1 on, 2 not known), when it last came on (0 not known), the window "while the screen was

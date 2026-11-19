@@ -177,6 +177,14 @@ impl Server {
 
 /// The engine on a datagram pair with `setting`, and the app's end.
 fn engine(setting: &TunnelSetting) -> io::Result<(Engine, UnixDatagram)> {
+    engine_on(setting, Arc::new(ByPort))
+}
+
+/// As [`engine`], with `platform` for Android.
+fn engine_on(
+    setting: &TunnelSetting,
+    platform: Arc<dyn Platform>,
+) -> io::Result<(Engine, UnixDatagram)> {
     let (engine_end, app_end) = std::os::unix::net::UnixDatagram::pair()?;
     engine_end.set_nonblocking(true)?;
     app_end.set_nonblocking(true)?;
@@ -188,7 +196,7 @@ fn engine(setting: &TunnelSetting) -> io::Result<(Engine, UnixDatagram)> {
             keep_flows: 64,
             addresses: Addresses::COMMON,
         },
-        Arc::new(ByPort),
+        platform,
         None,
     )?;
     engine.tunnels(setting);
@@ -500,6 +508,12 @@ async fn a_chosen_apps_lookup_goes_to_its_configurations_dns_server() -> Outcome
     let again = to_app(&tunnel).await?;
     let parsed = packet::parse(&again).map_err(|e| format!("{e:?}"))?;
     assert_eq!(parsed.source, watch_dns);
+    let payload = packet::udp_payload(&again, &parsed).ok_or("payload")?;
+    assert_eq!(
+        &payload[payload.len() - 10..payload.len() - 6],
+        &[0, 0, 0, 0],
+        "the cache's answer with a time to live of 0 too"
+    );
     assert!(server.quiet(Duration::from_millis(300)).await);
     Ok(())
 }
@@ -536,7 +550,7 @@ async fn echo_goes_through_the_default_tunnel() -> Outcome {
 async fn an_error_from_inside_the_tunnel_quotes_the_apps_own_datagram() -> Outcome {
     let mut server = Server::new(SERVER_KEY).await?;
     let setting = one(&server, &[FIRST], "10.77.0.2/32", "0.0.0.0/0")?;
-    let (_engine, tunnel) = engine(&setting)?;
+    let (engine, tunnel) = engine(&setting)?;
     let (app, closed) = (tun4(40_004), SocketAddr::from((WEB4, 9)));
     tunnel
         .send(&packet::udp(app, closed, b"anyone?").ok_or("datagram")?)
@@ -562,6 +576,20 @@ async fn an_error_from_inside_the_tunnel_quotes_the_apps_own_datagram() -> Outco
         "quoting it from the app"
     );
     assert!(checks_out(&back));
+    // An error quoting a packet that left from another address than the configuration's: no app's.
+    let mut stranger = seen.clone();
+    stranger[12..16].copy_from_slice(&[10, 77, 0, 9]);
+    let forged = packet::path_error(
+        &stranger,
+        (IpAddr::V4(WEB4), IpAddr::V4(PHONE4)),
+        (3, 3),
+        [0; 4],
+    )
+    .ok_or("error")?;
+    let filtered = engine.counters()[TUNNEL_FILTERED];
+    server.send(&forged).await?;
+    assert!(nothing_to_app(&tunnel, Duration::from_millis(300)).await);
+    assert_eq!(engine.counters()[TUNNEL_FILTERED], filtered + 1);
     Ok(())
 }
 
@@ -790,34 +818,53 @@ async fn per_packet_cost() -> Outcome {
     const PACKETS: usize = 200_000;
     let mut server = Server::new(SERVER_KEY).await?;
     let setting = one(&server, &[FIRST], "10.77.0.2/32", "0.0.0.0/0")?;
-    let (_engine, tunnel) = engine(&setting)?;
-    let sink = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+    let (engine, tunnel) = engine(&setting)?;
+    // On this machine's own address: the engine refuses an app's packet to the loopback, which a measure of the
+    // direct path to 127.0.0.1 measured instead (until W7's fix round).
+    let sink = UdpSocket::bind((local_address()?, 0)).await?;
     let sink_at = sink.local_addr()?;
+    let tunnel_lost = engine.counters().len() - 1;
     // The tunnel's session first, then the server only reads what comes.
     let web = SocketAddr::from((WEB4, 9));
     tunnel
         .send(&packet::udp(tun4(40_100), web, b"first").ok_or("datagram")?)
         .await?;
     let _ = server.next().await?;
-    let drain = |socket: UdpSocket| {
+    // What reached each reader, counted: a packet the engine dropped would cost it less, and flatter it.
+    let drain = |socket: UdpSocket, count: Arc<std::sync::atomic::AtomicUsize>| {
         tokio::spawn(async move {
             let mut buffer = vec![0u8; 2_048];
-            while tokio::time::timeout(Duration::from_secs(2), socket.recv(&mut buffer))
+            // Until aborted: a reader that stopped while the other path was measured closed its port, and the
+            // direct measure then counted the engine's handling of "port unreachable" (until W7's fix round).
+            while tokio::time::timeout(Duration::from_secs(60), socket.recv(&mut buffer))
                 .await
                 .is_ok()
-            {}
+            {
+                count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
         })
     };
-    let readers = [drain(server.socket), drain(sink)];
-    for (name, to, from) in [
+    let reached = [
+        Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+        Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+    ];
+    let readers = [
+        drain(server.socket, Arc::clone(&reached[0])),
+        drain(sink, Arc::clone(&reached[1])),
+    ];
+    for (path, (name, to, from)) in [
         ("tunnelled", web, tun4(40_101)),
         ("direct", sink_at, tun4(42_101)),
-    ] {
+    ]
+    .into_iter()
+    .enumerate()
+    {
         for size in [1_280usize, 100] {
             let datagram = packet::udp(from, to, &vec![7u8; size - 28]).ok_or("datagram")?;
             tunnel.send(&datagram).await?;
             tokio::time::sleep(Duration::from_millis(200)).await;
             let before = engine_ticks()?;
+            let arrived = reached[path].load(std::sync::atomic::Ordering::Relaxed);
             let started = std::time::Instant::now();
             for i in 0..PACKETS {
                 tunnel.send(&datagram).await?;
@@ -829,8 +876,9 @@ async fn per_packet_cost() -> Outcome {
             let ticks = engine_ticks()? - before;
             #[allow(clippy::cast_precision_loss)]
             let ns = ticks as f64 * 10_000_000.0 / PACKETS as f64;
+            let arrived = reached[path].load(std::sync::atomic::Ordering::Relaxed) - arrived;
             println!(
-                "{name} {size} B: {ns:.0} ns of the engine's CPU per packet ({:.2} s wall)",
+                "{name} {size} B: {ns:.0} ns of the engine's CPU per packet ({:.2} s wall), {arrived} of {PACKETS} read by the far end",
                 started.elapsed().as_secs_f64()
             );
         }
@@ -838,6 +886,16 @@ async fn per_packet_cost() -> Outcome {
     for reader in readers {
         reader.abort();
     }
+    assert_eq!(
+        engine.counters()[tunnel_lost],
+        0,
+        "the engine dropped tunnelled packets: the measure would flatter it"
+    );
+    let read = [0, 1].map(|path| reached[path].load(std::sync::atomic::Ordering::Relaxed));
+    assert!(
+        read.iter().all(|&n| n > PACKETS),
+        "the far ends read {read:?}: a path that delivers nothing measures something else"
+    );
     Ok(())
 }
 
@@ -883,5 +941,461 @@ async fn an_app_taken_off_its_tunnel_ends_its_flows_on_the_engines_thread() -> O
         server.quiet(Duration::from_millis(300)).await,
         "nothing more through the tunnel"
     );
+    Ok(())
+}
+
+/// Android as some tests play it: the app of port 40,900 as a test sets it (0 for none), every other port
+/// as [`ByPort`] says; and a host name its resolver answers, with whether it did so encrypted.
+struct Switchable {
+    owner: std::sync::atomic::AtomicU32,
+    name: Option<(String, Vec<IpAddr>, bool)>,
+    asked: std::sync::atomic::AtomicUsize,
+}
+
+impl Switchable {
+    fn new(owner: u32, name: Option<(String, Vec<IpAddr>, bool)>) -> Arc<Self> {
+        Arc::new(Self {
+            owner: owner.into(),
+            name,
+            asked: 0.into(),
+        })
+    }
+}
+
+impl Platform for Switchable {
+    fn owner(&self, protocol: u8, local: SocketAddr, remote: SocketAddr) -> Option<u32> {
+        if local.port() == 40_900 {
+            let uid = self.owner.load(std::sync::atomic::Ordering::Relaxed);
+            return (uid != 0).then_some(uid);
+        }
+        ByPort.owner(protocol, local, remote)
+    }
+
+    fn protect(&self, _: RawFd) -> bool {
+        true
+    }
+
+    fn log(&self, _: &[u8]) {}
+
+    fn resolve(&self, name: &str) -> Option<datapavan_net::Resolution> {
+        self.asked
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let (known, addresses, encrypted) = self.name.as_ref()?;
+        Some(datapavan_net::Resolution {
+            addresses: if name == known {
+                addresses.clone()
+            } else {
+                Vec::new()
+            },
+            encrypted: *encrypted,
+        })
+    }
+}
+
+/// A local UDP echo, and how many datagrams it saw.
+async fn local_echo() -> io::Result<(SocketAddr, Arc<std::sync::atomic::AtomicUsize>)> {
+    let echo = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+    let at = echo.local_addr()?;
+    let seen = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counted = Arc::clone(&seen);
+    tokio::spawn(async move {
+        let mut buffer = vec![0u8; 2_048];
+        while let Ok((n, from)) = echo.recv_from(&mut buffer).await {
+            counted.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let _ = echo.send_to(&buffer[..n], from).await;
+        }
+    });
+    Ok((at, seen))
+}
+
+/// An app routed to a tunnel whose configuration is not set, or was removed, waits: its TCP and UDP are
+/// refused at once with "administratively prohibited", and nothing of it leaves directly; once the
+/// configuration is set it goes through it (fix round: both reviews' first major finding).
+#[tokio::test(flavor = "current_thread")]
+async fn an_app_routed_to_a_tunnel_not_set_waits_and_never_goes_directly() -> Outcome {
+    let mut server = Server::new(SERVER_KEY).await?;
+    let setting = one(&server, &[FIRST], "10.77.0.2/32", "0.0.0.0/0")?;
+    let routes_only = TunnelSetting {
+        tunnels: Vec::new(),
+        ..setting.clone()
+    };
+    let (engine, tunnel) = engine(&routes_only)?;
+    let (echo_at, seen) = local_echo().await?;
+    tunnel
+        .send(&packet::udp(tun4(40_600), echo_at, b"direct?").ok_or("datagram")?)
+        .await?;
+    let refused = to_app(&tunnel).await?;
+    assert_eq!(
+        (refused[9], refused[20], refused[21]),
+        (1, 3, 13),
+        "prohibited"
+    );
+    tunnel.send(&syn(tun4(40_601), echo_at)?).await?;
+    let refused = to_app(&tunnel).await?;
+    assert_eq!(
+        (refused[9], refused[20], refused[21]),
+        (1, 3, 13),
+        "a SYN too"
+    );
+    let state = engine.tunnel_states();
+    assert_eq!(
+        state
+            .iter()
+            .map(|s| (s.id, s.configured))
+            .collect::<Vec<_>>(),
+        [(1, false)]
+    );
+    // The configuration comes: the app goes through it.
+    engine.tunnels(&setting);
+    tunnel
+        .send(&packet::udp(tun4(40_602), echo_at, b"through").ok_or("datagram")?)
+        .await?;
+    let through = server.next().await?;
+    assert_eq!(&through[12..16], &PHONE4.octets());
+    // Removed while the app is routed to it: it waits again.
+    engine.tunnels(&routes_only);
+    tunnel
+        .send(&packet::udp(tun4(40_603), echo_at, b"direct?").ok_or("datagram")?)
+        .await?;
+    let refused = to_app(&tunnel).await?;
+    assert_eq!((refused[20], refused[21]), (3, 13));
+    assert_eq!(
+        seen.load(std::sync::atomic::Ordering::Relaxed),
+        0,
+        "nothing reached the local echo directly"
+    );
+    Ok(())
+}
+
+/// An app with a direct UDP mapping, then sent through a tunnel: its next datagram on that socket goes into
+/// the tunnel, never by the mapping (the engine reviewer's R1, which kills the mutant that drops
+/// `Engine::tunnels`' bump of the chains' count); and Watch's DNS answers go uncached from then on.
+#[tokio::test(flavor = "current_thread")]
+async fn an_app_newly_routed_leaves_its_direct_mapping() -> Outcome {
+    let mut server = Server::new(SERVER_KEY).await?;
+    let setting = one(&server, &[FIRST], "10.77.0.2/32", "0.0.0.0/0")?;
+    let (engine, tunnel) = engine(&TunnelSetting {
+        routes: HashMap::new(),
+        ..setting.clone()
+    })?;
+    assert!(!engine.answers_uncached());
+    let (echo_at, seen) = local_echo().await?;
+    let app = tun4(40_300);
+    tunnel
+        .send(&packet::udp(app, echo_at, b"direct").ok_or("datagram")?)
+        .await?;
+    let _ = to_app(&tunnel).await?;
+    assert_eq!(seen.load(std::sync::atomic::Ordering::Relaxed), 1);
+    engine.tunnels(&setting);
+    assert!(
+        engine.answers_uncached(),
+        "TTL 0 while any app goes through a tunnel"
+    );
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    tunnel
+        .send(&packet::udp(app, echo_at, b"through").ok_or("datagram")?)
+        .await?;
+    let through = server.next().await?;
+    assert_eq!(&through[12..16], &PHONE4.octets(), "through the tunnel");
+    assert_eq!(
+        seen.load(std::sync::atomic::Ordering::Relaxed),
+        1,
+        "nothing more directly"
+    );
+    Ok(())
+}
+
+/// After a pause of its app, a tunnelled UDP flow asks Android again whose the socket is: the same app, and
+/// its datagram goes on through the tunnel; another, and the flow ends, its datagram dropped, the socket's
+/// next datagram routed for its new app (the maintainer's answer 5, 2026-11-19).
+#[tokio::test(flavor = "current_thread")]
+async fn a_tunnelled_udp_flow_asks_android_again_after_a_pause() -> Outcome {
+    let mut server = Server::new(SERVER_KEY).await?;
+    let setting = one(&server, &[FIRST], "10.77.0.2/32", "0.0.0.0/0")?;
+    let platform = Switchable::new(FIRST, None);
+    let (_engine, tunnel) = engine_on(&setting, Arc::clone(&platform) as Arc<dyn Platform>)?;
+    let (echo_at, seen) = local_echo().await?;
+    let app = tun4(40_900);
+    for (round, uid, through) in [(0u8, FIRST, true), (1, FIRST, true), (2, DIRECT, false)] {
+        platform
+            .owner
+            .store(uid, std::sync::atomic::Ordering::Relaxed);
+        if round > 0 {
+            tokio::time::sleep(Duration::from_millis(1_200)).await;
+        }
+        tunnel
+            .send(&packet::udp(app, echo_at, &[round]).ok_or("datagram")?)
+            .await?;
+        if through {
+            let seen_by_server = server.next().await?;
+            assert_eq!(seen_by_server.last(), Some(&round), "round {round} through");
+        } else {
+            assert!(
+                server.quiet(Duration::from_millis(500)).await,
+                "round {round}"
+            );
+        }
+    }
+    // The socket is the direct app's now: its next datagram goes its way.
+    tunnel
+        .send(&packet::udp(app, echo_at, b"direct").ok_or("datagram")?)
+        .await?;
+    let _ = to_app(&tunnel).await?;
+    assert_eq!(seen.load(std::sync::atomic::Ordering::Relaxed), 1);
+    Ok(())
+}
+
+/// The local address the machine would send from: a server bound there is reached without anything
+/// leaving the machine, and is no loopback address, which an endpoint's name may not resolve to.
+fn local_address() -> io::Result<Ipv4Addr> {
+    let probe = std::net::UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))?;
+    // `connect` on UDP sends nothing: it only picks the route and the source address.
+    probe.connect((Ipv4Addr::new(192, 0, 2, 1), 9))?;
+    match probe.local_addr()?.ip() {
+        IpAddr::V4(address) if !address.is_loopback() => Ok(address),
+        _ => Err(io::Error::other("no local address")),
+    }
+}
+
+/// An endpoint given by name is resolved by Android's resolver on the network beneath (here the test's
+/// platform), and the state says whether that was encrypted; the tunnel then works through it.
+#[tokio::test(flavor = "current_thread")]
+async fn an_endpoints_name_is_resolved_by_the_platform_and_the_state_says_how() -> Outcome {
+    let local = local_address()?;
+    for encrypted in [true, false] {
+        let socket = UdpSocket::bind((local, 0)).await?;
+        let port = socket.local_addr()?.port();
+        let mut server = Server::new(SERVER_KEY).await?;
+        server.socket = socket;
+        let text = phone_config(
+            SocketAddr::from((local, port)),
+            SERVER_KEY,
+            "10.77.0.2/32",
+            "0.0.0.0/0",
+        )
+        .replace(
+            &format!("{local}:{port}"),
+            &format!("provider.example:{port}"),
+        );
+        let setting = TunnelSetting {
+            tunnels: vec![Configured {
+                id: 1,
+                config: config(&text)?,
+                local_network: false,
+            }],
+            routes: HashMap::from([(FIRST, 1)]),
+            log_destinations: false,
+        };
+        // A multicast and a loopback address first, as a hostile resolver might answer: never taken.
+        let platform = Switchable::new(
+            FIRST,
+            Some((
+                "provider.example".into(),
+                vec![
+                    IpAddr::V4(Ipv4Addr::new(224, 0, 0, 1)),
+                    IpAddr::V4(Ipv4Addr::LOCALHOST),
+                    IpAddr::V4(local),
+                ],
+                encrypted,
+            )),
+        );
+        let (engine, tunnel) = engine_on(&setting, platform)?;
+        tunnel
+            .send(&packet::udp(tun4(40_700), SocketAddr::from((WEB4, 9)), b"x").ok_or("d")?)
+            .await?;
+        let seen = server.next().await?;
+        assert_eq!(&seen[12..16], &PHONE4.octets());
+        let state = engine.tunnel_states().into_iter().next().ok_or("state")?;
+        assert_eq!(
+            (state.plain_dns, state.resolutions, state.connected),
+            (!encrypted, 1, true),
+            "encrypted: {encrypted}"
+        );
+    }
+    Ok(())
+}
+
+/// An endpoint's name that does not resolve is not asked again for every packet: the tunnel's task waits,
+/// its pauses doubling from five seconds, and its apps' packets start no other (fix round, the engine's
+/// review, finding 2; its R2).
+#[tokio::test(flavor = "current_thread")]
+async fn a_name_that_does_not_resolve_is_not_asked_again_per_packet() -> Outcome {
+    let text = format!(
+        "[Interface]\nPrivateKey = {}\nAddress = 10.77.0.2/32\nDNS = 10.77.0.1\n[Peer]\nPublicKey = {}\n\
+         AllowedIPs = 0.0.0.0/0\nEndpoint = provider.example:51820\n",
+        base64(&PHONE_KEY),
+        base64(&public(SERVER_KEY)),
+    );
+    let setting = TunnelSetting {
+        tunnels: vec![Configured {
+            id: 1,
+            config: config(&text)?,
+            local_network: false,
+        }],
+        routes: HashMap::from([(FIRST, 1)]),
+        log_destinations: false,
+    };
+    // Android's resolver refuses the name, as a censor's resolver answers a blocked provider's.
+    let platform = Switchable::new(FIRST, Some(("other.example".into(), Vec::new(), false)));
+    let (engine, tunnel) = engine_on(&setting, Arc::clone(&platform) as Arc<dyn Platform>)?;
+    for i in 0..20u16 {
+        tunnel
+            .send(
+                &packet::udp(
+                    tun4(40_400),
+                    SocketAddr::from((WEB4, 443)),
+                    &i.to_be_bytes(),
+                )
+                .ok_or("datagram")?,
+            )
+            .await?;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let asked = platform.asked.load(std::sync::atomic::Ordering::Relaxed);
+    let state = engine.tunnel_states().into_iter().next().ok_or("state")?;
+    assert_eq!(
+        asked, 1,
+        "one resolution in two seconds, not one per packet"
+    );
+    assert_eq!(
+        (state.error, state.resolutions, state.connected),
+        (Some("resolve"), 1, false)
+    );
+    Ok(())
+}
+
+/// A UDP reply the far side fragmented (larger than the server's own tunnel MTU, DF clear, as a kernel
+/// forwarding it fragments it) is put together and reaches the app (fix round, the engine's review, finding
+/// 4; its R5).
+#[tokio::test(flavor = "current_thread")]
+async fn a_fragmented_reply_from_the_tunnel_reaches_the_app() -> Outcome {
+    let mut server = Server::new(SERVER_KEY).await?;
+    let setting = one(&server, &[FIRST], "10.77.0.2/32", "0.0.0.0/0")?;
+    let (_engine, tunnel) = engine(&setting)?;
+    let (app, far) = (tun4(40_500), SocketAddr::from((WEB4, 5_000)));
+    tunnel
+        .send(&packet::udp(app, far, b"ask").ok_or("datagram")?)
+        .await?;
+    let _ = server.next().await?;
+    let whole =
+        packet::udp(far, SocketAddr::from((PHONE4, 40_500)), &[7u8; 1_400]).ok_or("datagram")?;
+    for (part, more) in fragments(&whole, 1_000) {
+        let _ = more;
+        server.send(&part).await?;
+    }
+    let got = to_app(&tunnel).await?;
+    let parsed = packet::parse(&got).map_err(|e| format!("{e:?}"))?;
+    assert_eq!((parsed.source, parsed.destination), (far, app));
+    assert_eq!(
+        packet::udp_payload(&got, &parsed).map(<[u8]>::len),
+        Some(1_400)
+    );
+    Ok(())
+}
+
+/// `whole`, an IPv4 packet, cut into fragments whose data holds at most `size` bytes (a multiple of 8),
+/// with DF clear, each with its header's checksum.
+fn fragments(whole: &[u8], size: usize) -> Vec<(Vec<u8>, bool)> {
+    let data = &whole[20..];
+    let mut out = Vec::new();
+    let mut offset = 0;
+    while offset < data.len() {
+        let end = (offset + size).min(data.len());
+        let more = end < data.len();
+        let mut p = whole[..20].to_vec();
+        p.extend_from_slice(&data[offset..end]);
+        let total = u16::try_from(p.len()).unwrap_or(0);
+        p[2..4].copy_from_slice(&total.to_be_bytes());
+        p[4..6].copy_from_slice(&0x1234u16.to_be_bytes());
+        let field = u16::try_from(offset / 8).unwrap_or(0) | if more { 0x2000 } else { 0 };
+        p[6..8].copy_from_slice(&field.to_be_bytes());
+        p[10..12].fill(0);
+        let sum = !fold(&p[..20]);
+        p[10..12].copy_from_slice(&sum.to_be_bytes());
+        out.push((p, more));
+        offset = end;
+    }
+    out
+}
+
+/// A datagram the engine put together from the app's own fragments, larger than the tunnel's MTU, goes into
+/// the tunnel whole, since it came fragmented: no "fragmentation needed", which would only have it
+/// fragmented again; the outer datagram is fragmented on the way instead.
+#[tokio::test(flavor = "current_thread")]
+async fn a_datagram_put_together_from_the_apps_fragments_passes_whole() -> Outcome {
+    let mut server = Server::new(SERVER_KEY).await?;
+    let setting = one(
+        &server,
+        &[FIRST],
+        "10.77.0.2/32, fd77::2/128",
+        "0.0.0.0/0, ::/0",
+    )?;
+    let (engine, tunnel) = engine(&setting)?;
+    let (app, far) = (tun4(40_510), SocketAddr::from((WEB4, 5_000)));
+    let whole = packet::udp(app, far, &[9u8; 1_400]).ok_or("datagram")?;
+    for (part, _) in fragments(&whole, 1_000) {
+        tunnel.send(&part).await?;
+    }
+    let seen = server.next().await?;
+    assert_eq!(seen.len(), 1_428, "whole, over the MTU of 1,280");
+    // In IPv6, where no router fragments and every packet counts as "don't fragment", only having been put
+    // together lets it pass (the engine reviewer's mutant M5 survived the IPv4 case alone). The flow is open,
+    // and after a pause, so that the datagram waits while Android is asked again whose the socket is, and
+    // keeps its mark meanwhile.
+    let (app, far) = (tun6(40_511), SocketAddr::from((WEB6, 5_000)));
+    tunnel
+        .send(&packet::udp(app, far, b"open").ok_or("datagram")?)
+        .await?;
+    let _ = server.next().await?;
+    tokio::time::sleep(Duration::from_millis(1_200)).await;
+    let whole = packet::udp(app, far, &[9u8; 1_400]).ok_or("datagram")?;
+    for part in fragments6(&whole, 1_000) {
+        tunnel.send(&part).await?;
+    }
+    let seen = server.next().await?;
+    assert_eq!(seen.len(), 1_448, "whole, over the MTU of 1,280");
+    assert_eq!(engine.counters()[TUNNEL_TOO_BIG], 0);
+    Ok(())
+}
+
+/// The IPv6 datagram `whole` cut into fragments of at most `size` bytes of its payload, a multiple of 8, as an
+/// app's kernel cuts one, each with a fragment header.
+fn fragments6(whole: &[u8], size: usize) -> Vec<Vec<u8>> {
+    let data = &whole[40..];
+    let mut out = Vec::new();
+    let mut offset = 0;
+    while offset < data.len() {
+        let end = (offset + size).min(data.len());
+        let more = end < data.len();
+        let mut p = whole[..40].to_vec();
+        p[6] = 44;
+        let length = u16::try_from(8 + end - offset).unwrap_or(0);
+        p[4..6].copy_from_slice(&length.to_be_bytes());
+        let field = u16::try_from(offset).unwrap_or(0) | u16::from(more);
+        p.extend_from_slice(&[17, 0]);
+        p.extend_from_slice(&field.to_be_bytes());
+        p.extend_from_slice(&0x5678_u32.to_be_bytes());
+        p.extend_from_slice(&data[offset..end]);
+        out.push(p);
+        offset = end;
+    }
+    out
+}
+
+/// A ping to a stand-in address, which only the tool reaches, is refused, never carried by a tunnel.
+#[tokio::test(flavor = "current_thread")]
+async fn a_ping_to_a_stand_in_is_refused() -> Outcome {
+    let server = Server::new(SERVER_KEY).await?;
+    let setting = one(&server, &[FIRST], "10.77.0.2/32", "0.0.0.0/0")?;
+    let (_engine, tunnel) = engine(&setting)?;
+    tunnel
+        .send(&echo(
+            IpAddr::V4(Addresses::COMMON.tun4),
+            IpAddr::from([198, 18, 0, 1]),
+            false,
+        )?)
+        .await?;
+    let refused = to_app(&tunnel).await?;
+    assert_eq!((refused[9], refused[20], refused[21]), (1, 3, 13));
     Ok(())
 }

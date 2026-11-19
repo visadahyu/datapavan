@@ -31,6 +31,6 @@ pub mod wireguard;
 
 pub use engine::{
     Addresses, Chain, ChainSetting, Config, DnsUse, Ech, Engine, Flow, Handover, Limits, NamedBy,
-    Network, Outcome, Platform, TunnelSetting, TunnelState, Via,
+    Network, Outcome, Platform, Resolution, TunnelSetting, TunnelState, Via,
 };
 pub use owners::NetworkKind;
