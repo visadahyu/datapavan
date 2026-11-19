@@ -1,0 +1,16 @@
+# W7's interoperation lab (spikes/wireguard-core/lab.sh): one WireGuard peer of the reference implementation,
+# in a Compose project of its own. The client reaches it at its address on the project's network; nothing is
+# published on the host. lab.sh stops the project when it is done (stop, not down), and nothing restarts it.
+name: datapavan-wglab
+services:
+  peer:
+    build: .
+    image: datapavan-wglab-peer
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "0"
+      net.ipv6.conf.default.disable_ipv6: "0"
+    restart: "no"
+    # tini as PID 1, so that Python stops at once on `docker compose stop`.
+    init: true
