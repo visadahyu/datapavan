@@ -26,6 +26,16 @@ case $EDITION in
 esac
 
 [ -z "$(git -C "$ROOT" status --porcelain)" ] || fail "the working tree is not clean"
+# No string of the edition still waits for its translations ("Every release", step 2): strings added in English
+# only sit in strings_untranslated.xml, where lint lets them pass, so no build gate can hold this before the
+# translations land without failing CI's release builds meanwhile; the release itself is held here.
+modules="app shared"
+[ "$EDITION" = basic ] || modules="$modules watch"
+for module in $modules; do
+    waiting="$ROOT/android/$module/src/main/res/values/strings_untranslated.xml"
+    [ ! -f "$waiting" ] || ! grep -qE '<(string|plurals|string-array)[ >]' "$waiting" ||
+        fail "android/$module still has strings waiting for their translations in strings_untranslated.xml"
+done
 commit=$(git -C "$ROOT" rev-parse HEAD)
 git -C "$ROOT" merge-base --is-ancestor "$commit" origin/main || fail "$commit is not on origin/main"
 

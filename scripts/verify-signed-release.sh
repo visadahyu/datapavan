@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs a really signed release on an emulator (docs/RELEASE.md, "Every release", step 6): the smoke
+# Runs a really signed release on an emulator (docs/RELEASE.md, "Every release", step 7): the smoke
 # test and the shortcut check, then the app must know itself genuine, show the data pack the notes name,
 # refuse a damaged copy of that pack and refuse the pack again as not newer. Run
 # scripts/verify-signed.py on the same directory first, which checks the files from the published keys.

@@ -63,14 +63,16 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    icon's layers, and six screenshots per language in SystemUI's demo mode.
 2. **Strings.** No `strings_untranslated.xml` is left under `android/*/src/main/res/values/`: strings added in
    English only wait there for ADR 0030's translations and review, and move into `strings.xml` with them, where
-   `scripts/check-translations.py` holds them to every language (W5's third part).
+   `scripts/check-translations.py` holds them to every language (W5's third part). `scripts/prepare-signing.sh`
+   refuses an edition while a module it carries still has one with entries. No build gate holds this: lint lets
+   the file pass on purpose, and CI builds the release before the translations land.
 3. **Checks.** `scripts/check.sh all`, the emulator scripts (`smoke.sh`, `verify-audit.sh`,
    `verify-plan.sh`, `verify-shortcuts.sh`, `verify-datapack.sh`, `screenshots.sh`) on the CI image
    `dp-api35-ci`, and `scripts/reproducible.sh`, which builds the release twice from clean checkouts in
    different directories and fails unless the two unsigned APKs are identical. Then
-   `scripts/release-rehearsal.sh --install` runs steps 4 and 5 for Basic with throwaway keys and puts the signed
+   `scripts/release-rehearsal.sh --install` runs steps 5 and 6 for Basic with throwaway keys and puts the signed
    release build, the only one R8 shrinks, through the smoke test and the shortcut check on the
-   emulator; `scripts/release-rehearsal.sh advanced` runs steps 4 and 5 for Advanced, whose
+   emulator; `scripts/release-rehearsal.sh advanced` runs steps 5 and 6 for Advanced, whose
    release build `scripts/verify-watch-release.sh` runs on the emulator. CI's emulator cannot run 32-bit ARM code, so the 32-bit build is tried by hand on the
    Android 11 emulator (`dp-api30`), which translates ARM code: `INSTALL_ABI=armeabi-v7a scripts/smoke.sh`,
    then `verify-audit.sh`, `verify-plan.sh` and `verify-shortcuts.sh`. The data pack scripts stay on
@@ -130,7 +132,7 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    (`v<version>`). The tag itself is not signed, since none of the offline keys can sign a Git tag. The
    signed notes name the commit, so a tag moved later no longer matches them: compare with
    `git rev-parse v<version>^{commit}`. A key for tags can be added later, if `git verify-tag` should work too.
-8. **F-Droid.** F-Droid builds from the tag. With reproducible builds it publishes the APK signed by
+9. **F-Droid.** F-Droid builds from the tag. With reproducible builds it publishes the APK signed by
    the project only when its own build matches; the recipe lists the certificate's fingerprint.
    [fastlane/](../fastlane/) holds the store texts, which F-Droid reads from the repository.
 

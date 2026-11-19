@@ -8,7 +8,7 @@ copy can be checked against the one published fingerprint (ADR 0024).
 ## Order for v0.1
 
 1. **GitHub Releases**, the source of every other channel: the signed APK, its SHA-256, the release
-   notes and their signify signature (RELEASE.md, steps 4 to 6).
+   notes and their signify signature (RELEASE.md, steps 5 to 7).
 2. **The website**, `datapavan.org/download/`: the same signed files from a server that keeps no access log.
 3. **F-Droid**, which builds from source and needs a reviewed merge request. Its inclusion policy
    asks for at least three months of active development (Quality, point 6); Datapavan's began on

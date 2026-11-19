@@ -1,5 +1,5 @@
 """Checks a release's signed files on the main system, from the published keys only (docs/RELEASE.md,
-"Every release", step 6). It needs no secret and trusts nothing that came back from the offline system
+"Every release", step 7). It needs no secret and trusts nothing that came back from the offline system
 except through a signature or a hash that the notes name.
 
     python3 -I scripts/verify-signed.py DIRECTORY [COMMIT] [EDITION]
@@ -139,7 +139,7 @@ def main():
     ok(f"{apk.name}'s SHA-256 is the one in the notes")
 
     # apksigner checks every scheme's signature over the whole file; --min-sdk-version 24 makes it
-    # report v2 too, which it otherwise skips for minSdk 29 (docs/RELEASE.md, step 4).
+    # report v2 too, which it otherwise skips for minSdk 29 (docs/RELEASE.md, step 5).
     verified = subprocess.run([apksigner(), "verify", "--verbose", "--print-certs", "--min-sdk-version", "24", apk],
                               capture_output=True, text=True, check=False)
     if verified.returncode != 0:
