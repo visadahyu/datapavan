@@ -20,8 +20,9 @@ import org.visadahyu.datapavan.audit.OwnerNotes
 internal fun OwnerSection(notes: OwnerNotes) {
     Column {
         SectionTitle(R.string.owners_heading)
-        if (notes.group != null && notes.sameGroup.isNotEmpty()) {
-            Text(stringResource(R.string.owner_same_group, notes.group, notes.sameGroup.joinedForUser()), style = MaterialTheme.typography.bodyMedium)
+        val group = notes.group
+        if (group != null && notes.sameGroup.isNotEmpty()) {
+            Text(stringResource(R.string.owner_same_group, group, notes.sameGroup.joinedForUser()), style = MaterialTheme.typography.bodyMedium)
         }
         notes.shutDown.forEach { (name, date) ->
             Spacer(Modifier.height(4.dp))

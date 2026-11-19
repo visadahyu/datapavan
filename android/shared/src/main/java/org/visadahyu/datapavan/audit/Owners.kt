@@ -35,7 +35,8 @@ data class OwnerNotes(
 
 /**
  * Which company runs each SDK's service, which company controls which, and which company publishes
- * which app (`data/owners`, ADR 0020). The SDKs' class prefixes join the tracker scanner's signatures.
+ * which app (`data/owners`, ADR 0020). In the shared module since W5's third part, so that Watch's "Now"
+ * tells a tracker of the app's own company group as the audit's app page does. The SDKs' class prefixes join the tracker scanner's signatures.
  * Same group means both sides lead, through parents that hold the whole or a majority, to the same
  * company on the data's date; anything not recorded gives no note at all, never a guess.
  */
@@ -60,6 +61,9 @@ class Owners private constructor(
         signing ?: return null
         return (signing.current + signing.history).firstNotNullOfOrNull { publishers[packageName to it] }
     }
+
+    /** The name of [entity], or null for one the table does not hold. */
+    fun name(entity: String): String? = entities[entity]?.name
 
     /** The company at the top of [entity]'s group on [date]: up through parents that hold it wholly or by majority. */
     fun group(entity: String, date: String): String? {
