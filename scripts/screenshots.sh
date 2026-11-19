@@ -96,6 +96,9 @@ now_screens() {
                 { echo "SCREENSHOTS FAILED: the log's retention could not be set in $locale" >&2; exit 1; }
             # The request again until Watch counts it: just after the tunnel starts, Android may not route it yet.
             within 30 shell_counted || { echo "SCREENSHOTS FAILED: Watch did not count the shell's request in $locale" >&2; exit 1; }
+            # The shell's records written now, so that its history shows them, not "nothing kept yet".
+            grep -q '^log-flushed$' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" log-flush | tr -d '\r' | sed 's/^ *//')" ||
+                { echo "SCREENSHOTS FAILED: the log's records were not written in $locale" >&2; exit 1; }
             # "Now" for the shell alone, whose row is the first below the view's top.
             adb shell am start -n "$PKG/$watch" --activity-clear-top --ez now true --es now_package com.android.shell \
                 --ez screenshots_for_tests true >/dev/null
