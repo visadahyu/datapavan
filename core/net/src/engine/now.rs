@@ -14,10 +14,17 @@
 //!
 //! The seconds not placed yet count in the snapshot in a column of their own, "not told yet", from the
 //! flows' and the held segments' marks, so that the view needs no reading to show them.
+//!
+//! Bytes in no state are also counted by why (no usage access, no events, told too late, no app, not
+//! told), in the minutes that hold some only, so that "Now" can say why an app's bytes have no state (W5's
+//! third part). And a window of its own, "while the screen was off", holds each app's bytes by state from
+//! the moment the screen went off to the moment it came on again, kept from then until the screen next
+//! goes off, for the summary's "While the screen was off (2 h 10 min), N apps you were not using sent X"
+//! (ADR 0046, decision 2 (a)).
 
 use super::activity::{Mark, Of};
 use super::{Flow, NamedBy, Network, Shared, lock};
-use crate::snapshot::{AppNow, PlaceNow, Snapshot, Ways};
+use crate::snapshot::{AppNow, COLUMNS, OFF, PlaceNow, Snapshot, WINDOWS as VIEW_WINDOWS, Ways};
 use crate::states::Placed;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
@@ -44,6 +51,10 @@ pub(super) const WINDOWS: [u64; 2] = [10, 60];
 
 /// Bytes up and down by column: no state, in use, with its notification, in the background.
 type ByState = [Ways; 4];
+
+/// Bytes up and down in no state, by why ([`Placed::reason`]): no usage access, no events, told too
+/// late, no app, not told.
+type ByReason = [Ways; 5];
 
 /// Counts in whole minutes: the minute (of the wall clock, since 1970), and its counts.
 type Minutes<T> = VecDeque<(u64, T)>;
@@ -131,12 +142,82 @@ fn same_place(a: &Flow, b: &Flow) -> bool {
 #[derive(Default)]
 struct App {
     minutes: Minutes<ByState>,
+    /// The bytes in no state by why, in the minutes that hold some only.
+    reasons: Minutes<ByReason>,
     session: ByState,
+    session_reasons: ByReason,
     /// The last second a flow of it went through the user's tool with its destination left out.
     through_tool: Option<u64>,
     /// The last second it sent or received.
     last: u64,
     places: Vec<Place>,
+}
+
+/// One app's bytes in the window "while the screen was off".
+#[derive(Default)]
+struct OffApp {
+    bytes: ByState,
+    reasons: ByReason,
+    /// The last second it sent or received.
+    last: u64,
+}
+
+/// The window "while the screen was off": from the moment the screen went off to the moment it came on
+/// again, in milliseconds since 1970, and each app's bytes by state in it, at most [`APPS`] apps. A second
+/// counts in it when it began in that span. Kept from the screen-on that closed it until the screen next
+/// goes off; while the screen is off, the window runs.
+pub(super) struct Off {
+    pub(super) from: u64,
+    pub(super) until: Option<u64>,
+    apps: HashMap<Option<u32>, OffApp>,
+}
+
+impl Off {
+    /// Whether the second `second` falls in the window.
+    fn holds(&self, second: u64) -> bool {
+        let at = second.saturating_mul(1000);
+        at >= self.from && self.until.is_none_or(|until| at < until)
+    }
+
+    fn count(&mut self, uid: Option<u32>, second: u64, placed: Placed, ways: Ways) {
+        if !self.apps.contains_key(&uid) && self.apps.len() >= APPS {
+            let oldest = self
+                .apps
+                .iter()
+                .min_by_key(|(_, app)| app.last)
+                .map(|(uid, _)| *uid);
+            if let Some(oldest) = oldest {
+                self.apps.remove(&oldest);
+            }
+        }
+        let app = self.apps.entry(uid).or_default();
+        add(&mut app.bytes[placed.column()], ways);
+        if let Some(why) = placed.reason() {
+            add(&mut app.reasons[why], ways);
+        }
+        app.last = app.last.max(second);
+    }
+}
+
+impl App {
+    /// Adds a placed second's bytes, in `minute`, to its column, and to its why where it has no state.
+    fn add(&mut self, minute: u64, placed: Placed, ways: Ways, in_session: bool) {
+        let column = placed.column();
+        add_minute(&mut self.minutes, minute, |counts: &mut ByState| {
+            add(&mut counts[column], ways);
+        });
+        if let Some(why) = placed.reason() {
+            add_minute(&mut self.reasons, minute, |counts: &mut ByReason| {
+                add(&mut counts[why], ways);
+            });
+        }
+        if in_session {
+            add(&mut self.session[column], ways);
+            if let Some(why) = placed.reason() {
+                add(&mut self.session_reasons[why], ways);
+            }
+        }
+    }
 }
 
 /// Each app's counts by state, and the window since the screen came on.
@@ -149,21 +230,45 @@ pub(super) struct Counts {
     organisations: HashMap<std::net::IpAddr, Option<(Network, String)>>,
     /// When the screen last came on, in milliseconds since 1970: the window "since the screen came on".
     session: Option<u64>,
+    /// The window "while the screen was off", once the screen went off.
+    off: Option<Off>,
 }
 
 impl Counts {
-    /// The screen came on at `since`: the window since it did begins anew.
+    /// The screen came on at `since`: the window since it did begins anew, and the window "while the screen
+    /// was off", if it runs and began before, ends there.
     pub(super) fn screen_on(&mut self, since: u64) {
+        if let Some(off) = self
+            .off
+            .as_mut()
+            .filter(|off| off.until.is_none() && off.from <= since)
+        {
+            off.until = Some(since);
+        }
         if self.session == Some(since) {
             return;
         }
         self.session = Some(since);
         for app in self.apps.values_mut() {
             app.session = ByState::default();
+            app.session_reasons = ByReason::default();
             for place in &mut app.places {
                 place.session = Ways::default();
             }
         }
+    }
+
+    /// The screen went off at `at`: the window "while the screen was off" begins there, in place of the one
+    /// before, unless it is that one, or one before it.
+    pub(super) fn screen_off(&mut self, at: u64) {
+        if self.off.as_ref().is_some_and(|off| off.from >= at) {
+            return;
+        }
+        self.off = Some(Off {
+            from: at,
+            until: None,
+            apps: HashMap::new(),
+        });
     }
 
     /// The wall clock was set back to `now`: the minutes later than its own are of the old clock, and so
@@ -174,6 +279,7 @@ impl Counts {
         let mut gone = 0;
         for app in self.apps.values_mut() {
             app.minutes.retain(|(m, _)| *m <= minute);
+            app.reasons.retain(|(m, _)| *m <= minute);
             for place in &mut app.places {
                 place.minutes.retain(|(m, _)| *m <= minute);
             }
@@ -184,10 +290,19 @@ impl Counts {
             });
         }
         self.places -= gone;
+        // The window "while the screen was off" of the old clock, if it reaches past the new clock's now.
+        if self
+            .off
+            .as_ref()
+            .is_some_and(|off| off.until.unwrap_or(off.from) > now)
+        {
+            self.off = None;
+        }
         if self.session.is_some_and(|since| since > now) {
             self.session = None;
             for app in self.apps.values_mut() {
                 app.session = ByState::default();
+                app.session_reasons = ByReason::default();
                 for place in &mut app.places {
                     place.session = Ways::default();
                 }
@@ -226,6 +341,9 @@ impl Counts {
         if (up == 0 && down == 0) || matches!(seen, Seen::Lookups) {
             return;
         }
+        if let Some(off) = self.off.as_mut().filter(|off| off.holds(second)) {
+            off.count(uid, second, placed, [up, down]);
+        }
         if !self.apps.contains_key(&uid) && self.apps.len() >= APPS {
             let oldest = self
                 .apps
@@ -239,17 +357,9 @@ impl Counts {
         let in_session = self
             .session
             .is_some_and(|since| second.saturating_mul(1000) >= since);
-        let column = placed.column();
         let minute = second / 60;
         let app = self.apps.entry(uid).or_default();
-        add_minute(&mut app.minutes, minute, |counts: &mut ByState| {
-            counts[column][0] += up;
-            counts[column][1] += down;
-        });
-        if in_session {
-            app.session[column][0] += up;
-            app.session[column][1] += down;
-        }
+        app.add(minute, placed, [up, down], in_session);
         app.last = app.last.max(second);
         let (flow, routed) = match seen {
             Seen::Flow(flow) => (flow, false),
@@ -345,6 +455,7 @@ impl Counts {
         let mut gone = 0;
         self.apps.retain(|_, app| {
             app.minutes.retain(|(minute, _)| *minute >= first);
+            app.reasons.retain(|(minute, _)| *minute >= first);
             app.places.retain_mut(|place| {
                 place.minutes.retain(|(minute, _)| *minute >= first);
                 let keep = !place.minutes.is_empty() || place.session != Ways::default();
@@ -379,9 +490,16 @@ impl Shared {
             let live = lock(&self.live);
             let mut activity = lock(&self.activity);
             activity.counts.forget_old(now);
-            let mut view = View::new(now, activity.counts.session);
-            for (&uid, app) in &activity.counts.apps {
+            let counts = &activity.counts;
+            let off = counts.off.as_ref().map(|off| (off.from, off.until));
+            let mut view = View::new(now, counts.session, off);
+            for (&uid, app) in &counts.apps {
                 view.settled(uid, app);
+            }
+            if let Some(off) = &counts.off {
+                for (&uid, app) in &off.apps {
+                    view.settled_off(uid, app);
+                }
             }
             // The seconds not placed yet: in the live flows and the segments held.
             for live in live.values() {
@@ -418,6 +536,7 @@ impl Shared {
         };
         self.look_up(&view, &mut found);
         let (known, told_until, screen, session, states) = head;
+        let off = view.off;
         let apps = view
             .apps
             .into_iter()
@@ -454,6 +573,7 @@ impl Shared {
             told_until,
             screen,
             session,
+            off,
             apps,
         }
     }
@@ -511,36 +631,49 @@ struct View {
     /// The first minute of each window of whole minutes.
     firsts: [u64; 2],
     session: Option<u64>,
+    /// The window "while the screen was off": when the screen went off, and came on again if it did.
+    off: Option<(u64, Option<u64>)>,
     apps: BTreeMap<Option<u32>, AppView>,
 }
 
+/// The column of the seconds not told yet.
+const NOT_YET: usize = 4;
+
+/// The first column of the bytes in no state by why.
+const REASONS: usize = 5;
+
 #[derive(Default)]
 struct AppView {
-    /// By window (10 minutes, an hour, since the screen came on), then by column (no state, in use,
-    /// with its notification, in the background, not told yet).
-    bytes: [[Ways; 5]; 3],
+    /// By window (10 minutes, an hour, since the screen came on, while the screen was off), then by column
+    /// ([`crate::snapshot`]: no state, in use, with its notification, in the background, not told yet,
+    /// then the no state's bytes by why).
+    bytes: [[Ways; COLUMNS]; VIEW_WINDOWS],
     through_tool: bool,
     places: Vec<(Flow, [Ways; 3])>,
 }
 
 impl View {
-    fn new(now: u64, session: Option<u64>) -> Self {
+    fn new(now: u64, session: Option<u64>, off: Option<(u64, Option<u64>)>) -> Self {
         let minute = now / 60_000;
         Self {
             firsts: WINDOWS.map(|w| minute.saturating_sub(w - 1)),
             session,
+            off,
             apps: BTreeMap::new(),
         }
     }
 
-    /// The windows a second falls in: the 10 minutes, the hour, since the screen came on.
-    fn windows(&self, second: u64) -> [bool; 3] {
+    /// The windows a second falls in: the 10 minutes, the hour, since the screen came on, while the screen
+    /// was off.
+    fn windows(&self, second: u64) -> [bool; VIEW_WINDOWS] {
         let minute = second / 60;
+        let at = second.saturating_mul(1000);
         [
             minute >= self.firsts[0],
             minute >= self.firsts[1],
-            self.session
-                .is_some_and(|since| second.saturating_mul(1000) >= since),
+            self.session.is_some_and(|since| at >= since),
+            self.off
+                .is_some_and(|(from, until)| at >= from && until.is_none_or(|until| at < until)),
         ]
     }
 
@@ -560,7 +693,16 @@ impl View {
                 }
             }
         }
+        for (minute, reasons) in &app.reasons {
+            let windows = self.windows(minute * 60);
+            for (w, inside) in windows.into_iter().take(2).enumerate() {
+                if inside {
+                    add_reasons(&mut view.bytes[w], reasons);
+                }
+            }
+        }
         add_columns(&mut view.bytes[2], &app.session);
+        add_reasons(&mut view.bytes[2], &app.session_reasons);
         for place in &app.places {
             let mut bytes = [Ways::default(); 3];
             for (minute, counts) in &place.minutes {
@@ -576,9 +718,16 @@ impl View {
                 view.places.push((place.flow.clone(), bytes));
             }
         }
-        if view.bytes != [[Ways::default(); 5]; 3] || view.through_tool {
+        if view.bytes != [[Ways::default(); COLUMNS]; VIEW_WINDOWS] || view.through_tool {
             self.apps.insert(uid, view);
         }
+    }
+
+    /// An app's bytes in the window "while the screen was off".
+    fn settled_off(&mut self, uid: Option<u32>, app: &OffApp) {
+        let view = self.apps.entry(uid).or_default();
+        add_columns(&mut view.bytes[OFF], &app.bytes);
+        add_reasons(&mut view.bytes[OFF], &app.reasons);
     }
 
     /// The seconds not placed yet of one flow or segment, in its marks, `now` its counts after the
@@ -601,7 +750,7 @@ impl View {
             let app = self.apps.entry(uid).or_default();
             for (w, inside) in windows.into_iter().enumerate() {
                 if inside {
-                    add(&mut app.bytes[w][4], ways);
+                    add(&mut app.bytes[w][NOT_YET], ways);
                 }
             }
             let flow = match seen {
@@ -627,7 +776,7 @@ impl View {
             let Some(at) = at else {
                 continue;
             };
-            for (w, inside) in windows.into_iter().enumerate() {
+            for (w, inside) in windows.into_iter().take(3).enumerate() {
                 if inside {
                     add(&mut app.places[at].1[w], ways);
                 }
@@ -641,9 +790,15 @@ fn add(to: &mut Ways, more: Ways) {
     to[1] += more[1];
 }
 
-fn add_columns(to: &mut [Ways; 5], more: &ByState) {
+fn add_columns(to: &mut [Ways; COLUMNS], more: &ByState) {
     for (column, ways) in more.iter().enumerate() {
         add(&mut to[column], *ways);
+    }
+}
+
+fn add_reasons(to: &mut [Ways; COLUMNS], more: &ByReason) {
+    for (why, ways) in more.iter().enumerate() {
+        add(&mut to[REASONS + why], *ways);
     }
 }
 
@@ -661,12 +816,12 @@ mod tests {
     const MINUTE: u64 = 60_000;
 
     /// The bytes of `uid` in `snapshot`, by window and column.
-    fn bytes_of(snapshot: &Snapshot, uid: Option<u32>) -> [[Ways; 5]; 3] {
+    fn bytes_of(snapshot: &Snapshot, uid: Option<u32>) -> [[Ways; COLUMNS]; VIEW_WINDOWS] {
         snapshot
             .apps
             .iter()
             .find(|app| app.uid == uid)
-            .map_or([[[0; 2]; 5]; 3], |app| app.bytes)
+            .map_or([[[0; 2]; COLUMNS]; VIEW_WINDOWS], |app| app.bytes)
     }
 
     fn app_of(snapshot: &Snapshot, uid: Option<u32>) -> Option<&AppNow> {
@@ -728,7 +883,7 @@ mod tests {
         again.screen = crate::states::Screen::On(Some(T + 61 * MINUTE));
         shared.tell(&again);
         let snapshot = shared.now_view(T + 61 * MINUTE);
-        assert_eq!(bytes_of(&snapshot, Some(UID))[2], [[0; 2]; 5]);
+        assert_eq!(bytes_of(&snapshot, Some(UID))[2], [[0; 2]; COLUMNS]);
         assert_eq!(
             bytes_of(&snapshot, Some(UID))[1][3],
             [27, 0],
@@ -1477,6 +1632,212 @@ mod tests {
         );
     }
 
+    /// A reading of the states over `from` to `until`, every app in the background, with the screen as
+    /// given and when it went off.
+    fn screen_told(from: u64, until: u64, screen: crate::states::Screen, off: Option<u64>) -> Told {
+        Told {
+            screen,
+            screen_off: off,
+            ..told(from, until, &[])
+        }
+    }
+
+    /// The window "while the screen was off" holds each app's bytes by state from the moment the screen
+    /// went off to the moment it came on, a second counting where it began, and seconds placed after the
+    /// screen came on included; it is kept until the screen next goes off, which begins a new one, and a
+    /// reading that tells an older moment it went off changes nothing (W5's third part, the open list's
+    /// fourth item).
+    #[test]
+    fn the_window_while_the_screen_was_off_holds_each_apps_bytes_by_state() {
+        use crate::states::Screen;
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        let mut reading = told(T, T + 1_000, &[(T, T + 1_000, State::InUse)]);
+        reading.screen = Screen::On(Some(T - 10_000));
+        up_at(&shared, &clock, &bytes, 0, 10);
+        up_at(&shared, &clock, &bytes, 1_500, 20);
+        shared.tell(&reading);
+        assert_eq!(shared.now_view(T + 1_500).off, None, "not off yet");
+        // Off at 1.2 s: the second it went off in began before, so it is not the window's.
+        up_at(&shared, &clock, &bytes, 2_500, 30);
+        up_at(&shared, &clock, &bytes, 5_000, 40);
+        shared.tell(&screen_told(
+            T + 1_000,
+            T + 3_000,
+            Screen::Off,
+            Some(T + 1_200),
+        ));
+        let snapshot = shared.now_view(T + 3_000);
+        assert_eq!(snapshot.off, Some((T + 1_200, None)));
+        assert_eq!(bytes_of(&snapshot, Some(UID))[OFF][3], [30, 0]);
+        // On again at 8 s: the second 5 is placed after, and still counts in the window; the second 8 began
+        // as the screen came on, so it is since the screen came on, not while it was off.
+        up_at(&shared, &clock, &bytes, 8_000, 50);
+        let mut on = screen_told(
+            T + 3_000,
+            T + 9_000,
+            Screen::On(Some(T + 8_000)),
+            Some(T + 1_200),
+        );
+        on.intervals.push(Interval {
+            uid: UID,
+            from: T + 8_000,
+            until: T + 9_000,
+            state: State::InUse,
+        });
+        shared.tell(&on);
+        let snapshot = shared.now_view(T + 9_000);
+        assert_eq!(snapshot.off, Some((T + 1_200, Some(T + 8_000))));
+        let all = bytes_of(&snapshot, Some(UID));
+        assert_eq!((all[OFF][3], all[OFF][1]), ([70, 0], [0, 0]));
+        assert_eq!((all[2][1], all[2][3]), ([50, 0], [0, 0]));
+        assert_eq!(
+            (all[0][1], all[0][3]),
+            ([60, 0], [90, 0]),
+            "the 10 minutes hold every second, the one the screen went off in included"
+        );
+        // Told again, the same or an older moment it went off changes nothing.
+        for off in [T + 1_200, T + 500] {
+            shared.tell(&screen_told(
+                T + 9_000,
+                T + 9_500,
+                Screen::On(Some(T + 8_000)),
+                Some(off),
+            ));
+            assert_eq!(
+                shared.now_view(T + 9_500).off,
+                Some((T + 1_200, Some(T + 8_000)))
+            );
+        }
+        // Off again: a new window, empty, in place of the last.
+        shared.tell(&screen_told(
+            T + 9_500,
+            T + 12_000,
+            Screen::Off,
+            Some(T + 11_000),
+        ));
+        let snapshot = shared.now_view(T + 12_000);
+        assert_eq!(snapshot.off, Some((T + 11_000, None)));
+        assert_eq!(bytes_of(&snapshot, Some(UID))[OFF], [[0; 2]; COLUMNS]);
+    }
+
+    /// The screen went off and came on again within one reading: its window opens and closes with it.
+    #[test]
+    fn a_screen_off_and_on_within_one_reading_has_its_window() {
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 2_500, 30);
+        shared.tell(&screen_told(
+            T,
+            T + 4_000,
+            crate::states::Screen::On(Some(T + 3_000)),
+            Some(T + 2_000),
+        ));
+        let snapshot = shared.now_view(T + 4_000);
+        assert_eq!(snapshot.off, Some((T + 2_000, Some(T + 3_000))));
+        assert_eq!(bytes_of(&snapshot, Some(UID))[OFF][3], [30, 0]);
+    }
+
+    /// The window while the screen was off is bounded as the others: one app more than [`APPS`] takes
+    /// the place of the one with bytes the longest ago; and a clock set back past its end forgets it, while
+    /// one that still runs and began before the new clock's now is kept.
+    #[test]
+    fn the_window_while_the_screen_was_off_is_bounded_and_follows_the_clock() {
+        let mut counts = Counts::default();
+        counts.screen_off(T);
+        for uid in 0..=u32::try_from(APPS).unwrap_or(u32::MAX) {
+            let to = flow(1, Some(uid));
+            counts.count(
+                Some(uid),
+                T / 1000 + 1 + u64::from(uid),
+                [1, 0, 0, 0],
+                BACKGROUND,
+                Seen::Flow(&to),
+            );
+        }
+        let off = counts.off.as_ref().map(|off| off.apps.len());
+        assert_eq!(off, Some(APPS));
+        assert!(
+            counts
+                .off
+                .as_ref()
+                .is_some_and(|off| !off.apps.contains_key(&Some(0)))
+        );
+        counts.set_back(T + 30_000);
+        assert!(counts.off.is_some(), "still off, from before the new clock");
+        counts.screen_on(T + 60_000);
+        counts.set_back(T + 59_999);
+        assert!(counts.off.is_none(), "its end is past the new clock");
+        // Exactly at the new clock's now, it stays.
+        let mut counts = Counts::default();
+        counts.screen_off(T);
+        counts.screen_on(T + 60_000);
+        counts.set_back(T + 60_000);
+        assert!(counts.off.is_some());
+    }
+
+    /// Bytes in no state count by why, in each window: no usage access, no events, told too late, no app,
+    /// not told, each apart, and together they are the column of no state (W5's third part, the open list's
+    /// fifth item).
+    #[test]
+    fn bytes_in_no_state_count_by_why_in_each_window() {
+        use crate::states::Unknown;
+        let (shared, _, _) = telling_at(T);
+        let mut counts = Counts::default();
+        counts.screen_on(T - 20 * MINUTE);
+        counts.screen_off(T - 30 * MINUTE);
+        let to = flow(1, Some(UID));
+        let reasons = [
+            Unknown::NoAccess,
+            Unknown::Locked,
+            Unknown::Late,
+            Unknown::NoApp,
+            Unknown::NotTold,
+        ];
+        for (n, why) in (1..).zip(reasons) {
+            // Now, and 15 minutes ago: in the hour, not in the 10 minutes; and before the screen came on.
+            for (second, more) in [
+                (T / 1000, 0),
+                (T / 1000 - 15 * 60, 100),
+                (T / 1000 - 25 * 60, 1_000),
+            ] {
+                counts.count(
+                    Some(UID),
+                    second,
+                    [n + more, n, 0, 0],
+                    Placed::Unknown(why),
+                    Seen::Flow(&to),
+                );
+            }
+        }
+        counts.count(
+            Some(UID),
+            T / 1000,
+            [7, 0, 0, 0],
+            BACKGROUND,
+            Seen::Flow(&to),
+        );
+        lock(&shared.activity).counts = counts;
+        let all = bytes_of(&shared.now_view(T + 1_000), Some(UID));
+        for (r, n) in (0..5).zip(1..) {
+            assert_eq!(all[0][5 + r], [n, n], "10 minutes, why {r}");
+            assert_eq!(all[1][5 + r], [3 * n + 1_100, 3 * n], "the hour, why {r}");
+            assert_eq!(
+                all[2][5 + r],
+                [2 * n + 100, 2 * n],
+                "since the screen came on, why {r}"
+            );
+            assert_eq!(
+                all[OFF][5 + r],
+                [3 * n + 1_100, 3 * n],
+                "while the screen was off, why {r}"
+            );
+        }
+        assert_eq!(all[0][0], [15, 15], "no state is the sum of its whys");
+        assert_eq!(all[0][3], [7, 0]);
+        assert_eq!(all[1][0], [3 * 15 + 5 * 1_100, 3 * 15]);
+    }
+
     /// Where the fixture Watch's Kotlin side reads is kept (`SnapshotTest`).
     const FIXTURE: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -1520,7 +1881,8 @@ mod tests {
             until: T + 3_000,
             known: Known::States,
             screen: crate::states::Screen::On(Some(T + 1_000)),
-            screen_off: None,
+            // The screen was off for a minute before it came on: the first second falls in that window.
+            screen_off: Some(T - 59_000),
             intervals: vec![
                 Interval {
                     uid: UID,
@@ -1551,9 +1913,12 @@ mod tests {
             ([100, 0], [200, 0], [300, 0], [400, 1_000])
         );
         assert_eq!(all[2][1], [0, 0], "before the screen came on");
+        assert_eq!(all[3][1], [100, 0], "while the screen was off");
+        assert_eq!(snapshot.off, Some((T - 59_000, Some(T + 1_000))));
         assert_eq!(bytes_of(&snapshot, None)[0][0], [50, 0]);
+        assert_eq!(bytes_of(&snapshot, None)[0][8], [50, 0], "no app");
         let mut text = String::from(
-            "# Watch's live view: one snapshot as the engine writes it (core/net/src/snapshot.rs, version 1), in\n\
+            "# Watch's live view: one snapshot as the engine writes it (core/net/src/snapshot.rs, version 2), in\n\
              # hex. Written by the engine's test the_kotlin_sides_snapshot_fixture_is_what_the_engine_writes\n\
              # (core/net/src/engine/now.rs), which fails when the engine writes otherwise; run it with\n\
              # DATAPAVAN_WRITE_FIXTURE=1 to write it anew. Read by SnapshotTest. Not edited by hand.\n",

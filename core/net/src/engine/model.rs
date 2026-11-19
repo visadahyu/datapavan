@@ -468,20 +468,31 @@ fn the_engine_places_every_byte_in_its_true_state() {
         }
         assert_eq!(run.shared.waiting_marks(), 0, "seed {seed}");
         assert!(lock(&run.shared.activity).held.is_empty(), "seed {seed}");
-        // "Now": the hour holds the whole run, each app's bytes by its state.
+        // "Now": the hour holds the whole run, each app's bytes by its state, and those in no state by why.
         let snapshot = run.shared.now_view(run.now);
-        let mut expected: HashMap<Option<u32>, [[u64; 2]; 5]> = HashMap::new();
+        let mut expected: HashMap<Option<u32>, [[u64; 2]; 10]> = HashMap::new();
         for f in run.flows.values() {
             for &(at, up, down) in &f.counts {
-                let column = match truth.placed(f.uid, at) {
+                let placed = truth.placed(f.uid, at);
+                let column = match placed {
                     Placed::Known(State::InUse) => 1,
                     Placed::Known(State::Notification) => 2,
                     Placed::Known(State::Background) => 3,
                     Placed::Unknown(_) => 0,
                 };
-                let ways = &mut expected.entry(f.uid).or_default()[column];
-                ways[0] += up;
-                ways[1] += down;
+                let app = expected.entry(f.uid).or_default();
+                let reason = match placed {
+                    Placed::Unknown(Unknown::NoAccess) => Some(5),
+                    Placed::Unknown(Unknown::Locked) => Some(6),
+                    Placed::Unknown(Unknown::Late) => Some(7),
+                    Placed::Unknown(Unknown::NoApp) => Some(8),
+                    Placed::Unknown(Unknown::NotTold) => Some(9),
+                    Placed::Known(_) => None,
+                };
+                for column in std::iter::once(column).chain(reason) {
+                    app[column][0] += up;
+                    app[column][1] += down;
+                }
             }
         }
         for app in &snapshot.apps {
@@ -545,8 +556,10 @@ fn a_clock_set_back_loses_no_byte() {
                 .iter()
                 .find(|app| app.uid == uid)
                 .map_or([0, 0], |app| {
+                    // The states and "not told yet"; the columns by why after them repeat "no state".
                     app.bytes[1]
                         .iter()
+                        .take(5)
                         .fold([0, 0], |[u, d], w| [u + w[0], d + w[1]])
                 });
             assert_eq!(shown, ways, "seed {seed}, app {uid:?}: \"Now\"");

@@ -1,17 +1,21 @@
 //! What the live view "Now" draws (ADR 0046, decision 2 (d)), as the engine hands it to Watch's Kotlin
 //! side once a second while the view is open: each app's bytes by its state in each window, and the
-//! destinations it reached, from memory only. Version 1, little-endian:
+//! destinations it reached, from memory only. Version 2, little-endian:
 //!
-//! - version (1), when it was taken (milliseconds since 1970, UTC), what the latest reading of the
+//! - version (2), when it was taken (milliseconds since 1970, UTC), what the latest reading of the
 //!   states knew (0 none came yet, 1 the states, 2 nothing: Watch has no usage access, 3 nothing: Android
 //!   gave no events, as before the first unlock after a restart), the end of what was told, the screen
-//!   (0 off, 1 on, 2 not known) and when it last came on (0 not known), then a count (u32) of apps;
+//!   (0 off, 1 on, 2 not known), when it last came on (0 not known), the window "while the screen was
+//!   off": when the screen went off (0 for no window: it has not gone off since Watch started, or the live
+//!   memory was cleared since) and came on again (0 while it is still off), then a count (u32) of apps;
 //! - each app: its UID (`u32::MAX` for flows Android named no app for), its state now (the code of
 //!   [`Placed::code`], or 4 while the last second told does not place it), flags (bit 0: the user's
 //!   circumvention tool, which carries the chained apps' traffic; bit 1: it went through the tool, its
 //!   destinations not kept), then its bytes up and down for each window (the last 10 minutes, the last
-//!   hour, since the screen came on) and each column (no state, in use, with its notification, in the
-//!   background, not told yet): 30 numbers (u64), window by window; then a count (u16) of destinations;
+//!   hour, since the screen came on, while the screen was off) and each column (no state, in use, with
+//!   its notification, in the background, not told yet, then the bytes in no state by why: no usage
+//!   access, no events, told too late, no app, not told): 80 numbers (u64), window by window; then a
+//!   count (u16) of destinations;
 //! - each destination: protocol, where its name came from, ECH, the app's own DNS, flags (bit 0: it
 //!   came in), its address (length 4 or 16, then the bytes) and port, the AS number (0 none) and what its
 //!   owner is, then its name, the DNS name beside it where the two differ, the known resolver and the
@@ -19,18 +23,34 @@
 //!   window: 6 numbers.
 //!
 //! The windows of 10 minutes and an hour are whole minutes: the current one and the 9, or the 59, before
-//! it, so that they reach back at least 9 and 59 minutes and never more than 10 and 60. The codes of
-//! where a name came from, ECH, DNS and the owner are the log's (`log.rs`).
+//! it, so that they reach back at least 9 and 59 minutes and never more than 10 and 60. The window while
+//! the screen was off holds no destinations. The codes of where a name came from, ECH, DNS and the owner
+//! are the log's (`log.rs`).
+//!
+//! Version 2 (W5's third part) added the window while the screen was off and the bytes in no state by
+//! why. Both sides ship in one build, so the Kotlin side reads version 2 only.
 
 use crate::engine::{Flow, Network};
 use crate::log::{dns_code, ech_code, named_by_code, push_address, push_network, push_text};
 use crate::states::{Known, Placed, Screen};
 
 /// The version of the snapshot.
-pub const VERSION: u8 = 1;
+pub const VERSION: u8 = 2;
 
 /// Bytes up and down.
 pub type Ways = [u64; 2];
+
+/// The windows of an app's bytes: the last 10 minutes, the last hour, since the screen came on, while the
+/// screen was off.
+pub const WINDOWS: usize = 4;
+
+/// The window while the screen was off.
+pub const OFF: usize = 3;
+
+/// The columns of an app's bytes in each window: no state, in use, with its notification, in the
+/// background, not told yet, then the bytes in no state by why (no usage access, no events, told too
+/// late, no app, not told).
+pub const COLUMNS: usize = 10;
 
 /// The live view at one moment.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -45,6 +65,8 @@ pub struct Snapshot {
     pub screen: Screen,
     /// When the screen last came on: the start of the window "since the screen came on".
     pub session: Option<u64>,
+    /// The window "while the screen was off": when the screen went off, and came on again if it did.
+    pub off: Option<(u64, Option<u64>)>,
     /// The apps with bytes in a window, by UID.
     pub apps: Vec<AppNow>,
 }
@@ -60,9 +82,8 @@ pub struct AppNow {
     pub tool: bool,
     /// Whether it went through the tool with its destinations left out, in a window.
     pub through_tool: bool,
-    /// Its bytes up and down, by window (10 minutes, an hour, since the screen came on), then by column
-    /// (no state, in use, with its notification, in the background, not told yet).
-    pub bytes: [[Ways; 5]; 3],
+    /// Its bytes up and down, by window ([`WINDOWS`]), then by column ([`COLUMNS`]).
+    pub bytes: [[Ways; COLUMNS]; WINDOWS],
     /// The destinations it reached in a window.
     pub places: Vec<PlaceNow>,
 }
@@ -97,6 +118,11 @@ pub fn encode(snapshot: &Snapshot) -> Vec<u8> {
         Screen::Unknown => 2,
     });
     out.extend_from_slice(&snapshot.session.unwrap_or(0).to_le_bytes());
+    let (off, on) = snapshot
+        .off
+        .map_or((0, 0), |(off, on)| (off, on.unwrap_or(0)));
+    out.extend_from_slice(&off.to_le_bytes());
+    out.extend_from_slice(&on.to_le_bytes());
     out.extend_from_slice(
         &u32::try_from(snapshot.apps.len())
             .unwrap_or(u32::MAX)
@@ -180,14 +206,16 @@ mod tests {
     /// Field by field, so that the Kotlin side's reader is checked against the same layout.
     #[test]
     fn a_snapshot_is_laid_out_field_by_field() {
-        let mut bytes = [[[0; 2]; 5]; 3];
+        let mut bytes = [[[0; 2]; COLUMNS]; WINDOWS];
         bytes[1][3] = [100, 200];
+        bytes[3][7] = [7, 8];
         let snapshot = Snapshot {
             taken: 1_000,
             known: Some(Known::NoAccess),
             told_until: 900,
             screen: Screen::On(Some(500)),
             session: Some(500),
+            off: Some((300, Some(500))),
             apps: vec![AppNow {
                 uid: Some(10_123),
                 now: Some(Placed::Known(State::Background)),
@@ -198,21 +226,23 @@ mod tests {
             }],
         };
         let out = encode(&snapshot);
-        let mut expected = vec![1];
+        let mut expected = vec![2];
         expected.extend_from_slice(&1_000u64.to_le_bytes());
         expected.push(2);
         expected.extend_from_slice(&900u64.to_le_bytes());
         expected.push(1);
-        expected.extend_from_slice(&500u64.to_le_bytes());
+        for time in [500u64, 300, 500] {
+            expected.extend_from_slice(&time.to_le_bytes());
+        }
         expected.extend_from_slice(&1u32.to_le_bytes());
         expected.extend_from_slice(&10_123u32.to_le_bytes());
         expected.extend_from_slice(&[3, 0b10]);
-        for window in 0..3 {
-            for column in 0..5 {
-                let ways: [u64; 2] = if (window, column) == (1, 3) {
-                    [100, 200]
-                } else {
-                    [0, 0]
+        for window in 0..4 {
+            for column in 0..10 {
+                let ways: [u64; 2] = match (window, column) {
+                    (1, 3) => [100, 200],
+                    (3, 7) => [7, 8],
+                    _ => [0, 0],
                 };
                 expected.extend_from_slice(&ways[0].to_le_bytes());
                 expected.extend_from_slice(&ways[1].to_le_bytes());
@@ -243,13 +273,14 @@ mod tests {
             told_until: 0,
             screen: Screen::Off,
             session: None,
+            off: Some((700, None)),
             apps: vec![
                 AppNow {
                     uid: None,
                     now: Some(Placed::Unknown(Unknown::NoApp)),
                     tool: false,
                     through_tool: false,
-                    bytes: [[[0; 2]; 5]; 3],
+                    bytes: [[[0; 2]; COLUMNS]; WINDOWS],
                     places: Vec::new(),
                 },
                 AppNow {
@@ -257,7 +288,7 @@ mod tests {
                     now: None,
                     tool: true,
                     through_tool: false,
-                    bytes: [[[0; 2]; 5]; 3],
+                    bytes: [[[0; 2]; COLUMNS]; WINDOWS],
                     places: Vec::new(),
                 },
             ],
@@ -269,13 +300,21 @@ mod tests {
             "nothing told yet, the screen off"
         );
         assert_eq!(
-            (&out[19..27], &out[27..31]),
-            (&[0; 8][..], &[2, 0, 0, 0][..])
+            (&out[19..27], &out[35..43], &out[43..47]),
+            (&[0; 8][..], &[0; 8][..], &[2, 0, 0, 0][..]),
+            "the screen did not come on, and is still off"
         );
-        let first = 1 + 8 + 1 + 8 + 1 + 8 + 4;
-        let app = 4 + 1 + 1 + 30 * 8 + 2;
+        assert_eq!(&out[27..35], &700u64.to_le_bytes()[..]);
+        let first = 1 + 8 + 1 + 8 + 1 + 8 + 8 + 8 + 4;
+        let app = 4 + 1 + 1 + 80 * 8 + 2;
         assert_eq!(out[first..first + 6], [0xff, 0xff, 0xff, 0xff, 0x40, 0]);
         assert_eq!(out[first + app + 4..first + app + 6], [4, 1]);
         assert_eq!(out.len(), first + 2 * app);
+        // No window while the screen was off: both times 0.
+        let none = encode(&Snapshot {
+            off: None,
+            ..snapshot
+        });
+        assert_eq!(&none[27..43], &[0; 16][..]);
     }
 }

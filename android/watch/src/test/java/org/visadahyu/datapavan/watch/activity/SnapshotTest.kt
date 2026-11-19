@@ -27,6 +27,8 @@ class SnapshotTest {
         // The last reading had no usage access; the screen is off, and last came on a second in.
         assertEquals(Snapshot.NO_ACCESS to t + 3_000, snapshot.known to snapshot.toldUntil)
         assertEquals(Snapshot.SCREEN_OFF to t + 1_000, snapshot.screen to snapshot.screenOnSince)
+        // The screen was off for a minute before it came on.
+        assertEquals(t - 59_000 to t + 1_000, snapshot.offFrom to snapshot.offUntil)
         assertEquals(listOf(null, 10_123), snapshot.apps.map { it.uid })
 
         val noApp = snapshot.apps[0]
@@ -34,6 +36,9 @@ class SnapshotTest {
         assertEquals(50L to 0L, noApp.up(Snapshot.TEN_MINUTES, AppState.NONE) to noApp.down(Snapshot.TEN_MINUTES, AppState.NONE))
         // Counted three and a half seconds in, after the screen came on.
         assertEquals(50L, noApp.up(Snapshot.SINCE_SCREEN_ON, AppState.NONE))
+        // In no state because Android named no app.
+        assertEquals(50L, noApp.up(Snapshot.TEN_MINUTES, Snapshot.reasonColumn(AppState.NO_APP)))
+        assertEquals(0L, noApp.up(Snapshot.TEN_MINUTES, Snapshot.reasonColumn(AppState.NO_ACCESS)))
         val encrypted = noApp.destinations.single()
         assertEquals(listOf(17, 1, 1, 2), listOf(encrypted.protocol, encrypted.namedBy, encrypted.ech, encrypted.dns))
         assertEquals(true, encrypted.cameIn)
@@ -46,11 +51,13 @@ class SnapshotTest {
         assertEquals(false to false, app.isTool to app.throughTool)
         // Each second in the state told: in use, with its notification, in the background, and the last not told yet.
         val ten = (0 until Snapshot.COLUMNS).map { app.up(Snapshot.TEN_MINUTES, it) to app.down(Snapshot.TEN_MINUTES, it) }
-        assertEquals(listOf(0L to 0L, 100L to 0L, 200L to 0L, 300L to 0L, 400L to 1_000L), ten)
+        assertEquals(listOf(0L to 0L, 100L to 0L, 200L to 0L, 300L to 0L, 400L to 1_000L) + List(5) { 0L to 0L }, ten)
         assertEquals(ten, (0 until Snapshot.COLUMNS).map { app.up(Snapshot.HOUR, it) to app.down(Snapshot.HOUR, it) })
-        // Since the screen came on, a second in: not the second in use before it.
-        val since = (0 until Snapshot.COLUMNS).map { app.up(Snapshot.SINCE_SCREEN_ON, it) }
+        // Since the screen came on, a second in: not the second in use before it, which was while it was off.
+        val since = (0..AppState.NOT_YET).map { app.up(Snapshot.SINCE_SCREEN_ON, it) }
         assertEquals(listOf(0L, 0L, 200L, 300L, 400L), since)
+        val off = (0..AppState.NOT_YET).map { app.up(Snapshot.WHILE_OFF, it) }
+        assertEquals(listOf(0L, 100L, 0L, 0L, 0L), off)
         val web = app.destinations.single()
         assertEquals(listOf(6, 0, 0, 0), listOf(web.protocol, web.namedBy, web.ech, web.dns))
         assertEquals("198.51.100.9" to 443, web.address.hostAddress to web.port)
@@ -65,10 +72,11 @@ class SnapshotTest {
      */
     @Test
     fun refusesACodeTheEngineNeverWrites() {
-        // Version, taken (8), known; told until (8), screen; since (8), the apps' count (4); the first app's UID (4), now.
+        // Version, taken (8), known; told until (8), screen; since, off from and until (8 each), the apps' count
+        // (4); the first app's UID (4), now.
         val known = 1 + 8
         val screen = known + 1 + 8
-        val now = screen + 1 + 8 + 4 + 4
+        val now = screen + 1 + 3 * 8 + 4 + 4
         val with = { at: Int, value: Int -> Snapshot.parse(fixture.copyOf().also { it[at] = value.toByte() }) }
         assertEquals(Snapshot.LOCKED, with(known, Snapshot.LOCKED)?.known)
         assertNull(with(known, Snapshot.LOCKED + 1))
@@ -79,6 +87,28 @@ class SnapshotTest {
         for (code in listOf(AppState.NONE, AppState.NOT_YET + 1, 0x0f, AppState.NO_ACCESS or AppState.IN_USE, 0x60, 0xff)) {
             assertNull("state $code", with(now, code))
         }
+    }
+
+    /**
+     * Bytes in no state by why that do not add up to the column of no state, and a window while the screen was
+     * off that ends before it began, or has an end and no start, are refused (W5's third part).
+     */
+    @Test
+    fun refusesReasonsThatDoNotAddUpAndAWindowBackwards() {
+        val buffer = { bytes: ByteArray -> java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN) }
+        // The first app's bytes: after the head (1 + 8 + 1 + 8 + 1 + 3 × 8 + 4), its UID, now and flags.
+        val firstBytes = 1 + 8 + 1 + 8 + 1 + 3 * 8 + 4 + 4 + 1 + 1
+        val noAppWhy = firstBytes + Snapshot.reasonColumn(AppState.NO_APP) * 2 * 8
+        assertNull(Snapshot.parse(fixture.copyOf().also { buffer(it).putLong(noAppWhy, 49) }))
+        val noAccessWhy = firstBytes + Snapshot.reasonColumn(AppState.NO_ACCESS) * 2 * 8
+        assertNull(Snapshot.parse(fixture.copyOf().also { buffer(it).putLong(noAccessWhy, 1) }))
+        val offFrom = 1 + 8 + 1 + 8 + 1 + 8
+        assertNull(Snapshot.parse(fixture.copyOf().also { buffer(it).putLong(offFrom, t + 1_001) }))
+        assertNull(Snapshot.parse(fixture.copyOf().also { buffer(it).putLong(offFrom, 0) }))
+        // Still off: an end of 0 with any start.
+        val stillOff = Snapshot.parse(fixture.copyOf().also { buffer(it).putLong(offFrom + 8, 0) })
+        assertEquals(t - 59_000 to 0L, stillOff?.offFrom to stillOff?.offUntil)
+        assertEquals(t + 1_000, Snapshot.parse(fixture.copyOf().also { buffer(it).putLong(offFrom, t + 1_000) })?.offFrom)
     }
 
     /** No snapshot, cut short anywhere or with any byte changed, makes the reader throw: it reads it or refuses it. */
@@ -92,7 +122,8 @@ class SnapshotTest {
         }
         assertNull(Snapshot.parse(fixture.copyOf(fixture.size - 1)))
         assertNull(Snapshot.parse(fixture + 0))
-        assertNull(Snapshot.parse(fixture.copyOf().also { it[0] = 2 }))
+        assertNull("version 1", Snapshot.parse(fixture.copyOf().also { it[0] = 1 }))
+        assertNull(Snapshot.parse(fixture.copyOf().also { it[0] = 3 }))
         assertNull("no engine runs", Snapshot.parse(ByteArray(0)))
     }
 }

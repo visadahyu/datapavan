@@ -562,9 +562,13 @@ impl Activity {
         self.place(uid, (until / 1000).saturating_sub(1), None)
     }
 
-    /// Takes a reading: the screen first, so that the seconds it places count since the screen came on
-    /// where they do, then the states.
+    /// Takes a reading: the screen first, so that the seconds it places count since the screen came on,
+    /// and while it was off, where they do, then the states. When it went off comes before when it came
+    /// on, which, for a screen on, is never earlier.
     fn tell(&mut self, told: &Told) {
+        if let Some(off) = told.screen_off {
+            self.counts.screen_off(off);
+        }
         if let Screen::On(Some(since)) = told.screen {
             self.counts.screen_on(since);
         }

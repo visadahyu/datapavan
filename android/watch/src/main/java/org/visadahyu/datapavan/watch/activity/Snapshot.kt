@@ -7,9 +7,10 @@ import org.visadahyu.datapavan.watch.log.AppState
 
 /**
  * What the live view "Now" draws (ADR 0046, decision 2 (d)), as the engine hands it over
- * ([org.visadahyu.datapavan.watch.Engine.nativeActivity]; core/net/src/snapshot.rs, version 1): each app
- * that sent or received in a window, with its bytes by state, and the destinations it reached. From the
- * engine's memory only; nothing of it is kept.
+ * ([org.visadahyu.datapavan.watch.Engine.nativeActivity]; core/net/src/snapshot.rs, version 2): each app
+ * that sent or received in a window, with its bytes by state, those in no state by why, the window while
+ * the screen was off, and the destinations it reached. From the engine's memory only; nothing of it is
+ * kept. Both sides ship in one build, so version 1 is refused.
  */
 data class Snapshot(
     /** When it was taken, in milliseconds since 1970 (UTC). */
@@ -22,6 +23,12 @@ data class Snapshot(
     val screen: Int,
     /** When the screen last came on, the start of the window [SINCE_SCREEN_ON]; 0 when not known. */
     val screenOnSince: Long,
+    /**
+     * The window [WHILE_OFF]: when the screen went off, 0 for no window (it has not gone off since Watch
+     * started, or the live memory was cleared since), and when it came on again, 0 while it is still off.
+     */
+    val offFrom: Long,
+    val offUntil: Long,
     val apps: List<App>,
 ) {
     /** An app, by UID; null for flows Android named no app for. */
@@ -34,9 +41,10 @@ data class Snapshot(
         /** Whether it went through the tool with its destinations not kept ("Log where these apps connect" off). */
         val throughTool: Boolean,
         /**
-         * Its bytes up and down: by window ([TEN_MINUTES], [HOUR], [SINCE_SCREEN_ON]), then by column
-         * ([AppState.NONE], [AppState.IN_USE], [AppState.NOTIFICATION], [AppState.BACKGROUND],
-         * [AppState.NOT_YET]), then up and down: 30 numbers.
+         * Its bytes up and down: by window ([TEN_MINUTES], [HOUR], [SINCE_SCREEN_ON], [WHILE_OFF]), then by
+         * column ([AppState.NONE], [AppState.IN_USE], [AppState.NOTIFICATION], [AppState.BACKGROUND],
+         * [AppState.NOT_YET], then the bytes in no state by why, [reasonColumn]), then up and down: 80
+         * numbers.
          */
         val bytes: LongArray,
         val destinations: List<Destination>,
@@ -69,12 +77,12 @@ data class Snapshot(
         val resolver: String,
         /** The organisation behind the address's network, where the organisation table names it. */
         val organisation: String,
-        /** Up and down in each window: 6 numbers. */
+        /** Up and down in the windows [TEN_MINUTES], [HOUR] and [SINCE_SCREEN_ON]: 6 numbers. */
         val bytes: List<Long>,
     )
 
     companion object {
-        const val VERSION: Byte = 1
+        const val VERSION: Byte = 2
 
         const val NOTHING_YET = 0
         const val STATES = 1
@@ -88,7 +96,17 @@ data class Snapshot(
         const val TEN_MINUTES = 0
         const val HOUR = 1
         const val SINCE_SCREEN_ON = 2
-        const val COLUMNS = 5
+
+        /** From the screen going off to its coming on again; it holds no destinations. */
+        const val WHILE_OFF = 3
+        const val WINDOWS = 4
+        const val COLUMNS = 10
+
+        /** Why bytes have no state, in the order of their columns after [AppState.NOT_YET]. */
+        val REASONS = listOf(AppState.NO_ACCESS, AppState.LOCKED, AppState.LATE, AppState.NO_APP, AppState.NOT_TOLD)
+
+        /** The column of the bytes in no state for [why], one of [REASONS]. */
+        fun reasonColumn(why: Int): Int = AppState.NOT_YET + 1 + REASONS.indexOf(why).also { require(it >= 0) }
 
         /** The snapshot, or null for bytes that are not exactly one of this version, as when no engine runs. */
         fun parse(bytes: ByteArray): Snapshot? = try {
@@ -101,9 +119,13 @@ data class Snapshot(
                 val toldUntil = b.long
                 val screen = b.get().toInt() and 0xff
                 val since = b.long
+                val offFrom = b.long
+                val offUntil = b.long
                 val apps = List(count(b.int, b.remaining())) { app(b) }
-                Snapshot(taken, known, toldUntil, screen, since, apps).takeIf {
-                    !b.hasRemaining() && known <= LOCKED && screen <= SCREEN_UNKNOWN
+                // A window that came to an end has a start, and does not end before it.
+                val off = offUntil == 0L || (offFrom != 0L && offUntil >= offFrom)
+                Snapshot(taken, known, toldUntil, screen, since, offFrom, offUntil, apps).takeIf {
+                    !b.hasRemaining() && known <= LOCKED && screen <= SCREEN_UNKNOWN && off
                 }
             }
         } catch (e: java.nio.BufferUnderflowException) {
@@ -125,7 +147,14 @@ data class Snapshot(
             val now = b.get().toInt() and 0xff
             require(now == AppState.NOT_YET || AppState.isCode(now))
             val flags = b.get().toInt()
-            val bytes = LongArray(3 * COLUMNS * 2) { b.long }
+            val bytes = LongArray(WINDOWS * COLUMNS * 2) { b.long }
+            // The bytes in no state by why add up to the column of no state, in each window and way.
+            for (window in 0 until WINDOWS) {
+                for (way in 0..1) {
+                    val reasons = REASONS.sumOf { bytes[(window * COLUMNS + reasonColumn(it)) * 2 + way] }
+                    require(reasons == bytes[(window * COLUMNS + AppState.NONE) * 2 + way])
+                }
+            }
             val destinations = List(count(b.short.toInt() and 0xffff, b.remaining())) { destination(b) }
             return App(uid, now, flags and 1 != 0, flags and 2 != 0, bytes, destinations)
         }

@@ -738,8 +738,10 @@ class WatchVpnService : VpnService() {
      * `activity-app` line for each app, its UID (`-` for flows of no app), its state now (an
      * [org.visadahyu.datapavan.watch.log.AppState] name, which says why where there is none), whether it is
      * the user's tool and whether it went through it, how many destinations it reached, and its bytes up and
-     * down in each window (`10m`, `1h`, `screen`), for each column: no state, in use, with its notification,
-     * in the background, not told yet.
+     * down in each window (`10m`, `1h`, `screen`, and `off`, while the screen was off), for each column: no
+     * state, in use, with its notification, in the background, not told yet, then the bytes in no state by
+     * why (no usage access, no events, told too late, no app, not told); and `activity-off` the window while
+     * the screen was off, when the screen went off and came on again (0 for none, and while still off).
      */
     private fun debugActivity(args: List<String>, writer: PrintWriter) {
         if ("activity-read" in args) {
@@ -765,7 +767,8 @@ class WatchVpnService : VpnService() {
         // how much, for the lab's measure of how late they come (review b3 of W5's second part, fresh, m1).
         val (late, latest) = tracker?.late ?: (0 to 0L)
         writer.println("activity-late $late latest-ms $latest")
-        val windows = listOf("10m", "1h", "screen")
+        writer.println("activity-off ${snapshot.offFrom} ${snapshot.offUntil}")
+        val windows = listOf("10m", "1h", "screen", "off")
         for (app in snapshot.apps) {
             val bytes = windows.indices.joinToString(" ") { window ->
                 windows[window] + "=" + (0 until org.visadahyu.datapavan.watch.activity.Snapshot.COLUMNS)
