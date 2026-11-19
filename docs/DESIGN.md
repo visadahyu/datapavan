@@ -309,20 +309,6 @@ datapavan/
 
 ### 13.1 v0.1 "Audit"
 
-W5, part 3, on `watch-w5c`, 2026-11-19: the screens on that data (ADR 0046, decisions 2 (d), 3 and 5). "Now"
-shows one row per app that used the network in the last 10 minutes, the last hour or since the screen came on,
-named from its UID with every package that shares it, its state now, its bytes sent and received in each state,
-why bytes have no state, and its destinations as W3 names them, with the DNS name beside the connection's own and
-trackers marked from the εxodus network signatures; apps in the background first, rows that keep their place while
-the view is open, and at the end what the view cannot see. A tap opens the app's history from the log, a day at a
-time, with each lock state said plainly. The audit's page of an app opens "Now" for that app in Advanced. The engine
-adds the window while the screen was off, which W9's summary reads, bytes in no state by why for each app, and a call
-that clears the live view's memory for ADR 0047's profile; the snapshot and the readings are version 2. The data
-pack's code moves to `android/shared`, so that Watch reads the table of trackers from the pack the audit verifies.
-The activity check, reading "Now" from the screen too, passed on the emulators of Android 10, 11, 15 and 17, and the
-watch shard whole on Android 15; the new screens passed the accessibility check in English and both pseudo-locales,
-and wait for their translations. How it is built: ADR 0046, "How it is built".
-
 | # | Milestone | Done when |
 |---|---|---|
 | M1 | Skeleton | Android app and Rust core build together; CI green; app opens on the emulator and the A40 (A56 testing deferred, ADR 0011); string resources, RTL support and pseudo-locales in place from the start; brand marks and app icon |
@@ -1028,6 +1014,18 @@ pack's code moves to `android/shared`, so that Watch reads the table of trackers
 The activity check, reading "Now" from the screen too, passed on the emulators of Android 10, 11, 15 and 17, and the
 watch shard whole on Android 15; the new screens passed the accessibility check in English and both pseudo-locales,
 and wait for their translations. How it is built: ADR 0046, "How it is built".
+
+W5, part 3, fix round, 2026-11-19, after two reviews and the maintainer's decisions of that day: an app's group in
+"Now" is decided by the bytes it sent in each state, above a floor the lab run sets (0 until then), and apps that
+only received come last; a destination whose tracker belongs to the app's own company group (ADR 0020) is told as
+the same company, not as a tracker, and several trackers of one company that one broad signature names make one
+mark; the user's tool shows its servers, in "Now", the history and the log, only while "Log where these apps
+connect" is on. "Now" keeps its window, order and scroll across an app's history and a rotation; a chained app's
+history says where it connected was not logged, not "0.0.0.0"; on some phones the feed left of the home screen may
+count in the background, measured in use on one launcher ([spike](spikes/2026-11-feed-left-of-home.md)). The engine
+keeps counting after a clear and a clock set back, and the model test now covers the screen, a clear and runs past
+the hour. Watch reads the data pack without ever deleting it. A release of an edition is refused while one of its
+modules has strings waiting for their translations.
 
 | # | Milestone | Done when |
 |---|---|---|

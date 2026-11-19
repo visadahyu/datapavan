@@ -1,0 +1,10 @@
+# Run on 2026-11-19 by docs/spikes/2026-11-feed-left-of-home/feed-check.sh, after scripts/verify-activity.sh passed
+# on the same emulator; the lines as printed, the emulator's boot line first.
+== booted emulator-5652 (dp-api37-16k), Android 17
+feed: Google app uid 10162, version 17.76.14.ve.x86_64
+feed: home com.google.android.apps.nexuslauncher
+feed: focus mCurrentFocus=Window{d95e5ee u0 com.google.android.googlequicksearchbox/com.google.android.apps.search.googleapp.launcher.minusone.activity.MinusOneActivity}
+feed: dump      56 package="com.google.android.googlequicksearchbox"
+activity-read true
+activity-states states told-until 1795075178858 readings 19 screen on since 1795075015725
+feed: activity-app 10162 now=in-use tool=0 through-tool=0 places=14 10m=0/0,81835/1289007,0/0,0/0,0/0,0/0,0/0,0/0,0/0,0/0 1h=0/0,81835/1289007,0/0,0/0,0/0,0/0,0/0,0/0,0/0,0/0 screen=0/0,81835/1289007,0/0,0/0,0/0,0/0,0/0,0/0,0/0,0/0 off=0/0,0/0,0/0,0/0,0/0,0/0,0/0,0/0,0/0,0/0

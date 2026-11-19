@@ -170,8 +170,14 @@ be pulled down on a locked phone.
   (2026-11-18: each destination shows the name the connection itself sent and, where it differs, the DNS name
   beside it, in "Now" and in the history alike: ADR 0044, decision 4, built in W5's first part.)
 - apps "in the background" first, then "with its notification", then "in use"; within each, by bytes sent;
+  (*Settled 2026-11-19, the maintainer:* an app's group is decided by the bytes it **sent** in each state, above a
+  floor the lab run sets, 0 until then; bytes received decide no group, and apps that sent nothing above the
+  floor come after the three groups, by bytes received. "How it is built", part 3, gives the rule and its reason.)
 - tracker destinations marked from the εxodus network signatures already in `data/exodus/trackers.tsv`, and nothing
-  else (W5's plan);
+  else (W5's plan); (*Settled 2026-11-19, the maintainer:* no tracker mark where the tracker belongs to the app's
+  own company group, ADR 0020's entities held whole or by majority as the audit decides it: the destination is
+  told as the same company as the app instead; and where several trackers of one company share one broad
+  signature, one mark names the company. "How it is built", part 3, gives how a tracker's company is found.)
 - the flags of decision 4 beside the app they concern;
 - a tap on an app opens its history: W5's "who did this app talk to?" as a timeline from the log, with the state of
   each segment, for the days the user chose to keep.
@@ -227,6 +233,14 @@ behind the screen lock and Watch's own lock, as the log's records do (ADR 0037, 
 **Chained apps.** Their destinations are not shown in "Now" either unless the user turned on "Log where these apps
 connect" (`chain_log_destinations`). Without it, their rows say only that they went through the user's tool, with
 their bytes and state. What the screen shows, a search of an unlocked phone shows too.
+
+**The tool's own row** (*settled 2026-11-19, the maintainer*) follows the same switch: the tool's server
+addresses show, in "Now" and in the history alike, only while "Log where these apps connect" is on. Without it
+the row still shows the tool's bytes and that it carries the chained apps' traffic, and says that where it
+connects is not shown and why. The servers are where every chained app's traffic goes, so they tell as much
+as the chained apps' destinations would; one switch covers both. The engine keeps them out of the log too while
+the switch is off, which changes what W6 logged: until 2026-11-19 the tool's own connections were logged as
+any app's.
 
 **A profile for people whose phones may be searched.** [ADR 0047](0047-profile-for-phones-that-may-be-searched.md)
 defines this inspection profile, which the user chooses with one switch, "Keep nothing on this phone": off for
@@ -333,14 +347,16 @@ A short section "What this view cannot see" sits at the end of "Now", in plain w
   while its notification shows. On Android 12 and later a service shorter than 10 seconds is in the background,
   though Android shows some notifications at once.
 - **"In use" is what Android records of activities** (noted 2026-11-18, after the second review of W5's second part).
-  Two things real apps meet follow from it. The feed left of the home screen on Google's launchers is the Google
-  app's window over the launcher, not an activity of the Google app, so its traffic while the user scrolls it
-  counts as in the background [source: Launcher3's `LauncherOverlayManager`; to check on a Google Play emulator
-  image in the lab run]. (*Corrected 2026-11-19, W5's third part:* on the Android 17 Google Play emulator image,
-  with the Pixel Launcher and the Google app 17.76.14, the feed is an activity of the Google app,
-  `MinusOneActivity`, which holds the focus while it shows, and its traffic while the user scrolls it counted in
-  use: 82 KB sent and 1.3 MB received in a minute of scrolling, all in use. Launchers that still draw the feed
-  over themselves were not checked; "Now" no longer says the feed counts in the background.) And an app that Android lets start activities from the background, such as one with an
+  Two things real apps meet follow from it. **On some phones the feed left of the home screen may count as in the
+  background.** Launcher3 draws it as the Google app's window over the launcher, not as an activity of the
+  Google app [source: Launcher3's `LauncherOverlayManager`], and where a launcher does so, the feed's traffic
+  while the user scrolls it counts in the background. (*Scoped 2026-11-19, the maintainer, after W5's third part
+  measured one launcher:* on the Android 17 Google Play emulator image, with the Pixel Launcher and the Google
+  app 17.76.14, the feed is an activity of the Google app, `MinusOneActivity`, which holds the focus while it
+  shows, and its traffic counted in use: 82 KB sent and 1.3 MB received in a minute of scrolling, all in use
+  ([spike](../spikes/2026-11-feed-left-of-home.md), with its script and log). Other launchers, such as Samsung's
+  One UI Home with Google Discover, are not measured yet, so "Now" keeps the line, scoped to some phones.) And an
+  app that Android lets start activities from the background, such as one with an
   accessibility service the system binds or with "display over other apps", can resume an activity, even an
   invisible one, just before it sends, so that its sending counts as in use for the grace after; such access is
   what stalkerware holds, and the audit flags it.
@@ -715,8 +731,9 @@ this ADR left room, and why. Part 3 builds the screens on it.
     review of W5's second part, Kotlin, nit 11). Not built in part 2; part 3 and W9 settle it.
   - *Done in part 3: the clear call takes it, and the window while the screen was off.* ADR 0047's clearing must take the window "since the screen came on" too, which keeps apps and destinations
     until the screen next comes on, not for an hour at most (fix round 2, the fresh review's m5).
-  - *Done in part 3 for the feed, on the Android 17 Google Play image: it counts in use (decision 5 as corrected);
-    the day-rollover event is left for the lab run.* The feed left of the home screen on Google's launchers (decision 5) is checked on a Google Play emulator
+  - *Measured in part 3 on one launcher: on the Android 17 Google Play image with the Pixel Launcher the feed counts
+    in use (decision 5, scoped; the spike's note). Other launchers, the A40's among them, and the day-rollover
+    event are left for the lab run.* The feed left of the home screen on Google's launchers (decision 5) is checked on a Google Play emulator
     image in the lab run; so is whether Android hands an app its day-rollover event for a running foreground
     service, which would find one older than its record of events.
   - *Done in part 3: the window while the screen was off; W9's summary reads it.* Decision 2 (a)'s summary "While the screen was off (2 h 10 min), N apps you were not using sent X" needs the
@@ -745,8 +762,10 @@ What was chosen where this ADR left room, and why.
   512 apps, under 200 bytes each, the app with bytes the longest ago giving way. A clock set back past the
   window's end, or past the start of one still open, forgets it. It holds no destinations, as the summary needs
   none. "Now" shows it as one line above the rows once the screen came on again: how long it was off, how many
-  apps sent in the background while it was, and how much; with no floor, since the lab run sets the summary's
-  floor (decision 2 (a)).
+  apps sent more than `NowRows.SENT_FLOOR` in the background while it was, and how much; the floor is 0 until
+  the lab run sets it with the summary's (decision 2 (a)). The user's tool is not counted in the line, since its
+  bytes hold the chained apps' (fix round). The window begins no earlier than the engine began counting, so it
+  never claims hours Watch did not see (fix round).
 - **Why bytes have no state, by app.** Bytes by why, not the reasons seen: one window often holds two reasons
   (no events before the first unlock, then not told), and only bytes say how much each explains. Each app keeps,
   beside its minutes by state, minutes of bytes by why (no usage access, no events, told too late, no app, not
@@ -761,8 +780,12 @@ What was chosen where this ADR left room, and why.
   (their seconds after the clear show again as they count); and the seconds and segments that wait for their
   states, and the records not yet written, which are the log's and go to it as its retention says (none under
   the profile). If W9 clears after the reading that opened a screen-off's window, that window is gone until the
-  next screen-off: accepted, since the profile turns the summary off. W9 may also clear at the screen-on, before
-  the view can open, if the profile is to show only this screen-on's traffic.
+  next screen-off: accepted, since the profile turns the summary off. **W9 must also clear at the screen-on**,
+  before the view can open: a clear at the screen-off alone leaves the window while the screen was off, which
+  opens after it and fills while the phone lies locked, to show its line to whoever is handed the phone at the
+  next screen-on, and ADR 0047 promises that it shows nothing earlier (fix round). "Now" itself keeps no copy
+  the clear cannot reach: it drops its snapshot, its trackers and an opened day of the history when it stops,
+  and reads them again within a second of coming back (fix round).
 - **Snapshot version 2** (`snapshot.rs`): the window's start and end in the head (0 for none, and for an end
   while the screen is still off), four windows of ten columns for each app (no state, the three states, not told
   yet, then the five whys). Both sides ship in one build, so the Kotlin reader refuses version 1; it also refuses
@@ -783,31 +806,63 @@ What was chosen where this ADR left room, and why.
   address and port). Everything else is refused and counted: in the table of 2026-10-29 that is one alternative
   of 631, `data.\altbeacon\.org`, whose `\a` Python reads as the bell character, so it never matched a name
   anyway. Names compare without regard to ASCII case (RFC 4343). A destination is marked when its name, its
-  DNS name or its address matches; the history marks its segments the same way.
+  DNS name or its address matches; the history marks its segments the same way. A bar escaped as `\|` is part
+  of a literal, as Python reads it, not a split between alternatives (fix round).
+- **Tracker marks and the app's own company** (`activity/TrackerMarks.kt`, decision 2 (d) as the maintainer
+  settled it on 2026-11-19). The engine tells, for each match, the tracker's id, name and website and the
+  alternative that matched (`Engine.nativeTrackersOf`). A tracker's company is the entity of ADR 0020 whose own
+  domain, the host of the Digital Asset Links file the owners' table reads its apps from
+  (`owners/publisher-sources.tsv`), is the host of the tracker's website in the εxodus table or a domain above
+  it: the one link between the two tables that is the company's own word, not a guess from a name. The app's
+  company is its publisher by package and signing certificate (`owners/publishers.tsv`), as the audit finds
+  it; where packages share a UID, those the table records must lead to one group, or the app has none. Both go up to their company group by `Owners.group` on
+  the day the view opens, whole or majority control, as the audit's `OwnerNotes.group` decides it; `Owners`
+  moved to `android/shared` for it, rules unchanged. The three tables come from the same verified pack as the
+  trackers, read in the same pass. Where every tracker a destination matches is of the app's own group, the
+  destination says "Same company as the app" with the group's name, and no tracker; where two or more trackers
+  of one company match by the same alternative, one mark names the company ("Trackers of Meta Platforms, Inc.
+  in the εxodus list" for `\.facebook\.com`, which names seven); every other match is marked by its tracker's
+  name, as before. **An app whose publisher the table does not know is never told as the same company as
+  anything**, and a tracker whose company it does not know is marked by its name: nothing is guessed, and the
+  error left is a mark too many, never one missing. In the table of 2026-10-29, 14 of the 260 trackers with a
+  network signature have a company this way (Meta 7, Google 6, Amazon 1); Google's DoubleClick, whose website
+  is on a domain of its own, shares signatures with AdMob and keeps both names. `\.google\.com` (Google Ads)
+  marks every host under google.com, as `re.search` does; for Google's own apps that is now "same company".
 - **"Now"** (`NowActivity`, `ui/NowScreen.kt`, the rules in `activity/NowRows.kt`). Its windows are 10 minutes,
-  an hour and since the screen came on. **The order:** an app is in the group of the least seen state it had
-  traffic in, either way: "in the background" as soon as it sent or received anything while the user was not
-  using it and no notification could show, whatever it did otherwise; then "with its notification", then "in
-  use", then apps whose bytes have no state or are not told yet. Within a group, by bytes sent in the group's
-  state, then received, then by name and UID. Grouping by the state with the most bytes would hide a messenger
-  that sent 2 MB in use and 500 KB in the background under "in use", the one fact this view exists to show.
+  an hour and since the screen came on. **The order** (the maintainer, 2026-11-19): an app's group is decided by
+  the bytes it **sent**, above `NowRows.SENT_FLOOR`, one constant that the lab run of decision 4 sets with the
+  summary's floor (a messenger's keep-alive is not news) and that is 0 until then. "In the background" when it
+  sent above the floor while the user was not using it and no notification could show, whatever it did
+  otherwise; else "with its notification"; else "in use"; then apps that sent above the floor only where their
+  state is not known (no state, or not told yet); then, last, apps that sent nothing above the floor, by bytes
+  received. Received bytes still show on each row but decide no group: sending is what this view is about, and
+  an app that only received while the user was not using it (a push, a download it was asked for) sent nothing
+  of the user's. Grouping by the state with the most bytes would hide a messenger that sent 2 MB in use and
+  500 KB in the background under "in use", the one fact this view exists to show. Within a group, by bytes sent
+  in the group's state, then received, then by name without regard to case and by UID, so the order is total.
   Rows keep their order while the view is open: apps that come are added at the end, and apps that leave the
-  window keep their place until the user sorts again or changes the window. The snapshot is read once a second
-  while the view is on screen (`repeatOnLifecycle(STARTED)`), not at all otherwise; names, the trackers and the
-  log are read on a thread of the view's own. An app is named from its UID: the label first in the alphabet of
-  the packages that share it, every package listed under it; a UID no package holds now is "an app since
-  removed", and flows Android named no app for are one row of their own. Each row says the app's state now, its
+  window keep their place until the user sorts again, changes the window or chooses all apps. The order, the
+  window, the scroll and an opened history are kept across the history and a rotation (fix round). The
+  snapshot is read once a second while "Now" is on screen (`repeatOnLifecycle(STARTED)`), not while the history
+  is shown and not at all otherwise; names, the trackers, the owners and the log, its lock included, are read on
+  a thread of the view's own. An app is named from its UID: the label first in the alphabet of the packages that
+  share it, every package listed under it; a UID of an app (10000 and above) that no package holds now is "an
+  app since removed", one below it "Android system", and flows Android named no app for are one row of their
+  own. Each row says the app's state now, its
   bytes sent and received in each state, its bytes in no state with why, and its destinations with bytes in the
   window, most first, five and then all on request: the name the connection sent or the DNS answer's or the
   network's owner, with where it came from, the DNS name beside it where it differs (ADR 0044, decision 4), the
-  organisation, and the tracker. A chained app whose destinations are not logged says only that its traffic
-  went through the user's tool; the tool's row says it carries the chained apps' traffic. Without usage access
+  organisation, and the tracker's or the company's mark. A chained app whose destinations are not logged says
+  only that its traffic went through the user's tool; the tool's row says it carries the chained apps' traffic,
+  and shows its own servers only while "Log where these apps connect" is on (decision 3). Without usage access
   the view says so and offers the grant by the audit's route (`openUsageAccess`, now in `android/shared`); before
   the first unlock it says states come after it. "What this view cannot see" closes the view, every bullet of
   decision 5, in plain words.
 - **Each app's history** (`ui/HistoryScreen.kt`, `activity/History.kt`): a tap on an app's row opens its timeline
   from the log, a day at a time, today first, read on the view's thread: each segment's time, both names, bytes,
-  state and why it has none, newest first; the names the app looked up through Watch, as a count. The log's
+  state and why it has none, newest first, at the phone's own 12- or 24-hour time; the names the app looked up
+  through Watch, as a count. A segment of a chained app or of the tool whose destination was not logged says so
+  and why, not "0.0.0.0" (fix round). Its way back says "Back to Now". The log's
   states are said as Watch's screen says them: no key yet, open only while the phone is unlocked, open at any
   time on a phone with no screen lock or that refused the key, and a day that cannot be opened now. With
   retention "none" it says Watch keeps no record and how to keep one. Records older than the first install of
@@ -825,7 +880,9 @@ What was chosen where this ADR left room, and why.
   lint's `MissingTranslation` (the Android gate). The separate file keeps both green without a machine
   translation: the first reads `strings.xml` alone, and the second is lifted for that file alone. The seven
   languages come by ADR 0030's process after the review, and the strings then move into `strings.xml`; a release
-  needs no such file left (RELEASE.md).
+  needs no such file left (RELEASE.md, step 2), and `scripts/prepare-signing.sh` refuses an edition while a
+  module it carries has one with entries. No build gate holds it: lint lets the file pass on purpose, and CI
+  builds the release before the translations land, so a gate in the build would fail CI until then (fix round).
 - **The debug dump** prints the window while the screen was off (`activity-off`), the fourth window `off=` and
   the five whys after each window's columns; nothing new reaches logcat, and no destination ever does.
 - **Accepted limits of part 3.** The alternative with a port and a path marks every flow to its address and
@@ -878,3 +935,65 @@ What was chosen where this ADR left room, and why.
   English, both pseudo-locales and dark mode, with the destination and the package name isolated as
   left-to-right tokens in the right-to-left pseudo-locale; the eight languages follow the translations (decision
   6, item 9). Not run in this part: the A40, and the lab run of decision 4.
+
+**W5, part 3, fix round (2026-11-19, after review c1 of the engine and of the screens, and the maintainer's two
+decisions and two approvals of that day).** Each fix has a test or a check that fails when it is reverted.
+
+- **The engine.** After a clear, a clock set back no longer blanks "Now" and the window while the screen was off:
+  a set back brings the clear's moments down to the new clock (finding 1, major). A window a set back forgot
+  stays forgotten when Watch tells its moments again (2); a minute's whys leave with the minute, so they never
+  exceed its column of no state after a set back, which made the reader refuse the whole snapshot (3); an
+  escaped bar no longer splits a signature, and the fuzz target's oracle splits the same way (4, nit 3); the
+  window begins no earlier than counting (6); the readings refuse an off time for a screen on since a moment not
+  known (nit 6); the pack reader both bridges share has a test (nit 2); `clear_activity` says that it must not
+  run between a snapshot and its organisations' lookup (nit 5). Watch's process reads the data pack without
+  ever deleting a file, which is the audit's process's to do (5). The model test now turns the screen off and
+  on at random, clears, and runs past the hour in one run in ten of the set-back variant, and checks that the
+  window while the screen was off holds every byte after a clear, and the whys in every window (8). Finding 7
+  is written above and in ADR 0047: W9 clears at the screen-on too.
+- **The screens.** `scripts/now-screen.py` no longer ends a row at a destination with a dot in its name, so item
+  5's check reads the chained app's places again; its `--self-test`, in the data gate, fails on a dump that
+  shows the destination with the old reader (M1). It also finds a row by its whole package name, since the
+  one-app check added in this round found `…workload` in the row of `…workload.b`. "Now" keeps its window, order, scroll and an opened history
+  across the history and a rotation, checked by a JVM test and on the emulator (M2). A chained app's or the
+  tool's segment with no logged destination says so, not "0.0.0.0" (M3). The screenshot setting acts on the
+  window on screen once "Now" closed (m1); the line of the window while the screen was off leaves out the tool
+  (m2); "What this view cannot see" holds every part of decision 5 again, in plain words (m3); the feed's line
+  is scoped and its measurement kept (m4, the spike's note); tests now fail on the rules they hold (m5); the
+  one-app view is checked to show no other app, and the off line to equal the dump's apps and bytes (m6);
+  RELEASE.md's references follow its new step, and the signing script holds it (m7); DESIGN.md has the
+  paragraph once (m8); "Now" drops its copies when it stops (m9). Nits: the unused `outOfOrder` is gone (1);
+  "Show all apps" sorts anew (2); the snapshot is not read while the history shows (3); the texts say why
+  destinations are not shown exactly (4) and "Back to Now" (5); times follow the phone's 24-hour setting (6);
+  a UID below 10000 is "Android system" (7); the snapshot reader refuses a UID listed twice (10); the log's lock
+  is asked off the main thread (11); the screenshot run keeps the log a week, so the history's entries and
+  days' buttons pass the accessibility check, and item 6 checks that usage access is offered (13).
+- **Built after the maintainer's approval:** the tracker marks of the app's own company and the one mark for a
+  broad signature (decision 2 (d), above), and the tool's servers behind "Log where these apps connect" (decision
+  3). The engine says when it leaves the tool's servers out, in a third bit of each app's flags in the snapshot
+  (still version 2: the reader ignored the bit before, and both sides ship in one build), so that the row says
+  why from the engine's word, never from an empty list, which a full table of destinations could also leave.
+  The chain's emulator check now also asks that the tool's row name none of its servers while the switch is off,
+  and say why.
+- **Accepted limits and what is left.** Flows of no app near a screen change are left out of the model test's
+  check of the window while the screen was off: their seconds are placed when they pass, with no reading to
+  wait for, so they may land on either side of a screen-off told later; a few seconds of the "no app" row, and
+  never an app's. The item-4 check has no positive control while Advanced posts no notification; W9's summary
+  is the first, and the check then reads a real one (nit 8). One app's whys that do not add up still blank the
+  view with no word (nit 10): the engine's promise, now held by the model test in every window, is what keeps
+  it from happening, and a broken promise should not be drawn half. The flags of decision 4 beside the app wait
+  for the lab run that defines them, and the network page as a way into "Now" for W9 (nit 12). The company of a
+  tracker is known only where the owners' table holds the company's own domain: 14 of 260 trackers today.
+- **Runs of the fix round** (2026-11-19, each emulator alone). The gates passed: `scripts/check.sh` rust (the
+  engine's unit tests are 390), android, data (with the screen reader's self-test) and lab. The watch shard
+  passed whole on Android 15 (`dp-api35-ci`): the chain, whose "Now" read from the screen showed the picked app
+  through the tool and the tool's own row as the tool's, saying why its servers are not shown, with neither
+  the run's names nor addresses in any text; the live view's counters with the new checks; the log; and the
+  release build, at 25 MB with the screen open and 28 MB with the service alone. `verify-activity.sh` passed on
+  Android 11 (`dp-api30`) and 17 (`dp-api37-16k`) too: on all three, "The last hour" stayed chosen across an
+  app's history and a rotation over it, Watch's screen allowed screenshots on its own window after "Now"
+  closed, the off line equalled the dump's apps and bytes, the one-app view showed no other workload app, and
+  "Now" offered usage access without it. The first watch shard of the round failed there, on the reader's
+  match by a part of a package name, fixed and run again. `scripts/screenshots.sh --now` passed the
+  accessibility check in English, both pseudo-locales and dark mode, with the shell's history showing its
+  record and the days' buttons. Not run: the A40, which the maintainer measures himself.

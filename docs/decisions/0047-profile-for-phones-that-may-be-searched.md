@@ -161,8 +161,12 @@ forgets every app's bytes in every window of "Now", their destinations, the wind
 the organisations looked up, keeps only the moment the screen came on, and keeps out of the view every second
 before it that is placed later. It cannot clear the flows still open, which the engine needs to carry them, nor
 what waits for the log, which retention "none" under the profile already keeps from being written. W9 calls it at
-each screen-off, and may call it at the screen-on too, before the view can open, so that "Now" shows only this
-screen-on's traffic (ADR 0046, "How it is built", W5's third part).
+each screen-off **and at each screen-on**, before the view can open (*made a must 2026-11-19, review c1 of W5's
+third part, engine, finding 7*): a clear at the screen-off alone leaves the window while the screen was off,
+which opens after it and fills while the phone lies locked, to show its line at the next screen-on, and this
+decision promises that a phone handed over after it was locked shows nothing earlier. "Now" keeps no copy of its
+own that the call cannot reach: it drops its snapshot, its trackers and an opened day of the history when it stops
+(ADR 0046, "How it is built", W5's third part and its fix round).
 
 ### 7. Wiping: a panic trigger and a button
 
