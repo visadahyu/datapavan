@@ -72,8 +72,14 @@ What was found on 2026-11-09 (sources at the end):
   `get_queued_packets`; packets are `gotatun-packet` types. The `device`, `tun`, `socket` and `daita`
   features are optional. `tokio` is a hard dependency even without them. While a handshake runs, Tunn
   queues up to 256 packets. Its own device calls the timers every 250 ms; it has no next-deadline call.
+  *Spike, 2026-11-19 ([spike](../spikes/2026-11-wireguard-core.md)): the API is the same in 0.10.3;
+  the packet types are GotaTun's own `packet` module, not a separate crate; without the device the caller
+  also passes every datagram through `RateLimiter::verify_packet` (the MAC check) and checks AllowedIPs
+  after decryption.*
 - **Unsafe.** None in the protocol core (its clock module forbids `unsafe`); one site in
-  `gotatun-packet`'s buffer pool; two in the optional socket module.
+  `gotatun-packet`'s buffer pool; two in the optional socket module. *Spike, 2026-11-19: 17 sites in the
+  0.10.3 package, 1 compiled without the optional features (`packet/pool.rs`, in GotaTun itself); the 58 new
+  crates that reach the library hold 2,446.*
 - **Crypto.** `aws-lc-rs` by default since 0.6.0 (2026-04-30), `ring` with
   `default-features = false, features = ["ring"]`. Mullvad measured RustCrypto's `chacha20poly1305` at
   "roughly a 50% drop in tunnel throughput", and `aws-lc-rs` equal to `ring`. Mullvad's app uses
@@ -143,7 +149,9 @@ counter on 32-bit targets, a handshake race wireguard-go fixed on 2026-10-06).
   (CMake "never required" outside FIPS). Both put C objects into the reproducible build, so
   `scripts/reproducible.sh` must cover them. RustCrypto alone would be pure Rust, but none of the
   candidates offers it for the data path.
-- **Size.** No candidate publishes a library size. The spike below measures it.
+- **Size.** No candidate publishes a library size. The spike below measures it. *Spike, 2026-11-19:
+  GotaTun adds 149 KB to Watch's stripped library on arm64 with `ring` (123 KB on armv7, 191 KB on x86_64),
+  and 170 KB with `aws-lc-rs`.*
 - **Clock.** WireGuard's timers must count deep sleep, or a phone that wakes uses a session the server
   has already dropped. BoringTun, NepTUN and GotaTun read `CLOCK_BOOTTIME` themselves. sanstun takes
   the time from the caller, and Rust's `Instant` uses `CLOCK_MONOTONIC`, which does not reliably count
@@ -202,7 +210,10 @@ like every parser.
 - **Timers and keepalive.** The engine calls the timers from its one event loop, about once a second,
   only while a session exists or a handshake runs; an idle tunnel costs no timer (GotaTun rounds its
   timers to the second). `PersistentKeepalive` is used only if the configuration sets it, since each
-  keepalive wakes the radio.
+  keepalive wakes the radio. *Spike, 2026-11-19: GotaTun does not round them, and it stamps every event
+  with the time of the last `update_timers` call, which alone expires sessions; so the engine also calls it
+  before a packet that comes after a pause of a second or more. Against the kernel's WireGuard the
+  one-second tick kept `PersistentKeepalive` within 0.1 s and rekeyed 120.7 s after the first handshake.*
 - **A dropped tunnel.** No code path leads from a chosen app's flow to a direct socket. While the
   provider does not answer, packets wait in Tunn's bounded queue or are lost on the way; the apps see
   timeouts and Watch says the provider does not answer. If Watch itself crashes under "Block
@@ -235,9 +246,13 @@ in one tunnel. No research is needed; the spike is.
   commit that brings GotaTun in (W7), not before, so that nothing else slips in under them; the
   comment "only permissive" changes for MPL-2.0. The licence screen and NOTICE list them. Changes to
   GotaTun's files, if ever needed, are published upstream or under MPL-2.0.
-- **No Go.** The reproducible build gains C objects from `ring` only, through the NDK's clang.
+- **No Go.** The reproducible build gains C objects from `ring` only, through the NDK's clang. *Spike,
+  2026-11-19: with GotaTun inside `core`'s workspace, two clean builds at different paths give identical
+  libraries for all three ABIs, with `ring` and with `aws-lc-rs`, and no path of the machine in them.*
 - **About 29 more direct crates,** some shared with the engine (`tokio`). Each GotaTun upgrade is a
-  reviewed step, often a breaking one.
+  reviewed step, often a breaking one. *Spike, 2026-11-19: 29 on Android; Watch's library goes from 54
+  crates to 120, 8 of the new ones build-time macros; `tokio` gains no feature; the lock gains a second
+  generation of RustCrypto's traits.*
 - **The engine sees segments, not a byte stream,** for tunnelled TCP. Naming a flow by its TLS server
   name (W3) needs a small, bounded reassembly of the first segments, since a ClientHello with
   post-quantum key shares is larger than one segment.
@@ -259,8 +274,14 @@ in one tunnel. No research is needed; the spike is.
 1. **MPL-2.0 or no audit?** Is MPL-2.0 acceptable for Watch and the organisational edition (ADR 0033)?
    If not, sanstun (Apache-2.0, unaudited, five weeks old) is the next choice.
 2. **`ring` or `aws-lc-rs`?** Proposed `ring` (smaller, fewer licences); Mullvad's app uses `aws-lc-rs`.
-   The spike's size and CPU decide.
-3. **Size:** does the engine stay under 1 MB per ABI with WireGuard in it? Unverified.
+   The spike's size and CPU decide. *Spike, 2026-11-19 ([spike](../spikes/2026-11-wireguard-core.md)):
+   `ring`, unless the A40's run shows `aws-lc-rs` 10 % faster or more on ARM. On x86_64 the two are equal
+   within 2 % (both ways about 0.85 ms per MB on the development machine, 1.45 on the emulator); `ring` is
+   21 KB smaller on arm64; both builds are reproducible and need the same four licences.*
+3. **Size:** does the engine stay under 1 MB per ABI with WireGuard in it? Unverified. *Spike,
+   2026-11-19: no, and it is over already: Watch's library is 1.38 MB on arm64 today (1.22 on armv7, 1.59
+   on x86_64), and 1.53 MB with GotaTun on `ring` (1.34, 1.78). The spike proposes a measured budget with a
+   gate instead of the 1 MB target.*
 4. **Android's DNS cache is shared** by all apps of one VPN network. A direct app's answer from the
    network's resolver can be served from the cache to a chosen app, and so can a censored one. Not a
    leak of the chosen app's question, but a wrong answer is possible. One idea: answers from the
