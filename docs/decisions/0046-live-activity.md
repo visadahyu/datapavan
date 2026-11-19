@@ -354,8 +354,11 @@ A short section "What this view cannot see" sits at the end of "Now", in plain w
   measured one launcher:* on the Android 17 Google Play emulator image, with the Pixel Launcher and the Google
   app 17.76.14, the feed is an activity of the Google app, `MinusOneActivity`, which holds the focus while it
   shows, and its traffic counted in use: 82 KB sent and 1.3 MB received in a minute of scrolling, all in use
-  ([spike](../spikes/2026-11-feed-left-of-home.md), with its script and log). Other launchers, such as Samsung's
-  One UI Home with Google Discover, are not measured yet, so "Now" keeps the line, scoped to some phones.) And an
+  ([spike](../spikes/2026-11-feed-left-of-home.md), with its script and log). On the Galaxy A40 (One UI 3.1,
+  Android 11) the panel left of the home screen is Samsung Free, an activity of its own that Android records as
+  resumed while it shows, so its traffic counts in use too; that One UI Home offers no Google Discover. Launchers
+  that draw the Google app's feed over themselves are still not measured, so "Now" keeps the line, scoped to some
+  phones.) And an
   app that Android lets start activities from the background, such as one with an
   accessibility service the system binds or with "display over other apps", can resume an activity, even an
   invisible one, just before it sends, so that its sending counts as in use for the grace after; such access is

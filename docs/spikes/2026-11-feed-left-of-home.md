@@ -23,10 +23,25 @@ app 17.76.14:
 - the Google app's traffic over the minute of scrolling counted **in use**: 81,835 bytes sent and 1,289,007
   received, nothing in the background.
 
+## The Galaxy A40 (2026-11-19)
+
+Samsung Galaxy A40 (SM-A405FN), One UI 3.1 on Android 11 (`A405FNXXU4CWC3`), with One UI Home
+(`com.sec.android.app.launcher`) and Samsung Free 5.5.01.0 (`com.samsung.android.app.spage`), read by hand over
+adb without installing anything or changing a permission:
+
+- the panel left of the home screen is Samsung Free, on by default; the home screen's edit mode offers only its
+  switch, no Google Discover;
+- while it shows, the window holding the focus is Samsung Free's own `ui.MainActivity`, and Android's usage
+  events record `ACTIVITY_RESUMED` for it when it shows and `ACTIVITY_PAUSED` and `ACTIVITY_STOPPED` when it goes
+  (`dumpsys usagestats`, twice), so Watch places its traffic in use, by the same rule as any app on screen;
+- Samsung Free answered "There is no server response" (its terms were not accepted on this phone), so no bytes
+  were measured: the finding is the state, which is what decides the count.
+
 ## What it does not settle
 
-One launcher on one Android version. Launchers that still draw the feed over themselves, as Launcher3's overlay
-does, may count it in the background, and none was measured: Samsung's One UI Home with Google Discover, other
-vendors' launchers with a feed, older versions of the Pixel Launcher. So "Now"'s "What this view cannot see"
-keeps one line, scoped: on some phones the feed left of the home screen may count as in the background (the
-maintainer, 2026-11-19). The maintainer measures the Galaxy A40 later; each phone measured is added here.
+Two launchers on two Android versions, and both show their feed as an activity. Launchers that still draw the
+Google app's feed over themselves, as Launcher3's overlay does, may count it in the background, and none was
+measured: One UI Home with Google Discover on later versions or in other regions, other vendors' launchers with a
+feed, older versions of the Pixel Launcher. So "Now"'s "What this view cannot see" keeps one line, scoped: on some
+phones the feed left of the home screen may count as in the background (the maintainer, 2026-11-19). Each phone
+measured is added here.
