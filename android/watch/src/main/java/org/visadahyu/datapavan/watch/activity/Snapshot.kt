@@ -48,15 +48,21 @@ data class Snapshot(
          */
         val bytes: LongArray,
         val destinations: List<Destination>,
+        /**
+         * Whether it is the user's tool with its own servers not kept, as while "Log where these apps connect" is
+         * off (ADR 0046, decision 3, as decided on 2026-11-19): the engine says so, the view does not guess it.
+         */
+        val serversHidden: Boolean = false,
     ) {
         fun up(window: Int, column: Int): Long = bytes[(window * COLUMNS + column) * 2]
         fun down(window: Int, column: Int): Long = bytes[(window * COLUMNS + column) * 2 + 1]
 
         override fun equals(other: Any?) = other is App && uid == other.uid && now == other.now &&
             isTool == other.isTool && throughTool == other.throughTool && bytes.contentEquals(other.bytes) &&
-            destinations == other.destinations
+            destinations == other.destinations && serversHidden == other.serversHidden
 
-        override fun hashCode() = listOf(uid, now, isTool, throughTool, bytes.contentHashCode(), destinations).hashCode()
+        override fun hashCode() =
+            listOf(uid, now, isTool, throughTool, bytes.contentHashCode(), destinations, serversHidden).hashCode()
     }
 
     /** A destination as W3 names it, with its bytes up and down in each window. */
@@ -122,6 +128,9 @@ data class Snapshot(
                 val offFrom = b.long
                 val offUntil = b.long
                 val apps = List(count(b.int, b.remaining())) { app(b) }
+                // One row per UID: a UID twice would be two rows with one key (review c1 of W5's third part,
+                // screens, nit 10).
+                require(apps.map { it.uid }.toSet().size == apps.size)
                 // A window that came to an end has a start, and does not end before it.
                 val off = offUntil == 0L || (offFrom != 0L && offUntil >= offFrom)
                 Snapshot(taken, known, toldUntil, screen, since, offFrom, offUntil, apps).takeIf {
@@ -156,7 +165,7 @@ data class Snapshot(
                 }
             }
             val destinations = List(count(b.short.toInt() and 0xffff, b.remaining())) { destination(b) }
-            return App(uid, now, flags and 1 != 0, flags and 2 != 0, bytes, destinations)
+            return App(uid, now, flags and 1 != 0, flags and 2 != 0, bytes, destinations, serversHidden = flags and 4 != 0)
         }
 
         private fun destination(b: ByteBuffer): Destination {

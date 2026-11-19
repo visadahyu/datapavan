@@ -30,6 +30,26 @@ class AppNamesTest {
         assertEquals(3, asked)
     }
 
+    /**
+     * The label first in the alphabet without regard to case names a shared UID (review c1 of W5's third part,
+     * screens, m5); a UID no package holds is Android's own below the first of apps', else an app since
+     * removed; flows with no UID are no app Android named (nit 7).
+     */
+    @Test
+    fun aUidIsNamedByItsKind() {
+        val names = AppNames(
+            packagesFor = { if (it == 10_200) listOf("a.b", "c.d") else emptyList() },
+            labelOf = { mapOf("a.b" to "Zeta", "c.d" to "alpha")[it] },
+            installedAt = { null },
+        )
+        assertEquals("alpha", names.of(10_200).label)
+        assertEquals(AppNames.Kind.NAMED, names.of(10_200).kind)
+        assertEquals(AppNames.Kind.SYSTEM, names.of(0).kind)
+        assertEquals(AppNames.Kind.SYSTEM, names.of(9_999).kind)
+        assertEquals(AppNames.Kind.REMOVED, names.of(10_000).kind)
+        assertEquals(AppNames.Kind.UNNAMED, names.of(null).kind)
+    }
+
     /** A package with no label is listed by its name. */
     @Test
     fun aPackageWithNoLabelIsNamedByItsName() {

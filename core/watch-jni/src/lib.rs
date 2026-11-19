@@ -635,9 +635,10 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTrackers<
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
-/// `Engine.nativeTrackersOf(hosts)`: for each line `host\tport` (a name, or an address as text), the names
-/// of the trackers whose network signature matches it, separated by tabs, one line each, empty for none
-/// or before any table was handed over.
+/// `Engine.nativeTrackersOf(hosts)`: for each line `host\tport` (a name, or an address as text), each
+/// alternative of a network signature that matches it, as `id␟name␟website␟alternative` (the fields
+/// separated by U+001F), separated by tabs, one line each, empty for none or before any table was handed
+/// over.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTrackersOf(hosts: String):
 // String`.
 #[unsafe(no_mangle)]
@@ -659,13 +660,18 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTrackersO
                     let (host, port) = line.split_once('\t').unwrap_or((line, ""));
                     let port = port.parse().unwrap_or(0);
                     table.as_ref().map_or_else(String::new, |table| {
-                        let found = table.find(host, port);
-                        let names: Vec<&str> = found
-                            .iter()
-                            .filter_map(|&i| table.trackers().get(i))
-                            .map(|tracker| tracker.name.as_str())
+                        let found: Vec<String> = table
+                            .matches(host, port)
+                            .into_iter()
+                            .filter_map(|(i, alternative)| {
+                                let tracker = table.trackers().get(i)?;
+                                Some(format!(
+                                    "{}\u{1f}{}\u{1f}{}\u{1f}{alternative}",
+                                    tracker.id, tracker.name, tracker.website
+                                ))
+                            })
                             .collect();
-                        names.join("\t")
+                        found.join("\t")
                     })
                 })
                 .collect();

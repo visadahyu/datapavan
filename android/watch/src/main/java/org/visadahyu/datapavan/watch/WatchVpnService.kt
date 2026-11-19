@@ -759,12 +759,13 @@ class WatchVpnService : VpnService() {
         // one host and port given (W5's third part): no destination of any app is printed.
         val asked = args.indexOf("activity-tracker").takeIf { it >= 0 }
         if (asked != null) {
-            val read = NowActivity.loadTrackers(this)
+            val read = NowActivity.loadTables(this)
             writer.println("activity-trackers ${read.joinToString(" ").ifEmpty { "none" }}")
             val host = args.getOrNull(asked + 1)
             val port = args.getOrNull(asked + 2)
             if (host != null && port != null) {
-                writer.println("activity-tracker ${NowActivity.matchTrackers(listOf("$host\t$port")).values.flatten().joinToString(",").ifEmpty { "-" }}")
+                val matches = NowActivity.matchTrackers(listOf("$host\t$port")).values.flatten()
+                writer.println("activity-tracker ${matches.map { it.name }.distinct().joinToString(",").ifEmpty { "-" }}")
             }
         }
         val snapshot = org.visadahyu.datapavan.watch.activity.Snapshot.parse(Engine.nativeActivity()) ?: return

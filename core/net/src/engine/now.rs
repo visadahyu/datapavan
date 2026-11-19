@@ -545,6 +545,11 @@ impl Shared {
     /// window, the seconds not placed yet in a column apart, and its destinations with theirs.
     pub(super) fn now_view(&self, now: u64) -> Snapshot {
         let tool = self.chain().map(|chain| chain.tool);
+        // The tool whose own servers the view leaves out: "Log where these apps connect" is off.
+        let hidden_tool = self
+            .chain()
+            .filter(|chain| !chain.log_destinations)
+            .map(|chain| chain.tool);
         let (view, head, mut found) = {
             let live = lock(&self.live);
             let mut activity = lock(&self.activity);
@@ -621,6 +626,7 @@ impl Shared {
                     now: states.get(&uid).copied().flatten(),
                     tool: uid.is_some() && uid == tool,
                     through_tool: app.through_tool,
+                    servers_hidden: uid.is_some() && uid == hidden_tool,
                     bytes: app.bytes,
                     places,
                 }
@@ -1090,26 +1096,26 @@ mod tests {
         shared.tell(&told(T, T + 1_000, &[]));
         let places = |shared: &Shared, at| {
             app_of(&shared.now_view(at), Some(10_200))
-                .map(|a| (a.tool, a.through_tool, a.places.len()))
+                .map(|a| (a.tool, a.through_tool, a.servers_hidden, a.places.len()))
         };
         assert_eq!(
             places(&shared, T + 1_000),
-            Some((true, false, 1)),
+            Some((true, false, false, 1)),
             "logged while on"
         );
         *lock(&shared.chain) = Some(chain_of(UID, false));
         shared.hide_chained();
         assert_eq!(
             places(&shared, T + 1_000),
-            Some((true, false, 0)),
-            "gone at once"
+            Some((true, false, true, 0)),
+            "gone at once, and said to be"
         );
         let Some(off) = shared.record(flow(2, Some(10_200))) else {
             unreachable!("an open flow is live")
         };
         up_at(&shared, &clock, &off, 1_500, 20);
         shared.tell(&told(T + 1_000, T + 2_000, &[]));
-        assert_eq!(places(&shared, T + 2_000), Some((true, false, 0)));
+        assert_eq!(places(&shared, T + 2_000), Some((true, false, true, 0)));
         clock.set(T + 3_000);
         shared.flush();
         for record in taken(&shared) {

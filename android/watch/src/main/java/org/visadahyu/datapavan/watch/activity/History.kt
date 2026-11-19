@@ -25,6 +25,13 @@ object History {
         val state: Int,
         /** Whether the connection went on after this segment. */
         val continues: Boolean,
+        /**
+         * Whether the log keeps no destination of it: an app chained through the user's tool, or the tool's own
+         * servers, while "Log where these apps connect" was off. The engine writes such a segment with no name
+         * and an address of zeros (0.0.0.0 or ::), which is no destination (review c1 of W5's third part,
+         * screens, M3: the history showed it as one).
+         */
+        val unlogged: Boolean = false,
     )
 
     /**
@@ -47,6 +54,7 @@ object History {
                 Entry(
                     it.start, it.end, it.protocol, it.name, it.dnsName.takeIf { dns -> dns != it.name }.orEmpty(),
                     it.address.hostAddress.orEmpty(), it.port, it.namedBy, it.up, it.down, it.state, it.continues,
+                    unlogged = it.address.isAnyLocalAddress && it.name.isEmpty(),
                 )
             }
             .sortedWith(compareByDescending<Entry> { it.start }.thenByDescending { it.end })

@@ -62,6 +62,8 @@ impl Atom {
 struct Pattern {
     /// Index of its tracker in [`NetworkSignatures::trackers`].
     tracker: usize,
+    /// The alternative as the table writes it: trackers that match by the same one share a broad signature.
+    source: String,
     /// The host part.
     atoms: Vec<Atom>,
     /// Its longest run of literal characters, looked for before the automaton runs.
@@ -77,6 +79,8 @@ pub struct Tracker {
     pub id: u32,
     /// Its name, for example "Google `AdMob`".
     pub name: String,
+    /// Its website, as the table gives it: who runs it, where its operator's own domain says so.
+    pub website: String,
 }
 
 /// An alternative the matcher refused, as outside the subset it reads.
@@ -128,7 +132,7 @@ impl NetworkSignatures {
                 continue;
             }
             let columns: Vec<&str> = line.split('\t').collect();
-            let [id, name, _, _, _, signature] = columns[..] else {
+            let [id, name, _, website, _, signature] = columns[..] else {
                 return Err(Error::InvalidLine(number));
             };
             let id = id.parse().map_err(|_| Error::InvalidLine(number))?;
@@ -139,6 +143,7 @@ impl NetworkSignatures {
             table.trackers.push(Tracker {
                 id,
                 name: name.to_owned(),
+                website: website.to_owned(),
             });
             for alternative in alternatives(signature) {
                 match Pattern::new(tracker, alternative) {
@@ -175,17 +180,29 @@ impl NetworkSignatures {
     /// `host` (a name, or an address as text) at the port `port`, in ascending order, each once.
     #[must_use]
     pub fn find(&self, host: &str, port: u16) -> Vec<usize> {
-        let host: Vec<char> = host.chars().map(|c| c.to_ascii_lowercase()).collect();
-        let text: String = host.iter().collect();
         let mut found: Vec<usize> = self
-            .patterns
-            .iter()
-            .filter(|p| p.port.is_none_or(|own| own == port))
-            .filter(|p| text.contains(p.key.as_str()) && search(&p.atoms, &host))
-            .map(|p| p.tracker)
+            .matches(host, port)
+            .into_iter()
+            .map(|(t, _)| t)
             .collect();
         found.dedup();
         found
+    }
+
+    /// Each alternative that matches the host `host` at the port `port`: the index of its tracker in
+    /// [`Self::trackers`] and the alternative as the table writes it, in the order of the table, so that the
+    /// trackers one broad alternative names can be told as one (ADR 0046, decision 2 (d), as decided on
+    /// 2026-11-19).
+    #[must_use]
+    pub fn matches(&self, host: &str, port: u16) -> Vec<(usize, &str)> {
+        let host: Vec<char> = host.chars().map(|c| c.to_ascii_lowercase()).collect();
+        let text: String = host.iter().collect();
+        self.patterns
+            .iter()
+            .filter(|p| p.port.is_none_or(|own| own == port))
+            .filter(|p| text.contains(p.key.as_str()) && search(&p.atoms, &host))
+            .map(|p| (p.tracker, p.source.as_str()))
+            .collect()
     }
 }
 
@@ -220,6 +237,7 @@ impl Pattern {
         }
         Some(Self {
             tracker,
+            source: alternative.to_owned(),
             atoms,
             key,
             port,
@@ -417,6 +435,28 @@ mod tests {
         );
     }
 
+    /// Each matching alternative is told with its tracker, so that trackers sharing one broad alternative
+    /// are seen as such; the website is the table's fourth column.
+    #[test]
+    fn matches_tell_each_alternative_and_its_tracker() {
+        let tsv = "1\tFacebook Ads\t\thttps://developers.facebook.com/\t\t\\.facebook\\.com\n\
+                   2\tFacebook Login\t\thttps://developers.facebook.com/\t\t\\.facebook\\.com|graph\\.facebook\\.com\n";
+        let read = NetworkSignatures::parse(tsv).unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(
+            read.trackers()[0].website,
+            "https://developers.facebook.com/"
+        );
+        assert_eq!(
+            read.matches("graph.facebook.com", 443),
+            vec![
+                (0, r"\.facebook\.com"),
+                (1, r"\.facebook\.com"),
+                (1, r"graph\.facebook\.com")
+            ]
+        );
+        assert_eq!(read.find("graph.facebook.com", 443), vec![0, 1]);
+    }
+
     /// What lies outside the subset is refused and counted, never read as something else; the other
     /// alternatives of its signature still mark.
     #[test]
@@ -466,11 +506,13 @@ mod tests {
             &[
                 Tracker {
                     id: 2,
-                    name: "Tracker 2".into()
+                    name: "Tracker 2".into(),
+                    website: String::new()
                 },
                 Tracker {
                     id: 3,
-                    name: "Tracker 3".into()
+                    name: "Tracker 3".into(),
+                    website: String::new()
                 }
             ]
         );

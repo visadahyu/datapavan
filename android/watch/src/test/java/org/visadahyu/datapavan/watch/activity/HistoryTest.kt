@@ -49,6 +49,19 @@ class HistoryTest {
         assertEquals(0, History.day(20_775, listOf(segment(app, t, t + 1)), app, installedAt = t).beforeInstall)
     }
 
+    /**
+     * A segment the log keeps no destination of, a chained app's or the tool's own while "Log where these apps
+     * connect" is off, is told as such, never as a destination of zeros (review c1 of W5's third part, screens,
+     * M3); a named destination at such an address is not.
+     */
+    @Test
+    fun aSegmentWithNoDestinationIsToldAsSuch() {
+        fun at(address: ByteArray, name: String = "") = segment(app, t + 1_000, t + 2_000).copy(address = InetAddress.getByAddress(address), name = name)
+        val records = listOf(at(ByteArray(4)), at(ByteArray(16)), at(ByteArray(4), "named.example"), segment(app, t + 3_000, t + 4_000))
+        val day = History.day(20_775, records, app, installedAt = t)
+        assertEquals(listOf(false, true, true, false), day.entries.map { it.unlogged })
+    }
+
     /** The days the log keeps, today first; none with retention "none". */
     @Test
     fun theDaysAreThoseTheLogKeeps() {

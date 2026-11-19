@@ -111,6 +111,42 @@ class SnapshotTest {
         assertEquals(t + 1_000, Snapshot.parse(fixture.copyOf().also { buffer(it).putLong(offFrom, t + 1_000) })?.offFrom)
     }
 
+    /** A snapshot that lists one UID twice is refused (nit 10): the view keys its rows by UID. */
+    @Test
+    fun refusesAUidListedTwice() {
+        val first = 1 + 8 + 1 + 8 + 1 + 3 * 8 + 4
+        val second = first + 4 + 1 + 1 + Snapshot.WINDOWS * Snapshot.COLUMNS * 2 * 8 + 2 + destinationsOf(0)
+        val twice = fixture.copyOf().also { java.nio.ByteBuffer.wrap(it).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(second, -1) }
+        assertNull(Snapshot.parse(twice))
+        // The same place given another UID reads: it is the second app's UID.
+        val other = fixture.copyOf().also { java.nio.ByteBuffer.wrap(it).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(second, 10_124) }
+        assertEquals(listOf(null, 10_124), Snapshot.parse(other)?.apps?.map { it.uid })
+    }
+
+    /**
+     * The flags' third bit says the user's tool's own servers are not kept ("Log where these apps connect" off,
+     * decision 3 as decided on 2026-11-19), and only for the app it is set on: the view says so from it.
+     */
+    @Test
+    fun readsTheToolsServersHidden() {
+        assertEquals(listOf(false, false), checkNotNull(Snapshot.parse(fixture)).apps.map { it.serversHidden })
+        val first = 1 + 8 + 1 + 8 + 1 + 3 * 8 + 4
+        val second = first + 4 + 1 + 1 + Snapshot.WINDOWS * Snapshot.COLUMNS * 2 * 8 + 2 + destinationsOf(0)
+        val hidden = fixture.copyOf().also { it[second + 5] = (it[second + 5].toInt() or 0b101).toByte() }
+        val app = checkNotNull(Snapshot.parse(hidden)).apps
+        assertEquals(listOf(false, true), app.map { it.serversHidden })
+        assertEquals(true to false, app[1].isTool to app[1].throughTool)
+    }
+
+    /** The bytes the first app's destinations take in the fixture. */
+    private fun destinationsOf(app: Int): Int {
+        val snapshot = checkNotNull(Snapshot.parse(fixture))
+        return snapshot.apps[app].destinations.sumOf { d ->
+            5 + 1 + d.address.address.size + 2 + 4 + 1 +
+                listOf(d.name, d.dnsName, d.resolver, d.organisation).sumOf { 1 + it.toByteArray().size } + 6 * 8
+        }
+    }
+
     /** No snapshot, cut short anywhere or with any byte changed, makes the reader throw: it reads it or refuses it. */
     @Test
     fun noSnapshotCrashesTheReader() {

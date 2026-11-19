@@ -4,51 +4,63 @@ import org.visadahyu.datapavan.watch.log.AppState
 
 /**
  * The rules of the view "Now" (ADR 0046, decision 2 (d)), as pure functions the JVM tests hold: which group
- * an app's row is in, the order of rows, why an app's bytes have no state, and how a destination is named.
- * The screen draws what these return.
+ * an app's row is in, the order of rows, why an app's bytes have no state, how a destination is named, and
+ * the line of the window while the screen was off. The screen draws what these return.
  */
 object NowRows {
+    /**
+     * What counts as sending: more than this many bytes sent in a state. The lab run of decision 4 sets it
+     * (a messenger's keep-alive is not news), as it sets the summary's floor; 0 until then (the maintainer,
+     * 2026-11-19).
+     */
+    const val SENT_FLOOR = 0L
+
     /** The groups of rows, in the order they show. */
     const val BACKGROUND = 0
     const val NOTIFICATION = 1
     const val IN_USE = 2
 
-    /** Bytes in no state only, or not told yet: no state to group the app by. */
+    /** Sent above the floor only in no state, or not told yet: no state to group the app by. */
     const val NO_STATE = 3
 
+    /** Sent nothing above the floor: received only. */
+    const val RECEIVED = 4
+
     /**
-     * An app's group in [window]: the least seen state it had traffic in, so that an app is "in the background"
-     * as soon as it sent or received anything while the user was not using it and its notification did not
-     * show, whatever it did in the other states. Ordering by the state with the most bytes instead would hide
-     * a messenger that sent 2 MB in use and 500 KB in the background under "in use", the one fact this view
-     * exists to show (W5's third part).
+     * An app's group in [window], by the bytes it SENT (the maintainer, 2026-11-19): "in the background" when it
+     * sent more than [SENT_FLOOR] while the user was not using it and no notification could show, whatever it
+     * did otherwise; else "with its notification", else "in use", by the same rule. An app that sent above the
+     * floor only where its state is not known comes next; one that sent nothing above it, last. Received bytes
+     * still show on the row, but decide no group: sending is what this view is about, and an app that only
+     * received while the user was not using it (a push, a download it was asked for) sent nothing of the
+     * user's. Grouping by the state with the most bytes would hide a messenger that sent 2 MB in use and
+     * 500 KB in the background under "in use", the one fact this view exists to show.
      */
     fun group(app: Snapshot.App, window: Int): Int = when {
-        traffic(app, window, AppState.BACKGROUND) > 0 -> BACKGROUND
-        traffic(app, window, AppState.NOTIFICATION) > 0 -> NOTIFICATION
-        traffic(app, window, AppState.IN_USE) > 0 -> IN_USE
-        else -> NO_STATE
-    }
-
-    /** What decides the order within a group: the bytes sent in the group's state, then those received. */
-    private fun weight(app: Snapshot.App, window: Int): Pair<Long, Long> {
-        val column = when (group(app, window)) {
-            BACKGROUND -> AppState.BACKGROUND
-            NOTIFICATION -> AppState.NOTIFICATION
-            IN_USE -> AppState.IN_USE
-            else -> -1
-        }
-        return if (column < 0) {
-            sent(app, window, AppState.NONE) + sent(app, window, AppState.NOT_YET) to
-                received(app, window, AppState.NONE) + received(app, window, AppState.NOT_YET)
-        } else {
-            sent(app, window, column) to received(app, window, column)
-        }
+        sent(app, window, AppState.BACKGROUND) > SENT_FLOOR -> BACKGROUND
+        sent(app, window, AppState.NOTIFICATION) > SENT_FLOOR -> NOTIFICATION
+        sent(app, window, AppState.IN_USE) > SENT_FLOOR -> IN_USE
+        sent(app, window, AppState.NONE) + sent(app, window, AppState.NOT_YET) > SENT_FLOOR -> NO_STATE
+        else -> RECEIVED
     }
 
     /**
-     * The apps with traffic in [window], sorted: by group, then by bytes sent in the group's state, most
-     * first, then by bytes received, then by [label] and UID so that the order is total.
+     * What orders an app within its group: the bytes sent in the group's state, then received in it; for apps
+     * with no state, the bytes sent and received in no state and not told yet; for apps that sent nothing
+     * above the floor, the bytes received in every column, most first.
+     */
+    private fun weight(app: Snapshot.App, window: Int): Pair<Long, Long> = when (group(app, window)) {
+        BACKGROUND -> sent(app, window, AppState.BACKGROUND) to received(app, window, AppState.BACKGROUND)
+        NOTIFICATION -> sent(app, window, AppState.NOTIFICATION) to received(app, window, AppState.NOTIFICATION)
+        IN_USE -> sent(app, window, AppState.IN_USE) to received(app, window, AppState.IN_USE)
+        NO_STATE -> sent(app, window, AppState.NONE) + sent(app, window, AppState.NOT_YET) to
+            received(app, window, AppState.NONE) + received(app, window, AppState.NOT_YET)
+        else -> (AppState.NONE..AppState.NOT_YET).sumOf { received(app, window, it) } to 0L
+    }
+
+    /**
+     * The apps with traffic in [window], sorted: by group, then by [weight], most first, then by [label]
+     * without regard to case and by UID, so that the order is total.
      */
     fun sorted(apps: List<Snapshot.App>, window: Int, label: (Int?) -> String): List<Snapshot.App> =
         apps.filter { hasTraffic(it, window) }.sortedWith(
@@ -59,7 +71,7 @@ object NowRows {
                 .thenBy { it.uid ?: Int.MIN_VALUE },
         )
 
-    /** Whether an app sent or received anything in [window]. */
+    /** Whether an app sent or received anything in [window], in a state or not. */
     fun hasTraffic(app: Snapshot.App, window: Int): Boolean =
         (AppState.NONE..AppState.NOT_YET).any { traffic(app, window, it) > 0 }
 
@@ -77,10 +89,22 @@ object NowRows {
     data class Reason(val why: Int, val sent: Long, val received: Long)
 
     /**
+     * The line of the window while the screen was off, once it came on again: how many apps sent more than
+     * [SENT_FLOOR] in the background then, and how much. The user's tool is not counted: its bytes hold the
+     * chained apps' (decision 5; review c1 of W5's third part, screens, m2). Null for no window that ended.
+     */
+    fun offLine(snapshot: Snapshot): Pair<Int, Long>? {
+        if (snapshot.offFrom == 0L || snapshot.offUntil == 0L || snapshot.offUntil < snapshot.offFrom) return null
+        val senders = snapshot.apps.filter { !it.isTool && sent(it, Snapshot.WHILE_OFF, AppState.BACKGROUND) > SENT_FLOOR }
+        return senders.size to senders.sumOf { sent(it, Snapshot.WHILE_OFF, AppState.BACKGROUND) }
+    }
+
+    /**
      * The rows' keys in the order they keep while the view is open: the order sorted the last time the user
      * asked (or the view opened, or the window changed), with apps that came since added after, in their
      * own sorted order, and apps that left the window kept where they were, so that nothing moves under a
-     * finger or a screen reader's focus (decision 2 (d)). [Order.sort] sorts anew.
+     * finger or a screen reader's focus (decision 2 (d)). [Order.sort] sorts anew. It is kept across an app's
+     * history and a rotation ([save], [restore]).
      */
     class Order {
         private var keys: List<Int?> = emptyList()
@@ -103,10 +127,19 @@ object NowRows {
             sorted = false
         }
 
-        /** How many rows would move if sorted now: the button to sort says so only when some would. */
-        fun outOfOrder(apps: List<Snapshot.App>, window: Int, label: (Int?) -> String): Boolean {
-            val now = sorted(apps, window, label).map { it.uid }
-            return keys.filter { it in now } != now
+        companion object {
+            /** A UID in the saved form, where no UID is [NO_APP]; UIDs are never negative. */
+            private const val NO_APP = -1
+
+            /** The order in a form a saved state keeps: its keys, or null before it was first sorted. */
+            fun save(order: Order): IntArray? = if (order.sorted) order.keys.map { it ?: NO_APP }.toIntArray() else null
+
+            /** Gives [order] the keys [save] kept, as sorted, or leaves it to sort when [saved] is null. */
+            fun restore(order: Order, saved: IntArray?) {
+                saved ?: return
+                order.keys = saved.map { it.takeIf { uid -> uid != NO_APP } }
+                order.sorted = true
+            }
         }
     }
 

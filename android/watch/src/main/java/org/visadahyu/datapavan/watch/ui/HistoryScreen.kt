@@ -31,7 +31,9 @@ import java.time.ZoneId
 import java.util.Date
 import org.visadahyu.datapavan.watch.R
 import org.visadahyu.datapavan.watch.activity.AppNames
+import org.visadahyu.datapavan.watch.activity.Companies
 import org.visadahyu.datapavan.watch.activity.History
+import org.visadahyu.datapavan.watch.activity.TrackerMarks
 import org.visadahyu.datapavan.watch.log.ConnectionLog
 
 /**
@@ -50,6 +52,8 @@ internal data class HistoryView(
     val reading: Boolean,
     /** The day could not be opened: a locked phone, or a failure. */
     val closed: Boolean = false,
+    /** Whether the app is the user's circumvention tool, whose servers the log keeps only with the switch on. */
+    val tool: Boolean = false,
 )
 
 /**
@@ -60,9 +64,17 @@ internal data class HistoryView(
  * removed, and are counted apart.
  */
 @Composable
-internal fun HistoryScreen(view: HistoryView, trackers: Map<String, List<String>>, onDay: (Int) -> Unit, onClose: () -> Unit) {
+internal fun HistoryScreen(
+    view: HistoryView,
+    appGroup: String?,
+    trackers: Map<String, List<TrackerMarks.Match>>,
+    companies: Companies?,
+    onDay: (Int) -> Unit,
+    onClose: () -> Unit,
+) {
     val context = LocalContext.current
-    val time = DateFormat.getTimeInstance(DateFormat.SHORT)
+    // The phone's own choice of a 12- or 24-hour clock (review c1 of W5's third part, screens, nit 6).
+    val time = android.text.format.DateFormat.getTimeFormat(context)
     val date = DateFormat.getDateInstance(DateFormat.MEDIUM)
     LazyColumn(
         modifier = Modifier.safeDrawingPadding().testTag("history"),
@@ -71,7 +83,7 @@ internal fun HistoryScreen(view: HistoryView, trackers: Map<String, List<String>
     ) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = onClose) { Text(stringResource(R.string.now_title)) }
+                TextButton(onClick = onClose) { Text(stringResource(R.string.history_back)) }
                 Text(
                     stringResource(R.string.history_title, label(view.app, view.app.uid)),
                     style = MaterialTheme.typography.headlineSmall,
@@ -128,15 +140,27 @@ internal fun HistoryScreen(view: HistoryView, trackers: Map<String, List<String>
                         stringResource(R.string.history_time, time.format(Date(entry.start)), time.format(Date(entry.end))),
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    val hosts = listOf(entry.name, entry.dnsName, entry.address).filter { it.isNotEmpty() }.map { "$it\t${entry.port}" }
-                    Place(
-                        name = entry.name.ifEmpty { entry.address },
-                        dnsName = entry.dnsName,
-                        namedBy = entry.namedBy,
-                        organisation = "",
-                        trackers = hosts.flatMap { trackers[it].orEmpty() }.distinct(),
-                        bytes = stringResource(R.string.now_destination_bytes, size(context, entry.sent), size(context, entry.received)),
-                    )
+                    if (entry.unlogged) {
+                        // No destination was logged: say why, as "Now" does, never show zeros as one (M3).
+                        Text(
+                            stringResource(if (view.tool) R.string.history_tool_hidden else R.string.history_through_tool),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            stringResource(R.string.now_destination_bytes, size(context, entry.sent), size(context, entry.received)),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    } else {
+                        val hosts = listOf(entry.name, entry.dnsName, entry.address).filter { it.isNotEmpty() }.map { "$it\t${entry.port}" }
+                        Place(
+                            name = entry.name.ifEmpty { entry.address },
+                            dnsName = entry.dnsName,
+                            namedBy = entry.namedBy,
+                            organisation = "",
+                            marks = marksOf(hosts, appGroup, trackers, companies),
+                            bytes = stringResource(R.string.now_destination_bytes, size(context, entry.sent), size(context, entry.received)),
+                        )
+                    }
                     Text(stringResource(R.string.history_state, stateName(entry.state)), style = MaterialTheme.typography.bodyMedium)
                     if (org.visadahyu.datapavan.watch.log.AppState.why(entry.state) != 0) {
                         Text(whyName(org.visadahyu.datapavan.watch.log.AppState.why(entry.state)), style = MaterialTheme.typography.bodySmall)

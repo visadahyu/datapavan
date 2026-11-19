@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -27,7 +29,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -46,18 +47,38 @@ import org.visadahyu.datapavan.ui.isolate
 import org.visadahyu.datapavan.ui.isolateLtr
 import org.visadahyu.datapavan.watch.R
 import org.visadahyu.datapavan.watch.activity.AppNames
+import org.visadahyu.datapavan.watch.activity.Companies
 import org.visadahyu.datapavan.watch.activity.NowRows
 import org.visadahyu.datapavan.watch.activity.Snapshot
+import org.visadahyu.datapavan.watch.activity.TrackerMarks
 import org.visadahyu.datapavan.watch.log.AppState
 
-/** What "Now" draws: the engine's snapshot, whether the tunnel runs, the apps' names, trackers by host, the one app asked for. */
+/**
+ * What "Now" draws: the engine's snapshot, whether the tunnel runs, the apps' names and company groups, the
+ * trackers' matches by host and the companies to tell them by, the one app asked for, the window, and the
+ * rows' order, kept by the activity across an app's history and a rotation ([sorts] changes when it sorts).
+ */
 internal data class NowView(
     val snapshot: Snapshot?,
     val running: Boolean,
     val names: Map<Int?, AppNames.Named>,
-    val trackers: Map<String, List<String>>,
+    val groups: Map<Int?, String?>,
+    val trackers: Map<String, List<TrackerMarks.Match>>,
+    val companies: Companies?,
     val only: String?,
+    val window: Int,
+    val order: NowRows.Order,
+    val sorts: Int,
 )
+
+/** The marks of a destination of the app [uid], from its hosts' matches (ADR 0046, decision 2 (d)). */
+internal fun marksOf(hosts: List<String>, appGroup: String?, trackers: Map<String, List<TrackerMarks.Match>>, companies: Companies?): List<TrackerMarks.Mark> =
+    TrackerMarks.marks(
+        hosts.flatMap { trackers[it].orEmpty() }.distinct(),
+        appGroup,
+        { match -> companies?.groupOfWebsite(match.website) },
+        { group -> companies?.name(group) ?: group },
+    )
 
 /** A size as the user reads it, absolute, with its unit, isolated in right-to-left text. */
 internal fun size(context: Context, bytes: Long): String = isolate(Formatter.formatFileSize(context, bytes))
@@ -75,10 +96,11 @@ internal fun duration(millis: Long): String {
 
 /** An app's name: its label, or what stands for one where no package holds its UID or Android named none. */
 @Composable
-internal fun label(named: AppNames.Named?, uid: Int?): String = when {
-    uid == null -> stringResource(R.string.now_app_unnamed)
-    named?.label == null -> stringResource(R.string.now_app_removed)
-    else -> isolate(named.label)
+internal fun label(named: AppNames.Named?, uid: Int?): String = when ((named ?: AppNames.Named(uid, null, emptyList(), null)).kind) {
+    AppNames.Kind.UNNAMED -> stringResource(R.string.now_app_unnamed)
+    AppNames.Kind.SYSTEM -> stringResource(R.string.now_app_system)
+    AppNames.Kind.REMOVED -> stringResource(R.string.now_app_removed)
+    AppNames.Kind.NAMED -> isolate(named?.label.orEmpty())
 }
 
 /** A state's words, by its [AppState] code; why where there is none is said apart. */
@@ -115,37 +137,49 @@ internal fun whyName(code: Int): String = stringResource(
 internal fun NowScreen(
     view: NowView,
     history: HistoryView?,
+    onWindow: (Int) -> Unit,
+    onSort: () -> Unit,
     onAll: () -> Unit,
-    onHistory: (Int?) -> Unit,
+    onHistory: (Int?, Boolean) -> Unit,
     onDay: (Int) -> Unit,
     onCloseHistory: () -> Unit,
     onAllowAccess: () -> Unit,
 ) {
+    // Kept here, above the history, so that coming back from it, or a rotation, finds the list where it was
+    // (review c1 of W5's third part, screens, M2).
+    val listState = rememberLazyListState()
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         if (history != null) {
             BackHandler(onBack = onCloseHistory)
-            HistoryScreen(history, view.trackers, onDay, onCloseHistory)
+            HistoryScreen(history, view.groups[history.app.uid], view.trackers, view.companies, onDay, onCloseHistory)
         } else {
-            NowList(view, onAll, onHistory, onAllowAccess)
+            NowList(view, listState, onWindow, onSort, onAll, onHistory, onAllowAccess)
         }
     }
 }
 
 @Composable
-private fun NowList(view: NowView, onAll: () -> Unit, onHistory: (Int?) -> Unit, onAllowAccess: () -> Unit) {
+private fun NowList(
+    view: NowView,
+    listState: LazyListState,
+    onWindow: (Int) -> Unit,
+    onSort: () -> Unit,
+    onAll: () -> Unit,
+    onHistory: (Int?, Boolean) -> Unit,
+    onAllowAccess: () -> Unit,
+) {
     val context = LocalContext.current
-    var window by rememberSaveable { mutableIntStateOf(Snapshot.TEN_MINUTES) }
-    val order = remember { NowRows.Order() }
-    var sortedAt by remember { mutableIntStateOf(0) }
+    val window = view.window
     val snapshot = view.snapshot
     val labels = { uid: Int? -> view.names[uid]?.label ?: "" }
     val apps = snapshot?.apps.orEmpty().filter { app ->
         view.only == null || view.names[app.uid]?.packages?.contains(view.only) == true
     }
-    // Read once per recomposition; [sortedAt] makes a sort asked for take effect now.
-    val keys = remember(snapshot, window, sortedAt, view.only, view.names.size) { order.of(apps, window, labels) }
+    // Read once per recomposition; [NowView.sorts] makes a sort asked for take effect now.
+    val keys = remember(snapshot, window, view.sorts, view.only, view.names.size) { view.order.of(apps, window, labels) }
     val byUid = apps.associateBy { it.uid }
     LazyColumn(
+        state = listState,
         modifier = Modifier.safeDrawingPadding().testTag("now"),
         contentPadding = PaddingValues(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -164,17 +198,9 @@ private fun NowList(view: NowView, onAll: () -> Unit, onHistory: (Int?) -> Unit,
                     Text(stringResource(R.string.now_one_app), style = MaterialTheme.typography.bodyMedium)
                     OutlinedButton(onClick = onAll) { Text(stringResource(R.string.now_all_apps)) }
                 }
-                WindowChoice(window) {
-                    window = it
-                    order.sort()
-                }
+                WindowChoice(window, onWindow)
                 Text(stringResource(R.string.now_sort_note), style = MaterialTheme.typography.bodySmall)
-                OutlinedButton(
-                    onClick = {
-                        order.sort()
-                        sortedAt++
-                    },
-                ) { Text(stringResource(R.string.now_sort)) }
+                OutlinedButton(onClick = onSort) { Text(stringResource(R.string.now_sort)) }
                 if (keys.none { byUid[it]?.let { app -> NowRows.hasTraffic(app, window) } == true }) {
                     Text(stringResource(R.string.now_empty), style = MaterialTheme.typography.bodyMedium)
                 }
@@ -207,18 +233,19 @@ private fun Facts(view: NowView, snapshot: Snapshot?, onAllowAccess: () -> Unit)
         else -> Unit
     }
     // The window while the screen was off, once it came on again: the apps that sent in the background then.
-    if (snapshot != null && snapshot.offFrom != 0L && snapshot.offUntil >= snapshot.offFrom && snapshot.offUntil != 0L) {
-        val senders = snapshot.apps.filter { NowRows.sent(it, Snapshot.WHILE_OFF, AppState.BACKGROUND) > 0 }
+    val off = snapshot?.let(NowRows::offLine)
+    if (snapshot != null && off != null) {
+        val (senders, sent) = off
         val length = duration(snapshot.offUntil - snapshot.offFrom)
         Text(
-            if (senders.isEmpty()) {
+            if (senders == 0) {
                 stringResource(R.string.now_off_none, length)
             } else {
                 stringResource(
                     R.string.now_off_window,
                     length,
-                    pluralStringResource(R.plurals.now_off_apps, senders.size, senders.size),
-                    size(context, senders.sumOf { NowRows.sent(it, Snapshot.WHILE_OFF, AppState.BACKGROUND) }),
+                    pluralStringResource(R.plurals.now_off_apps, senders, senders),
+                    size(context, sent),
                 )
             },
             style = MaterialTheme.typography.bodyMedium,
@@ -253,13 +280,13 @@ private fun WindowChoice(window: Int, onWindow: (Int) -> Unit) {
 
 /** One app: its name and packages, its state now, its bytes by state, why some have none, and its destinations. */
 @Composable
-private fun AppRow(context: Context, app: Snapshot.App, window: Int, view: NowView, onHistory: (Int?) -> Unit) {
+private fun AppRow(context: Context, app: Snapshot.App, window: Int, view: NowView, onHistory: (Int?, Boolean) -> Unit) {
     val named = view.names[app.uid]
     val historyLabel = stringResource(R.string.now_history)
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Button, onClickLabel = historyLabel) { onHistory(app.uid) }
+            .clickable(role = Role.Button, onClickLabel = historyLabel) { onHistory(app.uid, app.isTool) }
             .testTag("now-app"),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -274,7 +301,11 @@ private fun AppRow(context: Context, app: Snapshot.App, window: Int, view: NowVi
             }
             Text(stringResource(R.string.now_state_now, stateName(app.now)), style = MaterialTheme.typography.bodyMedium)
             if (AppState.why(app.now) != 0) Text(whyName(AppState.why(app.now)), style = MaterialTheme.typography.bodyMedium)
-            if (app.isTool) Text(stringResource(R.string.now_is_tool), style = MaterialTheme.typography.bodyMedium)
+            if (app.isTool) {
+                Text(stringResource(R.string.now_is_tool), style = MaterialTheme.typography.bodyMedium)
+                // Its servers show only while "Log where these apps connect" is on (decision 3, 2026-11-19).
+                if (app.serversHidden) Text(stringResource(R.string.now_tool_hidden), style = MaterialTheme.typography.bodyMedium)
+            }
             for ((column, text) in listOf(
                 AppState.BACKGROUND to R.string.now_bytes_background,
                 AppState.NOTIFICATION to R.string.now_bytes_notification,
@@ -304,14 +335,14 @@ private fun AppRow(context: Context, app: Snapshot.App, window: Int, view: NowVi
                 )
             }
             if (app.throughTool) Text(stringResource(R.string.now_through_tool), style = MaterialTheme.typography.bodyMedium)
-            Destinations(context, app, window, view.trackers)
+            Destinations(context, app, window, view)
         }
     }
 }
 
 /** An app's destinations with bytes in the window, most bytes first, the first few and then all on request. */
 @Composable
-private fun Destinations(context: Context, app: Snapshot.App, window: Int, trackers: Map<String, List<String>>) {
+private fun Destinations(context: Context, app: Snapshot.App, window: Int, view: NowView) {
     val places = app.destinations
         .filter { it.bytes[window * 2] + it.bytes[window * 2 + 1] > 0 }
         .sortedByDescending { it.bytes[window * 2] + it.bytes[window * 2 + 1] }
@@ -325,7 +356,7 @@ private fun Destinations(context: Context, app: Snapshot.App, window: Int, track
             dnsName = dns,
             namedBy = place.namedBy,
             organisation = place.organisation,
-            trackers = org.visadahyu.datapavan.watch.NowActivity.hostsOf(place).flatMap { trackers[it].orEmpty() }.distinct(),
+            marks = marksOf(org.visadahyu.datapavan.watch.NowActivity.hostsOf(place), view.groups[app.uid], view.trackers, view.companies),
             bytes = stringResource(R.string.now_destination_bytes, size(context, place.bytes[window * 2]), size(context, place.bytes[window * 2 + 1])),
         )
     }
@@ -337,7 +368,7 @@ private fun Destinations(context: Context, app: Snapshot.App, window: Int, track
 
 /** One destination: its name, left to right in any language, where the name came from, and what else is known. */
 @Composable
-internal fun Place(name: String, dnsName: String, namedBy: Int, organisation: String, trackers: List<String>, bytes: String) {
+internal fun Place(name: String, dnsName: String, namedBy: Int, organisation: String, marks: List<TrackerMarks.Mark>, bytes: String) {
     Text(isolateLtr(name), style = MaterialTheme.typography.bodyLarge)
     Text(
         stringResource(
@@ -353,7 +384,14 @@ internal fun Place(name: String, dnsName: String, namedBy: Int, organisation: St
     )
     if (dnsName.isNotEmpty()) Text(stringResource(R.string.now_dns_name, isolateLtr(dnsName)), style = MaterialTheme.typography.bodySmall)
     if (organisation.isNotEmpty()) Text(stringResource(R.string.now_organisation, isolate(organisation)), style = MaterialTheme.typography.bodySmall)
-    for (tracker in trackers) Text(stringResource(R.string.now_tracker, isolate(tracker)), style = MaterialTheme.typography.bodySmall)
+    for (mark in marks) {
+        val line = when (mark) {
+            is TrackerMarks.Mark.Tracker -> stringResource(R.string.now_tracker, isolate(mark.name))
+            is TrackerMarks.Mark.Company -> stringResource(R.string.now_tracker_company, isolate(mark.name))
+            is TrackerMarks.Mark.SameCompany -> stringResource(R.string.now_same_company, isolate(mark.name))
+        }
+        Text(line, style = MaterialTheme.typography.bodySmall)
+    }
     Text(bytes, style = MaterialTheme.typography.bodySmall)
 }
 

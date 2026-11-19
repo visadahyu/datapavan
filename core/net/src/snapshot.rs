@@ -82,6 +82,10 @@ pub struct AppNow {
     pub tool: bool,
     /// Whether it went through the tool with its destinations left out, in a window.
     pub through_tool: bool,
+    /// Whether it is the user's tool with its own servers left out, as they are while "Log where these apps
+    /// connect" is off (ADR 0046, decision 3, as decided on 2026-11-19), so that the view says why it shows
+    /// none rather than guess it from an empty list.
+    pub servers_hidden: bool,
     /// Its bytes up and down, by window ([`WINDOWS`]), then by column ([`COLUMNS`]).
     pub bytes: [[Ways; COLUMNS]; WINDOWS],
     /// The destinations it reached in a window.
@@ -131,7 +135,11 @@ pub fn encode(snapshot: &Snapshot) -> Vec<u8> {
     for app in &snapshot.apps {
         out.extend_from_slice(&app.uid.unwrap_or(u32::MAX).to_le_bytes());
         out.push(app.now.map_or(4, Placed::code));
-        out.push(u8::from(app.tool) | u8::from(app.through_tool) << 1);
+        out.push(
+            u8::from(app.tool)
+                | u8::from(app.through_tool) << 1
+                | u8::from(app.servers_hidden) << 2,
+        );
         for window in &app.bytes {
             for ways in window {
                 push_ways(&mut out, *ways);
@@ -221,6 +229,7 @@ mod tests {
                 now: Some(Placed::Known(State::Background)),
                 tool: false,
                 through_tool: true,
+                servers_hidden: false,
                 bytes,
                 places: vec![place()],
             }],
@@ -280,6 +289,7 @@ mod tests {
                     now: Some(Placed::Unknown(Unknown::NoApp)),
                     tool: false,
                     through_tool: false,
+                    servers_hidden: false,
                     bytes: [[[0; 2]; COLUMNS]; WINDOWS],
                     places: Vec::new(),
                 },
@@ -288,6 +298,7 @@ mod tests {
                     now: None,
                     tool: true,
                     through_tool: false,
+                    servers_hidden: true,
                     bytes: [[[0; 2]; COLUMNS]; WINDOWS],
                     places: Vec::new(),
                 },
@@ -308,7 +319,11 @@ mod tests {
         let first = 1 + 8 + 1 + 8 + 1 + 8 + 8 + 8 + 4;
         let app = 4 + 1 + 1 + 80 * 8 + 2;
         assert_eq!(out[first..first + 6], [0xff, 0xff, 0xff, 0xff, 0x40, 0]);
-        assert_eq!(out[first + app + 4..first + app + 6], [4, 1]);
+        assert_eq!(
+            out[first + app + 4..first + app + 6],
+            [4, 0b101],
+            "not placed yet; the tool, its servers left out"
+        );
         assert_eq!(out.len(), first + 2 * app);
         // No window while the screen was off: both times 0.
         let none = encode(&Snapshot {
