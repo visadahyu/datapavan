@@ -162,7 +162,9 @@ class SnapshotTest {
         assertEquals(org.visadahyu.datapavan.watch.log.LogRecord.VIA_TUNNEL to 5L, destination.via to destination.tunnel)
         assertEquals(listOf(0L, 9L), snapshot.apps.map { it.throughTunnel })
         assertEquals(0, buffer(fixture).getInt(appTunnel))
-        assertNull("no such route", Snapshot.parse(fixture.copyOf().also { it[route] = 3 }))
+        for (code in listOf(3, 0x80, 0xff)) {
+            assertNull("no such route: $code", Snapshot.parse(fixture.copyOf().also { it[route] = code.toByte() }))
+        }
         assertNull("a tunnel of no number", Snapshot.parse(fixture.copyOf().also { it[route] = 2 }))
         assertNull("a number beside no tunnel", Snapshot.parse(fixture.copyOf().also { buffer(it).putInt(route + 1, 5) }))
     }

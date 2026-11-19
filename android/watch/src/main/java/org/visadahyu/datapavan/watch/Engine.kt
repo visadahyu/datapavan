@@ -110,8 +110,20 @@ internal object Engine {
      */
     external fun nativeTunnelSet(id: Int, text: ByteArray, localNetwork: Boolean): String
 
-    /** Removes the tunnel [id] and the routes to it (W7). */
+    /**
+     * Removes the configuration of the tunnel [id] (W7). The routes to it stay: its apps wait, their flows
+     * refused and never sent directly, until [nativeTunnelRoutes] sends them elsewhere or the configuration is
+     * set again.
+     */
     external fun nativeTunnelRemove(id: Int)
+
+    /**
+     * Reads the WireGuard configuration [text] without setting it, for the import (part 2): `refused WHY`, or
+     * `ok` and a line for each app it names, `only PACKAGE` (`IncludedApplications`) or `except PACKAGE`
+     * (`ExcludedApplications`), which the import offers as the choice of apps for the user to confirm. The
+     * caller zeroes its array after.
+     */
+    external fun nativeTunnelParse(text: ByteArray): String
 
     /**
      * Sends each app of [uids] through the tunnel at the same place in [tunnels], every other app its other way,
@@ -121,10 +133,19 @@ internal object Engine {
     external fun nativeTunnelRoutes(uids: IntArray, tunnels: IntArray, logDestinations: Boolean)
 
     /**
-     * Each tunnel's state, one per line: `id handshake received error not-answering plain-dns connected flows`,
-     * the times in milliseconds ago and `-` for none. No key, no address, no endpoint. Empty when no engine runs.
+     * Each tunnel's state, one per line: `id handshake received error not-answering plain-dns connected flows
+     * configured resolutions`, the times in milliseconds ago and `-` for none; `configured` is 0 for a tunnel apps
+     * are routed to whose configuration is not set, whose apps wait. No key, no address, no endpoint. Empty when
+     * no engine runs.
      */
     external fun nativeTunnelStates(): String
+
+    /**
+     * Debug builds' check (scripts/verify-wireguard.sh): how many of the flows kept went each way, by app, one
+     * per line: `uid route count`, the route `direct`, `tool` or `tunnel:N`, the UID `-` for flows of no app. No
+     * destination.
+     */
+    external fun nativeFlowRoutes(): String
 
     /**
      * Whether the answers of the tunnel's DNS address reach the apps with a time to live of 0, so that

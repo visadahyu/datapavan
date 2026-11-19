@@ -8,4 +8,5 @@
     public boolean protectSocket(int);
     public void logRecords(byte[]);
     public void statesWanted();
+    public java.lang.String resolveEndpoint(java.lang.String);
 }

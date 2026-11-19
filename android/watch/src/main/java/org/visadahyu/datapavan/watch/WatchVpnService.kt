@@ -61,7 +61,8 @@ class WatchVpnService : VpnService() {
     private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
     private val debuggable by lazy { applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 }
 
-    /** The network beneath that [network] follows. */
+    /** The network beneath that [network] follows; read by [resolveEndpoint] on the engine's resolver thread. */
+    @Volatile
     private var current: Network? = null
 
     /**
@@ -636,6 +637,28 @@ class WatchVpnService : VpnService() {
     @Suppress("unused")
     fun protectSocket(fd: Int): Boolean = protect(fd)
 
+    /**
+     * Called by the engine, on a thread of its own, for a WireGuard endpoint's name (W7, the maintainer's answer
+     * 4 of 2026-11-19): asked of Android's own resolver on the network beneath the tunnel, never through the
+     * tunnel, so that the user's Private DNS applies to it. Returns `encrypted` or `plain`, as Android says it
+     * resolves on that network, then the addresses; null where there is no network beneath, and the engine then
+     * asks the network's resolver itself, in plain DNS, and says so. Android's "automatic" mode may fall back
+     * to plain DNS when the server's DNS over TLS fails (ADR 0035).
+     */
+    @Suppress("unused")
+    fun resolveEndpoint(name: String): String? {
+        val network = current ?: return null
+        val encrypted = connectivity.getLinkProperties(network)?.isPrivateDnsActive == true
+        val word = if (encrypted) "encrypted" else "plain"
+        return try {
+            (listOf(word) + network.getAllByName(name).mapNotNull { it.hostAddress }).joinToString(" ")
+        } catch (e: java.net.UnknownHostException) {
+            word
+        } catch (e: SecurityException) {
+            null
+        }
+    }
+
     /** Called by the engine with a batch of finished records for the connection log (ADR 0037). */
     @Suppress("unused")
     fun logRecords(batch: ByteArray) = ConnectionLog.of(this).write(batch)
@@ -840,10 +863,12 @@ class WatchVpnService : VpnService() {
      * Debug builds only, for W7's emulator check (scripts/verify-wireguard.sh): `tunnel-add ID FILE [local]`
      * sets the WireGuard configuration in the file FILE of Watch's private storage (its files directory,
      * which `run-as` writes) as the tunnel ID, "Local network directly" on with `local`, and prints `tunnel-set
-     * ID` or `tunnel-refused ID WHY`; `tunnel-remove ID` removes it; `tunnel-route UID ID` sends the app UID
-     * through the tunnel ID, or its other way with ID 0, and prints `tunnel-routed UID ID`. Then, always, one
-     * `tunnel` line for each tunnel's state, with no key, address or endpoint. The file's bytes are zeroed
-     * once handed over; part 2 brings the import and the Keystore.
+     * ID` and a `tunnel-apps ID only|except PACKAGE` line for each app the configuration names, or `tunnel-refused
+     * ID WHY`; `tunnel-remove ID` removes its configuration, its routes kept, so that its apps wait;
+     * `tunnel-route UID ID` sends the app UID through the tunnel ID, or its other way with ID 0, and prints
+     * `tunnel-routed UID ID`. Then, always, one `tunnel` line for each tunnel's state, with no key, address or
+     * endpoint, and a `flow-route UID ROUTE COUNT` line for each app and way its kept flows went. The file's
+     * bytes are zeroed once handed over; part 2 brings the import and the Keystore.
      */
     private fun debugTunnels(args: List<String>, writer: PrintWriter) {
         fun after(command: String, n: Int) = args.indexOf(command).takeIf { it >= 0 }?.let { args.drop(it + 1).take(n) }
@@ -855,13 +880,20 @@ class WatchVpnService : VpnService() {
                 writer.println("tunnel-refused $id no-file")
                 return@let
             }
-            val why = Engine.nativeTunnelSet(id, text, localNetwork = given.getOrNull(2) == "local")
-            text.fill(0)
-            writer.println(if (why.isEmpty()) "tunnel-set $id" else "tunnel-refused $id $why")
+            try {
+                val why = Engine.nativeTunnelSet(id, text, localNetwork = given.getOrNull(2) == "local")
+                writer.println(if (why.isEmpty()) "tunnel-set $id" else "tunnel-refused $id $why")
+                if (why.isEmpty()) {
+                    Engine.nativeTunnelParse(text).lineSequence().drop(1).filter { it.isNotBlank() }
+                        .forEach { writer.println("tunnel-apps $id $it") }
+                }
+            } finally {
+                text.fill(0)
+            }
         }
         after("tunnel-remove", 1)?.firstOrNull()?.toIntOrNull()?.let { id ->
+            // The routes stay, in the engine and here: the apps wait for the tunnel.
             Engine.nativeTunnelRemove(id)
-            debugRoutes.values.removeAll { it == id }
             writer.println("tunnel-removed $id")
         }
         after("tunnel-route", 2)?.takeIf { it.size == 2 }?.let { (uid, id) ->
@@ -876,6 +908,7 @@ class WatchVpnService : VpnService() {
             writer.println("tunnel-routed $app $tunnel")
         }
         Engine.nativeTunnelStates().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("tunnel $it") }
+        Engine.nativeFlowRoutes().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("flow-route $it") }
     }
 
     /**

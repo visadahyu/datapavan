@@ -111,16 +111,18 @@ class LogTest {
 
     /**
      * A version 3 segment, as debug builds wrote them before W7: the engine's, without the route, which reads as
-     * direct; and version 4's route refused where it says what the engine never writes.
+     * unknown; and version 4's route refused where it says what the engine never writes.
      */
     @Test
-    fun readsAVersion3SegmentAsDirectAndRefusesARouteTheEngineNeverWrites() {
+    fun readsAVersion3SegmentsRouteAsUnknownAndRefusesARouteTheEngineNeverWrites() {
         val (_, engines) = EngineRecords.records[10]
         val version3 = engines.copyOf(engines.size - 5).also { it[0] = 3 }
         val record = LogRecord.parse(version3) as LogRecord.Segment
-        assertEquals(AppState.LATE to LogRecord.VIA_DIRECT, record.state to record.via)
+        assertEquals(AppState.LATE to LogRecord.VIA_UNKNOWN, record.state to record.via)
         val route = engines.size - 5
-        assertNull("no such route", LogRecord.parse(engines.copyOf().also { it[route] = 3 }))
+        for (code in listOf(3, 0x80, 0xff)) {
+            assertNull("no such route: $code", LogRecord.parse(engines.copyOf().also { it[route] = code.toByte() }))
+        }
         assertNull("a tunnel of no number", LogRecord.parse(engines.copyOf().also { it.fill(0, route + 1, route + 5) }))
         assertNull("a number beside no tunnel", LogRecord.parse(engines.copyOf().also { it[route] = 0 }))
         assertEquals(LogRecord.VIA_TOOL, (LogRecord.parse(engines.copyOf().also { it[route] = 1; it.fill(0, route + 1, route + 5) }) as LogRecord.Segment).via)

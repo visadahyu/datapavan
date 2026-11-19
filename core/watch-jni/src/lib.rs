@@ -96,13 +96,14 @@ fn set_tunnels(change: impl FnOnce(&mut TunnelSetting)) {
 }
 
 /// A tunnel's state as `nativeTunnelStates` writes it: `id handshake received error not-answering plain-dns
-/// connected flows`, the times in milliseconds ago and `-` for none. No key, no address, no endpoint.
+/// connected flows configured resolutions`, the times in milliseconds ago and `-` for none; `configured` 0 for a
+/// tunnel apps are routed to whose configuration is not set, whose apps wait. No key, no address, no endpoint.
 fn state_line(state: &TunnelState) -> String {
     let ms = |d: Option<std::time::Duration>| {
         d.map_or_else(|| "-".to_owned(), |d| d.as_millis().to_string())
     };
     format!(
-        "{} {} {} {} {} {} {} {}",
+        "{} {} {} {} {} {} {} {} {} {}",
         state.id,
         ms(state.handshake),
         ms(state.received),
@@ -111,7 +112,48 @@ fn state_line(state: &TunnelState) -> String {
         u8::from(state.plain_dns),
         u8::from(state.connected),
         state.flows,
+        u8::from(state.configured),
+        state.resolutions,
     )
+}
+
+/// What `nativeTunnelParse` says of a configuration: `refused WHY`, or `ok` and then a line for each app it
+/// names, `only PACKAGE` (`IncludedApplications`) or `except PACKAGE` (`ExcludedApplications`).
+fn parse_answer(text: &[u8]) -> String {
+    use datapavan_net::wireguard::config::Applications;
+    match WgConfig::parse(text) {
+        Err(refusal) => format!("refused {refusal}"),
+        Ok(config) => {
+            let mut out = String::from("ok");
+            let (word, names) = match &config.applications {
+                Applications::Unnamed => ("", &Vec::new()),
+                Applications::Only(names) => ("only", names),
+                Applications::Except(names) => ("except", names),
+            };
+            for name in names {
+                out.push('\n');
+                out.push_str(word);
+                out.push(' ');
+                out.push_str(name);
+            }
+            out
+        }
+    }
+}
+
+/// Reads `resolveEndpoint`'s answer: `encrypted` or `plain`, then addresses; addresses that do not read are
+/// left out.
+fn resolution(answer: &str) -> Option<datapavan_net::Resolution> {
+    let mut words = answer.split_whitespace();
+    let encrypted = match words.next()? {
+        "encrypted" => true,
+        "plain" => false,
+        _ => return None,
+    };
+    Some(datapavan_net::Resolution {
+        addresses: words.filter_map(|w| w.parse().ok()).collect(),
+        encrypted,
+    })
 }
 
 /// Keeps whether answers go uncached, where a chain was set to keep it with, and sets it on the engine
@@ -229,6 +271,33 @@ impl Platform for Service {
     /// Watch's Kotlin side tells the apps' states (ADR 0046, decision 1).
     fn tells_states(&self) -> bool {
         true
+    }
+
+    /// `WatchVpnService.resolveEndpoint(name)`: a `WireGuard` endpoint's name asked of Android's own resolver
+    /// on the network beneath the tunnel, which uses the user's Private DNS where it is on. Its answer is
+    /// `encrypted` or `plain`, then the addresses, by spaces; null where Kotlin has no network to ask.
+    fn resolve(&self, name: &str) -> Option<datapavan_net::Resolution> {
+        let answer = self
+            .vm
+            .attach_current_thread(|env| -> Result<Option<String>, Error> {
+                let name = JString::from_str(env, name)?;
+                let answer = env
+                    .call_method(
+                        &self.service,
+                        jni_str!("resolveEndpoint"),
+                        jni_sig!("(Ljava/lang/String;)Ljava/lang/String;"),
+                        &[JValue::Object(&name)],
+                    )?
+                    .l()?;
+                if answer.as_raw().is_null() {
+                    return Ok(None);
+                }
+                let answer = JString::cast_local(env, answer)?;
+                Ok(Some(answer.try_to_string(env)?))
+            })
+            .ok()
+            .flatten()?;
+        resolution(&answer)
     }
 
     /// `WatchVpnService.statesWanted`, which hands a reading to its tracker's own thread when its rules
@@ -565,8 +634,30 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelSet
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
-/// `Engine.nativeTunnelRemove(id)`: removes the tunnel `id`, and the routes to it: its apps go their other way
-/// (W7).
+/// `Engine.nativeTunnelParse(text)`: reads the `WireGuard` configuration `text` without setting it, for the
+/// import: `refused WHY`, or `ok` with the apps `WireGuard`'s app exported with it ([`parse_answer`]), which
+/// the import offers as the choice of apps for the user to confirm (the maintainer's answer 2). The copy here
+/// is zeroed once read.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTunnelParse(text: ByteArray):
+// String`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelParse<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    text: JByteArray<'caller>,
+) -> JString<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let mut bytes = env.convert_byte_array(&text)?;
+            let answer = parse_answer(&bytes);
+            bytes.zeroize();
+            JString::from_str(env, answer)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `Engine.nativeTunnelRemove(id)`: removes the configuration of the tunnel `id` (W7). The apps routed to it
+/// wait, their flows refused and never sent directly, until `nativeTunnelRoutes` sends them elsewhere.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTunnelRemove(id: Int)`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelRemove<'caller>(
@@ -577,10 +668,9 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelRem
     unowned_env
         .with_env(|_env| -> Result<_, Error> {
             if let Ok(id) = u32::try_from(id) {
-                set_tunnels(|tunnels| {
-                    tunnels.tunnels.retain(|t| t.id != id);
-                    tunnels.routes.retain(|_, t| *t != id);
-                });
+                // The routes to it stay: its apps wait, never going directly, until Watch routes them
+                // elsewhere or sets its configuration again (fix round, both reviews' first finding).
+                set_tunnels(|tunnels| tunnels.tunnels.retain(|t| t.id != id));
             }
             Ok(())
         })
@@ -866,6 +956,44 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeClearActi
         .resolve::<ThrowRuntimeExAndDefault>();
 }
 
+/// How many of `flows` went each way, by app: `uid route count` lines, the route `direct`, `tool` or
+/// `tunnel:N`, the UID `-` for flows of no app, in order. No destination.
+fn flow_routes(flows: &[Flow]) -> String {
+    let mut counts = std::collections::BTreeMap::<(Option<u32>, String), usize>::new();
+    for flow in flows {
+        let route = match flow.via {
+            datapavan_net::Via::Direct => "direct".to_owned(),
+            datapavan_net::Via::Tool => "tool".to_owned(),
+            datapavan_net::Via::Tunnel(t) => format!("tunnel:{t}"),
+        };
+        *counts.entry((flow.uid, route)).or_default() += 1;
+    }
+    counts
+        .into_iter()
+        .map(|((uid, route), n)| {
+            let uid = uid.map_or_else(|| "-".to_owned(), |u| u.to_string());
+            format!("{uid} {route} {n}")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// `Engine.nativeFlowRoutes()`: how many of the flows kept went each way, by app ([`flow_routes`]), for
+/// W7's emulator check (scripts/verify-wireguard.sh). Empty when the engine keeps none, as in release builds.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlowRoutes(): String`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlowRoutes<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) -> JString<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let flows = engine().as_ref().map_or_else(Vec::new, Engine::flows);
+            JString::from_str(env, flow_routes(&flows))
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
 /// `Engine.nativeFlows()`: the flows the engine kept, one per line as [`flow_line`] writes it, for debug
 /// builds and the end-to-end test. Empty when the engine keeps none, as in release builds.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlows(): String`.
@@ -1009,6 +1137,19 @@ mod tests {
             flow_line(&organisation),
             "tcp 10.1.10.1:40000 93.184.216.34:443 2000 opened org - - as15169:hosting - Google LLC"
         );
+        // W7's check counts the ways flows went, by app, with no destination.
+        let tunnelled = Flow {
+            via: datapavan_net::Via::Tunnel(3),
+            ..organisation.clone()
+        };
+        let unowned = Flow {
+            uid: None,
+            via: datapavan_net::Via::Tool,
+            ..organisation.clone()
+        };
+        let routes = flow_routes(&[organisation, tunnelled.clone(), tunnelled, unowned]);
+        assert_eq!(routes, "- tool 1\n2000 direct 1\n2000 tunnel:3 2");
+        assert!(!routes.contains("93.184"));
     }
 
     fn a_chain(port: u16) -> Chain {
@@ -1145,12 +1286,21 @@ mod tests {
             .unwrap_or_default();
         assert_eq!(states.iter().map(|s| s.id).collect::<Vec<_>>(), [4]);
         let line = state_line(&states[0]);
-        assert_eq!(line, "4 - - - 0 0 0 0");
+        assert_eq!(line, "4 - - - 0 0 0 0 1 0");
         assert!(!line.contains("192.0.2.1") && !line.contains("yAnz"));
-        set_tunnels(|tunnels| {
-            tunnels.tunnels.retain(|t| t.id != 4);
-            tunnels.routes.retain(|_, t| *t != 4);
-        });
+        // `nativeTunnelRemove`: the configuration goes, the route stays, and the tunnel is shown as one
+        // whose apps wait for it.
+        set_tunnels(|tunnels| tunnels.tunnels.retain(|t| t.id != 4));
+        let states = engine()
+            .as_ref()
+            .map(Engine::tunnel_states)
+            .unwrap_or_default();
+        assert_eq!(
+            states.iter().map(state_line).collect::<Vec<_>>(),
+            ["4 - - - 0 0 0 0 0 0"],
+            "routed, not configured"
+        );
+        set_tunnels(|tunnels| tunnels.routes.retain(|_, t| *t != 4));
         let states = engine()
             .as_ref()
             .map(Engine::tunnel_states)
@@ -1158,6 +1308,46 @@ mod tests {
         assert!(states.is_empty(), "removed from the engine that runs");
         stop_running();
         assert!(setting().is_none(), "nothing of the run kept for the next");
+    }
+
+    /// W7 fix round: the import's reading names the apps a configuration came with, and its refusals; the
+    /// resolver's answer reads both ways, and nothing else.
+    #[test]
+    fn a_configurations_apps_and_the_resolvers_answer_read() {
+        let text = "[Interface]\nPrivateKey = yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=\nAddress = 10.77.0.2/32\n\
+                    DNS = 10.77.0.1\nListenPort = 51820\nFwMark = 0x1234\nIncludedApplications = org.example.one, org.example.two\n\
+                    [Peer]\nPublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\nAllowedIPs = 0.0.0.0/0\n\
+                    Endpoint = 192.0.2.1:51820\n";
+        assert_eq!(
+            parse_answer(text.as_bytes()),
+            "ok\nonly org.example.one\nonly org.example.two"
+        );
+        let except = text.replace("IncludedApplications", "ExcludedApplications");
+        assert_eq!(
+            parse_answer(except.as_bytes()),
+            "ok\nexcept org.example.one\nexcept org.example.two"
+        );
+        let plain = text.replace(
+            "IncludedApplications = org.example.one, org.example.two\n",
+            "",
+        );
+        assert_eq!(parse_answer(plain.as_bytes()), "ok");
+        let both = text.replace(
+            "ListenPort = 51820\n",
+            "ExcludedApplications = org.example.three\n",
+        );
+        let answer = parse_answer(both.as_bytes());
+        assert!(answer.starts_with("refused "), "{answer}");
+        assert!(!answer.contains("yAnz"), "no key in a refusal");
+
+        let read = resolution("encrypted 192.0.2.7 2001:db8::7 nonsense");
+        assert_eq!(
+            read.map(|r| (r.encrypted, r.addresses.len())),
+            Some((true, 2))
+        );
+        assert_eq!(resolution("plain").map(|r| r.encrypted), Some(false));
+        assert!(resolution("maybe 192.0.2.7").is_none());
+        assert!(resolution("").is_none());
     }
 
     /// Unit 12b: a tunnel swapped in while no engine runs is refused, and its descriptor closed, so that

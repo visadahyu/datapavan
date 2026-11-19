@@ -102,7 +102,7 @@ val requiredLibraries = buildMap {
 val forbiddenLibraries = if (advanced) emptyList() else listOf("libdatapavan_watch.so")
 // The methods of WatchVpnService that Watch's library calls back by name (core/watch-jni/src/lib.rs), which
 // R8 must neither remove nor rename (watch/proguard-rules.pro).
-val jniCallbacks = if (advanced) listOf("ownerUid", "protectSocket", "logRecords", "statesWanted") else emptyList()
+val jniCallbacks = if (advanced) listOf("ownerUid", "protectSocket", "logRecords", "statesWanted", "resolveEndpoint") else emptyList()
 
 android {
     namespace = "org.visadahyu.datapavan"

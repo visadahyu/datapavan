@@ -61,8 +61,8 @@ sealed interface LogRecord {
         override val state: Int = AppState.NOT_TOLD,
         /**
          * Its route (version 4, W7): [VIA_DIRECT], [VIA_TOOL] or [VIA_TUNNEL], and for a tunnel its number,
-         * which Watch gave the configuration; records before version 4 went directly or through the tool,
-         * and say [VIA_DIRECT].
+         * which Watch gave the configuration; records before version 4, which went directly or through the
+         * tool, say [VIA_UNKNOWN].
          */
         val via: Int = VIA_DIRECT,
         val tunnel: Long = 0,
@@ -87,6 +87,9 @@ sealed interface LogRecord {
         const val VIA_DIRECT = 0
         const val VIA_TOOL = 1
         const val VIA_TUNNEL = 2
+
+        /** A segment of a version before 4, which kept no route. */
+        const val VIA_UNKNOWN = -1
         private const val UNKNOWN_UID = -1
 
         /**
@@ -144,7 +147,7 @@ sealed interface LogRecord {
                             state = state(b, version),
                         ).let { segment ->
                             if (version < VERSION) {
-                                segment
+                                segment.copy(via = VIA_UNKNOWN)
                             } else {
                                 val via = b.get().toInt() and 0xff
                                 val tunnel = b.int.toLong() and 0xffffffffL
@@ -176,8 +179,9 @@ sealed interface LogRecord {
         private const val VERSION_3: Byte = 3
 
         /**
-         * The record's last byte, its app's state, from version 3; "not told" before. A code the engine never
-         * writes gives -1, and the record is read as malformed.
+         * The app's state, one byte after the segment's counts from version 3 ("not told" before); in a
+         * version-4 segment the route's five bytes follow it. A code the engine never writes gives -1, and the
+         * record is read as malformed.
          */
         private fun state(b: ByteBuffer, version: Byte): Int {
             if (version < VERSION_3) return AppState.NOT_TOLD
