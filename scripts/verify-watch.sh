@@ -488,17 +488,35 @@ if is_emulator; then
             sleep 2
         done
     }
+    # What the emulator's Wi-Fi says of itself, on one line: on or off, and the network it is joined to.
+    wifi_state() {
+        adb shell cmd wifi status 2>/dev/null | tr -d '\r' | grep -E '^Wifi is (enabled|disabled|connected|not connected)' |
+            paste -sd ';' || true
+    }
     # The emulator's Wi-Fi did not come up before Watch started once (CI, 2026-11-14), and did not come back
-    # after the switch turned it on again twice (CI, 2026-11-16 and 2026-11-18): Android listed mobile data
-    # and no Wi-Fi, and the next attempt passed. So before either check fails, Wi-Fi is turned off and on once
-    # more, waited for again within the same bound, and the run says so (docs/ci-flakes.md). Only when Wi-Fi
-    # is not up: networks that are up and still changing are waited for, not toggled.
+    # after the switch turned it on again three times (CI, 2026-11-16, 2026-11-18 and 2026-11-19): Android
+    # listed mobile data and no Wi-Fi, and the next attempt passed. So before either check fails, Wi-Fi is
+    # brought back, waited for again within the same bound, and the run says so (docs/ci-flakes.md). Only when
+    # Wi-Fi is not up: networks that are up and still changing are waited for, not toggled. Turning Wi-Fi off
+    # and on alone did not bring it back on 2026-11-19; on the emulator, Wi-Fi on but joined to no network
+    # stays so through that, and comes back within seconds when told to join the emulator's own open access
+    # point, AndroidWifi, by name (`cmd wifi connect-network`, Android 11 and later). So it joins that network
+    # first, and only if Wi-Fi is still not up 20 s later turns it off and on and joins once more.
     wifi_again() {
         up WIFI && return 0
-        echo "  no Wi-Fi after $1 s ($(networks)): turning the emulator's Wi-Fi off and on once more"
+        echo "  no Wi-Fi after $1 s ($(networks); $(wifi_state)): joining the emulator's own Wi-Fi network"
+        adb shell cmd wifi set-wifi-enabled enabled >/dev/null 2>&1 || adb shell svc wifi enable
+        adb shell cmd wifi connect-network AndroidWifi open >/dev/null 2>&1 || true
+        for _ in $(seq 1 10); do
+            up WIFI && return 0
+            sleep 2
+        done
+        echo "  still no Wi-Fi ($(networks); $(wifi_state)): turning it off and on, and joining once more"
         adb shell svc wifi disable
         sleep 2
         adb shell svc wifi enable
+        sleep 3
+        adb shell cmd wifi connect-network AndroidWifi open >/dev/null 2>&1 || true
     }
     # Mobile data stays up beside Wi-Fi, as on most phones, so that the switch has a network to go to: on
     # CI, mobile data brought up only after Wi-Fi went off was not there 40 s later ("Active default
@@ -524,7 +542,7 @@ if is_emulator; then
     if ! wait_up 90 wifi; then
         wifi_again 90
         wait_up 90 wifi ||
-            fail "the emulator did not have both Wi-Fi and mobile data before Watch started ($(networks)), even after airplane mode and turning Wi-Fi off and on once more, so the network switch would have nowhere to go; this is the emulator, not Watch"
+            fail "the emulator did not have both Wi-Fi and mobile data before Watch started ($(networks); $(wifi_state)), even after airplane mode and Wi-Fi told to join its network, so the network switch would have nowhere to go; this is the emulator, not Watch"
     fi
     wait_settled 60 ||
         fail "the emulator's networks kept changing for 60 s before Watch started ($(networks)); this is the emulator, not Watch"
@@ -876,7 +894,7 @@ if is_emulator; then
     if ! wait_settled 90; then
         wifi_again 90
         wait_settled 90 ||
-            fail "Wi-Fi did not come back, or the networks did not settle, within 90 s, nor in 90 s more after Wi-Fi was turned off and on once more ($(networks)); this is the emulator, not Watch"
+            fail "Wi-Fi did not come back, or the networks did not settle, within 90 s, nor in 90 s more after Wi-Fi was told to join its network and turned off and on ($(networks); $(wifi_state)); this is the emulator, not Watch"
     fi
 else
     echo "skipped: the network switch, on a phone"

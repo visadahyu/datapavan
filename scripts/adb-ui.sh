@@ -8,6 +8,14 @@ is_emulator() {
     [ "$(adb shell getprop ro.boot.qemu | tr -d '\r')" = 1 ] || [ "$(adb shell getprop ro.kernel.qemu | tr -d '\r')" = 1 ]
 }
 
+# Waits up to $1 seconds for the device to answer adb again after it dropped off ("adb: device offline", CI,
+# 2026-11-19, docs/ci-flakes.md), and says how long it has been up, so that a run tells a dropped connection
+# from a restart of the emulator.
+device_back() {
+    timeout "$1" adb wait-for-device >/dev/null 2>&1 || return 1
+    echo "  the device answers again; up $(adb shell cat /proc/uptime 2>/dev/null | cut -d' ' -f1 | cut -d. -f1) s"
+}
+
 # Runs the command after $1 until it succeeds, once a second for up to $1 seconds, and fails if it never
 # does: a check reads a state only once it has had time to arrive, instead of after a fixed sleep. The
 # caller's failure message names what was waited for. Only for what must become true: a check that

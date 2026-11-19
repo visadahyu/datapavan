@@ -339,8 +339,14 @@ print(apps, total)')"
 echo "ok: the window while the screen was off holds the app's bytes in the background, and \"Now\" says so"
 
 # The audit's page of an app opens "Now" for that app alone (ADR 0046, decision 2 (d); Advanced only).
-# The audit's screen in the package's main process; Watch's process, and its tunnel, run on.
-adb shell am start -n "$PKG/org.visadahyu.datapavan.MainActivity" >/dev/null
+# The audit's screen in the package's main process; Watch's process, and its tunnel, run on. On CI the emulator
+# once stopped answering adb here, 30 s into this start, after every check above had passed (2026-11-19,
+# docs/ci-flakes.md): the start is waited for and made once more, and the run says whether the emulator restarted.
+if ! adb shell am start -n "$PKG/org.visadahyu.datapavan.MainActivity" >/dev/null; then
+    echo "  the audit's start got no answer from the emulator: waiting for it"
+    device_back 90 || fail "the emulator stopped answering adb when the audit started; this is the emulator, not Watch"
+    adb shell am start -n "$PKG/org.visadahyu.datapavan.MainActivity" >/dev/null || fail "the audit could not be started"
+fi
 within 60 has_id nav-summary || fail "the audit did not start"
 open_tab apps || fail "no list of apps in the audit"
 within 60 has_id app-row || fail "no app in the audit's list"
