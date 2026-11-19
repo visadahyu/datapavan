@@ -237,6 +237,8 @@ fn atoms(host: &str) -> Option<Vec<Atom>> {
                 c @ ('.' | '-') => Atom::Char(c),
                 _ => return None,
             },
+            // A run is read only where the subset has one: `*`, `+`, `?` and `{` anywhere else are refused below,
+            // as characters outside it.
             '.' if chars.peek() == Some(&'*') => {
                 chars.next();
                 Atom::AnyRun
@@ -254,10 +256,6 @@ fn atoms(host: &str) -> Option<Vec<Atom>> {
             }
             _ => return None,
         };
-        // A run is read only where the subset has one; `+`, `?` and `{` are refused as characters.
-        if chars.peek() == Some(&'*') {
-            return None;
-        }
         atoms.push(atom);
     }
     Some(atoms)
