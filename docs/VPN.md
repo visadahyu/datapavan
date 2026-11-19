@@ -85,7 +85,7 @@ Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED
 
 - **Battery:** one engine thread, event-driven, no busy loops, batched reads. Target: ≤ 3 % extra battery per day, measured on the Galaxy A40.
 - **Memory safety:** if the Rust stack is chosen (ADR 0012), every parser (IP, TCP, UDP, DNS, TLS, QUIC) lives in `datapavan-engine`, where `unsafe` is forbidden, and is fuzzed with `cargo fuzz`. With gVisor, the Go stack handles IP and TCP, and the higher-level parsers (DNS, TLS, QUIC) stay in Rust.
-- **Size:** target: the engine adds less than 1 MB per ABI. To be measured in the spike; the M1 bridge alone is about 340 KB on arm64, mostly the Rust standard library.
+- **Size:** Watch's native library, stripped as Advanced's release APK ships it, stays within 2 MB per ABI, held by a gate in `scripts/check.sh android` (the maintainer, 2026-11-19, after W7's spike: [ADR 0035](decisions/0035-wireguard-upstream.md), question 3). The earlier target, less than 1 MB, was set before the engine was built; nothing held it, and the library grew to 1.38 MB on arm64 (1.22 on armv7, 1.59 on x86_64) before WireGuard. WireGuard's core adds about 0.13 to 0.21 MB.
 - **Samsung and other OEM battery managers:** a health check in the app, plus per-vendor onboarding guides.
 
 ## The spike

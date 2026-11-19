@@ -158,6 +158,18 @@ rust_gates() {
     cargo deny --locked check
 }
 
+# Fails when the library $2 in the APK $1 is missing for one of the app's ABIs or larger than $3 bytes in it.
+native_budget() {
+    local apk=$1 lib=$2 budget=$3 abi size listing
+    listing=$(unzip -l "$apk")
+    for abi in arm64-v8a armeabi-v7a x86_64; do
+        size=$(awk -v path="lib/$abi/$lib" '$4 == path {print $1}' <<<"$listing")
+        [ -n "$size" ] || { echo "$apk has no lib/$abi/$lib" >&2; exit 1; }
+        echo "  $abi: $size bytes"
+        [ "$size" -le "$budget" ] || { echo "lib/$abi/$lib is $size bytes, over its budget of $budget" >&2; exit 1; }
+    done
+}
+
 android_gates() {
     echo "== Android: plain English strings (scripts/plain-language.py)"
     python3 -I "$ROOT/scripts/plain-language.py" "$ROOT/android/app/src/main/res/values/strings.xml"
@@ -185,6 +197,12 @@ android_gates() {
     echo "== Android: no release APK or bundle holds a class or a package of the lab (ADR 0048)"
     local out
     out="$ROOT/android/app"
+    # Watch's native library, as Advanced's release APK ships it (stripped), stays within its budget per ABI:
+    # 2 MB, set by the maintainer on 2026-11-19 after W7's spike measured 1.22 to 1.59 MB today and about 1.35 to
+    # 1.80 with WireGuard's core (ADR 0035, question 3; VPN.md). Nothing held the earlier target of 1 MB, and the
+    # library grew past it unnoticed.
+    echo "== Android: Watch's native library within 2 MB per ABI (ADR 0035)"
+    native_budget "$out/build-advanced/outputs/apk/release/app-release-unsigned.apk" libdatapavan_watch.so 2097152
     lab_class_check "$ROOT/android" \
         "$out/build/outputs/apk/release/app-release-unsigned.apk" "$out/build/outputs/bundle/release/app-release.aab" \
         "$out/build/outputs/mapping/release/mapping.txt" \
