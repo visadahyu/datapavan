@@ -51,8 +51,11 @@ class UsageStates(
     /** One interval of an app's state that is not the background: [States.IN_USE] or [States.NOTIFICATION]. */
     data class Interval(val uid: Int, val from: Long, val until: Long, val state: Int)
 
-    /** The screen at the end of a reading: on, off or not known, and when it last came on, if known. */
-    data class Screen(val on: Boolean?, val since: Long?)
+    /**
+     * The screen at the end of a reading: on, off or not known, when it last came on, and when it last went
+     * off, the start of the window "while the screen was off" (W5's third part), each if known.
+     */
+    data class Screen(val on: Boolean?, val since: Long?, val offSince: Long? = null)
 
     /** What a reading tells the engine: the states over a span of the wall clock. */
     data class Reading(val from: Long, val until: Long, val intervals: List<Interval>, val screen: Screen)
@@ -66,6 +69,8 @@ class UsageStates(
         val services: Map<Pair<String, String?>, Long>,
         val screenOn: Boolean?,
         val screenOnSince: Long?,
+        /** When the screen last went off, if an event said so. */
+        val screenOffSince: Long?,
         /** Whether the lock screen is shown, and since when. */
         val keyguard: Boolean,
         val keyguardSince: Long,
@@ -152,7 +157,7 @@ class UsageStates(
         val start = base ?: carried ?: Base(
             time = startTime,
             activities = emptyMap(), services = emptyMap(),
-            screenOn = firstScreen()?.let { it != Kind.SCREEN_ON } ?: screenNow, screenOnSince = null,
+            screenOn = firstScreen()?.let { it != Kind.SCREEN_ON } ?: screenNow, screenOnSince = null, screenOffSince = null,
             keyguard = false, keyguardSince = Long.MIN_VALUE, lastInUse = emptyMap(),
         )
         // From the overlap with the last reading, or the end of what was told before, or the start.
@@ -171,7 +176,7 @@ class UsageStates(
         pending.removeAll { it.time < next.time }
         base = next
         toldUntil = until
-        return Reading(from, until, intervals, Screen(run.screenOn, run.screenOnSince))
+        return Reading(from, until, intervals, Screen(run.screenOn, run.screenOnSince, run.screenOffSince))
     }
 
     /**
@@ -251,6 +256,7 @@ class UsageStates(
             },
             services = open.services.mapValues { moved(it.value) },
             screenOnSince = open.screenOnSince?.let(moved),
+            screenOffSince = open.screenOffSince?.let(moved),
             keyguardSince = moved(open.keyguardSince),
             lastInUse = open.lastInUse.mapValues { moved(it.value) },
         )
@@ -269,6 +275,7 @@ class UsageStates(
         private val services = start.services.toMutableMap()
         var screenOn = start.screenOn
         var screenOnSince = start.screenOnSince
+        var screenOffSince = start.screenOffSince
         private var keyguard = start.keyguard
         private var keyguardSince = start.keyguardSince
         private val lastInUse = start.lastInUse.toMutableMap()
@@ -367,6 +374,7 @@ class UsageStates(
                 }
                 Kind.SCREEN_OFF -> {
                     screenOn = false
+                    screenOffSince = event.time
                     // Android stops every screen shown when the screen turns off and resumes it after, so a
                     // screen kept through another instance's stop that is still shown comes back resumed.
                     activities.entries.removeAll { it.value.keptAt != null }
@@ -394,7 +402,7 @@ class UsageStates(
             val inUse = lastInUse.filterValues { it + grace > time }
             // A pause not followed by a resume yet is kept for as long as a reading reads again.
             val kept = activities.filterValues { it.resumedAt != null || it.at >= time - LATE_MS }
-            return Base(time, kept, services.toMap(), screenOn, screenOnSince, keyguard, keyguardSince, inUse)
+            return Base(time, kept, services.toMap(), screenOn, screenOnSince, screenOffSince, keyguard, keyguardSince, inUse)
         }
 
         /**

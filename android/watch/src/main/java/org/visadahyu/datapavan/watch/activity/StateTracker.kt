@@ -74,12 +74,16 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
     @Volatile
     private var lastWall: Long? = null
 
-    /** The screen, by the broadcasts: on or off, and when it last came on. */
+    /** The screen, by the broadcasts: on or off, and when it last came on and went off. */
     @Volatile
     private var screenOn = context.getSystemService(PowerManager::class.java).isInteractive
 
     @Volatile
     private var screenOnSince: Long? = null
+
+    /** When the screen last went off, by the broadcasts. */
+    @Volatile
+    private var screenOffSince: Long? = null
 
     /** Each package's UID, read again each reading, the worker's own: a package no longer installed has none. */
     /**
@@ -132,6 +136,7 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
                 }
                 Intent.ACTION_SCREEN_OFF -> {
                     screenOn = false
+                    screenOffSince = System.currentTimeMillis()
                     readIn(ReadingRules.screenOffWait(SystemClock.elapsedRealtime(), lastRead))
                 }
                 Intent.ACTION_TIME_CHANGED -> post(force = true)
@@ -247,7 +252,12 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
                 notifies = notifying.forReading(), screenNow = screenOn,
             )
             known = States.KNOWN
-            val screen = if (reading.screen.on == null) UsageStates.Screen(screenOn, screenOnSince) else reading.screen
+            val screen = if (reading.screen.on == null) {
+                UsageStates.Screen(screenOn, screenOnSince, screenOffSince)
+            } else {
+                // A change the events have not shown yet keeps the broadcasts' time it went off.
+                reading.screen.copy(offSince = reading.screen.offSince ?: screenOffSince)
+            }
             States.encode(reading.copy(screen = screen))
         }
         if (tell(message)) {
@@ -263,7 +273,7 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
     private fun nothing(until: Long, why: Int): ByteArray {
         known = why
         val (from, to) = core.nothing(until, startedAt)
-        return States.encode(from, to, why, UsageStates.Screen(screenOn, screenOnSince), emptyList())
+        return States.encode(from, to, why, UsageStates.Screen(screenOn, screenOnSince, screenOffSince), emptyList())
     }
 
     /**

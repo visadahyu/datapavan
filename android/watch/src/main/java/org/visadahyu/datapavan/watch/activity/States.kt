@@ -5,15 +5,16 @@ import java.nio.ByteOrder
 
 /**
  * A reading of the apps' states as Watch hands it to the engine ([org.visadahyu.datapavan.watch.Engine.nativeStates];
- * core/net/src/states.rs, version 1, little-endian): version, the span's start and end in milliseconds
+ * core/net/src/states.rs, version 2, little-endian): version, the span's start and end in milliseconds
  * since 1970, what is known over it ([KNOWN], [NO_ACCESS], [LOCKED]), the screen at its end (0 off, 1 on,
- * 2 not known) and when it last came on (0 not known, and always 0 for a screen not on, which the engine
- * refuses otherwise), then the count of intervals and each: UID, start,
+ * 2 not known), when it last came on (0 not known, and always 0 for a screen not on, which the engine
+ * refuses otherwise) and when it last went off (0 not known, and always 0 for a screen not known or, for
+ * one on, after it came on, which the engine refuses too), then the count of intervals and each: UID, start,
  * end, state ([IN_USE], [NOTIFICATION]). An app with no interval in a known span was in the background
  * throughout. UIDs, times and states only: nothing names a destination.
  */
 object States {
-    const val VERSION: Byte = 1
+    const val VERSION: Byte = 2
 
     const val IN_USE = 1
     const val NOTIFICATION = 2
@@ -22,7 +23,7 @@ object States {
     const val NO_ACCESS = 1
     const val LOCKED = 2
 
-    private const val HEAD = 1 + 8 + 8 + 1 + 1 + 8 + 4
+    private const val HEAD = 1 + 8 + 8 + 1 + 1 + 8 + 8 + 4
     private const val INTERVAL = 4 + 8 + 8 + 1
 
     /** A reading in its stored form. */
@@ -37,11 +38,20 @@ object States {
                 }.toByte(),
             )
             .putLong(if (screen.on == true) screen.since ?: 0 else 0)
+            .putLong(offSince(screen) ?: 0)
             .putInt(intervals.size)
         for (interval in intervals) {
             out.putInt(interval.uid).putLong(interval.from).putLong(interval.until).put(interval.state.toByte())
         }
         return out.array()
+    }
+
+    /**
+     * When the screen went off, as the engine takes it: for a screen whose state is known, and for one on,
+     * not after it came on (as events within one millisecond could have it).
+     */
+    internal fun offSince(screen: UsageStates.Screen): Long? = screen.offSince?.takeIf {
+        screen.on == false || (screen.on == true && it <= (screen.since ?: Long.MAX_VALUE))
     }
 
     /** A reading that knows the states: its intervals. */

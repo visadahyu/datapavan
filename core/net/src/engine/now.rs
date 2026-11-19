@@ -1520,6 +1520,7 @@ mod tests {
             until: T + 3_000,
             known: Known::States,
             screen: crate::states::Screen::On(Some(T + 1_000)),
+            screen_off: None,
             intervals: vec![
                 Interval {
                     uid: UID,
@@ -1540,6 +1541,7 @@ mod tests {
             until: T + 3_000,
             known: Known::NoAccess,
             screen: crate::states::Screen::Off,
+            screen_off: None,
             intervals: Vec::new(),
         });
         let snapshot = shared.now_view(T + 4_000);

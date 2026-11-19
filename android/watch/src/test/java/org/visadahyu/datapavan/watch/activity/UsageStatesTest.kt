@@ -123,7 +123,8 @@ class UsageStatesTest {
             listOf(inUse(A, at(10), at(100) + grace), inUse(A, at(300), at(600)), inUse(B, at(210), at(220) + grace)),
             reading.intervals,
         )
-        assertEquals(UsageStates.Screen(true, at(200)), reading.screen)
+        // When it went off is told too, for the window "while the screen was off" (W5's third part).
+        assertEquals(UsageStates.Screen(true, at(200), at(100)), reading.screen)
     }
 
     /** An activity resumed in the moment the lock screen shows is over it. */
@@ -141,7 +142,7 @@ class UsageStatesTest {
             keyboard = KEYBOARD,
         )
         assertEquals(listOf(inUse(KEYBOARD, t, at(100)), inUse(KEYBOARD, at(200), at(600))), reading.intervals)
-        assertEquals(UsageStates.Screen(true, at(200)), reading.screen)
+        assertEquals(UsageStates.Screen(true, at(200), at(100)), reading.screen)
     }
 
     /** `DEVICE_SHUTDOWN` and `DEVICE_STARTUP` end every open interval: none carries across a restart of the phone. */

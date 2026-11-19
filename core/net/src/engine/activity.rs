@@ -1106,6 +1106,7 @@ pub(super) mod tests {
             until,
             known: Known::States,
             screen: Screen::On(Some(from)),
+            screen_off: None,
             intervals: intervals
                 .iter()
                 .map(|&(from, until, state)| Interval {

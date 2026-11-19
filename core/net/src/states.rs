@@ -1,24 +1,28 @@
 //! What Watch's Kotlin side tells the engine of the apps' states (ADR 0046, decision 1): one reading of
-//! Android's usage events, as the states each app had over a span of the wall clock. Version 1,
+//! Android's usage events, as the states each app had over a span of the wall clock. Version 2,
 //! little-endian:
 //!
-//! - version (1), the span's start and end in milliseconds since 1970 (UTC), what is known over it (0:
+//! - version (2), the span's start and end in milliseconds since 1970 (UTC), what is known over it (0:
 //!   the states below; 1: nothing, Watch has no usage access; 2: nothing, Android gave no events, as
-//!   before the first unlock after a restart), the screen at the span's end (0 off, 1 on, 2 not known)
-//!   and when it last came on (0 for not known, and always 0 for a screen not on), then a count (u32) of
-//!   intervals, each an app's UID (u32), its start and end, and its state in it (1 in use, 2 with its
-//!   notification). An app with no interval in a known span was in the background throughout it;
-//!   intervals of one app may overlap, and "in use" wins where they do.
+//!   before the first unlock after a restart), the screen at the span's end (0 off, 1 on, 2 not known),
+//!   when it last came on (0 for not known, and always 0 for a screen not on) and when it last went off
+//!   (0 for not known, always 0 for a screen not known, and for a screen on never after it came on), then
+//!   a count (u32) of intervals, each an app's UID (u32), its start and end, and its state in it (1 in
+//!   use, 2 with its notification). An app with no interval in a known span was in the background
+//!   throughout it; intervals of one app may overlap, and "in use" wins where they do.
+//!
+//! Version 2 (W5's third part) added when the screen last went off, for the window "while the screen was
+//! off" ([`crate::snapshot`]). Both sides ship in one build, so version 1 is refused.
 //!
 //! Nothing in it names a destination: UIDs, times and states only. The engine reads it with [`read`],
 //! which takes any bytes and refuses what is not exactly one message of this version.
 
 /// The version of the message.
-pub const VERSION: u8 = 1;
+pub const VERSION: u8 = 2;
 
-/// The fixed part of a message: version, start, end, what is known, the screen, when it came on, the
-/// count of intervals.
-const HEAD: usize = 1 + 8 + 8 + 1 + 1 + 8 + 4;
+/// The fixed part of a message: version, start, end, what is known, the screen, when it came on, when it
+/// went off, the count of intervals.
+const HEAD: usize = 1 + 8 + 8 + 1 + 1 + 8 + 8 + 4;
 
 /// One interval: UID, start, end, state.
 const INTERVAL: usize = 4 + 8 + 8 + 1;
@@ -119,6 +123,13 @@ impl Placed {
     pub fn column(self) -> usize {
         usize::from(self.code() & 0x0f)
     }
+
+    /// Why it has no state, as the live view counts it apart: 0 no usage access, 1 no events, 2 told too
+    /// late, 3 no app, 4 not told; `None` for a state.
+    #[must_use]
+    pub fn reason(self) -> Option<usize> {
+        usize::from(self.code() >> 4).checked_sub(1)
+    }
 }
 
 /// What a reading knows over its span.
@@ -167,13 +178,17 @@ pub struct Told {
     pub known: Known,
     /// The screen at its end.
     pub screen: Screen,
+    /// When the screen last went off, in milliseconds since 1970, if known: the start of the window "while
+    /// the screen was off". For a screen on, never after it came on.
+    pub screen_off: Option<u64>,
     /// The apps' intervals in use and with their notification, within the span.
     pub intervals: Vec<Interval>,
 }
 
 /// Reads one message: `None` for anything that is not exactly one of this version, a span that ends
-/// before it starts, an unknown code, an interval outside the span or empty, or intervals with a span
-/// that knows nothing.
+/// before it starts, an unknown code, a time the screen came on for a screen not on, a time it went off
+/// for a screen not known or after it came on, an interval outside the span or empty, or intervals with
+/// a span that knows nothing.
 #[must_use]
 pub fn read(bytes: &[u8]) -> Option<Told> {
     let head = bytes.get(..HEAD)?;
@@ -196,7 +211,15 @@ pub fn read(bytes: &[u8]) -> Option<Told> {
         (2, 0) => Screen::Unknown,
         _ => return None,
     };
-    let count = usize::try_from(u32::from_le_bytes(head[27..31].try_into().ok()?)).ok()?;
+    // When it went off, for a screen whose state is known, and for one on, not after it came on.
+    let off = u64_at(head, 27)?;
+    let screen_off = match (screen, off) {
+        (_, 0) => None,
+        (Screen::Unknown, _) => return None,
+        (Screen::On(Some(on)), off) if off > on => return None,
+        (_, off) => Some(off),
+    };
+    let count = usize::try_from(u32::from_le_bytes(head[35..39].try_into().ok()?)).ok()?;
     let rest = &bytes[HEAD..];
     if from > until || rest.len() != count.checked_mul(INTERVAL)? {
         return None;
@@ -226,6 +249,7 @@ pub fn read(bytes: &[u8]) -> Option<Told> {
         until,
         known,
         screen,
+        screen_off,
         intervals,
     })
 }
@@ -250,6 +274,7 @@ pub fn write(told: &Told) -> Vec<u8> {
     };
     out.push(screen);
     out.extend_from_slice(&since.to_le_bytes());
+    out.extend_from_slice(&told.screen_off.unwrap_or(0).to_le_bytes());
     out.extend_from_slice(
         &u32::try_from(told.intervals.len())
             .unwrap_or(u32::MAX)
@@ -282,6 +307,7 @@ mod tests {
             until: 61_000,
             known: Known::States,
             screen: Screen::On(Some(500)),
+            screen_off: Some(400),
             intervals: vec![
                 Interval {
                     uid: 10_123,
@@ -304,8 +330,19 @@ mod tests {
         let message = write(&told());
         assert_eq!(message.len(), HEAD + 2 * INTERVAL);
         assert_eq!(read(&message), Some(told()));
-        for screen in [Screen::Off, Screen::On(None), Screen::Unknown] {
-            let other = Told { screen, ..told() };
+        for (screen, screen_off) in [
+            (Screen::Off, Some(900)),
+            (Screen::Off, None),
+            (Screen::On(None), Some(900)),
+            (Screen::On(Some(500)), Some(500)),
+            (Screen::On(Some(500)), None),
+            (Screen::Unknown, None),
+        ] {
+            let other = Told {
+                screen,
+                screen_off,
+                ..told()
+            };
             assert_eq!(read(&write(&other)), Some(other));
         }
         // A span with no length, as a reading that tells nothing new, is one too.
@@ -329,11 +366,12 @@ mod tests {
     #[test]
     fn a_message_is_laid_out_field_by_field() {
         let message = write(&told());
-        let mut expected = vec![1];
+        let mut expected = vec![2];
         expected.extend_from_slice(&1_000u64.to_le_bytes());
         expected.extend_from_slice(&61_000u64.to_le_bytes());
         expected.extend_from_slice(&[0, 1]);
         expected.extend_from_slice(&500u64.to_le_bytes());
+        expected.extend_from_slice(&400u64.to_le_bytes());
         expected.extend_from_slice(&2u32.to_le_bytes());
         expected.extend_from_slice(&10_123u32.to_le_bytes());
         expected.extend_from_slice(&1_000u64.to_le_bytes());
@@ -350,6 +388,7 @@ mod tests {
     #[test]
     fn what_is_not_one_message_is_refused() {
         let good = write(&told());
+        let bad = |told: Told| assert_eq!(read(&write(&told)), None, "{told:?}");
         // Cut anywhere, or one byte too many.
         for end in 0..good.len() {
             assert_eq!(read(&good[..end]), None, "cut at {end}");
@@ -361,14 +400,31 @@ mod tests {
         for screen in [0, 2] {
             let mut bad = write(&Told {
                 screen: Screen::Off,
+                screen_off: None,
                 ..told()
             });
             bad[18] = screen;
             bad[19] = 1;
             assert_eq!(read(&bad), None, "screen {screen} with a time it came on");
         }
-        // Another version, an unknown kind or screen, an unknown state.
-        for (at, value) in [(0, 2), (17, 3), (18, 3), (31 + 20, 0), (31 + 20, 3)] {
+        // When it went off, told for a screen not known, or after a screen on came on.
+        let mut unknown = write(&Told {
+            screen: Screen::Unknown,
+            screen_off: None,
+            ..told()
+        });
+        unknown[27] = 1;
+        assert_eq!(
+            read(&unknown),
+            None,
+            "a screen not known with a time it went off"
+        );
+        bad(Told {
+            screen_off: Some(501),
+            ..told()
+        });
+        // Another version (the first included), an unknown kind or screen, an unknown state.
+        for (at, value) in [(0, 1), (0, 3), (17, 3), (18, 3), (39 + 20, 0), (39 + 20, 3)] {
             let mut bad = good.clone();
             bad[at] = value;
             assert_eq!(read(&bad), None, "byte {at} = {value}");
@@ -376,11 +432,10 @@ mod tests {
         // A count that says more or fewer intervals than there are, or more than memory holds.
         for count in [1u32, 3, u32::MAX] {
             let mut bad = good.clone();
-            bad[27..31].copy_from_slice(&count.to_le_bytes());
+            bad[35..39].copy_from_slice(&count.to_le_bytes());
             assert_eq!(read(&bad), None, "count {count}");
         }
         // A span that ends before it starts; an interval empty, backwards or outside the span.
-        let bad = |told: Told| assert_eq!(read(&write(&told)), None, "{told:?}");
         bad(Told {
             from: 61_001,
             ..told()
@@ -434,6 +489,7 @@ mod tests {
                     until: t + 60_000,
                     known: Known::States,
                     screen: Screen::On(Some(t - 5_000)),
+                    screen_off: Some(t - 65_000),
                     intervals: vec![
                         Interval {
                             uid: 10_123,
@@ -454,6 +510,7 @@ mod tests {
                     until: t + 120_000,
                     known: Known::NoAccess,
                     screen: Screen::Off,
+                    screen_off: Some(t + 61_000),
                     intervals: Vec::new(),
                 }),
                 Some(Told {
@@ -461,6 +518,7 @@ mod tests {
                     until: t + 180_000,
                     known: Known::Locked,
                     screen: Screen::Unknown,
+                    screen_off: None,
                     intervals: Vec::new(),
                 }),
             ]
@@ -479,6 +537,18 @@ mod tests {
         assert_eq!(Placed::Unknown(Unknown::NoApp).code(), 0x40);
         assert_eq!(Placed::Unknown(Unknown::NotTold).code(), 0x50);
         assert_eq!(Placed::Unknown(Unknown::NotTold).column(), 0);
+        let reasons = [
+            Unknown::NoAccess,
+            Unknown::Locked,
+            Unknown::Late,
+            Unknown::NoApp,
+            Unknown::NotTold,
+        ]
+        .map(|why| Placed::Unknown(why).reason());
+        assert_eq!(reasons, [0, 1, 2, 3, 4].map(Some));
+        for state in [State::InUse, State::Notification, State::Background] {
+            assert_eq!(Placed::Known(state).reason(), None);
+        }
         for code in 0..=u8::MAX {
             assert_eq!(
                 Placed::from_code(code).map(Placed::code),

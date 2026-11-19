@@ -150,6 +150,7 @@ impl Truth {
             until,
             known: Known::States,
             screen: Screen::On(Some(T)),
+            screen_off: None,
             intervals,
         }
     }
