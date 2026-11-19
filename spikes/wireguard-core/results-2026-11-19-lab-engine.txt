@@ -1,0 +1,19 @@
+# W7, part 1: scripts/check.sh wglab on the development machine, 2026-11-19: the engine's WireGuard tunnels
+# (core/net/tests/wglab.rs) against two peers of the Linux kernel's WireGuard in datapavan-wglab.
+== peers: kernel WireGuard in datapavan-wglab, wireguard-tools-wg-1.0.20260223-r0
+PASS preshared-key: the session holds with the peer's preshared key, both versions
+PASS tcp-IPv4: the peer's web server answered the configuration's address 10.77.0.2
+PASS udp-IPv4: echoed, and the peer saw 10.77.0.2 40020 wglab-peer1
+PASS icmp-IPv4: the kernel's echo reply came back
+PASS dns-IPv4: Watch's DNS address answered from the configuration's server, TTL 0
+PASS tcp-IPv6: the peer's web server answered the configuration's address fd77::2
+PASS udp-IPv6: echoed, and the peer saw fd77::2 40021 wglab-peer1
+PASS icmp-IPv6: the kernel's echo reply came back
+PASS dns-IPv6: Watch's DNS address answered from the configuration's server, TTL 0
+PASS outside-allowed-ips: both reflected answers dropped and counted
+PASS two-tunnels: the first app reached peer1 as 10.77.0.2, the second peer2 as 10.77.0.4 and fd77::4
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.02s
+PASS peer-saw-handshake-plain: peer has a completed handshake with the engine's client
+PASS peer-saw-handshake-preshared-key: peer has a completed handshake with the engine's client
+PASS peer-saw-handshake-second-tunnel: peer2 has a completed handshake with the engine's client
+== all WireGuard lab checks passed

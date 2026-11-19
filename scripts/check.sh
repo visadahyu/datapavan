@@ -10,6 +10,9 @@
 #                             tools, the fixture's missing INTERNET permission, the tools' unit tests, the
 #                             README's tables against results.csv, and the published runs' privacy; seconds,
 #                             so CI runs it on every push too
+#   scripts/check.sh wglab    W7's interoperation lab: the engine's WireGuard tunnels against two peers of the
+#                             Linux kernel's WireGuard in the Compose project datapavan-wglab (scripts/wglab.sh);
+#                             needs Docker and the wireguard module; about a minute, stopped at the end
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -220,8 +223,12 @@ case "$WHAT" in
     android) android_gates ;;
     data) data_gates ;;
     lab) lab_gates ;;
+    wglab)
+        echo "== Rust: the engine's WireGuard against the kernel's (scripts/wglab.sh)"
+        "$ROOT/scripts/wglab.sh"
+        ;;
     all) data_gates; lab_gates; rust_gates; android_gates ;;
-    *) echo "usage: $0 [all|rust|android|data|lab]" >&2; exit 2 ;;
+    *) echo "usage: $0 [all|rust|android|data|lab|wglab]" >&2; exit 2 ;;
 esac
 
 echo "== all requested gates passed"

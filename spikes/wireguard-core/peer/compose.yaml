@@ -1,11 +1,14 @@
-# W7's interoperation lab (spikes/wireguard-core/lab.sh): one WireGuard peer of the reference implementation,
-# in a Compose project of its own. The client reaches it at its address on the project's network; nothing is
-# published on the host. lab.sh stops the project when it is done (stop, not down), and nothing restarts it.
+# W7's interoperation lab (spikes/wireguard-core/lab.sh, and since W7's part 1 scripts/wglab.sh): two WireGuard
+# peers of the reference implementation, in a Compose project of their own. The clients reach them at their
+# addresses on the project's network; nothing is published on the host unless compose.publish.yaml is added,
+# which the emulator check does, on the host's loopback alone. The scripts stop the project when they are done
+# (stop, not down), and nothing restarts it.
 name: datapavan-wglab
 services:
   peer:
     build: .
     image: datapavan-wglab-peer
+    hostname: wglab-peer1
     cap_add:
       - NET_ADMIN
     sysctls:
@@ -13,4 +16,19 @@ services:
       net.ipv6.conf.default.disable_ipv6: "0"
     restart: "no"
     # tini as PID 1, so that Python stops at once on `docker compose stop`.
+    init: true
+  # The second peer, for two tunnels at once (W7, part 1): the same image, keys of its own.
+  peer2:
+    image: datapavan-wglab-peer
+    # Built by `peer`; never pulled.
+    pull_policy: never
+    hostname: wglab-peer2
+    depends_on:
+      - peer
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "0"
+      net.ipv6.conf.default.disable_ipv6: "0"
+    restart: "no"
     init: true

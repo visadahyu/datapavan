@@ -1,0 +1,9 @@
+# For W7's emulator check (scripts/verify-wireguard.sh): each peer's WireGuard port published on the host's
+# loopback alone, which an emulator reaches as 10.0.2.2; nothing on the host's other addresses.
+services:
+  peer:
+    ports:
+      - "127.0.0.1:${WGLAB_PORT:-51820}:51820/udp"
+  peer2:
+    ports:
+      - "127.0.0.1:${WGLAB_PORT2:-51821}:51820/udp"
