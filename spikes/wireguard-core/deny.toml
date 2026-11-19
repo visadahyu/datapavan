@@ -1,0 +1,22 @@
+# cargo-deny policy for W7's spike: core/deny.toml unchanged, plus the four licences ADR 0035 accepts for
+# GotaTun (BSD-3-Clause, BSD-2-Clause, ISC, MPL-2.0), which core/deny.toml gains only in W7's own commit.
+# Run from this directory: cargo deny --locked check (--disable-fetch to use the cached advisory database).
+
+[graph]
+targets = ["aarch64-linux-android", "armv7-linux-androideabi", "x86_64-linux-android", "x86_64-unknown-linux-gnu"]
+
+[advisories]
+yanked = "deny"
+
+[licenses]
+allow = ["Apache-2.0", "MIT", "Unicode-3.0", "BSD-3-Clause", "BSD-2-Clause", "ISC", "MPL-2.0"]
+confidence-threshold = 0.93
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

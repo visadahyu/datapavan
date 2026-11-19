@@ -1,0 +1,15 @@
+[package]
+name = "wg-lab"
+description = "The interoperation lab's client: GotaTun's Tunn over a UDP socket against WireGuard itself (W7's spike)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gotatun = { workspace = true, features = ["ring"] }
+bytes = { workspace = true }
+# Builds and reads the hand-built IP packets, with their checksums; core/net's tests use it already.
+etherparse = "=0.21.0"
+# The keys as `wg` writes them; already a dependency of GotaTun.
+base64 = "=0.22.1"

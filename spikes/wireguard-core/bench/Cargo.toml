@@ -1,0 +1,18 @@
+[package]
+name = "wg-bench"
+description = "Tunn's encapsulation and the peer's decapsulation per packet, on one core (W7's spike)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# One crypto backend per build: `--features ring` or `--features aws-lc`.
+ring = ["gotatun/ring"]
+aws-lc = ["gotatun/aws-lc-rs"]
+
+[dependencies]
+gotatun = { workspace = true }
+bytes = { workspace = true }
+# Pins the thread to one core and reads its CPU time, behind safe functions; already in the lock file.
+nix = { version = "=0.31.3", default-features = false, features = ["sched", "time"] }

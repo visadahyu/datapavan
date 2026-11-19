@@ -1,0 +1,35 @@
+# W7's spike (ADR 0035, "Before building W7"): GotaTun's protocol core measured beside Watch's engine.
+# Throwaway code: nothing here is released or goes into core/net or the app. It lives outside core's
+# workspace, with a lock file of its own that began as a copy of core/Cargo.lock, so that every crate the
+# engine already uses keeps its version. Findings: docs/spikes/2026-11-wireguard-core.md.
+#
+# - size:  core/watch-jni's library, its own source unchanged, with GotaTun linked in and called;
+# - bench: Tunn's encapsulation and the peer's decapsulation, per packet, on one core;
+# - lab:   the client of the interoperation lab (peer/, lab.sh): Tunn over a UDP socket against the
+#          Linux kernel's WireGuard.
+[workspace]
+resolver = "3"
+members = ["size", "bench", "lab"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[workspace.dependencies]
+# Exactly as ADR 0035 decides: no device, TUN, socket or DAITA code. The crypto backend is each crate's
+# feature: `ring` (ADR 0035's proposal) or `aws-lc` (GotaTun's default, Mullvad's app).
+gotatun = { version = "=0.10.3", default-features = false }
+bytes = "=1.12.1"
+
+# core/Cargo.toml's release profile, unchanged, so that the libraries and the benchmark measure as the app
+# builds the engine.
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+overflow-checks = true
+strip = "symbols"
+debug = false

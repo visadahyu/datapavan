@@ -1,0 +1,26 @@
+[package]
+name = "wg-size"
+description = "core/watch-jni's library with GotaTun's Tunn linked in and called, to measure its size (W7's spike)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+# The name the app loads, so that the library compares with the one in Advanced's APK.
+name = "datapavan_watch"
+crate-type = ["cdylib"]
+
+[features]
+# With neither feature this is today's library; with one, GotaTun with that crypto backend.
+ring = ["dep:gotatun", "dep:bytes", "gotatun/ring"]
+aws-lc = ["dep:gotatun", "dep:bytes", "gotatun/aws-lc-rs"]
+
+[dependencies]
+# core/watch-jni's own dependencies, at the versions of core's lock file.
+datapavan-net = { path = "../../../core/net" }
+datapavan-engine = { path = "../../../core/engine" }
+jni = { version = "=0.22.4", default-features = false }
+libc = "=0.2.191"
+gotatun = { workspace = true, optional = true }
+bytes = { workspace = true, optional = true }
