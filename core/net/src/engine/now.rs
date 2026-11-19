@@ -1294,7 +1294,7 @@ mod tests {
                 config: Arc::new(config.clone()),
                 local_network: false,
             }],
-            routes: std::collections::HashMap::from([(UID, 3)]),
+            routes: std::collections::HashMap::from([(UID, 3), (UID + 1, 3)]),
             log_destinations: log,
         };
         shared.tunnels.set(&set(true), &shared);
@@ -1317,13 +1317,21 @@ mod tests {
         );
         shared.tunnels.set(&set(false), &shared);
         shared.hide_chained();
-        let Some(hidden) = shared.record_tunnelled(flow(2, Some(UID)), 3) else {
+        let snapshot = shared.now_view(T + 1_000);
+        let app = app_of(&snapshot, Some(UID)).map(|a| (a.places.len(), a.through_tunnel));
+        assert_eq!(
+            app,
+            Some((0, Some(3))),
+            "its destination left out when the switch goes off"
+        );
+        // Another app through the tunnel with the switch off from its first byte: its placed seconds mark it.
+        let Some(hidden) = shared.record_tunnelled(flow(2, Some(UID + 1)), 3) else {
             unreachable!("not live")
         };
         up_at(&shared, &clock, &hidden, 1_500, 10);
         shared.tell(&told(T + 1_000, T + 2_000, &[]));
         let snapshot = shared.now_view(T + 2_000);
-        let app = app_of(&snapshot, Some(UID))
+        let app = app_of(&snapshot, Some(UID + 1))
             .map(|a| (a.places.len(), a.through_tool, a.through_tunnel));
         assert_eq!(app, Some((0, false, Some(3))));
     }

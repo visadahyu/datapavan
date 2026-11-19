@@ -656,6 +656,40 @@ mod tests {
         assert_eq!(super::read(&cut), Back::Other);
     }
 
+    /// A quoted IPv4 UDP datagram sent without a checksum keeps none once the quote is swapped: 0 means "none".
+    #[test]
+    fn a_quoted_udp_datagram_without_a_checksum_keeps_none() {
+        let mut sent = udp(IpAddr::V4(CONFIG4), IpAddr::V4(SERVER4), b"query");
+        sent[20 + 6..20 + 8].fill(0);
+        let Some(mut error) = packet::path_error(
+            &sent,
+            (IpAddr::V4(ROUTER4), IpAddr::V4(CONFIG4)),
+            (3, 3),
+            [0; 4],
+        ) else {
+            unreachable!("no error")
+        };
+        let Back::Error(read) = super::read(&error) else {
+            unreachable!("not an error")
+        };
+        let quoted_checksum = read.inner_transport + 6;
+        assert_eq!(
+            swap_error(
+                &mut error,
+                &read,
+                IpAddr::V4(TUN4),
+                (IpAddr::V4(TUN4), IpAddr::V4(SERVER4))
+            ),
+            Some(())
+        );
+        assert_eq!(&error[quoted_checksum..quoted_checksum + 2], &[0, 0]);
+        assert_eq!(
+            fold(sum_words(&error[20..])),
+            0xffff,
+            "the error's own checksum holds"
+        );
+    }
+
     #[test]
     fn a_redirect_and_an_echo_request_are_no_errors() {
         let sent = udp(IpAddr::V4(CONFIG4), IpAddr::V4(SERVER4), b"x");
