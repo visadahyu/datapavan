@@ -56,8 +56,9 @@ def main(paths, package):
         out.append(f"off {off.group(2)} {size(off.group(3), off.group(4))}")
     elif "no app you were not using sent data" in text:
         out.append("off 0 0")
-    # "-": the whole screen, as an app's history, which names the app in its title.
-    start = 0 if package == "-" else text.find(package)
+    # "-": the whole screen, as an app's history, which names the app in its title. Of a screen read twice, the
+    # second time scrolled, the row is read from the last dump that names the app.
+    start = 0 if package == "-" else text.rfind(package)
     if start < 0:
         out.append("no-row")
     else:

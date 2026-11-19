@@ -59,6 +59,18 @@ capture() {
     python3 -I "$ROOT/scripts/a11y-check.py" "$OUT/$1-$locale-$mode.xml" "$min_px" "$PKG" || passed=""
 }
 
+# Whether Watch's own account says its tunnel runs (--now).
+watch_running() {
+    grep -qx 'running true' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" | tr -d '\r' | sed 's/^ *//')"
+}
+
+# Whether Watch counts traffic of adb's shell, after one more request to the test server (--now).
+shell_counted() {
+    adb shell "printf 'GET /ping HTTP/1.0\r\n\r\n' | nc -w 5 $HOST $PORT" >/dev/null 2>&1 || true
+    sleep 2
+    grep -q '^activity-app 2000 ' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" | tr -d '\r' | sed 's/^ *//')"
+}
+
 # Advanced's "Now" and an app's history (--now): Watch's tunnel up for adb's shell, which asks a test server on
 # this computer for a page, so that "Now" has a row to show and to open.
 now_screens() {
@@ -77,13 +89,18 @@ now_screens() {
             adb shell cmd locale set-app-locales "$PKG" --locales "$locale"
             adb shell am force-stop "$PKG"
             adb shell am start -W -n "$PKG/$watch" --ez start true >/dev/null
-            sleep 5
-            adb shell "printf 'GET /ping HTTP/1.0\r\n\r\n' | nc -w 5 $HOST $PORT" >/dev/null 2>&1 || true
-            sleep 4
-            adb shell am start -n "$PKG/$watch" --activity-clear-top --ez now true --ez screenshots_for_tests true >/dev/null
+            within 20 watch_running || { echo "SCREENSHOTS FAILED: Watch's tunnel did not come up in $locale" >&2; exit 1; }
+            # The request again until Watch counts it: just after the tunnel starts, Android may not route it yet.
+            within 30 shell_counted || { echo "SCREENSHOTS FAILED: Watch did not count the shell's request in $locale" >&2; exit 1; }
+            # "Now" for the shell alone, whose row is the first below the view's top.
+            adb shell am start -n "$PKG/$watch" --activity-clear-top --ez now true --es now_package com.android.shell \
+                --ez screenshots_for_tests true >/dev/null
             passed=1
-            within 20 screen_has_holding com.android.shell || { echo "SCREENSHOTS FAILED: no row in \"Now\" in $locale" >&2; exit 1; }
+            sleep 3
             capture now
+            for _ in 1 2 3 4; do screen_has_holding com.android.shell && break; swipe_up; done
+            screen_has_holding com.android.shell || { echo "SCREENSHOTS FAILED: no row in \"Now\" in $locale" >&2; exit 1; }
+            capture now-row
             tap_holding com.android.shell || { echo "SCREENSHOTS FAILED: no row to open in $locale" >&2; exit 1; }
             sleep 2
             capture history

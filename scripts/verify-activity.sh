@@ -83,7 +83,11 @@ vpn_up() {
     local uid vpns
     uid=$(uid_of "$PKG")
     vpns=$(adb shell dumpsys connectivity | tr -d '\r' | grep -E 'ni\{(VPN |\[type: VPN)' || true)
-    [ -n "$uid" ] && grep -q "OwnerUid: $uid " <<<"$vpns"
+    [ -n "$uid" ] || return 1
+    grep -q "OwnerUid: $uid " <<<"$vpns" && return 0
+    # Android 10 names no VPN's owner there: a VPN connected, and Watch's own account that its tunnel runs.
+    [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 30 ] && grep -q 'state: CONNECTED/CONNECTED' <<<"$vpns" &&
+        grep -qx 'running true' <<<"$(watch_dump)"
 }
 
 workload_log() { adb logcat -d -s DatapavanWorkload | tr -d '\r' | sed -n 's/.*DatapavanWorkload: //p'; }
