@@ -1165,6 +1165,17 @@ impl Engine {
         crate::snapshot::encode(&self.shared.now_view(self.shared.clock.wall_ms()))
     }
 
+    /// Forgets everything the live view holds (ADR 0047, decision 3: under the profile for phones that may
+    /// be searched, at each screen-off): every app's bytes in every window, its destinations, the window
+    /// while the screen was off and the organisations looked up. Seconds before now that are placed later
+    /// stay out of the view. It cannot clear the flows still open, which the engine needs to carry them,
+    /// nor the seconds and segments that wait for their states, which are the log's and go to it as its
+    /// retention says.
+    pub fn clear_activity(&self) {
+        let now = self.shared.clock.wall_ms();
+        lock(&self.shared.activity).counts.clear(now);
+    }
+
     /// Takes a reading of the apps' states from Watch's Kotlin side, a message of [`crate::states`]:
     /// every second held that it covers is placed, and the log's segments cut where an app's state
     /// changed. False for a message that is not one of its version, which changes nothing.

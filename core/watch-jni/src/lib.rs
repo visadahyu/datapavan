@@ -558,6 +558,24 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeActivity<
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
+/// `Engine.nativeClearActivity()`: forgets everything the live view holds, in the running engine
+/// (`datapavan_net::Engine::clear_activity`, for ADR 0047's profile); nothing when none runs.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeClearActivity()`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeClearActivity<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) {
+    unowned_env
+        .with_env(|_env| -> Result<_, Error> {
+            if let Some(running) = engine().as_ref() {
+                running.clear_activity();
+            }
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>();
+}
+
 /// `Engine.nativeFlows()`: the flows the engine kept, one per line as [`flow_line`] writes it, for debug
 /// builds and the end-to-end test. Empty when the engine keeps none, as in release builds.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlows(): String`.

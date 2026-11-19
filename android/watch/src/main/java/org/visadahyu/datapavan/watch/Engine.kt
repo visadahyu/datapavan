@@ -124,6 +124,15 @@ internal object Engine {
     external fun nativeActivity(): ByteArray
 
     /**
+     * Forgets everything the live view holds: every app's bytes in every window, its destinations, the window
+     * while the screen was off and the organisations looked up; seconds before now stay out of the view when
+     * they are placed later. ADR 0047's profile will call it at each screen-off (W9); for now only debug
+     * builds' dump reaches it (`activity-clear`). It cannot clear the flows still open, nor what waits for the
+     * log. Nothing when no engine runs.
+     */
+    external fun nativeClearActivity()
+
+    /**
      * The flows kept, one per line as `protocol app destination uid outcome named-by ech dns network dns-name name`,
      * `dns-name` being the DNS answer's name where it differs from the connection's own; debug builds only.
      */

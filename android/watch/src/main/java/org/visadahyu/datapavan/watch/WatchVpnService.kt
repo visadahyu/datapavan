@@ -742,10 +742,16 @@ class WatchVpnService : VpnService() {
      * state, in use, with its notification, in the background, not told yet, then the bytes in no state by
      * why (no usage access, no events, told too late, no app, not told); and `activity-off` the window while
      * the screen was off, when the screen went off and came on again (0 for none, and while still off).
+     * `activity-clear` first clears the live view's memory, as ADR 0047's profile will at each screen-off,
+     * and says so (W5's third part).
      */
     private fun debugActivity(args: List<String>, writer: PrintWriter) {
         if ("activity-read" in args) {
             writer.println("activity-read ${tracker?.readNow(ACTIVITY_READ_WAIT_MS) ?: false}")
+        }
+        if ("activity-clear" in args) {
+            Engine.nativeClearActivity()
+            writer.println("activity-cleared")
         }
         val snapshot = org.visadahyu.datapavan.watch.activity.Snapshot.parse(Engine.nativeActivity()) ?: return
         val known = when (snapshot.known) {

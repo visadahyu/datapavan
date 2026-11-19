@@ -20,7 +20,7 @@
 //! third part). And a window of its own, "while the screen was off", holds each app's bytes by state from
 //! the moment the screen went off to the moment it came on again, kept from then until the screen next
 //! goes off, for the summary's "While the screen was off (2 h 10 min), N apps you were not using sent X"
-//! (ADR 0046, decision 2 (a)).
+//! (ADR 0046, decision 2 (a)). [`Counts::clear`] forgets all of it at once, for ADR 0047's profile.
 
 use super::activity::{Mark, Of};
 use super::{Flow, NamedBy, Network, Shared, lock};
@@ -232,6 +232,12 @@ pub(super) struct Counts {
     session: Option<u64>,
     /// The window "while the screen was off", once the screen went off.
     off: Option<Off>,
+    /// The first second counted since the live memory was last cleared ([`Counts::clear`]), 0 for never:
+    /// seconds before it, placed later, are not counted again.
+    cleared: u64,
+    /// The moment the screen went off whose window the last clear forgot, so that a reading that tells it
+    /// again does not open it anew.
+    cleared_off: u64,
 }
 
 impl Counts {
@@ -259,9 +265,9 @@ impl Counts {
     }
 
     /// The screen went off at `at`: the window "while the screen was off" begins there, in place of the one
-    /// before, unless it is that one, or one before it.
+    /// before, unless it is that one, or one before it, or one the last clear forgot.
     pub(super) fn screen_off(&mut self, at: u64) {
-        if self.off.as_ref().is_some_and(|off| off.from >= at) {
+        if at <= self.cleared_off || self.off.as_ref().is_some_and(|off| off.from >= at) {
             return;
         }
         self.off = Some(Off {
@@ -269,6 +275,27 @@ impl Counts {
             until: None,
             apps: HashMap::new(),
         });
+    }
+
+    /// Forgets everything the live view holds, at the wall clock's `now`: every app's counts in every
+    /// window, its destinations, the window "while the screen was off" and the organisations looked up, for
+    /// ADR 0047's profile, which clears them at each screen-off. Seconds before `now` that are placed later
+    /// are not counted, so nothing from before shows again; the moment the screen came on is kept, as it
+    /// names no app. What this cannot clear is not the live view's: the flows still open, which the engine
+    /// needs to carry them, and the seconds and segments waiting for their states, which are the log's.
+    pub(super) fn clear(&mut self, now: u64) {
+        let cleared_off = self.off.as_ref().map_or(self.cleared_off, |off| off.from);
+        *self = Self {
+            session: self.session,
+            cleared: now.div_ceil(1000),
+            cleared_off: cleared_off.max(self.cleared_off),
+            ..Self::default()
+        };
+    }
+
+    /// Whether the live view counts the second `second`: one before the last clear is not.
+    pub(super) fn counted(&self, second: u64) -> bool {
+        second >= self.cleared
     }
 
     /// The wall clock was set back to `now`: the minutes later than its own are of the old clock, and so
@@ -338,7 +365,7 @@ impl Counts {
         seen: Seen<'_>,
     ) {
         let (up, down) = (bytes[0], bytes[1]);
-        if (up == 0 && down == 0) || matches!(seen, Seen::Lookups) {
+        if (up == 0 && down == 0) || matches!(seen, Seen::Lookups) || !self.counted(second) {
             return;
         }
         if let Some(off) = self.off.as_mut().filter(|off| off.holds(second)) {
@@ -492,7 +519,7 @@ impl Shared {
             activity.counts.forget_old(now);
             let counts = &activity.counts;
             let off = counts.off.as_ref().map(|off| (off.from, off.until));
-            let mut view = View::new(now, counts.session, off);
+            let mut view = View::new(now, counts.session, off, counts.cleared);
             for (&uid, app) in &counts.apps {
                 view.settled(uid, app);
             }
@@ -633,6 +660,8 @@ struct View {
     session: Option<u64>,
     /// The window "while the screen was off": when the screen went off, and came on again if it did.
     off: Option<(u64, Option<u64>)>,
+    /// The first second counted since the live memory was last cleared.
+    cleared: u64,
     apps: BTreeMap<Option<u32>, AppView>,
 }
 
@@ -653,12 +682,13 @@ struct AppView {
 }
 
 impl View {
-    fn new(now: u64, session: Option<u64>, off: Option<(u64, Option<u64>)>) -> Self {
+    fn new(now: u64, session: Option<u64>, off: Option<(u64, Option<u64>)>, cleared: u64) -> Self {
         let minute = now / 60_000;
         Self {
             firsts: WINDOWS.map(|w| minute.saturating_sub(w - 1)),
             session,
             off,
+            cleared,
             apps: BTreeMap::new(),
         }
     }
@@ -743,7 +773,8 @@ impl View {
                 next[0].saturating_sub(mark.counts[0]),
                 next[1].saturating_sub(mark.counts[1]),
             ];
-            if ways == Ways::default() {
+            // A second before the last clear stays out of the view, though the log may still get it.
+            if ways == Ways::default() || mark.second < self.cleared {
                 continue;
             }
             let windows = self.windows(mark.second);
@@ -805,7 +836,8 @@ fn add_reasons(to: &mut [Ways; COLUMNS], more: &ByReason) {
 #[cfg(test)]
 mod tests {
     use super::super::activity::tests::{
-        BACKGROUND, IN_USE, NOTIFICATION, T, Telling, UID, flow, open, telling_at, told, up_at,
+        BACKGROUND, IN_USE, NOTIFICATION, T, Telling, UID, flow, open, taken, telling_at, told,
+        up_at,
     };
     use super::super::tests::shared_with;
     use super::*;
@@ -1836,6 +1868,109 @@ mod tests {
         assert_eq!(all[0][0], [15, 15], "no state is the sum of its whys");
         assert_eq!(all[0][3], [7, 0]);
         assert_eq!(all[1][0], [3 * 15 + 5 * 1_100, 3 * 15]);
+    }
+
+    /// Clearing the live memory forgets every app's bytes in every window, its destinations, the window
+    /// while the screen was off and the organisations looked up, and keeps the moment the screen came on;
+    /// seconds before it, told later, stay out, while an open flow's seconds after it count again; the
+    /// window it forgot is not opened anew by a reading that tells it again (ADR 0047, decision 3; the open
+    /// list's first two items).
+    #[test]
+    fn clearing_the_live_memory_forgets_every_window_and_keeps_out_what_came_before() {
+        use crate::states::Screen;
+        let (mut shared, clock, _) = telling_at(T);
+        shared.organisations = Some(
+            crate::organisations::Organisations::open(Box::new(
+                crate::organisations::tests::sample(),
+            ))
+            .unwrap_or_else(|e| unreachable!("{e}")),
+        );
+        let bytes = shared.record(Flow {
+            destination: SocketAddr::from(([93, 184, 216, 34], 443)),
+            ..flow(1, Some(UID))
+        });
+        let Some(bytes) = bytes else {
+            unreachable!("an open flow is live")
+        };
+        up_at(&shared, &clock, &bytes, 500, 10);
+        up_at(&shared, &clock, &bytes, 1_500, 20);
+        shared.tell(&screen_told(
+            T,
+            T + 2_000,
+            Screen::On(Some(T + 1_500)),
+            Some(T + 500),
+        ));
+        // The second 2 is counted, not told yet, when the memory is cleared at 2.5 s.
+        up_at(&shared, &clock, &bytes, 2_200, 30);
+        let before = shared.now_view(T + 2_400);
+        assert!(app_of(&before, Some(UID)).is_some() && before.off.is_some());
+        assert!(!lock(&shared.activity).counts.organisations.is_empty());
+        lock(&shared.activity).counts.clear(T + 2_500);
+        let cleared = shared.now_view(T + 2_500);
+        assert!(cleared.apps.is_empty(), "{:?}", cleared.apps);
+        assert_eq!(cleared.off, None);
+        assert_eq!(
+            cleared.session,
+            Some(T + 1_500),
+            "the moment the screen came on is kept"
+        );
+        // The second 2, told now, stays out; the second 3, counted after, is in, with its destination.
+        up_at(&shared, &clock, &bytes, 3_200, 40);
+        assert_eq!(
+            app_of(&shared.now_view(T + 3_300), Some(UID)).map(|a| a.bytes[0][4]),
+            Some([40, 0]),
+            "not told yet: only what came after"
+        );
+        shared.tell(&screen_told(
+            T + 2_000,
+            T + 4_000,
+            Screen::On(Some(T + 1_500)),
+            Some(T + 500),
+        ));
+        let snapshot = shared.now_view(T + 4_000);
+        let app = app_of(&snapshot, Some(UID));
+        assert_eq!(
+            app.map(|a| (a.bytes[0][3], a.places.len())),
+            Some(([40, 0], 1))
+        );
+        assert_eq!(
+            snapshot.off, None,
+            "the window it forgot is not opened anew"
+        );
+        // The flow stays open: its next seconds count too, and the log still gets every one.
+        assert!(lock(&shared.live).contains_key(&1));
+        clock.set(T + 5_000);
+        shared.flush();
+        let logged: u64 = taken(&shared)
+            .iter()
+            .filter_map(|record| match record {
+                crate::log::Record::Segment { bytes, .. } => Some(bytes[0]),
+                crate::log::Record::Lookups { .. } => None,
+            })
+            .sum();
+        assert_eq!(logged, 100, "what is held for the log is the log's");
+        // A screen that goes off after the clear opens a window of its own.
+        shared.tell(&screen_told(
+            T + 4_000,
+            T + 6_000,
+            Screen::Off,
+            Some(T + 5_500),
+        ));
+        assert_eq!(shared.now_view(T + 6_000).off, Some((T + 5_500, None)));
+    }
+
+    /// The first second counted after a clear is the first that begins at or after it: a second the clear
+    /// falls within began before, and stays out.
+    #[test]
+    fn a_clear_within_a_second_keeps_that_second_out() {
+        let mut counts = Counts::default();
+        counts.clear(T + 1);
+        assert!(!counts.counted(T / 1000));
+        assert!(counts.counted(T / 1000 + 1));
+        counts.clear(T + 1_000);
+        assert!(counts.counted(T / 1000 + 1));
+        assert!(!counts.counted(T / 1000));
+        assert!(Counts::default().counted(0), "never cleared");
     }
 
     /// Where the fixture Watch's Kotlin side reads is kept (`SnapshotTest`).
