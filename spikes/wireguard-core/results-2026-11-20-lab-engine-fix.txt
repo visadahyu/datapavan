@@ -1,0 +1,25 @@
+# W7, part 1, fix round: scripts/check.sh wglab on the development machine, 2026-11-20: the engine's WireGuard
+# tunnels (core/net/tests/wglab.rs) against two peers of the Linux kernel's WireGuard in datapavan-wglab.
+== peers: kernel WireGuard in datapavan-wglab, wireguard-tools-wg-1.0.20260223-r0
+PASS preshared-key: the session holds with the peer's preshared key, both versions
+PASS tcp-IPv4: the peer's web server answered the configuration's address 10.77.0.2
+PASS udp-IPv4: echoed, and the peer saw 10.77.0.2 40020 wglab-peer1
+PASS icmp-IPv4: the kernel's echo reply came back
+PASS dns-IPv4: Watch's DNS address answered from the configuration's server, TTL 0
+PASS tcp-IPv6: the peer's web server answered the configuration's address fd77::2
+PASS udp-IPv6: echoed, and the peer saw fd77::2 40021 wglab-peer1
+PASS icmp-IPv6: the kernel's echo reply came back
+PASS dns-IPv6: Watch's DNS address answered from the configuration's server, TTL 0
+PASS outside-allowed-ips: both reflected answers dropped and counted
+PASS mss-IPv4: the SYN's MSS of 1460 reached the peer's kernel as 1240, the SYN-ACK's the app as 1240
+PASS too-big-IPv4: a datagram of 1280 bytes passed whole to the peer and back; one of 1281 got the app the error with 1280
+PASS mss-IPv6: the SYN's MSS of 1460 reached the peer's kernel as 1220, the SYN-ACK's the app as 1220
+PASS too-big-IPv6: a datagram of 1280 bytes passed whole to the peer and back; one of 1281 got the app the error with 1280
+PASS two-tunnels: the first app reached peer1 as 10.77.0.2, the second peer2 as 10.77.0.4 and fd77::4
+PASS peer-saw-handshake-plain: peer has a completed handshake with the engine's client
+PASS peer-saw-handshake-preshared-key: peer has a completed handshake with the engine's client
+PASS peer-saw-handshake-second-tunnel: peer2 has a completed handshake with the engine's client
+PASS peer-holds-preshared-key: the peer has the lab's preshared key for that client, and none for the plain one
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.03s
+== datapavan-wglab stopped
+== all WireGuard lab checks passed

@@ -3,8 +3,9 @@
 # its WireGuard tunnels, against two peers of the Linux kernel's WireGuard, the reference implementation, in the
 # Compose project datapavan-wglab (spikes/wireguard-core/peer). It starts the peers, gives them the lab's clients
 # with keys from the peers' own `wg genkey` (one with a preshared key), runs core/net/tests/wglab.rs, ignored by
-# default, with them, checks what the peers saw (`wg show`), and stops the project at the end, also on failure
-# (stop, not down: nothing restarts it).
+# default, with them, checks what the peers saw (`wg show`: a completed handshake with each client, and the
+# preshared key on the peer's side where the client has one, and none where it has none), and stops the project
+# at the end, also on failure (stop, not down: nothing restarts it).
 #
 #   scripts/wglab.sh            the lab
 #   scripts/wglab.sh --peers    only start the peers and print their settings, for scripts/verify-wireguard.sh
@@ -81,6 +82,15 @@ for check in "peer $plain_public plain" "peer $psk_public preshared-key" "peer2 
         failed=1
     fi
 done
+# The preshared key is on the peer's side too: a client that left it out would then make no session, so the
+# preshared-key test above shows the engine uses it.
+psk_of() { in_peer peer wg show wg0 preshared-keys | awk -v k="$1" '$1 == k { print $2 }'; }
+if [ "$(psk_of "$psk_public")" = "$psk" ] && [ "$(psk_of "$plain_public")" = "(none)" ]; then
+    echo "PASS peer-holds-preshared-key: the peer has the lab's preshared key for that client, and none for the plain one"
+else
+    echo "FAIL peer-holds-preshared-key: the peer's preshared keys are not the lab's"
+    failed=1
+fi
 "${compose[@]}" stop >/dev/null 2>&1
 echo "== datapavan-wglab stopped"
 [ "$failed" = 0 ] && echo "== all WireGuard lab checks passed" || { echo "== some WireGuard lab checks FAILED" >&2; exit 1; }

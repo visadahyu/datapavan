@@ -4,14 +4,20 @@ port the datagram came from, as this peer saw it; a reflector on port 9, which s
 address outside the client's AllowedIPs for the peer (10.77.1.1, fd77:1::1), for the client to drop; DNS on port
 53, which answers every A question with 10.77.0.1 and every AAAA with fd77::1; HTTP on port 80, whose answer
 names the client's address and this peer's host name, and has "pong" for /ping, as the emulator checks' workload
-app wants; and a TCP echo of lines on port 9000, for a connection kept open across a network switch. Who reached
-the HTTP server, the UDP echo, the DNS server and the TCP echo is written to /run/wglab/seen, a line each, for
-the emulator check (scripts/verify-wireguard.sh), which reads it from outside. ICMP echo is the kernel's own.
-Python's standard library only."""
+app wants; a TCP echo of lines on port 9000; on port 9001, the largest segment this peer may send on the
+connection, as its kernel took it from the client's SYN (TCP_MAXSEG), for the lab's check of the MSS clamp (W7's
+fix round); and on UDP port 9002 a ticker, which answers a datagram with `tick 1` at once, then after 30 seconds
+of silence with `tick 2` to `tick 11` a second apart, and `end`, for the emulator's network switch: the client
+sends nothing after its first datagram, and its WireGuard nothing after the keepalive it owes ten seconds after
+`tick 1`, so a switch in the silence reaches the peer only where the client tells it its new address. Who
+reached the HTTP server, the UDP echo, the DNS server, the TCP echo, the MSS service and the ticker is written to
+/run/wglab/seen, a line each, for the emulator check (scripts/verify-wireguard.sh), which reads it from outside. ICMP echo is the kernel's own. Python's standard
+library only."""
 
 import http.server
 import socket
 import threading
+import time
 
 ADDRESSES = {socket.AF_INET: "10.77.0.1", socket.AF_INET6: "fd77::1"}
 OUTSIDE = {socket.AF_INET: "10.77.1.1", socket.AF_INET6: "fd77:1::1"}
@@ -50,6 +56,29 @@ def tcp_echo(server):
     while True:
         connection, sender = server.accept()
         threading.Thread(target=serve, args=(connection, sender), daemon=True).start()
+
+
+def mss(server):
+    while True:
+        connection, sender = server.accept()
+        with connection:
+            largest = connection.getsockopt(socket.IPPROTO_TCP, socket.TCP_MAXSEG)
+            seen(f"mss {largest}", sender)
+            connection.sendall(f"mss {largest}\n".encode())
+
+
+def ticker(sock):
+    def serve(sender):
+        seen("ticker", sender)
+        sock.sendto(b"tick 1\n", sender)
+        time.sleep(30)
+        for n in range(2, 12):
+            sock.sendto(f"tick {n}\n".encode(), sender)
+            time.sleep(1)
+        sock.sendto(b"end\n", sender)
+    while True:
+        _, sender = sock.recvfrom(65535)
+        threading.Thread(target=serve, args=(sender,), daemon=True).start()
 
 
 def whoami(sock):
@@ -108,15 +137,17 @@ def main():
         reflector = bound(family, ADDRESSES[family], 9)
         threads.append(threading.Thread(target=udp, args=(echo, echo, "udp-echo"), daemon=True))
         threads.append(threading.Thread(target=whoami, args=(bound(family, ADDRESSES[family], 8),), daemon=True))
+        threads.append(threading.Thread(target=ticker, args=(bound(family, ADDRESSES[family], 9002),), daemon=True))
         threads.append(threading.Thread(target=dns, args=(bound(family, ADDRESSES[family], 53),), daemon=True))
         threads.append(threading.Thread(target=udp, args=(reflector, bound(family, OUTSIDE[family], 9)), daemon=True))
-        server = socket.socket(family, socket.SOCK_STREAM)
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if family == socket.AF_INET6:
-            server.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
-        server.bind((ADDRESSES[family], 9000))
-        server.listen(16)
-        threads.append(threading.Thread(target=tcp_echo, args=(server,), daemon=True))
+        for port, serve in ((9000, tcp_echo), (9001, mss)):
+            server = socket.socket(family, socket.SOCK_STREAM)
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if family == socket.AF_INET6:
+                server.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+            server.bind((ADDRESSES[family], port))
+            server.listen(16)
+            threads.append(threading.Thread(target=serve, args=(server,), daemon=True))
     servers = [http.server.ThreadingHTTPServer((ADDRESSES[socket.AF_INET], 80), Handler),
                Server6((ADDRESSES[socket.AF_INET6], 80), Handler)]
     threads += [threading.Thread(target=s.serve_forever, daemon=True) for s in servers]

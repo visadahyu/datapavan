@@ -1,8 +1,10 @@
 //! W7's interoperation lab through the engine itself (ADR 0035, "Tests without a provider"): Watch's engine on
 //! a pair of datagram sockets for its tunnel, its `WireGuard` tunnels to two peers of the Linux kernel's
 //! `WireGuard`, the reference implementation, in the Compose project `datapavan-wglab`. Chosen apps' TCP, UDP,
-//! ICMP and DNS on IPv4 and IPv6, a packet from outside `AllowedIPs` refused, a `PresharedKey`, and two
-//! tunnels at once to two peers.
+//! ICMP and DNS on IPv4 and IPv6, a packet from outside `AllowedIPs` refused, a `PresharedKey`, two tunnels at
+//! once to two peers, and the MTU's second way: a SYN's MSS clamped as the peer's kernel takes it, a datagram
+//! larger than the configuration's MTU answered with "fragmentation needed" or "packet too big", and one of
+//! the MTU's size passing whole to the peer and back.
 //!
 //! Ignored by default: `scripts/wglab.sh` (`scripts/check.sh wglab`) starts the peers, makes the clients'
 //! keys with the peers' own `wg`, and runs these with the settings in the environment (`WGLAB_*`).
@@ -12,7 +14,8 @@ use datapavan_net::engine::{Addresses, Configured, Limits, TunnelSetting};
 use datapavan_net::wireguard::config::Config as WgConfig;
 use datapavan_net::{Config, Engine, Platform, packet};
 use etherparse::{
-    IcmpEchoHeader, Icmpv4Type, Icmpv6Type, PacketBuilder, SlicedPacket, TransportSlice,
+    IcmpEchoHeader, Icmpv4Type, Icmpv6Type, PacketBuilder, SlicedPacket, TcpOptionElement,
+    TransportSlice,
 };
 use std::collections::HashMap;
 use std::io;
@@ -30,6 +33,7 @@ const SECOND: u32 = 10_301;
 const PEER4: Ipv4Addr = Ipv4Addr::new(10, 77, 0, 1);
 const PEER6: Ipv6Addr = Ipv6Addr::new(0xfd77, 0, 0, 0, 0, 0, 0, 1);
 const TUNNEL_FILTERED: usize = 54;
+const TUNNEL_TOO_BIG: usize = 57;
 const STEP: Duration = Duration::from_secs(8);
 
 struct ByPort;
@@ -57,15 +61,27 @@ fn setting(name: &str) -> Result<String, Box<dyn std::error::Error>> {
 /// The lab's client configuration: `key` and `address` the client's, `peer` and `public` the peer's.
 fn client(
     key: &str,
-    (v4, v6): (&str, &str),
+    addresses: (&str, &str),
     peer: &str,
     public: &str,
     psk: Option<&str>,
 ) -> Result<Arc<WgConfig>, Box<dyn std::error::Error>> {
+    client_with(key, addresses, peer, public, psk, "")
+}
+
+/// [`client`], with `interface` more lines for its `[Interface]`.
+fn client_with(
+    key: &str,
+    (v4, v6): (&str, &str),
+    peer: &str,
+    public: &str,
+    psk: Option<&str>,
+    interface: &str,
+) -> Result<Arc<WgConfig>, Box<dyn std::error::Error>> {
     let psk = psk.map_or_else(String::new, |psk| format!("PresharedKey = {psk}\n"));
     let text = format!(
-        "[Interface]\nPrivateKey = {key}\nAddress = {v4}/32, {v6}/128\nDNS = 10.77.0.1, fd77::1\n\n[Peer]\n\
-         PublicKey = {public}\n{psk}AllowedIPs = 10.77.0.0/24, fd77::/64\nEndpoint = {peer}\n"
+        "[Interface]\nPrivateKey = {key}\nAddress = {v4}/32, {v6}/128\nDNS = 10.77.0.1, fd77::1\n{interface}\n\
+         [Peer]\nPublicKey = {public}\n{psk}AllowedIPs = 10.77.0.0/24, fd77::/64\nEndpoint = {peer}\n"
     );
     Ok(Arc::new(
         WgConfig::parse(text.as_bytes()).map_err(|r| r.to_string())?,
@@ -211,7 +227,7 @@ async fn http(
     Ok(text)
 }
 
-/// An echo from the app to `to`, and whether its reply came.
+/// An echo from the app to `to`, and whether its reply came, from `to` itself.
 async fn ping(tunnel: &UnixDatagram, to: IpAddr, sequence: u16) -> Outcome {
     let from = if to.is_ipv4() {
         IpAddr::V4(Addresses::COMMON.tun4)
@@ -233,7 +249,7 @@ async fn ping(tunnel: &UnixDatagram, to: IpAddr, sequence: u16) -> Outcome {
     }
     tunnel.send(&request).await?;
     next(tunnel, |p| {
-        match SlicedPacket::from_ip(p).ok().and_then(|s| s.transport) {
+        (match SlicedPacket::from_ip(p).ok().and_then(|s| s.transport) {
             Some(TransportSlice::Icmpv4(i)) => {
                 matches!(i.icmp_type(), Icmpv4Type::EchoReply(h) if h.seq == sequence)
             }
@@ -241,10 +257,125 @@ async fn ping(tunnel: &UnixDatagram, to: IpAddr, sequence: u16) -> Outcome {
                 matches!(i.icmp_type(), Icmpv6Type::EchoReply(h) if h.seq == sequence)
             }
             _ => false,
-        }
+        }) && source_of(p) == Some(to)
     })
     .await?;
     Ok(())
+}
+
+/// A SYN with an MSS of 1,460 and no other option from the app at `from` to the peer's MSS service at `to`,
+/// the SYN-ACK's MSS as the app gets it, and the largest segment the peer's kernel may send on the connection,
+/// as the service says it: with no timestamps, the smaller of the SYN's MSS as it arrived and the peer's own.
+async fn mss(
+    tunnel: &UnixDatagram,
+    from: SocketAddr,
+    to: SocketAddr,
+) -> Result<(u16, u16), Box<dyn std::error::Error>> {
+    let isn = 0x3000_0000u32;
+    let mut syn = Vec::new();
+    builder(from.ip(), to.ip())?
+        .tcp(from.port(), to.port(), isn, 64_240)
+        .syn()
+        .options(&[TcpOptionElement::MaximumSegmentSize(1_460)])?
+        .write(&mut syn, &[])?;
+    tunnel.send(&syn).await?;
+    let tcp = |packet: &[u8]| -> Option<(etherparse::TcpHeader, Vec<u8>)> {
+        match SlicedPacket::from_ip(packet).ok()?.transport? {
+            TransportSlice::Tcp(t)
+                if t.source_port() == to.port() && t.destination_port() == from.port() =>
+            {
+                Some((t.to_header(), t.payload().to_vec()))
+            }
+            _ => None,
+        }
+    };
+    let synack = next(tunnel, |p| tcp(p).is_some_and(|(h, _)| h.syn && h.ack)).await?;
+    let (header, _) = tcp(&synack).ok_or("unread")?;
+    let offered = header
+        .options_iterator()
+        .find_map(|o| match o {
+            Ok(TcpOptionElement::MaximumSegmentSize(n)) => Some(n),
+            _ => None,
+        })
+        .ok_or("a SYN-ACK without an MSS")?;
+    let mut ack = Vec::new();
+    builder(from.ip(), to.ip())?
+        .tcp(from.port(), to.port(), isn.wrapping_add(1), 64_240)
+        .ack(header.sequence_number.wrapping_add(1))
+        .write(&mut ack, &[])?;
+    tunnel.send(&ack).await?;
+    let data = next(tunnel, |p| {
+        tcp(p).is_some_and(|(_, payload)| !payload.is_empty())
+    })
+    .await?;
+    let (_, payload) = tcp(&data).ok_or("unread")?;
+    let text = String::from_utf8_lossy(&payload).into_owned();
+    let mut reset = Vec::new();
+    builder(from.ip(), to.ip())?
+        .tcp(from.port(), to.port(), isn.wrapping_add(1), 0)
+        .rst()
+        .write(&mut reset, &[])?;
+    tunnel.send(&reset).await?;
+    let largest = text
+        .trim()
+        .strip_prefix("mss ")
+        .and_then(|n| n.parse().ok())
+        .ok_or_else(|| format!("the MSS service said {text}"))?;
+    Ok((offered, largest))
+}
+
+/// A UDP datagram of `size` bytes in all, IP header included, from the app at `from` to `to`, which may not
+/// be fragmented: IPv4's "don't fragment" set; `IPv6` routers never fragment.
+fn datagram_of(from: SocketAddr, to: SocketAddr, size: usize) -> Option<Vec<u8>> {
+    let header = if from.is_ipv4() { 20 + 8 } else { 40 + 8 };
+    let mut datagram = packet::udp(from, to, &vec![0x6c; size.checked_sub(header)?])?;
+    if from.is_ipv4() {
+        datagram[6] |= 0x40;
+        datagram[10..12].fill(0);
+        let sum = datagram[..20]
+            .chunks(2)
+            .map(|w| u32::from(u16::from_be_bytes([w[0], w[1]])))
+            .sum::<u32>();
+        let folded = (sum & 0xffff) + (sum >> 16);
+        let folded = (folded & 0xffff) + (folded >> 16);
+        let checksum = !u16::try_from(folded).ok()?;
+        datagram[10..12].copy_from_slice(&checksum.to_be_bytes());
+    }
+    Some(datagram)
+}
+
+/// A packet's source address, read from its IP header.
+fn source_of(packet: &[u8]) -> Option<IpAddr> {
+    match packet.first()? >> 4 {
+        4 => Some(IpAddr::from(<[u8; 4]>::try_from(packet.get(12..16)?).ok()?)),
+        6 => Some(IpAddr::from(<[u8; 16]>::try_from(packet.get(8..24)?).ok()?)),
+        _ => None,
+    }
+}
+
+/// The path MTU an ICMP error to the app says: IPv4's "fragmentation needed" or `ICMPv6`'s "packet too big",
+/// with the source it comes from. The engine's own errors carry no IPv4 options or `IPv6` extension headers.
+fn too_big_said(packet: &[u8]) -> Option<(IpAddr, u32)> {
+    let source = source_of(packet)?;
+    let (icmp, kind) = if source.is_ipv4() {
+        (packet.get(20..)?, (1, 3, 4))
+    } else {
+        (packet.get(40..)?, (58, 2, 0))
+    };
+    let protocol = if source.is_ipv4() {
+        packet.get(9)?
+    } else {
+        packet.get(6)?
+    };
+    if (*protocol, *icmp.first()?, *icmp.get(1)?) != kind {
+        return None;
+    }
+    let said = if source.is_ipv4() {
+        u32::from(u16::from_be_bytes([*icmp.get(6)?, *icmp.get(7)?]))
+    } else {
+        u32::from_be_bytes(icmp.get(4..8)?.try_into().ok()?)
+    };
+    Some((source, said))
 }
 
 /// A lookup to Watch's DNS address of `kind` for `lab.test`, and its answer.
@@ -373,6 +504,79 @@ async fn tcp_udp_icmp_and_dns_pass_on_both_versions_and_nothing_from_outside_all
         "{state:?}"
     );
     Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+#[ignore = "needs the lab's peers: scripts/wglab.sh"]
+async fn the_mtu_holds_on_the_path_to_the_kernel_peer() -> Outcome {
+    // A configuration's MTU of 1,280, below the peer's own 1,420, so that the clamp is what the peer reads.
+    let config = client_with(
+        &setting("WGLAB_PLAIN")?,
+        ("10.77.0.2", "fd77::2"),
+        &setting("WGLAB_PEER")?,
+        &setting("WGLAB_PEER_PUBLIC")?,
+        None,
+        "MTU = 1280\n",
+    )?;
+    let (engine, tunnel) = engine(
+        vec![Configured {
+            id: 1,
+            config,
+            local_network: false,
+        }],
+        &[(FIRST, 1)],
+    )?;
+    for v6 in [false, true] {
+        let version = if v6 { "IPv6" } else { "IPv4" };
+        // The largest segment a 1,280-byte packet carries: 1,240 in IPv4, 1,220 in IPv6.
+        let clamp = if v6 { 1_220 } else { 1_240 };
+        let (offered, largest) =
+            mss(&tunnel, app(v6, 40_060 + u16::from(v6)), peer(v6, 9001)).await?;
+        assert_eq!(
+            largest, clamp,
+            "{version}: the peer's kernel took the SYN's MSS as {largest}"
+        );
+        assert!(
+            offered <= clamp,
+            "{version}: the app got the SYN-ACK's MSS as {offered}"
+        );
+        println!(
+            "PASS mss-{version}: the SYN's MSS of 1460 reached the peer's kernel as {largest}, the SYN-ACK's the app as {offered}"
+        );
+        let from = app(v6, 40_070 + u16::from(v6));
+        let whole = udp_whole(&tunnel, from, peer(v6, 7), 1_280).await?;
+        assert_eq!(whole, 1_280 - if v6 { 48 } else { 28 }, "{version}");
+        tunnel
+            .send(&datagram_of(from, peer(v6, 7), 1_281).ok_or("datagram")?)
+            .await?;
+        let error = next(&tunnel, |p| too_big_said(p).is_some()).await?;
+        assert_eq!(
+            too_big_said(&error),
+            Some((peer(v6, 7).ip(), 1_280)),
+            "{version}: the error names the destination and the MTU"
+        );
+        println!(
+            "PASS too-big-{version}: a datagram of 1280 bytes passed whole to the peer and back; one of 1281 got the app the error with 1280"
+        );
+    }
+    let counters = engine.counters();
+    assert_eq!(counters[TUNNEL_TOO_BIG], 2, "{counters:?}");
+    Ok(())
+}
+
+/// A datagram of `size` bytes in all, which may not be fragmented, from the app at `from` to the echo at
+/// `to`, and the size of the echo's payload.
+async fn udp_whole(
+    tunnel: &UnixDatagram,
+    from: SocketAddr,
+    to: SocketAddr,
+    size: usize,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    tunnel
+        .send(&datagram_of(from, to, size).ok_or("datagram")?)
+        .await?;
+    let answer = next(tunnel, |p| udp_from(p, to).is_some()).await?;
+    Ok(udp_from(&answer, to).ok_or("no payload")?.len())
 }
 
 #[tokio::test(flavor = "current_thread")]
