@@ -103,6 +103,11 @@ def self_test():
     assert "place example.org" in first and "place maps.example" not in first, first
     second = read([dump(two)], "org.example.maps")
     assert "place maps.example" in second and "now in the background" in second, second
+    # A package whose name begins another's: each row is its own (the workload apps are w, w.b and w.c).
+    prefix = chained + ["B", "org.example.w.b", "Now: in the background", "Sent 3 B and received 4 B while you were not using it."]
+    assert "now in use" in read([dump(prefix)], "org.example.w"), read([dump(prefix)], "org.example.w")
+    assert "now in the background" in read([dump(prefix)], "org.example.w.b")
+    assert "no-row" in read([dump(chained)], "org.example")
     print("now-screen.py: self-test passed")
     return 0
 
@@ -122,7 +127,9 @@ def main(paths, package):
     if package == "-":
         first = 0
     else:
-        at = [i for i, line in enumerate(lines) if package in line]
+        # The package as a whole name: org.example.w is not in org.example.w.b's row.
+        named = re.compile(r"(?<![\w.])" + re.escape(package) + r"(?!\w|\.\w)")
+        at = [i for i, line in enumerate(lines) if named.search(line)]
         first = at[-1] if at else -1
     if first < 0:
         out.append("no-row")
