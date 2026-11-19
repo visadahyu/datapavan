@@ -300,6 +300,11 @@ jobs:
           # A phone-sized screen; without a profile the emulator is 320 x 640, smaller than any phone.
           profile: pixel_7
           disable-animations: true
+          # The runner's four cores and enough memory for Watch, its tunnel, the workload apps and the audit's scan
+          # at once: with the runner's default of two cores the emulator stopped answering adb three times in six
+          # runs at the audit's step of the watch shard (2026-11-19, docs/ci-flakes.md). The local AVDs have four.
+          cores: 4
+          ram-size: 4096M
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           # The runner's emulator listens on its default port: the shard runs only on a serial it is given.
           script: ANDROID_SERIAL=emulator-5554 scripts/emulator-shard.sh ${{ matrix.shard }}

@@ -340,13 +340,11 @@ echo "ok: the window while the screen was off holds the app's bytes in the backg
 
 # The audit's page of an app opens "Now" for that app alone (ADR 0046, decision 2 (d); Advanced only).
 # The audit's screen in the package's main process; Watch's process, and its tunnel, run on. On CI the emulator
-# once stopped answering adb here, 30 s into this start, after every check above had passed (2026-11-19,
-# docs/ci-flakes.md): the start is waited for and made once more, and the run says whether the emulator restarted.
-if ! adb shell am start -n "$PKG/org.visadahyu.datapavan.MainActivity" >/dev/null; then
-    echo "  the audit's start got no answer from the emulator: waiting for it"
-    device_back 90 || fail "the emulator stopped answering adb when the audit started; this is the emulator, not Watch"
-    adb shell am start -n "$PKG/org.visadahyu.datapavan.MainActivity" >/dev/null || fail "the audit could not be started"
-fi
+# stopped answering adb here three times on 2026-11-19, about 30 s after the audit started its scan beside Watch
+# and the workload apps (docs/ci-flakes.md): every adb call of this step waits for the device when it drops off,
+# says what it was doing (memory, crashes, kills), and is made once more.
+adb_again shell am start -n "$PKG/org.visadahyu.datapavan.MainActivity" >/dev/null ||
+    fail "the audit could not be started, or the emulator stopped answering adb; see the lines above"
 within 60 has_id nav-summary || fail "the audit did not start"
 open_tab apps || fail "no list of apps in the audit"
 within 60 has_id app-row || fail "no app in the audit's list"
@@ -365,15 +363,16 @@ all=""
 for _ in 1 2 3 4 5; do
     all=$(counted_bounds All || true)
     [ -z "$all" ] || break
-    adb shell input swipe 900 $(( (chips_top + chips_bottom) / 2 )) 150 $(( (chips_top + chips_bottom) / 2 )) 300
+    adb_again shell input swipe 900 $(( (chips_top + chips_bottom) / 2 )) 150 $(( (chips_top + chips_bottom) / 2 )) 300 ||
+        fail "the emulator stopped answering adb in the audit's list; see the lines above"
     sleep 1
 done
 [ -n "$all" ] || fail "no filter for all apps"
 set -- $all
-adb shell input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 ))
+adb_again shell input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 )) || fail "the emulator stopped answering adb in the audit's list"
 sleep 1
 tap_text "Search apps" || fail "no search in the audit's list"
-adb shell input text workload
+adb_again shell input text workload || fail "the emulator stopped answering adb in the audit's search"
 sleep 2
 # The keyboard, if it shows, goes, so that the list and then the page are read whole.
 if grep -q 'mInputShown=true' <<<"$(adb shell dumpsys input_method | tr -d '\r')"; then adb shell input keyevent KEYCODE_BACK; sleep 1; fi
@@ -384,7 +383,7 @@ page=$(adb shell cat "$DUMP" | LC_ALL=C sed 's/\xe2\x81[\xa6-\xa9]//g' | grep -o
 tap_text "Network" || fail "no network section on the app's page"
 tap_text "See what this app sends now" || fail "the app's page does not offer \"Now\""
 within 15 screen_has "Showing one app." || fail "\"Now\" did not open for one app"
-adb shell cat "$DUMP" >"$SCREENS/one.xml"
+adb_again shell cat "$DUMP" >"$SCREENS/one.xml" || fail "the emulator stopped answering adb on \"Now\" for one app"
 grep -qx row <<<"$(python3 -I "$ROOT/scripts/now-screen.py" "$SCREENS/one.xml" "$page")" || fail "\"Now\" opened from the app's page does not show $page"
 # And no other app: the other workload apps sent in this run too (review c1, screens, m6).
 for other in "$SCREEN_APP" "$BACKGROUND_APP" "$NOTICE_APP"; do

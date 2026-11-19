@@ -14,6 +14,27 @@ is_emulator() {
 device_back() {
     timeout "$1" adb wait-for-device >/dev/null 2>&1 || return 1
     echo "  the device answers again; up $(adb shell cat /proc/uptime 2>/dev/null | cut -d' ' -f1 | cut -d. -f1) s"
+    device_story
+}
+
+# What the device was doing when it dropped off, told on the run: its memory, and the crashes, kills and hangs
+# Android logged last. The emulator's own logs, never a phone's.
+device_story() {
+    echo "  memory: $(adb shell cat /proc/meminfo 2>/dev/null | tr -d '\r' |
+        awk '/^(MemTotal|MemAvailable|SwapFree):/ {printf "%s %s kB; ", $1, $2}')"
+    adb shell logcat -d -b crash -t 20 2>/dev/null | tr -d '\r' | sed 's/^/  crash: /' || true
+    adb shell logcat -d -b main,system -t 2000 2>/dev/null | tr -d '\r' |
+        grep -E 'lowmemorykiller|Watchdog|ANR in|FATAL EXCEPTION|Kill .*adj|Killing ' | tail -15 | sed 's/^/  log: /' || true
+}
+
+# Runs adb with its arguments; when the device stopped answering, waits for it, says what it was doing, and runs
+# the command once more, so that a dropped connection is waited for and told instead of ending a check that runs
+# under set -e without a word (CI, 2026-11-19, docs/ci-flakes.md).
+adb_again() {
+    adb "$@" && return 0
+    echo "  adb $* got no answer from the device: waiting for it"
+    device_back 120 || { echo "the device did not answer adb again within 120 s" >&2; return 1; }
+    adb "$@"
 }
 
 # Runs the command after $1 until it succeeds, once a second for up to $1 seconds, and fails if it never
