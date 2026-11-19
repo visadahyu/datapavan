@@ -836,8 +836,8 @@ fn add_reasons(to: &mut [Ways; COLUMNS], more: &ByReason) {
 #[cfg(test)]
 mod tests {
     use super::super::activity::tests::{
-        BACKGROUND, IN_USE, NOTIFICATION, T, Telling, UID, flow, open, taken, telling_at, told,
-        up_at,
+        BACKGROUND, IN_USE, NOT_TOLD, NOTIFICATION, T, Telling, UID, flow, open, taken, telling_at,
+        told, up_at,
     };
     use super::super::tests::shared_with;
     use super::*;
@@ -1808,6 +1808,43 @@ mod tests {
         assert!(counts.off.is_some());
     }
 
+    /// The edges of the window while the screen was off: it ends where the screen came on, once, even when
+    /// it went off and came on in one millisecond, and a screen-on told again later does not move its end;
+    /// a second not told yet that begins as the screen goes off is in it, and one that begins as it comes
+    /// on is not.
+    #[test]
+    fn the_window_while_the_screen_was_off_has_sharp_edges() {
+        let mut counts = Counts::default();
+        counts.screen_off(T);
+        counts.screen_on(T);
+        assert_eq!(counts.off.as_ref().map(|off| off.until), Some(Some(T)));
+        let mut counts = Counts::default();
+        counts.screen_off(T);
+        counts.screen_on(T + 5_000);
+        counts.screen_on(T + 9_000);
+        assert_eq!(
+            counts.off.as_ref().map(|off| off.until),
+            Some(Some(T + 5_000)),
+            "a later screen-on with no screen-off between does not move its end"
+        );
+        // Seconds not told yet at the edges.
+        let (shared, clock, _) = telling_at(T);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 0, 1);
+        shared.tell(&screen_told(
+            T - 1_000,
+            T,
+            crate::states::Screen::Off,
+            Some(T),
+        ));
+        up_at(&shared, &clock, &bytes, 2_000, 2);
+        let off = bytes_of(&shared.now_view(T + 2_500), Some(UID))[OFF][NOT_YET];
+        assert_eq!(off, [3, 0], "both seconds begin while it is off");
+        lock(&shared.activity).counts.screen_on(T + 2_000);
+        let all = bytes_of(&shared.now_view(T + 2_500), Some(UID));
+        assert_eq!((all[OFF][NOT_YET], all[2][NOT_YET]), ([1, 0], [2, 0]));
+    }
+
     /// Bytes in no state count by why, in each window: no usage access, no events, told too late, no app,
     /// not told, each apart, and together they are the column of no state (W5's third part, the open list's
     /// fifth item).
@@ -1868,6 +1905,50 @@ mod tests {
         assert_eq!(all[0][0], [15, 15], "no state is the sum of its whys");
         assert_eq!(all[0][3], [7, 0]);
         assert_eq!(all[1][0], [3 * 15 + 5 * 1_100, 3 * 15]);
+        // The screen comes on again: its window's whys begin anew too.
+        lock(&shared.activity).counts.screen_on(T + 500);
+        let all = bytes_of(&shared.now_view(T + 1_000), Some(UID));
+        assert_eq!(all[2], [[0; 2]; COLUMNS]);
+        // An hour on, the whys of the oldest minutes are forgotten with the minutes.
+        drop(shared.now_view(T + 46 * MINUTE));
+        let kept = lock(&shared.activity).counts.apps[&Some(UID)].reasons.len();
+        assert_eq!(kept, 1, "the minute 15 minutes before is still in the hour");
+        // A clock set back forgets the whys of the minutes later than its own, and of the window since
+        // the screen came on if that came on later.
+        let (shared, _, _) = telling_at(T);
+        let mut counts = Counts::default();
+        counts.screen_on(T - 20 * MINUTE);
+        counts.count(
+            Some(UID),
+            T / 1000 - 25 * 60,
+            [1, 1, 0, 0],
+            NOT_TOLD,
+            Seen::Flow(&to),
+        );
+        counts.count(
+            Some(UID),
+            T / 1000 - 60,
+            [2, 2, 0, 0],
+            NOT_TOLD,
+            Seen::Flow(&to),
+        );
+        counts.set_back(T - 30 * MINUTE);
+        counts.count(
+            Some(UID),
+            T / 1000 - 31 * 60,
+            [9, 0, 0, 0],
+            BACKGROUND,
+            Seen::Flow(&to),
+        );
+        lock(&shared.activity).counts = counts;
+        let all = bytes_of(&shared.now_view(T - 30 * MINUTE), Some(UID));
+        assert_eq!(all[1][9], [0, 0], "the minutes later than the new clock's");
+        assert_eq!(
+            all[2][9],
+            [0, 0],
+            "the window since the screen came on was of the old clock"
+        );
+        assert_eq!(all[1][3], [9, 0]);
     }
 
     /// Clearing the live memory forgets every app's bytes in every window, its destinations, the window
