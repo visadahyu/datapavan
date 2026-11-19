@@ -377,29 +377,45 @@ provider. What was chosen where the decision left room, and why:
   tunnel's task). GotaTun is `=0.10.3` with `default-features = false, features = ["aws-lc-rs"]`; its 89 crates
   in the lock are those the spike measured, version for version. `core/deny.toml` gained BSD-3-Clause,
   BSD-2-Clause, ISC and MPL-2.0; `NOTICE` lists GotaTun, where its source is, and the new licences. `cargo deny`
-  passes. Since `aws-lc-sys` compiles C for the target, `scripts/check.sh rust` runs the Android clippy
+  passes. The licence texts of every crate inside the native libraries are in `licences/` (`native-core.txt`,
+  `native-watch.txt`, written by `scripts/licences.py` from each package's own texts, which `scripts/check.sh
+  rust` holds current and which fails on a crate with none); GotaTun's package carries none, so
+  `licences/MPL-2.0.txt` (Debian's copy of the licence) and `licences/gotatun-BSD-3-Clause.txt` (the SPDX text
+  with the Cloudflare notice its source files carry) stand for them. Every APK carries `NOTICE`, `LICENSE` and
+  its libraries' texts under `assets/licences/`, which `scripts/check.sh android` checks in both release APKs. Since `aws-lc-sys` compiles C for the target, `scripts/check.sh rust` runs the Android clippy
   through cargo-ndk.
 - **Size.** Watch's stripped library in Advanced's release APK: 1,644,296 bytes on arm64, 1,417,888 on armv7,
   1,909,432 on x86_64, within the 2 MB gate (2,097,152), which `scripts/check.sh android` holds. Against the
   spike's measure of the engine without WireGuard (1,384,656, 1,220,364, 1,590,136 at `f1127f3`): +259,640,
-  +197,524 and +319,296 bytes, GotaTun's 170 KB and W7's own code and tables.
+  +197,524 and +319,296 bytes, GotaTun's 170 KB and W7's own code and tables. After the fix round: 1,678,872, 1,442,344 and
+  1,949,640 bytes (+34,576, +24,456, +40,208: the resolver's callback, the fragments put together, the
+  application lists).
 - **The configuration.** One `[Interface]` and one `[Peer]`, keys and sections in any case, `#` comments, a
   UTF-8 BOM, CRLF. Refused with a reason the screens can show (`Refusal`: a code, a line, a key, never a value):
   several peers or interfaces, an unknown section, `PostUp` and every other key it does not carry (among them
-  `ListenPort`, `FwMark`, `Table`, `SaveConfig`, WireGuard's app's `IncludedApplications`), a key twice, a value
-  it cannot read, two addresses of one version, a search domain in `DNS`, no `DNS` (W7, question 9), and, new
+  `Table` and `SaveConfig`), a key twice, a value it cannot read, two addresses of one version, a search domain in
+  `DNS`, no `DNS` (W7, question 9), both of WireGuard's app's application lists at once, and, new
   here, **no DNS server the tunnel reaches**: one of a version the configuration has an address of and inside
   the peer's `AllowedIPs`, since its answers must pass the back path's filter. `MTU` 576 to 1,500, at least
   1,280 with an IPv6 address; none gives 1,280. Keys are canonical base64 of 32 bytes, the all-zero key
   refused; they are `Secret`s, zeroed on drop (`zeroize`), never in `Debug`, a refusal, the dump or a log
-  line. At most 16 KiB of text, 256 networks in `AllowedIPs`, 8 DNS servers. Fuzzed (`core/fuzz`, target
-  `wireguard`, 7 seeds: 12.4 million runs without a fault after the one fault it found, a shift past a whole
-  prefix, fixed).
+  line; compared in constant time, and GotaTun's copies of them zeroed too. `ListenPort` and `FwMark` are read
+  and ignored, and WireGuard's app's `IncludedApplications` or `ExcludedApplications` kept, at most 512 package
+  names, for part 2's import to offer (the maintainer's answer 2, below). An endpoint must be a unicast address,
+  not an IPv6 link-local one; the loopback is allowed, since local relays (wstunnel, udp2raw) listen there. At most
+  16 KiB of text, 256 networks in `AllowedIPs`, 8 DNS servers. Fuzzed (`core/fuzz`, target `wireguard`, 7 seeds:
+  12.4 million runs without a fault after the one fault it found, a shift past a whole prefix, fixed; it checks
+  that neither key shows in `Debug` as bytes or base64 and that no refusal's text holds a run a key could be);
+  the back path's reader and the MSS clamp too (target `wireguard_back`, 9 seeds: what is read lies inside the
+  packet, swaps read back, a clamped MSS is within its bound with its checksum still right).
 - **Routes.** `Route` gains `Tunnel(n)`, decided where W6 decides it, after Android named the app: the held SYN
   (`tcp::upstream`, which now waits for the owner whenever any app goes through a tunnel) and the first
   datagram (`udp::open_mapped`, `udp::open_lookups`). An app with a tunnel goes through it whatever the chain
   says, since each app has one route; a flow of no app, and every echo, take the default tunnel, the first
-  configuration set, while any app goes through any; a stand-in address is refused. While any app goes
+  configuration set, while any app goes through any; a stand-in address is refused. A route to a tunnel whose
+  configuration is not set, or was removed, stays: its apps' flows are refused, never sent directly, and the
+  state shows the tunnel as routed and not configured, until the configuration comes or Watch routes them
+  elsewhere (the reviews' first finding). While any app goes
   through a tunnel, a SYN that finds no listener of the system stack is routed first, since tunnelled
   connections need none.
 - **Forwarding and the way back.** Ports are kept. A packet from the tunnel passes only if its source is in
@@ -416,15 +432,23 @@ provider. What was chosen where the decision left room, and why:
   second swap, of the same version only. Answers are learned for every app's flows, as Android's resolver's
   are, kept in a cache of the tunnel's own, and reach the app with a time to live of 0; while any app goes
   through a tunnel every answer of Watch's DNS address does (question 4). An answer over TCP is learned when
-  one segment holds it whole, and is not rebuilt, as on the direct and chained paths.
+  one segment holds it whole, and is not rebuilt, as on the direct and chained paths. Fragments from the tunnel
+  are put together (16 datagrams, 256 KiB, 5 s per tunnel) before the filter reads them.
 - **MTU: the second way.** The tunnel keeps the TUN's MTU, the first hop's, which direct apps keep using whole;
   a tunnelled SYN's MSS and the server's SYN-ACK's are clamped to the configuration's MTU, and a packet larger
   than it that may not be fragmented gets "fragmentation needed" or "packet too big" from its destination, as
   a router answers; one the engine put together from the app's own fragments passes whole. Why: several
   tunnels with different MTUs cannot share one TUN MTU without the smallest bounding every app, direct ones
   included; each configuration added or removed would set the tunnel up again; and the clamp and the error
-  are what routers do. Not measured: the CPU a TUN at 1,280 would have cost direct apps on the A40, which the
-  first way rested on; the lab and the emulator show TCP clamped and UDP's path MTU learned through it.
+  are what routers do. Shown in the lab, through the engine against the kernel's WireGuard
+  (`the_mtu_holds_on_the_path_to_the_kernel_peer`): with a configuration's MTU of 1,280, an app's SYN with an MSS of
+  1,460 reaches the peer's kernel as 1,240 in IPv4 and 1,220 in IPv6 (what the peer's socket reads as
+  `TCP_MAXSEG`), the SYN-ACK reaches the app clamped alike, a datagram of 1,280 bytes that may not be fragmented
+  passes whole to the peer and back, and one of 1,281 gets the app "fragmentation needed" or "packet too big"
+  with 1,280 from its destination. Not shown: an Android app's own socket learning the path MTU from that error,
+  nor the CPU a TUN at 1,280 would have cost direct apps on the A40, which the first way rested on. QUIC, most of
+  the web's UDP, finds its path's MTU itself (RFC 9000, 14.3, and DPLPMTUD, RFC 8899), sending probes it lets
+  be lost, so it needs no error from Watch (the maintainer's answer 1).
 - **The core's demands** (the spike's list), each with a test: every datagram through the rate limiter first
   (in `GotaTun::receive`), `AllowedIPs` after decryption, an `MtuWatcher` of the configuration's MTU for
   padding, the queue drained after a handshake, and the timers. Each tunnel's task ticks once a second only
@@ -432,28 +456,48 @@ provider. What was chosen where the decision left room, and why:
   either way after a pause of a second or more; an idle tunnel waits on its socket alone. A tunnel with
   keepalives starts at once when an app is routed to it, as the reference implementations start such a peer.
 - **A tunnel that does not answer.** No path leads from a tunnelled flow to a direct socket. Packets wait in
-  the core's queue of 256 or are lost, counted; the state says "does not answer" after two initiations went
-  unanswered, about ten seconds, and gives the handshake's age, the last packet received, and the last error
-  (of the socket, the endpoint's name, or the core, as a word).
+  the core's queue of 256 or are lost, counted; the state says "does not answer" once a second initiation goes
+  out with the first unanswered, about five seconds after the first (`REKEY_TIMEOUT`; a routine rekey's one
+  initiation does not), and gives the handshake's age, the last packet received, and the last error (of the
+  socket, the endpoint's name, or the core, as a word). The timers' pause is measured on `CLOCK_BOOTTIME`, so a
+  phone that slept runs them before its next packet.
 - **Roaming and the endpoint.** Each tunnel has its own protected, connected UDP socket. On a network change it
   is made anew and the server is told at once: a keepalive while the session is younger than two minutes, else
-  a handshake; the server's address stays the configured one. A host name is resolved before the tunnel over a
-  protected socket, an IPv4 address first; Watch has no encrypted resolver of its own before W8, so it is the
-  network's resolver over plain DNS, and the state says so for every name. It is resolved again after four
-  unanswered initiations, at most once a minute.
+  a handshake; the server's address stays the configured one. A host name is resolved before the tunnel by
+  Android's own resolver on the network beneath (`Network.getAllByName`, from Kotlin on a thread of its own, at
+  most 10 s), which uses the user's Private DNS where it is on: encrypted where Android says Private DNS is
+  active on that network (strict, or "automatic" with a server that offers DNS over TLS), plain otherwise, and
+  the state says which (the maintainer's answer 4, below). Only where Android has no network to ask does the
+  engine ask the network's resolver itself, in plain DNS through a protected socket, and says so. An IPv4 address
+  first, never a loopback or multicast one. It is resolved again after four unanswered initiations, at most once
+  a minute; a name that does not resolve, or a socket that cannot be made, is tried again after a pause that
+  doubles from 5 s to a minute, its apps' packets waiting meanwhile, never asking again per packet (the engine
+  reviewer's second finding); the state counts the resolutions.
 - **Local network directly**, per configuration, off by default: a tunnelled app's RFC 1918, link-local,
   unique-local and multicast destinations go directly, but not the configuration's own networks, its DNS
-  servers (Proton's 10.2.0.1 beside 10.2.0.2/32), or Watch's addresses.
+  servers (Proton's 10.2.0.1 beside 10.2.0.2/32), Watch's addresses, or a private range the configuration's
+  `AllowedIPs` names as narrowly as the local range or more (a company's 10.0.0.0/8 through its tunnel; an
+  `AllowedIPs` of everything does not count). Its destinations stay out of the log as the app's others do,
+  while "Log where these apps connect" is off, as the live view hides that app's places.
 - **The log and Now.** `Flow` gains its route (`Via`): the log's record goes to version 4, a segment's route
   after its state; the snapshot to version 3, each destination's route and each app's tunnel. A tunnelled
   flow's destination is kept only under "Log where these apps connect", as a chained one's; the tunnel's own
-  server is reached by Watch's protected socket and is no app's flow. The Kotlin readers and fixtures follow.
-  Nine counters are appended (52 to 60).
+  server is reached by Watch's protected socket and is no app's flow. The Kotlin readers and fixtures follow;
+  a segment of a version before 4 reads as of no known route. "Now"'s screen does not read the route yet: part
+  2 gives it its line. Nine counters are appended (52 to 60). The tunnels' table is taken only after the log's
+  live flows or alone, and the log is told nothing under it (the engine reviewer's third finding: the two were
+  taken in opposite orders, and the engine could freeze); a new SYN on the ends of a closed connection ends the
+  old flow's record.
 - **The bridge.** `nativeTunnelSet(id, text, localNetwork)` (the text zeroed once parsed; a refusal returned as
-  text), `nativeTunnelRemove`, `nativeTunnelRoutes(uids, tunnels, logDestinations)`, `nativeTunnelStates`;
-  kept beside the chain for the engines to come, forgotten when the tunnel stops. Debug builds' dump:
-  `tunnel-add ID FILE [local]` from Watch's files directory, `tunnel-route UID ID`, `tunnel-remove ID`, and a
-  `tunnel` line per state, with no key, address or endpoint.
+  text), `nativeTunnelParse(text)` (the refusal, or the configuration's application lists, for part 2's import),
+  `nativeTunnelRemove` (the configuration only: its routes stay, and its apps wait), `nativeTunnelRoutes(uids,
+  tunnels, logDestinations)`, `nativeTunnelStates` (with whether each tunnel is configured, and how many times
+  its name was resolved); kept beside the chain for the engines to come, forgotten when the tunnel stops. The
+  engine calls `WatchVpnService.resolveEndpoint(name)` back, kept from R8 and checked in the APK like the other
+  callbacks. Debug builds' dump: `tunnel-add ID FILE [local]` from Watch's files directory (with a `tunnel-apps`
+  line for each app the file names), `tunnel-route UID ID`, `tunnel-remove ID`, a `tunnel` line per state, with
+  no key, address or endpoint, and a `flow-route UID ROUTE COUNT` line for each app and way its kept flows went;
+  a release build's dump answers none of them, which `scripts/verify-watch-release.sh` checks.
 - **Bounds.** 8,192 tunnelled TCP and UDP flows in all, and as many echo identifiers; 8 datagrams waiting for a
   tunnel's socket; the core's queue of 256 per tunnel; a closed TCP flow kept `close_linger` (30 s), a silent
   one 2 h 4 min (RFC 5382); a UDP flow `udp_idle` (120 s); an echo 30 s; the per-tunnel DNS cache as Watch's
@@ -463,32 +507,119 @@ provider. What was chosen where the decision left room, and why:
   rule, the DNS redirect, in units and in `core/net/tests/wireguard.rs` through the whole engine against
   GotaTun's own core as the server. Interoperation through the engine, `scripts/check.sh wglab`
   (`scripts/wglab.sh`, a new mode beside `lab`, which is the gaps probe's), against two peers of the kernel's
-  WireGuard: TCP, UDP, ICMP and DNS on IPv4 and IPv6, answers from outside `AllowedIPs` dropped, a
-  `PresharedKey`, two tunnels at once to two peers, each peer seeing the handshake (13 checks,
+  WireGuard: TCP, UDP, ICMP (the reply from the peer itself) and DNS on IPv4 and IPv6, answers from outside
+  `AllowedIPs` dropped, a `PresharedKey` that the peer holds too, two tunnels at once to two peers, the MTU's
+  clamp and errors, each peer seeing the handshake (19 checks since the fix round,
+  [results](../../spikes/wireguard-core/results-2026-11-20-lab-engine-fix.txt); 13 before,
   [results](../../spikes/wireguard-core/results-2026-11-19-lab-engine.txt)). On the emulator,
   `scripts/verify-wireguard.sh` in the watch shard, on CI's image (Android 15): the workload app's lookup, TCP
-  and UDP through the first peer from 10.77.0.2, IPv6 inside the tunnel from fd77::2, another app directly, a
-  second configuration to the second peer at once, a connection kept across a network switch, and with the
-  peers stopped, nothing of the routed apps reaching a sentinel directly while the tunnel says it does not
-  answer. The watch shard's first run found that a route changed from Watch's thread ended the app's open
-  flows there, reading the log's clock off the engine's thread, which a debug build refuses with a panic; they
-  are now ended on the engine's thread, and a test holds it. Per packet, the engine's CPU for a UDP datagram from an app (`per_packet_cost`): through a tunnel
-  4.4 µs at 1,280 bytes and 4.1 µs at 100 on the development machine (directly 7.0 and 6.9), 4.2 and 3.3 µs on
-  the emulator (directly 5.3 and 5.1); the A40's in part 3.
-- **Accepted limits.** A tunnelled UDP flow keeps the app Android named for it until it falls silent, where the
-  direct path asks again after a pause: a port Android hands to another app meanwhile sends that app's
-  datagrams to the same destination through the same tunnel, never directly. A new engine (a tunnel set up
-  with other addresses) begins new sessions: the cores are not handed over, only the setting. The quote of an
-  error is read without IPv6 extension headers, which Watch's own packets into the tunnel never carry. A
-  cookie reply under load, an IPv6 outer address and wireguard-go as the peer are not in the lab (the spike's
-  list).
+  and UDP through the first peer from 10.77.0.2, the apps its configuration names read on Watch's side, another
+  app directly beside it, IPv6 TCP and UDP inside the tunnel from fd77::2, a second configuration to the second
+  peer at once with the first app's echoes counted at the first peer, a network switch while only the peer has
+  more to send, the peers not answering while the routed apps send TCP, UDP and lookups of new names for 15 s
+  past the tunnel saying so (nothing at a sentinel, no direct flow of theirs in Watch's list) and then answering
+  again, a removed configuration holding its apps, and no key or endpoint in the dump or the device's log. Run
+  with the socket's remaking reverted, and again with only the keepalive after it reverted, the switch step
+  fails: the peer's answers after the switch never arrive; run with an app sent directly while its tunnel does
+  not answer, the stopped-peers step fails at the sentinel. The watch shard's first run found that a route
+  changed from Watch's thread ended the app's open flows there, reading the log's clock off the engine's thread,
+  which a debug build refuses with a panic; they are now ended on the engine's thread, and a test holds it. Per
+  packet, the engine's CPU for a UDP datagram from an app (`per_packet_cost`, release build, each far end
+  counting what it read: all 200,000 of each run): through a tunnel 4.4 µs at 1,280 bytes and 4.1 µs at 100 on
+  the development machine, directly 4.45 and 4.35 µs. Encryption is a small part of either; the system calls
+  are most of it. The figures given before the fix round (directly 7.0 and 6.9 µs here, 5.3 and 5.1 on the
+  emulator, a tunnel cheaper than the direct path) measured the direct path against a reader that had stopped,
+  so the engine handled a "port unreachable" for each packet; they are withdrawn, and the emulator's and the
+  A40's come in part 3.
+- **Accepted limits.** A new engine (a tunnel set up with other addresses) begins new sessions: the cores are
+  not handed over, only the setting. The quote of an error is read without IPv6 extension headers, which Watch's
+  own packets into the tunnel never carry. An echo request the engine put together from the app's fragments,
+  larger than the tunnel's MTU, gets "fragmentation needed" where TCP and UDP put together pass whole, so a
+  `ping -s 2000` through a tunnel fails where a router would fragment it. A UDP datagram put together from the
+  app's fragments that opens a tunnelled flow waits on the direct path's side while Android names its app, and
+  loses the mark of having been put together there: in IPv6, one larger than the configuration's MTU then gets
+  "packet too big" once, where the next, on the open flow, passes whole (found in the fix round; the direct
+  path's waiting datagrams would need to carry the mark). Under Private DNS's "automatic" mode
+  Android may ask in plain DNS when the server's DNS over TLS fails, after saying it is active, so an endpoint's
+  name the state calls encrypted may have gone out plain then; strict mode never does. A thread asking
+  Android's resolver past its 10 s ends when Android answers, its answer unread. A cookie reply under load, an
+  IPv6 outer address and wireguard-go as the peer are not in the lab (the spike's list).
 
-**Left to the maintainer:** (1) the MTU's second way, above, against the first; (2) whether `ListenPort`,
-`FwMark` and WireGuard's app's `IncludedApplications`/`ExcludedApplications`, which mean nothing to Watch, are
-read and ignored rather than refused, so that a file exported from WireGuard's app imports; (3) that an app's
-tunnel wins over the chain's "every app but the tool"; (4) whether a host-name endpoint is resolved over plain
-DNS before W8, as now with the state saying so, or refused until W8 brings an encrypted resolver; (5) whether a
-tunnelled UDP flow asks Android again after a pause, as the direct path does.
+**The maintainer's answers (2026-11-19, after the reviews of part 1), and how they are built:**
+
+1. **The MTU's second way stands**, as above; QUIC finds its path's MTU itself, and the ADR says so.
+2. **`ListenPort` and `FwMark` are read and ignored**, so that a file exported from WireGuard's app imports;
+   `IncludedApplications` and `ExcludedApplications` are kept by the parser (not both at once) and handed over by
+   the bridge (`nativeTunnelParse`) for part 2's import to fill the choice of apps with and show for the user to
+   confirm; the engine routes by Watch's own choice alone.
+3. **An app's tunnel wins over the chain's "every app but the tool"**: the app's own route is the more specific
+   choice. The alternative, the chain winning, would send through the tool an app the user put in a tunnel by
+   name. Its cost: an app in a tunnel leaves the tool's cover, which part 2's screens show beside the chain's.
+4. **An endpoint's name is resolved over encrypted DNS where Android has it**: by Android's own resolver on the
+   network beneath, which uses the user's Private DNS, not by Watch's own DNS over TLS to the Private DNS server.
+   Why: it encrypts exactly where the user's setting does, with Android's own validation of the server and its
+   fallback rules; it needs no TLS client in the engine before W8; and it asks on the network beneath, never
+   through a tunnel that is not up. Plain DNS only where Android has none (no network beneath to ask), through
+   a protected socket, and the state says so. **W8 takes endpoint resolution over** with the user's own
+   encrypted resolver.
+5. **A tunnelled UDP flow asks Android again after a pause** (`udp_reask`, 1 s), as the direct path does: the
+   datagrams that come meanwhile wait (at most `udp_waiting`, 32), and a flow Android now names for another app
+   or route ends, its datagram going the new app's way.
+
+## Fix round of part 1 (2026-11-19)
+
+Two independent reviews of part 1 (the engine; the bridge, the checks and the documents) found eight majors
+between them; each is fixed with a test or check that fails when the fix is reverted:
+
+- **A route to a tunnel that is not set** sent the app directly; now it is kept and refused (above, "Routes").
+  `an_app_routed_to_a_tunnel_not_set_waits_and_never_goes_directly`, the units' route tests, and on the emulator
+  the last step of `scripts/verify-wireguard.sh`.
+- **An endpoint name that does not resolve** was asked again per packet; now with a doubling pause
+  (`a_name_that_does_not_resolve_is_not_asked_again_per_packet`).
+- **The tunnels' table and the log's live flows** were taken in opposite orders; now the log is told after the
+  table's lock (`forwarding_tells_the_log_nothing_under_the_tables_lock`, which froze on the old order).
+- **The "peers stopped" step** sent nothing after the tunnel said it does not answer; now the routed apps send
+  TCP, UDP and lookups of new names for 15 s past it, a sentinel and Watch's own flow list must show nothing
+  direct, and the peers come back for the app's traffic to pass again. Run with an app sent directly while its
+  tunnel does not answer, it fails.
+- **The network-switch step** passed without a switch, and with roaming reverted; now the default network moves
+  off Wi-Fi (or off mobile data where that was the default) while only the peer has more to send, after a
+  silence in which nothing of the client's is owed, so that the peer's last answers reach the app only where
+  Watch remade its socket and sent from it at once. Run with each half of `roamed` reverted, it fails.
+- **Licences:** the texts are now in the repository and in every APK, held by the gates (above, "Where").
+- **The MTU's evidence** is now the lab's, through the engine (above).
+
+Minors fixed with tests: fragments from the tunnel put together; "Local network directly" leaving a private
+`AllowedIPs` to the tunnel; a new SYN on a closed connection's ends ending the old record; the timers' pause on
+`CLOCK_BOOTTIME`; `resolve` reading AAAA after an unreadable A answer; tests for the hand mutants that
+survived (R1, a mapping of an app newly routed; the answers at a time to live of 0, cached and direct; the
+endpoint's name; the second flow on the same way back refused; an error's quote; a datagram put together passing
+whole, now in IPv6 too, where M5 had survived the IPv4 case, and kept so while it waits for Android to be asked
+again; a ping to a stand-in; the roam's handshake on an old session). Fixed without a test of their own: the
+keys' constant-time comparison and zeroed copies, and an idle tunnel's task ended when its configuration goes.
+Of 40 hand mutants (the engine reviewer's 30 and ten of the fix round's rules), the crate's tests kill all but
+six: M24 (the handover's tunnels, which `watch-jni`'s test kills), M32 and M34 (the engine's own plain query
+and the name asked again after a minute of failed handshakes, which would need port 53 or minutes), M35 and M36
+(a SYN on a closed connection's ends, through the whole engine; the record's end is tested in the table), and
+the removed tunnel's idle task. The fuzz targets assert what they say (8.9 and 24.5 million runs from their
+seeds, 90 s each, without a fault). The emulator check skips only without Docker, an answering Docker or the
+wireguard module, and fails otherwise; reads every dump whole; counts the peer's echoes for the two tunnels; adds IPv6 UDP; waits for the networks to
+settle after the switch; checks that no key or endpoint shows in the dump or the device's log; and removes the
+key's file whatever happens. The release build's dump is checked to answer no debug command. The lab checks the
+ping's source and the peer's preshared key. `per_packet_cost` measured the direct path against a reader that had
+stopped, so the engine handled "port unreachable" for every packet: its readers now read throughout, it counts
+what arrived and asserts that nothing was dropped.
+
+**Left for later, written down:** the back path's filter (`tunnels::back`) has no fuzz target of its own (it
+needs a table with flows, inside the crate); an AAAA lookup and a configuration without IPv6 on the emulator (its
+ICMPv6 "administratively prohibited") are units and lab checks only; Android's Private DNS in strict mode makes
+its DNS over TLS connections itself, and whether Android names Watch's tunnelled apps or the resolver as their
+owner, which decides whether their names reach the provider through the tunnel, is for part 3's check on the A40.
+
+**Release gate.** No release ships W7 before part 2 shows the licences on a screen of Advanced (the APK carries
+them already, and `NOTICE` says where GotaTun's source is, as MPL-2.0 section 3.2 asks), and before
+`licences/gotatun-BSD-3-Clause.txt` is compared with `LICENSE-CLOUDFLARE` at GotaTun's tag 0.10.3, which could
+not be downloaded here.
 
 ## Sources
 

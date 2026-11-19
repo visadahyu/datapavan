@@ -1029,8 +1029,8 @@ modules has strings waiting for their translations.
 
 W7, part 1, on `watch-w7a`, 2026-11-19: WireGuard in Watch's engine and its JNI bridge (ADR 0035, "How it is
 built"). GotaTun 0.10.3 with `aws-lc-rs` sits behind a trait of its own in `core/net/src/wireguard/core.rs`; the
-licences it brings are in `core/deny.toml` and `NOTICE`, and Watch's library is 1.57 MiB on arm64, within the 2 MB
-gate. A `wg-quick` parser, fuzzed, takes one interface and one peer with a DNS server the tunnel reaches and
+licences it brings are in `core/deny.toml` and `NOTICE`, the texts of every native crate in `licences/` and in
+every APK, and Watch's library is 1.60 MiB on arm64, within the 2 MB gate. A `wg-quick` parser, fuzzed, takes one interface and one peer with a DNS server the tunnel reaches and
 refuses anything else with a reason the screens can show, its keys zeroed on drop and never shown. Several
 configurations run at once, each app routed directly, through the tool or through one of them, decided where W6
 decides; flows of no app and every echo take the first set while any app goes through one. A chosen app's own
@@ -1039,11 +1039,15 @@ from inside `AllowedIPs` on a flow an app started; ICMP errors are swapped, look
 DNS server with a time to live of 0, IPv6 without an IPv6 address and destinations outside `AllowedIPs` are
 refused at once, never sent directly, and the MSS is clamped to the configuration's MTU. Each tunnel's timers
 tick only while a session or a handshake lives; a tunnel that does not answer holds its apps and says so; a
-network change makes its socket anew and tells the server at once. The log's record (version 4) and "Now"'s
-snapshot (version 3) say each flow's route. The bridge sets, routes and reads the tunnels, and debug builds'
+network change makes its socket anew and tells the server at once; a route to a tunnel whose configuration is
+not set holds its apps too. The log's record (version 4) and "Now"'s snapshot (version 3) say each flow's route;
+"Now"'s screen shows it in part 2. The bridge sets, routes and reads the tunnels, and debug builds'
 dump sets one from a file in Watch's private storage. Checked through the whole engine against GotaTun's own
 core, against the Linux kernel's WireGuard through the engine itself (`scripts/check.sh wglab`, two peers,
-both IP versions, a preshared key), and on the emulator (`scripts/verify-wireguard.sh`, in the watch shard).
+both IP versions, a preshared key, the MTU's clamp and errors), and on the emulator (`scripts/verify-wireguard.sh`,
+in the watch shard). A fix round after two reviews (ADR 0035, "Fix round of part 1") closed eight majors: the
+route to a tunnel not set, a name asked per packet, a lock order that could freeze the engine, two emulator steps
+that could not fail, the licence texts, and the MTU's evidence.
 Part 2 brings the import, the key's storage and the screens; part 3 the CI peer, the A40's measurements and the
 check from outside with a provider.
 

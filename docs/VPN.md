@@ -93,9 +93,12 @@ Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED
   outside a narrower `AllowedIPs`, or IPv6 when the configuration has no IPv6 address, is refused at once;
   "Local network directly", per configuration and off by default, lets the chosen apps reach a printer or a
   NAS. Flows Android names no app for, and every app's ping, go through the first configuration while any app
-  goes through one. While a tunnel's server does not answer, its apps wait and Watch says so; they never go
-  directly. On a network switch the tunnel's own protected socket is made anew and the server told at once, so
-  the chosen apps' connections go on. The tunnel keeps the TUN's MTU: a tunnelled SYN's MSS is clamped to the
+  goes through one. While a tunnel's server does not answer, or its configuration is not set, its apps wait and
+  Watch says so; they never go directly. On a network switch the tunnel's own protected socket is made anew and
+  the server told at once, so the chosen apps' connections go on. A server given by name is looked up by
+  Android's own resolver on the network beneath, encrypted where the phone's Private DNS is on; where it was
+  not, Watch says the network could learn which provider the user chose (W8 brings Watch's own encrypted
+  resolver for it). The tunnel keeps the TUN's MTU: a tunnelled SYN's MSS is clamped to the
   configuration's MTU, and a larger packet gets "fragmentation needed" or "packet too big", as from a router.
   Their destinations are logged only under "Log where these apps connect", as chained apps' are.
 - **Proxy mode, step by step.** Onboarding has a guide per popular tool, in every UI language, for running it in proxy mode instead of VPN mode.
