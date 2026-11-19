@@ -1066,9 +1066,62 @@ mod tests {
         };
         assert!(chained.through_tool && chained.places.is_empty());
         assert_eq!(chained.bytes[0][1], [50, 0]);
-        let tool = app_of(&snapshot, Some(10_200)).map(|a| (a.tool, a.places.len()));
-        assert_eq!(tool, Some((true, 1)));
-        assert_eq!(lock(&shared.activity).counts.places, 4);
+        // The tool's own servers stay out too while the switch is off (decision 3, 2026-11-19); its bytes
+        // stay, marked as the tool's, not as through it.
+        let tool = app_of(&snapshot, Some(10_200)).map(|a| {
+            let sent: u64 = a.bytes[0][..5].iter().map(|w| w[0]).sum();
+            (a.tool, a.through_tool, a.places.len(), sent)
+        });
+        assert_eq!(tool, Some((true, false, 0, 60)));
+        assert_eq!(lock(&shared.activity).counts.places, 3);
+    }
+
+    /// The tool's own destinations, its servers, show and are logged only while "Log where these apps
+    /// connect" is on; turned off, they leave "Now" at once (ADR 0046, decision 3's tool row, decided
+    /// 2026-11-19).
+    #[test]
+    fn the_tools_own_destinations_follow_the_switch() {
+        let (shared, clock, _) = telling_at(T);
+        *lock(&shared.chain) = Some(chain_of(UID, true));
+        let Some(on) = shared.record(flow(1, Some(10_200))) else {
+            unreachable!("an open flow is live")
+        };
+        up_at(&shared, &clock, &on, 500, 10);
+        shared.tell(&told(T, T + 1_000, &[]));
+        let places = |shared: &Shared, at| {
+            app_of(&shared.now_view(at), Some(10_200))
+                .map(|a| (a.tool, a.through_tool, a.places.len()))
+        };
+        assert_eq!(
+            places(&shared, T + 1_000),
+            Some((true, false, 1)),
+            "logged while on"
+        );
+        *lock(&shared.chain) = Some(chain_of(UID, false));
+        shared.hide_chained();
+        assert_eq!(
+            places(&shared, T + 1_000),
+            Some((true, false, 0)),
+            "gone at once"
+        );
+        let Some(off) = shared.record(flow(2, Some(10_200))) else {
+            unreachable!("an open flow is live")
+        };
+        up_at(&shared, &clock, &off, 1_500, 20);
+        shared.tell(&told(T + 1_000, T + 2_000, &[]));
+        assert_eq!(places(&shared, T + 2_000), Some((true, false, 0)));
+        clock.set(T + 3_000);
+        shared.flush();
+        for record in taken(&shared) {
+            if let crate::log::Record::Segment { flow, start, .. } = record
+                && start >= T + 1_000
+            {
+                assert!(
+                    flow.destination.ip().is_unspecified() && flow.name.is_none(),
+                    "{flow:?}"
+                );
+            }
+        }
     }
 
     /// A chain that sends `uid` through the tool, its destinations logged or not.

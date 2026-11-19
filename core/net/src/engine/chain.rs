@@ -96,16 +96,28 @@ impl Shared {
         }
     }
 
-    /// Whether the log leaves out where a flow of `uid` to `destination` went: a chained app's flow,
-    /// unless the user asked for chained destinations. The flow is still counted, with its app and bytes.
+    /// Whether the log leaves out where a flow of `uid` to `destination` went: a chained app's flow, and the
+    /// tool's own, whose destinations are the user's servers (ADR 0046, decision 3, as decided on
+    /// 2026-11-19), unless the user asked for chained destinations. The flow is still counted, with its app
+    /// and bytes.
     pub(super) fn hides(&self, uid: Option<u32>, destination: SocketAddr) -> bool {
         matches!(self.route(uid, destination), Route::Tool(chain) if !chain.log_destinations)
+            || self.hides_tool(uid)
     }
 
-    /// Whether the app `uid` goes through the tool with its destinations left out: what the live view
-    /// keeps of it is its bytes, with no destination (ADR 0046, decision 6, item 5).
+    /// Whether the app `uid` goes through the tool with its destinations left out, or is the tool itself
+    /// with them left out: what the live view keeps of it is its bytes, with no destination (ADR 0046,
+    /// decision 6, item 5, and decision 3's tool row).
     pub(super) fn hides_app(&self, uid: Option<u32>) -> bool {
         matches!(self.app_route(uid), Route::Tool(chain) if !chain.log_destinations)
+            || self.hides_tool(uid)
+    }
+
+    /// Whether `uid` is the user's tool and "Log where these apps connect" is off: its own flows, to its
+    /// servers, then keep no destination, in the log and the live view alike.
+    fn hides_tool(&self, uid: Option<u32>) -> bool {
+        self.chain()
+            .is_some_and(|chain| uid == Some(chain.tool) && !chain.log_destinations)
     }
 
     /// What to ask the tool for: the name behind a stand-in address, or the address itself. `None` for
