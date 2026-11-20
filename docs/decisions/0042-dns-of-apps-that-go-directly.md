@@ -1,6 +1,6 @@
 # 0042. DNS of apps that go directly: Oblivious DoH, several jurisdictions
 
-- Status: Accepted (by the maintainer on 2026-11-12), with open questions; part 1 of W8 built on 2026-11-20 (below)
+- Status: Accepted (by the maintainer on 2026-11-12), with open questions
 - Date: 2026-11-12
 
 ## Context
