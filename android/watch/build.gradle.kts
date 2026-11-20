@@ -29,6 +29,8 @@ android {
 
     buildFeatures {
         compose = true
+        // The interface to the QR decoder's isolated process (src/main/aidl, tunnel/qr/QrService.kt).
+        aidl = true
     }
 
     lint {
@@ -47,6 +49,9 @@ dependencies {
     implementation(libs.androidx.startup.runtime)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
+    // ZXing's core library alone (Apache-2.0), for the QR code of a WireGuard configuration, read only in the
+    // isolated process of tunnel/qr/QrService.kt (W7, part 2; ADR 0035, question 10).
+    implementation(libs.zxing.core)
     testImplementation(libs.junit)
 }
 

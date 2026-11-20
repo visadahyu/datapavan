@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The one folder Watch's FileProvider serves: the camera's photo of a QR code, in Watch's cache (tunnel/qr/Capture.kt). -->
+<paths>
+    <cache-path name="qr" path="qr-capture/" />
+</paths>

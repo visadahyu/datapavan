@@ -30,3 +30,4 @@ androidx.startup	AndroidX App Startup	Apache-2.0	all	LICENSE
 androidx.tracing	AndroidX Tracing	Apache-2.0	all	LICENSE
 androidx.versionedparcelable	AndroidX Versioned Parcelable	Apache-2.0	all	LICENSE
 androidx.window	AndroidX Window	Apache-2.0	all	LICENSE
+com.google.zxing:core	ZXing core: QR code decoding	Apache-2.0	advanced	LICENSE

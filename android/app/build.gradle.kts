@@ -90,8 +90,12 @@ val allowedExported = mapOf(
 )
 val allowedExportedInDebug = if (advanced) mapOf("org.visadahyu.datapavan.watch.MainActivity" to "") else emptyMap()
 
-// The services that parse untrusted input, which must stay in an isolated process (ADR 0045, decision 9).
-val isolatedServices = listOf("org.visadahyu.datapavan.audit.ParserService")
+// The services that parse untrusted input, which must stay in an isolated process (ADR 0045, decision 9): the audit's
+// parsers in every edition, and in Advanced the QR decoder of a WireGuard configuration's picture (W7, part 2).
+val isolatedServices = buildList {
+    add("org.visadahyu.datapavan.audit.ParserService")
+    if (advanced) add("org.visadahyu.datapavan.watch.tunnel.qr.QrService")
+}
 
 // The native libraries each APK must carry, with the JNI symbol each must export (core/jni and NativeCore.kt;
 // core/watch-jni and Engine.kt), and those it must not: Basic never carries Watch's engine.
