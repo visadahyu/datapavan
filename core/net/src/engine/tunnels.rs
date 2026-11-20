@@ -5,8 +5,9 @@
 //! **Routes.** Each app has one route: directly, through the user's tool (W6), or through one tunnel.
 //! The route is decided where W6 decides it, once Android has named the app: at the held SYN
 //! (`tcp::upstream`) and the first datagram (`udp::open_mapped`, `udp::open_lookups`). Flows Android names
-//! no app for, and ICMP echo, which Android cannot name, go through the default tunnel, the first
-//! configuration set, while any app goes through any tunnel; never directly.
+//! no app for, and ICMP echo, which Android cannot name, go through the default tunnel, the one the user
+//! chose, while any app goes through any tunnel; never directly, and while the default's configuration is
+//! not set, nowhere: they are refused rather than sent through another configuration's provider.
 //!
 //! **Forwarding.** A chosen app's packet takes the configuration's address as its source, its checksums
 //! updated incrementally, and goes to the core; its port stays, since every app socket on the tunnel's
@@ -123,6 +124,11 @@ pub struct TunnelSetting {
     pub routes: HashMap<u32, u32>,
     /// Whether their flows' destinations go to the log and the live view.
     pub log_destinations: bool,
+    /// The user's default tunnel, as Watch's order names it, set or not: while its configuration is not set (a
+    /// wrap that cannot be opened now, or at all), flows of no app and ICMP echo are refused, never sent through
+    /// another configuration's provider, which the user did not choose for them (W7, part 2, fix round, security
+    /// review m4). None: the first set is the default, as for the debug builds' hook.
+    pub default: Option<u32>,
 }
 
 /// A tunnel's state, for the screens and the dump: no key, no address, no endpoint.
@@ -359,8 +365,10 @@ impl Tunnel {
 /// The table of tunnels and their flows.
 #[derive(Default)]
 struct Table {
-    /// The tunnels' numbers in the order set: the first is the default.
+    /// The tunnels' numbers in the order set: the first is the default, unless [`TunnelSetting::default`] names one.
     order: Vec<u32>,
+    /// The user's default tunnel, set or not ([`TunnelSetting::default`]).
+    default: Option<u32>,
     tunnels: HashMap<u32, Tunnel>,
     routes: HashMap<u32, u32>,
     log_destinations: bool,
@@ -516,6 +524,7 @@ impl Tunnels {
                 .collect();
             table.routes = routes;
             table.log_destinations = setting.log_destinations;
+            table.default = setting.default.filter(|&id| id != 0);
             self.any.store(!table.routes.is_empty(), Ordering::Release);
             // Flows of a tunnel gone or set anew end, whose source may no longer be the configuration's.
             table.end_where(|(_, flow, protocol)| {
@@ -546,6 +555,7 @@ impl Tunnels {
                 .collect(),
             routes: table.routes.clone(),
             log_destinations: table.log_destinations,
+            default: table.default,
         }
     }
 
@@ -566,9 +576,11 @@ impl Tunnels {
     }
 
     /// The tunnel the app `uid` is sent through, if one: its own, or for an app Android cannot name the
-    /// default while any app is sent through one.
+    /// default while any app is sent through one: the user's default, as Watch named it, whether or not its
+    /// configuration is set, else the first set.
     /// With no configuration set at all, a flow of no app gets the number 0, which no tunnel has: it is
-    /// refused, never sent directly.
+    /// refused, never sent directly; and while the user's default is not set, its number, which refuses it
+    /// too, never sending it through another configuration (fix round, security review m4).
     pub(super) fn route_of(&self, uid: Option<u32>) -> Option<u32> {
         if !self.any() {
             return None;
@@ -576,7 +588,12 @@ impl Tunnels {
         let table = lock(&self.table);
         match uid {
             Some(uid) => table.routes.get(&uid).copied(),
-            None => Some(table.order.first().copied().unwrap_or(0)),
+            None => Some(
+                table
+                    .default
+                    .or_else(|| table.order.first().copied())
+                    .unwrap_or(0),
+            ),
         }
     }
 
@@ -2217,6 +2234,7 @@ mod tests {
             tunnels,
             routes: routes.iter().copied().collect(),
             log_destinations: log,
+            default: None,
         }
     }
 
@@ -2335,6 +2353,52 @@ mod tests {
             "the new default"
         );
         assert_eq!(generation(2), before, "its core kept");
+    }
+
+    /// The user's default tunnel whose configuration is not set (its wrap cannot be opened now, or at all) holds
+    /// flows of no app and every ping: they are refused, never sent through the next configuration, whose
+    /// provider the user did not choose for them (fix round, security review m4). Once it is set, they take it.
+    #[test]
+    fn a_default_not_set_refuses_flows_of_no_app_and_pings_never_taking_another() {
+        use super::super::chain::Route;
+        let shared = shared();
+        let web = SocketAddr::from(([93, 184, 216, 34], 443));
+        let app = SocketAddr::from((shared.addresses.tun4, 40_000));
+        let mut user = setting(
+            vec![configured(2, "0.0.0.0/0", false)],
+            &[(10_300, 2)],
+            false,
+        );
+        user.default = Some(1);
+        shared.tunnels.set(&user);
+        assert!(
+            matches!(shared.route(None, web), Route::Tunnel(1)),
+            "flows of no app keep the user's default"
+        );
+        assert_eq!(shared.tunnels.default_tunnel(), Some(1), "and so does ping");
+        assert_eq!(
+            shared.tunnels.admit(1, app, web, &shared, true),
+            None,
+            "which refuses them while it is not set"
+        );
+        assert_eq!(
+            shared.tunnels.setting().default,
+            Some(1),
+            "handed to the next engine"
+        );
+        user.tunnels.push(configured(1, "0.0.0.0/0", false));
+        shared.tunnels.set(&user);
+        assert!(matches!(shared.route(None, web), Route::Tunnel(1)));
+        assert!(
+            shared.tunnels.admit(1, app, web, &shared, true).is_some(),
+            "set, it carries them"
+        );
+        user.default = None;
+        shared.tunnels.set(&user);
+        assert!(
+            matches!(shared.route(None, web), Route::Tunnel(2)),
+            "with no default named, the first set"
+        );
     }
 
     /// "Local network directly", per configuration and off by default: a tunnelled app's private,

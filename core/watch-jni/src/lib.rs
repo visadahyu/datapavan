@@ -142,8 +142,11 @@ fn place_tunnel(tunnels: &mut TunnelSetting, configured: Configured) -> bool {
 }
 
 /// Puts the tunnels `ids` first, in that order, the others after them as they were: the first is the default
-/// tunnel (W7, part 2). Each keeps its core and its session, since its configuration is the same.
+/// tunnel (W7, part 2), kept as the user's default also while its configuration is not set, so that flows of no
+/// app and pings wait for it rather than go through another (fix round, security review m4). Each keeps its core
+/// and its session, since its configuration is the same.
 fn order_tunnels(tunnels: &mut TunnelSetting, ids: &[u32]) {
+    tunnels.default = ids.first().copied().filter(|&id| id != 0);
     let mut ordered: Vec<Configured> = Vec::with_capacity(tunnels.tunnels.len());
     for id in ids {
         if let Some(at) = tunnels.tunnels.iter().position(|t| t.id == *id) {
@@ -1376,10 +1379,19 @@ mod tests {
             [2, 3, 1, 5],
             "the default first, the others kept in order"
         );
+        assert_eq!(tunnels.default, Some(2));
         order_tunnels(&mut tunnels, &[5, 9, 1]);
         assert_eq!(ids(&tunnels), [5, 1, 2, 3], "an id not set is passed over");
+        order_tunnels(&mut tunnels, &[9, 5]);
+        assert_eq!(
+            tunnels.default,
+            Some(9),
+            "but the user's default is kept, set or not"
+        );
+        assert_eq!(ids(&tunnels), [5, 1, 2, 3]);
         order_tunnels(&mut tunnels, &[]);
         assert_eq!(ids(&tunnels), [5, 1, 2, 3]);
+        assert_eq!(tunnels.default, None);
         let one = |id| Configured {
             id,
             config: Arc::clone(&config),

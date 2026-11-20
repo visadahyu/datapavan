@@ -1296,6 +1296,7 @@ mod tests {
             }],
             routes: std::collections::HashMap::from([(UID, 3), (UID + 1, 3)]),
             log_destinations: log,
+            default: None,
         };
         shared.tunnels.set(&set(true));
         let Some(kept) = shared.record_tunnelled(flow(1, Some(UID)), 3) else {
