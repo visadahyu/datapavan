@@ -26,7 +26,6 @@ use crate::ladder::{Failure, Ladder, Now, Setup, Step};
 use crate::odoh::{self, TargetKey};
 use crate::packet;
 use crate::socks5::Credentials;
-use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, SocketAddr};
 use std::os::fd::AsFd;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -112,7 +111,8 @@ pub enum Reply {
 /// The exchanges handed to Watch's Kotlin side that wait for their reply.
 #[derive(Debug, Default)]
 pub struct Exchanges {
-    pending: Mutex<HashMap<u64, oneshot::Sender<Reply>>>,
+    /// By ticket: as many as lookups wait at once, a few dozen, so a list.
+    pending: Mutex<Vec<(u64, oneshot::Sender<Reply>)>>,
 }
 
 /// Every exchange's number, never the same twice in the process, whichever engine handed it out.
@@ -122,7 +122,11 @@ impl Exchanges {
     /// Hands the reply of exchange `ticket` to the lookup that waits for it. False when none waits: it gave up,
     /// or the engine that asked is gone.
     pub fn complete(&self, ticket: u64, reply: Reply) -> bool {
-        let waiting = lock(&self.pending).remove(&ticket);
+        let waiting = {
+            let mut pending = lock(&self.pending);
+            let at = pending.iter().position(|(t, _)| *t == ticket);
+            at.map(|at| pending.swap_remove(at).1)
+        };
         waiting.is_some_and(|w| w.send(reply).is_ok())
     }
 
@@ -138,7 +142,7 @@ struct Ticket<'a>(&'a Exchanges, u64);
 
 impl Drop for Ticket<'_> {
     fn drop(&mut self) {
-        lock(&self.0.pending).remove(&self.1);
+        lock(&self.0.pending).retain(|(t, _)| *t != self.1);
     }
 }
 
@@ -314,9 +318,9 @@ pub(super) struct Resolver {
     config: Mutex<Option<Arc<DnsConfig>>>,
     ladder: Mutex<Ladder>,
     /// Targets' keys fetched since the pack's, by target index.
-    keys: Mutex<HashMap<usize, TargetKey>>,
+    keys: Mutex<Vec<(usize, TargetKey)>>,
     /// Targets whose key is being fetched.
-    refreshing: Mutex<HashSet<usize>>,
+    refreshing: Mutex<Vec<usize>>,
     /// The encrypted ways' answers, kept for their time to live and a stale window.
     cache: Mutex<DnsCache>,
     /// The exchanges that wait for Watch's Kotlin side.
@@ -326,7 +330,7 @@ pub(super) struct Resolver {
     /// The engine's own listener for DNS over TCP to Watch's address, on the loopback, once bound.
     pub(super) tcp: tokio::sync::OnceCell<SocketAddr>,
     /// The route of each connection to that listener, by its source port, until the listener takes it.
-    pub(super) tcp_routes: Mutex<HashMap<u16, TcpLookups>>,
+    pub(super) tcp_routes: Mutex<Vec<(u16, TcpLookups)>>,
     /// What answered, for the screen and the checks: by way, the network, failures, local names, stale.
     counts: Counts,
 }
@@ -488,12 +492,23 @@ pub fn is_local(name: &str, search: &[String]) -> bool {
     octet(".172.in-addr.arpa", 16..=31) || octet(".100.in-addr.arpa", 64..=127)
 }
 
+/// A task of the resolver's, boxed: every one of them shares one type, so that the runtime's code for a task is
+/// in the library once, not once per kind of task (W8 kept the native library within its 2 MB gate so, at no
+/// cost in speed: one allocation per task, which the runtime makes anyway).
+pub(super) type Task = std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>;
+
+/// Spawns `task` as a [`Task`].
+pub(super) fn spawn(task: impl std::future::Future<Output = ()> + Send + 'static) {
+    let task: Task = Box::pin(task);
+    tokio::spawn(task);
+}
+
 /// Asks Watch's Kotlin side to carry `request`, and waits for its reply at most [`EXCHANGE_WAIT`].
 async fn ask(shared: &Shared, request: &Exchange) -> Reply {
     let exchanges = &shared.resolver.exchanges;
     let ticket = NEXT_TICKET.fetch_add(1, Ordering::Relaxed);
     let (sender, reply) = oneshot::channel();
-    lock(&exchanges.pending).insert(ticket, sender);
+    lock(&exchanges.pending).push((ticket, sender));
     let _forget = Ticket(exchanges, ticket);
     if !shared.platform.exchange(ticket, request) {
         return Reply::Unsupported;
@@ -557,7 +572,7 @@ pub(super) async fn answer(shared: &Arc<Shared>, query: &[u8], tcp: bool) -> Opt
     if let Some(stale) = stale {
         Counters::add(&r.counts.stale);
         let (keeper, config, again) = (Arc::clone(shared), Arc::clone(&config), asked.clone());
-        tokio::spawn(async move {
+        spawn(async move {
             if let Some((fresh, _)) = resolve(&keeper, &config, &again, None).await {
                 keeper.learn(&fresh, None);
                 lock(&keeper.resolver.cache).insert(&fresh, keeper.clock.since_boot());
@@ -724,8 +739,9 @@ async fn attempt(
     let &(r, t) = config.pairs.get(pair).ok_or(Failure::Refused)?;
     let (relay, target) = (&config.catalogue.relays[r], &config.catalogue.targets[t]);
     let key = lock(&shared.resolver.keys)
-        .get(&t)
-        .cloned()
+        .iter()
+        .find(|(k, _)| *k == t)
+        .map(|(_, key)| key.clone())
         .or_else(|| target.key.clone())
         .ok_or(Failure::Key)?;
     let sealed = odoh::seal(&key, &query, 0).ok_or(Failure::Refused)?;
@@ -793,20 +809,26 @@ fn checked(asked: &Asked, reply: Reply) -> Result<Vec<u8>, Failure> {
 /// user's tool while it is on, else directly over the network beneath, which shows the phone's address to
 /// the target once (an accepted limit, ADR 0042).
 fn refresh_key(shared: &Arc<Shared>, config: &Arc<DnsConfig>, t: usize) {
-    if !lock(&shared.resolver.refreshing).insert(t) {
-        return;
+    {
+        let mut refreshing = lock(&shared.resolver.refreshing);
+        if refreshing.contains(&t) {
+            return;
+        }
+        refreshing.push(t);
     }
     let (shared, config) = (Arc::clone(shared), Arc::clone(config));
-    tokio::spawn(async move {
+    spawn(async move {
         let key = key_from_records(&shared, &config, t).await;
         let key = match key {
             Some(key) => Some(key),
             None => key_from_target(&shared, &config, t).await,
         };
         if let Some(key) = key {
-            lock(&shared.resolver.keys).insert(t, key);
+            let mut keys = lock(&shared.resolver.keys);
+            keys.retain(|(k, _)| *k != t);
+            keys.push((t, key));
         }
-        lock(&shared.resolver.refreshing).remove(&t);
+        lock(&shared.resolver.refreshing).retain(|r| *r != t);
     });
 }
 
@@ -1008,21 +1030,19 @@ pub(super) async fn connect_lookups(
             let listener =
                 tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
             let at = listener.local_addr()?;
-            tokio::spawn(serve_lookups(listener, Arc::clone(shared)));
+            spawn(serve_lookups(listener, Arc::clone(shared)));
             std::io::Result::Ok(at)
         })
         .await?;
     let socket = tokio::net::TcpSocket::new_v4()?;
     socket.bind((std::net::Ipv4Addr::LOCALHOST, 0).into())?;
     let port = socket.local_addr()?.port();
-    lock(&shared.resolver.tcp_routes).insert(port, route);
-    match socket.connect(at).await {
-        Ok(stream) => Ok(stream),
-        Err(error) => {
-            lock(&shared.resolver.tcp_routes).remove(&port);
-            Err(error)
-        }
+    lock(&shared.resolver.tcp_routes).push((port, route));
+    let connected = socket.connect(at).await;
+    if connected.is_err() {
+        lock(&shared.resolver.tcp_routes).retain(|(p, _)| *p != port);
     }
+    connected
 }
 
 /// The engine's listener of DNS over TCP: each connection from a port [`connect_lookups`] registered is served.
@@ -1032,58 +1052,56 @@ async fn serve_lookups(listener: tokio::net::TcpListener, shared: Arc<Shared>) {
             tokio::time::sleep(Duration::from_millis(100)).await;
             continue;
         };
-        let route = lock(&shared.resolver.tcp_routes).remove(&peer.port());
+        let route = {
+            let mut routes = lock(&shared.resolver.tcp_routes);
+            let at = routes.iter().position(|(p, _)| *p == peer.port());
+            at.map(|at| routes.swap_remove(at).1)
+        };
         if let Some(route) = route {
-            tokio::spawn(serve_connection(stream, route, Arc::clone(&shared)));
+            spawn(serve_connection(stream, route, Arc::clone(&shared)));
         }
     }
 }
 
-/// Answers each query of one connection (two bytes of length, then the message, RFC 1035 4.2.2), several at
-/// once, until the app closes it or it is idle for [`TCP_IDLE`].
-async fn serve_connection(stream: tokio::net::TcpStream, route: TcpLookups, shared: Arc<Shared>) {
+/// Answers each query of one connection (two bytes of length, then the message, RFC 1035 4.2.2) in turn, until the
+/// app closes it or it is idle for [`TCP_IDLE`]. Android's resolver asks over TCP only for an answer cut short over
+/// UDP, one question at a time.
+async fn serve_connection(
+    mut stream: tokio::net::TcpStream,
+    route: TcpLookups,
+    shared: Arc<Shared>,
+) {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    let (mut reader, mut writer) = stream.into_split();
-    let (answers, mut written) = tokio::sync::mpsc::channel::<Vec<u8>>(16);
-    let writing = tokio::spawn(async move {
-        while let Some(answer) = written.recv().await {
-            let Ok(length) = u16::try_from(answer.len()) else {
-                continue;
-            };
-            if writer.write_all(&length.to_be_bytes()).await.is_err()
-                || writer.write_all(&answer).await.is_err()
-            {
-                break;
-            }
-        }
-        let _ = writer.shutdown().await;
-    });
     loop {
         let mut length = [0u8; 2];
-        match tokio::time::timeout(TCP_IDLE, reader.read_exact(&mut length)).await {
-            Ok(Ok(_)) => {}
-            _ => break,
-        }
-        let mut query = vec![0u8; usize::from(u16::from_be_bytes(length))];
-        if tokio::time::timeout(TCP_IDLE, reader.read_exact(&mut query))
-            .await
-            .map_or(true, |read| read.is_err())
-        {
+        if !matches!(
+            tokio::time::timeout(TCP_IDLE, stream.read_exact(&mut length)).await,
+            Ok(Ok(_))
+        ) {
             break;
         }
-        let (route, shared, answers) = (route.clone(), Arc::clone(&shared), answers.clone());
-        tokio::spawn(async move {
-            let answer = match route {
-                TcpLookups::Encrypted => answer(&shared, &query, true).await,
-                TcpLookups::Tool(chain) => super::lookups::answer(&shared, &chain, &query).await,
-            };
-            if let Some(answer) = answer {
-                let _ = answers.send(answer).await;
-            }
-        });
+        let mut query = vec![0u8; usize::from(u16::from_be_bytes(length))];
+        if !matches!(
+            tokio::time::timeout(TCP_IDLE, stream.read_exact(&mut query)).await,
+            Ok(Ok(_))
+        ) {
+            break;
+        }
+        let answer = match &route {
+            TcpLookups::Encrypted => answer(&shared, &query, true).await,
+            TcpLookups::Tool(chain) => super::lookups::answer(&shared, chain, &query).await,
+        };
+        let Some(answer) = answer else { continue };
+        let Ok(length) = u16::try_from(answer.len()) else {
+            continue;
+        };
+        let mut framed = length.to_be_bytes().to_vec();
+        framed.extend_from_slice(&answer);
+        if stream.write_all(&framed).await.is_err() {
+            break;
+        }
     }
-    drop(answers);
-    let _ = writing.await;
+    let _ = stream.shutdown().await;
 }
 
 #[cfg(test)]
@@ -1091,6 +1109,7 @@ mod tests {
     use super::*;
     use crate::catalogue;
     use crate::odoh::tests::{answer_as_target, target};
+    use std::collections::HashMap;
     use std::fmt::Write as _;
     use std::net::Ipv4Addr;
     use std::sync::OnceLock;
@@ -1431,7 +1450,7 @@ mod tests {
     fn a_ticket_given_up_is_forgotten_and_its_reply_goes_nowhere() {
         let exchanges = Exchanges::default();
         let (sender, _reply) = oneshot::channel();
-        lock(&exchanges.pending).insert(7, sender);
+        lock(&exchanges.pending).push((7, sender));
         {
             let _ticket = Ticket(&exchanges, 7);
         }
@@ -1575,7 +1594,7 @@ mod tests {
         );
         // The refresh asks two operators' HTTPS records (none has one here), then fetches.
         for _ in 0..50 {
-            if lock(&shared.resolver.keys).contains_key(&0) {
+            if lock(&shared.resolver.keys).iter().any(|(t, _)| *t == 0) {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(20)).await;

@@ -3157,7 +3157,7 @@ impl Loop {
                 true
             }
             UdpWay::Resolved => {
-                tokio::spawn(answer_resolved(
+                super::resolver::spawn(answer_resolved(
                     payload.to_vec(),
                     (key, uid),
                     (owed, Arc::clone(&self.udp)),
@@ -4781,7 +4781,7 @@ fn start_answers(
                 return;
             }
             for query in questions {
-                tokio::spawn(answer_resolved(
+                super::resolver::spawn(answer_resolved(
                     query,
                     (key, uid),
                     ((id, Arc::clone(&owed)), Arc::clone(flows)),

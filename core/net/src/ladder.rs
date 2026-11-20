@@ -17,7 +17,6 @@
 //! learned: what Watch learns lives in memory only, for the network it is on, and is never keyed by a network's
 //! name (a list of networks where encrypted DNS failed would be evidence in a phone search).
 
-use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 /// The first back-off after a timeout, a refusal or an error.
@@ -140,9 +139,10 @@ pub enum Now {
 /// The ladder's state on the network Watch is on.
 #[derive(Debug)]
 pub struct Ladder {
-    holds: HashMap<Step, Hold>,
-    /// Within each rung, the step that answered last.
-    learned: HashMap<Rung, Step>,
+    /// The steps held, each once: a few dozen at most, so a list (the native library's size counts, W8).
+    holds: Vec<(Step, Hold)>,
+    /// Within each rung, the step that answered last, by the rung's place.
+    learned: [Option<Step>; 4],
     validated: bool,
     now: Now,
 }
@@ -150,8 +150,8 @@ pub struct Ladder {
 impl Default for Ladder {
     fn default() -> Self {
         Self {
-            holds: HashMap::new(),
-            learned: HashMap::new(),
+            holds: Vec::new(),
+            learned: [None; 4],
             validated: true,
             now: Now::Unknown,
         }
@@ -159,16 +159,38 @@ impl Default for Ladder {
 }
 
 impl Ladder {
+    fn hold(&self, step: Step) -> Option<&Hold> {
+        self.holds.iter().find(|(s, _)| *s == step).map(|(_, h)| h)
+    }
+
+    fn learned(&self, rung: Rung) -> Option<Step> {
+        self.learned[rung as usize]
+    }
+
     /// The steps to try now, in order: by rung, the one learned first within each, held ones left out.
     #[must_use]
     pub fn plan(&self, setup: &Setup, now: Instant) -> Vec<Step> {
-        let mut steps: Vec<Step> = setup
+        let open: Vec<Step> = setup
             .steps()
             .into_iter()
-            .filter(|s| self.holds.get(s).is_none_or(|h| h.until <= now))
+            .filter(|s| self.hold(*s).is_none_or(|h| h.until <= now))
             .collect();
-        // A stable sort: by rung, and within a rung the learned step first, the rest in their order.
-        steps.sort_by_key(|s| (s.rung(), self.learned.get(&s.rung()) != Some(s)));
+        // The steps come in their rungs' order already: within each rung, the learned step first, the rest in
+        // their order.
+        let mut steps = Vec::with_capacity(open.len());
+        for rung in [
+            Rung::First,
+            Rung::ThroughTool,
+            Rung::TargetsDoh,
+            Rung::Presets,
+        ] {
+            let learned = self.learned(rung).filter(|l| open.contains(l));
+            steps.extend(learned);
+            steps.extend(
+                open.iter()
+                    .filter(|s| s.rung() == rung && Some(**s) != learned),
+            );
+        }
         steps
     }
 
@@ -183,33 +205,30 @@ impl Ladder {
         if !self.validated || failure == Failure::Key {
             return;
         }
-        let backoff = match failure {
-            Failure::Tampered => HOLD_TAMPERED,
-            _ => self
-                .holds
-                .get(&step)
-                .map_or(BACKOFF_FIRST, |h| (h.backoff * 2).min(BACKOFF_MOST)),
-        };
-        let hold = match failure {
-            Failure::Tampered => Hold {
+        let before = self.hold(step).map(|h| h.backoff);
+        let hold = if failure == Failure::Tampered {
+            Hold {
                 until: now + HOLD_TAMPERED,
-                backoff: self.holds.get(&step).map_or(BACKOFF_FIRST, |h| h.backoff),
-            },
-            _ => Hold {
+                backoff: before.unwrap_or(BACKOFF_FIRST),
+            }
+        } else {
+            let backoff = before.map_or(BACKOFF_FIRST, |b| (b * 2).min(BACKOFF_MOST));
+            Hold {
                 until: now + backoff,
                 backoff,
-            },
+            }
         };
-        self.holds.insert(step, hold);
-        if self.learned.get(&step.rung()) == Some(&step) {
-            self.learned.remove(&step.rung());
+        self.holds.retain(|(s, _)| *s != step);
+        self.holds.push((step, hold));
+        if self.learned(step.rung()) == Some(step) {
+            self.learned[step.rung() as usize] = None;
         }
     }
 
     /// `step` answered: it is no longer held, it is tried first within its rung, and it is the way now.
     pub fn answered(&mut self, step: Step) {
-        self.holds.remove(&step);
-        self.learned.insert(step.rung(), step);
+        self.holds.retain(|(s, _)| *s != step);
+        self.learned[step.rung() as usize] = Some(step);
         self.now = Now::Way(step);
     }
 
@@ -242,7 +261,7 @@ impl Ladder {
     /// The network beneath changed, or the ways themselves did: every hold and everything learned goes.
     pub fn reset(&mut self) {
         self.holds.clear();
-        self.learned.clear();
+        self.learned = [None; 4];
         self.now = Now::Unknown;
     }
 
@@ -255,7 +274,7 @@ impl Ladder {
     /// How many steps are held at `now`.
     #[must_use]
     pub fn held(&self, now: Instant) -> usize {
-        self.holds.values().filter(|h| h.until > now).count()
+        self.holds.iter().filter(|(_, h)| h.until > now).count()
     }
 }
 
