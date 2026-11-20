@@ -101,6 +101,8 @@ internal data class TunnelsView(
     /** Each slot's name as shown, removed ones included. */
     val names: Map<Int, String> = emptyMap(),
     val logDestinations: Boolean = false,
+    /** What Watch kept can no longer be opened, and every app is held until the user chooses. */
+    val lost: Boolean = false,
 ) {
     /**
      * The note on the default tunnel (fix round, screens review M4): whenever a configuration exists, since the one
@@ -135,6 +137,8 @@ internal class TunnelActions(
     val onCancel: () -> Unit,
     val onRoute: (String, Routes.Route) -> Unit,
     val onLoadApps: () -> Unit,
+    /** After a loss: true to add configurations again at once, false to let the apps go their way. */
+    val onLostChoice: (Boolean) -> Unit = {},
 )
 
 /** A configuration's name for a sentence, isolated so that it keeps its own direction (ADR 0004). */
@@ -160,6 +164,10 @@ internal fun TunnelsSection(view: TunnelsView, actions: TunnelActions, leftOut: 
             modifier = Modifier.semantics { heading() },
         )
         Text(stringResource(R.string.tunnels_intro), style = MaterialTheme.typography.bodyMedium)
+        if (view.lost) {
+            LostCard(actions)
+            return@Column
+        }
         when (view.home) {
             KeyHome.STRONGBOX -> R.string.tunnels_key_strongbox
             KeyHome.TRUSTED_ENVIRONMENT -> R.string.tunnels_key_tee
@@ -214,6 +222,27 @@ internal fun TunnelsSection(view: TunnelsView, actions: TunnelActions, leftOut: 
             Switching(stringResource(R.string.chain_log_destinations), view.logDestinations, actions.onLogDestinations)
             Text(stringResource(R.string.chain_log_destinations_note), style = MaterialTheme.typography.bodyMedium)
             Text(stringResource(R.string.tunnels_log_note), style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+/**
+ * What Watch kept of the configurations can no longer be opened (key A gone for good), and every app is held: the
+ * user chooses to add the configurations again or to let the apps go their way; either forgets what was kept.
+ */
+@Composable
+private fun LostCard(actions: TunnelActions) {
+    Card(Modifier.fillMaxWidth().testTag("tunnels-lost")) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.tunnels_lost_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+            Text(stringResource(R.string.tunnels_lost_body), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+            Text(stringResource(R.string.tunnels_lost_note), style = MaterialTheme.typography.bodyMedium)
+            Button(onClick = { actions.onLostChoice(true) }, modifier = Modifier.testTag("tunnel-lost-again")) {
+                Text(stringResource(R.string.tunnels_lost_again))
+            }
+            OutlinedButton(onClick = { actions.onLostChoice(false) }, modifier = Modifier.testTag("tunnel-lost-let-go")) {
+                Text(stringResource(R.string.tunnels_lost_let_go))
+            }
         }
     }
 }

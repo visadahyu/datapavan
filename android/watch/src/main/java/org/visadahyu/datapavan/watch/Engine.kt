@@ -144,6 +144,16 @@ internal object Engine {
     external fun nativeTunnelRoutes(uids: IntArray, tunnels: IntArray, logDestinations: Boolean)
 
     /**
+     * Every installed app's UID, while Watch routes any app (a configuration or the tool), or null when it routes
+     * none (W7, part 2, fix round, the maintainer's word of 2026-11-20): a flow of a UID outside them, an app
+     * installed since, waits while the engine asks [WatchVpnService.routeOfApp], and goes nowhere until it answers.
+     */
+    external fun nativeKnownApps(uids: IntArray?)
+
+    /** Debug builds: the engine's answers for the apps Watch did not name, one per line, `uid direct|tool|tunnel:N|refused`. */
+    external fun nativeAppAnswers(): String
+
+    /**
      * Each tunnel's state, one per line: `id handshake received error not-answering plain-dns connected flows
      * configured resolutions`, the times in milliseconds ago and `-` for none; `configured` is 0 for a tunnel apps
      * are routed to whose configuration is not set, whose apps wait. No key, no address, no endpoint. Empty when

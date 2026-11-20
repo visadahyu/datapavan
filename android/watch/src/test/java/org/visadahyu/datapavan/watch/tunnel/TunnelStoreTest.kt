@@ -465,4 +465,61 @@ class TunnelStoreTest {
         }
         File(dir, "$slot.text").setReadable(true)
     }
+
+    /**
+     * Beside the wraps, a marker that holds nothing but its presence: it exists while any configuration or route
+     * exists, and goes when the user removes the last (the maintainer's word of 2026-11-20).
+     */
+    @Test
+    fun the_marker_exists_while_a_configuration_or_a_route_does() {
+        val marker = File(dir, "kept")
+        val store = store()
+        assertFalse(marker.exists())
+        val one = store.add("one", text, apps = setOf("org.example.mail")) ?: error("full")
+        assertTrue(marker.exists())
+        assertEquals("it holds nothing", 0L, marker.length())
+        store.remove(one, appsWait = true)
+        assertTrue("an app still waits for it", marker.exists())
+        store.route("org.example.mail", null)
+        assertFalse("the last route gone", marker.exists())
+        store.route("org.example.chat", 9)
+        assertTrue("a route alone", marker.exists())
+        store.route("org.example.chat", null)
+        assertFalse(marker.exists())
+    }
+
+    /**
+     * Key A gone for good while the marker exists: the state is lost, never read as empty, so that the service holds
+     * every app; the state's file deleted likewise. A data clear, which takes the marker too, reads as empty; and
+     * the user's choice after a loss forgets everything (the maintainer's word of 2026-11-20).
+     */
+    @Test
+    fun a_state_lost_for_good_is_never_read_as_empty_while_the_marker_exists() {
+        val store = store()
+        store.add("one", text, apps = setOf("org.example.mail"))
+        wrap.destroy()
+        for (fresh in listOf(true, false)) {
+            try {
+                (if (fresh) TunnelStore(dir, wrap, unlocked) else store).state()
+                error("a lost state read")
+            } catch (e: TunnelStore.StateLost) {
+                // Expected.
+            }
+        }
+        File(dir, "state").delete()
+        try {
+            store.state()
+            error("a missing state read with the marker present")
+        } catch (e: TunnelStore.StateLost) {
+            // Expected.
+        }
+        store.forget()
+        assertEquals("forgotten", TunnelStore.State(), store.state())
+        assertEquals(emptyList<String>(), dir.listFiles().orEmpty().map { it.name })
+        wrap.key = 0x5a
+        store.add("again", text, apps = setOf("org.example.mail"))
+        wrap.destroy()
+        dir.deleteRecursively()
+        assertEquals("a data clear reads as empty", TunnelStore.State(), TunnelStore(dir, wrap, unlocked).state())
+    }
 }

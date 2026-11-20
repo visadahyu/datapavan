@@ -328,7 +328,7 @@ class WatchVpnService : VpnService() {
      * package. Without this, such an app went its other way, directly perhaps, until Watch started again.
      */
     private fun followPackages() {
-        if (packages != null) return
+        if (packages != null || packagesOff) return
         val receiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(context: android.content.Context, intent: Intent) {
                 if (active) applyRoutes()
@@ -346,6 +346,9 @@ class WatchVpnService : VpnService() {
 
     /** The receiver of [followPackages], while the tunnel runs. */
     private var packages: android.content.BroadcastReceiver? = null
+
+    /** Debug builds: the receiver turned off through the dump (`packages-follow off`), for the check of the ask. */
+    private var packagesOff = false
 
     /**
      * Hands the user's chain (W6) to the engine: the tool's proxy where it last answered, its password
@@ -425,10 +428,19 @@ class WatchVpnService : VpnService() {
             // before any route was handed, nothing tells which apps go through a configuration: every app is held,
             // never sent directly, until the state opens (W7, part 2, fix round, the maintainer's decision on key B).
             Log.w(TAG, "The configurations' state could not be read", e)
+            if (e is org.visadahyu.datapavan.watch.tunnel.TunnelStore.StateLost) {
+                // Lost for good, while the store held a configuration or a route: every app is held, also while
+                // it runs, until the user chooses on Watch's screen, which one notification opens (the
+                // maintainer's word of 2026-11-20). Trying again would not open it.
+                holdEveryApp()
+                Notices.show(this, Notices.Kind.LOST, true)
+                return
+            }
             if (!routesKnown) holdEveryApp()
             tryAgainLater(unavailable = true)
             return
         }
+        Notices.show(this, Notices.Kind.LOST, false)
         for (gone in tunnelsSet.keys - state.order.toSet()) {
             Engine.nativeTunnelRemove(gone)
             tunnelsSet.remove(gone)
@@ -473,9 +485,49 @@ class WatchVpnService : VpnService() {
         )
         routesSet = handed
         routesKnown = true
+        // Every installed app's UID, while any app is routed: one installed since is asked of Watch at its first
+        // flow (routeOfApp), never sent on a default way before Watch says where (the maintainer, 2026-11-20).
+        val chain = org.visadahyu.datapavan.watch.chain.ChainSettings.of(this)
+        Engine.nativeKnownApps(if (state.routes.isNotEmpty() || (chain.on && chain.lastTool != null)) installedUids() else null)
         if (locked) waitForUnlock() else stopWaitingForUnlock()
-        UnlockNotice.show(this, locked)
+        Notices.show(this, Notices.Kind.UNLOCK, locked)
         tryAgainLater(unavailable)
+    }
+
+    /** Every installed app's UID. */
+    // Every app: Datapavan Advanced holds QUERY_ALL_PACKAGES, the audit's (ADR 0014), which this library's own manifest
+    // does not name.
+    @android.annotation.SuppressLint("QueryPermissionsNeeded")
+    private fun installedUids(): IntArray {
+        @Suppress("DEPRECATION")
+        return packageManager.getInstalledApplications(0).map { it.uid }.distinct().toIntArray()
+    }
+
+    /**
+     * Called by the engine, on a thread of its own, for a flow of the app [uid], which Watch did not name when it
+     * last handed its routes over (an app installed since, as one installed again with a new UID): where the store
+     * sends its packages, `tunnel N`, `tool` or `direct`, by the rules the routes are handed by; empty where Watch
+     * cannot say, as while the state cannot be opened, and the engine then refuses the flow. The engine waits for it
+     * at most three seconds (`ASK_BOUND`), so nothing here may wait on the main thread.
+     */
+    @Suppress("unused")
+    fun routeOfApp(uid: Int): String {
+        val packages = packageManager.getPackagesForUid(uid)?.sorted() ?: return ""
+        val state = try {
+            org.visadahyu.datapavan.watch.tunnel.TunnelStore.of(this).state()
+        } catch (e: IOException) {
+            return ""
+        } catch (e: java.security.GeneralSecurityException) {
+            return ""
+        }
+        val left = LeftOut.of(this).apps
+        // As Routes.forEngine: packages that share a UID share a route, the first by name deciding.
+        packages.firstOrNull { it !in left && it in state.routes }?.let { return "tunnel ${state.routes.getValue(it)}" }
+        val chain = org.visadahyu.datapavan.watch.chain.ChainSettings.of(this)
+        val tool = chain.lastTool?.packageName
+        val chained = chain.on && tool != null && tool !in packages &&
+            (chain.allApps || packages.any { it !in left && it in chain.apps })
+        return if (chained) "tool" else "direct"
     }
 
     /** Whether this run handed the engine the routes from the store at least once. Main thread only. */
@@ -494,6 +546,8 @@ class WatchVpnService : VpnService() {
         val uids = packageManager.getInstalledApplications(0).map { it.uid }.distinct()
         Engine.nativeTunnelOrder(intArrayOf(HOLD_TUNNEL))
         Engine.nativeTunnelRoutes(uids.toIntArray(), IntArray(uids.size) { HOLD_TUNNEL }, logDestinations = false)
+        // An app installed meanwhile is asked of Watch, which cannot say: it is held too.
+        Engine.nativeKnownApps(uids.toIntArray())
         routesSet = uids.map { it to HOLD_TUNNEL }
         Log.w(TAG, "Every app is held until the configurations' state opens")
     }
@@ -812,7 +866,8 @@ class WatchVpnService : VpnService() {
         tunnelsSet.clear()
         routesSet = emptyList()
         routesKnown = false
-        UnlockNotice.show(this, false)
+        Notices.show(this, Notices.Kind.UNLOCK, false)
+        Notices.show(this, Notices.Kind.LOST, false)
         stopWaitingForUnlock()
         packages?.let { unregisterReceiver(it) }
         packages = null
@@ -1160,8 +1215,14 @@ class WatchVpnService : VpnService() {
     private fun debugStore(args: List<String>, writer: PrintWriter) {
         val store = org.visadahyu.datapavan.watch.tunnel.TunnelStore.of(this)
         if ("tunnel-store" in args) {
+            writer.println("tunnel-lost notice ${if (Notices.shown(this, Notices.Kind.LOST)) "shown" else "none"}")
+            for (answer in Engine.nativeAppAnswers().lines().filter { it.isNotBlank() }) writer.println("tunnel-asked $answer")
+            writer.println("packages-follow ${if (packages != null) "on" else "off"}")
             val state = try {
                 store.state()
+            } catch (e: org.visadahyu.datapavan.watch.tunnel.TunnelStore.StateLost) {
+                writer.println("tunnel-state lost")
+                return
             } catch (e: java.security.GeneralSecurityException) {
                 writer.println("tunnel-state closed")
                 return
@@ -1186,9 +1247,29 @@ class WatchVpnService : VpnService() {
             for ((uid, slot) in routesSet) writer.println("tunnel-engine-route $uid $slot")
             // Which key wraps each configuration, and the profile (the maintainer's decision on key B).
             for (slot in state.order) writer.println("tunnel-key-of $slot ${store.keyOf(slot)?.name?.lowercase() ?: "-"}")
-            writer.println("tunnel-profile ${if (state.profile) "on" else "off"} notice ${if (UnlockNotice.shown(this)) "shown" else "none"}")
+            writer.println("tunnel-profile ${if (state.profile) "on" else "off"} notice ${if (Notices.shown(this, Notices.Kind.UNLOCK)) "shown" else "none"}")
             writer.println("tunnel-unlock waiting ${if (unlockWait != null) "yes" else "no"} seen $unlocksSeen")
             writer.println("tunnel-key ${store.home().name.lowercase()}")
+        }
+        // The package receiver off and on again, for the check that an app installed again is asked of Watch at its
+        // first flow (the maintainer, 2026-11-20); and key A deleted, as a Keystore reset would, for the check of a
+        // state lost for good.
+        when (args.indexOf("packages-follow").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }) {
+            "off" -> {
+                packagesOff = true
+                packages?.let { unregisterReceiver(it) }
+                packages = null
+                writer.println("packages-follow off")
+            }
+            "on" -> {
+                packagesOff = false
+                if (active) followPackages()
+                writer.println("packages-follow ${if (packages != null) "on" else "off"}")
+            }
+        }
+        if (args.indexOf("tunnel-key-delete").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) } == "a") {
+            org.visadahyu.datapavan.watch.tunnel.KeystoreWrap().destroy()
+            writer.println("tunnel-key-deleted a")
         }
         // ADR 0047's profile, which W9's switch turns on and off: every configuration wrapped again under its key.
         val profile = args.indexOf("tunnel-profile").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }

@@ -65,6 +65,16 @@
     <string name="unlock_channel">Waiting for the unlock</string>
     <string name="unlock_title">Unlock your phone to connect again</string>
     <string name="unlock_text">Some apps wait for a VPN configuration that opens only while your phone is unlocked. Nothing of theirs goes out until then.</string>
+    <!-- The notification while what Watch kept of its configurations can no longer be opened and every app is held.
+         It names no provider and no configuration, and opens Watch's screen. -->
+    <string name="lost_title">Watch is holding your apps</string>
+    <string name="lost_text">Watch can no longer open what it kept of your VPN configurations. Open Watch to choose what your apps do.</string>
+    <!-- On Watch's screen, in place of the configurations, while they can no longer be opened. -->
+    <string name="tunnels_lost_title">Your configurations can no longer be opened</string>
+    <string name="tunnels_lost_body">Watch can no longer open what it kept of your WireGuard configurations, as after the phone\'s key store was reset. It does not know which apps went through them. So it holds every app, and nothing goes out, until you choose.</string>
+    <string name="tunnels_lost_again">Add the configurations again</string>
+    <string name="tunnels_lost_let_go">Let the apps go their way</string>
+    <string name="tunnels_lost_note">Either way, each app then goes directly, or through your circumvention tool if it takes it. Add a configuration to send an app through it again.</string>
     <!-- A configuration's state, refreshed while the screen is shown. -->
     <string name="tunnel_state_off">Not in use while Watch is off.</string>
     <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->

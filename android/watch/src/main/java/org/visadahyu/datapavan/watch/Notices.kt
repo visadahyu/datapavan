@@ -1,0 +1,81 @@
+package org.visadahyu.datapavan.watch
+
+import android.Manifest
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+
+/**
+ * Watch's two notifications about its WireGuard configurations (W7, part 2, fix round; the maintainer's decisions
+ * of 2026-11-20, ADR 0035). Each names no provider and no configuration, on the lock screen or off it, whose
+ * version is its title alone; each opens Watch's screen. From Android 13 they show only once the user allows
+ * Watch's notifications, which W9's onboarding asks.
+ */
+internal object Notices {
+    /** What a notification is for. */
+    enum class Kind(val id: Int, val title: Int, val text: Int) {
+        /**
+         * Configurations under key B wait for the phone's unlock: with ADR 0047's profile on, Watch started again
+         * while the phone is locked cannot open them, and their apps wait until the unlock, when it goes.
+         */
+        UNLOCK(7_201, R.string.unlock_title, R.string.unlock_text),
+
+        /**
+         * What Watch kept of its configurations can no longer be opened (key A gone for good): every app is held
+         * until the user chooses on Watch's screen, when it goes.
+         */
+        LOST(7_202, R.string.lost_title, R.string.lost_text),
+    }
+
+    private const val CHANNEL = "watch-unlock"
+
+    /** Shows the notification [kind] while [on], and takes it away otherwise. */
+    fun show(context: Context, kind: Kind, on: Boolean) {
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        if (!on) {
+            manager.cancel(kind.id)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL, context.getString(R.string.unlock_channel), NotificationManager.IMPORTANCE_DEFAULT),
+        )
+        val title = context.getString(kind.title)
+        val text = context.getString(kind.text)
+        val open = PendingIntent.getActivity(
+            context,
+            kind.id,
+            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_IMMUTABLE,
+        )
+        // The lock screen's version: the title alone.
+        val locked = Notification.Builder(context, CHANNEL)
+            .setSmallIcon(android.R.drawable.ic_lock_lock)
+            .setContentTitle(title)
+            .build()
+        val notice = Notification.Builder(context, CHANNEL)
+            .setSmallIcon(android.R.drawable.ic_lock_lock)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(Notification.BigTextStyle().bigText(text))
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setPublicVersion(locked)
+            .setContentIntent(open)
+            .setOnlyAlertOnce(true)
+            .build()
+        manager.notify(kind.id, notice)
+    }
+
+    /** Whether [kind] shows now, for the debug builds' dump. */
+    fun shown(context: Context, kind: Kind): Boolean =
+        context.getSystemService(NotificationManager::class.java)?.activeNotifications?.any { it.id == kind.id } == true
+}

@@ -9,4 +9,5 @@
     public void logRecords(byte[]);
     public void statesWanted();
     public java.lang.String resolveEndpoint(java.lang.String);
+    public java.lang.String routeOfApp(int);
 }

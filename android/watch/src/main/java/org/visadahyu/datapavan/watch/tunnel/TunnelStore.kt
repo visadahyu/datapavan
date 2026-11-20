@@ -58,6 +58,14 @@ class TunnelStore(
      */
     class StateClosed : java.security.GeneralSecurityException("A wrap of the configurations cannot be opened now")
 
+    /**
+     * The state can never be opened again (key A gone, or its wrap damaged) while the marker says it held a
+     * configuration or a route: some apps went through a configuration or the tool, and nothing tells which. The
+     * service holds every app until the user chooses ([forget]); a data clear, which takes the marker too, reads as
+     * an empty store instead (the maintainer's word of 2026-11-20).
+     */
+    class StateLost : java.security.GeneralSecurityException("The configurations' state can no longer be opened")
+
     /** Which of the two keys wrapped a file, by its first byte. */
     enum class Key(val mark: Byte) { A('a'.code.toByte()), B('b'.code.toByte()) }
 
@@ -103,6 +111,12 @@ class TunnelStore(
 
     private val stateFile = File(dir, STATE)
 
+    /**
+     * A file that holds nothing but its presence, beside the wraps: it exists while any configuration or route
+     * exists, and goes when the user removes the last, so that a state lost for good is told from a store emptied.
+     */
+    private val marker = File(dir, MARKER)
+
     /** Names read since the store's last change: reading one opens a wrap, which StrongBox makes slow. */
     private val names = mutableMapOf<Int, Name.Known>()
 
@@ -127,11 +141,11 @@ class TunnelStore(
             routes = state.routes + apps.associateWith { slot },
         )
         val key = keyFor(state)
-        commit(
+        commitState(
+            added,
             listOf(
                 file(slot, Wrap.Part.TEXT) to sealed(key, slot, Wrap.Part.TEXT, text),
                 file(slot, Wrap.Part.NAME) to wrappedName(key, slot, name),
-                stateFile to encode(added),
             ),
         )
         wrote(slot)
@@ -362,10 +376,11 @@ class TunnelStore(
     /**
      * The state, opened under key A. A state written before it was wrapped (part 2's builds before its fix round) is
      * read as it is, and wrapped at the next change. One that cannot be opened now throws [StateClosed]; one whose key
-     * is gone for good, which leaves every configuration's wrap unopenable too, reads as an empty store.
+     * is gone for good, which leaves every configuration's wrap unopenable too, throws [StateLost] while the marker
+     * exists, and reads as an empty store once it is gone, as after Android clears the app's data.
      */
     private fun read(): State {
-        if (!stateFile.isFile) return State()
+        if (!stateFile.isFile) return if (marker.isFile) throw StateLost() else State()
         val bytes = stateFile.readBytes()
         if (bytes.firstOrNull() == 'o'.code.toByte()) return parse(String(bytes, Charsets.US_ASCII))
         return when (val opened = unsealed(0, Wrap.Part.STATE, bytes)) {
@@ -375,7 +390,7 @@ class TunnelStore(
                 opened.bytes.fill(0)
             }
             Opened.Locked, Opened.Unavailable -> throw StateClosed()
-            Opened.Lost -> State()
+            Opened.Lost -> if (marker.isFile) throw StateLost() else State()
         }
     }
 
@@ -404,7 +419,32 @@ class TunnelStore(
         return State(order, local intersect order.toSet(), next, routes, profile)
     }
 
-    private fun write(state: State) = commit(listOf(stateFile to encode(state)))
+    private fun write(state: State) = commitState(state, emptyList())
+
+    /**
+     * Commits [state] with [others] in one change, and keeps the marker to it: made before a state that holds a
+     * configuration or a route, deleted after one that holds neither, so that a crash between leaves it present.
+     */
+    private fun commitState(state: State, others: List<Pair<File, ByteArray>>) {
+        val kept = state.order.isNotEmpty() || state.routes.isNotEmpty()
+        if (kept && !marker.isFile) {
+            dir.mkdirs()
+            marker.createNewFile()
+        }
+        commit(others + (stateFile to encode(state)))
+        if (!kept) marker.delete()
+    }
+
+    /**
+     * Forgets everything the store kept, wraps, state and marker, once the user chose so after the state was lost
+     * for good ([StateLost]): the apps then go their way, and configurations are added anew.
+     */
+    @Synchronized
+    fun forget() {
+        dir.listFiles()?.forEach { it.delete() }
+        names.clear()
+        writes.clear()
+    }
 
     /** The state as its file holds it: wrapped under key A, which opens while the phone is locked. */
     private fun encode(state: State): ByteArray {
@@ -442,6 +482,7 @@ class TunnelStore(
         private val RETRIES_MS = listOf(2_000L, 5_000L, 15_000L, 30_000L, 60_000L)
 
         private const val STATE = "state"
+        private const val MARKER = "kept"
         private val PACKAGE = Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+")
 
         /**

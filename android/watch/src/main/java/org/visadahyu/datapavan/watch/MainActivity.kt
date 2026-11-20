@@ -400,7 +400,29 @@ class MainActivity : ComponentActivity() {
         },
         onRoute = ::route,
         onLoadApps = { if (chain.value.choices.isEmpty()) loadChoices() },
+        onLostChoice = ::chooseAfterLoss,
     )
+
+    /**
+     * What the user chose once what Watch kept could no longer be opened: the store forgets it all, marker and
+     * wraps, the apps go their way, and with [again] the documents screen opens for a configuration (the
+     * maintainer's word of 2026-11-20).
+     */
+    private fun chooseAfterLoss(again: Boolean) {
+        worker.execute {
+            val failed = Changes.run { TunnelStore.of(this).forget() }
+            runOnUiThread {
+                refreshTunnels()
+                applyTunnels()
+                if (failed != null) {
+                    say(Refusals.words(resources, failed))
+                } else if (again) {
+                    replacing = null
+                    openFile.launch(arrayOf("*/*"))
+                }
+            }
+        }
+    }
 
     /** Reads the configurations and their names off the main thread, and shows them. */
     private fun refreshTunnels() {
@@ -413,6 +435,12 @@ class MainActivity : ComponentActivity() {
             } catch (e: java.io.IOException) {
                 // The state could not be read now: the screen keeps what it showed, and the next change reads again.
                 null
+            } catch (e: TunnelStore.StateLost) {
+                // Lost for good: the screen asks the user what the apps do, which every app waits for meanwhile.
+                runOnUiThread {
+                    tunnels.value = tunnels.value.copy(lost = true, configurations = emptyList(), routes = emptyMap(), pending = null)
+                }
+                null
             } catch (e: java.security.GeneralSecurityException) {
                 null
             } ?: return@execute
@@ -420,6 +448,7 @@ class MainActivity : ComponentActivity() {
             runOnUiThread {
                 val shown = names.mapValues { (_, name) -> nameFor(name) }
                 tunnels.value = tunnels.value.copy(
+                    lost = false,
                     configurations = state.order.map { slot ->
                         ConfigurationView(
                             slot = slot,
