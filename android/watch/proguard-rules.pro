@@ -10,6 +10,6 @@
     public void statesWanted();
     public java.lang.String resolveEndpoint(java.lang.String);
     public java.lang.String routeOfApp(int);
-    public boolean exchange(long, int, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, byte[], byte[], byte[]);
+    public boolean exchange(long, int, java.lang.String, byte[], byte[], byte[]);
     public void dnsChanged();
 }
