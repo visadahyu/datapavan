@@ -154,15 +154,16 @@ done
 [ "${records:-0}" -gt 0 ] || fail "the release build's log got no records: $(log_line)"
 echo "ok: the release build's log gets records ($records)"
 
-# The debug builds' ways in are not in a release build (W7's fix round): its dump takes no tunnel, route or chain
-# and prints no tunnel's state and no flow's route. The file named does not exist; a build that read the
+# The debug builds' ways in are not in a release build (W7's fix round, and part 2's store, key and picture
+# commands): its dump takes no tunnel, route or chain and prints no tunnel's state and no flow's route. The file named does not exist; a build that read the
 # commands would say so.
 gate=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" \
-    tunnel-add 1 none.conf tunnel-route 2000 1 tunnel-remove 1 | tr -d '\r')
-if grep -qE '^ *(tunnel|tunnel-[a-z]+|flow-route|flow|chain) ' <<<"$gate"; then
-    fail "the release build's dump answered a debug command: $(grep -E '^ *(tunnel|flow|chain)' <<<"$gate" | head -3 | tr '\n' ' ')"
+    tunnel-add 1 none.conf tunnel-route 2000 1 tunnel-remove 1 tunnel-store tunnel-key-time tunnel-key-probe open \
+    qr-decode none.png | tr -d '\r')
+if grep -qE '^ *(tunnel|tunnel-[a-z-]+|flow-route|flow|chain|qr-[a-z]+) ' <<<"$gate"; then
+    fail "the release build's dump answered a debug command: $(grep -E '^ *(tunnel|flow|chain|qr-)' <<<"$gate" | head -3 | tr '\n' ' ')"
 fi
-echo "ok: the release build's dump takes no tunnel and shows no tunnel or flow"
+echo "ok: the release build's dump takes no tunnel, no store, key or picture command, and shows no tunnel or flow"
 
 open_kb=$(pss)
 adb shell input keyevent KEYCODE_BACK
