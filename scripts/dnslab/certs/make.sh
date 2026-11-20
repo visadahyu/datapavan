@@ -12,12 +12,16 @@ cd "$DIR"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
+# `make.sh resolver` makes the resolver's certificate alone, with the CA kept (W8's fix round: the resolver's
+# address on the lab's bridge was missing).
+if [ "${1:-}" != resolver ]; then
 openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out ca.key
 openssl req -x509 -new -key ca.key -sha256 -days 7305 -out ca.pem \
     -subj "/O=Datapavan DNS lab/CN=Datapavan DNS lab test CA (public key, tests only)" \
     -addext "basicConstraints=critical,CA:TRUE,pathlen:0" \
     -addext "keyUsage=critical,keyCertSign,cRLSign" \
     -addext "subjectKeyIdentifier=hash"
+fi
 
 # server NAME SAN...
 server() {
@@ -36,13 +40,16 @@ EOF
         -sha256 -days 3683 -extfile "$work/$name.ext" -out "$name.pem"
 }
 
+if [ "${1:-}" != resolver ]; then
 server relay "DNS:relay.dnslab.test"
 server target-a "DNS:target-a.dnslab.test"
 server target-b "DNS:target-b.dnslab.test"
 server doh "DNS:doh.dnslab.test"
 server dot "DNS:dot.dnslab.test"
+fi
 # The network's resolver, for Private DNS on "automatic": its address as the emulator sees it (10.0.2.3, which
-# the emulator sends to the -dns-server 127.0.0.2 on the computer) and as the computer sees it.
-server resolver "DNS:resolver.dnslab.test,IP:10.0.2.3,IP:127.0.0.2,IP:10.0.2.2,IP:127.0.0.1"
+# the emulator sends to its -dns-server, the lab's bridge address 10.153.53.1, or the loopback front through
+# 10.0.2.2) and as the computer sees it.
+server resolver "DNS:resolver.dnslab.test,IP:10.0.2.3,IP:10.153.53.1,IP:127.0.0.2,IP:10.0.2.2,IP:127.0.0.1"
 chmod 644 ./*.key ./*.pem
 echo "lab certificates written in $DIR"

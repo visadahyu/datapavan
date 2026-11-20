@@ -172,7 +172,8 @@ internet.
 
 One review round (`research/2026-11-w8/review-w8a-security.md`, `review-w8a-screens.md` in the strategy repository)
 and its fix brief, whose decisions the coordinator took under the session's grant. Each fix has a test that fails
-when the fix is taken back. What was decided, and why:
+when the fix is taken back, checked by taking each back by hand: 23 in the engine, 14 on the Kotlin side (two tests
+were tightened after it), and the notification's permission on the emulator. What was decided, and why:
 
 - **A network's search domains (S-C1).** DHCP's option 15 is the network's to set, so it cannot decide that a name
   of the internet is local: a hostile Wi-Fi with the domain `com` had every `*.com` name in plain DNS, strict
