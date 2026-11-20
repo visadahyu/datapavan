@@ -419,9 +419,13 @@ class WatchVpnService : VpnService() {
         val store = org.visadahyu.datapavan.watch.tunnel.TunnelStore.of(this)
         val state = try {
             store.state()
-        } catch (e: IOException) {
-            // The engine keeps what it has, every route among it, and the store is read again shortly.
+        } catch (e: Exception) {
+            if (e !is IOException && e !is java.security.GeneralSecurityException) throw e
+            // The engine keeps what it has, every route among it, and the store is read again shortly. At a start,
+            // before any route was handed, nothing tells which apps go through a configuration: every app is held,
+            // never sent directly, until the state opens (W7, part 2, fix round, the maintainer's decision on key B).
             Log.w(TAG, "The configurations' state could not be read", e)
+            if (!routesKnown) holdEveryApp()
             tryAgainLater(unavailable = true)
             return
         }
@@ -468,8 +472,27 @@ class WatchVpnService : VpnService() {
             logDestinations = org.visadahyu.datapavan.watch.chain.ChainSettings.of(this).logDestinations,
         )
         routesSet = handed
+        routesKnown = true
         if (locked) waitForUnlock() else stopWaitingForUnlock()
+        UnlockNotice.show(this, locked)
         tryAgainLater(unavailable)
+    }
+
+    /** Whether this run handed the engine the routes from the store at least once. Main thread only. */
+    private var routesKnown = false
+
+    /**
+     * Holds every installed app, routed to a tunnel no configuration has, so that its flows are refused and none goes
+     * directly, with flows of no app and pings: while the store's state cannot be opened at a start, nothing tells
+     * which apps go through a configuration. The store's routes replace these once it opens.
+     */
+    private fun holdEveryApp() {
+        @Suppress("DEPRECATION")
+        val uids = packageManager.getInstalledApplications(0).map { it.uid }.distinct()
+        Engine.nativeTunnelOrder(intArrayOf(HOLD_TUNNEL))
+        Engine.nativeTunnelRoutes(uids.toIntArray(), IntArray(uids.size) { HOLD_TUNNEL }, logDestinations = false)
+        routesSet = uids.map { it to HOLD_TUNNEL }
+        Log.w(TAG, "Every app is held until the configurations' state opens")
     }
 
     /**
@@ -492,11 +515,15 @@ class WatchVpnService : VpnService() {
         if (unlockWait != null) return
         val receiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(context: android.content.Context, intent: Intent) {
-                if (active) applyTunnels()
+                unlocksSeen++
+                if (active) afterUnlock(0)
             }
         }
+        // Exported: the unlock is told by the keyguard in SystemUI's process, whose broadcast a receiver that is not
+        // exported never gets, as the emulator showed (part 2's code waited forever); USER_PRESENT is a protected
+        // broadcast, which no app can send.
         androidx.core.content.ContextCompat.registerReceiver(
-            this, receiver, android.content.IntentFilter(Intent.ACTION_USER_PRESENT), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+            this, receiver, android.content.IntentFilter(Intent.ACTION_USER_PRESENT), androidx.core.content.ContextCompat.RECEIVER_EXPORTED,
         )
         unlockWait = receiver
     }
@@ -504,7 +531,24 @@ class WatchVpnService : VpnService() {
     private fun stopWaitingForUnlock() {
         unlockWait?.let { unregisterReceiver(it) }
         unlockWait = null
+        main.removeCallbacksAndMessages(unlocking)
     }
+
+    /**
+     * The phone was unlocked: the configurations that waited for it are set. Android may tell the unlock a moment
+     * before the Keystore lets a key that needs it be used, so a configuration still closed is tried again a few
+     * times, after 1, 2, 4 and 8 s.
+     */
+    private fun afterUnlock(attempt: Int) {
+        applyTunnels()
+        if (unlockWait == null) return
+        val wait = UNLOCK_RETRIES_MS.getOrNull(attempt) ?: return
+        main.postDelayed({ if (active) afterUnlock(attempt + 1) }, unlocking, wait)
+    }
+
+    /** The token of [afterUnlock]'s tries, and how many unlocks this run saw, for the dump. Main thread only. */
+    private val unlocking = Any()
+    private var unlocksSeen = 0
 
     /** Looks for the tool again off the main thread, and applies the chain again where its proxy moved. */
     private fun refreshChain() {
@@ -764,6 +808,8 @@ class WatchVpnService : VpnService() {
         // Stopping the engine forgot its tunnels: the next start sets them again.
         tunnelsSet.clear()
         routesSet = emptyList()
+        routesKnown = false
+        UnlockNotice.show(this, false)
         stopWaitingForUnlock()
         packages?.let { unregisterReceiver(it) }
         packages = null
@@ -1097,7 +1143,10 @@ class WatchVpnService : VpnService() {
      * `tunnel-slot N default|other local|- name STATE set|unset routes K` line for each configuration the store keeps
      * (STATE `known`, `locked`, `unavailable`, `lost` or `removed`; `set` when this run set it in the engine), a
      * `tunnel-waiting N routes K` line for each removed slot apps still wait for, a `tunnel-engine-route UID N` line
-     * for each route last handed to the engine, and `tunnel-key HOME`; no name, key, address or
+     * for each route last handed to the engine, a `tunnel-key-of N a|b` line for each configuration's key, `tunnel-profile
+     * on|off notice shown|none`, and `tunnel-key HOME`; `tunnel-profile on|off` turns ADR 0047's profile on or off and
+     * wraps every configuration again under its key, printing `tunnel-profile on|off moved K unmoved L`; no name, key,
+     * address or
      * endpoint. `tunnel-key-time` opens each configuration as a start does and prints `tunnel-opened N MS` (zeroed at
      * once). `tunnel-key-probe make|open|clear` measures a key that needs an unlocked phone, as ADR 0035 asks of
      * `setUnlockedDeviceRequired`: `make` makes one (alias `watch-tunnels-probe`) and wraps 32 random bytes in Watch's
@@ -1108,7 +1157,12 @@ class WatchVpnService : VpnService() {
     private fun debugStore(args: List<String>, writer: PrintWriter) {
         val store = org.visadahyu.datapavan.watch.tunnel.TunnelStore.of(this)
         if ("tunnel-store" in args) {
-            val state = store.state()
+            val state = try {
+                store.state()
+            } catch (e: java.security.GeneralSecurityException) {
+                writer.println("tunnel-state closed")
+                return
+            }
             for (slot in state.order) {
                 val name = when (store.name(slot)) {
                     is org.visadahyu.datapavan.watch.tunnel.TunnelStore.Name.Known -> "known"
@@ -1127,7 +1181,18 @@ class WatchVpnService : VpnService() {
             }
             // What the engine was last handed, by UID: an app installed again is routed by its new one (M1).
             for ((uid, slot) in routesSet) writer.println("tunnel-engine-route $uid $slot")
+            // Which key wraps each configuration, and the profile (the maintainer's decision on key B).
+            for (slot in state.order) writer.println("tunnel-key-of $slot ${store.keyOf(slot)?.name?.lowercase() ?: "-"}")
+            writer.println("tunnel-profile ${if (state.profile) "on" else "off"} notice ${if (UnlockNotice.shown(this)) "shown" else "none"}")
+            writer.println("tunnel-unlock waiting ${if (unlockWait != null) "yes" else "no"} seen $unlocksSeen")
             writer.println("tunnel-key ${store.home().name.lowercase()}")
+        }
+        // ADR 0047's profile, which W9's switch turns on and off: every configuration wrapped again under its key.
+        val profile = args.indexOf("tunnel-profile").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
+        if (profile == "on" || profile == "off") {
+            val moved = store.setProfile(profile == "on")
+            writer.println("tunnel-profile $profile moved ${moved.moved.size} unmoved ${moved.unmoved.size}")
+            main.post { if (active) applyTunnels() }
         }
         if ("tunnel-key-time" in args) {
             for (slot in store.state().order) {
@@ -1314,6 +1379,12 @@ class WatchVpnService : VpnService() {
 
         /** The debug builds' key that needs an unlocked phone, for the measure of `setUnlockedDeviceRequired`. */
         private const val PROBE_ALIAS = "watch-tunnels-probe"
+
+        /** When a configuration still closed after an unlock is tried again. */
+        private val UNLOCK_RETRIES_MS = listOf(1_000L, 2_000L, 4_000L, 8_000L)
+
+        /** The tunnel no configuration has, that every app is held to while the store's state cannot be opened. */
+        private const val HOLD_TUNNEL = Int.MAX_VALUE
 
         /** The UID given for a tool that is not installed: no app has it. */
         private const val NO_UID = Int.MAX_VALUE

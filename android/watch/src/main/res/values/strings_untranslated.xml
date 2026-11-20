@@ -60,6 +60,11 @@
     <!-- The same switch as the chain's, which governs both. -->
     <string name="tunnels_log_note">This switch also covers apps you send through your circumvention tool.</string>
 
+    <!-- The notification while configurations that open only on an unlocked phone wait for the unlock (ADR 0047's
+         profile). It names no provider and no configuration, on the lock screen or off it. -->
+    <string name="unlock_channel">Waiting for the unlock</string>
+    <string name="unlock_title">Unlock your phone to connect again</string>
+    <string name="unlock_text">Some apps wait for a VPN configuration that opens only while your phone is unlocked. Nothing of theirs goes out until then.</string>
     <!-- A configuration's state, refreshed while the screen is shown. -->
     <string name="tunnel_state_off">Not in use while Watch is off.</string>
     <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->

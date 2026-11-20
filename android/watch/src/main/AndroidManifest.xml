@@ -31,6 +31,12 @@
         connection and nothing outside this app's own windows.
     -->
     <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
+    <!--
+        One notification, while configurations that open only on an unlocked phone wait for the unlock (ADR 0035, the
+        maintainer's decision of 2026-11-20; ADR 0047's profile): it names no provider and no configuration. From
+        Android 13 it shows only once the user allows it, which W9's onboarding asks.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!--
         Package visibility (ADR 0034): every app a user can open, so that Watch finds the user's tool of
