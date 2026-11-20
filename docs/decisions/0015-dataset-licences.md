@@ -26,6 +26,7 @@ project's own licence file or website on 2026-10-29:
 | JA4+ (JA4S, JA4H, JA4X and the other methods) | FoxIO License 1.1, patent pending; the README says it "is not permissive for monetization" | No, without an OEM licence |
 | Google's attestation root certificates | Apache-2.0: the Android Developers site states that its documentation, including code shown in it, is under Apache-2.0 (developer.android.com/license) | Yes |
 | Google's attestation revocation list (`android.googleapis.com/attestation/status`) | No licence stated. Google publishes it for anyone who verifies key attestation | Unclear |
+| Public suffix list (publicsuffix.org) | MPL-2.0 (the list's first lines) | Yes |
 | Google Play data-safety labels | The Play terms forbid redistributing content; Play's robots.txt disallows `/store/apps/datasafety*`; Google's terms forbid automated access against robots.txt | Not applicable |
 
 Two needs have no ready dataset. The εxodus database contains no proxy or remote-access SDKs (checked
@@ -62,7 +63,10 @@ project's own channels.
    - DB-IP Lite, under CC BY 4.0 with its credit, and IPtoASN, under PDDL, to check it every month and
      as its fallback ([ADR 0036](0036-ip-to-organisation-dataset.md), which reversed the first order on
      2026-11-09: IPtoASN gives AS handles, not organisations);
-   - JA3 and JA4, computed by our own code.
+   - JA3 and JA4, computed by our own code;
+   - *(W8, part 1, fix round, 2026-11-20)* the ICANN section of the public suffix list
+     (`data/public-suffix`), under MPL-2.0, as the list publishes it with its labels written as A-labels: a
+     network's search domain that is a public suffix is never the network's own (ADR 0042).
 
    HaGeZi and any fingerprint database get their own check before use.
 5. **Data-safety labels are not collected automatically.** The app links to each app's Play listing,

@@ -5,8 +5,11 @@
 //! resolver or Oblivious DoH through the pairs, then ODoH through the user's tool, the targets' operators' own
 //! DoH, the presets that filter nothing), and only then, outside the strict setting, by the network's resolver,
 //! which the screen shows while it lasts. In the strict setting a lookup no encrypted way answers gets "server
-//! failure" at once. Local names (the network's search domains, `home.arpa`, the zones of RFC 6303 and 7793,
-//! `ipv4only.arpa`, `resolver.arpa`, single labels) go to the network's resolver in either setting.
+//! failure" at once. Local names (`home.arpa`, the zones of RFC 6303 and 7793, `ipv4only.arpa`, `resolver.arpa`,
+//! single labels) go to the network's resolver in either setting. A name under one of the network's search
+//! domains goes the encrypted way first, and to the network's resolver only when that way answers that it does
+//! not exist (NXDOMAIN), in either setting too: the network names its own domains, never the internet's (W8's fix
+//! round, review S-C1). Watch's Kotlin side hands only search domains that are not public suffixes.
 //!
 //! The engine holds no TLS: each exchange is handed to Watch's Kotlin side ([`Platform::exchange`]), which
 //! carries it over Android's own TLS from a socket it protects and binds to the network beneath, or through the
@@ -22,7 +25,7 @@ use super::{Shared, lock};
 use crate::catalogue::{Catalogue, Endpoint, Protocol, Url, dot_url};
 use crate::dnscache::DnsCache;
 use crate::hygiene::{self, Asked};
-use crate::ladder::{Failure, Ladder, Now, Setup, Step};
+use crate::ladder::{Choose, Failure, Ladder, Now, Setup, Step};
 use crate::odoh::{self, TargetKey};
 use crate::packet;
 use crate::socks5::Credentials;
@@ -174,13 +177,19 @@ pub struct DnsConfig {
     pub choice: Choice,
     /// The pairs in use, the user's or the defaults, each allowed by the rule.
     pub pairs: Vec<(usize, usize)>,
-    /// The strict setting.
+    /// The strict setting; also on with "only this resolver".
     pub strict: bool,
+    /// "Only this resolver": the user's resolver alone, nothing else asked, the network's resolver included
+    /// (W8's fix round, review R-M1). Off without a choice.
+    pub only: bool,
+    /// Debug builds, for the DNS lab's check of a rotated key: how long a key's fetch waits after its 401, at
+    /// least and at most, in place of [`REFRESH_DELAY`]. Watch's release builds never write it.
+    pub refresh: Option<(Duration, Duration)>,
 }
 
 impl DnsConfig {
-    /// The setting `setting` (lines `strict 0|1`, `choice odoh`, `choice preset ID`, `choice doh URL ADDRS`,
-    /// `choice dot HOST[:PORT] ADDRS`, `pairs default` or `pairs R>T,R>T`, addresses by commas) over
+    /// The setting `setting` (lines `strict 0|1`, `only 0|1`, `choice odoh`, `choice preset ID`, `choice doh URL
+    /// ADDRS`, `choice dot HOST[:PORT] ADDRS`, `pairs default` or `pairs R>T,R>T`, addresses by commas) over
     /// `catalogue`. What does not read falls back to the default: ODoH, the default pairs, strict off. A pairs
     /// line that leaves no pair the rule allows keeps the defaults.
     #[must_use]
@@ -190,11 +199,20 @@ impl DnsConfig {
             catalogue,
             choice: Choice::Odoh,
             strict: false,
+            only: false,
+            refresh: None,
         };
         for line in setting.lines() {
             let mut words = line.split_whitespace();
             match (words.next(), words.next(), words.next(), words.next()) {
                 (Some("strict"), Some(on), None, None) => config.strict = on == "1",
+                (Some("only"), Some(on), None, None) => config.only = on == "1",
+                (Some("refresh"), Some(low), Some(high), None) => {
+                    if let (Ok(low), Ok(high)) = (low.parse(), high.parse()) {
+                        config.refresh =
+                            Some((Duration::from_secs(low), Duration::from_secs(high)));
+                    }
+                }
                 (Some("choice"), Some("preset"), Some(id), None) => {
                     if let Some(i) = config.catalogue.presets.iter().position(|p| p.id == id) {
                         config.choice = Choice::Preset(i);
@@ -230,7 +248,22 @@ impl DnsConfig {
                 _ => {}
             }
         }
+        config.only &= config.choice != Choice::Odoh;
+        config.strict |= config.only;
         config
+    }
+
+    /// The ways by their ids, in order: the relays, the targets, the presets and the pairs. Steps are indices
+    /// into these, so a hold or a key holds only while they stay.
+    fn ways(&self) -> Vec<&str> {
+        let c = &self.catalogue;
+        let mut ways: Vec<&str> = c.relays.iter().map(|r| r.id.as_str()).collect();
+        ways.extend(c.targets.iter().map(|t| t.id.as_str()));
+        ways.extend(c.presets.iter().map(|p| p.id.as_str()));
+        for &(r, t) in &self.pairs {
+            ways.extend([c.relays[r].id.as_str(), c.targets[t].id.as_str()]);
+        }
+        ways
     }
 
     /// The ladder's steps, with the tool on or not.
@@ -262,7 +295,11 @@ impl DnsConfig {
             })
             .collect();
         Setup {
-            choice: self.choice != Choice::Odoh,
+            choice: match (&self.choice, self.only) {
+                (Choice::Odoh, _) => Choose::No,
+                (_, false) => Choose::First,
+                (_, true) => Choose::Only,
+            },
             pairs: self.pairs.len(),
             tool,
             target_doh,
@@ -334,10 +371,13 @@ pub(super) struct Resolver {
     refresh_delay: Mutex<(Duration, Duration)>,
     /// The encrypted ways' answers, kept for their time to live and a stale window.
     cache: Mutex<DnsCache>,
+    /// The questions (without ID and flags) whose stale answer is being renewed now: each once at a time.
+    renewing: Mutex<Vec<Vec<u8>>>,
     /// The exchanges that wait for Watch's Kotlin side.
     pub(super) exchanges: Arc<Exchanges>,
-    /// The network beneath's search domains.
-    local: Mutex<Vec<String>>,
+    /// The network beneath's search domains that Watch accepts: never one label (nor, from Watch's Kotlin side,
+    /// a public suffix).
+    search: Mutex<Vec<String>>,
     /// The engine's own listener for DNS over TCP to Watch's address, on the loopback, once bound.
     pub(super) tcp: tokio::sync::OnceCell<SocketAddr>,
     /// The route of each connection to that listener, by its source port, until the listener takes it.
@@ -374,8 +414,9 @@ impl Default for Resolver {
             refreshing: Mutex::default(),
             refresh_delay: Mutex::new(REFRESH_DELAY),
             cache: Mutex::new(DnsCache::serving_stale(STALE_WINDOW)),
+            renewing: Mutex::default(),
             exchanges: Arc::default(),
-            local: Mutex::default(),
+            search: Mutex::default(),
             tcp: tokio::sync::OnceCell::new(),
             tcp_routes: Mutex::default(),
             counts: Counts::default(),
@@ -401,8 +442,27 @@ impl Resolver {
     }
 
     /// Sets the resolver anew: what was learned and kept goes.
+    /// Watch set the resolver anew. When the ways are the same (the same pairs, targets and presets) and only
+    /// strict, the choice or "only" changed, what the resolver learned on this network stays: its holds, the
+    /// keys, the answers (W8's fix round, review R-m1); a new choice starts afresh, and its old answers go.
     pub(super) fn set(&self, config: Option<Arc<DnsConfig>>) {
-        *lock(&self.config) = config;
+        if let Some((low, high)) = config.as_ref().and_then(|c| c.refresh) {
+            self.set_refresh_delay(low, high);
+        }
+        let mut kept = lock(&self.config);
+        let (same, chosen) = match (kept.as_ref(), config.as_ref()) {
+            (Some(old), Some(new)) => (old.ways() == new.ways(), old.choice == new.choice),
+            _ => (false, false),
+        };
+        *kept = config;
+        drop(kept);
+        if same {
+            if !chosen {
+                lock(&self.ladder).forget(Step::Choice);
+                lock(&self.cache).clear();
+            }
+            return;
+        }
         lock(&self.ladder).reset();
         lock(&self.keys).clear();
         lock(&self.cache).clear();
@@ -412,20 +472,21 @@ impl Resolver {
         self.config()
     }
 
-    /// The network beneath changed: holds, what was learned and the answers kept go.
+    /// The network beneath changed: holds, what was learned, the answers kept and the search domains go.
     pub(super) fn network_moved(&self) {
         lock(&self.ladder).reset();
         lock(&self.cache).clear();
         lock(&self.refreshing).clear();
+        lock(&self.search).clear();
     }
 
     /// What Android says of the network beneath: validated or not, and its search domains.
     pub(super) fn network(&self, validated: bool, domains: &str) {
         lock(&self.ladder).set_validated(validated);
-        *lock(&self.local) = domains
+        *lock(&self.search) = domains
             .split([' ', ','])
             .map(|d| d.trim().trim_end_matches('.').to_ascii_lowercase())
-            .filter(|d| !d.is_empty())
+            .filter(|d| d.contains('.') && !d.starts_with('.'))
             .take(16)
             .collect();
     }
@@ -467,7 +528,7 @@ impl Resolver {
         }
         format!(
             "way {way}\nstrict {}\nvalidated {}\nheld {}\nanswers odoh {} doh {} dot {} network {} failed {} local {} \
-             stale {} cached {}\n{latency}",
+             stale {} cached {}\nsearch {}\n{latency}",
             u8::from(config.as_ref().is_some_and(|c| c.strict)),
             u8::from(ladder.validated()),
             ladder.held(now),
@@ -479,12 +540,13 @@ impl Resolver {
             n(&c.local),
             n(&c.stale),
             n(&c.cached),
+            lock(&self.search).join(" "),
         )
     }
 
-    /// Whether `name` is local: the network's to answer in either setting.
-    fn is_local(&self, name: &str) -> bool {
-        is_local(name, &lock(&self.local))
+    /// Whether `name` is under one of the network's search domains that Watch accepts.
+    fn searched(&self, name: &str) -> bool {
+        lock(&self.search).iter().any(|domain| under(name, domain))
     }
 }
 
@@ -515,15 +577,20 @@ const LOCAL_ZONES: &[&str] = &[
     "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa",
 ];
 
-/// Whether `name` (lower case, no final dot) is local: a single label, under a local zone, the second octets
-/// 16 to 31 of 172 and 64 to 127 of 100 in reverse, or under one of the network's `search` domains.
+/// Whether `name` is `zone` or under it.
+fn under(name: &str, zone: &str) -> bool {
+    name.strip_suffix(zone)
+        .is_some_and(|rest| rest.is_empty() || rest.ends_with('.'))
+}
+
+/// Whether `name` (lower case, no final dot) is local: a single label, under a local zone, or the second octets
+/// 16 to 31 of 172 and 64 to 127 of 100 in reverse. A network's search domains are not: see [`answer`].
 #[must_use]
-pub fn is_local(name: &str, search: &[String]) -> bool {
-    let under = |zone: &str| name == zone || name.ends_with(&format!(".{zone}"));
+pub fn is_local(name: &str) -> bool {
     if !name.is_empty() && !name.contains('.') {
         return true;
     }
-    if LOCAL_ZONES.iter().any(|z| under(z)) || search.iter().any(|z| under(z)) {
+    if LOCAL_ZONES.iter().any(|z| under(name, z)) {
         return true;
     }
     // 172.16.0.0/12 and 100.64.0.0/10: their second octet's zones.
@@ -613,7 +680,7 @@ pub(super) async fn answer(shared: &Arc<Shared>, query: &[u8], tcp: bool) -> Opt
         return asked.failure();
     };
     let r = &shared.resolver;
-    if shared.resolver.is_local(&asked.name) {
+    if is_local(&asked.name) {
         Counters::add(&r.counts.local);
         return match network(shared, &asked).await {
             Some(answer) => {
@@ -623,26 +690,52 @@ pub(super) async fn answer(shared: &Arc<Shared>, query: &[u8], tcp: bool) -> Opt
             None => asked.failure(),
         };
     }
+    // A name under a search domain: the network's own only when the internet does not know it, so an encrypted
+    // NXDOMAIN for it is never served from the cache.
+    let searched = r.searched(&asked.name);
+    let unknown =
+        |answer: &Vec<u8>| searched && answer.get(3).is_some_and(|flags| flags & 0x0f == NXDOMAIN);
     let now = shared.clock.since_boot();
     let key = asked.as_query();
-    let kept = lock(&r.cache).answer(&key, now);
+    let kept = lock(&r.cache).answer(&key, now).filter(|a| !unknown(a));
     if let Some(kept) = kept {
         Counters::add(&r.counts.cached);
         return mine(&kept);
     }
-    let stale = lock(&r.cache).stale(&key, now);
+    let stale = lock(&r.cache).stale(&key, now).filter(|a| !unknown(a));
     if let Some(stale) = stale {
         Counters::add(&r.counts.stale);
-        let (keeper, config, again) = (Arc::clone(shared), Arc::clone(&config), asked.clone());
-        spawn(async move {
-            if let Some((fresh, _)) = resolve(&keeper, &config, &again, None).await {
-                keeper.learn(&fresh, None);
-                lock(&keeper.resolver.cache).insert(&fresh, keeper.clock.since_boot());
+        // One renewal per question at a time (W8's fix round, the security review's nit).
+        let question = key.get(4..).unwrap_or_default().to_vec();
+        let first = {
+            let mut renewing = lock(&r.renewing);
+            let first = !renewing.contains(&question);
+            if first {
+                renewing.push(question.clone());
             }
-        });
+            first
+        };
+        if first {
+            let (keeper, config, again) = (Arc::clone(shared), Arc::clone(&config), asked.clone());
+            spawn(async move {
+                if let Some((fresh, _)) = resolve(&keeper, &config, &again, None).await {
+                    keeper.learn(&fresh, None);
+                    lock(&keeper.resolver.cache).insert(&fresh, keeper.clock.since_boot());
+                }
+                lock(&keeper.resolver.renewing).retain(|q| *q != question);
+            });
+        }
         return mine(&stale);
     }
     if let Some((upstream, _)) = resolve(shared, &config, &asked, None).await {
+        if unknown(&upstream) {
+            Counters::add(&r.counts.local);
+            if let Some(answer) = network(shared, &asked).await {
+                shared.learn(&answer, None);
+                return mine(&answer);
+            }
+            return mine(&upstream);
+        }
         shared.learn(&upstream, None);
         lock(&r.cache).insert(&upstream, shared.clock.since_boot());
         return mine(&upstream);
@@ -662,6 +755,9 @@ pub(super) async fn answer(shared: &Arc<Shared>, query: &[u8], tcp: bool) -> Opt
         asked.failure()
     }
 }
+
+/// DNS's response code for a name that does not exist (RFC 1035 4.1.1).
+const NXDOMAIN: u8 = 3;
 
 /// The counters' one operation.
 struct Counters;
@@ -769,8 +865,11 @@ impl Setup {
     /// the presets, each reached through the tool.
     fn steps_through_tool(&self) -> Vec<Step> {
         let mut steps = Vec::new();
-        if self.choice {
+        if self.choice != Choose::No {
             steps.push(Step::Choice);
+            if self.choice == Choose::Only {
+                return steps;
+            }
         }
         steps.extend((0..self.pairs).map(Step::PairThroughTool));
         steps.extend(self.target_doh.iter().copied().map(Step::TargetDoh));
@@ -1021,6 +1120,10 @@ async fn key_from_target(
 /// The network's resolver's answer to `asked` (ID 0 asked, any back): through Android's resolver on the network
 /// beneath where Watch's Kotlin side carries it, else from a protected socket to the network's DNS server.
 async fn network(shared: &Arc<Shared>, asked: &Asked) -> Option<Vec<u8>> {
+    // A random ID, as `plain` sends (W8's fix round, review S-m1): plain DNS has only it and the source port
+    // against an answer forged off the path. The app's own ID comes back in `Asked::answer`.
+    let mut body = asked.upstream(false);
+    getrandom::fill(body.get_mut(..2)?).ok()?;
     let request = Exchange {
         carry: Carry::Network,
         url: String::new(),
@@ -1028,7 +1131,7 @@ async fn network(shared: &Arc<Shared>, asked: &Asked) -> Option<Vec<u8>> {
         addresses: Vec::new(),
         pins: Vec::new(),
         through: None,
-        body: asked.upstream(false),
+        body,
     };
     match ask(shared, &request).await {
         Reply::Answer(answer) => asked.answer(&answer, None).map(|_| answer),
@@ -1241,6 +1344,7 @@ mod tests {
         /// Whether a fetch of a target's configurations gives the tables' key rather than the one it holds.
         stale_fetch: std::sync::atomic::AtomicBool,
         changed: AtomicU64,
+        clock: Arc<super::super::clock::ManualClock>,
     }
 
     /// The fixed answer of each carry: 10.53.1.N for ODoH to the target of index N's host, 10.53.3.3 for DoH,
@@ -1253,6 +1357,19 @@ mod tests {
         out[7] = 1;
         out.extend_from_slice(&[0xc0, 12, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4]);
         out.extend_from_slice(&address.octets());
+        out
+    }
+
+    /// An encrypted way's answer: as [`answer_with`], but "no such name" (NXDOMAIN) for a name whose first label
+    /// is `intranet`, which only the network knows.
+    fn internet_answer(query: &[u8], address: Ipv4Addr) -> Vec<u8> {
+        let asked = hygiene::read(query).unwrap_or_else(|| unreachable!("a query"));
+        if !asked.name.starts_with("intranet.") {
+            return answer_with(query, address);
+        }
+        let mut out = asked.as_query();
+        out[2] = 0x81;
+        out[3] = 0x83;
         out
     }
 
@@ -1269,6 +1386,7 @@ mod tests {
                 late_relay: Mutex::default(),
                 stale_fetch: std::sync::atomic::AtomicBool::new(false),
                 changed: AtomicU64::new(0),
+                clock: super::super::clock::ManualClock::at(1_800_000_000_000),
             })
         }
 
@@ -1314,15 +1432,15 @@ mod tests {
                     else {
                         return Reply::Status(401);
                     };
-                    let dns = answer_with(&query, Ipv4Addr::new(10, 53, 1, index + 1));
+                    let dns = internet_answer(&query, Ipv4Addr::new(10, 53, 1, index + 1));
                     answer_as_target(sk, configs, &request.body, &dns, nonce)
                         .map_or(Reply::Status(400), |(_, sealed)| Reply::Answer(sealed))
                 }
                 Carry::Doh => {
-                    Reply::Answer(answer_with(&request.body, Ipv4Addr::new(10, 53, 3, 3)))
+                    Reply::Answer(internet_answer(&request.body, Ipv4Addr::new(10, 53, 3, 3)))
                 }
                 Carry::Dot => {
-                    Reply::Answer(answer_with(&request.body, Ipv4Addr::new(10, 53, 4, 4)))
+                    Reply::Answer(internet_answer(&request.body, Ipv4Addr::new(10, 53, 4, 4)))
                 }
                 Carry::Network => {
                     Reply::Answer(answer_with(&request.body, Ipv4Addr::new(10, 53, 5, 5)))
@@ -1376,6 +1494,9 @@ mod tests {
         }
         fn dns_changed(&self) {
             self.changed.fetch_add(1, Ordering::Relaxed);
+        }
+        fn clock(&self) -> Arc<dyn super::super::Clock> {
+            Arc::clone(&self.clock) as Arc<dyn super::super::Clock>
         }
     }
 
@@ -1513,7 +1634,7 @@ mod tests {
             "court-ordered blocks are filtering"
         );
         let chosen = config("choice preset quad9-unsecured-dot").setup(true);
-        assert!(chosen.choice && chosen.tool);
+        assert!(chosen.choice == Choose::First && chosen.tool);
         assert!(
             !chosen
                 .presets
@@ -1525,7 +1646,6 @@ mod tests {
 
     #[test]
     fn local_names_are_the_networks() {
-        let search = vec!["corp.example".to_owned()];
         for name in [
             "printer",
             "printer.home.arpa",
@@ -1534,23 +1654,24 @@ mod tests {
             "1.1.168.192.in-addr.arpa",
             "5.20.172.in-addr.arpa",
             "9.70.100.in-addr.arpa",
-            "intranet.corp.example",
-            "corp.example",
             "b.e.f.ip6.arpa",
         ] {
-            assert!(is_local(name, &search), "{name}");
+            assert!(is_local(name), "{name}");
         }
+        // A network's search domain is not local by itself (review S-C1): see the searched names' test.
         for name in [
             "example.com",
+            "intranet.corp.example",
+            "corp.example",
             "5.15.172.in-addr.arpa",
             "5.32.172.in-addr.arpa",
             "9.128.100.in-addr.arpa",
             "9.10.100.in-addr.arpa",
             "1.1.1.1.in-addr.arpa",
-            "notcorp.example",
             "home.arpa.example.com",
+            "myhome.arpa",
         ] {
-            assert!(!is_local(name, &search), "{name}");
+            assert!(!is_local(name), "{name}");
         }
     }
 
@@ -1639,18 +1760,149 @@ mod tests {
         assert_eq!(fake.seen(Carry::Network).len(), 0);
     }
 
+    /// Review R-M1: when the user's resolver fails, Oblivious DoH carries the names next; with "only this
+    /// resolver", nothing else is asked, the network's resolver included, strict off or on.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_failing_choice_falls_to_odoh_and_only_this_resolver_asks_nothing_else() {
+        let (shared, fake) = resolving("choice dot p.test 192.0.2.5");
+        fake.does(Carry::Dot, Does::Fail(Failure::Refused));
+        let (address, _) = read(answer(&shared, &app_query("a.example.com", 1), false).await);
+        assert_eq!(address, Some(v4(10, 53, 1, 1)), "the first pair's target");
+        assert!(shared.resolver.status().starts_with("way odoh ra ta\n"));
+        let (shared, fake) = resolving("choice dot p.test 192.0.2.5\nonly 1");
+        fake.does(Carry::Dot, Does::Fail(Failure::Refused));
+        let failed = answer(&shared, &app_query("b.example.com", 1), false)
+            .await
+            .unwrap_or_default();
+        assert_eq!(failed.get(3).map(|f| f & 0x0f), Some(2), "server failure");
+        assert_eq!(fake.seen(Carry::Dot).len(), 1);
+        for carry in [Carry::Odoh, Carry::Doh, Carry::Network] {
+            assert!(fake.seen(carry).is_empty(), "{carry:?} asked");
+        }
+        assert!(shared.resolver.status().starts_with("way failing "));
+    }
+
+    /// Review S-m1: the network's resolver gets a random ID, never 0, and the app its own back.
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_networks_resolver_gets_a_random_id_and_the_app_its_own() {
+        let (shared, fake) = resolving("");
+        for _ in 0..4 {
+            let answered = answer(&shared, &app_query("printer.home.arpa", 1), false)
+                .await
+                .unwrap_or_default();
+            assert_eq!(answered.get(..2), Some(&[0x77, 0x01][..]), "the app's ID");
+        }
+        let ids: Vec<u16> = fake
+            .seen(Carry::Network)
+            .iter()
+            .map(|e| u16::from_be_bytes([e.body[0], e.body[1]]))
+            .collect();
+        assert_eq!(ids.len(), 4);
+        assert!(ids.iter().any(|&id| id != 0), "{ids:?}");
+    }
+
+    /// The security review's nit: a stale answer served twice at once is renewed once.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_stale_answer_is_renewed_once_at_a_time() {
+        let (shared, fake) = resolving("");
+        let _ = answer(&shared, &app_query("www.example.com", 1), false).await;
+        assert_eq!(fake.seen(Carry::Odoh).len(), 1);
+        fake.clock.pass(61_000);
+        for _ in 0..3 {
+            let (address, _) = read(answer(&shared, &app_query("www.example.com", 1), false).await);
+            assert_eq!(address, Some(v4(10, 53, 1, 1)), "the stale answer");
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(fake.seen(Carry::Odoh).len(), 2, "one renewal");
+        assert!(lock(&shared.resolver.renewing).is_empty());
+    }
+
+    /// Review R-m1: turning strict on, or choosing another resolver, keeps what was learned on this network (a
+    /// held pair stays held, the way now stays); other pairs start afresh.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_change_of_strict_or_choice_keeps_the_holds() {
+        let (shared, fake) = resolving("");
+        fake.does(Carry::Odoh, Does::Fail(Failure::Tampered));
+        let _ = answer(&shared, &app_query("a.example.com", 1), false).await;
+        let held = |shared: &Arc<Shared>| lock(&shared.resolver.ladder).held(Instant::now());
+        assert_eq!(held(&shared), 2, "both pairs held");
+        let way = shared.resolver.status().lines().next().map(str::to_owned);
+        shared.resolver.set(Some(lab_config("strict 1")));
+        assert_eq!(held(&shared), 2, "strict on: still held");
+        shared
+            .resolver
+            .set(Some(lab_config("strict 1\nchoice preset pdoh")));
+        assert_eq!(held(&shared), 2, "another choice: still held");
+        assert_eq!(
+            shared.resolver.status().lines().next().map(str::to_owned),
+            way
+        );
+        shared.resolver.set(Some(lab_config("pairs rb>ta")));
+        assert_eq!(held(&shared), 0, "other pairs: afresh");
+        assert_eq!(
+            config("refresh 1 3").refresh,
+            Some((Duration::from_secs(1), Duration::from_secs(3)))
+        );
+    }
+
     #[tokio::test(flavor = "current_thread")]
     async fn local_names_go_to_the_network_even_in_strict() {
         let (shared, fake) = resolving("strict 1");
-        shared.resolver.network(true, "corp.example");
         let (address, _) = read(answer(&shared, &app_query("printer.home.arpa", 1), false).await);
         assert_eq!(address, Some(v4(10, 53, 5, 5)));
-        let (address, _) = read(answer(&shared, &app_query("wiki.corp.example", 1), false).await);
+        let (address, _) = read(answer(&shared, &app_query("printer", 1), false).await);
         assert_eq!(address, Some(v4(10, 53, 5, 5)));
         assert!(
             fake.seen(Carry::Odoh).is_empty(),
             "no local name to a target"
         );
+    }
+
+    /// Review S-C1: a name under a search domain goes the encrypted way first, and to the network's resolver
+    /// only when that way says it does not exist, in strict too; that "no such name" is never served from the
+    /// cache, and a name under no search domain never goes to the network for it.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_searched_name_goes_encrypted_first_and_to_the_network_only_when_unknown() {
+        let (shared, fake) = resolving("strict 1");
+        shared.resolver.network(true, "corp.example");
+        let (address, _) = read(answer(&shared, &app_query("www.corp.example", 1), false).await);
+        assert_eq!(address, Some(v4(10, 53, 1, 1)), "the internet knows it");
+        assert!(
+            fake.seen(Carry::Network).is_empty(),
+            "nothing to the network"
+        );
+        for _ in 0..2 {
+            let (address, _) =
+                read(answer(&shared, &app_query("intranet.corp.example", 1), false).await);
+            assert_eq!(address, Some(v4(10, 53, 5, 5)), "the network's own name");
+        }
+        assert_eq!(fake.seen(Carry::Network).len(), 2, "never from the cache");
+        let unknown = answer(&shared, &app_query("intranet.other.example", 1), false)
+            .await
+            .unwrap_or_default();
+        assert_eq!(unknown.get(3).map(|f| f & 0x0f), Some(NXDOMAIN));
+        assert_eq!(fake.seen(Carry::Network).len(), 2, "under no search domain");
+    }
+
+    /// Review S-C1's case: a network that sets `com` as its domain gets nothing of `*.com`, strict or not; the
+    /// domains in use are in the status, and go with the network.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_search_domain_of_one_label_is_refused_and_goes_with_the_network() {
+        let (shared, fake) = resolving("");
+        shared.resolver.network(true, "com, corp.example. .net");
+        assert!(shared.resolver.status().contains("\nsearch corp.example\n"));
+        let unknown = answer(&shared, &app_query("intranet.example.com", 1), false)
+            .await
+            .unwrap_or_default();
+        assert_eq!(unknown.get(3).map(|f| f & 0x0f), Some(NXDOMAIN));
+        let (address, _) = read(answer(&shared, &app_query("secret.example.com", 1), false).await);
+        assert_eq!(address, Some(v4(10, 53, 1, 1)));
+        assert!(
+            fake.seen(Carry::Network).is_empty(),
+            "nothing to the network"
+        );
+        shared.resolver.network_moved();
+        assert!(shared.resolver.status().contains("\nsearch \n"));
     }
 
     #[tokio::test(flavor = "current_thread")]

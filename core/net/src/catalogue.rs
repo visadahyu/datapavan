@@ -26,15 +26,17 @@ pub struct Url {
 }
 
 impl Url {
-    /// Reads `https://host[:port][/path]`; `None` for any other scheme, a query or fragment, or a host that is
-    /// not a name of letters, digits, hyphens and dots or an address.
+    /// Reads `https://host[:port][/path]`; `None` for any other scheme, a query or fragment, user information, a
+    /// host that is not a name of letters, digits, hyphens and dots or an IPv4 address, or a path of other
+    /// characters than RFC 3986's unreserved ones and `/` (W8's fix round, review S-m4: a target's path goes into
+    /// the relay's URL as it is, and no path may add a parameter to it). Watch's screen checks the same.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
         let rest = text.strip_prefix("https://")?;
-        if rest.contains(['?', '#', '@', ' ']) {
+        let (authority, path) = rest.find('/').map_or((rest, "/"), |at| rest.split_at(at));
+        if !plain_path(path) {
             return None;
         }
-        let (authority, path) = rest.find('/').map_or((rest, "/"), |at| rest.split_at(at));
         let (host, port) = match authority.rsplit_once(':') {
             Some((host, port)) if !host.contains(':') => (host, port.parse().ok()?),
             _ => (authority, 443),
@@ -58,6 +60,14 @@ impl Url {
             format!("https://{}:{}{}", self.host, self.port, self.path)
         }
     }
+}
+
+/// Whether `path` starts with `/` and holds only RFC 3986's unreserved characters and `/`.
+fn plain_path(path: &str) -> bool {
+    path.starts_with('/')
+        && path
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"/-._~".contains(&b))
 }
 
 /// Whether `host` is a name of letters, digits, hyphens and dots, at most 253 long.
@@ -387,7 +397,7 @@ fn read_targets(table: &str) -> Vec<Target> {
         let Some(behind) = behind(operator, person, jurisdictions, hosting, cdn) else {
             continue;
         };
-        if !valid_host(host) || !path.starts_with('/') || targets.iter().any(|t| t.id == id) {
+        if !valid_host(host) || !plain_path(path) || targets.iter().any(|t| t.id == id) {
             continue;
         }
         let doh = Url::parse(doh).map(|url| Endpoint {
@@ -486,8 +496,9 @@ impl Catalogue {
         catalogue
     }
 
-    /// The pairs named by ids, as indices, in order: each only once, and only where both are known and the
-    /// rule allows them.
+    /// The pairs named by ids, as indices, in order: each only once, and only where both are known, the target
+    /// filters nothing and the rule allows them (W8's fix round, review S-m4: "unfiltered only" held here, not
+    /// only on the screen).
     pub fn pairs_of<'a>(
         &self,
         named: impl Iterator<Item = (&'a str, &'a str)>,
@@ -500,10 +511,11 @@ impl Catalogue {
             ) else {
                 continue;
             };
-            if self.relays[r]
-                .behind
-                .clash(&self.targets[t].behind)
-                .is_none()
+            if !self.targets[t].filters
+                && self.relays[r]
+                    .behind
+                    .clash(&self.targets[t].behind)
+                    .is_none()
                 && !pairs.contains(&(r, t))
             {
                 pairs.push((r, t));
@@ -587,6 +599,38 @@ pub(crate) mod tests {
                 ("crypto-sx-fastly", "dnscry-pt-fra01")
             ]
         );
+    }
+
+    /// Review S-m4: a target that filters never pairs, whoever names the pair; nor one whose path would add a
+    /// parameter to the relay's URL.
+    #[test]
+    fn a_filtering_target_or_a_path_with_a_parameter_never_pairs() {
+        // The shipped tables with one field of fra01's row changed.
+        let changed = |field: usize, value: &str| {
+            let rows: Vec<String> = TARGETS
+                .lines()
+                .map(|line| {
+                    if !line.starts_with("dnscry-pt-fra01\t") {
+                        return line.to_owned();
+                    }
+                    let mut fields: Vec<&str> = line.split('\t').collect();
+                    fields[field] = value;
+                    fields.join("\t")
+                })
+                .collect();
+            Catalogue::parse(RELAYS, &rows.join("\n"), PAIRS, PRESETS)
+        };
+        assert_eq!(
+            shipped()
+                .pairs_from("crypto-sx-fastly>dnscry-pt-fra01")
+                .len(),
+            1
+        );
+        let filtering = changed(10, "malware");
+        assert!(filtering.targets.iter().any(|t| t.id == "dnscry-pt-fra01"));
+        assert_eq!(filtering.pairs_from("crypto-sx-fastly>dnscry-pt-fra01"), []);
+        let other = changed(2, "/dns-query&targethost=other.test");
+        assert!(other.targets.iter().all(|t| t.id != "dnscry-pt-fra01"));
     }
 
     #[test]
@@ -678,6 +722,18 @@ pub(crate) mod tests {
         assert!(Url::parse("https://a.b/x?y=1").is_none());
         assert!(Url::parse("https://user@a.b/").is_none());
         assert!(Url::parse("https://a..b/").is_none());
+        // Review S-m4 and the screen's nit: nothing but unreserved characters in a path, no IPv6 literal.
+        for refused in [
+            "https://a.b/dns-query&targethost=other.test",
+            "https://a.b/dns-query\nchoice odoh",
+            "https://a.b/x y",
+            "https://a.b/%2e",
+            "https://[2001:db8::1]/dns-query",
+            "https://a.b/x#y",
+        ] {
+            assert!(Url::parse(refused).is_none(), "{refused:?}");
+        }
+        assert!(Url::parse("https://dns.example/dns-query/ab_1.2~c-d").is_some());
         assert_eq!(dot_url("dns.quad9.net").map(|u| u.port), Some(853));
         assert_eq!(
             dot_url("dot.dnslab.test:18444").map(|u| u.port),

@@ -27,6 +27,9 @@ Datapavan Advanced's Watch, WireGuard upstream (W7, docs/decisions/0035-wireguar
 Datapavan Advanced's Watch, Oblivious DoH for the apps that go directly (W8, part 1,
 docs/decisions/0042-dns-of-apps-that-go-directly.md):
 
+- The ICANN section of the public suffix list (https://publicsuffix.org): MPL-2.0, whose text is
+  licences/MPL-2.0.txt, in data/public-suffix with its source. Watch ignores a network's search domain that is
+  one of its suffixes.
 - Oblivious DoH's framing and HPKE are Datapavan's own code (core/net/src/odoh.rs, hpke.rs), over crates the
   library already carries: x25519-dalek (above) and RustCrypto's hkdf, sha2 and aes-gcm (licences/native-watch.txt).
 - OkHttp 5.5.1 (com.squareup.okhttp3:okhttp) and Okio 3.18.1 (com.squareup.okio:okio), Square, Inc. and the OkHttp

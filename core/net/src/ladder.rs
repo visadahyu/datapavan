@@ -2,10 +2,11 @@
 //! (W8, part 1, ADR 0042, "How it is built", points 6 and 7). Pure: the engine hands it the time and what each
 //! attempt gave, and asks it what to try.
 //!
-//! **The order, by privacy.** The user's own resolver when there is one, else Oblivious DoH through the pairs;
-//! then, while the user's tool is on, Oblivious DoH through the tool; then DoH directly to the targets' own
-//! operators; then the presets that filter nothing; the network's resolver last, and never in the strict
-//! setting. Watch learns only within a rung (which pair or endpoint answered last on this network, tried first
+//! **The order, by privacy.** The user's own resolver when there is one; Oblivious DoH through the pairs (first,
+//! or next after the user's resolver failed: W8's fix round, review R-M1); then, while the user's tool is on,
+//! Oblivious DoH through the tool; then DoH directly to the targets' own operators; then the presets that filter
+//! nothing; the network's resolver last, and never in the strict setting. With "only this resolver" the user's
+//! resolver is the only step, and the network's resolver is never asked either. Watch learns only within a rung (which pair or endpoint answered last on this network, tried first
 //! next), never across rungs, and climbs back up as soon as a higher rung answers: a rung below is used only
 //! while every step above is held.
 //!
@@ -47,7 +48,9 @@ pub enum Step {
 /// The rungs, highest first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Rung {
-    /// The user's own resolver, or Oblivious DoH.
+    /// The user's own resolver: a rung of its own, so that an answer of the pairs below never puts them first.
+    Chosen,
+    /// Oblivious DoH.
     First,
     /// Oblivious DoH through the user's tool.
     ThroughTool,
@@ -62,7 +65,8 @@ impl Step {
     #[must_use]
     pub fn rung(self) -> Rung {
         match self {
-            Self::Choice | Self::Pair(_) => Rung::First,
+            Self::Choice => Rung::Chosen,
+            Self::Pair(_) => Rung::First,
             Self::PairThroughTool(_) => Rung::ThroughTool,
             Self::TargetDoh(_) => Rung::TargetsDoh,
             Self::Preset(_) => Rung::Presets,
@@ -70,11 +74,23 @@ impl Step {
     }
 }
 
+/// The user's own resolver in the ladder.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Choose {
+    /// None: Oblivious DoH first.
+    #[default]
+    No,
+    /// The user's resolver first, then the rest of the order.
+    First,
+    /// "Only this resolver": nothing else is asked.
+    Only,
+}
+
 /// What the ladder is made of now.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Setup {
-    /// Whether the user chose a resolver.
-    pub choice: bool,
+    /// Whether the user chose a resolver, and whether only it.
+    pub choice: Choose,
     /// How many pairs there are.
     pub pairs: usize,
     /// Whether the user's tool is on.
@@ -91,11 +107,13 @@ impl Setup {
     /// Every step, in the order of privacy, before what was learned.
     fn steps(&self) -> Vec<Step> {
         let mut steps = Vec::new();
-        if self.choice {
+        if self.choice != Choose::No {
             steps.push(Step::Choice);
-        } else {
-            steps.extend((0..self.pairs).map(Step::Pair));
+            if self.choice == Choose::Only {
+                return steps;
+            }
         }
+        steps.extend((0..self.pairs).map(Step::Pair));
         if self.tool {
             steps.extend((0..self.pairs).map(Step::PairThroughTool));
         }
@@ -146,7 +164,7 @@ pub struct Ladder {
     /// The steps held, each once: a few dozen at most, so a list (the native library's size counts, W8).
     holds: Vec<(Step, Hold)>,
     /// Within each rung, the step that answered last, by the rung's place.
-    learned: [Option<Step>; 4],
+    learned: [Option<Step>; 5],
     validated: bool,
     now: Now,
 }
@@ -155,7 +173,7 @@ impl Default for Ladder {
     fn default() -> Self {
         Self {
             holds: Vec::new(),
-            learned: [None; 4],
+            learned: [None; 5],
             validated: true,
             now: Now::Unknown,
         }
@@ -183,6 +201,7 @@ impl Ladder {
         // their order.
         let mut steps = Vec::with_capacity(open.len());
         for rung in [
+            Rung::Chosen,
             Rung::First,
             Rung::ThroughTool,
             Rung::TargetsDoh,
@@ -198,10 +217,11 @@ impl Ladder {
         steps
     }
 
-    /// Whether the network's resolver may answer a name of the internet now: outside the strict setting only.
+    /// Whether the network's resolver may answer a name of the internet now: outside the strict setting and
+    /// "only this resolver" only.
     #[must_use]
     pub fn network_allowed(setup: &Setup) -> bool {
-        !setup.strict
+        !setup.strict && setup.choice != Choose::Only
     }
 
     /// `step` failed by `failure` at `now`.
@@ -237,6 +257,18 @@ impl Ladder {
     /// `step` is no longer held: its target's key came again.
     pub fn release(&mut self, step: Step) {
         self.holds.retain(|(s, _)| *s != step);
+    }
+
+    /// `step` is another now (the user chose another resolver): its hold and what was learned of it go, and it
+    /// is no longer the way now.
+    pub fn forget(&mut self, step: Step) {
+        self.release(step);
+        if self.learned(step.rung()) == Some(step) {
+            self.learned[step.rung() as usize] = None;
+        }
+        if self.now == Now::Way(step) {
+            self.now = Now::Unknown;
+        }
     }
 
     /// `step` answered: it is no longer held, it is tried first within its rung, and it is the way now.
@@ -275,7 +307,7 @@ impl Ladder {
     /// The network beneath changed, or the ways themselves did: every hold and everything learned goes.
     pub fn reset(&mut self) {
         self.holds.clear();
-        self.learned = [None; 4];
+        self.learned = [None; 5];
         self.now = Now::Unknown;
     }
 
@@ -298,7 +330,7 @@ mod tests {
 
     fn setup() -> Setup {
         Setup {
-            choice: false,
+            choice: Choose::No,
             pairs: 2,
             tool: false,
             target_doh: vec![0, 1],
@@ -324,29 +356,47 @@ mod tests {
         );
     }
 
+    /// Review R-M1: after the user's resolver, Oblivious DoH, then the rest; the pairs answering never puts them
+    /// before the user's resolver; "only this resolver" asks nothing else, the network's resolver included.
     #[test]
-    fn the_users_choice_comes_first_in_place_of_odoh_and_the_tool_after_it() {
-        let ladder = Ladder::default();
+    fn the_users_choice_comes_first_then_odoh_then_the_tool() {
+        let mut ladder = Ladder::default();
         let s = Setup {
-            choice: true,
+            choice: Choose::First,
             tool: true,
             ..setup()
         };
+        let at = Instant::now();
         assert_eq!(
-            ladder.plan(&s, Instant::now())[..4],
+            ladder.plan(&s, at)[..6],
             [
                 Step::Choice,
+                Step::Pair(0),
+                Step::Pair(1),
                 Step::PairThroughTool(0),
                 Step::PairThroughTool(1),
                 Step::TargetDoh(0)
             ]
         );
+        ladder.failed(Step::Choice, Failure::Timeout, at);
+        ladder.answered(Step::Pair(1));
+        assert_eq!(
+            ladder.plan(&s, at + BACKOFF_FIRST)[..2],
+            [Step::Choice, Step::Pair(1)]
+        );
+        let only = Setup {
+            choice: Choose::Only,
+            ..s.clone()
+        };
+        assert_eq!(ladder.plan(&only, at + BACKOFF_FIRST), [Step::Choice]);
+        assert!(!Ladder::network_allowed(&only));
+        assert!(Ladder::network_allowed(&s));
         let without_choice = Setup {
             tool: true,
             ..setup()
         };
         assert_eq!(
-            ladder.plan(&without_choice, Instant::now())[..3],
+            Ladder::default().plan(&without_choice, Instant::now())[..3],
             [Step::Pair(0), Step::Pair(1), Step::PairThroughTool(0)]
         );
     }

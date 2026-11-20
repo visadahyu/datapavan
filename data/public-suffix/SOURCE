@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: CC0-1.0
+list: https://publicsuffix.org/list/public_suffix_list.dat, read from a copy on disk
+copy: Debian package publicsuffix 20261007.0728-1 (upstream list of 2026-10-07 07:28)
+file-sha256: 2919eb9803c91a3f73a507cc6fedc934de005543c22c4016f72e3343de5dd6e7
+licence-statement: the list's first three lines, the MPL-2.0 notice
+licence-sha256: 775e2d3cd4efb1ac4d64b6d65e799ccaea47aec4f73c68bf6b4f2e093e6d1b2d
+section: ICANN (between // ===BEGIN ICANN DOMAINS=== and // ===END ICANN DOMAINS===)
+rules: 6949
+icann.dat-sha256: 0ecb35ffbf03e4b303fedbcf265686ea330fe8b39dcd84bbf98605ea5b150613

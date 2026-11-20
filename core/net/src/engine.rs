@@ -1234,12 +1234,6 @@ impl Engine {
         self.shared.resolver.network(validated, domains);
     }
 
-    /// How long the fetch of a target's key waits after the 401 that called for it, at least and at most: a random
-    /// time between ([`resolver::REFRESH_DELAY`] in the product). Debug builds shorten it for the DNS lab's check.
-    pub fn dns_refresh_delay(&self, low: Duration, high: Duration) {
-        self.shared.resolver.set_refresh_delay(low, high);
-    }
-
     /// The encrypted resolver's state, one `key value` per line: `way` (`off`, `none`, the way that answered
     /// last, `fallback SECONDS`, `failing SECONDS`), `strict`, `validated`, `held`, and `answers` by way. It names
     /// no lookup.
@@ -1751,6 +1745,7 @@ mod tests {
 
     pub(super) fn shared_with(platform: Arc<dyn Platform>) -> Shared {
         let tracks = platform.tells_states();
+        let clock = platform.clock();
         Shared {
             platform,
             addresses: Addresses::COMMON,
@@ -1775,7 +1770,7 @@ mod tests {
             ),
             owners: Owners::default(),
             next_id: AtomicU64::new(0),
-            clock: Arc::new(SystemClock),
+            clock,
             engine_thread: std::sync::OnceLock::new(),
             quarter: AtomicU64::new(0),
             last_reading: AtomicU64::new(0),
