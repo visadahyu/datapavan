@@ -13,16 +13,27 @@ name: CI
 #
 # A check that fails without a change to what it tests is a flake: it goes into docs/ci-flakes.md, with
 # the run, the check, the cause and the fix, before the run is repeated.
+#
+# The WireGuard checks (W7, part 3a, ADR 0035), the cargo lab against the Linux kernel's WireGuard and wireguard-go
+# in the build job and the emulator's wireguard shard, run where the scope rule says the WireGuard code or its checks
+# changed, and every week whatever changed: main moves only by fast-forward, so no push to it runs them, and the
+# runner's kernel, one of the two references, changes without a commit. The weekly run (or one started by hand)
+# carries what takes minutes too: a rekey at 120 s, keepalive timing, and a cookie reply under a flood of
+# initiations, each through the engine. On CI a check that cannot find its peer fails (WGLAB_REQUIRED=1).
 on:
   push:
     branches: ["**"]
   pull_request:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# The weekly run and one started by hand have a group of their own, so that a push does not cancel them.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '-weekly' || '' }}
   cancel-in-progress: true
 
 jobs:
@@ -32,7 +43,8 @@ jobs:
   # checks, in CI runs of pushes (scripts/ci-scope.sh): the build runs unless the trees differ only in
   # documents, and the emulator checks run unless they differ only in what no emulator check reads. A
   # change to the apps, the engine, the scripts or CI itself always runs both; so does a history with no
-  # earlier pass.
+  # earlier pass. The WireGuard checks run unless the commit differs from the nearest earlier one whose run passed
+  # them only in what they do not read. The weekly run carries the WireGuard checks alone.
   scope:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -43,6 +55,9 @@ jobs:
       passed: ${{ steps.lookup.outputs.passed }}
       build: ${{ steps.decide.outputs.build }}
       emulator: ${{ steps.decide.outputs.emulator }}
+      wireguard: ${{ steps.decide.outputs.wireguard }}
+      weekly: ${{ steps.decide.outputs.weekly }}
+      shards: ${{ steps.decide.outputs.shards }}
     steps:
       - id: lookup
         env:
@@ -72,7 +87,12 @@ jobs:
         if: steps.lookup.outputs.passed != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: scripts/ci-scope.sh decide
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = schedule ] || [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            scripts/ci-scope.sh weekly
+          else
+            scripts/ci-scope.sh decide
+          fi
 
   # Checks that need no build of the product, on every push: the bundled datasets' licences, the published
   # keys, the documents against the code and the record (scripts/check-truth.py, which reads the release
@@ -81,7 +101,7 @@ jobs:
   # No emulator runs the probe in CI.
   repository:
     needs: scope
-    if: needs.scope.outputs.passed != 'true'
+    if: needs.scope.outputs.passed != 'true' && needs.scope.outputs.weekly != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -116,7 +136,9 @@ jobs:
       - name: The lab's gaps probe and fixture (ADR 0048)
         run: scripts/check.sh lab
 
-  # The build and its gates (scripts/check.sh rust and android). It hands the APKs to the emulator shards.
+  # The build and its gates (scripts/check.sh rust and android), and the cargo lab against both WireGuard references
+  # (scripts/check.sh wglab) where the WireGuard checks run. It hands the APKs to the emulator shards. The weekly run
+  # builds Advanced's debug APK alone, for the wireguard shard, and runs the cargo lab with its long checks.
   build:
     needs: scope
     if: needs.scope.outputs.passed != 'true' && needs.scope.outputs.build == 'true'
@@ -207,12 +229,83 @@ jobs:
 
       # The repository checks (scripts/check.sh data) run in their own job, above.
       - name: Quality gates
+        if: needs.scope.outputs.weekly != 'true'
         run: |
           scripts/check.sh rust
           scripts/check.sh android
 
+      - name: Advanced's debug APK for the wireguard shard
+        if: needs.scope.outputs.weekly == 'true'
+        timeout-minutes: 30
+        run: scripts/check.sh advanced-debug
+
+      # The WireGuard lab's references: the kernel's module, which a container cannot load, and the peers' image,
+      # built from pinned sources (spikes/wireguard-core/peer/Dockerfile) and kept in the Actions cache, so that a
+      # run fetches nothing when the Dockerfile has not changed. A runner without the module fails here, with its
+      # kernel's version.
+      - name: The wireguard module
+        if: needs.scope.outputs.wireguard == 'true'
+        timeout-minutes: 2
+        run: |
+          sudo modprobe wireguard || { echo "::error title=No wireguard module::modprobe wireguard failed on Linux $(uname -r)"; exit 1; }
+          [ -c /dev/net/tun ] || sudo modprobe tun
+          echo "the wireguard module $(cat /sys/module/wireguard/version) on Linux $(uname -r)"
+
+      - name: Docker Buildx for the lab's peer image
+        if: needs.scope.outputs.wireguard == 'true'
+        timeout-minutes: 5
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Each fetch inside the build is tried three times; the build itself twice, a minute apart.
+      - name: The lab's peer image
+        id: peer-image
+        if: needs.scope.outputs.wireguard == 'true'
+        continue-on-error: true
+        timeout-minutes: 10
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: spikes/wireguard-core/peer
+          load: true
+          tags: datapavan-wglab-peer:latest
+          cache-from: type=gha,scope=wglab-peer
+          cache-to: type=gha,scope=wglab-peer,mode=max
+
+      - name: The lab's peer image, after a minute
+        if: needs.scope.outputs.wireguard == 'true' && steps.peer-image.outcome == 'failure'
+        timeout-minutes: 2
+        run: sleep 60
+
+      - name: The lab's peer image, second attempt
+        if: needs.scope.outputs.wireguard == 'true' && steps.peer-image.outcome == 'failure'
+        timeout-minutes: 10
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: spikes/wireguard-core/peer
+          load: true
+          tags: datapavan-wglab-peer:latest
+          cache-from: type=gha,scope=wglab-peer
+          cache-to: type=gha,scope=wglab-peer,mode=max
+
+      - name: WireGuard lab against the kernel's WireGuard and wireguard-go
+        if: needs.scope.outputs.wireguard == 'true'
+        timeout-minutes: 20
+        env:
+          WGLAB_REQUIRED: "1"
+          WGLAB_NO_BUILD: "1"
+          WGLAB_LONG: ${{ needs.scope.outputs.weekly == 'true' && '1' || '' }}
+        run: scripts/check.sh wglab
+
+      - name: Keep the lab peers' logs
+        if: failure() && needs.scope.outputs.wireguard == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wglab-logs-build
+          path: build/wglab/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Keep the APKs for the emulator shards
-        if: needs.scope.outputs.emulator == 'true'
+        if: needs.scope.outputs.emulator == 'true' || needs.scope.outputs.wireguard == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: apks
@@ -220,6 +313,17 @@ jobs:
             android/app/build/outputs/apk/debug/app-debug.apk
             android/app/build-advanced/outputs/apk/debug/app-debug.apk
             android/app/build-advanced/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 1
+
+      # The import check draws its QR code with the ZXing jar the app is built with, checked against the verification
+      # metadata's SHA-256; the emulator's runner has no Gradle cache, so the build hands it over.
+      - name: Keep ZXing's jar for the wireguard shard
+        if: needs.scope.outputs.wireguard == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: zxing
+          path: ~/.gradle/caches/modules-2/files-2.1/com.google.zxing/core/3.5.4/*/core-3.5.4.jar
           if-no-files-found: error
           retention-days: 1
 
@@ -239,7 +343,10 @@ jobs:
   #   Android hands them to the launcher, and the data pack import (scripts/smoke.sh,
   #   scripts/verify-audit.sh, scripts/verify-plan.sh, scripts/verify-shortcuts.sh,
   #   scripts/verify-datapack.sh);
-  # - screens: screenshots in every language with an accessibility check (scripts/screenshots.sh).
+  # - screens: screenshots in every language with an accessibility check (scripts/screenshots.sh);
+  # - wireguard: Watch's WireGuard upstream and the import of its configurations against the lab's peers of the
+  #   kernel's WireGuard on the runner (scripts/verify-wireguard.sh, verify-wireguard-import.sh), only where the
+  #   scope rule's WireGuard checks run, and in the weekly run.
   # A shard that fails leaves the others running (fail-fast off), so that a repeat runs only the shard that
   # failed. The emulator boots cold each time: the runner can cache a booted snapshot, but it would save
   # under half a minute a shard (the system image is fetched either way), take gigabytes of the
@@ -248,13 +355,17 @@ jobs:
   emulator:
     name: emulator ${{ matrix.shard }}
     needs: [scope, build]
-    if: needs.scope.outputs.passed != 'true' && needs.scope.outputs.emulator == 'true'
+    if: needs.scope.outputs.passed != 'true' && needs.scope.outputs.shards != '[]' && needs.scope.outputs.shards != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        shard: [watch, audit, screens]
+        shard: ${{ fromJSON(needs.scope.outputs.shards) }}
+    env:
+      # The WireGuard checks fail rather than skip without their peers, and the peers' image is the one built here.
+      WGLAB_REQUIRED: ${{ matrix.shard == 'wireguard' && '1' || '' }}
+      WGLAB_NO_BUILD: ${{ matrix.shard == 'wireguard' && '1' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -291,7 +402,57 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # The wireguard shard's peers, as in the build job: the module, and the image from the Actions cache.
+      - name: The wireguard module
+        if: matrix.shard == 'wireguard'
+        timeout-minutes: 2
+        run: |
+          sudo modprobe wireguard || { echo "::error title=No wireguard module::modprobe wireguard failed on Linux $(uname -r)"; exit 1; }
+          echo "the wireguard module $(cat /sys/module/wireguard/version) on Linux $(uname -r)"
+
+      - name: Docker Buildx for the lab's peer image
+        if: matrix.shard == 'wireguard'
+        timeout-minutes: 5
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: The lab's peer image
+        id: peer-image
+        if: matrix.shard == 'wireguard'
+        continue-on-error: true
+        timeout-minutes: 10
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: spikes/wireguard-core/peer
+          load: true
+          tags: datapavan-wglab-peer:latest
+          cache-from: type=gha,scope=wglab-peer
+
+      - name: The lab's peer image, after a minute
+        if: matrix.shard == 'wireguard' && steps.peer-image.outcome == 'failure'
+        timeout-minutes: 2
+        run: sleep 60
+
+      - name: The lab's peer image, second attempt
+        if: matrix.shard == 'wireguard' && steps.peer-image.outcome == 'failure'
+        timeout-minutes: 10
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: spikes/wireguard-core/peer
+          load: true
+          tags: datapavan-wglab-peer:latest
+          cache-from: type=gha,scope=wglab-peer
+
+      - name: ZXing's jar for the import check
+        if: matrix.shard == 'wireguard'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: zxing
+          path: ~/.gradle/caches/modules-2/files-2.1/com.google.zxing/core/3.5.4/ci
+
+      # Bounded, so that an emulator that does not shut down once every check passed cannot hold the job to its
+      # limit (docs/ci-flakes.md, 2026-11-19).
       - name: Emulator checks
+        timeout-minutes: 35
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 35
@@ -306,8 +467,20 @@ jobs:
           cores: 4
           ram-size: 4096M
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
-          # The runner's emulator listens on its default port: the shard runs only on a serial it is given.
-          script: ANDROID_SERIAL=emulator-5554 scripts/emulator-shard.sh ${{ matrix.shard }}
+          # The runner's emulator listens on its default port: the shard runs only on a serial it is given. Once the
+          # shard passed, the emulator is stopped within a bound (scripts/emulator-stop.sh, docs/ci-flakes.md).
+          script: |
+            ANDROID_SERIAL=emulator-5554 scripts/emulator-shard.sh ${{ matrix.shard }}
+            scripts/emulator-stop.sh emulator-5554
+
+      - name: Keep the lab peers' logs
+        if: failure() && matrix.shard == 'wireguard'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wglab-logs-emulator
+          path: build/wglab/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Keep the screenshots
         if: always()
@@ -321,7 +494,7 @@ jobs:
   # passed, and fails when anything failed, was cancelled or did not run when it had to.
   # The build and the emulator checks are let off only when the scope job said "false" for them: an empty
   # or missing answer needs them. The emulator job's result is its shards' together: success only if every
-  # shard passed.
+  # shard passed. The weekly run needs no repository checks.
   gate:
     needs: [scope, repository, build, emulator]
     if: always()
@@ -333,15 +506,17 @@ jobs:
           PASSED: ${{ needs.scope.outputs.passed }}
           NEEDS_BUILD: ${{ needs.scope.outputs.build }}
           NEEDS_EMULATOR: ${{ needs.scope.outputs.emulator }}
+          NEEDS_WIREGUARD: ${{ needs.scope.outputs.wireguard }}
+          WEEKLY: ${{ needs.scope.outputs.weekly }}
           REPOSITORY: ${{ needs.repository.result }}
           BUILD: ${{ needs.build.result }}
           EMULATOR: ${{ needs.emulator.result }}
         run: |
-          echo "scope: $SCOPE (passed before: $PASSED, needs the build: $NEEDS_BUILD, the emulator: $NEEDS_EMULATOR)"
+          echo "scope: $SCOPE (passed before: $PASSED, needs the build: $NEEDS_BUILD, the emulator: $NEEDS_EMULATOR, WireGuard: $NEEDS_WIREGUARD, weekly: $WEEKLY)"
           echo "repository: $REPOSITORY; build: $BUILD; emulator: $EMULATOR"
           [ "$SCOPE" = success ] || exit 1
           [ "$PASSED" != true ] || exit 0
-          [ "$REPOSITORY" = success ] || exit 1
+          [ "$WEEKLY" = true ] || [ "$REPOSITORY" = success ] || exit 1
           [ "$NEEDS_BUILD" = false ] || [ "$BUILD" = success ] || exit 1
-          [ "$NEEDS_EMULATOR" = false ] || [ "$EMULATOR" = success ] || exit 1
+          { [ "$NEEDS_EMULATOR" = false ] && [ "$NEEDS_WIREGUARD" = false ]; } || [ "$EMULATOR" = success ] || exit 1
           echo "Everything this push needed passed."

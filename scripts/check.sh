@@ -10,9 +10,13 @@
 #                             tools, the fixture's missing INTERNET permission, the tools' unit tests, the
 #                             README's tables against results.csv, and the published runs' privacy; seconds,
 #                             so CI runs it on every push too
-#   scripts/check.sh wglab    W7's interoperation lab: the engine's WireGuard tunnels against two peers of the
-#                             Linux kernel's WireGuard in the Compose project datapavan-wglab (scripts/wglab.sh);
-#                             needs Docker and the wireguard module; about a minute, stopped at the end
+#   scripts/check.sh wglab    W7's interoperation lab: the engine's WireGuard tunnels against peers of both
+#                             reference implementations, the Linux kernel's WireGuard and wireguard-go, in the
+#                             Compose project datapavan-wglab (scripts/wglab.sh); needs Docker, the wireguard module
+#                             and /dev/net/tun; about a minute, stopped at the end; WGLAB_LONG=1 adds the checks that
+#                             take minutes
+#   scripts/check.sh advanced-debug
+#                             Advanced's debug APK alone, for the wireguard emulator shard of CI's weekly run
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -248,11 +252,17 @@ case "$WHAT" in
     data) data_gates ;;
     lab) lab_gates ;;
     wglab)
-        echo "== Rust: the engine's WireGuard against the kernel's (scripts/wglab.sh)"
+        echo "== Rust: the engine's WireGuard against the kernel's and wireguard-go (scripts/wglab.sh)"
         "$ROOT/scripts/wglab.sh"
         ;;
+    advanced-debug)
+        echo "== Android: Advanced's debug APK"
+        cd "$ROOT/android"
+        ./gradlew --no-daemon --stacktrace -Pdatapavan.edition=advanced --project-cache-dir .gradle-advanced \
+            :app:assembleDebug
+        ;;
     all) data_gates; lab_gates; rust_gates; android_gates ;;
-    *) echo "usage: $0 [all|rust|android|data|lab|wglab]" >&2; exit 2 ;;
+    *) echo "usage: $0 [all|rust|android|data|lab|wglab|advanced-debug]" >&2; exit 2 ;;
 esac
 
 echo "== all requested gates passed"
