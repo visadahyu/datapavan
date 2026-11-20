@@ -486,6 +486,9 @@ class WatchVpnService : VpnService() {
      * directly, with flows of no app and pings: while the store's state cannot be opened at a start, nothing tells
      * which apps go through a configuration. The store's routes replace these once it opens.
      */
+    // Every app: Datapavan Advanced holds QUERY_ALL_PACKAGES, the audit's (ADR 0014), which this library's own manifest
+    // does not name.
+    @android.annotation.SuppressLint("QueryPermissionsNeeded")
     private fun holdEveryApp() {
         @Suppress("DEPRECATION")
         val uids = packageManager.getInstalledApplications(0).map { it.uid }.distinct()
