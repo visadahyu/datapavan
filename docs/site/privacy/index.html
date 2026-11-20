@@ -188,7 +188,7 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 <details class="lng"><summary aria-label="Language">English</summary><ul><li><a href="../privacy/index.html" hreflang="en" lang="en" aria-current="true">English</a></li><li><a href="../fr/privacy/index.html" hreflang="fr" lang="fr">Français</a></li><li><a href="../de/privacy/index.html" hreflang="de" lang="de">Deutsch</a></li><li><a href="../es/privacy/index.html" hreflang="es" lang="es">Español</a></li><li><a href="../ru/privacy/index.html" hreflang="ru" lang="ru">Русский</a></li><li><a href="../zh/privacy/index.html" hreflang="zh" lang="zh">简体中文</a></li><li><a href="../ar/privacy/index.html" hreflang="ar" lang="ar">العربية</a></li><li><a href="../fa/privacy/index.html" hreflang="fa" lang="fa">فارسی</a></li></ul></details></header></div>
 <main><section><div class="w prose"><h1>Privacy policy</h1><ul>
 <li><strong>Effective:</strong> 2026-11-07</li>
-<li><strong>Updated:</strong> 2026-11-18, with Datapavan Advanced&rsquo;s lines for 0.2.0, which is not yet released</li>
+<li><strong>Updated:</strong> 2026-11-20, with Datapavan Advanced&rsquo;s lines for 0.2.0, which is not yet released</li>
 <li><strong>Responsible:</strong> the Datapavan maintainer (mehdashti), until the Visadahyu Foundation is established</li>
 </ul>
 <p><strong>Datapavan collects no data about you.</strong></p>
@@ -228,6 +228,14 @@ log keeps no destination unless you turn that on.</li>
 the password Datapavan made for it, which is encrypted under a key that Android&rsquo;s keystore protects.</li>
 <li><strong>The apps you leave out of the firewall,</strong> which then go to the internet without it: their names, until you take
 them back.</li>
+<li><strong>The WireGuard configurations you add,</strong> at most eight: each one&rsquo;s text, which holds its private key and its
+server, and the name you gave it, encrypted under a key that Android&rsquo;s keystore keeps (in the phone&rsquo;s separate
+security chip where it has one), in storage that is never backed up or moved to another phone. Beside them, not
+encrypted: which apps go through each, which one is the default, and whether its apps reach your local network
+directly. Removing a configuration deletes its text and name; if you chose that its apps wait, their names stay
+until you give them another way. A photo of a QR code that the phone&rsquo;s camera takes for Datapavan is deleted as
+soon as it is read, also when it holds no code or you cancel; a picture you pick from your gallery stays there,
+and Datapavan says that it holds the configuration&rsquo;s key.</li>
 </ul>
 <h2 id="version-01-cannot-open-network-connections">Version 0.1 cannot open network connections</h2>
 <p>Datapavan Basic 0.1 does not request the INTERNET permission, so Android itself prevents it from
@@ -240,6 +248,12 @@ phone; none of it goes to us. Of its own, it asks your network&rsquo;s DNS resol
 phone would without it, over an encrypted connection where the phone used one. When you send apps through your
 circumvention tool, their lookups go to the tool, and their other DNS questions go through the tool to Quad9, a
 Swiss foundation that does not log addresses, so Quad9 sees the tool&rsquo;s address, not yours.</p>
+<p>When you add a WireGuard configuration of your VPN provider, Datapavan Advanced connects to that provider&rsquo;s server,
+the one the configuration names, for the apps you send through it; their lookups go to the configuration&rsquo;s DNS
+server through it. Where the configuration names its server by a host name, Android&rsquo;s own resolver looks it up on
+your network first, encrypted where your phone&rsquo;s Private DNS is on; where it is not, the network can see which
+provider you use, and Datapavan says so. Datapavan reads a QR code without the camera permission: the phone&rsquo;s own
+camera app takes the photo for it, or you pick a picture.</p>
 <h2 id="permissions-and-why-they-are-needed">Permissions and why they are needed</h2>
 <table>
 	<thead>

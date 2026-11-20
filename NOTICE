@@ -24,6 +24,13 @@ Datapavan Advanced's Watch, WireGuard upstream (W7, docs/decisions/0035-wireguar
 - untrusted (Brian Smith): ISC.
 - ip_network_table-deps-treebitmap (Hroi Sigurdsson's treebitmap, forked by Jakub Onderka): MIT.
 
+Datapavan Advanced's Watch, the QR code of a WireGuard configuration (W7, part 2):
+
+- ZXing core 3.5.4 (com.google.zxing:core), the ZXing authors: Apache-2.0, whose text is LICENSE.
+  Source: https://github.com/zxing/zxing and Maven Central. It reads a picture's QR code in an isolated
+  process of Watch's own. licences/jvm-components.tsv lists every Java and Kotlin library in the APKs,
+  and the build holds it to each edition's classpath.
+
 "WireGuard" is a registered trademark of Jason A. Donenfeld.
 
 Every other crate in the native libraries is under Apache-2.0, MIT or Unicode-3.0 (`core/deny.toml`

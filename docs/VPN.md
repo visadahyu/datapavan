@@ -101,6 +101,15 @@ Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED
   resolver for it). The tunnel keeps the TUN's MTU: a tunnelled SYN's MSS is clamped to the
   configuration's MTU, and a larger packet gets "fragmentation needed" or "packet too big", as from a router.
   Their destinations are logged only under "Log where these apps connect", as chained apps' are.
+- **The way in** (W7, part 2, ADR 0035). A configuration comes from a file (Android's documents screen, no storage
+  permission) or a QR code: a photo the phone's own camera takes for Watch, which never holds `CAMERA`, or a
+  picture picked in the photo picker, read with ZXing's core in an isolated process with no permissions. Before
+  anything is saved, Watch shows what it does and never a key: the server, the addresses, the DNS server, whether
+  only some destinations go through it, whether it has a preshared key; the apps it names become a proposed choice
+  to confirm, never applied silently. Watch keeps at most eight, each wrapped with AES-256-GCM under an Android
+  Keystore key, in StrongBox where the phone has one; the text is opened only to be handed to the engine, and
+  zeroed. Each app's way, directly, through the tool or through one configuration, is set in one place on Watch's
+  screen; removing a configuration asks whether its apps wait or go their other way, never directly unasked.
 - **Proxy mode, step by step.** Onboarding has a guide per popular tool, in every UI language, for running it in proxy mode instead of VPN mode.
 
 ## Engineering constraints

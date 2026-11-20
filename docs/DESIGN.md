@@ -1048,8 +1048,20 @@ both IP versions, a preshared key, the MTU's clamp and errors), and on the emula
 in the watch shard). A fix round after two reviews (ADR 0035, "Fix round of part 1") closed eight majors: the
 route to a tunnel not set, a name asked per packet, a lock order that could freeze the engine, two emulator steps
 that could not fail, the licence texts, and the MTU's evidence.
-Part 2 brings the import, the key's storage and the screens; part 3 the CI peer, the A40's measurements and the
-check from outside with a provider.
+W7, part 2, on `watch-w7b`, 2026-11-20: the way in (ADR 0035, "How it is built (W7, part 2)"). A configuration
+comes from a file on Android's documents screen or a QR code, in a photo the phone's own camera takes for Watch or
+a picked picture, read with ZXing's core in an isolated process (`:qr`) within bounds; Watch never holds `CAMERA`,
+and the camera's photo is deleted once read. The confirmation shows what the configuration does, never a key, and
+the apps a file names as a proposed choice; a refusal says why in plain words, every code held by a test. At most
+eight configurations, each one's text and name wrapped with AES-256-GCM under a Keystore key in
+`noBackupFilesDir`, the routes beside them in plain text so that a configuration that cannot be opened still holds
+its apps. Each app's way is chosen in one place; removal asks whether the apps wait. The service hands the
+configurations to the engine before any traffic at every start, each opened only to be set and zeroed. States
+while the screen shows, the configurations' names in "Now" and the history, and the licence screen read from the
+same files as `licences/`, with Cloudflare's own text from GotaTun's tag. Checked on the emulator by
+`scripts/verify-wireguard-import.sh` (the documents screen, the photo picker, the camera, a restart, removal,
+the files) against the lab's peers. Part 3 brings the CI peer, the A40's measurements and the check from outside
+with a provider.
 
 | # | Milestone | Done when |
 |---|---|---|
