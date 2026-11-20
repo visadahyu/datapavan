@@ -1096,8 +1096,8 @@ would answer Android's DNS over TLS itself is replaced: refusing port 853 brings
 where Watch encrypts them upstream, and there is nothing to gain by encrypting the hop inside the phone. Checked
 by unit tests, RFC 9180's vectors, an ODoH oracle of its own and `odoh-rs`, three fuzz targets, hand mutants, the
 DNS lab (`scripts/dnslab.sh`) and `scripts/verify-dns.sh`, which CI runs in a shard of its own with the lab since
-the fix round. The native library is within its gate on arm64 and armv7, and 8,200 bytes over it on x86_64, which
-waits for the maintainer's choice (ADR 0042, "The fix round").
+the fix round. The native library is within its 2 MB gate on every ABI, x86_64 by 164 KB, since the data packs'
+Ed25519 check is built for size (ADR 0042, "The fix round").
 
 | # | Milestone | Done when |
 |---|---|---|

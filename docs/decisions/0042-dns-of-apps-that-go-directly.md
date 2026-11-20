@@ -236,8 +236,16 @@ were tightened after it), and the notification's permission on the emulator. Wha
   1,817,416 / 1,539,760 / 2,106,376; with the round's other fixes 1,821,304 / 1,542,192 / 2,109,944; with the
   presets' words and the bridge's texts moved to Kotlin, no cost in speed, 1,819,448 / 1,540,784 / 2,106,872. In
   Advanced's release APK, as `scripts/check.sh android` reads the gate, after the rebase on main: 1,817,800 /
-  1,539,280 / 2,105,352. **x86_64 is 8,200 bytes over the gate there; the work stopped, as the brief says, and the
-  gate is unchanged.**
+  1,539,280 / 2,105,352, x86_64 8,200 bytes over the gate. Then, at the coordinator's second step: building the
+  DNS path's crypto crates (aes-gcm, aes, ghash, polyval, hkdf, sha2 and their traits) with opt-level `z` left
+  x86_64 unchanged and made arm64 864 bytes larger, and was taken back; building `ed25519-compact`, which checks a
+  data pack's signature when the pack is read and never runs per packet, with its `opt_size` feature (its field
+  arithmetic called rather than inlined; one function alone was 133 KB on x86_64) gave **1,695,200 / 1,256,752 /
+  1,933,072**, x86_64 164,080 bytes under the gate, with the gate unchanged. Its cost, on this computer: a
+  signature's check 33 → about 44 µs, and the SHA-512 over a signed pack about 3.5 times slower (3 MB: 4 → 14 ms;
+  the bundled payload is 0.65 MB). Lookups do not touch it: Watch's CPU per lookup on the emulator stayed 19, 17
+  and 13 ms (ODoH, DoH, DoT, 60 lookups each, before and after), the lab's ODoH p50 and p95 10 and 51 ms before, 4
+  and 49 ms after, and ODoH's seal and open 55.6 µs and 1.50 µs before, 55.6 to 56.9 µs and 1.50 µs after.
 
 **Release gate for the maintainer:** each volunteer operator whose endpoint is a default (Numa, crypto.sx,
 dnscry.pt) is asked before a release ships it; Cloudflare's ODoH page states no logging policy of its own.

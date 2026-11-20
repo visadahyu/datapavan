@@ -9,8 +9,10 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
-# Ed25519 for signed data packs (ADR 0017): no dependencies of its own.
-ed25519-compact = { version = "2.6.0", default-features = false }
+# Ed25519 for signed data packs (ADR 0017): no dependencies of its own. Built for size ("opt_size": its field
+# arithmetic is called, not inlined everywhere; W8's fix round): a pack's signature is checked when the pack is read,
+# never per packet, and the check stays a few tens of microseconds (measured: ADR 0042, "The fix round").
+ed25519-compact = { version = "2.6.0", default-features = false, features = ["opt_size"] }
 
 [lints]
 workspace = true
