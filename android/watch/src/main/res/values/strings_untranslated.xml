@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    W8, part 1 (ADR 0042), with its fix round: the strings of the names of apps that go directly, in English only.
-    W7 part 2's strings moved into strings.xml with their translations; these are translated into the seven other
-    languages after their review, by ADR 0030's process, and then move there too, where scripts/check-translations.py
-    holds them to every language. Until then this file is held to the plain-language gate (scripts/check.sh) and to
-    ADR 0025's list of words, and lint's check for missing translations is lifted for it alone. A release needs it
-    empty (RELEASE.md).
+    W8, part 1 (ADR 0042), with its fix round: the strings of the names of apps that go directly; and W8, part 2a
+    (ADR 0052): the strings of apps' own proxies in "Now" and each app's history. In English only. W7 part 2's strings
+    moved into strings.xml with their translations; these are translated into the seven other languages after their
+    review, by ADR 0030's process, and then move there too, where scripts/check-translations.py holds them to every
+    language. Until then this file is held to the plain-language gate (scripts/check.sh) and to ADR 0025's list of
+    words (for the proxies' strings, ProxyWordsTest), and lint's check for missing translations is lifted for it alone.
+    A release needs it empty (RELEASE.md).
 -->
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
 
@@ -85,4 +86,40 @@
     <string name="dns_fallback_channel">Names without encryption</string>
     <string name="dns_fallback_title">Names go to the network\'s resolver</string>
     <string name="dns_fallback_text">No encrypted way answers on this network, so apps that go directly use its resolver for now. Open Watch to turn on strict.</string>
+
+    <!-- Where a destination's name came from, beside "name the connection sent" and the others: the app named the
+         destination to its proxy. -->
+    <string name="now_named_proxy">destination the app asked its proxy for</string>
+    <!-- The kinds of proxy, set into the sentences below. SOCKS5, SOCKS4, HTTP and MTProto are names of protocols,
+         and Telegram, WhatsApp and Signal names of apps: never translated. -->
+    <string name="proxy_kind_socks5">SOCKS5 proxy</string>
+    <string name="proxy_kind_socks4">SOCKS4 proxy</string>
+    <string name="proxy_kind_http">HTTP proxy</string>
+    <string name="proxy_kind_mtproto">Telegram proxy (MTProto)</string>
+    <string name="proxy_kind_whatsapp">WhatsApp proxy</string>
+    <string name="proxy_kind_signal">Signal proxy</string>
+    <!-- A proxy the app's own bytes named: %1$s is its kind (above), %2$s where it is, as a name or an address with
+         its port, %3$s the destination the app asked it for. "Read from the connection" says how Watch knows. -->
+    <string name="proxy_asked">Asked the %1$s at %2$s for %3$s. Read from the connection.</string>
+    <!-- A messenger's proxy that Watch infers: %1$s its kind, %2$s where it is. -->
+    <string name="proxy_inferred">Through a %1$s at %2$s. Inferred from where and how it connects. What it reaches from there is encrypted.</string>
+    <!-- Where a proxy is, by its address alone: who runs it is not known. %1$s is the organisation whose network holds
+         the address. -->
+    <string name="proxy_network">An address in the network of %1$s. Who runs it is not known.</string>
+    <!-- As above, and the network is not the app maker's own: %2$s is the app's maker, such as Telegram. -->
+    <string name="proxy_network_not_maker">An address in the network of %1$s, not of %2$s. Who runs it is not known.</string>
+    <string name="proxy_network_unknown">Watch cannot name the network of this address. Who runs it is not known.</string>
+    <string name="proxy_local">On your local network. Who runs it is not known.</string>
+    <!-- The proxy set in Android's settings, which apps that follow those settings all use. -->
+    <string name="proxy_setting">This is the proxy in Android\'s settings, which other apps can use too.</string>
+    <string name="proxy_password">A password for this proxy crossed the network unencrypted. Watch did not keep it.</string>
+    <!-- The server name an inferred proxy's connection sent to look like another site: %1$s is that name. -->
+    <string name="proxy_cover">Its connection sent the name %1$s to look like that site. No DNS answer Watch passed gave that name this address.</string>
+    <!-- %1$s owns the name above, %2$s the network of the address. -->
+    <string name="proxy_cover_owner">That name belongs to %1$s, and the network to %2$s.</string>
+    <!-- An app's own proxy while "Log where these apps connect" is off: %1$s is its kind. -->
+    <string name="now_proxy_hidden">Through its own %1$s. Where it connected is not shown, because \"Log where these apps connect\" is off.</string>
+    <string name="history_proxy_hidden">Through its own %1$s. Where it connected was not logged, because \"Log where these apps connect\" was off.</string>
+    <!-- One more line of "What this view cannot see". -->
+    <string name="cannot_see_proxy">For a proxy an app uses, Watch cannot see who runs it, or whether you or the app chose it. For a proxy Watch infers, it cannot see where the traffic goes after it.</string>
 </resources>

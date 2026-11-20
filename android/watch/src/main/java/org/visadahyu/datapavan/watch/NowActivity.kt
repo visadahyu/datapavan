@@ -342,7 +342,7 @@ class NowActivity : ComponentActivity() {
             val text = { path: String -> store.text(path) }
             companies = try {
                 val owners = Owners.parse(text(Owners.ENTITIES_PATH).orEmpty(), "", text(Owners.PUBLISHERS_PATH).orEmpty())
-                Companies(owners, text(PUBLISHER_SOURCES).orEmpty(), LocalDate.now().toString())
+                Companies(owners, text(PUBLISHER_SOURCES).orEmpty(), LocalDate.now().toString(), text(ASNS).orEmpty())
             } catch (e: RuntimeException) {
                 null
             }
@@ -365,6 +365,7 @@ class NowActivity : ComponentActivity() {
 
         private const val TRACKERS = "exodus/trackers.tsv"
         private const val PUBLISHER_SOURCES = "owners/publisher-sources.tsv"
+        private const val ASNS = "owners/asns.tsv"
 
         /** The intent that opens "Now", for [packageName] alone if given. */
         fun intent(context: Context, packageName: String? = null): Intent =

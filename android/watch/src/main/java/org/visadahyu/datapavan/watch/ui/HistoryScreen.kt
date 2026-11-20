@@ -147,7 +147,18 @@ internal fun HistoryScreen(
                     } else {
                         null
                     }
-                    if (entry.unlogged) {
+                    val proxy = entry.proxy?.let {
+                        proxyFacts(it, java.net.InetAddress.getByName(entry.address.ifEmpty { "0.0.0.0" }), entry.port, entry.asn, appGroup, companies)
+                    }
+                    if (proxy != null && !proxy.kept) {
+                        // An app's own proxy while "Log where these apps connect" was off: its kind alone (ADR 0052).
+                        Text(stringResource(R.string.history_proxy_hidden, stringResource(proxyKind(proxy.kind))), style = MaterialTheme.typography.bodyMedium)
+                        ProxyLines(proxy)
+                        Text(
+                            stringResource(R.string.now_destination_bytes, size(context, entry.sent), size(context, entry.received)),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    } else if (entry.unlogged) {
                         // No destination was logged: say why, as "Now" does, never show zeros as one (M3).
                         Text(
                             when {
@@ -171,6 +182,7 @@ internal fun HistoryScreen(
                             marks = marksOf(hosts, appGroup, trackers, companies),
                             bytes = stringResource(R.string.now_destination_bytes, size(context, entry.sent), size(context, entry.received)),
                             through = tunnel,
+                            proxy = proxy,
                         )
                     }
                     Text(stringResource(R.string.history_state, stateName(entry.state)), style = MaterialTheme.typography.bodyMedium)

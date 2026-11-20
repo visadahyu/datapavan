@@ -49,6 +49,7 @@ import org.visadahyu.datapavan.watch.R
 import org.visadahyu.datapavan.watch.activity.AppNames
 import org.visadahyu.datapavan.watch.activity.Companies
 import org.visadahyu.datapavan.watch.activity.NowRows
+import org.visadahyu.datapavan.watch.activity.ProxyFacts
 import org.visadahyu.datapavan.watch.activity.Snapshot
 import org.visadahyu.datapavan.watch.activity.TrackerMarks
 import org.visadahyu.datapavan.watch.log.AppState
@@ -359,15 +360,26 @@ private fun Destinations(context: Context, app: Snapshot.App, window: Int, view:
     val shown = if (all) places else places.take(FIRST_PLACES)
     for (place in shown) {
         HorizontalDivider(Modifier.padding(vertical = 4.dp))
+        val bytes = stringResource(R.string.now_destination_bytes, size(context, place.bytes[window * 2]), size(context, place.bytes[window * 2 + 1]))
+        val proxy = place.proxy?.let { proxyFacts(it, place.address, place.port, place.asn, view.groups[app.uid], view.companies) }
+        if (proxy != null && !proxy.kept) {
+            // An app's own proxy while "Log where these apps connect" is off: its kind, and no destination (ADR 0052).
+            Text(stringResource(R.string.now_proxy_hidden, stringResource(proxyKind(proxy.kind))), style = MaterialTheme.typography.bodyMedium)
+            ProxyLines(proxy)
+            Text(bytes, style = MaterialTheme.typography.bodySmall)
+            continue
+        }
         val (name, dns) = NowRows.destination(place.name, place.dnsName, place.address.hostAddress.orEmpty())
         Place(
             name = name,
             dnsName = dns,
             namedBy = place.namedBy,
-            organisation = place.organisation,
+            // A proxied destination's organisation is the proxy's network's, which its lines say.
+            organisation = if (proxy == null) place.organisation else "",
             marks = marksOf(org.visadahyu.datapavan.watch.NowActivity.hostsOf(place), view.groups[app.uid], view.trackers, view.companies),
-            bytes = stringResource(R.string.now_destination_bytes, size(context, place.bytes[window * 2]), size(context, place.bytes[window * 2 + 1])),
+            bytes = bytes,
             through = if (place.via == org.visadahyu.datapavan.watch.log.LogRecord.VIA_TUNNEL) tunnelName(view, place.tunnel) else null,
+            proxy = proxy,
         )
     }
     if (!all && places.size > FIRST_PLACES) {
@@ -387,9 +399,12 @@ internal fun Place(
     bytes: String,
     /** The WireGuard configuration it went through, by its name, if one (W7, part 2). */
     through: String? = null,
+    /** The app's own proxy it went through, if one (ADR 0052). */
+    proxy: ProxyFacts.Facts? = null,
 ) {
     Text(isolateLtr(name), style = MaterialTheme.typography.bodyLarge)
     through?.let { Text(stringResource(R.string.now_destination_tunnel, it), style = MaterialTheme.typography.bodySmall) }
+    proxy?.let { ProxyLines(it) }
     Text(
         stringResource(
             when (NowRows.namedBy(namedBy)) {
@@ -397,6 +412,7 @@ internal fun Place(
                 NowRows.NamedBy.QUIC -> R.string.now_named_quic
                 NowRows.NamedBy.DNS -> R.string.now_named_dns
                 NowRows.NamedBy.ORGANISATION -> R.string.now_named_organisation
+                NowRows.NamedBy.PROXY -> R.string.now_named_proxy
                 NowRows.NamedBy.UNKNOWN -> R.string.now_named_unknown
             },
         ),
@@ -415,6 +431,72 @@ internal fun Place(
     Text(bytes, style = MaterialTheme.typography.bodySmall)
 }
 
+/**
+ * The facts of a destination's proxy (ADR 0052), for the app of company group [appGroup], with the owners' tables
+ * [companies] where the pack holds them.
+ */
+internal fun proxyFacts(
+    proxy: org.visadahyu.datapavan.watch.log.LogRecord.Proxy,
+    address: java.net.InetAddress,
+    port: Int,
+    asn: Long,
+    appGroup: String?,
+    companies: Companies?,
+): ProxyFacts.Facts = ProxyFacts.of(
+    proxy, address, port, asn,
+    appMaker = appGroup?.let { companies?.name(it) ?: it },
+    networkGroup = { companies?.groupOfAsn(it) },
+    coverGroup = { companies?.groupOfHost(it) },
+    groupName = { companies?.name(it) ?: it },
+)
+
+/** A proxy's kind, as the sentences set it in. */
+internal fun proxyKind(kind: ProxyFacts.Kind): Int = when (kind) {
+    ProxyFacts.Kind.SOCKS5 -> R.string.proxy_kind_socks5
+    ProxyFacts.Kind.SOCKS4 -> R.string.proxy_kind_socks4
+    ProxyFacts.Kind.HTTP -> R.string.proxy_kind_http
+    ProxyFacts.Kind.MTPROTO -> R.string.proxy_kind_mtproto
+    ProxyFacts.Kind.WHATSAPP -> R.string.proxy_kind_whatsapp
+    ProxyFacts.Kind.SIGNAL -> R.string.proxy_kind_signal
+}
+
+/**
+ * The lines of a destination's proxy (ADR 0052): its kind, where it is and how Watch knows, then where its address
+ * is and that who runs it is not known, and the facts beside it. Only the facts that name nothing while its
+ * destination is not kept.
+ */
+@Composable
+internal fun ProxyLines(facts: ProxyFacts.Facts) {
+    val kind = stringResource(proxyKind(facts.kind))
+    if (facts.kept) {
+        Text(
+            if (facts.declared && facts.asked.isNotEmpty()) {
+                stringResource(R.string.proxy_asked, kind, isolateLtr(facts.at), isolateLtr(facts.asked))
+            } else {
+                stringResource(R.string.proxy_inferred, kind, isolateLtr(facts.at))
+            },
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Text(
+            when {
+                facts.where == ProxyFacts.Where.LOCAL -> stringResource(R.string.proxy_local)
+                facts.where == ProxyFacts.Where.UNKNOWN -> stringResource(R.string.proxy_network_unknown)
+                facts.maker.isNotEmpty() -> stringResource(R.string.proxy_network_not_maker, isolate(facts.organisation), isolate(facts.maker))
+                else -> stringResource(R.string.proxy_network, isolate(facts.organisation))
+            },
+            style = MaterialTheme.typography.bodySmall,
+        )
+        if (facts.cover.isNotEmpty()) {
+            Text(stringResource(R.string.proxy_cover, isolateLtr(facts.cover)), style = MaterialTheme.typography.bodySmall)
+            facts.coverOwner?.let { (name, network) ->
+                Text(stringResource(R.string.proxy_cover_owner, isolate(name), isolate(network)), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+    if (facts.setting) Text(stringResource(R.string.proxy_setting), style = MaterialTheme.typography.bodySmall)
+    if (facts.password) Text(stringResource(R.string.proxy_password), style = MaterialTheme.typography.bodySmall)
+}
+
 /** "What this view cannot see" (ADR 0046, decision 5), in plain words at the end of "Now". */
 @Composable
 private fun CannotSee() {
@@ -427,6 +509,7 @@ private fun CannotSee() {
         for (line in listOf(
             R.string.cannot_see_sender, R.string.cannot_see_content, R.string.cannot_see_device, R.string.cannot_see_together,
             R.string.cannot_see_gaps, R.string.cannot_see_sizes, R.string.cannot_see_notification, R.string.cannot_see_in_use,
+            R.string.cannot_see_proxy,
         )) {
             Text("• " + stringResource(line), style = MaterialTheme.typography.bodyMedium)
         }

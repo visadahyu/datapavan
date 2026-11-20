@@ -77,7 +77,31 @@ object TrackerMarks {
  * The companies of `data/owners` (ADR 0020) as [TrackerMarks] reads them: who publishes an app, whose website a
  * tracker's is, and the company group of each on [date] (`YYYY-MM-DD`).
  */
-class Companies(private val owners: Owners, publisherSources: String, private val date: String) {
+class Companies(
+    private val owners: Owners,
+    publisherSources: String,
+    private val date: String,
+    /** `owners/asns.tsv`: the company behind each listed network (ADR 0036, decision 4), for an app's own proxy (ADR 0052). */
+    asns: String = "",
+) {
+    /** Each listed network's entity, by AS number. */
+    private val networks: Map<Long, String> = asns.lineSequence()
+        .filter { it.isNotBlank() && !it.startsWith("#") }
+        .map { it.split('\t') }
+        .filter { it.size >= 2 }
+        .mapNotNull { columns -> columns[0].toLongOrNull()?.let { it to columns[1] } }
+        .toMap()
+
+    /** The company group of the network of AS [asn], or null where the owners' table lists none. */
+    fun groupOfAsn(asn: Long): String? = networks[asn]?.let { owners.group(it, date) }
+
+    /** The company group of a host [name], by the entity whose own domain holds it, or null where none does. */
+    fun groupOfHost(name: String): String? {
+        val host = name.lowercase().removeSuffix(".")
+        val entity = domains.firstOrNull { (domain, _) -> host == domain || host.endsWith(".$domain") }?.second
+        return entity?.let { owners.group(it, date) }
+    }
+
     /** Each entity's own domains: the hosts of the asset-links files the owners' table reads, without `www.`. */
     private val domains: List<Pair<String, String>> = publisherSources.lineSequence()
         .filter { it.isNotBlank() && !it.startsWith("#") }

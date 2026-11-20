@@ -206,6 +206,8 @@ class WatchVpnService : VpnService() {
             val dns = properties.dnsServers.firstOrNull { !it.isLinkLocalAddress }?.hostAddress ?: ""
             // Android reports a network's properties several times after a switch; only a new network
             // closes the engine's UDP flows, and nothing the engine already knows is sent again.
+            // A network's own proxy setting may have changed with its properties (ADR 0052).
+            main.post { if (active) applyProxies() }
             if (network == told && dns == toldDns) return
             Engine.nativeNetworkChanged(dns, network != told)
             told = network
@@ -374,6 +376,66 @@ class WatchVpnService : VpnService() {
     private fun applyRoutes() {
         applyTunnels()
         applyChain()
+        applyProxies()
+    }
+
+    /**
+     * Debug builds: packages of this project's own fixtures added to a messenger's clients through the dump (W8, part
+     * 2a; `messenger-client FAMILY PACKAGE`), by family code; never a real app's package. Main thread only.
+     */
+    private val debugClients = mutableMapOf<String, Int>()
+
+    /**
+     * Hands the engine the messengers' apps, by the UIDs Android gives their packages now (`data/messengers`, through
+     * the engine's own table), and the proxies Android's setting names: the global one and each network's (W8, part
+     * 2a, ADR 0052). The engine reads each new flow of those apps for their proxies, and tells Android's setting from
+     * an app's own. Main thread only.
+     */
+    private fun applyProxies() {
+        val clients = Engine.nativeMessengerClients().lineSequence().mapNotNull { line ->
+            val parts = line.split(' ')
+            val family = MESSENGER_FAMILIES.indexOf(parts.firstOrNull())
+            if (parts.size == 2 && family >= 0) parts[1] to family else null
+        } + debugClients.toList().asSequence()
+        val messengers = clients.mapNotNull { (name, family) ->
+            try {
+                @Suppress("DEPRECATION")
+                family to packageManager.getApplicationInfo(name, 0).uid
+            } catch (e: PackageManager.NameNotFoundException) {
+                null
+            }
+        }.distinct().toList()
+        val proxies = buildList {
+            connectivity.defaultProxy?.let(::add)
+            @Suppress("DEPRECATION")
+            for (network in connectivity.allNetworks) connectivity.getLinkProperties(network)?.httpProxy?.let(::add)
+        }
+        // A proxy given by a PAC file is found by Android on the phone's loopback, which never enters the tunnel.
+        val android = proxies.filter { it.host != null && it.port in 1..65535 }.map { "${it.host} ${it.port}" }.distinct()
+        Engine.nativeProxies(
+            messengers.map { it.first }.toIntArray(),
+            messengers.map { it.second }.toIntArray(),
+            android.joinToString("\n"),
+        )
+    }
+
+    /** The receiver of Android's proxy setting's changes, while the tunnel runs. */
+    private var proxyChanges: android.content.BroadcastReceiver? = null
+
+    /** Follows Android's proxy setting while the tunnel runs (ADR 0052): the engine tells it from an app's own. */
+    private fun followProxySetting() {
+        if (proxyChanges != null) return
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context, intent: Intent) {
+                if (active) applyProxies()
+            }
+        }
+        // A protected broadcast that only the system sends.
+        androidx.core.content.ContextCompat.registerReceiver(
+            this, receiver, android.content.IntentFilter(android.net.Proxy.PROXY_CHANGE_ACTION),
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        proxyChanges = receiver
     }
 
     /**
@@ -691,6 +753,9 @@ class WatchVpnService : VpnService() {
         // goes through its tunnel, or waits for it, and never directly. A photo of a QR code a crash left goes too.
         org.visadahyu.datapavan.watch.tunnel.qr.Capture.deleteLeftovers(this, keep = MainActivity.pendingCapture)
         applyTunnels()
+        // The messengers' apps and Android's proxy setting likewise (W8, part 2a): a messenger's first flow is read
+        // for its proxy.
+        applyProxies()
         val established = establish()
         // null: the user's consent is missing or was withdrawn.
         if (established == null || !startEngine(established)) {
@@ -703,6 +768,7 @@ class WatchVpnService : VpnService() {
         state.value = true
         tracker = org.visadahyu.datapavan.watch.activity.StateTracker(this) { Engine.nativeStates(it) }.also { it.start() }
         followPackages()
+        followProxySetting()
         refreshChain()
         ConnectionLog.of(this).expire()
         val request = NetworkRequest.Builder()
@@ -934,6 +1000,8 @@ class WatchVpnService : VpnService() {
         stopWaitingForUnlock()
         packages?.let { unregisterReceiver(it) }
         packages = null
+        proxyChanges?.let { unregisterReceiver(it) }
+        proxyChanges = null
         main.removeCallbacksAndMessages(reopen)
         reopenTries = 0
         main.removeCallbacksAndMessages(riseCheck)
@@ -1157,9 +1225,41 @@ class WatchVpnService : VpnService() {
                 writer.println(found?.let(::describe) ?: "tool searching")
             }
             Engine.nativeFlows().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("flow $it") }
+            debugProxies(args.orEmpty().toList(), writer)
             debugActivity(args.orEmpty().toList(), writer)
             debugLog(log, args.orEmpty().toList(), writer)
         }
+    }
+
+    /**
+     * Debug builds only, for scripts/verify-proxies.sh (ADR 0052): `messenger-client FAMILY PACKAGE` adds a package of
+     * this project's own (`org.visadahyu.datapavan.` and after) to the clients of `telegram`, `whatsapp` or `signal`,
+     * and refuses any other, so that a real app is never read as another's; `messenger-clear` takes them away. Then,
+     * always, the kept flows that went through a proxy, one `flow-proxy` line each (no credential: none is kept).
+     */
+    private fun debugProxies(args: List<String>, writer: PrintWriter) {
+        val at = args.indexOf("messenger-client")
+        if (at >= 0) {
+            val family = MESSENGER_FAMILIES.indexOf(args.getOrNull(at + 1))
+            val name = args.getOrNull(at + 2).orEmpty()
+            if (family >= 0 && name.startsWith("org.visadahyu.datapavan.")) {
+                main.post {
+                    debugClients[name] = family
+                    if (active) applyProxies()
+                }
+                writer.println("messenger-client ${MESSENGER_FAMILIES[family]} $name")
+            } else {
+                writer.println("messenger-client refused")
+            }
+        }
+        if ("messenger-clear" in args) {
+            main.post {
+                debugClients.clear()
+                if (active) applyProxies()
+            }
+            writer.println("messenger-clear")
+        }
+        Engine.nativeFlowProxies().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("flow-proxy $it") }
     }
 
     /**
@@ -1632,6 +1732,9 @@ class WatchVpnService : VpnService() {
     }
 
     companion object {
+        /** The messengers' families, by the code the engine takes (`nativeProxies`), and as its table names them. */
+        private val MESSENGER_FAMILIES = listOf("telegram", "whatsapp", "signal")
+
         const val ACTION_START = "org.visadahyu.datapavan.watch.START"
         const val ACTION_STOP = "org.visadahyu.datapavan.watch.STOP"
 

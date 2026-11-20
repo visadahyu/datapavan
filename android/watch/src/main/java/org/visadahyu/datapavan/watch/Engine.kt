@@ -223,6 +223,22 @@ internal object Engine {
     external fun nativeClearActivity()
 
     /**
+     * The messengers' apps whose built-in proxies the engine infers, each UID of [uids] of the family at the same
+     * place in [families] (0 Telegram, 1 WhatsApp, 2 Signal), and the proxies Android's setting names, one `host port`
+     * a line in [android] (W8, part 2a, ADR 0052). Kept for the engines to come, as the chain is.
+     */
+    external fun nativeProxies(families: IntArray, uids: IntArray, android: String)
+
+    /** The messengers' client packages the engine's table holds (`data/messengers`), one `family package` a line. */
+    external fun nativeMessengerClients(): String
+
+    /**
+     * The kept flows that went through a proxy, one per line as `protocol app destination uid kind how flags asked
+     * proxy-name cover name` (core/watch-jni's `proxy_line`); debug builds only. No credential: the engine keeps none.
+     */
+    external fun nativeFlowProxies(): String
+
+    /**
      * The flows kept, one per line as `protocol app destination uid outcome named-by ech dns network dns-name name`,
      * `dns-name` being the DNS answer's name where it differs from the connection's own; debug builds only.
      */
