@@ -77,3 +77,27 @@ stated.
 - **Two limits stay named.** A second human reviewer on every security change is not possible with one
   maintainer; the outside review before public release covers part of it. Hiding Watch from other apps is not
   possible on stock Android (ADR 0041).
+
+## The speed budget of direct apps' names (W8, part 1, 2026-11-20)
+
+Gate 7's "speed budget, measured per release" begins with the names of the apps that go directly
+([ADR 0042](0042-dns-of-apps-that-go-directly.md)). Measured on 2026-11-20, on one residential network, warm, 30
+public names, one connection per way kept open as Watch keeps it (`scripts/dns-latency.py`, clients independent of
+the app, endpoints and addresses from the data pack):
+
+| Way | p50 | p95 |
+|---|---|---|
+| Plain DNS to the network's resolver (the baseline) | 45 ms | 230 ms |
+| ODoH, Numa to Cloudflare (first default) | 147 ms | 171 ms |
+| ODoH, crypto.sx on Fastly to dnscry.pt fra01 (second) | 135 ms | 282 ms |
+| DoH to Cloudflare, the first target's operator | 146 ms | 203 ms |
+| DoH to dnscry.pt fra01 | 123 ms | 128 ms |
+| DoT presets: Cloudflare, Quad9 without blocking | 42, 57 ms | 145, 227 ms |
+
+**The budget:** on the same network, the default way's warm p50 at most 150 ms above plain DNS's, and its p95 at
+most 250 ms above it (measured: +102 ms and −59 ms), checked by `scripts/dns-latency.py` before each release that
+carries Watch; and Watch's own cost of each way, where every server is a few milliseconds away (the DNS lab), p50 at
+most 100 ms and p95 at most 400 ms, held by `scripts/verify-dns.sh` (measured on the Android 15 emulator: ODoH 7 and
+124 ms, DoH 2 and 7 ms, DoT 1 and 5 ms; Watch's process spent about 15 to 24 ms of CPU per lookup in the lab,
+emulated x86_64). The first query of a way opens its TLS connection: 250 to 300 ms on the internet for an ODoH
+pair, which Android's cache and Watch's own then hide for each name's time to live. Battery on a phone is W9's.

@@ -105,7 +105,11 @@ not checked.
    - **Upstream DNS.** Plain DNS to a resolver on the LAN at port 53 is exempt; DNS over TLS to it
      (port 853, Private DNS on "automatic") is not. Watch sends its upstream queries for the network's
      resolver through Android's resolver bound to the network under the tunnel (`DnsResolver`), which
-     is exempt and keeps Private DNS as the phone had it [code; to test].
+     is exempt and keeps Private DNS as the phone had it [code; to test]. *Amended by W8's part 1
+     (2026-11-20, [ADR 0042](0042-dns-of-apps-that-go-directly.md)): the network's resolver is only the fallback
+     outside the strict setting, and the answer for local names; both go through `DnsResolver.rawQuery` on the
+     network beneath (`dns/Exchanger.kt`), never through the tunnel, and keep nothing in Android's cache of that
+     network. The encrypted ways reach public servers, not the LAN, so the local-network rule does not touch them.*
    - **Android 16** had an opt-in test mode, switched on over adb and gated by `NEARBY_WIFI_DEVICES`;
      it is deprecated [doc]. Watch does not request that permission. On 10 to 16 the LAN stays open as
      before.

@@ -86,6 +86,10 @@ Option 1, from W6 on, with these rules:
   hints, so that every connection goes to a stand-in in one space, and keeps the ECH keys, so that ECH
   works through the tool as without it. Through the tool, the resolver sees the tool's exit, not the
   user's address. W8 adds the user's own DoH or DoT resolver, reached through the tool the same way.
+  *Built in W8's part 1 (2026-11-20, [ADR 0042](0042-dns-of-apps-that-go-directly.md)): once Watch's encrypted
+  resolver is set, these questions go its encrypted ways through the tool (the user's own resolver, ODoH through
+  the pairs, the targets' operators' DoH, the presets), never to Quad9 in plain DNS; DNS over TCP to Watch's address
+  from a chained app goes the same way as its UDP lookups.*
   If the resolver cannot be reached through the tool (a Tor exit that refuses port 53, for example),
   these questions get an empty answer, and the app falls back to A.
 - **Reverse lookups** of a stand-in are answered from the map, with the name.

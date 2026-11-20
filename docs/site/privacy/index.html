@@ -247,15 +247,25 @@ app, it can still hand information to another app when you ask it to, for exampl
 <p>What Android itself does is outside Datapavan&rsquo;s control. On phones with Google&rsquo;s services, Play Protect may give Google information about the apps you install from any source, Datapavan included, and may send it an unknown app to check. You can turn part of this off in Play Protect&rsquo;s settings in the Play Store. Datapavan&rsquo;s hardware check can also make Android contact Google: on phones that get their attestation keys from Google&rsquo;s provisioning server, a check that finds none left asks Android for more (Android 13 tells the provisioning service, and from Android 14 the keystore asks it), and Android fetches them over its own connection. Datapavan sends nothing itself.</p>
 <h2 id="what-datapavan-advanced-connects-to">What Datapavan Advanced connects to</h2>
 <p>Datapavan Advanced, from 0.2.0, passes your apps&rsquo; traffic on to where they send it, through the firewall on the
-phone; none of it goes to us. Of its own, it asks your network&rsquo;s DNS resolver for the names apps look up, as the
-phone would without it, over an encrypted connection where the phone used one. When you send apps through your
-circumvention tool, their lookups go to the tool, and their other DNS questions go through the tool to Quad9, a
-Swiss foundation that does not log addresses, so Quad9 sees the tool&rsquo;s address, not yours.</p>
+phone; none of it goes to us. Of its own, it looks up the names that apps which go directly ask for. By default it
+uses Oblivious DoH: each question is encrypted on the phone for a resolver (the &ldquo;target&rdquo;), and sent through a relay
+run by another company in another country. The relay sees your address but not the question; the target sees the
+question but not your address. The default relays and targets are Numa&rsquo;s relay in Germany with Cloudflare&rsquo;s target
+in the United States, and crypto.sx&rsquo;s relay on Fastly with dnscry.pt&rsquo;s target in Germany; you can see and change
+them in Watch. Instead, you can choose an encrypted resolver from a list, each with its operator, country, what it
+says it logs and what it blocks, or give your own; that resolver then sees your address and the names. When none of
+these answers on your network, Datapavan tries the others, and only then your network&rsquo;s DNS resolver, which can see
+the names; Watch says so while it lasts, and with &ldquo;Strict&rdquo; on it never does. Names of your own network (a printer, a
+router) always go to your network&rsquo;s resolver. Datapavan keeps no list of the names apps look up. To get a resolver&rsquo;s
+current key when its old one stops working, Datapavan may ask that resolver once directly, which shows it your
+address but no question.</p>
+<p>When you send apps through your circumvention tool, their lookups go to the tool, and their other DNS questions go
+through the tool by the same encrypted ways, so the resolver sees the tool&rsquo;s address, not yours.</p>
 <p>When you add a WireGuard configuration of your VPN provider, Datapavan Advanced connects to that provider&rsquo;s server,
 the one the configuration names, for the apps you send through it; their lookups go to the configuration&rsquo;s DNS
 server through it. While any app goes through a configuration, every app&rsquo;s ping, and traffic Android names no app
-for, also go through your default configuration, which Datapavan says, and wait while it cannot be opened. Where the configuration names its server by a host name, Android&rsquo;s own resolver looks it up on
-your network first, encrypted where your phone&rsquo;s Private DNS is on; where it is not, the network can see which
+for, also go through your default configuration, which Datapavan says, and wait while it cannot be opened. Where the configuration names its server by a host name, Datapavan looks it up by the same encrypted
+ways; only when none answers, and &ldquo;Strict&rdquo; is off, does your network&rsquo;s resolver, which can then see which
 provider you use, and Datapavan says so. Datapavan reads a QR code without the camera permission: the phone&rsquo;s own
 camera app takes the photo for it, or you pick a picture.</p>
 <h2 id="permissions-and-why-they-are-needed">Permissions and why they are needed</h2>

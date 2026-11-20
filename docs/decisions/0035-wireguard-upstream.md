@@ -564,7 +564,10 @@ provider. What was chosen where the decision left room, and why:
    fallback rules; it needs no TLS client in the engine before W8; and it asks on the network beneath, never
    through a tunnel that is not up. Plain DNS only where Android has none (no network beneath to ask), through
    a protected socket, and the state says so. **W8 takes endpoint resolution over** with the user's own
-   encrypted resolver.
+   encrypted resolver. *Done in W8's part 1 (2026-11-20, [ADR 0042](0042-dns-of-apps-that-go-directly.md)): once
+   Watch's encrypted resolver is set, an endpoint's name goes its ways (ODoH by default), not to Android's resolver;
+   outside the strict setting the network's resolver answers when no encrypted way does, and the tunnel's state says
+   plain; in it, nothing does and the tunnel waits. Checked on the emulator (`scripts/verify-dns.sh`, step 8).*
 5. **A tunnelled UDP flow asks Android again after a pause** (`udp_reask`, 1 s), as the direct path does: the
    datagrams that come meanwhile wait (at most `udp_waiting`, 32), and a flow Android now names for another app
    or route ends, its datagram going the new app's way.

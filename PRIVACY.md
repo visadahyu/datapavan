@@ -66,16 +66,27 @@ What Android itself does is outside Datapavan's control. On phones with Google's
 ## What Datapavan Advanced connects to
 
 Datapavan Advanced, from 0.2.0, passes your apps' traffic on to where they send it, through the firewall on the
-phone; none of it goes to us. Of its own, it asks your network's DNS resolver for the names apps look up, as the
-phone would without it, over an encrypted connection where the phone used one. When you send apps through your
-circumvention tool, their lookups go to the tool, and their other DNS questions go through the tool to Quad9, a
-Swiss foundation that does not log addresses, so Quad9 sees the tool's address, not yours.
+phone; none of it goes to us. Of its own, it looks up the names that apps which go directly ask for. By default it
+uses Oblivious DoH: each question is encrypted on the phone for a resolver (the "target"), and sent through a relay
+run by another company in another country. The relay sees your address but not the question; the target sees the
+question but not your address. The default relays and targets are Numa's relay in Germany with Cloudflare's target
+in the United States, and crypto.sx's relay on Fastly with dnscry.pt's target in Germany; you can see and change
+them in Watch. Instead, you can choose an encrypted resolver from a list, each with its operator, country, what it
+says it logs and what it blocks, or give your own; that resolver then sees your address and the names. When none of
+these answers on your network, Datapavan tries the others, and only then your network's DNS resolver, which can see
+the names; Watch says so while it lasts, and with "Strict" on it never does. Names of your own network (a printer, a
+router) always go to your network's resolver. Datapavan keeps no list of the names apps look up. To get a resolver's
+current key when its old one stops working, Datapavan may ask that resolver once directly, which shows it your
+address but no question.
+
+When you send apps through your circumvention tool, their lookups go to the tool, and their other DNS questions go
+through the tool by the same encrypted ways, so the resolver sees the tool's address, not yours.
 
 When you add a WireGuard configuration of your VPN provider, Datapavan Advanced connects to that provider's server,
 the one the configuration names, for the apps you send through it; their lookups go to the configuration's DNS
 server through it. While any app goes through a configuration, every app's ping, and traffic Android names no app
-for, also go through your default configuration, which Datapavan says, and wait while it cannot be opened. Where the configuration names its server by a host name, Android's own resolver looks it up on
-your network first, encrypted where your phone's Private DNS is on; where it is not, the network can see which
+for, also go through your default configuration, which Datapavan says, and wait while it cannot be opened. Where the configuration names its server by a host name, Datapavan looks it up by the same encrypted
+ways; only when none answers, and "Strict" is off, does your network's resolver, which can then see which
 provider you use, and Datapavan says so. Datapavan reads a QR code without the camera permission: the phone's own
 camera app takes the photo for it, or you pick a picture.
 

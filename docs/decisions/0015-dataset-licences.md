@@ -46,6 +46,10 @@ project's own channels.
    - preinstalled data collectors;
    - wake-word assistants.
 
+   - *(W8, part 1, 2026-11-20)* the Oblivious DoH relays, targets and default pairs (`data/odoh`) and the presets
+     of encrypted resolvers the user may choose (`data/dns-presets`), facts read on the operators' own pages, the
+     DNSCrypt project's signed lists at a pinned commit and the registries' RDAP records.
+
    Each entry records its source, such as a security report or a project's release page, and a date.
    Only facts are recorded, such as package names and certificate digests, and never text from the
    sources. These lists live in files apart from the εxodus data, so the two licences never mix
