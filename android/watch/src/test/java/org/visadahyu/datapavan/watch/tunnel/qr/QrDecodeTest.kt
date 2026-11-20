@@ -108,6 +108,7 @@ class QrDecodeTest {
         assertNull(QrDecode.sampleSize(10, 0))
         assertEquals(1, QrDecode.sampleSize(QrDecode.TARGET, QrDecode.TARGET))
         assertEquals(2, QrDecode.sampleSize(QrDecode.TARGET + 1, 100))
+        assertEquals("a tall picture too", 2, QrDecode.sampleSize(100, QrDecode.TARGET + 1))
         assertEquals(8, QrDecode.sampleSize(QrDecode.MAX_SIDE, QrDecode.MAX_SIDE))
         // Brought down, every allowed size fits the pixel bound.
         for ((w, h) in listOf(16_384 to 16_384, 12_000 to 9_000, 4_000 to 3_000, 4_097 to 4_097)) {
@@ -162,6 +163,12 @@ class QrDecodeTest {
                 // Expected.
             }
             assertFalse("after a read that threw", file.exists())
+            // At the next start, every photo a crash left goes, but the one a camera may still be writing.
+            val left = photo()
+            val writing = File(dir, "writing.jpg").apply { writeBytes(byteArrayOf(4)) }
+            Capture.deleteLeftovers(dir, keep = writing.name)
+            assertFalse("a photo a crash left", left.exists())
+            assertTrue("the photo a camera is writing", writing.exists())
         } finally {
             dir.deleteRecursively()
         }

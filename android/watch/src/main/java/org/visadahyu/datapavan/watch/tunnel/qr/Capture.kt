@@ -78,7 +78,10 @@ object Capture {
     }
 
     /** Deletes every photo left but [keep], which a camera may still be writing for a screen that comes back. */
-    fun deleteLeftovers(context: Context, keep: String? = null) {
-        File(context.cacheDir, FOLDER).listFiles()?.forEach { if (it.name != keep) it.delete() }
+    fun deleteLeftovers(context: Context, keep: String? = null) = deleteLeftovers(File(context.cacheDir, FOLDER), keep)
+
+    /** Deletes every file in [folder] but [keep]. */
+    fun deleteLeftovers(folder: File, keep: String?) {
+        folder.listFiles()?.forEach { if (it.name != keep) it.delete() }
     }
 }

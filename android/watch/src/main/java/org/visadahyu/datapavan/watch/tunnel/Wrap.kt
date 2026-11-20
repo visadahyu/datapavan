@@ -98,6 +98,7 @@ class KeystoreWrap(private val alias: String = ALIAS, private val unlockedOnly: 
             cipher.updateAAD(associated(slot, part))
             Opened.Plain(cipher.doFinal(wrapped, IV_BYTES, wrapped.size - IV_BYTES))
         } catch (e: UserNotAuthenticatedException) {
+            lastError = e.javaClass.simpleName
             Opened.Locked
         } catch (e: KeyPermanentlyInvalidatedException) {
             Opened.Lost
@@ -106,10 +107,20 @@ class KeystoreWrap(private val alias: String = ALIAS, private val unlockedOnly: 
         } catch (e: GeneralSecurityException) {
             // A key that needs an unlocked phone, used while it is locked, fails here on some versions, as a
             // Keystore error rather than UserNotAuthenticatedException: told apart by the lock's own state.
-            if (unlockedOnly && lockedNow()) Opened.Locked else Opened.Lost.also { Log.w(TAG, "A configuration did not open", e) }
+            failed(e)
         } catch (e: ProviderException) {
-            if (unlockedOnly && lockedNow()) Opened.Locked else Opened.Lost.also { Log.w(TAG, "A configuration did not open", e) }
+            failed(e)
         }
+    }
+
+    /** The class of the last error an unwrap met, for debug builds' measure; never a value. */
+    @Volatile
+    var lastError: String? = null
+        private set
+
+    private fun failed(e: Exception): Opened {
+        lastError = e.javaClass.simpleName
+        return if (unlockedOnly && lockedNow()) Opened.Locked else Opened.Lost.also { Log.w(TAG, "A configuration did not open", e) }
     }
 
     override fun destroy() {

@@ -1043,6 +1043,8 @@ class WatchVpnService : VpnService() {
         }
         val probe = args.indexOf("tunnel-key-probe").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
         if (probe != null) {
+            // The store sets how Watch tells a locked phone; the probe's key is read the same way.
+            org.visadahyu.datapavan.watch.tunnel.TunnelStore.of(this)
             val wrap = org.visadahyu.datapavan.watch.tunnel.KeystoreWrap(PROBE_ALIAS, unlockedOnly = true)
             val file = java.io.File(filesDir, "tunnel-key-probe")
             val started = SystemClock.elapsedRealtimeNanos()
@@ -1065,7 +1067,7 @@ class WatchVpnService : VpnService() {
                     "cleared"
                 }
             }
-            writer.println("tunnel-key-probe $said ${(SystemClock.elapsedRealtimeNanos() - started) / 1_000_000}")
+            writer.println("tunnel-key-probe $said ${(SystemClock.elapsedRealtimeNanos() - started) / 1_000_000} ${wrap.lastError ?: "-"}")
         }
         val picture = args.indexOf("qr-decode").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
             ?.takeIf { it.matches(Regex("[A-Za-z0-9._-]+")) }

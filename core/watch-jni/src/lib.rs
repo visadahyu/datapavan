@@ -1385,7 +1385,7 @@ mod tests {
             config: Arc::clone(&config),
             local_network: true,
         };
-        for id in 6..=u32::try_from(MAX_TUNNELS + 1).unwrap_or(9) {
+        for id in 6..=u32::try_from(MAX_TUNNELS + 5).unwrap_or(13) {
             let room = tunnels.tunnels.len() < MAX_TUNNELS;
             assert_eq!(place_tunnel(&mut tunnels, one(id)), room, "tunnel {id}");
         }

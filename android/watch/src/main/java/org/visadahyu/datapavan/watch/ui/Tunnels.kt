@@ -147,7 +147,7 @@ internal fun TunnelsSection(view: TunnelsView, actions: TunnelActions) {
         }
         if (view.configurations.size > 1) Text(stringResource(R.string.tunnels_default_note), style = MaterialTheme.typography.bodyMedium)
         if (view.full) {
-            Text(stringResource(R.string.tunnels_full, TunnelStore.MAX), style = MaterialTheme.typography.bodyMedium)
+            Text(pluralStringResource(R.plurals.tunnels_full, TunnelStore.MAX, TunnelStore.MAX), style = MaterialTheme.typography.bodyMedium)
         } else {
             OutlinedButton(onClick = actions.onAddFile, modifier = Modifier.testTag("tunnel-add-file")) {
                 Text(stringResource(R.string.tunnels_add_file))
@@ -357,8 +357,8 @@ internal fun ImportConfirmation(pending: PendingView, choices: List<AppChoice>, 
                 )
             }
             Text(stringResource(if (d.preshared) R.string.import_preshared else R.string.import_no_preshared), style = body)
-            d.keepalive?.let { Text(stringResource(R.string.import_keepalive, it), style = body) }
-            Text(stringResource(R.string.import_mtu, d.mtu), style = body)
+            d.keepalive?.let { Text(pluralStringResource(R.plurals.import_keepalive, it, it), style = body) }
+            Text(pluralStringResource(R.plurals.import_mtu, d.mtu, d.mtu), style = body)
             if (pending.replacing == null) {
                 Switching(stringResource(R.string.tunnels_local), pending.local, actions.onPendingLocal)
                 Text(stringResource(R.string.tunnels_local_note), style = MaterialTheme.typography.bodySmall)

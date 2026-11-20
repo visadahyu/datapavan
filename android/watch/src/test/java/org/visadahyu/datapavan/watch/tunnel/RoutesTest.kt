@@ -49,7 +49,7 @@ class RoutesTest {
 
     @Test
     fun the_engine_gets_each_routed_app_by_uid_waiting_ones_included() {
-        val uids = mapOf("org.example.mail" to 10_100, "org.example.chat" to 10_101, "org.example.a" to 10_200, "org.example.b" to 10_200)
+        val uids = mapOf("org.example.mail" to 10_100, "org.example.chat" to 10_101, "org.example.a" to 10_200, "org.example.b" to 10_200, "org.example.bank" to 10_300)
         val routes = Routes.forEngine(
             mapOf("org.example.mail" to 1, "org.example.chat" to 4, "org.example.gone" to 1, "org.example.bank" to 2, "org.example.b" to 2, "org.example.a" to 1),
             leftOut = setOf("org.example.bank"),

@@ -21,7 +21,10 @@
     <!-- Shown under the two QR code buttons. -->
     <string name="tunnels_picture_note">A picture of a QR code holds the configuration\'s private key. After you add it, you may want to delete the picture.</string>
     <!-- %1$d: the most configurations Watch keeps (8). -->
-    <string name="tunnels_full">Watch keeps at most %1$d configurations. Remove one to add another.</string>
+    <plurals name="tunnels_full">
+        <item quantity="one">Watch keeps at most %d configuration. Remove it to add another.</item>
+        <item quantity="other">Watch keeps at most %d configurations. Remove one to add another.</item>
+    </plurals>
     <string name="tunnels_default">Default</string>
     <string name="tunnels_default_note">The default one also carries ping, and traffic Android names no app for. It does so while any app goes through a configuration.</string>
     <string name="tunnels_make_default">Make default</string>
@@ -86,9 +89,15 @@
     <string name="import_preshared">It has a preshared key, an extra secret that guards it against future quantum computers.</string>
     <string name="import_no_preshared">It has no preshared key.</string>
     <!-- %1$d: seconds. -->
-    <string name="import_keepalive">It sends a small packet every %1$d seconds to keep the connection open. This uses a little battery.</string>
+    <plurals name="import_keepalive">
+        <item quantity="one">It sends a small packet every %d second to keep the connection open. This uses a little battery.</item>
+        <item quantity="other">It sends a small packet every %d seconds to keep the connection open. This uses a little battery.</item>
+    </plurals>
     <!-- %1$d: bytes. -->
-    <string name="import_mtu">Largest packet inside it: %1$d bytes.</string>
+    <plurals name="import_mtu">
+        <item quantity="one">Largest packet inside it: %d byte.</item>
+        <item quantity="other">Largest packet inside it: %d bytes.</item>
+    </plurals>
     <string name="import_apps">Apps to send through it</string>
     <string name="import_apps_from_file">The file named these apps. Check them before you save.</string>
     <!-- %1$s: package names, comma separated. -->

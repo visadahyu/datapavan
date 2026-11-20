@@ -264,7 +264,12 @@ class TunnelStore(private val dir: File, private val wrap: Wrap) {
 
         /** The process's store, in `noBackupFilesDir/tunnels`. */
         fun of(context: Context): TunnelStore = store ?: synchronized(this) {
-            store ?: TunnelStore(File(context.applicationContext.noBackupFilesDir, "tunnels"), KeystoreWrap()).also { store = it }
+            store ?: run {
+                val app = context.applicationContext
+                // An error the Keystore gives without saying why is told by the lock's own state.
+                KeystoreWrap.locked = { app.getSystemService(android.app.KeyguardManager::class.java)?.isDeviceLocked == true }
+                TunnelStore(File(app.noBackupFilesDir, "tunnels"), KeystoreWrap()).also { store = it }
+            }
         }
     }
 }
