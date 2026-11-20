@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version | 0.2 (draft, revised 2026-11-15: three editions, ADR 0045; what apps sent while not in use, shown live, ADR 0046, accepted 2026-11-15; a profile for phones that may be searched, ADR 0047, accepted 2026-11-15; a lab probe of where stock Android leaves privacy tools blind or exposed, ADR 0048, accepted 2026-11-15; the editions' names and one version line, the maintainer, 2026-11-14; a signing key for each edition, ready to rotate, backed up in shares, ADR 0049, accepted 2026-11-15; mobile operators and SIM cards, ADR 0050, accepted 2026-11-15; two lanes of work and an isolated machine for suspect apps, ADR 0051, accepted 2026-11-15) |
+| Version | 0.2 (draft, revised 2026-11-20: three editions, ADR 0045; what apps sent while not in use, shown live, ADR 0046, accepted 2026-11-15; a profile for phones that may be searched, ADR 0047, accepted 2026-11-15; a lab probe of where stock Android leaves privacy tools blind or exposed, ADR 0048, accepted 2026-11-15; the editions' names and one version line, the maintainer, 2026-11-14; a signing key for each edition, ready to rotate, backed up in shares, ADR 0049, accepted 2026-11-15; mobile operators and SIM cards, ADR 0050, accepted 2026-11-15; two lanes of work and an isolated machine for suspect apps, ADR 0051, accepted 2026-11-15; apps' built-in proxies named, ADR 0052, proposed 2026-11-20) |
 | Date | 2026-10-28 |
 | Scope | Stage 1: the layer app for stock Android, with no root |
 | Status | The whole design, much of it not built yet. The [README](../README.md) says what exists today |
@@ -1079,6 +1079,18 @@ commit answered IPv6 handshakes at a wrong address once it had sent over IPv4; t
 upstream. The emulator checks move to a `wireguard` shard; CI runs both where the WireGuard code or its checks
 changed and every week, and fails a check that cannot find its peer (`WGLAB_REQUIRED=1`). Part 3b brings the A40's
 measurements and the check from outside with a provider.
+W8, part 2a, on `watch-w8b`, 2026-11-20: apps' built-in proxies named ([ADR 0052](decisions/0052-apps-built-in-proxies.md),
+proposed). A SOCKS5, SOCKS4 or HTTP proxy an app set itself is read from the connection's first bytes, and the flow is
+named by the destination asked for, the inner hello read after the handshake; the proxy's place is "an address in the
+network of X; who runs it is not known", or on the local network, never "the operator"; Android's proxy setting is
+told apart, and a password sent unencrypted is said, never kept: the bytes it passed through are zeroed. Telegram's
+MTProto (its obfuscated start or a fake-TLS hello outside its published ranges, `data/messengers`), WhatsApp's and
+Signal's proxies are inferred, each only while the app reaches its maker's own network in no other way, and a cover
+never names the flow. The tool's own flows and chained or tunnelled apps are not read. Its place and destination
+follow "Log where these apps connect". Checked by unit tests, fuzzing, two network-lab tests through the whole engine,
+the proxy lab (`scripts/proxylab.sh`: microsocks, tinyproxy and mtg on a network with no way out) and the emulator's
+`proxies` shard, which CI runs with `PROXYLAB_REQUIRED=1`. The proxy-like behaviour flags are part 2b: their
+thresholds need sessions of real apps on the A40 and the maintainer's word.
 
 W8, part 1, on `watch-w8a`, 2026-11-20 ([ADR 0042](decisions/0042-dns-of-apps-that-go-directly.md), "How it is
 built"): direct apps' names go by Oblivious DoH by default, sealed in the engine (its own HPKE and framing since
@@ -1183,6 +1195,7 @@ Each decision is recorded in full, with context and consequences, as an ADR in
 | [0049](decisions/0049-signing-keys-of-the-editions.md) | A signing key for each edition, ready to rotate, backed up in shares | Accepted |
 | [0050](decisions/0050-operators-and-sim-cards.md) | Mobile operators and SIM cards: what the phone installed, what the SIM can do, what to tell users | Accepted |
 | [0051](decisions/0051-two-lanes-and-an-analysis-machine.md) | Two lanes of work, and an isolated machine for suspect apps | Accepted |
+| [0052](decisions/0052-apps-built-in-proxies.md) | Apps' built-in proxies named: read from the connection, or inferred with substitution | Proposed |
 
 ## 15. Names
 

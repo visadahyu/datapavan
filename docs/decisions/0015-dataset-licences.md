@@ -50,6 +50,15 @@ project's own channels.
    - *(W8, part 1, 2026-11-20)* the Oblivious DoH relays, targets and default pairs (`data/odoh`) and the presets
      of encrypted resolvers the user may choose (`data/dns-presets`), facts read on the operators' own pages, the
      DNSCrypt project's signed lists at a pinned commit and the registries' RDAP records.
+   - *(W8, part 2a, 2026-11-20)* the Android packages of Telegram's, WhatsApp's and Signal's own clients and the
+     server names that tell their own connections, fronts and third parties from their proxies'
+     (`data/messengers/clients.tsv`, `names.tsv`; ADR 0052), facts read on the makers' own pages, asset-links file and
+     source at pinned commits. Beside them, Telegram's own list of its address ranges (`telegram-cidr.txt`), copied
+     byte for byte from core.telegram.org/resources/cidr.txt: no licence is stated; Telegram publishes the 14 ranges
+     for anyone who needs them, and only the facts are used, as decision 6 reasons for the attestation list. Each fetch
+     is recorded in `SOURCE` with its date, SHA-256, Last-Modified header and the ranges added and removed, and a change
+     stops the update until a person accepts it (decision 9's rule, as no licence file can be hashed). Compiled into
+     Watch's engine, as the resolvers are, and left out of the audit app's payload.
 
    Each entry records its source, such as a security report or a project's release page, and a date.
    Only facts are recorded, such as package names and certificate digests, and never text from the

@@ -59,6 +59,7 @@ in the Git history.
 | [0049](0049-signing-keys-of-the-editions.md) | A signing key for each edition, ready to rotate, backed up in shares | Accepted |
 | [0050](0050-operators-and-sim-cards.md) | Mobile operators and SIM cards: what the phone installed, what the SIM can do, what to tell users | Accepted |
 | [0051](0051-two-lanes-and-an-analysis-machine.md) | Two lanes of work, and an isolated machine for suspect apps | Accepted |
+| [0052](0052-apps-built-in-proxies.md) | Apps' built-in proxies named: read from the connection, or inferred with substitution | Proposed |
 
 ## Template
 

@@ -37,8 +37,13 @@ your unlocked phone can see it, as they can see the rest of the app.
   its notification, or neither. Each record is encrypted under a key for its day that Android's keystore protects;
   on a phone with a screen lock, earlier days can be read only while it is unlocked. Days past your choice are
   deleted with their keys, and one tap deletes everything. For apps you send through your circumvention tool, the
-  log keeps no destination unless you turn that on.
-- **Each app's recent traffic, for the "Now" view,** in memory only. It is gone when the firewall stops.
+  log keeps no destination unless you turn that on. When an app uses a proxy of its own, the record also says what
+  kind of proxy it was and, only while "Log where these apps connect" is on, where the proxy is and what the app asked
+  it for; it never keeps a proxy's password, which Datapavan reads past and does not store, and says only that one
+  was sent unencrypted.
+- **Each app's recent traffic, for the "Now" view,** in memory only. It is gone when the firewall stops. To tell
+  Telegram's, WhatsApp's and Signal's own connections from their proxies', it also notes in memory when each of them
+  last connected to its maker's network, for ten minutes; nothing of it is written anywhere.
 - **Your circumvention tool's settings:** whether apps go through it and which ones, the tool's host and port, and
   the password Datapavan made for it, which is encrypted under a key that Android's keystore protects.
 - **The apps you leave out of the firewall,** which then go to the internet without it: their names, until you take
