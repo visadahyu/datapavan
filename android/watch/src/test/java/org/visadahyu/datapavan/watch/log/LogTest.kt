@@ -25,7 +25,7 @@ class LogTest {
     @Test
     fun readsWhatTheEngineWrites() {
         val records = EngineRecords.records.map { it.first }
-        assertEquals(11, records.size)
+        assertEquals(15, records.size)
         val day = 1_794_873_600_000L
         fun at(hours: Int, minutes: Int) = day + (hours * 60L + minutes) * 60_000
         val tls = records[0] as LogRecord.Segment
@@ -82,6 +82,57 @@ class LogTest {
         assertEquals(LogRecord.VIA_TUNNEL to 7L, byDns.via to byDns.tunnel)
         assertEquals(LogRecord.VIA_DIRECT to 0L, before.via to before.tunnel)
         assertEquals(listOf("in-use", "none-late"), listOf(AppState.name(tls.state), AppState.name(byDns.state)))
+        // Version 5: no proxy on any of these.
+        assertEquals(List(11) { null }, records.take(11).map { (it as? LogRecord.Segment)?.proxy })
+    }
+
+    /** Version 5's proxies (ADR 0052), as the engine writes them: declared, inferred, and with the destination left out. */
+    @Test
+    fun readsTheProxiesTheEngineWrites() {
+        val records = EngineRecords.records.map { it.first }.filterIsInstance<LogRecord.Segment>().takeLast(4)
+        val socks5 = records[0]
+        assertEquals("example.org" to 5, socks5.name to socks5.namedBy)
+        assertEquals("203.0.113.5" to 1080, socks5.address.hostAddress to socks5.port)
+        assertEquals(24_940L to 3, socks5.asn to socks5.network)
+        assertEquals(
+            LogRecord.Proxy(
+                LogRecord.PROXY_SOCKS5, setting = true, password = true, asked = "example.org", askedPort = 443,
+                proxyName = "proxy.example.net", organisation = "Hetzner Online GmbH",
+            ),
+            socks5.proxy,
+        )
+        assertEquals(true to true, socks5.proxy?.declared to socks5.proxy?.kept)
+        val connect = records[1]
+        assertEquals(LogRecord.Proxy(LogRecord.PROXY_CONNECT, asked = "2001:db8:0:0:0:0:0:7", askedPort = 8443), connect.proxy)
+        assertEquals("" to 4, connect.name to connect.namedBy)
+        val mtproto = records[2]
+        assertEquals(
+            LogRecord.Proxy(LogRecord.PROXY_MTPROTO, outsideMaker = true, organisation = "Hetzner Online GmbH", cover = "www.google.com"),
+            mtproto.proxy,
+        )
+        assertEquals(false, mtproto.proxy?.declared)
+        // Its destination left out: the kind alone, at an address of zeros, and no name.
+        val hidden = records[3]
+        assertEquals(LogRecord.Proxy(LogRecord.PROXY_SOCKS4), hidden.proxy)
+        assertEquals(true to "", hidden.address.isAnyLocalAddress to hidden.name)
+        assertEquals(false, hidden.proxy?.kept)
+    }
+
+    /** A version 4 segment reads with no proxy; a proxy's kind or flag the engine never writes is malformed. */
+    @Test
+    fun readsAVersion4SegmentWithoutAProxyAndRefusesAProxyTheEngineNeverWrites() {
+        val (_, plain) = EngineRecords.records[10]
+        val version4 = plain.copyOf(plain.size - 1).also { it[0] = 4 }
+        assertNull((LogRecord.parse(version4) as LogRecord.Segment).proxy)
+        assertEquals(LogRecord.VIA_TUNNEL, (LogRecord.parse(version4) as LogRecord.Segment).via)
+        val (_, hidden) = EngineRecords.records[14]
+        val kind = hidden.size - 5
+        assertEquals(LogRecord.PROXY_SOCKS4, (LogRecord.parse(hidden) as LogRecord.Segment).proxy?.kind)
+        for (code in listOf(8, 0x80, 0xff)) {
+            assertNull("no such proxy: $code", LogRecord.parse(hidden.copyOf().also { it[kind] = code.toByte() }))
+        }
+        assertNull("a flag the engine never writes", LogRecord.parse(hidden.copyOf().also { it[kind + 1] = 0x10 }))
+        assertNull("a destination that does not follow", LogRecord.parse(hidden.copyOf().also { it[kind + 1] = 8 }))
     }
 
     /** Version 3's state is the record's last byte: a code the engine never writes, or a byte after it, is malformed. */
@@ -103,7 +154,7 @@ class LogTest {
     @Test
     fun readsAVersion2RecordAsNotTold() {
         val (_, engines) = EngineRecords.records[0]
-        val version2 = engines.copyOf(engines.size - 6).also { it[0] = 2 }
+        val version2 = engines.copyOf(engines.size - 7).also { it[0] = 2 }
         val record = LogRecord.parse(version2) as LogRecord.Segment
         assertEquals("other.example" to "www.example.com", record.name to record.dnsName)
         assertEquals(AppState.NOT_TOLD, record.state)
@@ -116,10 +167,10 @@ class LogTest {
     @Test
     fun readsAVersion3SegmentsRouteAsUnknownAndRefusesARouteTheEngineNeverWrites() {
         val (_, engines) = EngineRecords.records[10]
-        val version3 = engines.copyOf(engines.size - 5).also { it[0] = 3 }
+        val version3 = engines.copyOf(engines.size - 6).also { it[0] = 3 }
         val record = LogRecord.parse(version3) as LogRecord.Segment
         assertEquals(AppState.LATE to LogRecord.VIA_UNKNOWN, record.state to record.via)
-        val route = engines.size - 5
+        val route = engines.size - 6
         for (code in listOf(3, 0x80, 0xff)) {
             assertNull("no such route: $code", LogRecord.parse(engines.copyOf().also { it[route] = code.toByte() }))
         }
@@ -145,7 +196,7 @@ class LogTest {
     @Test
     fun skipsAndCountsARecordOfAnotherVersion() {
         val (_, engines) = EngineRecords.records[0]
-        val newer = engines.copyOf().also { it[0] = 5 }
+        val newer = engines.copyOf().also { it[0] = 6 }
         val batch = ByteBuffer.allocate(4 + 3 * 2 + newer.size + segment.size + engines.size).order(ByteOrder.LITTLE_ENDIAN)
             .putInt(3).putShort(newer.size.toShort()).put(newer).putShort(segment.size.toShort()).put(segment)
             .putShort(engines.size.toShort()).put(engines).array()

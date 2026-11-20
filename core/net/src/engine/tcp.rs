@@ -5,15 +5,15 @@ use super::budget::Place;
 use super::chain::{Route, connect_through};
 use super::logbook::FlowBytes;
 use super::naming::Begun;
+use super::proxied::{Found, Sniff};
 use super::resolver::{TcpLookups, connect_lookups};
 use super::upstream::{connect_tcp, owner};
 use super::{Counters, Ech, Flow, Loop, NamedBy, Opened, Outcome, Shared, is_unreachable, lock};
 use crate::nat::{Listener, Lookup, Nat};
+use crate::packet;
 use crate::packet::{ACK, Packet, RST, SYN, TCP, Unreachable};
 use crate::standins::is_stand_in;
-use crate::tls::ServerName;
 use crate::tun::Tun;
-use crate::{packet, tls};
 use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
 use nix::sys::socket::{getsockopt, sockopt};
 use std::collections::HashMap;
@@ -26,6 +26,7 @@ use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpSocket, TcpStream};
 use tokio::sync::Notify;
+use zeroize::Zeroizing;
 
 /// An upstream connection waiting for Android's TCP stack to hand over the app's end.
 pub(super) struct Upstream {
@@ -384,6 +385,7 @@ impl Drop for Waiting {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 /// Opens the upstream connection for a held SYN; `_waiting` holds its place until the server has
 /// answered or failed, and so does its place in its app's share.
 async fn open(
@@ -433,9 +435,16 @@ async fn open(
         .then_some(name.as_deref())
         .flatten();
     let (dns, resolver) = shared.dns_use(destination, by_dns);
+    let dns_name = by_dns.map(str::to_owned);
+    // Its first bytes are read for a proxy only where it went directly and is not the user's tool's own: a
+    // chained app's flows, and the tool's, carry what the tool carries (ADR 0046, decision 3).
+    let sniffs =
+        via.is_none() && uid.is_none_or(|uid| shared.chain().is_none_or(|chain| chain.tool != uid));
     let opened = Opened {
         id,
         port: destination.port(),
+        destination,
+        sniffs,
         dns,
         uid,
         dns_held_until: held_until,
@@ -458,9 +467,14 @@ async fn open(
             resolver,
             network,
             via: crate::engine::Via::Direct,
+            proxy: None,
         },
         via.as_deref(),
     );
+    // A messenger's attempt to reach its maker directly counts for substitution, whether or not it got through.
+    if sniffs {
+        shared.proxies_opened(&opened, dns_name.as_deref());
+    }
     let answer = match upstream {
         Ok(stream) if listener.port == 0 => {
             // No listener now, as when its port was taken and none can be bound: the app is refused,
@@ -825,7 +839,7 @@ enum End {
 
 /// Relays one connection both ways, counting the bytes as they pass, until both directions end; the
 /// caller writes the flow's last segment once the tunnel is done with it. The app's first bytes are
-/// read for a TLS hello (at most [`tls::MAX_HELLO`]), even when DNS named the flow, since only the
+/// read for a TLS hello (at most [`crate::tls::MAX_HELLO`]), even when DNS named the flow, since only the
 /// hello tells whether ECH hid the name; nothing is held back for that, so a protocol in which the
 /// server speaks first is not delayed.
 ///
@@ -842,24 +856,27 @@ async fn relay(mut app: TcpStream, mut upstream: Upstream, shared: &Arc<Shared>)
         let opened = upstream.opened;
         let bytes = upstream.bytes.as_ref();
         let up = async {
-            let mut buffer = vec![0u8; 16 * 1024];
-            let mut start = Some(Vec::new());
+            // Zeroed when dropped: a proxy's credentials may have passed through it (ADR 0052).
+            let mut buffer = Zeroizing::new(vec![0u8; 16 * 1024]);
+            let messenger = opened.sniffs && shared.family(opened.uid).is_some();
+            let mut sniff = Some(Sniff::new(opened.sniffs, messenger));
             loop {
                 let n = match app_read.read(&mut buffer).await {
                     Ok(0) => break,
                     Ok(n) => n,
                     Err(_) => return End::Failed,
                 };
-                if let Some(seen) = start.as_mut() {
-                    seen.extend_from_slice(&buffer[..n]);
-                    match tls::server_name(seen) {
-                        ServerName::Found(hello) => {
-                            shared.hello(opened, &hello, NamedBy::Tls);
-                            start = None;
+                if let Some(reading) = sniff.as_mut() {
+                    for found in reading.feed(&buffer[..n]) {
+                        match found {
+                            Found::Hello(hello, true) => shared.hello(opened, &hello, NamedBy::Tls),
+                            Found::Hello(hello, false) => shared.hello_read(opened, &hello),
+                            Found::Request(request) => shared.declared(&opened, &request),
+                            Found::Shape(shape) => shared.shaped(&opened, shape),
                         }
-                        ServerName::None => start = None,
-                        ServerName::Incomplete if seen.len() >= tls::MAX_HELLO => start = None,
-                        ServerName::Incomplete => {}
+                    }
+                    if reading.done() {
+                        sniff = None;
                     }
                 }
                 if up_write.write_all(&buffer[..n]).await.is_err() {
@@ -986,6 +1003,7 @@ mod tests {
             resolver: None,
             network: None,
             via: crate::engine::Via::Direct,
+            proxy: None,
         }) else {
             unreachable!("an open flow is live")
         };
@@ -994,6 +1012,8 @@ mod tests {
             opened: Opened {
                 id: 1,
                 port: destination.port(),
+                destination,
+                sniffs: true,
                 dns: DnsUse::None,
                 uid: Some(10_123),
                 dns_held_until: Duration::ZERO,

@@ -1,5 +1,5 @@
 //! The records Watch's connection log stores (W4, ADR 0037), in the form the engine hands them to
-//! Watch's Kotlin side, which seals each one under the day's key. Version 4, little-endian:
+//! Watch's Kotlin side, which seals each one under the day's key. Version 5, little-endian:
 //!
 //! - a flow segment: version, kind 1, the flow's number, the app's UID (`u32::MAX` unknown), start and
 //!   end in milliseconds since 1970 (UTC), bytes up and down as the app sent and received them, bytes
@@ -10,7 +10,7 @@
 //!   byte and UTF-8, then the state of its app over the segment ([`Placed::code`]): its bytes' seconds', or,
 //!   for a part with no bytes, its end's (ADR 0046, "How it is built"); and last its route: one byte (0
 //!   directly, 1 through the user's tool, 2 through a `WireGuard` tunnel) and the tunnel's number (u32, 0 for
-//!   none).
+//!   none); and since version 5 its proxy ([`push_proxy`]): a byte 0 for none.
 //! - lookups an app sent to Watch's own DNS address: version, kind 2, the UID, start and end, their
 //!   count, their packets' bytes up and down on the tunnel, and last the app's state over them, as a segment's.
 //!
@@ -22,16 +22,19 @@
 //! ADR 0046's decision 1) added the state, one byte at the end of each kind: the low four bits the state
 //! (0 none, 1 in use, 2 with its notification, 3 in the background), the high four why there is none.
 //! Version 4 (W7, part 1, ADR 0035) added a segment's route after its state, so that the history says which
-//! flows went through which tunnel, or the tool; a lookups record is as in version 3.
+//! flows went through which tunnel, or the tool; a lookups record is as in version 3. Version 5 (W8, part 2a, ADR
+//! 0052) added a segment's proxy after its route, and the code 5 of where a name came from: the destination the
+//! app asked its proxy for.
 
 use std::net::{IpAddr, SocketAddr};
 
-use crate::engine::{DnsUse, Ech, Flow, NamedBy, Network, Outcome, Via};
+use crate::engine::{DnsUse, Ech, Flow, NamedBy, Network, Outcome, Proxied, Via};
 use crate::owners::NetworkKind;
+use crate::proxies::{Asked, Kind};
 use crate::states::Placed;
 
 /// The version of the record format.
-pub const VERSION: u8 = 4;
+pub const VERSION: u8 = 5;
 
 /// One record of the log.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -110,6 +113,7 @@ impl Record {
                 push_text(&mut out, flow.dns_name.as_deref());
                 out.push(state.code());
                 push_via(&mut out, flow.via);
+                push_proxy(&mut out, flow.proxy.as_deref());
             }
             Self::Lookups {
                 uid,
@@ -154,7 +158,60 @@ pub(crate) fn named_by_code(named_by: NamedBy) -> u8 {
         NamedBy::Quic => 2,
         NamedBy::Organisation => 3,
         NamedBy::Unknown => 4,
+        NamedBy::Proxy => 5,
     }
+}
+
+/// A flow's proxy (W8, part 2a; ADR 0052), as the log and the live view's snapshot write it: its kind, one byte
+/// (0 none, 1 SOCKS5, 2 SOCKS4, 3 an HTTP `CONNECT`, 4 a plain request to an HTTP proxy, 5 Telegram's `MTProto`,
+/// 6 `WhatsApp`'s, 7 Signal's); for a proxy, then flags (bit 0: Android's proxy setting names it; bit 1: a password
+/// crossed the network unencrypted; bit 2: its address is outside the maker's network; bit 3: the destination
+/// asked for follows), the destination asked for where bit 3 says (its address, length 0, 4 or 16 and the bytes,
+/// then its name, a length byte and UTF-8, then its port, u16), and the proxy's own name, the organisation behind
+/// its network and the cover name its hello sent, each a length byte and UTF-8, empty for none. No credential is
+/// ever written: none is kept.
+pub(crate) fn push_proxy(out: &mut Vec<u8>, proxy: Option<&Proxied>) {
+    let Some(proxy) = proxy else {
+        out.push(0);
+        return;
+    };
+    out.push(match proxy.kind {
+        Kind::Socks5 => 1,
+        Kind::Socks4 => 2,
+        Kind::Connect => 3,
+        Kind::Forward => 4,
+        Kind::MtProto => 5,
+        Kind::WhatsApp => 6,
+        Kind::Signal => 7,
+    });
+    out.push(
+        u8::from(proxy.setting)
+            | u8::from(proxy.password) << 1
+            | u8::from(proxy.outside_maker) << 2
+            | u8::from(proxy.asked.is_some()) << 3,
+    );
+    if let Some((asked, port)) = &proxy.asked {
+        match asked {
+            Asked::Address(IpAddr::V4(ip)) => {
+                out.push(4);
+                out.extend_from_slice(&ip.octets());
+                push_text(out, None);
+            }
+            Asked::Address(IpAddr::V6(ip)) => {
+                out.push(16);
+                out.extend_from_slice(&ip.octets());
+                push_text(out, None);
+            }
+            Asked::Name(name) => {
+                out.push(0);
+                push_text(out, Some(name));
+            }
+        }
+        out.extend_from_slice(&port.to_le_bytes());
+    }
+    push_text(out, proxy.proxy_name.as_deref());
+    push_text(out, proxy.organisation.as_deref());
+    push_text(out, proxy.cover.as_deref());
 }
 
 /// What a flow's hello said of ECH, as the log and the snapshot write it.
@@ -239,8 +296,21 @@ pub fn batch(records: &[Record]) -> Vec<u8> {
     out
 }
 
-/// The state of each segment in a batch, in order, for the engine's tests: read from the record's last
-/// byte.
+/// A segment's state, read past its fixed fields, its address, network and three texts; before its route and
+/// its proxy.
+#[cfg(test)]
+fn segment_state(record: &[u8]) -> Option<Placed> {
+    // Version, kind, number, UID, six counts, six codes.
+    let mut at = 1 + 1 + 8 + 4 + 6 * 8 + 6;
+    at += 1 + usize::from(*record.get(at)?) + 2;
+    at += 4 + 1;
+    for _ in 0..3 {
+        at += 1 + usize::from(*record.get(at)?);
+    }
+    record.get(at).copied().and_then(Placed::from_code)
+}
+
+/// The state of each segment in a batch, in order, for the engine's tests.
 #[cfg(test)]
 pub(crate) fn states_in(batch: &[u8]) -> Vec<Placed> {
     let mut states = Vec::new();
@@ -249,13 +319,7 @@ pub(crate) fn states_in(batch: &[u8]) -> Vec<Placed> {
         let length = usize::from(u16::from_le_bytes([length[0], length[1]]));
         if let Some(record) = batch.get(at + 2..at + 2 + length)
             && record.get(1) == Some(&1)
-            // A segment's state comes before its route's five bytes.
-            && let Some(state) = record
-                .len()
-                .checked_sub(6)
-                .and_then(|at| record.get(at))
-                .copied()
-                .and_then(Placed::from_code)
+            && let Some(state) = segment_state(record)
         {
             states.push(state);
         }
@@ -292,6 +356,7 @@ mod tests {
                 kind: NetworkKind::Own,
             }),
             via: crate::engine::Via::Direct,
+            proxy: None,
         }
     }
 
@@ -306,7 +371,7 @@ mod tests {
             state: NOT_TOLD,
         };
         let bytes = record.encode();
-        let mut expected = vec![4, 1];
+        let mut expected = vec![5, 1];
         expected.extend_from_slice(&7u64.to_le_bytes());
         expected.extend_from_slice(&10_123u32.to_le_bytes());
         for v in [1_000u64, 2_000, 300, 40_000, 820, 42_900] {
@@ -321,6 +386,8 @@ mod tests {
         expected.extend_from_slice(&[0, 0]);
         expected.push(0x50);
         expected.extend_from_slice(&[0, 0, 0, 0, 0]);
+        // No proxy.
+        expected.push(0);
         assert_eq!(bytes, expected);
     }
 
@@ -342,8 +409,8 @@ mod tests {
             };
             let bytes = segment.encode();
             assert_eq!(
-                &bytes[bytes.len() - 6..],
-                &[&[NOT_TOLD.code()][..], &end].concat()[..]
+                &bytes[bytes.len() - 7..],
+                &[&[NOT_TOLD.code()][..], &end, &[0]].concat()[..]
             );
         }
     }
@@ -381,10 +448,10 @@ mod tests {
                 state,
             };
             let (segment, lookups) = (segment.encode(), lookups.encode());
-            assert_eq!((segment[0], segment[segment.len() - 6]), (4, state.code()));
+            assert_eq!((segment[0], segment[segment.len() - 7]), (5, state.code()));
             assert_eq!(
                 (lookups[0], lookups.last().copied()),
-                (4, Some(state.code()))
+                (5, Some(state.code()))
             );
             assert_eq!(Placed::from_code(state.code()), Some(state));
         }
@@ -420,9 +487,9 @@ mod tests {
         let bytes = record(false).encode();
         // Version, kind, number, UID, six times; protocol, outcome, named by, ECH, DNS, flags.
         let flags = 1 + 1 + 8 + 4 + 6 * 8 + 5;
-        assert_eq!((bytes[0], bytes[flags]), (4, 0b10));
+        assert_eq!((bytes[0], bytes[flags]), (5, 0b10));
         assert_eq!(record(true).encode()[flags], 0b11);
-        assert!(bytes.ends_with(b"\x0dother.example\x00\x0fwww.example.com\x50\0\0\0\0\0"));
+        assert!(bytes.ends_with(b"\x0dother.example\x00\x0fwww.example.com\x50\0\0\0\0\0\0"));
     }
 
     #[test]
@@ -441,8 +508,8 @@ mod tests {
             state: NOT_TOLD,
         };
         let bytes = record.encode();
-        // The name, then an empty resolver, no DNS name, the state and the route.
-        let name_at = bytes.len() - 5 - 1 - 1 - 1 - 254 - 1;
+        // The name, then an empty resolver, no DNS name, the state, the route and no proxy.
+        let name_at = bytes.len() - 1 - 5 - 1 - 1 - 1 - 254 - 1;
         assert_eq!(bytes[name_at], 254, "127 two-byte characters");
         let lookups = Record::Lookups {
             uid: Some(10_123),

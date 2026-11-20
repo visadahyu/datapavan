@@ -512,6 +512,7 @@ impl Shared {
     /// last segment written once its seconds' states are told.
     pub(super) fn finish(&self, id: u64) {
         let now = self.log_now();
+        self.proxies_ended(id);
         let Some(live) = lock(&self.live).remove(&id) else {
             return;
         };
@@ -551,6 +552,7 @@ impl Shared {
     /// start when the last passed before it, in a segment already written.
     pub(super) fn finish_closed(&self, id: u64) {
         let now = self.log_now();
+        self.proxies_ended(id);
         let Some(live) = lock(&self.live).remove(&id) else {
             return;
         };
@@ -631,6 +633,7 @@ impl Shared {
     /// holds to the next one, on a tunnel set up again ([`super::Engine::hand_over`]).
     pub(super) fn finish_all(&self) {
         let now = self.log_now();
+        self.proxies_all_ended();
         let live: Vec<Live> = lock(&self.live).drain().map(|(_, l)| l).collect();
         let mut pieces: Vec<Piece> = live
             .into_iter()
@@ -676,6 +679,11 @@ pub(super) fn without_destination(flow: &Flow) -> Flow {
         dns: DnsUse::None,
         resolver: None,
         network: None,
+        // An app's own proxy keeps its kind, and the facts that name nothing (ADR 0052).
+        proxy: flow
+            .proxy
+            .as_ref()
+            .map(|p| Box::new(p.without_destination())),
         ..flow.clone()
     }
 }
@@ -688,9 +696,14 @@ impl Shared {
     /// A flow opened while the switch was on adds no destination after. What the log already wrote stays,
     /// for the retention the user chose.
     pub(super) fn hide_chained(&self) {
+        // An app's own proxy follows the same switch (ADR 0052).
+        let own_proxies = !self.logs_own_proxies();
+        let hides = |flow: &Flow| {
+            self.hides(flow.uid, flow.destination) || own_proxies && flow.proxy.is_some()
+        };
         let mut live = lock(&self.live);
         for live in live.values_mut() {
-            if !live.hidden && self.hides(live.flow.uid, live.flow.destination) {
+            if !live.hidden && hides(&live.flow) {
                 live.hidden = true;
                 live.flow = without_destination(&live.flow);
             }
@@ -699,13 +712,16 @@ impl Shared {
         for piece in &mut activity.held {
             if let Of::Flow { flow, hidden, .. } = &mut piece.of
                 && !*hidden
-                && self.hides(flow.uid, flow.destination)
+                && hides(flow)
             {
                 *hidden = true;
                 *flow = without_destination(flow);
             }
         }
         activity.counts.hide(|uid| self.hides_app(uid));
+        if own_proxies {
+            activity.counts.hide_proxies();
+        }
     }
 }
 
@@ -857,6 +873,7 @@ mod tests {
             resolver: None,
             network: None,
             via: crate::engine::Via::Direct,
+            proxy: None,
         }
     }
 
@@ -1150,7 +1167,107 @@ mod tests {
             records.extend(taken(&shared));
         }
         records.push(fixture_codes());
+        records.extend(fixture_proxies());
         records
+    }
+
+    /// The fixture's segments of an app's own proxies (version 5, ADR 0052): a SOCKS5 proxy its bytes declared,
+    /// asked for a name, with a password unencrypted, named by Android's setting, its own name and its network's
+    /// organisation kept; an HTTP proxy asked for an address; Telegram's `MTProto` proxy inferred, outside its maker's
+    /// network, with the cover its hello sent; and a SOCKS4 proxy with its destination left out.
+    fn fixture_proxies() -> Vec<Record> {
+        use super::super::{Network, Proxied};
+        use crate::owners::NetworkKind;
+        use crate::proxies::{Asked, Kind};
+        let proxy = |kind| Proxied {
+            kind,
+            setting: false,
+            password: false,
+            outside_maker: false,
+            asked: None,
+            proxy_name: None,
+            organisation: None,
+            cover: None,
+        };
+        let segment = |flow: Flow, minute| Record::Segment {
+            flow,
+            start: at(22, minute),
+            end: at(22, minute),
+            bytes: [10, 20, 30, 40],
+            continues: false,
+            state: Placed::Known(crate::states::State::InUse),
+        };
+        let network = Some(Network {
+            asn: 24_940,
+            kind: NetworkKind::Unlisted,
+        });
+        vec![
+            segment(
+                Flow {
+                    id: 20,
+                    destination: SocketAddr::from(([203, 0, 113, 5], 1080)),
+                    name: Some("example.org".into()),
+                    named_by: NamedBy::Proxy,
+                    network,
+                    proxy: Some(Box::new(Proxied {
+                        setting: true,
+                        password: true,
+                        asked: Some((Asked::Name("example.org".into()), 443)),
+                        proxy_name: Some("proxy.example.net".into()),
+                        organisation: Some("Hetzner Online GmbH".into()),
+                        ..proxy(Kind::Socks5)
+                    })),
+                    ..flow(20)
+                },
+                20,
+            ),
+            segment(
+                Flow {
+                    id: 21,
+                    destination: SocketAddr::from(([192, 168, 1, 2], 3128)),
+                    name: None,
+                    named_by: NamedBy::Unknown,
+                    proxy: Some(Box::new(Proxied {
+                        asked: Some((
+                            Asked::Address(
+                                "2001:db8::7".parse().unwrap_or(std::net::IpAddr::V6(
+                                    std::net::Ipv6Addr::UNSPECIFIED,
+                                )),
+                            ),
+                            8443,
+                        )),
+                        ..proxy(Kind::Connect)
+                    })),
+                    ..flow(21)
+                },
+                21,
+            ),
+            segment(
+                Flow {
+                    id: 22,
+                    destination: SocketAddr::from(([198, 51, 100, 9], 443)),
+                    name: Some("Hetzner Online GmbH".into()),
+                    named_by: NamedBy::Organisation,
+                    network,
+                    proxy: Some(Box::new(Proxied {
+                        outside_maker: true,
+                        organisation: Some("Hetzner Online GmbH".into()),
+                        cover: Some("www.google.com".into()),
+                        ..proxy(Kind::MtProto)
+                    })),
+                    ..flow(22)
+                },
+                22,
+            ),
+            segment(
+                without_destination(&Flow {
+                    id: 23,
+                    proxy: Some(Box::new(proxy(Kind::Socks4))),
+                    ..flow(23)
+                }),
+                23,
+            ),
+        ]
     }
 
     /// The fixture's segment of the codes the others leave out (review 1 of W5's first part, names, finding
@@ -1197,7 +1314,7 @@ mod tests {
         );
         let mut text = String::from(
             "# Watch's connection log: one batch of records as the engine writes them (core/net/src/log.rs,\n\
-             # version 4), in hex. Written by the engine's test the_kotlin_sides_fixture_is_what_the_engine_writes\n\
+             # version 5), in hex. Written by the engine's test the_kotlin_sides_fixture_is_what_the_engine_writes\n\
              # (core/net/src/engine/logbook.rs), which fails when the engine writes otherwise; run it with\n\
              # DATAPAVAN_WRITE_FIXTURE=1 to write it anew. Read by LogTest and LogDaysTest. Not edited by hand.\n",
         );
@@ -1391,6 +1508,8 @@ mod tests {
         let opened = super::super::Opened {
             id: 1,
             port: 443,
+            destination: std::net::SocketAddr::from(([192, 0, 2, 1], 443)),
+            sniffs: false,
             dns: DnsUse::None,
             uid: Some(10_123),
             dns_held_until: Duration::MAX,

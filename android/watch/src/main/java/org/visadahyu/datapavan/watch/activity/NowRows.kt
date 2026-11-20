@@ -144,13 +144,15 @@ object NowRows {
     }
 
     /** Where a destination's name came from, by the log's code (LogRecord.Segment.namedBy). */
-    enum class NamedBy { DNS, TLS, QUIC, ORGANISATION, UNKNOWN }
+    enum class NamedBy { DNS, TLS, QUIC, ORGANISATION, PROXY, UNKNOWN }
 
     fun namedBy(code: Int): NamedBy = when (code) {
         0 -> NamedBy.DNS
         1 -> NamedBy.TLS
         2 -> NamedBy.QUIC
         3 -> NamedBy.ORGANISATION
+        // The destination the app asked its proxy for (version 5 of the log, 4 of the snapshot; ADR 0052).
+        5 -> NamedBy.PROXY
         else -> NamedBy.UNKNOWN
     }
 

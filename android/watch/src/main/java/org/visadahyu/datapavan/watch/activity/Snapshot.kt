@@ -7,9 +7,9 @@ import org.visadahyu.datapavan.watch.log.AppState
 
 /**
  * What the live view "Now" draws (ADR 0046, decision 2 (d)), as the engine hands it over
- * ([org.visadahyu.datapavan.watch.Engine.nativeActivity]; core/net/src/snapshot.rs, version 3): each app
+ * ([org.visadahyu.datapavan.watch.Engine.nativeActivity]; core/net/src/snapshot.rs, version 4): each app
  * that sent or received in a window, with its bytes by state, those in no state by why, the window while
- * the screen was off, the destinations it reached with each one's route, and the WireGuard tunnel it went
+ * the screen was off, the destinations it reached with each one's route and proxy, and the WireGuard tunnel it went
  * through with its destinations not kept (W7). From the engine's memory only; nothing of it is kept. Both
  * sides ship in one build, so earlier versions are refused.
  */
@@ -92,10 +92,12 @@ data class Snapshot(
         /** Its route, as the log codes it (LogRecord.Segment.via), and for a tunnel its number. */
         val via: Int = org.visadahyu.datapavan.watch.log.LogRecord.VIA_DIRECT,
         val tunnel: Long = 0,
+        /** The proxy it went through, read from the connection or inferred (version 4; ADR 0052); null for none. */
+        val proxy: org.visadahyu.datapavan.watch.log.LogRecord.Proxy? = null,
     )
 
     companion object {
-        const val VERSION: Byte = 3
+        const val VERSION: Byte = 4
 
         const val NOTHING_YET = 0
         const val STATES = 1
@@ -199,9 +201,10 @@ data class Snapshot(
             // A code the engine never writes, or a tunnel number beside no tunnel, is refused.
             require(via <= org.visadahyu.datapavan.watch.log.LogRecord.VIA_TUNNEL)
             require((via == org.visadahyu.datapavan.watch.log.LogRecord.VIA_TUNNEL) == (tunnel != 0L))
+            val proxy = org.visadahyu.datapavan.watch.log.LogRecord.Proxy.read(b)
             return Destination(
                 protocol, namedBy, ech, dns, flags and 1 != 0, address, port, asn, network,
-                name, dnsName, resolver, organisation, bytes, via, tunnel,
+                name, dnsName, resolver, organisation, bytes, via, tunnel, proxy,
             )
         }
 

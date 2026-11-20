@@ -29,7 +29,7 @@ class SnapshotTest {
         assertEquals(Snapshot.SCREEN_OFF to t + 1_000, snapshot.screen to snapshot.screenOnSince)
         // The screen was off for a minute before it came on.
         assertEquals(t - 59_000 to t + 1_000, snapshot.offFrom to snapshot.offUntil)
-        assertEquals(listOf(null, 10_123), snapshot.apps.map { it.uid })
+        assertEquals(listOf(null, 10_123, 10_124), snapshot.apps.map { it.uid })
 
         val noApp = snapshot.apps[0]
         assertEquals(AppState.NO_APP, noApp.now)
@@ -47,7 +47,9 @@ class SnapshotTest {
         assertEquals(listOf(50L, 0L, 50L, 0L, 50L, 0L), encrypted.bytes)
         // Version 3: directly, and no app went through a WireGuard tunnel.
         assertEquals(org.visadahyu.datapavan.watch.log.LogRecord.VIA_DIRECT to 0L, encrypted.via to encrypted.tunnel)
-        assertEquals(listOf(0L, 0L), snapshot.apps.map { it.throughTunnel })
+        assertEquals(listOf(0L, 0L, 0L), snapshot.apps.map { it.throughTunnel })
+        // Version 4: no proxy.
+        assertNull(encrypted.proxy)
 
         val app = snapshot.apps[1]
         assertEquals(AppState.BACKGROUND, app.now)
@@ -67,6 +69,19 @@ class SnapshotTest {
         assertEquals("www.example.com" to "", web.name to web.dnsName)
         assertEquals(0L to 0, web.asn to web.network)
         assertEquals(listOf(1_000L, 1_000L, 1_000L, 1_000L, 900L, 1_000L), web.bytes)
+        assertNull(web.proxy)
+
+        // Version 4: a destination through a SOCKS5 proxy its bytes declared (ADR 0052).
+        val proxied = snapshot.apps[2].destinations.single()
+        assertEquals("example.org" to 5, proxied.name to proxied.namedBy)
+        assertEquals("203.0.113.5" to 1080, proxied.address.hostAddress to proxied.port)
+        assertEquals(
+            org.visadahyu.datapavan.watch.log.LogRecord.Proxy(
+                org.visadahyu.datapavan.watch.log.LogRecord.PROXY_SOCKS5, password = true, asked = "example.org",
+                askedPort = 443, proxyName = "proxy.example.net", organisation = "Hetzner Online GmbH",
+            ),
+            proxied.proxy,
+        )
     }
 
     /**
@@ -122,8 +137,8 @@ class SnapshotTest {
         val twice = fixture.copyOf().also { java.nio.ByteBuffer.wrap(it).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(second, -1) }
         assertNull(Snapshot.parse(twice))
         // The same place given another UID reads: it is the second app's UID.
-        val other = fixture.copyOf().also { java.nio.ByteBuffer.wrap(it).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(second, 10_124) }
-        assertEquals(listOf(null, 10_124), Snapshot.parse(other)?.apps?.map { it.uid })
+        val other = fixture.copyOf().also { java.nio.ByteBuffer.wrap(it).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(second, 10_125) }
+        assertEquals(listOf(null, 10_125, 10_124), Snapshot.parse(other)?.apps?.map { it.uid })
     }
 
     /**
@@ -132,12 +147,12 @@ class SnapshotTest {
      */
     @Test
     fun readsTheToolsServersHidden() {
-        assertEquals(listOf(false, false), checkNotNull(Snapshot.parse(fixture)).apps.map { it.serversHidden })
+        assertEquals(listOf(false, false, false), checkNotNull(Snapshot.parse(fixture)).apps.map { it.serversHidden })
         val first = 1 + 8 + 1 + 8 + 1 + 3 * 8 + 4
         val second = first + 4 + 1 + 1 + Snapshot.WINDOWS * Snapshot.COLUMNS * 2 * 8 + 2 + destinationsOf(0) + 4
         val hidden = fixture.copyOf().also { it[second + 5] = (it[second + 5].toInt() or 0b101).toByte() }
         val app = checkNotNull(Snapshot.parse(hidden)).apps
-        assertEquals(listOf(false, true), app.map { it.serversHidden })
+        assertEquals(listOf(false, true, false), app.map { it.serversHidden })
         assertEquals(true to false, app[1].isTool to app[1].throughTool)
     }
 
@@ -150,8 +165,9 @@ class SnapshotTest {
     fun readsEachDestinationsRouteAndAnAppsTunnel() {
         val buffer = { bytes: ByteArray -> java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN) }
         val first = 1 + 8 + 1 + 8 + 1 + 3 * 8 + 4
-        val route = first + 4 + 1 + 1 + Snapshot.WINDOWS * Snapshot.COLUMNS * 2 * 8 + 2 + destinationsOf(0) - 5
-        val appTunnel = route + 5
+        // The route's five bytes, then the destination's proxy, none: one byte.
+        val route = first + 4 + 1 + 1 + Snapshot.WINDOWS * Snapshot.COLUMNS * 2 * 8 + 2 + destinationsOf(0) - 6
+        val appTunnel = route + 6
         val routed = fixture.copyOf().also {
             it[route] = 2
             buffer(it).putInt(route + 1, 5)
@@ -160,7 +176,7 @@ class SnapshotTest {
         val snapshot = checkNotNull(Snapshot.parse(routed))
         val destination = snapshot.apps[0].destinations.single()
         assertEquals(org.visadahyu.datapavan.watch.log.LogRecord.VIA_TUNNEL to 5L, destination.via to destination.tunnel)
-        assertEquals(listOf(0L, 9L), snapshot.apps.map { it.throughTunnel })
+        assertEquals(listOf(0L, 0L, 9L), snapshot.apps.map { it.throughTunnel })
         assertEquals(0, buffer(fixture).getInt(appTunnel))
         for (code in listOf(3, 0x80, 0xff)) {
             assertNull("no such route: $code", Snapshot.parse(fixture.copyOf().also { it[route] = code.toByte() }))
@@ -174,8 +190,21 @@ class SnapshotTest {
         val snapshot = checkNotNull(Snapshot.parse(fixture))
         return snapshot.apps[app].destinations.sumOf { d ->
             5 + 1 + d.address.address.size + 2 + 4 + 1 +
-                listOf(d.name, d.dnsName, d.resolver, d.organisation).sumOf { 1 + it.toByteArray().size } + 6 * 8 + 5
+                listOf(d.name, d.dnsName, d.resolver, d.organisation).sumOf { 1 + it.toByteArray().size } + 6 * 8 + 5 +
+                proxyBytes(d.proxy)
         }
+    }
+
+    /** The bytes a destination's proxy takes (version 4): one for none. */
+    private fun proxyBytes(proxy: org.visadahyu.datapavan.watch.log.LogRecord.Proxy?): Int {
+        proxy ?: return 1
+        val asked = when {
+            proxy.askedPort < 0 -> 0
+            proxy.asked.contains(':') -> 1 + 16 + 1 + 2
+            proxy.asked.all { it.isDigit() || it == '.' } -> 1 + 4 + 1 + 2
+            else -> 1 + 1 + proxy.asked.toByteArray().size + 2
+        }
+        return 2 + asked + listOf(proxy.proxyName, proxy.organisation, proxy.cover).sumOf { 1 + it.toByteArray().size }
     }
 
     /** No snapshot, cut short anywhere or with any byte changed, makes the reader throw: it reads it or refuses it. */
@@ -191,7 +220,8 @@ class SnapshotTest {
         assertNull(Snapshot.parse(fixture + 0))
         assertNull("version 1", Snapshot.parse(fixture.copyOf().also { it[0] = 1 }))
         assertNull("version 2", Snapshot.parse(fixture.copyOf().also { it[0] = 2 }))
-        assertNull(Snapshot.parse(fixture.copyOf().also { it[0] = 4 }))
+        assertNull("version 3", Snapshot.parse(fixture.copyOf().also { it[0] = 3 }))
+        assertNull(Snapshot.parse(fixture.copyOf().also { it[0] = 5 }))
         assertNull("no engine runs", Snapshot.parse(ByteArray(0)))
     }
 }

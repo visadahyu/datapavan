@@ -35,6 +35,12 @@ object History {
         /** Its route, as the log codes it ([LogRecord.VIA_DIRECT] and the others), and for a tunnel its number (W7). */
         val via: Int = LogRecord.VIA_DIRECT,
         val tunnel: Long = 0,
+        /**
+         * The proxy it went through, read from the connection or inferred (ADR 0052), and the AS number of the
+         * proxy's network; a proxy with its destination not logged has only its kind, at an address of zeros.
+         */
+        val proxy: LogRecord.Proxy? = null,
+        val asn: Long = 0,
     )
 
     /**
@@ -60,6 +66,8 @@ object History {
                     unlogged = it.address.isAnyLocalAddress && it.name.isEmpty(),
                     via = it.via,
                     tunnel = it.tunnel,
+                    proxy = it.proxy,
+                    asn = it.asn,
                 )
             }
             .sortedWith(compareByDescending<Entry> { it.start }.thenByDescending { it.end })

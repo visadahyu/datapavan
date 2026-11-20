@@ -15,14 +15,16 @@ use datapavan_engine::datapack;
 use datapavan_net::catalogue::Catalogue;
 use datapavan_net::engine::{Configured, MAX_TUNNELS, TunnelState};
 use datapavan_net::ladder::Failure;
+use datapavan_net::messengers::{Family, Messengers};
 use datapavan_net::organisations::{FilePart, Organisations};
+use datapavan_net::proxies::{Asked, Kind};
 use datapavan_net::socks5::Credentials;
 use datapavan_net::trackers::NetworkSignatures;
 use datapavan_net::wireguard::Config as WgConfig;
 use datapavan_net::{
     Addresses, AppRoute, Chain, ChainSetting, Config, DnsConfig, DnsUse, Ech, Engine, Exchange,
-    Exchanges, Flow, Handover, Limits, NamedBy, NetworkKind, Outcome, Platform, Reply,
-    TunnelSetting,
+    Exchanges, Flow, Handover, Limits, NamedBy, NetworkKind, Outcome, Platform, ProxySetting,
+    Reply, TunnelSetting,
 };
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
 use jni::objects::{JByteArray, JClass, JIntArray, JLongArray, JObject, JString};
@@ -89,6 +91,7 @@ fn set_dns(config: Option<Arc<DnsConfig>>) {
         uncached_answers: false,
         tunnels: TunnelSetting::default(),
         dns: None,
+        proxies: ProxySetting::default(),
     });
     kept.dns.clone_from(&config);
     if let Some(running) = engine().as_ref() {
@@ -103,11 +106,13 @@ fn set_chain(chain: Option<Chain>) -> bool {
     let on = chain.is_some();
     let tunnels = set.as_ref().map(|s| s.tunnels.clone()).unwrap_or_default();
     let dns = set.as_ref().and_then(|s| s.dns.clone());
+    let proxies = set.as_ref().map(|s| s.proxies.clone()).unwrap_or_default();
     *set = Some(ChainSetting {
         chain: chain.clone(),
         uncached_answers: on,
         tunnels,
         dns,
+        proxies,
     });
     match engine().as_ref() {
         Some(running) => {
@@ -127,10 +132,28 @@ fn set_tunnels(change: impl FnOnce(&mut TunnelSetting)) {
         uncached_answers: false,
         tunnels: TunnelSetting::default(),
         dns: None,
+        proxies: ProxySetting::default(),
     });
     change(&mut kept.tunnels);
     if let Some(running) = engine().as_ref() {
         running.tunnels(&kept.tunnels);
+    }
+}
+
+/// Sets the messengers' apps and Android's proxy setting (W8, part 2a) for the engines to come, kept beside the
+/// chain, and on the one that runs, if any.
+fn set_proxies(proxies: ProxySetting) {
+    let mut set = setting();
+    let kept = set.get_or_insert_with(|| ChainSetting {
+        chain: None,
+        uncached_answers: false,
+        tunnels: TunnelSetting::default(),
+        dns: None,
+        proxies: ProxySetting::default(),
+    });
+    kept.proxies = proxies;
+    if let Some(running) = engine().as_ref() {
+        running.proxies(kept.proxies.clone());
     }
 }
 
@@ -1421,6 +1444,158 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlowRoute
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
+/// `Engine.nativeProxies(families, uids, android)`: the messengers' apps, each UID of `uids` of the family at the
+/// same place in `families` (0 Telegram, 1 `WhatsApp`, 2 Signal), and the proxies Android's setting names, one
+/// `host port` a line in `android` (W8, part 2a; ADR 0052). Kept for the engines to come, as the chain is.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeProxies(families: IntArray, uids:
+// IntArray, android: String)`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeProxies<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    families: JIntArray<'caller>,
+    uids: JIntArray<'caller>,
+    android: JString<'caller>,
+) {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let read = |array: &JIntArray<'_>, env: &mut jni::Env<'_>| -> Result<Vec<i32>, Error> {
+                let mut values = vec![0; array.len(env)?];
+                array.get_region(env, 0, &mut values)?;
+                Ok(values)
+            };
+            let (families, uids) = (read(&families, env)?, read(&uids, env)?);
+            let android = android.try_to_string(env)?;
+            set_proxies(proxy_setting(&families, &uids, &android));
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>();
+}
+
+/// The setting of `nativeProxies`: codes and UIDs that do not fit, and lines that do not parse, are left out.
+fn proxy_setting(families: &[i32], uids: &[i32], android: &str) -> ProxySetting {
+    let messengers = families
+        .iter()
+        .zip(uids)
+        .filter_map(|(&family, &uid)| {
+            let family = match family {
+                0 => Family::Telegram,
+                1 => Family::WhatsApp,
+                2 => Family::Signal,
+                _ => return None,
+            };
+            Some((family, u32::try_from(uid).ok()?))
+        })
+        .collect();
+    let android = android
+        .lines()
+        .filter_map(|line| {
+            let (host, port) = line.trim().rsplit_once(' ')?;
+            let port = port.parse::<u16>().ok().filter(|&p| p != 0)?;
+            let host = host.trim().trim_start_matches('[').trim_end_matches(']');
+            (!host.is_empty() && !host.contains(char::is_whitespace))
+                .then(|| (host.to_ascii_lowercase(), port))
+        })
+        .collect();
+    ProxySetting {
+        messengers,
+        android,
+    }
+}
+
+/// `Engine.nativeMessengerClients()`: the messengers' client packages the engine's table holds, one `family
+/// package` a line (`telegram`, `whatsapp` or `signal`), for Watch to find their UIDs.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeMessengerClients(): String`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeMessengerClients<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) -> JString<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let table = Messengers::bundled();
+            let lines: Vec<String> = table
+                .clients()
+                .map(|(family, package)| format!("{} {package}", family.code()))
+                .collect();
+            JString::from_str(env, lines.join("\n"))
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `Engine.nativeFlowProxies()`: the kept flows that went through a proxy, one per line as [`proxy_line`]
+/// writes it, for debug builds and the emulator check. Empty when the engine keeps none.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlowProxies(): String`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlowProxies<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) -> JString<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let flows = engine().as_ref().map_or_else(Vec::new, Engine::flows);
+            let lines: Vec<String> = flows.iter().filter_map(proxy_line).collect();
+            JString::from_str(env, lines.join("\n"))
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// A kept flow through a proxy, as `protocol app destination uid kind how flags asked proxy-name cover name`:
+/// `kind` `socks5`, `socks4`, `connect`, `forward`, `mtproto`, `whatsapp` or `signal`; `how` `read` or `inferred`;
+/// `flags` of `s` (Android's setting), `p` (a password crossed unencrypted) and `o` (outside the maker's network),
+/// `-` for none; `asked` the destination asked for as `host:port`, `[address]:port` or `-`; the proxy's own name and
+/// the cover its hello sent, `-` for none; and last the flow's name, which may hold spaces. No credential is kept,
+/// so none can be written.
+fn proxy_line(f: &Flow) -> Option<String> {
+    let proxy = f.proxy.as_ref()?;
+    let kind = match proxy.kind {
+        Kind::Socks5 => "socks5",
+        Kind::Socks4 => "socks4",
+        Kind::Connect => "connect",
+        Kind::Forward => "forward",
+        Kind::MtProto => "mtproto",
+        Kind::WhatsApp => "whatsapp",
+        Kind::Signal => "signal",
+    };
+    let how = if proxy.kind.declared() {
+        "read"
+    } else {
+        "inferred"
+    };
+    let mut flags = String::new();
+    for (on, flag) in [
+        (proxy.setting, 's'),
+        (proxy.password, 'p'),
+        (proxy.outside_maker, 'o'),
+    ] {
+        if on {
+            flags.push(flag);
+        }
+    }
+    if flags.is_empty() {
+        flags.push('-');
+    }
+    let asked = match &proxy.asked {
+        Some((Asked::Name(name), port)) => format!("{name}:{port}"),
+        Some((Asked::Address(address), port)) => SocketAddr::new(*address, *port).to_string(),
+        None => "-".to_owned(),
+    };
+    let protocol = if f.protocol == datapavan_net::packet::TCP {
+        "tcp"
+    } else {
+        "udp"
+    };
+    let uid = f.uid.map_or_else(|| "-".to_owned(), |u| u.to_string());
+    Some(format!(
+        "{protocol} {} {} {uid} {kind} {how} {flags} {asked} {} {} {}",
+        f.app,
+        f.destination,
+        proxy.proxy_name.as_deref().unwrap_or("-"),
+        proxy.cover.as_deref().unwrap_or("-"),
+        f.name.as_deref().unwrap_or("-"),
+    ))
+}
+
 /// `Engine.nativeFlows()`: the flows the engine kept, one per line as [`flow_line`] writes it, for debug
 /// builds and the end-to-end test. Empty when the engine keeps none, as in release builds.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlows(): String`.
@@ -1464,6 +1639,7 @@ fn flow_line(f: &Flow) -> String {
         NamedBy::Tls => "tls",
         NamedBy::Quic => "quic",
         NamedBy::Organisation => "org",
+        NamedBy::Proxy => "proxy",
         NamedBy::Unknown => "-",
     };
     let ech = match f.ech {
@@ -1588,6 +1764,7 @@ mod tests {
             resolver: None,
             network: None,
             via: datapavan_net::Via::Direct,
+            proxy: None,
         };
         assert_eq!(
             flow_line(&flow),

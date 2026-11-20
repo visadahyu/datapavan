@@ -48,6 +48,7 @@ use tokio::sync::{Notify, mpsc, watch};
 use crate::dnscache::DnsCache;
 use crate::fragments::{self, Reassembler, Taken};
 use crate::log::Record;
+use crate::messengers::Messengers;
 use crate::names::Names;
 use crate::nat::{self, Nat};
 #[cfg(test)]
@@ -77,6 +78,7 @@ mod naming;
 mod now;
 pub mod resolver;
 use resolver::{DnsConfig, Exchange, Exchanges};
+mod proxied;
 mod tcp;
 mod tunnels;
 mod udp;
@@ -90,6 +92,7 @@ use echo::Echoes;
 use logbook::{FlowBytes, Live, Lookups, logger};
 #[cfg(test)]
 use naming::Begun;
+pub use proxied::{Proxied, ProxySetting};
 use tcp::{Listening, Pending, listen};
 #[cfg(test)]
 use tcp::{Upstream, accept};
@@ -445,6 +448,10 @@ pub enum NamedBy {
     Tls,
     /// The server name of the QUIC connection's Initial packets.
     Quic,
+    /// The destination the app asked its proxy for, read from the connection (W8, part 2a; ADR 0052): after
+    /// the hello's name, which the connection inside the proxy's tunnel sends, and before a DNS answer for
+    /// the proxy's address, which names the proxy, not the destination.
+    Proxy,
     /// A DNS answer Watch passed to the app for the destination's address.
     Dns,
     /// The organisation whose network the address is in, from the offline table (ADR 0036).
@@ -459,9 +466,10 @@ impl NamedBy {
     fn yields_to(self, other: Self) -> bool {
         let rank = |by: Self| match by {
             Self::Tls | Self::Quic => 0,
-            Self::Dns => 1,
-            Self::Organisation => 2,
-            Self::Unknown => 3,
+            Self::Proxy => 1,
+            Self::Dns => 2,
+            Self::Organisation => 3,
+            Self::Unknown => 4,
         };
         rank(other) < rank(self)
     }
@@ -526,6 +534,8 @@ pub struct Flow {
     pub network: Option<Network>,
     /// The way it went: directly, through the user's tool, or through one `WireGuard` configuration.
     pub via: Via,
+    /// The proxy the app reached it through, read from the connection or inferred (W8, part 2a; ADR 0052).
+    pub proxy: Option<Box<Proxied>>,
 }
 
 /// The way a flow went (W6, W7): its route when it opened, which the log's records and the live view say.
@@ -554,6 +564,11 @@ pub struct Network {
 struct Opened {
     id: u64,
     port: u16,
+    /// Where the app sent it.
+    destination: SocketAddr,
+    /// Whether its first bytes are read for a proxy (W8, part 2a): it went directly, and is not the user's
+    /// tool's own (ADR 0046, decision 3).
+    sniffs: bool,
     dns: DnsUse,
     /// The app's UID, if Android named it: whose ECH public names hide the hello's name.
     uid: Option<u32>,
@@ -578,7 +593,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 61;
+pub const COUNTERS: usize = 67;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -644,6 +659,12 @@ pub struct Counters {
     tunnel_lost: AtomicU64,
     tunnel_handshakes: AtomicU64,
     tunnel_rejected: AtomicU64,
+    proxies_declared: AtomicU64,
+    proxy_passwords: AtomicU64,
+    proxies_inferred: AtomicU64,
+    proxies_substituted: AtomicU64,
+    proxies_taken_back: AtomicU64,
+    covers_kept_out: AtomicU64,
 }
 
 impl Counters {
@@ -717,7 +738,11 @@ impl Counters {
     /// flow a local app started was theirs, the apps' packets refused because their tunnel could not carry them
     /// (outside `AllowedIPs`, or IPv6 without an IPv6 address), those answered as too big for the tunnel's MTU,
     /// those lost in a core's queue or for want of a socket, the handshake initiations sent, and the datagrams
-    /// from a server that the core refused. None names a destination: they can be read on any phone. New
+    /// from a server that the core refused; then (W8, part 2a, ADR 0052) the proxy requests the apps' bytes
+    /// declared, those of them that carried a password unencrypted, the flows named a messenger's inferred proxy,
+    /// those not named so because the app connected to its maker directly in the window (substitution), the
+    /// names taken back when it did so later, and the hellos whose name, a messenger's cover, named no flow. None
+    /// names a destination: they can be read on any phone. New
     /// counters are only ever appended, so that scripts reading a column by its place keep reading the same one.
     #[must_use]
     pub fn snapshot(&self) -> [u64; COUNTERS] {
@@ -798,6 +823,12 @@ impl Counters {
             &self.tunnel_lost,
             &self.tunnel_handshakes,
             &self.tunnel_rejected,
+            &self.proxies_declared,
+            &self.proxy_passwords,
+            &self.proxies_inferred,
+            &self.proxies_substituted,
+            &self.proxies_taken_back,
+            &self.covers_kept_out,
         ]
     }
 }
@@ -818,6 +849,8 @@ pub struct ChainSetting {
     /// The encrypted resolver for direct apps' names (W8, part 1), as set last ([`Engine::dns`]); `None` keeps
     /// the network's resolver, as before W8.
     pub dns: Option<Arc<DnsConfig>>,
+    /// The messengers' apps and Android's proxy setting (W8, part 2a), as set last ([`Engine::proxies`]).
+    pub proxies: ProxySetting,
 }
 
 /// What an engine hands the next when the tunnel is set up again (ADR 0044, decision 5 as amended): what
@@ -841,6 +874,8 @@ pub struct Handover {
     tunnels: TunnelSetting,
     /// The encrypted resolver's setting; what it learned stays behind, with the network it learned on.
     dns: Option<Arc<DnsConfig>>,
+    /// The messengers' apps and Android's proxy setting (W8, part 2a).
+    proxies: ProxySetting,
 }
 
 /// What the engine's thread and its controller share.
@@ -937,6 +972,12 @@ struct Shared {
     tunnels: tunnels::Tunnels,
     /// The encrypted resolver for direct apps' names (W8, part 1).
     resolver: resolver::Resolver,
+    /// The messengers whose proxies are inferred (W8, part 2a; ADR 0052): their apps' packages, Telegram's
+    /// ranges and the names that tell their own connections.
+    messengers: Messengers,
+    /// What the inference and the declared proxies know: the messengers' apps, their direct connections,
+    /// and Android's proxy setting.
+    proxies: Mutex<proxied::State>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -1032,6 +1073,7 @@ impl Engine {
             mut activity,
             mut tunnels,
             mut dns,
+            mut proxies,
         } = handover.unwrap_or_else(|| Handover {
             chain: None,
             upstream_dns: None,
@@ -1042,6 +1084,7 @@ impl Engine {
             activity: activity::Activity::new(tracks),
             tunnels: TunnelSetting::default(),
             dns: None,
+            proxies: ProxySetting::default(),
         });
         let waiting = activity::Waiting::of_held(&activity.held);
         if let Some(setting) = setting {
@@ -1049,6 +1092,7 @@ impl Engine {
             uncached_answers = setting.uncached_answers;
             tunnels = setting.tunnels;
             dns = setting.dns;
+            proxies = setting.proxies;
         }
         let clock = platform.clock();
         // The live view counts from now on; a handed-over view keeps the moment its first engine began.
@@ -1098,10 +1142,14 @@ impl Engine {
             kept: Mutex::default(),
             tunnels: tunnels::Tunnels::default(),
             resolver: resolver::Resolver::default(),
+            messengers: Messengers::bundled(),
+            proxies: Mutex::default(),
         });
         // In place before the thread reads its first packet: no direct app's lookup goes to the network's
         // resolver while the encrypted one is set.
         shared.resolver.set(dns);
+        // In place before the thread reads its first packet: a messenger's first flow is read as one.
+        shared.set_proxies(proxies);
         // In place before the thread reads its first packet: a tunnelled app's first SYN never goes directly.
         shared.tunnels.set(&tunnels);
         if shared.tunnels.any() {
@@ -1202,6 +1250,7 @@ impl Engine {
             ),
             tunnels: shared.tunnels.setting(),
             dns: shared.resolver.get(),
+            proxies: lock(&shared.proxies).setting().clone(),
         }
     }
 
@@ -1281,6 +1330,12 @@ impl Engine {
         self.shared.uncached_answers.store(on, Ordering::Relaxed);
         lock(&self.shared.direct_answers).clear();
         self.shared.hide_chained();
+    }
+
+    /// Sets the messengers' apps, by UID, and the proxies Android's setting names (W8, part 2a; ADR 0052): each
+    /// app's new flows are read by them from now on, and the open ones keep how they were named.
+    pub fn proxies(&self, setting: ProxySetting) {
+        self.shared.set_proxies(setting);
     }
 
     /// Whether the answers of Watch's own DNS address reach the apps with a time to live of 0 now: while a chain
@@ -1795,6 +1850,8 @@ mod tests {
             kept: Mutex::default(),
             tunnels: tunnels::Tunnels::default(),
             resolver: resolver::Resolver::default(),
+            messengers: crate::messengers::Messengers::bundled(),
+            proxies: Mutex::default(),
         }
     }
 
@@ -1833,10 +1890,13 @@ mod tests {
             resolver,
             network,
             via: crate::engine::Via::Direct,
+            proxy: None,
         });
         Opened {
             id,
             port: destination.port(),
+            destination,
+            sniffs: true,
             dns,
             uid: Some(uid),
             dns_held_until: held_until,
@@ -2234,6 +2294,7 @@ mod tests {
             resolver: None,
             network: None,
             via: crate::engine::Via::Direct,
+            proxy: None,
         };
         let server = SocketAddr::from(([198, 51, 100, 9], 443));
         let Some(bytes) = shared.record(flow(1, server, Outcome::Opened)) else {
@@ -3710,6 +3771,7 @@ mod tests {
             resolver: None,
             network: None,
             via: crate::engine::Via::Direct,
+            proxy: None,
         }) else {
             unreachable!("an open flow is live")
         };

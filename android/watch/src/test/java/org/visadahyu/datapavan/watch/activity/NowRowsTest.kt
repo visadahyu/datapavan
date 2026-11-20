@@ -178,8 +178,11 @@ class NowRowsTest {
         assertEquals("a.example" to "", NowRows.destination("a.example", "", "192.0.2.1"))
         assertEquals("192.0.2.1" to "", NowRows.destination("", "", "192.0.2.1"))
         assertEquals(
-            listOf(NowRows.NamedBy.DNS, NowRows.NamedBy.TLS, NowRows.NamedBy.QUIC, NowRows.NamedBy.ORGANISATION, NowRows.NamedBy.UNKNOWN, NowRows.NamedBy.UNKNOWN),
-            (0..5).map(NowRows::namedBy),
+            listOf(
+                NowRows.NamedBy.DNS, NowRows.NamedBy.TLS, NowRows.NamedBy.QUIC, NowRows.NamedBy.ORGANISATION, NowRows.NamedBy.UNKNOWN,
+                NowRows.NamedBy.PROXY, NowRows.NamedBy.UNKNOWN,
+            ),
+            (0..6).map(NowRows::namedBy),
         )
     }
 }

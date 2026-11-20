@@ -39,7 +39,7 @@ pub mod wireguard;
 pub use engine::resolver::{Carry, Choice, DnsConfig, Exchange, Exchanges, Reply, Through};
 pub use engine::{
     ASK_BOUND, Addresses, AppRoute, Chain, ChainSetting, Config, DnsUse, Ech, Engine, Flow,
-    Handover, Limits, NamedBy, Network, Outcome, Platform, Resolution, TunnelSetting, TunnelState,
-    Via,
+    Handover, Limits, NamedBy, Network, Outcome, Platform, Proxied, ProxySetting, Resolution,
+    TunnelSetting, TunnelState, Via,
 };
 pub use owners::NetworkKind;

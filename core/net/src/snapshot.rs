@@ -1,6 +1,6 @@
 //! What the live view "Now" draws (ADR 0046, decision 2 (d)), as the engine hands it to Watch's Kotlin
 //! side once a second while the view is open: each app's bytes by its state in each window, and the
-//! destinations it reached, from memory only. Version 3, little-endian:
+//! destinations it reached, from memory only. Version 4, little-endian:
 //!
 //! - version (3), when it was taken (milliseconds since 1970, UTC), what the latest reading of the
 //!   states knew (0 none came yet, 1 the states, 2 nothing: Watch has no usage access, 3 nothing: Android
@@ -21,7 +21,8 @@
 //!   owner is, then its name, the DNS name beside it where the two differ, the known resolver and the
 //!   organisation behind its network, each a length byte and UTF-8, and its bytes up and down for each
 //!   window: 6 numbers; then its route, as the log writes it: a byte (0 directly, 1 through the tool, 2
-//!   through a `WireGuard` tunnel) and the tunnel's number (u32, 0 for none);
+//!   through a `WireGuard` tunnel) and the tunnel's number (u32, 0 for none); then its proxy, as the log writes it
+//!   (`log::push_proxy`, a byte 0 for none);
 //! - after each app's destinations, the `WireGuard` tunnel it went through with its destinations left out
 //!   ("Log where these apps connect" off), in a window: its number (u32), 0 for none.
 //!
@@ -31,17 +32,17 @@
 //! are the log's (`log.rs`).
 //!
 //! Version 2 (W5's third part) added the window while the screen was off and the bytes in no state by
-//! why; version 3 (W7, part 1) each destination's route and each app's tunnel. Both sides ship in one build,
-//! so the Kotlin side reads version 3 only.
+//! why; version 3 (W7, part 1) each destination's route and each app's tunnel; version 4 (W8, part 2a, ADR 0052)
+//! each destination's proxy. Both sides ship in one build, so the Kotlin side reads version 4 only.
 
 use crate::engine::{Flow, Network};
 use crate::log::{
-    dns_code, ech_code, named_by_code, push_address, push_network, push_text, push_via,
+    dns_code, ech_code, named_by_code, push_address, push_network, push_proxy, push_text, push_via,
 };
 use crate::states::{Known, Placed, Screen};
 
 /// The version of the snapshot.
-pub const VERSION: u8 = 3;
+pub const VERSION: u8 = 4;
 
 /// Bytes up and down.
 pub type Ways = [u64; 2];
@@ -173,6 +174,7 @@ pub fn encode(snapshot: &Snapshot) -> Vec<u8> {
                 push_ways(&mut out, ways);
             }
             push_via(&mut out, flow.via);
+            push_proxy(&mut out, flow.proxy.as_deref());
         }
         out.extend_from_slice(&app.through_tunnel.unwrap_or(0).to_le_bytes());
     }
@@ -210,6 +212,7 @@ mod tests {
                 resolver: Some("sample".into()),
                 network: None,
                 via: crate::engine::Via::Direct,
+                proxy: None,
             },
             organisation: Some((
                 Network {
@@ -247,7 +250,7 @@ mod tests {
             }],
         };
         let out = encode(&snapshot);
-        let mut expected = vec![3];
+        let mut expected = vec![4];
         expected.extend_from_slice(&1_000u64.to_le_bytes());
         expected.push(2);
         expected.extend_from_slice(&900u64.to_le_bytes());
@@ -281,8 +284,9 @@ mod tests {
         for value in [1u64, 2, 3, 4, 5, 6] {
             expected.extend_from_slice(&value.to_le_bytes());
         }
-        // Version 3: the destination's route, directly, and the app's tunnel, none.
+        // Version 3: the destination's route, directly; version 4: its proxy, none; and the app's tunnel, none.
         expected.extend_from_slice(&[0, 0, 0, 0, 0]);
+        expected.push(0);
         expected.extend_from_slice(&0u32.to_le_bytes());
         assert_eq!(out, expected);
     }

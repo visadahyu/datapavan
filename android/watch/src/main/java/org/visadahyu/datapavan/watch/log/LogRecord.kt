@@ -5,9 +5,9 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * One record of the connection log, as the engine writes it (core/net/src/log.rs, version 4). The
- * bytes are kept as they are, sealed; this reads them back, and reads versions 1 to 3 too, which no
- * release wrote but debug builds on test phones did, as ADR 0044's decision 4 asked: a day sealed then
+ * One record of the connection log, as the engine writes it (core/net/src/log.rs, version 5). The
+ * bytes are kept as they are, sealed; this reads them back, and reads versions 1 to 4 too, which debug
+ * builds on test phones wrote (version 4 was also W7's), as ADR 0044's decision 4 asked: a day sealed then
  * stays readable until it expires. A record of another version is skipped and counted, never read as
  * this one.
  */
@@ -66,7 +66,68 @@ sealed interface LogRecord {
          */
         val via: Int = VIA_DIRECT,
         val tunnel: Long = 0,
+        /** The proxy it went through, read from the connection or inferred (version 5; W8, part 2a, ADR 0052). */
+        val proxy: Proxy? = null,
     ) : LogRecord
+
+    /**
+     * A flow's proxy, as the engine writes it (core/net/src/log.rs, `push_proxy`): its [kind], whether Android's
+     * proxy [setting] names it, whether a [password] for it crossed the network unencrypted (never the password,
+     * which the engine never keeps), whether its address is [outsideMaker]'s network, the destination [asked] for
+     * and its port where it was declared and kept, the proxy's own name, the organisation behind its network, and
+     * the [cover] name an inferred proxy's hello sent, which names nothing. Empty texts and a port of -1 for none.
+     */
+    data class Proxy(
+        val kind: Int,
+        val setting: Boolean = false,
+        val password: Boolean = false,
+        val outsideMaker: Boolean = false,
+        val asked: String = "",
+        val askedPort: Int = -1,
+        val proxyName: String = "",
+        val organisation: String = "",
+        val cover: String = "",
+    ) {
+        /** Whether it was read from the connection: SOCKS or an HTTP proxy; else inferred. */
+        val declared: Boolean get() = kind <= PROXY_FORWARD
+
+        /** Whether where it went was kept ("Log where these apps connect" on). */
+        val kept: Boolean get() = askedPort >= 0 || proxyName.isNotEmpty() || organisation.isNotEmpty() || cover.isNotEmpty()
+
+        companion object {
+            /**
+             * A proxy as the engine writes it, or null for its code 0, none; a code or flag it never writes throws
+             * [IllegalArgumentException], and the record is read as malformed.
+             */
+            fun read(b: ByteBuffer): Proxy? {
+                val kind = b.get().toInt() and 0xff
+                if (kind == 0) return null
+                require(kind in PROXY_SOCKS5..PROXY_SIGNAL)
+                val flags = b.get().toInt() and 0xff
+                require(flags and 0xf0 == 0)
+                var asked = ""
+                var port = -1
+                if (flags and 8 != 0) {
+                    val length = b.get().toInt() and 0xff
+                    require(length == 0 || length == 4 || length == 16)
+                    val address = ByteArray(length).also { b.get(it) }
+                    val name = text(b)
+                    require((length == 0) != name.isEmpty())
+                    asked = if (length == 0) name else InetAddress.getByAddress(address).hostAddress.orEmpty()
+                    port = b.short.toInt() and 0xffff
+                }
+                return Proxy(
+                    kind, setting = flags and 1 != 0, password = flags and 2 != 0, outsideMaker = flags and 4 != 0,
+                    asked = asked, askedPort = port, proxyName = text(b), organisation = text(b), cover = text(b),
+                )
+            }
+
+            private fun text(b: ByteBuffer): String {
+                val bytes = ByteArray(b.get().toInt() and 0xff).also { b.get(it) }
+                return String(bytes, Charsets.UTF_8)
+            }
+        }
+    }
 
     /** Lookups the app sent to Watch's own DNS address, and their packets' bytes on the tunnel. */
     data class Lookups(
@@ -81,7 +142,16 @@ sealed interface LogRecord {
 
     companion object {
         /** The version the engine writes. */
-        const val VERSION: Byte = 4
+        const val VERSION: Byte = 5
+
+        /** A proxy's kind (version 5): SOCKS5, SOCKS4, an HTTP `CONNECT`, a plain request to an HTTP proxy, and inferred, Telegram's MTProto, WhatsApp's and Signal's. */
+        const val PROXY_SOCKS5 = 1
+        const val PROXY_SOCKS4 = 2
+        const val PROXY_CONNECT = 3
+        const val PROXY_FORWARD = 4
+        const val PROXY_MTPROTO = 5
+        const val PROXY_WHATSAPP = 6
+        const val PROXY_SIGNAL = 7
 
         /** A segment's route (version 4). */
         const val VIA_DIRECT = 0
@@ -120,7 +190,7 @@ sealed interface LogRecord {
         fun parse(bytes: ByteArray): LogRecord? = try {
             val b = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
             val version = b.get()
-            if (version != VERSION && version != VERSION_3 && version != VERSION_2 && version != VERSION_1) {
+            if (version != VERSION && version != VERSION_4 && version != VERSION_3 && version != VERSION_2 && version != VERSION_1) {
                 null
             } else {
                 when (b.get().toInt()) {
@@ -146,13 +216,17 @@ sealed interface LogRecord {
                             name = text(b), resolver = text(b), dnsName = if (version == VERSION_1) "" else text(b),
                             state = state(b, version),
                         ).let { segment ->
-                            if (version < VERSION) {
+                            if (version < VERSION_4) {
                                 segment.copy(via = VIA_UNKNOWN)
                             } else {
                                 val via = b.get().toInt() and 0xff
                                 val tunnel = b.int.toLong() and 0xffffffffL
                                 // A code the engine never writes, or a tunnel number beside no tunnel, is malformed.
-                                if (via > VIA_TUNNEL || (via == VIA_TUNNEL) != (tunnel != 0L)) null else segment.copy(via = via, tunnel = tunnel)
+                                if (via > VIA_TUNNEL || (via == VIA_TUNNEL) != (tunnel != 0L)) {
+                                    null
+                                } else {
+                                    segment.copy(via = via, tunnel = tunnel, proxy = if (version >= VERSION) Proxy.read(b) else null)
+                                }
                             }
                         }
                     }
@@ -167,6 +241,8 @@ sealed interface LogRecord {
             null
         } catch (e: java.net.UnknownHostException) {
             null
+        } catch (e: IllegalArgumentException) {
+            null
         }
 
         /** The version before the DNS name and the flag of a flow that came in. */
@@ -177,6 +253,9 @@ sealed interface LogRecord {
 
         /** The version before a segment's route. */
         private const val VERSION_3: Byte = 3
+
+        /** The version before a segment's proxy. */
+        private const val VERSION_4: Byte = 4
 
         /**
          * The app's state, one byte after the segment's counts from version 3 ("not told" before); in a

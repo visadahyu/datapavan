@@ -1617,6 +1617,7 @@ fn new_flow(
         resolver,
         network,
         via: Via::Direct,
+        proxy: None,
     }
 }
 

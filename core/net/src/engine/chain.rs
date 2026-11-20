@@ -347,6 +347,7 @@ mod tests {
             resolver: None,
             network: None,
             via: crate::engine::Via::Direct,
+            proxy: None,
         };
         assert!(shared.record(flow(1, CHAINED)).is_some(), "still counted");
         assert!(shared.record(flow(2, DIRECT)).is_some());
@@ -393,6 +394,7 @@ mod tests {
             resolver: None,
             network: None,
             via: crate::engine::Via::Direct,
+            proxy: None,
         };
         let hello = crate::tls::Hello {
             name: "other.example".into(),
@@ -406,6 +408,8 @@ mod tests {
             let opened = Opened {
                 id,
                 port: 443,
+                destination: std::net::SocketAddr::from(([192, 0, 2, 1], 443)),
+                sniffs: false,
                 dns: DnsUse::None,
                 uid: Some(uid),
                 // As the answer that named it gave it: held an hour.
@@ -462,6 +466,7 @@ mod tests {
                     resolver: Some("sample".into()),
                     network: None,
                     via: crate::engine::Via::Direct,
+                    proxy: None,
                 })
                 .is_some()
         );
@@ -469,6 +474,8 @@ mod tests {
         let opened = Opened {
             id: 1,
             port: 443,
+            destination: std::net::SocketAddr::from(([192, 0, 2, 1], 443)),
+            sniffs: false,
             dns: DnsUse::Encrypted,
             uid: Some(CHAINED),
             dns_held_until: std::time::Duration::MAX,

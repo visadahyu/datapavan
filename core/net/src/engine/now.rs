@@ -112,6 +112,9 @@ impl<'a> Seen<'a> {
     /// a flow that went through the tool marks its app so (review b2 of W5's second part, N3).
     pub(super) fn live(flow: &'a Flow, hidden: bool, direct: bool) -> Self {
         match (hidden, direct) {
+            // An app's own proxy with its destination left out keeps a place of its own: its kind, with no
+            // address or name (ADR 0052).
+            (true, true) if flow.proxy.is_some() => Self::Flow(flow),
             (true, false) => Self::Hidden,
             (true, true) => Self::HiddenDirect(match flow.via {
                 crate::engine::Via::Tunnel(t) => Some(t),
@@ -135,9 +138,11 @@ struct Place {
 }
 
 /// Whether two flows reach one destination as the live view shows it: by name, where the name came
-/// from, the DNS name beside it and the app's own DNS; and by address where neither has a name.
+/// from, the DNS name beside it and the app's own DNS; and by address where neither has a name; and
+/// through the same proxy, if any (ADR 0052).
 fn same_place(a: &Flow, b: &Flow) -> bool {
-    a.name == b.name
+    a.proxy == b.proxy
+        && a.name == b.name
         && a.named_by == b.named_by
         && a.dns_name == b.dns_name
         && a.dns == b.dns
@@ -376,6 +381,28 @@ impl Counts {
                     place.session = Ways::default();
                 }
             }
+        }
+    }
+
+    /// Forgets the place a flow was counted under before a later fact named it otherwise: a proxy its bytes
+    /// declared, or a messenger's inferred (ADR 0052). The app keeps its bytes.
+    pub(super) fn forget_place(&mut self, uid: Option<u32>, before: &Flow) {
+        if let Some(app) = self.apps.get_mut(&uid) {
+            let had = app.places.len();
+            app.places.retain(|place| !same_place(&place.flow, before));
+            self.places -= had - app.places.len();
+        }
+    }
+
+    /// Leaves out every app's own proxies that still show where they went, as "Log where these apps connect"
+    /// turned off asks (ADR 0052); the apps keep their bytes.
+    pub(super) fn hide_proxies(&mut self) {
+        for app in self.apps.values_mut() {
+            let had = app.places.len();
+            app.places.retain(|place| {
+                place.flow.proxy.is_none() || place.flow.destination.ip().is_unspecified()
+            });
+            self.places -= had - app.places.len();
         }
     }
 
@@ -2377,12 +2404,33 @@ mod tests {
     /// (`logbook`): from an engine's own counts, of an app placed in each state, a chained app, the tool
     /// and flows of no app, read with no usage access at the end.
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn the_kotlin_sides_snapshot_fixture_is_what_the_engine_writes() -> std::io::Result<()> {
         let platform = Arc::new(Telling::default());
         let clock = super::super::clock::ManualClock::at(T);
         let mut shared = shared_with(platform);
         shared.clock = clock.clone();
         let bytes = open(&shared, 1);
+        // A second app's flow through a SOCKS5 proxy its bytes declared (version 4, ADR 0052).
+        let Some(proxied) = shared.record(Flow {
+            destination: SocketAddr::from(([203, 0, 113, 5], 1080)),
+            name: Some("example.org".into()),
+            named_by: NamedBy::Proxy,
+            proxy: Some(Box::new(crate::engine::Proxied {
+                kind: crate::proxies::Kind::Socks5,
+                setting: false,
+                password: true,
+                outside_maker: false,
+                asked: Some((crate::proxies::Asked::Name("example.org".into()), 443)),
+                proxy_name: Some("proxy.example.net".into()),
+                organisation: Some("Hetzner Online GmbH".into()),
+                cover: None,
+            })),
+            ..flow(3, Some(UID + 1))
+        }) else {
+            unreachable!("an open flow is live")
+        };
+        proxied.up(&shared, 60, 100);
         for (at, n) in [(0, 100), (1_000, 200), (2_000, 300), (3_000, 400)] {
             up_at(&shared, &clock, &bytes, at, n);
         }
@@ -2447,7 +2495,7 @@ mod tests {
         assert_eq!(bytes_of(&snapshot, None)[0][0], [50, 0]);
         assert_eq!(bytes_of(&snapshot, None)[0][8], [50, 0], "no app");
         let mut text = String::from(
-            "# Watch's live view: one snapshot as the engine writes it (core/net/src/snapshot.rs, version 2), in\n\
+            "# Watch's live view: one snapshot as the engine writes it (core/net/src/snapshot.rs, version 4), in\n\
              # hex. Written by the engine's test the_kotlin_sides_snapshot_fixture_is_what_the_engine_writes\n\
              # (core/net/src/engine/now.rs), which fails when the engine writes otherwise; run it with\n\
              # DATAPAVAN_WRITE_FIXTURE=1 to write it anew. Read by SnapshotTest. Not edited by hand.\n",

@@ -4915,6 +4915,8 @@ fn begin_udp(
     let opened = Opened {
         id,
         port: destination.port(),
+        destination,
+        sniffs: false,
         dns,
         uid,
         dns_held_until: held_until,
@@ -4935,6 +4937,7 @@ fn begin_udp(
         resolver,
         network,
         via: crate::engine::Via::Direct,
+        proxy: None,
     };
     (opened, flow)
 }
