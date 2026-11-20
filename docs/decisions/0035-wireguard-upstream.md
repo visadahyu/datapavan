@@ -699,8 +699,9 @@ app's route, the states, and the licence screen. What was chosen where the decis
   until then the debug builds' dump turns it on and off (`tunnel-profile on|off`). While the state itself cannot be
   opened at a start (key A erring now, m2), nothing tells which apps go through a configuration, and the service
   holds every installed app, flows of no app and pings with them, until it opens. A state whose key A is gone for
-  good, which leaves every configuration's wrap unopenable too, reads as an empty store, as after Android clears
-  the app's data. Checked on the emulator (`scripts/verify-wireguard-import.sh`, step 5b): with the profile on,
+  good, which leaves every configuration's wrap unopenable too, is held the same way while the store's marker says
+  it held a configuration or a route (below, "Two edges closed"); without the marker, as after Android clears the
+  app's data, it reads as an empty store. Checked on the emulator (`scripts/verify-wireguard-import.sh`, step 5b): with the profile on,
   Watch's process killed and started again on the locked phone, the routed app's TCP and UDP to a sentinel send
   nothing directly, the engine holds the configuration unset, the notification shows and names nothing of the
   configurations; after the PIN the configuration is set, the notification gone, and the app reaches the peer.
@@ -820,9 +821,8 @@ app's route, the states, and the licence screen. What was chosen where the decis
   picker stays in the user's gallery; Watch says so but cannot delete it. On the emulator the camera photographs the
   virtual scene's wall, which shows the QR picture small and at an angle: the check accepts the photo decoded or
   refused as no code, and the photo deleted either way; a decoded photo of the phone's own camera is part 3's, on the
-  A40. Routes go by UID, so packages that share a UID share a route, and an app installed again is routed by its new
-  UID once Android's broadcast of its installation reaches Watch, a moment in which, started at once, it would go its
-  other way. The confirmation's server line, the dump's `tunnel-store` and the states never print a key; the
+  A40. Routes go by UID, so packages that share a UID share a route; an app installed again, with a new UID, is
+  asked of Watch at its first flow (below, "Two edges closed"). The confirmation's server line, the dump's `tunnel-store` and the states never print a key; the
   endpoint is shown on the confirmation alone. A file or picture larger than its bound is refused, never cut.
 
 **Fix round of part 2 (2026-11-20).** One review round, two independent reviewers (security and the engine; the
@@ -900,6 +900,45 @@ exported, it failed at the unlock of step 5b. Watch's native library, as Advance
 dp-api35-ci, no camera) passed whole, the import check with its reinstall, its screen made anew and its locked
 phone under key B, and part 1's check with the debug hook's routes kept beside the store's; the audit shard passed
 too, its tracker scan through the parsers' primitive answer.
+
+**Two edges closed before the push (the maintainer's word of 2026-11-20).**
+
+- **The instant after a reinstall.** Watch hands the engine every installed app's UID at each hand-over of the
+  routes, while it routes any app (`nativeKnownApps`, `TunnelSetting::known`); none while it routes none, so that
+  nothing then waits. At the held SYN or the first datagram of a UID outside that set, the engine, at the flow's
+  owner lookup and on a thread of its own, never the packet loop's, asks Watch (`Platform::route_of_app`,
+  `WatchVpnService.routeOfApp`), which reads the UID's packages from `PackageManager` and answers the route its store
+  gives them, as the hand-over would: a configuration, the tool, or directly; empty where it cannot say. The flow
+  is held until the answer, which is kept by UID until the next hand-over names the app. **The bound: 3 s**
+  (`ASK_BOUND`): Watch's answer opens the state under key A, well under a second on a slow phone; a held SYN is sent
+  again by the app's kernel after a second, so three cost an app installed a moment ago a retry or two. Past it the
+  flow is refused, never sent directly, an answer that comes later serving the next flows, and a refusal stands
+  10 s before a new flow asks again. This covers W6's chain too: an app chosen for the tool and installed again
+  goes through the tool from its first packet. A held SYN now waits for its app's name while Watch names its apps,
+  as it does while a chain or a tunnel takes any app. While every app is held for a state that cannot be opened,
+  the set holds every app then installed, so that one installed meanwhile is asked, and refused. The package
+  receiver stays: it hands the routes over again, after which the app is named. Checked by step 3c: with the
+  receiver turned off through the debug dump (`packages-follow off`), the workload app installed again was never
+  handed over, yet its first TCP connection went through its configuration to the peer, none of it directly, and
+  the engine's answers show `tunnel:1` for its new UID.
+- **Key A lost for good.** Beside the wraps a marker, `kept`, holds nothing but its presence: it is made before a
+  state that holds a configuration or a route is committed, and deleted after one that holds neither, so that it
+  exists while any configuration or route exists and goes when the user removes the last. A state that can never be
+  opened (key A gone, or its wrap damaged), or is missing, while the marker exists is lost (`StateLost`): Watch
+  holds every installed app, flows of no app and pings with them, as for a passing error, and shows one
+  notification, "Watch is holding your apps", naming no provider or configuration, that opens its screen; there the
+  user chooses to add the configurations again or to let the apps go their way, either of which forgets the store,
+  marker included (`TunnelStore.forget`). A data clear removes the marker with the rest, so that case reads as
+  empty. Checked by step 8: key A deleted through the debug dump (`tunnel-key-delete a`), Watch started again held
+  the app, which sent nothing directly, and showed the notification; let go on its screen, the notification went and
+  the app reached the sentinel directly.
+
+Tests of the two: in Rust, the routes of apps Watch did not name and the question asked off the loop and refused
+past its bound (3 reverts, killed), and the answer's reading in the bridge; in `:watch`, the marker's life and a
+lost state never read as empty while it exists (2 reverts, killed); on the emulator, step 3c fails when Watch never
+names its apps, and step 8 when the marker is never made. `:watch` has 179 JVM tests. Watch's native library
+grew to 1,706,336, 1,464,360 and 1,979,968 bytes on arm64, armv7 and x86_64, within the 2 MB gate. `scripts/check.sh rust`, `android`, `data` and `wglab` pass again, and the watch shard
+(`scripts/emulator-shards.sh --alone watch`) passed whole with steps 3c and 8.
 
 ## Sources
 

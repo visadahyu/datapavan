@@ -90,7 +90,7 @@ camera app takes the photo for it, or you pick a picture.
 | Hide other apps' overlays | From Android 12: while Datapavan is on the screen, other apps cannot draw over it. It does not allow any connection | Datapavan Basic after 0.1.2, and Datapavan Advanced |
 | VPN (granted by you) | The **local** firewall. Traffic is filtered on the phone and never sent to us | Datapavan Advanced, from 0.2.0 |
 | Internet | Forwarding the traffic of other apps through the local firewall. Datapavan Basic never asks for it | Datapavan Advanced, from 0.2.0 |
-| Notifications (granted by you, from Android 13) | One notice, when a WireGuard configuration kept for a phone that may be searched waits for you to unlock the phone; it names no provider and no configuration | Datapavan Advanced, from 0.2.0 |
+| Notifications (granted by you, from Android 13) | Two notices about the WireGuard configurations: when one kept for a phone that may be searched waits for you to unlock the phone, and when Datapavan can no longer open what it kept and holds your apps until you choose; they name no provider and no configuration | Datapavan Advanced, from 0.2.0 |
 
 ## Optional updates of tracker lists (planned)
 
