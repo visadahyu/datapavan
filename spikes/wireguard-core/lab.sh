@@ -25,7 +25,8 @@ trap '"${compose[@]}" stop >/dev/null 2>&1 || true' EXIT
 [ -d /sys/module/wireguard ] || { echo "the wireguard module is not loaded on this host (modprobe wireguard)" >&2; exit 1; }
 (cd "$HERE" && cargo build -q --release --locked -p wg-lab)
 client="$HERE/target/release/wg-lab"
-"${compose[@]}" up -d --build --quiet-pull >/dev/null 2>&1 || "${compose[@]}" up -d --build
+# The kernel's first peer alone: since W7's part 3a the project also holds peer2 and wireguard-go's peers.
+"${compose[@]}" up -d --build --quiet-pull peer >/dev/null 2>&1 || "${compose[@]}" up -d --build peer
 
 # Ready once its services have bound their addresses in the tunnel (peer/services.py writes the mark; the
 # logs would not do, as they keep the lines of earlier starts).
@@ -37,7 +38,7 @@ server_public=$(in_peer wg show wg0 public-key 2>/dev/null) || true
 in_peer test -e /run/wglab/ready 2>/dev/null && [ -n "$server_public" ] ||
     { "${compose[@]}" logs peer >&2; echo "the peer did not come up" >&2; exit 1; }
 address=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$("${compose[@]}" ps -q peer)")
-echo "== peer: kernel WireGuard in datapavan-wglab, $(in_peer sh -c 'grep -E "^(wireguard-tools-wg|iproute2|python3)-[0-9]" /etc/wglab-packages | tr "\n" " "')"
+echo "== peer: kernel WireGuard in datapavan-wglab, $(in_peer sh -c 'grep -E "^(wireguard-tools|iproute2|python3) " /etc/wglab-packages | tr "\n" " "')"
 
 # A client: its private key from the peer's wg, its public key, and its entry on the peer.
 #   new_client NAME V4 V6 [PSK on the peer] [the peer's PersistentKeepalive for it]

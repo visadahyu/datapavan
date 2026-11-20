@@ -1,8 +1,10 @@
-# W7's interoperation lab (spikes/wireguard-core/lab.sh, and since W7's part 1 scripts/wglab.sh): two WireGuard
-# peers of the reference implementation, in a Compose project of their own. The clients reach them at their
-# addresses on the project's network; nothing is published on the host unless compose.publish.yaml is added,
-# which the emulator check does, on the host's loopback alone. The scripts stop the project when they are done
-# (stop, not down), and nothing restarts it.
+# W7's interoperation lab (spikes/wireguard-core/lab.sh, and since W7's part 1 scripts/wglab.sh): WireGuard peers of
+# the two reference implementations, in a Compose project of their own. Two of the Linux kernel's WireGuard, which
+# the cargo lab and the emulator checks run against, and since W7's part 3a two of wireguard-go, which the cargo lab
+# runs against too. The clients reach them at their addresses on the project's network, IPv4 and IPv6; nothing is
+# published on the host unless compose.publish.yaml is added, which the emulator checks do, for the kernel's peers
+# alone, on the host's loopback. The scripts stop the project when they are done (stop, not down), and nothing
+# restarts it.
 name: datapavan-wglab
 services:
   peer:
@@ -32,3 +34,57 @@ services:
       net.ipv6.conf.default.disable_ipv6: "0"
     restart: "no"
     init: true
+  # wireguard-go, the second reference (W7, part 3a): the same image and services on a TUN device of the container's
+  # own, its handshakes and packets in its log.
+  gopeer:
+    image: datapavan-wglab-peer
+    pull_policy: never
+    hostname: wglab-gopeer1
+    depends_on:
+      - peer
+    environment:
+      WGLAB_IMPL: go
+      LOG_LEVEL: verbose
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "0"
+      net.ipv6.conf.default.disable_ipv6: "0"
+    restart: "no"
+    init: true
+    logging:
+      options:
+        max-size: 20m
+        max-file: "2"
+  gopeer2:
+    image: datapavan-wglab-peer
+    pull_policy: never
+    hostname: wglab-gopeer2
+    depends_on:
+      - peer
+    environment:
+      WGLAB_IMPL: go
+      LOG_LEVEL: verbose
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "0"
+      net.ipv6.conf.default.disable_ipv6: "0"
+    restart: "no"
+    init: true
+    logging:
+      options:
+        max-size: 20m
+        max-file: "2"
+networks:
+  # IPv6 beside IPv4, for the cargo lab's check of an IPv6 outer address (W7, part 3a): a unique local prefix of the
+  # lab's own (RFC 4193); Docker picks the IPv4 subnet.
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: fd5e:3a91:c2d4:77::/64

@@ -1,0 +1,25 @@
+wireguard-go's fix of its IPv6 send address, proposed upstream in https://github.com/WireGuard/wireguard-go/pull/135
+(open since 2025-12-20, not merged as of 2026-11-20), applied to the pinned commit b3bc704 by the lab's Dockerfile.
+
+StdNetBind.Send takes the destination from a pooled net.UDPAddr and copied the address into its IP before resizing
+it: once an IPv4 send had cut the pooled IP to 4 bytes, an IPv6 send copied only 4 of its 16 bytes and kept the
+rest from before, so the datagram went to another address. In W7's lab (part 3a) the go peer then answered an IPv6
+initiation at fd5e:3a91:: instead of fd5e:3a91:c2d4:77::1, once it had sent to IPv4 clients: 4 of 6 runs.
+
+--- a/conn/bind_std.go
++++ b/conn/bind_std.go
+@@ -367,12 +367,12 @@
+ 	defer s.udpAddrPool.Put(ua)
+ 	if is6 {
+ 		as16 := endpoint.DstIP().As16()
+-		copy(ua.IP, as16[:])
+ 		ua.IP = ua.IP[:16]
++		copy(ua.IP, as16[:])
+ 	} else {
+ 		as4 := endpoint.DstIP().As4()
+-		copy(ua.IP, as4[:])
+ 		ua.IP = ua.IP[:4]
++		copy(ua.IP, as4[:])
+ 	}
+ 	ua.Port = int(endpoint.(*StdNetEndpoint).Port())
+ 	var (
