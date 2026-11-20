@@ -2133,4 +2133,76 @@ mod tests {
         stop_running();
         Ok(())
     }
+
+    /// What Watch hands for the proxies: codes and UIDs that do not fit, and lines that do not parse, are left out.
+    #[test]
+    fn the_proxy_setting_keeps_only_what_parses() {
+        let setting = proxy_setting(
+            &[0, 1, 2, 3, 0],
+            &[10_001, 10_002, 10_003, 10_004, -1],
+            "203.0.113.5 3128\nProxy.Example.NET 8080\n[2001:db8::1] 80\nno-port\nbad 0\nspace d 1\n",
+        );
+        assert_eq!(
+            setting.messengers,
+            vec![
+                (Family::Telegram, 10_001),
+                (Family::WhatsApp, 10_002),
+                (Family::Signal, 10_003)
+            ]
+        );
+        assert_eq!(
+            setting.android,
+            vec![
+                ("203.0.113.5".to_owned(), 3128),
+                ("proxy.example.net".to_owned(), 8080),
+                ("2001:db8::1".to_owned(), 80),
+            ]
+        );
+    }
+
+    /// A kept flow's proxy, as the dump prints it: no credential, since none is kept.
+    #[test]
+    fn a_proxy_line_says_the_kind_how_and_what_was_asked() {
+        let flow = Flow {
+            id: 1,
+            protocol: datapavan_net::packet::TCP,
+            app: SocketAddr::from(([10, 1, 10, 1], 40_000)),
+            destination: SocketAddr::from(([10, 0, 2, 2], 1080)),
+            uid: Some(10_123),
+            outcome: Outcome::Opened,
+            name: Some("inner.example".into()),
+            named_by: NamedBy::Tls,
+            dns_name: None,
+            came_in: false,
+            ech: Ech::Absent,
+            dns: DnsUse::None,
+            resolver: None,
+            network: None,
+            via: datapavan_net::Via::Direct,
+            proxy: Some(Box::new(datapavan_net::Proxied {
+                kind: Kind::Socks5,
+                setting: false,
+                password: true,
+                outside_maker: false,
+                asked: Some((Asked::Name("inner.example".into()), 443)),
+                proxy_name: None,
+                organisation: None,
+                cover: None,
+            })),
+        };
+        assert_eq!(
+            proxy_line(&flow).as_deref(),
+            Some(
+                "tcp 10.1.10.1:40000 10.0.2.2:1080 10123 socks5 read p inner.example:443 - - inner.example"
+            )
+        );
+        assert_eq!(
+            proxy_line(&Flow {
+                proxy: None,
+                ..flow
+            }),
+            None
+        );
+        assert!(Messengers::bundled().clients().count() >= 7);
+    }
 }

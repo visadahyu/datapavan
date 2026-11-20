@@ -150,6 +150,10 @@ impl Shared {
                 if dns_name.is_some_and(|n| self.messengers.role(family, n) == Some(Role::Own)) {
                     return Some(true);
                 }
+                // An address of the user's own network is no company's network: a proxy on it is outside Meta's.
+                if is_local(address) {
+                    return Some(false);
+                }
                 let asn = self.organisations.as_ref()?.lookup(address)?.asn;
                 Some(
                     self.owners.of(asn).is_some_and(|owner| {
@@ -473,6 +477,14 @@ impl Shared {
         self.flow_of(id)
             .filter(|f| f.named_by == NamedBy::Dns)
             .and_then(|f| f.name)
+    }
+}
+
+/// Whether `address` is on the user's own network: private, link-local, or IPv6's unique local addresses.
+fn is_local(address: IpAddr) -> bool {
+    match address {
+        IpAddr::V4(a) => a.is_private() || a.is_link_local(),
+        IpAddr::V6(a) => a.is_unique_local() || a.is_unicast_link_local(),
     }
 }
 
@@ -1051,6 +1063,10 @@ mod tests {
         );
         let flow = live(&shared, media.id);
         assert!(flow.proxy.is_some() && flow.name.as_deref() != Some("mmg.whatsapp.net"));
+        // A proxy on the local network is outside Meta's network, table or not.
+        let (local, bytes) = open(&shared, UID, at([192, 168, 1, 2], 5222));
+        relay(&shared, local, &bytes, &[b"WA\x06\x03"]);
+        assert!(live(&shared, local.id).proxy.is_some());
         // Without the organisation table nothing tells Meta's network: nothing is inferred.
         let mut bare = engine(true);
         bare.organisations = None;

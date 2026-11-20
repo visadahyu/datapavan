@@ -106,8 +106,16 @@ impl Platform for Lab {
         true
     }
 
-    fn log(&self, _: &[u8]) {}
+    fn log(&self, batch: &[u8]) {
+        LOGGED
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .extend_from_slice(batch);
+    }
 }
+
+/// Every batch of records the engine handed the log in this test's process, one after another.
+static LOGGED: std::sync::Mutex<Vec<u8>> = std::sync::Mutex::new(Vec::new());
 
 /// Runs `body` with the engine on the namespace's tunnel. Outside the namespace, it runs this same
 /// test inside a fresh one instead, and fails unless exactly that test ran there and passed: a lab
@@ -4357,6 +4365,323 @@ fn another_app_on_the_listeners_old_port_gets_nothing_through_the_engine() -> Ou
             .await?;
             interloper.wait()?;
             assert!(rest.is_empty(), "the interloper accepted: {rest:?}");
+            Ok(())
+        },
+    )
+}
+
+/// A scripted proxy's answers (ADR 0052).
+static SOCKS: &[&[u8]] = &[&[5, 2], &[1, 0], &[5, 0, 0, 1, 0, 0, 0, 0, 0, 0]];
+
+/// A scripted proxy's answers (ADR 0052).
+static HTTP: &[&[u8]] = &[b"HTTP/1.1 200 Connection established\r\n\r\n"];
+
+/// A scripted proxy's answers (ADR 0052).
+static PLAIN: &[&[u8]] = &[b"HTTP/1.1 204 No Content\r\n\r\n"];
+
+/// A synthetic secret no flow, record or dump may hold (W8, part 2a; ADR 0052).
+const SECRET: &[u8] = b"hunter2-synthetic-secret";
+
+/// A minimal TLS `ClientHello` record for `name`.
+fn client_hello(name: &str) -> Vec<u8> {
+    let name = name.as_bytes();
+    let length = u16::try_from(name.len()).unwrap_or(0);
+    let mut extension = vec![0, 0];
+    extension.extend_from_slice(&(length + 5).to_be_bytes());
+    extension.extend_from_slice(&(length + 3).to_be_bytes());
+    extension.push(0);
+    extension.extend_from_slice(&length.to_be_bytes());
+    extension.extend_from_slice(name);
+    let mut body = vec![3, 3];
+    body.extend_from_slice(&[7; 32]);
+    body.extend_from_slice(&[0, 0, 2, 0x13, 0x01, 1, 0]);
+    body.extend_from_slice(&u16::try_from(extension.len()).unwrap_or(0).to_be_bytes());
+    body.extend_from_slice(&extension);
+    let mut handshake = vec![1, 0];
+    handshake.extend_from_slice(&u16::try_from(body.len()).unwrap_or(0).to_be_bytes());
+    handshake.extend_from_slice(&body);
+    let mut record = vec![22, 3, 1];
+    record.extend_from_slice(&u16::try_from(handshake.len()).unwrap_or(0).to_be_bytes());
+    record.extend_from_slice(&handshake);
+    record
+}
+
+/// A proxy on the lab's "internet" that answers each step of a handshake with `replies`, in order, one for each
+/// read, then echoes what follows: enough for an app's own SOCKS5 or HTTP proxy, which the engine only reads.
+async fn scripted_proxy(at: Ipv4Addr, replies: &'static [&'static [u8]]) -> io::Result<SocketAddr> {
+    let listener = TcpListener::bind((at, 0)).await?;
+    let address = listener.local_addr()?;
+    tokio::spawn(async move {
+        while let Ok((mut connection, _)) = listener.accept().await {
+            tokio::spawn(async move {
+                let mut buffer = vec![0u8; 4096];
+                for reply in replies {
+                    if !matches!(connection.read(&mut buffer).await, Ok(n) if n > 0) {
+                        return;
+                    }
+                    if connection.write_all(reply).await.is_err() {
+                        return;
+                    }
+                }
+                while let Ok(n) = connection.read(&mut buffer).await {
+                    if n == 0 || connection.write_all(&buffer[..n]).await.is_err() {
+                        return;
+                    }
+                }
+            });
+        }
+    });
+    Ok(address)
+}
+
+/// Sends `said`, and reads `expected.len()` bytes back, which must be `expected`.
+async fn step(connection: &mut TcpStream, said: &[u8], expected: &[u8]) -> Outcome {
+    connection.write_all(said).await?;
+    let mut heard = vec![0u8; expected.len()];
+    within("a proxy's answer", connection.read_exact(&mut heard)).await?;
+    assert_eq!(heard, expected);
+    Ok(())
+}
+
+/// The kept flow to `destination`, once the engine has named it as `done` says, within [`STEP`].
+async fn flow_to(
+    engine: &Engine,
+    destination: SocketAddr,
+    done: impl Fn(&datapavan_net::Flow) -> bool,
+) -> Result<datapavan_net::Flow, Box<dyn std::error::Error>> {
+    let until = tokio::time::Instant::now() + STEP;
+    loop {
+        if let Some(flow) = engine
+            .flows()
+            .into_iter()
+            .rev()
+            .find(|f| f.destination == destination && done(f))
+        {
+            return Ok(flow);
+        }
+        if tokio::time::Instant::now() > until {
+            return Err(format!("no flow to {destination} as wanted: {:?}", engine.flows()).into());
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+fn holds(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack.windows(needle.len()).any(|w| w == needle)
+}
+
+/// An app's own SOCKS5 proxy with a password, an HTTP proxy asked with `CONNECT` and one sent a plain request,
+/// through the whole engine on Linux's TCP stack (ADR 0052): each flow is named by the destination asked for,
+/// the inner hello read after the handshake, and no password reaches a flow, the log or what the engine shows;
+/// with "Log where these apps connect" off, the next ones keep their kind alone.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+#[allow(clippy::too_many_lines)]
+fn an_apps_own_proxies_are_named_and_no_password_is_kept() -> Outcome {
+    lab(
+        "an_apps_own_proxies_are_named_and_no_password_is_kept",
+        &Limits {
+            close_linger: Duration::from_millis(50),
+            ..Limits::default()
+        },
+        |engine| async move {
+            engine.tunnels(&datapavan_net::TunnelSetting {
+                log_destinations: true,
+                ..datapavan_net::TunnelSetting::default()
+            });
+            let socks = scripted_proxy(SERVER, SOCKS).await?;
+            let mut app = app_connect(socks).await?;
+            step(&mut app, &[5, 2, 0, 2], &[5, 2]).await?;
+            let mut auth = vec![1, 4];
+            auth.extend_from_slice(b"user");
+            auth.push(u8::try_from(SECRET.len()).unwrap_or(0));
+            auth.extend_from_slice(SECRET);
+            step(&mut app, &auth, &[1, 0]).await?;
+            let mut request = vec![5, 1, 0, 3, 11];
+            request.extend_from_slice(b"example.com");
+            request.extend_from_slice(&443u16.to_be_bytes());
+            step(&mut app, &request, &[5, 0, 0, 1, 0, 0, 0, 0, 0, 0]).await?;
+            let hello = client_hello("example.com");
+            step(&mut app, &hello, &hello).await?;
+            let flow = flow_to(&engine, socks, |f| {
+                f.named_by == datapavan_net::NamedBy::Tls
+            })
+            .await?;
+            assert_eq!(flow.name.as_deref(), Some("example.com"));
+            let proxy = flow.proxy.clone().ok_or("no proxy kept")?;
+            assert_eq!(proxy.kind, datapavan_net::proxies::Kind::Socks5);
+            assert!(proxy.password, "a password crossed unencrypted");
+
+            let http = scripted_proxy(OTHER, HTTP).await?;
+            let mut connect = app_connect(http).await?;
+            let mut asked =
+                b"CONNECT example.net:443 HTTP/1.1\r\nProxy-Authorization: Basic ".to_vec();
+            asked.extend_from_slice(SECRET);
+            asked.extend_from_slice(b"\r\n\r\n");
+            step(
+                &mut connect,
+                &asked,
+                b"HTTP/1.1 200 Connection established\r\n\r\n",
+            )
+            .await?;
+            let hello = client_hello("example.net");
+            step(&mut connect, &hello, &hello).await?;
+            let flow =
+                flow_to(&engine, http, |f| f.named_by == datapavan_net::NamedBy::Tls).await?;
+            assert_eq!(flow.name.as_deref(), Some("example.net"));
+            assert_eq!(
+                flow.proxy.map(|p| (p.kind, p.password)),
+                Some((datapavan_net::proxies::Kind::Connect, true))
+            );
+
+            let plain = scripted_proxy(SERVER, PLAIN).await?;
+            let mut forward = app_connect(plain).await?;
+            step(
+                &mut forward,
+                b"GET http://example.org/private?q=1 HTTP/1.1\r\nHost: example.org\r\n\r\n",
+                b"HTTP/1.1 204 No Content\r\n\r\n",
+            )
+            .await?;
+            let flow = flow_to(&engine, plain, |f| f.proxy.is_some()).await?;
+            assert_eq!(flow.name.as_deref(), Some("example.org"));
+
+            // Their last segments are written once they end, the rewriting's short linger after.
+            drop((app, connect, forward));
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            engine.flush_log();
+            let logged = LOGGED.lock().map_err(|e| e.to_string())?.clone();
+            assert!(
+                holds(&logged, b"example.com"),
+                "the destinations asked for are logged while the switch is on: {} bytes {:?}",
+                logged.len(),
+                String::from_utf8_lossy(&logged)
+            );
+            assert!(
+                !holds(&logged, b"private"),
+                "a plain request's path is never kept"
+            );
+            assert!(!holds(&logged, SECRET), "no password in the log");
+
+            // "Log where these apps connect" off: the next proxy keeps its kind alone, in the log too.
+            engine.tunnels(&datapavan_net::TunnelSetting::default());
+            let mut hidden = app_connect(socks).await?;
+            hidden_request(&mut hidden, &auth).await?;
+            drop(hidden);
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            engine.flush_log();
+            let logged = LOGGED.lock().map_err(|e| e.to_string())?.clone();
+            assert!(!holds(&logged, b"hidden.example"), "not once it is off");
+            assert!(!holds(&logged, SECRET), "no password in the log");
+            assert!(
+                !format!("{:?}", engine.flows()).contains("hunter2"),
+                "no password in a flow"
+            );
+            assert!(
+                !holds(&engine.activity(), SECRET),
+                "no password in the live view"
+            );
+            let counters = engine.counters();
+            assert_eq!(
+                (counters[61], counters[62]),
+                (4, 3),
+                "requests declared, and with a password"
+            );
+            Ok(())
+        },
+    )
+}
+
+/// The handshake of a SOCKS5 proxy with a password, asking for `hidden.example`.
+async fn hidden_request(connection: &mut TcpStream, auth: &[u8]) -> Outcome {
+    step(connection, &[5, 2, 0, 2], &[5, 2]).await?;
+    step(connection, auth, &[1, 0]).await?;
+    let mut other = vec![5, 1, 0, 3, 14];
+    other.extend_from_slice(b"hidden.example");
+    other.extend_from_slice(&443u16.to_be_bytes());
+    step(connection, &other, &[5, 0, 0, 1, 0, 0, 0, 0, 0, 0]).await
+}
+
+/// 64 random-looking bytes that start Telegram's obfuscated transport.
+fn obfuscated_start() -> Vec<u8> {
+    let mut x: u64 = 0x9e37_79b9_7f4a_7c15;
+    let mut header: Vec<u8> = (0..64)
+        .map(|_| {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            (x >> 24).to_le_bytes()[0]
+        })
+        .collect();
+    header[0] = 0x3c;
+    header
+}
+
+/// Telegram's proxy inferred end to end (ADR 0052): an obfuscated start to an address outside Telegram's published
+/// ranges is its `MTProto` proxy while it reaches none of them; once it does (an address of its ranges on the lab's
+/// loopback, never the real one), a CDN data centre reached directly is not its proxy, nor a fake-TLS hello, whose
+/// cover never names the flow.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn telegrams_proxy_is_inferred_only_while_it_does_not_reach_its_own_ranges() -> Outcome {
+    lab(
+        "telegrams_proxy_is_inferred_only_while_it_does_not_reach_its_own_ranges",
+        &Limits::default(),
+        |engine| async move {
+            // An address of Telegram's ranges on the namespace's own loopback: nothing leaves the lab.
+            let telegram = Ipv4Addr::new(149, 154, 167, 51);
+            let added = Command::new("ip")
+                .args(["address", "add", "149.154.167.51/32", "dev", "lo"])
+                .status()?;
+            assert!(added.success(), "the lab's address of Telegram's ranges");
+            engine.tunnels(&datapavan_net::TunnelSetting {
+                log_destinations: true,
+                ..datapavan_net::TunnelSetting::default()
+            });
+            engine.proxies(datapavan_net::ProxySetting {
+                messengers: vec![(datapavan_net::messengers::Family::Telegram, APP)],
+                android: Vec::new(),
+            });
+            let start = obfuscated_start();
+            let proxy = scripted_proxy(OTHER, &[]).await?;
+            let mut via = app_connect(proxy).await?;
+            step(&mut via, &start, &start).await?;
+            let flow = flow_to(&engine, proxy, |f| f.proxy.is_some()).await?;
+            assert_eq!(
+                flow.proxy.map(|p| (p.kind, p.outside_maker)),
+                Some((datapavan_net::proxies::Kind::MtProto, true))
+            );
+
+            let own = scripted_proxy(telegram, &[]).await?;
+            let mut direct = app_connect(own).await?;
+            step(&mut direct, &start, &start).await?;
+            // The proxy's name is taken back, and a CDN data centre reached now is no proxy.
+            flow_to(&engine, proxy, |f| f.proxy.is_none()).await?;
+            let cdn = scripted_proxy(SERVER, &[]).await?;
+            let mut media = app_connect(cdn).await?;
+            step(&mut media, &start, &start).await?;
+            let mut cover = app_connect(cdn).await?;
+            let hello = client_hello("www.google.com");
+            step(&mut cover, &hello, &hello).await?;
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            let to_cdn: Vec<_> = engine
+                .flows()
+                .into_iter()
+                .filter(|f| f.destination == cdn)
+                .collect();
+            assert_eq!(to_cdn.len(), 2, "{to_cdn:?}");
+            assert!(to_cdn.iter().all(|f| f.proxy.is_none()), "{to_cdn:?}");
+            assert!(
+                to_cdn
+                    .iter()
+                    .all(|f| f.name.as_deref() != Some("www.google.com")),
+                "Telegram → google.com"
+            );
+            let counters = engine.counters();
+            assert_eq!(
+                (counters[63], counters[64], counters[65], counters[66]),
+                (1, 2, 1, 1)
+            );
+            drop((via, direct, media, cover));
             Ok(())
         },
     )
