@@ -196,6 +196,75 @@ pub fn response(message: &[u8]) -> Option<Response> {
     })
 }
 
+/// The value of the parameter `key` of the first HTTPS record (RFC 9460) in the answer section of the response
+/// `message` whose owner is `host` or a name a CNAME of the answer led to from it, in the answer's order: the
+/// `odohconfig` of an ODoH target (RFC 9230 6), for one. `None` for a response that is not well formed, has no
+/// such record, or whose record has no such parameter.
+#[must_use]
+pub fn svc_param(message: &[u8], host: &str, key: u16) -> Option<Vec<u8>> {
+    let flags = u16_at(message, 2)?;
+    if flags & 0x8000 == 0 || flags & 0x000f != 0 || u16_at(message, 4)? != 1 {
+        return None;
+    }
+    let answers = u16_at(message, 6)?;
+    let (_, mut at) = read_name(message, 12)?;
+    at = at.checked_add(4)?;
+    let mut owners = vec![host.trim_end_matches('.').to_ascii_lowercase()];
+    for _ in 0..answers.min(u16::try_from(MAX_ANSWERS).unwrap_or(u16::MAX)) {
+        let (owner, after) = read_name(message, at)?;
+        let kind = u16_at(message, after)?;
+        let length = usize::from(u16_at(message, after + 8)?);
+        let data = after + 10;
+        let record = message.get(data..data.checked_add(length)?)?;
+        at = data + length;
+        if !owners.contains(&owner) {
+            continue;
+        }
+        if kind == 5 {
+            if let Some((target, _)) = read_name(message, data)
+                && owners.len() < MAX_ANSWERS
+            {
+                owners.push(target);
+            }
+            continue;
+        }
+        if kind == TYPE_HTTPS
+            && let Some(value) = param_of(record, key)
+        {
+            return Some(value);
+        }
+    }
+    None
+}
+
+/// The value of the parameter `key` in an SVCB or HTTPS record's data; none in alias mode (priority 0).
+fn param_of(record: &[u8], key: u16) -> Option<Vec<u8>> {
+    if u16_at(record, 0)? == 0 {
+        return None;
+    }
+    let mut at = 2;
+    loop {
+        let length = usize::from(*record.get(at)?);
+        if length > 63 {
+            return None;
+        }
+        at += 1 + length;
+        if length == 0 {
+            break;
+        }
+    }
+    while at < record.len() {
+        let found = u16_at(record, at)?;
+        let length = usize::from(u16_at(record, at + 2)?);
+        let value = record.get(at + 4..at + 4 + length)?;
+        at += 4 + length;
+        if found == key {
+            return Some(value.to_vec());
+        }
+    }
+    None
+}
+
 /// Sets the time to live of every record of a DNS response to 0, the OPT record's flags left alone,
 /// so that Android's resolver, which keeps one cache for all the apps of a network, keeps none of it:
 /// each app's next lookup of the name then reaches Watch again, with that app as its owner. Negative

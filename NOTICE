@@ -24,6 +24,13 @@ Datapavan Advanced's Watch, WireGuard upstream (W7, docs/decisions/0035-wireguar
 - untrusted (Brian Smith): ISC.
 - ip_network_table-deps-treebitmap (Hroi Sigurdsson's treebitmap, forked by Jakub Onderka): MIT.
 
+Datapavan Advanced's Watch, Oblivious DoH for the apps that go directly (W8, part 1,
+docs/decisions/0042-dns-of-apps-that-go-directly.md):
+
+- odoh-rs 1.0.5 (Cloudflare, Inc.): BSD-2-Clause. Source: https://github.com/cloudflare/odoh-rs
+- hpke 0.14.1 (Michael Rosenberg): MIT OR Apache-2.0, with x25519-dalek 3 and curve25519-dalek 5 (above).
+- thiserror (David Tolnay): MIT OR Apache-2.0.
+
 Datapavan Advanced's Watch, the QR code of a WireGuard configuration (W7, part 2):
 
 - ZXing core 3.5.4 (com.google.zxing:core), the ZXing authors: Apache-2.0, whose text is LICENSE.

@@ -7,14 +7,18 @@
 //! `datapavan-watch-jni` hands it the tunnel's descriptor and answers its questions to Android.
 
 pub mod answers;
+pub mod catalogue;
 pub mod dns;
 pub mod dnscache;
 pub mod engine;
 pub mod fragments;
+pub mod hygiene;
 pub mod identifiers;
+pub mod ladder;
 pub mod log;
 pub mod names;
 pub mod nat;
+pub mod odoh;
 pub mod organisations;
 pub mod owners;
 pub mod packet;

@@ -1,0 +1,3 @@
+# The names of the DNS protocols W8 brings (DNS over HTTPS and over TLS, Oblivious DoH, RFC 8484, 7858 and 9230),
+# which the pedantic `doc_markdown` lint would otherwise take for code. ".." keeps clippy's own list.
+doc-valid-idents = ["DoH", "DoT", "ODoH", "DoQ", ".."]

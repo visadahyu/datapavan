@@ -50,6 +50,15 @@ bytes = "=1.12.1"
 # Already in the tree through GotaTun's `x25519-dalek`; Apache-2.0 OR MIT.
 zeroize = "=1.9.2"
 
+# Oblivious DoH (RFC 9230) for the names of apps that go directly (W8, part 1, ADR 0042): Cloudflare's odoh-rs,
+# pinned exactly, the client side alone used (seal a query, open its answer), on rozbb's hpke (X25519, HKDF-SHA256,
+# AES-128-GCM, the suite RFC 9230 makes mandatory) with no `unsafe`; odoh-rs BSD-2-Clause, hpke MIT OR Apache-2.0.
+# TLS stays out of the engine: the query goes to the relay over Android's own TLS, from Watch's Kotlin side.
+odoh-rs = "=1.0.5"
+hpke = { version = "=0.14.1", default-features = false, features = ["alloc", "getrandom", "x25519", "aes"] }
+# The random numbers of each seal: the system's (`getrandom`), through the `rand_core` hpke takes.
+getrandom = { version = "=0.4.3", default-features = false, features = ["sys_rng"] }
+
 [dev-dependencies]
 # Checks the packets the engine builds against an independent implementation, in tests only.
 etherparse = "0.21.0"
