@@ -312,51 +312,6 @@ internal fun releaseDateText(): String = try {
 }
 
 /**
- * The open-source components in the APK and their licences, as `cargo metadata` and the Gradle catalogue
- * name them; build-time crates such as proc macros are not shipped and not listed. Licence names stay
- * in English, as the licences do.
- */
-private val COMPONENTS = listOf(
-    "Datapavan" to "Apache-2.0",
-    "Kotlin standard library" to "Apache-2.0",
-    "AndroidX Activity, Lifecycle, Startup, Core" to "Apache-2.0",
-    "Jetpack Compose (UI, Material 3)" to "Apache-2.0",
-    "bytes" to "MIT",
-    "cfg-if" to "MIT OR Apache-2.0",
-    "combine" to "MIT",
-    "ed25519-compact" to "MIT",
-    "jni, jni-sys" to "MIT OR Apache-2.0",
-    "log" to "MIT OR Apache-2.0",
-    "memchr" to "Unlicense OR MIT",
-    "simd_cesu8" to "Apache-2.0 OR MIT",
-    "simdutf8" to "MIT OR Apache-2.0",
-    "thiserror" to "MIT OR Apache-2.0",
-)
-
-@Composable
-internal fun LicencesScreen(insets: PaddingValues, onBack: () -> Unit) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(insets),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        item {
-            TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
-            Text(stringResource(R.string.licences_title), style = MaterialTheme.typography.headlineSmall)
-            Text(stringResource(R.string.licences_intro), style = MaterialTheme.typography.bodyMedium)
-        }
-        items(COMPONENTS) { (name, licence) ->
-            SelectionContainer {
-                Column {
-                    Text(name, style = MaterialTheme.typography.titleSmall.copy(textDirection = TextDirection.Ltr))
-                    Text(licence, style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
-    }
-}
-
-/**
  * Every screen blocks screenshots and screen recordings (ADR 0040). A person who needs a screenshot to ask
  * for help allows it here for one minute; it is blocked again then, or when the app leaves the screen.
  */

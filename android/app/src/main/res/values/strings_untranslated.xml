@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    W7, part 2 (ADR 0035, release gate): the strings of the licence screen, in English only. They are
+    translated into the seven other languages after the review, by ADR 0030's process, and then move
+    into strings.xml, which scripts/check-translations.py reads and holds to every language. Until then
+    this file is held to the plain-language gate (scripts/check.sh) and to ADR 0025's list of words, and
+    lint's check for missing translations is lifted for it alone. A release needs it empty (RELEASE.md).
+-->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <!-- The licence screen: the heading over the full texts the app carries. -->
+    <string name="licences_texts_title">Licence texts</string>
+    <!-- What each full text is. NOTICE also says where to get the source code of GotaTun, as its licence asks. -->
+    <string name="licences_text_notice">The notices this app must carry, and where to get the source code of the parts whose licence asks for that.</string>
+    <string name="licences_text_licence">The Apache License 2.0. Datapavan is published under it, and so are many of its parts.</string>
+    <!-- %1$s: the name of a native library file, for example libdatapavan.so. -->
+    <string name="licences_text_native">The licence texts of the Rust packages inside %1$s.</string>
+    <string name="licences_text_mpl">The Mozilla Public License 2.0. GotaTun, the WireGuard code in Watch, is published under it.</string>
+    <string name="licences_text_gotatun">The BSD 3-Clause License of the parts of GotaTun that came from Cloudflare\'s BoringTun.</string>
+    <!-- A file the screen has no description for: its name only. -->
+    <string name="licences_text_other">A licence text the app carries.</string>
+    <!-- The heading over the app's own code and the Java and Kotlin libraries in it. -->
+    <string name="licences_jvm_title">The app\'s code and its Java and Kotlin libraries</string>
+    <!-- Datapavan's own code, the first entry under that heading. -->
+    <string name="licences_own">Datapavan\'s own code</string>
+    <!-- The heading over the Rust packages inside one native library. %1$s: its file name, for example libdatapavan.so. -->
+    <string name="licences_native_title">Rust packages inside %1$s</string>
+    <!-- A button under a part: opens the licence text in the file %1$s. -->
+    <string name="licences_read">Read %1$s</string>
+    <!-- The text view: back to the list of licences. -->
+    <string name="licences_back">Back to the licences</string>
+    <!-- While a long text is read from the app. -->
+    <string name="licences_opening">Opening the text…</string>
+    <string name="licences_unreadable">This text could not be opened.</string>
+    <!-- A line of a list of parts that the screen could not read: shown as it is. -->
+    <string name="licences_unread">Shown as the list has it: %1$s</string>
+</resources>
