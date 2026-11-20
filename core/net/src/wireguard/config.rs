@@ -1169,6 +1169,10 @@ mod tests {
             "a company's network alone"
         );
         assert!(
+            with("0.0.0.0/1, 10.0.0.0/8, 128.0.0.0/1", "10.2.0.2/32"),
+            "a network inside another one does not hide the rest"
+        );
+        assert!(
             !with("0.0.0.0/0", "10.2.0.2/32, fd00::2/128"),
             "IPv6 refused"
         );

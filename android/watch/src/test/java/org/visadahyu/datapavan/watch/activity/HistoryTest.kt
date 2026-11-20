@@ -62,6 +62,24 @@ class HistoryTest {
         assertEquals(listOf(false, true, true, false), day.entries.map { it.unlogged })
     }
 
+    /**
+     * W7, part 2: a segment that went through a WireGuard tunnel keeps its route and the tunnel's number, so that the
+     * history names the configuration, or says it was removed; one of a version before routes says none.
+     */
+    @Test
+    fun aSegmentThroughATunnelKeepsItsTunnel() {
+        val records = listOf(
+            segment(app, t + 1_000, t + 2_000).copy(via = LogRecord.VIA_TUNNEL, tunnel = 3),
+            segment(app, t + 3_000, t + 4_000).copy(via = LogRecord.VIA_TOOL),
+            segment(app, t + 5_000, t + 6_000).copy(via = LogRecord.VIA_UNKNOWN),
+        )
+        val day = History.day(20_775, records, app, installedAt = t)
+        assertEquals(
+            listOf(LogRecord.VIA_UNKNOWN to 0L, LogRecord.VIA_TOOL to 0L, LogRecord.VIA_TUNNEL to 3L),
+            day.entries.map { it.via to it.tunnel },
+        )
+    }
+
     /** The days the log keeps, today first; none with retention "none". */
     @Test
     fun theDaysAreThoseTheLogKeeps() {

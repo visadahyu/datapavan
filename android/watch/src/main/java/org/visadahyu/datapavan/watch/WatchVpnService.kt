@@ -197,6 +197,7 @@ class WatchVpnService : VpnService() {
         when (intent?.action) {
             ACTION_STOP -> stop()
             ACTION_APPLY_CHAIN -> if (active) applyChain()
+            ACTION_APPLY_TUNNELS -> if (active) applyTunnels()
             // The apps left out are part of the tunnel's own setup: it is set up again.
             ACTION_APPLY_LEFT_OUT -> setUpAgain()
             else -> startMeasured(intent)
@@ -343,6 +344,83 @@ class WatchVpnService : VpnService() {
         )
     }
 
+    /**
+     * The configurations set in the engine this run, each with what it was set from: its text's file as it stood
+     * and its "Local network directly", so that a configuration that did not change is not opened again. Main
+     * thread only; [close] forgets them, as stopping the engine forgets its tunnels.
+     */
+    private val tunnelsSet = mutableMapOf<Int, Pair<Long, Boolean>>()
+
+    /** Whether a configuration waits for the phone's unlock, and the receiver that sets it then. */
+    private var unlockWait: android.content.BroadcastReceiver? = null
+
+    /**
+     * Hands the engine the WireGuard configurations Watch keeps and each app's tunnel (W7, part 2), before any
+     * traffic at a start, as the chain is, and again when the screen changes them: each configuration's text is
+     * opened only to be set and zeroed at once; a configuration whose wrap cannot be opened, because its key is gone
+     * or needs an unlocked phone, is not set, and its apps wait, routed to it, never going directly. The engine
+     * keeps them for the engines to come while none runs; the default tunnel goes first.
+     */
+    private fun applyTunnels() {
+        val store = org.visadahyu.datapavan.watch.tunnel.TunnelStore.of(this)
+        val state = store.state()
+        for (gone in tunnelsSet.keys - state.order.toSet()) {
+            Engine.nativeTunnelRemove(gone)
+            tunnelsSet.remove(gone)
+        }
+        var locked = false
+        for (slot in state.order) {
+            val local = slot in state.local
+            val stamp = store.stamp(slot) to local
+            if (tunnelsSet[slot] == stamp) continue
+            when (val opened = store.text(slot)) {
+                is org.visadahyu.datapavan.watch.tunnel.Opened.Plain -> try {
+                    val why = Engine.nativeTunnelSet(slot, opened.bytes, local)
+                    if (why.isEmpty()) tunnelsSet[slot] = stamp else Log.w(TAG, "A configuration was refused: $why")
+                } finally {
+                    opened.bytes.fill(0)
+                }
+                org.visadahyu.datapavan.watch.tunnel.Opened.Locked -> locked = true
+                // Its apps wait: the route stays, and the engine refuses their flows.
+                org.visadahyu.datapavan.watch.tunnel.Opened.Lost -> Log.w(TAG, "A configuration can no longer be opened")
+            }
+        }
+        Engine.nativeTunnelOrder(state.order.toIntArray())
+        val routes = org.visadahyu.datapavan.watch.tunnel.Routes.forEngine(state.routes, LeftOut.of(this).apps) { app ->
+            try {
+                @Suppress("DEPRECATION")
+                packageManager.getApplicationInfo(app, 0).uid
+            } catch (e: PackageManager.NameNotFoundException) {
+                null
+            }
+        }
+        Engine.nativeTunnelRoutes(
+            routes.map { it.first }.toIntArray(),
+            routes.map { it.second }.toIntArray(),
+            logDestinations = org.visadahyu.datapavan.watch.chain.ChainSettings.of(this).logDestinations,
+        )
+        if (locked) waitForUnlock() else stopWaitingForUnlock()
+    }
+
+    /** A configuration whose key needs an unlocked phone waits for the unlock, and is set then. */
+    private fun waitForUnlock() {
+        if (unlockWait != null) return
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context, intent: Intent) {
+                if (active) applyTunnels()
+            }
+        }
+        androidx.core.content.ContextCompat.registerReceiver(
+            this, receiver, android.content.IntentFilter(Intent.ACTION_USER_PRESENT), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        unlockWait = receiver
+    }
+
+    private fun stopWaitingForUnlock() {
+        unlockWait?.let { unregisterReceiver(it) }
+        unlockWait = null
+    }
+
     /** Looks for the tool again off the main thread, and applies the chain again where its proxy moved. */
     private fun refreshChain() {
         if (!org.visadahyu.datapavan.watch.chain.ChainSettings.of(this).on) return
@@ -367,6 +445,10 @@ class WatchVpnService : VpnService() {
         // with it. The screen shows the chain's settings and whether the tunnel runs, neither of which
         // this changes. A start that fails, at establish() or after, stops, which forgets the chain.
         applyChain()
+        // The WireGuard configurations and their apps' routes likewise (W7, part 2): a tunnelled app's first packet
+        // goes through its tunnel, or waits for it, and never directly. A photo of a QR code a crash left goes too.
+        org.visadahyu.datapavan.watch.tunnel.qr.Capture.deleteLeftovers(this, keep = MainActivity.pendingCapture)
+        applyTunnels()
         val established = establish()
         // null: the user's consent is missing or was withdrawn.
         if (established == null || !startEngine(established)) {
@@ -592,6 +674,9 @@ class WatchVpnService : VpnService() {
         tracker?.stop()
         tracker = null
         Engine.nativeStop()
+        // Stopping the engine forgot its tunnels: the next start sets them again.
+        tunnelsSet.clear()
+        stopWaitingForUnlock()
         main.removeCallbacksAndMessages(riseCheck)
         setup = null
         current = null
@@ -912,6 +997,106 @@ class WatchVpnService : VpnService() {
         }
         Engine.nativeTunnelStates().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("tunnel $it") }
         Engine.nativeFlowRoutes().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("flow-route $it") }
+        debugStore(args, writer)
+    }
+
+    /**
+     * Debug builds only, for W7's second emulator check (scripts/verify-wireguard-import.sh): `tunnel-store` prints a
+     * `tunnel-slot N default|other local|- name STATE set|unset routes K` line for each configuration the store keeps
+     * (STATE `known`, `locked`, `lost` or `removed`; `set` when this run set it in the engine), a `tunnel-waiting N
+     * routes K` line for each removed slot apps still wait for, and `tunnel-key HOME`; no name, key, address or
+     * endpoint. `tunnel-key-time` opens each configuration as a start does and prints `tunnel-opened N MS` (zeroed at
+     * once). `tunnel-key-probe make|open|clear` measures a key that needs an unlocked phone, as ADR 0035 asks of
+     * `setUnlockedDeviceRequired`: `make` makes one (alias `watch-tunnels-probe`) and wraps 32 random bytes in Watch's
+     * files, `open` unwraps them and prints `tunnel-key-probe open ok|locked|lost MS`, `clear` deletes both. `qr-decode
+     * FILE` hands the file FILE of Watch's files directory to the QR decoder's isolated process and prints
+     * `qr-decoded BYTES MS` or `qr-failed WHY MS`, never the text.
+     */
+    private fun debugStore(args: List<String>, writer: PrintWriter) {
+        val store = org.visadahyu.datapavan.watch.tunnel.TunnelStore.of(this)
+        if ("tunnel-store" in args) {
+            val state = store.state()
+            for (slot in state.order) {
+                val name = when (store.name(slot)) {
+                    is org.visadahyu.datapavan.watch.tunnel.TunnelStore.Name.Known -> "known"
+                    org.visadahyu.datapavan.watch.tunnel.TunnelStore.Name.Locked -> "locked"
+                    org.visadahyu.datapavan.watch.tunnel.TunnelStore.Name.Lost -> "lost"
+                    org.visadahyu.datapavan.watch.tunnel.TunnelStore.Name.Removed -> "removed"
+                }
+                writer.println(
+                    "tunnel-slot $slot ${if (slot == state.default) "default" else "other"} ${if (slot in state.local) "local" else "-"} " +
+                        "name $name ${if (slot in tunnelsSet) "set" else "unset"} routes ${state.routes.count { it.value == slot }}",
+                )
+            }
+            for (slot in state.routes.values.distinct().filter { it !in state.order }) {
+                writer.println("tunnel-waiting $slot routes ${state.routes.count { it.value == slot }}")
+            }
+            writer.println("tunnel-key ${store.home().name.lowercase()}")
+        }
+        if ("tunnel-key-time" in args) {
+            for (slot in store.state().order) {
+                val started = SystemClock.elapsedRealtimeNanos()
+                val opened = store.text(slot)
+                (opened as? org.visadahyu.datapavan.watch.tunnel.Opened.Plain)?.bytes?.fill(0)
+                writer.println("tunnel-opened $slot ${(SystemClock.elapsedRealtimeNanos() - started) / 1_000_000}")
+            }
+        }
+        val probe = args.indexOf("tunnel-key-probe").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
+        if (probe != null) {
+            val wrap = org.visadahyu.datapavan.watch.tunnel.KeystoreWrap(PROBE_ALIAS, unlockedOnly = true)
+            val file = java.io.File(filesDir, "tunnel-key-probe")
+            val started = SystemClock.elapsedRealtimeNanos()
+            val said = when (probe) {
+                "make" -> {
+                    wrap.destroy()
+                    val plain = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
+                    file.writeBytes(wrap.wrap(1, org.visadahyu.datapavan.watch.tunnel.Wrap.Part.TEXT, plain))
+                    plain.fill(0)
+                    "made ${wrap.home().name.lowercase()}"
+                }
+                "open" -> when (val opened = wrap.unwrap(1, org.visadahyu.datapavan.watch.tunnel.Wrap.Part.TEXT, file.takeIf { it.isFile }?.readBytes() ?: ByteArray(0))) {
+                    is org.visadahyu.datapavan.watch.tunnel.Opened.Plain -> "open ok".also { opened.bytes.fill(0) }
+                    org.visadahyu.datapavan.watch.tunnel.Opened.Locked -> "open locked"
+                    org.visadahyu.datapavan.watch.tunnel.Opened.Lost -> "open lost"
+                }
+                else -> {
+                    wrap.destroy()
+                    file.delete()
+                    "cleared"
+                }
+            }
+            writer.println("tunnel-key-probe $said ${(SystemClock.elapsedRealtimeNanos() - started) / 1_000_000}")
+        }
+        val picture = args.indexOf("qr-decode").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
+            ?.takeIf { it.matches(Regex("[A-Za-z0-9._-]+")) }
+        if (picture != null) {
+            val file = java.io.File(filesDir, picture)
+            val started = SystemClock.elapsedRealtimeNanos()
+            var result: org.visadahyu.datapavan.watch.tunnel.qr.QrDecode.Result? = null
+            // The binding's callbacks come on a thread of their own; this one waits for the answer.
+            Thread {
+                result = try {
+                    org.visadahyu.datapavan.watch.tunnel.qr.QrClient.decode(
+                        this,
+                        ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY),
+                    )
+                } catch (e: java.io.FileNotFoundException) {
+                    org.visadahyu.datapavan.watch.tunnel.qr.QrDecode.Result.Failed(org.visadahyu.datapavan.watch.tunnel.qr.QrDecode.Failure.NOT_A_PICTURE)
+                }
+            }.apply {
+                start()
+                join(QR_WAIT_MS)
+            }
+            val ms = (SystemClock.elapsedRealtimeNanos() - started) / 1_000_000
+            when (val read = result) {
+                is org.visadahyu.datapavan.watch.tunnel.qr.QrDecode.Result.Text -> {
+                    writer.println("qr-decoded ${read.bytes.size} $ms")
+                    read.bytes.fill(0)
+                }
+                is org.visadahyu.datapavan.watch.tunnel.qr.QrDecode.Result.Failed -> writer.println("qr-failed ${read.why.name.lowercase()} $ms")
+                null -> writer.println("qr-failed waiting $ms")
+            }
+        }
     }
 
     /**
@@ -1013,6 +1198,9 @@ class WatchVpnService : VpnService() {
         /** The chain's settings changed: hand them to the engine (W6). */
         const val ACTION_APPLY_CHAIN = "org.visadahyu.datapavan.watch.APPLY_CHAIN"
 
+        /** From Watch's screen: the WireGuard configurations or their apps changed (W7, part 2). */
+        const val ACTION_APPLY_TUNNELS = "org.visadahyu.datapavan.watch.APPLY_TUNNELS"
+
         /** From Watch's screen: the apps left out changed, so the tunnel is set up again if it is up. */
         const val ACTION_APPLY_LEFT_OUT = "org.visadahyu.datapavan.watch.APPLY_LEFT_OUT"
 
@@ -1021,6 +1209,12 @@ class WatchVpnService : VpnService() {
 
         /** How long the debug command `find-tool` waits for the search. */
         private const val SEARCH_WAIT_MS = 10_000L
+
+        /** How long the debug command `qr-decode` waits for the decoder. */
+        private const val QR_WAIT_MS = 20_000L
+
+        /** The debug builds' key that needs an unlocked phone, for the measure of `setUnlockedDeviceRequired`. */
+        private const val PROBE_ALIAS = "watch-tunnels-probe"
 
         /** The UID given for a tool that is not installed: no app has it. */
         private const val NO_UID = Int.MAX_VALUE

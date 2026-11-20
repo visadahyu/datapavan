@@ -169,6 +169,20 @@ class TunnelStoreTest {
     }
 
     @Test
+    fun a_slot_an_app_waits_for_is_never_given_again_even_from_a_damaged_count() {
+        dir.mkdirs()
+        File(dir, "state").writeText("order\nnext 1\nroute org.example.a 1\n")
+        assertEquals("the waiting app's slot is passed over", 2, store().add("new", text))
+    }
+
+    @Test
+    fun the_bound_is_the_engines() {
+        val source = File("../../core/net/src/engine/tunnels.rs").readText()
+        val engine = Regex("pub const MAX_TUNNELS: usize = (\\d+);").find(source)?.groupValues?.get(1)?.toInt()
+        assertEquals("core/net's MAX_TUNNELS", engine, TunnelStore.MAX)
+    }
+
+    @Test
     fun the_default_is_the_first_and_can_be_chosen() {
         val store = store()
         val one = store.add("one", text) ?: error("full")

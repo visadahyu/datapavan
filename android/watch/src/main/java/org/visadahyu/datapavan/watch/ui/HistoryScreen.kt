@@ -71,6 +71,8 @@ internal fun HistoryScreen(
     companies: Companies?,
     onDay: (Int) -> Unit,
     onClose: () -> Unit,
+    /** The WireGuard configurations' names by tunnel number (W7, part 2). */
+    tunnelNames: Map<Long, String> = emptyMap(),
 ) {
     val context = LocalContext.current
     // The phone's own choice of a 12- or 24-hour clock (review c1 of W5's third part, screens, nit 6).
@@ -140,10 +142,19 @@ internal fun HistoryScreen(
                         stringResource(R.string.history_time, time.format(Date(entry.start)), time.format(Date(entry.end))),
                         style = MaterialTheme.typography.bodyMedium,
                     )
+                    val tunnel = if (entry.via == org.visadahyu.datapavan.watch.log.LogRecord.VIA_TUNNEL) {
+                        tunnelNames[entry.tunnel] ?: stringResource(R.string.tunnel_removed_name)
+                    } else {
+                        null
+                    }
                     if (entry.unlogged) {
                         // No destination was logged: say why, as "Now" does, never show zeros as one (M3).
                         Text(
-                            stringResource(if (view.tool) R.string.history_tool_hidden else R.string.history_through_tool),
+                            when {
+                                tunnel != null -> stringResource(R.string.history_through_tunnel, tunnel)
+                                view.tool -> stringResource(R.string.history_tool_hidden)
+                                else -> stringResource(R.string.history_through_tool)
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Text(
@@ -159,6 +170,7 @@ internal fun HistoryScreen(
                             organisation = "",
                             marks = marksOf(hosts, appGroup, trackers, companies),
                             bytes = stringResource(R.string.now_destination_bytes, size(context, entry.sent), size(context, entry.received)),
+                            through = tunnel,
                         )
                     }
                     Text(stringResource(R.string.history_state, stateName(entry.state)), style = MaterialTheme.typography.bodyMedium)

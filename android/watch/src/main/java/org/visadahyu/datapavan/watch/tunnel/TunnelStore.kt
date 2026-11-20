@@ -158,6 +158,16 @@ class TunnelStore(private val dir: File, private val wrap: Wrap) {
     /** Where the key lives, for the screen. */
     fun home(): KeyHome = wrap.home()
 
+    /**
+     * What the slot's text was last written as, for the service to tell a configuration that changed from one it
+     * already set: the file's time and length, which every write changes, with its IV.
+     */
+    @Synchronized
+    fun stamp(slot: Int): Long = file(slot, Wrap.Part.TEXT).let { it.lastModified() * 31 + it.length() + writes.getOrDefault(slot, 0) }
+
+    /** The writes of each slot's text by this process, so that two within a file time's tick still differ. */
+    private val writes = mutableMapOf<Int, Long>()
+
     private fun putName(slot: Int, name: String) {
         val bytes = cleanName(name).toByteArray(Charsets.UTF_8)
         put(slot, Wrap.Part.NAME, bytes)
@@ -166,6 +176,7 @@ class TunnelStore(private val dir: File, private val wrap: Wrap) {
 
     private fun put(slot: Int, part: Wrap.Part, plain: ByteArray) {
         replaceWith(file(slot, part), wrap.wrap(slot, part, plain))
+        if (part == Wrap.Part.TEXT) writes[slot] = writes.getOrDefault(slot, 0) + 1
     }
 
     private fun file(slot: Int, part: Wrap.Part) = File(dir, "$slot.${part.label}")

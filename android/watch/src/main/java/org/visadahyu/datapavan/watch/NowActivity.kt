@@ -61,6 +61,9 @@ class NowActivity : ComponentActivity() {
     private val names = mutableStateMapOf<Int?, AppNames.Named>()
     private val groups = mutableStateMapOf<Int?, String?>()
     private val trackers = mutableStateMapOf<String, List<TrackerMarks.Match>>()
+
+    /** The WireGuard configurations' names by tunnel number, read off the main thread once each (W7, part 2). */
+    private val tunnelNames = mutableStateMapOf<Long, String>()
     private val history = mutableStateOf<HistoryView?>(null)
     private val only = mutableStateOf<String?>(null)
     private val window = mutableIntStateOf(Snapshot.TEN_MINUTES)
@@ -108,6 +111,7 @@ class NowActivity : ComponentActivity() {
                         window = window.intValue,
                         order = order,
                         sorts = sorts.intValue,
+                        tunnelNames = tunnelNames,
                     ),
                     history = history.value,
                     onWindow = {
@@ -184,8 +188,9 @@ class NowActivity : ComponentActivity() {
             val named = read?.apps.orEmpty().map { it.uid }.filter { it !in known }.associateWith(appNames::of)
             val grouped = named.mapValues { (_, app) -> groupOf(app) }
             val hosts = read?.apps.orEmpty().flatMap { app -> app.destinations.flatMap(::hostsOf) }.distinct().filter { it !in seen }
-            Fetched(read, named, grouped, matchTrackers(hosts))
+            Fetched(read, named, grouped, matchTrackers(hosts), namesOf(tunnelsOf(read)))
         }
+        tunnelNames.putAll(read.tunnels)
         names.putAll(read.named)
         groups.putAll(read.grouped)
         keep(read.trackers)
@@ -197,7 +202,28 @@ class NowActivity : ComponentActivity() {
         val named: Map<Int?, AppNames.Named>,
         val grouped: Map<Int?, String?>,
         val trackers: Map<String, List<TrackerMarks.Match>>,
+        val tunnels: Map<Long, String>,
     )
+
+    /** The tunnels a snapshot names, by number. */
+    private fun tunnelsOf(snapshot: Snapshot?): Set<Long> = snapshot?.apps.orEmpty()
+        .flatMap { app -> listOf(app.throughTunnel) + app.destinations.map { it.tunnel } }
+        .filter { it != 0L }.toSet()
+
+    /**
+     * The names of the tunnels [ids] not read yet, from the store (worker): a configuration's own, isolated so that
+     * it keeps its direction, or a plain phrase for one since removed or that cannot be opened now.
+     */
+    private fun namesOf(ids: Collection<Long>): Map<Long, String> {
+        val store = org.visadahyu.datapavan.watch.tunnel.TunnelStore.of(this)
+        return ids.filter { it !in tunnelNames && it <= Int.MAX_VALUE }.associateWith { id ->
+            when (val name = store.name(id.toInt())) {
+                is org.visadahyu.datapavan.watch.tunnel.TunnelStore.Name.Known -> org.visadahyu.datapavan.ui.isolate(name.name)
+                org.visadahyu.datapavan.watch.tunnel.TunnelStore.Name.Removed -> getString(R.string.tunnel_removed_name)
+                else -> getString(R.string.tunnel_closed_name)
+            }
+        }
+    }
 
     /** The company group of an app's packages, by their signing, where the owners' table knows it (worker). */
     private fun groupOf(app: AppNames.Named): String? {
@@ -249,6 +275,8 @@ class NowActivity : ComponentActivity() {
                 val records = ConnectionLog.of(this@NowActivity).read(day)
                 records?.let { History.day(day, it, shown.app.uid, shown.app.installedAt) }
             }
+            val tunnels = read?.entries.orEmpty().map { it.tunnel }.filter { it != 0L }
+            tunnelNames.putAll(withContext(worker) { namesOf(tunnels) })
             // An entry the log keeps no destination of is no host to match (review c1, screens, M3).
             val hosts = read?.entries.orEmpty().filter { !it.unlogged }
                 .flatMap { listOf(it.name to it.port, it.dnsName to it.port, it.address to it.port) }

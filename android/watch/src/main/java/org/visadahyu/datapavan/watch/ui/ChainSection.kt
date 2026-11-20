@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -77,7 +78,7 @@ internal class ChainActions(
  * are logged. A tool's name keeps its own direction inside a right-to-left sentence.
  */
 @Composable
-internal fun ChainSection(view: ChainView, privateDns: PrivateDns?, actions: ChainActions) {
+internal fun ChainSection(view: ChainView, privateDns: PrivateDns?, actions: ChainActions, tunnelled: Map<String, String> = emptyMap()) {
     val bidi = BidiFormatter.getInstance()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
@@ -101,7 +102,7 @@ internal fun ChainSection(view: ChainView, privateDns: PrivateDns?, actions: Cha
                 )
                 OutlinedButton(onClick = actions.onSearch) { Text(stringResource(R.string.chain_search_again)) }
             }
-            is ToolSearch.Answering -> Answering(search, view, privateDns, actions)
+            is ToolSearch.Answering -> Answering(search, view, privateDns, actions, tunnelled)
         }
         // A chain that is on stays one tap from off, whatever the search says now: while the tool does
         // not answer, the apps sent through it wait, and the user must be able to let them go directly
@@ -114,7 +115,7 @@ internal fun ChainSection(view: ChainView, privateDns: PrivateDns?, actions: Cha
 }
 
 @Composable
-private fun Answering(search: ToolSearch.Answering, view: ChainView, privateDns: PrivateDns?, actions: ChainActions) {
+private fun Answering(search: ToolSearch.Answering, view: ChainView, privateDns: PrivateDns?, actions: ChainActions, tunnelled: Map<String, String>) {
     val tool = BidiFormatter.getInstance().unicodeWrap(search.found.tool.name)
     Text(stringResource(R.string.chain_found, tool, search.found.port), style = MaterialTheme.typography.bodyMedium)
     view.key?.let { KeyVerdict(it) }
@@ -150,17 +151,28 @@ private fun Answering(search: ToolSearch.Answering, view: ChainView, privateDns:
             }
         }
     }
+    // An app sent through a WireGuard configuration goes through it, whatever the chain says (the maintainer's
+    // answer 3 of 2026-11-19): the chain's choice says so, and its way is changed under "Each app's way".
+    if (view.allApps && tunnelled.isNotEmpty()) {
+        Text(pluralStringResource(R.plurals.chain_tunnelled_apps, tunnelled.size, tunnelled.size), style = MaterialTheme.typography.bodyMedium)
+    }
     if (!view.allApps) {
         for (app in view.choices) {
+            val tunnel = tunnelled[app.packageName]
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .toggleable(value = app.packageName in view.apps, role = Role.Checkbox) { actions.onApp(app.packageName, it) }
+                    .toggleable(value = app.packageName in view.apps && tunnel == null, enabled = tunnel == null, role = Role.Checkbox) {
+                        actions.onApp(app.packageName, it)
+                    }
                     .padding(start = 16.dp, top = 2.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Checkbox(checked = app.packageName in view.apps, onCheckedChange = null)
-                Text(app.label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp))
+                Checkbox(checked = app.packageName in view.apps && tunnel == null, onCheckedChange = null, enabled = tunnel == null)
+                Column(Modifier.padding(start = 12.dp)) {
+                    Text(app.label, style = MaterialTheme.typography.bodyLarge)
+                    tunnel?.let { Text(stringResource(R.string.chain_app_tunnel, it), style = MaterialTheme.typography.bodyMedium) }
+                }
             }
         }
     }

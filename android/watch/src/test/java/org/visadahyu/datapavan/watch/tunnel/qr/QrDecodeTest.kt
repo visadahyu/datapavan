@@ -116,6 +116,7 @@ class QrDecodeTest {
         }
         val side = QrDecode.TARGET + 1
         assertEquals(QrDecode.Result.Failed(QrDecode.Failure.TOO_LARGE), QrDecode.decode(IntArray(1), side, side))
+        assertEquals("all its pixels given", QrDecode.Result.Failed(QrDecode.Failure.TOO_LARGE), QrDecode.decode(IntArray(side * side), side, side))
         assertEquals(QrDecode.Result.Failed(QrDecode.Failure.TOO_LARGE), QrDecode.decode(IntArray(10), 100, 100))
         assertEquals(QrDecode.Result.Failed(QrDecode.Failure.TOO_LARGE), QrDecode.decode(IntArray(0), 0, 0))
     }

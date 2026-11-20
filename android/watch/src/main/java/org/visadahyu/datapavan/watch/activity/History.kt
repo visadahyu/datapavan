@@ -32,6 +32,9 @@ object History {
          * screens, M3: the history showed it as one).
          */
         val unlogged: Boolean = false,
+        /** Its route, as the log codes it ([LogRecord.VIA_DIRECT] and the others), and for a tunnel its number (W7). */
+        val via: Int = LogRecord.VIA_DIRECT,
+        val tunnel: Long = 0,
     )
 
     /**
@@ -55,6 +58,8 @@ object History {
                     it.start, it.end, it.protocol, it.name, it.dnsName.takeIf { dns -> dns != it.name }.orEmpty(),
                     it.address.hostAddress.orEmpty(), it.port, it.namedBy, it.up, it.down, it.state, it.continues,
                     unlogged = it.address.isAnyLocalAddress && it.name.isEmpty(),
+                    via = it.via,
+                    tunnel = it.tunnel,
                 )
             }
             .sortedWith(compareByDescending<Entry> { it.start }.thenByDescending { it.end })

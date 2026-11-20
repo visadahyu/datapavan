@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    W7, part 2 (ADR 0035): the strings of the WireGuard import, the configurations, each app's way and their
+    states, in English only. They are translated into the seven other languages after the review, by ADR 0030's
+    process, and then move into strings.xml, which scripts/check-translations.py reads and holds to every
+    language. Until then this file is held to the plain-language gate (scripts/check.sh) and to ADR 0025's list of
+    words, and lint's check for missing translations is lifted for it alone. A release needs it empty (RELEASE.md).
+-->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <!-- The heading of Watch's section for WireGuard configurations from the user's VPN provider. -->
+    <string name="tunnels_title">WireGuard configurations</string>
+    <string name="tunnels_intro">Send the apps you choose through a WireGuard server of your VPN provider. Watch keeps each configuration encrypted on this phone.</string>
+    <!-- Where the key that encrypts the configurations is kept. -->
+    <string name="tunnels_key_strongbox">The key that encrypts them is in this phone\'s separate security chip (StrongBox).</string>
+    <string name="tunnels_key_tee">The key that encrypts them is in this phone\'s secure area, apart from Android.</string>
+    <string name="tunnels_key_software">The key that encrypts them is kept by Android in software. This phone has no secure hardware for it.</string>
+    <string name="tunnels_none">No configuration yet.</string>
+    <string name="tunnels_add_file">Add from a file</string>
+    <string name="tunnels_add_camera">Take a photo of a QR code</string>
+    <string name="tunnels_add_picture">Choose a picture of a QR code</string>
+    <!-- Shown under the two QR code buttons. -->
+    <string name="tunnels_picture_note">A picture of a QR code holds the configuration\'s private key. After you add it, you may want to delete the picture.</string>
+    <!-- %1$d: the most configurations Watch keeps (8). -->
+    <string name="tunnels_full">Watch keeps at most %1$d configurations. Remove one to add another.</string>
+    <string name="tunnels_default">Default</string>
+    <string name="tunnels_default_note">The default one also carries ping, and traffic Android names no app for. It does so while any app goes through a configuration.</string>
+    <string name="tunnels_make_default">Make default</string>
+    <string name="tunnels_rename">Rename</string>
+    <string name="tunnels_replace">Replace</string>
+    <string name="tunnels_remove">Remove</string>
+    <string name="tunnels_save_name">Save the name</string>
+    <string name="tunnels_name">Name</string>
+    <!-- %1$d: a number, for a configuration whose file gave no name. -->
+    <string name="tunnels_default_name">WireGuard %1$d</string>
+    <plurals name="tunnels_apps">
+        <item quantity="one">%d app goes through it.</item>
+        <item quantity="other">%d apps go through it.</item>
+    </plurals>
+    <string name="tunnels_no_apps">No app goes through it yet. Choose its apps under \"Each app\'s way\".</string>
+    <!-- A switch for one configuration (ADR 0035, question 8). -->
+    <string name="tunnels_local">Local network directly</string>
+    <string name="tunnels_local_note">When on, its apps reach printers and other devices on your own network directly, not through the server.</string>
+    <!-- The same switch as the chain's, which governs both. -->
+    <string name="tunnels_log_note">This switch also covers apps you send through your circumvention tool.</string>
+
+    <!-- A configuration's state, refreshed while the screen is shown. -->
+    <string name="tunnel_state_off">Not in use while Watch is off.</string>
+    <plurals name="tunnel_state_seconds">
+        <item quantity="one">Connected. The last handshake was %d second ago.</item>
+        <item quantity="other">Connected. The last handshake was %d seconds ago.</item>
+    </plurals>
+    <plurals name="tunnel_state_minutes">
+        <item quantity="one">Connected. The last handshake was %d minute ago.</item>
+        <item quantity="other">Connected. The last handshake was %d minutes ago.</item>
+    </plurals>
+    <string name="tunnel_state_idle">Not connected yet. It connects when one of its apps sends.</string>
+    <string name="tunnel_state_not_answering">The server does not answer. Its apps wait, and nothing of theirs goes out directly.</string>
+    <string name="tunnel_state_missing">Not ready in Watch yet. Its apps wait, and nothing of theirs goes out directly.</string>
+    <string name="tunnel_state_locked">It cannot be opened while the phone is locked. Its apps wait until you unlock it.</string>
+    <string name="tunnel_state_lost">It can no longer be opened on this phone. Its apps wait. Remove it and add it again.</string>
+    <string name="tunnel_state_plain_dns">Watch found the server\'s address only through DNS that is not encrypted. Your network may see which provider you use.</string>
+
+    <!-- Removing a configuration: what its apps do then. %1$s: its name. -->
+    <string name="tunnels_remove_title">Remove %1$s?</string>
+    <string name="tunnels_remove_wait">Its apps wait and send nothing, until you choose another way for them.</string>
+    <string name="tunnels_remove_other_way">Its apps go their other way: directly, or through your circumvention tool if it takes them.</string>
+    <string name="tunnels_remove_confirm">Remove it</string>
+    <string name="tunnels_cancel">Cancel</string>
+
+    <!-- The confirmation before anything is saved. -->
+    <string name="import_title">Check this configuration</string>
+    <!-- %1$s: the name of the configuration it replaces. -->
+    <string name="import_replace_title">Replace %1$s</string>
+    <string name="import_replace_note">Its apps and its switches stay as they are.</string>
+    <!-- %1$s: the server's address or name; %2$d: its port. -->
+    <string name="import_server">Server: %1$s, port %2$d.</string>
+    <string name="import_server_name">Watch looks up this name through your network before the tunnel starts. If Private DNS is not on, your network may see it.</string>
+    <!-- %1$s: the addresses, comma separated. -->
+    <string name="import_addresses">This phone\'s address in it: %1$s.</string>
+    <string name="import_no_ipv6">It has no IPv6 address. Your chosen apps\' IPv6 connections are refused, so they use IPv4.</string>
+    <!-- %1$s: the DNS servers, comma separated. -->
+    <string name="import_dns">Names your chosen apps look up go to %1$s, through the server.</string>
+    <string name="import_everything">All your chosen apps\' traffic goes through it.</string>
+    <!-- %1$s: the networks, comma separated. -->
+    <string name="import_narrower">Only these destinations go through it: %1$s. Watch refuses every other destination of your chosen apps, and never sends it directly.</string>
+    <string name="import_preshared">It has a preshared key, an extra secret that guards it against future quantum computers.</string>
+    <string name="import_no_preshared">It has no preshared key.</string>
+    <!-- %1$d: seconds. -->
+    <string name="import_keepalive">It sends a small packet every %1$d seconds to keep the connection open. This uses a little battery.</string>
+    <!-- %1$d: bytes. -->
+    <string name="import_mtu">Largest packet inside it: %1$d bytes.</string>
+    <string name="import_apps">Apps to send through it</string>
+    <string name="import_apps_from_file">The file named these apps. Check them before you save.</string>
+    <!-- %1$s: package names, comma separated. -->
+    <string name="import_not_installed">Named in the file but not installed: %1$s.</string>
+    <string name="import_save">Save</string>
+    <string name="import_apps_loading">Loading your apps…</string>
+
+    <!-- Why a configuration was refused. %1$d: a line of the file; %2$s: what is wrong with it. -->
+    <string name="refused_line">Line %1$d: %2$s</string>
+    <string name="refused_too_long">The file is too long to be a WireGuard configuration.</string>
+    <string name="refused_not_text">The file is not text, so it is not a WireGuard configuration.</string>
+    <string name="refused_unreadable">This line cannot be read.</string>
+    <string name="refused_outside_section">A setting comes before any [Interface] or [Peer] section.</string>
+    <string name="refused_unknown_section">Watch knows only the sections [Interface] and [Peer].</string>
+    <string name="refused_several_interfaces">The file has a second [Interface] section.</string>
+    <string name="refused_several_peers">The file has a second [Peer] section. Watch takes one server for each configuration.</string>
+    <!-- %1$s: the name of a setting, such as PostUp. -->
+    <string name="refused_unsupported">Watch does not carry out the setting %1$s.</string>
+    <string name="refused_unsupported_unnamed">Watch does not carry out this setting.</string>
+    <string name="refused_repeated">The setting %1$s is given twice.</string>
+    <string name="refused_bad_value">The value of %1$s cannot be read.</string>
+    <string name="refused_several_addresses">The file gives two addresses of one kind. Watch takes one IPv4 and one IPv6 address.</string>
+    <string name="refused_search_domain">The DNS setting names a search domain, which Watch cannot use.</string>
+    <string name="refused_no_interface">The file has no [Interface] section.</string>
+    <string name="refused_no_peer">The file has no [Peer] section.</string>
+    <string name="refused_no_private_key">The file has no private key (PrivateKey).</string>
+    <string name="refused_no_address">The file gives no address (Address).</string>
+    <string name="refused_no_dns">The file names no DNS server. The names your apps look up would have nowhere private to go, so Watch does not take it.</string>
+    <string name="refused_dns_unreachable">None of the file\'s DNS servers can be reached through its server.</string>
+    <string name="refused_no_public_key">The file has no key of the server (PublicKey).</string>
+    <string name="refused_no_endpoint">The file does not say where the server is (Endpoint).</string>
+    <string name="refused_no_allowed_ips">The file does not say which destinations go through the server (AllowedIPs).</string>
+    <string name="refused_bad_mtu">The file\'s MTU is not one Watch takes: 576 to 1,500 bytes, and at least 1,280 with an IPv6 address.</string>
+    <string name="refused_both_application_lists">The file names apps to include and apps to exclude. Only one of the two lists is allowed.</string>
+    <string name="refused_too_many">Watch keeps at most 8 configurations. Remove one to add another.</string>
+    <string name="refused_unknown">Watch could not read this configuration.</string>
+    <string name="import_unreadable">Watch could not read this file.</string>
+
+    <!-- Reading a QR code from a picture. -->
+    <string name="qr_not_a_picture">This is not a picture Watch can read.</string>
+    <string name="qr_too_large">This picture is too large to read.</string>
+    <string name="qr_no_code">No QR code could be read in this picture. Try a sharp photo with the whole code in it.</string>
+    <string name="qr_too_long">This QR code holds more text than a WireGuard configuration.</string>
+    <string name="qr_too_slow">Reading this picture took too long.</string>
+    <string name="qr_stopped">Watch\'s picture reader stopped on this picture.</string>
+    <string name="qr_no_camera">This phone has no camera app that can take the photo for Watch.</string>
+    <string name="qr_reading">Reading the picture…</string>
+    <string name="qr_photo_deleted">The photo was deleted.</string>
+
+    <!-- Each app's one way (ADR 0035, routes). -->
+    <string name="routes_title">Each app\'s way</string>
+    <string name="routes_intro">Each app goes one way: directly, through your circumvention tool, or through one WireGuard configuration.</string>
+    <string name="routes_choose">Choose apps\' ways</string>
+    <string name="routes_done">Done</string>
+    <string name="route_direct">Directly</string>
+    <!-- %1$s: the tool's name. -->
+    <string name="route_tool">Through %1$s</string>
+    <string name="route_tool_unnamed">Through your circumvention tool</string>
+    <!-- %1$s: a configuration's name. -->
+    <string name="route_tunnel">Through %1$s</string>
+    <string name="route_waiting">Waits for a configuration that was removed. Nothing of it goes out.</string>
+    <string name="route_left_out">Left out of Watch: it goes to the internet without Watch.</string>
+    <string name="routes_all_apps_note">While your tool takes every app, an app goes directly only if you leave it out of Watch.</string>
+    <!-- The chain's choice of apps: an app with a configuration goes through it instead of the tool. %1$s: the configuration's name. -->
+    <string name="chain_app_tunnel">Goes through %1$s instead. Change it under \"Each app\'s way\".</string>
+    <plurals name="chain_tunnelled_apps">
+        <item quantity="one">%d app goes through a WireGuard configuration instead of the tool.</item>
+        <item quantity="other">%d apps go through a WireGuard configuration instead of the tool.</item>
+    </plurals>
+
+    <!-- "Now" and each app's history: an app sent through a WireGuard configuration. %1$s: its name. -->
+    <string name="now_through_tunnel">Sent through %1$s. Where it connected is not shown, because \"Log where these apps connect\" is off.</string>
+    <string name="now_destination_tunnel">Through %1$s</string>
+    <string name="history_through_tunnel">Sent through %1$s. Where it connected was not logged, because \"Log where these apps connect\" was off.</string>
+    <!-- In place of a name, in the sentences above. -->
+    <string name="tunnel_removed_name">a WireGuard configuration since removed</string>
+    <string name="tunnel_closed_name">a WireGuard configuration that cannot be opened now</string>
+</resources>

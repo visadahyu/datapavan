@@ -53,6 +53,10 @@ import org.visadahyu.datapavan.watch.activity.Snapshot
 import org.visadahyu.datapavan.watch.activity.TrackerMarks
 import org.visadahyu.datapavan.watch.log.AppState
 
+/** A tunnel's configuration by its name, or a plain phrase for one since removed (W7, part 2). */
+@Composable
+internal fun tunnelName(view: NowView, tunnel: Long): String = view.tunnelNames[tunnel] ?: stringResource(R.string.tunnel_removed_name)
+
 /**
  * What "Now" draws: the engine's snapshot, whether the tunnel runs, the apps' names and company groups, the
  * trackers' matches by host and the companies to tell them by, the one app asked for, the window, and the
@@ -69,6 +73,8 @@ internal data class NowView(
     val window: Int,
     val order: NowRows.Order,
     val sorts: Int,
+    /** The WireGuard configurations' names by the engine's tunnel numbers, or a phrase for one since removed (W7). */
+    val tunnelNames: Map<Long, String> = emptyMap(),
 )
 
 /** The marks of a destination of the app [uid], from its hosts' matches (ADR 0046, decision 2 (d)). */
@@ -151,7 +157,7 @@ internal fun NowScreen(
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         if (history != null) {
             BackHandler(onBack = onCloseHistory)
-            HistoryScreen(history, view.groups[history.app.uid], view.trackers, view.companies, onDay, onCloseHistory)
+            HistoryScreen(history, view.groups[history.app.uid], view.trackers, view.companies, onDay, onCloseHistory, view.tunnelNames)
         } else {
             NowList(view, listState, onWindow, onSort, onAll, onHistory, onAllowAccess)
         }
@@ -335,6 +341,9 @@ private fun AppRow(context: Context, app: Snapshot.App, window: Int, view: NowVi
                 )
             }
             if (app.throughTool) Text(stringResource(R.string.now_through_tool), style = MaterialTheme.typography.bodyMedium)
+            if (app.throughTunnel != 0L) {
+                Text(stringResource(R.string.now_through_tunnel, tunnelName(view, app.throughTunnel)), style = MaterialTheme.typography.bodyMedium)
+            }
             Destinations(context, app, window, view)
         }
     }
@@ -358,6 +367,7 @@ private fun Destinations(context: Context, app: Snapshot.App, window: Int, view:
             organisation = place.organisation,
             marks = marksOf(org.visadahyu.datapavan.watch.NowActivity.hostsOf(place), view.groups[app.uid], view.trackers, view.companies),
             bytes = stringResource(R.string.now_destination_bytes, size(context, place.bytes[window * 2]), size(context, place.bytes[window * 2 + 1])),
+            through = if (place.via == org.visadahyu.datapavan.watch.log.LogRecord.VIA_TUNNEL) tunnelName(view, place.tunnel) else null,
         )
     }
     if (!all && places.size > FIRST_PLACES) {
@@ -368,8 +378,18 @@ private fun Destinations(context: Context, app: Snapshot.App, window: Int, view:
 
 /** One destination: its name, left to right in any language, where the name came from, and what else is known. */
 @Composable
-internal fun Place(name: String, dnsName: String, namedBy: Int, organisation: String, marks: List<TrackerMarks.Mark>, bytes: String) {
+internal fun Place(
+    name: String,
+    dnsName: String,
+    namedBy: Int,
+    organisation: String,
+    marks: List<TrackerMarks.Mark>,
+    bytes: String,
+    /** The WireGuard configuration it went through, by its name, if one (W7, part 2). */
+    through: String? = null,
+) {
     Text(isolateLtr(name), style = MaterialTheme.typography.bodyLarge)
+    through?.let { Text(stringResource(R.string.now_destination_tunnel, it), style = MaterialTheme.typography.bodySmall) }
     Text(
         stringResource(
             when (NowRows.namedBy(namedBy)) {

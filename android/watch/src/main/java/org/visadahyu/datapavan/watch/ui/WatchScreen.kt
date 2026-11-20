@@ -43,9 +43,9 @@ import org.visadahyu.datapavan.watch.log.ConnectionLog
 
 /**
  * Watch's one screen: what it is for, whether it is on, the switch, while it is on what Private DNS
- * hides from it (W3), the user's circumvention tool and the apps sent through it (W6), what other apps see
- * of a VPN and the apps left out (ADR 0041), how long the connection log keeps its records, with its wipe
- * (W4), and screenshots (ADR 0040).
+ * hides from it (W3), the user's circumvention tool and the apps sent through it (W6), the WireGuard
+ * configurations and each app's way (W7, part 2), what other apps see of a VPN and the apps left out (ADR
+ * 0041), how long the connection log keeps its records, with its wipe (W4), and screenshots (ADR 0040).
  */
 @Composable
 internal fun WatchScreen(
@@ -58,6 +58,8 @@ internal fun WatchScreen(
     screenLock: Boolean,
     chain: ChainView,
     chainActions: ChainActions,
+    tunnels: TunnelsView,
+    tunnelActions: TunnelActions,
     onStart: () -> Unit,
     onStop: () -> Unit,
     onRetention: (Int) -> Unit,
@@ -68,6 +70,11 @@ internal fun WatchScreen(
     onLeaveOut: (String, Boolean) -> Unit,
     onNow: () -> Unit,
 ) {
+    // The import's confirmation takes the screen until the user saves or cancels (W7, part 2).
+    tunnels.pending?.let {
+        ImportConfirmation(it, choices.filter { app -> app.packageName !in leftOut }, tunnelActions)
+        return
+    }
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
@@ -106,7 +113,21 @@ internal fun WatchScreen(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            ChainSection(chain, privateDns, chainActions)
+            // An app's tunnel wins over the chain's choice: the chain's list shows it so (W7, part 2).
+            val tunnelled = tunnels.routes.filterKeys { it !in leftOut }.mapValues { (_, slot) ->
+                tunnels.names[slot] ?: stringResource(R.string.tunnel_removed_name)
+            }
+            ChainSection(chain, privateDns, chainActions, tunnelled)
+            TunnelsSection(tunnels, tunnelActions)
+            val search = chain.search as? org.visadahyu.datapavan.watch.chain.ToolSearch.Answering
+            RoutesSection(
+                view = tunnels,
+                chain = org.visadahyu.datapavan.watch.tunnel.Routes.Chain(chain.on, chain.allApps, chain.apps, search?.found?.tool?.packageName),
+                toolName = search?.found?.tool?.name ?: chain.chainedName,
+                leftOut = leftOut,
+                choices = choices,
+                actions = tunnelActions,
+            )
             LeftOutSection(leftOut, choices, onLoadApps, onLeaveOut)
             LogSettings(retentionDays, deleted, logLock, screenLock, onRetention, onDelete)
             ScreenshotSetting()
