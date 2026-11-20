@@ -444,6 +444,11 @@ class ExchangerTest {
         assertNull(none)
         assertEquals(Exchanger.REFUSED, why)
         assertFalse(Exchanger.answers(query))
+        // A server that answers something else than an answer to the question: not an answer.
+        val echo = tlsServer("dot")
+        serveDot(echo, 1)
+        exchanger.probe(DnsSettings.Choice.Custom(true, "dot.dnslab.test:${echo.localPort}", listOf("127.0.0.1"))) { got, why2 -> results.put(got to why2) }
+        assertNull("an echo is no answer", (results.poll(10, TimeUnit.SECONDS) ?: error("no result")).first)
     }
 
     @Test

@@ -2042,6 +2042,8 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn the_records_are_asked_only_of_operators_that_run_no_target_and_once() {
         let (shared, fake) = rotated();
+        // The first record way fails: the next is still asked (the security review's nit).
+        fake.does(Carry::Doh, Does::Fail(Failure::Refused));
         let _ = answer(&shared, &app_query("one.example.com", 1), false).await;
         wait_for(|| !fake.seen(Carry::Fetch).is_empty()).await;
         let asked: Vec<Exchange> = fake
@@ -2052,7 +2054,7 @@ mod tests {
         assert_eq!(
             asked.len(),
             2,
-            "both ways of the one operator that runs no target"
+            "both ways of the one operator that runs no target, the second after the first failed"
         );
         for exchange in &asked {
             assert_eq!(exchange.host, "p.test", "never a target's operator");
