@@ -908,7 +908,16 @@ mod tests {
             &bytes,
             &[b"CONNECT example.org:443 HTTP/1.1\r\n\r\n"],
         );
+        // Android's setting's host at another port is an app's own proxy.
+        let (other_port, bytes) = open(&shared, UID, at([203, 0, 113, 5], 3129));
+        relay(
+            &shared,
+            other_port,
+            &bytes,
+            &[b"GET http://example.org/a HTTP/1.1\r\n\r\n"],
+        );
         let setting = |id| live(&shared, id).proxy.map(|p| (p.kind, p.setting));
+        assert_eq!(setting(other_port.id), Some((Kind::Forward, false)));
         assert_eq!(setting(own.id), Some((Kind::Forward, false)));
         assert_eq!(setting(set.id), Some((Kind::Forward, true)));
         assert_eq!(setting(named.id), Some((Kind::Connect, true)));
@@ -970,15 +979,22 @@ mod tests {
             live(&shared, cdn.id).proxy.is_none(),
             "a CDN data centre reached directly"
         );
-        // Ten minutes after its last direct connection ended, one is again.
+        // Its direct connection ended a moment ago: within the window, a connection elsewhere is still no proxy.
         shared.finish(direct.id);
+        let (soon, bytes) = open(&shared, UID, at([93, 184, 216, 37], 443));
+        relay(&shared, soon, &bytes, &[&header]);
+        assert!(
+            live(&shared, soon.id).proxy.is_none(),
+            "within the window of substitution"
+        );
+        // Ten minutes after its last direct connection ended, one is again.
         if let Some(d) = lock(&shared.proxies).direct.get_mut(&UID) {
             d.last = Instant::now().checked_sub(SUBSTITUTION + Duration::from_secs(1));
         }
         let (later, bytes) = open(&shared, UID, at([93, 184, 216, 36], 443));
         relay(&shared, later, &bytes, &[&header]);
         assert!(live(&shared, later.id).proxy.is_some());
-        assert_eq!(shared.counters.snapshot()[63..66], [2, 1, 1]);
+        assert_eq!(shared.counters.snapshot()[63..66], [2, 2, 1]);
     }
 
     #[test]
@@ -1181,6 +1197,84 @@ mod tests {
             &[&crate::tls::tests::hello("signal-proxy.example.org", 1000)],
         );
         assert!(live(&shared, after.id).proxy.is_none());
+    }
+
+    #[test]
+    fn a_request_and_the_inner_hello_in_one_read_are_both_read() {
+        let mut bytes = b"CONNECT example.org:443 HTTP/1.1\r\n\r\n".to_vec();
+        bytes.extend_from_slice(&crate::tls::tests::hello("inner.example", 1000));
+        let found = Sniff::new(true, false).feed(&bytes);
+        assert!(
+            matches!(&found[..], [Found::Request(_), Found::Hello(h, true)] if h.name == "inner.example")
+        );
+    }
+
+    /// The place a proxied flow's first bytes were counted under, before its request named it, goes: it named the
+    /// proxy, not the destination, and while "Log where these apps connect" is off it would show the proxy's name.
+    #[test]
+    fn the_place_the_first_bytes_were_counted_under_goes_once_the_request_names_the_flow() {
+        let (mut shared, clock, _) = telling_at(T);
+        shared.tunnels.set(&TunnelSetting::default());
+        learn(&shared, "203.0.113.5", "proxy.example.net");
+        let (opened, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
+        let reads = socks5_reads();
+        relay(&shared, opened, &bytes, &[&reads[0]]);
+        clock.set(T + 1_500);
+        shared.tell(&super::super::activity::tests::told(
+            T,
+            T + 1_000,
+            &[(T, T + 1_000, crate::states::State::InUse)],
+        ));
+        let named = |shared: &Shared| -> Vec<Option<String>> {
+            shared
+                .now_view(T + 1_500)
+                .apps
+                .iter()
+                .flat_map(|a| a.places.iter().map(|p| p.flow.name.clone()))
+                .collect()
+        };
+        assert_eq!(
+            named(&shared),
+            vec![Some("proxy.example.net".to_owned())],
+            "placed under the proxy's name"
+        );
+        // The rest of the handshake, in the same flow's sniff: a new one reads it from the start.
+        let mut sniff = Sniff::new(true, false);
+        for read in &reads {
+            for found in sniff.feed(read) {
+                if let Found::Request(request) = found {
+                    shared.declared(&opened, &request);
+                }
+            }
+        }
+        assert!(
+            !named(&shared).contains(&Some("proxy.example.net".to_owned())),
+            "{:?}",
+            named(&shared)
+        );
+        let _ = &mut shared;
+    }
+
+    /// One destination reached directly and through a proxy is two places in "Now".
+    #[test]
+    fn a_destination_reached_through_a_proxy_is_a_place_apart() {
+        let shared = engine(true);
+        learn(&shared, "93.184.216.34", "example.com");
+        let (direct, bytes) = open(&shared, UID, at([93, 184, 216, 34], 443));
+        relay(
+            &shared,
+            direct,
+            &bytes,
+            &[&crate::tls::tests::hello("example.com", 1000)],
+        );
+        let (proxied, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
+        let reads = socks5_reads();
+        let reads: Vec<&[u8]> = reads.iter().map(Vec::as_slice).collect();
+        relay(&shared, proxied, &bytes, &reads);
+        let view = shared.now_view(T + 1_000);
+        let places: Vec<_> = view.apps.iter().flat_map(|a| a.places.iter()).collect();
+        assert_eq!(places.len(), 2, "{places:?}");
+        assert_eq!(places.iter().filter(|p| p.flow.proxy.is_some()).count(), 1);
     }
 
     #[test]

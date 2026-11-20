@@ -4686,3 +4686,55 @@ fn telegrams_proxy_is_inferred_only_while_it_does_not_reach_its_own_ranges() -> 
         },
     )
 }
+
+/// The user's tool's own flows, and an app chained through it, are not read for a proxy (ADR 0052, decision 3): what
+/// they carry is the tool's. A chained app's own SOCKS5 proxy, reached through the tool, and the tool's own SOCKS5
+/// request to its upstream are both left as they are, while the same request from an app that goes directly is read.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn the_tools_own_flows_and_chained_apps_are_not_read_for_a_proxy() -> Outcome {
+    lab(
+        "the_tools_own_flows_and_chained_apps_are_not_read_for_a_proxy",
+        &Limits::default(),
+        |engine| async move {
+            engine.tunnels(&datapavan_net::TunnelSetting {
+                log_destinations: true,
+                ..datapavan_net::TunnelSetting::default()
+            });
+            let tool = proxy(Settings::default()).await?;
+            // The second app is the tool; the first is chained through it.
+            engine.chain(Some(Chain {
+                tool: SECOND_APP,
+                ..lab_chain(tool.address)
+            }));
+            let own = scripted_proxy(SERVER, SOCKS).await?;
+            let mut chained = app_connect(own).await?;
+            step(&mut chained, &[5, 1, 0], &[5, 2]).await?;
+            // The tool's own connection: from a socket the lab's Android names the second app for.
+            let socket = TcpSocket::new_v4()?;
+            socket.bind(SocketAddr::from((
+                Addresses::COMMON.tun4,
+                SECOND_PORTS.start + 7,
+            )))?;
+            let mut upstream = within("the tool's own connection", socket.connect(own)).await?;
+            step(&mut upstream, &[5, 1, 0], &[5, 2]).await?;
+            let mut request = vec![5, 1, 0, 3, 11];
+            request.extend_from_slice(b"example.com");
+            request.extend_from_slice(&443u16.to_be_bytes());
+            for connection in [&mut chained, &mut upstream] {
+                step(connection, &request, &[1, 0]).await?;
+            }
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            let to_own: Vec<_> = engine
+                .flows()
+                .into_iter()
+                .filter(|f| f.destination == own)
+                .collect();
+            assert_eq!(to_own.len(), 2, "{to_own:?}");
+            assert!(to_own.iter().all(|f| f.proxy.is_none()), "{to_own:?}");
+            assert_eq!(engine.counters()[61], 0, "no request declared");
+            drop((chained, upstream));
+            Ok(())
+        },
+    )
+}
