@@ -188,4 +188,225 @@
         <item quantity="one">%d رکورد زیر شمارهٔ این برنامه از خود برنامه قدیمی‌تر است. این رکورد به برنامه‌ای تعلق دارد که بعداً حذف شده است.</item>
         <item quantity="other">%d رکورد زیر شمارهٔ این برنامه از خود برنامه قدیمی‌تر است. این رکوردها به برنامه‌ای تعلق دارند که بعداً حذف شده است.</item>
     </plurals>
+
+    <!-- W7, part 2 (ADR 0035): the WireGuard import, the configurations, each app's way and their states. -->
+    <!-- The heading of Watch's section for WireGuard configurations from the user's VPN provider. -->
+    <string name="tunnels_title">پیکربندی‌های WireGuard</string>
+    <string name="tunnels_intro">برنامه‌هایی را که انتخاب می‌کنید از یک سرور WireGuard ارائه‌دهندهٔ وی‌پی‌ان خود عبور دهید. سرویس Watch هر پیکربندی را رمزگذاری‌شده روی این گوشی نگه می‌دارد.</string>
+    <!-- Where the key that encrypts the configurations is kept. -->
+    <string name="tunnels_key_strongbox">کلیدی که آن‌ها را رمزگذاری می‌کند در تراشهٔ امنیتی جداگانهٔ این گوشی (StrongBox) است.</string>
+    <string name="tunnels_key_tee">کلیدی که آن‌ها را رمزگذاری می‌کند در بخش امن این گوشی است، جدا از اندروید.</string>
+    <string name="tunnels_key_software">کلیدی را که آن‌ها را رمزگذاری می‌کند، اندروید به‌صورت نرم‌افزاری نگه می‌دارد. این گوشی سخت‌افزار امنی برای آن ندارد.</string>
+    <!-- Android 10 and 11 do not say which kind of secure hardware holds the key. -->
+    <string name="tunnels_key_secure_hardware">کلیدی که آن‌ها را رمزگذاری می‌کند در سخت‌افزار امن این گوشی است، جدا از اندروید.</string>
+    <string name="tunnels_none">هنوز هیچ پیکربندی‌ای نیست.</string>
+    <string name="tunnels_add_file">افزودن از فایل</string>
+    <string name="tunnels_add_camera">گرفتن عکس از کد QR</string>
+    <string name="tunnels_add_picture">انتخاب تصویر کد QR</string>
+    <!-- Shown under the two QR code buttons. -->
+    <string name="tunnels_picture_note">تصویر یک کد QR، کلید خصوصی پیکربندی را در خود دارد. پس از افزودن آن، شاید بخواهید تصویر را پاک کنید.</string>
+    <!-- %d: the most configurations Watch keeps (8). -->
+    <plurals name="tunnels_full">
+        <item quantity="one">سرویس Watch حداکثر %d پیکربندی نگه می‌دارد. برای افزودن پیکربندی دیگر، آن را حذف کنید.</item>
+        <item quantity="other">سرویس Watch حداکثر %d پیکربندی نگه می‌دارد. برای افزودن پیکربندی دیگر، یکی را حذف کنید.</item>
+    </plurals>
+    <string name="tunnels_default">پیش‌فرض</string>
+    <string name="tunnels_default_note">پیکربندی پیش‌فرض، پینگ و ترافیکی را هم که اندروید نمی‌گوید از کدام برنامه است جابه‌جا می‌کند. این کار را تا وقتی می‌کند که دست‌کم یک برنامه از یکی از پیکربندی‌ها عبور می‌کند. تا وقتی پیکربندی پیش‌فرض باز نمی‌شود، پینگ و آن ترافیک منتظر می‌مانند.</string>
+    <!-- The same, with a single configuration, which is the default. -->
+    <string name="tunnels_default_note_one">این پیکربندی، پینگ و ترافیکی را هم که اندروید نمی‌گوید از کدام برنامه است جابه‌جا می‌کند، تا وقتی که دست‌کم یک برنامه از آن عبور می‌کند. تا وقتی باز نمی‌شود، پینگ و آن ترافیک منتظر می‌مانند.</string>
+    <!-- Apps routed to a configuration the user removed, choosing that they wait. -->
+    <plurals name="tunnels_waiting">
+        <item quantity="one">%d برنامه منتظر پیکربندی‌ای است که حذف کرده‌اید، پس هیچ داده‌ای از آن بیرون نمی‌رود. در «راه هر برنامه» راه دیگری به آن بدهید.</item>
+        <item quantity="other">%d برنامه منتظر پیکربندی‌ای هستند که حذف کرده‌اید، پس هیچ داده‌ای از آن‌ها بیرون نمی‌رود. در «راه هر برنامه» راه دیگری به آن‌ها بدهید.</item>
+    </plurals>
+    <!-- A change of the configurations that could not be saved; nothing was changed. -->
+    <string name="tunnels_not_saved_storage">ذخیره نشد. سرویس Watch نتوانست در حافظهٔ این گوشی بنویسد؛ شاید حافظه پر باشد. پیکربندی‌های شما همان‌طور که بودند می‌مانند.</string>
+    <string name="tunnels_not_saved_keystore">ذخیره نشد. مخزن کلید گوشی پاسخ نداد. پیکربندی‌های شما همان‌طور که بودند می‌مانند. دوباره امتحان کنید.</string>
+    <string name="tunnels_not_saved_gone">ذخیره نشد. پیکربندی‌ای که قرار بود جایگزین شود، در این فاصله حذف شد.</string>
+    <string name="tunnels_not_saved_other">ذخیره نشد. در Watch مشکلی پیش آمد. پیکربندی‌های شما همان‌طور که بودند می‌مانند.</string>
+    <string name="tunnels_make_default">پیش‌فرض کردن</string>
+    <string name="tunnels_rename">تغییر نام</string>
+    <string name="tunnels_replace">جایگزین کردن</string>
+    <string name="tunnels_remove">حذف کردن</string>
+    <string name="tunnels_save_name">ذخیرهٔ نام</string>
+    <string name="tunnels_name">نام</string>
+    <!-- %1$d: a number, for a configuration whose file gave no name. -->
+    <string name="tunnels_default_name">WireGuard %1$d</string>
+    <plurals name="tunnels_apps">
+        <item quantity="one">%d برنامه از آن عبور می‌کند.</item>
+        <item quantity="other">%d برنامه از آن عبور می‌کنند.</item>
+    </plurals>
+    <string name="tunnels_no_apps">هنوز هیچ برنامه‌ای از آن عبور نمی‌کند. برنامه‌هایش را در «راه هر برنامه» انتخاب کنید.</string>
+    <!-- A switch for one configuration (ADR 0035, question 8). -->
+    <string name="tunnels_local">شبکهٔ محلی به‌صورت مستقیم</string>
+    <string name="tunnels_local_note">وقتی روشن است، برنامه‌هایش مستقیم به چاپگرها و دستگاه‌های دیگر شبکهٔ خودتان وصل می‌شوند، نه از راه سرور.</string>
+    <!-- The same switch as the chain's, which governs both. -->
+    <string name="tunnels_log_note">این گزینه برنامه‌هایی را هم که از فیلترشکن شما عبور می‌دهید در بر می‌گیرد.</string>
+
+    <!-- The notification while configurations that open only on an unlocked phone wait for the unlock (ADR 0047's
+         profile). It names no provider and no configuration, on the lock screen or off it. -->
+    <string name="unlock_channel">در انتظار باز شدن قفل</string>
+    <string name="unlock_title">برای وصل شدن دوباره، قفل گوشی را باز کنید</string>
+    <string name="unlock_text">بعضی برنامه‌ها منتظر پیکربندی وی‌پی‌انی هستند که فقط وقتی گوشی قفل نیست باز می‌شود. تا آن موقع هیچ داده‌ای از آن‌ها بیرون نمی‌رود.</string>
+    <!-- The notification while what Watch kept of its configurations can no longer be opened and every app is held.
+         It names no provider and no configuration, and opens Watch's screen. -->
+    <string name="lost_title">سرویس Watch برنامه‌های شما را نگه داشته است</string>
+    <string name="lost_text">سرویس Watch دیگر نمی‌تواند آنچه را از پیکربندی‌های وی‌پی‌ان شما نگه داشته بود باز کند. Watch را باز کنید تا انتخاب کنید برنامه‌هایتان چه کنند.</string>
+    <!-- On Watch's screen, in place of the configurations, while they can no longer be opened. -->
+    <string name="tunnels_lost_title">پیکربندی‌های شما دیگر باز نمی‌شوند</string>
+    <string name="tunnels_lost_body">سرویس Watch دیگر نمی‌تواند آنچه را از پیکربندی‌های WireGuard شما نگه داشته بود باز کند، مثلاً پس از بازنشانی مخزن کلید گوشی. نمی‌داند کدام برنامه‌ها از آن‌ها عبور می‌کردند. پس همهٔ برنامه‌ها را نگه می‌دارد و هیچ داده‌ای بیرون نمی‌رود، تا وقتی که شما انتخاب کنید.</string>
+    <string name="tunnels_lost_again">افزودن دوبارهٔ پیکربندی‌ها</string>
+    <string name="tunnels_lost_let_go">رها کردن برنامه‌ها به راه خودشان</string>
+    <string name="tunnels_lost_note">در هر دو صورت، هر برنامه از آن پس مستقیم می‌رود، یا اگر جزو برنامه‌هایی باشد که از فیلترشکن شما عبور می‌دهید، از راه آن. پیکربندی‌ای اضافه کنید تا برنامه‌ای را دوباره از آن عبور دهید.</string>
+    <!-- A configuration's state, refreshed while the screen is shown. -->
+    <string name="tunnel_state_off">تا وقتی Watch خاموش است، به کار نمی‌رود.</string>
+    <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->
+    <string name="tunnel_state_connected">وصل است.</string>
+    <plurals name="tunnel_handshake_seconds">
+        <item quantity="one">آخرین دست‌دهی %d ثانیه پیش بود.</item>
+        <item quantity="other">آخرین دست‌دهی %d ثانیه پیش بود.</item>
+    </plurals>
+    <plurals name="tunnel_handshake_minutes">
+        <item quantity="one">آخرین دست‌دهی %d دقیقه پیش بود.</item>
+        <item quantity="other">آخرین دست‌دهی %d دقیقه پیش بود.</item>
+    </plurals>
+    <string name="tunnel_state_idle">هنوز وصل نشده است. وقتی یکی از برنامه‌هایش چیزی بفرستد، وصل می‌شود.</string>
+    <string name="tunnel_state_not_answering">سرور پاسخ نمی‌دهد. برنامه‌هایش منتظر می‌مانند و هیچ داده‌ای از آن‌ها مستقیم بیرون نمی‌رود.</string>
+    <string name="tunnel_state_missing">هنوز در Watch آماده نیست. برنامه‌هایش منتظر می‌مانند و هیچ داده‌ای از آن‌ها مستقیم بیرون نمی‌رود.</string>
+    <string name="tunnel_state_locked">تا وقتی گوشی قفل است، باز نمی‌شود. برنامه‌هایش منتظر می‌مانند تا قفل گوشی را باز کنید.</string>
+    <string name="tunnel_state_unavailable">الان باز نمی‌شود. برنامه‌هایش منتظر می‌مانند و Watch دوباره تلاش می‌کند.</string>
+    <string name="tunnel_state_lost">دیگر روی این گوشی باز نمی‌شود. برنامه‌هایش منتظر می‌مانند. آن را دوباره با فایل یا کد QR خودش جایگزین کنید؛ برنامه‌هایش با آن می‌مانند.</string>
+    <string name="tunnel_state_plain_dns">سرویس Watch نشانی سرور را فقط از راه DNS رمزگذاری‌نشده پیدا کرد. شبکهٔ شما ممکن است ببیند از کدام ارائه‌دهنده استفاده می‌کنید.</string>
+
+    <!-- Removing a configuration: what its apps do then. %1$s: its name. -->
+    <string name="tunnels_remove_title">حذف %1$s؟</string>
+    <string name="tunnels_remove_wait">برنامه‌هایش منتظر می‌مانند و هیچ چیزی نمی‌فرستند، تا وقتی که راه دیگری برایشان انتخاب کنید.</string>
+    <string name="tunnels_remove_other_way">برنامه‌هایش از راه دیگرشان می‌روند: مستقیم، یا اگر جزو برنامه‌هایی باشند که از فیلترشکن شما عبور می‌دهید، از راه آن.</string>
+    <string name="tunnels_remove_confirm">حذف کردن</string>
+    <string name="tunnels_cancel">لغو</string>
+
+    <!-- The confirmation before anything is saved. -->
+    <string name="import_title">این پیکربندی را بررسی کنید</string>
+    <!-- %1$s: the name of the configuration it replaces. -->
+    <string name="import_replace_title">جایگزین کردن %1$s</string>
+    <string name="import_replace_note">برنامه‌ها و گزینه‌هایش همان‌طور که هستند می‌مانند.</string>
+    <!-- %1$s: the server's address or name; %2$d: its port. -->
+    <string name="import_server">سرور: %1$s، درگاه %2$d.</string>
+    <string name="import_server_name">سرویس Watch پیش از شروع تونل، این نام را از راه شبکهٔ شما جست‌وجو می‌کند. اگر DNS خصوصی روشن نباشد، شبکهٔ شما ممکن است آن را ببیند.</string>
+    <!-- %1$s: the addresses, comma separated. -->
+    <string name="import_addresses">نشانی این گوشی در آن: %1$s.</string>
+    <string name="import_no_ipv6">نشانی IPv6 ندارد. اتصال‌های IPv6 برنامه‌هایی که انتخاب کرده‌اید پذیرفته نمی‌شوند، پس این برنامه‌ها از IPv4 استفاده می‌کنند.</string>
+    <!-- %1$s: the DNS servers, comma separated. -->
+    <string name="import_dns">نام‌هایی که برنامه‌های انتخابی شما جست‌وجو می‌کنند، از راه سرور به %1$s می‌روند.</string>
+    <string name="import_everything">همهٔ ترافیک برنامه‌های انتخابی شما از آن عبور می‌کند.</string>
+    <!-- %1$s: the networks, comma separated. -->
+    <string name="import_narrower">فقط این مقصدها از آن عبور می‌کنند: %1$s. سرویس Watch هر مقصد دیگر برنامه‌های انتخابی شما را نمی‌پذیرد و هرگز آن را مستقیم نمی‌فرستد.</string>
+    <string name="import_preshared">یک کلید از پیش مشترک دارد، رمزی اضافه که از آن در برابر رایانه‌های کوانتومی آینده محافظت می‌کند.</string>
+    <string name="import_no_preshared">کلید از پیش مشترک ندارد.</string>
+    <!-- %1$d: seconds. -->
+    <plurals name="import_keepalive">
+        <item quantity="one">هر %d ثانیه یک بستهٔ کوچک می‌فرستد تا اتصال باز بماند. این کار کمی باتری مصرف می‌کند.</item>
+        <item quantity="other">هر %d ثانیه یک بستهٔ کوچک می‌فرستد تا اتصال باز بماند. این کار کمی باتری مصرف می‌کند.</item>
+    </plurals>
+    <!-- %1$d: bytes. -->
+    <plurals name="import_mtu">
+        <item quantity="one">بزرگ‌ترین بسته درون آن: %d بایت.</item>
+        <item quantity="other">بزرگ‌ترین بسته درون آن: %d بایت.</item>
+    </plurals>
+    <string name="import_apps">برنامه‌هایی که از آن عبور می‌دهید</string>
+    <string name="import_apps_from_file">برنامه‌هایی که فایل نام می‌برد، بالای فهرست زیر آمده‌اند. پیش از ذخیره، آن‌ها را بررسی کنید.</string>
+    <string name="import_apps_not_ticked">برنامه‌ای که الان از فیلترشکن شما یا پیکربندی دیگری عبور می‌کند، تیک نخورده است. برای اینکه آن را به اینجا منتقل کنید، تیکش بزنید.</string>
+    <!-- %1$s: the apps it leaves out, comma separated. -->
+    <string name="import_excluded">فایل %1$s را مستثنا می‌کند و همهٔ برنامه‌های دیگر گوشی شما را پیشنهاد می‌کند.</string>
+    <string name="import_excluded_now">این فقط برنامه‌هایی را در بر می‌گیرد که الان روی گوشی شما هستند. برنامه‌ای که بعداً نصب کنید از آن عبور نمی‌کند، مگر اینکه آن را انتخاب کنید.</string>
+    <!-- Under an app: how it goes now. %1$s: its way, such as Directly. -->
+    <string name="import_app_way">راهش الان: %1$s</string>
+    <!-- Under a ticked app that goes another way now. %1$s: that way. -->
+    <string name="import_app_moves">با ذخیره، به اینجا منتقل می‌شود. راهش تا الان: %1$s</string>
+    <!-- The heading over the apps the file does not name. -->
+    <string name="import_apps_others">برنامه‌های دیگر</string>
+    <!-- %1$s: package names, comma separated. -->
+    <string name="import_not_installed">در فایل نام برده شده‌اند ولی نصب نشده‌اند: %1$s.</string>
+    <string name="import_not_choosable">در فایل نام برده شده‌اند، ولی جزو برنامه‌هایی نیستند که اینجا می‌توانید انتخاب کنید: %1$s.</string>
+    <string name="import_left_out">در فایل نام برده شده‌اند، ولی از Watch کنار گذاشته شده‌اند، پس هیچ داده‌ای از آن‌ها از Watch نمی‌گذرد: %1$s.</string>
+    <string name="import_save">ذخیره</string>
+    <string name="import_apps_loading">در حال بارگذاری برنامه‌های شما…</string>
+
+    <!-- Why a configuration was refused. %1$d: a line of the file; %2$s: what is wrong with it. -->
+    <string name="refused_line">خط %1$d: %2$s</string>
+    <string name="refused_too_long">فایل بلندتر از آن است که پیکربندی WireGuard باشد.</string>
+    <string name="refused_not_text">فایل متنی نیست، پس پیکربندی WireGuard نیست.</string>
+    <string name="refused_unreadable">این خط خوانده نمی‌شود.</string>
+    <string name="refused_outside_section">یک تنظیم پیش از هر بخش [Interface] یا [Peer] آمده است.</string>
+    <string name="refused_unknown_section">سرویس Watch فقط بخش‌های [Interface] و [Peer] را می‌شناسد.</string>
+    <string name="refused_several_interfaces">فایل یک بخش [Interface] دوم دارد.</string>
+    <string name="refused_several_peers">فایل یک بخش [Peer] دوم دارد. سرویس Watch برای هر پیکربندی یک سرور می‌پذیرد.</string>
+    <!-- %1$s: the name of a setting, such as PostUp. -->
+    <string name="refused_unsupported">سرویس Watch تنظیم %1$s را اجرا نمی‌کند.</string>
+    <string name="refused_unsupported_unnamed">سرویس Watch این تنظیم را اجرا نمی‌کند.</string>
+    <string name="refused_repeated">تنظیم %1$s دو بار آمده است.</string>
+    <string name="refused_bad_value">مقدار %1$s خوانده نمی‌شود.</string>
+    <string name="refused_several_addresses">فایل دو نشانی از یک نوع دارد. سرویس Watch یک نشانی IPv4 و یک نشانی IPv6 می‌پذیرد.</string>
+    <string name="refused_search_domain">تنظیم DNS یک دامنهٔ جست‌وجو نام می‌برد که Watch نمی‌تواند از آن استفاده کند.</string>
+    <string name="refused_no_interface">فایل بخش [Interface] ندارد.</string>
+    <string name="refused_no_peer">فایل بخش [Peer] ندارد.</string>
+    <string name="refused_no_private_key">فایل کلید خصوصی (PrivateKey) ندارد.</string>
+    <string name="refused_no_address">فایل هیچ نشانی‌ای (Address) نمی‌دهد.</string>
+    <string name="refused_no_dns">فایل هیچ سرور DNS نام نمی‌برد. نام‌هایی که برنامه‌های شما جست‌وجو می‌کنند هیچ جای خصوصی‌ای برای رفتن نخواهند داشت، پس Watch آن را نمی‌پذیرد.</string>
+    <string name="refused_dns_unreachable">هیچ‌کدام از سرورهای DNS فایل از راه سرور این پیکربندی در دسترس نیستند.</string>
+    <string name="refused_no_public_key">فایل کلید سرور (PublicKey) را ندارد.</string>
+    <string name="refused_no_endpoint">فایل نمی‌گوید سرور کجاست (Endpoint).</string>
+    <string name="refused_no_allowed_ips">فایل نمی‌گوید کدام مقصدها از سرور عبور می‌کنند (AllowedIPs).</string>
+    <string name="refused_bad_mtu">مقدار MTU فایل از مقدارهایی نیست که Watch می‌پذیرد: ۵۷۶ تا ۱۵۰۰ بایت، و با نشانی IPv6 دست‌کم ۱۲۸۰.</string>
+    <string name="refused_both_application_lists">فایل هم برنامه‌هایی را برای شامل شدن نام می‌برد و هم برنامه‌هایی را برای مستثنا شدن. فقط یکی از این دو فهرست مجاز است.</string>
+    <!-- %d: the most configurations Watch keeps (8). -->
+    <plurals name="refused_too_many">
+        <item quantity="one">سرویس Watch حداکثر %d پیکربندی نگه می‌دارد. برای افزودن پیکربندی دیگر، آن را حذف کنید.</item>
+        <item quantity="other">سرویس Watch حداکثر %d پیکربندی نگه می‌دارد. برای افزودن پیکربندی دیگر، یکی را حذف کنید.</item>
+    </plurals>
+    <string name="refused_unknown">سرویس Watch نتوانست این پیکربندی را بخواند.</string>
+    <string name="import_unreadable">سرویس Watch نتوانست این فایل را بخواند.</string>
+    <string name="import_too_slow">خواندن این فایل بیش از حد طول کشید. اگر آنلاین ذخیره شده است، اول آن را دانلود کنید.</string>
+
+    <!-- Reading a QR code from a picture. -->
+    <string name="qr_not_a_picture">این تصویری نیست که Watch بتواند بخواند.</string>
+    <string name="qr_too_large">این تصویر بزرگ‌تر از آن است که خوانده شود.</string>
+    <string name="qr_no_code">هیچ کد QR در این تصویر خوانده نشد. عکسی واضح امتحان کنید که کل کد در آن باشد.</string>
+    <string name="qr_too_long">این کد QR متنی بیشتر از اندازهٔ یک پیکربندی WireGuard در خود دارد.</string>
+    <string name="qr_too_slow">خواندن این تصویر بیش از حد طول کشید.</string>
+    <string name="qr_stopped">بخش خواندن تصویر در Watch روی این تصویر متوقف شد.</string>
+    <string name="qr_no_camera">این گوشی هیچ برنامهٔ دوربینی ندارد که بتواند عکس را برای Watch بگیرد.</string>
+    <string name="qr_reading">در حال خواندن تصویر…</string>
+    <string name="qr_photo_deleted">عکس پاک شد.</string>
+
+    <!-- Each app's one way (ADR 0035, routes). -->
+    <string name="routes_title">راه هر برنامه</string>
+    <string name="routes_intro">هر برنامه از یک راه می‌رود: مستقیم، از راه فیلترشکن شما، یا از راه یک پیکربندی WireGuard.</string>
+    <string name="routes_choose">انتخاب راه برنامه‌ها</string>
+    <string name="routes_done">تمام</string>
+    <string name="route_direct">مستقیم</string>
+    <!-- %1$s: the tool's name. -->
+    <string name="route_tool">از راه %1$s</string>
+    <string name="route_tool_unnamed">از راه فیلترشکن شما</string>
+    <!-- %1$s: a configuration's name. -->
+    <string name="route_tunnel">از راه %1$s</string>
+    <string name="route_waiting">منتظر پیکربندی‌ای است که حذف شده است. هیچ داده‌ای از آن بیرون نمی‌رود.</string>
+    <string name="route_left_out">از Watch کنار گذاشته شده است: بدون Watch به اینترنت می‌رود.</string>
+    <string name="routes_all_apps_note">تا وقتی همهٔ برنامه‌ها از فیلترشکن شما عبور می‌کنند، یک برنامه فقط وقتی مستقیم می‌رود که آن را از Watch کنار بگذارید.</string>
+    <!-- The chain's choice of apps: an app with a configuration goes through it instead of the tool. %1$s: the configuration's name. -->
+    <string name="chain_app_tunnel">به‌جای فیلترشکن از راه %1$s می‌رود. آن را در «راه هر برنامه» تغییر دهید.</string>
+    <!-- The chain's choice of apps: an app that waits for a removed configuration. -->
+    <string name="chain_app_waiting">منتظر پیکربندی‌ای است که حذف کرده‌اید، پس هیچ داده‌ای از آن بیرون نمی‌رود. آن را در «راه هر برنامه» تغییر دهید.</string>
+    <plurals name="chain_tunnelled_apps">
+        <item quantity="one">%d برنامه به‌جای فیلترشکن از راه یک پیکربندی WireGuard می‌رود.</item>
+        <item quantity="other">%d برنامه به‌جای فیلترشکن از راه یک پیکربندی WireGuard می‌روند.</item>
+    </plurals>
+
+    <!-- "Now" and each app's history: an app sent through a WireGuard configuration. %1$s: its name. -->
+    <string name="now_through_tunnel">از راه %1$s فرستاده شد. اینکه به کجا وصل شد نشان داده نمی‌شود، چون «ثبت مقصد اتصال این برنامه‌ها» خاموش است.</string>
+    <string name="now_destination_tunnel">از راه %1$s</string>
+    <string name="history_through_tunnel">از راه %1$s فرستاده شد. اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد اتصال این برنامه‌ها» خاموش بود.</string>
+    <!-- In place of a configuration's name: inside the sentences above, and also alone as a configuration's heading and in its buttons' and rows' labels, so it must read well on its own too. -->
+    <string name="tunnel_removed_name">یک پیکربندی WireGuard که حذف شده است</string>
+    <string name="tunnel_closed_name">یک پیکربندی WireGuard که الان باز نمی‌شود</string>
 </resources>

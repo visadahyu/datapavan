@@ -658,4 +658,36 @@
     <!-- W5, part 3 (ADR 0046): the way into Watch's "Now" from an app's page, Advanced only. -->
     <!-- Datapavan Advanced, on an app's page: opens Watch's view "Now" for that app. -->
     <string name="watch_now_open">ببینید این برنامه الان چه می‌فرستد</string>
+
+    <!-- W7, part 2 (ADR 0035, release gate): the licence screen. -->
+    <!-- The licence screen: the heading over the full texts the app carries. -->
+    <string name="licences_texts_title">متن پروانه‌ها</string>
+    <!-- What each full text is. NOTICE also says where to get the source code of GotaTun, as its licence asks. -->
+    <string name="licences_text_notice">اطلاعیه‌هایی که این برنامه باید همراه داشته باشد، و اینکه کد منبع بخش‌هایی را که پروانه‌شان این را می‌خواهد از کجا می‌توان گرفت.</string>
+    <string name="licences_text_licence">پروانه Apache License 2.0. برنامه Datapavan با آن منتشر شده است، و بسیاری از بخش‌هایش هم.</string>
+    <!-- %1$s: the name of a native library file, for example libdatapavan.so. -->
+    <string name="licences_text_native">متن پروانه‌های بسته‌های Rust درون %1$s.</string>
+    <string name="licences_text_mpl">پروانه Mozilla Public License 2.0. کد WireGuard در Watch، یعنی GotaTun، با آن منتشر شده است.</string>
+    <string name="licences_text_gotatun">پروانه BSD 3-Clause License برای بخش‌هایی از GotaTun که از BoringTun شرکت Cloudflare آمده‌اند.</string>
+    <!-- A file the screen has no description for: its name only. -->
+    <string name="licences_text_other">متن پروانه‌ای که برنامه همراه دارد.</string>
+    <!-- The heading over the app's own code and the Java and Kotlin libraries in it. -->
+    <string name="licences_jvm_title">کد برنامه و کتابخانه‌های Java و Kotlin آن</string>
+    <!-- Datapavan's own code, the first entry under that heading. -->
+    <string name="licences_own">کد خود Datapavan</string>
+    <!-- The heading over the Rust packages inside one native library. %1$s: its file name, for example libdatapavan.so. -->
+    <string name="licences_native_title">بسته‌های Rust درون %1$s</string>
+    <!-- A button under a part: opens the licence text in the file %1$s. -->
+    <string name="licences_read">خواندن %1$s</string>
+    <!-- The text view: back to the list of licences. -->
+    <string name="licences_back">بازگشت به پروانه‌ها</string>
+    <!-- While a long text is read from the app. -->
+    <string name="licences_opening">در حال باز کردن متن…</string>
+    <string name="licences_unreadable">این متن باز نشد.</string>
+    <!-- The heading over the databases the app carries, last on the licence screen. -->
+    <string name="licences_data_title">داده‌ها</string>
+    <!-- "Data sources" is the name of the Settings page that lists each database with its licence. -->
+    <string name="licences_data_note">پایگاه‌های داده‌ای که Datapavan برنامه‌ها و گوشی شما را با آن‌ها مقایسه می‌کند، پروانه‌های خودشان را دارند، مانند پروانه Open Database License فهرست ردیاب‌های εxodus. صفحه «منابع داده» در تنظیمات، هر کدام را با پروانه‌اش و جایی که از آن می‌آید نام می‌برد.</string>
+    <!-- A line of a list of parts that the screen could not read: shown as it is. -->
+    <string name="licences_unread">همان‌طور که در فهرست آمده است: %1$s</string>
 </resources>

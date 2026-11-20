@@ -695,4 +695,36 @@
     <!-- W5, part 3 (ADR 0046): the way into Watch's "Now" from an app's page, Advanced only. -->
     <!-- Datapavan Advanced, on an app's page: opens Watch's view "Now" for that app. -->
     <string name="watch_now_open">عرض ما يرسله هذا التطبيق الآن</string>
+
+    <!-- W7, part 2 (ADR 0035, release gate): the licence screen. -->
+    <!-- The licence screen: the heading over the full texts the app carries. -->
+    <string name="licences_texts_title">نصوص التراخيص</string>
+    <!-- What each full text is. NOTICE also says where to get the source code of GotaTun, as its licence asks. -->
+    <string name="licences_text_notice">الإشعارات القانونية التي يجب أن يحملها هذا التطبيق، ومن أين تحصل على الرمز المصدري للأجزاء التي يطلب ترخيصها ذلك.</string>
+    <string name="licences_text_licence">ترخيص Apache License 2.0. يُنشر Datapavan بموجبه، وكذلك كثير من أجزائه.</string>
+    <!-- %1$s: the name of a native library file, for example libdatapavan.so. -->
+    <string name="licences_text_native">نصوص تراخيص حزم Rust الموجودة داخل %1$s.</string>
+    <string name="licences_text_mpl">ترخيص Mozilla Public License 2.0. يُنشر بموجبه GotaTun، وهو الرمز البرمجي لـ WireGuard في Watch.</string>
+    <string name="licences_text_gotatun">ترخيص BSD 3-Clause License للأجزاء من GotaTun التي جاءت من BoringTun التابع لـ Cloudflare.</string>
+    <!-- A file the screen has no description for: its name only. -->
+    <string name="licences_text_other">نص ترخيص يحمله التطبيق.</string>
+    <!-- The heading over the app's own code and the Java and Kotlin libraries in it. -->
+    <string name="licences_jvm_title">الرمز البرمجي للتطبيق ومكتبات Java وKotlin فيه</string>
+    <!-- Datapavan's own code, the first entry under that heading. -->
+    <string name="licences_own">الرمز البرمجي الخاص بـ Datapavan</string>
+    <!-- The heading over the Rust packages inside one native library. %1$s: its file name, for example libdatapavan.so. -->
+    <string name="licences_native_title">حزم Rust داخل %1$s</string>
+    <!-- A button under a part: opens the licence text in the file %1$s. -->
+    <string name="licences_read">قراءة %1$s</string>
+    <!-- The text view: back to the list of licences. -->
+    <string name="licences_back">العودة إلى التراخيص</string>
+    <!-- While a long text is read from the app. -->
+    <string name="licences_opening">جارٍ فتح النص…</string>
+    <string name="licences_unreadable">تعذّر فتح هذا النص.</string>
+    <!-- The heading over the databases the app carries, last on the licence screen. -->
+    <string name="licences_data_title">البيانات</string>
+    <!-- "Data sources" is the name of the Settings page that lists each database with its licence. -->
+    <string name="licences_data_note">قواعد البيانات التي يقارن بها Datapavan تطبيقاتك وهاتفك لها تراخيصها الخاصة، مثل ترخيص Open Database License لقائمة أدوات التتبّع εxodus. وتذكر صفحة «مصادر البيانات» في الإعدادات كل قاعدة منها مع ترخيصها ومن أين تأتي.</string>
+    <!-- A line of a list of parts that the screen could not read: shown as it is. -->
+    <string name="licences_unread">معروض كما ورد في القائمة: %1$s</string>
 </resources>

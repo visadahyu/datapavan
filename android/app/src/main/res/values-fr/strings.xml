@@ -667,4 +667,36 @@
     <!-- W5, part 3 (ADR 0046): the way into Watch's "Now" from an app's page, Advanced only. -->
     <!-- Datapavan Advanced, on an app's page: opens Watch's view "Now" for that app. -->
     <string name="watch_now_open">Voir ce que cette appli envoie maintenant</string>
+
+    <!-- W7, part 2 (ADR 0035, release gate): the licence screen. -->
+    <!-- The licence screen: the heading over the full texts the app carries. -->
+    <string name="licences_texts_title">Textes des licences</string>
+    <!-- What each full text is. NOTICE also says where to get the source code of GotaTun, as its licence asks. -->
+    <string name="licences_text_notice">Les mentions que cette appli doit inclure, et où obtenir le code source des composants dont la licence le demande.</string>
+    <string name="licences_text_licence">L\'Apache License 2.0. Datapavan est publié sous cette licence, ainsi que beaucoup de ses composants.</string>
+    <!-- %1$s: the name of a native library file, for example libdatapavan.so. -->
+    <string name="licences_text_native">Les textes des licences des paquets Rust contenus dans %1$s.</string>
+    <string name="licences_text_mpl">La Mozilla Public License 2.0. GotaTun, le code WireGuard de Watch, est publié sous cette licence.</string>
+    <string name="licences_text_gotatun">La BSD 3-Clause License des composants de GotaTun issus de BoringTun, de Cloudflare.</string>
+    <!-- A file the screen has no description for: its name only. -->
+    <string name="licences_text_other">Un texte de licence inclus dans l\'appli.</string>
+    <!-- The heading over the app's own code and the Java and Kotlin libraries in it. -->
+    <string name="licences_jvm_title">Le code de l\'appli et ses bibliothèques Java et Kotlin</string>
+    <!-- Datapavan's own code, the first entry under that heading. -->
+    <string name="licences_own">Le code propre à Datapavan</string>
+    <!-- The heading over the Rust packages inside one native library. %1$s: its file name, for example libdatapavan.so. -->
+    <string name="licences_native_title">Paquets Rust contenus dans %1$s</string>
+    <!-- A button under a part: opens the licence text in the file %1$s. -->
+    <string name="licences_read">Lire %1$s</string>
+    <!-- The text view: back to the list of licences. -->
+    <string name="licences_back">Retour aux licences</string>
+    <!-- While a long text is read from the app. -->
+    <string name="licences_opening">Ouverture du texte…</string>
+    <string name="licences_unreadable">Ce texte n\'a pas pu être ouvert.</string>
+    <!-- The heading over the databases the app carries, last on the licence screen. -->
+    <string name="licences_data_title">Données</string>
+    <!-- "Data sources" is the name of the Settings page that lists each database with its licence. -->
+    <string name="licences_data_note">Les bases de données auxquelles Datapavan compare vos applis et votre téléphone ont leurs propres licences, comme l\'Open Database License de la liste de traceurs εxodus. La page Sources de données, dans les paramètres, nomme chacune d\'elles avec sa licence et sa provenance.</string>
+    <!-- A line of a list of parts that the screen could not read: shown as it is. -->
+    <string name="licences_unread">Affiché tel que la liste l\'indique : %1$s</string>
 </resources>

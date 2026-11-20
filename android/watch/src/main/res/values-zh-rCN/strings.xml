@@ -182,4 +182,216 @@
     <plurals name="history_before_install">
         <item quantity="other">此应用编号下有 %d 条记录早于此应用的安装，属于一个已移除的应用。</item>
     </plurals>
+
+    <!-- W7, part 2 (ADR 0035): the WireGuard import, the configurations, each app's way and their states. -->
+    <!-- The heading of Watch's section for WireGuard configurations from the user's VPN provider. -->
+    <string name="tunnels_title">WireGuard 配置</string>
+    <string name="tunnels_intro">让您选择的应用经由您 VPN 服务商的 WireGuard 服务器连接。Watch 会在这部手机上以加密形式保存每个配置。</string>
+    <!-- Where the key that encrypts the configurations is kept. -->
+    <string name="tunnels_key_strongbox">加密它们的密钥保存在这部手机独立的安全芯片（StrongBox）中。</string>
+    <string name="tunnels_key_tee">加密它们的密钥保存在这部手机的安全区域中，与 Android 隔离。</string>
+    <string name="tunnels_key_software">加密它们的密钥由 Android 以软件方式保存。这部手机没有可用于保存它的安全硬件。</string>
+    <!-- Android 10 and 11 do not say which kind of secure hardware holds the key. -->
+    <string name="tunnels_key_secure_hardware">加密它们的密钥保存在这部手机的安全硬件中，与 Android 隔离。</string>
+    <string name="tunnels_none">还没有配置。</string>
+    <string name="tunnels_add_file">从文件添加</string>
+    <string name="tunnels_add_camera">拍一张 QR 码照片</string>
+    <string name="tunnels_add_picture">选择一张 QR 码图片</string>
+    <!-- Shown under the two QR code buttons. -->
+    <string name="tunnels_picture_note">QR 码图片中含有该配置的私钥。添加之后，您可以考虑删除这张图片。</string>
+    <!-- %d: the most configurations Watch keeps (8). -->
+    <plurals name="tunnels_full">
+        <item quantity="other">Watch 最多保存 %d 个配置。要添加新的配置，请先移除一个。</item>
+    </plurals>
+    <string name="tunnels_default">默认</string>
+    <string name="tunnels_default_note">只要有任何应用经由某个配置连接，默认配置还会承载 ping，以及 Android 未指明所属应用的流量。默认配置无法打开时，ping 和这类流量都会等待。</string>
+    <!-- The same, with a single configuration, which is the default. -->
+    <string name="tunnels_default_note_one">只要有任何应用经由它连接，它还会承载 ping，以及 Android 未指明所属应用的流量。它无法打开时，ping 和这类流量都会等待。</string>
+    <!-- Apps routed to a configuration the user removed, choosing that they wait. -->
+    <plurals name="tunnels_waiting">
+        <item quantity="other">%d 个应用在等待一个您已移除的配置，因此它们的任何数据都不会发出。请在“各应用的连接方式”中为它们另选方式。</item>
+    </plurals>
+    <!-- A change of the configurations that could not be saved; nothing was changed. -->
+    <string name="tunnels_not_saved_storage">未保存。Watch 无法写入这部手机的存储空间，存储空间可能已满。您的配置保持原样。</string>
+    <string name="tunnels_not_saved_keystore">未保存。手机的密钥库没有响应。您的配置保持原样。请重试。</string>
+    <string name="tunnels_not_saved_gone">未保存。它要替换的配置在此期间已被移除。</string>
+    <string name="tunnels_not_saved_other">未保存。Watch 内部出了问题。您的配置保持原样。</string>
+    <string name="tunnels_make_default">设为默认</string>
+    <string name="tunnels_rename">重命名</string>
+    <string name="tunnels_replace">替换</string>
+    <string name="tunnels_remove">移除</string>
+    <string name="tunnels_save_name">保存名称</string>
+    <string name="tunnels_name">名称</string>
+    <!-- %1$d: a number, for a configuration whose file gave no name. -->
+    <string name="tunnels_default_name">WireGuard %1$d</string>
+    <plurals name="tunnels_apps">
+        <item quantity="other">%d 个应用经由它连接。</item>
+    </plurals>
+    <string name="tunnels_no_apps">还没有应用经由它连接。请在“各应用的连接方式”中选择它的应用。</string>
+    <!-- A switch for one configuration (ADR 0035, question 8). -->
+    <string name="tunnels_local">直接访问本地网络</string>
+    <string name="tunnels_local_note">开启后，经由它连接的应用会直接访问您自己网络中的打印机和其他设备，而不经过服务器。</string>
+    <!-- The same switch as the chain's, which governs both. -->
+    <string name="tunnels_log_note">这个开关也适用于设置为通过您用来绕过网络限制的工具连接的应用。</string>
+
+    <!-- The notification while configurations that open only on an unlocked phone wait for the unlock (ADR 0047's
+         profile). It names no provider and no configuration, on the lock screen or off it. -->
+    <string name="unlock_channel">等待解锁</string>
+    <string name="unlock_title">解锁手机以重新连接</string>
+    <string name="unlock_text">有些应用在等待一个只有在手机解锁时才能打开的 VPN 配置。在此之前，它们的任何数据都不会发出。</string>
+    <!-- The notification while what Watch kept of its configurations can no longer be opened and every app is held.
+         It names no provider and no configuration, and opens Watch's screen. -->
+    <string name="lost_title">Watch 正在暂停您的应用联网</string>
+    <string name="lost_text">Watch 无法再打开它为您保存的 VPN 配置。请打开 Watch，选择您的应用接下来怎么做。</string>
+    <!-- On Watch's screen, in place of the configurations, while they can no longer be opened. -->
+    <string name="tunnels_lost_title">您的配置已无法再打开</string>
+    <string name="tunnels_lost_body">Watch 无法再打开它为您保存的 WireGuard 配置，例如在手机的密钥库被重置之后就会这样。它不知道哪些应用曾经由这些配置连接。因此，在您做出选择之前，它会暂停所有应用联网，任何数据都不会发出。</string>
+    <string name="tunnels_lost_again">重新添加配置</string>
+    <string name="tunnels_lost_let_go">让应用按各自的方式连接</string>
+    <string name="tunnels_lost_note">无论选择哪一项，之后每个应用都会直接连接；如果您用来绕过网络限制的工具接管该应用，则通过该工具连接。要让某个应用再次经由某个配置连接，请添加配置。</string>
+    <!-- A configuration's state, refreshed while the screen is shown. -->
+    <string name="tunnel_state_off">Watch 关闭时不使用。</string>
+    <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->
+    <string name="tunnel_state_connected">已连接。</string>
+    <plurals name="tunnel_handshake_seconds">
+        <item quantity="other">上次握手在 %d 秒前。</item>
+    </plurals>
+    <plurals name="tunnel_handshake_minutes">
+        <item quantity="other">上次握手在 %d 分钟前。</item>
+    </plurals>
+    <string name="tunnel_state_idle">尚未连接。它的某个应用发送数据时，它就会连接。</string>
+    <string name="tunnel_state_not_answering">服务器没有响应。它的应用会等待，它们的任何数据都不会直接发出。</string>
+    <string name="tunnel_state_missing">在 Watch 中尚未就绪。它的应用会等待，它们的任何数据都不会直接发出。</string>
+    <string name="tunnel_state_locked">手机锁定时无法打开它。它的应用会等待，直到您解锁手机。</string>
+    <string name="tunnel_state_unavailable">现在无法打开它。它的应用会等待，Watch 会再次尝试。</string>
+    <string name="tunnel_state_lost">在这部手机上已无法再打开它。它的应用会等待。请再次用它的文件或 QR 码替换它，这样会保留它的应用。</string>
+    <string name="tunnel_state_plain_dns">Watch 只能通过未加密的 DNS 找到服务器的地址。您的网络可能会看到您使用的是哪家服务商。</string>
+
+    <!-- Removing a configuration: what its apps do then. %1$s: its name. -->
+    <string name="tunnels_remove_title">移除 %1$s？</string>
+    <string name="tunnels_remove_wait">它的应用会等待，不发送任何数据，直到您为它们另选方式。</string>
+    <string name="tunnels_remove_other_way">它的应用会改走它们的另一种方式：直接连接；如果您用来绕过网络限制的工具接管它们，则通过该工具连接。</string>
+    <string name="tunnels_remove_confirm">移除</string>
+    <string name="tunnels_cancel">取消</string>
+
+    <!-- The confirmation before anything is saved. -->
+    <string name="import_title">检查此配置</string>
+    <!-- %1$s: the name of the configuration it replaces. -->
+    <string name="import_replace_title">替换 %1$s</string>
+    <string name="import_replace_note">它的应用和开关保持不变。</string>
+    <!-- %1$s: the server's address or name; %2$d: its port. -->
+    <string name="import_server">服务器：%1$s，端口 %2$d。</string>
+    <string name="import_server_name">Watch 会在隧道启动之前通过您的网络查询这个名称。如果未开启专用 DNS，您的网络可能会看到它。</string>
+    <!-- %1$s: the addresses, comma separated. -->
+    <string name="import_addresses">这部手机在其中的地址：%1$s。</string>
+    <string name="import_no_ipv6">它没有 IPv6 地址。您所选应用的 IPv6 连接会被拒绝，因此它们会使用 IPv4。</string>
+    <!-- %1$s: the DNS servers, comma separated. -->
+    <string name="import_dns">您所选应用查询的名称会经由服务器发送到 %1$s。</string>
+    <string name="import_everything">您所选应用的所有流量都会经由它。</string>
+    <!-- %1$s: the networks, comma separated. -->
+    <string name="import_narrower">只有这些目的地会经由它：%1$s。对于您所选应用的其他所有目的地，Watch 都会拒绝，绝不会直接发送。</string>
+    <string name="import_preshared">它带有预共享密钥，即一个额外的机密，用来防范未来的量子计算机。</string>
+    <string name="import_no_preshared">它没有预共享密钥。</string>
+    <!-- %1$d: seconds. -->
+    <plurals name="import_keepalive">
+        <item quantity="other">它每 %d 秒发送一个小数据包，以保持连接开启。这会消耗少量电量。</item>
+    </plurals>
+    <!-- %1$d: bytes. -->
+    <plurals name="import_mtu">
+        <item quantity="other">其内部的最大数据包：%d 字节。</item>
+    </plurals>
+    <string name="import_apps">要经由它连接的应用</string>
+    <string name="import_apps_from_file">文件中指定的应用排在下方列表的顶部。保存前请检查它们。</string>
+    <string name="import_apps_not_ticked">当前通过您用来绕过网络限制的工具或另一个配置连接的应用不会被勾选。勾选它即可将它移到这里。</string>
+    <!-- %1$s: the apps it leaves out, comma separated. -->
+    <string name="import_excluded">文件排除了 %1$s，并建议加入您手机上的其他所有应用。</string>
+    <string name="import_excluded_now">这仅涵盖您手机上现有的应用。您以后安装的应用不会经由它连接，除非您选择它。</string>
+    <!-- Under an app: how it goes now. %1$s: its way, such as Directly. -->
+    <string name="import_app_way">当前方式：%1$s</string>
+    <!-- Under a ticked app that goes another way now. %1$s: that way. -->
+    <string name="import_app_moves">保存后，它会移到这里。它此前的方式：%1$s</string>
+    <!-- The heading over the apps the file does not name. -->
+    <string name="import_apps_others">其他应用</string>
+    <!-- %1$s: package names, comma separated. -->
+    <string name="import_not_installed">文件中指定但未安装：%1$s。</string>
+    <string name="import_not_choosable">文件中指定，但不在您可以在此选择的应用中：%1$s。</string>
+    <string name="import_left_out">文件中指定，但已被排除在 Watch 之外，因此它们的任何数据都不会经过 Watch：%1$s。</string>
+    <string name="import_save">保存</string>
+    <string name="import_apps_loading">正在加载您的应用…</string>
+
+    <!-- Why a configuration was refused. %1$d: a line of the file; %2$s: what is wrong with it. -->
+    <string name="refused_line">第 %1$d 行：%2$s</string>
+    <string name="refused_too_long">文件太长，不是 WireGuard 配置。</string>
+    <string name="refused_not_text">文件不是文本，因此不是 WireGuard 配置。</string>
+    <string name="refused_unreadable">无法读取这一行。</string>
+    <string name="refused_outside_section">有一项设置出现在任何 [Interface] 或 [Peer] 部分之前。</string>
+    <string name="refused_unknown_section">Watch 只认识 [Interface] 和 [Peer] 这两个部分。</string>
+    <string name="refused_several_interfaces">文件中有第二个 [Interface] 部分。</string>
+    <string name="refused_several_peers">文件中有第二个 [Peer] 部分。Watch 的每个配置只使用一台服务器。</string>
+    <!-- %1$s: the name of a setting, such as PostUp. -->
+    <string name="refused_unsupported">Watch 不执行设置 %1$s。</string>
+    <string name="refused_unsupported_unnamed">Watch 不执行这项设置。</string>
+    <string name="refused_repeated">设置 %1$s 出现了两次。</string>
+    <string name="refused_bad_value">无法读取 %1$s 的值。</string>
+    <string name="refused_several_addresses">文件给出了两个同类地址。Watch 只使用一个 IPv4 地址和一个 IPv6 地址。</string>
+    <string name="refused_search_domain">DNS 设置中指定了搜索域，Watch 无法使用它。</string>
+    <string name="refused_no_interface">文件中没有 [Interface] 部分。</string>
+    <string name="refused_no_peer">文件中没有 [Peer] 部分。</string>
+    <string name="refused_no_private_key">文件中没有私钥（PrivateKey）。</string>
+    <string name="refused_no_address">文件中没有给出地址（Address）。</string>
+    <string name="refused_no_dns">文件中没有指定 DNS 服务器。您的应用查询的名称将没有私密的去处，因此 Watch 不接受此文件。</string>
+    <string name="refused_dns_unreachable">文件中的 DNS 服务器都无法经由文件中的服务器访问。</string>
+    <string name="refused_no_public_key">文件中没有服务器的密钥（PublicKey）。</string>
+    <string name="refused_no_endpoint">文件中没有说明服务器在哪里（Endpoint）。</string>
+    <string name="refused_no_allowed_ips">文件中没有说明哪些目的地经由服务器（AllowedIPs）。</string>
+    <string name="refused_bad_mtu">文件中的 MTU 不在 Watch 接受的范围内：576 至 1,500 字节；如有 IPv6 地址，则至少 1,280 字节。</string>
+    <string name="refused_both_application_lists">文件同时指定了要包含的应用和要排除的应用。两个列表只能使用其中一个。</string>
+    <!-- %d: the most configurations Watch keeps (8). -->
+    <plurals name="refused_too_many">
+        <item quantity="other">Watch 最多保存 %d 个配置。要添加新的配置，请先移除一个。</item>
+    </plurals>
+    <string name="refused_unknown">Watch 无法读取此配置。</string>
+    <string name="import_unreadable">Watch 无法读取此文件。</string>
+    <string name="import_too_slow">读取此文件用时过长。如果文件存储在网上，请先下载它。</string>
+
+    <!-- Reading a QR code from a picture. -->
+    <string name="qr_not_a_picture">这不是 Watch 能读取的图片。</string>
+    <string name="qr_too_large">这张图片太大，无法读取。</string>
+    <string name="qr_no_code">无法在这张图片中读到 QR 码。请试一张清晰的、包含完整 QR 码的照片。</string>
+    <string name="qr_too_long">这个 QR 码包含的文本比一份 WireGuard 配置还多。</string>
+    <string name="qr_too_slow">读取这张图片用时过长。</string>
+    <string name="qr_stopped">Watch 的图片读取程序在处理这张图片时停止了。</string>
+    <string name="qr_no_camera">这部手机没有可以为 Watch 拍照的相机应用。</string>
+    <string name="qr_reading">正在读取图片…</string>
+    <string name="qr_photo_deleted">照片已删除。</string>
+
+    <!-- Each app's one way (ADR 0035, routes). -->
+    <string name="routes_title">各应用的连接方式</string>
+    <string name="routes_intro">每个应用只走一种方式：直接连接、通过您用来绕过网络限制的工具，或者经由一个 WireGuard 配置。</string>
+    <string name="routes_choose">选择应用的连接方式</string>
+    <string name="routes_done">完成</string>
+    <string name="route_direct">直接连接</string>
+    <!-- %1$s: the tool's name. -->
+    <string name="route_tool">通过 %1$s</string>
+    <string name="route_tool_unnamed">通过您用来绕过网络限制的工具</string>
+    <!-- %1$s: a configuration's name. -->
+    <string name="route_tunnel">经由 %1$s</string>
+    <string name="route_waiting">在等待一个已被移除的配置。此应用的任何数据都不会发出。</string>
+    <string name="route_left_out">已排除在 Watch 之外：它不经过 Watch 直接连接互联网。</string>
+    <string name="routes_all_apps_note">当您的工具接管所有应用时，只有将某个应用排除在 Watch 之外，它才会直接连接。</string>
+    <!-- The chain's choice of apps: an app with a configuration goes through it instead of the tool. %1$s: the configuration's name. -->
+    <string name="chain_app_tunnel">此应用改为经由 %1$s 连接。可在“各应用的连接方式”中更改。</string>
+    <!-- The chain's choice of apps: an app that waits for a removed configuration. -->
+    <string name="chain_app_waiting">此应用在等待一个您已移除的配置，因此它的任何数据都不会发出。可在“各应用的连接方式”中更改。</string>
+    <plurals name="chain_tunnelled_apps">
+        <item quantity="other">%d 个应用经由 WireGuard 配置连接，而不通过该工具。</item>
+    </plurals>
+
+    <!-- "Now" and each app's history: an app sent through a WireGuard configuration. %1$s: its name. -->
+    <string name="now_through_tunnel">经由 %1$s 发送。未显示它连接到了哪里，因为“记录这些应用连接到哪里”已关闭。</string>
+    <string name="now_destination_tunnel">经由 %1$s</string>
+    <string name="history_through_tunnel">经由 %1$s 发送。未记录它连接到了哪里，因为当时“记录这些应用连接到哪里”已关闭。</string>
+    <!-- In place of a configuration's name: inside the sentences above, and also alone as a configuration's heading and in its buttons' and rows' labels, so it must read well on its own too. -->
+    <string name="tunnel_removed_name">WireGuard 配置（已移除）</string>
+    <string name="tunnel_closed_name">WireGuard 配置（现在无法打开）</string>
 </resources>

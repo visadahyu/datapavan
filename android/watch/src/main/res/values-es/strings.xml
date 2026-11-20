@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="watch_tagline">Mira a dónde se conecta cada app de tu teléfono.</string>
     <string name="status_on">Watch está activado.</string>
     <string name="status_off">Watch está desactivado.</string>
@@ -194,4 +194,234 @@
         <item quantity="many">%d registros con el ID de usuario de esta app son anteriores a la app. Pertenecen a una app ya eliminada.</item>
         <item quantity="other">%d registros con el ID de usuario de esta app son anteriores a la app. Pertenecen a una app ya eliminada.</item>
     </plurals>
+
+    <!-- W7, part 2 (ADR 0035): the WireGuard import, the configurations, each app's way and their states. -->
+    <!-- The heading of Watch's section for WireGuard configurations from the user's VPN provider. -->
+    <string name="tunnels_title">Configuraciones de WireGuard</string>
+    <string name="tunnels_intro">Envía las apps que elijas a través de un servidor WireGuard de tu proveedor de VPN. Watch guarda cada configuración cifrada en este teléfono.</string>
+    <!-- Where the key that encrypts the configurations is kept. -->
+    <string name="tunnels_key_strongbox">La clave que las cifra está en el chip de seguridad independiente de este teléfono (StrongBox).</string>
+    <string name="tunnels_key_tee">La clave que las cifra está en el área segura de este teléfono, separada de Android.</string>
+    <string name="tunnels_key_software">Android guarda en software la clave que las cifra. Este teléfono no tiene hardware seguro para ella.</string>
+    <!-- Android 10 and 11 do not say which kind of secure hardware holds the key. -->
+    <string name="tunnels_key_secure_hardware">La clave que las cifra está en el hardware seguro de este teléfono, separado de Android.</string>
+    <string name="tunnels_none">Aún no hay ninguna configuración.</string>
+    <string name="tunnels_add_file">Añadir desde un archivo</string>
+    <string name="tunnels_add_camera">Tomar una foto de un código QR</string>
+    <string name="tunnels_add_picture">Elegir una imagen de un código QR</string>
+    <!-- Shown under the two QR code buttons. -->
+    <string name="tunnels_picture_note">Una imagen de un código QR contiene la clave privada de la configuración. Después de añadirla, quizá quieras borrar la imagen.</string>
+    <!-- %d: the most configurations Watch keeps (8). -->
+    <plurals name="tunnels_full">
+        <item quantity="one">Watch guarda como máximo %d configuración. Elimínala para añadir otra.</item>
+        <item quantity="many">Watch guarda como máximo %d configuraciones. Elimina una para añadir otra.</item>
+        <item quantity="other">Watch guarda como máximo %d configuraciones. Elimina una para añadir otra.</item>
+    </plurals>
+    <string name="tunnels_default">Predeterminada</string>
+    <string name="tunnels_default_note">La predeterminada también transporta el ping y el tráfico para el que Android no indica ninguna app. Lo hace mientras alguna app pase por una configuración. Mientras no se pueda abrir la predeterminada, el ping y ese tráfico esperan.</string>
+    <!-- The same, with a single configuration, which is the default. -->
+    <string name="tunnels_default_note_one">También transporta el ping y el tráfico para el que Android no indica ninguna app, mientras alguna app pase por ella. Mientras no se pueda abrir, el ping y ese tráfico esperan.</string>
+    <!-- Apps routed to a configuration the user removed, choosing that they wait. -->
+    <plurals name="tunnels_waiting">
+        <item quantity="one">%d app espera una configuración que eliminaste, así que no sale nada de lo que envía. Dale otra ruta en «La ruta de cada app».</item>
+        <item quantity="many">%d apps esperan una configuración que eliminaste, así que no sale nada de lo que envían. Dales otra ruta en «La ruta de cada app».</item>
+        <item quantity="other">%d apps esperan una configuración que eliminaste, así que no sale nada de lo que envían. Dales otra ruta en «La ruta de cada app».</item>
+    </plurals>
+    <!-- A change of the configurations that could not be saved; nothing was changed. -->
+    <string name="tunnels_not_saved_storage">No se guardó. Watch no pudo escribir en el almacenamiento de este teléfono, que puede estar lleno. Tus configuraciones siguen como estaban.</string>
+    <string name="tunnels_not_saved_keystore">No se guardó. El almacén de claves del teléfono no respondió. Tus configuraciones siguen como estaban. Vuelve a intentarlo.</string>
+    <string name="tunnels_not_saved_gone">No se guardó. Mientras tanto, se eliminó la configuración que iba a reemplazar.</string>
+    <string name="tunnels_not_saved_other">No se guardó. Algo falló en Watch. Tus configuraciones siguen como estaban.</string>
+    <string name="tunnels_make_default">Hacer predeterminada</string>
+    <string name="tunnels_rename">Cambiar el nombre</string>
+    <string name="tunnels_replace">Reemplazar</string>
+    <string name="tunnels_remove">Eliminar</string>
+    <string name="tunnels_save_name">Guardar el nombre</string>
+    <string name="tunnels_name">Nombre</string>
+    <!-- %1$d: a number, for a configuration whose file gave no name. -->
+    <string name="tunnels_default_name">WireGuard %1$d</string>
+    <plurals name="tunnels_apps">
+        <item quantity="one">%d app pasa por ella.</item>
+        <item quantity="many">%d apps pasan por ella.</item>
+        <item quantity="other">%d apps pasan por ella.</item>
+    </plurals>
+    <string name="tunnels_no_apps">Aún no pasa ninguna app por ella. Elige sus apps en «La ruta de cada app».</string>
+    <!-- A switch for one configuration (ADR 0035, question 8). -->
+    <string name="tunnels_local">Red local directamente</string>
+    <string name="tunnels_local_note">Si está activado, sus apps llegan directamente a las impresoras y otros dispositivos de tu propia red, no a través del servidor.</string>
+    <!-- The same switch as the chain's, which governs both. -->
+    <string name="tunnels_log_note">Este interruptor también se aplica a las apps que envías a través de tu herramienta para eludir bloqueos.</string>
+
+    <!-- The notification while configurations that open only on an unlocked phone wait for the unlock (ADR 0047's
+         profile). It names no provider and no configuration, on the lock screen or off it. -->
+    <string name="unlock_channel">Esperando el desbloqueo</string>
+    <string name="unlock_title">Desbloquea el teléfono para volver a conectarte</string>
+    <string name="unlock_text">Algunas apps esperan una configuración de VPN que solo se abre mientras el teléfono está desbloqueado. Hasta entonces, no sale nada de lo que envían.</string>
+    <!-- The notification while what Watch kept of its configurations can no longer be opened and every app is held.
+         It names no provider and no configuration, and opens Watch's screen. -->
+    <string name="lost_title">Watch está reteniendo tus apps</string>
+    <string name="lost_text">Watch ya no puede abrir lo que guardó de tus configuraciones de VPN. Abre Watch para elegir qué hacen tus apps.</string>
+    <!-- On Watch's screen, in place of the configurations, while they can no longer be opened. -->
+    <string name="tunnels_lost_title">Tus configuraciones ya no se pueden abrir</string>
+    <string name="tunnels_lost_body">Watch ya no puede abrir lo que guardó de tus configuraciones de WireGuard, como ocurre cuando se restablece el almacén de claves del teléfono. No sabe qué apps pasaban por ellas. Por eso retiene todas las apps, y no sale nada, hasta que elijas.</string>
+    <string name="tunnels_lost_again">Volver a añadir las configuraciones</string>
+    <string name="tunnels_lost_let_go">Dejar que las apps sigan su ruta</string>
+    <string name="tunnels_lost_note">En ambos casos, cada app va entonces directamente, o a través de tu herramienta para eludir bloqueos si esta la incluye. Añade una configuración para volver a enviar una app a través de ella.</string>
+    <!-- A configuration's state, refreshed while the screen is shown. -->
+    <string name="tunnel_state_off">Sin uso mientras Watch está desactivado.</string>
+    <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->
+    <string name="tunnel_state_connected">Conectada.</string>
+    <plurals name="tunnel_handshake_seconds">
+        <item quantity="one">El último handshake fue hace %d segundo.</item>
+        <item quantity="many">El último handshake fue hace %d segundos.</item>
+        <item quantity="other">El último handshake fue hace %d segundos.</item>
+    </plurals>
+    <plurals name="tunnel_handshake_minutes">
+        <item quantity="one">El último handshake fue hace %d minuto.</item>
+        <item quantity="many">El último handshake fue hace %d minutos.</item>
+        <item quantity="other">El último handshake fue hace %d minutos.</item>
+    </plurals>
+    <string name="tunnel_state_idle">Aún no está conectada. Se conecta cuando una de sus apps envía algo.</string>
+    <string name="tunnel_state_not_answering">El servidor no responde. Sus apps esperan, y nada de lo que envían sale directamente.</string>
+    <string name="tunnel_state_missing">Aún no está lista en Watch. Sus apps esperan, y nada de lo que envían sale directamente.</string>
+    <string name="tunnel_state_locked">No se puede abrir mientras el teléfono está bloqueado. Sus apps esperan hasta que lo desbloquees.</string>
+    <string name="tunnel_state_unavailable">No se puede abrir en este momento. Sus apps esperan, y Watch vuelve a intentarlo.</string>
+    <string name="tunnel_state_lost">Ya no se puede abrir en este teléfono. Sus apps esperan. Reemplázala de nuevo con su archivo o su código QR; así conserva sus apps.</string>
+    <string name="tunnel_state_plain_dns">Watch encontró la dirección del servidor solo mediante DNS no cifrado. Tu red puede ver qué proveedor usas.</string>
+
+    <!-- Removing a configuration: what its apps do then. %1$s: its name. -->
+    <string name="tunnels_remove_title">¿Eliminar %1$s?</string>
+    <string name="tunnels_remove_wait">Sus apps esperan y no envían nada, hasta que elijas otra ruta para ellas.</string>
+    <string name="tunnels_remove_other_way">Sus apps siguen su otra ruta: directamente, o a través de tu herramienta para eludir bloqueos si esta las incluye.</string>
+    <string name="tunnels_remove_confirm">Eliminarla</string>
+    <string name="tunnels_cancel">Cancelar</string>
+
+    <!-- The confirmation before anything is saved. -->
+    <string name="import_title">Revisa esta configuración</string>
+    <!-- %1$s: the name of the configuration it replaces. -->
+    <string name="import_replace_title">Reemplazar %1$s</string>
+    <string name="import_replace_note">Sus apps y sus interruptores siguen como están.</string>
+    <!-- %1$s: the server's address or name; %2$d: its port. -->
+    <string name="import_server">Servidor: %1$s, puerto %2$d.</string>
+    <string name="import_server_name">Watch busca este nombre a través de tu red antes de que se inicie el túnel. Si el DNS privado no está activado, tu red puede verlo.</string>
+    <!-- %1$s: the addresses, comma separated. -->
+    <string name="import_addresses">Dirección de este teléfono en ella: %1$s.</string>
+    <string name="import_no_ipv6">No tiene dirección IPv6. Se rechazan las conexiones IPv6 de las apps que elegiste, así que usan IPv4.</string>
+    <!-- %1$s: the DNS servers, comma separated. -->
+    <string name="import_dns">Los nombres que buscan las apps que elegiste van a %1$s, a través del servidor.</string>
+    <string name="import_everything">Todo el tráfico de las apps que elegiste pasa por ella.</string>
+    <!-- %1$s: the networks, comma separated. -->
+    <string name="import_narrower">Solo estos destinos pasan por ella: %1$s. Watch rechaza cualquier otro destino de las apps que elegiste, y nunca lo envía directamente.</string>
+    <string name="import_preshared">Tiene una clave precompartida, un secreto adicional que protege la configuración frente a las futuras computadoras cuánticas.</string>
+    <string name="import_no_preshared">No tiene clave precompartida.</string>
+    <!-- %1$d: seconds. -->
+    <plurals name="import_keepalive">
+        <item quantity="one">Envía un paquete pequeño cada %d segundo para mantener abierta la conexión. Esto gasta un poco de batería.</item>
+        <item quantity="many">Envía un paquete pequeño cada %d segundos para mantener abierta la conexión. Esto gasta un poco de batería.</item>
+        <item quantity="other">Envía un paquete pequeño cada %d segundos para mantener abierta la conexión. Esto gasta un poco de batería.</item>
+    </plurals>
+    <!-- %1$d: bytes. -->
+    <plurals name="import_mtu">
+        <item quantity="one">Paquete más grande dentro de ella: %d byte.</item>
+        <item quantity="many">Paquete más grande dentro de ella: %d bytes.</item>
+        <item quantity="other">Paquete más grande dentro de ella: %d bytes.</item>
+    </plurals>
+    <string name="import_apps">Apps para enviar a través de ella</string>
+    <string name="import_apps_from_file">Las apps que indica el archivo están al principio de la lista de abajo. Revísalas antes de guardar.</string>
+    <string name="import_apps_not_ticked">Una app que ahora va a través de tu herramienta o de otra configuración no está marcada. Márcala para moverla aquí.</string>
+    <!-- %1$s: the apps it leaves out, comma separated. -->
+    <string name="import_excluded">El archivo excluye %1$s y propone todas las demás apps de tu teléfono.</string>
+    <string name="import_excluded_now">Esto abarca solo las apps que hay ahora en tu teléfono. Una app que instales más adelante no pasa por ella salvo que la elijas.</string>
+    <!-- Under an app: how it goes now. %1$s: its way, such as Directly. -->
+    <string name="import_app_way">Su ruta ahora: %1$s</string>
+    <!-- Under a ticked app that goes another way now. %1$s: that way. -->
+    <string name="import_app_moves">Al guardar, se mueve aquí. Su ruta hasta ahora: %1$s</string>
+    <!-- The heading over the apps the file does not name. -->
+    <string name="import_apps_others">Otras apps</string>
+    <!-- %1$s: package names, comma separated. -->
+    <string name="import_not_installed">Indicadas en el archivo, pero no instaladas: %1$s.</string>
+    <string name="import_not_choosable">Indicadas en el archivo, pero no están entre las apps que puedes elegir aquí: %1$s.</string>
+    <string name="import_left_out">Indicadas en el archivo, pero dejadas fuera de Watch, así que nada de lo que envían pasa por Watch: %1$s.</string>
+    <string name="import_save">Guardar</string>
+    <string name="import_apps_loading">Cargando tus apps…</string>
+
+    <!-- Why a configuration was refused. %1$d: a line of the file; %2$s: what is wrong with it. -->
+    <string name="refused_line">Línea %1$d: %2$s</string>
+    <string name="refused_too_long">El archivo es demasiado largo para ser una configuración de WireGuard.</string>
+    <string name="refused_not_text">El archivo no es texto, así que no es una configuración de WireGuard.</string>
+    <string name="refused_unreadable">No se puede leer esta línea.</string>
+    <string name="refused_outside_section" tools:ignore="Typos">Hay un ajuste antes de cualquier sección [Interface] o [Peer].</string>
+    <string name="refused_unknown_section" tools:ignore="Typos">Watch solo conoce las secciones [Interface] y [Peer].</string>
+    <string name="refused_several_interfaces" tools:ignore="Typos">El archivo tiene una segunda sección [Interface].</string>
+    <string name="refused_several_peers">El archivo tiene una segunda sección [Peer]. Watch admite un servidor por configuración.</string>
+    <!-- %1$s: the name of a setting, such as PostUp. -->
+    <string name="refused_unsupported">Watch no aplica el ajuste %1$s.</string>
+    <string name="refused_unsupported_unnamed">Watch no aplica este ajuste.</string>
+    <string name="refused_repeated">El ajuste %1$s aparece dos veces.</string>
+    <string name="refused_bad_value">No se puede leer el valor de %1$s.</string>
+    <string name="refused_several_addresses">El archivo da dos direcciones del mismo tipo. Watch admite una dirección IPv4 y una IPv6.</string>
+    <string name="refused_search_domain">El ajuste DNS indica un dominio de búsqueda, que Watch no puede usar.</string>
+    <string name="refused_no_interface" tools:ignore="Typos">El archivo no tiene sección [Interface].</string>
+    <string name="refused_no_peer">El archivo no tiene sección [Peer].</string>
+    <string name="refused_no_private_key">El archivo no tiene clave privada (PrivateKey).</string>
+    <string name="refused_no_address">El archivo no da ninguna dirección (Address).</string>
+    <string name="refused_no_dns">El archivo no indica ningún servidor DNS. Los nombres que buscan tus apps no tendrían ningún sitio privado al que ir, así que Watch no lo admite.</string>
+    <string name="refused_dns_unreachable">No se puede llegar a ninguno de los servidores DNS del archivo a través de su servidor.</string>
+    <string name="refused_no_public_key">El archivo no tiene la clave del servidor (PublicKey).</string>
+    <string name="refused_no_endpoint">El archivo no dice dónde está el servidor (Endpoint).</string>
+    <string name="refused_no_allowed_ips">El archivo no dice qué destinos pasan por el servidor (AllowedIPs).</string>
+    <string name="refused_bad_mtu">Watch no admite la MTU del archivo: debe ser de 576 a 1500 bytes, y de al menos 1280 con una dirección IPv6.</string>
+    <string name="refused_both_application_lists">El archivo indica apps para incluir y apps para excluir. Solo se permite una de las dos listas.</string>
+    <!-- %d: the most configurations Watch keeps (8). -->
+    <plurals name="refused_too_many">
+        <item quantity="one">Watch guarda como máximo %d configuración. Elimínala para añadir otra.</item>
+        <item quantity="many">Watch guarda como máximo %d configuraciones. Elimina una para añadir otra.</item>
+        <item quantity="other">Watch guarda como máximo %d configuraciones. Elimina una para añadir otra.</item>
+    </plurals>
+    <string name="refused_unknown">Watch no pudo leer esta configuración.</string>
+    <string name="import_unreadable">Watch no pudo leer este archivo.</string>
+    <string name="import_too_slow">Leer este archivo tardó demasiado. Si está guardado en línea, descárgalo primero.</string>
+
+    <!-- Reading a QR code from a picture. -->
+    <string name="qr_not_a_picture">Esta no es una imagen que Watch pueda leer.</string>
+    <string name="qr_too_large">Esta imagen es demasiado grande para leerla.</string>
+    <string name="qr_no_code">No se pudo leer ningún código QR en esta imagen. Prueba con una foto nítida en la que aparezca el código entero.</string>
+    <string name="qr_too_long">Este código QR contiene más texto que una configuración de WireGuard.</string>
+    <string name="qr_too_slow">Leer esta imagen tardó demasiado.</string>
+    <string name="qr_stopped">El lector de imágenes de Watch se detuvo al leer esta imagen.</string>
+    <string name="qr_no_camera">Este teléfono no tiene ninguna app de cámara que pueda tomar la foto para Watch.</string>
+    <string name="qr_reading">Leyendo la imagen…</string>
+    <string name="qr_photo_deleted">Se borró la foto.</string>
+
+    <!-- Each app's one way (ADR 0035, routes). -->
+    <string name="routes_title">La ruta de cada app</string>
+    <string name="routes_intro">Cada app sigue una sola ruta: directamente, a través de tu herramienta para eludir bloqueos o a través de una configuración de WireGuard.</string>
+    <string name="routes_choose">Elegir las rutas de las apps</string>
+    <string name="routes_done">Listo</string>
+    <string name="route_direct">Directamente</string>
+    <!-- %1$s: the tool's name. -->
+    <string name="route_tool">A través de %1$s</string>
+    <string name="route_tool_unnamed">A través de tu herramienta para eludir bloqueos</string>
+    <!-- %1$s: a configuration's name. -->
+    <string name="route_tunnel">A través de %1$s</string>
+    <string name="route_waiting">Espera una configuración que se eliminó. No sale nada de lo que envía.</string>
+    <string name="route_left_out">Fuera de Watch: va a internet sin pasar por Watch.</string>
+    <string name="routes_all_apps_note">Mientras tu herramienta incluye todas las apps, una app solo va directamente si la dejas fuera de Watch.</string>
+    <!-- The chain's choice of apps: an app with a configuration goes through it instead of the tool. %1$s: the configuration's name. -->
+    <string name="chain_app_tunnel">En su lugar, pasa por %1$s. Cámbialo en «La ruta de cada app».</string>
+    <!-- The chain's choice of apps: an app that waits for a removed configuration. -->
+    <string name="chain_app_waiting">Espera una configuración que eliminaste, así que no sale nada de lo que envía. Cámbialo en «La ruta de cada app».</string>
+    <plurals name="chain_tunnelled_apps">
+        <item quantity="one">%d app pasa por una configuración de WireGuard en lugar de por la herramienta.</item>
+        <item quantity="many">%d apps pasan por una configuración de WireGuard en lugar de por la herramienta.</item>
+        <item quantity="other">%d apps pasan por una configuración de WireGuard en lugar de por la herramienta.</item>
+    </plurals>
+
+    <!-- "Now" and each app's history: an app sent through a WireGuard configuration. %1$s: its name. -->
+    <string name="now_through_tunnel">Enviado a través de %1$s. No se muestra a dónde se conectó, porque «Registrar a dónde se conectan estas apps» está desactivado.</string>
+    <string name="now_destination_tunnel">A través de %1$s</string>
+    <string name="history_through_tunnel">Enviado a través de %1$s. No se registró a dónde se conectó, porque «Registrar a dónde se conectan estas apps» estaba desactivado.</string>
+    <!-- In place of a configuration's name: inside the sentences above, and also alone as a configuration's heading and in its buttons' and rows' labels, so it must read well on its own too. -->
+    <string name="tunnel_removed_name">una configuración de WireGuard ya eliminada</string>
+    <string name="tunnel_closed_name">una configuración de WireGuard que ahora no se puede abrir</string>
 </resources>

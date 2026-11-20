@@ -647,4 +647,36 @@
     <!-- W5, part 3 (ADR 0046): the way into Watch's "Now" from an app's page, Advanced only. -->
     <!-- Datapavan Advanced, on an app's page: opens Watch's view "Now" for that app. -->
     <string name="watch_now_open">查看此应用此刻在发送什么</string>
+
+    <!-- W7, part 2 (ADR 0035, release gate): the licence screen. -->
+    <!-- The licence screen: the heading over the full texts the app carries. -->
+    <string name="licences_texts_title">许可文本</string>
+    <!-- What each full text is. NOTICE also says where to get the source code of GotaTun, as its licence asks. -->
+    <string name="licences_text_notice">此应用必须附带的声明，以及其许可要求提供源代码的那些组件从哪里获取源代码。</string>
+    <string name="licences_text_licence">Apache License 2.0。Datapavan 依据它发布，其许多组件也是如此。</string>
+    <!-- %1$s: the name of a native library file, for example libdatapavan.so. -->
+    <string name="licences_text_native">%1$s 中各 Rust 软件包的许可文本。</string>
+    <string name="licences_text_mpl">Mozilla Public License 2.0。GotaTun（Watch 中的 WireGuard 代码）依据它发布。</string>
+    <string name="licences_text_gotatun">GotaTun 中源自 Cloudflare 的 BoringTun 的那些部分所适用的 BSD 3-Clause License。</string>
+    <!-- A file the screen has no description for: its name only. -->
+    <string name="licences_text_other">此应用附带的一份许可文本。</string>
+    <!-- The heading over the app's own code and the Java and Kotlin libraries in it. -->
+    <string name="licences_jvm_title">此应用的代码及其 Java 和 Kotlin 库</string>
+    <!-- Datapavan's own code, the first entry under that heading. -->
+    <string name="licences_own">Datapavan 自己的代码</string>
+    <!-- The heading over the Rust packages inside one native library. %1$s: its file name, for example libdatapavan.so. -->
+    <string name="licences_native_title">%1$s 中的 Rust 软件包</string>
+    <!-- A button under a part: opens the licence text in the file %1$s. -->
+    <string name="licences_read">阅读 %1$s</string>
+    <!-- The text view: back to the list of licences. -->
+    <string name="licences_back">返回许可列表</string>
+    <!-- While a long text is read from the app. -->
+    <string name="licences_opening">正在打开文本…</string>
+    <string name="licences_unreadable">无法打开此文本。</string>
+    <!-- The heading over the databases the app carries, last on the licence screen. -->
+    <string name="licences_data_title">数据</string>
+    <!-- "Data sources" is the name of the Settings page that lists each database with its licence. -->
+    <string name="licences_data_note">Datapavan 用来与您的应用和手机进行比对的数据库有各自的许可，例如 εxodus 跟踪器列表的 Open Database License。设置中的“数据来源”页面列出了每个数据库及其许可和来源。</string>
+    <!-- A line of a list of parts that the screen could not read: shown as it is. -->
+    <string name="licences_unread">按列表原样显示：%1$s</string>
 </resources>

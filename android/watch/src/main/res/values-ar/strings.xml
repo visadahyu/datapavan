@@ -212,4 +212,261 @@
         <item quantity="many">%d سجلًا تحت رقم هذا التطبيق أقدم من التطبيق. وهي تعود إلى تطبيق مُزال.</item>
         <item quantity="other">%d سجل تحت رقم هذا التطبيق أقدم من التطبيق. وهي تعود إلى تطبيق مُزال.</item>
     </plurals>
+
+    <!-- W7, part 2 (ADR 0035): the WireGuard import, the configurations, each app's way and their states. -->
+    <!-- The heading of Watch's section for WireGuard configurations from the user's VPN provider. -->
+    <string name="tunnels_title">تكوينات WireGuard</string>
+    <string name="tunnels_intro">مرّر التطبيقات التي تختارها عبر خادم WireGuard لدى مزوّد VPN الذي تستخدمه. يحتفظ Watch بكل تكوين مشفّرًا على هذا الهاتف.</string>
+    <!-- Where the key that encrypts the configurations is kept. -->
+    <string name="tunnels_key_strongbox">المفتاح الذي يشفّرها موجود في شريحة الأمان المنفصلة في هذا الهاتف (StrongBox).</string>
+    <string name="tunnels_key_tee">المفتاح الذي يشفّرها موجود في المنطقة الآمنة في هذا الهاتف، بمعزل عن Android.</string>
+    <string name="tunnels_key_software">المفتاح الذي يشفّرها يحفظه Android برمجيًا. لا يوجد في هذا الهاتف عتاد آمن لحفظه.</string>
+    <!-- Android 10 and 11 do not say which kind of secure hardware holds the key. -->
+    <string name="tunnels_key_secure_hardware">المفتاح الذي يشفّرها موجود في العتاد الآمن في هذا الهاتف، بمعزل عن Android.</string>
+    <string name="tunnels_none">لا يوجد أي تكوين بعد.</string>
+    <string name="tunnels_add_file">إضافة من ملف</string>
+    <string name="tunnels_add_camera">التقاط صورة لرمز QR</string>
+    <string name="tunnels_add_picture">اختيار صورة لرمز QR</string>
+    <!-- Shown under the two QR code buttons. -->
+    <string name="tunnels_picture_note">تحمل صورة رمز QR المفتاح الخاص للتكوين. بعد إضافة التكوين، قد ترغب في حذف الصورة.</string>
+    <!-- %d: the most configurations Watch keeps (8). -->
+    <plurals name="tunnels_full">
+        <item quantity="zero">يحتفظ Watch بـ %d تكوين على الأكثر. أزِل أحدها لتضيف غيره.</item>
+        <item quantity="one">يحتفظ Watch بتكوين واحد على الأكثر. أزِله لتضيف غيره.</item>
+        <item quantity="two">يحتفظ Watch بتكوينين على الأكثر. أزِل أحدهما لتضيف غيره.</item>
+        <item quantity="few">يحتفظ Watch بـ %d تكوينات على الأكثر. أزِل أحدها لتضيف غيره.</item>
+        <item quantity="many">يحتفظ Watch بـ %d تكوينًا على الأكثر. أزِل أحدها لتضيف غيره.</item>
+        <item quantity="other">يحتفظ Watch بـ %d تكوين على الأكثر. أزِل أحدها لتضيف غيره.</item>
+    </plurals>
+    <string name="tunnels_default">الافتراضي</string>
+    <string name="tunnels_default_note">ينقل التكوين الافتراضي أيضًا رسائل ping، وحركة البيانات التي لا يسمّي Android لها أي تطبيق. يفعل ذلك ما دام أي تطبيق يمرّ عبر تكوين. وما دام التكوين الافتراضي لا يمكن فتحه، تنتظر رسائل ping وهذه الحركة.</string>
+    <!-- The same, with a single configuration, which is the default. -->
+    <string name="tunnels_default_note_one">ينقل أيضًا رسائل ping، وحركة البيانات التي لا يسمّي Android لها أي تطبيق، ما دام أي تطبيق يمرّ عبره. وما دام لا يمكن فتحه، تنتظر رسائل ping وهذه الحركة.</string>
+    <!-- Apps routed to a configuration the user removed, choosing that they wait. -->
+    <plurals name="tunnels_waiting">
+        <item quantity="zero">%d تطبيق تنتظر تكوينًا أزلته، لذا لا يخرج منها أي شيء. اختر لها مسارًا آخر في «مسار كل تطبيق».</item>
+        <item quantity="one">تطبيق واحد ينتظر تكوينًا أزلته، لذا لا يخرج منه أي شيء. اختر له مسارًا آخر في «مسار كل تطبيق».</item>
+        <item quantity="two">تطبيقان ينتظران تكوينًا أزلته، لذا لا يخرج منهما أي شيء. اختر لهما مسارًا آخر في «مسار كل تطبيق».</item>
+        <item quantity="few">%d تطبيقات تنتظر تكوينًا أزلته، لذا لا يخرج منها أي شيء. اختر لها مسارًا آخر في «مسار كل تطبيق».</item>
+        <item quantity="many">%d تطبيقًا تنتظر تكوينًا أزلته، لذا لا يخرج منها أي شيء. اختر لها مسارًا آخر في «مسار كل تطبيق».</item>
+        <item quantity="other">%d تطبيق تنتظر تكوينًا أزلته، لذا لا يخرج منها أي شيء. اختر لها مسارًا آخر في «مسار كل تطبيق».</item>
+    </plurals>
+    <!-- A change of the configurations that could not be saved; nothing was changed. -->
+    <string name="tunnels_not_saved_storage">لم يُحفظ. لم يستطع Watch الكتابة في ذاكرة التخزين في هذا الهاتف، وقد تكون ممتلئة. تبقى تكويناتك كما كانت.</string>
+    <string name="tunnels_not_saved_keystore">لم يُحفظ. لم يستجب مخزن المفاتيح في الهاتف. تبقى تكويناتك كما كانت. حاول مرة أخرى.</string>
+    <string name="tunnels_not_saved_gone">لم يُحفظ. أُزيل في هذه الأثناء التكوين الذي كان التكوين الجديد سيحلّ محله.</string>
+    <string name="tunnels_not_saved_other">لم يُحفظ. حدث خطأ ما في Watch. تبقى تكويناتك كما كانت.</string>
+    <string name="tunnels_make_default">جعله الافتراضي</string>
+    <string name="tunnels_rename">إعادة التسمية</string>
+    <string name="tunnels_replace">استبدال</string>
+    <string name="tunnels_remove">إزالة</string>
+    <string name="tunnels_save_name">حفظ الاسم</string>
+    <string name="tunnels_name">الاسم</string>
+    <!-- %1$d: a number, for a configuration whose file gave no name. -->
+    <string name="tunnels_default_name">WireGuard %1$d</string>
+    <plurals name="tunnels_apps">
+        <item quantity="zero">لا يمرّ عبره أي تطبيق.</item>
+        <item quantity="one">يمرّ عبره تطبيق واحد.</item>
+        <item quantity="two">يمرّ عبره تطبيقان.</item>
+        <item quantity="few">يمرّ عبره %d تطبيقات.</item>
+        <item quantity="many">يمرّ عبره %d تطبيقًا.</item>
+        <item quantity="other">يمرّ عبره %d تطبيق.</item>
+    </plurals>
+    <string name="tunnels_no_apps">لا يمرّ عبره أي تطبيق بعد. اختر تطبيقاته في «مسار كل تطبيق».</string>
+    <!-- A switch for one configuration (ADR 0035, question 8). -->
+    <string name="tunnels_local">الشبكة المحلية مباشرةً</string>
+    <string name="tunnels_local_note">عند تشغيله، تصل تطبيقاته إلى الطابعات والأجهزة الأخرى في شبكتك مباشرةً، لا عبر الخادم.</string>
+    <!-- The same switch as the chain's, which governs both. -->
+    <string name="tunnels_log_note">يشمل هذا الخيار أيضًا التطبيقات التي تمرّرها عبر أداتك لتجاوز الحجب.</string>
+
+    <!-- The notification while configurations that open only on an unlocked phone wait for the unlock (ADR 0047's
+         profile). It names no provider and no configuration, on the lock screen or off it. -->
+    <string name="unlock_channel">انتظار فتح القفل</string>
+    <string name="unlock_title">افتح قفل هاتفك للاتصال من جديد</string>
+    <string name="unlock_text">بعض التطبيقات تنتظر تكوين VPN لا يُفتح إلا والهاتف غير مقفل. لا يخرج منها أي شيء حتى ذلك الحين.</string>
+    <!-- The notification while what Watch kept of its configurations can no longer be opened and every app is held.
+         It names no provider and no configuration, and opens Watch's screen. -->
+    <string name="lost_title">يُبقي Watch تطبيقاتك في الانتظار</string>
+    <string name="lost_text">لم يعد Watch يستطيع فتح ما احتفظ به من تكوينات VPN لديك. افتح Watch لتختار ما تفعله تطبيقاتك.</string>
+    <!-- On Watch's screen, in place of the configurations, while they can no longer be opened. -->
+    <string name="tunnels_lost_title">لم يعد من الممكن فتح تكويناتك</string>
+    <string name="tunnels_lost_body">لم يعد Watch يستطيع فتح ما احتفظ به من تكوينات WireGuard لديك، كما يحدث بعد إعادة ضبط مخزن المفاتيح في الهاتف. وهو لا يعرف أي التطبيقات كانت تمرّ عبرها. لذا يُبقي كل التطبيقات في الانتظار، ولا يخرج أي شيء، حتى تختار.</string>
+    <string name="tunnels_lost_again">إضافة التكوينات مرة أخرى</string>
+    <string name="tunnels_lost_let_go">ترك التطبيقات تمضي في مساراتها</string>
+    <string name="tunnels_lost_note">في الحالتين، يمرّ كل تطبيق بعد ذلك مباشرةً، أو عبر أداتك لتجاوز الحجب إن كانت تشمله. أضِف تكوينًا لتمرّر تطبيقًا عبره من جديد.</string>
+    <!-- A configuration's state, refreshed while the screen is shown. -->
+    <string name="tunnel_state_off">غير مستخدَم ما دامت خدمة Watch متوقفة.</string>
+    <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->
+    <string name="tunnel_state_connected">متصل.</string>
+    <plurals name="tunnel_handshake_seconds">
+        <item quantity="zero">جرت آخر مصافحة قبل %d ثانية.</item>
+        <item quantity="one">جرت آخر مصافحة قبل ثانية واحدة.</item>
+        <item quantity="two">جرت آخر مصافحة قبل ثانيتين.</item>
+        <item quantity="few">جرت آخر مصافحة قبل %d ثوانٍ.</item>
+        <item quantity="many">جرت آخر مصافحة قبل %d ثانيةً.</item>
+        <item quantity="other">جرت آخر مصافحة قبل %d ثانية.</item>
+    </plurals>
+    <plurals name="tunnel_handshake_minutes">
+        <item quantity="zero">جرت آخر مصافحة قبل %d دقيقة.</item>
+        <item quantity="one">جرت آخر مصافحة قبل دقيقة واحدة.</item>
+        <item quantity="two">جرت آخر مصافحة قبل دقيقتين.</item>
+        <item quantity="few">جرت آخر مصافحة قبل %d دقائق.</item>
+        <item quantity="many">جرت آخر مصافحة قبل %d دقيقةً.</item>
+        <item quantity="other">جرت آخر مصافحة قبل %d دقيقة.</item>
+    </plurals>
+    <string name="tunnel_state_idle">غير متصل بعد. يتصل عندما يرسل أحد تطبيقاته.</string>
+    <string name="tunnel_state_not_answering">الخادم لا يستجيب. تطبيقاته تنتظر، ولا يخرج منها أي شيء مباشرةً.</string>
+    <string name="tunnel_state_missing">ليس جاهزًا في Watch بعد. تطبيقاته تنتظر، ولا يخرج منها أي شيء مباشرةً.</string>
+    <string name="tunnel_state_locked">لا يمكن فتحه والهاتف مقفل. تطبيقاته تنتظر حتى تفتح قفل الهاتف.</string>
+    <string name="tunnel_state_unavailable">لا يمكن فتحه الآن. تطبيقاته تنتظر، ويحاول Watch مرة أخرى.</string>
+    <string name="tunnel_state_lost">لم يعد من الممكن فتحه على هذا الهاتف. تطبيقاته تنتظر. استبدله بملفه أو برمز QR الخاص به مرة أخرى، وبذلك تبقى تطبيقاته معه.</string>
+    <string name="tunnel_state_plain_dns">لم يجد Watch عنوان الخادم إلا عبر DNS غير مشفّر. قد ترى شبكتك أي مزوّد تستخدم.</string>
+
+    <!-- Removing a configuration: what its apps do then. %1$s: its name. -->
+    <string name="tunnels_remove_title">إزالة %1$s؟</string>
+    <string name="tunnels_remove_wait">تنتظر تطبيقاته ولا ترسل أي شيء، حتى تختار لها مسارًا آخر.</string>
+    <string name="tunnels_remove_other_way">تمضي تطبيقاته في مساراتها الأخرى: مباشرةً، أو عبر أداتك لتجاوز الحجب إن كانت تشملها.</string>
+    <string name="tunnels_remove_confirm">إزالة</string>
+    <string name="tunnels_cancel">إلغاء</string>
+
+    <!-- The confirmation before anything is saved. -->
+    <string name="import_title">تحقّق من هذا التكوين</string>
+    <!-- %1$s: the name of the configuration it replaces. -->
+    <string name="import_replace_title">استبدال %1$s</string>
+    <string name="import_replace_note">تبقى تطبيقاته وخياراته كما هي.</string>
+    <!-- %1$s: the server's address or name; %2$d: its port. -->
+    <string name="import_server">الخادم: %1$s، المنفذ %2$d.</string>
+    <string name="import_server_name">يبحث Watch عن هذا الاسم عبر شبكتك قبل أن يبدأ النفق. إذا لم يكن «نظام أسماء النطاقات الخاص» مفعّلًا، فقد تراه شبكتك.</string>
+    <!-- %1$s: the addresses, comma separated. -->
+    <string name="import_addresses">عنوان هذا الهاتف فيه: %1$s.</string>
+    <string name="import_no_ipv6">ليس فيه عنوان IPv6. تُرفض اتصالات IPv6 من التطبيقات التي اخترتها، لذا تستخدم IPv4.</string>
+    <!-- %1$s: the DNS servers, comma separated. -->
+    <string name="import_dns">الأسماء التي تبحث عنها التطبيقات التي اخترتها تذهب إلى %1$s، عبر الخادم.</string>
+    <string name="import_everything">كل حركة بيانات التطبيقات التي اخترتها تمرّ عبره.</string>
+    <!-- %1$s: the networks, comma separated. -->
+    <string name="import_narrower">لا يمرّ عبره إلا هذه الجهات: %1$s. يرفض Watch كل جهة أخرى تقصدها التطبيقات التي اخترتها، ولا يرسل إليها أي شيء مباشرةً أبدًا.</string>
+    <string name="import_preshared">فيه مفتاح مشترك مسبقًا، وهو سرّ إضافي يحميه من الحواسيب الكمومية في المستقبل.</string>
+    <string name="import_no_preshared">ليس فيه مفتاح مشترك مسبقًا.</string>
+    <!-- %1$d: seconds. -->
+    <plurals name="import_keepalive">
+        <item quantity="zero">يرسل حزمة صغيرة كل %d ثانية لإبقاء الاتصال مفتوحًا. هذا يستهلك قليلًا من البطارية.</item>
+        <item quantity="one">يرسل حزمة صغيرة كل ثانية لإبقاء الاتصال مفتوحًا. هذا يستهلك قليلًا من البطارية.</item>
+        <item quantity="two">يرسل حزمة صغيرة كل ثانيتين لإبقاء الاتصال مفتوحًا. هذا يستهلك قليلًا من البطارية.</item>
+        <item quantity="few">يرسل حزمة صغيرة كل %d ثوانٍ لإبقاء الاتصال مفتوحًا. هذا يستهلك قليلًا من البطارية.</item>
+        <item quantity="many">يرسل حزمة صغيرة كل %d ثانيةً لإبقاء الاتصال مفتوحًا. هذا يستهلك قليلًا من البطارية.</item>
+        <item quantity="other">يرسل حزمة صغيرة كل %d ثانية لإبقاء الاتصال مفتوحًا. هذا يستهلك قليلًا من البطارية.</item>
+    </plurals>
+    <!-- %1$d: bytes. -->
+    <plurals name="import_mtu">
+        <item quantity="zero">أكبر حزمة داخله: %d بايت.</item>
+        <item quantity="one">أكبر حزمة داخله: بايت واحد.</item>
+        <item quantity="two">أكبر حزمة داخله: بايتان.</item>
+        <item quantity="few">أكبر حزمة داخله: %d بايتات.</item>
+        <item quantity="many">أكبر حزمة داخله: %d بايتًا.</item>
+        <item quantity="other">أكبر حزمة داخله: %d بايت.</item>
+    </plurals>
+    <string name="import_apps">التطبيقات التي تمرّرها عبره</string>
+    <string name="import_apps_from_file">التطبيقات التي يسمّيها الملف تظهر في أعلى القائمة أدناه. تحقّق منها قبل أن تحفظ.</string>
+    <string name="import_apps_not_ticked">التطبيق الذي يمرّ الآن عبر أداتك أو عبر تكوين آخر ليس محدَّدًا. حدّده لتنقله إلى هنا.</string>
+    <!-- %1$s: the apps it leaves out, comma separated. -->
+    <string name="import_excluded">يستبعد الملف %1$s، ويقترح كل التطبيقات الأخرى على هاتفك.</string>
+    <string name="import_excluded_now">هذا لا يشمل إلا التطبيقات الموجودة على هاتفك الآن. التطبيق الذي تثبّته لاحقًا لا يمرّ عبره ما لم تختره.</string>
+    <!-- Under an app: how it goes now. %1$s: its way, such as Directly. -->
+    <string name="import_app_way">مساره الآن: %1$s</string>
+    <!-- Under a ticked app that goes another way now. %1$s: that way. -->
+    <string name="import_app_moves">الحفظ ينقله إلى هنا. مساره حتى الآن: %1$s</string>
+    <!-- The heading over the apps the file does not name. -->
+    <string name="import_apps_others">تطبيقات أخرى</string>
+    <!-- %1$s: package names, comma separated. -->
+    <string name="import_not_installed">يسمّيها الملف لكنها غير مثبّتة: %1$s.</string>
+    <string name="import_not_choosable">يسمّيها الملف، لكنها ليست من التطبيقات التي يمكنك اختيارها هنا: %1$s.</string>
+    <string name="import_left_out">يسمّيها الملف، لكنها مستثناة من Watch، لذا لا يمرّ أي شيء منها عبر Watch: %1$s.</string>
+    <string name="import_save">حفظ</string>
+    <string name="import_apps_loading">جارٍ تحميل تطبيقاتك…</string>
+
+    <!-- Why a configuration was refused. %1$d: a line of the file; %2$s: what is wrong with it. -->
+    <string name="refused_line">السطر %1$d: %2$s</string>
+    <string name="refused_too_long">الملف أطول من أن يكون تكوين WireGuard.</string>
+    <string name="refused_not_text">الملف ليس نصًا، لذا فهو ليس تكوين WireGuard.</string>
+    <string name="refused_unreadable">لا يمكن قراءة هذا السطر.</string>
+    <string name="refused_outside_section">يأتي إعداد قبل أي قسم [Interface] أو [Peer].</string>
+    <string name="refused_unknown_section">لا يعرف Watch إلا القسمين [Interface] و[Peer].</string>
+    <string name="refused_several_interfaces">في الملف قسم [Interface] ثانٍ.</string>
+    <string name="refused_several_peers">في الملف قسم [Peer] ثانٍ. يأخذ Watch خادمًا واحدًا لكل تكوين.</string>
+    <!-- %1$s: the name of a setting, such as PostUp. -->
+    <string name="refused_unsupported">لا ينفّذ Watch الإعداد %1$s.</string>
+    <string name="refused_unsupported_unnamed">لا ينفّذ Watch هذا الإعداد.</string>
+    <string name="refused_repeated">الإعداد %1$s مذكور مرتين.</string>
+    <string name="refused_bad_value">لا يمكن قراءة قيمة %1$s.</string>
+    <string name="refused_several_addresses">يذكر الملف عنوانين من النوع نفسه. يأخذ Watch عنوان IPv4 واحدًا وعنوان IPv6 واحدًا.</string>
+    <string name="refused_search_domain">يسمّي إعداد DNS نطاق بحث، ولا يستطيع Watch استخدامه.</string>
+    <string name="refused_no_interface">ليس في الملف قسم [Interface].</string>
+    <string name="refused_no_peer">ليس في الملف قسم [Peer].</string>
+    <string name="refused_no_private_key">ليس في الملف مفتاح خاص (PrivateKey).</string>
+    <string name="refused_no_address">لا يذكر الملف أي عنوان (Address).</string>
+    <string name="refused_no_dns">لا يسمّي الملف أي خادم DNS. لن يكون للأسماء التي تبحث عنها تطبيقاتك مكان خاص تذهب إليه، لذا لا يقبله Watch.</string>
+    <string name="refused_dns_unreachable">لا يمكن الوصول إلى أي من خوادم DNS المذكورة في الملف عبر الخادم الذي يصفه.</string>
+    <string name="refused_no_public_key">ليس في الملف مفتاح الخادم (PublicKey).</string>
+    <string name="refused_no_endpoint">لا يذكر الملف أين يوجد الخادم (Endpoint).</string>
+    <string name="refused_no_allowed_ips">لا يذكر الملف أي الجهات تمرّ عبر الخادم (AllowedIPs).</string>
+    <string name="refused_bad_mtu">قيمة MTU في الملف ليست مما يقبله Watch: من 576 إلى 1500 بايت، و1280 على الأقل مع عنوان IPv6.</string>
+    <string name="refused_both_application_lists">يسمّي الملف تطبيقات لتضمينها وتطبيقات لاستبعادها. لا يُسمح إلا بواحدة من القائمتين.</string>
+    <!-- %d: the most configurations Watch keeps (8). -->
+    <plurals name="refused_too_many">
+        <item quantity="zero">يحتفظ Watch بـ %d تكوين على الأكثر. أزِل أحدها لتضيف غيره.</item>
+        <item quantity="one">يحتفظ Watch بتكوين واحد على الأكثر. أزِله لتضيف غيره.</item>
+        <item quantity="two">يحتفظ Watch بتكوينين على الأكثر. أزِل أحدهما لتضيف غيره.</item>
+        <item quantity="few">يحتفظ Watch بـ %d تكوينات على الأكثر. أزِل أحدها لتضيف غيره.</item>
+        <item quantity="many">يحتفظ Watch بـ %d تكوينًا على الأكثر. أزِل أحدها لتضيف غيره.</item>
+        <item quantity="other">يحتفظ Watch بـ %d تكوين على الأكثر. أزِل أحدها لتضيف غيره.</item>
+    </plurals>
+    <string name="refused_unknown">لم يستطع Watch قراءة هذا التكوين.</string>
+    <string name="import_unreadable">لم يستطع Watch قراءة هذا الملف.</string>
+    <string name="import_too_slow">استغرقت قراءة هذا الملف وقتًا طويلًا جدًا. إذا كان مخزّنًا على الإنترنت، فنزّله أولًا.</string>
+
+    <!-- Reading a QR code from a picture. -->
+    <string name="qr_not_a_picture">هذه ليست صورة يستطيع Watch قراءتها.</string>
+    <string name="qr_too_large">هذه الصورة أكبر من أن تُقرأ.</string>
+    <string name="qr_no_code">تعذّرت قراءة أي رمز QR في هذه الصورة. جرّب صورة واضحة يظهر فيها الرمز كاملًا.</string>
+    <string name="qr_too_long">يحمل رمز QR هذا نصًا أكثر مما يحمله تكوين WireGuard.</string>
+    <string name="qr_too_slow">استغرقت قراءة هذه الصورة وقتًا طويلًا جدًا.</string>
+    <string name="qr_stopped">توقّف قارئ الصور في Watch عند هذه الصورة.</string>
+    <string name="qr_no_camera">لا يوجد في هذا الهاتف تطبيق كاميرا يمكنه التقاط الصورة لـ Watch.</string>
+    <string name="qr_reading">جارٍ قراءة الصورة…</string>
+    <string name="qr_photo_deleted">تم حذف الصورة.</string>
+
+    <!-- Each app's one way (ADR 0035, routes). -->
+    <string name="routes_title">مسار كل تطبيق</string>
+    <string name="routes_intro">يمرّ كل تطبيق في مسار واحد: مباشرةً، أو عبر أداتك لتجاوز الحجب، أو عبر تكوين WireGuard واحد.</string>
+    <string name="routes_choose">اختيار مسارات التطبيقات</string>
+    <string name="routes_done">تم</string>
+    <string name="route_direct">مباشرةً</string>
+    <!-- %1$s: the tool's name. -->
+    <string name="route_tool">عبر %1$s</string>
+    <string name="route_tool_unnamed">عبر أداتك لتجاوز الحجب</string>
+    <!-- %1$s: a configuration's name. -->
+    <string name="route_tunnel">عبر %1$s</string>
+    <string name="route_waiting">ينتظر تكوينًا أُزيل. لا يخرج منه أي شيء.</string>
+    <string name="route_left_out">مستثنى من Watch: يتصل بالإنترنت دون المرور بـ Watch.</string>
+    <string name="routes_all_apps_note">ما دامت أداتك تشمل كل التطبيقات، لا يمرّ تطبيق مباشرةً إلا إذا استثنيته من Watch.</string>
+    <!-- The chain's choice of apps: an app with a configuration goes through it instead of the tool. %1$s: the configuration's name. -->
+    <string name="chain_app_tunnel">يمرّ عبر %1$s بدلًا من ذلك. غيّر ذلك في «مسار كل تطبيق».</string>
+    <!-- The chain's choice of apps: an app that waits for a removed configuration. -->
+    <string name="chain_app_waiting">ينتظر تكوينًا أزلته، لذا لا يخرج منه أي شيء. غيّر ذلك في «مسار كل تطبيق».</string>
+    <plurals name="chain_tunnelled_apps">
+        <item quantity="zero">لا يمرّ أي تطبيق عبر تكوين WireGuard بدلًا من الأداة.</item>
+        <item quantity="one">يمرّ تطبيق واحد عبر تكوين WireGuard بدلًا من الأداة.</item>
+        <item quantity="two">يمرّ تطبيقان عبر تكوين WireGuard بدلًا من الأداة.</item>
+        <item quantity="few">%d تطبيقات تمرّ عبر تكوين WireGuard بدلًا من الأداة.</item>
+        <item quantity="many">%d تطبيقًا تمرّ عبر تكوين WireGuard بدلًا من الأداة.</item>
+        <item quantity="other">%d تطبيق تمرّ عبر تكوين WireGuard بدلًا من الأداة.</item>
+    </plurals>
+
+    <!-- "Now" and each app's history: an app sent through a WireGuard configuration. %1$s: its name. -->
+    <string name="now_through_tunnel">أُرسل عبر %1$s. لا تظهر الجهات التي اتصل بها، لأن «تسجيل الجهات التي تتصل بها هذه التطبيقات» متوقف.</string>
+    <string name="now_destination_tunnel">عبر %1$s</string>
+    <string name="history_through_tunnel">أُرسل عبر %1$s. لم تُسجَّل الجهات التي اتصل بها، لأن «تسجيل الجهات التي تتصل بها هذه التطبيقات» كان متوقفًا.</string>
+    <!-- In place of a configuration's name: inside the sentences above, and also alone as a configuration's heading and in its buttons' and rows' labels, so it must read well on its own too. -->
+    <string name="tunnel_removed_name">تكوين WireGuard مُزال</string>
+    <string name="tunnel_closed_name">تكوين WireGuard لا يمكن فتحه الآن</string>
 </resources>

@@ -200,4 +200,243 @@
         <item quantity="many">%d записей под идентификатором этого приложения старше самого приложения. Они относятся к приложению, которое с тех пор удалено.</item>
         <item quantity="other">%d записи под идентификатором этого приложения старше самого приложения. Они относятся к приложению, которое с тех пор удалено.</item>
     </plurals>
+
+    <!-- W7, part 2 (ADR 0035): the WireGuard import, the configurations, each app's way and their states. -->
+    <!-- The heading of Watch's section for WireGuard configurations from the user's VPN provider. -->
+    <string name="tunnels_title">Конфигурации WireGuard</string>
+    <string name="tunnels_intro">Направляйте выбранные вами приложения через сервер WireGuard вашего VPN-провайдера. Watch хранит каждую конфигурацию на этом телефоне в зашифрованном виде.</string>
+    <!-- Where the key that encrypts the configurations is kept. -->
+    <string name="tunnels_key_strongbox">Ключ, которым они зашифрованы, находится в отдельном чипе безопасности этого телефона (StrongBox).</string>
+    <string name="tunnels_key_tee">Ключ, которым они зашифрованы, находится в защищённой области этого телефона, отдельно от Android.</string>
+    <string name="tunnels_key_software">Ключ, которым они зашифрованы, Android хранит программно. На этом телефоне нет для него защищённого оборудования.</string>
+    <!-- Android 10 and 11 do not say which kind of secure hardware holds the key. -->
+    <string name="tunnels_key_secure_hardware">Ключ, которым они зашифрованы, находится в защищённом оборудовании этого телефона, отдельно от Android.</string>
+    <string name="tunnels_none">Конфигураций пока нет.</string>
+    <string name="tunnels_add_file">Добавить из файла</string>
+    <string name="tunnels_add_camera">Сфотографировать QR-код</string>
+    <string name="tunnels_add_picture">Выбрать изображение QR-кода</string>
+    <!-- Shown under the two QR code buttons. -->
+    <string name="tunnels_picture_note">Изображение QR-кода содержит закрытый ключ конфигурации. После добавления вы, возможно, захотите удалить это изображение.</string>
+    <!-- %d: the most configurations Watch keeps (8). -->
+    <plurals name="tunnels_full">
+        <item quantity="one">Watch хранит не больше %d конфигурации. Удалите конфигурацию, чтобы добавить другую.</item>
+        <item quantity="few">Watch хранит не больше %d конфигураций. Удалите одну, чтобы добавить другую.</item>
+        <item quantity="many">Watch хранит не больше %d конфигураций. Удалите одну, чтобы добавить другую.</item>
+        <item quantity="other">Watch хранит не больше %d конфигурации. Удалите одну, чтобы добавить другую.</item>
+    </plurals>
+    <string name="tunnels_default">По умолчанию</string>
+    <string name="tunnels_default_note">Конфигурация по умолчанию также передаёт пинг и трафик, для которого Android не указал приложение. Она делает это, пока хотя бы одно приложение идёт через какую-либо конфигурацию. Пока конфигурацию по умолчанию нельзя открыть, пинг и этот трафик ждут.</string>
+    <!-- The same, with a single configuration, which is the default. -->
+    <string name="tunnels_default_note_one">Она также передаёт пинг и трафик, для которого Android не указал приложение, пока через неё идёт хотя бы одно приложение. Пока её нельзя открыть, пинг и этот трафик ждут.</string>
+    <!-- Apps routed to a configuration the user removed, choosing that they wait. -->
+    <plurals name="tunnels_waiting">
+        <item quantity="one">%d приложение ждёт конфигурацию, которую вы удалили, поэтому от него ничего не уходит. Выберите для него другой путь в разделе «Путь каждого приложения».</item>
+        <item quantity="few">%d приложения ждут конфигурацию, которую вы удалили, поэтому от них ничего не уходит. Выберите для них другой путь в разделе «Путь каждого приложения».</item>
+        <item quantity="many">%d приложений ждут конфигурацию, которую вы удалили, поэтому от них ничего не уходит. Выберите для них другой путь в разделе «Путь каждого приложения».</item>
+        <item quantity="other">%d приложения ждут конфигурацию, которую вы удалили, поэтому от них ничего не уходит. Выберите для них другой путь в разделе «Путь каждого приложения».</item>
+    </plurals>
+    <!-- A change of the configurations that could not be saved; nothing was changed. -->
+    <string name="tunnels_not_saved_storage">Не сохранено. Watch не смог записать данные в память этого телефона, возможно, она заполнена. Ваши конфигурации остались как были.</string>
+    <string name="tunnels_not_saved_keystore">Не сохранено. Хранилище ключей телефона не ответило. Ваши конфигурации остались как были. Попробуйте ещё раз.</string>
+    <string name="tunnels_not_saved_gone">Не сохранено. Конфигурацию, которую нужно было заменить, тем временем удалили.</string>
+    <string name="tunnels_not_saved_other">Не сохранено. В Watch что-то пошло не так. Ваши конфигурации остались как были.</string>
+    <string name="tunnels_make_default">Использовать по умолчанию</string>
+    <string name="tunnels_rename">Переименовать</string>
+    <string name="tunnels_replace">Заменить</string>
+    <string name="tunnels_remove">Удалить</string>
+    <string name="tunnels_save_name">Сохранить название</string>
+    <string name="tunnels_name">Название</string>
+    <!-- %1$d: a number, for a configuration whose file gave no name. -->
+    <string name="tunnels_default_name">WireGuard %1$d</string>
+    <plurals name="tunnels_apps">
+        <item quantity="one">Через неё идёт %d приложение.</item>
+        <item quantity="few">Через неё идут %d приложения.</item>
+        <item quantity="many">Через неё идут %d приложений.</item>
+        <item quantity="other">Через неё идут %d приложения.</item>
+    </plurals>
+    <string name="tunnels_no_apps">Через неё пока не идёт ни одно приложение. Выберите её приложения в разделе «Путь каждого приложения».</string>
+    <!-- A switch for one configuration (ADR 0035, question 8). -->
+    <string name="tunnels_local">Локальная сеть напрямую</string>
+    <string name="tunnels_local_note">Когда включено, её приложения обращаются к принтерам и другим устройствам вашей собственной сети напрямую, а не через сервер.</string>
+    <!-- The same switch as the chain's, which governs both. -->
+    <string name="tunnels_log_note">Этот переключатель действует и на приложения, которые вы направляете через ваш инструмент обхода блокировок.</string>
+
+    <!-- The notification while configurations that open only on an unlocked phone wait for the unlock (ADR 0047's
+         profile). It names no provider and no configuration, on the lock screen or off it. -->
+    <string name="unlock_channel">Ожидание разблокировки</string>
+    <string name="unlock_title">Разблокируйте телефон, чтобы снова подключиться</string>
+    <string name="unlock_text">Некоторые приложения ждут конфигурацию VPN, которая открывается, только пока ваш телефон разблокирован. До этого от них ничего не уходит.</string>
+    <!-- The notification while what Watch kept of its configurations can no longer be opened and every app is held.
+         It names no provider and no configuration, and opens Watch's screen. -->
+    <string name="lost_title">Watch удерживает ваши приложения</string>
+    <string name="lost_text">Watch больше не может открыть то, что он сохранил из ваших конфигураций VPN. Откройте Watch, чтобы выбрать, что будут делать ваши приложения.</string>
+    <!-- On Watch's screen, in place of the configurations, while they can no longer be opened. -->
+    <string name="tunnels_lost_title">Ваши конфигурации больше нельзя открыть</string>
+    <string name="tunnels_lost_body">Watch больше не может открыть то, что он сохранил из ваших конфигураций WireGuard, как бывает после сброса хранилища ключей телефона. Он не знает, какие приложения шли через них. Поэтому он удерживает все приложения, и ничего не уходит, пока вы не сделаете выбор.</string>
+    <string name="tunnels_lost_again">Добавить конфигурации заново</string>
+    <string name="tunnels_lost_let_go">Пусть приложения идут своим путём</string>
+    <string name="tunnels_lost_note">В обоих случаях каждое приложение затем идёт напрямую или через ваш инструмент обхода блокировок, если инструмент его принимает. Добавьте конфигурацию, чтобы снова направить приложение через неё.</string>
+    <!-- A configuration's state, refreshed while the screen is shown. -->
+    <string name="tunnel_state_off">Не используется, пока Watch выключен.</string>
+    <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->
+    <string name="tunnel_state_connected">Подключена.</string>
+    <plurals name="tunnel_handshake_seconds">
+        <item quantity="one">Последнее рукопожатие было %d секунду назад.</item>
+        <item quantity="few">Последнее рукопожатие было %d секунды назад.</item>
+        <item quantity="many">Последнее рукопожатие было %d секунд назад.</item>
+        <item quantity="other">Последнее рукопожатие было %d секунды назад.</item>
+    </plurals>
+    <plurals name="tunnel_handshake_minutes">
+        <item quantity="one">Последнее рукопожатие было %d минуту назад.</item>
+        <item quantity="few">Последнее рукопожатие было %d минуты назад.</item>
+        <item quantity="many">Последнее рукопожатие было %d минут назад.</item>
+        <item quantity="other">Последнее рукопожатие было %d минуты назад.</item>
+    </plurals>
+    <string name="tunnel_state_idle">Пока не подключена. Она подключается, когда одно из её приложений что-то отправляет.</string>
+    <string name="tunnel_state_not_answering">Сервер не отвечает. Её приложения ждут, и ничего от них не уходит напрямую.</string>
+    <string name="tunnel_state_missing">Пока не готова в Watch. Её приложения ждут, и ничего от них не уходит напрямую.</string>
+    <string name="tunnel_state_locked">Её нельзя открыть, пока телефон заблокирован. Её приложения ждут, пока вы его не разблокируете.</string>
+    <string name="tunnel_state_unavailable">Сейчас её нельзя открыть. Её приложения ждут, а Watch пробует снова.</string>
+    <string name="tunnel_state_lost">Её больше нельзя открыть на этом телефоне. Её приложения ждут. Замените её, снова добавив её файл или QR-код: так её приложения сохранятся.</string>
+    <string name="tunnel_state_plain_dns">Watch нашёл адрес сервера только через незашифрованный DNS. Ваша сеть может видеть, каким провайдером вы пользуетесь.</string>
+
+    <!-- Removing a configuration: what its apps do then. %1$s: its name. -->
+    <string name="tunnels_remove_title">Удалить %1$s?</string>
+    <string name="tunnels_remove_wait">Её приложения ждут и ничего не отправляют, пока вы не выберете для них другой путь.</string>
+    <string name="tunnels_remove_other_way">Её приложения идут другим путём: напрямую или через ваш инструмент обхода блокировок, если он их принимает.</string>
+    <string name="tunnels_remove_confirm">Удалить её</string>
+    <string name="tunnels_cancel">Отмена</string>
+
+    <!-- The confirmation before anything is saved. -->
+    <string name="import_title">Проверьте эту конфигурацию</string>
+    <!-- %1$s: the name of the configuration it replaces. -->
+    <string name="import_replace_title">Заменить %1$s</string>
+    <string name="import_replace_note">Её приложения и её переключатели останутся как есть.</string>
+    <!-- %1$s: the server's address or name; %2$d: its port. -->
+    <string name="import_server">Сервер: %1$s, порт %2$d.</string>
+    <string name="import_server_name">Watch ищет это имя через вашу сеть до запуска туннеля. Если частный DNS-сервер не включён, ваша сеть может его увидеть.</string>
+    <!-- %1$s: the addresses, comma separated. -->
+    <string name="import_addresses">Адрес этого телефона в ней: %1$s.</string>
+    <string name="import_no_ipv6">В ней нет адреса IPv6. IPv6-подключения выбранных вами приложений отклоняются, поэтому они используют IPv4.</string>
+    <!-- %1$s: the DNS servers, comma separated. -->
+    <string name="import_dns">Имена, которые ищут выбранные вами приложения, отправляются на %1$s через сервер.</string>
+    <string name="import_everything">Весь трафик выбранных вами приложений идёт через неё.</string>
+    <!-- %1$s: the networks, comma separated. -->
+    <string name="import_narrower">Через неё идут только эти места назначения: %1$s. Watch отклоняет все остальные места назначения выбранных вами приложений и никогда ничего не отправляет к ним напрямую.</string>
+    <string name="import_preshared">В ней есть предварительный общий ключ: дополнительный секрет, который защищает её от будущих квантовых компьютеров.</string>
+    <string name="import_no_preshared">В ней нет предварительного общего ключа.</string>
+    <!-- %1$d: seconds. -->
+    <plurals name="import_keepalive">
+        <item quantity="one">Она отправляет небольшой пакет каждую %d секунду, чтобы соединение оставалось открытым. Это немного расходует заряд батареи.</item>
+        <item quantity="few">Она отправляет небольшой пакет каждые %d секунды, чтобы соединение оставалось открытым. Это немного расходует заряд батареи.</item>
+        <item quantity="many">Она отправляет небольшой пакет каждые %d секунд, чтобы соединение оставалось открытым. Это немного расходует заряд батареи.</item>
+        <item quantity="other">Она отправляет небольшой пакет каждые %d секунды, чтобы соединение оставалось открытым. Это немного расходует заряд батареи.</item>
+    </plurals>
+    <!-- %1$d: bytes. -->
+    <plurals name="import_mtu">
+        <item quantity="one">Наибольший пакет внутри неё: %d байт.</item>
+        <item quantity="few">Наибольший пакет внутри неё: %d байта.</item>
+        <item quantity="many">Наибольший пакет внутри неё: %d байт.</item>
+        <item quantity="other">Наибольший пакет внутри неё: %d байта.</item>
+    </plurals>
+    <string name="import_apps">Какие приложения направлять через неё</string>
+    <string name="import_apps_from_file">Приложения, указанные в файле, стоят в начале списка ниже. Проверьте их перед сохранением.</string>
+    <string name="import_apps_not_ticked">Приложение, которое сейчас идёт через ваш инструмент или другую конфигурацию, не отмечено. Отметьте его, чтобы перенести сюда.</string>
+    <!-- %1$s: the apps it leaves out, comma separated. -->
+    <string name="import_excluded">Файл исключает %1$s и предлагает все остальные приложения на вашем телефоне.</string>
+    <string name="import_excluded_now">Это касается только приложений, которые сейчас есть на вашем телефоне. Приложение, установленное позже, не пойдёт через неё, если вы его не выберете.</string>
+    <!-- Under an app: how it goes now. %1$s: its way, such as Directly. -->
+    <string name="import_app_way">Путь сейчас: %1$s</string>
+    <!-- Under a ticked app that goes another way now. %1$s: that way. -->
+    <string name="import_app_moves">Сохранение перенесёт его сюда. Прежний путь: %1$s</string>
+    <!-- The heading over the apps the file does not name. -->
+    <string name="import_apps_others">Другие приложения</string>
+    <!-- %1$s: package names, comma separated. -->
+    <string name="import_not_installed">Указаны в файле, но не установлены: %1$s.</string>
+    <string name="import_not_choosable">Указаны в файле, но их нельзя выбрать здесь: %1$s.</string>
+    <string name="import_left_out">Указаны в файле, но исключены из Watch, поэтому ничего от них не проходит через Watch: %1$s.</string>
+    <string name="import_save">Сохранить</string>
+    <string name="import_apps_loading">Загружаем ваши приложения…</string>
+
+    <!-- Why a configuration was refused. %1$d: a line of the file; %2$s: what is wrong with it. -->
+    <string name="refused_line">Строка %1$d: %2$s</string>
+    <string name="refused_too_long">Файл слишком длинный для конфигурации WireGuard.</string>
+    <string name="refused_not_text">Файл не текстовый, поэтому это не конфигурация WireGuard.</string>
+    <string name="refused_unreadable">Эту строку не удаётся прочитать.</string>
+    <string name="refused_outside_section">Настройка стоит до первого раздела [Interface] или [Peer].</string>
+    <string name="refused_unknown_section">Watch знает только разделы [Interface] и [Peer].</string>
+    <string name="refused_several_interfaces">В файле есть второй раздел [Interface].</string>
+    <string name="refused_several_peers">В файле есть второй раздел [Peer]. Watch принимает один сервер на каждую конфигурацию.</string>
+    <!-- %1$s: the name of a setting, such as PostUp. -->
+    <string name="refused_unsupported">Watch не выполняет настройку %1$s.</string>
+    <string name="refused_unsupported_unnamed">Watch не выполняет эту настройку.</string>
+    <string name="refused_repeated">Настройка %1$s указана дважды.</string>
+    <string name="refused_bad_value">Не удаётся прочитать значение %1$s.</string>
+    <string name="refused_several_addresses">В файле указаны два адреса одного типа. Watch принимает один адрес IPv4 и один адрес IPv6.</string>
+    <string name="refused_search_domain">В настройке DNS указан домен поиска, который Watch не может использовать.</string>
+    <string name="refused_no_interface">В файле нет раздела [Interface].</string>
+    <string name="refused_no_peer">В файле нет раздела [Peer].</string>
+    <string name="refused_no_private_key">В файле нет закрытого ключа (PrivateKey).</string>
+    <string name="refused_no_address">В файле не указан адрес (Address).</string>
+    <string name="refused_no_dns">В файле не указан DNS-сервер. Имена, которые ищут ваши приложения, было бы некуда отправить конфиденциально, поэтому Watch не принимает эту конфигурацию.</string>
+    <string name="refused_dns_unreachable">Ни один DNS-сервер из файла недоступен через сервер, указанный в этом же файле.</string>
+    <string name="refused_no_public_key">В файле нет ключа сервера (PublicKey).</string>
+    <string name="refused_no_endpoint">В файле не указано, где находится сервер (Endpoint).</string>
+    <string name="refused_no_allowed_ips">В файле не указано, какие места назначения идут через сервер (AllowedIPs).</string>
+    <string name="refused_bad_mtu">MTU в файле не подходит для Watch: нужно от 576 до 1500 байт и не меньше 1280 байт при адресе IPv6.</string>
+    <string name="refused_both_application_lists">В файле указаны и приложения для включения, и приложения для исключения. Допускается только один из двух списков.</string>
+    <!-- %d: the most configurations Watch keeps (8). -->
+    <plurals name="refused_too_many">
+        <item quantity="one">Watch хранит не больше %d конфигурации. Удалите конфигурацию, чтобы добавить другую.</item>
+        <item quantity="few">Watch хранит не больше %d конфигураций. Удалите одну, чтобы добавить другую.</item>
+        <item quantity="many">Watch хранит не больше %d конфигураций. Удалите одну, чтобы добавить другую.</item>
+        <item quantity="other">Watch хранит не больше %d конфигурации. Удалите одну, чтобы добавить другую.</item>
+    </plurals>
+    <string name="refused_unknown">Watch не смог прочитать эту конфигурацию.</string>
+    <string name="import_unreadable">Watch не смог прочитать этот файл.</string>
+    <string name="import_too_slow">Чтение этого файла заняло слишком много времени. Если он хранится в интернете, сначала скачайте его.</string>
+
+    <!-- Reading a QR code from a picture. -->
+    <string name="qr_not_a_picture">Это не изображение, которое Watch может прочитать.</string>
+    <string name="qr_too_large">Это изображение слишком большое, чтобы его прочитать.</string>
+    <string name="qr_no_code">На этом изображении не удалось прочитать QR-код. Попробуйте чёткую фотографию, на которой код виден целиком.</string>
+    <string name="qr_too_long">В этом QR-коде больше текста, чем может быть в конфигурации WireGuard.</string>
+    <string name="qr_too_slow">Чтение этого изображения заняло слишком много времени.</string>
+    <string name="qr_stopped">Модуль чтения изображений в Watch остановился на этом изображении.</string>
+    <string name="qr_no_camera">На этом телефоне нет приложения камеры, которое может сделать снимок для Watch.</string>
+    <string name="qr_reading">Читаем изображение…</string>
+    <string name="qr_photo_deleted">Фотография удалена.</string>
+
+    <!-- Each app's one way (ADR 0035, routes). -->
+    <string name="routes_title">Путь каждого приложения</string>
+    <string name="routes_intro">Каждое приложение идёт одним путём: напрямую, через ваш инструмент обхода блокировок или через одну конфигурацию WireGuard.</string>
+    <string name="routes_choose">Выбрать пути приложений</string>
+    <string name="routes_done">Готово</string>
+    <string name="route_direct">Напрямую</string>
+    <!-- %1$s: the tool's name. -->
+    <string name="route_tool">Через %1$s</string>
+    <string name="route_tool_unnamed">Через ваш инструмент обхода блокировок</string>
+    <!-- %1$s: a configuration's name. -->
+    <string name="route_tunnel">Через %1$s</string>
+    <string name="route_waiting">Ждёт конфигурацию, которую удалили. Ничего от него не уходит.</string>
+    <string name="route_left_out">Исключено из Watch: оно выходит в интернет без Watch.</string>
+    <string name="routes_all_apps_note">Пока ваш инструмент принимает все приложения, приложение идёт напрямую, только если вы исключите его из Watch.</string>
+    <!-- The chain's choice of apps: an app with a configuration goes through it instead of the tool. %1$s: the configuration's name. -->
+    <string name="chain_app_tunnel">Вместо этого идёт через %1$s. Измените это в разделе «Путь каждого приложения».</string>
+    <!-- The chain's choice of apps: an app that waits for a removed configuration. -->
+    <string name="chain_app_waiting">Ждёт конфигурацию, которую вы удалили, поэтому ничего от него не уходит. Измените это в разделе «Путь каждого приложения».</string>
+    <plurals name="chain_tunnelled_apps">
+        <item quantity="one">%d приложение идёт через конфигурацию WireGuard, а не через инструмент.</item>
+        <item quantity="few">%d приложения идут через конфигурацию WireGuard, а не через инструмент.</item>
+        <item quantity="many">%d приложений идут через конфигурацию WireGuard, а не через инструмент.</item>
+        <item quantity="other">%d приложения идут через конфигурацию WireGuard, а не через инструмент.</item>
+    </plurals>
+
+    <!-- "Now" and each app's history: an app sent through a WireGuard configuration. %1$s: its name. -->
+    <string name="now_through_tunnel">Отправлено через %1$s. Куда подключалось приложение, не показано, потому что настройка «Записывать, куда подключаются эти приложения» выключена.</string>
+    <string name="now_destination_tunnel">Через %1$s</string>
+    <string name="history_through_tunnel">Отправлено через %1$s. Куда подключалось приложение, не записано, потому что настройка «Записывать, куда подключаются эти приложения» была выключена.</string>
+    <!-- In place of a configuration's name: inside the sentences above, and also alone as a configuration's heading and in its buttons' and rows' labels, so it must read well on its own too. -->
+    <string name="tunnel_removed_name">WireGuard (конфигурация с тех пор удалена)</string>
+    <string name="tunnel_closed_name">WireGuard (конфигурацию сейчас нельзя открыть)</string>
 </resources>
