@@ -4,7 +4,9 @@
 # module of an edition's runtime classpath has no row here, and when a row of an edition covers none of its
 # modules. Columns, by tabs: a Maven group, group:artifact, or group.* for the group and the groups under it; the
 # name shown; the licence as an SPDX expression; the editions (all, or basic, lite and advanced by commas); the
-# file under licences/ in the APK that holds the licence's text.
+# file under licences/ in the APK that holds the licence's text. A row of a whole group (a group, or group.*) takes
+# in any artifact of that group that comes later under its one name and licence, which the build cannot check: a
+# new artifact of such a group under another licence needs a row of its own, so read its licence when it comes.
 org.jetbrains.kotlin	Kotlin standard library	Apache-2.0	all	LICENSE
 org.jetbrains.kotlinx	Kotlin coroutines and serialization (kotlinx)	Apache-2.0	all	LICENSE
 org.jetbrains:annotations	JetBrains Java annotations	Apache-2.0	all	LICENSE

@@ -129,6 +129,12 @@ internal fun LicencesScreen(insets: PaddingValues, onBack: () -> Unit) {
                         Text(stringResource(R.string.licences_unread, isolateLtr(line)), style = MaterialTheme.typography.bodySmall)
                     }
                 }
+                // The data pack's databases, whose licences the Data sources page shows with each (W7, part 2, fix round,
+                // screens review m6): the APK carries them too.
+                item {
+                    Heading(stringResource(R.string.licences_data_title))
+                    Text(stringResource(R.string.licences_data_note), style = MaterialTheme.typography.bodyMedium)
+                }
             }
         }
     }

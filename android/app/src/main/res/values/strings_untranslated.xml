@@ -31,6 +31,10 @@
     <!-- While a long text is read from the app. -->
     <string name="licences_opening">Opening the text…</string>
     <string name="licences_unreadable">This text could not be opened.</string>
+    <!-- The heading over the databases the app carries, last on the licence screen. -->
+    <string name="licences_data_title">Data</string>
+    <!-- "Data sources" is the name of the Settings page that lists each database with its licence. -->
+    <string name="licences_data_note">The databases Datapavan compares your apps and your phone with have licences of their own, such as the Open Database License of the εxodus tracker list. The Data sources page in Settings names each one with its licence and where it comes from.</string>
     <!-- A line of a list of parts that the screen could not read: shown as it is. -->
     <string name="licences_unread">Shown as the list has it: %1$s</string>
 </resources>
