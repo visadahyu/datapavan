@@ -383,12 +383,19 @@ mod tests {
 
     #[test]
     fn every_length_of_name_pads_to_a_block() {
-        for n in 1..=63 {
-            let name = format!("{}.test", "a".repeat(n));
+        // Names of every length up to 250, in labels of at most 63: past a whole block or two.
+        for n in 1usize..=240 {
+            let labels: Vec<String> = (0..n.div_ceil(60))
+                .map(|i| "a".repeat((n - i * 60).min(60)))
+                .collect();
+            let name = format!("{}.test", labels.join("."));
             let Some(asked) = query_for(&name, 1) else {
                 unreachable!("a query")
             };
-            assert_eq!(asked.upstream(true).len() % QUERY_BLOCK, 0, "{n}");
+            let (padded, bare) = (asked.upstream(true).len(), asked.upstream(false).len());
+            assert_eq!(padded % QUERY_BLOCK, 0, "{n}");
+            // The least padding that ends on a block: the option's four bytes and less than a block of zeros.
+            assert!(padded - bare < 4 + QUERY_BLOCK, "{n}: {padded} from {bare}");
         }
     }
 

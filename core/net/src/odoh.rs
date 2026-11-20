@@ -224,6 +224,13 @@ pub(crate) mod tests {
         else {
             unreachable!("answered")
         };
+        let mut longer = answer.clone();
+        longer.push(0);
+        assert_eq!(
+            open(&first_again, &longer),
+            None,
+            "a byte after the message"
+        );
         let last = answer.len() - 1;
         answer[last] ^= 1;
         assert_eq!(open(&first_again, &answer), None, "the tag fails");

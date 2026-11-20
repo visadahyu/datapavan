@@ -19,6 +19,7 @@ import struct
 import sys
 import time
 
+sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "dnslab"))
 import odoh_probe  # noqa: E402  (the lab's independent ODoH client)
 

@@ -613,9 +613,21 @@ pub(crate) mod tests {
             fastly.clash(&who("T", "B", &["NO"], &[2], &[54113])),
             Some(Clash::Network(54113))
         );
+        // Both behind one CDN, though hosted apart.
+        let fronted = who("R", "P", &["FR"], &[1], &[13335]);
+        assert_eq!(
+            fronted.clash(&who("T", "B", &["NO"], &[2], &[13335])),
+            Some(Clash::Network(13335))
+        );
         assert_eq!(
             relay.clash(&who("T", "", &["US"], &[1], &[])),
             Some(Clash::Unknown)
+        );
+        let fine = who("T", "B", &["US"], &[1], &[]);
+        assert_eq!(
+            who("R", "", &["DE"], &[2], &[]).clash(&fine),
+            Some(Clash::Unknown),
+            "the relay's side too"
         );
         assert_eq!(
             relay.clash(&who("T", "B", &[], &[1], &[])),

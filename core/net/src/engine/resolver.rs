@@ -1481,6 +1481,8 @@ mod tests {
         for name in [
             "example.com",
             "5.15.172.in-addr.arpa",
+            "5.32.172.in-addr.arpa",
+            "9.128.100.in-addr.arpa",
             "9.10.100.in-addr.arpa",
             "1.1.1.1.in-addr.arpa",
             "notcorp.example",
@@ -1533,6 +1535,11 @@ mod tests {
             "nothing to the network's resolver"
         );
         assert!(shared.resolver.status().starts_with("way odoh ra ta\n"));
+        assert!(
+            shared.resolver.status().contains("\nlatency odoh 1 "),
+            "the exchange timed as ODoH's"
+        );
+        assert!(shared.resolver.status().contains("\nlatency doh 0 "));
         // Kept: the same name again asks nothing.
         let again = answer(&shared, &app_query("www.example.com", 1), false).await;
         assert_eq!(read(again).0, Some(v4(10, 53, 1, 1)));
