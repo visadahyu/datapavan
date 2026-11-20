@@ -40,8 +40,8 @@ interface Wrap {
     /** Where the key lives, for the screen. */
     fun home(): KeyHome
 
-    /** What of a configuration a wrap holds. */
-    enum class Part(val label: String) { NAME("name"), TEXT("text") }
+    /** What of a configuration a wrap holds, or the store's state (slot 0). */
+    enum class Part(val label: String) { NAME("name"), TEXT("text"), STATE("state") }
 }
 
 /** What an unwrap gave. */
@@ -78,10 +78,10 @@ enum class KeyHome { STRONGBOX, TRUSTED_ENVIRONMENT, SECURE_HARDWARE, SOFTWARE, 
  * 96-bit IV itself (randomised encryption, its default), which is stored before the sealed bytes; the slot's
  * number and the part are the associated data.
  *
- * The key does not require an unlocked phone (`setUnlockedDeviceRequired`): Watch, started again while the phone
- * is locked, as after an update installed at night, sets its configurations at once, and its apps do not wait
- * for the unlock. ADR 0035, "How it is built (W7, part 2)", gives the measure and the reason, and the maintainer
- * decides it. [unlockedOnly] makes the other key, for the debug builds' measure only.
+ * Two such keys (the maintainer's decision of 2026-11-20, ADR 0035): [ALIAS], key A, which opens at any time, and
+ * [UNLOCKED_ALIAS], key B, made with [unlockedOnly] (`setUnlockedDeviceRequired`), which from Android 12 the
+ * Keystore makes unusable while the phone is locked, even to code running as Watch. [TunnelStore] wraps the
+ * configurations under key B while ADR 0047's profile is on, and what decides the routes under key A always.
  */
 class KeystoreWrap(private val alias: String = ALIAS, private val unlockedOnly: Boolean = false) : Wrap {
     private val keyStore: KeyStore = KeyStore.getInstance(PROVIDER).apply { load(null) }
@@ -184,6 +184,9 @@ class KeystoreWrap(private val alias: String = ALIAS, private val unlockedOnly: 
 
     companion object {
         const val ALIAS = "watch-tunnels"
+
+        /** Key B: needs an unlocked phone. */
+        const val UNLOCKED_ALIAS = "watch-tunnels-unlocked"
         private const val TAG = "WatchTunnels"
         private const val PROVIDER = "AndroidKeyStore"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"

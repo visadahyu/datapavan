@@ -9,13 +9,18 @@ import java.nio.file.StandardCopyOption
 
 /**
  * The WireGuard configurations Watch keeps (W7, part 2, ADR 0035), each in a slot of its own, numbered from 1 and
- * never numbered again while an app is routed to it: its text and its name, each wrapped by [wrap] (the Keystore's
- * AES-256-GCM key, [KeystoreWrap]) with the slot's number bound to it, in files under [dir], which is in Watch's
- * `noBackupFilesDir`: out of cloud backup and device-to-device transfer, as the application's data extraction
- * rules also say of every file of both editions. Beside them, in plain text, what Watch must read without opening
- * a key, so that a configuration that cannot be opened still holds its apps: the slots in order, the default
- * first; which have "Local network directly"; the next slot's number; and each app routed to a slot, by package
- * name, as the chain keeps its apps (ADR 0047's table lists both).
+ * never numbered again while an app is routed to it, in files under [dir], which is in Watch's `noBackupFilesDir`:
+ * out of cloud backup and device-to-device transfer, as the application's data extraction rules also say of every
+ * file of both editions.
+ *
+ * Two Keystore keys (AES-256-GCM, [KeystoreWrap]; the maintainer's decision of 2026-11-20, ADR 0035): key A ([wrap])
+ * opens at any time, key B ([unlockedWrap]) only while the phone is unlocked (`setUnlockedDeviceRequired`). Each
+ * configuration's text and name are wrapped apart, with the slot's number bound to each, under key B while ADR
+ * 0047's profile for phones that may be searched is on ([State.profile], [setProfile]), under key A otherwise; each
+ * file says which key wrapped it. What decides a route is wrapped under key A alone, so that Watch, started again
+ * while the phone is locked, still knows which apps to hold and holds them, never sending one directly: the slots in
+ * order, the default first, "Local network directly", the next number, the profile, and each app routed to a slot
+ * by package name ([State]).
  *
  * The text never becomes a `String`: it is handed in and out as bytes, which the caller zeroes after use. A change
  * leaves the store as it was or changes it whole (W7, part 2, fix round, security review M3): every wrap is made
@@ -23,7 +28,12 @@ import java.nio.file.StandardCopyOption
  * flushed to the disk, so that a full disk changes nothing either; and only then is each put in place of its own
  * by a rename, which takes no space. One store per process ([of]); its methods hold its lock.
  */
-class TunnelStore(private val dir: File, private val wrap: Wrap, private val disk: Disk = Disk.SYNCED) {
+class TunnelStore(
+    private val dir: File,
+    private val wrap: Wrap,
+    private val unlockedWrap: Wrap = wrap,
+    private val disk: Disk = Disk.SYNCED,
+) {
     /** Writes a file's bytes to the disk, flushed; the tests' own fills up. */
     fun interface Disk {
         fun write(file: File, bytes: ByteArray)
@@ -41,7 +51,20 @@ class TunnelStore(private val dir: File, private val wrap: Wrap, private val dis
     /** A change that named a slot no configuration holds any more: removed while the confirmation was open. */
     class SlotGone(slot: Int) : IllegalArgumentException("No configuration in slot $slot")
 
-    /** What the store keeps in plain text. */
+    /**
+     * A wrap a call needs could not be opened now: the state's, under key A, which leaves nothing to tell of any app's
+     * route meanwhile, so that the service holds every app until it opens; or a configuration's, under key B on a
+     * locked phone, which a move between the keys needs.
+     */
+    class StateClosed : java.security.GeneralSecurityException("A wrap of the configurations cannot be opened now")
+
+    /** Which of the two keys wrapped a file, by its first byte. */
+    enum class Key(val mark: Byte) { A('a'.code.toByte()), B('b'.code.toByte()) }
+
+    /** What [setProfile] moved: the slots now under the profile's key, and those it could not move, still under the other. */
+    data class Rewrapped(val moved: List<Int>, val unmoved: List<Int>)
+
+    /** What decides the routes, wrapped under key A. */
     data class State(
         /** The slots that hold a configuration, the default first. */
         val order: List<Int> = emptyList(),
@@ -51,6 +74,8 @@ class TunnelStore(private val dir: File, private val wrap: Wrap, private val dis
         val next: Int = 1,
         /** Each app sent through a tunnel, by package name, to its slot; a slot removed with its apps waiting stays. */
         val routes: Map<String, Int> = emptyMap(),
+        /** ADR 0047's profile: configurations are wrapped under key B, which needs an unlocked phone. */
+        val profile: Boolean = false,
     ) {
         /** The default tunnel's slot, the first. */
         val default: Int? get() = order.firstOrNull()
@@ -101,10 +126,11 @@ class TunnelStore(private val dir: File, private val wrap: Wrap, private val dis
             next = slot + 1,
             routes = state.routes + apps.associateWith { slot },
         )
+        val key = keyFor(state)
         commit(
             listOf(
-                file(slot, Wrap.Part.TEXT) to wrap.wrap(slot, Wrap.Part.TEXT, text),
-                file(slot, Wrap.Part.NAME) to wrappedName(slot, name),
+                file(slot, Wrap.Part.TEXT) to sealed(key, slot, Wrap.Part.TEXT, text),
+                file(slot, Wrap.Part.NAME) to wrappedName(key, slot, name),
                 stateFile to encode(added),
             ),
         )
@@ -118,22 +144,82 @@ class TunnelStore(private val dir: File, private val wrap: Wrap, private val dis
      */
     @Synchronized
     fun replace(slot: Int, text: ByteArray, name: String?) {
-        if (slot !in read().order) throw SlotGone(slot)
+        val state = read()
+        if (slot !in state.order) throw SlotGone(slot)
+        val key = keyFor(state)
+        // A name kept goes under the same key as the text, so that a slot is under one key whole.
+        val kept = if (name == null && keyOf(slot) != key) (name(slot) as? Name.Known)?.name else null
+        if (name == null && kept == null && keyOf(slot) != key) throw StateClosed()
         commit(
             listOfNotNull(
-                file(slot, Wrap.Part.TEXT) to wrap.wrap(slot, Wrap.Part.TEXT, text),
-                name?.let { file(slot, Wrap.Part.NAME) to wrappedName(slot, it) },
+                file(slot, Wrap.Part.TEXT) to sealed(key, slot, Wrap.Part.TEXT, text),
+                (name ?: kept)?.let { file(slot, Wrap.Part.NAME) to wrappedName(key, slot, it) },
             ),
         )
         wrote(slot)
     }
 
-    /** Names the slot's configuration anew; its text is not opened. */
+    /** Names the slot's configuration anew, under the key its text is under; its text is not opened. */
     @Synchronized
     fun rename(slot: Int, name: String) {
         if (slot !in read().order) throw SlotGone(slot)
-        commit(listOf(file(slot, Wrap.Part.NAME) to wrappedName(slot, name)))
+        commit(listOf(file(slot, Wrap.Part.NAME) to wrappedName(keyOf(slot) ?: Key.A, slot, name)))
         names.remove(slot)
+    }
+
+    /**
+     * Turns ADR 0047's profile on or off (W9 wires the profile's switch to it; debug builds' dump has `tunnel-profile`):
+     * the state says so at once, so that a configuration added after goes under the profile's key, and then each
+     * configuration is wrapped again under that key, its text and name together, in one change for the slot, which
+     * leaves the slot as it was when it fails. Wrapping under key B, or opening what it wrapped, needs an unlocked
+     * phone: a slot that cannot be moved now is listed in [Rewrapped.unmoved], still under the other key, and a
+     * later call moves it.
+     */
+    @Synchronized
+    fun setProfile(on: Boolean): Rewrapped {
+        val state = read()
+        if (state.profile != on) write(state.copy(profile = on))
+        val target = if (on) Key.B else Key.A
+        val moved = mutableListOf<Int>()
+        val unmoved = mutableListOf<Int>()
+        for (slot in state.order) {
+            if (keyOf(slot) == target) {
+                moved += slot
+                continue
+            }
+            try {
+                rewrap(slot, target)
+                moved += slot
+            } catch (e: IOException) {
+                unmoved += slot
+            } catch (e: java.security.GeneralSecurityException) {
+                unmoved += slot
+            } catch (e: java.security.ProviderException) {
+                unmoved += slot
+            }
+        }
+        return Rewrapped(moved, unmoved)
+    }
+
+    /** Which key wrapped the slot's text, or null for none. */
+    @Synchronized
+    fun keyOf(slot: Int): Key? = try {
+        file(slot, Wrap.Part.TEXT).takeIf { it.isFile }?.inputStream()?.use { it.read() }?.let { first -> Key.entries.firstOrNull { it.mark.toInt() == first } }
+    } catch (e: IOException) {
+        null
+    }
+
+    /** Opens the slot's text and name under their key and wraps both under [target], in one change. */
+    private fun rewrap(slot: Int, target: Key) {
+        val parts = listOf(Wrap.Part.TEXT, Wrap.Part.NAME)
+        val opened = parts.map { part -> opened(slot, part) }
+        try {
+            if (opened.any { it !is Opened.Plain }) throw StateClosed()
+            commit(parts.zip(opened).map { (part, plain) -> file(slot, part) to sealed(target, slot, part, (plain as Opened.Plain).bytes) })
+        } finally {
+            opened.forEach { (it as? Opened.Plain)?.bytes?.fill(0) }
+        }
+        wrote(slot)
     }
 
     /**
@@ -151,7 +237,7 @@ class TunnelStore(private val dir: File, private val wrap: Wrap, private val dis
                 routes = if (appsWait) state.routes else state.routes.filterValues { it != slot },
             ),
         )
-        for (part in Wrap.Part.entries) file(slot, part).delete()
+        for (part in listOf(Wrap.Part.TEXT, Wrap.Part.NAME)) file(slot, part).delete()
         names.remove(slot)
     }
 
@@ -182,14 +268,8 @@ class TunnelStore(private val dir: File, private val wrap: Wrap, private val dis
     @Synchronized
     fun name(slot: Int): Name {
         names[slot]?.let { return it }
-        val file = file(slot, Wrap.Part.NAME)
-        if (!file.isFile) return Name.Removed
-        val wrapped = try {
-            file.readBytes()
-        } catch (e: IOException) {
-            return Name.Unavailable
-        }
-        return when (val opened = wrap.unwrap(slot, Wrap.Part.NAME, wrapped)) {
+        if (!file(slot, Wrap.Part.NAME).isFile) return Name.Removed
+        return when (val opened = opened(slot, Wrap.Part.NAME)) {
             is Opened.Plain -> Name.Known(String(opened.bytes, Charsets.UTF_8)).also {
                 opened.bytes.fill(0)
                 names[slot] = it
@@ -205,16 +285,33 @@ class TunnelStore(private val dir: File, private val wrap: Wrap, private val dis
      * cannot be read now is [Opened.Unavailable], as a Keystore error is: tried again, never taken as lost.
      */
     @Synchronized
-    fun text(slot: Int): Opened {
-        val file = file(slot, Wrap.Part.TEXT)
+    fun text(slot: Int): Opened = opened(slot, Wrap.Part.TEXT)
+
+    /** A slot's file opened under the key its first byte names: lost when it is gone or names no key. */
+    private fun opened(slot: Int, part: Wrap.Part): Opened {
+        val file = file(slot, part)
         if (!file.isFile) return Opened.Lost
-        val wrapped = try {
+        val bytes = try {
             file.readBytes()
         } catch (e: IOException) {
             return Opened.Unavailable
         }
-        return wrap.unwrap(slot, Wrap.Part.TEXT, wrapped)
+        return unsealed(slot, part, bytes)
     }
+
+    /** [bytes] as a file holds them: the key's mark, then the wrap. */
+    private fun unsealed(slot: Int, part: Wrap.Part, bytes: ByteArray): Opened {
+        val key = Key.entries.firstOrNull { it.mark == bytes.firstOrNull() } ?: return Opened.Lost
+        return wrapOf(key).unwrap(slot, part, bytes.copyOfRange(1, bytes.size))
+    }
+
+    /** [plain] wrapped under [key], with the key's mark first. */
+    private fun sealed(key: Key, slot: Int, part: Wrap.Part, plain: ByteArray): ByteArray =
+        byteArrayOf(key.mark) + wrapOf(key).wrap(slot, part, plain)
+
+    private fun wrapOf(key: Key): Wrap = if (key == Key.B) unlockedWrap else wrap
+
+    private fun keyFor(state: State): Key = if (state.profile) Key.B else Key.A
 
     /** Where the key lives, for the screen. */
     fun home(): KeyHome = wrap.home()
@@ -235,7 +332,7 @@ class TunnelStore(private val dir: File, private val wrap: Wrap, private val dis
         names.remove(slot)
     }
 
-    private fun wrappedName(slot: Int, name: String): ByteArray = wrap.wrap(slot, Wrap.Part.NAME, cleanName(name).toByteArray(Charsets.UTF_8))
+    private fun wrappedName(key: Key, slot: Int, name: String): ByteArray = sealed(key, slot, Wrap.Part.NAME, cleanName(name).toByteArray(Charsets.UTF_8))
 
     private fun file(slot: Int, part: Wrap.Part) = File(dir, "$slot.${part.label}")
 
@@ -262,18 +359,39 @@ class TunnelStore(private val dir: File, private val wrap: Wrap, private val dis
         }
     }
 
+    /**
+     * The state, opened under key A. A state written before it was wrapped (part 2's builds before its fix round) is
+     * read as it is, and wrapped at the next change. One that cannot be opened now throws [StateClosed]; one whose key
+     * is gone for good, which leaves every configuration's wrap unopenable too, reads as an empty store.
+     */
     private fun read(): State {
         if (!stateFile.isFile) return State()
+        val bytes = stateFile.readBytes()
+        if (bytes.firstOrNull() == 'o'.code.toByte()) return parse(String(bytes, Charsets.US_ASCII))
+        return when (val opened = unsealed(0, Wrap.Part.STATE, bytes)) {
+            is Opened.Plain -> try {
+                parse(String(opened.bytes, Charsets.US_ASCII))
+            } finally {
+                opened.bytes.fill(0)
+            }
+            Opened.Locked, Opened.Unavailable -> throw StateClosed()
+            Opened.Lost -> State()
+        }
+    }
+
+    private fun parse(text: String): State {
         var order = emptyList<Int>()
         val local = mutableSetOf<Int>()
         var next = 1
+        var profile = false
         val routes = mutableMapOf<String, Int>()
-        for (line in stateFile.readLines()) {
+        for (line in text.lines()) {
             val words = line.split(' ').filter { it.isNotEmpty() }
             when (words.firstOrNull()) {
                 "order" -> order = words.drop(1).mapNotNull { it.toIntOrNull()?.takeIf { slot -> slot > 0 } }.distinct()
                 "local" -> local += words.drop(1).mapNotNull { it.toIntOrNull() }
                 "next" -> next = words.getOrNull(1)?.toIntOrNull()?.takeIf { it > 0 } ?: next
+                "profile" -> profile = words.getOrNull(1) == "on"
                 "route" -> {
                     val app = words.getOrNull(1)?.takeIf { PACKAGE.matches(it) }
                     val slot = words.getOrNull(2)?.toIntOrNull()?.takeIf { it > 0 }
@@ -283,17 +401,26 @@ class TunnelStore(private val dir: File, private val wrap: Wrap, private val dis
         }
         // A slot whose text is gone (a crash between two writes) is not offered; its apps keep waiting.
         order = order.filter { file(it, Wrap.Part.TEXT).isFile }
-        return State(order, local intersect order.toSet(), next, routes)
+        return State(order, local intersect order.toSet(), next, routes, profile)
     }
 
     private fun write(state: State) = commit(listOf(stateFile to encode(state)))
 
-    private fun encode(state: State): ByteArray = buildString {
-        append("order ${state.order.joinToString(" ")}\n")
-        append("local ${state.local.sorted().joinToString(" ")}\n")
-        append("next ${state.next}\n")
-        for ((app, slot) in state.routes.toSortedMap()) append("route $app $slot\n")
-    }.toByteArray(Charsets.US_ASCII)
+    /** The state as its file holds it: wrapped under key A, which opens while the phone is locked. */
+    private fun encode(state: State): ByteArray {
+        val plain = buildString {
+            append("order ${state.order.joinToString(" ")}\n")
+            append("local ${state.local.sorted().joinToString(" ")}\n")
+            append("next ${state.next}\n")
+            append("profile ${if (state.profile) "on" else "off"}\n")
+            for ((app, slot) in state.routes.toSortedMap()) append("route $app $slot\n")
+        }.toByteArray(Charsets.US_ASCII)
+        return try {
+            sealed(Key.A, 0, Wrap.Part.STATE, plain)
+        } finally {
+            plain.fill(0)
+        }
+    }
 
     companion object {
         /** The engine's bound on configurations at once (core/net's `MAX_TUNNELS`). */
@@ -335,13 +462,17 @@ class TunnelStore(private val dir: File, private val wrap: Wrap, private val dis
         @Volatile
         private var store: TunnelStore? = null
 
-        /** The process's store, in `noBackupFilesDir/tunnels`. */
+        /** The process's store, in `noBackupFilesDir/tunnels`, with key A and key B. */
         fun of(context: Context): TunnelStore = store ?: synchronized(this) {
             store ?: run {
                 val app = context.applicationContext
                 // An error the Keystore gives without saying why is told by the lock's own state.
                 KeystoreWrap.locked = { app.getSystemService(android.app.KeyguardManager::class.java)?.isDeviceLocked == true }
-                TunnelStore(File(app.noBackupFilesDir, "tunnels"), KeystoreWrap()).also { store = it }
+                TunnelStore(
+                    File(app.noBackupFilesDir, "tunnels"),
+                    KeystoreWrap(),
+                    KeystoreWrap(KeystoreWrap.UNLOCKED_ALIAS, unlockedOnly = true),
+                ).also { store = it }
             }
         }
     }

@@ -413,6 +413,8 @@ class MainActivity : ComponentActivity() {
             } catch (e: java.io.IOException) {
                 // The state could not be read now: the screen keeps what it showed, and the next change reads again.
                 null
+            } catch (e: java.security.GeneralSecurityException) {
+                null
             } ?: return@execute
             val (state, names, home) = read
             runOnUiThread {
@@ -646,6 +648,8 @@ class MainActivity : ComponentActivity() {
                 state.order.associateWith { store.name(it) },
             )
         } catch (e: java.io.IOException) {
+            null
+        } catch (e: java.security.GeneralSecurityException) {
             null
         }
         if (opened == null) {

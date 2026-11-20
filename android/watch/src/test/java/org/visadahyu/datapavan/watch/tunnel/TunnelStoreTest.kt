@@ -24,8 +24,8 @@ class TunnelStoreTest {
     }
 
     /** A wrap of the test's: XOR with a key byte, a tag of the associated data; it remembers what it was given. */
-    class FakeWrap : Wrap {
-        var key: Byte? = 0x5a
+    class FakeWrap(private val start: Byte = 0x5a) : Wrap {
+        var key: Byte? = start
         var locked = false
 
         /** The Keystore erring as it does when busy or restarting. */
@@ -35,6 +35,8 @@ class TunnelStoreTest {
 
         override fun wrap(slot: Int, part: Wrap.Part, plain: ByteArray): ByteArray {
             if (failing) throw java.security.ProviderException("Keystore operation failed")
+            // A key that needs an unlocked phone cannot be used on a locked one, to wrap as to open.
+            if (locked) throw java.security.InvalidKeyException("Key user not authenticated")
             given += plain
             val k = key ?: error("no key")
             iv++
@@ -67,13 +69,16 @@ class TunnelStoreTest {
 
     private val wrap = FakeWrap()
 
+    /** Key B, which works only while the phone is unlocked. */
+    private val unlocked = FakeWrap(0x33)
+
     /** A disk that fills up after [room] more files. */
     private var room = Int.MAX_VALUE
     private val disk = TunnelStore.Disk { file, bytes ->
         if (room-- <= 0) throw java.io.IOException("No space left on device")
         TunnelStore.Disk.SYNCED.write(file, bytes)
     }
-    private fun store() = TunnelStore(dir, wrap, disk)
+    private fun store() = TunnelStore(dir, wrap, unlocked, disk)
 
     /** Every file of the store and its bytes, to tell a change that left nothing behind. */
     private fun files(): Map<String, List<Byte>> = dir.listFiles().orEmpty().associate { it.name to it.readBytes().toList() }
@@ -114,20 +119,142 @@ class TunnelStoreTest {
         assertEquals(TunnelStore.Name.Removed, TunnelStore(dir, wrap).name(2))
     }
 
+    /**
+     * A configuration under key B on a locked phone, or whose key is gone, says so, and its apps stay routed to it:
+     * what decides the routes is under key A, which opens while the phone is locked (the maintainer's decision of
+     * 2026-11-20).
+     */
     @Test
     fun a_lost_key_or_a_locked_phone_says_so_and_keeps_the_apps_routed() {
         val store = store()
+        store.setProfile(true)
         val slot = store.add("work", text) ?: error("full")
         store.route("org.example.mail", slot)
-        wrap.locked = true
+        unlocked.locked = true
         assertEquals(Opened.Locked, store.text(slot))
-        assertEquals(TunnelStore.Name.Locked, TunnelStore(dir, wrap).name(slot))
-        wrap.locked = false
-        wrap.destroy()
+        assertEquals(TunnelStore.Name.Locked, TunnelStore(dir, wrap, unlocked).name(slot))
+        assertEquals("the routes open while the phone is locked", mapOf("org.example.mail" to slot), TunnelStore(dir, wrap, unlocked).state().routes)
+        unlocked.locked = false
+        unlocked.destroy()
         assertEquals(Opened.Lost, store.text(slot))
-        assertEquals(TunnelStore.Name.Lost, TunnelStore(dir, wrap).name(slot))
+        assertEquals(TunnelStore.Name.Lost, TunnelStore(dir, wrap, unlocked).name(slot))
         assertEquals(mapOf("org.example.mail" to slot), store.state().routes)
         assertEquals(listOf(slot), store.state().order)
+    }
+
+    /**
+     * What decides a route is wrapped under key A, never in plain and never under key B (the maintainer's decision of
+     * 2026-11-20): no file holds an app's package name or the order in plain, and with key B locked or gone the state
+     * still gives every route, the order and the default.
+     */
+    @Test
+    fun the_routes_are_wrapped_under_key_a_and_never_depend_on_key_b() {
+        val store = store()
+        store.setProfile(true)
+        val one = store.add("one", text, local = true, apps = setOf("org.example.mail")) ?: error("full")
+        val two = store.add("two", text, apps = setOf("org.example.chat")) ?: error("full")
+        store.setDefault(two)
+        for (file in dir.listFiles().orEmpty()) {
+            val plain = String(file.readBytes(), Charsets.ISO_8859_1)
+            for (word in listOf("org.example", "order", "route", "profile")) assertFalse("${file.name} holds $word in plain", word in plain)
+        }
+        for (closed in listOf<() -> Unit>({ unlocked.locked = true }, { unlocked.locked = false; unlocked.destroy() })) {
+            closed()
+            val state = TunnelStore(dir, wrap, unlocked).state()
+            assertEquals(mapOf("org.example.mail" to one, "org.example.chat" to two), state.routes)
+            assertEquals(listOf(two, one), state.order)
+            assertEquals(two, state.default)
+            assertEquals(setOf(one), state.local)
+            assertTrue(state.profile)
+        }
+    }
+
+    /** With ADR 0047's profile on, a configuration's text and name go under key B, and its file says so. */
+    @Test
+    fun with_the_profile_on_a_configuration_goes_under_key_b() {
+        val store = store()
+        val before = store.add("before", text) ?: error("full")
+        assertEquals(TunnelStore.Key.A, store.keyOf(before))
+        store.setProfile(true)
+        val after = store.add("after", "after".toByteArray()) ?: error("full")
+        assertEquals(TunnelStore.Key.B, store.keyOf(after))
+        assertTrue("key B wrapped its text", unlocked.given.any { it.contentEquals("after".toByteArray()) })
+        assertFalse("key A did not", wrap.given.any { it.contentEquals("after".toByteArray()) })
+        assertArrayEquals("after".toByteArray(), opened(TunnelStore(dir, wrap, unlocked), after))
+        assertEquals(TunnelStore.Name.Known("after"), TunnelStore(dir, wrap, unlocked).name(after))
+    }
+
+    /**
+     * The profile's switch wraps every configuration again under its key, its text and name in one change for the
+     * slot: on a locked phone key B cannot be used and nothing moves; a disk that fills at a slot leaves that slot
+     * whole under its old key; a later call moves what is left, and turning the profile off brings all back to key A.
+     */
+    @Test
+    fun the_profile_moves_each_configuration_between_the_keys_whole_or_not_at_all() {
+        val store = store()
+        val one = store.add("one", text) ?: error("full")
+        val two = store.add("two", "second".toByteArray()) ?: error("full")
+        unlocked.locked = true
+        val before = files().filterKeys { it != "state" }
+        assertEquals(TunnelStore.Rewrapped(emptyList(), listOf(one, two)), store.setProfile(true))
+        assertEquals("locked, no configuration moved", before, files().filterKeys { it != "state" })
+        assertTrue(store.state().profile)
+        unlocked.locked = false
+        // Two files each: the first slot's change fits, the second's does not.
+        room = 3
+        assertEquals(TunnelStore.Rewrapped(listOf(one), listOf(two)), store.setProfile(true))
+        assertEquals(TunnelStore.Key.B, store.keyOf(one))
+        assertEquals(TunnelStore.Key.A, store.keyOf(two))
+        assertEquals("the second slot as it was", before.filterKeys { it.startsWith("$two.") }, files().filterKeys { it.startsWith("$two.") })
+        room = Int.MAX_VALUE
+        assertEquals(TunnelStore.Rewrapped(listOf(one, two), emptyList()), store.setProfile(true))
+        assertEquals(TunnelStore.Key.B, store.keyOf(two))
+        assertArrayEquals("second".toByteArray(), opened(TunnelStore(dir, wrap, unlocked), two))
+        assertEquals(TunnelStore.Name.Known("two"), TunnelStore(dir, wrap, unlocked).name(two))
+        assertEquals(TunnelStore.Rewrapped(listOf(one, two), emptyList()), store.setProfile(false))
+        assertEquals(listOf(TunnelStore.Key.A, TunnelStore.Key.A), listOf(store.keyOf(one), store.keyOf(two)))
+        assertArrayEquals(text, opened(TunnelStore(dir, wrap, unlocked), one))
+        assertFalse(store.state().profile)
+    }
+
+    /** A replacement keeps a slot under one key whole: its kept name moves with its text to the profile's key. */
+    @Test
+    fun a_replacement_keeps_its_slot_under_one_key() {
+        val store = store()
+        unlocked.locked = true
+        val slot = store.add("kept", text) ?: error("full")
+        store.setProfile(true)
+        unlocked.locked = false
+        store.replace(slot, "newer".toByteArray(), null)
+        assertEquals(TunnelStore.Key.B, store.keyOf(slot))
+        assertEquals(TunnelStore.Name.Known("kept"), TunnelStore(dir, wrap, unlocked).name(slot))
+        assertTrue("the name is under key B too", String(File(dir, "$slot.name").readBytes(), Charsets.ISO_8859_1).startsWith("b"))
+    }
+
+    /** A state written in plain before the fix round is read, and wrapped under key A at the next change. */
+    @Test
+    fun a_state_written_in_plain_before_is_read_and_wrapped_at_the_next_change() {
+        val store = store()
+        val slot = store.add("one", text) ?: error("full")
+        File(dir, "state").writeText("order $slot\nlocal\nnext ${slot + 1}\nroute org.example.mail $slot\n")
+        assertEquals(mapOf("org.example.mail" to slot), store.state().routes)
+        store.setLocal(slot, true)
+        assertFalse("wrapped now", "org.example.mail" in String(File(dir, "state").readBytes(), Charsets.ISO_8859_1))
+        assertEquals(mapOf("org.example.mail" to slot), store.state().routes)
+    }
+
+    /** Key A erring now leaves nothing to tell of the routes: the state says it is closed, never empty. */
+    @Test
+    fun a_state_that_cannot_be_opened_now_is_never_read_as_empty() {
+        val store = store()
+        store.add("one", text, apps = setOf("org.example.mail"))
+        wrap.locked = true
+        try {
+            TunnelStore(dir, wrap, unlocked).state()
+            error("read a closed state")
+        } catch (e: TunnelStore.StateClosed) {
+            // Expected.
+        }
     }
 
     @Test
