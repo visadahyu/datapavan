@@ -107,6 +107,8 @@ val jniCallbacks = if (advanced) listOf("ownerUid", "protectSocket", "logRecords
 // The licence texts every APK carries under assets/licences/ (NOTICE, W7's fix round, review M4): NOTICE, LICENSE,
 // and the texts of every crate inside its native libraries (licences/, scripts/licences.py); Advanced adds Watch's
 // library's, with GotaTun's, whose package carries none. scripts/check.sh android checks the release APKs hold them.
+// The licence screen offers them in this order and reads its list of components from them (ui/LicenceList.kt), with
+// the table of the Java and Kotlin libraries, which checkJvmComponents holds to each variant's classpath (W7, part 2).
 val licenceFiles = buildList {
     add("NOTICE")
     add("LICENSE")
@@ -116,6 +118,7 @@ val licenceFiles = buildList {
         add("licences/MPL-2.0.txt")
         add("licences/gotatun-BSD-3-Clause.txt")
     }
+    add("licences/jvm-components.tsv")
 }
 
 android {
@@ -149,6 +152,8 @@ android {
         // And all it may ask for, the build's allowlist: in Advanced, a copy that asks for anything else is not
         // genuine (review b3 of W5's second part, R11).
         buildConfigField("String", "ALLOWED_PERMISSIONS", "\"${allowedPermissions.keys.joinToString(",")}\"")
+        // The files the APK carries under assets/licences/, by name and in order, for the licence screen.
+        buildConfigField("String", "LICENCE_FILES", "\"${licenceFiles.joinToString(",") { it.substringAfterLast('/') }}\"")
         // Every edition's name carries Datapavan and the edition, in Latin letters in every language,
         // Google Play included, so that no one takes Basic for the full app (ADR 0045, decision 1).
         resValue("string", "app_name", if (advanced) "Datapavan Advanced" else "Datapavan Basic")
@@ -299,11 +304,19 @@ abstract class CargoNdkTask : DefaultTask() {
     }
 }
 
-/** Copies the licence texts ([licenceFiles]) into the assets, under `licences/`, each by its own name. */
+/**
+ * Copies the licence texts ([licenceFiles]) into the assets, under `licences/`, each by its own name, once
+ * [JvmComponentsCheck] has passed for the variant: the table of Java and Kotlin libraries reaches no APK unchecked.
+ */
 abstract class LicenceTexts : DefaultTask() {
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.NAME_ONLY)
     abstract val texts: ConfigurableFileCollection
+
+    /** The report of the variant's [JvmComponentsCheck], which so runs before the texts are copied. */
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val checked: ConfigurableFileCollection
 
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
@@ -314,6 +327,109 @@ abstract class LicenceTexts : DefaultTask() {
         outputDir.get().asFile.deleteRecursively()
         out.mkdirs()
         texts.files.forEach { it.copyTo(out.resolve(it.name)) }
+    }
+}
+
+/**
+ * Holds `licences/jvm-components.tsv`, the licence screen's list of the Java and Kotlin libraries, to the variant's
+ * runtime classpath (W7, part 2): it fails for a module no row of the edition covers, so that a library added later
+ * cannot be missing from the screen, and for a row of the edition that covers no module, so that the screen lists
+ * nothing the APK does not carry. BOMs and other platforms are not modules of the APK; the project's own modules
+ * (`:shared`, `:watch`) are Datapavan's, under LICENSE. A row's licence text must be one of the files the APK carries.
+ */
+abstract class JvmComponentsCheck : DefaultTask() {
+    @get:Input
+    abstract val edition: Property<String>
+
+    /** The variant's runtime classpath, resolved: each module as `group:artifact`. */
+    @get:Input
+    abstract val modules: ListProperty<String>
+
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val table: RegularFileProperty
+
+    /** The names of the files the APK carries under `assets/licences/`. */
+    @get:Input
+    abstract val texts: ListProperty<String>
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val editions = setOf("basic", "lite", "advanced")
+        val problems = mutableListOf<String>()
+        data class Row(val line: Int, val pattern: String, val name: String, val licence: String, val editions: Set<String>, val text: String)
+        val rows = table.get().asFile.readLines().withIndex()
+            .filter { (_, line) -> line.isNotBlank() && !line.startsWith("#") }
+            .mapNotNull { (index, line) ->
+                val fields = line.split('\t')
+                if (fields.size != 5 || fields.any { it.isBlank() }) {
+                    problems += "line ${index + 1} is not five fields by tabs: $line"
+                    return@mapNotNull null
+                }
+                val named = if (fields[3] == "all") editions else fields[3].split(',').toSet()
+                if (named.isEmpty() || !editions.containsAll(named)) problems += "line ${index + 1} names an unknown edition: ${fields[3]}"
+                if (fields[4] !in texts.get()) problems += "line ${index + 1}'s licence text ${fields[4]} is not one the APK carries"
+                Row(index + 1, fields[0], fields[1], fields[2], named, fields[4])
+            }
+            .filter { edition.get() in it.editions }
+        fun Row.covers(module: String): Boolean {
+            val group = module.substringBefore(':')
+            return when {
+                ':' in pattern -> module == pattern
+                pattern.endsWith(".*") -> pattern.removeSuffix(".*").let { group == it || group.startsWith("$it.") }
+                else -> group == pattern
+            }
+        }
+        val lines = mutableListOf<String>()
+        for (module in modules.get()) {
+            val row = rows.firstOrNull { it.covers(module) }
+            if (row == null) problems += "the module $module has no row" else lines += "OK $module: ${row.name}, ${row.licence}"
+        }
+        for (row in rows.filter { row -> modules.get().none { row.covers(it) } }) {
+            problems += "line ${row.line} (${row.pattern}) covers no module of the ${edition.get()} edition"
+        }
+        if (problems.isNotEmpty()) {
+            throw GradleException(
+                "licences/jvm-components.tsv does not match the ${edition.get()} edition's runtime classpath (the licence screen's list, W7):\n  " +
+                    problems.joinToString("\n  "),
+            )
+        }
+        report.get().asFile.writeText(lines.joinToString("\n", postfix = "\n"))
+    }
+}
+
+/**
+ * The modules of a resolved classpath, as `group:artifact`: every component reached through real dependencies (not
+ * constraints alone) that Maven Central or Google's repository serves, but platforms (BOMs), which put nothing in
+ * the APK.
+ */
+object ClasspathModules {
+    fun of(root: org.gradle.api.artifacts.result.ResolvedComponentResult): List<String> {
+        val seen = mutableSetOf<org.gradle.api.artifacts.component.ComponentIdentifier>()
+        val found = sortedSetOf<String>()
+        val stack = ArrayDeque(listOf(root))
+        while (stack.isNotEmpty()) {
+            val component = stack.removeLast()
+            if (!seen.add(component.id)) continue
+            val id = component.id
+            if (id is org.gradle.api.artifacts.component.ModuleComponentIdentifier) {
+                val platform = component.variants.any { variant ->
+                    @Suppress("UNCHECKED_CAST")
+                    val category = variant.attributes.keySet().firstOrNull { it.name == "org.gradle.category" }
+                        as org.gradle.api.attributes.Attribute<Any>?
+                    category != null && variant.attributes.getAttribute(category).toString() in setOf("platform", "enforced-platform")
+                }
+                if (!platform) found += "${id.group}:${id.module}"
+            }
+            component.dependencies
+                .filterIsInstance<org.gradle.api.artifacts.result.ResolvedDependencyResult>()
+                .filter { !it.isConstraint }
+                .forEach { stack += it.selected }
+        }
+        return found.toList()
     }
 }
 
@@ -631,6 +747,10 @@ tasks.withType<Test>().configureEach {
         .withPropertyName("releaseKey")
     inputs.file(repositoryRoot.file("scripts/attestation-chain-from-logcat.py")).withPathSensitivity(PathSensitivity.NONE)
         .withPropertyName("labCaptureScript")
+    // The licence screen's lists and texts (ui/LicenceList.kt), which its tests read as the APK carries them.
+    inputs.dir(repositoryRoot.dir("licences")).withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("licenceTexts")
+    inputs.files(repositoryRoot.file("NOTICE"), repositoryRoot.file("LICENSE")).withPathSensitivity(PathSensitivity.NAME_ONLY)
+        .withPropertyName("noticeAndLicence")
 }
 
 // The data-signing test key (scripts/testdata), whose secret half is public: debug builds trust it so
@@ -675,8 +795,17 @@ androidComponents {
         }
         variant.sources.jniLibs?.addGeneratedSourceDirectory(cargoTask, CargoNdkTask::outputDir)
 
+        // The licence screen's list of Java and Kotlin libraries against this variant's classpath (W7, part 2).
+        val jvmComponents = tasks.register<JvmComponentsCheck>("checkJvmComponents$suffix") {
+            edition.set(editionName)
+            modules.set(variant.runtimeConfiguration.incoming.resolutionResult.rootComponent.map { ClasspathModules.of(it) })
+            table.set(repositoryRoot.file("licences/jvm-components.tsv"))
+            texts.set(licenceFiles.map { it.substringAfterLast('/') })
+            report.set(layout.buildDirectory.file("reports/jvm-components/${variant.name}.txt"))
+        }
         val licencesTask = tasks.register<LicenceTexts>("licenceTexts$suffix") {
             texts.from(licenceFiles.map { repositoryRoot.file(it) })
+            checked.from(jvmComponents.flatMap { it.report })
         }
         variant.sources.assets?.addGeneratedSourceDirectory(licencesTask, LicenceTexts::outputDir)
 

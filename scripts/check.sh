@@ -227,10 +227,14 @@ android_gates() {
     # library grew past it unnoticed.
     echo "== Android: Watch's native library within 2 MB per ABI (ADR 0035)"
     native_budget "$out/build-advanced/outputs/apk/release/app-release-unsigned.apk" libdatapavan_watch.so 2097152
-    echo "== Android: the release APKs carry NOTICE and their native libraries' licence texts (licences/)"
-    licence_texts "$out/build/outputs/apk/release/app-release-unsigned.apk" NOTICE LICENSE licences/native-core.txt
+    # The table of the Java and Kotlin libraries comes along, held by the build to each variant's classpath
+    # (checkJvmComponents): the licence screen reads its list from these files (W7, part 2).
+    echo "== Android: the release APKs carry NOTICE, their native libraries' licence texts and their libraries' table (licences/)"
+    licence_texts "$out/build/outputs/apk/release/app-release-unsigned.apk" NOTICE LICENSE licences/native-core.txt \
+        licences/jvm-components.tsv
     licence_texts "$out/build-advanced/outputs/apk/release/app-release-unsigned.apk" NOTICE LICENSE \
-        licences/native-core.txt licences/native-watch.txt licences/MPL-2.0.txt licences/gotatun-BSD-3-Clause.txt
+        licences/native-core.txt licences/native-watch.txt licences/MPL-2.0.txt licences/gotatun-BSD-3-Clause.txt \
+        licences/jvm-components.tsv
     lab_class_check "$ROOT/android" \
         "$out/build/outputs/apk/release/app-release-unsigned.apk" "$out/build/outputs/bundle/release/app-release.aab" \
         "$out/build/outputs/mapping/release/mapping.txt" \

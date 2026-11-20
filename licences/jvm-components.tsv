@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: Apache-2.0
+# The Java and Kotlin libraries inside the APKs, which the licence screen lists (W7, part 2). Kept by hand and
+# held by android/app/build.gradle.kts (checkJvmComponents<Variant>, run with every APK): the build fails when a
+# module of an edition's runtime classpath has no row here, and when a row of an edition covers none of its
+# modules. Columns, by tabs: a Maven group, group:artifact, or group.* for the group and the groups under it; the
+# name shown; the licence as an SPDX expression; the editions (all, or basic, lite and advanced by commas); the
+# file under licences/ in the APK that holds the licence's text.
+org.jetbrains.kotlin	Kotlin standard library	Apache-2.0	all	LICENSE
+org.jetbrains.kotlinx	Kotlin coroutines and serialization (kotlinx)	Apache-2.0	all	LICENSE
+org.jetbrains:annotations	JetBrains Java annotations	Apache-2.0	all	LICENSE
+org.jspecify:jspecify	JSpecify annotations	Apache-2.0	all	LICENSE
+com.google.guava:listenablefuture	Guava ListenableFuture	Apache-2.0	all	LICENSE
+androidx.compose.*	Jetpack Compose: runtime, UI, foundation, animation, Material 3	Apache-2.0	all	LICENSE
+androidx.activity	AndroidX Activity	Apache-2.0	all	LICENSE
+androidx.annotation	AndroidX Annotation	Apache-2.0	all	LICENSE
+androidx.arch.core	AndroidX Arch Core	Apache-2.0	all	LICENSE
+androidx.autofill	AndroidX Autofill	Apache-2.0	all	LICENSE
+androidx.collection	AndroidX Collection	Apache-2.0	all	LICENSE
+androidx.concurrent	AndroidX Concurrent	Apache-2.0	all	LICENSE
+androidx.core	AndroidX Core	Apache-2.0	all	LICENSE
+androidx.customview	AndroidX Custom View	Apache-2.0	all	LICENSE
+androidx.emoji2	AndroidX Emoji2	Apache-2.0	all	LICENSE
+androidx.graphics	AndroidX Graphics	Apache-2.0	all	LICENSE
+androidx.interpolator	AndroidX Interpolator	Apache-2.0	all	LICENSE
+androidx.lifecycle	AndroidX Lifecycle	Apache-2.0	all	LICENSE
+androidx.navigationevent	AndroidX Navigation Event	Apache-2.0	all	LICENSE
+androidx.profileinstaller	AndroidX Profile Installer	Apache-2.0	all	LICENSE
+androidx.savedstate	AndroidX Saved State	Apache-2.0	all	LICENSE
+androidx.startup	AndroidX App Startup	Apache-2.0	all	LICENSE
+androidx.tracing	AndroidX Tracing	Apache-2.0	all	LICENSE
+androidx.versionedparcelable	AndroidX Versioned Parcelable	Apache-2.0	all	LICENSE
+androidx.window	AndroidX Window	Apache-2.0	all	LICENSE
