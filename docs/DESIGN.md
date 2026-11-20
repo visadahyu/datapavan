@@ -1081,21 +1081,23 @@ changed and every week, and fails a check that cannot find its peer (`WGLAB_REQU
 measurements and the check from outside with a provider.
 
 W8, part 1, on `watch-w8a`, 2026-11-20 ([ADR 0042](decisions/0042-dns-of-apps-that-go-directly.md), "How it is
-built"): direct apps' names go by Oblivious DoH by default, sealed in the engine (`odoh-rs` on `hpke`) and carried
+built"): direct apps' names go by Oblivious DoH by default, sealed in the engine (its own HPKE and framing since
+the fix round, over the crates the library already held) and carried
 by Watch's Kotlin side over Android's own TLS (OkHttp 5 for DoH and ODoH, DoT on Android's sockets), through two
 default pairs of different operators, jurisdictions and networks (Numa to Cloudflare, crypto.sx on Fastly to
 dnscry.pt), hedged after 400 ms; the user's own DoH or DoT resolver or a preset instead, each preset with its card;
 an order of privacy down to the network's resolver, which only answers outside the strict setting and is shown
-while it does; holds of 5 to 60 s after a timeout and 360 s after a reset, none behind a captive portal, all
-cleared on a change of network; local names to the network's resolver in either setting; queries padded and
+while it does; holds of 5 to 60 s after a timeout, 360 s after a reset and until a new key after a 401, none behind
+a captive portal, all cleared on a change of network; local names to the network's resolver in either setting, and
+a name under the network's own search domain only when the internet does not know it; queries padded and
 without the apps' client subnet; port 853 at Watch's DNS address refused and DNS over TCP the same way; chained
 apps' other record types and W7's endpoint names by the encrypted ways. The W3 decision of 2026-11-09 that Watch
 would answer Android's DNS over TLS itself is replaced: refusing port 853 brings Android's lookups to port 53,
 where Watch encrypts them upstream, and there is nothing to gain by encrypting the hop inside the phone. Checked
-by unit tests, RFC 9180's vectors, an ODoH oracle of its own, three fuzz targets, 31 hand mutants, the DNS lab
-(`scripts/dnslab.sh`) and `scripts/verify-dns.sh` on the Android 15 emulator. The native library is within its
-gate on arm64 and armv7, and 39,000 bytes over it on x86_64, which waits for the maintainer's choice (ADR 0042,
-point 2).
+by unit tests, RFC 9180's vectors, an ODoH oracle of its own and `odoh-rs`, three fuzz targets, hand mutants, the
+DNS lab (`scripts/dnslab.sh`) and `scripts/verify-dns.sh`, which CI runs in a shard of its own with the lab since
+the fix round. The native library is within its gate on arm64 and armv7, and 9,720 bytes over it on x86_64, which
+waits for the maintainer's choice (ADR 0042, "The fix round").
 
 | # | Milestone | Done when |
 |---|---|---|

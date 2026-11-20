@@ -63,23 +63,21 @@ the maintainer; built on `watch-w8a` on 2026-11-20. Each point as built:
    session cache per network beneath, idle connections closed after 60 s and opened again on demand; Conscrypt sends
    no early data. Every socket is protected from the tunnel and bound to the network beneath, or goes through the
    user's tool (`dns/ToolSocket.kt`, SOCKS5 with its password, the destination by address). The engine hands each
-   exchange over (`Platform::exchange`, which returns at once) and awaits its reply (`Engine::exchanges`), so the
-   packet loop never waits. What the platform does not give, written as it stands: Conscrypt is a Mainline module
+   exchange over (`Platform::exchange`, which returns at once: since the fix round every step of it, Android's roots,
+   the TLS context and the client included, runs on the exchanger's own threads, and is built ahead when the service
+   starts and the network changes) and awaits its reply (`Engine::exchanges`), so the packet loop never waits. Each
+   exchange carries its own addresses and pins; a socket to the user's tool on the LAN is protected like any other. What the platform does not give, written as it stands: Conscrypt is a Mainline module
    from Android 10, but whether a given image keeps it updated is not verified (the Android 15 emulator image used
    here carries `com.google.android.conscrypt` 350820300, its factory version); the root store is updated apart from
    the system only from Android 14; ECH comes only from Android 17, for apps that target API 37; no source shows
    post-quantum key exchange by default.
 2. **The engine keeps** the DNS parsing (its own: `hygiene.rs`, `dns.rs`), the caches (`dnscache.rs`, with RFC
-   8767's stale answers), the policy (`ladder.rs`, `engine/resolver.rs`) and ODoH's HPKE (`odoh.rs`: Cloudflare's
-   `odoh-rs` 1.0.5 on rozbb's `hpke` 0.14.1, pinned). Measured inside `core`, stripped: arm64 1,836,584 bytes
-   (+127,832 over W7), armv7 1,557,176 (+91,440), x86_64 2,136,152 (+152,976), against the 2,097,152-byte gate.
-   ODoH's crypto alone is +29,440 / +24,864 / +40,840; the rest is the resolver's own code. Savings that cost no
-   speed were taken (the resolver's tasks boxed into one type, its small tables as lists, no generic sort: about
-   20 KB on x86_64); opt-level `z` for the cold crates made x86_64 larger, not smaller. **x86_64 stays 39,000 bytes
-   over the gate; arm64 and armv7, the phones' ABIs, are within it.** Stopped there for the maintainer, as the brief
-   asks, without raising the gate: an own HPKE (base mode, export, one suite) over `x25519-dalek` 2, `hkdf` and
-   `aes-gcm`, already in the tree, would save about the 40 KB ODoH's crypto costs, which only just reaches the gate;
-   or a written exception for x86_64, the emulators' ABI (and ChromeOS's on Intel).
+   8767's stale answers), the policy (`ladder.rs`, `engine/resolver.rs`) and ODoH: since the fix round its framing
+   (`odoh.rs`) and its HPKE (`hpke.rs`, RFC 9180 base mode, the one suite) are the engine's own code, over crates the
+   library already carries for WireGuard and QUIC: `x25519-dalek` 2, RustCrypto's `hkdf` and `aes-gcm`. The size
+   gate is 2,097,152 bytes per ABI; the measures, inside `core`, stripped, are under "The fix round" below. **x86_64,
+   the emulators' ABI, stays over it; arm64 and armv7, the phones' ABIs, are within it with 270 and 550 KB to
+   spare.** The gate is the maintainer's to keep or to except for x86_64.
 3. **Data, signed, in the pack:** `data/odoh` (relays, targets with their bootstrap keys, the default pairs) and
    `data/dns-presets` (the user's choices, each with its card), CC0, every value with its source. `data/resolvers`
    stays a detection list. Either changes without a release; closed services are left out.
@@ -93,29 +91,39 @@ the maintainer; built on `watch-w8a` on 2026-11-20. Each point as built:
    attempt is sealed afresh. Only unfiltered targets pair. The user sees the pairs on Watch's screen and
    changes them among those the rule allows.
 5. **Target keys.** No target publishes `odohconfig` in a DNS HTTPS record (checked through two resolvers on
-   2026-11-20: Cloudflare's record has none, crypto.sx's has ECH only, dnscry.pt's nodes have no HTTPS record). The
-   engine still asks for it first, after a 401, through two ways of different operators, and takes it only when
-   both agree; failing that it fetches `/.well-known/odohconfigs` from the target, through the user's tool while it
-   is on, else directly over the network beneath: **an accepted limit**, which shows the phone's address to the
-   target once per key, and gives no assurance that every user holds the same key. The pack's copy bootstraps.
+   2026-11-20: Cloudflare's record has none, crypto.sx's has ECH only, dnscry.pt's nodes have no HTTPS record). A
+   401 holds the pair that met it (6 hours, or until a new key comes) and the other pair carries the names; the
+   key is fetched apart from the lookup, a random 2 to 10 minutes later, at most once per target per network every
+   4 hours (W8's fix round, review S-C2). The engine asks first for the target's HTTPS record of presets whose
+   operator runs no target in the pairs, through the user's tool while it is on, and takes it only when two agree;
+   failing that it fetches `/.well-known/odohconfigs` from the target at its own addresses (review S-M1), through
+   the tool while it is on, else, **last and as an accepted limit**, directly over the network beneath, which shows
+   the phone's address to the target minutes apart from any question, once per key, and gives no assurance that
+   every user holds the same key. A key equal to the one held keeps the pair held: a target cannot call for the
+   fetch with a 401 to a key it holds. The pack's copy bootstraps.
    Rotation measured during the build, every 30 minutes: dnscry.pt fra01's key, the second default pair's, changed
    between 15:39 and 16:09 UTC, held at least since 13:44; Cloudflare's did not change from 13:44 to 16:09 UTC, and
    it serves it with `no-store` and a `Last-Modified` of that day's 00:00 UTC, so a daily key is likely. Keys
    therefore change faster than packs can follow, and the fetch after a 401 is the usual way a key arrives, not a
    rare one: the pack's copy only saves the first fetch while it is still current. A key feed that every user
    holds alike, accepted when two paths agree, is frontier work (the IETF's consistency drafts expired in 2024).
-6. **The order, by privacy** (`ladder.rs`): the user's own resolver, else ODoH; then, while the user's tool is on,
-   ODoH through the tool; then DoH to the targets' own operators; then the presets that filter nothing; the
-   network's resolver last, never in strict. Watch learns only within a rung (the step that answered last is
-   tried first there) and climbs back as soon as a higher step's hold ends. Holds: 5 s after a timeout, a refusal
-   or an error, doubling to 60 s; 360 s after a reset once the TLS hello was out or a certificate that does not
-   check; none after a 401 (the key is fetched again); none while Android says the network is not validated (a
-   captive portal); all cleared, with everything learned and the answers kept, on a change of network. Nothing of
-   it is stored or keyed by a network's name.
+6. **The order, by privacy** (`ladder.rs`): the user's own resolver, a rung of its own; ODoH, first or next after
+   the user's resolver failed (review R-M1); then, while the user's tool is on, ODoH through the tool; then DoH to
+   the targets' own operators; then the presets that filter nothing; the network's resolver last, never in strict.
+   With "only this resolver" the user's resolver is the only step and the network's resolver is never asked for a
+   name of the internet either. Watch learns only within a rung (the step that answered last is tried first there)
+   and climbs back as soon as a higher step's hold ends. Holds: 5 s after a timeout, a refusal or an error,
+   doubling to 60 s; 360 s after a reset once the TLS hello was out or a certificate that does not check; 6 hours
+   after a 401, until the key's fetch (point 5); none while Android says the network is not validated (a captive
+   portal); all cleared, with everything learned and the answers kept, on a change of network, but kept when only
+   strict, "only" or the choice changed (review R-m1). Nothing of it is stored or keyed by a network's name.
 7. **Strict:** with no encrypted way answering, "server failure" at once, and the screen says why. Local names
-   (single labels, the network's search domains, `home.arpa`, `ipv4only.arpa`, `resolver.arpa`, `localhost`,
-   `local`, the zones of RFC 6303 and RFC 7793) go to the network's resolver in either setting, and the screen says
-   so; it also says what strict cannot cover: Android's own connectivity checks and apps' own encrypted DNS.
+   (single labels, `home.arpa`, `ipv4only.arpa`, `resolver.arpa`, `localhost`, `local`, the zones of RFC 6303 and
+   RFC 7793) go to the network's resolver in either setting, and the screen says so. A name under one of the
+   network's search domains goes the encrypted way first, and to the network's resolver only when that way answers
+   NXDOMAIN, in strict too; a search domain of one label or a public suffix is ignored (review S-C1, "The fix
+   round"). The screen also says what strict cannot cover: Android's own connectivity checks, apps' own encrypted
+   DNS, the apps left out of Watch, and the moments Watch restarts or is stopped without Always-on.
 8. **Hygiene** (`hygiene.rs`): ID 0 (RFC 8484); every EDNS option the app sent dropped (client subnet and cookies
    among them); EDNS(0) padding to 128-byte blocks (RFC 8467), which asks the resolver to pad its answer (RFC 7830);
    the answer made the app's again (its ID and question, a bare OPT record or none, cut to a truncated answer past
@@ -132,16 +140,18 @@ the maintainer; built on `watch-w8a` on 2026-11-20. Each point as built:
 10. **W7's endpoint names** go the encrypted way (`resolver::endpoint`), not to Android's resolver; outside strict
     the network's resolver answers when nothing else does, and the tunnel's state says plain; in strict nothing does.
 11. **The screen** (`ui/DnsSection.kt`) says which way names go now (the relay's and target's operators and
-    countries), the fallback while it lasts, and, if the user turns it on, a notification while it lasts (Watch has
-    no tile until W9); when Android's strict Private DNS takes the names past Watch; the choice, with each preset's
-    card. Nothing of the names is kept or logged: the state names ways, never lookups.
+    countries), by what failed when the user's resolver does not answer, the fallback while it lasts, and, if the
+    user turns it on and Android lets Watch notify, a notification while it lasts (Watch has no tile until W9); when
+    Android's strict Private DNS takes the names past Watch, that note alone; the choice, one row per service with
+    its card in translated words and what happens if it fails; "only this resolver"; the network's own domains in
+    use. Nothing of the names is kept or logged: the state names ways, never lookups.
 12. **Speed:** ADR 0039's budget, measured on 2026-11-20 (below there).
 
 Checks: the unit tests (the ladder, the pair rule, the hygiene, the catalogue against the shipped tables, the
 resolver with a fake Kotlin side: ODoH, hedging, a 401's key, strict, local names, the fallback and its end, TCP,
 the tool, endpoint names, the captive portal); HPKE against RFC 9180's A.1.1 vectors, both sides; ODoH against an
 implementation of its own in Python, to the byte (`core/net/testdata/odoh/oracle.py`, since RFC 9230 has no
-vectors); the engine through its tunnel (`core/net/tests/resolver.rs`); the transport on the JVM against the lab's
+vectors), and against `odoh-rs` both ways; the engine through its tunnel (`core/net/tests/resolver.rs`); the transport on the JVM against the lab's
 certificates (DoT, pins, a user's root refused, a certificate for another name refused, the tool's SOCKS5); three
 new fuzz targets (`odoh`, `hygiene`, `catalogue`: 4.5, 12.2 and 3.8 million runs, no finding); 31 hand mutants
 on the new rules, all killed (six by tests added for them); the DNS lab (`scripts/dnslab.sh`) and the emulator
@@ -155,7 +165,76 @@ answer reaches whatever the network's resolver answers (local names, and the fal
 key's fetch above; ODoH does not hide the connection that follows a lookup (its address, and its server name
 without ECH); one person curates the public ODoH list and runs a relay and a target; Android's own validation of
 the network could not be exercised in the lab (its resolver knows only the lab's names), so the emulator check
-tells the engine the network's state, while the unit tests hold the rule.
+tells the engine "not validated", while "validated" reaches it by Android's own path where the emulator reaches the
+internet.
+
+### The fix round (W8, part 1, 2026-11-20)
+
+One review round (`research/2026-11-w8/review-w8a-security.md`, `review-w8a-screens.md` in the strategy repository)
+and its fix brief, whose decisions the coordinator took under the session's grant. Each fix has a test that fails
+when the fix is taken back. What was decided, and why:
+
+- **A network's search domains (S-C1).** DHCP's option 15 is the network's to set, so it cannot decide that a name
+  of the internet is local: a hostile Wi-Fi with the domain `com` had every `*.com` name in plain DNS, strict
+  included. Now only the special-use zones and single labels go to the network's resolver unasked. A name under a
+  search domain goes the encrypted way first and to the network's resolver only on NXDOMAIN (a name the internet
+  does not know is the network's own), in strict too, and that NXDOMAIN is never served from the cache. A search
+  domain of one label is refused by the engine; one that is a public suffix by Watch's Kotlin side, from the ICANN
+  section of the public suffix list in the signed pack (`data/public-suffix`, MPL-2.0, ADR 0015), and none at all
+  without that list. The status and the screen show the domains in use; they go when the network changes, before
+  the next one's arrive. **What the rule gets wrong:** a split-horizon name, one the internet knows with another
+  answer than the network's (a company's intranet under its public domain), gets the internet's answer; the
+  network then learns nothing, which is the side to err on. Asking the network first for names under its domain, as
+  Android does, would hand every such name to a network that chose the domain; a list of domains the user confirms
+  would serve split horizon, and is left for a later unit.
+- **A 401 apart from the lookup (S-C2), and the targets' own addresses (S-M1).** Point 5 above. The 401 holds that
+  pair, the other carries the names; the fetch waits a random 2 to 10 minutes and runs once per target per network
+  every 4 hours; records are asked only of operators that run no target in the pairs, through the tool when it is
+  on; the direct fetch is the last way; an unchanged key keeps the pair held, so a target cannot tie a chosen query
+  to the phone's address with a 401. The targets' address columns are read, and the test double refuses an
+  address-less fetch.
+- **The user's own resolver (R-M1, S-m3).** It is tested with one query (`example.com`) before it is saved, and the
+  screen shows how long it took or what failed; a resolver that does not answer is not saved. When it fails later,
+  the screen says so first ("Your resolver does not answer…"), and ODoH carries the names next, then the rest of the
+  order. "Only this resolver" asks nothing else, the network's resolver included; the card says what happens if the
+  resolver fails. A preset is saved without a test: it comes from the signed pack, and a failure on one network is
+  the network's.
+- **Words, not the dataset's English (R-M2).** A row is the operator and a translated service name (blocks harmful
+  sites, unfiltered, standard), one row per service with its two protocols inside (n3); the card's logging,
+  filtering and audit are enumerated columns of `presets.tsv`, each with its source, which the screen turns into
+  translated sentences; countries come from `Locale`; the policy link is on the card (n1). The table keeps its
+  sourced sentences for the record. The engine no longer carries the presets' words.
+- **The notification's permission (R-M3).** Turning "Notify me" on asks for Android's leave on Android 13 and later;
+  refused, the switch stays off and the screen says why; the emulator check runs that case before it grants.
+- **CI (R-M4).** The emulator check has a shard of its own, `dns`, with the lab started before the emulator, and
+  `DNSLAB_REQUIRED=1`, which turns a skip, or a check that ends without its last line, into a failure. A debug
+  command points Watch's exchanges with the network's resolver at the lab's resolver, so CI's emulators need no
+  special start; the precheck after that fails rather than skips. The default path is tested on the JVM: DoH and
+  ODoH over OkHttp against OkHttp's own test server with the lab's certificate, over HTTP/2 (the unit tests run
+  OkHttp's JVM build of the same version): the request on the wire, a 401, a body over the limit, the pins.
+- **The speed budget (R-M5).** `scripts/dns-latency.py` compares against ADR 0039's budget and exits non-zero on a
+  breach or a failed default pair; RELEASE.md calls it; the lab's p95 is 250 ms, about twice what the lab measures.
+- **The minors and nits.** A random ID towards the network's resolver (S-m1); the tool's socket protected when the
+  tool is not on the loopback (S-m2); "unfiltered only" held in the engine, and a URL's path held to RFC 3986's
+  unreserved characters, so no path adds a parameter to the relay's URL (S-m4, and the screen checks a URL as the
+  engine reads it, n2); nothing of an exchange on the engine's thread (S-m5); one reply per network exchange, pins
+  and addresses per exchange, both record ways asked, a stale answer renewed once at a time (the nits); "Notify me"
+  no longer resets the resolver, and strict or the choice keep the holds (R-m1); the texts on the connection log,
+  the strict limits, "operators" for who runs the relays and targets, the hedge, the key's daily fetch (R-m2 to
+  R-m4); the strict Private DNS note alone (R-m5); a selectable custom row, the refusal tied to its field and read
+  out, left-to-right fields with a URL keyboard, Persian digits read as ASCII, relay and target in words, and a
+  live region that reads the way's kind, not each hedge (R-m6); check steps that can fail (R-m7: at least one flow
+  refused at port 853, the injected answer through the fallback asserted, Android's own validation reaching the
+  engine where the emulator reaches the internet).
+- **The size gate.** The brief asked first for HPKE over aws-lc-rs's primitives, one audited provider: measured, it
+  brought aws-lc's X25519, HMAC and AES-GCM into a library that links only its ChaCha20-Poly1305 for WireGuard, and
+  grew by 757,320 bytes on arm64, 494,580 on armv7 and 986,888 on x86_64. HPKE was therefore written over
+  `x25519-dalek`, `hkdf` and `aes-gcm`, which the library already holds, held to RFC 9180's vectors both ways, the
+  Python oracle, `odoh-rs` (now in tests only) and the fuzz target. Measured, stripped, against the gate of
+  2,097,152 bytes (arm64 / armv7 / x86_64): before the round 1,836,584 / 1,557,176 / 2,136,152; with the own HPKE
+  1,817,416 / 1,539,760 / 2,106,376; with the round's other fixes 1,821,304 / 1,542,192 / 2,109,944; with the
+  presets' words and the bridge's texts moved to Kotlin, no cost in speed, 1,819,448 / 1,540,784 / 2,106,872.
+  **x86_64 is 9,720 bytes over; the work stopped there, as the brief says, and the gate is unchanged.**
 
 **Release gate for the maintainer:** each volunteer operator whose endpoint is a default (Numa, crypto.sx,
 dnscry.pt) is asked before a release ships it; Cloudflare's ODoH page states no logging policy of its own.
