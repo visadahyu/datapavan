@@ -4,12 +4,16 @@
 # imported through Android's own documents screen and another from a picture of its QR code through the photo
 # picker, each confirmed on Watch's screen, which proposes the app the first names; the workload app goes through
 # the first, is moved to the second through "Each app's way" and back, and reaches each peer from that
-# configuration's address. Watch's process is killed and started again: the tunnels come back from the store. No
-# file of Watch's holds a key or a configuration's text in plain form. The camera path: the phone's own camera takes
-# a photo for Watch (the emulator's scene holds no QR code), which is read in the decoder's isolated process,
-# refused, deleted, and leaves no copy in MediaStore; where the emulator has no camera, the cancel path alone is
-# checked, and the run says so. A configuration removed with its apps waiting holds the app: nothing of it leaves
-# directly. Last, the measure ADR 0035 asks of setUnlockedDeviceRequired: a key that needs an unlocked phone does
+# configuration's address. The first confirmation survives the screen made anew for a rotation, a dark-mode switch
+# and a larger font, with the name typed into it. Watch's process is killed and started again: the tunnels come back
+# from the store. The workload app is installed again, so that it has a new UID, and still goes through its
+# configuration, never directly. No file of Watch's holds a key or a configuration's text in plain form, which a
+# search that finds the store's own word proves it can see. The camera path: the phone's own camera takes a photo
+# for Watch with the virtual scene's wall showing the second configuration's QR code, which Watch reads in the
+# decoder's isolated process; the scene's picture is small and seen at an angle, so either the confirmation shows,
+# and is cancelled, or Watch says it found no code; the photo is deleted either way and leaves no copy in
+# MediaStore. Where the emulator has no camera, the cancel path alone is checked, and the run says so. A
+# configuration removed with its apps waiting holds the app: nothing of it leaves directly. Last, the measure ADR 0035 asks of setUnlockedDeviceRequired: a key that needs an unlocked phone does
 # not open while the phone is locked, Watch's own key does, and the time each takes.
 #
 # Skipped, with a line that says so, only where no lab peer can start (no Docker, Docker not answering, or no
@@ -147,9 +151,16 @@ vpn_down() { ! vpn_up; }
 confirmation_or_refusal() { screen_has "No QR code could be read" || has_id tunnel-confirm; }
 images() { adb shell content query --uri content://media/external/images/media --projection _id 2>/dev/null | tr -d '\r' | grep -c '^Row' || true; }
 # The confirmation's Save, once its screen shows.
+# The confirmation's last button, Cancel, once on screen: Save, above it, is then clear of the navigation bar, under
+# which an element at the screen's bottom edge lies, and which takes a tap there.
+confirmation_end() {
+    for _ in $(seq 1 15); do has_id tunnel-cancel && return 0; swipe_up; done
+    return 1
+}
 save_confirmation() {
     within 20 has_id tunnel-confirm || fail "the confirmation did not show"
-    tap_tag tunnel-save || fail "the confirmation has no Save"
+    confirmation_end && has_id tunnel-save || fail "the confirmation has no Save"
+    tap_dumped_id tunnel-save
     within 10 gone_id tunnel-confirm || fail "the confirmation stayed after Save"
 }
 
@@ -217,6 +228,59 @@ grep -q 'text="wg-import-one"' <<<"$shown" || fail "the configuration's name is 
 ! grep -qF "$WGLAB_PLAIN" <<<"$shown" || fail "the confirmation shows the private key"
 for _ in $(seq 1 8); do has_id "tunnel-app-$WORKLOAD" && break; swipe_up; done
 ticked "tunnel-app-$WORKLOAD" || fail "the app the file names is not proposed"
+screen_has "Its way now: Directly" || fail "the proposed app's way now is not shown"
+# The confirmation survives the screen made anew (review M1 of the fix round): a name typed into it, then a rotation,
+# dark mode and a larger font, each of which makes Watch's screen anew; the confirmation, the name and the tick stay.
+scroll_to_top
+tap_tag tunnel-name || fail "the confirmation has no name field"
+adb shell input keyevent KEYCODE_MOVE_END
+adb shell input text "-kept"
+# The keyboard goes, Back only while it shows: Back without it cancels the confirmation. A screen made anew gives the
+# name its focus, and the keyboard, back; a swipe over it would type.
+keyboard_away() {
+    grep -q "mInputShown=true" <<<"$(adb shell dumpsys input_method | tr -d '\r')" || return 0
+    adb shell input keyevent KEYCODE_BACK
+    sleep 1
+}
+keyboard_away
+within 5 screen_has 'wg-import-one-kept' || fail "the name typed into the confirmation does not show"
+# The confirmation and its name; with "ticked", the proposed app's tick too, which takes scrolling, and swipe_up's
+# lengths are the portrait screen's, so not in landscape.
+recreated() {
+    within 20 has_id tunnel-confirm || return 1
+    keyboard_away
+    screen_has 'wg-import-one-kept' || return 1
+    [ "${1:-}" = ticked ] || return 0
+    for _ in $(seq 1 8); do has_id "tunnel-app-$WORKLOAD" && break; swipe_up; done
+    ticked "tunnel-app-$WORKLOAD"
+}
+rotation=$(adb shell settings get system user_rotation | tr -d '\r')
+auto_rotation=$(adb shell settings get system accelerometer_rotation | tr -d '\r')
+font=$(adb shell settings get system font_scale | tr -d '\r')
+night=$(adb shell cmd uimode night | tr -d '\r' | sed -n 's/^Night mode: //p')
+restore_display() {
+    adb shell settings put system user_rotation "${rotation/null/0}" >/dev/null 2>&1 || true
+    adb shell settings put system accelerometer_rotation "${auto_rotation/null/0}" >/dev/null 2>&1 || true
+    adb shell settings put system font_scale "${font/null/1.0}" >/dev/null 2>&1 || true
+    adb shell cmd uimode night "${night:-no}" >/dev/null 2>&1 || true
+}
+adb shell settings put system accelerometer_rotation 0
+adb shell settings put system user_rotation 1
+sleep 2
+recreated || { restore_display; fail "the confirmation or its name did not survive a rotation to landscape"; }
+adb shell settings put system user_rotation 0
+sleep 2
+recreated ticked || { restore_display; fail "the confirmation, its name or its tick did not survive a rotation back"; }
+adb shell cmd uimode night yes >/dev/null
+sleep 2
+recreated ticked || { restore_display; fail "the confirmation, its name or its tick did not survive dark mode"; }
+adb shell settings put system font_scale 1.3
+sleep 2
+recreated ticked || { restore_display; fail "the confirmation, its name or its tick did not survive a larger font"; }
+restore_display
+sleep 2
+recreated ticked || fail "the confirmation did not survive the display put back"
+echo "ok: the confirmation, the name typed into it and its tick survived a rotation, dark mode and a larger font"
 save_confirmation
 within 15 store_has 1 "^tunnel-slot 1 default - name known set routes 1$" ||
     fail "the first configuration is not kept and set with its app: $(store_line 1)"
@@ -306,7 +370,30 @@ workload --es tcp 10.77.0.1:80
 grep -qx "tcp 10.77.0.1:80 pong" <<<"$(workload_log)" || fail "after the restart the app's TCP did not reach the peer"
 echo "ok: Watch's process killed and started again, the configurations came back from the store and the app went through again"
 
-# 4. No file of Watch's holds a key or a configuration's text in plain form.
+# 3b. The workload app installed again (review M1 of the fix round): Android gives it a new UID, and Watch, which routes
+# by UID, hands the engine its route again when the app comes, so that it goes through its configuration, never its
+# other way.
+adb uninstall "$WORKLOAD" >/dev/null
+adb install "$ROOT/build/workload-app/workload-app.apk" >/dev/null
+again=$(adb shell cmd package list packages -U "$WORKLOAD" | tr -d '\r' | sed -n "s/^package:$WORKLOAD uid:\([0-9]*\)$/\1/p")
+[ -n "$again" ] || fail "the workload app did not install again"
+[ "$again" != "$WORKLOAD_UID" ] || fail "Android gave the workload app its old UID $again again: this step proves nothing"
+engine_route() { grep -qE "^ *tunnel-engine-route $1 $2$" <<<"$(dump tunnel-store)"; }
+within 10 engine_route "$again" 1 ||
+    fail "the engine has no route for the app's new UID $again: $(grep tunnel-engine-route <<<"$(dump tunnel-store)" | tr '\n' ' ')"
+! engine_route "$WORKLOAD_UID" 1 || fail "the engine still routes the app's old UID $WORKLOAD_UID"
+WORKLOAD_UID=$again
+peer_before=$(grep -c "^http 10\.77\.0\.2 " <<<"$(seen peer)" || true)
+workload --es tcp 10.77.0.1:80
+grep -qx "tcp 10.77.0.1:80 pong" <<<"$(workload_log)" || fail "installed again, the app's TCP did not reach the peer"
+[ "$(grep -c "^http 10\.77\.0\.2 " <<<"$(seen peer)" || true)" -gt "$peer_before" ] || fail "installed again, the peer saw nothing from 10.77.0.2"
+[ "$(flows_of "$WORKLOAD_UID" direct)" = 0 ] || fail "installed again, the app has flows that went directly"
+echo "ok: the workload app installed again had a new UID ($WORKLOAD_UID), which Watch routed at once, and went through its configuration to the peer"
+
+# 4. No file of Watch's holds a key or a configuration's text in plain form. The search must first find what the
+# store keeps in plain text (review m4 of the fix round): a search that cannot read Watch's files finds nothing either.
+control=$(adb shell run-as "$PKG" sh -c "'grep -rlF -- \"order\" no_backup/tunnels 2>/dev/null'" | tr -d '\r' || true)
+grep -q "no_backup/tunnels/state" <<<"$control" || fail "the search for keys cannot see the store's own state file: it would prove nothing"
 for secret in "$WGLAB_PLAIN" "$WGLAB_SECOND" "PrivateKey" "Endpoint = $HOST"; do
     found=$(adb shell run-as "$PKG" sh -c "'grep -rlF -- \"$secret\" . 2>/dev/null'" | tr -d '\r' || true)
     [ -z "$found" ] || fail "Watch's files hold a key or a configuration in plain form: $found"
@@ -319,8 +406,10 @@ for secret in "$WGLAB_PLAIN" "$WGLAB_SECOND" "$HOST:$WGLAB_PORT" "$HOST:$WGLAB_P
 done
 echo "ok: no file of Watch's, its dump or the device's log holds a key or a configuration's text"
 
-# 5. The camera path: the phone's own camera writes the photo to Watch's file, which is read, refused (the emulator's
-# scene holds no QR code) and deleted, with no copy in MediaStore; with no camera, the cancel deletes it.
+# 5. The camera path: the phone's own camera writes the photo to Watch's file, which is read in the isolated decoder and
+# deleted, with no copy in MediaStore. The scene's wall shows the second configuration's QR code, small and at an
+# angle, so Watch either shows its confirmation, which is cancelled, or says no code could be read; with no camera,
+# the cancel deletes the file.
 before=$(images)
 adb emu virtualscene-image wall "$WORK/$PICTURE" >/dev/null 2>&1 || true
 watch_screen
@@ -331,7 +420,10 @@ if within 15 has_id "$CAMERA_SHUTTER"; then
     [ -n "$(capture_left)" ] || fail "no file of Watch's waits for the camera's photo"
     tap_dumped_id "$CAMERA_DONE"
     within 30 confirmation_or_refusal || fail "Watch did not read the camera's photo"
-    has_id tunnel-confirm && tap_tag tunnel-cancel
+    if has_id tunnel-confirm; then
+        # Cancel at the screen's bottom edge would lie under the navigation bar: one swipe more lifts it.
+        confirmation_end && swipe_up && has_id tunnel-cancel && tap_dumped_id tunnel-cancel
+    fi
     echo "ok: the phone's camera wrote the photo to Watch's own file, which was read in the isolated decoder"
 else
     echo "SKIPPED the camera's photo: this emulator has no camera (CI's and the shards' run with -camera-back none); the cancel path alone is checked"
