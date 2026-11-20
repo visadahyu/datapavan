@@ -157,6 +157,13 @@ class WatchVpnService : VpnService() {
     /** Whether Android validated the network beneath, and its search domains, last told to the engine. */
     private var toldValidated: Pair<Boolean, String>? = null
 
+    /**
+     * Debug builds: validation as scripts/verify-dns.sh sets it, in place of Android's, since the DNS lab's network
+     * resolver knows only the lab's names and Android's own check of the network can never pass there.
+     */
+    @Volatile
+    private var validatedForTests: Boolean? = null
+
     /** Follows the network beneath the tunnel: Wi-Fi, mobile data, or none. */
     private val network = object : ConnectivityManager.NetworkCallback() {
 
@@ -1022,7 +1029,7 @@ class WatchVpnService : VpnService() {
     /** Tells the engine what changed of the network beneath: validated, its search domains. */
     private fun tellDnsNetwork(validated: Boolean?, domains: String?) {
         val before = toldValidated ?: (true to "")
-        val now = (validated ?: before.first) to (domains ?: before.second)
+        val now = (validatedForTests ?: validated ?: before.first) to (domains ?: before.second)
         if (now == toldValidated) return
         toldValidated = now
         Engine.nativeDnsNetwork(now.first, now.second)
@@ -1281,6 +1288,15 @@ class WatchVpnService : VpnService() {
         after("dns-pairs", 1)?.let {
             settings.pairs = it.firstOrNull()?.takeIf { p -> p != "default" }.orEmpty()
             changed = true
+        }
+        after("dns-validated", 1)?.let {
+            validatedForTests = when (it.firstOrNull()) {
+                "on" -> true
+                "off" -> false
+                else -> null
+            }
+            main.post { tellDnsNetwork(validatedForTests ?: true, null) }
+            writer.println("dns-validated-set ${validatedForTests ?: "android"}")
         }
         after("dns-choice", 3)?.let {
             settings.choice = org.visadahyu.datapavan.watch.dns.DnsSettings.Choice.read(it.joinToString(" "))

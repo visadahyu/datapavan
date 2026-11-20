@@ -152,8 +152,11 @@ class Exchanger(
 
                 override fun onResponse(call: Call, response: Response) {
                     response.use {
+                        // The whole body, never more than a DNS message can be: a longer one is refused unread.
                         val bytes = try {
-                            it.body.source().readByteArray(MAX_BODY)
+                            val source = it.body.source()
+                            if (source.request(MAX_BODY + 1)) return reply(ticket, REFUSED, null)
+                            source.buffer.readByteArray()
                         } catch (e: IOException) {
                             return reply(ticket, outcomeOf(e), null)
                         }
@@ -197,6 +200,9 @@ class Exchanger(
         override fun createSocket(): Socket {
             if (through != null) return ToolSocket(through.proxy, through.user, through.password)
             val socket = Socket()
+            // A Socket makes its descriptor only when first used: reading an option makes it now, so that it can be
+            // protected (as Network.bindSocket does for itself).
+            socket.reuseAddress
             if (!host.protect(socket)) throw SocketException("not protected")
             host.network?.bindSocket(socket)
             return socket
