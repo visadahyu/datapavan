@@ -90,9 +90,24 @@ pub fn seal(key: &TargetKey, query: &[u8], padding: usize) -> Option<Sealed> {
     if query.len() > usize::from(u16::MAX) || padding > usize::from(u16::MAX) {
         return None;
     }
+    seal_with(
+        key,
+        query,
+        padding,
+        &mut hpke::rand_core::UnwrapErr(getrandom::SysRng),
+    )
+}
+
+/// [`seal`] with the ephemeral key's material from `rng`: the system's in the product, fixed in the tests that
+/// check the bytes against an independent implementation.
+fn seal_with<R: hpke::rand_core::CryptoRng>(
+    key: &TargetKey,
+    query: &[u8],
+    padding: usize,
+    rng: &mut R,
+) -> Option<Sealed> {
     let plaintext = ObliviousDoHMessagePlaintext::new(query, padding);
-    let mut rng = hpke::rand_core::UnwrapErr(getrandom::SysRng);
-    let (message, secret) = odoh_rs::encrypt_query(&plaintext, &key.contents, &mut rng).ok()?;
+    let (message, secret) = odoh_rs::encrypt_query(&plaintext, &key.contents, rng).ok()?;
     let body = odoh_rs::compose(&message).ok()?.to_vec();
     Some(Sealed {
         body,
@@ -225,6 +240,165 @@ pub(crate) mod tests {
             unreachable!("sealed")
         };
         assert!(answer_as_target(&other, &sealed.body, b"a", [0; 16]).is_none());
+    }
+
+    /// Random numbers that are not: the bytes given, then zeros.
+    struct Fixed(Vec<u8>);
+
+    impl hpke::rand_core::TryRng for Fixed {
+        type Error = std::convert::Infallible;
+        fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+            let mut b = [0u8; 4];
+            self.try_fill_bytes(&mut b)?;
+            Ok(u32::from_le_bytes(b))
+        }
+        fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+            let mut b = [0u8; 8];
+            self.try_fill_bytes(&mut b)?;
+            Ok(u64::from_le_bytes(b))
+        }
+        fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
+            for byte in dst.iter_mut() {
+                *byte = if self.0.is_empty() {
+                    0
+                } else {
+                    self.0.remove(0)
+                };
+            }
+            Ok(())
+        }
+    }
+
+    impl hpke::rand_core::TryCryptoRng for Fixed {}
+
+    fn unhex(text: &str) -> Vec<u8> {
+        (0..text.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap_or(0))
+            .collect()
+    }
+
+    /// The oracle's values (testdata/odoh/oracle.txt, written by oracle.py, an implementation of RFC 9180 and 9230
+    /// of its own in Python, after the research's probe).
+    fn oracle(key: &str) -> Vec<u8> {
+        let text = include_str!("../testdata/odoh/oracle.txt");
+        let line = text
+            .lines()
+            .find_map(|l| l.strip_prefix(key).and_then(|r| r.strip_prefix(' ')))
+            .unwrap_or("");
+        unhex(line)
+    }
+
+    /// RFC 9230 has no test vectors: the engine's sealed query must be the oracle's to the byte, from the same
+    /// key material, and the oracle's answer, sealed as a target seals it, must open to its message.
+    #[test]
+    fn the_sealed_query_and_the_opened_answer_match_an_independent_implementation() {
+        let Some(key) = TargetKey::parse(&oracle("configs")) else {
+            unreachable!("the oracle's configs read")
+        };
+        let Some(sealed) = seal_with(&key, &oracle("message"), 0, &mut Fixed(oracle("ikm-e")))
+        else {
+            unreachable!("sealed")
+        };
+        assert_eq!(
+            sealed.body,
+            oracle("query"),
+            "the same bytes as the oracle's"
+        );
+        assert_eq!(open(&sealed, &oracle("response")), Some(oracle("answer")));
+    }
+
+    /// HPKE against RFC 9180's test vectors, A.1.1 (DHKEM(X25519, HKDF-SHA256), HKDF-SHA256, AES-128-GCM, base
+    /// mode): the receiver's setup opens the vector's ciphertexts in order and exports its values, and the sender's,
+    /// with the vector's ephemeral key material, gives its `enc` and seals its first ciphertext.
+    #[test]
+    fn hpke_meets_rfc_9180s_vectors() {
+        use hpke::aead::AesGcm128;
+        use hpke::kdf::HkdfSha256;
+        use hpke::kem::X25519HkdfSha256;
+        use hpke::{Deserializable, Kem, OpModeR, OpModeS, Serializable};
+        let info = unhex("4f6465206f6e2061204772656369616e2055726e");
+        let Ok(sk_r) = <X25519HkdfSha256 as Kem>::PrivateKey::from_bytes(&unhex(
+            "4612c550263fc8ad58375df3f557aac531d26850903e55a9f23f21d8534e8ac8",
+        )) else {
+            unreachable!("skRm")
+        };
+        let Ok(enc) = <X25519HkdfSha256 as Kem>::EncappedKey::from_bytes(&unhex(
+            "37fda3567bdbd628e88668c3c8d7e97d1d1253b6d4ea6d44c150f741f1bf4431",
+        )) else {
+            unreachable!("enc")
+        };
+        let Ok(mut receiver) = hpke::setup_receiver::<AesGcm128, HkdfSha256, X25519HkdfSha256>(
+            &OpModeR::Base,
+            &sk_r,
+            &enc,
+            &info,
+        ) else {
+            unreachable!("the receiver's setup")
+        };
+        let pt = unhex("4265617574792069732074727574682c20747275746820626561757479");
+        for (aad, ct) in [
+            (
+                "436f756e742d30",
+                "f938558b5d72f1a23810b4be2ab4f84331acc02fc97babc53a52ae8218a355a96d8770ac83d07bea87e13c512a",
+            ),
+            (
+                "436f756e742d31",
+                "af2d7e9ac9ae7e270f46ba1f975be53c09f8d875bdc8535458c2494e8a6eab251c03d0c22a56b8ca42c2063b84",
+            ),
+            (
+                "436f756e742d32",
+                "498dfcabd92e8acedc281e85af1cb4e3e31c7dc394a1ca20e173cb72516491588d96a19ad4a683518973dcc180",
+            ),
+        ] {
+            assert_eq!(
+                receiver.open(&unhex(ct), &unhex(aad)).ok(),
+                Some(pt.clone())
+            );
+        }
+        for (context, value) in [
+            (
+                "",
+                "3853fe2b4035195a573ffc53856e77058e15d9ea064de3e59f4961d0095250ee",
+            ),
+            (
+                "00",
+                "2e8f0b54673c7029649d4eb9d5e33bf1872cf76d623ff164ac185da9e88c21a5",
+            ),
+            (
+                "54657374436f6e74657874",
+                "e9e43065102c3836401bed8c3c3c75ae46be1639869391d62c61f1ec7af54931",
+            ),
+        ] {
+            let mut out = [0u8; 32];
+            assert!(receiver.export(&unhex(context), &mut out).is_ok());
+            assert_eq!(out.to_vec(), unhex(value));
+        }
+        let Ok(pk_r) = <X25519HkdfSha256 as Kem>::PublicKey::from_bytes(&unhex(
+            "3948cfe0ad1ddb695d780e59077195da6c56506b027329794ab02bca80815c4d",
+        )) else {
+            unreachable!("pkRm")
+        };
+        let mut ikm_e = Fixed(unhex(
+            "7268600d403fce431561aef583ee1613527cff655c1343f29812e66706df3234",
+        ));
+        let Ok((enc, mut sender)) = hpke::setup_sender_with_rng::<
+            AesGcm128,
+            HkdfSha256,
+            X25519HkdfSha256,
+        >(&OpModeS::Base, &pk_r, &info, &mut ikm_e) else {
+            unreachable!("the sender's setup")
+        };
+        assert_eq!(
+            enc.to_bytes().to_vec(),
+            unhex("37fda3567bdbd628e88668c3c8d7e97d1d1253b6d4ea6d44c150f741f1bf4431")
+        );
+        assert_eq!(
+            sender.seal(&pt, &unhex("436f756e742d30")).ok(),
+            Some(unhex(
+                "f938558b5d72f1a23810b4be2ab4f84331acc02fc97babc53a52ae8218a355a96d8770ac83d07bea87e13c512a"
+            ))
+        );
     }
 
     #[test]
