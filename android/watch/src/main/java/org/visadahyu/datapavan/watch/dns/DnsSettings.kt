@@ -25,6 +25,16 @@ class DnsSettings private constructor(private val prefs: SharedPreferences) {
         get() = prefs.getBoolean(STRICT, false)
         set(value) = prefs.edit { putBoolean(STRICT, value) }
 
+    /** "Only this resolver": the user's own resolver alone, nothing else asked (W8's fix round, review R-M1). */
+    var only: Boolean
+        get() = prefs.getBoolean(ONLY, false)
+        set(value) = prefs.edit { putBoolean(ONLY, value) }
+
+    /** Debug builds, for the DNS lab's check of a rotated key: `LOW HIGH` seconds a key's fetch waits, or empty. */
+    var refreshForTests: String
+        get() = prefs.getString(REFRESH, "").orEmpty()
+        set(value) = prefs.edit { putString(REFRESH, value) }
+
     /** The user's pairs, `relay>target` by commas; empty for the defaults. */
     var pairs: String
         get() = prefs.getString(PAIRS, "").orEmpty()
@@ -38,8 +48,10 @@ class DnsSettings private constructor(private val prefs: SharedPreferences) {
     /** The setting as the engine reads it (`DnsConfig::read`). */
     fun engineSetting(): String = buildString {
         append("strict ").append(if (strict) 1 else 0).append('\n')
+        append("only ").append(if (only && choice != Choice.Odoh) 1 else 0).append('\n')
         append("choice ").append(choice.engine).append('\n')
         append("pairs ").append(pairs.ifEmpty { "default" }).append('\n')
+        if (refreshForTests.isNotEmpty()) append("refresh ").append(refreshForTests).append('\n')
     }
 
     /** The user's resolver. */
@@ -84,27 +96,71 @@ class DnsSettings private constructor(private val prefs: SharedPreferences) {
             }
 
             /**
-             * A resolver the user typed, or null with the reason it was refused: a DoH URL (`https://...`) or a DoT
-             * host, and at least one address, since Watch never looks a resolver's name up in plain DNS.
+             * A resolver the user typed, or null when it does not read: a DoH URL (`https://host[:port][/path]`) or a
+             * DoT host (`host[:port]`), read as the engine reads them (`Url::parse`, `dot_url`: a host of letters,
+             * digits, hyphens and dots, a path of RFC 3986's unreserved characters and `/`, no query, user or space;
+             * W8's fix round), and one to sixteen IP addresses, since Watch never looks a resolver's name up in plain
+             * DNS. Persian and Arabic digits and commas, as a Persian keyboard types them, read as ASCII ones
+             * (review R-m6). Nothing typed makes it throw (review S-M2).
              */
-            fun custom(at: String, addresses: String): Choice? {
-                val list = addresses.split(',', ' ').map { it.trim() }.filter { it.isNotEmpty() }
-                if (list.isEmpty() || list.any { Exchanger.numeric(it) == null }) return null
-                val trimmed = at.trim()
-                return when {
-                    trimmed.startsWith("https://") && trimmed.length > 8 && ' ' !in trimmed -> Custom(false, trimmed, list)
-                    trimmed.matches(HOST) -> Custom(true, trimmed, list)
+            fun custom(at: String, addresses: String): Choice? = try {
+                val list = ascii(addresses).split(',', ' ').map { it.trim() }.filter { it.isNotEmpty() }
+                val trimmed = ascii(at).trim()
+                when {
+                    list.isEmpty() || list.size > MAX_ADDRESSES || list.any { Exchanger.numeric(it) == null } -> null
+                    trimmed.startsWith("https://") -> trimmed.takeIf { dohUrl(it) }?.let { Custom(false, it, list) }
+                    hostPort(trimmed) -> Custom(true, trimmed.lowercase(), list)
                     else -> null
+                }
+            } catch (e: RuntimeException) {
+                null
+            }
+
+            private const val MAX_ADDRESSES = 16
+
+            /** [text] with Persian and Arabic-Indic digits and the Arabic comma as their ASCII forms. */
+            internal fun ascii(text: String): String = buildString(text.length) {
+                for (c in text) {
+                    append(
+                        when (c) {
+                            in '\u06F0'..'\u06F9' -> '0' + (c - '\u06F0')
+                            in '\u0660'..'\u0669' -> '0' + (c - '\u0660')
+                            '\u060C' -> ','
+                            else -> c
+                        },
+                    )
                 }
             }
 
-            private val HOST = Regex("^[A-Za-z0-9.-]+(:[0-9]{1,5})?$")
+            /** Whether [text] is a DoH URL the engine reads: `https://`, a [hostPort], and a path of unreserved characters. */
+            internal fun dohUrl(text: String): Boolean {
+                if (!text.startsWith("https://") || text.any { it.code <= 0x20 || it.code >= 0x7f }) return false
+                val rest = text.removePrefix("https://")
+                val slash = rest.indexOf('/')
+                val path = if (slash < 0) "/" else rest.substring(slash)
+                return hostPort(if (slash < 0) rest else rest.substring(0, slash)) &&
+                    path.all { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it in "/-._~" }
+            }
+
+            /** Whether [text] is `host` or `host:port`: labels of ASCII letters, digits and hyphens, a port of 1 to 65535. */
+            internal fun hostPort(text: String): Boolean {
+                val colon = text.lastIndexOf(':')
+                val host = if (colon < 0) text else text.substring(0, colon)
+                val port = if (colon < 0) null else text.substring(colon + 1)
+                if (port != null && (port.isEmpty() || port.length > 5 || port.any { it !in '0'..'9' } || port.toInt() !in 1..65535)) return false
+                return host.isNotEmpty() && host.length <= 253 && host.split('.').all { label ->
+                    label.isNotEmpty() && label.length <= 63 && label.all { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '-' }
+                }
+            }
+
         }
     }
 
     companion object {
         private const val CHOICE = "choice"
         private const val STRICT = "strict"
+        private const val ONLY = "only"
+        private const val REFRESH = "refresh-for-tests"
         private const val PAIRS = "pairs"
         private const val NOTIFY = "notify"
 
@@ -113,6 +169,9 @@ class DnsSettings private constructor(private val prefs: SharedPreferences) {
         const val TARGETS = "odoh/targets.tsv"
         const val PAIR_TABLE = "odoh/pairs.tsv"
         const val PRESETS = "dns-presets/presets.tsv"
+
+        /** The ICANN section of the public suffix list (W8's fix round, review S-C1). */
+        const val SUFFIXES = "public-suffix/icann.dat"
 
         /** Debug builds: the DNS lab's tables and root, put in Watch's files by scripts/verify-dns.sh, in place of the pack's. */
         const val LAB_DIR = "dnslab"
@@ -139,6 +198,16 @@ class DnsSettings private constructor(private val prefs: SharedPreferences) {
             return listOf(RELAYS, TARGETS, PAIR_TABLE, PRESETS).map { store.text(it).orEmpty() }
         }
 
+        /**
+         * The public suffixes of the data pack, for [SearchDomains]; empty when the pack does not read, and then Watch
+         * accepts no search domain at all.
+         */
+        fun suffixes(context: Context): PublicSuffixes = try {
+            PublicSuffixes.parse(DataPackStore.read(context, WatchPacks).text(SUFFIXES).orEmpty())
+        } catch (e: RuntimeException) {
+            PublicSuffixes.parse("")
+        }
+
         /** Hands the engine the tables and the user's setting, for the engines to come and the one that runs. */
         fun apply(context: Context): IntArray {
             val (relays, targets, pairs, presets) = tables(context)
@@ -148,7 +217,7 @@ class DnsSettings private constructor(private val prefs: SharedPreferences) {
         /** The ways the screen offers. */
         fun catalogue(context: Context): DnsCatalogue {
             val (relays, targets, pairs, presets) = tables(context)
-            return DnsCatalogue.parse(Engine.nativeDnsCatalogue(relays, targets, pairs, presets))
+            return DnsCatalogue.parse(Engine.nativeDnsCatalogue(relays, targets, pairs, presets), relays, targets, presets)
         }
     }
 }
@@ -164,22 +233,43 @@ data class DnsCatalogue(
     /** Who stands behind a relay or a target. */
     data class Party(val id: String, val operator: String, val person: String, val jurisdictions: String)
 
-    /** A resolver the user may choose, with its card. */
+    /**
+     * A resolver the user may choose, with its card (W8's fix round, review R-M2): the operator, its seat's country
+     * code, and the table's enumerated values, which the screen turns into translated words; the table's own
+     * sentences stay in the data, for the record.
+     */
     data class Preset(
         val id: String,
-        val name: String,
         val operator: String,
         val country: String,
         val dot: Boolean,
-        val logging: String,
-        val audit: String,
-        val filtering: String,
+        /** `blocking`, `unfiltered` or `standard`. */
+        val service: String,
+        /** `totals`, `names-day`, `day`, `months` or `none`. */
+        val logs: String,
+        /** `none`, `harm` or `court`. */
+        val blocks: String,
+        /** `no` or `firm`. */
+        val audited: String,
         val policy: String,
-    )
+    ) {
+        /** The service, as both of its protocols share it: the id without `-doh` or `-dot`. */
+        val group: String get() = id.removeSuffix("-doh").removeSuffix("-dot")
+    }
 
     companion object {
-        /** Reads `nativeDnsCatalogue`'s lines. */
-        fun parse(text: String): DnsCatalogue {
+        /**
+         * Reads `nativeDnsCatalogue`'s lines, which name the relays, targets and presets the engine read, the pairs,
+         * and how each preset is reached, with their words from the tables themselves: [relaysTable] and
+         * [targetsTable] (`odoh/relays.tsv`, `odoh/targets.tsv`: the operator, the person, the jurisdictions) and
+         * [presetsTable] (`dns-presets/presets.tsv`: the cards' columns).
+         */
+        fun parse(text: String, relaysTable: String, targetsTable: String, presetsTable: String): DnsCatalogue {
+            fun table(tsv: String, columns: Int) = tsv.lineSequence().filter { it.isNotBlank() && !it.startsWith("#") }
+                .map { it.split('\t') }.filter { it.size >= columns }.associateBy { it[0] }
+            val relayRows = table(relaysTable, 7)
+            val targetRows = table(targetsTable, 8)
+            val rows = table(presetsTable, 18)
             val relays = linkedMapOf<String, Party>()
             val targets = linkedMapOf<String, Party>()
             val defaults = mutableListOf<Pair<String, String>>()
@@ -188,11 +278,24 @@ data class DnsCatalogue(
             for (line in text.lines()) {
                 val f = line.split('\t')
                 when (f[0]) {
-                    "relay" -> if (f.size >= 5) relays[f[1]] = Party(f[1], f[2], f[3], f[4])
-                    "target" -> if (f.size >= 6) targets[f[1]] = Party(f[1], f[2], f[3], f[4])
+                    "relay" -> if (f.size >= 2) relayRows[f[1]]?.let { relays[f[1]] = Party(f[1], it[4], it[5], it[6]) }
+                    "target" -> if (f.size >= 2) targetRows[f[1]]?.let { targets[f[1]] = Party(f[1], it[5], it[6], it[7]) }
                     "pair" -> if (f.size >= 3) defaults += f[1] to f[2]
                     "allowed" -> if (f.size >= 3) allowed += f[1] to f[2]
-                    "preset" -> if (f.size >= 10) presets += Preset(f[1], f[2], f[3], f[4], f[5] == "dot", f[6], f[7], f[8], f[9])
+                    "preset" -> if (f.size >= 3) {
+                        val row = rows[f[1]]
+                        presets += Preset(
+                            id = f[1],
+                            operator = row?.get(2).orEmpty(),
+                            country = row?.get(3).orEmpty(),
+                            dot = f[2] == "dot",
+                            service = row?.get(14).orEmpty(),
+                            logs = row?.get(15).orEmpty(),
+                            blocks = row?.get(16).orEmpty(),
+                            audited = row?.get(17).orEmpty(),
+                            policy = row?.get(11)?.takeIf { it.startsWith("https://") }.orEmpty(),
+                        )
+                    }
                 }
             }
             return DnsCatalogue(relays, targets, defaults, allowed, presets)
@@ -211,6 +314,8 @@ data class DnsStatus(
     val strict: Boolean,
     val validated: Boolean,
     val held: Int,
+    /** The network's search domains in use: names under them go to its resolver when the internet does not know them. */
+    val search: List<String> = emptyList(),
 ) {
     companion object {
         fun parse(text: String): DnsStatus {
@@ -224,6 +329,7 @@ data class DnsStatus(
                 strict = lines["strict"] == "1",
                 validated = lines["validated"] != "0",
                 held = lines["held"]?.toIntOrNull() ?: 0,
+                search = lines["search"].orEmpty().split(' ').filter { it.isNotEmpty() },
             )
         }
     }

@@ -27,6 +27,7 @@ androidx-compose-ui = { module = "androidx.compose.ui:ui" }
 junit = { module = "junit:junit", version.ref = "junit" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver3", version.ref = "okhttp" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

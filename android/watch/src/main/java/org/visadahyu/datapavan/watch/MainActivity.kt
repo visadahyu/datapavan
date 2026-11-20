@@ -78,9 +78,32 @@ class MainActivity : ComponentActivity() {
     private val dns = mutableStateOf(
         org.visadahyu.datapavan.watch.ui.DnsView(
             running = false, status = null, choice = org.visadahyu.datapavan.watch.dns.DnsSettings.Choice.Odoh,
-            strict = false, notify = false, pairs = "", catalogue = null,
+            strict = false, only = false, notify = false, notifyRefused = false, pairs = "", catalogue = null, probe = null,
         ),
     )
+
+    /**
+     * Android 13 and later: the fallback's notification shows only once the user allows Watch's notifications, so
+     * "Notify me" asks for that when it is turned on; refused, it stays off and the screen says why (W8's fix round,
+     * review R-M3).
+     */
+    private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) setNotify(true) else dns.value = dns.value.copy(notify = false, notifyRefused = true)
+    }
+
+    /** Whether Android lets Watch post notifications. */
+    private fun notificationsAllowed(): Boolean = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU ||
+        checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+    /**
+     * "Notify me": kept, and the notification shown or taken away at once. It is no part of the engine's setting, so
+     * the engine is not told, and keeps what it learned (review R-m1).
+     */
+    private fun setNotify(on: Boolean) {
+        org.visadahyu.datapavan.watch.dns.DnsSettings.of(this).notify = on
+        dns.value = dns.value.copy(notify = on, notifyRefused = false)
+        Notices.show(this, Notices.Kind.DNS_FALLBACK, on && dns.value.status?.fallbackSeconds != null)
+    }
 
     /** The apps the user left out of the tunnel (ADR 0041). */
     private val leftOut = mutableStateOf(emptySet<String>())
@@ -494,9 +517,12 @@ class MainActivity : ComponentActivity() {
         val settings = org.visadahyu.datapavan.watch.dns.DnsSettings.of(this)
         val running = WatchVpnService.running.value
         val status = if (running) org.visadahyu.datapavan.watch.dns.DnsStatus.parse(Engine.nativeDnsStatus()) else null
+        // A permission taken back in Android's settings turns "Notify me" off on the screen, and says why.
+        val allowed = notificationsAllowed()
         val view = dns.value.copy(
-            running = running, status = status, choice = settings.choice, strict = settings.strict,
-            notify = settings.notify, pairs = settings.pairs,
+            running = running, status = status, choice = settings.choice, strict = settings.strict, only = settings.only,
+            notify = settings.notify && allowed, notifyRefused = dns.value.notifyRefused || (settings.notify && !allowed),
+            pairs = settings.pairs,
         )
         if (view != dns.value) dns.value = view
         if (view.catalogue == null && !catalogueAsked) {
@@ -518,9 +544,34 @@ class MainActivity : ComponentActivity() {
     }
 
     private val dnsActions = org.visadahyu.datapavan.watch.ui.DnsActions(
-        onChoice = { choice -> changeDns { it.choice = choice } },
+        onChoice = { choice ->
+            dns.value = dns.value.copy(probe = null)
+            changeDns { it.choice = choice }
+        },
+        onCustom = { choice ->
+            // Tested with one query before it is saved; saved only if it answers (W8's fix round, review R-M1).
+            dns.value = dns.value.copy(probe = org.visadahyu.datapavan.watch.ui.DnsView.Probe.Asking)
+            org.visadahyu.datapavan.watch.dns.DnsProbe.check(choice) { ms, outcome ->
+                runOnUiThread {
+                    if (ms != null) {
+                        dns.value = dns.value.copy(probe = org.visadahyu.datapavan.watch.ui.DnsView.Probe.Answered(ms))
+                        changeDns { it.choice = choice }
+                    } else {
+                        val tampered = outcome == org.visadahyu.datapavan.watch.dns.Exchanger.TAMPERED
+                        dns.value = dns.value.copy(probe = org.visadahyu.datapavan.watch.ui.DnsView.Probe.Failed(tampered))
+                    }
+                }
+            }
+        },
         onStrict = { on -> changeDns { it.strict = on } },
-        onNotify = { on -> changeDns { it.notify = on } },
+        onOnly = { on -> changeDns { it.only = on } },
+        onNotify = { on ->
+            when {
+                !on -> setNotify(false)
+                notificationsAllowed() -> setNotify(true)
+                else -> askNotifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        },
         onPairs = { pairs -> changeDns { it.pairs = pairs } },
     )
 

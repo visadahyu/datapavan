@@ -142,6 +142,8 @@ class WatchVpnService : VpnService() {
         object : org.visadahyu.datapavan.watch.dns.Exchanger.Host {
             override fun protect(socket: java.net.Socket): Boolean = this@WatchVpnService.protect(socket)
 
+            override fun protect(socket: java.net.DatagramSocket): Boolean = this@WatchVpnService.protect(socket)
+
             override val network: Network? get() = current
 
             override val generation: Int get() = networkGeneration
@@ -149,6 +151,9 @@ class WatchVpnService : VpnService() {
             override val extraRoots: List<java.security.cert.X509Certificate> get() = labRoots()
         },
     )
+
+    /** The data pack's public suffixes, read once, for the network's search domains. */
+    private val suffixes by lazy { org.visadahyu.datapavan.watch.dns.DnsSettings.suffixes(this) }
 
     /** Changes with the network beneath, so that each has its own clients and TLS sessions. */
     @Volatile
@@ -171,6 +176,9 @@ class WatchVpnService : VpnService() {
             if (network != current) {
                 networkGeneration++
                 exchanger.networkChanged()
+                exchanger.warm()
+                // The search domains of the network before go with it, before this one's arrive (review S-C1).
+                tellDnsNetwork(null, "")
             }
             current = network
             setUnderlyingNetworks(arrayOf(network))
@@ -191,8 +199,9 @@ class WatchVpnService : VpnService() {
             }
             if (network != current) return
             remeasure(network)
-            // The network's search domains are its local names, which go to its own resolver (W8, part 1, point 7).
-            tellDnsNetwork(null, properties.domains.orEmpty())
+            // The network's search domains, but for public suffixes (W8's fix round, review S-C1): a name under one
+            // goes to the network's resolver only when the encrypted way says it does not exist.
+            tellDnsNetwork(null, org.visadahyu.datapavan.watch.dns.SearchDomains.accepted(properties.domains.orEmpty(), suffixes))
             // A link-local DNS server needs its interface's scope, which the engine does not take.
             val dns = properties.dnsServers.firstOrNull { !it.isLinkLocalAddress }?.hostAddress ?: ""
             // Android reports a network's properties several times after a switch; only a new network
@@ -868,8 +877,11 @@ class WatchVpnService : VpnService() {
      */
     private fun startEngine(tunnel: ParcelFileDescriptor): Boolean {
         // The encrypted resolver before the engine's first packet: no direct app's lookup goes to the network's
-        // resolver while it is set (W8, part 1).
+        // resolver while it is set (W8, part 1). The first exchange's client and roots, and the public suffixes for the
+        // network's search domains, are made ready meanwhile (W8's fix round).
         org.visadahyu.datapavan.watch.dns.DnsSettings.apply(this)
+        exchanger.warm()
+        suffixes.known
         val fd = tunnel.detachFd()
         var tableFd = -1
         var tableStart = 0L
@@ -940,7 +952,13 @@ class WatchVpnService : VpnService() {
         stop()
     }
 
+    override fun onCreate() {
+        super.onCreate()
+        exchangerNow = exchanger
+    }
+
     override fun onDestroy() {
+        if (exchangerNow === exchanger) exchangerNow = null
         // A first start still waiting for its measure does not start a tunnel on a destroyed service.
         starts++
         close()
@@ -996,18 +1014,11 @@ class WatchVpnService : VpnService() {
      * the exchanger and returns at once; the reply goes back by [Engine.nativeExchanged].
      */
     @Suppress("unused")
-    fun exchange(
-        ticket: Long,
-        carry: Int,
-        url: String,
-        host: String,
-        addresses: String,
-        pins: String,
-        proxy: String,
-        user: ByteArray,
-        password: ByteArray,
-        body: ByteArray,
-    ): Boolean = exchanger.exchange(ticket, carry, url, host, addresses, pins, proxy, user, password, body)
+    fun exchange(ticket: Long, carry: Int, texts: String, user: ByteArray, password: ByteArray, body: ByteArray): Boolean {
+        // The URL, the host, the addresses, the pins and the proxy, by line breaks, as the bridge packs them.
+        val (url, host, addresses, pins, proxy) = (texts.split('\n', limit = 5) + List(5) { "" }).take(5)
+        return exchanger.exchange(ticket, carry, url, host, addresses, pins, proxy, user, password, body)
+    }
 
     /**
      * Called by the engine when the way direct apps' names go changed kind (W8, part 1): the fallback's notification,
@@ -1091,6 +1102,7 @@ class WatchVpnService : VpnService() {
             val shown = if (debuggable || !line.startsWith("way ")) line else "way " + line.removePrefix("way ").substringBefore(' ')
             writer.println("dns-$shown")
         }
+        writer.println("dns-notify ${if (org.visadahyu.datapavan.watch.dns.DnsSettings.of(this).notify) "on" else "off"}")
         writer.println("addresses ${addresses.name} ${addresses.tun4} ${addresses.dns4} ${addresses.tun6} ${addresses.dns6}")
         writer.println("mtu $mtu first-hop ${firstHops.first ?: "-"} ${firstHops.second ?: "-"}")
         writer.println("setups kept $setupsKept anew $setupsAnew")
@@ -1268,10 +1280,14 @@ class WatchVpnService : VpnService() {
      * bytes are zeroed once handed over; part 2 brings the import and the Keystore.
      */
     /**
-     * Debug builds only, for scripts/verify-dns.sh (W8, part 1): `dns-strict on|off`, `dns-choice odoh`, `dns-choice
-     * preset ID`, `dns-choice doh|dot AT ADDRS`, `dns-pairs SPEC|default` and `dns-notify on|off` set the user's
-     * setting; `dns-apply` hands the engine the tables again (the lab's, where the check put them in Watch's files)
-     * and prints what it read; every one of them applies the setting.
+     * Debug builds only, for scripts/verify-dns.sh (W8, part 1): `dns-strict on|off`, `dns-only on|off`, `dns-choice
+     * odoh`, `dns-choice preset ID`, `dns-choice doh|dot AT ADDRS`, `dns-pairs SPEC|default`, `dns-notify on|off` and
+     * `dns-refresh LOW HIGH|off` (seconds a target's key fetch waits after a 401) set the user's setting; `dns-apply`
+     * hands the engine the tables again (the lab's, where the check put them in Watch's files) and prints what it
+     * read; every one of them applies the setting. `dns-search DOMAINS` (by commas) hands the engine those search
+     * domains as Android's would be, through the public suffix list, and prints `dns-search-set` and what it kept.
+     * `dns-network-resolver ADDRESS:PORT|android` asks the network's resolver there in plain DNS, for the lab, in
+     * place of Android's resolver of the network ([org.visadahyu.datapavan.watch.dns.Exchanger.networkResolverForTests]).
      */
     private fun debugDns(args: List<String>, writer: PrintWriter) {
         fun after(command: String, n: Int) = args.indexOf(command).takeIf { it >= 0 }?.let { args.drop(it + 1).take(n) }
@@ -1284,6 +1300,24 @@ class WatchVpnService : VpnService() {
         after("dns-notify", 1)?.let {
             settings.notify = it.firstOrNull() == "on"
             changed = true
+        }
+        after("dns-only", 1)?.let {
+            settings.only = it.firstOrNull() == "on"
+            changed = true
+        }
+        after("dns-refresh", 2)?.let {
+            val (low, high) = (it + listOf("", "")).take(2).map { n -> n.toIntOrNull() }
+            settings.refreshForTests = if (low != null && high != null) "$low $high" else ""
+            changed = true
+        }
+        after("dns-network-resolver", 1)?.let {
+            exchanger.networkResolverForTests = it.firstOrNull()?.let(org.visadahyu.datapavan.watch.dns.Exchanger::parseAddress)
+            writer.println("dns-network-resolver-set ${exchanger.networkResolverForTests ?: "android"}")
+        }
+        after("dns-search", 1)?.let {
+            val kept = org.visadahyu.datapavan.watch.dns.SearchDomains.accepted(it.firstOrNull().orEmpty(), suffixes)
+            main.post { tellDnsNetwork(null, kept) }
+            writer.println("dns-search-set $kept")
         }
         after("dns-pairs", 1)?.let {
             settings.pairs = it.firstOrNull()?.takeIf { p -> p != "default" }.orEmpty()
@@ -1649,5 +1683,10 @@ class WatchVpnService : VpnService() {
 
         /** Private DNS on Watch's network while the tunnel is up, else null, for Watch's own screens. */
         val privateDns: StateFlow<PrivateDns?> = dnsState.asStateFlow()
+
+        /** The exchanger of the service that runs, for the screen's check of a resolver ([Exchanger.probe]); else null. */
+        @Volatile
+        internal var exchangerNow: org.visadahyu.datapavan.watch.dns.Exchanger? = null
+            private set
     }
 }

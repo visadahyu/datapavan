@@ -108,7 +108,8 @@ internal fun WatchScreen(
             }
             // "Now" (ADR 0046, decision 2 (d)): what apps sent, and whether the user was using them.
             OutlinedButton(onClick = onNow) { Text(stringResource(R.string.now_open)) }
-            if (running && privateDns != null && privateDns != PrivateDns.Plain) {
+            // Strict Private DNS is said once, in the names' section below (W8's fix round, review R-m5).
+            if (running && privateDns != null && privateDns != PrivateDns.Plain && privateDns !is PrivateDns.Strict) {
                 PrivateDnsNote(privateDns)
             }
             DnsSection(dns, privateDns, dnsActions)

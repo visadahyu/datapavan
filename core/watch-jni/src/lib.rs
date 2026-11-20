@@ -434,28 +434,26 @@ impl Platform for Service {
                 )
             },
         );
+        // One string for the five texts (none holds a line break: the URL's path, the host and the pins are of
+        // plain characters, W8's fix round), so that the bridge converts one: the native library's size counts.
+        let texts = format!(
+            "{}\n{}\n{addresses}\n{pins}\n{proxy}",
+            request.url, request.host
+        );
         self.vm
             .attach_current_thread(|env| -> Result<bool, Error> {
-                let url = JString::from_str(env, &request.url)?;
-                let host = JString::from_str(env, &request.host)?;
-                let addresses = JString::from_str(env, &addresses)?;
-                let pins = JString::from_str(env, &pins)?;
-                let proxy = JString::from_str(env, &proxy)?;
+                let texts = JString::from_str(env, &texts)?;
                 let user = env.byte_array_from_slice(&user)?;
                 let password = env.byte_array_from_slice(&password)?;
                 let body = env.byte_array_from_slice(&request.body)?;
                 env.call_method(
                     &self.service,
                     jni_str!("exchange"),
-                    jni_sig!("(JILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[B[B[B)Z"),
+                    jni_sig!("(JILjava/lang/String;[B[B[B)Z"),
                     &[
                         JValue::Long(ticket),
                         JValue::Int(request.carry as i32),
-                        JValue::Object(&url),
-                        JValue::Object(&host),
-                        JValue::Object(&addresses),
-                        JValue::Object(&pins),
-                        JValue::Object(&proxy),
+                        JValue::Object(&texts),
                         JValue::Object(&user),
                         JValue::Object(&password),
                         JValue::Object(&body),
@@ -1124,31 +1122,17 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeDnsCatalo
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
-/// The ways of `catalogue` as Watch's screen reads them, one per line, fields by tabs: `relay ID OPERATOR PERSON
-/// JURISDICTIONS`, `target ID OPERATOR PERSON JURISDICTIONS FILTERS`, `pair RELAY TARGET` for each default pair,
-/// `allowed RELAY TARGET` for each pair the rule allows, `preset ID NAME OPERATOR COUNTRY PROTOCOL LOGGING AUDIT
-/// FILTERING POLICY`.
+/// The ways of `catalogue` that the engine read, as Watch's screen reads them, one per line, fields by tabs: `relay
+/// ID`, `target ID`, `pair RELAY TARGET` for each default pair, `allowed RELAY TARGET` for each pair the rule allows,
+/// `preset ID PROTOCOL`. The words of each come from the tables, which the screen reads itself (W8's fix round: the
+/// native library's size counts).
 fn catalogue_lines(catalogue: &Catalogue) -> String {
-    let clean = |text: &str| text.replace(['\t', '\n'], " ");
     let mut lines = Vec::new();
     for r in &catalogue.relays {
-        lines.push(format!(
-            "relay\t{}\t{}\t{}\t{}",
-            r.id,
-            clean(&r.behind.operator),
-            clean(&r.behind.person),
-            r.behind.jurisdictions.join(",")
-        ));
+        lines.push(format!("relay\t{}", r.id));
     }
     for t in &catalogue.targets {
-        lines.push(format!(
-            "target\t{}\t{}\t{}\t{}\t{}",
-            t.id,
-            clean(&t.behind.operator),
-            clean(&t.behind.person),
-            t.behind.jurisdictions.join(","),
-            u8::from(t.filters)
-        ));
+        lines.push(format!("target\t{}", t.id));
     }
     for &(r, t) in &catalogue.pairs {
         lines.push(format!(
@@ -1168,17 +1152,9 @@ fn catalogue_lines(catalogue: &Catalogue) -> String {
             datapavan_net::catalogue::Protocol::Doh => "doh",
             datapavan_net::catalogue::Protocol::Dot => "dot",
         };
-        lines.push(format!(
-            "preset\t{}\t{}\t{}\t{}\t{protocol}\t{}\t{}\t{}\t{}",
-            p.id,
-            clean(&p.name),
-            clean(&p.operator),
-            clean(&p.country),
-            clean(&p.logging),
-            clean(&p.audit),
-            clean(&p.filtering),
-            clean(&p.policy)
-        ));
+        // The card's words come from the table itself, which Watch's Kotlin side reads (W8's fix round, review
+        // R-M2): only the presets that read here, and how each is reached.
+        lines.push(format!("preset\t{}\t{protocol}", p.id));
     }
     lines.join("\n")
 }

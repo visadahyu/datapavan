@@ -18,6 +18,10 @@ import java.util.concurrent.TimeUnit
 import javax.net.ssl.KeyManagerFactory
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLServerSocket
+import mockwebserver3.MockResponse
+import mockwebserver3.MockWebServer
+import okhttp3.Protocol
+import okio.Buffer
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -31,30 +35,55 @@ import org.junit.Test
  * answers, what goes over HTTP carries no User-Agent and no Accept-Encoding, a pin that matches none of the chain and a
  * certificate for another name are refused as tampering, a root the user added (an `AndroidCAStore` alias that is not
  * `system:`) is not trusted, and the tool's SOCKS5 proxy is asked for the destination by its address, with its
- * password. OkHttp's Android platform does not start on the JVM, so DoH and ODoH over it are checked on the emulator
- * against the lab (scripts/verify-dns.sh).
+ * password. DoH and ODoH over OkHttp, against OkHttp's own test server with the lab's certificate, over HTTP/2 (W8's
+ * fix round, review R-M4; the unit tests run OkHttp's JVM build of the same version, watch/build.gradle.kts): the
+ * request as it reaches the server, the answer, a 401, a body longer than a DNS message, the pins. Each exchange
+ * carries its own pins, and nothing of it runs on the caller's thread.
  */
 class ExchangerTest {
     private val certs = File("../../scripts/dnslab/certs")
     private val replies = ArrayBlockingQueue<Triple<Long, Int, ByteArray?>>(16)
     private val servers = mutableListOf<ServerSocket>()
 
+    private val webServers = mutableListOf<MockWebServer>()
+
     @After
-    fun closeServers() = servers.forEach { it.close() }
+    fun closeServers() {
+        servers.forEach { it.close() }
+        webServers.forEach { it.close() }
+    }
 
     private fun certificate(name: String): X509Certificate =
         File(certs, "$name.pem").inputStream().use { CertificateFactory.getInstance("X.509").generateCertificate(it) as X509Certificate }
 
-    /** A TLS server socket on the loopback with the lab's certificate and key of [name]. */
-    private fun tlsServer(name: String): SSLServerSocket {
+    /** A server's TLS context with the lab's certificate and key of [name]. */
+    private fun tlsContext(name: String): SSLContext {
         val pem = File(certs, "$name.key").readText().lines().filter { !it.startsWith("-----") }.joinToString("")
         val key = KeyFactory.getInstance("EC").generatePrivate(PKCS8EncodedKeySpec(Base64.getDecoder().decode(pem)))
         val store = KeyStore.getInstance(KeyStore.getDefaultType()).apply { load(null) }
         store.setKeyEntry(name, key, CharArray(0), arrayOf(certificate(name), certificate("ca")))
         val keys = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()).apply { init(store, CharArray(0)) }
-        val context = SSLContext.getInstance("TLS").apply { init(keys.keyManagers, null, null) }
-        return (context.serverSocketFactory.createServerSocket(0, 8, InetAddress.getLoopbackAddress()) as SSLServerSocket).also { servers += it }
+        return SSLContext.getInstance("TLS").apply { init(keys.keyManagers, null, null) }
     }
+
+    /** A TLS server socket on the loopback with the lab's certificate and key of [name]. */
+    private fun tlsServer(name: String): SSLServerSocket =
+        (tlsContext(name).serverSocketFactory.createServerSocket(0, 8, InetAddress.getLoopbackAddress()) as SSLServerSocket).also { servers += it }
+
+    /** OkHttp's test server on the loopback, over TLS with the lab's DoH certificate, HTTP/2 first. */
+    private fun webServer(): MockWebServer = MockWebServer().also { server ->
+        webServers += server
+        server.useHttps(tlsContext("doh").socketFactory)
+        server.protocols = listOf(Protocol.HTTP_2, Protocol.HTTP_1_1)
+        server.start(InetAddress.getLoopbackAddress(), 0)
+    }
+
+    private fun http(exchanger: Exchanger, ticket: Long, carry: Int, server: MockWebServer, pins: String = "") = exchanger.exchange(
+        ticket, carry, "https://doh.dnslab.test:${server.port}/dns-query", "doh.dnslab.test", "127.0.0.1", pins, "",
+        ByteArray(0), ByteArray(0), query,
+    )
+
+    private fun reply() = replies.poll(10, TimeUnit.SECONDS) ?: error("no reply")
 
     private fun exchanger(trust: List<X509Certificate>) = Exchanger(
         object : Exchanger.Host {
@@ -227,6 +256,194 @@ class ExchangerTest {
         assertEquals(InetAddress.getByName("192.0.2.9"), socket.inetAddress)
         assertEquals("hello", String(DataInputStream(socket.getInputStream()).let { ByteArray(5).also(it::readFully) }))
         socket.close()
+    }
+
+    /**
+     * Review R-M4: DoH and ODoH as they reach the server: a POST over HTTP/2 with the DNS message as it was, its type
+     * asked and given, no User-Agent, no Accept-Encoding; the answer back whole.
+     */
+    @Test
+    fun dohAndOdohGoOverHttp2WithNothingOkHttpAdds() {
+        val server = webServer()
+        val answer = ByteArray(96) { it.toByte() }
+        val exchanger = exchanger(listOf(certificate("ca")))
+        for ((ticket, carry) in listOf(20L to Exchanger.CARRY_DOH, 21L to Exchanger.CARRY_ODOH)) {
+            server.enqueue(MockResponse.Builder().code(200).body(Buffer().write(answer)).build())
+            http(exchanger, ticket, carry, server)
+            val (got, outcome, body) = reply()
+            assertEquals(ticket, got)
+            assertEquals(Exchanger.OK, outcome)
+            assertArrayEquals(answer, body)
+            val request = server.takeRequest(5, TimeUnit.SECONDS) ?: error("no request")
+            val type = if (carry == Exchanger.CARRY_DOH) Exchanger.DOH_TYPE else Exchanger.ODOH_TYPE
+            assertEquals("POST", request.method)
+            assertTrue(request.version, request.version.startsWith("HTTP/2"))
+            assertEquals("/dns-query", request.target)
+            assertEquals(type, request.headers["Accept"])
+            assertEquals(type, request.headers["Content-Type"])
+            assertNull(request.headers["User-Agent"])
+            assertNull(request.headers["Accept-Encoding"])
+            assertNull(request.headers["Cookie"])
+            assertArrayEquals(query, request.body?.toByteArray())
+        }
+    }
+
+    /** Review R-M4: a 401 reaches the engine as 401 (a target's new key), a body longer than any DNS message is refused unread. */
+    @Test
+    fun a401AndAnOverlongBodyReadAsTheEngineNeeds() {
+        val server = webServer()
+        val exchanger = exchanger(listOf(certificate("ca")))
+        server.enqueue(MockResponse.Builder().code(401).body("key").build())
+        http(exchanger, 22, Exchanger.CARRY_ODOH, server)
+        val (_, outcome, body) = reply()
+        assertEquals(401, outcome)
+        assertNull(body)
+        server.enqueue(MockResponse.Builder().code(200).body(Buffer().write(ByteArray(Exchanger.MAX_BODY.toInt() + 1))).build())
+        http(exchanger, 23, Exchanger.CARRY_DOH, server)
+        assertEquals(Exchanger.REFUSED, reply().second)
+        server.enqueue(MockResponse.Builder().code(200).body(Buffer().write(ByteArray(Exchanger.MAX_BODY.toInt()))).build())
+        http(exchanger, 24, Exchanger.CARRY_DOH, server)
+        assertEquals(Exchanger.OK, reply().second)
+    }
+
+    /** Review R-M4: a DoH server whose chain matches none of its pins is tampering; the right pin passes. */
+    @Test
+    fun dohWithAPinThatMatchesNothingIsTampering() {
+        val server = webServer()
+        server.enqueue(MockResponse.Builder().code(200).body("x").build())
+        val wrong = "sha256/" + Base64.getEncoder().encodeToString(ByteArray(32))
+        http(exchanger(listOf(certificate("ca"))), 25, Exchanger.CARRY_DOH, server, wrong)
+        assertEquals(Exchanger.TAMPERED, reply().second)
+        http(exchanger(listOf(certificate("ca"))), 26, Exchanger.CARRY_DOH, server, SystemTrust.pin(certificate("ca")))
+        assertEquals(Exchanger.OK, reply().second)
+    }
+
+    /**
+     * The security review's nit: each exchange carries its own pins. One without pins (a resolver of the user's on a
+     * preset's host) leaves its connection open; a pinned one after it never rides that connection unchecked.
+     */
+    @Test
+    fun aPinnedExchangeNeverRidesAnUnpinnedConnection() {
+        val server = tlsServer("dot")
+        Thread {
+            try {
+                repeat(2) {
+                    val socket = server.accept()
+                    Thread {
+                        try {
+                            val input = DataInputStream(socket.getInputStream())
+                            val out = socket.getOutputStream()
+                            while (true) {
+                                val asked = ByteArray(input.readUnsignedShort()).also(input::readFully)
+                                out.write(byteArrayOf((asked.size shr 8).toByte(), asked.size.toByte()) + asked)
+                                out.flush()
+                            }
+                        } catch (_: Exception) {
+                        }
+                    }.apply { isDaemon = true; start() }
+                }
+            } catch (_: Exception) {
+            }
+        }.apply { isDaemon = true; start() }
+        val exchanger = exchanger(listOf(certificate("ca")))
+        dot(exchanger, 27, server)
+        assertEquals(Exchanger.ANSWER, reply().second)
+        dot(exchanger, 28, server, "sha256/" + Base64.getEncoder().encodeToString(ByteArray(32)))
+        assertEquals(Exchanger.TAMPERED, reply().second)
+    }
+
+    /** Review S-m5: an exchange returns at once, while what it needs is built on the exchanger's own threads. */
+    @Test
+    fun anExchangeReturnsAtOnceWhileItsClientIsBuilt() {
+        val slow = Exchanger(
+            object : Exchanger.Host {
+                override fun protect(socket: Socket) = true
+                override val network: Network? = null
+                override val generation: Int
+                    get() {
+                        Thread.sleep(1_500)
+                        return 0
+                    }
+                override val extraRoots = emptyList<X509Certificate>()
+            },
+            replies = { ticket, outcome, body -> replies.put(Triple(ticket, outcome, body)) },
+            given = SystemTrust.manager(listOf(certificate("ca"))),
+        )
+        val started = System.nanoTime()
+        slow.exchange(29, Exchanger.CARRY_DOH, "https://doh.dnslab.test:9/dns-query", "doh.dnslab.test", "127.0.0.1", "", "", ByteArray(0), ByteArray(0), query)
+        assertTrue("returned at once", System.nanoTime() - started < 500_000_000L)
+        assertEquals(29L, reply().first)
+    }
+
+    /** Review S-m2: a socket to a tool off the loopback (on the LAN) is protected from Watch's own tunnel; one on the loopback needs not. */
+    @Test
+    fun aToolOffTheLoopbackIsProtected() {
+        val protectedSockets = mutableListOf<Socket>()
+        val exchanger = Exchanger(
+            object : Exchanger.Host {
+                override fun protect(socket: Socket) = protectedSockets.add(socket)
+                override val network: Network? = null
+                override val generation = 0
+                override val extraRoots = emptyList<X509Certificate>()
+            },
+            replies = { _, _, _ -> },
+            given = SystemTrust.manager(listOf(certificate("ca"))),
+        )
+        val lan = exchanger.socketFor(Exchanger.Through(InetSocketAddress(InetAddress.getByName("192.0.2.1"), 1080), ByteArray(0), ByteArray(0)))
+        assertTrue(lan is ToolSocket)
+        assertEquals(listOf(lan), protectedSockets)
+        exchanger.socketFor(Exchanger.Through(InetSocketAddress(InetAddress.getLoopbackAddress(), 1080), ByteArray(0), ByteArray(0)))
+        assertEquals(1, protectedSockets.size)
+        exchanger.socketFor(null)
+        assertEquals(2, protectedSockets.size)
+    }
+
+    /** The security review's nit: of an answer and a timeout, only the first reaches the engine. */
+    @Test
+    fun onlyTheFirstOutcomeIsReplied() {
+        val seen = mutableListOf<Int>()
+        val once = Exchanger.firstOnly { outcome, _ -> seen += outcome }
+        once(Exchanger.ANSWER, ByteArray(1))
+        once(Exchanger.TIMEOUT, null)
+        assertEquals(listOf(Exchanger.ANSWER), seen)
+    }
+
+    /** Review R-M1: the screen's check of a resolver: an answer to its question, with the time it took; none, refused. */
+    @Test
+    fun theProbeAsksOnceAndReadsTheAnswer() {
+        val server = tlsServer("dot")
+        Thread {
+            try {
+                server.accept().use { socket ->
+                    val input = DataInputStream(socket.getInputStream())
+                    val asked = ByteArray(input.readUnsignedShort()).also(input::readFully)
+                    val answer = asked.copyOf().also {
+                        it[2] = 0x81.toByte()
+                        it[3] = 0x80.toByte()
+                    }
+                    socket.getOutputStream().apply {
+                        write(byteArrayOf((answer.size shr 8).toByte(), answer.size.toByte()) + answer)
+                        flush()
+                    }
+                    input.read()
+                }
+            } catch (_: Exception) {
+            }
+        }.apply { isDaemon = true; start() }
+        val results = ArrayBlockingQueue<Pair<Long?, Int>>(2)
+        val exchanger = exchanger(listOf(certificate("ca")))
+        exchanger.probe(DnsSettings.Choice.Custom(true, "dot.dnslab.test:${server.localPort}", listOf("127.0.0.1"))) { ms, outcome -> results.put(ms to outcome) }
+        val (ms, outcome) = results.poll(10, TimeUnit.SECONDS) ?: error("no result")
+        assertTrue("answered", ms != null && ms >= 0)
+        assertEquals(Exchanger.ANSWER, outcome)
+        assertTrue("no reply to the engine", replies.isEmpty())
+        // Nothing listens there.
+        val closed = ServerSocket(0, 1, InetAddress.getLoopbackAddress()).let { val port = it.localPort; it.close(); port }
+        exchanger.probe(DnsSettings.Choice.Custom(true, "dot.dnslab.test:$closed", listOf("127.0.0.1"))) { got, why -> results.put(got to why) }
+        val (none, why) = results.poll(10, TimeUnit.SECONDS) ?: error("no result")
+        assertNull(none)
+        assertEquals(Exchanger.REFUSED, why)
+        assertFalse(Exchanger.answers(query))
     }
 
     @Test

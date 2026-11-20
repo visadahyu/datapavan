@@ -17,6 +17,7 @@ Punycode, RFC 3492), as a search domain arrives from DHCP. The private section (
 `github.io`) is left out: the brief asked for the ICANN section, the suffixes of the domain registries.
 """
 
+import datetime
 import hashlib
 import os
 import sys
@@ -81,6 +82,7 @@ def main() -> int:
     (HERE / "SOURCE").write_text(
         "\n".join([
             "# SPDX-License-Identifier: CC0-1.0",
+            f"retrieved: {datetime.datetime.now(datetime.timezone.utc):%Y-%m-%d}",
             "list: https://publicsuffix.org/list/public_suffix_list.dat, read from a copy on disk",
             f"copy: {version}",
             f"file-sha256: {hashlib.sha256(raw).hexdigest()}",

@@ -1,63 +1,87 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    W7, part 2 (ADR 0035): the strings of the WireGuard import, the configurations, each app's way and their
-    states, in English only. They are translated into the seven other languages after the review, by ADR 0030's
-    process, and then move into strings.xml, which scripts/check-translations.py reads and holds to every
-    language. Until then this file is held to the plain-language gate (scripts/check.sh) and to ADR 0025's list of
-    words, and lint's check for missing translations is lifted for it alone. A release needs it empty (RELEASE.md).
+    W8, part 1 (ADR 0042), with its fix round: the strings of the names of apps that go directly, in English only.
+    W7 part 2's strings moved into strings.xml with their translations; these are translated into the seven other
+    languages after their review, by ADR 0030's process, and then move there too, where scripts/check-translations.py
+    holds them to every language. Until then this file is held to the plain-language gate (scripts/check.sh) and to
+    ADR 0025's list of words, and lint's check for missing translations is lifted for it alone. A release needs it
+    empty (RELEASE.md).
 -->
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
 
-    <!-- The notification while configurations that open only on an unlocked phone wait for the unlock (ADR 0047's
-         profile). It names no provider and no configuration, on the lock screen or off it. -->
-    <!-- The notification while what Watch kept of its configurations can no longer be opened and every app is held.
-         It names no provider and no configuration, and opens Watch's screen. -->
-
-
-
-
-
-
-    <!-- W8, part 1 (ADR 0042): the names of apps that go directly. -->
+    <!-- W8, part 1 (ADR 0042), and its fix round: the names of apps that go directly. -->
     <string name="dns_title">Names of apps that go directly</string>
     <string name="dns_now_unknown">No app has looked up a name on this network yet.</string>
     <string name="dns_now_none_odoh">No app has looked up a name on this network yet. Watch will use Oblivious DoH.</string>
-    <!-- %1$s: the relay's operator and its countries; %2$s: the target's. -->
-    <string name="dns_now_odoh">Names now go by Oblivious DoH: through %1$s to %2$s. The first sees your address but not the names. The second sees the names but not your address.</string>
-    <string name="dns_now_odoh_tool">Names now go by Oblivious DoH through your tool: through %1$s to %2$s.</string>
+    <!-- The first sentence of the "now" line, read out when it changes; the details follow apart. -->
+    <string name="dns_now_odoh">Names now go by Oblivious DoH.</string>
+    <string name="dns_now_odoh_tool">Names now go by Oblivious DoH through your tool.</string>
     <string name="dns_now_choice">Names now go encrypted to the resolver you chose.</string>
-    <!-- %1$s: a resolver's name. -->
-    <string name="dns_now_down">Oblivious DoH does not answer on this network. Names now go encrypted to %1$s. It sees your address and the names.</string>
+    <string name="dns_now_down_odoh">Oblivious DoH does not answer on this network.</string>
+    <string name="dns_now_choice_down">Your resolver does not answer on this network.</string>
     <string name="dns_now_fallback">No encrypted way answers on this network. For now, names go to this network\'s resolver without encryption. The network can see them. Turn on strict to stop this.</string>
     <string name="dns_now_failing">No encrypted way answers on this network. Strict is on, so apps that go directly cannot look up names until one does.</string>
-    <!-- %1$s: an operator; %2$s: its countries, as two-letter codes. -->
+    <string name="dns_now_failing_only">Your resolver does not answer on this network. \"Only this resolver\" is on, so apps that go directly cannot look up names until it does.</string>
+    <!-- %1$s: the relay's operator and its countries; %2$s: the target's. -->
+    <string name="dns_now_pair">Relay: %1$s. Target: %2$s. The relay sees your address but not the names. The target sees the names but not your address.</string>
+    <!-- %1$s: a resolver's operator. -->
+    <string name="dns_now_to">Names now go encrypted to %1$s. It sees your address and the names.</string>
+    <!-- %1$s: an operator; %2$s: its countries, by commas. -->
     <string name="dns_party">%1$s (%2$s)</string>
     <!-- %1$s: the host name of Android's Private DNS provider. -->
     <string name="dns_private_dns_strict">Android\'s Private DNS sends every app\'s names to %1$s, past Watch. Your choice here applies only while Private DNS is off or on automatic.</string>
     <string name="dns_choice">Where names go:</string>
     <string name="dns_odoh">Oblivious DoH (recommended)</string>
-    <string name="dns_odoh_detail">Two companies in different countries each see half: one your address, the other the names.</string>
-    <!-- %1$s: the service's name; %2$s: DoH or DoT. -->
+    <string name="dns_odoh_detail">Two operators in different countries each see half: one sees your address, the other sees the names.</string>
+    <!-- A resolver's row: %1$s its operator; %2$s one of the service's names below. -->
     <string name="dns_preset">%1$s, %2$s</string>
-    <!-- A one-line card: %1$s operator, %2$s country code, %3$s what it says it logs, %4$s audit, %5$s what it blocks. -->
-    <string name="dns_preset_card">%1$s, %2$s. Logs: %3$s. Checked by: %4$s. Blocks: %5$s.</string>
-    <string name="dns_preset_no_audit">no one</string>
+    <string name="dns_service_blocking">blocks harmful sites</string>
+    <string name="dns_service_unfiltered">unfiltered</string>
+    <string name="dns_service_standard">standard</string>
+    <string name="dns_protocol_doh">Over HTTPS (DoH)</string>
+    <string name="dns_protocol_dot">Over TLS (DoT)</string>
+    <!-- A resolver's card: %1$s the country of its operator's seat; %2$s, %3$s, %4$s sentences below. -->
+    <string name="dns_preset_card">Based in %1$s. %2$s %3$s %4$s</string>
+    <string name="dns_logs_totals">It keeps no addresses, only totals.</string>
+    <string name="dns_logs_names_day">It keeps the names for a day, without addresses, and totals.</string>
+    <string name="dns_logs_day">It keeps logs with your address for about a day.</string>
+    <string name="dns_logs_months">It keeps logs with part of your address hidden for up to six months.</string>
+    <string name="dns_logs_none">It says it keeps no logs.</string>
+    <string name="dns_blocks_none">It blocks nothing.</string>
+    <string name="dns_blocks_harm">It blocks harmful sites.</string>
+    <string name="dns_blocks_court">It blocks what courts order.</string>
+    <string name="dns_audited_no">No one outside has checked this.</string>
+    <string name="dns_audited_firm">An accounting firm checked these claims.</string>
+    <string name="dns_policy">Its privacy policy</string>
+    <string name="dns_choice_fails">If it does not answer, Watch uses Oblivious DoH, then the other encrypted ways. Turn on \"Only this resolver\" to stop that.</string>
+    <string name="dns_only">Only this resolver</string>
+    <string name="dns_only_cost">If your resolver does not answer, apps that go directly cannot look up names.</string>
     <string name="dns_custom">Your own resolver</string>
     <string name="dns_custom_detail">A DoH address (https://…) or a DoT server name, and its IP addresses.</string>
     <string name="dns_custom_at">DoH address or DoT server</string>
     <string name="dns_custom_addresses">IP addresses, by commas</string>
-    <string name="dns_custom_use">Use it</string>
+    <string name="dns_custom_use">Test it and use it</string>
     <string name="dns_custom_refused">Give a DoH address that starts with https://, or a DoT server name, and at least one IP address. Watch never looks up a resolver\'s name without encryption.</string>
+    <string name="dns_custom_testing">Asking your resolver for a name…</string>
+    <!-- %1$d: milliseconds. -->
+    <string name="dns_custom_answered">Your resolver answered in %1$d ms. Watch uses it now.</string>
+    <string name="dns_custom_failed">Your resolver did not answer, so Watch did not save it. Check its address and its IP addresses.</string>
+    <string name="dns_custom_tampered">Your resolver\'s certificate did not check, or the connection was cut. Watch did not save it.</string>
     <string name="dns_strict">Strict: never the network\'s resolver</string>
     <string name="dns_strict_cost">If no encrypted way answers, apps that go directly cannot look up names. Use it where the network is censored or watched.</string>
     <string name="dns_local_names">Local names, like your printer or router, still go to your network\'s own resolver.</string>
-    <string name="dns_strict_limits">Strict cannot cover two things. Android checks the connection by itself, past Watch. And some apps use their own encrypted DNS.</string>
+    <!-- %1$s: the network's own domains, by commas. -->
+    <string name="dns_search">This network names its own domains: %1$s. For a name under them, Watch asks the encrypted way first. It asks this network only when the internet does not know the name.</string>
+    <string name="dns_strict_limits">Strict does not cover everything. Android checks the connection by itself, past Watch. Some apps use their own encrypted DNS. The apps you left out of Watch are not covered. And while Watch restarts, or if Android stops it and Always-on VPN is off, apps use the network\'s resolver.</string>
     <string name="dns_notify">Notify me while names go to the network\'s resolver</string>
-    <string name="dns_pairs">Oblivious DoH pairs, each of two different companies and countries:</string>
+    <string name="dns_notify_refused">Android does not let Watch show notifications, so this stays off. Allow them for Watch in Android\'s settings, then turn this on again.</string>
+    <string name="dns_pairs">Oblivious DoH pairs, each of two different operators and countries:</string>
+    <!-- %1$s: the relay's operator and its countries; %2$s: the target's. -->
+    <string name="dns_pair">Relay: %1$s. Target: %2$s.</string>
     <string name="dns_pairs_change">Change pairs</string>
     <string name="dns_pairs_default">Use the default pairs</string>
     <string name="dns_pairs_done">Done</string>
-    <string name="dns_not_kept">Watch keeps no list of the names apps look up.</string>
+    <string name="dns_not_kept">Watch keeps no list of the names apps look up, apart from the connection log, if you keep one. It keeps answers in memory for up to a day, and forgets them when the network changes.</string>
     <string name="dns_fallback_channel">Names without encryption</string>
     <string name="dns_fallback_title">Names go to the network\'s resolver</string>
     <string name="dns_fallback_text">No encrypted way answers on this network, so apps that go directly use its resolver for now. Open Watch to turn on strict.</string>

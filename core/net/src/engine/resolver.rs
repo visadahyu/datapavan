@@ -253,16 +253,13 @@ impl DnsConfig {
         config
     }
 
-    /// The ways by their ids, in order: the relays, the targets, the presets and the pairs. Steps are indices
-    /// into these, so a hold or a key holds only while they stay.
+    /// The ways by their ids, in order: the relays, the targets and the presets. Keys and steps name them by
+    /// their places, so what was learned of them holds only while these stay.
     fn ways(&self) -> Vec<&str> {
         let c = &self.catalogue;
         let mut ways: Vec<&str> = c.relays.iter().map(|r| r.id.as_str()).collect();
         ways.extend(c.targets.iter().map(|t| t.id.as_str()));
         ways.extend(c.presets.iter().map(|p| p.id.as_str()));
-        for &(r, t) in &self.pairs {
-            ways.extend([c.relays[r].id.as_str(), c.targets[t].id.as_str()]);
-        }
         ways
     }
 
@@ -441,31 +438,35 @@ impl Resolver {
         lock(&self.config).clone()
     }
 
-    /// Sets the resolver anew: what was learned and kept goes.
-    /// Watch set the resolver anew. When the ways are the same (the same pairs, targets and presets) and only
-    /// strict, the choice or "only" changed, what the resolver learned on this network stays: its holds, the
-    /// keys, the answers (W8's fix round, review R-m1); a new choice starts afresh, and its old answers go.
+    /// Watch set the resolver anew. With the same ways (relays, targets, presets), what the resolver learned on
+    /// this network stays (W8's fix round, review R-m1): the targets' keys and the answers always; the holds too
+    /// when the pairs are the same, since steps name pairs by their place; a new choice forgets the old choice's
+    /// hold and its answers. Other ways start everything afresh.
     pub(super) fn set(&self, config: Option<Arc<DnsConfig>>) {
         if let Some((low, high)) = config.as_ref().and_then(|c| c.refresh) {
             self.set_refresh_delay(low, high);
         }
         let mut kept = lock(&self.config);
-        let (same, chosen) = match (kept.as_ref(), config.as_ref()) {
-            (Some(old), Some(new)) => (old.ways() == new.ways(), old.choice == new.choice),
-            _ => (false, false),
+        let (ways, pairs, chosen) = match (kept.as_ref(), config.as_ref()) {
+            (Some(old), Some(new)) => (
+                old.ways() == new.ways(),
+                old.pairs == new.pairs,
+                old.choice == new.choice,
+            ),
+            _ => (false, false, false),
         };
         *kept = config;
         drop(kept);
-        if same {
-            if !chosen {
-                lock(&self.ladder).forget(Step::Choice);
-                lock(&self.cache).clear();
-            }
-            return;
+        if !ways {
+            lock(&self.keys).clear();
+            lock(&self.cache).clear();
         }
-        lock(&self.ladder).reset();
-        lock(&self.keys).clear();
-        lock(&self.cache).clear();
+        if !ways || !pairs {
+            lock(&self.ladder).reset();
+        } else if !chosen {
+            lock(&self.ladder).forget(Step::Choice);
+            lock(&self.cache).clear();
+        }
     }
 
     pub(super) fn get(&self) -> Option<Arc<DnsConfig>> {
@@ -1837,8 +1838,18 @@ mod tests {
             shared.resolver.status().lines().next().map(str::to_owned),
             way
         );
+        let key = shared
+            .resolver
+            .config()
+            .and_then(|c| c.catalogue.targets[0].key.clone());
+        lock(&shared.resolver.keys).extend(key.map(|k| (0, k)));
         shared.resolver.set(Some(lab_config("pairs rb>ta")));
         assert_eq!(held(&shared), 0, "other pairs: afresh");
+        assert_eq!(
+            lock(&shared.resolver.keys).len(),
+            1,
+            "the keys fetched stay"
+        );
         assert_eq!(
             config("refresh 1 3").refresh,
             Some((Duration::from_secs(1), Duration::from_secs(3)))

@@ -210,22 +210,13 @@ pub enum Protocol {
 pub struct Preset {
     /// Its id in the dataset.
     pub id: String,
-    /// The service's name.
-    pub name: String,
     /// Its operator.
     pub operator: String,
-    /// The operator's seat.
-    pub country: String,
     /// Where and how it is reached.
     pub endpoint: Endpoint,
-    /// What the operator says it logs.
-    pub logging: String,
-    /// Who examined that, and when; empty for no one.
-    pub audit: String,
-    /// What it filters; `none` for nothing.
+    /// What it filters; `none` for nothing. The card's other words are the table's, read by Watch's Kotlin side
+    /// (W8's fix round, review R-M2).
     pub filtering: String,
-    /// Its privacy policy's URL.
-    pub policy: String,
 }
 
 /// Everything the datasets hold.
@@ -427,17 +418,17 @@ fn read_presets(table: &str) -> Vec<Preset> {
     for row in rows(table) {
         let [
             id,
-            name,
+            _name,
             operator,
-            country,
+            _country,
             protocol,
             endpoint,
             v4,
             v6,
-            logging,
-            audit,
+            _logging,
+            _audit,
             filtering,
-            policy,
+            _policy,
             pin,
             ..,
         ] = row[..]
@@ -459,19 +450,14 @@ fn read_presets(table: &str) -> Vec<Preset> {
         }
         presets.push(Preset {
             id: id.to_owned(),
-            name: name.to_owned(),
             operator: operator.to_owned(),
-            country: country.to_owned(),
             endpoint: Endpoint {
                 protocol,
                 url,
                 addresses: addresses(v4, v6),
                 pins: pins(pin),
             },
-            logging: text(logging),
-            audit: text(audit),
             filtering: text(filtering),
-            policy: text(policy),
         });
     }
     presets

@@ -27,7 +27,6 @@ import javax.net.ssl.SSLSocket
 internal class DotClient(
     private val socketFor: (Exchanger.Through?) -> Socket,
     private val sslFor: () -> SSLContext,
-    private val pinsFor: (String) -> List<String>,
     private val timers: ScheduledExecutorService,
     private val work: ExecutorService,
     private val replies: (Long, Int, ByteArray?) -> Unit,
@@ -35,13 +34,17 @@ internal class DotClient(
     private val connections = ConcurrentHashMap<String, Connection>()
     private val random = SecureRandom()
 
-    /** Asks [query] of `server:port` at [addresses], directly or through [through]; the reply goes to [Engine.nativeExchanged]. */
-    fun ask(ticket: Long, server: String, port: Int, addresses: List<InetAddress>, through: Exchanger.Through?, query: ByteArray) {
+    /**
+     * Asks [query] of `server:port` at [addresses], with [pins] (none: Android's roots alone), directly or through
+     * [through]; the reply goes to [Engine.nativeExchanged]. A connection serves only exchanges with the same addresses
+     * and pins (W8's fix round: a resolver of the user's on a preset's host never takes that preset's pins away).
+     */
+    fun ask(ticket: Long, server: String, port: Int, addresses: List<InetAddress>, pins: List<String>, through: Exchanger.Through?, query: ByteArray) {
         if (query.size < 12) return reply(ticket, Exchanger.REFUSED, null)
         work.execute {
-            val key = "$server $port ${through?.proxy}"
+            val key = "$server $port ${through?.proxy} $addresses $pins"
             val connection = try {
-                connections[key]?.takeIf { it.open } ?: open(server, port, addresses, through).also { connections[key] = it }
+                connections[key]?.takeIf { it.open } ?: open(server, port, addresses, pins, through).also { connections[key] = it }
             } catch (e: IOException) {
                 return@execute reply(ticket, Exchanger.outcomeOf(e), null)
             }
@@ -55,7 +58,7 @@ internal class DotClient(
         connections.clear()
     }
 
-    private fun open(server: String, port: Int, addresses: List<InetAddress>, through: Exchanger.Through?): Connection {
+    private fun open(server: String, port: Int, addresses: List<InetAddress>, pins: List<String>, through: Exchanger.Through?): Connection {
         var last: IOException = IOException("no address in the data pack")
         for (address in addresses) {
             val raw = socketFor(through)
@@ -67,7 +70,7 @@ internal class DotClient(
                 tls.soTimeout = 0
                 tls.startHandshake()
                 try {
-                    SystemTrust.checkPins(tls.session.peerCertificates.filterIsInstance<X509Certificate>(), pinsFor(server))
+                    SystemTrust.checkPins(tls.session.peerCertificates.filterIsInstance<X509Certificate>(), pins)
                 } catch (e: java.security.cert.CertificateException) {
                     throw SSLPeerUnverifiedException(e.message)
                 }

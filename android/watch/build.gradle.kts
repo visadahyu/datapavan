@@ -64,6 +64,20 @@ dependencies {
     // User-Agent, no Accept-Encoding, no cookies, no cache (dns/Exchanger.kt).
     implementation(libs.okhttp)
     testImplementation(libs.junit)
+    // The JVM tests of DoH and Oblivious DoH over OkHttp (W8's fix round, review R-M4): OkHttp's own test server,
+    // with TLS and HTTP/2, the same version, in tests only.
+    testImplementation(libs.okhttp.mockwebserver)
+}
+
+// OkHttp's Android build starts its Android platform, which the JVM of the unit tests lacks: they get OkHttp's JVM
+// build of the same version instead, on the JDK's TLS (W8's fix round, review R-M4). The app keeps the Android build.
+configurations.configureEach {
+    if (name.endsWith("UnitTestRuntimeClasspath") || name.endsWith("UnitTestCompileClasspath")) {
+        resolutionStrategy.dependencySubstitution {
+            substitute(module("com.squareup.okhttp3:okhttp-android"))
+                .using(module("com.squareup.okhttp3:okhttp-jvm:${libs.versions.okhttp.get()}"))
+        }
+    }
 }
 
 /**
