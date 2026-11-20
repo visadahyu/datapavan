@@ -119,6 +119,11 @@ Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED
 - **Memory safety:** if the Rust stack is chosen (ADR 0012), every parser (IP, TCP, UDP, DNS, TLS, QUIC) lives in `datapavan-engine`, where `unsafe` is forbidden, and is fuzzed with `cargo fuzz`. With gVisor, the Go stack handles IP and TCP, and the higher-level parsers (DNS, TLS, QUIC) stay in Rust.
 - **Size:** Watch's native library, stripped as Advanced's release APK ships it, stays within 2 MB per ABI, held by a gate in `scripts/check.sh android` (the maintainer, 2026-11-19, after W7's spike: [ADR 0035](decisions/0035-wireguard-upstream.md), question 3). The earlier target, less than 1 MB, was set before the engine was built; nothing held it, and the library grew to 1.38 MB on arm64 (1.22 on armv7, 1.59 on x86_64) before WireGuard. WireGuard's core adds about 0.13 to 0.21 MB.
 - **Samsung and other OEM battery managers:** a health check in the app, plus per-vendor onboarding guides.
+- **Interoperation:** Watch's WireGuard is checked through its own engine against both reference implementations,
+  the Linux kernel's WireGuard and wireguard-go, never against its own core alone: `scripts/check.sh wglab` and the
+  emulator's `wireguard` shard, on CI where the WireGuard code or its checks change and every week, the weekly run
+  with a rekey, keepalives and a cookie reply under load; on CI a check that cannot find its peer fails
+  ([ADR 0035](decisions/0035-wireguard-upstream.md), "How it is built (W7, part 3a)").
 
 ## The spike
 

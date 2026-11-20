@@ -349,7 +349,9 @@ field's best:
   the A40 personally; no agent sees or moves its private key.
 - **Tests without a provider:** a WireGuard peer of the reference implementation (the Linux kernel's or
   wireguard-go) in a container on the development machine and on CI, so that every run tests interoperation with
-  WireGuard itself, not GotaTun with GotaTun.
+  WireGuard itself, not GotaTun with GotaTun. *Built in part 3a (2026-11-20): peers of both, every run that touches
+  WireGuard and every week on CI, every run of `scripts/check.sh wglab` here; below, "How it is built (W7, part
+  3a)".*
 
 - **Routes, decided before W7 was built (the maintainer, 2026-11-19):** each app has one route: directly,
   through the user's tool (W6), or through one WireGuard configuration; the tool's chain and WireGuard run at once,
@@ -543,7 +545,8 @@ provider. What was chosen where the decision left room, and why:
   Android may ask in plain DNS when the server's DNS over TLS fails, after saying it is active, so an endpoint's
   name the state calls encrypted may have gone out plain then; strict mode never does. A thread asking
   Android's resolver past its 10 s ends when Android answers, its answer unread. A cookie reply under load, an
-  IPv6 outer address and wireguard-go as the peer are not in the lab (the spike's list).
+  IPv6 outer address and wireguard-go as the peer are not in the lab (the spike's list). *All three are in the lab
+  since part 3a (2026-11-20), below.*
 
 **The maintainer's answers (2026-11-19, after the reviews of part 1), and how they are built:**
 
@@ -939,6 +942,117 @@ lost state never read as empty while it exists (2 reverts, killed); on the emula
 names its apps, and step 8 when the marker is never made. `:watch` has 179 JVM tests. Watch's native library
 grew to 1,706,336, 1,464,360 and 1,979,968 bytes on arm64, armv7 and x86_64, within the 2 MB gate. `scripts/check.sh rust`, `android`, `data` and `wglab` pass again, and the watch shard
 (`scripts/emulator-shards.sh --alone watch`) passed whole with steps 3c and 8.
+
+## How it is built (W7, part 3a, 2026-11-20)
+
+Part 3a makes "Tests without a provider" hold on CI, where the runner had no module loaded and both WireGuard checks
+skipped: the engine's tunnels against two reference implementations, on every run that touches WireGuard and every
+week. The A40's measurements and the check with a provider are part 3b. What was chosen, and why:
+
+- **Two references, every time.** `scripts/check.sh wglab` (`scripts/wglab.sh`) runs the cargo lab
+  (`core/net/tests/wglab.rs`) against the Linux kernel's WireGuard and against wireguard-go in turn, two peers of
+  each in the Compose project `datapavan-wglab`. wireguard-go is a second code base by WireGuard's authors, with its
+  own timers, cookie handling and handshake races (its fixes of 2026-10-06, "reject response consumption after
+  intermediate initiation", and of 2026-10-24 show them recent), and it is what WireGuard's own Android app and
+  Proton's apps run; a fallback for a runner without the module would test it only there. It runs from the same image
+  on the container's TUN device (`WGLAB_IMPL=go`), so the services behind both are the same. On CI the kernel's peer
+  is the runner's own kernel, loaded with `sudo modprobe wireguard`, which works on GitHub's `ubuntu-24.04` image
+  (Linux 7.0.0-1014-aws, module 1.0.0, on 2026-11-20); without it the job fails with the kernel's version, and no package is sought. The emulator checks
+  keep the kernel's two peers: their path through the emulator's 10.0.2.2 tests Watch on Android, not the peer.
+- **What wireguard-go found.** Against wireguard-go at its last commit, b3bc704 of 2026-10-24, the lab's server at an
+  IPv6 address failed in 4 of 6 runs once the same peer had served an IPv4 client before: a capture inside the peer
+  showed it answer the engine's IPv6 initiation at `fd5e:3a91::` instead of `fd5e:3a91:c2d4:77::1`. Its
+  `StdNetBind.Send` takes the destination from a pooled `net.UDPAddr` and copied an IPv6 address into its IP before
+  resizing it, so after an IPv4 send had cut it to four bytes, only four were copied. A fix is open upstream since
+  2025-12-20 ([pull request 135](https://github.com/WireGuard/wireguard-go/pull/135)); the lab builds wireguard-go
+  with it, as `spikes/wireguard-core/peer/wireguard-go-ipv6-send.patch`, and the same runs then passed 8 of 8. The
+  fault is the server's, not Watch's: a provider whose server runs wireguard-go with both IPv4 and IPv6 clients
+  would answer some IPv6 handshakes at a wrong address, and Watch would then say the server does not answer and try
+  again, as it does for any server that does not answer. The patch leaves the protocol code as upstream has it.
+- **Nothing unpinned.** The image's base moved from Alpine to Debian (`trixie-20261104-slim`, by digest): Alpine
+  drops a package's older versions from its repository, so its versions could only be recorded, not pinned. Debian's
+  image names in its own sources the moment of snapshot.debian.org its packages came from; apt reads that snapshot
+  alone, and `wireguard-tools`, `iproute2` and `python3` are installed at the versions written in the Dockerfile.
+  wireguard-go is built in Go's own image (`golang:1.27.4-trixie`, by digest, for its git, which applies the patch)
+  from its module at the pinned commit, checked against its `h1:` checksum, its dependencies against its `go.sum`,
+  with `-trimpath`. Every fetch inside the build is tried three times; on CI the image is built with Buildx from the
+  Actions cache, so a run whose Dockerfile did not change fetches nothing but the base images' manifests, and the
+  build itself is tried twice, a minute apart. Each run writes the versions: the kernel's release and module, and
+  wireguard-go's commit, checksum, patch and Go.
+- **More through the engine.** A server at an IPv6 address (the project's network has a unique local IPv6 prefix of
+  its own), carrying TCP, UDP and ICMP of both versions, the peer holding the engine's socket at an IPv6 address. A
+  wrong preshared key (the peer's responses refused, `aead`) and the second peer's public key given for the first
+  (no answer; the tunnel says its server does not answer) make no session at either end, the peer recording no
+  handshake, where the same clients with the right keys make theirs. The lab runs six tests against each reference,
+  `scripts/wglab.sh`'s peer-side checks after them, and fails unless cargo ran every test it lists with none ignored,
+  since cargo says "ok" for a run of none. Both references take 52 s here, the image built.
+- **What takes minutes, weekly.** With `WGLAB_LONG=1`, against both references at once through one engine: the
+  engine rekeyed 120.3 s after the first handshake with each, every echo of 61 rounds answered across it, and each
+  peer's own handshake moved on by 120 to 121 s; with `PersistentKeepalive = 5` the engine's keepalives reached each
+  peer 4.9 to 5.0 s apart in 21 s of silence, and a peer's every 3 s reached the engine, the longest silence 4.1 s,
+  each side's keepalive starting the other's period anew, so the two directions use two tunnels. A cookie reply under
+  load: the flood, from as many threads as half the machine's cores, sends a burst every 0.1 s of initiations with
+  a valid MAC for a key the peer does not know, each burst led by a probe whose sender index no other carries; a
+  probe answered with a cookie reply shows the peer under load as its burst came. The kernel counts itself under
+  load from 512 queued handshakes, wireguard-go from 128, each for a second after; under load a peer answers fast,
+  so the bursts grow until the probes are answered, up to 3,600 and 900, below where either queue would drop the
+  engine's own initiation. Here the kernel's peer still lapsed out of load for a moment now and then (3 to 7 of
+  about 100 probes), so the check asks of the probes of the bursts on either side of each of the engine's
+  initiations: nothing between bursts can count the peer under load again, so both answered means under load at
+  that moment, and an attempt with a lapse next to either is made again, three times at most. In 4 runs of 4 the
+  first attempt showed it against both: a cookie reply answered the engine's first initiation, and its second,
+  carrying the cookie's MAC, made the session 6.0 s in (the core's retry after 5 s, on the one-second tick). The
+  kernel keeps one measure of load for the whole machine, so on a development machine with a WireGuard interface of
+  its own, that interface's handshakes take a cookie's round trip for the check's seconds. The long checks took
+  161 s here.
+- **Where they run.** The scope rule (`scripts/ci-scope.sh`) gains a flag beside its tiers: the WireGuard checks run
+  unless the commit differs from the nearest earlier commit whose run passed them only in paths they do not read
+  (the engine and its bridge with their build, the apps, the peers, the checks and what they share, and CI). A run
+  passed them where the build and the new `wireguard` shard both passed: the shard runs only where the build ran the
+  cargo lab. The build job runs `scripts/check.sh wglab` after its gates; `scripts/verify-wireguard.sh` and
+  `verify-wireguard-import.sh` moved from the watch shard to the wireguard shard, measured in the emulator's
+  shards below. main moves only by fast-forward, so its scope never runs them; a weekly run instead (Mondays at
+  03:17 UTC, or started by hand) builds Advanced's debug APK alone and runs the cargo lab with its long checks and
+  the wireguard shard whatever changed, which also catches the runner's kernel changing without a commit.
+- **A skip on CI is a failure.** `WGLAB_REQUIRED=1`, set by `ci.yml` for the build's lab and the wireguard shard
+  alone, not read from `GITHUB_ACTIONS`: without Docker, an answering Docker or the module, both emulator checks
+  fail with the reason and the kernel's version; without it the skip and its line stay, as on a developer's
+  machine. Under the switch the shard also fails a check that ended without its last line. Each new step has a time
+  limit, and the peers' logs are kept as an artifact when a step fails.
+- **The emulator checks' first runs on CI.** `verify-wireguard.sh` passed whole on CI's emulator at once. The import
+  check failed in both first runs at a way to choose: CI's emulator (the `pixel_7` profile) has Android's gesture bar
+  at the bottom edge, which takes a tap there, while the local AVD (`hw.mainKeys=yes`) has no on-screen bar at all;
+  an emulator made like CI's in a scratch AVD home failed the same way at another button. The check now moves an
+  element in the screen's lowest eighth up before tapping it, as `adb-ui.sh`'s `tap_text` already did, and says on
+  failure where its last tap landed. On that emulator the decoder's isolated process then showed as `u0ai9000`:
+  Android 15's `UserHandle.formatUid` writes the first isolated UID since boot that way, so the check reads both
+  forms and still refuses an app's own UID. The check then passed whole on it, and on CI, in the push run 44763295534
+  and the weekly run 44763320490 of the same commit, every job of both green. The local shards' AVD could gain CI's
+  gesture bar (`qemu.hw.mainkeys=0`, and CI's height of 2,400 pixels, which the AVD's own 640 caps at 1,920): a
+  proposal, not done here.
+- **Minutes.** Before (watch-w7b at c1ab922, run 44739358456): the build 1,000 s; the shards watch 1,134 s, audit
+  1,189 s and screens 979 s, the two WireGuard checks skipping inside watch in seconds. Where the WireGuard checks
+  run (run 44753117841): the build 1,231 s, of which its WireGuard steps took 74 s (the image from the cache, the
+  lab 49 s for both references) and the rest is the same gates on a slower runner; watch 1,288 s, audit 1,183 s and
+  screens 953 s, within the runners' spread; and the wireguard shard, a fourth emulator beside the others, 850 s
+  in run 44763295534 (the build 1,093 s there), so that the run's length is still that of the watch or audit shard. Where they do not run, nothing is added. The
+  weekly run (44754999855): Advanced's debug APK 231 s, the image built without a cache 48 s, the lab with its long
+  checks 249 s (the long ones 170 s), the build job 695 s in all, then the wireguard shard; with the image from the
+  cache (run 44763320490), the build 573 s and the shard 1,021 s, about 27 runner minutes a week. Here: the lab
+  52 s, the long checks 161 s, the wireguard shard 671 s with its emulator's boot.
+- **Shown able to fail.** The negative check with its wrong keys made right, the preshared key or the peer's, fails
+  ("an answer came through a tunnel with a wrong key"); the cookie check, with the engine changed for the run to
+  drop the peer's cookie replies, fails ("the engine's echo was not answered under load"); the guard, given a filter
+  no test matches, fails where cargo says "ok"; both emulator checks, with `WGLAB_REQUIRED=1` and a Docker that does
+  not answer, fail with the reason and the kernel's version, and without the switch skip as before; and the server
+  at an IPv6 address failed against wireguard-go without its fix. The local wireguard shard (Android 15 image
+  dp-api35-ci) passed whole against the new image's kernel peers in 671 s, boot included.
+- **Accepted limits.** The emulator's path to the peers stays IPv4, through 10.0.2.2. A branch from a commit before
+  part 3a that touches no WireGuard path has no earlier pass to compare with until a run passes the checks; the
+  rule then runs them, as for a history with no earlier pass, and looks back over the last 25 commits CI ran. The
+  peers' `wg` is Debian's `wireguard-tools` 1.0.20210914, older than Alpine's: it only configures the peers, which
+  both references read through the same interface. wireguard-go carries one fix that is not upstream yet; the
+  patch goes when upstream takes it, or a later commit fixes it otherwise.
 
 ## Sources
 
