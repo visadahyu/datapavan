@@ -234,8 +234,10 @@ were tightened after it), and the notification's permission on the emulator. Wha
   Python oracle, `odoh-rs` (now in tests only) and the fuzz target. Measured, stripped, against the gate of
   2,097,152 bytes (arm64 / armv7 / x86_64): before the round 1,836,584 / 1,557,176 / 2,136,152; with the own HPKE
   1,817,416 / 1,539,760 / 2,106,376; with the round's other fixes 1,821,304 / 1,542,192 / 2,109,944; with the
-  presets' words and the bridge's texts moved to Kotlin, no cost in speed, 1,819,448 / 1,540,784 / 2,106,872.
-  **x86_64 is 9,720 bytes over; the work stopped there, as the brief says, and the gate is unchanged.**
+  presets' words and the bridge's texts moved to Kotlin, no cost in speed, 1,819,448 / 1,540,784 / 2,106,872. In
+  Advanced's release APK, as `scripts/check.sh android` reads the gate, after the rebase on main: 1,817,800 /
+  1,539,280 / 2,105,352. **x86_64 is 8,200 bytes over the gate there; the work stopped, as the brief says, and the
+  gate is unchanged.**
 
 **Release gate for the maintainer:** each volunteer operator whose endpoint is a default (Numa, crypto.sx,
 dnscry.pt) is asked before a release ships it; Cloudflare's ODoH page states no logging policy of its own.
