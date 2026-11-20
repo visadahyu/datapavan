@@ -4,7 +4,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
-import android.os.Bundle
 import android.os.DeadObjectException
 import android.os.IBinder
 import android.os.Looper
@@ -35,9 +34,12 @@ internal class Parsers(context: Context) : AutoCloseable {
         return loaded
     }
 
-    /** Scans the APK at [path] (ApkScan has the result's keys). */
-    fun scanApk(path: String): Bundle = ParcelFileDescriptor.open(java.io.File(path), ParcelFileDescriptor.MODE_READ_ONLY).use { apk ->
-        call { it.scanApk(apk) }
+    /** Scans the APK at [path]: null when it could not be read ([ApkScan.decode]). */
+    fun scanApk(path: String): ApkScan.Result? = ParcelFileDescriptor.open(java.io.File(path), ParcelFileDescriptor.MODE_READ_ONLY).use { apk ->
+        call {
+            val libraries = mutableListOf<String>()
+            ApkScan.decode(it.scanApk(apk, libraries), libraries)
+        }
     }
 
     /** The fields of a KeyDescription extension (NativeCore.parseAttestation), or null when it is malformed. */

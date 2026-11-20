@@ -169,11 +169,10 @@ class TrackerScanner(private val context: Context) {
         val apks = listOfNotNull(info.sourceDir) + info.splitSourceDirs.orEmpty()
         return try {
             for (apk in apks) {
-                val scan = parsers.scanApk(apk)
-                if (scan.getBoolean(ApkScan.UNREADABLE)) return UNREADABLE
-                embedded += sdkList.nativeMatches(scan.getStringArrayList(ApkScan.LIBRARIES).orEmpty().asSequence())
-                embedded += scan.getIntArray(ApkScan.EMBEDDED)?.toList().orEmpty()
-                referenced += scan.getIntArray(ApkScan.REFERENCED)?.toList().orEmpty()
+                val scan = parsers.scanApk(apk) ?: return UNREADABLE
+                embedded += sdkList.nativeMatches(scan.libraries.asSequence())
+                embedded += scan.embedded.toList()
+                referenced += scan.referenced.toList()
             }
             AppTrackers(embedded.toList(), (referenced - embedded).toList())
         } catch (_: IOException) {

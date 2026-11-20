@@ -2,7 +2,6 @@ package org.visadahyu.datapavan.audit
 
 import android.app.Service
 import android.content.Intent
-import android.os.Bundle
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.system.ErrnoException
@@ -31,7 +30,11 @@ class ParserService : Service() {
             false
         }
 
-        override fun scanApk(apk: ParcelFileDescriptor): Bundle = ApkScan.scan(apk)
+        override fun scanApk(apk: ParcelFileDescriptor, libraries: MutableList<String>): IntArray? {
+            val scan = ApkScan.scan(apk) ?: return null
+            libraries.addAll(scan.libraries)
+            return ApkScan.encode(scan)
+        }
 
         override fun parseAttestation(extension: ByteArray): ByteArray? = try {
             NativeCore.parseAttestation(extension)
@@ -41,35 +44,47 @@ class ParserService : Service() {
     }
 }
 
-/** One APK's scan, in the parsers' process: what [scan] returns, under these keys. */
+/**
+ * One APK's scan, in the parsers' process ([scan]), and as it crosses the binder: primitives only (W7, part 2, fix
+ * round, security review m1), the tracker ids as [encode] writes them and the libraries' names as a list of strings,
+ * which the audit reads back with [decode].
+ */
 internal object ApkScan {
-    /** Whether the APK could not be read; then the other keys are absent. */
-    const val UNREADABLE = "unreadable"
+    /**
+     * What a scan found: the tracker ids whose code the APK contains ([embedded]), those its code only refers to
+     * ([referenced]), and the names of its entries under lib/, for the native-library signatures
+     * (SdkList.nativeMatches).
+     */
+    class Result(val embedded: IntArray, val referenced: IntArray, val libraries: List<String>)
 
-    /** The tracker ids whose code the APK contains, as an IntArray. */
-    const val EMBEDDED = "embedded"
+    /** The ids as they cross the binder: the count of embedded ids, those ids, then the referenced ones. */
+    fun encode(scan: Result): IntArray = intArrayOf(scan.embedded.size) + scan.embedded + scan.referenced
 
-    /** The tracker ids its code only refers to, as an IntArray. */
-    const val REFERENCED = "referenced"
+    /**
+     * What the audit reads of the parsers' answer: null, as for an APK that could not be read, where [ids] is
+     * missing or its count does not fit it, since a subverted parser may send anything.
+     */
+    fun decode(ids: IntArray?, libraries: List<String>): Result? {
+        val count = ids?.firstOrNull() ?: return null
+        if (count < 0 || count > ids.size - 1) return null
+        return Result(ids.copyOfRange(1, 1 + count), ids.copyOfRange(1 + count, ids.size), libraries)
+    }
 
-    /** The names of its entries under lib/, for the native-library signatures (SdkList.nativeMatches). */
-    const val LIBRARIES = "libraries"
-
-    /** Scans [apk] and closes it. */
-    fun scan(apk: ParcelFileDescriptor): Bundle = ParcelFileDescriptor.AutoCloseInputStream(apk).use { stream ->
+    /** Scans [apk] and closes it: null when it could not be read. */
+    fun scan(apk: ParcelFileDescriptor): Result? = ParcelFileDescriptor.AutoCloseInputStream(apk).use { stream ->
         try {
             scan(stream.channel, apk.fileDescriptor)
         } catch (_: IOException) {
-            unreadable()
+            null
         } catch (_: RuntimeException) {
             // A malformed DEX file, reported by the Rust parser.
-            unreadable()
+            null
         }
     }
 
-    private fun scan(channel: FileChannel, fd: FileDescriptor): Bundle {
-        val directory = StoredDex.directory(channel) ?: return unreadable()
-        if (!directory.complete) return unreadable()
+    private fun scan(channel: FileChannel, fd: FileDescriptor): Result? {
+        val directory = StoredDex.directory(channel) ?: return null
+        if (!directory.complete) return null
         val embedded = sortedSetOf<Int>()
         val referenced = sortedSetOf<Int>()
         for (entry in directory.dex) {
@@ -78,14 +93,8 @@ internal object ApkScan {
             embedded += found.drop(1).take(count)
             referenced += found.drop(1 + count)
         }
-        return Bundle().apply {
-            putIntArray(EMBEDDED, embedded.toIntArray())
-            putIntArray(REFERENCED, referenced.toIntArray())
-            putStringArrayList(LIBRARIES, ArrayList(directory.names.filter { it.startsWith("lib/") }))
-        }
+        return Result(embedded.toIntArray(), referenced.toIntArray(), directory.names.filter { it.startsWith("lib/") })
     }
-
-    private fun unreadable() = Bundle().apply { putBoolean(UNREADABLE, true) }
 
     /**
      * Scans a stored DEX file through a read-only mapping of its bytes in the APK, so that only the pages
