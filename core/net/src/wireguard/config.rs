@@ -304,6 +304,97 @@ impl Config {
     pub fn parse(text: &[u8]) -> Result<Self, Refusal> {
         parse(text)
     }
+
+    /// Whether the peer's `AllowedIPs` carry every destination of each IP version the configuration has an
+    /// address of: `0.0.0.0/0`, or networks that add up to it, such as `0.0.0.0/1, 128.0.0.0/1`. Where they do
+    /// not, only those destinations go through the tunnel, and the chosen apps' others are refused, never sent
+    /// directly (ADR 0035, question 9). A version the configuration has no address of is refused either way.
+    #[must_use]
+    pub fn carries_everything(&self) -> bool {
+        let whole = |v6: bool| {
+            let (width, top) = if v6 {
+                (128, u128::MAX)
+            } else {
+                (32, u128::from(u32::MAX))
+            };
+            let mut ranges: Vec<(u128, u128)> = self
+                .peer
+                .allowed_ips
+                .iter()
+                .filter(|n| n.address.is_ipv6() == v6)
+                .map(|n| {
+                    let start = match n.address {
+                        IpAddr::V4(a) => u128::from(a.to_bits()),
+                        IpAddr::V6(a) => a.to_bits(),
+                    } & mask(width, n.prefix);
+                    (start, start | (!mask(width, n.prefix) & top))
+                })
+                .collect();
+            ranges.sort_unstable();
+            // The first address not covered yet.
+            let mut next = 0u128;
+            for (start, end) in ranges {
+                if start > next {
+                    return false;
+                }
+                if end >= top {
+                    return true;
+                }
+                next = next.max(end + 1);
+            }
+            false
+        };
+        (self.addresses.v4.is_none() || whole(false))
+            && (self.addresses.v6.is_none() || whole(true))
+    }
+
+    /// What the import shows the user before anything is saved (W7, part 2): what the configuration does,
+    /// never a key. One line each, a word and its value: `endpoint HOST PORT`, `address A/P` for each address,
+    /// `dns A` for each server, `allowed A/P` for each network of `AllowedIPs`, `everything 1` or `0`
+    /// ([`Self::carries_everything`]), `preshared 1` or `0` (whether a `PresharedKey` is set), `mtu N` (the
+    /// tunnel's, given or [`DEFAULT_MTU`]), `keepalive N` where the configuration asks for keepalives, and last
+    /// `only PACKAGE` or `except PACKAGE` for each app `WireGuard`'s app named with it ([`Applications`]). The
+    /// endpoint is the user's to see on the screen; Watch's dump and log never print it.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        let mut lines = Vec::new();
+        lines.push(match &self.peer.endpoint {
+            Endpoint::Address(address) => format!("endpoint {} {}", address.ip(), address.port()),
+            Endpoint::Name(name, port) => format!("endpoint {name} {port}"),
+        });
+        if let Some((address, prefix)) = self.addresses.v4 {
+            lines.push(format!("address {address}/{prefix}"));
+        }
+        if let Some((address, prefix)) = self.addresses.v6 {
+            lines.push(format!("address {address}/{prefix}"));
+        }
+        lines.extend(self.dns.iter().map(|dns| format!("dns {dns}")));
+        lines.extend(
+            self.peer
+                .allowed_ips
+                .iter()
+                .map(|n| format!("allowed {}/{}", n.address, n.prefix)),
+        );
+        lines.push(format!(
+            "everything {}",
+            u8::from(self.carries_everything())
+        ));
+        lines.push(format!(
+            "preshared {}",
+            u8::from(self.peer.preshared_key.is_some())
+        ));
+        lines.push(format!("mtu {}", self.mtu()));
+        if let Some(seconds) = self.peer.persistent_keepalive {
+            lines.push(format!("keepalive {seconds}"));
+        }
+        let (word, names) = match &self.applications {
+            Applications::Unnamed => ("", &[][..]),
+            Applications::Only(names) => ("only", &names[..]),
+            Applications::Except(names) => ("except", &names[..]),
+        };
+        lines.extend(names.iter().map(|name| format!("{word} {name}")));
+        lines.join("\n")
+    }
 }
 
 /// Why a configuration is refused. Each names what the screens can tell the user, a line where there is
@@ -1013,6 +1104,83 @@ mod tests {
         );
         assert_eq!(config.peer.persistent_keepalive, None);
         assert!(config.peer.preshared_key.is_none());
+    }
+
+    /// W7, part 2: the import's description says what the configuration does, in a line each, and never a key.
+    #[test]
+    fn the_description_says_what_it_does_and_no_key() {
+        let text = format!(
+            "[Interface]\nPrivateKey = {PRIVATE}\nAddress = 10.64.0.2/32, fc00:bbbb::2/128\nDNS = 10.64.0.1, fc00:bbbb::1\n\
+             MTU = 1420\nIncludedApplications = org.example.one, org.example.two\n[Peer]\nPublicKey = {PUBLIC}\n\
+             PresharedKey = {PSK}\nEndpoint = vpn.Example.net:443\nAllowedIPs = 0.0.0.0/1, 128.0.0.0/1, ::/0\n\
+             PersistentKeepalive = 25\n"
+        );
+        let Ok(config) = Config::parse(text.as_bytes()) else {
+            unreachable!("refused")
+        };
+        assert_eq!(
+            config.describe(),
+            "endpoint vpn.example.net 443\naddress 10.64.0.2/32\naddress fc00:bbbb::2/128\ndns 10.64.0.1\n\
+             dns fc00:bbbb::1\nallowed 0.0.0.0/1\nallowed 128.0.0.0/1\nallowed ::/0\neverything 1\npreshared 1\n\
+             mtu 1420\nkeepalive 25\nonly org.example.one\nonly org.example.two"
+        );
+        let shown = config.describe();
+        for key in [PRIVATE, PSK] {
+            assert!(!shown.contains(key), "{shown}");
+        }
+        let Ok(proton) = Config::parse(proton_like().as_bytes()) else {
+            unreachable!("refused")
+        };
+        assert_eq!(
+            proton.describe(),
+            "endpoint 198.51.100.7 51820\naddress 10.2.0.2/32\ndns 10.2.0.1\nallowed 0.0.0.0/0\neverything 1\n\
+             preshared 0\nmtu 1280"
+        );
+    }
+
+    /// `everything` adds up the networks of each version the configuration has an address of.
+    #[test]
+    fn everything_is_every_destination_of_each_version_it_has() {
+        let with = |allowed: &str, address: &str| {
+            let text = proton_like()
+                .replace("0.0.0.0/0", allowed)
+                .replace("10.2.0.2/32", address)
+                .replace("DNS = 10.2.0.1", "DNS = 10.2.0.1, fd00::1");
+            match Config::parse(text.as_bytes()) {
+                Ok(config) => config.carries_everything(),
+                Err(refusal) => unreachable!("{refusal} for {allowed}"),
+            }
+        };
+        assert!(
+            with("0.0.0.0/0", "10.2.0.2/32"),
+            "IPv4 alone, all of it: an IPv4 configuration needs no IPv6 network"
+        );
+        assert!(with("0.0.0.0/1, 128.0.0.0/1", "10.2.0.2/32"), "two halves");
+        assert!(
+            with("128.0.0.0/1, 0.0.0.0/2, 64.0.0.0/2", "10.2.0.2/32"),
+            "out of order"
+        );
+        assert!(
+            !with("0.0.0.0/1, 192.0.0.0/2", "10.2.0.2/32"),
+            "a quarter missing"
+        );
+        assert!(
+            !with("10.0.0.0/8", "10.2.0.2/32"),
+            "a company's network alone"
+        );
+        assert!(
+            !with("0.0.0.0/0", "10.2.0.2/32, fd00::2/128"),
+            "IPv6 refused"
+        );
+        assert!(with(
+            "0.0.0.0/0, ::/1, 8000::/1",
+            "10.2.0.2/32, fd00::2/128"
+        ));
+        assert!(!with("0.0.0.0/0, ::/1", "10.2.0.2/32, fd00::2/128"));
+        assert!(
+            with("::/0, 0.0.0.0/0, 10.0.0.0/8", "fd00::2/128"),
+            "overlapping"
+        );
     }
 
     #[test]

@@ -105,8 +105,9 @@ internal object Engine {
      * Sets the WireGuard configuration [text], in wg-quick's form, as the tunnel [id] (not 0), in place of the
      * one of that number if any (W7, ADR 0035), with "Local network directly" as [localNetwork] says. The text
      * is handed over unwrapped; the caller zeroes its array after. Returns "" when it is set, else why it is
-     * refused: a code, a line and a key, never a value (core/net/src/wireguard/config.rs, `Refusal`). Kept for
-     * the engines to come while none runs, as the chain is; stopping the tunnel forgets it.
+     * refused: a code, a line and a key, never a value (core/net/src/wireguard/config.rs, `Refusal`), or
+     * `too-many` for a new one past the engine's bound of eight (`MAX_TUNNELS`, W7, part 2). Kept for the
+     * engines to come while none runs, as the chain is; stopping the tunnel forgets it.
      */
     external fun nativeTunnelSet(id: Int, text: ByteArray, localNetwork: Boolean): String
 
@@ -118,12 +119,22 @@ internal object Engine {
     external fun nativeTunnelRemove(id: Int)
 
     /**
-     * Reads the WireGuard configuration [text] without setting it, for the import (part 2): `refused WHY`, or
-     * `ok` and a line for each app it names, `only PACKAGE` (`IncludedApplications`) or `except PACKAGE`
-     * (`ExcludedApplications`), which the import offers as the choice of apps for the user to confirm. The
-     * caller zeroes its array after.
+     * Reads the WireGuard configuration [text] without setting it, for the import (W7, part 2): `refused WHY`, or
+     * `ok` and what it does, a line each and never a key (core/net's `Config::describe`): `endpoint HOST PORT`,
+     * `address A/P`, `dns A`, `allowed A/P`, `everything 1|0` (whether `AllowedIPs` carry every destination of
+     * each version it has an address of), `preshared 1|0`, `mtu N`, `keepalive N` where set, and last a line for
+     * each app it names, `only PACKAGE` (`IncludedApplications`) or `except PACKAGE` (`ExcludedApplications`),
+     * which the import offers as the choice of apps for the user to confirm ([org.visadahyu.datapavan.watch.tunnel.Import]).
+     * The endpoint is for the screen alone: the dump and the log never print it. The caller zeroes its array after.
      */
     external fun nativeTunnelParse(text: ByteArray): String
+
+    /**
+     * Puts the tunnels [ids] first, in that order (W7, part 2): the first is the default tunnel, which flows of no
+     * app and ICMP echo take while any app goes through a tunnel. The others stay after them as they were, and
+     * each keeps its session.
+     */
+    external fun nativeTunnelOrder(ids: IntArray)
 
     /**
      * Sends each app of [uids] through the tunnel at the same place in [tunnels], every other app its other way,

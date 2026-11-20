@@ -12,7 +12,7 @@ use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd, RawFd};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use datapavan_engine::datapack;
-use datapavan_net::engine::{Configured, TunnelState};
+use datapavan_net::engine::{Configured, MAX_TUNNELS, TunnelState};
 use datapavan_net::organisations::{FilePart, Organisations};
 use datapavan_net::socks5::Credentials;
 use datapavan_net::trackers::NetworkSignatures;
@@ -117,28 +117,41 @@ fn state_line(state: &TunnelState) -> String {
     )
 }
 
-/// What `nativeTunnelParse` says of a configuration: `refused WHY`, or `ok` and then a line for each app it
-/// names, `only PACKAGE` (`IncludedApplications`) or `except PACKAGE` (`ExcludedApplications`).
+/// What `nativeTunnelParse` says of a configuration: `refused WHY`, or `ok` and then its description, a line
+/// each ([`WgConfig::describe`]): what the configuration does, never a key, and last a line for each app it
+/// names, `only PACKAGE` (`IncludedApplications`) or `except PACKAGE` (`ExcludedApplications`), for the import's
+/// confirmation (W7, part 2).
 fn parse_answer(text: &[u8]) -> String {
-    use datapavan_net::wireguard::config::Applications;
     match WgConfig::parse(text) {
         Err(refusal) => format!("refused {refusal}"),
-        Ok(config) => {
-            let mut out = String::from("ok");
-            let (word, names) = match &config.applications {
-                Applications::Unnamed => ("", &Vec::new()),
-                Applications::Only(names) => ("only", names),
-                Applications::Except(names) => ("except", names),
-            };
-            for name in names {
-                out.push('\n');
-                out.push_str(word);
-                out.push(' ');
-                out.push_str(name);
-            }
-            out
+        Ok(config) => format!("ok\n{}", config.describe()),
+    }
+}
+
+/// Puts `configured` in place of the configuration of its number, or after the others: false, with nothing
+/// changed, when it is a new one and the engine's bound is reached (W7, part 2), which the screens hold the
+/// import to.
+fn place_tunnel(tunnels: &mut TunnelSetting, configured: Configured) -> bool {
+    let count = tunnels.tunnels.len();
+    match tunnels.tunnels.iter_mut().find(|t| t.id == configured.id) {
+        Some(place) => *place = configured,
+        None if count >= MAX_TUNNELS => return false,
+        None => tunnels.tunnels.push(configured),
+    }
+    true
+}
+
+/// Puts the tunnels `ids` first, in that order, the others after them as they were: the first is the default
+/// tunnel (W7, part 2). Each keeps its core and its session, since its configuration is the same.
+fn order_tunnels(tunnels: &mut TunnelSetting, ids: &[u32]) {
+    let mut ordered: Vec<Configured> = Vec::with_capacity(tunnels.tunnels.len());
+    for id in ids {
+        if let Some(at) = tunnels.tunnels.iter().position(|t| t.id == *id) {
+            ordered.push(tunnels.tunnels.remove(at));
         }
     }
+    ordered.append(&mut tunnels.tunnels);
+    tunnels.tunnels = ordered;
 }
 
 /// Reads `resolveEndpoint`'s answer: `encrypted` or `plain`, then addresses; addresses that do not read are
@@ -620,13 +633,13 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelSet
                         config: Arc::new(config),
                         local_network,
                     };
-                    set_tunnels(
-                        |tunnels| match tunnels.tunnels.iter_mut().find(|t| t.id == id) {
-                            Some(place) => *place = configured,
-                            None => tunnels.tunnels.push(configured),
-                        },
-                    );
-                    String::new()
+                    let mut answer = String::new();
+                    set_tunnels(|tunnels| {
+                        if !place_tunnel(tunnels, configured) {
+                            "too-many".clone_into(&mut answer);
+                        }
+                    });
+                    answer
                 }
             };
             JString::from_str(env, answer)
@@ -654,6 +667,30 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelPar
             JString::from_str(env, answer)
         })
         .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `Engine.nativeTunnelOrder(ids)`: puts the tunnels `ids` first, in that order, the first the default tunnel
+/// (W7, part 2): flows of no app and ICMP echo go through it while any app goes through a tunnel. The others stay
+/// after them as they were; each keeps its core and its session.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTunnelOrder(ids: IntArray)`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelOrder<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    ids: JIntArray<'caller>,
+) {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let mut values = vec![0; ids.len(env)?];
+            ids.get_region(env, 0, &mut values)?;
+            let ids: Vec<u32> = values
+                .into_iter()
+                .filter_map(|id| u32::try_from(id).ok())
+                .collect();
+            set_tunnels(|tunnels| order_tunnels(tunnels, &ids));
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>();
 }
 
 /// `Engine.nativeTunnelRemove(id)`: removes the configuration of the tunnel `id` (W7). The apps routed to it
@@ -1310,6 +1347,57 @@ mod tests {
         assert!(setting().is_none(), "nothing of the run kept for the next");
     }
 
+    /// W7, part 2: a new order puts the default first and keeps the rest as they were; a configuration past the
+    /// engine's bound is refused with `too-many`, while one in place of a set one is not.
+    #[test]
+    fn tunnels_are_ordered_and_held_to_the_engines_bound() {
+        let _process = process();
+        stop_running();
+        let text = "[Interface]\nPrivateKey = yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=\nAddress = 10.77.0.2/32\n\
+                    DNS = 10.77.0.1\n[Peer]\nPublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\n\
+                    AllowedIPs = 0.0.0.0/0\nEndpoint = 192.0.2.1:51820\n";
+        let Ok(config) = WgConfig::parse(text.as_bytes()) else {
+            unreachable!("refused")
+        };
+        let config = Arc::new(config);
+        let ids =
+            |tunnels: &TunnelSetting| tunnels.tunnels.iter().map(|t| t.id).collect::<Vec<_>>();
+        let mut tunnels = TunnelSetting::default();
+        for id in [3, 1, 2, 5] {
+            tunnels.tunnels.push(Configured {
+                id,
+                config: Arc::clone(&config),
+                local_network: false,
+            });
+        }
+        order_tunnels(&mut tunnels, &[2]);
+        assert_eq!(
+            ids(&tunnels),
+            [2, 3, 1, 5],
+            "the default first, the others kept in order"
+        );
+        order_tunnels(&mut tunnels, &[5, 9, 1]);
+        assert_eq!(ids(&tunnels), [5, 1, 2, 3], "an id not set is passed over");
+        order_tunnels(&mut tunnels, &[]);
+        assert_eq!(ids(&tunnels), [5, 1, 2, 3]);
+        let one = |id| Configured {
+            id,
+            config: Arc::clone(&config),
+            local_network: true,
+        };
+        for id in 6..=u32::try_from(MAX_TUNNELS + 1).unwrap_or(9) {
+            let room = tunnels.tunnels.len() < MAX_TUNNELS;
+            assert_eq!(place_tunnel(&mut tunnels, one(id)), room, "tunnel {id}");
+        }
+        assert_eq!(tunnels.tunnels.len(), MAX_TUNNELS);
+        assert!(
+            place_tunnel(&mut tunnels, one(1)),
+            "in place of one set, past the bound"
+        );
+        assert!(tunnels.tunnels.iter().any(|t| t.id == 1 && t.local_network));
+        stop_running();
+    }
+
     /// W7 fix round: the import's reading names the apps a configuration came with, and its refusals; the
     /// resolver's answer reads both ways, and nothing else.
     #[test]
@@ -1318,20 +1406,26 @@ mod tests {
                     DNS = 10.77.0.1\nListenPort = 51820\nFwMark = 0x1234\nIncludedApplications = org.example.one, org.example.two\n\
                     [Peer]\nPublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\nAllowedIPs = 0.0.0.0/0\n\
                     Endpoint = 192.0.2.1:51820\n";
+        let described = "endpoint 192.0.2.1 51820\naddress 10.77.0.2/32\ndns 10.77.0.1\nallowed 0.0.0.0/0\n\
+                         everything 1\npreshared 0\nmtu 1280";
         assert_eq!(
             parse_answer(text.as_bytes()),
-            "ok\nonly org.example.one\nonly org.example.two"
+            format!("ok\n{described}\nonly org.example.one\nonly org.example.two")
         );
         let except = text.replace("IncludedApplications", "ExcludedApplications");
         assert_eq!(
             parse_answer(except.as_bytes()),
-            "ok\nexcept org.example.one\nexcept org.example.two"
+            format!("ok\n{described}\nexcept org.example.one\nexcept org.example.two")
         );
         let plain = text.replace(
             "IncludedApplications = org.example.one, org.example.two\n",
             "",
         );
-        assert_eq!(parse_answer(plain.as_bytes()), "ok");
+        assert_eq!(parse_answer(plain.as_bytes()), format!("ok\n{described}"));
+        assert!(
+            !parse_answer(text.as_bytes()).contains("yAnz"),
+            "no key in the description"
+        );
         let both = text.replace(
             "ListenPort = 51820\n",
             "ExcludedApplications = org.example.three\n",

@@ -94,6 +94,11 @@ const TCP_IDLE: Duration = Duration::from_mins(124);
 const ECHO_IDLE: Duration = Duration::from_secs(30);
 /// The largest datagram read from a tunnel's socket.
 const LARGEST: usize = 65_535;
+/// At most this many configurations at once (W7, part 2): each holds a protocol core with its queue of 256
+/// packets, its socket, its buffer for fragments (256 KiB) and its read buffer, about 700 KiB at worst, so eight
+/// stay within a tenth of Watch's memory budget of 48 MB (ADR 0045); a phone's user needs a few. The screens hold
+/// the import to it, and `Tunnels::set` takes the first this many in order.
+pub const MAX_TUNNELS: usize = 8;
 
 /// One configuration Watch sets, under the number Watch gave it.
 #[derive(Clone, Debug)]
@@ -454,6 +459,9 @@ impl Tunnels {
             for configured in &setting.tunnels {
                 if configured.id == 0 || order.contains(&configured.id) {
                     continue;
+                }
+                if order.len() == MAX_TUNNELS {
+                    break;
                 }
                 order.push(configured.id);
                 let same = tunnels.get(&configured.id).is_some_and(|t| {
@@ -2277,6 +2285,56 @@ mod tests {
             true,
         ));
         assert!(!shared.hides(Some(10_300), web));
+    }
+
+    /// W7, part 2: at most [`MAX_TUNNELS`] configurations, the first in order; one past them is not set, so its
+    /// apps wait as for a configuration not set, never going directly; a new order changes the default and keeps
+    /// each tunnel's core.
+    #[test]
+    fn at_most_max_tunnels_are_set_the_first_in_order() {
+        use super::super::chain::Route;
+        let shared = shared();
+        let web = SocketAddr::from(([93, 184, 216, 34], 443));
+        let many: Vec<Configured> = (1..=u32::try_from(MAX_TUNNELS + 1).unwrap_or(9))
+            .map(|id| configured(id, "0.0.0.0/0", false))
+            .collect();
+        let last = u32::try_from(MAX_TUNNELS + 1).unwrap_or(9);
+        shared
+            .tunnels
+            .set(&setting(many.clone(), &[(10_300, last)], false));
+        let set = shared.tunnels.setting();
+        assert_eq!(set.tunnels.len(), MAX_TUNNELS);
+        assert!(
+            set.tunnels.iter().all(|t| t.id != last),
+            "the one past the bound"
+        );
+        let app = SocketAddr::from((shared.addresses.tun4, 40_000));
+        assert!(matches!(
+            shared.route(Some(10_300), web),
+            Route::Tunnel(t) if t == last
+        ));
+        assert_eq!(
+            shared.tunnels.admit(last, app, web, &shared, true),
+            None,
+            "its app waits, never going directly"
+        );
+        let generation = |id: u32| {
+            lock(&shared.tunnels.table)
+                .tunnels
+                .get(&id)
+                .map(|t| t.generation)
+        };
+        let before = generation(2);
+        let mut reordered = many;
+        reordered.swap(0, 1);
+        shared
+            .tunnels
+            .set(&setting(reordered, &[(10_300, last)], false));
+        assert!(
+            matches!(shared.route(None, web), Route::Tunnel(2)),
+            "the new default"
+        );
+        assert_eq!(generation(2), before, "its core kept");
     }
 
     /// "Local network directly", per configuration and off by default: a tunnelled app's private,

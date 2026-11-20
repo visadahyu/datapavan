@@ -884,7 +884,10 @@ class WatchVpnService : VpnService() {
                 val why = Engine.nativeTunnelSet(id, text, localNetwork = given.getOrNull(2) == "local")
                 writer.println(if (why.isEmpty()) "tunnel-set $id" else "tunnel-refused $id $why")
                 if (why.isEmpty()) {
-                    Engine.nativeTunnelParse(text).lineSequence().drop(1).filter { it.isNotBlank() }
+                    // The apps' lines alone: the rest of the description names the endpoint and the addresses,
+                    // which the dump never prints.
+                    Engine.nativeTunnelParse(text).lineSequence().drop(1)
+                        .filter { it.startsWith("only ") || it.startsWith("except ") }
                         .forEach { writer.println("tunnel-apps $id $it") }
                 }
             } finally {

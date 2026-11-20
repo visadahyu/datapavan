@@ -91,7 +91,7 @@ use naming::Begun;
 use tcp::{Listening, Pending, listen};
 #[cfg(test)]
 use tcp::{Upstream, accept};
-pub use tunnels::{Configured, TunnelSetting, TunnelState};
+pub use tunnels::{Configured, MAX_TUNNELS, TunnelSetting, TunnelState};
 use udp::UdpFlows;
 
 /// The tunnel's addresses (ADR 0041, decision 3): its own address, a /32 or a /128 (ADR 0034: a wider

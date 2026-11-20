@@ -3,7 +3,8 @@
 //! it can reach, a peer with an endpoint and AllowedIPs of a version it has), within the bounds, and its `Debug`
 //! shows neither key, as bytes, as a list of numbers or in base64; a refusal names a line inside the text and a
 //! key that is one of `wg-quick`'s or a plain word, never a value: its text holds no run of base64 a key could
-//! be.
+//! be. The import's description of an accepted configuration (W7, part 2) holds no key either, and its
+//! `everything` holds: every destination of each version it has an address of is allowed.
 #![no_main]
 
 use datapavan_net::wireguard::config::{self, Config, Endpoint, MTU_RANGE};
@@ -54,6 +55,33 @@ const KEYS: [&str; 15] = [
     "",
 ];
 
+/// The words that begin the description's lines (`Config::describe`).
+const DESCRIBED: [&str; 11] = [
+    "endpoint",
+    "address",
+    "dns",
+    "allowed",
+    "everything",
+    "preshared",
+    "mtu",
+    "keepalive",
+    "only",
+    "except",
+    "",
+];
+
+/// Destinations every configuration that carries everything must allow, of the versions it has.
+const SAMPLES: [&str; 8] = [
+    "0.0.0.0",
+    "127.255.255.255",
+    "128.0.0.0",
+    "255.255.255.255",
+    "93.184.216.34",
+    "::",
+    "8000::",
+    "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+];
+
 fuzz_target!(|data: &[u8]| {
     match Config::parse(data) {
         Ok(config) => {
@@ -87,15 +115,31 @@ fuzz_target!(|data: &[u8]| {
             }
             assert_ne!(config.private_key.bytes(), &[0; 32]);
             let shown = format!("{config:?}");
+            // The import's description (W7, part 2), which reaches the screen: what the configuration does, a line
+            // each under a known word, and no key.
+            let described = config.describe();
+            for line in described.lines() {
+                let word = line.split(' ').next().unwrap_or("");
+                assert!(DESCRIBED.contains(&word), "{line}");
+            }
             let keys = std::iter::once(config.private_key.bytes())
                 .chain(config.peer.preshared_key.as_ref().map(|k| k.bytes()));
             for key in keys {
-                assert!(!shown.contains(&base64(key)), "{shown}");
-                assert!(!shown.contains(&format!("{key:?}")[1..20]), "{shown}");
-                assert!(
-                    !shown.as_bytes().windows(32).any(|w| w == key),
-                    "{shown}"
-                );
+                for text in [&shown, &described] {
+                    assert!(!text.contains(&base64(key)), "{text}");
+                    assert!(!text.contains(&format!("{key:?}")[1..20]), "{text}");
+                    assert!(!text.as_bytes().windows(32).any(|w| w == key), "{text}");
+                }
+            }
+            // `everything` says that every destination of each version the configuration has goes through it.
+            if config.carries_everything() {
+                for sample in SAMPLES {
+                    let address: std::net::IpAddr =
+                        sample.parse().unwrap_or(std::net::IpAddr::from([0; 4]));
+                    if config.addresses.like(address).is_some() {
+                        assert!(config.peer.allows(address), "{sample} {described}");
+                    }
+                }
             }
         }
         Err(refusal) => {
