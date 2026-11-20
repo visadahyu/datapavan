@@ -89,6 +89,7 @@ flows_of() {
 screen_text() { dump_screen >/dev/null 2>&1 || true; adb shell cat "$DUMP" 2>/dev/null | LC_ALL=C sed 's/\xe2\x81[\xa6-\xa9]//g'; }
 fail() {
     echo "WIREGUARD IMPORT CHECK FAILED: $*" >&2
+    echo "The last tap: ${LAST_TAP:-none}; the screen's navigation: $(adb shell cmd overlay list 2>/dev/null | tr -d '\r' | grep -o '\[x\] [^ ]*navbar[^ ]*' | head -1)" >&2
     echo "Watch's store, tunnels and flows' routes:" >&2
     grep -E '^ *(tunnel|flow-route)' <<<"$(dump tunnel-store)" >&2 || true
     echo "On screen:" >&2
@@ -120,13 +121,36 @@ watch_screen() {
     sleep 1
     scroll_to_top
 }
-# Scrolls Watch's screen until the element whose resource-id is $1 shows, and taps it.
+# Scrolls Watch's screen until the element whose resource-id is $1 shows, and taps it. One in the screen's lowest
+# eighth is moved up first, as tap_text does: CI's emulator has Android's gesture bar at the bottom edge, which takes a
+# tap there, where the local AVD has none (W7, part 3a: the check's first runs on CI failed at a way to choose and,
+# on an emulator like CI's, at the button that lets the apps go). The tap is kept in $LAST_TAP for the failure's account.
+LAST_TAP=""
 tap_tag() {
+    local bounds height
     for _ in $(seq 1 10); do
-        has_id "$1" && { tap_dumped_id "$1"; return 0; }
+        if has_id "$1"; then
+            bounds=$(id_bounds "$1")
+            height=$(adb shell wm size | tr -d '\r' | sed -n 's/.*x\([0-9]*\)$/\1/p' | tail -1)
+            if [ -n "$bounds" ] && [ "$(cut -d' ' -f4 <<<"$bounds")" -gt $((height * 7 / 8)) ]; then
+                set -- "$1" $bounds
+                adb shell input swipe $((($2 + $4) / 2)) $((height * 3 / 5)) $((($2 + $4) / 2)) $((height * 2 / 5)) 300
+                sleep 1
+                has_id "$1" || continue
+                bounds=$(id_bounds "$1")
+            fi
+            LAST_TAP="$1 at $bounds on a screen $height high"
+            tap_dumped_id "$1"
+            return 0
+        fi
         swipe_up
     done
     return 1
+}
+# The bounds of the element whose resource-id is $1 in the last dump, as "left top right bottom".
+id_bounds() {
+    adb shell cat "$DUMP" | grep -o "resource-id=\"$1\"[^>]*bounds=\"[^\"]*\"" | head -1 | grep -o 'bounds="[^"]*"' |
+        grep -o '[0-9]\+' | tr '\n' ' ' | sed 's/ $//'
 }
 # Taps the first element whose content description starts with $1.
 tap_desc_prefix() {
@@ -334,7 +358,10 @@ shown=$(screen_text)
 grep -q "10.77.0.4/32, fd77::4/128" <<<"$shown" && grep -q "Server: $HOST, port $WGLAB_PORT2\." <<<"$shown" &&
     grep -q "Largest packet inside it: $MTU bytes\." <<<"$shown" ||
     fail "the picture's configuration is not this run's: the picker gave another picture"
-grep -qE "Start proc [0-9]+:$PKG:qr.*/u[0-9]+i[0-9]+ for service" <<<"$(adb logcat -d | tr -d '\r')" ||
+# An isolated UID, as Android 15 writes it: i and its offset, or for the first isolated UID since boot, 99000, ai9000
+# (UserHandle.formatUid takes the isolated range from above it), which the decoder takes on a fresh emulator where it is
+# the first isolated process (W7, part 3a).
+grep -qE "Start proc [0-9]+:$PKG:qr.*/u[0-9]+a?i[0-9]+ for service" <<<"$(adb logcat -d | tr -d '\r')" ||
     fail "the QR decoder did not run in an isolated process"
 save_confirmation
 within 15 store_has 2 "^tunnel-slot 2 other - name known set routes 0$" ||
