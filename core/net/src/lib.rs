@@ -17,6 +17,7 @@ pub mod hygiene;
 pub mod identifiers;
 pub mod ladder;
 pub mod log;
+pub mod messengers;
 pub mod names;
 pub mod nat;
 pub mod odoh;

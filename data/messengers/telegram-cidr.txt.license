@@ -1,0 +1,5 @@
+SPDX-FileCopyrightText: Telegram's published address ranges, core.telegram.org/resources/cidr.txt, copied byte for byte
+SPDX-License-Identifier: LicenseRef-Telegram-cidr
+
+No licence is stated. Telegram publishes this list of its address ranges for anyone who needs them; it holds
+14 ranges, facts, kept unchanged so that its SHA-256 matches the fetch recorded in SOURCE (ADR 0015's record).

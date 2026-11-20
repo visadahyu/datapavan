@@ -1,0 +1,10 @@
+SPDX-License-Identifier: CC0-1.0
+
+clients.tsv and names.tsv: the Android packages of three messengers and the server names that tell their own
+connections from their proxies', collected by the Datapavan project from the makers' own pages, asset-links
+files and source code at pinned commits, and dedicated to the public domain under CC0 1.0
+(https://creativecommons.org/publicdomain/zero/1.0/). Only facts are recorded, never text from the sources.
+
+telegram-cidr.txt is Telegram's own list of its address ranges, copied byte for byte from
+https://core.telegram.org/resources/cidr.txt; it states no licence (telegram-cidr.txt.license). Recorded in
+ADR 0015 and ADR 0052.

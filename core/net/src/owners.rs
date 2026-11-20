@@ -28,6 +28,8 @@ pub enum NetworkKind {
 pub struct Owner {
     /// The company's name, from `entities.tsv`.
     pub name: String,
+    /// Its entity in `entities.tsv`, as `asns.tsv` names it.
+    pub entity: String,
     /// Whether it hosts other companies' servers.
     pub kind: NetworkKind,
 }
@@ -70,6 +72,7 @@ impl Owners {
                 asn,
                 Owner {
                     name: (*name).to_owned(),
+                    entity: (*entity).to_owned(),
                     kind,
                 },
             );
@@ -123,6 +126,7 @@ mod tests {
             owners.of(64500),
             Some(&Owner {
                 name: "Sample Platforms, Inc.".into(),
+                entity: "sample".into(),
                 kind: NetworkKind::Own,
             })
         );

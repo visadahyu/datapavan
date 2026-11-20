@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: CC0-1.0
+# The server names that tell a messenger's own connections from its proxy's (ADR 0052). A name matches a row when it is
+# the row's name or ends in "." and it. Columns: family, role, name, where it is read, checked. Roles:
+#   own     the maker's own service: a connection to it is the app going directly, never through its proxy
+#   front   a name the app sends to reach its own service through another company's network (Signal's own
+#           circumvention): not a proxy
+#   other   a third party the app reaches itself (payments, a captcha): not a proxy
+whatsapp	own	whatsapp.net	https://raw.githubusercontent.com/WhatsApp/proxy/f48d4b1271e01f61674d5e20980dd06d2e002857/proxy/src/proxy_config.cfg	2026-11-20
+whatsapp	own	whatsapp.com	https://www.whatsapp.com/.well-known/assetlinks.json	2026-10-30
+signal	own	signal.org	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/build.gradle.kts	2026-11-20
+signal	own	signalcaptchas.org	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/build.gradle.kts	2026-11-20
+signal	front	www.google.com	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt	2026-11-20
+signal	front	android.clients.google.com	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt	2026-11-20
+signal	front	clients3.google.com	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt	2026-11-20
+signal	front	clients4.google.com	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt	2026-11-20
+signal	front	googlemail.com	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt	2026-11-20
+signal	front	www.google.com.eg	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt	2026-11-20
+signal	front	www.google.ae	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt	2026-11-20
+signal	front	www.google.com.om	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt	2026-11-20
+signal	front	www.google.com.qa	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt	2026-11-20
+signal	front	www.google.co.uz	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt	2026-11-20
+signal	front	www.google.co.ve	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt	2026-11-20
+signal	front	www.google.com.pk	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt	2026-11-20
+signal	front	github.githubassets.com	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt	2026-11-20
+signal	front	pinterest.com	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt	2026-11-20
+signal	front	www.redditstatic.com	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt	2026-11-20
+signal	other	api.stripe.com	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/build.gradle.kts	2026-11-20
+signal	other	hcaptcha.com	https://signalcaptchas.org/registration/generate.html	2026-11-20

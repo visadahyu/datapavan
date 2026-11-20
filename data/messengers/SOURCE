@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: CC0-1.0
+retrieved: 2026-11-20
+file: https://core.telegram.org/resources/cidr.txt
+licence-statement: none on the file or the page that serves it; a bare list of 14 ranges (ADR 0015's record)
+ranges: 14 (9 IPv4, 5 IPv6)
+clients: clients.tsv, 7 packages of three families, each with its source
+names: names.tsv, 21 names (4 own, 15 fronts, 2 others), each with its source
+method: cidr.txt fetched by update.py, which records every fetch below, with its SHA-256 and the ranges added and
+  removed, and keeps the file byte for byte; the packages and names read on the makers' own pages and in their
+  source at pinned commits (Telegram's DrKLO/Telegram 21f7d10, Signal-Android aa38b25, WhatsApp/proxy f48d4b1);
+  WhatsApp's packages as data/owners read its asset-links file on 2026-10-30.
+left-out: forks of the three clients (Telegram FOSS shares Telegram's package; others are not recognised until a
+  row names them); Signal's static addresses, which its build reads from a file the source does not hold.
+# fetches
+- 2026-11-20T17:26:49Z sha256 3ecd072cedf72eceee6961b18a51e37f905d5ce4a656a5d24cf5fea63e6ec651 last-modified 'Fri, 01 Oct 2021 16:51:55 GMT' ranges 14 added (first fetch) removed -
