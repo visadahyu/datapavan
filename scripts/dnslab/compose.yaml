@@ -1,0 +1,218 @@
+# SPDX-License-Identifier: Apache-2.0
+# W8's DNS lab (scripts/dnslab.sh): every way Watch may send an app's DNS, each answering probe.dnslab.test with
+# its own address, behind a censor that a check sets per server.
+#
+#   relay         ODoH relay (odoh-server-go, /proxy), relay.dnslab.test
+#   target-a      ODoH target of odoh-rs (DNSCrypt's doh-proxy), target-a.dnslab.test     probe 10.53.1.1
+#   target-b      ODoH target of odoh-server-go, target-b.dnslab.test                     probe 10.53.2.2
+#   doh           plain DoH (doh-proxy), doh.dnslab.test/dns-query                         probe 10.53.3.3
+#   dot           DoT (nginx's stream TLS), dot.dnslab.test:853                            probe 10.53.4.4
+#   resolver      the network's resolver, plain DNS on UDP and TCP 53                      probe 10.53.5.5
+#                 (and printer.home.arpa 192.168.1.50); resolver-dot is its DoT on 853
+#   portal        a captive portal (/generate_204)
+#   censor        the one way in: a front per server (py/censor.py)
+#   ns-*          the backends behind the target-a, target-b, doh and dot servers (py/dnsserver.py)
+#
+# doh-proxy and nginx look their backend up once, at their start: Compose restarts them when it recreates the
+# backend (depends_on ... restart: true).
+#
+# The servers sit on an internal network: nothing in the lab reaches the internet, and the backends answer only
+# the lab's names. The relay reaches the targets by their names there and trusts the lab's CA (certs/, test keys,
+# public on purpose). Alone, this file keeps the censor on that network; compose.publish.yaml moves it onto the
+# host's loopback, where the emulator and the engine's tests reach it. scripts/dnslab.sh stops the project when
+# asked (stop, not down); nothing restarts it.
+name: datapavan-dnslab
+
+x-python: &python
+  image: datapavan-dnslab-py
+  # Built by `resolver`; never pulled.
+  pull_policy: never
+  depends_on:
+    - resolver
+  restart: "no"
+  init: true
+  networks:
+    - lab
+
+services:
+  resolver:
+    build: ./py
+    image: datapavan-dnslab-py
+    restart: "no"
+    init: true
+    networks:
+      - lab
+    command: ["python3", "-I", "/opt/dnslab/dnsserver.py", "--name", "resolver", "--probe", "10.53.5.5",
+              "--extra", "printer.home.arpa=192.168.1.50"]
+  ns-target-a:
+    <<: *python
+    command: ["python3", "-I", "/opt/dnslab/dnsserver.py", "--name", "target-a", "--probe", "10.53.1.1"]
+  ns-target-b:
+    <<: *python
+    command: ["python3", "-I", "/opt/dnslab/dnsserver.py", "--name", "target-b", "--probe", "10.53.2.2"]
+  ns-doh:
+    <<: *python
+    command: ["python3", "-I", "/opt/dnslab/dnsserver.py", "--name", "doh", "--probe", "10.53.3.3"]
+  ns-dot:
+    <<: *python
+    command: ["python3", "-I", "/opt/dnslab/dnsserver.py", "--name", "dot", "--probe", "10.53.4.4"]
+
+  target-a:
+    build: ./doh-proxy
+    image: datapavan-dnslab-doh-proxy
+    restart: "no"
+    init: true
+    depends_on:
+      ns-target-a:
+        condition: service_started
+        restart: true
+    volumes:
+      - ./certs:/certs:ro
+    networks:
+      lab:
+        aliases:
+          - target-a.dnslab.test
+    command: ["-l", "0.0.0.0:443", "-u", "ns-target-a:53", "-i", "/certs/target-a.pem", "-I", "/certs/target-a.key",
+              "-H", "target-a.dnslab.test", "-T", "0", "-E", "0"]
+  doh:
+    image: datapavan-dnslab-doh-proxy
+    # Built by `target-a`; never pulled.
+    pull_policy: never
+    restart: "no"
+    init: true
+    depends_on:
+      ns-doh:
+        condition: service_started
+        restart: true
+      target-a:
+        condition: service_started
+        restart: true
+    volumes:
+      - ./certs:/certs:ro
+    networks:
+      lab:
+        aliases:
+          - doh.dnslab.test
+    command: ["-l", "0.0.0.0:443", "-u", "ns-doh:53", "-i", "/certs/doh.pem", "-I", "/certs/doh.key",
+              "-H", "doh.dnslab.test", "-T", "0", "-E", "0"]
+
+  target-b:
+    build: ./odoh-server-go
+    image: datapavan-dnslab-odoh-server-go
+    restart: "no"
+    init: true
+    depends_on:
+      ns-target-b:
+        condition: service_started
+        restart: true
+    volumes:
+      - ./certs:/certs:ro
+    networks:
+      lab:
+        aliases:
+          - target-b.dnslab.test
+    environment:
+      PORT: "443"
+      CERT: /certs/target-b.pem
+      KEY: /certs/target-b.key
+      DNSLAB_NAMESERVER: ns-target-b:53
+      TARGET_INSTANCE_NAME: target-b
+      # The lab's target key, fixed so that its configs stay the same from one start to the next: a test key,
+      # public on purpose.
+      SEED_SECRET_KEY: 70344f8922d749d90ff9f15b9bf3b5aa8718787ad2f8fd1b4c173c10ba159437
+  relay:
+    image: datapavan-dnslab-odoh-server-go
+    # Built by `target-b`; never pulled.
+    pull_policy: never
+    restart: "no"
+    init: true
+    depends_on:
+      - target-a
+      - target-b
+    volumes:
+      - ./certs:/certs:ro
+    networks:
+      lab:
+        aliases:
+          - relay.dnslab.test
+    environment:
+      PORT: "443"
+      CERT: /certs/relay.pem
+      KEY: /certs/relay.key
+      # Go's TLS trusts the lab's CA alone, for the targets.
+      SSL_CERT_FILE: /certs/ca.pem
+      # The relay's own target role is not used: nothing answers there.
+      DNSLAB_NAMESERVER: 127.0.0.1:9
+      TARGET_INSTANCE_NAME: relay
+
+  dot:
+    build: ./nginx
+    image: datapavan-dnslab-nginx
+    restart: "no"
+    init: true
+    depends_on:
+      ns-dot:
+        condition: service_started
+        restart: true
+    volumes:
+      - ./certs:/certs:ro
+    networks:
+      lab:
+        aliases:
+          - dot.dnslab.test
+    command: ["/etc/dnslab/dot.conf"]
+  resolver-dot:
+    image: datapavan-dnslab-nginx
+    # Built by `dot`; never pulled.
+    pull_policy: never
+    restart: "no"
+    init: true
+    depends_on:
+      resolver:
+        condition: service_started
+        restart: true
+      dot:
+        condition: service_started
+        restart: true
+    volumes:
+      - ./certs:/certs:ro
+    networks:
+      lab:
+        aliases:
+          - resolver.dnslab.test
+    command: ["/etc/dnslab/resolver-dot.conf"]
+
+  portal:
+    <<: *python
+    networks:
+      lab:
+        aliases:
+          - portal.dnslab.test
+    environment:
+      DNSLAB_ROLE: portal
+    command: ["python3", "-I", "/opt/dnslab/portal.py", "serve"]
+
+  censor:
+    <<: *python
+    depends_on:
+      - relay
+      - target-a
+      - target-b
+      - doh
+      - dot
+      - resolver
+      - resolver-dot
+      - portal
+    environment:
+      DNSLAB_ROLE: censor
+    command: ["python3", "-I", "/opt/dnslab/censor.py", "serve"]
+
+networks:
+  lab:
+    internal: true
+    # A fixed subnet, so that its gateway, this computer's own address on the lab's bridge, can carry the network's
+    # resolver for an emulator (`-dns-server 10.153.53.1`): the emulator ignores a loopback address there.
+    ipam:
+      config:
+        - subnet: 10.153.53.0/24
+          gateway: 10.153.53.1

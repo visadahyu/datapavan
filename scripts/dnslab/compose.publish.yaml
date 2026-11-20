@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+# The DNS lab's fronts on the host (scripts/dnslab.sh up): the censor runs on the host's network and listens on
+# the loopback alone, which an emulator reaches as 10.0.2.2: its fronts on 127.0.0.1 from DNSLAB_PORT (relay +0,
+# target-a +1, target-b +2, doh +3, dot +4, portal +5, resolver +6 UDP and TCP, resolver-dot +7), and the network's
+# resolver on DNSLAB_RESOLVER_ADDR (10.153.53.1, the lab bridge's own address on this computer) port 53, UDP and TCP, and 853 for its DoT, so that an emulator
+# started with `-dns-server 10.153.53.1` takes it for the network's resolver. Nothing listens on the host's other
+# addresses.
+#
+# Not Docker's port publishing: its proxy (docker-proxy) completes every TCP handshake itself and turns a reset
+# from the container into a plain close (measured on 2026-11-20 with Docker 28.5), so neither a dropped SYN nor a
+# reset would reach the client. On the host's network the censor's resets and dropped SYNs are the client's own.
+# The censor gets no capability beyond Docker's defaults and touches no firewall. Its servers' names do not
+# resolve on the host's network: scripts/dnslab.sh gives it their addresses (`ctl upstream`).
+services:
+  censor:
+    network_mode: host
+    networks: !reset []
+    environment:
+      DNSLAB_BIND: 127.0.0.1
+      DNSLAB_PORT: ${DNSLAB_PORT:-18440}
+      DNSLAB_RESOLVER_ADDR: ${DNSLAB_RESOLVER_ADDR:-10.153.53.1}

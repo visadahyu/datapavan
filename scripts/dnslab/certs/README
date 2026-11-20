@@ -1,0 +1,6 @@
+SPDX-License-Identifier: Apache-2.0
+
+These keys and certificates are for the DNS lab's tests only and are public on purpose: anyone may read them,
+so nothing outside the lab may ever trust ca.pem. They were made by make.sh (ECDSA P-256; the CA valid for
+twenty years, each server's certificate for ten years and a month). A debug build of the app trusts ca.pem for
+the lab alone; a release build never does.

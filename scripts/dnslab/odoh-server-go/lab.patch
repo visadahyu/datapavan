@@ -1,0 +1,21 @@
+SPDX-License-Identifier: MIT (the license of odoh-server-go, which this patch changes)
+The DNS lab's change to odoh-server-go at 5a9bf1f5b7b3f676558e8a4e50f94abd032ceb4a (scripts/dnslab, W8): the
+backend DNS server it forwards to comes from DNSLAB_NAMESERVER (host:port) instead of three public resolvers.
+
+diff --git a/odoh_server.go b/odoh_server.go
+index cbc54af..418a8b4 100644
+--- a/odoh_server.go
++++ b/odoh_server.go
+@@ -150,6 +150,12 @@ func main() {
+ 	endpoints["Health"] = healthEndpoint
+ 	endpoints["Config"] = configEndpoint
+ 
++	// The DNS lab (Datapavan's scripts/dnslab): the backend to forward to, from the environment, so that
++	// nothing is sent to a public resolver.
++	if nameServer := os.Getenv("DNSLAB_NAMESERVER"); nameServer != "" {
++		nameServers = []string{nameServer}
++	}
++
+ 	resolversInUse := make([]resolver, len(nameServers))
+ 
+ 	for index := 0; index < len(nameServers); index++ {
