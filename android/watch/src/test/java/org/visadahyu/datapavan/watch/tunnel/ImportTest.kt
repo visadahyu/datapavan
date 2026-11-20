@@ -69,31 +69,84 @@ class ImportTest {
         assertNull(Import.read("ok\nsecret yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk="))
     }
 
+    /** Every app the test's phone has installed, the choosable ones and one without an icon to open it. */
+    private val installed = setOf("org.example.mail", "org.example.chat", "org.example.maps", "org.example.out", "org.example.noicon", "org.visadahyu.datapavan.advanced")
+
+    private fun propose(read: Import.Described, choosable: List<String>, leftOut: Set<String> = setOf("org.example.out"), elsewhere: Set<String> = emptySet()) =
+        Import.propose(read, choosable, "org.visadahyu.datapavan.advanced", leftOut, { it in installed }, { it !in elsewhere })
+
     @Test
-    fun included_applications_propose_those_installed_and_list_the_others() {
-        val read = Import.read(answer) as Import.Described
-        val choosable = listOf("org.example.mail", "org.example.chat", "org.visadahyu.datapavan.advanced", "org.example.out")
-        val proposal = Import.propose(read, choosable, "org.visadahyu.datapavan.advanced", leftOut = setOf("org.example.out"))
-        assertEquals(setOf("org.example.mail"), proposal.apps)
+    fun included_applications_propose_those_installed_and_say_why_not_the_others() {
+        val read = Import.read(answer.replace("only org.example.gone", "only org.example.gone\nonly org.example.noicon\nonly org.example.out")) as Import.Described
+        val choosable = listOf("org.example.chat", "org.example.mail", "org.visadahyu.datapavan.advanced", "org.example.out")
+        val proposal = propose(read, choosable)
+        assertEquals(listOf("org.example.mail"), proposal.proposed)
+        assertEquals(setOf("org.example.mail"), proposal.ticked)
         assertEquals(listOf("org.example.gone"), proposal.notInstalled)
+        // Installed but not among the apps the user can choose, and left out of Watch: each said apart (m2).
+        assertEquals(listOf("org.example.noicon"), proposal.notChoosable)
+        assertEquals(listOf("org.example.out"), proposal.leftOut)
+        assertEquals(emptyList<String>(), proposal.excluded)
+    }
+
+    /**
+     * The proposed apps come first, in the file's order, and an app that goes another way now (the tool, another
+     * configuration, or waiting for a removed one) is proposed but not ticked, so that Save moves nothing silently
+     * (fix round, screens review M2).
+     */
+    @Test
+    fun an_app_that_goes_another_way_is_proposed_but_not_ticked() {
+        val read = Import.read(answer.replace("only org.example.gone\n", "only org.example.chat\nonly org.example.maps\n")) as Import.Described
+        val choosable = listOf("org.example.chat", "org.example.mail", "org.example.maps")
+        val proposal = propose(read, choosable, elsewhere = setOf("org.example.chat", "org.example.maps"))
+        assertEquals("the file's order", listOf("org.example.mail", "org.example.chat", "org.example.maps"), proposal.proposed)
+        assertEquals(setOf("org.example.mail"), proposal.ticked)
     }
 
     @Test
-    fun excluded_applications_propose_every_app_but_those() {
+    fun excluded_applications_propose_every_app_but_those_and_name_them() {
         val except = answer.replace("only ", "except ")
         val read = Import.read(except) as Import.Described
-        val choosable = listOf("org.example.mail", "org.example.chat", "org.example.maps", "org.visadahyu.datapavan.advanced", "org.example.out")
-        val proposal = Import.propose(read, choosable, "org.visadahyu.datapavan.advanced", leftOut = setOf("org.example.out"))
-        assertEquals("never Watch, never an app left out of Watch", setOf("org.example.chat", "org.example.maps"), proposal.apps)
+        val choosable = listOf("org.example.chat", "org.example.mail", "org.example.maps", "org.visadahyu.datapavan.advanced", "org.example.out")
+        val proposal = propose(read, choosable, elsewhere = setOf("org.example.maps"))
+        assertEquals("never Watch, never an app left out of Watch", listOf("org.example.chat", "org.example.maps"), proposal.proposed)
+        assertEquals(setOf("org.example.chat"), proposal.ticked)
+        assertEquals("the apps it leaves out, by name", listOf("org.example.mail"), proposal.excluded)
         assertEquals(listOf("org.example.gone"), proposal.notInstalled)
     }
 
     @Test
     fun a_file_that_names_no_apps_proposes_none() {
         val plain = answer.lines().filterNot { it.startsWith("only ") }.joinToString("\n")
-        val proposal = Import.propose(Import.read(plain) as Import.Described, listOf("org.example.mail"), "self", emptySet())
-        assertEquals(emptySet<String>(), proposal.apps)
+        val proposal = propose(Import.read(plain) as Import.Described, listOf("org.example.mail"))
+        assertEquals(emptyList<String>(), proposal.proposed)
+        assertEquals(emptySet<String>(), proposal.ticked)
         assertEquals(emptyList<String>(), proposal.notInstalled)
+    }
+
+    /**
+     * The configuration on its way is held across the screen's recreation and zeroed when another takes its place,
+     * when it is dropped, and by whoever takes it to save it (fix round, screens review M1).
+     */
+    @Test
+    fun the_held_configuration_is_zeroed_when_replaced_dropped_or_saved() {
+        val read = Import.read(answer) as Import.Described
+        val held = Import.Held()
+        val first = "one".toByteArray()
+        held.hold(Import.Pending(first, read, "one"))
+        val second = "two".toByteArray()
+        held.hold(Import.Pending(second, read, "two"))
+        assertTrue("the one replaced is zeroed", first.all { it == 0.toByte() })
+        assertArrayEquals("two".toByteArray(), held.now?.text)
+        held.drop()
+        assertTrue("dropped", second.all { it == 0.toByte() })
+        assertNull(held.now)
+        val third = "three".toByteArray()
+        held.hold(Import.Pending(third, read, "three"))
+        val taken = held.take()
+        assertNull("nothing held once taken", held.now)
+        held.drop()
+        assertArrayEquals("the saver's to zero", "three".toByteArray(), taken?.text)
     }
 
     @Test

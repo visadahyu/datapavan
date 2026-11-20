@@ -196,10 +196,18 @@ class WatchVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> stop()
-            ACTION_APPLY_CHAIN -> if (active) applyChain()
+            // The tunnels' routes before the chain, from the store as it stands: an app the screen moved from the tool
+            // to a configuration has its tunnel's route in the engine before it leaves the chain's list, so that it
+            // never goes directly in between (fix round, security review M2).
+            ACTION_APPLY_CHAIN -> if (active) applyRoutes()
             ACTION_APPLY_TUNNELS -> if (active) applyTunnels()
-            // The apps left out are part of the tunnel's own setup: it is set up again.
-            ACTION_APPLY_LEFT_OUT -> setUpAgain()
+            // The apps left out are part of the tunnel's own setup: it is set up again. The routes first: an app taken
+            // back has its tunnel's or the chain's route in the engine before its packets come into the tunnel again,
+            // never going directly; an app left out leaves them, as it leaves Watch (fix round, security review M1).
+            ACTION_APPLY_LEFT_OUT -> {
+                if (active) applyRoutes()
+                setUpAgain()
+            }
             else -> startMeasured(intent)
         }
         return START_NOT_STICKY
@@ -305,6 +313,41 @@ class WatchVpnService : VpnService() {
     }
 
     /**
+     * Hands the engine every app's route again from what Watch keeps, the tunnels' before the chain's: each by its
+     * UID as Android has it now. Main thread only.
+     */
+    private fun applyRoutes() {
+        applyTunnels()
+        applyChain()
+    }
+
+    /**
+     * Follows the apps installed, installed again, updated and removed while the tunnel runs (fix round, security
+     * review M1): routes go by UID, and an app installed again (another build in place of the store's) has a new one,
+     * so every route is handed to the engine again from the store and the chain's settings, which name apps by
+     * package. Without this, such an app went its other way, directly perhaps, until Watch started again.
+     */
+    private fun followPackages() {
+        if (packages != null) return
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context, intent: Intent) {
+                if (active) applyRoutes()
+            }
+        }
+        val filter = android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REPLACED)
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addDataScheme("package")
+        }
+        androidx.core.content.ContextCompat.registerReceiver(this, receiver, filter, androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
+        packages = receiver
+    }
+
+    /** The receiver of [followPackages], while the tunnel runs. */
+    private var packages: android.content.BroadcastReceiver? = null
+
+    /**
      * Hands the user's chain (W6) to the engine: the tool's proxy where it last answered, its password
      * where the tool takes one, the tool's UID, and the chained apps. It runs before any traffic, from
      * what Watch remembers, so that chained apps never go directly while the tool is looked for again;
@@ -355,6 +398,17 @@ class WatchVpnService : VpnService() {
     private var unlockWait: android.content.BroadcastReceiver? = null
 
     /**
+     * How many times in a row a configuration could not be opened now (a Keystore error that is not a lost key, or a
+     * file that could not be read), and the token of the next try ([TunnelStore.retryAfterMs], fix round, security
+     * review m2). Main thread only.
+     */
+    private var reopenTries = 0
+    private val reopen = Any()
+
+    /** The routes last handed to the engine, by UID, for the debug builds' dump. Main thread only. */
+    private var routesSet: List<Pair<Int, Int>> = emptyList()
+
+    /**
      * Hands the engine the WireGuard configurations Watch keeps and each app's tunnel (W7, part 2), before any
      * traffic at a start, as the chain is, and again when the screen changes them: each configuration's text is
      * opened only to be set and zeroed at once; a configuration whose wrap cannot be opened, because its key is gone
@@ -363,12 +417,20 @@ class WatchVpnService : VpnService() {
      */
     private fun applyTunnels() {
         val store = org.visadahyu.datapavan.watch.tunnel.TunnelStore.of(this)
-        val state = store.state()
+        val state = try {
+            store.state()
+        } catch (e: IOException) {
+            // The engine keeps what it has, every route among it, and the store is read again shortly.
+            Log.w(TAG, "The configurations' state could not be read", e)
+            tryAgainLater(unavailable = true)
+            return
+        }
         for (gone in tunnelsSet.keys - state.order.toSet()) {
             Engine.nativeTunnelRemove(gone)
             tunnelsSet.remove(gone)
         }
         var locked = false
+        var unavailable = false
         for (slot in state.order) {
             val local = slot in state.local
             val stamp = store.stamp(slot) to local
@@ -381,10 +443,13 @@ class WatchVpnService : VpnService() {
                     opened.bytes.fill(0)
                 }
                 org.visadahyu.datapavan.watch.tunnel.Opened.Locked -> locked = true
+                // Its apps wait, and it is tried again, a few times (m2).
+                org.visadahyu.datapavan.watch.tunnel.Opened.Unavailable -> unavailable = true
                 // Its apps wait: the route stays, and the engine refuses their flows.
                 org.visadahyu.datapavan.watch.tunnel.Opened.Lost -> Log.w(TAG, "A configuration can no longer be opened")
             }
         }
+        // The user's default first, set or not: while it is not set, flows of no app and pings wait for it (m4).
         Engine.nativeTunnelOrder(state.order.toIntArray())
         val routes = org.visadahyu.datapavan.watch.tunnel.Routes.forEngine(state.routes, LeftOut.of(this).apps) { app ->
             try {
@@ -394,12 +459,32 @@ class WatchVpnService : VpnService() {
                 null
             }
         }
+        // Debug builds: the routes part 1's check set through the dump's hook stay, now that the store's are handed
+        // again on more occasions (a chain's change, an app installed); theirs win for their UIDs.
+        val handed = (routes.toMap() + debugRoutes).toList()
         Engine.nativeTunnelRoutes(
-            routes.map { it.first }.toIntArray(),
-            routes.map { it.second }.toIntArray(),
+            handed.map { it.first }.toIntArray(),
+            handed.map { it.second }.toIntArray(),
             logDestinations = org.visadahyu.datapavan.watch.chain.ChainSettings.of(this).logDestinations,
         )
+        routesSet = handed
         if (locked) waitForUnlock() else stopWaitingForUnlock()
+        tryAgainLater(unavailable)
+    }
+
+    /**
+     * A configuration that could not be opened now is tried again after a pause that grows, a few times
+     * ([org.visadahyu.datapavan.watch.tunnel.TunnelStore.retryAfterMs]); then not until the next change, start or
+     * unlock. Its apps wait meanwhile, never going directly.
+     */
+    private fun tryAgainLater(unavailable: Boolean) {
+        main.removeCallbacksAndMessages(reopen)
+        if (!unavailable) {
+            reopenTries = 0
+            return
+        }
+        val wait = org.visadahyu.datapavan.watch.tunnel.TunnelStore.retryAfterMs(reopenTries++) ?: return
+        main.postDelayed({ if (active) applyTunnels() }, reopen, wait)
     }
 
     /** A configuration whose key needs an unlocked phone waits for the unlock, and is set then. */
@@ -430,7 +515,8 @@ class WatchVpnService : VpnService() {
             val settings = org.visadahyu.datapavan.watch.chain.ChainSettings.of(this)
             val before = settings.lastTool
             settings.remember(found)
-            if (settings.lastTool != before && active) applyChain()
+            // On the main thread, behind any change the screen sent, the tunnels' routes first (M2).
+            if (settings.lastTool != before) main.post { if (active) applyRoutes() }
         }.apply { name = "watch-chain" }.start()
     }
 
@@ -460,6 +546,7 @@ class WatchVpnService : VpnService() {
         active = true
         state.value = true
         tracker = org.visadahyu.datapavan.watch.activity.StateTracker(this) { Engine.nativeStates(it) }.also { it.start() }
+        followPackages()
         refreshChain()
         ConnectionLog.of(this).expire()
         val request = NetworkRequest.Builder()
@@ -676,7 +763,12 @@ class WatchVpnService : VpnService() {
         Engine.nativeStop()
         // Stopping the engine forgot its tunnels: the next start sets them again.
         tunnelsSet.clear()
+        routesSet = emptyList()
         stopWaitingForUnlock()
+        packages?.let { unregisterReceiver(it) }
+        packages = null
+        main.removeCallbacksAndMessages(reopen)
+        reopenTries = 0
         main.removeCallbacksAndMessages(riseCheck)
         setup = null
         current = null
@@ -1003,8 +1095,9 @@ class WatchVpnService : VpnService() {
     /**
      * Debug builds only, for W7's second emulator check (scripts/verify-wireguard-import.sh): `tunnel-store` prints a
      * `tunnel-slot N default|other local|- name STATE set|unset routes K` line for each configuration the store keeps
-     * (STATE `known`, `locked`, `lost` or `removed`; `set` when this run set it in the engine), a `tunnel-waiting N
-     * routes K` line for each removed slot apps still wait for, and `tunnel-key HOME`; no name, key, address or
+     * (STATE `known`, `locked`, `unavailable`, `lost` or `removed`; `set` when this run set it in the engine), a
+     * `tunnel-waiting N routes K` line for each removed slot apps still wait for, a `tunnel-engine-route UID N` line
+     * for each route last handed to the engine, and `tunnel-key HOME`; no name, key, address or
      * endpoint. `tunnel-key-time` opens each configuration as a start does and prints `tunnel-opened N MS` (zeroed at
      * once). `tunnel-key-probe make|open|clear` measures a key that needs an unlocked phone, as ADR 0035 asks of
      * `setUnlockedDeviceRequired`: `make` makes one (alias `watch-tunnels-probe`) and wraps 32 random bytes in Watch's
@@ -1020,6 +1113,7 @@ class WatchVpnService : VpnService() {
                 val name = when (store.name(slot)) {
                     is org.visadahyu.datapavan.watch.tunnel.TunnelStore.Name.Known -> "known"
                     org.visadahyu.datapavan.watch.tunnel.TunnelStore.Name.Locked -> "locked"
+                    org.visadahyu.datapavan.watch.tunnel.TunnelStore.Name.Unavailable -> "unavailable"
                     org.visadahyu.datapavan.watch.tunnel.TunnelStore.Name.Lost -> "lost"
                     org.visadahyu.datapavan.watch.tunnel.TunnelStore.Name.Removed -> "removed"
                 }
@@ -1031,6 +1125,8 @@ class WatchVpnService : VpnService() {
             for (slot in state.routes.values.distinct().filter { it !in state.order }) {
                 writer.println("tunnel-waiting $slot routes ${state.routes.count { it.value == slot }}")
             }
+            // What the engine was last handed, by UID: an app installed again is routed by its new one (M1).
+            for ((uid, slot) in routesSet) writer.println("tunnel-engine-route $uid $slot")
             writer.println("tunnel-key ${store.home().name.lowercase()}")
         }
         if ("tunnel-key-time" in args) {
@@ -1059,6 +1155,7 @@ class WatchVpnService : VpnService() {
                 "open" -> when (val opened = wrap.unwrap(1, org.visadahyu.datapavan.watch.tunnel.Wrap.Part.TEXT, file.takeIf { it.isFile }?.readBytes() ?: ByteArray(0))) {
                     is org.visadahyu.datapavan.watch.tunnel.Opened.Plain -> "open ok".also { opened.bytes.fill(0) }
                     org.visadahyu.datapavan.watch.tunnel.Opened.Locked -> "open locked"
+                    org.visadahyu.datapavan.watch.tunnel.Opened.Unavailable -> "open unavailable"
                     org.visadahyu.datapavan.watch.tunnel.Opened.Lost -> "open lost"
                 }
                 else -> {

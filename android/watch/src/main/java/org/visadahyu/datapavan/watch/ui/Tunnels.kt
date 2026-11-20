@@ -1,5 +1,7 @@
 package org.visadahyu.datapavan.watch.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -70,10 +72,19 @@ internal data class PendingView(
     val replacing: Int?,
     val replacingName: String?,
     val chosen: Set<String>,
-    val notInstalled: List<String>,
-    val fromFile: Boolean,
     val local: Boolean,
-)
+    /** What the file proposes, read once the apps the user can choose are loaded; null while they load. */
+    val proposal: Import.Proposal? = null,
+) {
+    /** Whether the file names apps, in either of WireGuard's lists. */
+    val fromFile: Boolean get() = described.only.isNotEmpty() || described.except.isNotEmpty()
+
+    /**
+     * With [next], what the file proposes read anew: its ticks the first time only, so that ticks, a name and a
+     * switch the user changed meanwhile stay (fix round, screens review m3).
+     */
+    fun with(next: Import.Proposal): PendingView = copy(proposal = next, chosen = if (proposal == null) next.ticked else chosen)
+}
 
 /** The WireGuard part of Watch's screen. */
 internal data class TunnelsView(
@@ -90,7 +101,21 @@ internal data class TunnelsView(
     /** Each slot's name as shown, removed ones included. */
     val names: Map<Int, String> = emptyMap(),
     val logDestinations: Boolean = false,
-)
+) {
+    /**
+     * The note on the default tunnel (fix round, screens review M4): whenever a configuration exists, since the one
+     * or the first carries ping and flows Android names no app for while any app goes through one.
+     */
+    val defaultNote: Int?
+        get() = when (configurations.size) {
+            0 -> null
+            1 -> R.string.tunnels_default_note_one
+            else -> R.string.tunnels_default_note
+        }
+
+    /** The apps that wait for a configuration since removed, apps left out aside (fix round, screens review m1). */
+    fun waiting(leftOut: Set<String>): Map<String, Int> = Routes.split(routes, configurations.map { it.slot }, leftOut).second
+}
 
 /** What the user can do with the configurations and the apps' ways. */
 internal class TunnelActions(
@@ -116,7 +141,7 @@ internal class TunnelActions(
 @Composable
 internal fun shownName(name: TunnelStore.Name?): String = when (name) {
     is TunnelStore.Name.Known -> isolate(name.name)
-    TunnelStore.Name.Locked, TunnelStore.Name.Lost -> stringResource(R.string.tunnel_closed_name)
+    TunnelStore.Name.Locked, TunnelStore.Name.Unavailable, TunnelStore.Name.Lost -> stringResource(R.string.tunnel_closed_name)
     TunnelStore.Name.Removed, null -> stringResource(R.string.tunnel_removed_name)
 }
 
@@ -127,7 +152,7 @@ internal fun shownName(name: TunnelStore.Name?): String = when (name) {
  * shown only on the confirmation.
  */
 @Composable
-internal fun TunnelsSection(view: TunnelsView, actions: TunnelActions) {
+internal fun TunnelsSection(view: TunnelsView, actions: TunnelActions, leftOut: Set<String>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.semantics { testTagsAsResourceId = true }) {
         Text(
             stringResource(R.string.tunnels_title),
@@ -138,6 +163,7 @@ internal fun TunnelsSection(view: TunnelsView, actions: TunnelActions) {
         when (view.home) {
             KeyHome.STRONGBOX -> R.string.tunnels_key_strongbox
             KeyHome.TRUSTED_ENVIRONMENT -> R.string.tunnels_key_tee
+            KeyHome.SECURE_HARDWARE -> R.string.tunnels_key_secure_hardware
             KeyHome.SOFTWARE -> R.string.tunnels_key_software
             KeyHome.UNKNOWN, null -> null
         }?.let { Text(stringResource(it), style = MaterialTheme.typography.bodyMedium) }
@@ -145,7 +171,15 @@ internal fun TunnelsSection(view: TunnelsView, actions: TunnelActions) {
         view.configurations.forEachIndexed { index, configuration ->
             ConfigurationCard(configuration, isDefault = index == 0, several = view.configurations.size > 1, actions = actions)
         }
-        if (view.configurations.size > 1) Text(stringResource(R.string.tunnels_default_note), style = MaterialTheme.typography.bodyMedium)
+        view.defaultNote?.let { Text(stringResource(it), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("tunnels-default-note")) }
+        val waiting = view.waiting(leftOut).size
+        if (waiting > 0) {
+            Text(
+                pluralStringResource(R.plurals.tunnels_waiting, waiting, waiting),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
         if (view.full) {
             Text(pluralStringResource(R.plurals.tunnels_full, TunnelStore.MAX, TunnelStore.MAX), style = MaterialTheme.typography.bodyMedium)
         } else {
@@ -193,16 +227,23 @@ private fun ConfigurationCard(configuration: ConfigurationView, isDefault: Boole
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
             if (isDefault && several) Text(stringResource(R.string.tunnels_default), style = MaterialTheme.typography.labelLarge)
+            // Only the state's kind is a live region: the handshake's age, which changes every second, is said beside
+            // it, so that TalkBack does not announce each configuration every second (fix round, screens review M3).
+            val kind = TunnelStates.kind(configuration.shown)
             Text(
-                stateWords(configuration.shown),
+                stringResource(kindWords(kind)),
                 style = MaterialTheme.typography.bodyMedium,
-                color = when (configuration.shown) {
-                    TunnelStates.Shown.NotAnswering, TunnelStates.Shown.Lost, TunnelStates.Shown.Locked, TunnelStates.Shown.Missing ->
-                        MaterialTheme.colorScheme.error
+                color = when (kind) {
+                    TunnelStates.Kind.NOT_ANSWERING, TunnelStates.Kind.LOST, TunnelStates.Kind.LOCKED, TunnelStates.Kind.UNAVAILABLE,
+                    TunnelStates.Kind.MISSING,
+                    -> MaterialTheme.colorScheme.error
                     else -> MaterialTheme.colorScheme.onSurface
                 },
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }.testTag("tunnel-state-${configuration.slot}"),
             )
+            (configuration.shown as? TunnelStates.Shown.Connected)?.let { connected ->
+                Text(handshakeWords(connected.seconds), style = MaterialTheme.typography.bodyMedium)
+            }
             if (configuration.plainDns) Text(stringResource(R.string.tunnel_state_plain_dns), style = MaterialTheme.typography.bodyMedium)
             Text(
                 if (configuration.apps == 0) {
@@ -289,29 +330,47 @@ private fun RemoveDialog(name: String, onRemove: (Boolean) -> Unit, onCancel: ()
     )
 }
 
-/** What a configuration's state says. */
+/**
+ * What a state's kind says, the words of its live region: a kind alone, never a number, so that it changes only when
+ * the state does (fix round, screens review M3).
+ */
+internal fun kindWords(kind: TunnelStates.Kind): Int = when (kind) {
+    TunnelStates.Kind.OFF -> R.string.tunnel_state_off
+    TunnelStates.Kind.IDLE -> R.string.tunnel_state_idle
+    TunnelStates.Kind.NOT_ANSWERING -> R.string.tunnel_state_not_answering
+    TunnelStates.Kind.MISSING -> R.string.tunnel_state_missing
+    TunnelStates.Kind.LOCKED -> R.string.tunnel_state_locked
+    TunnelStates.Kind.UNAVAILABLE -> R.string.tunnel_state_unavailable
+    TunnelStates.Kind.LOST -> R.string.tunnel_state_lost
+    TunnelStates.Kind.CONNECTED -> R.string.tunnel_state_connected
+}
+
+/** How long ago a connected configuration's last handshake was, outside the live region. */
 @Composable
-private fun stateWords(shown: TunnelStates.Shown): String = when (shown) {
-    TunnelStates.Shown.Off -> stringResource(R.string.tunnel_state_off)
-    TunnelStates.Shown.Idle -> stringResource(R.string.tunnel_state_idle)
-    TunnelStates.Shown.NotAnswering -> stringResource(R.string.tunnel_state_not_answering)
-    TunnelStates.Shown.Missing -> stringResource(R.string.tunnel_state_missing)
-    TunnelStates.Shown.Locked -> stringResource(R.string.tunnel_state_locked)
-    TunnelStates.Shown.Lost -> stringResource(R.string.tunnel_state_lost)
-    is TunnelStates.Shown.Connected -> if (shown.seconds < 120) {
-        pluralStringResource(R.plurals.tunnel_state_seconds, shown.seconds.toInt(), shown.seconds)
-    } else {
-        val minutes = shown.seconds / 60
-        pluralStringResource(R.plurals.tunnel_state_minutes, minutes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), minutes)
-    }
+private fun handshakeWords(seconds: Long): String = if (seconds < 120) {
+    pluralStringResource(R.plurals.tunnel_handshake_seconds, seconds.toInt(), seconds)
+} else {
+    val minutes = seconds / 60
+    pluralStringResource(R.plurals.tunnel_handshake_minutes, minutes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), minutes)
 }
 
 /**
  * The confirmation before anything is saved (W7, part 2): what the configuration does, never a key, its name, which
  * the user may change, and the apps it proposes, which the user confirms or changes; nothing is applied silently.
+ * The apps the file names come first, each with its way now, and an app that goes another way now is not ticked;
+ * one the user ticks says where it moves from (fix round, screens review M2). Back cancels it.
  */
 @Composable
-internal fun ImportConfirmation(pending: PendingView, choices: List<AppChoice>, actions: TunnelActions) {
+internal fun ImportConfirmation(
+    pending: PendingView,
+    choices: List<AppChoice>,
+    chain: Routes.Chain,
+    toolName: String?,
+    leftOut: Set<String>,
+    view: TunnelsView,
+    actions: TunnelActions,
+) {
+    BackHandler(onBack = actions.onCancel)
     val body = MaterialTheme.typography.bodyMedium
     val d = pending.described
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -363,26 +422,12 @@ internal fun ImportConfirmation(pending: PendingView, choices: List<AppChoice>, 
                 Switching(stringResource(R.string.tunnels_local), pending.local, actions.onPendingLocal)
                 Text(stringResource(R.string.tunnels_local_note), style = MaterialTheme.typography.bodySmall)
                 Text(stringResource(R.string.import_apps), style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
-                if (pending.fromFile) Text(stringResource(R.string.import_apps_from_file), style = body)
-                if (pending.notInstalled.isNotEmpty()) {
-                    Text(stringResource(R.string.import_not_installed, pending.notInstalled.joinToString(", ") { isolateLtr(it) }), style = body)
-                }
-                if (choices.isEmpty()) Text(stringResource(R.string.import_apps_loading), style = body)
-                for (app in choices) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .toggleable(value = app.packageName in pending.chosen, role = Role.Checkbox) { actions.onPendingApp(app.packageName, it) }
-                            .padding(vertical = 2.dp)
-                            .testTag("tunnel-app-${app.packageName}"),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Checkbox(checked = app.packageName in pending.chosen, onCheckedChange = null)
-                        Column(Modifier.padding(start = 12.dp)) {
-                            Text(isolate(app.label), style = MaterialTheme.typography.bodyLarge)
-                            Text(isolateLtr(app.packageName), style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
+                val proposal = pending.proposal
+                // Nothing is said of the apps, installed or not, while they load (fix round, screens review m2).
+                if (proposal == null) {
+                    Text(stringResource(R.string.import_apps_loading), style = body)
+                } else {
+                    ProposedApps(pending, proposal, choices, chain, toolName, leftOut, view, actions)
                 }
             }
             Button(
@@ -392,6 +437,72 @@ internal fun ImportConfirmation(pending: PendingView, choices: List<AppChoice>, 
             ) { Text(stringResource(R.string.import_save)) }
             OutlinedButton(onClick = actions.onCancel, modifier = Modifier.testTag("tunnel-cancel")) {
                 Text(stringResource(R.string.tunnels_cancel))
+            }
+        }
+    }
+}
+
+/**
+ * The confirmation's apps: what the file proposes first, by name, each with its way now; the apps it leaves out and
+ * those it names that cannot go through it, each said apart; then every other app the user can choose.
+ */
+@Composable
+private fun ProposedApps(
+    pending: PendingView,
+    proposal: Import.Proposal,
+    choices: List<AppChoice>,
+    chain: Routes.Chain,
+    toolName: String?,
+    leftOut: Set<String>,
+    view: TunnelsView,
+    actions: TunnelActions,
+) {
+    val body = MaterialTheme.typography.bodyMedium
+    val labels = choices.associate { it.packageName to it.label }
+    val slots = view.configurations.map { it.slot }
+    fun named(apps: List<String>) = apps.joinToString(", ") { app -> labels[app]?.let(::isolate) ?: isolateLtr(app) }
+    if (pending.fromFile) {
+        Text(stringResource(R.string.import_apps_from_file), style = body)
+        if (proposal.ticked.size < proposal.proposed.size) Text(stringResource(R.string.import_apps_not_ticked), style = body)
+    }
+    if (proposal.excluded.isNotEmpty()) {
+        Text(stringResource(R.string.import_excluded, named(proposal.excluded)), style = body)
+        Text(stringResource(R.string.import_excluded_now), style = body)
+    }
+    if (proposal.notInstalled.isNotEmpty()) Text(stringResource(R.string.import_not_installed, named(proposal.notInstalled)), style = body)
+    if (proposal.notChoosable.isNotEmpty()) Text(stringResource(R.string.import_not_choosable, named(proposal.notChoosable)), style = body)
+    if (proposal.leftOut.isNotEmpty()) Text(stringResource(R.string.import_left_out, named(proposal.leftOut)), style = body)
+    val first = proposal.proposed.toSet()
+    val proposed = proposal.proposed.mapNotNull { app -> choices.firstOrNull { it.packageName == app } }
+    val others = choices.filter { it.packageName !in first }
+    for (app in proposed) AppRow(app, pending, Routes.of(app.packageName, chain, view.routes, slots, leftOut), toolName, view.names, actions)
+    if (proposed.isNotEmpty() && others.isNotEmpty()) {
+        Text(stringResource(R.string.import_apps_others), style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
+    }
+    for (app in others) AppRow(app, pending, Routes.of(app.packageName, chain, view.routes, slots, leftOut), toolName, view.names, actions)
+}
+
+/** One app of the confirmation: its tick, its name, its way now, and where it moves from once ticked. */
+@Composable
+private fun AppRow(app: AppChoice, pending: PendingView, way: Routes.Route, toolName: String?, names: Map<Int, String>, actions: TunnelActions) {
+    val ticked = app.packageName in pending.chosen
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(value = ticked, role = Role.Checkbox) { actions.onPendingApp(app.packageName, it) }
+            .padding(vertical = 2.dp)
+            .testTag("tunnel-app-${app.packageName}"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(checked = ticked, onCheckedChange = null)
+        Column(Modifier.padding(start = 12.dp)) {
+            Text(isolate(app.label), style = MaterialTheme.typography.bodyLarge)
+            Text(isolateLtr(app.packageName), style = MaterialTheme.typography.bodySmall)
+            val words = routeWords(way, toolName, names)
+            if (ticked && way != Routes.Route.Direct) {
+                Text(stringResource(R.string.import_app_moves, words), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+            } else {
+                Text(stringResource(R.string.import_app_way, words), style = MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -430,10 +541,12 @@ internal fun RoutesSection(
         for (app in choices) {
             val route = Routes.of(app.packageName, chain, view.routes, slots, leftOut)
             Column(Modifier.fillMaxWidth()) {
+                // A button that opens the app's choices: TalkBack reads it as one, not as "selected" (fix round, screens
+                // review, nit).
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .selectable(selected = expanded == app.packageName, role = Role.Button) {
+                        .clickable(role = Role.Button) {
                             expanded = if (expanded == app.packageName) null else app.packageName
                         }
                         .padding(vertical = 4.dp)

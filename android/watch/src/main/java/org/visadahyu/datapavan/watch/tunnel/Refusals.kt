@@ -36,7 +36,8 @@ object Refusals {
         "no-allowed-ips" -> R.string.refused_no_allowed_ips
         "bad-mtu" -> R.string.refused_bad_mtu
         "both-application-lists" -> R.string.refused_both_application_lists
-        "too-many" -> R.string.refused_too_many
+        // A plural, with the engine's bound (fix round, screens review m8).
+        "too-many" -> R.plurals.refused_too_many
         else -> null
     }
 
@@ -48,12 +49,30 @@ object Refusals {
         val id = of(refused.code) ?: return resources.getString(R.string.refused_unknown)
         val key = refused.key?.let(::isolateLtr)
         val text = when {
+            refused.code == "too-many" -> resources.getQuantityString(id, TunnelStore.MAX, TunnelStore.MAX)
             refused.code !in NAMING -> resources.getString(id)
             key != null -> resources.getString(id, key)
             refused.code == "unsupported" -> resources.getString(R.string.refused_unsupported_unnamed)
             else -> resources.getString(R.string.refused_unknown)
         }
         return refused.line?.let { resources.getString(R.string.refused_line, it, text) } ?: text
+    }
+
+    /**
+     * Why a change of the configurations was not saved, in plain words (fix round, security review M3): the words'
+     * resource, a plural for the engine's bound alone.
+     */
+    fun of(why: Changes.NotSaved): Int = when (why) {
+        Changes.NotSaved.STORAGE -> R.string.tunnels_not_saved_storage
+        Changes.NotSaved.KEYSTORE -> R.string.tunnels_not_saved_keystore
+        Changes.NotSaved.GONE -> R.string.tunnels_not_saved_gone
+        Changes.NotSaved.FULL -> R.plurals.refused_too_many
+        Changes.NotSaved.OTHER -> R.string.tunnels_not_saved_other
+    }
+
+    fun words(resources: Resources, why: Changes.NotSaved): String = when (why) {
+        Changes.NotSaved.FULL -> words(resources, Import.Refused("too-many"))
+        else -> resources.getString(of(why))
     }
 
     /** Why a picture gave no configuration, in plain words. */

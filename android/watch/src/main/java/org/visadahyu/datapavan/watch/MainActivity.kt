@@ -22,15 +22,19 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import android.os.CancellationSignal
+import android.content.pm.PackageManager
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import java.io.File
-import java.util.concurrent.Executors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.visadahyu.datapavan.safety.ScreenProtection
 import org.visadahyu.datapavan.ui.isolate
+import org.visadahyu.datapavan.watch.tunnel.Changes
+import org.visadahyu.datapavan.watch.tunnel.DocumentRead
 import org.visadahyu.datapavan.watch.tunnel.Import
 import org.visadahyu.datapavan.watch.tunnel.Refusals
 import org.visadahyu.datapavan.watch.tunnel.Routes
@@ -80,14 +84,22 @@ class MainActivity : ComponentActivity() {
         if (result.resultCode == RESULT_OK) startTunnel() else refused.value = true
     }
 
-    /** The WireGuard configurations and the import (W7, part 2). */
-    private val tunnels = mutableStateOf(TunnelsView())
+    /**
+     * The WireGuard configurations and the import (W7, part 2), kept across the screen's recreation, the confirmation
+     * among them (fix round, screens review M1).
+     */
+    private val model: TunnelModel by lazy { ViewModelProvider(this)[TunnelModel::class.java] }
+    private val tunnels get() = model.tunnels
 
-    /** Where the Keystore, the files and the QR decoder are used: off the main thread, one thing at a time. */
-    private val worker = Executors.newSingleThreadExecutor { Thread(it, "watch-tunnels").apply { isDaemon = true } }
+    /** Where the store and the Keystore are used: off the main thread, one thing at a time, never a document's read. */
+    private val worker get() = TunnelModel.worker
 
     /** The slot the import under way replaces, or null for a new configuration. Not secret: kept across a restart. */
-    private var replacing: Int? = null
+    private var replacing: Int?
+        get() = model.replacing
+        set(value) {
+            model.replacing = value
+        }
 
     /** The camera's photo under way, and its URI, while the camera has it. */
     private var capture: File? = null
@@ -117,12 +129,15 @@ class MainActivity : ComponentActivity() {
         leftOut.value = LeftOut.of(this).apps
         // A camera's photo this screen asked for before it was recreated is read when the camera answers; any other
         // left is deleted (W7, part 2). The import's slot comes back with it; a pending configuration's bytes stay
-        // in this process alone (pendingImport), never in the saved state.
-        replacing = savedInstanceState?.getInt(SAVED_REPLACING, 0)?.takeIf { it > 0 }
+        // in this process alone (TunnelModel), never in the saved state.
+        savedInstanceState?.getInt(SAVED_REPLACING, 0)?.takeIf { it > 0 }?.let { if (replacing == null) replacing = it }
         capture = savedInstanceState?.getString(SAVED_CAPTURE)?.let { File(it) }
         pendingCapture = capture?.name
         Capture.deleteLeftovers(this, keep = capture?.name)
         refreshTunnels()
+        // A confirmation open before the screen was made anew comes back with it; its apps are read again.
+        if (tunnels.value.pending != null && model.held.now == null) tunnels.value = tunnels.value.copy(pending = null)
+        if (tunnels.value.pending?.replacing == null && tunnels.value.pending != null) loadChoices()
         // Each configuration's state, fresh while the screen is shown, not read while it is not.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -316,8 +331,9 @@ class MainActivity : ComponentActivity() {
                 .sortedBy { it.label.lowercase() }
             runOnUiThread {
                 chain.value = chain.value.copy(choices = choices)
-                // A configuration waiting for the apps it proposes gets them now.
-                tunnels.value.pending?.let { if (it.replacing == null) showPending(null, null) }
+                // A configuration waiting for the apps it proposes gets them now, the name and switch the user
+                // changed meanwhile kept (fix round, screens review m3).
+                proposeApps()
             }
         }.apply { name = "watch-apps" }.start()
     }
@@ -338,9 +354,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // A configuration not yet saved stays in this process for the screen that comes back; a screen that is
-        // finished drops it.
-        if (isFinishing) dropPending()
+        // A configuration not yet saved stays in the model for the screen that comes back, which zeroes it when the
+        // screen finishes (TunnelModel.onCleared). A photo the camera never answered for goes now, its write grant
+        // taken back first, so that the camera cannot write it again (fix round, security review m7).
+        if (isFinishing) {
+            capture?.let { file -> Capture.abandon(file) { Capture.revoke(this, Capture.uri(this, file)) } }
+            capture = null
+            pendingCapture = null
+        }
     }
 
     private val tunnelActions = TunnelActions(
@@ -385,10 +406,15 @@ class MainActivity : ComponentActivity() {
     private fun refreshTunnels() {
         worker.execute {
             val store = TunnelStore.of(this)
-            val state = store.state()
-            val slots = (state.order + state.routes.values).distinct()
-            val names = slots.associateWith { store.name(it) }
-            val home = if (state.order.isEmpty()) null else store.home()
+            val read = try {
+                val state = store.state()
+                val slots = (state.order + state.routes.values).distinct()
+                Triple(state, slots.associateWith { store.name(it) }, if (state.order.isEmpty()) null else store.home())
+            } catch (e: java.io.IOException) {
+                // The state could not be read now: the screen keeps what it showed, and the next change reads again.
+                null
+            } ?: return@execute
+            val (state, names, home) = read
             runOnUiThread {
                 val shown = names.mapValues { (_, name) -> nameFor(name) }
                 tunnels.value = tunnels.value.copy(
@@ -416,7 +442,7 @@ class MainActivity : ComponentActivity() {
     /** A configuration's name for a sentence. */
     private fun nameFor(name: TunnelStore.Name): String = when (name) {
         is TunnelStore.Name.Known -> isolate(name.name)
-        TunnelStore.Name.Locked, TunnelStore.Name.Lost -> getString(R.string.tunnel_closed_name)
+        TunnelStore.Name.Locked, TunnelStore.Name.Unavailable, TunnelStore.Name.Lost -> getString(R.string.tunnel_closed_name)
         TunnelStore.Name.Removed -> getString(R.string.tunnel_removed_name)
     }
 
@@ -432,13 +458,19 @@ class MainActivity : ComponentActivity() {
         if (configurations != view.configurations) tunnels.value = view.copy(configurations = configurations)
     }
 
-    /** Changes the store off the main thread, then shows it and hands it to the running tunnel. */
-    private fun changeTunnels(change: (TunnelStore) -> Unit) {
+    /**
+     * Changes the store off the main thread, then shows it and hands it to the running tunnel, and then runs [after]
+     * on the main thread, once the change is on its way to the engine. A change that fails, a full disk, a Keystore
+     * error or a slot removed meanwhile, ends alone, the store as it was, and the screen says it was not saved (fix
+     * round, security review M3); [after] does not run then.
+     */
+    private fun changeTunnels(after: () -> Unit = {}, change: (TunnelStore) -> Unit) {
         worker.execute {
-            change(TunnelStore.of(this))
+            val failed = Changes.run { change(TunnelStore.of(this)) }
             runOnUiThread {
                 refreshTunnels()
                 applyTunnels()
+                if (failed == null) after() else say(Refusals.words(resources, failed))
             }
         }
     }
@@ -450,12 +482,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Gives [app] the way [route]: the chain's list and the app's tunnel change together, one way per app. */
+    /**
+     * Gives [app] the way [route]: the chain's list and the app's tunnel change together, one way per app, in the
+     * order that never sends it directly in between (fix round, security review M2): a tunnel's route first, and the
+     * chain's list only once that change is on its way to the engine, behind it; the chain first when the app leaves
+     * its tunnel.
+     */
     private fun route(app: String, route: Routes.Route) {
         val settings = ChainSettings.of(this)
         val change = Routes.choose(app, route, routesChain())
-        if (change.chainApps != settings.apps) changeChain { it.apps = change.chainApps }
-        changeTunnels { it.route(app, change.tunnel) }
+        val chained = { if (change.chainApps != ChainSettings.of(this).apps) changeChain { it.apps = change.chainApps } }
+        if (change.tunnelFirst) {
+            changeTunnels(after = chained) { it.route(app, change.tunnel) }
+        } else {
+            if (change.chainApps != settings.apps) chained()
+            changeTunnels { it.route(app, change.tunnel) }
+        }
     }
 
     /** The chain as the routes read it. */
@@ -464,10 +506,14 @@ class MainActivity : ComponentActivity() {
         return Routes.Chain(settings.on, settings.allApps, settings.apps, settings.lastTool?.packageName)
     }
 
-    /** A configuration's file: its name, and at most [Import.MAX_TEXT] bytes of it, read off the main thread. */
+    /**
+     * A configuration's file: its name, and at most [Import.MAX_TEXT] bytes of it, read on a thread of its own within
+     * [DocumentRead.LIMIT_MS], never on the store's worker, which a slow provider would hold (fix round, security
+     * review M2); then read by the engine's parser on the worker.
+     */
     private fun importFile(uri: android.net.Uri) {
         tunnels.value = tunnels.value.copy(message = null, photoDeleted = false)
-        worker.execute {
+        reading {
             val name = try {
                 contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
                     if (cursor.moveToFirst()) cursor.getString(0) else null
@@ -475,50 +521,48 @@ class MainActivity : ComponentActivity() {
             } catch (e: RuntimeException) {
                 null
             }
-            val text = try {
-                contentResolver.openInputStream(uri)?.use { readBounded(it) }
-            } catch (e: java.io.IOException) {
-                null
-            } catch (e: SecurityException) {
-                null
+            val cancel = CancellationSignal()
+            val got = DocumentRead.read(DocumentRead.LIMIT_MS, Import.MAX_TEXT, onLate = cancel::cancel) {
+                contentResolver.openFileDescriptor(uri, "r", cancel)?.let { android.os.ParcelFileDescriptor.AutoCloseInputStream(it) }
             }
-            when (text) {
-                null -> say(getString(R.string.import_unreadable))
-                TOO_LONG -> say(Refusals.words(resources, Import.Refused("too-long")))
-                else -> read(text, name, fromPicture = false)
+            when (got) {
+                is DocumentRead.Result.Bytes -> worker.execute { read(got.bytes, name, fromPicture = false) }
+                DocumentRead.Result.TooLong -> say(Refusals.words(resources, Import.Refused("too-long")))
+                DocumentRead.Result.TooSlow -> say(getString(R.string.import_too_slow))
+                DocumentRead.Result.Unreadable -> say(getString(R.string.import_unreadable))
             }
         }
+    }
+
+    /** Runs [task] on a thread of its own: a document's or a picture's read, which may wait on its provider. */
+    private fun reading(task: () -> Unit) {
+        Thread(task, "watch-import").apply { isDaemon = true }.start()
     }
 
     /**
-     * At most [Import.MAX_TEXT] bytes of [stream], or [TOO_LONG] when there are more. The buffers it read through
-     * are zeroed; the caller zeroes what it returns.
+     * A picture from the photo picker: opened within [DocumentRead.LIMIT_MS], its QR code read in the decoder's
+     * isolated process within that one's own limit, on a thread of its own.
      */
-    private fun readBounded(stream: java.io.InputStream): ByteArray {
-        val held = ByteArray(Import.MAX_TEXT + 1)
-        var length = 0
-        try {
-            while (length < held.size) {
-                val n = stream.read(held, length, held.size - length)
-                if (n < 0) break
-                length += n
-            }
-            return if (length > Import.MAX_TEXT) TOO_LONG else held.copyOf(length)
-        } finally {
-            held.fill(0)
-        }
-    }
-
-    /** A picture from the photo picker: its QR code read in the decoder's isolated process. */
     private fun importPicture(uri: android.net.Uri) {
         tunnels.value = tunnels.value.copy(message = null, reading = true, photoDeleted = false)
-        worker.execute {
+        reading {
+            val cancel = CancellationSignal()
+            val opening = java.util.concurrent.Executors.newSingleThreadScheduledExecutor()
+            val late = opening.schedule(cancel::cancel, DocumentRead.LIMIT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
             val result = try {
-                contentResolver.openFileDescriptor(uri, "r")?.let { QrClient.decode(this, it) }
+                contentResolver.openFileDescriptor(uri, "r", cancel)?.let { QrClient.decode(this, it) }
             } catch (e: java.io.IOException) {
                 null
             } catch (e: SecurityException) {
                 null
+            } catch (e: android.os.OperationCanceledException) {
+                QrDecode.Result.Failed(QrDecode.Failure.TOO_SLOW)
+            } catch (e: RuntimeException) {
+                // A provider that no longer has the picture, or refuses it otherwise.
+                null
+            } finally {
+                late.cancel(false)
+                opening.shutdown()
             } ?: QrDecode.Result.Failed(QrDecode.Failure.NOT_A_PICTURE)
             readPicture(result, photo = false)
         }
@@ -555,7 +599,7 @@ class MainActivity : ComponentActivity() {
         capture = null
         Capture.revoke(this, Capture.uri(this, file))
         tunnels.value = tunnels.value.copy(reading = taken)
-        worker.execute {
+        reading {
             val result = Capture.finish(file, taken) {
                 android.os.ParcelFileDescriptor.open(it, android.os.ParcelFileDescriptor.MODE_READ_ONLY).let { picture -> QrClient.decode(this, picture) }
             }
@@ -568,11 +612,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** What the decoder gave: the configuration's text, read as a file's, or why not. Worker thread. */
+    /** What the decoder gave: the configuration's text, read as a file's on the store's worker, or why not. */
     private fun readPicture(result: QrDecode.Result, photo: Boolean) {
         runOnUiThread { tunnels.value = tunnels.value.copy(reading = false, photoDeleted = photo) }
         when (result) {
-            is QrDecode.Result.Text -> read(result.bytes, null, fromPicture = true)
+            is QrDecode.Result.Text -> worker.execute { read(result.bytes, null, fromPicture = true) }
             is QrDecode.Result.Failed -> say(getString(Refusals.of(result.why)))
         }
     }
@@ -592,86 +636,104 @@ class MainActivity : ComponentActivity() {
             say((reading as? Import.Refused)?.let { Refusals.words(resources, it) } ?: getString(R.string.refused_unknown))
             return
         }
-        val store = TunnelStore.of(this)
-        val state = store.state()
-        val slot = replacing?.takeIf { it in state.order }
+        val opened = try {
+            val store = TunnelStore.of(this)
+            val state = store.state()
+            val slot = replacing?.takeIf { it in state.order }
+            Triple(
+                state,
+                slot,
+                state.order.associateWith { store.name(it) },
+            )
+        } catch (e: java.io.IOException) {
+            null
+        }
+        if (opened == null) {
+            text.fill(0)
+            say(Refusals.words(resources, Changes.NotSaved.STORAGE))
+            return
+        }
+        val (state, slot, names) = opened
         if (slot == null && state.full) {
             text.fill(0)
             say(Refusals.words(resources, Import.Refused("too-many")))
             return
         }
-        val taken = state.order.mapNotNull { (store.name(it) as? TunnelStore.Name.Known)?.name }
-        val replacedName = slot?.let { (store.name(it) as? TunnelStore.Name.Known)?.name }
+        val taken = names.values.mapNotNull { (it as? TunnelStore.Name.Known)?.name }
+        val replacedName = slot?.let { (names[it] as? TunnelStore.Name.Known)?.name }
         val name = replacedName ?: Import.defaultName(if (fromPicture) null else fileName, { getString(R.string.tunnels_default_name, it) }, taken)
         runOnUiThread {
-            dropPending()
-            pendingImport = Import.Pending(text, reading, name)
-            showPending(slot, replacedName?.let(::isolate))
+            model.held.hold(Import.Pending(text, reading, name))
+            tunnels.value = tunnels.value.copy(
+                message = null,
+                pending = PendingView(reading, name, slot, replacedName?.let(::isolate), chosen = emptySet(), local = false),
+            )
+            if (slot == null) {
+                if (chain.value.choices.isEmpty()) loadChoices() else proposeApps()
+            }
         }
     }
 
-    /** Shows the pending configuration's confirmation, with the apps it proposes once the apps are loaded. */
-    private fun showPending(slot: Int?, replacedName: String?) {
-        val pending = pendingImport ?: return
-        val proposal = Import.propose(pending.described, chain.value.choices.map { it.packageName }, packageName, leftOut.value)
-        tunnels.value = tunnels.value.copy(
-            message = null,
-            pending = PendingView(
-                described = pending.described,
-                name = pending.name,
-                replacing = slot,
-                replacingName = replacedName,
-                chosen = proposal.apps,
-                notInstalled = proposal.notInstalled,
-                fromFile = pending.described.only.isNotEmpty() || pending.described.except.isNotEmpty(),
-                local = false,
-            ),
+    /**
+     * Reads, once the apps the user can choose are loaded, the apps the pending configuration proposes and how each
+     * goes now; the ticks only the first time, so that the user's own changes, its name and switch with them, stay
+     * (fix round, screens review M2, m2 and m3). Nothing is said of the apps while they load.
+     */
+    private fun proposeApps() {
+        val view = tunnels.value.pending ?: return
+        if (view.replacing != null || chain.value.choices.isEmpty()) return
+        val ways = routesChain()
+        val slots = tunnels.value.configurations.map { it.slot }
+        val routes = tunnels.value.routes
+        val proposal = Import.propose(
+            view.described,
+            chain.value.choices.map { it.packageName },
+            packageName,
+            leftOut.value,
+            installed = ::installed,
+            goesDirectly = { app -> Routes.of(app, ways, routes, slots, leftOut.value) == Routes.Route.Direct },
         )
-        if (slot == null && chain.value.choices.isEmpty()) loadChoices()
+        tunnels.value = tunnels.value.copy(pending = view.with(proposal))
     }
 
-    /** Saves the confirmed configuration, with its name, its apps and its switch, then zeroes its bytes. */
+    /** Whether Android has the package installed, whether or not it has an icon to open it. */
+    private fun installed(app: String): Boolean = try {
+        @Suppress("DEPRECATION")
+        packageManager.getApplicationInfo(app, 0)
+        true
+    } catch (e: PackageManager.NameNotFoundException) {
+        false
+    }
+
+    /**
+     * Saves the confirmed configuration, with its name, its apps and its switch, in one change, then zeroes its bytes;
+     * a change that fails leaves the store as it was and says so (fix round, security review M3). The new route goes
+     * to the engine before a chained app leaves the chain's list, so that it never goes directly in between (M2).
+     */
     private fun savePending() {
         val view = tunnels.value.pending ?: return
-        val pending = pendingImport ?: return
-        pendingImport = null
+        val pending = model.held.take() ?: return
         tunnels.value = tunnels.value.copy(pending = null)
         val apps = view.chosen
         worker.execute {
-            val store = TunnelStore.of(this)
-            val text = pending.text
-            try {
-                if (text == null) return@execute
-                val slot = view.replacing
-                if (slot != null) {
-                    store.replace(slot, text, view.name)
-                } else {
-                    val added = store.add(view.name, text)
-                    if (added == null) {
-                        say(Refusals.words(resources, Import.Refused("too-many")))
-                        return@execute
-                    }
-                    store.setLocal(added, view.local)
-                    for (app in apps) store.route(app, added)
-                    // One way per app: a chained app chosen for the tunnel leaves the chain's list.
-                    val settings = ChainSettings.of(this)
-                    if ((settings.apps intersect apps).isNotEmpty()) runOnUiThread { changeChain { it.apps = it.apps - apps } }
-                }
-            } finally {
-                pending.close()
-                replacing = null
-            }
+            val saved = Changes.save(TunnelStore.of(this), pending, view.name, view.replacing, view.local, apps)
             runOnUiThread {
+                replacing = null
                 refreshTunnels()
                 applyTunnels()
+                when (saved) {
+                    // One way per app: a chained app chosen for the tunnel leaves the chain's list, behind its route.
+                    is Changes.Saved.Added -> if ((ChainSettings.of(this).apps intersect apps).isNotEmpty()) changeChain { it.apps = it.apps - apps }
+                    is Changes.Saved.Replaced -> Unit
+                    is Changes.Saved.Not -> say(Refusals.words(resources, saved.why))
+                }
             }
         }
     }
 
     /** Zeroes a configuration not saved. */
     private fun dropPending() {
-        pendingImport?.close()
-        pendingImport = null
+        model.held.drop()
     }
 
     /** Shows why an import gave no configuration. Any thread. */
@@ -715,18 +777,9 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        /**
-         * The configuration on its way to the store (W7, part 2), held by Watch's process alone: never in a saved
-         * state, which Android copies out of the process. Main thread only.
-         */
-        private var pendingImport: Import.Pending? = null
-
         /** The name of the camera's photo under way, which a start of the service must not delete. */
         @Volatile
         var pendingCapture: String? = null
-
-        /** What a file longer than a configuration reads as. */
-        private val TOO_LONG = ByteArray(0)
 
         /** How often the configurations' states are read while the screen is shown. */
         private const val STATES_EVERY_MS = 1_000L

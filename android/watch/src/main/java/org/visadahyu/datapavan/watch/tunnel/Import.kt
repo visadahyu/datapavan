@@ -88,26 +88,56 @@ object Import {
     }
 
     /**
-     * The choice of apps the configuration proposes, for the user to confirm or change, never applied silently:
-     * from `IncludedApplications`, those of them installed; from `ExcludedApplications`, every app the user can
-     * choose but those; with neither, none. Watch itself and the apps left out of Watch are never in it. The apps
-     * it names that are not installed are listed as such.
+     * The choice of apps the configuration proposes, for the user to confirm or change, never applied silently (W7,
+     * part 2; fix round, screens review M2 and m2), read once the apps the user can choose are loaded:
+     * - [proposed]: the apps the file names in `IncludedApplications` that the user can choose, in the file's order,
+     *   or with `ExcludedApplications` every app the user can choose but those, in the list's order; the screen lists
+     *   them first, each with its way now;
+     * - [ticked]: those of them that go directly now; one that goes through the tool or another configuration, or
+     *   waits for a removed one, is not ticked, and the screen says where it moves from if the user ticks it;
+     * - [excluded]: with `ExcludedApplications`, the apps it leaves out that the user has, which the screen names;
+     * - [notInstalled], [notChoosable] (installed but not among the apps the user can choose, as an app with no icon
+     *   to open it, or the user's tool) and [leftOut] (left out of Watch), each said apart.
+     * Watch itself is never in any of them.
      */
-    data class Proposal(val apps: Set<String>, val notInstalled: List<String>)
+    data class Proposal(
+        val proposed: List<String>,
+        val ticked: Set<String>,
+        val excluded: List<String>,
+        val notInstalled: List<String>,
+        val notChoosable: List<String>,
+        val leftOut: List<String>,
+    )
 
-    fun propose(described: Described, choosable: Collection<String>, self: String, leftOut: Set<String>): Proposal {
-        val installed = choosable.toSet() - self - leftOut
-        return when {
-            described.only.isNotEmpty() -> Proposal(
-                described.only.filter { it in installed }.toSet(),
-                described.only.filter { it !in choosable && it != self },
-            )
-            described.except.isNotEmpty() -> Proposal(
-                installed - described.except.toSet(),
-                described.except.filter { it !in choosable && it != self },
-            )
-            else -> Proposal(emptySet(), emptyList())
+    /**
+     * [choosable]: the apps the user can choose, in the screen's order, Watch and the apps left out of it not among
+     * them; [installed] asks Android whether a package is installed at all; [goesDirectly] whether an app goes
+     * directly now, neither through the tool nor through a configuration nor waiting for one.
+     */
+    fun propose(
+        described: Described,
+        choosable: List<String>,
+        self: String,
+        leftOut: Set<String>,
+        installed: (String) -> Boolean,
+        goesDirectly: (String) -> Boolean,
+    ): Proposal {
+        val choices = choosable.filter { it != self && it !in leftOut }
+        val named = (described.only + described.except).distinct().filter { it != self }
+        val proposed = when {
+            described.only.isNotEmpty() -> described.only.distinct().filter { it in choices }
+            described.except.isNotEmpty() -> choices.filter { it !in described.except }
+            else -> emptyList()
         }
+        val outside = named.filter { it !in choices }
+        return Proposal(
+            proposed = proposed,
+            ticked = proposed.filter(goesDirectly).toSet(),
+            excluded = described.except.distinct().filter { it in choices },
+            notInstalled = outside.filter { it !in leftOut && !installed(it) },
+            notChoosable = outside.filter { it !in leftOut && installed(it) },
+            leftOut = outside.filter { it in leftOut },
+        )
     }
 
     /**
@@ -136,6 +166,34 @@ object Import {
         override fun close() {
             held?.fill(0)
             held = null
+        }
+    }
+
+    /**
+     * Where Watch's screen keeps the configuration on its way while the confirmation is open (fix round, screens
+     * review M1): it survives the screen's recreation for a rotation, a dark-mode switch or a font change, and its
+     * bytes are zeroed when another takes its place, when it is dropped (cancel, or the screen finishing), and by
+     * whoever [take]s it to save it.
+     */
+    class Held {
+        private var pending: Pending? = null
+
+        /** The configuration held, if any. */
+        val now: Pending? get() = pending
+
+        /** Holds [next], zeroing the one it replaces. */
+        fun hold(next: Pending) {
+            if (pending !== next) pending?.close()
+            pending = next
+        }
+
+        /** Hands the configuration over to be saved, which zeroes it once done; nothing is held after. */
+        fun take(): Pending? = pending.also { pending = null }
+
+        /** Zeroes the configuration held, if any. */
+        fun drop() {
+            pending?.close()
+            pending = null
         }
     }
 }

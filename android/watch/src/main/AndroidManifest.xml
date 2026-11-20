@@ -118,13 +118,15 @@
         <!--
             The file the phone's own camera writes a QR code's photo to for Watch (tunnel/qr/Capture.kt): one file in
             Watch's cache at a time, granted to the camera for writing alone and taken back once it answers; the photo
-            is deleted once read. Watch never holds CAMERA.
+            is deleted once read. Watch never holds CAMERA. In Watch's process, so that the photo's file is opened
+            there alone, not in the audit's (W7, part 2, fix round, the security review's nit).
         -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.watch.capture"
             android:exported="false"
-            android:grantUriPermissions="true">
+            android:grantUriPermissions="true"
+            android:process=":watch">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/watch_capture_paths" />

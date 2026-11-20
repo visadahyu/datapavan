@@ -48,8 +48,18 @@ object Routes {
         slots.forEach { add(Route.Tunnel(it)) }
     }
 
-    /** What choosing [route] for [app] changes: the chain's list of apps, and the app's tunnel (null for none). */
-    data class Change(val chainApps: Set<String>, val tunnel: Int?)
+    /**
+     * What choosing [route] for [app] changes: the chain's list of apps, and the app's tunnel (null for none).
+     *
+     * The order it is applied in (fix round, security review M2): the engine lets an app's tunnel win over the
+     * chain, so a change that gives the app a tunnel ([tunnelFirst]) sets the tunnel's route first and takes the app
+     * off the chain's list only once that is in the engine; one that takes its tunnel away puts it on the chain's
+     * list first. Either way the app's new route is in the engine before its old one goes, and it never goes
+     * directly in between.
+     */
+    data class Change(val chainApps: Set<String>, val tunnel: Int?) {
+        val tunnelFirst: Boolean get() = tunnel != null
+    }
 
     fun choose(app: String, route: Route, chain: Chain): Change = when (route) {
         is Route.Tunnel -> Change(chain.apps - app, route.slot)
@@ -57,6 +67,15 @@ object Routes {
         Route.Tool -> Change(if (chain.allApps) chain.apps else chain.apps + app, null)
         Route.Direct, Route.LeftOut -> Change(chain.apps - app, null)
     }
+
+    /**
+     * The apps routed to a slot, apps left out aside, split into those that go through a configuration that holds
+     * the slot and those that wait for one since removed (fix round, screens review m1): a waiting app goes nowhere,
+     * and is never counted or described as going through a configuration.
+     */
+    fun split(tunnels: Map<String, Int>, slots: Collection<Int>, leftOut: Set<String>): Pair<Map<String, Int>, Map<String, Int>> =
+        tunnels.filterKeys { it !in leftOut }.entries.partition { it.value in slots }
+            .let { (through, waiting) -> through.associate { it.key to it.value } to waiting.associate { it.key to it.value } }
 
     /**
      * The routes the engine gets, by UID, each app routed to a slot, waiting ones included, so that they wait;

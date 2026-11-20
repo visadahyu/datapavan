@@ -62,7 +62,11 @@ class NowActivity : ComponentActivity() {
     private val groups = mutableStateMapOf<Int?, String?>()
     private val trackers = mutableStateMapOf<String, List<TrackerMarks.Match>>()
 
-    /** The WireGuard configurations' names by tunnel number, read off the main thread once each (W7, part 2). */
+    /**
+     * The WireGuard configurations' names by tunnel number, read off the main thread with each snapshot (W7, part 2),
+     * so that a rename, or a name that could not be read a moment ago, shows within a second (fix round, screens
+     * review, nit); the store keeps each name it opened until it changes, so a read costs no Keystore.
+     */
     private val tunnelNames = mutableStateMapOf<Long, String>()
     private val history = mutableStateOf<HistoryView?>(null)
     private val only = mutableStateOf<String?>(null)
@@ -211,12 +215,12 @@ class NowActivity : ComponentActivity() {
         .filter { it != 0L }.toSet()
 
     /**
-     * The names of the tunnels [ids] not read yet, from the store (worker): a configuration's own, isolated so that
-     * it keeps its direction, or a plain phrase for one since removed or that cannot be opened now.
+     * The names of the tunnels [ids], from the store (worker): a configuration's own, isolated so that it keeps its
+     * direction, or a plain phrase for one since removed or that cannot be opened now.
      */
     private fun namesOf(ids: Collection<Long>): Map<Long, String> {
         val store = org.visadahyu.datapavan.watch.tunnel.TunnelStore.of(this)
-        return ids.filter { it !in tunnelNames && it <= Int.MAX_VALUE }.associateWith { id ->
+        return ids.filter { it <= Int.MAX_VALUE }.associateWith { id ->
             when (val name = store.name(id.toInt())) {
                 is org.visadahyu.datapavan.watch.tunnel.TunnelStore.Name.Known -> org.visadahyu.datapavan.ui.isolate(name.name)
                 org.visadahyu.datapavan.watch.tunnel.TunnelStore.Name.Removed -> getString(R.string.tunnel_removed_name)

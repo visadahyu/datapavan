@@ -70,9 +70,12 @@ internal fun WatchScreen(
     onLeaveOut: (String, Boolean) -> Unit,
     onNow: () -> Unit,
 ) {
+    val search = chain.search as? org.visadahyu.datapavan.watch.chain.ToolSearch.Answering
+    val ways = org.visadahyu.datapavan.watch.tunnel.Routes.Chain(chain.on, chain.allApps, chain.apps, search?.found?.tool?.packageName)
+    val toolName = search?.found?.tool?.name ?: chain.chainedName
     // The import's confirmation takes the screen until the user saves or cancels (W7, part 2).
     tunnels.pending?.let {
-        ImportConfirmation(it, choices.filter { app -> app.packageName !in leftOut }, tunnelActions)
+        ImportConfirmation(it, choices.filter { app -> app.packageName !in leftOut }, ways, toolName, leftOut, tunnels, tunnelActions)
         return
     }
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -113,17 +116,16 @@ internal fun WatchScreen(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            // An app's tunnel wins over the chain's choice: the chain's list shows it so (W7, part 2).
-            val tunnelled = tunnels.routes.filterKeys { it !in leftOut }.mapValues { (_, slot) ->
-                tunnels.names[slot] ?: stringResource(R.string.tunnel_removed_name)
-            }
-            ChainSection(chain, privateDns, chainActions, tunnelled)
-            TunnelsSection(tunnels, tunnelActions)
-            val search = chain.search as? org.visadahyu.datapavan.watch.chain.ToolSearch.Answering
+            // An app's tunnel wins over the chain's choice: the chain's list shows it so (W7, part 2); an app waiting
+            // for a removed configuration is said to wait, never to go through one (fix round, screens review m1).
+            val (through, waiting) = org.visadahyu.datapavan.watch.tunnel.Routes.split(tunnels.routes, tunnels.configurations.map { it.slot }, leftOut)
+            val tunnelled = through.mapValues { (_, slot) -> tunnels.names[slot] ?: stringResource(R.string.tunnel_closed_name) }
+            ChainSection(chain, privateDns, chainActions, tunnelled, waiting.keys)
+            TunnelsSection(tunnels, tunnelActions, leftOut)
             RoutesSection(
                 view = tunnels,
-                chain = org.visadahyu.datapavan.watch.tunnel.Routes.Chain(chain.on, chain.allApps, chain.apps, search?.found?.tool?.packageName),
-                toolName = search?.found?.tool?.name ?: chain.chainedName,
+                chain = ways,
+                toolName = toolName,
                 leftOut = leftOut,
                 choices = choices,
                 actions = tunnelActions,

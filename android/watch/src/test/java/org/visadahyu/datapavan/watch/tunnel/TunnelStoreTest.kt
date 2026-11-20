@@ -27,10 +27,14 @@ class TunnelStoreTest {
     class FakeWrap : Wrap {
         var key: Byte? = 0x5a
         var locked = false
+
+        /** The Keystore erring as it does when busy or restarting. */
+        var failing = false
         val given = mutableListOf<ByteArray>()
         private var iv = 0
 
         override fun wrap(slot: Int, part: Wrap.Part, plain: ByteArray): ByteArray {
+            if (failing) throw java.security.ProviderException("Keystore operation failed")
             given += plain
             val k = key ?: error("no key")
             iv++
@@ -62,7 +66,17 @@ class TunnelStoreTest {
     }
 
     private val wrap = FakeWrap()
-    private fun store() = TunnelStore(dir, wrap)
+
+    /** A disk that fills up after [room] more files. */
+    private var room = Int.MAX_VALUE
+    private val disk = TunnelStore.Disk { file, bytes ->
+        if (room-- <= 0) throw java.io.IOException("No space left on device")
+        TunnelStore.Disk.SYNCED.write(file, bytes)
+    }
+    private fun store() = TunnelStore(dir, wrap, disk)
+
+    /** Every file of the store and its bytes, to tell a change that left nothing behind. */
+    private fun files(): Map<String, List<Byte>> = dir.listFiles().orEmpty().associate { it.name to it.readBytes().toList() }
     private val text = "[Interface]\nPrivateKey = yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=\n".toByteArray()
 
     private fun opened(store: TunnelStore, slot: Int): ByteArray? = (store.text(slot) as? Opened.Plain)?.bytes
@@ -210,5 +224,118 @@ class TunnelStoreTest {
         assertEquals("no text, no slot", emptyList<Int>(), state.order)
         assertEquals(mapOf("org.example.b" to 2), state.routes)
         assertEquals(1, state.next)
+    }
+
+    /**
+     * A change that fails leaves the store as it was (fix round, security review M3): the disk filling up at any of
+     * the files a change writes, or the Keystore erring, changes no file, leaves no half-written one, and the
+     * configuration it would have replaced still opens as it was.
+     */
+    @Test
+    fun a_full_disk_or_a_keystore_error_leaves_the_store_as_it_was() {
+        val store = store()
+        val one = store.add("one", text, local = true, apps = setOf("org.example.a")) ?: error("full")
+        val before = files()
+        for (written in 0..2) {
+            room = written
+            try {
+                store.add("two", "other".toByteArray(), apps = setOf("org.example.b"))
+                error("the disk took it")
+            } catch (e: java.io.IOException) {
+                // Expected.
+            }
+            assertEquals("a new configuration, the disk full after $written files", before, files())
+        }
+        for (written in 0..1) {
+            room = written
+            try {
+                store.replace(one, "newer".toByteArray(), "renamed")
+                error("the disk took it")
+            } catch (e: java.io.IOException) {
+                // Expected.
+            }
+            assertEquals("a replacement, the disk full after $written files", before, files())
+        }
+        room = 0
+        for (change in listOf<() -> Unit>({ store.rename(one, "x") }, { store.remove(one, appsWait = false) }, { store.setDefault(one) }, { store.route("org.example.c", one) })) {
+            try {
+                change()
+                error("the disk took it")
+            } catch (e: java.io.IOException) {
+                // Expected.
+            }
+            assertEquals(before, files())
+        }
+        room = Int.MAX_VALUE
+        wrap.failing = true
+        try {
+            store.replace(one, "newer".toByteArray(), "renamed")
+            error("the Keystore wrapped it")
+        } catch (e: java.security.ProviderException) {
+            // Expected.
+        }
+        assertEquals("a Keystore error", before, files())
+        wrap.failing = false
+        assertArrayEquals(text, opened(TunnelStore(dir, wrap), one))
+        assertEquals(TunnelStore.Name.Known("one"), TunnelStore(dir, wrap).name(one))
+        assertEquals(mapOf("org.example.a" to one), store.state().routes)
+    }
+
+    /** A configuration's switch and apps go in with it, in one change. */
+    @Test
+    fun a_new_configuration_keeps_its_switch_and_apps_in_the_same_change() {
+        val store = store()
+        val slot = store.add("one", text, local = true, apps = setOf("org.example.a", "org.example.b")) ?: error("full")
+        assertEquals(setOf(slot), store.state().local)
+        assertEquals(mapOf("org.example.a" to slot, "org.example.b" to slot), store.state().routes)
+    }
+
+    /** A replacement whose configuration was removed while the confirmation was open says so, and writes nothing. */
+    @Test
+    fun a_slot_removed_meanwhile_is_said_and_nothing_is_written() {
+        val store = store()
+        val one = store.add("one", text) ?: error("full")
+        store.remove(one, appsWait = false)
+        val before = files()
+        try {
+            store.replace(one, text, "again")
+            error("replaced a removed slot")
+        } catch (e: TunnelStore.SlotGone) {
+            // Expected.
+        }
+        assertEquals(before, files())
+    }
+
+    /** A wrap that cannot be opened now is tried again a few times, after pauses that grow, then waits (m2). */
+    @Test
+    fun a_configuration_that_cannot_be_opened_now_is_tried_again_a_bounded_number_of_times() {
+        val waits = generateSequence(0) { it + 1 }.map { TunnelStore.retryAfterMs(it) }.takeWhile { it != null }.toList()
+        assertTrue("tried again at all", waits.isNotEmpty())
+        assertTrue("a few times", waits.size <= 10)
+        assertEquals("pauses that grow", waits.sortedBy { it }, waits)
+        assertNull(TunnelStore.retryAfterMs(waits.size))
+    }
+
+    /**
+     * What a Keystore error means (fix round, security review m2): lost for good only where the key's alias is gone,
+     * the key invalidated or the tag does not match; a busy or restarting Keystore cannot open it now, and it is
+     * tried again; a key that needs an unlocked phone, on a locked one, waits for the unlock.
+     */
+    @Test
+    fun only_a_bad_tag_or_an_invalidated_key_reads_as_lost() {
+        val never = { false }
+        assertEquals(Opened.Lost, KeystoreWrap.opened(javax.crypto.AEADBadTagException(), unlockedOnly = false, lockedNow = never))
+        assertEquals(Opened.Unavailable, KeystoreWrap.opened(java.security.ProviderException("Keystore busy"), unlockedOnly = false, lockedNow = never))
+        assertEquals(Opened.Unavailable, KeystoreWrap.opened(java.security.KeyStoreException("system error"), unlockedOnly = false, lockedNow = never))
+        assertEquals(Opened.Unavailable, KeystoreWrap.opened(java.security.InvalidKeyException(), unlockedOnly = false, lockedNow = { true }))
+        assertEquals(Opened.Locked, KeystoreWrap.opened(java.security.InvalidKeyException(), unlockedOnly = true, lockedNow = { true }))
+        assertEquals(Opened.Unavailable, KeystoreWrap.opened(java.security.InvalidKeyException(), unlockedOnly = true, lockedNow = never))
+        val store = store()
+        val slot = store.add("one", text) ?: error("full")
+        File(dir, "$slot.text").setReadable(false)
+        if (!File(dir, "$slot.text").canRead()) {
+            assertEquals("a file that cannot be read now", Opened.Unavailable, store.text(slot))
+        }
+        File(dir, "$slot.text").setReadable(true)
     }
 }

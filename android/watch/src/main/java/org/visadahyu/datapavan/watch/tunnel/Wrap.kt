@@ -52,12 +52,24 @@ sealed interface Opened {
     /** The key works only while the phone is unlocked, and it is locked: the configuration waits for the unlock. */
     data object Locked : Opened
 
-    /** The key is gone, or the wrap is not one it made for this slot: it cannot be opened again. */
+    /**
+     * The Keystore erred for another reason (busy, restarting) or the file could not be read: it cannot be opened
+     * now, and is tried again; never taken as lost (W7, part 2, fix round, security review m2).
+     */
+    data object Unavailable : Opened
+
+    /**
+     * The key is gone (no key under its alias, or one Android invalidated for good), or the wrap is not one it made
+     * for this slot (its tag does not match): it cannot be opened again.
+     */
     data object Lost : Opened
 }
 
-/** Where the Keystore keeps the key: a separate secure chip, the processor's trusted environment, or neither. */
-enum class KeyHome { STRONGBOX, TRUSTED_ENVIRONMENT, SOFTWARE, UNKNOWN }
+/**
+ * Where the Keystore keeps the key: a separate secure chip, the processor's trusted environment, secure hardware of
+ * either kind (before Android 12, which does not say which), or neither.
+ */
+enum class KeyHome { STRONGBOX, TRUSTED_ENVIRONMENT, SECURE_HARDWARE, SOFTWARE, UNKNOWN }
 
 /**
  * The Android Keystore's AES-256 key for the configurations: generated inside the Keystore and never exportable,
@@ -87,26 +99,19 @@ class KeystoreWrap(private val alias: String = ALIAS, private val unlockedOnly: 
     override fun unwrap(slot: Int, part: Wrap.Part, wrapped: ByteArray): Opened {
         if (wrapped.size < IV_BYTES + TAG_BITS / 8) return Opened.Lost
         val key = try {
-            key()
+            // No key under the alias: it is gone for good.
+            key() ?: return Opened.Lost
         } catch (e: GeneralSecurityException) {
-            Log.w(TAG, "The configurations' key could not be read", e)
-            null
-        } ?: return Opened.Lost
+            return failed(e)
+        } catch (e: ProviderException) {
+            return failed(e)
+        }
         return try {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, wrapped, 0, IV_BYTES))
             cipher.updateAAD(associated(slot, part))
             Opened.Plain(cipher.doFinal(wrapped, IV_BYTES, wrapped.size - IV_BYTES))
-        } catch (e: UserNotAuthenticatedException) {
-            lastError = e.javaClass.simpleName
-            Opened.Locked
-        } catch (e: KeyPermanentlyInvalidatedException) {
-            Opened.Lost
-        } catch (e: AEADBadTagException) {
-            Opened.Lost
         } catch (e: GeneralSecurityException) {
-            // A key that needs an unlocked phone, used while it is locked, fails here on some versions, as a
-            // Keystore error rather than UserNotAuthenticatedException: told apart by the lock's own state.
             failed(e)
         } catch (e: ProviderException) {
             failed(e)
@@ -120,7 +125,7 @@ class KeystoreWrap(private val alias: String = ALIAS, private val unlockedOnly: 
 
     private fun failed(e: Exception): Opened {
         lastError = e.javaClass.simpleName
-        return if (unlockedOnly && lockedNow()) Opened.Locked else Opened.Lost.also { Log.w(TAG, "A configuration did not open", e) }
+        return opened(e, unlockedOnly, ::lockedNow).also { if (it != Opened.Locked) Log.w(TAG, "A configuration did not open: $it", e) }
     }
 
     override fun destroy() {
@@ -142,8 +147,9 @@ class KeystoreWrap(private val alias: String = ALIAS, private val unlockedOnly: 
                 else -> KeyHome.UNKNOWN
             }
         } else {
+            // Android 10 and 11 say only whether the key is in secure hardware, not whether that is StrongBox.
             @Suppress("DEPRECATION")
-            if (info.isInsideSecureHardware) KeyHome.TRUSTED_ENVIRONMENT else KeyHome.SOFTWARE
+            if (info.isInsideSecureHardware) KeyHome.SECURE_HARDWARE else KeyHome.SOFTWARE
         }
     } catch (e: GeneralSecurityException) {
         KeyHome.UNKNOWN
@@ -188,6 +194,19 @@ class KeystoreWrap(private val alias: String = ALIAS, private val unlockedOnly: 
         /** Whether the phone is locked now, for an error the Keystore gave without saying why; set by Watch's process. */
         @Volatile
         var locked: () -> Boolean = { false }
+
+        /**
+         * What an error of the Keystore's means for a wrap (fix round, security review m2): the phone locked for a key
+         * that needs it unlocked; lost for good only where the Keystore says the key was invalidated or the wrap's tag
+         * does not match; anything else, a busy or restarting Keystore among them, cannot be opened now and is tried
+         * again. A key that needs an unlocked phone fails on some versions with a plain Keystore error rather than
+         * [UserNotAuthenticatedException]: told apart by the lock's own state.
+         */
+        fun opened(e: Exception, unlockedOnly: Boolean, lockedNow: () -> Boolean): Opened = when (e) {
+            is UserNotAuthenticatedException -> Opened.Locked
+            is KeyPermanentlyInvalidatedException, is AEADBadTagException -> Opened.Lost
+            else -> if (unlockedOnly && lockedNow()) Opened.Locked else Opened.Unavailable
+        }
     }
 }
 

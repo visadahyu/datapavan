@@ -53,8 +53,12 @@ object TunnelStates {
         /** Watch is off: it holds no tunnel. */
         data object Off : Shown
 
-        /** Its wrap cannot be opened now (a locked phone) or at all (the key gone): its apps wait. */
+        /**
+         * Its wrap cannot be opened while the phone is locked, now (the Keystore or the disk erred, tried again), or at
+         * all (the key gone): its apps wait.
+         */
         data object Locked : Shown
+        data object Unavailable : Shown
         data object Lost : Shown
 
         /** Not set in the engine although apps are routed to it: they wait. */
@@ -70,9 +74,28 @@ object TunnelStates {
         data object Idle : Shown
     }
 
+    /**
+     * What a state's live region announces (fix round, screens review M3): its kind alone, which stays the same from
+     * one second to the next while a configuration stays connected; the handshake's age is said beside it, outside
+     * the live region, so that TalkBack does not announce every configuration every second.
+     */
+    enum class Kind { OFF, LOCKED, UNAVAILABLE, LOST, MISSING, NOT_ANSWERING, CONNECTED, IDLE }
+
+    fun kind(shown: Shown): Kind = when (shown) {
+        Shown.Off -> Kind.OFF
+        Shown.Locked -> Kind.LOCKED
+        Shown.Unavailable -> Kind.UNAVAILABLE
+        Shown.Lost -> Kind.LOST
+        Shown.Missing -> Kind.MISSING
+        Shown.NotAnswering -> Kind.NOT_ANSWERING
+        is Shown.Connected -> Kind.CONNECTED
+        Shown.Idle -> Kind.IDLE
+    }
+
     fun shown(running: Boolean, opened: TunnelStore.Name?, line: Line?): Shown = when {
         opened == TunnelStore.Name.Lost -> Shown.Lost
         opened == TunnelStore.Name.Locked -> Shown.Locked
+        opened == TunnelStore.Name.Unavailable -> Shown.Unavailable
         !running -> Shown.Off
         line == null || !line.configured -> Shown.Missing
         line.notAnswering -> Shown.NotAnswering

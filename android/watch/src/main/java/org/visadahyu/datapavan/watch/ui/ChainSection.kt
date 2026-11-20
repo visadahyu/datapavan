@@ -78,7 +78,13 @@ internal class ChainActions(
  * are logged. A tool's name keeps its own direction inside a right-to-left sentence.
  */
 @Composable
-internal fun ChainSection(view: ChainView, privateDns: PrivateDns?, actions: ChainActions, tunnelled: Map<String, String> = emptyMap()) {
+internal fun ChainSection(
+    view: ChainView,
+    privateDns: PrivateDns?,
+    actions: ChainActions,
+    tunnelled: Map<String, String> = emptyMap(),
+    waiting: Set<String> = emptySet(),
+) {
     val bidi = BidiFormatter.getInstance()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
@@ -102,7 +108,7 @@ internal fun ChainSection(view: ChainView, privateDns: PrivateDns?, actions: Cha
                 )
                 OutlinedButton(onClick = actions.onSearch) { Text(stringResource(R.string.chain_search_again)) }
             }
-            is ToolSearch.Answering -> Answering(search, view, privateDns, actions, tunnelled)
+            is ToolSearch.Answering -> Answering(search, view, privateDns, actions, tunnelled, waiting)
         }
         // A chain that is on stays one tap from off, whatever the search says now: while the tool does
         // not answer, the apps sent through it wait, and the user must be able to let them go directly
@@ -115,7 +121,14 @@ internal fun ChainSection(view: ChainView, privateDns: PrivateDns?, actions: Cha
 }
 
 @Composable
-private fun Answering(search: ToolSearch.Answering, view: ChainView, privateDns: PrivateDns?, actions: ChainActions, tunnelled: Map<String, String>) {
+private fun Answering(
+    search: ToolSearch.Answering,
+    view: ChainView,
+    privateDns: PrivateDns?,
+    actions: ChainActions,
+    tunnelled: Map<String, String>,
+    waiting: Set<String>,
+) {
     val tool = BidiFormatter.getInstance().unicodeWrap(search.found.tool.name)
     Text(stringResource(R.string.chain_found, tool, search.found.port), style = MaterialTheme.typography.bodyMedium)
     view.key?.let { KeyVerdict(it) }
@@ -159,19 +172,22 @@ private fun Answering(search: ToolSearch.Answering, view: ChainView, privateDns:
     if (!view.allApps) {
         for (app in view.choices) {
             val tunnel = tunnelled[app.packageName]
+            val waits = app.packageName in waiting
+            val free = tunnel == null && !waits
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .toggleable(value = app.packageName in view.apps && tunnel == null, enabled = tunnel == null, role = Role.Checkbox) {
+                    .toggleable(value = app.packageName in view.apps && free, enabled = free, role = Role.Checkbox) {
                         actions.onApp(app.packageName, it)
                     }
                     .padding(start = 16.dp, top = 2.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Checkbox(checked = app.packageName in view.apps && tunnel == null, onCheckedChange = null, enabled = tunnel == null)
+                Checkbox(checked = app.packageName in view.apps && free, onCheckedChange = null, enabled = free)
                 Column(Modifier.padding(start = 12.dp)) {
                     Text(app.label, style = MaterialTheme.typography.bodyLarge)
                     tunnel?.let { Text(stringResource(R.string.chain_app_tunnel, it), style = MaterialTheme.typography.bodyMedium) }
+                    if (waits) Text(stringResource(R.string.chain_app_waiting), style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }

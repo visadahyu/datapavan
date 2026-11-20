@@ -14,6 +14,8 @@
     <string name="tunnels_key_strongbox">The key that encrypts them is in this phone\'s separate security chip (StrongBox).</string>
     <string name="tunnels_key_tee">The key that encrypts them is in this phone\'s secure area, apart from Android.</string>
     <string name="tunnels_key_software">The key that encrypts them is kept by Android in software. This phone has no secure hardware for it.</string>
+    <!-- Android 10 and 11 do not say which kind of secure hardware holds the key. -->
+    <string name="tunnels_key_secure_hardware">The key that encrypts them is in this phone\'s secure hardware, apart from Android.</string>
     <string name="tunnels_none">No configuration yet.</string>
     <string name="tunnels_add_file">Add from a file</string>
     <string name="tunnels_add_camera">Take a photo of a QR code</string>
@@ -26,7 +28,19 @@
         <item quantity="other">Watch keeps at most %d configurations. Remove one to add another.</item>
     </plurals>
     <string name="tunnels_default">Default</string>
-    <string name="tunnels_default_note">The default one also carries ping, and traffic Android names no app for. It does so while any app goes through a configuration.</string>
+    <string name="tunnels_default_note">The default one also carries ping, and traffic Android names no app for. It does so while any app goes through a configuration. While the default cannot be opened, these wait.</string>
+    <!-- The same, with a single configuration, which is the default. -->
+    <string name="tunnels_default_note_one">It also carries ping, and traffic Android names no app for, while any app goes through it. While it cannot be opened, these wait.</string>
+    <!-- Apps routed to a configuration the user removed, choosing that they wait. -->
+    <plurals name="tunnels_waiting">
+        <item quantity="one">%d app waits for a configuration you removed, so nothing of it goes out. Give it another way under \"Each app\'s way\".</item>
+        <item quantity="other">%d apps wait for a configuration you removed, so nothing of theirs goes out. Give them another way under \"Each app\'s way\".</item>
+    </plurals>
+    <!-- A change of the configurations that could not be saved; nothing was changed. -->
+    <string name="tunnels_not_saved_storage">Not saved. Watch could not write to this phone\'s storage, which may be full. Your configurations stay as they were.</string>
+    <string name="tunnels_not_saved_keystore">Not saved. The phone\'s key store did not answer. Your configurations stay as they were. Try again.</string>
+    <string name="tunnels_not_saved_gone">Not saved. The configuration it was to replace was removed meanwhile.</string>
+    <string name="tunnels_not_saved_other">Not saved. Something went wrong in Watch. Your configurations stay as they were.</string>
     <string name="tunnels_make_default">Make default</string>
     <string name="tunnels_rename">Rename</string>
     <string name="tunnels_replace">Replace</string>
@@ -48,19 +62,22 @@
 
     <!-- A configuration's state, refreshed while the screen is shown. -->
     <string name="tunnel_state_off">Not in use while Watch is off.</string>
-    <plurals name="tunnel_state_seconds">
-        <item quantity="one">Connected. The last handshake was %d second ago.</item>
-        <item quantity="other">Connected. The last handshake was %d seconds ago.</item>
+    <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->
+    <string name="tunnel_state_connected">Connected.</string>
+    <plurals name="tunnel_handshake_seconds">
+        <item quantity="one">The last handshake was %d second ago.</item>
+        <item quantity="other">The last handshake was %d seconds ago.</item>
     </plurals>
-    <plurals name="tunnel_state_minutes">
-        <item quantity="one">Connected. The last handshake was %d minute ago.</item>
-        <item quantity="other">Connected. The last handshake was %d minutes ago.</item>
+    <plurals name="tunnel_handshake_minutes">
+        <item quantity="one">The last handshake was %d minute ago.</item>
+        <item quantity="other">The last handshake was %d minutes ago.</item>
     </plurals>
     <string name="tunnel_state_idle">Not connected yet. It connects when one of its apps sends.</string>
     <string name="tunnel_state_not_answering">The server does not answer. Its apps wait, and nothing of theirs goes out directly.</string>
     <string name="tunnel_state_missing">Not ready in Watch yet. Its apps wait, and nothing of theirs goes out directly.</string>
     <string name="tunnel_state_locked">It cannot be opened while the phone is locked. Its apps wait until you unlock it.</string>
-    <string name="tunnel_state_lost">It can no longer be opened on this phone. Its apps wait. Remove it and add it again.</string>
+    <string name="tunnel_state_unavailable">It cannot be opened right now. Its apps wait, and Watch tries again.</string>
+    <string name="tunnel_state_lost">It can no longer be opened on this phone. Its apps wait. Replace it with its file or QR code again, which keeps its apps.</string>
     <string name="tunnel_state_plain_dns">Watch found the server\'s address only through DNS that is not encrypted. Your network may see which provider you use.</string>
 
     <!-- Removing a configuration: what its apps do then. %1$s: its name. -->
@@ -99,9 +116,21 @@
         <item quantity="other">Largest packet inside it: %d bytes.</item>
     </plurals>
     <string name="import_apps">Apps to send through it</string>
-    <string name="import_apps_from_file">The file named these apps. Check them before you save.</string>
+    <string name="import_apps_from_file">The file names the apps below first. Check them before you save.</string>
+    <string name="import_apps_not_ticked">An app that goes through your tool or another configuration now is not ticked. Tick it to move it here.</string>
+    <!-- %1$s: the apps it leaves out, comma separated. -->
+    <string name="import_excluded">The file leaves out %1$s, and proposes every other app on your phone.</string>
+    <string name="import_excluded_now">This covers only the apps on your phone now. An app you install later does not go through it unless you choose it.</string>
+    <!-- Under an app: how it goes now. %1$s: its way, such as Directly. -->
+    <string name="import_app_way">Its way now: %1$s</string>
+    <!-- Under a ticked app that goes another way now. %1$s: that way. -->
+    <string name="import_app_moves">Saving moves it here. Its way until now: %1$s</string>
+    <!-- The heading over the apps the file does not name. -->
+    <string name="import_apps_others">Other apps</string>
     <!-- %1$s: package names, comma separated. -->
     <string name="import_not_installed">Named in the file but not installed: %1$s.</string>
+    <string name="import_not_choosable">Named in the file, but not among the apps you can choose here: %1$s.</string>
+    <string name="import_left_out">Named in the file, but left out of Watch, so nothing of theirs passes through it: %1$s.</string>
     <string name="import_save">Save</string>
     <string name="import_apps_loading">Loading your apps…</string>
 
@@ -132,9 +161,14 @@
     <string name="refused_no_allowed_ips">The file does not say which destinations go through the server (AllowedIPs).</string>
     <string name="refused_bad_mtu">The file\'s MTU is not one Watch takes: 576 to 1,500 bytes, and at least 1,280 with an IPv6 address.</string>
     <string name="refused_both_application_lists">The file names apps to include and apps to exclude. Only one of the two lists is allowed.</string>
-    <string name="refused_too_many">Watch keeps at most 8 configurations. Remove one to add another.</string>
+    <!-- %1$d: the most configurations Watch keeps (8). -->
+    <plurals name="refused_too_many">
+        <item quantity="one">Watch keeps at most %d configuration. Remove it to add another.</item>
+        <item quantity="other">Watch keeps at most %d configurations. Remove one to add another.</item>
+    </plurals>
     <string name="refused_unknown">Watch could not read this configuration.</string>
     <string name="import_unreadable">Watch could not read this file.</string>
+    <string name="import_too_slow">Reading this file took too long. If it is stored online, download it first.</string>
 
     <!-- Reading a QR code from a picture. -->
     <string name="qr_not_a_picture">This is not a picture Watch can read.</string>
@@ -163,6 +197,8 @@
     <string name="routes_all_apps_note">While your tool takes every app, an app goes directly only if you leave it out of Watch.</string>
     <!-- The chain's choice of apps: an app with a configuration goes through it instead of the tool. %1$s: the configuration's name. -->
     <string name="chain_app_tunnel">Goes through %1$s instead. Change it under \"Each app\'s way\".</string>
+    <!-- The chain's choice of apps: an app that waits for a removed configuration. -->
+    <string name="chain_app_waiting">Waits for a configuration you removed, so nothing of it goes out. Change it under \"Each app\'s way\".</string>
     <plurals name="chain_tunnelled_apps">
         <item quantity="one">%d app goes through a WireGuard configuration instead of the tool.</item>
         <item quantity="other">%d apps go through a WireGuard configuration instead of the tool.</item>

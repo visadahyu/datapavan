@@ -30,4 +30,22 @@ class TunnelStatesTest {
         assertEquals("a lost key is said even while Watch is off", Shown.Lost, TunnelStates.shown(false, TunnelStore.Name.Lost, null))
         assertEquals(Shown.Locked, TunnelStates.shown(true, TunnelStore.Name.Locked, lines[1]))
     }
+
+    /**
+     * TalkBack announces a state's kind alone (fix round, screens review M3): a connected configuration's kind, and the
+     * words of its live region, stay the same from one second to the next, and no kind's words hold a number.
+     */
+    @Test
+    fun the_live_region_says_the_kind_alone() {
+        assertEquals(TunnelStates.kind(Shown.Connected(37)), TunnelStates.kind(Shown.Connected(38)))
+        assertEquals(TunnelStates.Kind.CONNECTED, TunnelStates.kind(Shown.Connected(3_600)))
+        val xml = java.io.File("src/main/res/values/strings_untranslated.xml").readText()
+        for (kind in TunnelStates.Kind.entries) {
+            val name = org.visadahyu.datapavan.watch.R.string::class.java.fields.firstOrNull { it.getInt(null) == org.visadahyu.datapavan.watch.ui.kindWords(kind) }?.name
+            val words = Regex("<string name=\"$name\">([^<]*)</string>").find(xml)?.groupValues?.get(1)
+            assertTrue("$kind has words of its own: $name", words != null)
+            assertTrue("$kind's words hold no number: $words", words!!.none { it.isDigit() } && "%" !in words)
+        }
+        assertEquals(Shown.Unavailable, TunnelStates.shown(true, TunnelStore.Name.Unavailable, null))
+    }
 }

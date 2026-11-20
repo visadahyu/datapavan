@@ -17,11 +17,30 @@ import java.nio.file.StandardCopyOption
  * first; which have "Local network directly"; the next slot's number; and each app routed to a slot, by package
  * name, as the chain keeps its apps (ADR 0047's table lists both).
  *
- * The text never becomes a `String`: it is handed in and out as bytes, which the caller zeroes after use. Writes
- * go to a new file that replaces the old one whole, so that a crash leaves either. One store per process
- * ([of]); its methods hold its lock.
+ * The text never becomes a `String`: it is handed in and out as bytes, which the caller zeroes after use. A change
+ * leaves the store as it was or changes it whole (W7, part 2, fix round, security review M3): every wrap is made
+ * first, so that a Keystore error changes nothing; then every file the change writes is written beside its own,
+ * flushed to the disk, so that a full disk changes nothing either; and only then is each put in place of its own
+ * by a rename, which takes no space. One store per process ([of]); its methods hold its lock.
  */
-class TunnelStore(private val dir: File, private val wrap: Wrap) {
+class TunnelStore(private val dir: File, private val wrap: Wrap, private val disk: Disk = Disk.SYNCED) {
+    /** Writes a file's bytes to the disk, flushed; the tests' own fills up. */
+    fun interface Disk {
+        fun write(file: File, bytes: ByteArray)
+
+        companion object {
+            val SYNCED = Disk { file, bytes ->
+                FileOutputStream(file).use { out ->
+                    out.write(bytes)
+                    out.fd.sync()
+                }
+            }
+        }
+    }
+
+    /** A change that named a slot no configuration holds any more: removed while the confirmation was open. */
+    class SlotGone(slot: Int) : IllegalArgumentException("No configuration in slot $slot")
+
     /** What the store keeps in plain text. */
     data class State(
         /** The slots that hold a configuration, the default first. */
@@ -47,6 +66,9 @@ class TunnelStore(private val dir: File, private val wrap: Wrap) {
         /** The key works only on an unlocked phone, which is locked. */
         data object Locked : Name
 
+        /** The Keystore or the disk erred: it cannot be opened now, and Watch tries again ([Opened.Unavailable]). */
+        data object Unavailable : Name
+
         /** The key is gone or the wrap damaged: the configuration cannot be opened again. */
         data object Lost : Name
 
@@ -63,33 +85,55 @@ class TunnelStore(private val dir: File, private val wrap: Wrap) {
     fun state(): State = read()
 
     /**
-     * Keeps a new configuration under [name] (see [cleanName]) and returns its slot; null when the engine's bound
-     * ([MAX]) is reached. [text] is the caller's, which it zeroes.
+     * Keeps a new configuration under [name] (see [cleanName]), with "Local network directly" as [local] and the
+     * [apps] sent through it, in one change, and returns its slot; null when the engine's bound ([MAX]) is reached.
+     * [text] is the caller's, which it zeroes.
      */
     @Synchronized
-    fun add(name: String, text: ByteArray): Int? {
+    fun add(name: String, text: ByteArray, local: Boolean = false, apps: Set<String> = emptySet()): Int? {
+        require(apps.all { PACKAGE.matches(it) }) { "Not a package name" }
         val state = read()
         if (state.full) return null
         val slot = generateSequence(state.next) { it + 1 }.first { it !in state.order && it !in state.routes.values }
-        put(slot, Wrap.Part.TEXT, text)
-        putName(slot, name)
-        write(state.copy(order = state.order + slot, next = slot + 1))
+        val added = state.copy(
+            order = state.order + slot,
+            local = if (local) state.local + slot else state.local,
+            next = slot + 1,
+            routes = state.routes + apps.associateWith { slot },
+        )
+        commit(
+            listOf(
+                file(slot, Wrap.Part.TEXT) to wrap.wrap(slot, Wrap.Part.TEXT, text),
+                file(slot, Wrap.Part.NAME) to wrappedName(slot, name),
+                stateFile to encode(added),
+            ),
+        )
+        wrote(slot)
         return slot
     }
 
-    /** Puts [text] in place of the slot's configuration, its apps and switches kept, and [name] if given. */
+    /**
+     * Puts [text] in place of the slot's configuration, its apps and switches kept, and [name] if given; [SlotGone]
+     * when the slot was removed meanwhile.
+     */
     @Synchronized
     fun replace(slot: Int, text: ByteArray, name: String?) {
-        require(slot in read().order) { "No configuration in slot $slot" }
-        put(slot, Wrap.Part.TEXT, text)
-        if (name != null) putName(slot, name)
+        if (slot !in read().order) throw SlotGone(slot)
+        commit(
+            listOfNotNull(
+                file(slot, Wrap.Part.TEXT) to wrap.wrap(slot, Wrap.Part.TEXT, text),
+                name?.let { file(slot, Wrap.Part.NAME) to wrappedName(slot, it) },
+            ),
+        )
+        wrote(slot)
     }
 
     /** Names the slot's configuration anew; its text is not opened. */
     @Synchronized
     fun rename(slot: Int, name: String) {
-        require(slot in read().order) { "No configuration in slot $slot" }
-        putName(slot, name)
+        if (slot !in read().order) throw SlotGone(slot)
+        commit(listOf(file(slot, Wrap.Part.NAME) to wrappedName(slot, name)))
+        names.remove(slot)
     }
 
     /**
@@ -99,8 +143,7 @@ class TunnelStore(private val dir: File, private val wrap: Wrap) {
     @Synchronized
     fun remove(slot: Int, appsWait: Boolean) {
         val state = read()
-        for (part in Wrap.Part.entries) file(slot, part).delete()
-        names.remove(slot)
+        // The state first: a disk that fails leaves the configuration as it was; its wraps go once it is out.
         write(
             state.copy(
                 order = state.order - slot,
@@ -108,6 +151,8 @@ class TunnelStore(private val dir: File, private val wrap: Wrap) {
                 routes = if (appsWait) state.routes else state.routes.filterValues { it != slot },
             ),
         )
+        for (part in Wrap.Part.entries) file(slot, part).delete()
+        names.remove(slot)
     }
 
     @Synchronized
@@ -137,21 +182,37 @@ class TunnelStore(private val dir: File, private val wrap: Wrap) {
     @Synchronized
     fun name(slot: Int): Name {
         names[slot]?.let { return it }
-        val wrapped = file(slot, Wrap.Part.NAME).takeIf { it.isFile }?.readBytes() ?: return Name.Removed
+        val file = file(slot, Wrap.Part.NAME)
+        if (!file.isFile) return Name.Removed
+        val wrapped = try {
+            file.readBytes()
+        } catch (e: IOException) {
+            return Name.Unavailable
+        }
         return when (val opened = wrap.unwrap(slot, Wrap.Part.NAME, wrapped)) {
             is Opened.Plain -> Name.Known(String(opened.bytes, Charsets.UTF_8)).also {
                 opened.bytes.fill(0)
                 names[slot] = it
             }
             Opened.Locked -> Name.Locked
+            Opened.Unavailable -> Name.Unavailable
             Opened.Lost -> Name.Lost
         }
     }
 
-    /** The slot's configuration, for the engine: the bytes in [Opened.Plain] are the caller's to zero. */
+    /**
+     * The slot's configuration, for the engine: the bytes in [Opened.Plain] are the caller's to zero. A file that
+     * cannot be read now is [Opened.Unavailable], as a Keystore error is: tried again, never taken as lost.
+     */
     @Synchronized
     fun text(slot: Int): Opened {
-        val wrapped = file(slot, Wrap.Part.TEXT).takeIf { it.isFile }?.readBytes() ?: return Opened.Lost
+        val file = file(slot, Wrap.Part.TEXT)
+        if (!file.isFile) return Opened.Lost
+        val wrapped = try {
+            file.readBytes()
+        } catch (e: IOException) {
+            return Opened.Unavailable
+        }
         return wrap.unwrap(slot, Wrap.Part.TEXT, wrapped)
     }
 
@@ -160,7 +221,8 @@ class TunnelStore(private val dir: File, private val wrap: Wrap) {
 
     /**
      * What the slot's text was last written as, for the service to tell a configuration that changed from one it
-     * already set: the file's time and length, which every write changes, with its IV.
+     * already set: the file's time and length, and the count of this process's writes of it, so that two writes
+     * within a tick of the file's time still differ. The IV is not read: that would read the file.
      */
     @Synchronized
     fun stamp(slot: Int): Long = file(slot, Wrap.Part.TEXT).let { it.lastModified() * 31 + it.length() + writes.getOrDefault(slot, 0) }
@@ -168,31 +230,34 @@ class TunnelStore(private val dir: File, private val wrap: Wrap) {
     /** The writes of each slot's text by this process, so that two within a file time's tick still differ. */
     private val writes = mutableMapOf<Int, Long>()
 
-    private fun putName(slot: Int, name: String) {
-        val bytes = cleanName(name).toByteArray(Charsets.UTF_8)
-        put(slot, Wrap.Part.NAME, bytes)
+    private fun wrote(slot: Int) {
+        writes[slot] = writes.getOrDefault(slot, 0) + 1
         names.remove(slot)
     }
 
-    private fun put(slot: Int, part: Wrap.Part, plain: ByteArray) {
-        replaceWith(file(slot, part), wrap.wrap(slot, part, plain))
-        if (part == Wrap.Part.TEXT) writes[slot] = writes.getOrDefault(slot, 0) + 1
-    }
+    private fun wrappedName(slot: Int, name: String): ByteArray = wrap.wrap(slot, Wrap.Part.NAME, cleanName(name).toByteArray(Charsets.UTF_8))
 
     private fun file(slot: Int, part: Wrap.Part) = File(dir, "$slot.${part.label}")
 
-    /** Writes [bytes] to a new file beside [target], flushed to the disk, and puts it in place of [target] whole. */
-    private fun replaceWith(target: File, bytes: ByteArray) {
+    /**
+     * Puts each file's bytes in place of it, all or none as far as the disk allows: each is first written to a new
+     * file beside its own and flushed, and any failure there deletes them all and leaves every file as it was; then
+     * each new file is renamed onto its own, which replaces it whole and needs no space.
+     */
+    private fun commit(files: List<Pair<File, ByteArray>>) {
         dir.mkdirs()
-        val fresh = File(dir, "${target.name}.new")
-        FileOutputStream(fresh).use { out ->
-            out.write(bytes)
-            out.fd.sync()
-        }
+        val staged = mutableListOf<Pair<File, File>>()
         try {
-            Files.move(fresh.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            for ((target, bytes) in files) {
+                val fresh = File(dir, "${target.name}.new")
+                staged += fresh to target
+                disk.write(fresh, bytes)
+            }
+            for ((fresh, target) in staged) {
+                Files.move(fresh.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            }
         } catch (e: IOException) {
-            fresh.delete()
+            for ((fresh, _) in staged) fresh.delete()
             throw e
         }
     }
@@ -221,15 +286,14 @@ class TunnelStore(private val dir: File, private val wrap: Wrap) {
         return State(order, local intersect order.toSet(), next, routes)
     }
 
-    private fun write(state: State) {
-        val text = buildString {
-            append("order ${state.order.joinToString(" ")}\n")
-            append("local ${state.local.sorted().joinToString(" ")}\n")
-            append("next ${state.next}\n")
-            for ((app, slot) in state.routes.toSortedMap()) append("route $app $slot\n")
-        }
-        replaceWith(stateFile, text.toByteArray(Charsets.US_ASCII))
-    }
+    private fun write(state: State) = commit(listOf(stateFile to encode(state)))
+
+    private fun encode(state: State): ByteArray = buildString {
+        append("order ${state.order.joinToString(" ")}\n")
+        append("local ${state.local.sorted().joinToString(" ")}\n")
+        append("next ${state.next}\n")
+        for ((app, slot) in state.routes.toSortedMap()) append("route $app $slot\n")
+    }.toByteArray(Charsets.US_ASCII)
 
     companion object {
         /** The engine's bound on configurations at once (core/net's `MAX_TUNNELS`). */
@@ -240,6 +304,15 @@ class TunnelStore(private val dir: File, private val wrap: Wrap) {
 
         /** The longest name kept, in characters. */
         const val NAME_LENGTH = 64
+
+        /**
+         * How long after its [attempt]th try in a row a configuration that could not be opened now is tried again:
+         * a pause that grows, bounded, then null, and it waits for the next change, start or unlock (fix round,
+         * security review m2).
+         */
+        fun retryAfterMs(attempt: Int): Long? = RETRIES_MS.getOrNull(attempt)
+
+        private val RETRIES_MS = listOf(2_000L, 5_000L, 15_000L, 30_000L, 60_000L)
 
         private const val STATE = "state"
         private val PACKAGE = Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+")

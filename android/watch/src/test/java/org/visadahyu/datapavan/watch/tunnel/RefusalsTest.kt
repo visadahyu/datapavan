@@ -30,8 +30,9 @@ class RefusalsTest {
         return Regex("\"(too-many)\"\\.clone_into").findAll(source).map { it.groupValues[1] }.toList()
     }
 
-    /** The string resources' names and their ids, by reflection on R.string. */
-    private fun stringName(id: Int): String? = R.string::class.java.fields.firstOrNull { it.getInt(null) == id }?.name
+    /** The string resources' names and their ids, by reflection on R.string and R.plurals. */
+    private fun stringName(id: Int): String? =
+        (R.string::class.java.fields + R.plurals::class.java.fields).firstOrNull { it.getInt(null) == id }?.name
 
     private fun strings(): String = listOf("strings.xml", "strings_untranslated.xml")
         .joinToString("\n") { File("src/main/res/values/$it").readText() }
@@ -61,6 +62,23 @@ class RefusalsTest {
             val name = stringName(Refusals.of(failure))
             assertTrue("$failure: $name", name != null && xml.contains("name=\"$name\""))
         }
+    }
+
+    /** Every reason a change was not saved has words of its own (fix round, security review M3). */
+    @Test
+    fun every_reason_a_change_was_not_saved_has_words() {
+        val xml = strings()
+        val names = Changes.NotSaved.entries.map { stringName(Refusals.of(it)) }
+        for ((why, name) in Changes.NotSaved.entries.zip(names)) assertTrue("$why: $name", name != null && xml.contains("name=\"$name\""))
+        assertEquals("each its own", names.size, names.toSet().size)
+    }
+
+    /** The engine's bound is said with the number Watch keeps, in a plural, never written into the words (m8). */
+    @Test
+    fun the_bound_is_said_with_the_stores_number() {
+        assertEquals(R.plurals.refused_too_many, Refusals.of("too-many"))
+        val plural = Regex("<plurals name=\"refused_too_many\">(.*?)</plurals>", RegexOption.DOT_MATCHES_ALL).find(strings())?.groupValues?.get(1)
+        assertTrue("a plural", plural != null && "%d" in plural && plural.none { it.isDigit() && it != '1' })
     }
 
     @Test

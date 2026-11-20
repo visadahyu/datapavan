@@ -1,6 +1,8 @@
 package org.visadahyu.datapavan.watch.tunnel
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.visadahyu.datapavan.watch.tunnel.Routes.Route
 
@@ -55,5 +57,29 @@ class RoutesTest {
             leftOut = setOf("org.example.bank"),
         ) { uids[it] }
         assertEquals(listOf(10_200 to 1, 10_101 to 4, 10_100 to 1), routes)
+    }
+
+    /**
+     * The order a change is applied in (fix round, security review M2): a change that gives the app a tunnel sets the
+     * tunnel's route first and the chain's list after; one that takes it away, the chain first.
+     */
+    @Test
+    fun a_new_tunnel_goes_in_before_the_old_way_is_taken_away() {
+        assertTrue("the tool to a tunnel", Routes.choose("org.example.mail", Route.Tunnel(2), some).tunnelFirst)
+        assertTrue("a waiting route", Routes.choose("org.example.mail", Route.Waiting(4), some).tunnelFirst)
+        assertFalse("a tunnel to the tool", Routes.choose("org.example.mail", Route.Tool, some).tunnelFirst)
+        assertFalse("a tunnel to directly", Routes.choose("org.example.mail", Route.Direct, some).tunnelFirst)
+    }
+
+    /** An app waiting for a removed configuration is told apart from one that goes through one (screens review m1). */
+    @Test
+    fun waiting_apps_are_told_apart_from_tunnelled_ones() {
+        val (through, waiting) = Routes.split(
+            mapOf("org.example.mail" to 1, "org.example.chat" to 4, "org.example.bank" to 4),
+            slots = listOf(1, 2),
+            leftOut = setOf("org.example.bank"),
+        )
+        assertEquals(mapOf("org.example.mail" to 1), through)
+        assertEquals(mapOf("org.example.chat" to 4), waiting)
     }
 }
