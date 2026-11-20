@@ -165,6 +165,17 @@ if grep -qE '^ *(tunnel|tunnel-[a-z-]+|flow-route|flow|chain|qr-[a-z]+) ' <<<"$g
 fi
 echo "ok: the release build's dump takes no tunnel, no store, key or picture command, and shows no tunnel or flow"
 
+# Nor the encrypted resolver's (W8, part 1): no setting, no lab tables, no validation from the check; and its state
+# names the kind of way alone, never which resolver.
+gate=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" \
+    dns-apply dns-strict on dns-choice odoh dns-validated off dns-pairs default | tr -d '\r')
+if grep -qE '^ *dns-(applied|validated-set) ' <<<"$gate"; then
+    fail "the release build's dump answered a DNS debug command: $(grep -E '^ *dns-(applied|validated-set)' <<<"$gate" | head -2 | tr '\n' ' ')"
+fi
+way=$(sed -n 's/^ *dns-way //p' <<<"$gate")
+[ "$(wc -w <<<"$way")" -le 1 ] || fail "the release build's dump names the resolver: dns-way $way"
+echo "ok: the release build's dump takes no DNS command, and its way names only its kind (${way:-none})"
+
 open_kb=$(pss)
 adb shell input keyevent KEYCODE_BACK
 sleep 15
