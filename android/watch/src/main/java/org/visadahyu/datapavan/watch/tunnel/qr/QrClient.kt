@@ -53,23 +53,14 @@ object QrClient {
         try {
             if (!connected.await(WAIT_MS, TimeUnit.MILLISECONDS)) return QrDecode.Result.Failed(QrDecode.Failure.STOPPED)
             val decoder = bound.get() ?: return QrDecode.Result.Failed(QrDecode.Failure.STOPPED)
-            val answer = try {
-                decoder.decode(picture)
+            val failure = IntArray(1) { -1 }
+            val text = try {
+                decoder.decode(picture, failure)
             } catch (e: RemoteException) {
                 // The process died on the picture: what a hostile one may do.
                 return QrDecode.Result.Failed(QrDecode.Failure.STOPPED)
             }
-            val text = answer.getByteArray(QrService.TEXT)
-            if (text != null) {
-                return if (text.size > QrDecode.MAX_TEXT) {
-                    text.fill(0)
-                    QrDecode.Result.Failed(QrDecode.Failure.TOO_LONG)
-                } else {
-                    QrDecode.Result.Text(text)
-                }
-            }
-            val failure = QrDecode.Failure.entries.firstOrNull { it.name == answer.getString(QrService.FAILURE) }
-            return QrDecode.Result.Failed(failure ?: QrDecode.Failure.STOPPED)
+            return QrDecode.fromAnswer(text, failure)
         } finally {
             context.unbindService(connection)
         }

@@ -4,7 +4,6 @@ import android.app.Service
 import android.content.Intent
 import android.content.res.AssetFileDescriptor
 import android.graphics.ImageDecoder
-import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -21,7 +20,8 @@ import java.util.concurrent.TimeoutException
  * of its own, `:qr`, as the audit's parsers of untrusted input are (ADR 0045, decision 9): no permissions, no
  * network, none of Watch's files. A picture is hostile input until it is read, through Android's image decoders and
  * ZXing alike; a picture that subverted either would find nothing here worth taking. It gets the picture as a
- * read-only file descriptor and gives back only the QR code's text, at most [QrDecode.MAX_TEXT] bytes, or why not.
+ * read-only file descriptor and gives back only the QR code's text, at most [QrDecode.MAX_TEXT] bytes, or why not, as
+ * primitives ([QrDecode.answer]).
  *
  * Bounds: a picture larger than [QrDecode.MAX_SIDE] a side, by its header, is not decoded; one that is, is brought
  * down to at most [QrDecode.TARGET] a side while Android decodes it, and refused if it still holds more than
@@ -35,7 +35,7 @@ class QrService : Service() {
     private val reader = Executors.newSingleThreadExecutor { Thread(it, "qr-read").apply { isDaemon = true } }
 
     override fun onBind(intent: Intent): IBinder = object : IQrDecoder.Stub() {
-        override fun decode(picture: ParcelFileDescriptor): Bundle {
+        override fun decode(picture: ParcelFileDescriptor, failure: IntArray): ByteArray? {
             val result = try {
                 reader.submit<QrDecode.Result> { picture.use(::read) }.get(TIME_LIMIT_MS, TimeUnit.MILLISECONDS)
             } catch (e: TimeoutException) {
@@ -47,12 +47,7 @@ class QrService : Service() {
             } catch (e: InterruptedException) {
                 QrDecode.Result.Failed(QrDecode.Failure.STOPPED)
             }
-            return Bundle().apply {
-                when (result) {
-                    is QrDecode.Result.Text -> putByteArray(TEXT, result.bytes)
-                    is QrDecode.Result.Failed -> putString(FAILURE, result.why.name)
-                }
-            }
+            return QrDecode.answer(result, failure)
         }
     }
 
@@ -105,10 +100,6 @@ class QrService : Service() {
     }
 
     companion object {
-        /** The answer's keys: the text's bytes, or the failure's name. */
-        const val TEXT = "text"
-        const val FAILURE = "failure"
-
         /** The time a read may take, a picture's decoding included. */
         const val TIME_LIMIT_MS = 10_000L
 

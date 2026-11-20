@@ -77,6 +77,19 @@ object Capture {
         file.delete()
     }
 
+    /**
+     * A photo whose camera never answered, as when Watch's screen finishes while the camera has it (its task removed
+     * from Recents) and Watch's process lives on (fix round, security review m7): the write grant is taken back by
+     * [revoke], so that the camera cannot write the file again, and the file is deleted, whatever the revoke does.
+     */
+    fun abandon(file: File, revoke: () -> Unit) {
+        try {
+            revoke()
+        } finally {
+            file.delete()
+        }
+    }
+
     /** Deletes every photo left but [keep], which a camera may still be writing for a screen that comes back. */
     fun deleteLeftovers(context: Context, keep: String? = null) = deleteLeftovers(File(context.cacheDir, FOLDER), keep)
 

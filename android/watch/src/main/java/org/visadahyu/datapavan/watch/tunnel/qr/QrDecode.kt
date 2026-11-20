@@ -62,6 +62,31 @@ object QrDecode {
     }
 
     /**
+     * The answer as the decoder's process sends it across the binder (fix round, security review m1): the text's bytes,
+     * or null with the failure's number in [failure]'s first place.
+     */
+    fun answer(result: Result, failure: IntArray): ByteArray? = when (result) {
+        is Result.Text -> result.bytes
+        is Result.Failed -> {
+            if (failure.isNotEmpty()) failure[0] = result.why.ordinal
+            null
+        }
+    }
+
+    /**
+     * What Watch reads of the decoder's answer: the text, bounded again here, since a decoder a picture subverted
+     * may send anything; else the failure its number names, and "stopped" for a number that names none.
+     */
+    fun fromAnswer(text: ByteArray?, failure: IntArray): Result {
+        if (text != null) {
+            if (text.size <= MAX_TEXT) return Result.Text(text)
+            text.fill(0)
+            return Result.Failed(Failure.TOO_LONG)
+        }
+        return Result.Failed(failure.firstOrNull()?.let { Failure.entries.getOrNull(it) } ?: Failure.STOPPED)
+    }
+
+    /**
      * The power of two a picture of [width] by [height] is brought down by to fit [TARGET], or null when it is
      * larger than [MAX_SIDE] a side or empty: such a picture is not read at all.
      */

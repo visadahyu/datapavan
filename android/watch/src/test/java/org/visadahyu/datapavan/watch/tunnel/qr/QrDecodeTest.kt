@@ -139,6 +139,30 @@ class QrDecodeTest {
         }
     }
 
+    /**
+     * The decoder's answer crosses the binder as primitives (fix round, security review m1): the text, or the failure's
+     * number; Watch bounds the text again and reads a number that names no failure as "stopped".
+     */
+    @Test
+    fun the_decoders_answer_is_primitives_and_watch_bounds_it_again() {
+        val failure = IntArray(1) { -1 }
+        val text = "[Interface]".toByteArray()
+        val sent = QrDecode.answer(QrDecode.Result.Text(text), failure)
+        assertTrue(sent.contentEquals(text))
+        assertTrue((QrDecode.fromAnswer(sent, failure) as QrDecode.Result.Text).bytes.contentEquals(text))
+        for (why in QrDecode.Failure.entries) {
+            val number = IntArray(1)
+            assertNull(QrDecode.answer(QrDecode.Result.Failed(why), number))
+            assertEquals(QrDecode.Result.Failed(why), QrDecode.fromAnswer(null, number))
+        }
+        val tooLong = ByteArray(QrDecode.MAX_TEXT + 1) { 'a'.code.toByte() }
+        assertEquals(QrDecode.Result.Failed(QrDecode.Failure.TOO_LONG), QrDecode.fromAnswer(tooLong, failure))
+        assertTrue("zeroed", tooLong.all { it == 0.toByte() })
+        assertEquals(QrDecode.Result.Failed(QrDecode.Failure.STOPPED), QrDecode.fromAnswer(null, intArrayOf(99)))
+        assertEquals(QrDecode.Result.Failed(QrDecode.Failure.STOPPED), QrDecode.fromAnswer(null, intArrayOf(-1)))
+        assertEquals(QrDecode.Result.Failed(QrDecode.Failure.STOPPED), QrDecode.fromAnswer(null, IntArray(0)))
+    }
+
     @Test
     fun the_photo_is_deleted_on_every_path() {
         val dir = Files.createTempDirectory("capture").toFile()
@@ -169,6 +193,19 @@ class QrDecodeTest {
             Capture.deleteLeftovers(dir, keep = writing.name)
             assertFalse("a photo a crash left", left.exists())
             assertTrue("the photo a camera is writing", writing.exists())
+            // A screen that finishes while the camera has the photo takes the grant back and deletes it (m7), also
+            // where taking the grant back fails.
+            var revoked = false
+            Capture.abandon(writing) { revoked = true }
+            assertTrue("the grant taken back", revoked)
+            assertFalse("the photo the camera never answered for", writing.exists())
+            file = photo()
+            try {
+                Capture.abandon(file) { throw SecurityException("no grant") }
+            } catch (e: SecurityException) {
+                // Expected.
+            }
+            assertFalse("after a revoke that threw", file.exists())
         } finally {
             dir.deleteRecursively()
         }
