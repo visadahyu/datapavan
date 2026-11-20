@@ -87,9 +87,10 @@ the maintainer; built on `watch-w8a` on 2026-11-20. Each point as built:
    read from the fields; an entry whose person, jurisdictions or hosting the dataset does not know never pairs.
    Defaults, verified again on 2026-11-20: Numa's relay (DE, RO; AS24940) to Cloudflare's target (US, CR; AS13335),
    then crypto.sx's relay on Fastly (FR, US; AS54113) to dnscry.pt's fra01 (DE; AS44486). sh2o is out while its
-   operator is unknown. The second pair is asked 400 ms after the first, unless the first failed sooner: about
-   three times the warm p95 of the first pair in the lab and twice its cold first query on the internet (below);
-   each attempt is sealed afresh. Only unfiltered targets pair. The user sees the pairs on Watch's screen and
+   operator is unknown. The second pair is asked 400 ms after the first, unless the first failed sooner: above
+   the first pair's warm p95 on the internet (171 ms, ADR 0039) and its first query on a cold connection (about
+   250 to 300 ms), so the second is asked only when the first is slower than a new connection would be; each
+   attempt is sealed afresh. Only unfiltered targets pair. The user sees the pairs on Watch's screen and
    changes them among those the rule allows.
 5. **Target keys.** No target publishes `odohconfig` in a DNS HTTPS record (checked through two resolvers on
    2026-11-20: Cloudflare's record has none, crypto.sx's has ECH only, dnscry.pt's nodes have no HTTPS record). The

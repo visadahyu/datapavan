@@ -8,7 +8,7 @@
 # The emulator must use the lab's resolver as its network's: start it with `-dns-server 10.153.53.1` (the lab's bridge on this computer; the emulator ignores a loopback
 # address there). The check:
 #   1. a direct app's name goes by Oblivious DoH through the lab's relay to the first target, and the network's
-#      resolver never sees it; Watch's own process looks up no name at all;
+#      resolver never sees it; Watch's own process looks up no name at all; nor when the tunnel is set up again;
 #   2. Android's opportunistic DNS over TLS to Watch's address is refused, and its lookups come on port 53;
 #   3. the user's preset (DoH, then DoT) and the user's own DoH resolver answer;
 #   4. strict, with every encrypted way down (the censor drops them): the app gets no address, nothing reaches the
@@ -159,6 +159,21 @@ asked resolver "$name" "$resolver_mark" && fail "the network's resolver saw $nam
 asked resolver "probe.dnslab.test" "$resolver_mark" && fail "the network's resolver saw probe.dnslab.test"
 asked resolver "dnslab.test" "$resolver_mark" && fail "the network's resolver saw a name of the lab's servers: Watch looked one up"
 echo "ok: the network's resolver saw none of these names, nor any of the lab's servers"
+
+# 1b. The tunnel set up again (ADR 0044, unit 12b): the engine that takes it has the resolver before its first
+# packet, so no lookup slips to the network's resolver meanwhile.
+resolver_mark=$(mark resolver)
+dump setup-again >/dev/null
+names=""
+for _ in 1 2 3; do
+    name=$(fresh)
+    names="$names $name"
+    lookup "$name" >/dev/null
+done
+for name in $names; do
+    asked resolver "$name" "$resolver_mark" && fail "after the tunnel was set up again, the network's resolver saw $name"
+done
+echo "ok: the tunnel set up again, and the network's resolver saw none of the lookups around it"
 
 # 2. Android's opportunistic DNS over TLS: port 853 at Watch's address refused, lookups on port 53.
 PRIVATE_MODE=$(adb shell settings get global private_dns_mode | tr -d '\r')
