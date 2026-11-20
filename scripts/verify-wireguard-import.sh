@@ -15,9 +15,11 @@
 # MediaStore. Where the emulator has no camera, the cancel path alone is checked, and the run says so. ADR 0047's
 # profile, turned on through the debug builds' dump, puts the configurations under key B: Watch started again on a
 # locked phone holds the app and asks for the unlock in one notification, and the tunnel comes back at the unlock. A
-# configuration removed with its apps waiting holds the app: nothing of it leaves directly. Last, the measure ADR
+# configuration removed with its apps waiting holds the app: nothing of it leaves directly. Then the measure ADR
 # 0035 asks of setUnlockedDeviceRequired: a key that needs an unlocked phone does not open while the phone is
-# locked, Watch's own key does, and the time each takes.
+# locked, Watch's own key does, and the time each takes. With the package receiver off, the app installed again is
+# asked of Watch at its first packet and goes through its configuration. Last, key A deleted: Watch holds every app
+# with one notification until the user lets them go on its screen.
 #
 # Skipped, with a line that says so, only where no lab peer can start (no Docker, Docker not answering, or no
 # wireguard module), as verify-wireguard.sh is; CI's runner joins in W7's part 3.
@@ -393,6 +395,27 @@ grep -qx "tcp 10.77.0.1:80 pong" <<<"$(workload_log)" || fail "installed again, 
 [ "$(flows_of "$WORKLOAD_UID" direct)" = 0 ] || fail "installed again, the app has flows that went directly"
 echo "ok: the workload app installed again had a new UID ($WORKLOAD_UID), which Watch routed at once, and went through its configuration to the peer"
 
+# 3c. The same with the package receiver off (the maintainer's word of 2026-11-20): no hand-over names the new UID,
+# and the engine, at the app's first packet, asks Watch where it goes and holds the flow until Watch answers its
+# configuration; nothing of it goes on a default way meanwhile.
+grep -qE "^ *packages-follow off$" <<<"$(dump packages-follow off)" || fail "the package receiver could not be turned off"
+adb uninstall "$WORKLOAD" >/dev/null
+adb install "$ROOT/build/workload-app/workload-app.apk" >/dev/null
+asked=$(adb shell cmd package list packages -U "$WORKLOAD" | tr -d '\r' | sed -n "s/^package:$WORKLOAD uid:\([0-9]*\)$/\1/p")
+[ -n "$asked" ] && [ "$asked" != "$WORKLOAD_UID" ] || fail "the workload app did not get a new UID: $asked"
+sleep 2
+! engine_route "$asked" 1 || fail "with the receiver off the engine was handed the new UID's route: this step proves nothing"
+peer_before=$(grep -c "^http 10\.77\.0\.2 " <<<"$(seen peer)" || true)
+workload --es tcp 10.77.0.1:80
+grep -qx "tcp 10.77.0.1:80 pong" <<<"$(workload_log)" || fail "with the receiver off, the app installed again did not reach the peer"
+[ "$(grep -c "^http 10\.77\.0\.2 " <<<"$(seen peer)" || true)" -gt "$peer_before" ] || fail "with the receiver off, the peer saw nothing from 10.77.0.2"
+[ "$(flows_of "$asked" direct)" = 0 ] || fail "with the receiver off, the app installed again had flows that went directly"
+grep -qE "^ *tunnel-asked $asked tunnel:1$" <<<"$(dump tunnel-store)" || fail "the engine did not ask Watch where the new UID goes"
+! engine_route "$asked" 1 || fail "the engine was handed the new UID's route meanwhile: this step proves nothing"
+grep -qE "^ *packages-follow on$" <<<"$(dump packages-follow on)" || fail "the package receiver could not be turned on again"
+WORKLOAD_UID=$asked
+echo "ok: with the receiver off, the app installed again (UID $WORKLOAD_UID) was asked of Watch at its first packet and went through its configuration, none of it directly"
+
 # 4. No file of Watch's holds a key or a configuration's text in plain form, nor, in the store, an app it routes: the
 # state is wrapped under key A. The search must first find a file of its own among Watch's (review m4 of the fix
 # round): a search that cannot read Watch's files finds nothing either.
@@ -541,5 +564,42 @@ echo "measure: Watch's own key opens a configuration in ${opened:-?} ms unlocked
 [[ $locked == "open locked "* ]] || fail "a key that needs an unlocked phone opened while it was locked: $locked"
 [[ $unlocked == "open ok "* ]] || fail "a key that needs an unlocked phone did not open once it was unlocked: $unlocked"
 [ -n "$own_locked" ] || fail "Watch's own key did not open a configuration while the phone was locked"
+
+# 8. Key A lost for good (the maintainer's word of 2026-11-20), deleted through the debug dump as a Keystore reset
+# would: the marker says the store held routes (step 6 left the app waiting), so Watch started again holds every app,
+# sends nothing directly, and shows one notification, naming no configuration, that opens its screen; there the
+# user lets the apps go their way, which forgets the store, and the app goes directly again.
+grep -qE "^ *tunnel-key-deleted a$" <<<"$(dump tunnel-key-delete a)" || fail "key A could not be deleted"
+pid=$(adb shell pidof "$PKG:watch" | tr -d '\r')
+[ -n "$pid" ] || fail "no process of Watch's"
+adb shell run-as "$PKG" kill -9 "$pid" || fail "Watch's process could not be killed"
+within 20 vpn_down || fail "Watch's VPN stayed up with its process killed"
+adb shell am start -S -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
+within 20 vpn_up || fail "Watch's tunnel did not come up with key A gone"
+lost_state() { grep -qE "^ *tunnel-state lost$" <<<"$(dump tunnel-store)"; }
+lost_notice() { [ "$(sed -n 's/^ *tunnel-lost notice //p' <<<"$(dump tunnel-store)")" = "$1" ]; }
+within 10 lost_state || fail "with key A gone the store's state is not lost: $(dump tunnel-store | grep -E 'tunnel-(state|slot)' | tr '\n' ' ')"
+within 10 lost_notice shown || fail "no notification says Watch holds the apps"
+record=$(adb shell dumpsys notification --noredact | tr -d '\r' | grep -A30 "NotificationRecord.*pkg=$PKG.*id=7202" || true)
+grep -qF "Watch is holding your apps" <<<"$record" || fail "the notification does not say Watch holds the apps"
+for word in wg-import "WireGuard" "$HOST" 10.77.0; do
+    ! grep -qF -- "$word" <<<"$record" || fail "the notification names a configuration or a server ($word)"
+done
+SENTINEL_MARK=$(wc -l <"$WORK/sentinel.log")
+direct_before=$(flows_of "$WORKLOAD_UID" direct)
+workload --es tcp "$HOST:$((PORT + 3))" --es udp "$HOST:$((PORT + 3))"
+sleep 3
+[ -z "$(sentinel_since)" ] || fail "with key A gone, an app reached this computer directly"
+[ "$(flows_of "$WORKLOAD_UID" direct)" = "$direct_before" ] || fail "with key A gone, the app has flows that went directly"
+grep -qx done <<<"$(workload_log)" || fail "the workload app did not run: the step above proves nothing"
+watch_screen
+tap_tag tunnel-lost-let-go || fail "Watch's screen does not offer to let the apps go their way"
+within 10 lost_notice none || fail "the notification stayed after the choice"
+lost_state && fail "the store was not forgotten after the choice"
+SENTINEL_MARK=$(wc -l <"$WORK/sentinel.log")
+workload --es tcp "$HOST:$((PORT + 3))"
+sentinel_saw_tcp() { grep -q '^tcp$' <<<"$(sentinel_since)"; }
+within 10 sentinel_saw_tcp || fail "after the choice the app did not go its way: nothing reached the sentinel directly"
+echo "ok: with key A gone and the marker present, Watch held every app with one notification naming no configuration; let go on its screen, the app went its way"
 
 echo "== WireGuard import checked on the emulator"
