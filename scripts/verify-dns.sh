@@ -168,6 +168,30 @@ dump dns-choice doh "https://doh.dnslab.test:${FRONT_doh##*:}/dns-query" 10.0.2.
 expect "the user's own DoH resolver answers" "$(lookup probe.dnslab.test)" 10.53.3.3
 dump dns-choice odoh >/dev/null
 
+# 3b. The speed budget (ADR 0039): Watch's own cost of each way in the lab, where every server is a few
+# milliseconds away. The engine times each exchange it hands over and answers (latency WAY COUNT P50 P95, in ms);
+# the CPU time Watch's process spends per lookup is read from its /proc/PID/stat (ticks of 10 ms).
+watch_pid=$(adb shell pidof "$PKG:watch" | tr -d '\r')
+[ -n "$watch_pid" ] || watch_pid=$(adb shell pidof "$PKG" | tr -d '\r')
+cpu() { adb shell cat "/proc/$watch_pid/stat" | tr -d '\r' | awk '{print $14 + $15}'; }
+for choice in "odoh" "preset lab-doh" "preset lab-dot"; do
+    # shellcheck disable=SC2086 # the choice's words are the dump's arguments
+    dump dns-choice $choice >/dev/null
+    before=$(cpu)
+    for _ in $(seq 1 20); do lookup "$(fresh)" >/dev/null; done
+    after=$(cpu)
+    echo "ok: $choice: Watch's CPU per lookup $(( (after - before) * 10 / 20 )) ms (20 lookups)"
+done
+dump dns-choice odoh >/dev/null
+grep -E '^ *dns-latency ' <<<"$(dump)" | sed 's/^ */  /'
+for carry in odoh doh dot; do
+    read -r count p50 p95 < <(sed -n "s/^ *dns-latency $carry \([0-9]*\) \([0-9]*\) \([0-9]*\)$/\1 \2 \3/p" <<<"$(dump)")
+    [ "${count:-0}" -ge 15 ] || fail "too few $carry exchanges timed: ${count:-0}"
+    [ "$p50" -le "${DNS_BUDGET_LAB_P50_MS:-100}" ] && [ "$p95" -le "${DNS_BUDGET_LAB_P95_MS:-400}" ] ||
+        fail "$carry in the lab: p50 $p50 ms, p95 $p95 ms, over the budget of ${DNS_BUDGET_LAB_P50_MS:-100} and ${DNS_BUDGET_LAB_P95_MS:-400} ms (ADR 0039)"
+    echo "ok: $carry in the lab: p50 $p50 ms, p95 $p95 ms, within the budget (ADR 0039)"
+done
+
 # 4. Strict, every encrypted way down.
 dump dns-strict on >/dev/null
 for front in relay target-a target-b doh; do "$LAB" censor "$front" drop >/dev/null; done

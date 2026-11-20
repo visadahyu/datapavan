@@ -26,6 +26,7 @@ use crate::ladder::{Failure, Ladder, Now, Setup, Step};
 use crate::odoh::{self, TargetKey};
 use crate::packet;
 use crate::socks5::Credentials;
+use std::fmt::Write as _;
 use std::net::{IpAddr, SocketAddr};
 use std::os::fd::AsFd;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -333,7 +334,13 @@ pub(super) struct Resolver {
     pub(super) tcp_routes: Mutex<Vec<(u16, TcpLookups)>>,
     /// What answered, for the screen and the checks: by way, the network, failures, local names, stale.
     counts: Counts,
+    /// How long the last answered exchanges of each carry took, in milliseconds, for the speed budget's check (ADR
+    /// 0039): ODoH, DoH, DoT, the network's resolver. Durations only, never what was asked.
+    times: Mutex<[Vec<u16>; 4]>,
 }
+
+/// How many durations are kept for each carry.
+const TIMES_KEPT: usize = 256;
 
 /// How many lookups each way answered.
 #[derive(Default)]
@@ -361,6 +368,7 @@ impl Default for Resolver {
             tcp: tokio::sync::OnceCell::new(),
             tcp_routes: Mutex::default(),
             counts: Counts::default(),
+            times: Mutex::default(),
         }
     }
 }
@@ -421,9 +429,28 @@ impl Resolver {
         };
         let c = &self.counts;
         let n = |a: &AtomicU64| a.load(Ordering::Relaxed);
+        let times = lock(&self.times);
+        let mut latency = String::new();
+        for (name, kept) in ["odoh", "doh", "dot", "network"].iter().zip(times.iter()) {
+            let mut sorted = kept.clone();
+            sorted.sort_unstable();
+            let at = |p: usize| {
+                sorted
+                    .get((sorted.len() * p / 100).min(sorted.len().saturating_sub(1)))
+                    .copied()
+                    .unwrap_or(0)
+            };
+            let _ = writeln!(
+                latency,
+                "latency {name} {} {} {}",
+                sorted.len(),
+                at(50),
+                at(95)
+            );
+        }
         format!(
             "way {way}\nstrict {}\nvalidated {}\nheld {}\nanswers odoh {} doh {} dot {} network {} failed {} local {} \
-             stale {} cached {}\n",
+             stale {} cached {}\n{latency}",
             u8::from(config.as_ref().is_some_and(|c| c.strict)),
             u8::from(ladder.validated()),
             ladder.held(now),
@@ -510,13 +537,31 @@ async fn ask(shared: &Shared, request: &Exchange) -> Reply {
     let (sender, reply) = oneshot::channel();
     lock(&exchanges.pending).push((ticket, sender));
     let _forget = Ticket(exchanges, ticket);
+    let asked = Instant::now();
     if !shared.platform.exchange(ticket, request) {
         return Reply::Unsupported;
     }
-    match tokio::time::timeout(EXCHANGE_WAIT, reply).await {
+    let reply = match tokio::time::timeout(EXCHANGE_WAIT, reply).await {
         Ok(Ok(reply)) => reply,
         _ => Reply::Failed(Failure::Timeout),
+    };
+    let carry = match request.carry {
+        Carry::Odoh => Some(0),
+        Carry::Doh => Some(1),
+        Carry::Dot => Some(2),
+        Carry::Network => Some(3),
+        Carry::Fetch => None,
+    };
+    if let (Some(carry), Reply::Answer(_)) = (carry, &reply) {
+        let took = u16::try_from(asked.elapsed().as_millis()).unwrap_or(u16::MAX);
+        let mut times = lock(&shared.resolver.times);
+        let kept = &mut times[carry];
+        if kept.len() == TIMES_KEPT {
+            kept.remove(0);
+        }
+        kept.push(took);
     }
+    reply
 }
 
 /// Tells Watch's Kotlin side when the way it shows changed kind: a way, the fallback, failing.
@@ -1110,7 +1155,6 @@ mod tests {
     use crate::catalogue;
     use crate::odoh::tests::{answer_as_target, target};
     use std::collections::HashMap;
-    use std::fmt::Write as _;
     use std::net::Ipv4Addr;
     use std::sync::OnceLock;
 
