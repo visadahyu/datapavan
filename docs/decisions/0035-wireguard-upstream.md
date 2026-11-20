@@ -768,6 +768,9 @@ app's route, the states, and the licence screen. What was chosen where the decis
   screen is in front again, so the photo's empty file waited for that; the check now brings the screen back first,
   and a photo left by a process that died is deleted at the next start. The import check's first runs also met the
   photo picker giving a picture read before from the same path; each run's picture has a name and an MTU of its own.
+  Run before the activity check, it left the workload app routed to the configuration it removed with its apps
+  waiting, and the activity check's copy of that app then waited, as such a route is meant to hold it; the check now
+  clears Watch's data when it ends.
 - **Accepted limits.** The Keystore's cipher, the binder's parcel that carries the decoded text from the isolated
   process, and Compose's text field for the name keep copies Watch cannot zero; the text is never a `String` in
   Watch's process, but it is one inside the decoder's, which ends after each picture. A picture picked in the photo

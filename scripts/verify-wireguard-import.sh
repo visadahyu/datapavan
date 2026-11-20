@@ -43,7 +43,9 @@ cleanup() {
     adb shell "rm -f /sdcard/Download/wg-import-one.conf /sdcard/Pictures/wg-import-two-*.png" >/dev/null 2>&1 || true
     adb shell "content delete --uri content://media/external/file --where \"_display_name LIKE 'wg-import-%'\"" >/dev/null 2>&1 || true
     adb emu virtualscene-image wall >/dev/null 2>&1 || true
-    adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
+    # Watch's data goes with the run: a route left waiting for a removed configuration would hold the workload app,
+    # which the checks after this one install again, as it holds any app the user left so.
+    adb shell pm clear "$PKG" >/dev/null 2>&1 || true
     adb uninstall "$WORKLOAD" >/dev/null 2>&1 || true
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
     "${compose[@]}" stop >/dev/null 2>&1 || true
