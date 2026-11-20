@@ -69,6 +69,8 @@ internal fun WatchScreen(
     onLoadApps: () -> Unit,
     onLeaveOut: (String, Boolean) -> Unit,
     onNow: () -> Unit,
+    dns: DnsView,
+    dnsActions: DnsActions,
 ) {
     val search = chain.search as? org.visadahyu.datapavan.watch.chain.ToolSearch.Answering
     val ways = org.visadahyu.datapavan.watch.tunnel.Routes.Chain(chain.on, chain.allApps, chain.apps, search?.found?.tool?.packageName)
@@ -109,6 +111,7 @@ internal fun WatchScreen(
             if (running && privateDns != null && privateDns != PrivateDns.Plain) {
                 PrivateDnsNote(privateDns)
             }
+            DnsSection(dns, privateDns, dnsActions)
             if (refused && !running) {
                 Text(
                     stringResource(R.string.consent_refused),

@@ -30,9 +30,18 @@ internal object Notices {
          * until the user chooses on Watch's screen, when it goes.
          */
         LOST(7_202, R.string.lost_title, R.string.lost_text),
+
+        /**
+         * Direct apps' names go to the network's resolver, since no encrypted way answers (W8, part 1): only when
+         * the user turned it on, since Watch has no tile until W9; it goes as soon as an encrypted way answers.
+         */
+        DNS_FALLBACK(7_203, R.string.dns_fallback_title, R.string.dns_fallback_text),
     }
 
     private const val CHANNEL = "watch-unlock"
+
+    /** The fallback's own channel, so that the user can silence it apart from the others. */
+    private const val DNS_CHANNEL = "watch-dns"
 
     /** Shows the notification [kind] while [on], and takes it away otherwise. */
     fun show(context: Context, kind: Kind, on: Boolean) {
@@ -46,8 +55,13 @@ internal object Notices {
         ) {
             return
         }
+        val channel = if (kind == Kind.DNS_FALLBACK) DNS_CHANNEL else CHANNEL
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL, context.getString(R.string.unlock_channel), NotificationManager.IMPORTANCE_DEFAULT),
+            if (kind == Kind.DNS_FALLBACK) {
+                NotificationChannel(DNS_CHANNEL, context.getString(R.string.dns_fallback_channel), NotificationManager.IMPORTANCE_LOW)
+            } else {
+                NotificationChannel(CHANNEL, context.getString(R.string.unlock_channel), NotificationManager.IMPORTANCE_DEFAULT)
+            },
         )
         val title = context.getString(kind.title)
         val text = context.getString(kind.text)
@@ -58,11 +72,11 @@ internal object Notices {
             PendingIntent.FLAG_IMMUTABLE,
         )
         // The lock screen's version: the title alone.
-        val locked = Notification.Builder(context, CHANNEL)
+        val locked = Notification.Builder(context, channel)
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setContentTitle(title)
             .build()
-        val notice = Notification.Builder(context, CHANNEL)
+        val notice = Notification.Builder(context, channel)
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setContentTitle(title)
             .setContentText(text)

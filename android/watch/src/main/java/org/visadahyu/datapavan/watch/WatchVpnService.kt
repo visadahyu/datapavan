@@ -133,12 +133,47 @@ class WatchVpnService : VpnService() {
      */
     private var starts = 0
 
+    /**
+     * Carries the encrypted resolver's exchanges for the engine (W8, part 1, ADR 0042): DoH, ODoH and DoT over
+     * Android's own TLS from sockets protected from the tunnel and bound to the network beneath, or through the
+     * user's tool; the network's resolver through Android's own on the network beneath.
+     */
+    private val exchanger = org.visadahyu.datapavan.watch.dns.Exchanger(
+        object : org.visadahyu.datapavan.watch.dns.Exchanger.Host {
+            override fun protect(socket: java.net.Socket): Boolean = this@WatchVpnService.protect(socket)
+
+            override val network: Network? get() = current
+
+            override val generation: Int get() = networkGeneration
+
+            override val extraRoots: List<java.security.cert.X509Certificate> get() = labRoots()
+        },
+    )
+
+    /** Changes with the network beneath, so that each has its own clients and TLS sessions. */
+    @Volatile
+    private var networkGeneration = 0
+
+    /** Whether Android validated the network beneath, and its search domains, last told to the engine. */
+    private var toldValidated: Pair<Boolean, String>? = null
+
     /** Follows the network beneath the tunnel: Wi-Fi, mobile data, or none. */
     private val network = object : ConnectivityManager.NetworkCallback() {
 
         override fun onAvailable(network: Network) {
+            if (network != current) {
+                networkGeneration++
+                exchanger.networkChanged()
+            }
             current = network
             setUnderlyingNetworks(arrayOf(network))
+        }
+
+        override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+            if (network != current) return
+            // Behind a captive portal Android does not validate the network: the encrypted ways' failures do not
+            // count meanwhile (W8, part 1, point 6).
+            tellDnsNetwork(capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED), null)
         }
 
         override fun onLinkPropertiesChanged(network: Network, properties: LinkProperties) {
@@ -149,6 +184,8 @@ class WatchVpnService : VpnService() {
             }
             if (network != current) return
             remeasure(network)
+            // The network's search domains are its local names, which go to its own resolver (W8, part 1, point 7).
+            tellDnsNetwork(null, properties.domains.orEmpty())
             // A link-local DNS server needs its interface's scope, which the engine does not take.
             val dns = properties.dnsServers.firstOrNull { !it.isLinkLocalAddress }?.hostAddress ?: ""
             // Android reports a network's properties several times after a switch; only a new network
@@ -161,6 +198,8 @@ class WatchVpnService : VpnService() {
 
         override fun onLost(network: Network) {
             if (network != current) return
+            networkGeneration++
+            exchanger.networkChanged()
             current = null
             setUnderlyingNetworks(null)
             Engine.nativeNetworkChanged("", true)
@@ -821,6 +860,9 @@ class WatchVpnService : VpnService() {
      * inside the APK, without loading it.
      */
     private fun startEngine(tunnel: ParcelFileDescriptor): Boolean {
+        // The encrypted resolver before the engine's first packet: no direct app's lookup goes to the network's
+        // resolver while it is set (W8, part 1).
+        org.visadahyu.datapavan.watch.dns.DnsSettings.apply(this)
         val fd = tunnel.detachFd()
         var tableFd = -1
         var tableStart = 0L
@@ -868,6 +910,8 @@ class WatchVpnService : VpnService() {
         routesKnown = false
         Notices.show(this, Notices.Kind.UNLOCK, false)
         Notices.show(this, Notices.Kind.LOST, false)
+        Notices.show(this, Notices.Kind.DNS_FALLBACK, false)
+        toldValidated = null
         stopWaitingForUnlock()
         packages?.let { unregisterReceiver(it) }
         packages = null
@@ -940,6 +984,65 @@ class WatchVpnService : VpnService() {
         }
     }
 
+    /**
+     * Called by the engine, on its own thread, for each exchange of its encrypted resolver (W8, part 1): hands it to
+     * the exchanger and returns at once; the reply goes back by [Engine.nativeExchanged].
+     */
+    @Suppress("unused")
+    fun exchange(
+        ticket: Long,
+        carry: Int,
+        url: String,
+        host: String,
+        addresses: String,
+        pins: String,
+        proxy: String,
+        user: ByteArray,
+        password: ByteArray,
+        body: ByteArray,
+    ): Boolean = exchanger.exchange(ticket, carry, url, host, addresses, pins, proxy, user, password, body)
+
+    /**
+     * Called by the engine when the way direct apps' names go changed kind (W8, part 1): the fallback's notification,
+     * if the user turned it on, is shown or taken away on the main thread. Returns at once.
+     */
+    @Suppress("unused")
+    fun dnsChanged() {
+        main.post(::showDnsNotice)
+    }
+
+    /** The fallback's notification, while names go to the network's resolver and the user asked for it. */
+    private fun showDnsNotice() {
+        if (!active) return
+        val status = org.visadahyu.datapavan.watch.dns.DnsStatus.parse(Engine.nativeDnsStatus())
+        val on = org.visadahyu.datapavan.watch.dns.DnsSettings.of(this).notify && status.fallbackSeconds != null
+        Notices.show(this, Notices.Kind.DNS_FALLBACK, on)
+    }
+
+    /** Tells the engine what changed of the network beneath: validated, its search domains. */
+    private fun tellDnsNetwork(validated: Boolean?, domains: String?) {
+        val before = toldValidated ?: (true to "")
+        val now = (validated ?: before.first) to (domains ?: before.second)
+        if (now == toldValidated) return
+        toldValidated = now
+        Engine.nativeDnsNetwork(now.first, now.second)
+    }
+
+    /** Debug builds: the DNS lab's test root that scripts/verify-dns.sh put in Watch's files; none in release builds. */
+    private fun labRoots(): List<java.security.cert.X509Certificate> {
+        if (!debuggable) return emptyList()
+        val file = java.io.File(java.io.File(filesDir, org.visadahyu.datapavan.watch.dns.DnsSettings.LAB_DIR), "ca.pem")
+        if (!file.isFile) return emptyList()
+        return try {
+            file.inputStream().use { input ->
+                java.security.cert.CertificateFactory.getInstance("X.509").generateCertificates(input)
+                    .filterIsInstance<java.security.cert.X509Certificate>()
+            }
+        } catch (e: java.security.cert.CertificateException) {
+            emptyList()
+        }
+    }
+
     /** Called by the engine with a batch of finished records for the connection log (ADR 0037). */
     @Suppress("unused")
     fun logRecords(batch: ByteArray) = ConnectionLog.of(this).write(batch)
@@ -976,6 +1079,11 @@ class WatchVpnService : VpnService() {
             is PrivateDns.Strict -> if (debuggable) "strict ${mode.host}" else "strict"
         }
         writer.println("private-dns $dns")
+        // The encrypted resolver's way now (W8, part 1); release builds only its kind, never which resolver.
+        Engine.nativeDnsStatus().lineSequence().filter { it.isNotBlank() }.forEach { line ->
+            val shown = if (debuggable || !line.startsWith("way ")) line else "way " + line.removePrefix("way ").substringBefore(' ')
+            writer.println("dns-$shown")
+        }
         writer.println("addresses ${addresses.name} ${addresses.tun4} ${addresses.dns4} ${addresses.tun6} ${addresses.dns6}")
         writer.println("mtu $mtu first-hop ${firstHops.first ?: "-"} ${firstHops.second ?: "-"}")
         writer.println("setups kept $setupsKept anew $setupsAnew")
@@ -1016,6 +1124,7 @@ class WatchVpnService : VpnService() {
                 main.post { setUpAgain() }
                 writer.println("setup-again")
             }
+            debugDns(args.orEmpty().toList(), writer)
             debugChain(args.orEmpty().toList(), writer)
             debugTunnels(args.orEmpty().toList(), writer)
             if ("find-tool" in args.orEmpty()) {
@@ -1151,6 +1260,39 @@ class WatchVpnService : VpnService() {
      * endpoint, and a `flow-route UID ROUTE COUNT` line for each app and way its kept flows went. The file's
      * bytes are zeroed once handed over; part 2 brings the import and the Keystore.
      */
+    /**
+     * Debug builds only, for scripts/verify-dns.sh (W8, part 1): `dns-strict on|off`, `dns-choice odoh`, `dns-choice
+     * preset ID`, `dns-choice doh|dot AT ADDRS`, `dns-pairs SPEC|default` and `dns-notify on|off` set the user's
+     * setting; `dns-apply` hands the engine the tables again (the lab's, where the check put them in Watch's files)
+     * and prints what it read; every one of them applies the setting.
+     */
+    private fun debugDns(args: List<String>, writer: PrintWriter) {
+        fun after(command: String, n: Int) = args.indexOf(command).takeIf { it >= 0 }?.let { args.drop(it + 1).take(n) }
+        val settings = org.visadahyu.datapavan.watch.dns.DnsSettings.of(this)
+        var changed = "dns-apply" in args
+        after("dns-strict", 1)?.let {
+            settings.strict = it.firstOrNull() == "on"
+            changed = true
+        }
+        after("dns-notify", 1)?.let {
+            settings.notify = it.firstOrNull() == "on"
+            changed = true
+        }
+        after("dns-pairs", 1)?.let {
+            settings.pairs = it.firstOrNull()?.takeIf { p -> p != "default" }.orEmpty()
+            changed = true
+        }
+        after("dns-choice", 3)?.let {
+            settings.choice = org.visadahyu.datapavan.watch.dns.DnsSettings.Choice.read(it.joinToString(" "))
+            changed = true
+        }
+        if (changed) {
+            val read = org.visadahyu.datapavan.watch.dns.DnsSettings.apply(this)
+            writer.println("dns-applied ${read.joinToString(" ")}")
+            main.post(::showDnsNotice)
+        }
+    }
+
     private fun debugTunnels(args: List<String>, writer: PrintWriter) {
         fun after(command: String, n: Int) = args.indexOf(command).takeIf { it >= 0 }?.let { args.drop(it + 1).take(n) }
         after("tunnel-add", 3)?.let { given ->

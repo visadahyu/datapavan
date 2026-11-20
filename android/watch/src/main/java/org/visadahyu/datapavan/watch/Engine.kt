@@ -227,6 +227,34 @@ internal object Engine {
      * `dns-name` being the DNS answer's name where it differs from the connection's own; debug builds only.
      */
     external fun nativeFlows(): String
+
+    /**
+     * The reply to the engine's exchange [ticket] (W8, part 1; [org.visadahyu.datapavan.watch.dns.Exchanger]):
+     * [outcome] 200 or 0 with [body], another HTTP status, or -1 (no answer in time), -2 (reset once the TLS hello
+     * was out, or a certificate that does not check), -3 (refused, closed, or anything else). Whether a lookup
+     * still waited for it. From any thread; it never waits for the engine.
+     */
+    external fun nativeExchanged(ticket: Long, outcome: Int, body: ByteArray?): Boolean
+
+    /**
+     * The encrypted resolver for direct apps' names (W8, part 1): the data pack's ODoH relays, targets and pairs and
+     * the presets, and the user's [setting] ([org.visadahyu.datapavan.watch.dns.DnsSettings.engineSetting]); kept
+     * for the engines to come and set on the one that runs. How many relays, targets, pairs allowed and presets
+     * were read.
+     */
+    external fun nativeDns(relays: String, targets: String, pairs: String, presets: String, setting: String): IntArray
+
+    /** What Android says of the network beneath: validated or not (a captive portal), and its search domains. */
+    external fun nativeDnsNetwork(validated: Boolean, domains: String)
+
+    /**
+     * The encrypted resolver's state, `key value` lines: `way` (`off`, `none`, the way that answered last, or
+     * `fallback SECONDS`, `failing SECONDS`), `strict`, `validated`, `held`, `answers ...`. It names no lookup.
+     */
+    external fun nativeDnsStatus(): String
+
+    /** The ways of the four tables for Watch's screen, as [org.visadahyu.datapavan.watch.dns.DnsCatalogue] reads them. */
+    external fun nativeDnsCatalogue(relays: String, targets: String, pairs: String, presets: String): String
 }
 
 /** Watch's Rust reader of data packs (core/engine's `datapack`, through Watch's own library). */

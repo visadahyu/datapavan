@@ -106,7 +106,7 @@ val requiredLibraries = buildMap {
 val forbiddenLibraries = if (advanced) emptyList() else listOf("libdatapavan_watch.so")
 // The methods of WatchVpnService that Watch's library calls back by name (core/watch-jni/src/lib.rs), which
 // R8 must neither remove nor rename (watch/proguard-rules.pro).
-val jniCallbacks = if (advanced) listOf("ownerUid", "protectSocket", "logRecords", "statesWanted", "resolveEndpoint", "routeOfApp") else emptyList()
+val jniCallbacks = if (advanced) listOf("ownerUid", "protectSocket", "logRecords", "statesWanted", "resolveEndpoint", "routeOfApp", "exchange", "dnsChanged") else emptyList()
 
 // The licence texts every APK carries under assets/licences/ (NOTICE, W7's fix round, review M4): NOTICE, LICENSE,
 // and the texts of every crate inside its native libraries (licences/, scripts/licences.py); Advanced adds Watch's

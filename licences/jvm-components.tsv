@@ -33,3 +33,5 @@ androidx.tracing	AndroidX Tracing	Apache-2.0	all	LICENSE
 androidx.versionedparcelable	AndroidX Versioned Parcelable	Apache-2.0	all	LICENSE
 androidx.window	AndroidX Window	Apache-2.0	all	LICENSE
 com.google.zxing:core	ZXing core: QR code decoding	Apache-2.0	advanced	LICENSE
+com.squareup.okhttp3	OkHttp: DNS over HTTPS and Oblivious DoH	Apache-2.0	advanced	LICENSE
+com.squareup.okio	Okio, under OkHttp	Apache-2.0	advanced	LICENSE

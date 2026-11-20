@@ -33,6 +33,12 @@ android {
         aidl = true
     }
 
+    testOptions {
+        // OkHttp's Android platform asks android.util.Log whether to log as it starts (W8, part 1): the JVM tests of
+        // the encrypted resolver's transport (dns/ExchangerTest.kt) get Android's defaults rather than a stub's error.
+        unitTests.isReturnDefaultValues = true
+    }
+
     lint {
         abortOnError = true
         warningsAsErrors = true
@@ -53,6 +59,10 @@ dependencies {
     // ZXing's core library alone (Apache-2.0), for the QR code of a WireGuard configuration, read only in the
     // isolated process of tunnel/qr/QrService.kt (W7, part 2; ADR 0035, question 10).
     implementation(libs.zxing.core)
+    // OkHttp 5 (Apache-2.0), pinned, with Okio (Apache-2.0): DoH and Oblivious DoH for direct apps' names over HTTP/2
+    // on Android's own TLS, from sockets Watch protects and binds to the network beneath (W8, part 1; ADR 0042). No
+    // User-Agent, no Accept-Encoding, no cookies, no cache (dns/Exchanger.kt).
+    implementation(libs.okhttp)
     testImplementation(libs.junit)
 }
 

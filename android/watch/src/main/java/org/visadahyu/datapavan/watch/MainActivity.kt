@@ -74,6 +74,14 @@ class MainActivity : ComponentActivity() {
         ChainView(null, on = false, allApps = true, apps = emptySet(), logDestinations = false, udp = false, user = null, password = null, choices = emptyList()),
     )
 
+    /** The names of apps that go directly (W8, part 1): the user's setting, the way now, the data pack's ways. */
+    private val dns = mutableStateOf(
+        org.visadahyu.datapavan.watch.ui.DnsView(
+            running = false, status = null, choice = org.visadahyu.datapavan.watch.dns.DnsSettings.Choice.Odoh,
+            strict = false, notify = false, pairs = "", catalogue = null,
+        ),
+    )
+
     /** The apps the user left out of the tunnel (ADR 0041). */
     private val leftOut = mutableStateOf(emptySet<String>())
 
@@ -143,6 +151,7 @@ class MainActivity : ComponentActivity() {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 while (true) {
                     readStates()
+                    readDns()
                     delay(STATES_EVERY_MS)
                 }
             }
@@ -178,6 +187,8 @@ class MainActivity : ComponentActivity() {
                     onLoadApps = { if (chain.value.choices.isEmpty()) loadChoices() },
                     onLeaveOut = ::leaveOut,
                     onNow = { startActivity(NowActivity.intent(this)) },
+                    dns = dns.value,
+                    dnsActions = dnsActions,
                 )
             }
         }
@@ -478,6 +489,41 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Each configuration's state from the engine, while the screen is shown (W7, part 2). */
+    /** The user's DNS setting and, while the tunnel runs, the way names go now; the ways themselves once, off this thread. */
+    private fun readDns() {
+        val settings = org.visadahyu.datapavan.watch.dns.DnsSettings.of(this)
+        val running = WatchVpnService.running.value
+        val status = if (running) org.visadahyu.datapavan.watch.dns.DnsStatus.parse(Engine.nativeDnsStatus()) else null
+        val view = dns.value.copy(
+            running = running, status = status, choice = settings.choice, strict = settings.strict,
+            notify = settings.notify, pairs = settings.pairs,
+        )
+        if (view != dns.value) dns.value = view
+        if (view.catalogue == null && !catalogueAsked) {
+            catalogueAsked = true
+            worker.execute {
+                val catalogue = org.visadahyu.datapavan.watch.dns.DnsSettings.catalogue(this)
+                runOnUiThread { dns.value = dns.value.copy(catalogue = catalogue) }
+            }
+        }
+    }
+
+    private var catalogueAsked = false
+
+    /** A change of the DNS setting: kept, then handed to the engines, off this thread, since it reads the data pack. */
+    private fun changeDns(change: (org.visadahyu.datapavan.watch.dns.DnsSettings) -> Unit) {
+        change(org.visadahyu.datapavan.watch.dns.DnsSettings.of(this))
+        readDns()
+        worker.execute { org.visadahyu.datapavan.watch.dns.DnsSettings.apply(this) }
+    }
+
+    private val dnsActions = org.visadahyu.datapavan.watch.ui.DnsActions(
+        onChoice = { choice -> changeDns { it.choice = choice } },
+        onStrict = { on -> changeDns { it.strict = on } },
+        onNotify = { on -> changeDns { it.notify = on } },
+        onPairs = { pairs -> changeDns { it.pairs = pairs } },
+    )
+
     private fun readStates() {
         val running = WatchVpnService.running.value
         val lines = if (running) TunnelStates.read(Engine.nativeTunnelStates()) else emptyMap()

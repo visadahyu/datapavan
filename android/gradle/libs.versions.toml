@@ -11,6 +11,8 @@ startup = "1.1.1"
 junit = "4.13.2"
 # W7, part 2: the QR code of a WireGuard configuration, decoded in an isolated process (ADR 0035, question 10).
 zxing = "3.5.4"
+# W8, part 1: DoH and Oblivious DoH over Android's own TLS (Conscrypt) with HTTP/2 (ADR 0042, "How it is built", point 1).
+okhttp = "5.5.1"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
@@ -24,6 +26,7 @@ androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
 androidx-compose-ui = { module = "androidx.compose.ui:ui" }
 junit = { module = "junit:junit", version.ref = "junit" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
