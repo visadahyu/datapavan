@@ -265,8 +265,12 @@ androidComponents {
 tasks.withType<Test>().configureEach {
     inputs.dir(layout.projectDirectory.dir("src/main/res/values")).withPathSensitivity(PathSensitivity.RELATIVE)
         .withPropertyName("englishStrings")
-    inputs.files(listOf("data/app-signers", "data/tools").map { repositoryRoot.dir(it) })
-        .withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("repositoryData")
+    // W8: the DNS tables and the public suffix list (dns/DnsSettingsTest.kt, PublicSuffixesTest.kt), and the DNS
+    // lab's test certificates (dns/ExchangerTest.kt).
+    inputs.files(
+        listOf("data/app-signers", "data/tools", "data/odoh", "data/dns-presets", "data/public-suffix", "scripts/dnslab/certs")
+            .map { repositoryRoot.dir(it) },
+    ).withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("repositoryData")
     inputs.files(
         listOf("core/net/src/engine.rs", "core/net/src/wireguard/config.rs", "core/watch-jni/src/lib.rs")
             .map { repositoryRoot.file(it) },
