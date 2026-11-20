@@ -488,8 +488,8 @@ abstract class BundledDataTask : DefaultTask() {
         val files = source.walkTopDown()
             .filter { it.isFile && it.parentFile != source && it.extension !in setOf("py", "sh") && !it.name.startsWith(".") }
             // Datasets that only Watch uses go into Watch's APK, not the audit app's (ADR 0036): the
-            // organisation table, and the resolvers compiled into Watch's engine.
-            .filter { it.relativeTo(source).invariantSeparatorsPath.substringBefore('/') !in setOf("dbip-asn", "resolvers") }
+            // organisation table, and the resolvers and the messengers (ADR 0052) compiled into Watch's engine.
+            .filter { it.relativeTo(source).invariantSeparatorsPath.substringBefore('/') !in setOf("dbip-asn", "resolvers", "messengers") }
             .map { it.relativeTo(source).invariantSeparatorsPath to it }
             .sortedBy { it.first }
             .toList()

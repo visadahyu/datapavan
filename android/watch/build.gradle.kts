@@ -228,6 +228,8 @@ androidComponents {
             // networks' owners (core/net/src/owners.rs).
             sources.from(repositoryRoot.file("data/resolvers/resolvers.tsv"))
             sources.from(repositoryRoot.file("data/owners/asns.tsv"), repositoryRoot.file("data/owners/entities.tsv"))
+            // The messengers whose proxies the engine infers (core/net/src/messengers.rs, ADR 0052).
+            sources.from(listOf("clients.tsv", "names.tsv", "telegram-cidr.txt").map { repositoryRoot.file("data/messengers/$it") })
             workspaceDir.set(rustWorkspace)
             crate.set("datapavan-watch-jni")
             abis.set(shippedAbis)

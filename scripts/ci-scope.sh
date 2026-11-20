@@ -52,13 +52,15 @@ tier() {
 
 # data/: both editions bundle every file of every dataset but the scripts that make them and hidden files
 # (BundledDataTask in android/app/build.gradle.kts), and the data pack's header from data/PACK. The audit's
-# pack leaves out data/dbip-asn and data/resolvers, of which Watch's build reads only asn.bin and
-# resolvers.tsv (android/watch/build.gradle.kts); files at data/'s top other than PACK are not bundled.
+# pack leaves out data/dbip-asn, data/resolvers and data/messengers, of which Watch's build reads only asn.bin,
+# resolvers.tsv and the messengers' three tables (android/watch/build.gradle.kts); files at data/'s top other than PACK
+# are not bundled.
 data_tier() {
     local rest=${1#data/} name=${1##*/}
     case $rest in
         PACK | dbip-asn/asn.bin | resolvers/resolvers.tsv) echo emulator; return ;;
-        dbip-asn/* | resolvers/*) echo build; return ;;
+        messengers/clients.tsv | messengers/names.tsv | messengers/telegram-cidr.txt) echo emulator; return ;;
+        dbip-asn/* | resolvers/* | messengers/*) echo build; return ;;
         */*) ;;
         *) echo build; return ;;
     esac
