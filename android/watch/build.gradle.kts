@@ -233,3 +233,18 @@ androidComponents {
         variant.sources.assets?.addGeneratedSourceDirectory(toolsTask, ToolTable::outputDir)
     }
 }
+
+// The unit tests read these files while they run (Watch's English strings, the datasets, the engine's sources whose
+// codes and addresses they hold Kotlin to), so a change to any of them must run the tests again: undeclared, Gradle
+// took the tests as up to date when W7 part 2's strings moved out of strings_untranslated.xml, and only CI's fresh
+// run found the two tests that still read it.
+tasks.withType<Test>().configureEach {
+    inputs.dir(layout.projectDirectory.dir("src/main/res/values")).withPathSensitivity(PathSensitivity.RELATIVE)
+        .withPropertyName("englishStrings")
+    inputs.files(listOf("data/app-signers", "data/tools").map { repositoryRoot.dir(it) })
+        .withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("repositoryData")
+    inputs.files(
+        listOf("core/net/src/engine.rs", "core/net/src/wireguard/config.rs", "core/watch-jni/src/lib.rs")
+            .map { repositoryRoot.file(it) },
+    ).withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("engineSources")
+}

@@ -39,7 +39,8 @@ class TunnelStatesTest {
     fun the_live_region_says_the_kind_alone() {
         assertEquals(TunnelStates.kind(Shown.Connected(37)), TunnelStates.kind(Shown.Connected(38)))
         assertEquals(TunnelStates.Kind.CONNECTED, TunnelStates.kind(Shown.Connected(3_600)))
-        val xml = java.io.File("src/main/res/values/strings_untranslated.xml").readText()
+        val xml = listOf("strings.xml", "strings_untranslated.xml").map { java.io.File("src/main/res/values/$it") }
+            .filter { it.isFile }.joinToString("\n") { it.readText() }
         for (kind in TunnelStates.Kind.entries) {
             val name = org.visadahyu.datapavan.watch.R.string::class.java.fields.firstOrNull { it.getInt(null) == org.visadahyu.datapavan.watch.ui.kindWords(kind) }?.name
             val words = Regex("<string name=\"$name\">([^<]*)</string>").find(xml)?.groupValues?.get(1)

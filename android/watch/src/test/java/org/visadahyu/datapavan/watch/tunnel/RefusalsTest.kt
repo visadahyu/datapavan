@@ -34,8 +34,10 @@ class RefusalsTest {
     private fun stringName(id: Int): String? =
         (R.string::class.java.fields + R.plurals::class.java.fields).firstOrNull { it.getInt(null) == id }?.name
 
+    /** Every English strings file of Watch: strings.xml, and strings_untranslated.xml while strings wait for ADR 0030. */
     private fun strings(): String = listOf("strings.xml", "strings_untranslated.xml")
-        .joinToString("\n") { File("src/main/res/values/$it").readText() }
+        .map { File("src/main/res/values/$it") }.filter { it.isFile }
+        .joinToString("\n") { it.readText() }
 
     @Test
     fun every_code_the_engine_gives_has_words() {
