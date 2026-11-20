@@ -1,0 +1,7 @@
+SPDX-License-Identifier: CC0-1.0
+
+Ordinary DNS over HTTPS and DNS over TLS resolvers a user may choose, with their operators, seats, endpoints,
+bootstrap addresses and the facts of each card (logging, audit, filtering, policy), collected by the Datapavan
+project from each operator's own pages and dedicated to the public domain under CC0 1.0
+(https://creativecommons.org/publicdomain/zero/1.0/). Recorded in ADR 0015 and ADR 0042. The pages are cited as
+evidence; the logging and filtering statements are summarised in our own words and nothing is copied from them.

@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: CC0-1.0
+# Public Oblivious DoH relays (RFC 9230) that Watch's engine may use (ADR 0042, W8). A relay sees the user's address
+# but not the question. Every value has its source in sources.tsv; read and measured on 2026-11-20 (SOURCE).
+# Columns:
+#   id             short name, lower case
+#   url            the relay's https URL; the relay takes ?targethost=..&targetpath=..
+#   ipv4           bootstrap addresses, comma separated
+#   ipv6           bootstrap addresses, comma separated, compressed lower-case form
+#   operator       the service's operator as it names itself
+#   person         the person or body behind it
+#   jurisdictions  ISO 3166-1 alpha-2 codes: the operator's or person's seat, the hosting company's, any CDN's
+#   hosting        the hosting networks, as AS numbers
+#   cdn            the CDN in front, as AS numbers
+#   pins           SPKI SHA-256 pins (sha256/BASE64); none published by any operator
+#   note           free text
+# '-' means none.
+numa	https://odoh-relay.numa.rs/relay	178.104.229.30	-	Numa	Razvan Dimescu	DE,RO	AS24940	-	-	Run by the Numa project on Hetzner Online (DE); the list entry, added by Razvan Dimescu himself, says Falkenstein while the address's RIPE netblock is named CLOUD-NBG1 (Nuremberg); RO is the person's own location on his GitHub profile, no seat of the Numa project is published; no logging statement for the relay on numa.rs; no AAAA record on 2026-11-20
+crypto-sx-fastly	https://odoh-relay.edgecompute.app/	151.101.1.51,151.101.65.51,151.101.129.51,151.101.193.51	2a04:4e42::307,2a04:4e42:200::307,2a04:4e42:400::307,2a04:4e42:600::307	crypto.sx	Frank Denis	FR,US	AS54113	AS54113	-	A Fastly Compute service maintained by Frank Denis (not Fastly's managed OHTTP Relay product); the host is a CNAME to ecp.map.fastly.net, anycast; FR is the person's own location on his GitHub profile, US is Fastly's seat; the same person maintains the crypto.sx target and curates the DNSCrypt lists; no logging statement for the relay

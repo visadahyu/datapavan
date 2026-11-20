@@ -1,0 +1,144 @@
+# SPDX-License-Identifier: CC0-1.0
+# Where each value of presets.tsv comes from: the operator's own pages, or, for addresses no page gives for the
+# endpoint's host, one row per resolver that gave them (Quad9's and Cloudflare's DoH, which agreed).
+# Columns: id, field, value, location (URL), retrieved.
+quad9-doh	name	Recommended: Malware Blocking, DNSSEC Validation	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-doh	operator	Quad9	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-doh	country	CH	https://quad9.net/privacy/policy/	2026-11-20
+quad9-doh	endpoint	https://dns.quad9.net/dns-query	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-doh	logging	no client IP recorded; aggregate counters only	https://quad9.net/privacy/policy/	2026-11-20
+quad9-doh	filtering	malware,phishing,exploits,fraud	https://quad9.net/privacy/policy/	2026-11-20
+quad9-doh	policy	https://quad9.net/privacy/policy/	https://quad9.net/privacy/policy/	2026-11-20
+quad9-doh	ipv4	9.9.9.9	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-doh	ipv4	149.112.112.112	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-doh	ipv6	2620:fe::fe	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-doh	ipv6	2620:fe::9	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-dot	name	Recommended: Malware Blocking, DNSSEC Validation	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-dot	operator	Quad9	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-dot	country	CH	https://quad9.net/privacy/policy/	2026-11-20
+quad9-dot	endpoint	dns.quad9.net	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-dot	logging	no client IP recorded; aggregate counters only	https://quad9.net/privacy/policy/	2026-11-20
+quad9-dot	filtering	malware,phishing,exploits,fraud	https://quad9.net/privacy/policy/	2026-11-20
+quad9-dot	policy	https://quad9.net/privacy/policy/	https://quad9.net/privacy/policy/	2026-11-20
+quad9-dot	ipv4	9.9.9.9	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-dot	ipv4	149.112.112.112	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-dot	ipv6	2620:fe::fe	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-dot	ipv6	2620:fe::9	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-unsecured-doh	name	Unsecured: No Malware blocking, DNSSEC validation	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-unsecured-doh	operator	Quad9	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-unsecured-doh	country	CH	https://quad9.net/privacy/policy/	2026-11-20
+quad9-unsecured-doh	endpoint	https://dns10.quad9.net/dns-query	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-unsecured-doh	logging	no client IP recorded; aggregate counters only	https://quad9.net/privacy/policy/	2026-11-20
+quad9-unsecured-doh	filtering	none	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-unsecured-doh	policy	https://quad9.net/privacy/policy/	https://quad9.net/privacy/policy/	2026-11-20
+quad9-unsecured-doh	ipv4	9.9.9.10	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-unsecured-doh	ipv4	149.112.112.10	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-unsecured-doh	ipv6	2620:fe::10	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-unsecured-doh	ipv6	2620:fe::fe:10	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-unsecured-dot	name	Unsecured: No Malware blocking, DNSSEC validation	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-unsecured-dot	operator	Quad9	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-unsecured-dot	country	CH	https://quad9.net/privacy/policy/	2026-11-20
+quad9-unsecured-dot	endpoint	dns10.quad9.net	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-unsecured-dot	logging	no client IP recorded; aggregate counters only	https://quad9.net/privacy/policy/	2026-11-20
+quad9-unsecured-dot	filtering	none	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-unsecured-dot	policy	https://quad9.net/privacy/policy/	https://quad9.net/privacy/policy/	2026-11-20
+quad9-unsecured-dot	ipv4	9.9.9.10	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-unsecured-dot	ipv4	149.112.112.10	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-unsecured-dot	ipv6	2620:fe::10	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+quad9-unsecured-dot	ipv6	2620:fe::fe:10	https://quad9.net/service/service-addresses-and-features/	2026-11-20
+cloudflare-doh	name	1.1.1.1	https://developers.cloudflare.com/1.1.1.1/ip-addresses/	2026-11-20
+cloudflare-doh	operator	Cloudflare	https://developers.cloudflare.com/1.1.1.1/ip-addresses/	2026-11-20
+cloudflare-doh	country	US	https://rdap.arin.net/registry/autnum/13335	2026-11-20
+cloudflare-doh	endpoint	https://cloudflare-dns.com/dns-query	https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/	2026-11-20
+cloudflare-doh	logging	source IP truncated and deleted within 25 hours; query logs kept 25 hours	https://developers.cloudflare.com/1.1.1.1/privacy/public-dns-resolver/	2026-11-20
+cloudflare-doh	filtering	none	https://developers.cloudflare.com/1.1.1.1/ip-addresses/	2026-11-20
+cloudflare-doh	policy	https://developers.cloudflare.com/1.1.1.1/privacy/public-dns-resolver/	https://developers.cloudflare.com/1.1.1.1/privacy/public-dns-resolver/	2026-11-20
+cloudflare-doh	audit	a Big 4 accounting firm examined its privacy commitments over 2024; report published 2026-04-01	https://blog.cloudflare.com/1111-privacy-examination-2026/	2026-11-20
+cloudflare-doh	ipv4	104.16.248.249	https://dns.quad9.net/dns-query	2026-11-20
+cloudflare-doh	ipv4	104.16.248.249	https://cloudflare-dns.com/dns-query	2026-11-20
+cloudflare-doh	ipv4	104.16.249.249	https://dns.quad9.net/dns-query	2026-11-20
+cloudflare-doh	ipv4	104.16.249.249	https://cloudflare-dns.com/dns-query	2026-11-20
+cloudflare-doh	ipv6	2606:4700::6810:f8f9	https://dns.quad9.net/dns-query	2026-11-20
+cloudflare-doh	ipv6	2606:4700::6810:f8f9	https://cloudflare-dns.com/dns-query	2026-11-20
+cloudflare-doh	ipv6	2606:4700::6810:f9f9	https://dns.quad9.net/dns-query	2026-11-20
+cloudflare-doh	ipv6	2606:4700::6810:f9f9	https://cloudflare-dns.com/dns-query	2026-11-20
+cloudflare-dot	name	1.1.1.1	https://developers.cloudflare.com/1.1.1.1/ip-addresses/	2026-11-20
+cloudflare-dot	operator	Cloudflare	https://developers.cloudflare.com/1.1.1.1/ip-addresses/	2026-11-20
+cloudflare-dot	country	US	https://rdap.arin.net/registry/autnum/13335	2026-11-20
+cloudflare-dot	endpoint	one.one.one.one	https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-tls/	2026-11-20
+cloudflare-dot	logging	source IP truncated and deleted within 25 hours; query logs kept 25 hours	https://developers.cloudflare.com/1.1.1.1/privacy/public-dns-resolver/	2026-11-20
+cloudflare-dot	filtering	none	https://developers.cloudflare.com/1.1.1.1/ip-addresses/	2026-11-20
+cloudflare-dot	policy	https://developers.cloudflare.com/1.1.1.1/privacy/public-dns-resolver/	https://developers.cloudflare.com/1.1.1.1/privacy/public-dns-resolver/	2026-11-20
+cloudflare-dot	audit	a Big 4 accounting firm examined its privacy commitments over 2024; report published 2026-04-01	https://blog.cloudflare.com/1111-privacy-examination-2026/	2026-11-20
+cloudflare-dot	ipv4	1.1.1.1	https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-tls/	2026-11-20
+cloudflare-dot	ipv4	1.0.0.1	https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-tls/	2026-11-20
+cloudflare-dot	ipv6	2606:4700:4700::1111	https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-tls/	2026-11-20
+cloudflare-dot	ipv6	2606:4700:4700::1001	https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-tls/	2026-11-20
+adguard-unfiltered-doh	name	AdGuard DNS: Non-filtering servers	https://adguard-dns.io/kb/general/dns-providers/	2026-11-20
+adguard-unfiltered-doh	operator	AdGuard	https://adguard-dns.io/kb/general/dns-providers/	2026-11-20
+adguard-unfiltered-doh	country	CY	https://adguard-dns.io/privacy.html	2026-11-20
+adguard-unfiltered-doh	endpoint	https://unfiltered.adguard-dns.com/dns-query	https://adguard-dns.io/kb/general/dns-providers/	2026-11-20
+adguard-unfiltered-doh	logging	no personal data for public DNS; anonymous 24-hour domain list and aggregate counters	https://adguard-dns.io/privacy.html	2026-11-20
+adguard-unfiltered-doh	filtering	none	https://adguard-dns.io/kb/general/dns-providers/	2026-11-20
+adguard-unfiltered-doh	policy	https://adguard-dns.io/privacy.html	https://adguard-dns.io/privacy.html	2026-11-20
+adguard-unfiltered-doh	ipv4	94.140.14.140	https://adguard-dns.io/kb/general/dns-providers/	2026-11-20
+adguard-unfiltered-doh	ipv4	94.140.14.141	https://adguard-dns.io/kb/general/dns-providers/	2026-11-20
+adguard-unfiltered-doh	ipv6	2a10:50c0::1:ff	https://adguard-dns.io/kb/general/dns-providers/	2026-11-20
+adguard-unfiltered-doh	ipv6	2a10:50c0::2:ff	https://adguard-dns.io/kb/general/dns-providers/	2026-11-20
+adguard-unfiltered-dot	name	AdGuard DNS: Non-filtering servers	https://adguard-dns.io/kb/general/dns-providers/	2026-11-20
+adguard-unfiltered-dot	operator	AdGuard	https://adguard-dns.io/kb/general/dns-providers/	2026-11-20
+adguard-unfiltered-dot	country	CY	https://adguard-dns.io/privacy.html	2026-11-20
+adguard-unfiltered-dot	endpoint	unfiltered.adguard-dns.com	https://adguard-dns.io/kb/general/dns-providers/	2026-11-20
+adguard-unfiltered-dot	logging	no personal data for public DNS; anonymous 24-hour domain list and aggregate counters	https://adguard-dns.io/privacy.html	2026-11-20
+adguard-unfiltered-dot	filtering	none	https://adguard-dns.io/kb/general/dns-providers/	2026-11-20
+adguard-unfiltered-dot	policy	https://adguard-dns.io/privacy.html	https://adguard-dns.io/privacy.html	2026-11-20
+adguard-unfiltered-dot	ipv4	94.140.14.140	https://adguard-dns.io/kb/general/dns-providers/	2026-11-20
+adguard-unfiltered-dot	ipv4	94.140.14.141	https://adguard-dns.io/kb/general/dns-providers/	2026-11-20
+adguard-unfiltered-dot	ipv6	2a10:50c0::1:ff	https://adguard-dns.io/kb/general/dns-providers/	2026-11-20
+adguard-unfiltered-dot	ipv6	2a10:50c0::2:ff	https://adguard-dns.io/kb/general/dns-providers/	2026-11-20
+controld-unfiltered-doh	name	Free DNS: Unfiltered	https://docs.controld.com/docs/free-dns	2026-11-20
+controld-unfiltered-doh	operator	Control D	https://docs.controld.com/docs/free-dns	2026-11-20
+controld-unfiltered-doh	country	CA	https://controld.com/terms	2026-11-20
+controld-unfiltered-doh	endpoint	https://freedns.controld.com/p0	https://docs.controld.com/docs/free-dns	2026-11-20
+controld-unfiltered-doh	logging	no query logs, browsing history or timestamps stored	https://docs.controld.com/docs/free-dns	2026-11-20
+controld-unfiltered-doh	filtering	none	https://docs.controld.com/docs/free-dns	2026-11-20
+controld-unfiltered-doh	policy	https://controld.com/privacy	https://controld.com/privacy	2026-11-20
+controld-unfiltered-doh	logging	no query logs, browsing history or timestamps stored	https://controld.com/free-dns	2026-11-20
+controld-unfiltered-doh	ipv4	76.76.2.11	https://dns.quad9.net/dns-query	2026-11-20
+controld-unfiltered-doh	ipv4	76.76.2.11	https://cloudflare-dns.com/dns-query	2026-11-20
+controld-unfiltered-doh	ipv6	2606:1a40::11	https://dns.quad9.net/dns-query	2026-11-20
+controld-unfiltered-doh	ipv6	2606:1a40::11	https://cloudflare-dns.com/dns-query	2026-11-20
+controld-unfiltered-dot	name	Free DNS: Unfiltered	https://docs.controld.com/docs/free-dns	2026-11-20
+controld-unfiltered-dot	operator	Control D	https://docs.controld.com/docs/free-dns	2026-11-20
+controld-unfiltered-dot	country	CA	https://controld.com/terms	2026-11-20
+controld-unfiltered-dot	endpoint	p0.freedns.controld.com	https://docs.controld.com/docs/free-dns	2026-11-20
+controld-unfiltered-dot	logging	no query logs, browsing history or timestamps stored	https://docs.controld.com/docs/free-dns	2026-11-20
+controld-unfiltered-dot	filtering	none	https://docs.controld.com/docs/free-dns	2026-11-20
+controld-unfiltered-dot	policy	https://controld.com/privacy	https://controld.com/privacy	2026-11-20
+controld-unfiltered-dot	logging	no query logs, browsing history or timestamps stored	https://controld.com/free-dns	2026-11-20
+controld-unfiltered-dot	ipv4	76.76.2.11	https://dns.quad9.net/dns-query	2026-11-20
+controld-unfiltered-dot	ipv4	76.76.2.11	https://cloudflare-dns.com/dns-query	2026-11-20
+controld-unfiltered-dot	ipv6	2606:1a40::11	https://dns.quad9.net/dns-query	2026-11-20
+controld-unfiltered-dot	ipv6	2606:1a40::11	https://cloudflare-dns.com/dns-query	2026-11-20
+dns4eu-unfiltered-doh	name	DNS4EU: Unfiltered resolution	https://www.joindns4.eu/for-public	2026-11-20
+dns4eu-unfiltered-doh	operator	Whalebone	https://www.joindns4.eu/for-public	2026-11-20
+dns4eu-unfiltered-doh	country	CZ	https://www.joindns4.eu/for-public	2026-11-20
+dns4eu-unfiltered-doh	endpoint	https://unfiltered.joindns4.eu/dns-query	https://www.joindns4.eu/for-public	2026-11-20
+dns4eu-unfiltered-doh	logging	client IP in RAM only; query logs with an anonymised address kept up to 6 months	https://legal-documents-dns4eu.s3.fr-par.scw.cloud/DNS4EU-Public-DNS-Resolver-policy-2025.pdf	2026-11-20
+dns4eu-unfiltered-doh	filtering	court-ordered blocks	https://www.joindns4.eu/for-public	2026-11-20
+dns4eu-unfiltered-doh	policy	https://legal-documents-dns4eu.s3.fr-par.scw.cloud/DNS4EU-Public-DNS-Resolver-policy-2025.pdf	https://legal-documents-dns4eu.s3.fr-par.scw.cloud/DNS4EU-Public-DNS-Resolver-policy-2025.pdf	2026-11-20
+dns4eu-unfiltered-doh	ipv4	86.54.11.100	https://www.joindns4.eu/for-public	2026-11-20
+dns4eu-unfiltered-doh	ipv4	86.54.11.200	https://www.joindns4.eu/for-public	2026-11-20
+dns4eu-unfiltered-doh	ipv6	2a13:1001::86:54:11:100	https://www.joindns4.eu/for-public	2026-11-20
+dns4eu-unfiltered-doh	ipv6	2a13:1001::86:54:11:200	https://www.joindns4.eu/for-public	2026-11-20
+dns4eu-unfiltered-dot	name	DNS4EU: Unfiltered resolution	https://www.joindns4.eu/for-public	2026-11-20
+dns4eu-unfiltered-dot	operator	Whalebone	https://www.joindns4.eu/for-public	2026-11-20
+dns4eu-unfiltered-dot	country	CZ	https://www.joindns4.eu/for-public	2026-11-20
+dns4eu-unfiltered-dot	endpoint	unfiltered.joindns4.eu	https://www.joindns4.eu/for-public	2026-11-20
+dns4eu-unfiltered-dot	logging	client IP in RAM only; query logs with an anonymised address kept up to 6 months	https://legal-documents-dns4eu.s3.fr-par.scw.cloud/DNS4EU-Public-DNS-Resolver-policy-2025.pdf	2026-11-20
+dns4eu-unfiltered-dot	filtering	court-ordered blocks	https://www.joindns4.eu/for-public	2026-11-20
+dns4eu-unfiltered-dot	policy	https://legal-documents-dns4eu.s3.fr-par.scw.cloud/DNS4EU-Public-DNS-Resolver-policy-2025.pdf	https://legal-documents-dns4eu.s3.fr-par.scw.cloud/DNS4EU-Public-DNS-Resolver-policy-2025.pdf	2026-11-20
+dns4eu-unfiltered-dot	ipv4	86.54.11.100	https://www.joindns4.eu/for-public	2026-11-20
+dns4eu-unfiltered-dot	ipv4	86.54.11.200	https://www.joindns4.eu/for-public	2026-11-20
+dns4eu-unfiltered-dot	ipv6	2a13:1001::86:54:11:100	https://www.joindns4.eu/for-public	2026-11-20
+dns4eu-unfiltered-dot	ipv6	2a13:1001::86:54:11:200	https://www.joindns4.eu/for-public	2026-11-20

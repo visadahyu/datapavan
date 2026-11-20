@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: CC0-1.0
+retrieved: 2026-11-20
+relays: 2
+targets: 6
+pairs: 2
+evidence: 189
+list: github.com/DNSCrypt/dnscrypt-resolvers at commit be83948783d10ace1febef4180d640936acd40ea (2026-11-15):
+  v3/odoh-relays.md, sha256 f4718be434cc838e929aa10d4f3cb18d645f8ae4bcfa09ba3f88c4906cd70652, 3 relays;
+  v3/odoh-servers.md, sha256 e778bfe1a8f168815a1033a8e361b2cece97b0b8c88a0743b59f612d1328721b, 130 targets
+  (125 of dnscry.pt); both signatures checked against the lists' minisign key
+  RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3; v3/public-resolvers.md at the same commit for the
+  operators' plain DoH. The lists carry no licence file; only facts (host names, paths, operators) are taken.
+method: operators and persons from the list entries; a person's country from the person's own page (the
+  location on Frank Denis's and Razvan Dimescu's GitHub profiles) or the operator's imprint (dnscry.pt, § 5
+  TMG); Numa's entry was added by Razvan Dimescu himself (commit d9ceba6). No primary source names the Numa
+  project's seat, so its row carries the hosting company's seat and the person's.
+addresses-method: A and AAAA of every host asked of two resolvers over DoH, certificates checked (dig 9.20
+  +https: dns.quad9.net at 9.9.9.9 and cloudflare-dns.com at 1.1.1.1), 13:41 to 13:47 UTC; both gave the same
+  answers for every host.
+hosting-method: the origin AS of each measured address from RIPEstat network-info (RIS), its holder and seat
+  from the registry's RDAP record (RIPE, ARIN, LACNIC); cdn where the address belongs to Fastly (AS54113) or
+  Cloudflare (AS13335). crypto.sx's backend sits behind Cloudflare: AS12876 is Scaleway's AS by RDAP, from the
+  list's word that Scaleway hosts it, not from a measured address.
+configs-method: GET https://HOST/.well-known/odohconfigs at 13:44 UTC and again at 13:54 UTC, same bytes each
+  time; every target served one config of 46 bytes: version 1, X25519, HKDF-SHA256, AES-128-GCM.
+doh-method: one query (example.com A) to each target operator's plain DoH: Cloudflare and the four dnscry.pt
+  nodes answered a POST with application/dns-message; doh.crypto.sx answered a GET and refused a POST (405).
+round-trips: a minimal RFC 9230 client from the project's research (odoh_probe.py), python3 -I, public names
+  only (example.com, wikipedia.org), from one residential vantage point at 13:46 UTC:
+  numa to cloudflare: 6 of 6 answered, first 249 ms, warm median 62 ms;
+  crypto-sx-fastly to dnscry-pt-fra01: 6 of 6 answered, first 299 ms, warm median 46 ms;
+  the other pairs the rule allows, 2 queries each: numa to crypto-sx, crypto-sx-fastly to dnscry-pt-waw01,
+  dnscry-pt-vie01 and dnscry-pt-lis01, all answered.
+https-record: the HTTPS record (type 65) of each target host asked of cloudflare-dns.com and dns.quad9.net
+  over DoH, the answers decoded for SvcParamKey 32769 (odohconfig, RFC 9230 section 6); both resolvers agreed:
+  odoh.cloudflare-dns.com has a DNSSEC-validated HTTPS record with alpn, ipv4hint and ipv6hint only, no
+  odohconfig, although Cloudflare's ODoH page (updated 2026-10-02) says the key is published there;
+  odoh.crypto.sx has an HTTPS record with alpn, ipv4hint, ech and ipv6hint, no odohconfig;
+  fra01, waw01, vie01 and lis01.dnscry.pt are CNAMEs to vpsNNN.brueggus.de with no HTTPS record.
+  No target publishes its config in DNS, so there is nothing to compare: /.well-known/odohconfigs is the only
+  source, and configs holds that copy.
+pins: none published by any operator, so '-' everywhere. Issuers of each chain on 2026-11-20 (openssl s_client
+  -showcerts), for information only:
+  odoh-relay.numa.rs: Let's Encrypt YE2, ISRG Root YE, ISRG Root X2, ISRG Root X1;
+  odoh-relay.edgecompute.app (*.edgecompute.app): GlobalSign Atlas R46 DV TLS CA 2026 Q3, GlobalSign Root R46,
+  GlobalSign Root R3;
+  odoh.cloudflare-dns.com, odoh.crypto.sx and doh.crypto.sx: Google Trust Services WE1, GTS Root R4,
+  GlobalSign Root CA;
+  cloudflare-dns.com: SSL.com SSL Intermediate CA ECC R2, SSL.com Root Certification Authority ECC;
+  the dnscry.pt nodes (one certificate for dnscry.pt): Let's Encrypt YE1, ISRG Root YE, ISRG Root X2, ISRG
+  Root X1.
+rule: a pair is refused when relay and target share an operator, a person, a jurisdiction, or a hosting or CDN
+  AS. On these values numa pairs only with cloudflare and crypto-sx (with dnscry.pt it shares DE), and
+  crypto-sx-fastly only with the dnscry.pt targets (with cloudflare it shares US, with crypto-sx its person).
+  Both default pairs pass.
+left-out: the relay sh2o (odoh-relay.sh2o.link): the list says only that it is in Spain and names no operator.
+  The targets of Tiarap (odoh-id-gmail, odoh-tiarap.org): they filter ads, trackers and malware. Snowstorm
+  (dope.snowstorm.love): no seat of its operator found. The other 121 dnscry.pt targets: one operator and
+  person; four nodes on hosts in four countries are enough. Of those looked up, zrh01 (AS51852 of Private
+  Layer INC, Panama, on an IPv4 block held by a Hong Kong company) and gva01 (AS204957 of Green Floid LLC, US,
+  which would share US with the Fastly relay) were left out.
+caution: dnscry.pt is run and paid for by one person, who wrote on 2026-07-05 (dnscry.pt/news/on-the-future-of-
+  dnscry-pt) that costly or unreliable locations will be cancelled and that node addresses change; Cloudflare's
+  config came with no-store and a Last-Modified of 2026-11-20 00:00 UTC. Bootstrap addresses and configs are a
+  first-contact copy, to be refreshed.

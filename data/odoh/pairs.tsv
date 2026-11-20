@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: CC0-1.0
+# The default relay and target pairs, in order: the first is tried first, the second after a hedge delay.
+# A pair is refused when relay and target share an operator, a person, a jurisdiction, or a hosting or CDN AS;
+# both pairs pass that rule on the values of relays.tsv and targets.tsv.
+# Columns: relay (an id of relays.tsv), target (an id of targets.tsv).
+numa	cloudflare
+crypto-sx-fastly	dnscry-pt-fra01

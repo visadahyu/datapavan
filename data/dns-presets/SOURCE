@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: CC0-1.0
+retrieved: 2026-11-20
+presets: 12
+services: 6
+operators: 5
+evidence: 140
+method: every name, endpoint, seat, logging statement, filtering and policy read on its operator's own pages
+  (sources.tsv); the logging and filtering columns summarise them in our own words. Addresses are the page's
+  own where it lists them for the endpoint's host (Quad9, Cloudflare's one.one.one.one, AdGuard, DNS4EU);
+  where it does not (Cloudflare's cloudflare-dns.com, Control D's freedns.controld.com and
+  p0.freedns.controld.com), they are what two resolvers over DoH, certificates checked (dns.quad9.net and
+  cloudflare-dns.com), both answered on 2026-11-20. Every endpoint answered one query (example.com A) over its
+  own protocol at a bootstrap address, its certificate checked, on 2026-11-20.
+audit: only Cloudflare publishes an examination of its claim (a Big 4 accounting firm, report of 2026-04-01 on
+  its privacy commitments over 2024); none is named on the pages of Quad9, AdGuard, Control D or DNS4EU.
+pins: none published by any operator, so '-' everywhere.
+left-out: dns0.eu (closed in October 2025; on 2026-11-20 its domain had no address) and Mullvad's public
+  encrypted DNS (closed on 2026-11-02, data/resolvers/SOURCE): closed services are never offered. NextDNS:
+  its own pages document no endpoint for use without an account (each configuration has its own ID; the
+  account-free endpoints appear only in its CLI's source), while its privacy page says nothing is logged
+  unless the user asks for it. The other variants of these operators (Quad9's ECS service, AdGuard's default
+  and family servers, Control D's filtered resolvers, DNS4EU's protective ones, 1.1.1.1 for Families): only the
+  unfiltered service of each, and Quad9's default malware blocking, were chosen.

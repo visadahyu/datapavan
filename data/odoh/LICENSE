@@ -1,0 +1,7 @@
+SPDX-License-Identifier: CC0-1.0
+
+Public Oblivious DoH (RFC 9230) relays and targets, their operators, people, jurisdictions, hosting networks,
+bootstrap addresses and key configurations, and the default relay and target pairs, collected by the Datapavan
+project from public lists, the operators' own pages, registry (RDAP) records and its own measurements, and
+dedicated to the public domain under CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/). Recorded in
+ADR 0015 and ADR 0042. The sources are cited as evidence; nothing is copied from them.

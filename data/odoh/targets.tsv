@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: CC0-1.0
+# Public Oblivious DoH targets (RFC 9230) that Watch's engine may use (ADR 0042, W8). A target sees the question but
+# not the user's address. Every value has its source in sources.tsv; read and measured on 2026-11-20 (SOURCE).
+# Columns:
+#   id             short name, lower case
+#   host           the target host, as given in targethost
+#   path           the target path, as given in targetpath
+#   ipv4           bootstrap addresses of the host, comma separated
+#   ipv6           bootstrap addresses of the host, comma separated, compressed lower-case form
+#   operator       the service's operator as it names itself
+#   person         the person or body behind it
+#   jurisdictions  ISO 3166-1 alpha-2 codes: the operator's or person's seat, the hosting company's, any CDN's
+#   hosting        the hosting networks, as AS numbers
+#   cdn            the CDN in front, as AS numbers
+#   filtering      no, or what it filters
+#   doh            the same operator's plain DoH URL
+#   doh-ipv4       bootstrap addresses of that URL's host
+#   doh-ipv6       bootstrap addresses of that URL's host
+#   pins           SPKI SHA-256 pins (sha256/BASE64); none published by any operator
+#   configs        lower-case hex of the ObliviousDoHConfigs that /.well-known/odohconfigs served on 2026-11-20
+#   note           free text
+# '-' means none.
+cloudflare	odoh.cloudflare-dns.com	/dns-query	162.159.62.1,172.64.42.1	2803:f800:54::1,2a06:98c1:53::1	Cloudflare	Cloudflare Inc.	US,CR	AS13335	AS13335	no	https://cloudflare-dns.com/dns-query	104.16.248.249,104.16.249.249	2606:4700::6810:f8f9,2606:4700::6810:f9f9	-	002c0001002800200001000100205766261ed7393f4f640ddd1e5758cdafe3aa1fbacfd5f36b34cdc2660c589d24	The 1.1.1.1 resolver acting as an ODoH target (Cloudflare's docs); the 1.1.1.1 privacy policy does not name ODoH; CR because the IPv6 block 2803:f800::/32 is registered to CloudFlare Latin America S.R.L. (the RIPE block 2a06:98c1::/32 carries country GB but names Cloudflare, Inc. of San Francisco); the config was served with no-store and a Last-Modified of 2026-11-20 00:00 UTC, so it may rotate daily: the bootstrap copy is for the first query only
+crypto-sx	odoh.crypto.sx	/dns-query	104.21.46.152,172.67.140.94	2606:4700:3034::6815:2e98,2606:4700:3034::ac43:8c5e	crypto.sx	Frank Denis	FR,US	AS13335,AS12876	AS13335	no	https://doh.crypto.sx/dns-query	104.21.46.152,172.67.140.94	2606:4700:3034::6815:2e98,2606:4700:3034::ac43:8c5e	-	002c0001002800200001000100206cab510e9a45f8e7be41a506699dab904edc344762490745144ab75dd8678a47	Behind Cloudflare's CDN; the list says the backend is hosted by Scaleway, whose AS by RDAP is AS12876 (Scaleway SAS, Paris), but the backend's own address is not visible; filtering from the list's entry for the same operator's plain DoH, which says no censorship; that DoH answered GET only on 2026-11-20 (POST got HTTP 405); same person as the crypto-sx-fastly relay
+dnscry-pt-fra01	fra01.dnscry.pt	/dns-query	45.82.120.61	2a0e:6a80:3:669::	dnscry.pt	Alexander Brügmann	DE	AS44486	-	no	https://fra01.dnscry.pt/dns-query	45.82.120.61	2a0e:6a80:3:669::	-	002c00010028002000010001002040284617e1e84ac768e42d745d386f7601a667d397ce953bdf36f97d772f5152	Frankfurt; hosting AS44486, SYNLINQ (Frankfurt), by RDAP; one of 125 dnscry.pt ODoH targets in the list, each with its own key; the host is a CNAME to vps472.brueggus.de; the operator wrote on 2026-07-05 that costly or unreliable locations will be cancelled and that node addresses change from time to time
+dnscry-pt-waw01	waw01.dnscry.pt	/dns-query	195.3.221.162	2a03:cfc0:8000:26::c303:dda2	dnscry.pt	Alexander Brügmann	DE,PL	AS201814	-	no	https://waw01.dnscry.pt/dns-query	195.3.221.162	2a03:cfc0:8000:26::c303:dda2	-	002c000100280020000100010020c97c6150093d569c0eabc51f516842f65bab4347da1f2e5b1d9a5afb3cd7cb07	Warsaw; hosting AS201814, MEVSPACE sp. z o.o. (Warsaw), by RDAP; one of 125 dnscry.pt ODoH targets in the list, each with its own key; the host is a CNAME to vps488.brueggus.de; the operator wrote on 2026-07-05 that costly or unreliable locations will be cancelled and that node addresses change from time to time
+dnscry-pt-vie01	vie01.dnscry.pt	/dns-query	83.138.55.186	2a0d:f302:110:6517::1	dnscry.pt	Alexander Brügmann	DE,AT	AS40994	-	no	https://vie01.dnscry.pt/dns-query	83.138.55.186	2a0d:f302:110:6517::1	-	002c0001002800200001000100203385a204ed63f6f176a0b178b151a09294bf90d8e9d63720317fe4dbcb70190b	Vienna; hosting AS40994, Alwyzon, a trading name of Hohl IT e.U. (Vienna), by RDAP; one of 125 dnscry.pt ODoH targets in the list, each with its own key; the host is a CNAME to vps241.brueggus.de; the operator wrote on 2026-07-05 that costly or unreliable locations will be cancelled and that node addresses change from time to time
+dnscry-pt-lis01	lis01.dnscry.pt	/dns-query	143.20.12.32	2a0f:c442:8000::32	dnscry.pt	Alexander Brügmann	DE,PT	AS214913	-	no	https://lis01.dnscry.pt/dns-query	143.20.12.32	2a0f:c442:8000::32	-	002c0001002800200001000100201e97e8183c21e201c7be2748a5e01a49d3e8de7d1b9844bc43f8a1190b83c858	Lisbon; hosting AS214913, WebTejo (PT), by RDAP; one of 125 dnscry.pt ODoH targets in the list, each with its own key; the host is a CNAME to vps462.brueggus.de; the operator wrote on 2026-07-05 that costly or unreliable locations will be cancelled and that node addresses change from time to time; the IPv4 block's record names only a maintainer, so its holder is taken from the AS
