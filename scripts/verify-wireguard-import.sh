@@ -22,7 +22,8 @@
 # with one notification until the user lets them go on its screen.
 #
 # Skipped, with a line that says so, only where no lab peer can start (no Docker, Docker not answering, or no
-# wireguard module), as verify-wireguard.sh is; CI's runner joins in W7's part 3.
+# wireguard module), as verify-wireguard.sh is, and failed then too with WGLAB_REQUIRED=1, which CI sets (W7, part
+# 3a).
 #
 #   scripts/verify-wireguard-import.sh [path/to/Datapavan-Advanced-debug.apk]
 set -euo pipefail
@@ -48,6 +49,7 @@ SERVER=""
 PIN=""
 
 cleanup() {
+    local status=$?
     [ -z "$PIN" ] || adb shell locksettings clear --old "$PIN" >/dev/null 2>&1 || true
     adb shell "rm -f /sdcard/Download/wg-import-one.conf /sdcard/Pictures/wg-import-two-*.png" >/dev/null 2>&1 || true
     adb shell "content delete --uri content://media/external/file --where \"_display_name LIKE 'wg-import-%'\"" >/dev/null 2>&1 || true
@@ -57,6 +59,11 @@ cleanup() {
     adb shell pm clear "$PKG" >/dev/null 2>&1 || true
     adb uninstall "$WORKLOAD" >/dev/null 2>&1 || true
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
+    # The peers' logs, which CI keeps when a check fails (W7, part 3a).
+    if [ "$status" != 0 ]; then
+        mkdir -p "$ROOT/build/wglab"
+        "${compose[@]}" logs --no-color --timestamps >"$ROOT/build/wglab/peers-$(basename "$0" .sh).log" 2>&1 || true
+    fi
     "${compose[@]}" stop >/dev/null 2>&1 || true
     rm -rf "$WORK"
 }
@@ -178,6 +185,11 @@ elif [ ! -d /sys/module/wireguard ]; then
     why_not="the wireguard module is not loaded"
 fi
 if [ -n "$why_not" ]; then
+    # On CI the switch is on (WGLAB_REQUIRED=1, W7's part 3a): there a skip would pass without checking, so it fails.
+    if [ "${WGLAB_REQUIRED:-}" = 1 ]; then
+        echo "WIREGUARD CHECK FAILED: WGLAB_REQUIRED=1, and no WireGuard lab peer can start here ($why_not; Linux $(uname -r))" >&2
+        exit 1
+    fi
     echo "SKIPPED verify-wireguard-import.sh: no WireGuard lab peer can start here ($why_not); nothing of W7's import was checked on the emulator"
     [ -z "${GITHUB_ACTIONS:-}" ] || echo "::notice title=W7's import check skipped::$why_not: nothing of W7's import was checked on the emulator"
     exit 0

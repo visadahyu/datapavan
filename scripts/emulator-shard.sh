@@ -19,21 +19,24 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SHARDS="watch audit screens"
+SHARDS="watch audit screens wireguard"
 
 # The checks of shard $1, in order.
 checks_of() {
     case $1 in
         # Watch in Datapavan Advanced: its smoke test, its engine end to end, its chaining through a test
-        # tool, its WireGuard upstream against the lab's peers and the import of its configurations through
-        # Android's own documents screen, photo picker and camera (skipped, and saying so, where no peer can start),
-        # the live counters by the apps' states, its connection log, and its release build as users get it.
-        watch) echo smoke-watch.sh verify-watch.sh verify-chain.sh verify-wireguard.sh verify-wireguard-import.sh verify-activity.sh verify-log.sh verify-watch-release.sh ;;
+        # tool, the live counters by the apps' states, its connection log, and its release build as users get it.
+        watch) echo smoke-watch.sh verify-watch.sh verify-chain.sh verify-activity.sh verify-log.sh verify-watch-release.sh ;;
         # Basic: its smoke test, which installs it, then the audit with its fixture, the remediation plan,
         # the launcher shortcuts and the data pack import.
         audit) echo smoke.sh verify-audit.sh verify-plan.sh verify-shortcuts.sh verify-datapack.sh ;;
         # Basic's screens in every language with the accessibility check.
         screens) echo screenshots.sh ;;
+        # Watch's WireGuard upstream against the lab's peers of the kernel's WireGuard, and the import of its
+        # configurations through Android's own documents screen, photo picker and camera (W7; a shard of their own
+        # since part 3a, which CI runs where the WireGuard code or its checks changed, and every week): each skipped,
+        # and saying so, where no peer can start, unless WGLAB_REQUIRED=1, as on CI.
+        wireguard) echo verify-wireguard.sh verify-wireguard-import.sh ;;
         *) return 1 ;;
     esac
 }
@@ -78,6 +81,18 @@ case "${1:-}" in
                     # the audit shard.
                     adb install -r "$ROOT/android/app/build/outputs/apk/debug/app-debug.apk" >/dev/null
                     "$ROOT/scripts/screenshots.sh" "$ROOT/build/screenshots"
+                    ;;
+                verify-wireguard.sh | verify-wireguard-import.sh)
+                    # A check that ends without its last line has not checked everything (W7, part 3a): with the
+                    # switch on, that fails the shard, whatever the check's own status said.
+                    log=$(mktemp)
+                    "$ROOT/scripts/$check" | tee "$log"
+                    last=$(tail -n 1 "$log")
+                    rm -f "$log"
+                    if [ "${WGLAB_REQUIRED:-}" = 1 ] && ! grep -qx '== WireGuard .* checked on the emulator' <<<"$last"; then
+                        echo "$check ended without its last line, with WGLAB_REQUIRED=1: '$last'" >&2
+                        exit 1
+                    fi
                     ;;
                 *) "$ROOT/scripts/$check" ;;
             esac

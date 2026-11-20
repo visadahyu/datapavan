@@ -14,9 +14,10 @@
 # come back, and the app's traffic goes through again. A tunnel whose configuration is removed keeps its apps
 # waiting. Nothing Watch shows or logs names a key or the endpoint.
 #
-# CI's runner joins in W7's part 3. Only where no lab peer can start here at all (no Docker, Docker not
-# answering, or no wireguard module) is the check skipped, with a line that says so (a notice on CI), and it
-# passes: it then proves nothing, and the run says it. Any other failure of the lab fails the check.
+# Only where no lab peer can start here at all (no Docker, Docker not answering, or no wireguard module) is the
+# check skipped, with a line that says so, and it passes: it then proves nothing, and the run says it. With
+# WGLAB_REQUIRED=1, which CI sets (W7, part 3a), that fails too, with its reason. Any other failure of the lab fails
+# the check; the peers' logs then go to build/wglab/.
 #
 #   scripts/verify-wireguard.sh [path/to/Datapavan-Advanced-debug.apk]
 set -euo pipefail
@@ -43,6 +44,7 @@ SERVER=""
 DATA_ALWAYS_ON=""
 
 cleanup() {
+    local status=$?
     adb shell run-as "$PKG" rm -f files/wg1.conf files/wg2.conf >/dev/null 2>&1 || true
     adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
     adb uninstall "$WORKLOAD" >/dev/null 2>&1 || true
@@ -53,6 +55,11 @@ cleanup() {
         *) adb shell settings put global mobile_data_always_on "$DATA_ALWAYS_ON" >/dev/null 2>&1 || true ;;
     esac
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
+    # The peers' logs, which CI keeps when a check fails (W7, part 3a).
+    if [ "$status" != 0 ]; then
+        mkdir -p "$ROOT/build/wglab"
+        "${compose[@]}" logs --no-color --timestamps >"$ROOT/build/wglab/peers-$(basename "$0" .sh).log" 2>&1 || true
+    fi
     "${compose[@]}" stop >/dev/null 2>&1 || true
     rm -rf "$WORK"
 }
@@ -141,6 +148,11 @@ elif [ ! -d /sys/module/wireguard ]; then
     why_not="the wireguard module is not loaded"
 fi
 if [ -n "$why_not" ]; then
+    # On CI the switch is on (WGLAB_REQUIRED=1, W7's part 3a): there a skip would pass without checking, so it fails.
+    if [ "${WGLAB_REQUIRED:-}" = 1 ]; then
+        echo "WIREGUARD CHECK FAILED: WGLAB_REQUIRED=1, and no WireGuard lab peer can start here ($why_not; Linux $(uname -r))" >&2
+        exit 1
+    fi
     echo "SKIPPED verify-wireguard.sh: no WireGuard lab peer can start here ($why_not); nothing of W7 was checked on the emulator"
     [ -z "${GITHUB_ACTIONS:-}" ] || echo "::notice title=W7's emulator check skipped::$why_not: nothing of W7 was checked on the emulator"
     exit 0
