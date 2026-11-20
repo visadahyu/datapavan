@@ -1252,6 +1252,17 @@ class WatchVpnService : VpnService() {
                 writer.println("messenger-client refused")
             }
         }
+        // "Log where these apps connect", as the screen's switch sets it, for the check that an app's own proxy follows it.
+        when (args.indexOf("log-destinations").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }) {
+            "on", "off" -> {
+                val on = args[args.indexOf("log-destinations") + 1] == "on"
+                main.post {
+                    org.visadahyu.datapavan.watch.chain.ChainSettings.of(this).logDestinations = on
+                    if (active) applyRoutes()
+                }
+                writer.println("log-destinations ${if (on) "on" else "off"}")
+            }
+        }
         if ("messenger-clear" in args) {
             main.post {
                 debugClients.clear()
@@ -1333,6 +1344,14 @@ class WatchVpnService : VpnService() {
                     "tool=${if (app.isTool) 1 else 0} through-tool=${if (app.throughTool) 1 else 0} " +
                     "places=${app.destinations.size} $bytes",
             )
+            // An app's own proxies as "Now" holds them (ADR 0052): its kind, what was asked and the proxy's name where kept.
+            for (place in app.destinations) {
+                val proxy = place.proxy ?: continue
+                writer.println(
+                    "activity-proxy ${app.uid ?: "-"} ${proxyWords(proxy)} ${place.address.hostAddress}:${place.port} " +
+                        "named-by=${place.namedBy} ${place.name.ifEmpty { "-" }}",
+                )
+            }
         }
     }
 
@@ -1718,6 +1737,15 @@ class WatchVpnService : VpnService() {
      * whether the flow came in, and the app's state (ADR 0046) last, so that the fields before keep their
      * places, and the record's start and end, in milliseconds since 1970, after them.
      */
+    /** A proxy as the debug builds' dump writes it: `kind:how:flags:asked:proxy-name`, `-` for none; no credential is kept. */
+    private fun proxyWords(proxy: LogRecord.Proxy): String {
+        val kind = listOf("-", "socks5", "socks4", "connect", "forward", "mtproto", "whatsapp", "signal").getOrElse(proxy.kind) { "?" }
+        val flags = listOfNotNull("s".takeIf { proxy.setting }, "p".takeIf { proxy.password }, "o".takeIf { proxy.outsideMaker })
+            .joinToString("").ifEmpty { "-" }
+        val asked = if (proxy.askedPort >= 0) "${proxy.asked}@${proxy.askedPort}" else "-"
+        return "$kind:${if (proxy.declared) "read" else "inferred"}:$flags:$asked:${proxy.proxyName.ifEmpty { "-" }}"
+    }
+
     private fun describe(record: LogRecord): String = when (record) {
         is LogRecord.Segment -> listOfNotNull(
             if (record.protocol == 6) "tcp" else "udp", record.uid ?: "-", "${record.address.hostAddress}:${record.port}",
@@ -1725,6 +1753,7 @@ class WatchVpnService : VpnService() {
             "wire=${record.wireUp}/${record.wireDown}", record.name.ifEmpty { "-" }, "flow=${record.flow}",
             record.dnsName.takeIf { it.isNotEmpty() }?.let { "dns-name=$it" }, "came-in".takeIf { record.cameIn },
             "state=${org.visadahyu.datapavan.watch.log.AppState.name(record.state)}", "at=${record.start}-${record.end}",
+            record.proxy?.let { "proxy=${proxyWords(it)}" },
         ).joinToString(" ")
         is LogRecord.Lookups ->
             "lookups ${record.uid ?: "-"} ${record.count} wire=${record.wireUp}/${record.wireDown} " +

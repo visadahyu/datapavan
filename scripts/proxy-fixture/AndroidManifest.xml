@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    W8 part 2a's proxy fixture (scripts/verify-proxies.sh, ADR 0052): an app of this project's own that speaks to the
+    proxy lab (scripts/proxylab) the way apps with built-in proxies do: SOCKS5 with a password, an HTTP CONNECT with
+    Basic credentials, a plain request to an HTTP proxy, one through Android's proxy setting, Telegram's obfuscated
+    start and a fake-TLS hello, WhatsApp's clear header, and TLS hellos with Signal's names. The check builds it under
+    three more package names, each an app of its own, which Watch's debug builds add to the clients of Telegram,
+    WhatsApp and Signal: never a real app's package. It talks to the lab on this computer alone (10.0.2.2), and logs
+    what came back, never a credential. Emulators only; never shipped.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.visadahyu.datapavan.proxyfixture">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application android:label="Datapavan proxy fixture" android:hasCode="true" android:usesCleartextTraffic="true">
+        <activity android:name="org.visadahyu.datapavan.proxyfixture.ProxyActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

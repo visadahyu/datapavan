@@ -368,6 +368,9 @@ jobs:
       WGLAB_NO_BUILD: ${{ matrix.shard == 'wireguard' && '1' || '' }}
       # The DNS check fails rather than skips without its lab (W8's fix round, review R-M4).
       DNSLAB_REQUIRED: ${{ matrix.shard == 'dns' && '1' || '' }}
+      # The proxies shard (W8, part 2a, ADR 0052): a check that cannot start the proxy lab fails on CI.
+      PROXYLAB_REQUIRED: ${{ matrix.shard == 'proxies' && '1' || '' }}
+      PROXYLAB_NO_BUILD: ${{ matrix.shard == 'proxies' && '1' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -454,6 +457,42 @@ jobs:
           sudo apt-get install -y --no-install-recommends dnsutils python3-cryptography
           scripts/dnslab.sh up
 
+      # The proxies shard's lab image, built from pinned sources (scripts/proxylab/Dockerfile) and kept in the Actions
+      # cache, as the WireGuard peers' is: tried twice, a minute apart.
+      - name: Docker Buildx for the proxy lab's image
+        if: matrix.shard == 'proxies'
+        timeout-minutes: 5
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: The proxy lab's image
+        id: proxylab-image
+        if: matrix.shard == 'proxies'
+        continue-on-error: true
+        timeout-minutes: 10
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: scripts/proxylab
+          load: true
+          tags: datapavan-proxylab:latest
+          cache-from: type=gha,scope=proxylab
+          cache-to: type=gha,mode=max,scope=proxylab
+
+      - name: The proxy lab's image, after a minute
+        if: matrix.shard == 'proxies' && steps.proxylab-image.outcome == 'failure'
+        timeout-minutes: 2
+        run: sleep 60
+
+      - name: The proxy lab's image, second attempt
+        if: matrix.shard == 'proxies' && steps.proxylab-image.outcome == 'failure'
+        timeout-minutes: 10
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: scripts/proxylab
+          load: true
+          tags: datapavan-proxylab:latest
+          cache-from: type=gha,scope=proxylab
+          cache-to: type=gha,mode=max,scope=proxylab
+
       - name: ZXing's jar for the import check
         if: matrix.shard == 'wireguard'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -509,6 +548,15 @@ jobs:
         with:
           name: dnslab-logs-emulator
           path: build/dnslab/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Keep the proxy lab's logs
+        if: failure() && matrix.shard == 'proxies'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: proxylab-logs-emulator
+          path: build/proxylab/
           if-no-files-found: ignore
           retention-days: 7
 

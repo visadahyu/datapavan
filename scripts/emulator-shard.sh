@@ -19,7 +19,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SHARDS="watch audit screens dns wireguard"
+SHARDS="watch audit screens dns proxies wireguard"
 
 # The checks of shard $1, in order.
 checks_of() {
@@ -42,6 +42,10 @@ checks_of() {
         # command, so any emulator serves; skipped, and saying so, where Docker does not run, unless
         # DNSLAB_REQUIRED=1, as on CI.
         dns) echo verify-dns.sh ;;
+        # Apps' built-in proxies named (W8, part 2a, ADR 0052): the project's proxy fixture through the proxy lab's
+        # SOCKS5, HTTP and MTProto proxies on this computer, skipped, and saying so, where Docker cannot start the lab,
+        # unless PROXYLAB_REQUIRED=1, as on CI.
+        proxies) echo verify-proxies.sh ;;
         *) return 1 ;;
     esac
 }
@@ -107,6 +111,17 @@ case "${1:-}" in
                     rm -f "$log"
                     if [ "${DNSLAB_REQUIRED:-}" = 1 ] && [ "$last" != "== the DNS check passed" ]; then
                         echo "$check ended without its last line, with DNSLAB_REQUIRED=1: '$last'" >&2
+                        exit 1
+                    fi
+                    ;;
+                verify-proxies.sh)
+                    # As the WireGuard checks: with the switch on, a check that ends without its last line fails the shard.
+                    log=$(mktemp)
+                    "$ROOT/scripts/$check" | tee "$log"
+                    last=$(tail -n 1 "$log")
+                    rm -f "$log"
+                    if [ "${PROXYLAB_REQUIRED:-}" = 1 ] && [ "$last" != "== Apps' built-in proxies checked on the emulator" ]; then
+                        echo "$check ended without its last line, with PROXYLAB_REQUIRED=1: '$last'" >&2
                         exit 1
                     fi
                     ;;
