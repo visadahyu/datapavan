@@ -27,9 +27,8 @@ Datapavan Advanced's Watch, WireGuard upstream (W7, docs/decisions/0035-wireguar
 Datapavan Advanced's Watch, Oblivious DoH for the apps that go directly (W8, part 1,
 docs/decisions/0042-dns-of-apps-that-go-directly.md):
 
-- odoh-rs 1.0.5 (Cloudflare, Inc.): BSD-2-Clause. Source: https://github.com/cloudflare/odoh-rs
-- hpke 0.14.1 (Michael Rosenberg): MIT OR Apache-2.0, with x25519-dalek 3 and curve25519-dalek 5 (above).
-- thiserror (David Tolnay): MIT OR Apache-2.0.
+- Oblivious DoH's framing and HPKE are Datapavan's own code (core/net/src/odoh.rs, hpke.rs), over crates the
+  library already carries: x25519-dalek (above) and RustCrypto's hkdf, sha2 and aes-gcm (licences/native-watch.txt).
 - OkHttp 5.5.1 (com.squareup.okhttp3:okhttp) and Okio 3.18.1 (com.squareup.okio:okio), Square, Inc. and the OkHttp
   and Okio authors: Apache-2.0, whose text is LICENSE. Source: https://github.com/square/okhttp and Maven Central.
   They carry DoH and Oblivious DoH over Android's own TLS from Watch's Kotlin side.

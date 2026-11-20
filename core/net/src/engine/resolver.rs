@@ -50,6 +50,13 @@ pub const STALE_WINDOW: Duration = Duration::from_hours(24);
 pub const NETWORK_WAIT: Duration = Duration::from_secs(3);
 /// How long a chained app's question may try the ways through the tool in all.
 pub const TOOL_DEADLINE: Duration = Duration::from_secs(8);
+/// How long a fetch of a target's key waits after the 401 that called for it: a random time in this range, so
+/// that what the fetch shows of the phone (its address, where the fetch is direct) is not tied in time to the name
+/// the 401 met (W8's fix round, review S-C2).
+pub const REFRESH_DELAY: (Duration, Duration) =
+    (Duration::from_secs(120), Duration::from_secs(600));
+/// How often a target's key is asked for again on one network, at most.
+pub const REFRESH_EVERY: Duration = Duration::from_hours(4);
 
 /// How an exchange travels, as Watch's Kotlin side carries it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -320,8 +327,11 @@ pub(super) struct Resolver {
     ladder: Mutex<Ladder>,
     /// Targets' keys fetched since the pack's, by target index.
     keys: Mutex<Vec<(usize, TargetKey)>>,
-    /// Targets whose key is being fetched.
-    refreshing: Mutex<Vec<usize>>,
+    /// Each target whose key was asked for again on this network, and when: at most once in [`REFRESH_EVERY`].
+    refreshing: Mutex<Vec<(usize, Instant)>>,
+    /// How long a fetch of a key waits after the 401 that called for it, at least and at most: a random time
+    /// between, so that the fetch is not tied to the lookup in time. Debug builds may shorten it for the lab.
+    refresh_delay: Mutex<(Duration, Duration)>,
     /// The encrypted ways' answers, kept for their time to live and a stale window.
     cache: Mutex<DnsCache>,
     /// The exchanges that wait for Watch's Kotlin side.
@@ -362,6 +372,7 @@ impl Default for Resolver {
             ladder: Mutex::default(),
             keys: Mutex::default(),
             refreshing: Mutex::default(),
+            refresh_delay: Mutex::new(REFRESH_DELAY),
             cache: Mutex::new(DnsCache::serving_stale(STALE_WINDOW)),
             exchanges: Arc::default(),
             local: Mutex::default(),
@@ -374,6 +385,11 @@ impl Default for Resolver {
 }
 
 impl Resolver {
+    /// How long a key's fetch waits after its 401, at least and at most (debug builds, for the lab's check).
+    pub(super) fn set_refresh_delay(&self, low: Duration, high: Duration) {
+        *lock(&self.refresh_delay) = (low, high.max(low));
+    }
+
     /// Whether Watch set the encrypted resolver: without it (the engine's own tests), direct apps' lookups go
     /// to the network's resolver as before W8.
     pub(super) fn on(&self) -> bool {
@@ -400,6 +416,7 @@ impl Resolver {
     pub(super) fn network_moved(&self) {
         lock(&self.ladder).reset();
         lock(&self.cache).clear();
+        lock(&self.refreshing).clear();
     }
 
     /// What Android says of the network beneath: validated or not, and its search domains.
@@ -809,9 +826,10 @@ async fn attempt(
             let opened = odoh::open(&sealed, &body).ok_or(Failure::Refused)?;
             checked(asked, Reply::Answer(opened))
         }
-        // RFC 9230 4.3: the target holds another key now.
+        // RFC 9230 4.3: the target holds another key now. The pairs to it are held, the other pair carries the
+        // names, and the key is fetched apart from this lookup (`refresh_key`).
         Reply::Status(401) => {
-            refresh_key(shared, config, t);
+            refresh_key(shared, config, t, key);
             Err(Failure::Key)
         }
         other => checked(asked, other),
@@ -848,36 +866,84 @@ fn checked(asked: &Asked, reply: Reply) -> Result<Vec<u8>, Failure> {
     }
 }
 
-/// Fetches the key of the target `t` again, once at a time, after it answered 401: first from its HTTPS
-/// record's `odohconfig` (RFC 9230 6), asked through two of the ladder's other ways, of different operators,
-/// and taken only when both give the same; else from the target's `/.well-known/odohconfigs`, through the
-/// user's tool while it is on, else directly over the network beneath, which shows the phone's address to
-/// the target once (an accepted limit, ADR 0042).
-fn refresh_key(shared: &Arc<Shared>, config: &Arc<DnsConfig>, t: usize) {
+/// Fetches the key of the target `t` again after it answered 401 to a query sealed to `met`, apart from the lookup
+/// that met it (W8's fix round, review S-C2): a random time of minutes later ([`REFRESH_DELAY`]), at most once per
+/// target on a network in [`REFRESH_EVERY`]. First from its HTTPS record's `odohconfig` (RFC 9230 6), asked through
+/// two ways of different operators of which neither runs a target of the pairs, through the user's tool while it is
+/// on, and taken only when both agree; else from the target's `/.well-known/odohconfigs`, through the tool while it
+/// is on, and directly over the network beneath only as the last way, which shows the target the phone's address
+/// (an accepted limit, ADR 0042). Meanwhile the pairs to the target are held and the other pair carries the names.
+/// A key that comes back unchanged is a fault: the pairs stay held.
+fn refresh_key(shared: &Arc<Shared>, config: &Arc<DnsConfig>, t: usize, met: TargetKey) {
+    let now = Instant::now();
     {
         let mut refreshing = lock(&shared.resolver.refreshing);
-        if refreshing.contains(&t) {
+        if refreshing
+            .iter()
+            .any(|(r, at)| *r == t && now.duration_since(*at) < REFRESH_EVERY)
+        {
             return;
         }
-        refreshing.push(t);
+        refreshing.retain(|(r, _)| *r != t);
+        refreshing.push((t, now));
     }
+    {
+        let mut ladder = lock(&shared.resolver.ladder);
+        for (i, _) in config
+            .pairs
+            .iter()
+            .enumerate()
+            .filter(|(_, (_, target))| *target == t)
+        {
+            ladder.failed(Step::Pair(i), Failure::Key, now);
+            ladder.failed(Step::PairThroughTool(i), Failure::Key, now);
+        }
+    }
+    let (low, high) = *lock(&shared.resolver.refresh_delay);
+    let mut random = [0u8; 4];
+    let _ = getrandom::fill(&mut random);
+    let span = high.saturating_sub(low).as_millis();
+    let extra = u128::from(u32::from_be_bytes(random)) % span.max(1);
+    let wait = low + Duration::from_millis(u64::try_from(extra).unwrap_or(0));
     let (shared, config) = (Arc::clone(shared), Arc::clone(config));
     spawn(async move {
-        let key = key_from_records(&shared, &config, t).await;
-        let key = match key {
+        tokio::time::sleep(wait).await;
+        let key = match key_from_records(&shared, &config, t).await {
             Some(key) => Some(key),
             None => key_from_target(&shared, &config, t).await,
         };
-        if let Some(key) = key {
+        let Some(key) = key.filter(|key| *key != met) else {
+            // Nothing new: the pairs to this target stay held, until the network changes or the hold ends.
+            return;
+        };
+        {
             let mut keys = lock(&shared.resolver.keys);
             keys.retain(|(k, _)| *k != t);
             keys.push((t, key));
         }
-        lock(&shared.resolver.refreshing).retain(|r| *r != t);
+        let mut ladder = lock(&shared.resolver.ladder);
+        for (i, _) in config
+            .pairs
+            .iter()
+            .enumerate()
+            .filter(|(_, (_, target))| *target == t)
+        {
+            ladder.release(Step::Pair(i));
+            ladder.release(Step::PairThroughTool(i));
+        }
     });
 }
 
-/// The target's key from its HTTPS record, where two ways of different operators agree on it.
+/// The user's tool, while it is on.
+fn tool_of(shared: &Shared) -> Option<Through> {
+    shared.chain().map(|chain| Through {
+        proxy: chain.proxy,
+        credentials: chain.credentials.clone(),
+    })
+}
+
+/// The target's key from its HTTPS record, where two ways of different operators agree on it: presets whose
+/// operator runs no target of the pairs, through the tool while it is on.
 async fn key_from_records(
     shared: &Arc<Shared>,
     config: &Arc<DnsConfig>,
@@ -885,30 +951,31 @@ async fn key_from_records(
 ) -> Option<TargetKey> {
     let target = config.catalogue.targets.get(t)?;
     let asked = hygiene::query_for(&target.host, crate::dns::TYPE_HTTPS)?;
+    let runs_a_target = |operator: &str| {
+        config.pairs.iter().any(|&(_, p)| {
+            config.catalogue.targets[p]
+                .behind
+                .operator
+                .eq_ignore_ascii_case(operator)
+        })
+    };
     let setup = config.setup(false);
-    let ways: Vec<Step> = setup
-        .target_doh
-        .iter()
-        .copied()
-        .filter(|&o| o != t)
-        .map(Step::TargetDoh)
-        .chain(setup.presets.iter().copied().map(Step::Preset))
-        .collect();
     let mut found: Vec<(String, TargetKey)> = Vec::new();
-    for step in ways {
-        let operator = match step {
-            Step::TargetDoh(o) => config.catalogue.targets[o].behind.operator.clone(),
-            Step::Preset(p) => config.catalogue.presets[p].operator.clone(),
-            _ => continue,
-        };
-        if found.iter().any(|(o, _)| *o == operator) {
+    for p in setup.presets {
+        let operator = config.catalogue.presets[p].operator.clone();
+        if runs_a_target(&operator) || found.iter().any(|(o, _)| o.eq_ignore_ascii_case(&operator))
+        {
             continue;
         }
-        let Ok(answer) = attempt(shared, config, step, &asked, None).await else {
+        let Ok(answer) = attempt(shared, config, Step::Preset(p), &asked, tool_of(shared)).await
+        else {
             continue;
         };
-        let key =
-            odoh::configs_in_https(&answer, &target.host).and_then(|c| TargetKey::parse(&c))?;
+        let Some(key) =
+            odoh::configs_in_https(&answer, &target.host).and_then(|c| TargetKey::parse(&c))
+        else {
+            continue;
+        };
         found.push((operator, key));
         if found.len() == 2 {
             return (found[0].1 == found[1].1).then(|| found.swap_remove(0).1);
@@ -917,28 +984,20 @@ async fn key_from_records(
     None
 }
 
-/// The target's key from its `/.well-known/odohconfigs`.
+/// The target's key from its `/.well-known/odohconfigs`, at its own addresses (or its DoH endpoint's, where that is
+/// the same host, which also gives the port), through the tool while it is on, else directly.
 async fn key_from_target(
     shared: &Arc<Shared>,
     config: &Arc<DnsConfig>,
     t: usize,
 ) -> Option<TargetKey> {
     let target = config.catalogue.targets.get(t)?;
-    let addresses = target
-        .doh
-        .as_ref()
-        .filter(|d| d.url.host == target.host)
-        .map(|d| d.addresses.clone())
-        .unwrap_or_default();
-    let through = shared.chain().map(|chain| Through {
-        proxy: chain.proxy,
-        credentials: chain.credentials.clone(),
-    });
-    let port = target
-        .doh
-        .as_ref()
-        .filter(|d| d.url.host == target.host)
-        .map_or(443, |d| d.url.port);
+    let same_host = target.doh.as_ref().filter(|d| d.url.host == target.host);
+    let addresses = match same_host {
+        Some(doh) if !doh.addresses.is_empty() => doh.addresses.clone(),
+        _ => target.addresses.clone(),
+    };
+    let port = same_host.map_or(443, |d| d.url.port);
     let host = if port == 443 {
         target.host.clone()
     } else {
@@ -950,7 +1009,7 @@ async fn key_from_target(
         host: target.host.clone(),
         addresses,
         pins: target.pins.clone(),
-        through,
+        through: tool_of(shared),
         body: Vec::new(),
     };
     match ask(shared, &request).await {
@@ -1177,8 +1236,10 @@ mod tests {
         seen: Mutex<Vec<Exchange>>,
         does: Mutex<HashMap<u8, Does>>,
         /// The relay that answers late, by host, and the target key pairs, by target host.
-        keys: HashMap<String, odoh_rs::ObliviousDoHKeyPair>,
+        keys: HashMap<String, ([u8; 32], Vec<u8>)>,
         late_relay: Mutex<Option<(String, u64)>>,
+        /// Whether a fetch of a target's configurations gives the tables' key rather than the one it holds.
+        stale_fetch: std::sync::atomic::AtomicBool,
         changed: AtomicU64,
     }
 
@@ -1203,9 +1264,10 @@ mod tests {
                 does: Mutex::default(),
                 keys: targets
                     .iter()
-                    .map(|(host, ikm)| ((*host).to_owned(), target(ikm).0))
+                    .map(|(host, ikm)| ((*host).to_owned(), target(ikm)))
                     .collect(),
                 late_relay: Mutex::default(),
+                stale_fetch: std::sync::atomic::AtomicBool::new(false),
                 changed: AtomicU64::new(0),
             })
         }
@@ -1239,7 +1301,7 @@ mod tests {
                         .nth(1)
                         .and_then(|r| r.split('&').next())
                         .unwrap_or("");
-                    let Some(pair) = self.keys.get(host) else {
+                    let Some((sk, configs)) = self.keys.get(host) else {
                         return Reply::Status(400);
                     };
                     let index =
@@ -1247,17 +1309,13 @@ mod tests {
                             .unwrap_or(0);
                     let mut nonce = [0u8; 16];
                     nonce[0] = index;
-                    let mut buffer = bytes::Bytes::copy_from_slice(&request.body);
-                    let Ok(message) =
-                        odoh_rs::parse::<odoh_rs::ObliviousDoHMessage, _>(&mut buffer)
+                    // A query to another key does not open: the target answers 401 (RFC 9230 4.3).
+                    let Some((query, _)) = answer_as_target(sk, configs, &request.body, b"", nonce)
                     else {
-                        return Reply::Status(400);
-                    };
-                    let Ok((query, _)) = odoh_rs::decrypt_query(&message, pair) else {
                         return Reply::Status(401);
                     };
-                    let dns = answer_with(&query.into_msg(), Ipv4Addr::new(10, 53, 1, index + 1));
-                    answer_as_target(pair, &request.body, &dns, nonce)
+                    let dns = answer_with(&query, Ipv4Addr::new(10, 53, 1, index + 1));
+                    answer_as_target(sk, configs, &request.body, &dns, nonce)
                         .map_or(Reply::Status(400), |(_, sealed)| Reply::Answer(sealed))
                 }
                 Carry::Doh => {
@@ -1270,16 +1328,19 @@ mod tests {
                     Reply::Answer(answer_with(&request.body, Ipv4Addr::new(10, 53, 5, 5)))
                 }
                 Carry::Fetch => {
+                    // Watch's Kotlin side never looks a name up: a fetch with no address to go to fails.
+                    if request.addresses.is_empty() {
+                        return Reply::Failed(Failure::Refused);
+                    }
                     let host = request.host.as_str();
-                    self.keys.get(host).map_or(Reply::Status(404), |pair| {
-                        let configs: odoh_rs::ObliviousDoHConfigs =
-                            vec![odoh_rs::ObliviousDoHConfig::from(pair.public().clone())].into();
-                        Reply::Answer(
-                            odoh_rs::compose(&configs)
-                                .map(|b| b.to_vec())
-                                .unwrap_or_default(),
-                        )
-                    })
+                    if self.stale_fetch.load(Ordering::Relaxed) && host == "target-a.test" {
+                        return Reply::Answer(target(&[1; 32]).1);
+                    }
+                    self.keys
+                        .get(host)
+                        .map_or(Reply::Status(404), |(_, configs)| {
+                            Reply::Answer(configs.clone())
+                        })
                 }
             }
         }
@@ -1331,8 +1392,8 @@ mod tests {
                       rb\thttps://relay-b.test/proxy\t192.0.2.2\t-\tRelay B\tPerson B\tXB\tAS64502\t-\t-\tlab\n"
             .to_owned();
         let targets = format!(
-            "ta\ttarget-a.test\t/dns-query\t-\t-\tTarget A\tPerson C\tXC\tAS64503\t-\tno\thttps://doh-a.test/dns-query\t192.0.2.3\t-\t-\t{}\tlab\n\
-             tb\ttarget-b.test\t/dns-query\t-\t-\tTarget B\tPerson D\tXD\tAS64504\t-\tno\thttps://doh-b.test/dns-query\t192.0.2.4\t-\t-\t{}\tlab\n\
+            "ta\ttarget-a.test\t/dns-query\t192.0.2.13\t-\tTarget A\tPerson C\tXC\tAS64503\t-\tno\thttps://doh-a.test/dns-query\t192.0.2.3\t-\t-\t{}\tlab\n\
+             tb\ttarget-b.test\t/dns-query\t192.0.2.14\t-\tTarget B\tPerson D\tXD\tAS64504\t-\tno\thttps://doh-b.test/dns-query\t192.0.2.4\t-\t-\t{}\tlab\n\
              tc\ttarget-c.test\t/dns-query\t-\t-\tTarget C\tPerson E\tXE\tAS64505\t-\tno\t-\t-\t-\t-\t{}\tlab\n",
             hex(&[1; 32]),
             hex(&[2; 32]),
@@ -1340,7 +1401,8 @@ mod tests {
         );
         let pairs = "ra\tta\nrb\ttb\n".to_owned();
         let presets = "pdoh\tP DoH\tPreset Co\tXF\tdoh\thttps://p.test/dns-query\t192.0.2.5\t-\tno logs\t-\tnone\thttps://p.test/policy\t-\t-\n\
-                       pdot\tP DoT\tPreset Co\tXF\tdot\tp.test\t192.0.2.5\t-\tno logs\t-\tnone\thttps://p.test/policy\t-\t-\n"
+                       pdot\tP DoT\tPreset Co\tXF\tdot\tp.test\t192.0.2.5\t-\tno logs\t-\tnone\thttps://p.test/policy\t-\t-\n\
+                       pta\tTarget A's DoH\tTarget A\tXC\tdoh\thttps://ta-dns.test/dns-query\t192.0.2.6\t-\tno logs\t-\tnone\thttps://ta.test/policy\t-\t-\n"
             .to_owned();
         (relays, targets, pairs, presets)
     }
@@ -1628,40 +1690,157 @@ mod tests {
         assert_ne!(odoh[0].body, odoh[1].body, "each sealed afresh");
     }
 
-    #[tokio::test(flavor = "current_thread")]
-    async fn a_401_fetches_the_key_again_and_the_next_lookup_uses_it() {
-        // Target A's key in the table is not the one it holds: it answers 401.
+    /// The engine with target A holding another key than the tables' ([9; 32] against [1; 32]): it answers 401.
+    fn rotated() -> (Arc<Shared>, Arc<Fake>) {
         let fake = Fake::new(&[("target-a.test", [9; 32]), ("target-b.test", [2; 32])]);
         let shared = Arc::new(super::super::tests::shared_with(
             Arc::clone(&fake) as Arc<dyn super::super::Platform>
         ));
         let _ = fake.exchanges.set(Arc::clone(&shared.resolver.exchanges));
         shared.resolver.set(Some(lab_config("")));
+        shared
+            .resolver
+            .set_refresh_delay(Duration::from_millis(300), Duration::from_millis(300));
+        (shared, fake)
+    }
+
+    async fn wait_for(what: impl Fn() -> bool) {
+        for _ in 0..100 {
+            if what() {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
+    /// Review S-C2 and S-M1: a 401 holds the pairs to its target while the other pair carries the names; the key is
+    /// fetched minutes later in the product, apart from the lookup, at the target's own addresses; it releases the
+    /// pair, and on another network the first pair answers with it.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_401_holds_its_pair_and_the_key_is_fetched_later_at_the_targets_addresses() {
+        let (shared, fake) = rotated();
         let (address, _) = read(answer(&shared, &app_query("one.example.com", 1), false).await);
         assert_eq!(
             address,
             Some(v4(10, 53, 1, 2)),
             "the second pair answered meanwhile"
         );
-        // The refresh asks two operators' HTTPS records (none has one here), then fetches.
-        for _ in 0..50 {
-            if lock(&shared.resolver.keys).iter().any(|(t, _)| *t == 0) {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-        assert_ne!(fake.seen(Carry::Fetch).len(), 0);
         assert_eq!(
-            fake.seen(Carry::Fetch)[0].url,
+            fake.seen(Carry::Fetch).len(),
+            0,
+            "nothing fetched with the lookup"
+        );
+        assert_eq!(
+            fake.seen(Carry::Doh).len(),
+            0,
+            "no record asked with the lookup"
+        );
+        let (address, _) = read(answer(&shared, &app_query("two.example.com", 1), false).await);
+        assert_eq!(
+            address,
+            Some(v4(10, 53, 1, 2)),
+            "the first pair held: no second 401"
+        );
+        let to_a = fake
+            .seen(Carry::Odoh)
+            .iter()
+            .filter(|e| e.url.contains("targethost=target-a.test"))
+            .count();
+        assert_eq!(to_a, 1, "one 401, then the second pair alone");
+        wait_for(|| lock(&shared.resolver.keys).iter().any(|(t, _)| *t == 0)).await;
+        let fetched = fake.seen(Carry::Fetch);
+        assert_eq!(fetched.len(), 1);
+        assert_eq!(
+            fetched[0].url,
             "https://target-a.test/.well-known/odohconfigs"
         );
-        // On another network, nothing learned: the first pair first, with the fetched key.
+        assert_eq!(
+            fetched[0].addresses,
+            vec![IpAddr::V4(Ipv4Addr::new(192, 0, 2, 13))],
+            "its own address"
+        );
+        assert!(fetched[0].through.is_none());
+        assert!(
+            shared.resolver.status().contains("\nheld 0\n"),
+            "the pair released"
+        );
         shared.resolver.network_moved();
-        let (address, _) = read(answer(&shared, &app_query("two.example.com", 1), false).await);
+        let (address, _) = read(answer(&shared, &app_query("three.example.com", 1), false).await);
         assert_eq!(
             address,
             Some(v4(10, 53, 1, 1)),
             "the first pair again, with the fetched key"
+        );
+    }
+
+    /// Review S-C2: the key's records are never asked of a way whose operator runs a target of the pairs (here
+    /// target A's operator's DoH, and a preset of target A's operator), and a target's key is asked at most once on
+    /// a network.
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_records_are_asked_only_of_operators_that_run_no_target_and_once() {
+        let (shared, fake) = rotated();
+        let _ = answer(&shared, &app_query("one.example.com", 1), false).await;
+        wait_for(|| !fake.seen(Carry::Fetch).is_empty()).await;
+        let asked: Vec<Exchange> = fake
+            .seen(Carry::Doh)
+            .into_iter()
+            .chain(fake.seen(Carry::Dot))
+            .collect();
+        assert_eq!(
+            asked.len(),
+            2,
+            "both ways of the one operator that runs no target"
+        );
+        for exchange in &asked {
+            assert_eq!(exchange.host, "p.test", "never a target's operator");
+        }
+        // The same network: the pair met 401 again, nothing is fetched again.
+        lock(&shared.resolver.ladder).reset();
+        lock(&shared.resolver.keys).clear();
+        let _ = answer(&shared, &app_query("two.example.com", 1), false).await;
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        assert_eq!(
+            fake.seen(Carry::Fetch).len(),
+            1,
+            "at most once per target on a network"
+        );
+    }
+
+    /// Review S-C2: a fetch that brings back the key the 401 met is a fault: the pair stays held.
+    #[tokio::test(flavor = "current_thread")]
+    async fn an_unchanged_key_after_a_401_keeps_the_pair_held() {
+        let (shared, fake) = rotated();
+        fake.stale_fetch.store(true, Ordering::Relaxed);
+        let _ = answer(&shared, &app_query("one.example.com", 1), false).await;
+        wait_for(|| !fake.seen(Carry::Fetch).is_empty()).await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            !shared.resolver.status().contains("\nheld 0\n"),
+            "still held"
+        );
+        let plan = lock(&shared.resolver.ladder).plan(&lab_config("").setup(false), Instant::now());
+        assert!(!plan.contains(&Step::Pair(0)));
+        assert_eq!(lock(&shared.resolver.keys).len(), 0, "no key taken");
+    }
+
+    /// Review S-C2: while the user's tool is on, the fetch goes through it.
+    #[tokio::test(flavor = "current_thread")]
+    async fn with_the_tool_on_the_key_is_fetched_through_it() {
+        let (shared, fake) = rotated();
+        *lock(&shared.chain) = Some(Arc::new(Chain {
+            proxy: SocketAddr::from(([127, 0, 0, 1], 10_808)),
+            credentials: None,
+            tool: 10_200,
+            apps: Some(std::collections::HashSet::new()),
+            udp: false,
+            log_destinations: false,
+        }));
+        let _ = answer(&shared, &app_query("one.example.com", 1), false).await;
+        wait_for(|| !fake.seen(Carry::Fetch).is_empty()).await;
+        assert!(fake.seen(Carry::Fetch)[0].through.is_some());
+        assert!(
+            fake.seen(Carry::Doh).iter().all(|e| e.through.is_some()),
+            "the records too"
         );
     }
 

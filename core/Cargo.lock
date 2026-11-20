@@ -383,13 +383,13 @@ dependencies = [
  "getrandom 0.4.3",
  "gotatun",
  "hkdf",
- "hpke",
  "miniz_oxide",
  "nix",
  "odoh-rs",
  "sha2",
  "socket2",
  "tokio",
+ "x25519-dalek 2.0.1",
  "zeroize",
 ]
 

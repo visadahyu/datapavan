@@ -159,6 +159,8 @@ pub struct Target {
     pub host: String,
     /// Its path, as `targetpath` names it.
     pub path: String,
+    /// Its own addresses, so that its configurations can be fetched without a lookup.
+    pub addresses: Vec<IpAddr>,
     /// Who stands behind it.
     pub behind: Behind,
     /// Whether it filters answers (not offered by default).
@@ -364,8 +366,8 @@ fn read_targets(table: &str) -> Vec<Target> {
             id,
             host,
             path,
-            _v4,
-            _v6,
+            v4,
+            v6,
             operator,
             person,
             jurisdictions,
@@ -398,6 +400,7 @@ fn read_targets(table: &str) -> Vec<Target> {
             id: id.to_owned(),
             host: host.to_ascii_lowercase(),
             path: path.to_owned(),
+            addresses: addresses(v4, v6),
             behind,
             filters: filtering != "no",
             doh,

@@ -12,6 +12,7 @@ pub mod dns;
 pub mod dnscache;
 pub mod engine;
 pub mod fragments;
+pub mod hpke;
 pub mod hygiene;
 pub mod identifiers;
 pub mod ladder;

@@ -4,19 +4,16 @@
 //! Each query is sealed afresh, with its own ephemeral key, so two attempts of one lookup (a hedge to the second
 //! pair) cannot be linked by their bytes.
 //!
-//! The cryptography is Cloudflare's `odoh-rs` on rozbb's `hpke`, with the suite RFC 9230 makes mandatory and the
-//! only one every public target offers (DHKEM(X25519, HKDF-SHA256), HKDF-SHA256, AES-128-GCM). This module reads
-//! the target's configurations and keeps the secret between a query and its answer; it holds no TLS: the sealed
-//! bytes go to the relay over Android's own TLS, from Watch's Kotlin side.
+//! The framing is this module's (RFC 9230 is short) and the HPKE the engine's own ([`crate::hpke`]), with the
+//! suite RFC 9230 makes mandatory and the only one every public target offers (DHKEM(X25519, HKDF-SHA256),
+//! HKDF-SHA256, AES-128-GCM): W8's fix round replaced Cloudflare's `odoh-rs` and the `hpke` crate, a second crypto
+//! stack, to keep the native library within its gate. `odoh-rs` stays in the tests, with an implementation in
+//! Python, as independent references: a query sealed here opens there, and theirs here.
 //!
 //! Every function takes bytes a target, a relay or the data pack can choose, so none may panic
 //! (`fuzz_targets/odoh.rs`).
 
-use bytes::Bytes;
-use odoh_rs::{
-    ObliviousDoHConfigContents, ObliviousDoHConfigs, ObliviousDoHMessage,
-    ObliviousDoHMessagePlaintext, OdohSecret,
-};
+use crate::hpke::{self, NK, NN, NPK};
 
 /// The media type of a sealed query and its answer (RFC 9230 4.1).
 pub const MEDIA_TYPE: &str = "application/oblivious-dns-message";
@@ -24,37 +21,92 @@ pub const MEDIA_TYPE: &str = "application/oblivious-dns-message";
 /// The `odohconfig` key of an HTTPS record's parameters (RFC 9230 6).
 pub const KEY_ODOHCONFIG: u16 = 32769;
 
+/// The one version of a configuration (RFC 9230 6).
+const VERSION: u16 = 0x0001;
+/// The message types (RFC 9230 4.1).
+const QUERY: u8 = 0x01;
+const RESPONSE: u8 = 0x02;
+/// The length of a response's nonce: `max(Nn, Nk)` (RFC 9230 4.3).
+const RESPONSE_NONCE: usize = 16;
+
+/// Reads a big-endian `u16` at `at`.
+fn u16_at(bytes: &[u8], at: usize) -> Option<u16> {
+    Some(u16::from_be_bytes(
+        bytes.get(at..at.checked_add(2)?)?.try_into().ok()?,
+    ))
+}
+
+/// Two bytes of length, then `bytes`.
+fn put_lengthed(out: &mut Vec<u8>, bytes: &[u8]) -> Option<()> {
+    out.extend_from_slice(&u16::try_from(bytes.len()).ok()?.to_be_bytes());
+    out.extend_from_slice(bytes);
+    Some(())
+}
+
+/// The bytes after two bytes of length at `at`, and where they end.
+fn lengthed(bytes: &[u8], at: usize) -> Option<(&[u8], usize)> {
+    let length = usize::from(u16_at(bytes, at)?);
+    let end = at.checked_add(2 + length)?;
+    Some((bytes.get(at + 2..end)?, end))
+}
+
 /// A target's public key, as one of its configurations gives it, with the key's identifier.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TargetKey {
-    contents: ObliviousDoHConfigContents,
+    public_key: [u8; NPK],
+    /// The configuration's identifier (RFC 9230 6.2): `Expand(Extract("", contents), "odoh key id", Nh)`.
+    key_id: [u8; 32],
     /// The configurations' bytes it came from, to tell two copies apart or alike.
     configs: Vec<u8>,
 }
 
-impl PartialEq for TargetKey {
-    fn eq(&self, other: &Self) -> bool {
-        self.configs == other.configs
-    }
-}
-
-impl Eq for TargetKey {}
-
 impl TargetKey {
-    /// The first configuration of `configs` (an `ObliviousDoHConfigs`, as `/.well-known/odohconfigs` serves it
-    /// and an HTTPS record's `odohconfig` holds it) that this client supports: version 1 with the mandatory
-    /// suite. `None` when there is none, or the bytes are not configurations.
+    /// The first configuration of `configs` (an `ObliviousDoHConfigs`, as `/.well-known/odohconfigs` serves it and an
+    /// HTTPS record's `odohconfig` holds it) that this client supports: version 1 with the mandatory suite and an
+    /// X25519 key. `None` when there is none, or the bytes are not configurations.
     #[must_use]
     pub fn parse(configs: &[u8]) -> Option<Self> {
-        let mut buffer = Bytes::copy_from_slice(configs);
-        let read: ObliviousDoHConfigs = odoh_rs::parse(&mut buffer).ok()?;
-        let contents: ObliviousDoHConfigContents = read.supported().into_iter().next()?.into();
-        // A key that cannot be read as an X25519 public key is refused here, not at the first query.
-        contents.identifier().ok()?;
-        Some(Self {
-            contents,
-            configs: configs.to_vec(),
-        })
+        let (list, end) = lengthed(configs, 0)?;
+        if end != configs.len() {
+            return None;
+        }
+        let mut at = 0;
+        while at < list.len() {
+            let version = u16_at(list, at)?;
+            let (contents, next) = lengthed(list, at + 2)?;
+            at = next;
+            if version != VERSION {
+                continue;
+            }
+            // kem_id, kdf_id, aead_id, then the public key with two bytes of length.
+            if (
+                u16_at(contents, 0)?,
+                u16_at(contents, 2)?,
+                u16_at(contents, 4)?,
+            ) != (0x0020, 0x0001, 0x0001)
+            {
+                continue;
+            }
+            let (public_key, used) = lengthed(contents, 6)?;
+            let Ok(public_key) = <[u8; NPK]>::try_from(public_key) else {
+                continue;
+            };
+            if used != contents.len() {
+                continue;
+            }
+            let mut key_id = [0u8; 32];
+            hpke::expand(
+                &hpke::extract(b"", contents),
+                &[b"odoh key id"],
+                &mut key_id,
+            );
+            return Some(Self {
+                public_key,
+                key_id,
+                configs: configs.to_vec(),
+            });
+        }
+        None
     }
 
     /// The configurations' bytes this key was read from.
@@ -68,8 +120,10 @@ impl TargetKey {
 pub struct Sealed {
     /// The bytes to send to the relay: an `ObliviousDoHMessage` of type query.
     pub body: Vec<u8>,
-    plaintext: ObliviousDoHMessagePlaintext,
-    secret: OdohSecret,
+    /// The query's plaintext (`ObliviousDoHMessagePlaintext`), which the answer's key is derived from.
+    plaintext: Vec<u8>,
+    /// The HPKE context's export for the answer (RFC 9230 4.3).
+    secret: [u8; NK],
 }
 
 impl std::fmt::Debug for Sealed {
@@ -87,28 +141,27 @@ impl std::fmt::Debug for Sealed {
 /// longer than a query can be.
 #[must_use]
 pub fn seal(key: &TargetKey, query: &[u8], padding: usize) -> Option<Sealed> {
-    if query.len() > usize::from(u16::MAX) || padding > usize::from(u16::MAX) {
-        return None;
-    }
-    seal_with(
-        key,
-        query,
-        padding,
-        &mut hpke::rand_core::UnwrapErr(getrandom::SysRng),
-    )
+    let mut ikm = [0u8; 32];
+    getrandom::fill(&mut ikm).ok()?;
+    seal_with(key, query, padding, &ikm)
 }
 
-/// [`seal`] with the ephemeral key's material from `rng`: the system's in the product, fixed in the tests that
-/// check the bytes against an independent implementation.
-fn seal_with<R: hpke::rand_core::CryptoRng>(
-    key: &TargetKey,
-    query: &[u8],
-    padding: usize,
-    rng: &mut R,
-) -> Option<Sealed> {
-    let plaintext = ObliviousDoHMessagePlaintext::new(query, padding);
-    let (message, secret) = odoh_rs::encrypt_query(&plaintext, &key.contents, rng).ok()?;
-    let body = odoh_rs::compose(&message).ok()?.to_vec();
+/// [`seal`] with the ephemeral key derived from `ikm`: random in the product, fixed in the tests that check the
+/// bytes against independent implementations.
+fn seal_with(key: &TargetKey, query: &[u8], padding: usize, ikm: &[u8]) -> Option<Sealed> {
+    let mut plaintext = Vec::with_capacity(query.len() + padding + 4);
+    put_lengthed(&mut plaintext, query)?;
+    put_lengthed(&mut plaintext, &vec![0u8; padding])?;
+    let mut aad = vec![QUERY];
+    put_lengthed(&mut aad, &key.key_id)?;
+    let (enc, mut context) = hpke::setup_sender(&key.public_key, b"odoh query", ikm)?;
+    let sealed = context.seal(&aad, &plaintext)?;
+    let mut secret = [0u8; NK];
+    context.export(b"odoh response", &mut secret);
+    let mut body = aad;
+    let mut encrypted = enc.to_vec();
+    encrypted.extend_from_slice(&sealed);
+    put_lengthed(&mut body, &encrypted)?;
     Some(Sealed {
         body,
         plaintext,
@@ -116,18 +169,47 @@ fn seal_with<R: hpke::rand_core::CryptoRng>(
     })
 }
 
-/// Opens the target's answer `body` to `sealed`: the DNS message inside, or `None` for anything that is not
-/// the answer to this very query (a wrong type, a nonce of the wrong length, a tag that does not verify,
-/// padding that is not zero).
+/// The answer's key and nonce for `sealed`'s query and the target's `nonce` (RFC 9230 4.3).
+fn response_keys(
+    plaintext: &[u8],
+    secret: &[u8; NK],
+    nonce: &[u8],
+) -> Option<([u8; NK], [u8; NN])> {
+    let mut salt = plaintext.to_vec();
+    put_lengthed(&mut salt, nonce)?;
+    let prk = hpke::extract(&salt, secret);
+    let mut key = [0u8; NK];
+    hpke::expand(&prk, &[b"odoh key"], &mut key);
+    let mut iv = [0u8; NN];
+    hpke::expand(&prk, &[b"odoh nonce"], &mut iv);
+    Some((key, iv))
+}
+
+/// Reads an `ObliviousDoHMessagePlaintext`: the DNS message, when the padding after it is all zeros and nothing
+/// follows.
+fn read_plaintext(plaintext: &[u8]) -> Option<Vec<u8>> {
+    let (message, after) = lengthed(plaintext, 0)?;
+    let (padding, end) = lengthed(plaintext, after)?;
+    (end == plaintext.len() && padding.iter().all(|&b| b == 0)).then(|| message.to_vec())
+}
+
+/// Opens the target's answer `body` to `sealed`: the DNS message inside, or `None` for anything that is not the
+/// answer to this very query (a wrong type, a nonce of the wrong length, a tag that does not verify, padding that
+/// is not zero, bytes after the message).
 #[must_use]
 pub fn open(sealed: &Sealed, body: &[u8]) -> Option<Vec<u8>> {
-    let mut buffer = Bytes::copy_from_slice(body);
-    let message: ObliviousDoHMessage = odoh_rs::parse(&mut buffer).ok()?;
-    if !buffer.is_empty() {
+    if *body.first()? != RESPONSE {
         return None;
     }
-    let opened = odoh_rs::decrypt_response(&sealed.plaintext, &message, sealed.secret).ok()?;
-    Some(opened.into_msg().to_vec())
+    let (nonce, after) = lengthed(body, 1)?;
+    let (ciphertext, end) = lengthed(body, after)?;
+    if nonce.len() != RESPONSE_NONCE || end != body.len() {
+        return None;
+    }
+    let (key, iv) = response_keys(&sealed.plaintext, &sealed.secret, nonce)?;
+    let mut aad = vec![RESPONSE];
+    put_lengthed(&mut aad, nonce)?;
+    read_plaintext(&hpke::open_aead(&key, iv, &aad, ciphertext)?)
 }
 
 /// The value of the `odohconfig` parameter of the HTTPS records for `host` in the DNS answer `answer`
@@ -138,51 +220,97 @@ pub fn configs_in_https(answer: &[u8], host: &str) -> Option<Vec<u8>> {
     crate::dns::svc_param(answer, host, KEY_ODOHCONFIG)
 }
 
+/// A target, for the tests and the fuzzer: its private key and its configurations.
+#[cfg(test)]
+pub(crate) mod target {
+    use super::*;
+
+    /// A target's key pair from fixed key material, and its configurations as the target would serve them.
+    #[must_use]
+    pub(crate) fn new(ikm: &[u8; 32]) -> ([u8; NPK], Vec<u8>) {
+        let (sk, pk) = hpke::derive_key_pair(ikm).unwrap_or(([0; NPK], [0; NPK]));
+        let mut contents = Vec::new();
+        for id in [0x0020u16, 0x0001, 0x0001] {
+            contents.extend_from_slice(&id.to_be_bytes());
+        }
+        let _ = put_lengthed(&mut contents, &pk);
+        let mut config = VERSION.to_be_bytes().to_vec();
+        let _ = put_lengthed(&mut config, &contents);
+        let mut configs = Vec::new();
+        let _ = put_lengthed(&mut configs, &config);
+        (sk, configs)
+    }
+
+    /// What a target does with a sealed query: opens it with `sk` (whose configurations are `configs`) and seals
+    /// `answer` back with `nonce`; the query's DNS message and the answer's body. `None` for a query to another
+    /// key, or one that does not open.
+    #[must_use]
+    pub(crate) fn answer(
+        sk: &[u8; NPK],
+        configs: &[u8],
+        sealed: &[u8],
+        answer: &[u8],
+        nonce: [u8; RESPONSE_NONCE],
+    ) -> Option<(Vec<u8>, Vec<u8>)> {
+        let key = TargetKey::parse(configs)?;
+        if *sealed.first()? != QUERY {
+            return None;
+        }
+        let (key_id, after) = lengthed(sealed, 1)?;
+        let (encrypted, end) = lengthed(sealed, after)?;
+        if key_id != key.key_id || end != sealed.len() {
+            return None;
+        }
+        let mut aad = vec![QUERY];
+        put_lengthed(&mut aad, key_id)?;
+        let mut context = hpke::setup_receiver(encrypted.get(..NPK)?, sk, b"odoh query")?;
+        let plaintext = context.open(&aad, encrypted.get(NPK..)?)?;
+        let query = read_plaintext(&plaintext)?;
+        let mut secret = [0u8; NK];
+        context.export(b"odoh response", &mut secret);
+        let (response_key, iv) = response_keys(&plaintext, &secret, &nonce)?;
+        let mut reply = Vec::new();
+        put_lengthed(&mut reply, answer)?;
+        put_lengthed(&mut reply, &[])?;
+        let mut response_aad = vec![RESPONSE];
+        put_lengthed(&mut response_aad, &nonce)?;
+        let sealed_reply = hpke::seal_aead(&response_key, iv, &response_aad, &reply)?;
+        let mut body = response_aad;
+        put_lengthed(&mut body, &sealed_reply)?;
+        Some((query, body))
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use odoh_rs::{ObliviousDoHConfig, ObliviousDoHKeyPair, ResponseNonce};
 
-    /// A target's key pair from fixed key material, and its configurations as the target would serve them.
-    pub(crate) fn target(ikm: &[u8; 32]) -> (ObliviousDoHKeyPair, Vec<u8>) {
-        let pair = ObliviousDoHKeyPair::from_parameters(0x0020, 0x0001, 0x0001, ikm);
-        let configs: ObliviousDoHConfigs =
-            vec![ObliviousDoHConfig::from(pair.public().clone())].into();
-        let Ok(bytes) = odoh_rs::compose(&configs) else {
-            unreachable!("configs compose")
-        };
-        (pair, bytes.to_vec())
+    pub(crate) fn target(ikm: &[u8; 32]) -> ([u8; NPK], Vec<u8>) {
+        super::target::new(ikm)
     }
 
-    /// What a target does with a sealed query: opens it and seals `answer` back with `nonce`.
     pub(crate) fn answer_as_target(
-        pair: &ObliviousDoHKeyPair,
+        sk: &[u8; NPK],
+        configs: &[u8],
         sealed: &[u8],
         answer: &[u8],
-        nonce: ResponseNonce,
+        nonce: [u8; 16],
     ) -> Option<(Vec<u8>, Vec<u8>)> {
-        let mut buffer = Bytes::copy_from_slice(sealed);
-        let message: ObliviousDoHMessage = odoh_rs::parse(&mut buffer).ok()?;
-        let (query, secret) = odoh_rs::decrypt_query(&message, pair).ok()?;
-        let reply = ObliviousDoHMessagePlaintext::new(answer, 0);
-        let sealed = odoh_rs::encrypt_response(&query, &reply, secret, nonce).ok()?;
-        Some((
-            query.into_msg().to_vec(),
-            odoh_rs::compose(&sealed).ok()?.to_vec(),
-        ))
+        super::target::answer(sk, configs, sealed, answer, nonce)
     }
 
     #[test]
     fn a_query_sealed_here_opens_at_the_target_and_its_answer_opens_here() {
-        let (pair, configs) = target(&[7; 32]);
+        let (sk, configs) = target(&[7; 32]);
         let Some(key) = TargetKey::parse(&configs) else {
             unreachable!("a key")
         };
         let Some(sealed) = seal(&key, b"a dns query", 0) else {
             unreachable!("sealed")
         };
-        let body = sealed.body.clone();
-        let Some((query, answer)) = answer_as_target(&pair, &body, b"a dns answer", [9; 16]) else {
+        let Some((query, answer)) =
+            answer_as_target(&sk, &configs, &sealed.body, b"a dns answer", [9; 16])
+        else {
             unreachable!("the target opens it")
         };
         assert_eq!(query, b"a dns query");
@@ -206,77 +334,39 @@ pub(crate) mod tests {
 
     #[test]
     fn an_answer_to_another_query_or_tampered_does_not_open() {
-        let (pair, configs) = target(&[7; 32]);
+        let (sk, configs) = target(&[7; 32]);
         let Some(key) = TargetKey::parse(&configs) else {
             unreachable!("a key")
         };
         let (Some(first), Some(second)) = (seal(&key, b"one", 0), seal(&key, b"two", 0)) else {
             unreachable!("sealed")
         };
-        let Some((_, answer)) = answer_as_target(&pair, &first.body, b"for one", [1; 16]) else {
-            unreachable!("answered")
-        };
-        assert_eq!(open(&second, &answer), None, "not this query's answer");
-        let Some(first_again) = seal(&key, b"one", 0) else {
-            unreachable!("sealed")
-        };
-        let Some((_, mut answer)) = answer_as_target(&pair, &first_again.body, b"x", [1; 16])
+        let Some((_, answer)) = answer_as_target(&sk, &configs, &first.body, b"for one", [1; 16])
         else {
             unreachable!("answered")
         };
+        assert_eq!(open(&second, &answer), None, "not this query's answer");
         let mut longer = answer.clone();
         longer.push(0);
-        assert_eq!(
-            open(&first_again, &longer),
-            None,
-            "a byte after the message"
-        );
-        let last = answer.len() - 1;
-        answer[last] ^= 1;
-        assert_eq!(open(&first_again, &answer), None, "the tag fails");
+        assert_eq!(open(&first, &longer), None, "a byte after the message");
+        let mut tampered = answer;
+        let last = tampered.len() - 1;
+        tampered[last] ^= 1;
+        assert_eq!(open(&first, &tampered), None, "the tag fails");
     }
 
     #[test]
     fn another_targets_key_cannot_open_the_query() {
         let (_, configs) = target(&[7; 32]);
-        let (other, _) = target(&[8; 32]);
+        let (other_sk, other_configs) = target(&[8; 32]);
         let Some(key) = TargetKey::parse(&configs) else {
             unreachable!("a key")
         };
         let Some(sealed) = seal(&key, b"q", 0) else {
             unreachable!("sealed")
         };
-        assert!(answer_as_target(&other, &sealed.body, b"a", [0; 16]).is_none());
+        assert!(answer_as_target(&other_sk, &other_configs, &sealed.body, b"a", [0; 16]).is_none());
     }
-
-    /// Random numbers that are not: the bytes given, then zeros.
-    struct Fixed(Vec<u8>);
-
-    impl hpke::rand_core::TryRng for Fixed {
-        type Error = std::convert::Infallible;
-        fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
-            let mut b = [0u8; 4];
-            self.try_fill_bytes(&mut b)?;
-            Ok(u32::from_le_bytes(b))
-        }
-        fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
-            let mut b = [0u8; 8];
-            self.try_fill_bytes(&mut b)?;
-            Ok(u64::from_le_bytes(b))
-        }
-        fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
-            for byte in dst.iter_mut() {
-                *byte = if self.0.is_empty() {
-                    0
-                } else {
-                    self.0.remove(0)
-                };
-            }
-            Ok(())
-        }
-    }
-
-    impl hpke::rand_core::TryCryptoRng for Fixed {}
 
     fn unhex(text: &str) -> Vec<u8> {
         (0..text.len())
@@ -303,8 +393,7 @@ pub(crate) mod tests {
         let Some(key) = TargetKey::parse(&oracle("configs")) else {
             unreachable!("the oracle's configs read")
         };
-        let Some(sealed) = seal_with(&key, &oracle("message"), 0, &mut Fixed(oracle("ikm-e")))
-        else {
+        let Some(sealed) = seal_with(&key, &oracle("message"), 0, &oracle("ikm-e")) else {
             unreachable!("sealed")
         };
         assert_eq!(
@@ -315,106 +404,56 @@ pub(crate) mod tests {
         assert_eq!(open(&sealed, &oracle("response")), Some(oracle("answer")));
     }
 
-    /// HPKE against RFC 9180's test vectors, A.1.1 (DHKEM(X25519, HKDF-SHA256), HKDF-SHA256, AES-128-GCM, base
-    /// mode): the receiver's setup opens the vector's ciphertexts in order and exports its values, and the sender's,
-    /// with the vector's ephemeral key material, gives its `enc` and seals its first ciphertext.
+    /// Cloudflare's `odoh-rs` on rozbb's `hpke`, which the engine used before, as a second reference: a query sealed
+    /// here opens at its target, and its target's answer opens here.
     #[test]
-    fn hpke_meets_rfc_9180s_vectors() {
-        use hpke::aead::AesGcm128;
-        use hpke::kdf::HkdfSha256;
-        use hpke::kem::X25519HkdfSha256;
-        use hpke::{Deserializable, Kem, OpModeR, OpModeS, Serializable};
-        let info = unhex("4f6465206f6e2061204772656369616e2055726e");
-        let Ok(sk_r) = <X25519HkdfSha256 as Kem>::PrivateKey::from_bytes(&unhex(
-            "4612c550263fc8ad58375df3f557aac531d26850903e55a9f23f21d8534e8ac8",
-        )) else {
-            unreachable!("skRm")
+    fn a_query_sealed_here_opens_at_odoh_rs_and_its_answer_opens_here() {
+        use bytes::Bytes;
+        use odoh_rs::{
+            ObliviousDoHConfig, ObliviousDoHConfigs, ObliviousDoHKeyPair, ObliviousDoHMessage,
+            ObliviousDoHMessagePlaintext,
         };
-        let Ok(enc) = <X25519HkdfSha256 as Kem>::EncappedKey::from_bytes(&unhex(
-            "37fda3567bdbd628e88668c3c8d7e97d1d1253b6d4ea6d44c150f741f1bf4431",
-        )) else {
-            unreachable!("enc")
+        let pair = ObliviousDoHKeyPair::from_parameters(0x0020, 0x0001, 0x0001, &[5; 32]);
+        let configs: ObliviousDoHConfigs =
+            vec![ObliviousDoHConfig::from(pair.public().clone())].into();
+        let Ok(bytes) = odoh_rs::compose(&configs) else {
+            unreachable!("composed")
         };
-        let Ok(mut receiver) = hpke::setup_receiver::<AesGcm128, HkdfSha256, X25519HkdfSha256>(
-            &OpModeR::Base,
-            &sk_r,
-            &enc,
-            &info,
-        ) else {
-            unreachable!("the receiver's setup")
+        let Some(key) = TargetKey::parse(&bytes) else {
+            unreachable!("odoh-rs's configs read here")
         };
-        let pt = unhex("4265617574792069732074727574682c20747275746820626561757479");
-        for (aad, ct) in [
-            (
-                "436f756e742d30",
-                "f938558b5d72f1a23810b4be2ab4f84331acc02fc97babc53a52ae8218a355a96d8770ac83d07bea87e13c512a",
-            ),
-            (
-                "436f756e742d31",
-                "af2d7e9ac9ae7e270f46ba1f975be53c09f8d875bdc8535458c2494e8a6eab251c03d0c22a56b8ca42c2063b84",
-            ),
-            (
-                "436f756e742d32",
-                "498dfcabd92e8acedc281e85af1cb4e3e31c7dc394a1ca20e173cb72516491588d96a19ad4a683518973dcc180",
-            ),
-        ] {
-            assert_eq!(
-                receiver.open(&unhex(ct), &unhex(aad)).ok(),
-                Some(pt.clone())
-            );
-        }
-        for (context, value) in [
-            (
-                "",
-                "3853fe2b4035195a573ffc53856e77058e15d9ea064de3e59f4961d0095250ee",
-            ),
-            (
-                "00",
-                "2e8f0b54673c7029649d4eb9d5e33bf1872cf76d623ff164ac185da9e88c21a5",
-            ),
-            (
-                "54657374436f6e74657874",
-                "e9e43065102c3836401bed8c3c3c75ae46be1639869391d62c61f1ec7af54931",
-            ),
-        ] {
-            let mut out = [0u8; 32];
-            assert!(receiver.export(&unhex(context), &mut out).is_ok());
-            assert_eq!(out.to_vec(), unhex(value));
-        }
-        let Ok(pk_r) = <X25519HkdfSha256 as Kem>::PublicKey::from_bytes(&unhex(
-            "3948cfe0ad1ddb695d780e59077195da6c56506b027329794ab02bca80815c4d",
-        )) else {
-            unreachable!("pkRm")
+        let Some(sealed) = seal(&key, b"a query", 3) else {
+            unreachable!("sealed")
         };
-        let mut ikm_e = Fixed(unhex(
-            "7268600d403fce431561aef583ee1613527cff655c1343f29812e66706df3234",
-        ));
-        let Ok((enc, mut sender)) = hpke::setup_sender_with_rng::<
-            AesGcm128,
-            HkdfSha256,
-            X25519HkdfSha256,
-        >(&OpModeS::Base, &pk_r, &info, &mut ikm_e) else {
-            unreachable!("the sender's setup")
+        let mut buffer = Bytes::copy_from_slice(&sealed.body);
+        let Ok(message) = odoh_rs::parse::<ObliviousDoHMessage, _>(&mut buffer) else {
+            unreachable!("odoh-rs reads the message")
         };
-        assert_eq!(
-            enc.to_bytes().to_vec(),
-            unhex("37fda3567bdbd628e88668c3c8d7e97d1d1253b6d4ea6d44c150f741f1bf4431")
-        );
-        assert_eq!(
-            sender.seal(&pt, &unhex("436f756e742d30")).ok(),
-            Some(unhex(
-                "f938558b5d72f1a23810b4be2ab4f84331acc02fc97babc53a52ae8218a355a96d8770ac83d07bea87e13c512a"
-            ))
-        );
+        let Ok((query, secret)) = odoh_rs::decrypt_query(&message, &pair) else {
+            unreachable!("odoh-rs opens it")
+        };
+        assert_eq!(query.clone().into_msg().as_ref(), b"a query");
+        let reply = ObliviousDoHMessagePlaintext::new(b"an answer", 0);
+        let Ok(response) = odoh_rs::encrypt_response(&query, &reply, secret, [4; 16]) else {
+            unreachable!("odoh-rs seals the answer")
+        };
+        let Ok(body) = odoh_rs::compose(&response) else {
+            unreachable!("composed")
+        };
+        assert_eq!(open(&sealed, &body).as_deref(), Some(&b"an answer"[..]));
     }
 
     #[test]
     fn configurations_that_are_not_are_refused() {
         assert!(TargetKey::parse(&[]).is_none());
         assert!(TargetKey::parse(&[0, 4, 0, 1, 0, 0]).is_none());
-        let (_, mut configs) = target(&[7; 32]);
+        let (_, configs) = target(&[7; 32]);
+        let mut unknown = configs.clone();
         // An unknown version only: nothing supported.
-        configs[2] = 0xff;
-        assert!(TargetKey::parse(&configs).is_none());
+        unknown[2] = 0xff;
+        assert!(TargetKey::parse(&unknown).is_none());
+        let mut longer = configs;
+        longer.push(0);
+        assert!(TargetKey::parse(&longer).is_none(), "a byte after the list");
     }
 }

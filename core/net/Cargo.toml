@@ -50,16 +50,18 @@ bytes = "=1.12.1"
 # Already in the tree through GotaTun's `x25519-dalek`; Apache-2.0 OR MIT.
 zeroize = "=1.9.2"
 
-# Oblivious DoH (RFC 9230) for the names of apps that go directly (W8, part 1, ADR 0042): Cloudflare's odoh-rs,
-# pinned exactly, the client side alone used (seal a query, open its answer), on rozbb's hpke (X25519, HKDF-SHA256,
-# AES-128-GCM, the suite RFC 9230 makes mandatory) with no `unsafe`; odoh-rs BSD-2-Clause, hpke MIT OR Apache-2.0.
-# TLS stays out of the engine: the query goes to the relay over Android's own TLS, from Watch's Kotlin side.
-odoh-rs = "=1.0.5"
-hpke = { version = "=0.14.1", default-features = false, features = ["alloc", "getrandom", "x25519", "aes"] }
-# The random numbers of each seal: the system's (`getrandom`), through the `rand_core` hpke takes.
-getrandom = { version = "=0.4.3", default-features = false, features = ["sys_rng"] }
+# Oblivious DoH's HPKE (RFC 9180) for the names of apps that go directly (W8, part 1, ADR 0042), written in the engine
+# (hpke.rs, odoh.rs) over what the library already holds: X25519 from GotaTun's `x25519-dalek` 2 (BSD-3-Clause, the
+# same version and a feature GotaTun turns on too), and RustCrypto's `hkdf`, `sha2` and `aes-gcm` above. The system's
+# random numbers from `getrandom` 0.4, already in the tree (MIT OR Apache-2.0). TLS stays out of the engine: Android's
+# own carries the sealed query, from Watch's Kotlin side.
+x25519-dalek = { version = "=2.0.1", default-features = false, features = ["static_secrets"] }
+getrandom = { version = "=0.4.3", default-features = false }
 
 [dev-dependencies]
+# A second, independent reference for the engine's ODoH (W8, part 1, fix round): Cloudflare's odoh-rs on rozbb's
+# hpke, which the engine used before its own; in tests only, so nothing of it ships.
+odoh-rs = "=1.0.5"
 # Checks the packets the engine builds against an independent implementation, in tests only.
 etherparse = "0.21.0"
 # Tokio's paused time, for the tests of the log's timer while the phone sleeps (finding 4): a feature of

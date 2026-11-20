@@ -25,6 +25,9 @@ pub const BACKOFF_FIRST: Duration = Duration::from_secs(5);
 pub const BACKOFF_MOST: Duration = Duration::from_secs(60);
 /// How long a step whose connection was reset, or whose answer was tampered with, is held.
 pub const HOLD_TAMPERED: Duration = Duration::from_secs(360);
+/// How long a pair whose target answered 401 is held while its key is fetched again, at most: the fetch, minutes
+/// later, releases it ([`Ladder::release`]); a fetch that brings the same key keeps it held (W8's fix round).
+pub const HOLD_KEY: Duration = Duration::from_hours(6);
 
 /// One step of the ladder.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -112,7 +115,8 @@ pub enum Failure {
     /// The connection was reset once the TLS hello was out, or the certificate did not check: what a censor
     /// does that blocks by server name, or one that answers in the server's place.
     Tampered,
-    /// The target no longer holds the key the query was sealed to (HTTP 401): no hold, the key is fetched again.
+    /// The target no longer holds the key the query was sealed to (HTTP 401): held [`HOLD_KEY`] while the key is
+    /// fetched again, minutes later, apart from the lookup.
     Key,
 }
 
@@ -202,13 +206,18 @@ impl Ladder {
 
     /// `step` failed by `failure` at `now`.
     pub fn failed(&mut self, step: Step, failure: Failure, now: Instant) {
-        if !self.validated || failure == Failure::Key {
+        if !self.validated {
             return;
         }
         let before = self.hold(step).map(|h| h.backoff);
-        let hold = if failure == Failure::Tampered {
+        let hold = if failure == Failure::Tampered || failure == Failure::Key {
             Hold {
-                until: now + HOLD_TAMPERED,
+                until: now
+                    + if failure == Failure::Key {
+                        HOLD_KEY
+                    } else {
+                        HOLD_TAMPERED
+                    },
                 backoff: before.unwrap_or(BACKOFF_FIRST),
             }
         } else {
@@ -223,6 +232,11 @@ impl Ladder {
         if self.learned(step.rung()) == Some(step) {
             self.learned[step.rung() as usize] = None;
         }
+    }
+
+    /// `step` is no longer held: its target's key came again.
+    pub fn release(&mut self, step: Step) {
+        self.holds.retain(|(s, _)| *s != step);
     }
 
     /// `step` answered: it is no longer held, it is tried first within its rung, and it is the way now.
@@ -377,10 +391,20 @@ mod tests {
     }
 
     #[test]
-    fn a_key_failure_holds_nothing() {
+    fn a_key_failure_holds_the_pair_until_released() {
         let mut ladder = Ladder::default();
         let at = Instant::now();
         ladder.failed(Step::Pair(0), Failure::Key, at);
+        assert_eq!(
+            ladder.plan(&setup(), at)[0],
+            Step::Pair(1),
+            "the other pair carries the names"
+        );
+        assert_ne!(
+            ladder.plan(&setup(), at + Duration::from_hours(5))[0],
+            Step::Pair(0)
+        );
+        ladder.release(Step::Pair(0));
         assert_eq!(ladder.plan(&setup(), at)[0], Step::Pair(0));
     }
 
