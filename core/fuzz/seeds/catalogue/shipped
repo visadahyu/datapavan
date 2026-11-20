@@ -1,0 +1,87 @@
+# SPDX-License-Identifier: CC0-1.0
+# Public Oblivious DoH relays (RFC 9230) that Watch's engine may use (ADR 0042, W8). A relay sees the user's address
+# but not the question. Every value has its source in sources.tsv; read and measured on 2026-11-20 (SOURCE).
+# Columns:
+#   id             short name, lower case
+#   url            the relay's https URL; the relay takes ?targethost=..&targetpath=..
+#   ipv4           bootstrap addresses, comma separated
+#   ipv6           bootstrap addresses, comma separated, compressed lower-case form
+#   operator       the service's operator as it names itself
+#   person         the person or body behind it
+#   jurisdictions  ISO 3166-1 alpha-2 codes: the operator's or person's seat, the hosting company's, any CDN's
+#   hosting        the hosting networks, as AS numbers
+#   cdn            the CDN in front, as AS numbers
+#   pins           SPKI SHA-256 pins (sha256/BASE64); none published by any operator
+#   note           free text
+# '-' means none.
+numa	https://odoh-relay.numa.rs/relay	178.104.229.30	-	Numa	Razvan Dimescu	DE,RO	AS24940	-	-	Run by the Numa project on Hetzner Online (DE); the list entry, added by Razvan Dimescu himself, says Falkenstein while the address's RIPE netblock is named CLOUD-NBG1 (Nuremberg); RO is the person's own location on his GitHub profile, no seat of the Numa project is published; no logging statement for the relay on numa.rs; no AAAA record on 2026-11-20
+crypto-sx-fastly	https://odoh-relay.edgecompute.app/	151.101.1.51,151.101.65.51,151.101.129.51,151.101.193.51	2a04:4e42::307,2a04:4e42:200::307,2a04:4e42:400::307,2a04:4e42:600::307	crypto.sx	Frank Denis	FR,US	AS54113	AS54113	-	A Fastly Compute service maintained by Frank Denis (not Fastly's managed OHTTP Relay product); the host is a CNAME to ecp.map.fastly.net, anycast; FR is the person's own location on his GitHub profile, US is Fastly's seat; the same person maintains the crypto.sx target and curates the DNSCrypt lists; no logging statement for the relay
+# SPDX-License-Identifier: CC0-1.0
+# Public Oblivious DoH targets (RFC 9230) that Watch's engine may use (ADR 0042, W8). A target sees the question but
+# not the user's address. Every value has its source in sources.tsv; read and measured on 2026-11-20 (SOURCE).
+# Columns:
+#   id             short name, lower case
+#   host           the target host, as given in targethost
+#   path           the target path, as given in targetpath
+#   ipv4           bootstrap addresses of the host, comma separated
+#   ipv6           bootstrap addresses of the host, comma separated, compressed lower-case form
+#   operator       the service's operator as it names itself
+#   person         the person or body behind it
+#   jurisdictions  ISO 3166-1 alpha-2 codes: the operator's or person's seat, the hosting company's, any CDN's
+#   hosting        the hosting networks, as AS numbers
+#   cdn            the CDN in front, as AS numbers
+#   filtering      no, or what it filters
+#   doh            the same operator's plain DoH URL
+#   doh-ipv4       bootstrap addresses of that URL's host
+#   doh-ipv6       bootstrap addresses of that URL's host
+#   pins           SPKI SHA-256 pins (sha256/BASE64); none published by any operator
+#   configs        lower-case hex of the ObliviousDoHConfigs that /.well-known/odohconfigs served on 2026-11-20
+#   note           free text
+# '-' means none.
+cloudflare	odoh.cloudflare-dns.com	/dns-query	162.159.62.1,172.64.42.1	2803:f800:54::1,2a06:98c1:53::1	Cloudflare	Cloudflare Inc.	US,CR	AS13335	AS13335	no	https://cloudflare-dns.com/dns-query	104.16.248.249,104.16.249.249	2606:4700::6810:f8f9,2606:4700::6810:f9f9	-	002c0001002800200001000100205766261ed7393f4f640ddd1e5758cdafe3aa1fbacfd5f36b34cdc2660c589d24	The 1.1.1.1 resolver acting as an ODoH target (Cloudflare's docs); the 1.1.1.1 privacy policy does not name ODoH; CR because the IPv6 block 2803:f800::/32 is registered to CloudFlare Latin America S.R.L. (the RIPE block 2a06:98c1::/32 carries country GB but names Cloudflare, Inc. of San Francisco); the config was served with no-store and a Last-Modified of 2026-11-20 00:00 UTC, so it may rotate daily: the bootstrap copy is for the first query only
+crypto-sx	odoh.crypto.sx	/dns-query	104.21.46.152,172.67.140.94	2606:4700:3034::6815:2e98,2606:4700:3034::ac43:8c5e	crypto.sx	Frank Denis	FR,US	AS13335,AS12876	AS13335	no	https://doh.crypto.sx/dns-query	104.21.46.152,172.67.140.94	2606:4700:3034::6815:2e98,2606:4700:3034::ac43:8c5e	-	002c0001002800200001000100206cab510e9a45f8e7be41a506699dab904edc344762490745144ab75dd8678a47	Behind Cloudflare's CDN; the list says the backend is hosted by Scaleway, whose AS by RDAP is AS12876 (Scaleway SAS, Paris), but the backend's own address is not visible; filtering from the list's entry for the same operator's plain DoH, which says no censorship; that DoH answered GET only on 2026-11-20 (POST got HTTP 405); same person as the crypto-sx-fastly relay
+dnscry-pt-fra01	fra01.dnscry.pt	/dns-query	45.82.120.61	2a0e:6a80:3:669::	dnscry.pt	Alexander Brügmann	DE	AS44486	-	no	https://fra01.dnscry.pt/dns-query	45.82.120.61	2a0e:6a80:3:669::	-	002c00010028002000010001002040284617e1e84ac768e42d745d386f7601a667d397ce953bdf36f97d772f5152	Frankfurt; hosting AS44486, SYNLINQ (Frankfurt), by RDAP; one of 125 dnscry.pt ODoH targets in the list, each with its own key; the host is a CNAME to vps472.brueggus.de; the operator wrote on 2026-07-05 that costly or unreliable locations will be cancelled and that node addresses change from time to time
+dnscry-pt-waw01	waw01.dnscry.pt	/dns-query	195.3.221.162	2a03:cfc0:8000:26::c303:dda2	dnscry.pt	Alexander Brügmann	DE,PL	AS201814	-	no	https://waw01.dnscry.pt/dns-query	195.3.221.162	2a03:cfc0:8000:26::c303:dda2	-	002c000100280020000100010020c97c6150093d569c0eabc51f516842f65bab4347da1f2e5b1d9a5afb3cd7cb07	Warsaw; hosting AS201814, MEVSPACE sp. z o.o. (Warsaw), by RDAP; one of 125 dnscry.pt ODoH targets in the list, each with its own key; the host is a CNAME to vps488.brueggus.de; the operator wrote on 2026-07-05 that costly or unreliable locations will be cancelled and that node addresses change from time to time
+dnscry-pt-vie01	vie01.dnscry.pt	/dns-query	83.138.55.186	2a0d:f302:110:6517::1	dnscry.pt	Alexander Brügmann	DE,AT	AS40994	-	no	https://vie01.dnscry.pt/dns-query	83.138.55.186	2a0d:f302:110:6517::1	-	002c0001002800200001000100203385a204ed63f6f176a0b178b151a09294bf90d8e9d63720317fe4dbcb70190b	Vienna; hosting AS40994, Alwyzon, a trading name of Hohl IT e.U. (Vienna), by RDAP; one of 125 dnscry.pt ODoH targets in the list, each with its own key; the host is a CNAME to vps241.brueggus.de; the operator wrote on 2026-07-05 that costly or unreliable locations will be cancelled and that node addresses change from time to time
+dnscry-pt-lis01	lis01.dnscry.pt	/dns-query	143.20.12.32	2a0f:c442:8000::32	dnscry.pt	Alexander Brügmann	DE,PT	AS214913	-	no	https://lis01.dnscry.pt/dns-query	143.20.12.32	2a0f:c442:8000::32	-	002c0001002800200001000100201e97e8183c21e201c7be2748a5e01a49d3e8de7d1b9844bc43f8a1190b83c858	Lisbon; hosting AS214913, WebTejo (PT), by RDAP; one of 125 dnscry.pt ODoH targets in the list, each with its own key; the host is a CNAME to vps462.brueggus.de; the operator wrote on 2026-07-05 that costly or unreliable locations will be cancelled and that node addresses change from time to time; the IPv4 block's record names only a maintainer, so its holder is taken from the AS
+# SPDX-License-Identifier: CC0-1.0
+# The default relay and target pairs, in order: the first is tried first, the second after a hedge delay.
+# A pair is refused when relay and target share an operator, a person, a jurisdiction, or a hosting or CDN AS;
+# both pairs pass that rule on the values of relays.tsv and targets.tsv.
+# Columns: relay (an id of relays.tsv), target (an id of targets.tsv).
+numa	cloudflare
+crypto-sx-fastly	dnscry-pt-fra01
+# SPDX-License-Identifier: CC0-1.0
+# Ordinary DoH and DoT resolvers the user may choose instead of Oblivious DoH (ADR 0042, W8), one row per service
+# and protocol, each with the facts of its card. Every value has its source in sources.tsv, read on 2026-11-20.
+# Columns:
+#   id         short name, lower case: service and protocol
+#   name       the service's name as the operator writes it
+#   operator   the company or organisation that runs it
+#   country    the operator's seat, ISO 3166-1 alpha-2
+#   protocol   doh or dot
+#   endpoint   the DoH URL, or the DoT host name
+#   ipv4       bootstrap addresses of the endpoint's host, comma separated
+#   ipv6       bootstrap addresses of the endpoint's host, comma separated, compressed lower-case form
+#   logging    the operator's own statement, in a few words of ours
+#   audit      who examined the logging claim and when
+#   filtering  none, or what it filters
+#   policy     the URL of its privacy policy
+#   pins       SPKI SHA-256 pins (sha256/BASE64); none published by any operator
+#   note       free text
+# '-' means none.
+quad9-doh	Recommended: Malware Blocking, DNSSEC Validation	Quad9	CH	doh	https://dns.quad9.net/dns-query	9.9.9.9,149.112.112.112	2620:fe::fe,2620:fe::9	no client IP recorded; aggregate counters only	-	malware,phishing,exploits,fraud	https://quad9.net/privacy/policy/	-	Swiss foundation, c/o SWITCH, Zürich; policy version 1.1 of 2026-06-24; DNSSEC validation; Quad9's default service
+quad9-dot	Recommended: Malware Blocking, DNSSEC Validation	Quad9	CH	dot	dns.quad9.net	9.9.9.9,149.112.112.112	2620:fe::fe,2620:fe::9	no client IP recorded; aggregate counters only	-	malware,phishing,exploits,fraud	https://quad9.net/privacy/policy/	-	Swiss foundation, c/o SWITCH, Zürich; policy version 1.1 of 2026-06-24; DNSSEC validation; Quad9's default service
+quad9-unsecured-doh	Unsecured: No Malware blocking, DNSSEC validation	Quad9	CH	doh	https://dns10.quad9.net/dns-query	9.9.9.10,149.112.112.10	2620:fe::10,2620:fe::fe:10	no client IP recorded; aggregate counters only	-	none	https://quad9.net/privacy/policy/	-	Swiss foundation, c/o SWITCH, Zürich; policy version 1.1 of 2026-06-24; DNSSEC validation; Quad9 marks this service as for experts
+quad9-unsecured-dot	Unsecured: No Malware blocking, DNSSEC validation	Quad9	CH	dot	dns10.quad9.net	9.9.9.10,149.112.112.10	2620:fe::10,2620:fe::fe:10	no client IP recorded; aggregate counters only	-	none	https://quad9.net/privacy/policy/	-	Swiss foundation, c/o SWITCH, Zürich; policy version 1.1 of 2026-06-24; DNSSEC validation; Quad9 marks this service as for experts
+cloudflare-doh	1.1.1.1	Cloudflare	US	doh	https://cloudflare-dns.com/dns-query	104.16.248.249,104.16.249.249	2606:4700::6810:f8f9,2606:4700::6810:f9f9	source IP truncated and deleted within 25 hours; query logs kept 25 hours	a Big 4 accounting firm examined its privacy commitments over 2024; report published 2026-04-01	none	https://developers.cloudflare.com/1.1.1.1/privacy/public-dns-resolver/	-	Addresses of cloudflare-dns.com as two resolvers answered on 2026-11-20 (the page lists the addresses of 1.1.1.1, not of this host); up to 0.05% of packets are sampled for troubleshooting; anonymised logs are shared with APNIC; the examination covered the privacy commitments only
+cloudflare-dot	1.1.1.1	Cloudflare	US	dot	one.one.one.one	1.1.1.1,1.0.0.1	2606:4700:4700::1111,2606:4700:4700::1001	source IP truncated and deleted within 25 hours; query logs kept 25 hours	a Big 4 accounting firm examined its privacy commitments over 2024; report published 2026-04-01	none	https://developers.cloudflare.com/1.1.1.1/privacy/public-dns-resolver/	-	Up to 0.05% of packets are sampled for troubleshooting; anonymised logs are shared with APNIC; the examination covered the privacy commitments only
+adguard-unfiltered-doh	AdGuard DNS: Non-filtering servers	AdGuard	CY	doh	https://unfiltered.adguard-dns.com/dns-query	94.140.14.140,94.140.14.141	2a10:50c0::1:ff,2a10:50c0::2:ff	no personal data for public DNS; anonymous 24-hour domain list and aggregate counters	-	none	https://adguard-dns.io/privacy.html	-	ADGUARD SOFTWARE LIMITED, Limassol, is the data controller
+adguard-unfiltered-dot	AdGuard DNS: Non-filtering servers	AdGuard	CY	dot	unfiltered.adguard-dns.com	94.140.14.140,94.140.14.141	2a10:50c0::1:ff,2a10:50c0::2:ff	no personal data for public DNS; anonymous 24-hour domain list and aggregate counters	-	none	https://adguard-dns.io/privacy.html	-	ADGUARD SOFTWARE LIMITED, Limassol, is the data controller
+controld-unfiltered-doh	Free DNS: Unfiltered	Control D	CA	doh	https://freedns.controld.com/p0	76.76.2.11	2606:1a40::11	no query logs, browsing history or timestamps stored	-	none	https://controld.com/privacy	-	ControlD Inc, registered in Ontario (its terms); addresses of freedns.controld.com as two resolvers answered on 2026-11-20 (the page's 76.76.2.0 and 76.76.10.0 are its plain DNS addresses); the logging statement is on the free DNS pages, the privacy policy page names no DNS logging
+controld-unfiltered-dot	Free DNS: Unfiltered	Control D	CA	dot	p0.freedns.controld.com	76.76.2.11	2606:1a40::11	no query logs, browsing history or timestamps stored	-	none	https://controld.com/privacy	-	ControlD Inc, registered in Ontario (its terms); addresses of p0.freedns.controld.com as two resolvers answered on 2026-11-20; the logging statement is on the free DNS pages, the privacy policy page names no DNS logging
+dns4eu-unfiltered-doh	DNS4EU: Unfiltered resolution	Whalebone	CZ	doh	https://unfiltered.joindns4.eu/dns-query	86.54.11.100,86.54.11.200	2a13:1001::86:54:11:100,2a13:1001::86:54:11:200	client IP in RAM only; query logs with an anonymised address kept up to 6 months	-	court-ordered blocks	https://legal-documents-dns4eu.s3.fr-par.scw.cloud/DNS4EU-Public-DNS-Resolver-policy-2025.pdf	-	Operated by Whalebone s.r.o., Brno; EU co-funded 2023 to 2025; the page says court-ordered blocks apply to every variant and offers the service to individuals in Europe; resolver policy of 2025-06-26
+dns4eu-unfiltered-dot	DNS4EU: Unfiltered resolution	Whalebone	CZ	dot	unfiltered.joindns4.eu	86.54.11.100,86.54.11.200	2a13:1001::86:54:11:100,2a13:1001::86:54:11:200	client IP in RAM only; query logs with an anonymised address kept up to 6 months	-	court-ordered blocks	https://legal-documents-dns4eu.s3.fr-par.scw.cloud/DNS4EU-Public-DNS-Resolver-policy-2025.pdf	-	Operated by Whalebone s.r.o., Brno; EU co-funded 2023 to 2025; the page says court-ordered blocks apply to every variant and offers the service to individuals in Europe; resolver policy of 2025-06-26
+strict 1
+choice preset quad9-doh
+pairs numa>cloudflare

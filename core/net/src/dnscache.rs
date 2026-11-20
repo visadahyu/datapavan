@@ -32,9 +32,48 @@ type Key = (String, u16, u16);
 pub struct DnsCache {
     entries: HashMap<Key, (Vec<u8>, Duration)>,
     order: VecDeque<Key>,
+    /// How long past its time an answer is still kept to be served stale (RFC 8767); none by default.
+    stale_for: Duration,
 }
 
+/// The time to live of an answer served stale (RFC 8767, 4: "30 seconds").
+pub const STALE_TTL: u32 = 30;
+
 impl DnsCache {
+    /// A cache that keeps each answer `stale_for` past its time to live, for [`DnsCache::stale`].
+    #[must_use]
+    pub fn serving_stale(stale_for: Duration) -> Self {
+        Self {
+            stale_for,
+            ..Self::default()
+        }
+    }
+
+    /// The answer kept for `query`'s question whose time ran out by `now` less than the stale window ago,
+    /// with every record's time to live [`STALE_TTL`], the query's ID and question: served while a fresh
+    /// answer is asked for (RFC 8767). `None` for a fresh answer ([`DnsCache::answer`] gives it), none kept,
+    /// or one past the window, which is forgotten.
+    pub fn stale(&mut self, query: &[u8], now: Duration) -> Option<Vec<u8>> {
+        let question = answers::question(query)?;
+        let key = (question.name, question.kind, question.class);
+        let (_, until) = self.entries.get(&key)?;
+        if *until > now {
+            return None;
+        }
+        if until.saturating_add(self.stale_for) <= now {
+            self.entries.remove(&key);
+            self.order.retain(|k| k != &key);
+            return None;
+        }
+        let mut out = self.entries.get(&key)?.0.clone();
+        for at in ttl_offsets(&out)? {
+            out.get_mut(at..at + 4)?
+                .copy_from_slice(&STALE_TTL.to_be_bytes());
+        }
+        out.get_mut(..2)?.copy_from_slice(query.get(..2)?);
+        Some(out)
+    }
+
     /// Keeps `answer` for its shortest time to live (for "no such name", the SOA record's, bounded by
     /// its minimum field, RFC 2308), if it is one to keep. `now` is the time since the phone started; the
     /// longest time there is, as a failed reading gives, keeps nothing, since a later reading that works
@@ -67,8 +106,11 @@ impl DnsCache {
         let key = (question.name, question.kind, question.class);
         let (kept, until) = self.entries.get(&key)?;
         if *until <= now {
-            self.entries.remove(&key);
-            self.order.retain(|k| k != &key);
+            // Kept for its stale window, if it has one.
+            if until.saturating_add(self.stale_for) <= now {
+                self.entries.remove(&key);
+                self.order.retain(|k| k != &key);
+            }
             return None;
         }
         let mut out = kept.clone();
@@ -165,6 +207,38 @@ mod tests {
 
     /// An hour after the phone started.
     const NOW: Duration = Duration::from_hours(1);
+
+    #[test]
+    fn a_stale_answer_is_served_with_30_seconds_within_its_window_only() {
+        let mut cache = DnsCache::serving_stale(Duration::from_hours(24));
+        let first = query(1, b"\x07example\x03com\x00");
+        cache.insert(&answer(&first, 300), NOW);
+        let again = query(2, b"\x07example\x03com\x00");
+        assert!(cache.stale(&again, NOW).is_none(), "fresh: not stale");
+        let later = NOW + Duration::from_secs(301);
+        assert!(cache.answer(&again, later).is_none());
+        let Some(stale) = cache.stale(&again, later) else {
+            unreachable!("served stale")
+        };
+        assert_eq!(stale[..2], [2, 2]);
+        assert_eq!(u32_at(&stale, stale.len() - 10), Some(STALE_TTL));
+        assert!(
+            cache
+                .stale(
+                    &again,
+                    NOW + Duration::from_secs(300) + Duration::from_hours(24)
+                )
+                .is_none(),
+            "past the window"
+        );
+        assert!(cache.is_empty(), "and forgotten");
+        let mut plain = DnsCache::default();
+        plain.insert(&answer(&first, 300), NOW);
+        assert!(
+            plain.stale(&again, later).is_none(),
+            "no window, no stale answer"
+        );
+    }
 
     #[test]
     fn answers_the_same_question_until_its_time_to_live_runs_out() {

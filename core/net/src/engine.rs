@@ -75,6 +75,8 @@ mod lookups;
 mod model;
 mod naming;
 mod now;
+pub mod resolver;
+use resolver::{DnsConfig, Exchange, Exchanges};
 mod tcp;
 mod tunnels;
 mod udp;
@@ -383,6 +385,20 @@ pub trait Platform: Send + Sync + 'static {
     fn route_of_app(&self, _uid: u32) -> Option<AppRoute> {
         None
     }
+
+    /// Carries the exchange `request` of the encrypted resolver (W8, part 1): over Android's own TLS, from a
+    /// socket Watch protects and binds to the network beneath or through the user's tool, or by Android's
+    /// resolver on the network beneath. Returns at once, from the engine's own thread, without blocking; the
+    /// reply comes later, by [`Engine::exchanged`] with `ticket`. False where the platform carries none: then
+    /// the network's resolver is asked from a protected socket, and no encrypted way answers.
+    fn exchange(&self, _ticket: u64, _request: &Exchange) -> bool {
+        false
+    }
+
+    /// The way direct apps' names go changed kind: an encrypted way, the fallback to the network's resolver,
+    /// or failing in the strict setting ([`Engine::dns_status`]). Returns at once; Watch's screen and its
+    /// notice read the state when they want it.
+    fn dns_changed(&self) {}
 }
 
 /// What Android's resolver said of a host name ([`Platform::resolve`]).
@@ -799,6 +815,9 @@ pub struct ChainSetting {
     pub uncached_answers: bool,
     /// The `WireGuard` tunnels and the apps sent through them (W7), as set last ([`Engine::tunnels`]).
     pub tunnels: TunnelSetting,
+    /// The encrypted resolver for direct apps' names (W8, part 1), as set last ([`Engine::dns`]); `None` keeps
+    /// the network's resolver, as before W8.
+    pub dns: Option<Arc<DnsConfig>>,
 }
 
 /// What an engine hands the next when the tunnel is set up again (ADR 0044, decision 5 as amended): what
@@ -820,6 +839,8 @@ pub struct Handover {
     activity: activity::Activity,
     /// The `WireGuard` tunnels and their routes, set anew in the next engine: its tunnels begin new sessions.
     tunnels: TunnelSetting,
+    /// The encrypted resolver's setting; what it learned stays behind, with the network it learned on.
+    dns: Option<Arc<DnsConfig>>,
 }
 
 /// What the engine's thread and its controller share.
@@ -914,6 +935,8 @@ struct Shared {
     kept: Mutex<Vec<kept::Kept>>,
     /// The `WireGuard` tunnels, their routes and their flows (W7).
     tunnels: tunnels::Tunnels,
+    /// The encrypted resolver for direct apps' names (W8, part 1).
+    resolver: resolver::Resolver,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -1008,6 +1031,7 @@ impl Engine {
             counters,
             mut activity,
             mut tunnels,
+            mut dns,
         } = handover.unwrap_or_else(|| Handover {
             chain: None,
             upstream_dns: None,
@@ -1017,12 +1041,14 @@ impl Engine {
             counters: [0; COUNTERS],
             activity: activity::Activity::new(tracks),
             tunnels: TunnelSetting::default(),
+            dns: None,
         });
         let waiting = activity::Waiting::of_held(&activity.held);
         if let Some(setting) = setting {
             chain = setting.chain.map(Arc::new);
             uncached_answers = setting.uncached_answers;
             tunnels = setting.tunnels;
+            dns = setting.dns;
         }
         let clock = platform.clock();
         // The live view counts from now on; a handed-over view keeps the moment its first engine began.
@@ -1071,7 +1097,11 @@ impl Engine {
             tool_answers: Mutex::default(),
             kept: Mutex::default(),
             tunnels: tunnels::Tunnels::default(),
+            resolver: resolver::Resolver::default(),
         });
+        // In place before the thread reads its first packet: no direct app's lookup goes to the network's
+        // resolver while the encrypted one is set.
+        shared.resolver.set(dns);
         // In place before the thread reads its first packet: a tunnelled app's first SYN never goes directly.
         shared.tunnels.set(&tunnels);
         if shared.tunnels.any() {
@@ -1171,6 +1201,7 @@ impl Engine {
                 activity::Activity::new(tracks),
             ),
             tunnels: shared.tunnels.setting(),
+            dns: shared.resolver.get(),
         }
     }
 
@@ -1184,9 +1215,37 @@ impl Engine {
         // Another resolver, or another network, may answer otherwise.
         lock(&self.shared.direct_answers).clear();
         if moved {
+            self.shared.resolver.network_moved();
             self.network
                 .send_modify(|generation| *generation = generation.wrapping_add(1));
         }
+    }
+
+    /// Sets the encrypted resolver for the names of apps that go directly (W8, part 1, ADR 0042), or `None` for
+    /// the network's resolver, as before W8. What the resolver learned and kept goes.
+    pub fn dns(&self, config: Option<Arc<DnsConfig>>) {
+        self.shared.resolver.set(config);
+        self.shared.platform.dns_changed();
+    }
+
+    /// What Android says of the network beneath, for the encrypted resolver: whether it is validated (while it
+    /// is not, as behind a captive portal, no failure counts) and its search domains (local names).
+    pub fn dns_network(&self, validated: bool, domains: &str) {
+        self.shared.resolver.network(validated, domains);
+    }
+
+    /// The encrypted resolver's state, one `key value` per line: `way` (`off`, `none`, the way that answered
+    /// last, `fallback SECONDS`, `failing SECONDS`), `strict`, `validated`, `held`, and `answers` by way. It names
+    /// no lookup.
+    #[must_use]
+    pub fn dns_status(&self) -> String {
+        self.shared.resolver.status()
+    }
+
+    /// The exchanges that wait for Watch's Kotlin side, which hands each reply to [`Exchanges::complete`].
+    #[must_use]
+    pub fn exchanges(&self) -> Arc<Exchanges> {
+        Arc::clone(&self.shared.resolver.exchanges)
     }
 
     /// Turns chaining on with `chain`, or off with `None` (W6). New flows follow it, and TCP
@@ -1734,6 +1793,7 @@ mod tests {
             tool_answers: Mutex::default(),
             kept: Mutex::default(),
             tunnels: tunnels::Tunnels::default(),
+            resolver: resolver::Resolver::default(),
         }
     }
 

@@ -169,6 +169,8 @@ pub(super) enum UdpWay {
     Direct(Arc<UdpSocket>),
     /// A chained app's lookups, which Watch answers (ADR 0038).
     Lookups(Arc<Chain>),
+    /// A direct app's lookups, which Watch's encrypted resolver answers (W8, part 1, ADR 0042).
+    Resolved,
 }
 
 impl UdpWay {
@@ -177,7 +179,7 @@ impl UdpWay {
     fn try_send(&self, payload: &[u8]) -> io::Result<usize> {
         match self {
             Self::Direct(socket) => socket.try_send(payload),
-            Self::Lookups(_) => Ok(payload.len()),
+            Self::Lookups(_) | Self::Resolved => Ok(payload.len()),
         }
     }
 
@@ -191,7 +193,7 @@ impl UdpWay {
     /// same tool, reached the same way, while it is chained.
     fn keeps(&self, route: &Route) -> bool {
         match (self, route) {
-            (Self::Direct(_), Route::Direct) => true,
+            (Self::Direct(_) | Self::Resolved, Route::Direct) => true,
             (Self::Lookups(one), Route::Tool(other)) => one.same_tool(other),
             _ => false,
         }
@@ -3061,7 +3063,7 @@ impl Loop {
                 match table.flows.get_mut(&key) {
                     Some(UdpEntry::Open(flow)) => {
                         let cached = match flow.way {
-                            UdpWay::Lookups(_) => None,
+                            UdpWay::Lookups(_) | UdpWay::Resolved => None,
                             UdpWay::Direct(_) => cached_answer(&self.shared, key.1, payload),
                         };
                         // The flow ends once every lookup it carried has its answer.
@@ -3117,15 +3119,7 @@ impl Loop {
         if lookup {
             self.shared.lookup(uid, packet.len());
         }
-        if let UdpWay::Lookups(chain) = &way {
-            tokio::spawn(answer_lookup(
-                payload.to_vec(),
-                (key, uid),
-                Arc::clone(chain),
-                (owed, Arc::clone(&self.udp)),
-                Arc::clone(&self.shared),
-                Arc::clone(&self.tun),
-            ));
+        if self.answered_here(&way, payload, (key, uid), owed.clone()) {
             return;
         }
         if let Some(answer) = cached {
@@ -3138,6 +3132,41 @@ impl Loop {
         let sent = way.try_send(payload);
         if let Some(error) = count_sent(&self.shared, None, packet, parsed, sent) {
             self.send(&error).await;
+        }
+    }
+
+    /// Hands a lookup on a way Watch answers itself to a task of its own: a chained app's (ADR 0038), or a direct
+    /// app's by the encrypted resolver (W8, part 1). False for a way that relays it.
+    fn answered_here(
+        &self,
+        way: &UdpWay,
+        payload: &[u8],
+        (key, uid): ((SocketAddr, SocketAddr), Option<u32>),
+        owed: (u64, Arc<Owed>),
+    ) -> bool {
+        match way {
+            UdpWay::Lookups(chain) => {
+                tokio::spawn(answer_lookup(
+                    payload.to_vec(),
+                    (key, uid),
+                    Arc::clone(chain),
+                    (owed, Arc::clone(&self.udp)),
+                    Arc::clone(&self.shared),
+                    Arc::clone(&self.tun),
+                ));
+                true
+            }
+            UdpWay::Resolved => {
+                tokio::spawn(answer_resolved(
+                    payload.to_vec(),
+                    (key, uid),
+                    (owed, Arc::clone(&self.udp)),
+                    Arc::clone(&self.shared),
+                    Arc::clone(&self.tun),
+                ));
+                true
+            }
+            UdpWay::Direct(_) => false,
         }
     }
 
@@ -4681,7 +4710,7 @@ async fn open_lookups(
                 continue;
             };
             lookups.push(packet.len());
-            if let UdpWay::Lookups(_) = way {
+            if let UdpWay::Lookups(_) | UdpWay::Resolved = way {
                 owed.add(payload);
                 questions.push(payload.to_vec());
                 continue;
@@ -4747,6 +4776,20 @@ fn start_answers(
                 ));
             }
         }
+        UdpWay::Resolved => {
+            if lock(flows).settled(key, id, &owed) {
+                return;
+            }
+            for query in questions {
+                tokio::spawn(answer_resolved(
+                    query,
+                    (key, uid),
+                    ((id, Arc::clone(&owed)), Arc::clone(flows)),
+                    Arc::clone(shared),
+                    Arc::clone(tun),
+                ));
+            }
+        }
         UdpWay::Direct(socket) => {
             tokio::spawn(answers(
                 socket,
@@ -4790,6 +4833,15 @@ async fn way_for(
     destination: SocketAddr,
 ) -> io::Result<UdpWay> {
     match route {
+        // Watch's encrypted resolver answers DNS at port 53 alone: DNS over QUIC or anything else at Watch's DNS
+        // address is refused, so that Android's resolver asks on port 53 (W8, part 1, point 9).
+        Route::Direct if shared.resolver.on() => {
+            if destination.port() == 53 {
+                Ok(UdpWay::Resolved)
+            } else {
+                Err(io::ErrorKind::HostUnreachable.into())
+            }
+        }
         Route::Direct => match shared.target(destination) {
             Some(target) => connect_udp(shared, target)
                 .await
@@ -4815,6 +4867,25 @@ async fn answer_lookup(
 ) {
     let (app, destination) = key;
     let answer = lookups::answer(&shared, &chain, &query).await;
+    if let Some(packet) = answer.and_then(|answer| packet::udp(destination, app, &answer)) {
+        shared.lookup_answered(uid, packet.len());
+        send_to_app(&tun, &shared, &packet).await;
+    }
+    owed.given_up(&query);
+    lock(&flows).settled(key, id, &owed);
+}
+
+/// Answers one lookup of a direct app by Watch's encrypted resolver (W8, part 1) and sends the answer to the
+/// app; then one lookup fewer of its flow `id` waits, as for a chained app's ([`answer_lookup`]).
+async fn answer_resolved(
+    query: Vec<u8>,
+    (key, uid): ((SocketAddr, SocketAddr), Option<u32>),
+    ((id, owed), flows): ((u64, Arc<Owed>), UdpFlows),
+    shared: Arc<Shared>,
+    tun: Arc<Tun>,
+) {
+    let (app, destination) = key;
+    let answer = super::resolver::answer(&shared, &query, false).await;
     if let Some(packet) = answer.and_then(|answer| packet::udp(destination, app, &answer)) {
         shared.lookup_answered(uid, packet.len());
         send_to_app(&tun, &shared, &packet).await;

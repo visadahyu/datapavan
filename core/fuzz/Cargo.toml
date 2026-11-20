@@ -129,3 +129,24 @@ path = "fuzz_targets/wireguard_back.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "odoh"
+path = "fuzz_targets/odoh.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "hygiene"
+path = "fuzz_targets/hygiene.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "catalogue"
+path = "fuzz_targets/catalogue.rs"
+test = false
+doc = false
+bench = false

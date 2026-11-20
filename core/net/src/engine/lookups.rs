@@ -1,11 +1,12 @@
 //! The lookups of chained apps (ADR 0038): Watch answers A, AAAA and reverse lookups of stand-ins
-//! itself, and asks Quad9's service without blocking for every other question, as DNS over TCP through
-//! the tool on a connection it keeps ([`super::kept`]), so that no lookup of a chained app reaches the
-//! network beneath.
+//! itself, and every other question goes through the tool: by the encrypted ways of Watch's resolver once it
+//! is set (W8, part 1), else to Quad9's service without blocking, as DNS over TCP on a connection Watch keeps
+//! ([`super::kept`]); so that no lookup of a chained app reaches the network beneath.
 
 use super::chain::Chain;
-use super::{Shared, kept, lock};
+use super::{Shared, kept, lock, resolver};
 use crate::answers::{self, A, AAAA};
+use crate::hygiene;
 use crate::standins::is_stand_in;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -57,6 +58,23 @@ pub(super) async fn answer(
     let kept = lock(&shared.tool_answers).answer(query, shared.clock.since_boot());
     if let Some(kept) = kept {
         return answers::rebuilt(&kept).or_else(|| answers::failure(query));
+    }
+    // Once Watch's encrypted resolver is set (W8, part 1), these questions go the encrypted ways through the
+    // tool, never to Quad9 in plain DNS (ADR 0038 gave this path to W8).
+    if shared.resolver.on() {
+        let Some(asked) = hygiene::read(query) else {
+            return answers::failure(query);
+        };
+        let answer = resolver::through_tool(shared, chain, &asked)
+            .await
+            .and_then(|upstream| asked.answer(&upstream, None));
+        return match answer {
+            Some(answer) => {
+                lock(&shared.tool_answers).insert(&answer, shared.clock.since_boot());
+                answers::rebuilt(&answer).or_else(|| answers::failure(query))
+            }
+            None => answers::failure(query),
+        };
     }
     match through_tool(shared, chain, query).await {
         Ok(answer) => {

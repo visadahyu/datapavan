@@ -12,14 +12,17 @@ use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd, RawFd};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use datapavan_engine::datapack;
+use datapavan_net::catalogue::Catalogue;
 use datapavan_net::engine::{Configured, MAX_TUNNELS, TunnelState};
+use datapavan_net::ladder::Failure;
 use datapavan_net::organisations::{FilePart, Organisations};
 use datapavan_net::socks5::Credentials;
 use datapavan_net::trackers::NetworkSignatures;
 use datapavan_net::wireguard::Config as WgConfig;
 use datapavan_net::{
-    Addresses, AppRoute, Chain, ChainSetting, Config, DnsUse, Ech, Engine, Flow, Handover, Limits,
-    NamedBy, NetworkKind, Outcome, Platform, TunnelSetting,
+    Addresses, AppRoute, Chain, ChainSetting, Config, DnsConfig, DnsUse, Ech, Engine, Exchange,
+    Exchanges, Flow, Handover, Limits, NamedBy, NetworkKind, Outcome, Platform, Reply,
+    TunnelSetting,
 };
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
 use jni::objects::{JByteArray, JClass, JIntArray, JLongArray, JObject, JString};
@@ -60,16 +63,51 @@ fn setting() -> MutexGuard<'static, Option<ChainSetting>> {
     SET.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// The exchanges of the engine that runs, which wait for Watch's Kotlin side (W8, part 1): `nativeExchanged`
+/// hands each reply here, never under [`ENGINE`], so that a reply never waits for the engine's lock. Set when an
+/// engine starts, cleared when it stops; a reply for an engine that is gone finds no ticket and goes nowhere.
+static EXCHANGES: Mutex<Option<Arc<Exchanges>>> = Mutex::new(None);
+
+fn exchanges() -> MutexGuard<'static, Option<Arc<Exchanges>>> {
+    EXCHANGES.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// What Android last said of the network beneath, for the encrypted resolver: validated, and its search domains;
+/// handed to each engine as it starts.
+static DNS_NETWORK: Mutex<Option<(bool, String)>> = Mutex::new(None);
+
+fn dns_network() -> MutexGuard<'static, Option<(bool, String)>> {
+    DNS_NETWORK.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Keeps the encrypted resolver's setting for the engines to come, beside the chain, and sets it on the one that
+/// runs, if any (W8, part 1).
+fn set_dns(config: Option<Arc<DnsConfig>>) {
+    let mut set = setting();
+    let kept = set.get_or_insert_with(|| ChainSetting {
+        chain: None,
+        uncached_answers: false,
+        tunnels: TunnelSetting::default(),
+        dns: None,
+    });
+    kept.dns.clone_from(&config);
+    if let Some(running) = engine().as_ref() {
+        running.dns(config);
+    }
+}
+
 /// Keeps `chain` for the engines to come and sets it on the one that runs, if any: whether a chain is
 /// on now, false while no engine runs.
 fn set_chain(chain: Option<Chain>) -> bool {
     let mut set = setting();
     let on = chain.is_some();
     let tunnels = set.as_ref().map(|s| s.tunnels.clone()).unwrap_or_default();
+    let dns = set.as_ref().and_then(|s| s.dns.clone());
     *set = Some(ChainSetting {
         chain: chain.clone(),
         uncached_answers: on,
         tunnels,
+        dns,
     });
     match engine().as_ref() {
         Some(running) => {
@@ -88,6 +126,7 @@ fn set_tunnels(change: impl FnOnce(&mut TunnelSetting)) {
         chain: None,
         uncached_answers: false,
         tunnels: TunnelSetting::default(),
+        dns: None,
     });
     change(&mut kept.tunnels);
     if let Some(running) = engine().as_ref() {
@@ -220,6 +259,10 @@ fn start_next(
     let Ok(started) = start((handover, set.clone())) else {
         return false;
     };
+    *exchanges() = Some(started.exchanges());
+    if let Some((validated, domains)) = dns_network().as_ref() {
+        started.dns_network(*validated, domains);
+    }
     *engine() = Some(started);
     drop(set);
     true
@@ -242,6 +285,7 @@ fn stop_running() {
     if let Some(mut running) = previous {
         running.stop();
     }
+    *exchanges() = None;
     *setting() = None;
 }
 
@@ -365,6 +409,70 @@ impl Platform for Service {
             .ok()
             .flatten()?;
         resolution(&answer)
+    }
+
+    /// `WatchVpnService.exchange(...)`, which hands the exchange to its own executor and returns at once; the
+    /// reply comes by `nativeExchanged` (W8, part 1). Called on the engine's thread.
+    fn exchange(&self, ticket: u64, request: &Exchange) -> bool {
+        let Ok(ticket) = i64::try_from(ticket) else {
+            return false;
+        };
+        let join = |items: Vec<String>| items.join(",");
+        let addresses = join(request.addresses.iter().map(ToString::to_string).collect());
+        let pins = join(request.pins.clone());
+        let (proxy, user, password) = request.through.as_ref().map_or_else(
+            || (String::new(), Vec::new(), Vec::new()),
+            |t| {
+                (
+                    t.proxy.to_string(),
+                    t.credentials
+                        .as_ref()
+                        .map_or_else(Vec::new, |c| c.user().to_vec()),
+                    t.credentials
+                        .as_ref()
+                        .map_or_else(Vec::new, |c| c.password().to_vec()),
+                )
+            },
+        );
+        self.vm
+            .attach_current_thread(|env| -> Result<bool, Error> {
+                let url = JString::from_str(env, &request.url)?;
+                let host = JString::from_str(env, &request.host)?;
+                let addresses = JString::from_str(env, &addresses)?;
+                let pins = JString::from_str(env, &pins)?;
+                let proxy = JString::from_str(env, &proxy)?;
+                let user = env.byte_array_from_slice(&user)?;
+                let password = env.byte_array_from_slice(&password)?;
+                let body = env.byte_array_from_slice(&request.body)?;
+                env.call_method(
+                    &self.service,
+                    jni_str!("exchange"),
+                    jni_sig!("(JILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[B[B[B)Z"),
+                    &[
+                        JValue::Long(ticket),
+                        JValue::Int(request.carry as i32),
+                        JValue::Object(&url),
+                        JValue::Object(&host),
+                        JValue::Object(&addresses),
+                        JValue::Object(&pins),
+                        JValue::Object(&proxy),
+                        JValue::Object(&user),
+                        JValue::Object(&password),
+                        JValue::Object(&body),
+                    ],
+                )?
+                .z()
+            })
+            .unwrap_or(false)
+    }
+
+    /// `WatchVpnService.dnsChanged()`, which posts a look at the resolver's state to its main thread and returns
+    /// at once.
+    fn dns_changed(&self) {
+        let _ = self.vm.attach_current_thread(|env| -> Result<(), Error> {
+            env.call_method(&self.service, jni_str!("dnsChanged"), jni_sig!("()V"), &[])?;
+            Ok(())
+        });
     }
 
     /// `WatchVpnService.statesWanted`, which hands a reading to its tracker's own thread when its rules
@@ -870,6 +978,211 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelSta
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
+/// A reply as Watch's Kotlin side gives it: `outcome` 200 or 0 with the answer's bytes, another HTTP status, or
+/// -1 (no answer in time), -2 (reset once the TLS hello was out, or a certificate that does not check), -3 (refused,
+/// closed, or anything else).
+fn reply(outcome: i32, body: Option<Vec<u8>>) -> Reply {
+    match (outcome, body) {
+        (0 | 200, Some(body)) => Reply::Answer(body),
+        (100..=599, _) => Reply::Status(u16::try_from(outcome).unwrap_or(500)),
+        (-1, _) => Reply::Failed(Failure::Timeout),
+        (-2, _) => Reply::Failed(Failure::Tampered),
+        _ => Reply::Failed(Failure::Refused),
+    }
+}
+
+/// `Engine.nativeExchanged(ticket, outcome, body)`: the reply to the engine's exchange `ticket` ([`reply`]), from
+/// Watch's Kotlin side's own threads. Returns whether a lookup still waited for it.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeExchanged(ticket: Long, outcome: Int,
+// body: ByteArray?): Boolean`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeExchanged<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    ticket: jlong,
+    outcome: jint,
+    body: JByteArray<'caller>,
+) -> jboolean {
+    unowned_env
+        .with_env(|env| -> Result<jboolean, Error> {
+            let body = if body.as_raw().is_null() {
+                None
+            } else {
+                Some(env.convert_byte_array(&body)?)
+            };
+            let waiting = exchanges().clone();
+            let Ok(ticket) = u64::try_from(ticket) else {
+                return Ok(false);
+            };
+            Ok(waiting.is_some_and(|w| w.complete(ticket, reply(outcome, body))))
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `Engine.nativeDns(relays, targets, pairs, presets, setting)`: the encrypted resolver for direct apps' names
+/// (W8, part 1) from the data pack's `odoh/relays.tsv`, `odoh/targets.tsv`, `odoh/pairs.tsv` and
+/// `dns-presets/presets.tsv` and the user's setting (`DnsConfig::read`), kept for the engines to come and set on
+/// the one that runs. Returns how many relays, targets, pairs allowed and presets were read.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeDns(relays: String, targets: String,
+// pairs: String, presets: String, setting: String): IntArray`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeDns<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    relays: JString<'caller>,
+    targets: JString<'caller>,
+    pairs: JString<'caller>,
+    presets: JString<'caller>,
+    choice: JString<'caller>,
+) -> JIntArray<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let catalogue = Catalogue::parse(
+                &relays.try_to_string(env)?,
+                &targets.try_to_string(env)?,
+                &pairs.try_to_string(env)?,
+                &presets.try_to_string(env)?,
+            );
+            let config = DnsConfig::read(catalogue, &choice.try_to_string(env)?);
+            let int = |n: usize| jint::try_from(n).unwrap_or(jint::MAX);
+            let counts = [
+                int(config.catalogue.relays.len()),
+                int(config.catalogue.targets.len()),
+                int(config.pairs.len()),
+                int(config.catalogue.presets.len()),
+            ];
+            set_dns(Some(Arc::new(config)));
+            int_array(env, &counts)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `Engine.nativeDnsNetwork(validated, domains)`: what Android says of the network beneath, kept for the engines
+/// to come: whether it is validated (no failure counts while it is not, as behind a captive portal) and its
+/// search domains, by spaces (local names).
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeDnsNetwork(validated: Boolean,
+// domains: String)`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeDnsNetwork<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    validated: jboolean,
+    domains: JString<'caller>,
+) {
+    unowned_env
+        .with_env(|env| -> Result<(), Error> {
+            let domains = domains.try_to_string(env)?;
+            *dns_network() = Some((validated, domains.clone()));
+            if let Some(running) = engine().as_ref() {
+                running.dns_network(validated, &domains);
+            }
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>();
+}
+
+/// `Engine.nativeDnsStatus()`: the encrypted resolver's state ([`Engine::dns_status`]); `way off` when no engine
+/// runs. It names no lookup.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeDnsStatus(): String`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeDnsStatus<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) -> JString<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let status = engine()
+                .as_ref()
+                .map_or_else(|| "way off\n".to_owned(), Engine::dns_status);
+            JString::from_str(env, status)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// The ways of the datasets for Watch's screen ([`catalogue_lines`]).
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeDnsCatalogue(relays: String,
+// targets: String, pairs: String, presets: String): String`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeDnsCatalogue<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    relays: JString<'caller>,
+    targets: JString<'caller>,
+    pairs: JString<'caller>,
+    presets: JString<'caller>,
+) -> JString<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let catalogue = Catalogue::parse(
+                &relays.try_to_string(env)?,
+                &targets.try_to_string(env)?,
+                &pairs.try_to_string(env)?,
+                &presets.try_to_string(env)?,
+            );
+            JString::from_str(env, catalogue_lines(&catalogue))
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// The ways of `catalogue` as Watch's screen reads them, one per line, fields by tabs: `relay ID OPERATOR PERSON
+/// JURISDICTIONS`, `target ID OPERATOR PERSON JURISDICTIONS FILTERS`, `pair RELAY TARGET` for each default pair,
+/// `allowed RELAY TARGET` for each pair the rule allows, `preset ID NAME OPERATOR COUNTRY PROTOCOL LOGGING AUDIT
+/// FILTERING POLICY`.
+fn catalogue_lines(catalogue: &Catalogue) -> String {
+    let clean = |text: &str| text.replace(['\t', '\n'], " ");
+    let mut lines = Vec::new();
+    for r in &catalogue.relays {
+        lines.push(format!(
+            "relay\t{}\t{}\t{}\t{}",
+            r.id,
+            clean(&r.behind.operator),
+            clean(&r.behind.person),
+            r.behind.jurisdictions.join(",")
+        ));
+    }
+    for t in &catalogue.targets {
+        lines.push(format!(
+            "target\t{}\t{}\t{}\t{}\t{}",
+            t.id,
+            clean(&t.behind.operator),
+            clean(&t.behind.person),
+            t.behind.jurisdictions.join(","),
+            u8::from(t.filters)
+        ));
+    }
+    for &(r, t) in &catalogue.pairs {
+        lines.push(format!(
+            "pair\t{}\t{}",
+            catalogue.relays[r].id, catalogue.targets[t].id
+        ));
+    }
+    for r in &catalogue.relays {
+        for t in &catalogue.targets {
+            if !t.filters && r.behind.clash(&t.behind).is_none() {
+                lines.push(format!("allowed\t{}\t{}", r.id, t.id));
+            }
+        }
+    }
+    for p in &catalogue.presets {
+        let protocol = match p.endpoint.protocol {
+            datapavan_net::catalogue::Protocol::Doh => "doh",
+            datapavan_net::catalogue::Protocol::Dot => "dot",
+        };
+        lines.push(format!(
+            "preset\t{}\t{}\t{}\t{}\t{protocol}\t{}\t{}\t{}\t{}",
+            p.id,
+            clean(&p.name),
+            clean(&p.operator),
+            clean(&p.country),
+            clean(&p.logging),
+            clean(&p.audit),
+            clean(&p.filtering),
+            clean(&p.policy)
+        ));
+    }
+    lines.join("\n")
+}
+
 /// `Engine.nativeUncacheAnswers(on)`: whether the answers of Watch's own DNS address reach the apps
 /// with a time to live of 0, so that Android's resolver keeps none of them.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeUncacheAnswers(on: Boolean)`.
@@ -1237,6 +1550,50 @@ mod tests {
 
     /// The dump's flows show the DNS answer's name beside the connection's own where the two differ, and
     /// `-` where they do not, so that a run can read both; the name, which may hold spaces, stays last.
+    #[test]
+    fn a_reply_reads_as_kotlin_gives_it() {
+        assert_eq!(reply(200, Some(vec![1])), Reply::Answer(vec![1]));
+        assert_eq!(reply(0, Some(vec![2])), Reply::Answer(vec![2]));
+        assert_eq!(reply(401, None), Reply::Status(401));
+        assert_eq!(
+            reply(200, None),
+            Reply::Status(200),
+            "no body: not an answer"
+        );
+        assert_eq!(reply(-1, None), Reply::Failed(Failure::Timeout));
+        assert_eq!(reply(-2, None), Reply::Failed(Failure::Tampered));
+        assert_eq!(reply(-3, None), Reply::Failed(Failure::Refused));
+        assert_eq!(reply(-99, Some(vec![])), Reply::Failed(Failure::Refused));
+    }
+
+    #[test]
+    fn the_catalogue_lines_name_the_shipped_ways_and_only_allowed_pairs() {
+        let catalogue = Catalogue::parse(
+            include_str!("../../../data/odoh/relays.tsv"),
+            include_str!("../../../data/odoh/targets.tsv"),
+            include_str!("../../../data/odoh/pairs.tsv"),
+            include_str!("../../../data/dns-presets/presets.tsv"),
+        );
+        let lines = catalogue_lines(&catalogue);
+        assert!(lines.lines().any(|l| l == "pair\tnuma\tcloudflare"));
+        assert!(lines.lines().any(|l| l == "allowed\tnuma\tcloudflare"));
+        assert!(
+            !lines.lines().any(|l| l == "allowed\tnuma\tdnscry-pt-fra01"),
+            "both in Germany"
+        );
+        assert!(
+            !lines
+                .lines()
+                .any(|l| l == "allowed\tcrypto-sx-fastly\tcrypto-sx"),
+            "one person"
+        );
+        assert_eq!(
+            lines.lines().filter(|l| l.starts_with("preset\t")).count(),
+            12
+        );
+        assert!(lines.lines().all(|l| !l.is_empty()));
+    }
+
     #[test]
     fn a_flow_line_shows_both_names_where_they_differ() {
         let flow = Flow {

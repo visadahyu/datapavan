@@ -142,6 +142,18 @@ impl Credentials {
             password: password.to_vec(),
         })
     }
+
+    /// The username, for Watch's Kotlin side when it reaches the tool itself (W8, part 1).
+    #[must_use]
+    pub fn user(&self) -> &[u8] {
+        &self.user
+    }
+
+    /// The password, for the same.
+    #[must_use]
+    pub fn password(&self) -> &[u8] {
+        &self.password
+    }
 }
 
 impl fmt::Debug for Credentials {

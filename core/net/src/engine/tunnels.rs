@@ -2035,11 +2035,17 @@ async fn connect(shared: &Arc<Shared>, t: u32, ready: &mut Ready) -> Option<Arc<
     Some(socket)
 }
 
-/// The address of `name`, and whether it was asked over encrypted DNS: from Android's own resolver on the
-/// network beneath (`Platform::resolve`), which uses the user's Private DNS where it is on (the maintainer's
-/// answer 4, 2026-11-19); where the platform has none, from the network's resolver over plain DNS through a
-/// protected socket. An IPv4 address first, else an IPv6 one; never a loopback, multicast or unspecified one.
+/// The address of `name`, and whether it was asked over encrypted DNS: by Watch's encrypted resolver once it is
+/// set (W8 takes this over); before, from Android's own resolver on the network beneath (`Platform::resolve`),
+/// which uses the user's Private DNS where it is on (the maintainer's answer 4, 2026-11-19); where the platform
+/// has none, from the network's resolver over plain DNS through a protected socket. An IPv4 address first, else an IPv6 one; never a loopback, multicast or unspecified one.
 async fn resolve(shared: &Arc<Shared>, name: &str, port: u16) -> Option<(SocketAddr, bool)> {
+    // Once Watch's encrypted resolver is set, it resolves the name, not Android's resolver (W8, part 1, point 10).
+    if shared.resolver.on() {
+        return super::resolver::endpoint(shared, name)
+            .await
+            .map(|(address, encrypted)| (SocketAddr::new(address, port), encrypted));
+    }
     let usable = |address: &IpAddr| packet::unicast(*address) && !address.is_loopback();
     let platform = Arc::clone(&shared.platform);
     let asked = name.to_owned();

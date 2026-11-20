@@ -5,6 +5,7 @@ use super::budget::Place;
 use super::chain::{Route, connect_through};
 use super::logbook::FlowBytes;
 use super::naming::Begun;
+use super::resolver::{TcpLookups, connect_lookups};
 use super::upstream::{connect_tcp, owner};
 use super::{Counters, Ech, Flow, Loop, NamedBy, Opened, Outcome, Shared, is_unreachable, lock};
 use crate::nat::{Listener, Lookup, Nat};
@@ -559,7 +560,18 @@ async fn upstream(
     Option<Arc<super::Chain>>,
     Option<u32>,
 )> {
+    // DNS over TCP to Watch's address goes the way the app's lookups go, once Watch's encrypted resolver is set:
+    // at port 53 to the engine's own listener of it, at any other port (853, Android's opportunistic DNS over
+    // TLS, among them) refused, so that Android asks on port 53 (W8, part 1, point 9).
+    let lookups = shared.resolver.on() && shared.is_tunnel_dns(destination.ip());
     let direct = async {
+        if lookups {
+            return if destination.port() == 53 {
+                connect_lookups(shared, TcpLookups::Encrypted).await
+            } else {
+                Err(io::ErrorKind::ConnectionRefused.into())
+            };
+        }
         match shared.target(destination) {
             Some(target) => connect_tcp(shared, target).await,
             None => Err(io::ErrorKind::NetworkUnreachable.into()),
@@ -579,6 +591,14 @@ async fn upstream(
         let share = shared.tcp_shares.take(uid).ok()?;
         let (upstream, via) = match shared.route(uid, destination) {
             Route::Direct => (direct.await, None),
+            Route::Tool(chain) if lookups => {
+                let stream = if destination.port() == 53 {
+                    connect_lookups(shared, TcpLookups::Tool(Arc::clone(&chain))).await
+                } else {
+                    Err(io::ErrorKind::ConnectionRefused.into())
+                };
+                (stream, Some(chain))
+            }
             Route::Tool(chain) => (
                 connect_through(shared, &chain, destination).await,
                 Some(chain),
