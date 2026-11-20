@@ -12,9 +12,12 @@
 # for Watch with the virtual scene's wall showing the second configuration's QR code, which Watch reads in the
 # decoder's isolated process; the scene's picture is small and seen at an angle, so either the confirmation shows,
 # and is cancelled, or Watch says it found no code; the photo is deleted either way and leaves no copy in
-# MediaStore. Where the emulator has no camera, the cancel path alone is checked, and the run says so. A
-# configuration removed with its apps waiting holds the app: nothing of it leaves directly. Last, the measure ADR 0035 asks of setUnlockedDeviceRequired: a key that needs an unlocked phone does
-# not open while the phone is locked, Watch's own key does, and the time each takes.
+# MediaStore. Where the emulator has no camera, the cancel path alone is checked, and the run says so. ADR 0047's
+# profile, turned on through the debug builds' dump, puts the configurations under key B: Watch started again on a
+# locked phone holds the app and asks for the unlock in one notification, and the tunnel comes back at the unlock. A
+# configuration removed with its apps waiting holds the app: nothing of it leaves directly. Last, the measure ADR
+# 0035 asks of setUnlockedDeviceRequired: a key that needs an unlocked phone does not open while the phone is
+# locked, Watch's own key does, and the time each takes.
 #
 # Skipped, with a line that says so, only where no lab peer can start (no Docker, Docker not answering, or no
 # wireguard module), as verify-wireguard.sh is; CI's runner joins in W7's part 3.
@@ -390,10 +393,17 @@ grep -qx "tcp 10.77.0.1:80 pong" <<<"$(workload_log)" || fail "installed again, 
 [ "$(flows_of "$WORKLOAD_UID" direct)" = 0 ] || fail "installed again, the app has flows that went directly"
 echo "ok: the workload app installed again had a new UID ($WORKLOAD_UID), which Watch routed at once, and went through its configuration to the peer"
 
-# 4. No file of Watch's holds a key or a configuration's text in plain form. The search must first find what the
-# store keeps in plain text (review m4 of the fix round): a search that cannot read Watch's files finds nothing either.
-control=$(adb shell run-as "$PKG" sh -c "'grep -rlF -- \"order\" no_backup/tunnels 2>/dev/null'" | tr -d '\r' || true)
-grep -q "no_backup/tunnels/state" <<<"$control" || fail "the search for keys cannot see the store's own state file: it would prove nothing"
+# 4. No file of Watch's holds a key or a configuration's text in plain form, nor, in the store, an app it routes: the
+# state is wrapped under key A. The search must first find a file of its own among Watch's (review m4 of the fix
+# round): a search that cannot read Watch's files finds nothing either.
+adb shell run-as "$PKG" sh -c "'mkdir -p no_backup/tunnels-control && echo datapavan-search-control > no_backup/tunnels-control/file'"
+control=$(adb shell run-as "$PKG" sh -c "'grep -rlF -- datapavan-search-control . 2>/dev/null'" | tr -d '\r' || true)
+adb shell run-as "$PKG" rm -r no_backup/tunnels-control
+grep -q "no_backup/tunnels-control/file" <<<"$control" || fail "the search for keys cannot see a file it put among Watch's: it would prove nothing"
+for plain in "$WORKLOAD" "route " "order "; do
+    found=$(adb shell run-as "$PKG" sh -c "'grep -rlF -- \"$plain\" no_backup/tunnels 2>/dev/null'" | tr -d '\r' || true)
+    [ -z "$found" ] || fail "the store holds what decides a route in plain form ($plain): $found"
+done
 for secret in "$WGLAB_PLAIN" "$WGLAB_SECOND" "PrivateKey" "Endpoint = $HOST"; do
     found=$(adb shell run-as "$PKG" sh -c "'grep -rlF -- \"$secret\" . 2>/dev/null'" | tr -d '\r' || true)
     [ -z "$found" ] || fail "Watch's files hold a key or a configuration in plain form: $found"
@@ -436,6 +446,58 @@ fi
 within 10 no_capture || fail "the camera's photo was not deleted: $(capture_left)"
 [ "$(images)" = "$before" ] || fail "the camera left a copy in MediaStore ($before images before, $(images) after)"
 echo "ok: the photo was deleted, and MediaStore holds no copy ($before images before and after)"
+
+# 5b. ADR 0047's profile, the maintainer's decision of 2026-11-20 (ADR 0035): the configurations go under key B, which
+# opens only on an unlocked phone, and what decides the routes stays under key A. Watch started again on a locked
+# phone holds the routed app, which sends nothing directly, and one notification, naming no configuration, asks for
+# the unlock; at the unlock the tunnel comes back and the notification goes. W9 wires the profile's switch; the
+# debug builds' dump turns it on and off here.
+[ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 33 ] || adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
+moved=$(sed -n 's/^ *tunnel-profile on moved //p' <<<"$(dump tunnel-profile on)")
+[ "$moved" = "2 unmoved 0" ] || fail "the profile did not move both configurations under key B: ${moved:-nothing said}"
+keys=$(grep -E '^ *tunnel-key-of ' <<<"$(dump tunnel-store)" | sed 's/^ *//' | tr '\n' ' ')
+[ "$keys" = "tunnel-key-of 1 b tunnel-key-of 2 b " ] || fail "the configurations are not under key B: $keys"
+PIN=4927
+adb shell locksettings set-pin "$PIN" >/dev/null
+adb shell input keyevent KEYCODE_SLEEP
+sleep 3
+pid=$(adb shell pidof "$PKG:watch" | tr -d '\r')
+[ -n "$pid" ] || fail "no process of Watch's"
+adb shell run-as "$PKG" kill -9 "$pid" || fail "Watch's process could not be killed"
+within 20 vpn_down || fail "Watch's VPN stayed up with its process killed"
+adb shell am start -S -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
+within 20 vpn_up || fail "Watch's tunnel did not come up on the locked phone"
+within 10 store_has 1 "name locked unset routes 1$" ||
+    fail "on the locked phone the first configuration is not held unset with its app: $(store_line 1)"
+within 10 state_field 1 8 0 || fail "the engine does not hold the app for the configuration it cannot open: $(state_of 1)"
+notice() { sed -n 's/^ *tunnel-profile on notice //p' <<<"$(dump tunnel-store)"; }
+notice_is() { [ "$(notice)" = "$1" ]; }
+within 10 notice_is shown || fail "no notification asks for the unlock: $(notice)"
+record=$(adb shell dumpsys notification --noredact | tr -d '\r' | grep -A30 "NotificationRecord.*pkg=$PKG.*id=7201" || true)
+grep -qF "Unlock your phone to connect again" <<<"$record" || fail "the notification does not say to unlock"
+for word in wg-import "WireGuard" "$HOST" 10.77.0; do
+    ! grep -qF -- "$word" <<<"$record" || fail "the notification names a configuration or a server ($word)"
+done
+SENTINEL_MARK=$(wc -l <"$WORK/sentinel.log")
+direct_before=$(flows_of "$WORKLOAD_UID" direct)
+workload --es tcp "$HOST:$((PORT + 3))" --es udp "$HOST:$((PORT + 3))"
+sleep 3
+[ -z "$(sentinel_since)" ] || fail "on the locked phone the app whose configuration waits reached this computer directly"
+[ "$(flows_of "$WORKLOAD_UID" direct)" = "$direct_before" ] || fail "on the locked phone the waiting app has flows that went directly"
+grep -qx done <<<"$(workload_log)" || fail "the workload app did not run on the locked phone: the step above proves nothing"
+adb shell input keyevent KEYCODE_WAKEUP
+adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
+sleep 1
+adb shell input text "$PIN"
+adb shell input keyevent KEYCODE_ENTER
+within 20 store_has 1 "name known set routes 1$" || fail "after the unlock the first configuration was not set: $(store_line 1)"
+within 10 notice_is none || fail "the notification stayed after the unlock: $(notice)"
+workload --es tcp 10.77.0.1:80
+grep -qx "tcp 10.77.0.1:80 pong" <<<"$(workload_log)" || fail "after the unlock the app's TCP did not reach the peer"
+moved=$(sed -n 's/^ *tunnel-profile off moved //p' <<<"$(dump tunnel-profile off)")
+[ "$moved" = "2 unmoved 0" ] || fail "the profile turned off did not move both configurations back under key A: ${moved:-nothing said}"
+adb shell locksettings clear --old "$PIN" >/dev/null && PIN=""
+echo "ok: under key B, Watch started again on the locked phone held the app, which sent nothing directly, and asked for the unlock in one notification naming no configuration; at the unlock the tunnel came back and the notification went"
 
 # 6. A configuration removed with its apps waiting holds the app: nothing of it leaves directly.
 watch_screen
