@@ -108,6 +108,7 @@ fn engine(tunnels: Vec<Configured>, routes: &[(u32, u32)]) -> io::Result<(Engine
         routes: routes.iter().copied().collect::<HashMap<_, _>>(),
         log_destinations: false,
         default: None,
+        known: None,
     });
     Ok((engine, UnixDatagram::from_std(app_end)?))
 }

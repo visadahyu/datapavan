@@ -45,7 +45,7 @@ use crate::tun::Tun;
 use crate::wireguard::config::{Config, Endpoint};
 use crate::wireguard::core::{Core, GotaTun, Received, Sent, Timers};
 use crate::wireguard::swap::{self, Back};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::os::fd::AsFd;
@@ -129,6 +129,51 @@ pub struct TunnelSetting {
     /// another configuration's provider, which the user did not choose for them (W7, part 2, fix round, security
     /// review m4). None: the first set is the default, as for the debug builds' hook.
     pub default: Option<u32>,
+    /// Every installed app's UID when Watch last handed its routes over, while Watch routes any app (a tunnel, or
+    /// the tool): a flow of a UID outside it, an app installed since (one installed again has a new UID), waits for
+    /// Watch to say where it goes ([`super::Platform::route_of_app`]), and goes nowhere until then, never on a
+    /// default way (the maintainer, 2026-11-20). None: Watch routes no app, or names none, and no flow asks.
+    pub known: Option<Arc<HashSet<u32>>>,
+}
+
+/// Where Watch says an app it did not name in its last hand-over goes ([`super::Platform::route_of_app`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AppRoute {
+    /// Directly: the store gives it no route.
+    Direct,
+    /// Through the user's tool.
+    Tool,
+    /// Through the tunnel of this number.
+    Tunnel(u32),
+}
+
+/// How long a flow of an app Watch did not name waits for Watch's answer before it is refused, never sent
+/// directly: Watch reads the app's packages from Android and the route its store gives them, which opens its
+/// state under a Keystore key in well under a second, also on a slow phone; a held SYN is sent again by the
+/// app's kernel after a second, and a first datagram waits, so three seconds cost an app installed a moment ago
+/// one or two retries at most.
+pub const ASK_BOUND: Duration = Duration::from_secs(3);
+
+/// How long a refusal for want of an answer stands before a new flow of the app asks again.
+const ASK_AGAIN: Duration = Duration::from_secs(10);
+
+/// An app as Watch's last hand-over knows it ([`Tunnels::newcomer`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Newcomer {
+    /// Named, or Watch names none: its route is the setting's.
+    Named,
+    /// Not named, and Watch has not answered, or not in time: it goes nowhere.
+    Unanswered,
+    /// Not named, and Watch answered.
+    Answered(AppRoute),
+}
+
+/// What Watch answered of an app it did not name, kept by UID until its next hand-over names it.
+#[derive(Clone, Copy, Debug)]
+enum Answer {
+    Route(AppRoute),
+    /// No answer within [`ASK_BOUND`], or none Watch could give: refused since.
+    Refused(Instant),
 }
 
 /// A tunnel's state, for the screens and the dump: no key, no address, no endpoint.
@@ -369,6 +414,9 @@ struct Table {
     order: Vec<u32>,
     /// The user's default tunnel, set or not ([`TunnelSetting::default`]).
     default: Option<u32>,
+    /// Every app Watch named at its last hand-over ([`TunnelSetting::known`]), and its answers for the others.
+    known: Option<Arc<HashSet<u32>>>,
+    answers: HashMap<u32, Answer>,
     tunnels: HashMap<u32, Tunnel>,
     routes: HashMap<u32, u32>,
     log_destinations: bool,
@@ -393,6 +441,8 @@ pub(super) struct Tunnels {
     any: AtomicBool,
     /// Whether any tunnelled flow or echo is open.
     carrying: AtomicBool,
+    /// Whether Watch named the apps it knows ([`TunnelSetting::known`]): a flow of another must wait for its app.
+    asks: AtomicBool,
     /// Woken when the setting changed, for the engine's loop to start what must start.
     pub(super) changed: Notify,
 }
@@ -525,6 +575,12 @@ impl Tunnels {
             table.routes = routes;
             table.log_destinations = setting.log_destinations;
             table.default = setting.default.filter(|&id| id != 0);
+            table.known.clone_from(&setting.known);
+            if let Some(known) = &setting.known {
+                // An app now named goes by the setting's routes, no longer by an answer.
+                table.answers.retain(|uid, _| !known.contains(uid));
+            }
+            self.asks.store(setting.known.is_some(), Ordering::Release);
             self.any.store(!table.routes.is_empty(), Ordering::Release);
             // Flows of a tunnel gone or set anew end, whose source may no longer be the configuration's.
             table.end_where(|(_, flow, protocol)| {
@@ -556,7 +612,84 @@ impl Tunnels {
             routes: table.routes.clone(),
             log_destinations: table.log_destinations,
             default: table.default,
+            known: table.known.clone(),
         }
+    }
+
+    /// Whether a new flow must wait for its app to be named before its route: Watch named the apps it knows, so
+    /// that one it did not name is asked of it.
+    pub(super) fn asks(&self) -> bool {
+        self.asks.load(Ordering::Acquire)
+    }
+
+    /// Whether Watch named the app `uid`, and if not, what it answered.
+    pub(super) fn newcomer(&self, uid: u32) -> Newcomer {
+        let table = lock(&self.table);
+        if table
+            .known
+            .as_ref()
+            .is_none_or(|known| known.contains(&uid))
+        {
+            return Newcomer::Named;
+        }
+        match table.answers.get(&uid) {
+            Some(Answer::Route(route)) => Newcomer::Answered(*route),
+            Some(Answer::Refused(_)) | None => Newcomer::Unanswered,
+        }
+    }
+
+    /// Whether a flow of the app `uid` must ask Watch where it goes: not named, and no answer yet, or a refusal
+    /// older than [`ASK_AGAIN`].
+    pub(super) fn must_ask(&self, uid: u32, now: Instant) -> bool {
+        let table = lock(&self.table);
+        if table
+            .known
+            .as_ref()
+            .is_none_or(|known| known.contains(&uid))
+        {
+            return false;
+        }
+        match table.answers.get(&uid) {
+            Some(Answer::Route(_)) => false,
+            Some(Answer::Refused(at)) => now.saturating_duration_since(*at) >= ASK_AGAIN,
+            None => true,
+        }
+    }
+
+    /// Notes Watch's answer for the app `uid`, or that none came: a late answer replaces the refusal, and a
+    /// refusal never replaces an answer.
+    pub(super) fn answered(&self, uid: u32, answer: Option<AppRoute>, now: Instant) {
+        let mut table = lock(&self.table);
+        match answer {
+            Some(route) => {
+                table.answers.insert(uid, Answer::Route(route));
+            }
+            None => {
+                if !matches!(table.answers.get(&uid), Some(Answer::Route(_))) {
+                    table.answers.insert(uid, Answer::Refused(now));
+                }
+            }
+        }
+    }
+
+    /// Watch's answers kept, by UID, `None` for a refusal: for the debug builds' dump.
+    pub(super) fn answers(&self) -> Vec<(u32, Option<AppRoute>)> {
+        let table = lock(&self.table);
+        let mut answers: Vec<_> = table
+            .answers
+            .iter()
+            .map(|(uid, answer)| {
+                (
+                    *uid,
+                    match answer {
+                        Answer::Route(route) => Some(*route),
+                        Answer::Refused(_) => None,
+                    },
+                )
+            })
+            .collect();
+        answers.sort_by_key(|(uid, _)| *uid);
+        answers
     }
 
     /// Whether any app is sent through any tunnel.
@@ -2235,6 +2368,7 @@ mod tests {
             routes: routes.iter().copied().collect(),
             log_destinations: log,
             default: None,
+            known: None,
         }
     }
 
@@ -2399,6 +2533,168 @@ mod tests {
             matches!(shared.route(None, web), Route::Tunnel(2)),
             "with no default named, the first set"
         );
+    }
+
+    /// An app Watch did not name when it last handed its routes over, one installed again with a new UID, goes
+    /// where Watch answers, through a tunnel, the tool or directly, and nowhere before that, never on a default
+    /// way; a refusal for want of an answer stands a while, then a new flow asks again; Watch's next hand-over that
+    /// names the app ends its answer (the maintainer, 2026-11-20).
+    #[test]
+    fn an_app_watch_did_not_name_goes_where_watch_answers_and_nowhere_before() {
+        use super::super::chain::Route;
+        let shared = shared();
+        let web = SocketAddr::from(([93, 184, 216, 34], 443));
+        let mut named = setting(
+            vec![configured(1, "0.0.0.0/0", false)],
+            &[(10_300, 1)],
+            false,
+        );
+        named.known = Some(Arc::new([10_300, 10_500].into_iter().collect()));
+        shared.tunnels.set(&named);
+        assert!(shared.tunnels.asks());
+        assert!(
+            matches!(shared.route(Some(10_500), web), Route::Direct),
+            "an app named and not routed"
+        );
+        assert!(
+            matches!(shared.route(Some(10_400), web), Route::Refused),
+            "not named, not answered: nowhere"
+        );
+        let now = Instant::now();
+        assert!(shared.tunnels.must_ask(10_400, now));
+        assert!(
+            !shared.tunnels.must_ask(10_300, now),
+            "a named app is never asked"
+        );
+        shared
+            .tunnels
+            .answered(10_400, Some(AppRoute::Tunnel(1)), now);
+        assert!(matches!(shared.route(Some(10_400), web), Route::Tunnel(1)));
+        assert!(!shared.tunnels.must_ask(10_400, now), "kept by UID");
+        shared.tunnels.answered(10_400, None, now);
+        assert!(
+            matches!(shared.route(Some(10_400), web), Route::Tunnel(1)),
+            "a refusal never replaces an answer"
+        );
+        shared.tunnels.answered(10_401, Some(AppRoute::Direct), now);
+        assert!(matches!(shared.route(Some(10_401), web), Route::Direct));
+        shared.tunnels.answered(10_402, Some(AppRoute::Tool), now);
+        assert!(
+            matches!(shared.route(Some(10_402), web), Route::Refused),
+            "the tool, with no chain set"
+        );
+        *lock(&shared.chain) = Some(Arc::new(super::super::chain::Chain {
+            proxy: SocketAddr::from(([127, 0, 0, 1], 10_808)),
+            credentials: None,
+            tool: 10_900,
+            apps: Some(HashSet::new()),
+            udp: false,
+            log_destinations: false,
+        }));
+        assert!(
+            matches!(shared.route(Some(10_402), web), Route::Tool(_)),
+            "the chain covers it once Watch says so"
+        );
+        shared.tunnels.answered(10_403, None, now);
+        assert!(matches!(shared.route(Some(10_403), web), Route::Refused));
+        assert!(
+            !shared
+                .tunnels
+                .must_ask(10_403, now + Duration::from_secs(1)),
+            "a refusal stands a while"
+        );
+        assert!(
+            shared.tunnels.must_ask(10_403, now + ASK_AGAIN),
+            "then a new flow asks again"
+        );
+        named.known = Some(Arc::new([10_300, 10_400, 10_500].into_iter().collect()));
+        named.routes.insert(10_400, 1);
+        shared.tunnels.set(&named);
+        assert!(
+            !shared
+                .tunnels
+                .answers()
+                .iter()
+                .any(|(uid, _)| *uid == 10_400),
+            "named now: the setting decides"
+        );
+        assert!(matches!(shared.route(Some(10_400), web), Route::Tunnel(1)));
+        named.known = None;
+        shared.tunnels.set(&named);
+        assert!(!shared.tunnels.asks());
+        assert!(
+            matches!(shared.route(Some(10_700), web), Route::Direct),
+            "Watch names none: no app is asked"
+        );
+    }
+
+    /// Watch is asked on a thread of its own at the flow's owner lookup; its answer decides the flow's route, and
+    /// one that does not come within [`ASK_BOUND`] refuses the flow, never sending it directly; a late answer
+    /// serves the next flow.
+    #[test]
+    fn watch_is_asked_off_the_loop_and_an_answer_too_late_refuses_the_flow() {
+        use super::super::chain::Route;
+        use std::sync::mpsc;
+        struct Asked {
+            answer: Mutex<mpsc::Receiver<Option<AppRoute>>>,
+        }
+        impl super::super::Platform for Asked {
+            fn owner(&self, _: u8, _: SocketAddr, _: SocketAddr) -> Option<u32> {
+                Some(10_400)
+            }
+            fn protect(&self, _: std::os::fd::RawFd) -> bool {
+                true
+            }
+            fn log(&self, _: &[u8]) {}
+            fn route_of_app(&self, uid: u32) -> Option<AppRoute> {
+                assert_eq!(uid, 10_400);
+                lock(&self.answer).recv().ok().flatten()
+            }
+        }
+        // The runtime first: a failing assertion drops the sender before the runtime, which ends the blocked
+        // question rather than wait for it.
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap_or_else(|_| unreachable!());
+        let (tell, answer) = mpsc::channel();
+        let shared = Arc::new(super::super::tests::shared_with(Arc::new(Asked {
+            answer: Mutex::new(answer),
+        })));
+        let mut named = setting(
+            vec![configured(1, "0.0.0.0/0", false)],
+            &[(10_300, 1)],
+            false,
+        );
+        named.known = Some(Arc::new([10_300].into_iter().collect()));
+        shared.tunnels.set(&named);
+        let web = SocketAddr::from(([93, 184, 216, 34], 443));
+        let app = SocketAddr::from((shared.addresses.tun4, 40_000));
+        let started = Instant::now();
+        let uid = runtime.block_on(super::super::upstream::owner(&shared, TCP, app, web));
+        assert_eq!(uid, Some(10_400));
+        assert!(
+            started.elapsed() >= ASK_BOUND,
+            "it waited for the answer, up to the bound"
+        );
+        assert!(
+            matches!(shared.route(uid, web), Route::Refused),
+            "no answer in time: refused, never direct"
+        );
+        // The answer comes late: the next flow goes by it.
+        tell.send(Some(AppRoute::Tunnel(1)))
+            .unwrap_or_else(|_| unreachable!());
+        // The engine's runtime runs on: the task that waits for the answer notes it.
+        runtime.block_on(async {
+            let answered = Instant::now();
+            while matches!(shared.route(uid, web), Route::Refused)
+                && answered.elapsed() < Duration::from_secs(5)
+            {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        });
+        assert!(matches!(shared.route(uid, web), Route::Tunnel(1)));
+        drop(runtime);
     }
 
     /// "Local network directly", per configuration and off by default: a tunnelled app's private,

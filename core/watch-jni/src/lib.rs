@@ -18,8 +18,8 @@ use datapavan_net::socks5::Credentials;
 use datapavan_net::trackers::NetworkSignatures;
 use datapavan_net::wireguard::Config as WgConfig;
 use datapavan_net::{
-    Addresses, Chain, ChainSetting, Config, DnsUse, Ech, Engine, Flow, Handover, Limits, NamedBy,
-    NetworkKind, Outcome, Platform, TunnelSetting,
+    Addresses, AppRoute, Chain, ChainSetting, Config, DnsUse, Ech, Engine, Flow, Handover, Limits,
+    NamedBy, NetworkKind, Outcome, Platform, TunnelSetting,
 };
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
 use jni::objects::{JByteArray, JClass, JIntArray, JLongArray, JObject, JString};
@@ -115,6 +115,31 @@ fn state_line(state: &TunnelState) -> String {
         u8::from(state.configured),
         state.resolutions,
     )
+}
+
+/// Reads `routeOfApp`'s answer: `direct`, `tool` or `tunnel N`; anything else, an empty answer among them, is
+/// none, and the flow that asked is refused.
+fn app_route(answer: &str) -> Option<AppRoute> {
+    let mut words = answer.split_whitespace();
+    let route = match (words.next()?, words.next()) {
+        ("direct", None) => AppRoute::Direct,
+        ("tool", None) => AppRoute::Tool,
+        ("tunnel", Some(id)) => AppRoute::Tunnel(id.parse().ok().filter(|&id: &u32| id != 0)?),
+        _ => return None,
+    };
+    words.next().is_none().then_some(route)
+}
+
+/// An answer the engine keeps as `nativeAppAnswers` writes it: the UID, then `direct`, `tool`, `tunnel:N` or
+/// `refused`.
+fn answer_line((uid, route): &(u32, Option<AppRoute>)) -> String {
+    let route = match route {
+        Some(AppRoute::Direct) => "direct".to_owned(),
+        Some(AppRoute::Tool) => "tool".to_owned(),
+        Some(AppRoute::Tunnel(id)) => format!("tunnel:{id}"),
+        None => "refused".to_owned(),
+    };
+    format!("{uid} {route}")
 }
 
 /// What `nativeTunnelParse` says of a configuration: `refused WHY`, or `ok` and then its description, a line
@@ -287,6 +312,32 @@ impl Platform for Service {
     /// Watch's Kotlin side tells the apps' states (ADR 0046, decision 1).
     fn tells_states(&self) -> bool {
         true
+    }
+
+    /// `WatchVpnService.routeOfApp(uid)`: where an app Watch did not name at its last hand-over goes, from its
+    /// packages and Watch's store ([`app_route`]); none where Kotlin cannot say.
+    fn route_of_app(&self, uid: u32) -> Option<AppRoute> {
+        let uid = i32::try_from(uid).ok()?;
+        let answer = self
+            .vm
+            .attach_current_thread(|env| -> Result<Option<String>, Error> {
+                let answer = env
+                    .call_method(
+                        &self.service,
+                        jni_str!("routeOfApp"),
+                        jni_sig!("(I)Ljava/lang/String;"),
+                        &[JValue::Int(uid)],
+                    )?
+                    .l()?;
+                if answer.as_raw().is_null() {
+                    return Ok(None);
+                }
+                let answer = JString::cast_local(env, answer)?;
+                Ok(Some(answer.try_to_string(env)?))
+            })
+            .ok()
+            .flatten()?;
+        app_route(&answer)
     }
 
     /// `WatchVpnService.resolveEndpoint(name)`: a `WireGuard` endpoint's name asked of Android's own resolver
@@ -751,6 +802,53 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelRou
             Ok(())
         })
         .resolve::<ThrowRuntimeExAndDefault>();
+}
+
+/// `Engine.nativeKnownApps(uids)`: every installed app's UID, while Watch routes any app, or null when it routes
+/// none (`TunnelSetting::known`): a flow of a UID outside it waits for Watch to say where it goes, and goes
+/// nowhere until then. Kept for the engines to come, as the routes are.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeKnownApps(uids: IntArray?)`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeKnownApps<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    uids: JIntArray<'caller>,
+) {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let known = if uids.as_raw().is_null() {
+                None
+            } else {
+                let mut values = vec![0; uids.len(env)?];
+                uids.get_region(env, 0, &mut values)?;
+                Some(Arc::new(
+                    values
+                        .into_iter()
+                        .filter_map(|uid| u32::try_from(uid).ok())
+                        .collect::<std::collections::HashSet<u32>>(),
+                ))
+            };
+            set_tunnels(|tunnels| tunnels.known = known);
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>();
+}
+
+/// `Engine.nativeAppAnswers()`: the engine's answers for the apps Watch did not name, one per line as
+/// [`answer_line`] writes it; empty when no engine runs. For the debug builds' dump.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeAppAnswers(): String`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeAppAnswers<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) -> JString<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let answers = engine().as_ref().map_or_else(Vec::new, Engine::app_answers);
+            let lines: Vec<String> = answers.iter().map(answer_line).collect();
+            JString::from_str(env, lines.join("\n"))
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
 }
 
 /// `Engine.nativeTunnelStates()`: each tunnel's state, one per line as [`state_line`] writes it, in the order
@@ -1348,6 +1446,30 @@ mod tests {
         assert!(states.is_empty(), "removed from the engine that runs");
         stop_running();
         assert!(setting().is_none(), "nothing of the run kept for the next");
+    }
+
+    /// Watch's answer for an app it did not name reads as a route, and anything else as none, which refuses.
+    #[test]
+    fn an_answer_for_an_unnamed_app_reads_strictly() {
+        assert_eq!(app_route("direct"), Some(AppRoute::Direct));
+        assert_eq!(app_route("tool"), Some(AppRoute::Tool));
+        assert_eq!(app_route("tunnel 3"), Some(AppRoute::Tunnel(3)));
+        for refused in [
+            "",
+            "tunnel",
+            "tunnel 0",
+            "tunnel x",
+            "tunnel 3 4",
+            "directly",
+            "direct now",
+        ] {
+            assert_eq!(app_route(refused), None, "{refused:?}");
+        }
+        assert_eq!(
+            answer_line(&(10_400, Some(AppRoute::Tunnel(1)))),
+            "10400 tunnel:1"
+        );
+        assert_eq!(answer_line(&(10_401, None)), "10401 refused");
     }
 
     /// W7, part 2: a new order puts the default first and keeps the rest as they were; a configuration past the

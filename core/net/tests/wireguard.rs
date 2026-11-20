@@ -220,6 +220,7 @@ fn one(
         routes: uids.iter().map(|&uid| (uid, 1)).collect::<HashMap<_, _>>(),
         log_destinations: true,
         default: None,
+        known: None,
     })
 }
 
@@ -699,6 +700,7 @@ async fn two_tunnels_carry_two_apps_and_the_first_takes_flows_of_no_app() -> Out
         routes: HashMap::from([(FIRST, 1), (SECOND, 2)]),
         log_destinations: true,
         default: None,
+        known: None,
     };
     let (engine, tunnel) = engine(&setting)?;
     let web = SocketAddr::from((WEB4, 443));
@@ -1188,6 +1190,7 @@ async fn an_endpoints_name_is_resolved_by_the_platform_and_the_state_says_how() 
             routes: HashMap::from([(FIRST, 1)]),
             log_destinations: false,
             default: None,
+            known: None,
         };
         // A multicast and a loopback address first, as a hostile resolver might answer: never taken.
         let platform = Switchable::new(
@@ -1238,6 +1241,7 @@ async fn a_name_that_does_not_resolve_is_not_asked_again_per_packet() -> Outcome
         routes: HashMap::from([(FIRST, 1)]),
         log_destinations: false,
         default: None,
+        known: None,
     };
     // Android's resolver refuses the name, as a censor's resolver answers a blocked provider's.
     let platform = Switchable::new(FIRST, Some(("other.example".into(), Vec::new(), false)));

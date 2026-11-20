@@ -92,6 +92,22 @@ impl Shared {
     /// tunnel, a flow whose app Android cannot name goes through the default one, never directly (ADR 0035,
     /// question 7 as settled).
     pub(super) fn app_route(&self, uid: Option<u32>) -> Route {
+        // An app Watch did not name when it last handed its routes over, one installed since (with a new UID when
+        // installed again), goes where Watch answered, asked at its first flow, and nowhere until then, never on a
+        // default way: directly it could be an app the user sends through a tunnel or the tool (the maintainer,
+        // 2026-11-20). This holds for the chain as for the tunnels.
+        if let Some(uid) = uid {
+            use super::tunnels::{AppRoute, Newcomer};
+            match self.tunnels.newcomer(uid) {
+                Newcomer::Named => {}
+                Newcomer::Unanswered => return Route::Refused,
+                Newcomer::Answered(AppRoute::Tunnel(t)) => return Route::Tunnel(t),
+                Newcomer::Answered(AppRoute::Direct) => return Route::Direct,
+                Newcomer::Answered(AppRoute::Tool) => {
+                    return self.chain().map_or(Route::Refused, Route::Tool);
+                }
+            }
+        }
         if let Some(t) = self.tunnels.route_of(uid) {
             return Route::Tunnel(t);
         }

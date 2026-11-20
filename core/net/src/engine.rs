@@ -91,7 +91,7 @@ use naming::Begun;
 use tcp::{Listening, Pending, listen};
 #[cfg(test)]
 use tcp::{Upstream, accept};
-pub use tunnels::{Configured, MAX_TUNNELS, TunnelSetting, TunnelState};
+pub use tunnels::{ASK_BOUND, AppRoute, Configured, MAX_TUNNELS, TunnelSetting, TunnelState};
 use udp::UdpFlows;
 
 /// The tunnel's addresses (ADR 0041, decision 3): its own address, a /32 or a /128 (ADR 0034: a wider
@@ -372,6 +372,15 @@ pub trait Platform: Send + Sync + 'static {
     /// (the maintainer's answer 4, 2026-11-19); called off the event loop. `None` where the platform has
     /// no resolver to offer: the engine then asks the network's resolver itself, over plain DNS.
     fn resolve(&self, _name: &str) -> Option<Resolution> {
+        None
+    }
+
+    /// Where the app `uid` goes, which Watch did not name when it last handed its routes over
+    /// ([`TunnelSetting::known`]): an app installed since, one installed again with a new UID among them. Watch
+    /// reads the UID's packages from Android and answers the route its store gives them. Called off the event
+    /// loop, on a thread of its own, at a held SYN or first datagram, which waits for it at most [`ASK_BOUND`];
+    /// `None` where it cannot say, and the flow is refused, never sent directly (the maintainer, 2026-11-20).
+    fn route_of_app(&self, _uid: u32) -> Option<AppRoute> {
         None
     }
 }
@@ -1220,6 +1229,13 @@ impl Engine {
     #[must_use]
     pub fn answers_uncached(&self) -> bool {
         self.shared.uncached_answers.load(Ordering::Relaxed)
+    }
+
+    /// Watch's answers for the apps it did not name, by UID, `None` for a flow refused for want of one
+    /// ([`Platform::route_of_app`]).
+    #[must_use]
+    pub fn app_answers(&self) -> Vec<(u32, Option<AppRoute>)> {
+        self.shared.tunnels.answers()
     }
 
     /// Each tunnel's state, in the order set: no key, no address, no endpoint.

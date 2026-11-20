@@ -2,12 +2,14 @@
 //! owner lookup and the protection that keep them out of the tunnel. W6 and W7 extend this, to go
 //! through a tool's proxy or a `WireGuard` upstream.
 
+use super::tunnels::ASK_BOUND;
 use super::{Shared, lock};
 use crate::packet;
 use std::io;
 use std::net::SocketAddr;
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd};
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::net::{TcpSocket, TcpStream, UdpSocket};
 
 impl Shared {
@@ -21,7 +23,8 @@ impl Shared {
     }
 }
 
-/// Asks Android whose a flow is, off the event loop: the answer comes over Binder.
+/// Asks Android whose a flow is, off the event loop: the answer comes over Binder. An app Watch did not name
+/// when it last handed its routes over is asked of Watch too, before the flow's route is decided ([`where_to`]).
 pub(super) async fn owner(
     shared: &Arc<Shared>,
     protocol: u8,
@@ -29,10 +32,36 @@ pub(super) async fn owner(
     remote: SocketAddr,
 ) -> Option<u32> {
     let platform = Arc::clone(&shared.platform);
-    tokio::task::spawn_blocking(move || platform.owner(protocol, local, remote))
+    let uid = tokio::task::spawn_blocking(move || platform.owner(protocol, local, remote))
         .await
         .ok()
-        .flatten()
+        .flatten();
+    if let Some(uid) = uid {
+        where_to(shared, uid).await;
+    }
+    uid
+}
+
+/// Asks Watch where the app `uid` goes, when Watch did not name it at its last hand-over and has not answered
+/// yet (the maintainer, 2026-11-20): on a thread of its own, never the event loop's, while the flow that asked
+/// waits, at most [`ASK_BOUND`]; past it the flow is refused ([`Shared::app_route`]), and an answer that comes
+/// later serves the app's next flows. The answer is kept by UID until Watch's next hand-over names the app.
+async fn where_to(shared: &Arc<Shared>, uid: u32) {
+    if !shared.tunnels.must_ask(uid, Instant::now()) {
+        return;
+    }
+    let platform = Arc::clone(&shared.platform);
+    let keeper = Arc::clone(shared);
+    let asked = tokio::spawn(async move {
+        let answer = tokio::task::spawn_blocking(move || platform.route_of_app(uid))
+            .await
+            .ok()
+            .flatten();
+        keeper.tunnels.answered(uid, answer, Instant::now());
+    });
+    if tokio::time::timeout(ASK_BOUND, asked).await.is_err() {
+        shared.tunnels.answered(uid, None, Instant::now());
+    }
 }
 
 /// Protects a socket of the engine's own, off the event loop: the answer comes over Binder. The

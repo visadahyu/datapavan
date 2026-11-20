@@ -566,10 +566,15 @@ async fn upstream(
         }
     };
     let crowded = shared.tcp_waiting.load(Ordering::Acquire) > shared.limits.tcp_share;
-    if shared.chain().is_some() || shared.tunnels.any() || is_stand_in(destination.ip()) || crowded
+    if shared.chain().is_some()
+        || shared.tunnels.any()
+        || shared.tunnels.asks()
+        || is_stand_in(destination.ip())
+        || crowded
     {
         // The route waits for the app's name: a chained or tunnelled app's connection must not start
-        // directly, nor one its app's share may refuse.
+        // directly, nor one its app's share may refuse, nor one of an app Watch did not name, which may be
+        // a routed app installed again.
         let uid = owner(shared, TCP, app, destination).await;
         let share = shared.tcp_shares.take(uid).ok()?;
         let (upstream, via) = match shared.route(uid, destination) {
