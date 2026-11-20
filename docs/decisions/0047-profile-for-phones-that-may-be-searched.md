@@ -30,6 +30,7 @@ Basic's items; it does not list Advanced's yet, since Advanced is not released.
 | Advanced | All of Basic's, plus the connection log ([ADR 0037](0037-connection-log-storage.md)): the database, each day's wrapped keys and the Keystore key pair | App-private database and preferences | Which app spoke to whom, for as long as the retention keeps it |
 | Advanced | The chain's settings: on or off, all apps or a list of apps, whether chained destinations are logged, the tool, its host and port, UDP, and the generated proxy password under a Keystore key | `chain` preferences | The user's circumvention tool, even after it was uninstalled before the search, and which apps the user sends through it |
 | Advanced | The apps left out of the tunnel ([ADR 0041](0041-watch-visibility-and-coexistence.md)) | `left_out` preferences | Little: apps that do not work with a VPN |
+| Advanced | The WireGuard configurations ([ADR 0035](0035-wireguard-upstream.md), W7): each one's text, with its private key and its server, and its name, wrapped with AES-256-GCM under key B (`watch-tunnels-unlocked`, which needs an unlocked phone) while the profile is on, under key A (`watch-tunnels`, which opens at any time) otherwise; and what decides the routes, under key A always: which apps go through each, how many there are, the order and the default, "Local network directly", and whether the profile is on | `noBackupFilesDir/tunnels` (no backup, no device transfer), and the two non-exportable Keystore keys | Nothing without the phone's Keystore. With it, by code run as Datapavan or above: under key A, which apps the user sends through a VPN provider's configuration, at any time after the first unlock; the provider, its server and the account's key under key A without the profile, and under key B with it only while the phone is unlocked (from Android 12), not from a locked phone after its first unlock; and from a dump of the running `:watch` process's memory, the configurations the engine set, which no app can prevent |
 | Advanced | The flows of this run, in memory, for Watch's screen | Memory | What apps did since Watch started, to anyone who opens Watch |
 
 ADR 0046, drafted beside this one, adds a live view of what apps the user did not open sent: an ongoing
@@ -95,6 +96,7 @@ asks the question and keeps its own switch; each says that the other edition has
 | The tool, its host and port (Advanced) | Kept, to start faster | Not kept: Watch finds the tool again at each start, as it already can (RESTRICTED-REGIONS.md). An uninstalled tool leaves no trace in Watch |
 | The chosen apps, the UDP choice and the proxy password (Advanced) | Kept | Kept, since the chain cannot work without them. Behind Watch's lock, and wiped by a wipe. "All apps through the tool" keeps no list |
 | The apps left out of the tunnel (Advanced) | Kept | Kept, and wiped by a wipe |
+| The WireGuard configurations (Advanced) | Kept, wrapped under key A, which opens at any time | Kept, since the apps sent through them cannot work without them, and wrapped again under key B, which needs an unlocked phone (the maintainer, 2026-11-20; ADR 0035): Watch started again while the phone is locked holds their apps until the unlock and says so in one notification that names no provider or configuration. What decides the routes stays under key A, so the apps are held, never sent directly. A wipe deletes all of `noBackupFilesDir/tunnels` and both Keystore keys, which leaves any copy of the wraps unreadable; the user adds the configurations again afterwards. W9 wires the switch to the store's call (`TunnelStore.setProfile`) |
 | ADR 0046's widget | Offered | Its provider is disabled, so it cannot be added. One already placed shows only the app's mark, and the switch's screen asks the user to remove it, since no app can remove a widget from a launcher |
 | ADR 0046's summary notification | Asked at onboarding, with this profile's question | Off. If Watch still posts an ongoing notification, its text is a neutral "On": no count, no app, no tool and no word for VPN; hidden on the lock screen (`VISIBILITY_SECRET`); silent |
 | ADR 0046's Quick Settings tile | Its state and summary | On and off only, no count. Opening the "Now" view from it asks for the phone's unlock first (`unlockAndRun`) |
@@ -173,7 +175,10 @@ own that the call cannot reach: it drops its snapshot, its trackers and an opene
 - **In the app.** With the profile on, "Delete everything now" is in each app's main menu and on Watch's lock
   screen, one tap and one confirmation. It deletes everything the app keeps but the profile's switch, the
   appearance, the language and the data packs, with the public list of keys in them. Keys the user pinned or
-  confirmed are wiped.
+  confirmed are wiped. In Advanced it covers the WireGuard configurations (W7): the folder
+  `noBackupFilesDir/tunnels`, the configurations' wraps and the routes' alike, and both Keystore keys,
+  `watch-tunnels` and `watch-tunnels-unlocked`, deleted with it so that no copy of a wrap made before can be opened (*added 2026-11-20, W7's part 2 fix round, the security review's
+  m6*).
 - **PanicKit.** Both editions answer [PanicKit](https://guardianproject.info/code/panickit/) triggers, as ADR
   0040 decided for Watch. PanicKit's rules hold: a trigger app may make an app destroy data only once the user
   has connected the two, and the connection is never made automatically. With the profile on:

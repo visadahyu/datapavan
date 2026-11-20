@@ -1060,8 +1060,15 @@ configurations to the engine before any traffic at every start, each opened only
 while the screen shows, the configurations' names in "Now" and the history, and the licence screen read from the
 same files as `licences/`, with Cloudflare's own text from GotaTun's tag. Checked on the emulator by
 `scripts/verify-wireguard-import.sh` (the documents screen, the photo picker, the camera, a restart, removal,
-the files) against the lab's peers. Part 3 brings the CI peer, the A40's measurements and the check from outside
-with a provider.
+the files) against the lab's peers. Its fix round (ADR 0035, "Fix round of part 2") hands every route to the engine
+again when an app is installed, replaced or removed and when the apps left out change, puts an app's new route in
+before its old one goes, makes the store's changes all or nothing with every failure said on the screen, keeps the
+confirmation across the screen's recreation, and lists the apps a file proposes first, each with its way now; by
+the maintainer's decision during it, the routes are wrapped under a key that opens while the phone is locked, and
+the configurations, under ADR 0047's profile, under a second key that needs an unlocked phone, their apps held with
+one notification until the unlock. The check gains a reinstall with a new UID, the confirmation through a rotation,
+dark mode and a larger font, and a locked phone under the second key. Part 3
+brings the CI peer, the A40's measurements and the check from outside with a provider.
 
 | # | Milestone | Done when |
 |---|---|---|

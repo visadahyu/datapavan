@@ -641,32 +641,69 @@ app's route, the states, and the licence screen. What was chosen where the decis
   a wrap moved to another slot or part does not open. The files are in `noBackupFilesDir/tunnels`, which Android
   leaves out of cloud backup, and which the application's `data_extraction_rules.xml` and `backup_rules.xml`, the
   same for both editions, exclude with every other domain from cloud backup and device-to-device transfer. Beside
-  the wraps, in plain text, what Watch must read without a key: the slots in order, the default first, "Local
-  network directly", the next number, and each app's slot by package name. Why plain: a configuration whose wrap
-  cannot be opened must still hold its apps, so the routes cannot sit behind the key; the chain's apps are kept so
-  already (ADR 0047's table). Each write replaces a file whole. The text never becomes a `String` in Watch's
+  the configurations, what decides the routes: the slots in order, the default first, "Local network directly", the
+  next number, the profile, and each app's slot by package name. It was kept in plain text in part 2, so that a
+  configuration whose wrap cannot be opened still holds its apps; since the maintainer's decision below, it is
+  wrapped under key A, which opens at any time, and never under key B, so it still holds them. Each file starts with
+  the mark of the key that wrapped it. Each write replaces a file whole. The text never becomes a `String` in Watch's
   process: bytes from the file or the decoder to the confirmation, to the store and to `nativeTunnelSet`, each array
-  zeroed after use; the JNI's copy is zeroed by Rust (`zeroize`). A wrap that cannot be opened reads as lost (the
-  key gone, the wrap damaged) or locked (a key that needs an unlocked phone, on a locked one): the screen says so,
-  and its apps stay routed to it and wait.
-- **`setUnlockedDeviceRequired`: measured, and not set.** The measure (`scripts/verify-wireguard-import.sh`,
+  zeroed after use; the JNI's copy is zeroed by Rust (`zeroize`). A wrap that cannot be opened reads as lost (no
+  key under the alias, a key Android invalidated, or a tag that does not match), locked (a key that needs an unlocked
+  phone, on a locked one), or, for any other Keystore error or a file that cannot be read, not openable now, tried
+  again after 2, 5, 15, 30 and 60 s (fix round, m2): the screen says which, and its apps stay routed to it and wait.
+- **`setUnlockedDeviceRequired`: measured; a second key with it, under ADR 0047's profile (the maintainer's
+  decision of 2026-11-20).** The measure (`scripts/verify-wireguard-import.sh`,
   step 7, Android 15 emulator): a key made as Watch's but with the flag (`tunnel-key-probe`) opened at once while the phone
   was unlocked; with a PIN set and the screen off, it did not open (the Keystore threw `InvalidKeyException`, read as
   locked by the keyguard's state), and it opened again after the PIN; Watch's own key opened a configuration in under
   a millisecond, locked and unlocked. The emulator's Keystore is software; the A40's, a trusted environment, is part
-  3's to time. What the flag would protect: the configurations of a phone searched
-  after its first unlock, locked, with Watch not running, against someone who can run code as Watch on it (ADR
-  0047's extraction); from Android 12 the Keystore enforces it by a key it drops at each lock. What it would not:
-  a phone searched unlocked, ADR 0047's commonest case, where the searcher demands the code; nor a phone where
-  Watch runs, which is how Watch is meant to run (always on), since the engine then holds the keys in memory, as
-  every WireGuard client does. What it would cost: Watch started again while the phone is locked, after an update
+  3's to time. What the flag would protect (*corrected in the fix round, the security review's m5*): from Android 12
+  the Keystore makes such a key unusable while the phone is locked, even to code that runs as Watch or above it, by a
+  key it drops at each lock. That defeats the usual extraction of a phone locked after its first unlock, a copy of
+  Watch's files plus the use of the phone's own Keystore by code run as the app or as the system: the wraps do not
+  open while the phone stays locked, and this holds while Watch runs too, not only while it is stopped. What it would
+  not protect: a dump of the running `:watch` process's memory, where the engine holds the configurations it set,
+  as every WireGuard client does; nor a phone searched unlocked, ADR 0047's commonest case, where the searcher
+  demands the code. Within ADR 0047's model, whose search is of an unlocked phone, the choice below stands; against
+  a locked phone's extraction after its first unlock the flag is the stronger choice, which the maintainer weighed
+  with the profile alternative below. What it would cost: Watch started again while the phone is locked, after an update
   installed at night, a crash, or Android ending its process, could not open its configurations, and its tunnelled
   apps would wait, sending nothing, until the next unlock (Watch would set them then; the code for it is in place,
   `waitForUnlock`). The field keeps WireGuard keys in plain files (WireGuard's app, Mullvad's); Watch's wrap under
-  a hardware key is already beyond it. The narrow case against a cost that every user meets after every update at
-  night decides it: not set, for the maintainer to confirm. The alternative kept open: set it under ADR 0047's
-  profile for phones that may be searched, where the user has said a locked phone's search matters more; the key
-  would then be made anew and every configuration wrapped again at the profile's switch.
+  a hardware key is already beyond it. Against a cost that every user meets after every update at night, the case
+  it covers, a locked phone extracted after its first unlock, was judged narrow outside the profile.
+
+  **Decided by the maintainer on 2026-11-20**, during the fix round, on the alternative this bullet left open: two
+  Keystore keys. Key A, `watch-tunnels`, as before, without the flag. Key B, `watch-tunnels-unlocked`, with it
+  (`setUnlockedDeviceRequired(true)`), StrongBox first with the same fallback. A configuration's text and name are
+  wrapped under key B while ADR 0047's profile for phones that may be searched is on, under key A otherwise; what
+  decides a route (which apps go through which configuration, the order, the default, the switches, the count) is
+  wrapped under key A always, and nothing that decides a route depends on key B. Why: from Android 12 key B is
+  unusable while the phone is locked, even to code that runs as Watch, so under the profile a locked phone extracted
+  after its first unlock gives up no configuration; it does not defeat a dump of the running `:watch` process's
+  memory, which no app in the field can prevent while the tunnel runs, as the engine holds what it set. What it
+  costs, under the profile alone: Watch started again while the phone is locked holds the tunnelled apps, which send
+  nothing, until the unlock, and says so in one notification, "Unlock your phone to connect again", whose text names
+  no provider and no configuration, on the lock screen or off it (`UnlockNotice`); at the unlock the configurations
+  are set and the notification goes. The unlock is told by `ACTION_USER_PRESENT`, which the keyguard sends from
+  SystemUI's process: part 2 listened for it with a receiver that was not exported, which never gets it, so that a
+  configuration that waited for an unlock waited until Watch started again (found by this step); the receiver is now
+  exported, safe for a protected broadcast that no app can send, and a configuration still closed just after the
+  unlock is tried again after 1, 2, 4 and 8 s. Since the state is under key A, Watch started again on a
+  locked phone still knows which apps to hold. How it is built: each file of the store starts with its key's mark;
+  `TunnelStore.setProfile` sets the profile in the state at once, so that a configuration added after goes under its
+  key, then wraps every configuration again under that key, its text and name in one change for the slot, which a
+  failure leaves as it was; on a locked phone key B can neither wrap nor open, the slot stays under its key, and the
+  call says which slots it could not move, for a later call. **W9 wires the profile's switch to it** (with its
+  onboarding, which also asks for the notification on Android 13 and later, and its wipe, which deletes both keys);
+  until then the debug builds' dump turns it on and off (`tunnel-profile on|off`). While the state itself cannot be
+  opened at a start (key A erring now, m2), nothing tells which apps go through a configuration, and the service
+  holds every installed app, flows of no app and pings with them, until it opens. A state whose key A is gone for
+  good, which leaves every configuration's wrap unopenable too, reads as an empty store, as after Android clears
+  the app's data. Checked on the emulator (`scripts/verify-wireguard-import.sh`, step 5b): with the profile on,
+  Watch's process killed and started again on the locked phone, the routed app's TCP and UDP to a sentinel send
+  nothing directly, the engine holds the configuration unset, the notification shows and names nothing of the
+  configurations; after the PIN the configuration is set, the notification gone, and the app reaches the peer.
 - **From a file.** `ACTION_OPEN_DOCUMENT` for any type (providers name `.conf` files variously), so no storage
   permission; at most 16 KiB read (the parser's own bound), a longer file refused as too long; the name from the
   document's display name, `.conf` dropped. The parser is the engine's (Rust, fuzzed), in Watch's process: it is
@@ -696,9 +733,13 @@ app's route, the states, and the licence screen. What was chosen where the decis
   use IPv4), the DNS servers, whether `AllowedIPs` carry everything or only the networks named, the others refused,
   never sent directly (`carries_everything` adds the networks up, so `0.0.0.0/1, 128.0.0.0/1` is everything), the
   preshared key, the keepalive and the MTU. The name is editable: the file's, else "WireGuard N", the first number
-  free. `IncludedApplications` and `ExcludedApplications` become a proposed choice of apps, ticked for the user to
-  confirm or change, never applied silently: those installed of the first; every app the user can choose but those
-  of the second; never Watch itself or an app left out of Watch; the apps named and not installed are listed. A
+  free. `IncludedApplications` and `ExcludedApplications` become a proposed choice of apps for the user to confirm
+  or change, never applied silently: those the user can choose of the first, in the file's order; every app the user
+  can choose but those of the second, which are named, with the line that this covers only the apps installed now;
+  never Watch itself or an app left out of Watch. They are listed first, each with its way now, ticked only where it
+  goes directly now, and a ticked app that goes another way says it moves from there (fix round, the screens review's
+  M2); the apps named and not installed, installed but not choosable, and left out of Watch are said apart (m2),
+  and nothing is said of them while the apps load. A
   configuration on its way is held by Watch's process alone, never in a saved state, which Android copies out of the
   process, and zeroed when saved or cancelled. Each refusal is said in plain words with its line and key
   (`Refusals`); a test reads the codes from `Refusal::code` and the bridge, and fails for a code without words or
@@ -719,7 +760,7 @@ app's route, the states, and the licence screen. What was chosen where the decis
   and before the tunnel is established, and at once when the screen changes them (`ACTION_APPLY_TUNNELS`); each
   configuration's text is opened only to be set and zeroed, and one already set is not opened again. Routes go by
   UID; packages that share one share a route, the first by name deciding. The debug hook stays for part 1's check;
-  its routes and the store's replace each other, as both call `nativeTunnelRoutes`.
+  its routes go with the store's whenever the store's are handed, and win for their UIDs.
 - **Each configuration's state**, from `nativeTunnelStates` once a second while Watch's screen is in front, not at
   all otherwise: the last handshake's age, not connected yet, no answer (its apps wait, nothing goes directly), the
   endpoint's name resolved over plain DNS only, not ready in Watch (its apps wait), and a wrap that cannot be opened.
@@ -740,8 +781,10 @@ app's route, the states, and the licence screen. What was chosen where the decis
 - **Screens.** In Watch's activity, whose window is protected (ADR 0040); the confirmation is part of it, and the
   removal's dialog inherits the protection. Headings are marked for TalkBack and changing lines are live regions;
   rows are the controls, buttons stand in a column that wraps at a large font, and nothing has a fixed height;
-  names, hosts, addresses and package names are isolated (checked on the emulator in the mirrored pseudo-locale, ar-XB, at a font size of 200 %: the
-  card, its switch and its text laid out right to left, a configuration's name kept in its own order). The strings are in English only, in
+  names, hosts, addresses and package names are isolated (checked by hand on the emulator in the mirrored
+  pseudo-locale, ar-XB, at a font size of 200 %, the card, its switch and its text laid out right to left, a
+  configuration's name kept in its own order; no script repeats it, since `scripts/screenshots.sh` covers Basic's
+  screens and `smoke-watch.sh` opens ar-XB only at launch: the screens review's m5). The strings are in English only, in
   `strings_untranslated.xml` of `:watch` and of `:app`, held to the plain-language gate.
 - **Measured.** Tests: 36 new JVM tests in `:watch` (the store 11, the confirmation 8, the decoder and the photo 7, the
   routes 4, the refusals 3, the states 2, the history 1), 8 in `:app` for the licence list, and 4 in Rust (the
@@ -774,10 +817,89 @@ app's route, the states, and the licence screen. What was chosen where the decis
 - **Accepted limits.** The Keystore's cipher, the binder's parcel that carries the decoded text from the isolated
   process, and Compose's text field for the name keep copies Watch cannot zero; the text is never a `String` in
   Watch's process, but it is one inside the decoder's, which ends after each picture. A picture picked in the photo
-  picker stays in the user's gallery; Watch says so but cannot delete it. On the emulator the camera's scene holds
-  no QR code, so the camera's photo is read and refused there, not decoded; a decoded photo of the phone's own camera
-  is part 3's, on the A40. Routes go by UID, so packages that share a UID share a route. The confirmation's server line, the dump's `tunnel-store` and the states never print a key; the
+  picker stays in the user's gallery; Watch says so but cannot delete it. On the emulator the camera photographs the
+  virtual scene's wall, which shows the QR picture small and at an angle: the check accepts the photo decoded or
+  refused as no code, and the photo deleted either way; a decoded photo of the phone's own camera is part 3's, on the
+  A40. Routes go by UID, so packages that share a UID share a route, and an app installed again is routed by its new
+  UID once Android's broadcast of its installation reaches Watch, a moment in which, started at once, it would go its
+  other way. The confirmation's server line, the dump's `tunnel-store` and the states never print a key; the
   endpoint is shown on the confirmation alone. A file or picture larger than its bound is refused, never cut.
+
+**Fix round of part 2 (2026-11-20).** One review round, two independent reviewers (security and the engine; the
+screens, the checks and the documents), seven majors between them; each is fixed with a test or an emulator step
+that fails when its fix is reverted (run so, by hand, for each: below, "Measured"):
+
+- **Routes stale against the store** (security M1). Routes go to the engine by UID, read from package names only at
+  a start, a change of the configurations and an unlock: an app installed again, with a new UID, and an app taken
+  back after it was left out, went their other way, directly perhaps, while the screen said "Through" its
+  configuration; W6's chain had the same staleness. Now, while the tunnel runs, a receiver of every package added,
+  replaced or removed hands the engine every route again, the tunnels' and then the chain's (`applyRoutes`), and a
+  change of the apps left out does so before the tunnel is set up again, so that an app taken back finds its route
+  in place. Emulator step 3b: the workload app is uninstalled and installed again, gets a new UID, the engine has
+  its route at once (`tunnel-engine-route` in the dump), and its traffic reaches the peer through the configuration,
+  none direct.
+- **The move from the tool to a configuration went directly in between** (security M2). The order is now fixed
+  (`Routes.Change.tunnelFirst`): a change that gives an app a tunnel writes the tunnel's route and hands it to the
+  engine first, and takes the app off the chain's list only in that change's completion, behind it; one that takes
+  the tunnel away puts the app on the chain's list first. The service applies the tunnels' routes before the chain
+  at every `ACTION_APPLY_CHAIN`, and a chain change of the tool's search runs on the main thread behind the screen's;
+  an import saves the configuration with its apps in one change and takes them off the chain's list after. Documents
+  and pictures are read on threads of their own, never on the store's worker: a document within 20 s, past which its
+  opening is cancelled (a `CancellationSignal` the provider gets) and its stream closed, and the screen says it took
+  too long (`DocumentRead`, tested with a stream and an opening that never end).
+- **An exception on the store's worker ended `:watch`** (security M3). The store's changes are now all or nothing:
+  every wrap is made first, so a Keystore error changes nothing; every file the change writes is written beside its
+  own and flushed, so a full disk changes nothing; then each is renamed onto its own, which needs no space. A new
+  configuration goes in with its switch and its apps in one change. Every task on the worker ends alone
+  (`Changes`): the screen says "Not saved" and why, the storage, the key store, a configuration removed meanwhile or
+  the bound, and the store is as it was; the bytes are zeroed whatever happens. Tested with a disk that fills after
+  each of a change's files, a Keystore that throws, and a slot removed while the confirmation was open.
+- **The confirmation was lost when the screen was made anew** (screens M1, security m3). It is kept in a `ViewModel`
+  (`TunnelModel`) with the pending configuration's bytes, which a rotation, a dark-mode switch and a font change keep
+  and which zeroes them when the screen finishes; an answer of the worker that comes meanwhile reaches the new screen.
+  Tested on the JVM, and on the emulator: a name typed into the confirmation, then a rotation, dark mode and a font
+  of 130 %, each makes the screen anew, and the confirmation, the name and the tick stay.
+- **The proposed apps were unreadable, and Save moved apps silently** (screens M2). Above, "The confirmation".
+- **TalkBack announced every configuration every second** (screens M3). Only the state's kind is a live region
+  ("Connected."); the handshake's age is a line of its own beside it.
+- **The default tunnel was not said in the common case** (screens M4). The note shows whenever a configuration
+  exists, in its own words for one; PRIVACY.md (and its page) and VPN.md say it.
+
+Minors, each with its test where it has behaviour: the decoder's and the audit's parsers' answers cross the binder
+as primitives, an int array and a byte array or a list of strings, never a Bundle (security m1); a Keystore error
+other than a missing alias, `KeyPermanentlyInvalidatedException` or `AEADBadTagException`, and a file that cannot
+be read, mean "cannot be opened now", said so and tried again after 2, 5, 15, 30 and 60 s (m2); flows of no app and
+pings wait for the user's default while it is not set, never taking the next configuration (m4: the engine keeps the
+default Watch's order names, set or not); the unlocked-device reasoning is corrected above (m5), and the
+maintainer decided the question during the round: key B under ADR 0047's profile, above; ADR 0047's tables gain the
+configurations, which key holds what, and what a wipe covers (m6); a photo the camera
+never answered for is deleted, its grant taken back, when the screen finishes (m7). An app waiting for a removed
+configuration is said to wait, apart from the count of tunnelled ones, with a line under the configurations
+(screens m1); the import tells apps not installed, installed but not choosable, and left out of Watch apart, by
+`PackageManager`, and says nothing of them while the apps load (m2); the apps' arrival keeps a name, a switch and
+ticks the user changed (m3); the check's search for keys first finds the store's own state file (m4); the ar-XB
+check above is said to be by hand (m5); the licence screen ends with the data's licences, which the Data sources
+page names (m6); a lost key's words say to replace it, which keeps its apps (m7); the bound's words are a plural
+with the store's number (m8). Nits: the stamp's comment; the photo's FileProvider in Watch's process; Back cancels
+the confirmation; "Now" reads the configurations' names with each snapshot, so a rename shows; before Android 12 the
+key is said to be in secure hardware, not which; the route rows are buttons, not selectable; the libraries' table
+says what a group's row takes in; the import check's header says what its camera step accepts.
+
+**Measured (fix round).** Tests: 32 new JVM tests in `:watch` (177 in all), 2 in `:app` (`ApkScanTest`), and one in
+Rust (the default not set), with the bridge's order test extended. Each fix's test was run against the fix reverted
+by hand, in cargo-mutants' manner, 23 reverts in all, every one killed: the default's route; the store's staging, its
+catch and the Keystore's reading; a move's order; the document's time limit; the model's zeroing; the ticks, their
+merge and the holder's zeroing; the default's note; the waiting split; the live region's kind; the decoder's bound and
+the photo's abandon; the scan's count; and of the two keys, the state in plain, the state under key B, the profile's
+key, a move split in two changes, a closed state read as empty, a replacement's name left under the other key, and
+the profile set late. On the emulator, the import check fails with the package receiver removed (at the reinstall
+step) and with the confirmation's view kept per screen (at the rotation); with part 2's receiver of the unlock, not
+exported, it failed at the unlock of step 5b. Watch's native library, as Advanced's release APK ships it: 1,686,632,
+1,450,464 and 1,958,872 bytes on arm64, armv7 and x86_64, within the 2 MB gate. `scripts/check.sh rust`, `android`,
+`data` and `wglab` pass. The watch shard (`scripts/emulator-shards.sh --alone watch audit`, Android 15 image
+dp-api35-ci, no camera) passed whole, the import check with its reinstall, its screen made anew and its locked
+phone under key B, and part 1's check with the debug hook's routes kept beside the store's; the audit shard passed
+too, its tracker scan through the parsers' primitive answer.
 
 ## Sources
 

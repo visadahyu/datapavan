@@ -92,8 +92,9 @@ Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED
   through the tunnel; its names never reach the network's resolver. A destination the tunnel cannot carry,
   outside a narrower `AllowedIPs`, or IPv6 when the configuration has no IPv6 address, is refused at once;
   "Local network directly", per configuration and off by default, lets the chosen apps reach a printer or a
-  NAS. Flows Android names no app for, and every app's ping, go through the first configuration while any app
-  goes through one. While a tunnel's server does not answer, or its configuration is not set, its apps wait and
+  NAS. Flows Android names no app for, and every app's ping, go through the default configuration, the one the
+  user chose, while any app goes through one; Watch's screen says so whenever a configuration exists, and while the
+  default cannot be opened they are refused, never sent through another configuration. While a tunnel's server does not answer, or its configuration is not set, its apps wait and
   Watch says so; they never go directly. On a network switch the tunnel's own protected socket is made anew and
   the server told at once, so the chosen apps' connections go on. A server given by name is looked up by
   Android's own resolver on the network beneath, encrypted where the phone's Private DNS is on; where it was

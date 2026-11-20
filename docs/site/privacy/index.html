@@ -230,9 +230,12 @@ the password Datapavan made for it, which is encrypted under a key that Android&
 them back.</li>
 <li><strong>The WireGuard configurations you add,</strong> at most eight: each one&rsquo;s text, which holds its private key and its
 server, and the name you gave it, encrypted under a key that Android&rsquo;s keystore keeps (in the phone&rsquo;s separate
-security chip where it has one), in storage that is never backed up or moved to another phone. Beside them, not
-encrypted: which apps go through each, which one is the default, and whether its apps reach your local network
-directly. Removing a configuration deletes its text and name; if you chose that its apps wait, their names stay
+security chip where it has one), in storage that is never backed up or moved to another phone. Beside them, also
+encrypted, under a key that opens even while the phone is locked: which apps go through each, which one is the
+default, and whether its apps reach your local network directly. With the setting for phones that may be searched
+(planned), the configurations go under a second key, which opens only while the phone is unlocked: if Datapavan
+starts again while the phone is locked, their apps wait until you unlock it, and one notification, naming no
+configuration, says so. Removing a configuration deletes its text and name; if you chose that its apps wait, their names stay
 until you give them another way. A photo of a QR code that the phone&rsquo;s camera takes for Datapavan is deleted as
 soon as it is read, also when it holds no code or you cancel; a picture you pick from your gallery stays there,
 and Datapavan says that it holds the configuration&rsquo;s key.</li>
@@ -250,7 +253,8 @@ circumvention tool, their lookups go to the tool, and their other DNS questions 
 Swiss foundation that does not log addresses, so Quad9 sees the tool&rsquo;s address, not yours.</p>
 <p>When you add a WireGuard configuration of your VPN provider, Datapavan Advanced connects to that provider&rsquo;s server,
 the one the configuration names, for the apps you send through it; their lookups go to the configuration&rsquo;s DNS
-server through it. Where the configuration names its server by a host name, Android&rsquo;s own resolver looks it up on
+server through it. While any app goes through a configuration, every app&rsquo;s ping, and traffic Android names no app
+for, also go through your default configuration, which Datapavan says, and wait while it cannot be opened. Where the configuration names its server by a host name, Android&rsquo;s own resolver looks it up on
 your network first, encrypted where your phone&rsquo;s Private DNS is on; where it is not, the network can see which
 provider you use, and Datapavan says so. Datapavan reads a QR code without the camera permission: the phone&rsquo;s own
 camera app takes the photo for it, or you pick a picture.</p>
@@ -297,6 +301,11 @@ camera app takes the photo for it, or you pick a picture.</p>
 			<tr>
 					<td>Internet</td>
 					<td>Forwarding the traffic of other apps through the local firewall. Datapavan Basic never asks for it</td>
+					<td>Datapavan Advanced, from 0.2.0</td>
+			</tr>
+			<tr>
+					<td>Notifications (granted by you, from Android 13)</td>
+					<td>One notice, when a WireGuard configuration kept for a phone that may be searched waits for you to unlock the phone; it names no provider and no configuration</td>
 					<td>Datapavan Advanced, from 0.2.0</td>
 			</tr>
 	</tbody>
