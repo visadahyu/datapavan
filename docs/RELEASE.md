@@ -77,7 +77,10 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    Android 11 emulator (`dp-api30`), which translates ARM code: `INSTALL_ABI=armeabi-v7a scripts/smoke.sh`,
    then `verify-audit.sh`, `verify-plan.sh` and `verify-shortcuts.sh`. The data pack scripts stay on
    CI's image: Android 11's file picker there would not pick a file that adb had put in Downloads
-   (2026-11-07, with the 64-bit build too). CI must be green on the release commit. A CI check that failed
+   (2026-11-07, with the 64-bit build too). For a release that carries Watch, `python3 -I scripts/dns-latency.py`
+   on a residential network measures the names of direct apps against plain DNS and fails when the default ODoH pair
+   is over the speed budget of [ADR 0039](decisions/0039-release-gates.md) or does not answer; its output goes into
+   the release notes' record. CI must be green on the release commit. A CI check that failed
    while nothing it tests had changed goes into [ci-flakes.md](ci-flakes.md), with the run, the check, its
    cause and its fix, before the run is repeated.
 

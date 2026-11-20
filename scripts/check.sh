@@ -56,6 +56,9 @@ data_gates() {
     python3 -I "$ROOT/scripts/check-translations.py" || failed=1
     # The emulator checks read "Now" from the screen with now-screen.py, which must see a row's places.
     python3 -I "$ROOT/scripts/now-screen.py" --self-test || failed=1
+    # The speed budget's verdict for direct apps' names (ADR 0039), on made-up numbers: the measure itself needs the
+    # public operators and runs before each release (docs/RELEASE.md).
+    python3 -I "$ROOT/scripts/dns-latency.py" --self-test || failed=1
     # The emulator checks find the ports of this computer their test servers take free before they start.
     "$ROOT/scripts/host-ports.sh" --self-test || failed=1
     # The website in docs/site is what site/ builds, and it keeps the site's rules.

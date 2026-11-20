@@ -366,6 +366,8 @@ jobs:
       # The WireGuard checks fail rather than skip without their peers, and the peers' image is the one built here.
       WGLAB_REQUIRED: ${{ matrix.shard == 'wireguard' && '1' || '' }}
       WGLAB_NO_BUILD: ${{ matrix.shard == 'wireguard' && '1' || '' }}
+      # The DNS check fails rather than skips without its lab (W8's fix round, review R-M4).
+      DNSLAB_REQUIRED: ${{ matrix.shard == 'dns' && '1' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -442,6 +444,16 @@ jobs:
           tags: datapavan-wglab-peer:latest
           cache-from: type=gha,scope=wglab-peer
 
+      # The dns shard's lab (scripts/dnslab.sh): its images built and every way answering before the emulator starts,
+      # so that the build stays out of the emulator's time; dig and Python's cryptography for its clients.
+      - name: The DNS lab
+        if: matrix.shard == 'dns'
+        timeout-minutes: 20
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends dnsutils python3-cryptography
+          scripts/dnslab.sh up
+
       - name: ZXing's jar for the import check
         if: matrix.shard == 'wireguard'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -479,6 +491,24 @@ jobs:
         with:
           name: wglab-logs-emulator
           path: build/wglab/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Keep the DNS lab's logs
+        if: failure() && matrix.shard == 'dns'
+        run: |
+          mkdir -p build/dnslab
+          for service in relay target-a target-b doh dot resolver censor; do
+            scripts/dnslab.sh log "$service" >"build/dnslab/$service.log" 2>&1 || true
+          done
+          scripts/dnslab.sh stop || true
+
+      - name: Upload the DNS lab's logs
+        if: failure() && matrix.shard == 'dns'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dnslab-logs-emulator
+          path: build/dnslab/
           if-no-files-found: ignore
           retention-days: 7
 

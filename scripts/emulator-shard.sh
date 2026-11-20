@@ -19,7 +19,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SHARDS="watch audit screens wireguard"
+SHARDS="watch audit screens dns wireguard"
 
 # The checks of shard $1, in order.
 checks_of() {
@@ -37,6 +37,11 @@ checks_of() {
         # since part 3a, which CI runs where the WireGuard code or its checks changed, and every week): each skipped,
         # and saying so, where no peer can start, unless WGLAB_REQUIRED=1, as on CI.
         wireguard) echo verify-wireguard.sh verify-wireguard-import.sh ;;
+        # Watch's encrypted resolver for direct apps' names against the DNS lab (W8, part 1; a shard of its own
+        # since the fix round, review R-M4): Watch asks the lab's resolver as the network's through a debug
+        # command, so any emulator serves; skipped, and saying so, where Docker does not run, unless
+        # DNSLAB_REQUIRED=1, as on CI.
+        dns) echo verify-dns.sh ;;
         *) return 1 ;;
     esac
 }
@@ -91,6 +96,17 @@ case "${1:-}" in
                     rm -f "$log"
                     if [ "${WGLAB_REQUIRED:-}" = 1 ] && ! grep -qx '== WireGuard .* checked on the emulator' <<<"$last"; then
                         echo "$check ended without its last line, with WGLAB_REQUIRED=1: '$last'" >&2
+                        exit 1
+                    fi
+                    ;;
+                verify-dns.sh)
+                    # As the WireGuard checks: with DNSLAB_REQUIRED=1, only the check's last line passes the shard.
+                    log=$(mktemp)
+                    "$ROOT/scripts/$check" | tee "$log"
+                    last=$(tail -n 1 "$log")
+                    rm -f "$log"
+                    if [ "${DNSLAB_REQUIRED:-}" = 1 ] && [ "$last" != "== the DNS check passed" ]; then
+                        echo "$check ended without its last line, with DNSLAB_REQUIRED=1: '$last'" >&2
                         exit 1
                     fi
                     ;;

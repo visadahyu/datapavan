@@ -8,7 +8,8 @@
 #   doh           plain DoH (doh-proxy), doh.dnslab.test/dns-query                         probe 10.53.3.3
 #   dot           DoT (nginx's stream TLS), dot.dnslab.test:853                            probe 10.53.4.4
 #   resolver      the network's resolver, plain DNS on UDP and TCP 53                      probe 10.53.5.5
-#                 (and printer.home.arpa 192.168.1.50); resolver-dot is its DoT on 853
+#                 (and printer.home.arpa 192.168.1.50, nas.office.example 192.168.1.60, a name of the
+#                 network's own domain that no target knows); resolver-dot is its DoT on 853
 #   portal        a captive portal (/generate_204)
 #   censor        the one way in: a front per server (py/censor.py)
 #   ns-*          the backends behind the target-a, target-b, doh and dot servers (py/dnsserver.py)
@@ -43,7 +44,8 @@ services:
     networks:
       - lab
     command: ["python3", "-I", "/opt/dnslab/dnsserver.py", "--name", "resolver", "--probe", "10.53.5.5",
-              "--extra", "printer.home.arpa=192.168.1.50"]
+              "--extra", "printer.home.arpa=192.168.1.50",
+              "--extra", "nas.office.example=192.168.1.60"]
   ns-target-a:
     <<: *python
     command: ["python3", "-I", "/opt/dnslab/dnsserver.py", "--name", "target-a", "--probe", "10.53.1.1"]

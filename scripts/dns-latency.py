@@ -6,7 +6,12 @@ of public names once each after a first query that opens the connection; the nam
 Endpoints and their addresses come from the data pack's tables (data/odoh, data/dns-presets); no name of a server
 is looked up. Nothing is sent but the public names below, and no way is asked more than len(NAMES) + 1 times.
 
-    python3 -I scripts/dns-latency.py [--resolver ADDRESS] [--pairs] [--presets]
+It holds the budget of ADR 0039 (W8's fix round, review R-M5): the first default pair's warm p50 at most
+P50_OVER ms above plain DNS's and its p95 at most P95_OVER ms above it. It exits 1 when the default pair is over
+the budget, when it failed, or when plain DNS failed; the other ways are measured and printed for the record.
+
+    python3 -I scripts/dns-latency.py [--resolver ADDRESS] [--no-presets]
+    python3 -I scripts/dns-latency.py --self-test
 """
 
 import argparse
@@ -117,15 +122,65 @@ def dot(host, address):
     return ask
 
 
+# The budget (ADR 0039): the default way's warm p50 and p95 at most this far above plain DNS's, in ms.
+P50_OVER = 150
+P95_OVER = 250
+PLAIN = "plain DNS to this network's resolver"
+
+
+def verdict(results, default):
+    """The budget's verdict on results [(way, (p50, p95) or "failed: ...")]: (passed, the line that says why)."""
+    found = dict(results)
+    plain_result, way = found.get(PLAIN), found.get(default)
+    if not isinstance(plain_result, tuple):
+        return False, f"BUDGET NOT CHECKED: plain DNS did not answer ({plain_result})"
+    if not isinstance(way, tuple):
+        return False, f"BUDGET FAILED: the default way {default} did not answer ({way})"
+    over50, over95 = way[0] - plain_result[0], way[1] - plain_result[1]
+    line = (f"{default}: p50 {over50:+.0f} ms, p95 {over95:+.0f} ms against plain DNS; "
+            f"the budget is +{P50_OVER} and +{P95_OVER} ms (ADR 0039)")
+    if over50 > P50_OVER or over95 > P95_OVER:
+        return False, "BUDGET FAILED: " + line
+    return True, "within the budget: " + line
+
+
+def self_test():
+    """The verdict on made-up numbers: within, over at p50, over at p95, a failed default, a failed baseline."""
+    default = "ODoH a -> b"
+    cases = [
+        ([(PLAIN, (45, 230)), (default, (147, 171))], True),
+        ([(PLAIN, (45, 230)), (default, (196, 171))], False),
+        ([(PLAIN, (45, 100)), (default, (60, 351))], False),
+        ([(PLAIN, (45, 230)), (default, "failed: TimeoutError")], False),
+        ([(PLAIN, "failed: TimeoutError"), (default, (60, 100))], False),
+        ([(PLAIN, (45, 230))], False),
+    ]
+    for results, wanted in cases:
+        got, line = verdict(results, default)
+        if got != wanted:
+            print(f"self-test FAILED: {results} gave {got}: {line}", file=sys.stderr)
+            return 1
+    print("dns-latency.py self-test passed")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--resolver", help="this network's resolver (default: the first nameserver of /etc/resolv.conf)")
+    parser.add_argument("--no-presets", action="store_true", help="leave out the presets' DoH and DoT")
+    parser.add_argument("--self-test", action="store_true", help="check the budget's verdict on made-up numbers")
     args = parser.parse_args()
+    if args.self_test:
+        return self_test()
     resolver = args.resolver
     if not resolver:
         with open("/etc/resolv.conf") as f:
             resolver = next(line.split()[1] for line in f if line.startswith("nameserver"))
-    results = [("plain DNS to this network's resolver", timed(plain(resolver)))]
+    try:
+        results = [(PLAIN, timed(plain(resolver)))]
+    except Exception as e:  # noqa: BLE001  (reported as the baseline's failure)
+        results = [(PLAIN, f"failed: {type(e).__name__}")]
+    default = None
     relays = {r[0]: r for r in rows("data/odoh/relays.tsv")}
     targets = {t[0]: t for t in rows("data/odoh/targets.tsv")}
     for relay_id, target_id in rows("data/odoh/pairs.tsv"):
@@ -137,6 +192,7 @@ def main():
             continue
         contents, pk = configs[0]
         path = f"{relay_path}?targethost={target[1]}&targetpath={target[2]}"
+        default = default or f"ODoH {relay_id} -> {target_id}"
 
         def sealed(name, contents=contents, pk=pk):
             body, plain_text, exporter = odoh_probe.build(contents, pk, query(name))
@@ -155,7 +211,7 @@ def main():
                 results.append((f"DoH to {target_id}'s operator", timed(ask)))
             except Exception as e:  # noqa: BLE001
                 results.append((f"DoH to {target_id}'s operator", f"failed: {type(e).__name__}"))
-    for preset in rows("data/dns-presets/presets.tsv"):
+    for preset in [] if args.no_presets else rows("data/dns-presets/presets.tsv"):
         if preset[0] not in ("quad9-unsecured-doh", "quad9-unsecured-dot", "cloudflare-dot"):
             continue
         address = preset[6].split(",")[0]
@@ -174,7 +230,10 @@ def main():
             print(f"{name}: warm p50 {result[0]:.0f} ms, p95 {result[1]:.0f} ms")
         else:
             print(f"{name}: {result}")
+    passed, line = verdict(results, default or "the default pair (none read)")
+    print(line, file=sys.stdout if passed else sys.stderr)
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

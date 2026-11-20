@@ -96,8 +96,10 @@ the app, endpoints and addresses from the data pack):
 
 **The budget:** on the same network, the default way's warm p50 at most 150 ms above plain DNS's, and its p95 at
 most 250 ms above it (measured: +102 ms and −59 ms), checked by `scripts/dns-latency.py` before each release that
-carries Watch; and Watch's own cost of each way, where every server is a few milliseconds away (the DNS lab), p50 at
-most 100 ms and p95 at most 400 ms, held by `scripts/verify-dns.sh` (measured on the Android 15 emulator: ODoH 7 and
-124 ms, DoH 2 and 7 ms, DoT 1 and 5 ms; Watch's process spent about 15 to 24 ms of CPU per lookup in the lab,
+carries Watch (docs/RELEASE.md, step 3), which exits non-zero over the budget or when the default pair or plain DNS
+does not answer; and Watch's own cost of each way, where every server is a few milliseconds away (the DNS lab), p50
+at most 100 ms and p95 at most 250 ms, held by `scripts/verify-dns.sh` on CI's dns shard (W8's fix round, review
+R-M5: 400 ms was three times what the lab measured and equal to the hedge's delay; measured on the Android 15
+emulator: ODoH 7 and 124 ms, DoH 2 and 7 ms, DoT 1 and 5 ms; Watch's process spent about 15 to 24 ms of CPU per lookup in the lab,
 emulated x86_64). The first query of a way opens its TLS connection: 250 to 300 ms on the internet for an ODoH
 pair, which Android's cache and Watch's own then hide for each name's time to live. Battery on a phone is W9's.

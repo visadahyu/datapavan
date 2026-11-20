@@ -27,6 +27,8 @@
 #                                         FRONT: relay target-a target-b doh dot portal resolver resolver-dot;
 #                                         MODE: pass, drop, reset, reset-sni NAME, block (dot, resolver-dot),
 #                                         inject (resolver) (scripts/dnslab/py/censor.py says what each does)
+#   scripts/dnslab.sh rotate              restarts target-a (odoh-rs), which makes a new key at each start, and waits
+#                                         until it serves configs other than before (the key rotation's check)
 #   scripts/dnslab.sh portal open|captive
 #   scripts/dnslab.sh counts              what the censor saw, per front
 #   scripts/dnslab.sh log SERVICE         a backend's query log (target-a, target-b, doh, dot, resolver), or any
@@ -300,15 +302,15 @@ data() {
         echo "# The DNS lab's DoH and DoT servers as presets (scripts/dnslab.sh data, $(date -u +%F)), as the emulator reaches them."
         echo "# Test only: operators and seats invented; the lab logs every query, for its checks."
         echo "# Columns: id, name, operator, country, protocol, endpoint, ipv4, ipv6, logging, audit, filtering, policy, pins,"
-        echo "#   note. '-' means none."
-        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' lab-doh "DNS lab DoH" \
+        echo "#   note, service, logs, blocks, audited. '-' means none."
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' lab-doh "DNS lab DoH" \
             "DNS lab DoH operator XD" XD doh "https://doh.dnslab.test:$(port_of doh)/dns-query" "$h" - \
             "logs every query (test lab)" - none https://dnslab.test/privacy "$(pin_of doh)" \
-            "the lab's plain DoH (doh-proxy 0.11.1), probe.dnslab.test 10.53.3.3"
-        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' lab-dot "DNS lab DoT" \
+            "the lab's plain DoH (doh-proxy 0.11.1), probe.dnslab.test 10.53.3.3" standard day none no
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' lab-dot "DNS lab DoT" \
             "DNS lab DoT operator XE" XE dot "dot.dnslab.test:$(port_of dot)" "$h" - \
             "logs every query (test lab)" - none https://dnslab.test/privacy "$(pin_of dot)" \
-            "the lab's DoT (nginx's stream TLS before the lab's responder), probe.dnslab.test 10.53.4.4"
+            "the lab's DoT (nginx's stream TLS before the lab's responder), probe.dnslab.test 10.53.4.4" standard day none no
     } >"$dir/presets.tsv"
     cp "$CA" "$dir/ca.pem"
     say "== the lab's datasets written in $dir (fronts from $EMULATOR_HOST:$BASE)"
@@ -474,8 +476,28 @@ selftest() {
     fi
 }
 
+# Restarts target-a, whose key is new at each start, and waits until it serves other configs (W8's fix round, review
+# S-M1: the emulator check's key rotation).
+rotate() {
+    need_running
+    local before after
+    before=$(odoh configs --ca "$CA" --connect "127.0.0.1:$(port_of target-a)" --host target-a.dnslab.test)
+    "${compose[@]}" restart target-a >/dev/null 2>&1
+    for _ in $(seq 1 30); do
+        after=$(odoh configs --ca "$CA" --connect "127.0.0.1:$(port_of target-a)" --host target-a.dnslab.test 2>/dev/null || true)
+        if [[ "$after" =~ ^[0-9a-f]+$ ]] && [ "$after" != "$before" ]; then
+            say "== target-a serves a new key"
+            return
+        fi
+        sleep 1
+    done
+    say "!! target-a did not come back with a new key"
+    exit 1
+}
+
 case "${1:-}" in
     up) up ;;
+    rotate) rotate ;;
     fronts) need_running; print_fronts ;;
     data) [ -n "${2:-}" ] || { say "usage: $0 data DIR"; exit 2; }; data "$2" ;;
     censor)

@@ -5,22 +5,34 @@
 # check reads which way answered from what the app was given and from the servers' logs, and that nothing reached
 # the network's resolver from the network resolver's own log (what reached it, as a capture would show it).
 #
-# The emulator must use the lab's resolver as its network's: start it with `-dns-server 10.153.53.1` (the lab's bridge on this computer; the emulator ignores a loopback
-# address there). The check:
+# Watch asks the lab's resolver as the network's (W8's fix round, review R-M4): a debug build's command points its
+# exchanges with the network's resolver at the lab's resolver front, so that any emulator works, CI's included. An
+# emulator started with `-dns-server 10.153.53.1` (the lab's bridge on this computer; the emulator ignores a
+# loopback address there) also sends Android's own lookups to the lab, and the check then says so. With
+# DNSLAB_REQUIRED=1 (CI's dns shard) the check fails where it would otherwise skip. The check:
+#   0. "Notify me" without Android's leave to notify (Android 13 and later): the screen asks, the user refuses, the
+#      switch stays off and the screen says why (review R-M3);
 #   1. a direct app's name goes by Oblivious DoH through the lab's relay to the first target, and the network's
 #      resolver never sees it; Watch's own process looks up no name at all; nor when the tunnel is set up again;
-#   2. Android's opportunistic DNS over TLS to Watch's address is refused, and its lookups come on port 53;
+#   2. Android's opportunistic DNS over TLS to Watch's address is refused, at least once, and its lookups come on
+#      port 53;
 #   3. the user's preset (DoH, then DoT) and the user's own DoH resolver answer;
 #   4. strict, with every encrypted way down (the censor drops them): the app gets no address, nothing reaches the
 #      network's resolver, Watch's state says so, and a local name (printer.home.arpa) still resolves;
 #   5. outside strict, the same: the network's resolver answers, the state says fallback, the notification shows;
 #      the ways come back, and once their back-off ends the names go by ODoH again;
 #   6. the censor's methods one by one: a reset on the relay's server name holds ODoH for six minutes and the next
-#      way answers; port 853 blocked fails the DoT preset over to the next way; an injected answer reaches the app
-#      only through the fallback;
-#   7. behind a captive portal no failure counts (the engine told so: the lab's resolver knows only the lab's
-#      names, so Android's own check of the network cannot pass on the emulator);
-#   8. a WireGuard endpoint's name goes the encrypted way.
+#      way answers; port 853 blocked fails the DoT preset over to the next way, and with "only this resolver" to
+#      nothing at all; an injected answer reaches a name that goes encrypted never, and the app only through the
+#      fallback;
+#   7. behind a captive portal no failure counts. Android's own validation reaches the engine where the emulator
+#      reaches the internet; "not validated" is set by a debug command, since no emulator here sits behind a real
+#      portal (the lab's portal container serves its selftest);
+#   8. a WireGuard endpoint's name goes the encrypted way;
+#   9. a network's search domains (review S-C1): `com` is refused; a name under the network's own domain goes the
+#      encrypted way first and to the network's resolver only when the internet does not know it;
+#  10. a target's key rotated (review S-M1): its pair is held, the other carries the names, the key is fetched
+#      later at the target's own addresses, and the pair answers again.
 #
 #   scripts/verify-dns.sh [path/to/Datapavan-Advanced-debug.apk]
 set -euo pipefail
@@ -104,12 +116,25 @@ expect() {
 n=0
 fresh() { n=$((n + 1)); echo "name-$n-$RANDOM.dnslab.test"; }
 
-# Skipped, and saying so, only where the lab cannot run here at all, or the emulator was not started on its
-# resolver (CI's shards start theirs on the default one): the check then proves nothing, and its line says it.
+# Skipped, and saying so, only where the lab cannot run here at all: the check then proves nothing, and its line
+# says it. With DNSLAB_REQUIRED=1, as on CI's dns shard, that is a failure.
 skip() {
+    if [ "${DNSLAB_REQUIRED:-}" = 1 ]; then
+        echo "DNS CHECK FAILED: it would skip, with DNSLAB_REQUIRED=1: $1" >&2
+        exit 1
+    fi
     echo "SKIPPED verify-dns.sh: $1; nothing of W8's part 1 was checked on the emulator"
     [ -z "${GITHUB_ACTIONS:-}" ] || echo "::notice title=W8's emulator check skipped::$1"
     exit 0
+}
+# Taps the first element whose text starts with $1 (a text with an apostrophe, which the dump may escape).
+tap_starting() {
+    dump_screen || return 1
+    local bounds
+    bounds=$(adb shell cat "$DUMP" | grep -o "text=\"$1[^\"]*\"[^>]*bounds=\"[^\"]*\"" | head -1 | grep -o 'bounds="[^"]*"' | grep -o '[0-9]\+' | tr '\n' ' ')
+    [ -n "$bounds" ] || return 1
+    set -- $bounds
+    adb shell input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 ))
 }
 command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 || skip "no Docker answers here"
 
@@ -125,10 +150,13 @@ adb shell pm clear "$PKG" >/dev/null
 adb uninstall "$WORKLOAD" >/dev/null 2>&1 || true
 adb install "$ROOT/build/workload-app/workload-app.apk" >/dev/null
 
-# Before Watch: the emulator's network resolver must be the lab's.
-[ "$(lookup printer.home.arpa)" = 192.168.1.50 ] ||
-    skip "the emulator does not use the lab's resolver (start it with -dns-server 10.153.53.1)"
-echo "ok: the emulator's network resolver is the lab's (printer.home.arpa before Watch: 192.168.1.50)"
+# Before Watch: whether the emulator's own resolver is the lab's too (started with -dns-server 10.153.53.1). Then
+# a lookup that slipped past Watch would show in the lab's log as well; otherwise only Watch's own exchanges do.
+if [ "$(lookup printer.home.arpa)" = 192.168.1.50 ]; then
+    echo "ok: the emulator's own resolver is the lab's too: a lookup past Watch would show in its log"
+else
+    echo "ok: the emulator's own resolver is not the lab's; Watch is pointed at the lab's resolver below"
+fi
 
 # The lab's tables and root in Watch's files, in place of the pack's (debug builds only).
 adb push "$WORK/data/." /data/local/tmp/dnslab >/dev/null
@@ -136,16 +164,50 @@ adb shell run-as "$PKG" sh -c "'mkdir -p files/dnslab && cp /data/local/tmp/dnsl
 adb shell rm -rf /data/local/tmp/dnslab
 allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
-# The fallback's notification needs the user's leave from Android 13 on, which W9's onboarding asks.
-[ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 33 ] || adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
 adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
 vpn_up || fail "Watch's tunnel did not come up"
-# The lab's resolver knows only the lab's names, so Android's own check of the network can never pass here: the
-# engine is told the network is validated, as it would be on a real network, and step 7 tells it otherwise.
-dump dns-validated on >/dev/null
 applied=$(sed -n 's/^ *dns-applied //p' <<<"$(dump dns-apply)")
 expect "Watch read the lab's tables (relays targets pairs presets)" "$applied" "1 2 2 2"
+# The network's resolver is the lab's from here on, through its censor's front on this computer's loopback, as the
+# emulator reaches it (10.0.2.2).
+set_resolver=$(sed -n 's/^ *dns-network-resolver-set //p' <<<"$(dump dns-network-resolver "10.0.2.2:${FRONT_resolver_alt##*:}")")
+expect "Watch asks the lab's resolver as the network's" "$set_resolver" "/10.0.2.2:${FRONT_resolver_alt##*:}"
+# The precheck, once the lab is up: a failure, never a skip.
+expect "a local name through Watch reaches the lab's resolver" "$(lookup printer.home.arpa)" 192.168.1.50
+# Android's own check of the network: where the emulator reaches the internet, its "validated" reaches the engine
+# by the real path; where it cannot (its own resolver is the lab's), the engine is told so.
+validated=""
+for _ in $(seq 1 20); do
+    grep -q "dns-validated 1" <<<"$(dump)" && { validated=android; break; }
+    sleep 1
+done
+if [ -n "$validated" ]; then
+    echo "ok: Android's own validation of the network reached the engine"
+else
+    dump dns-validated on >/dev/null
+    echo "ok: Android cannot validate the network here (its resolver knows only the lab's names): the engine is told it is"
+fi
+
+# 0. "Notify me" without Android's leave to notify (Android 13 and later): the switch asks; refused, it stays off
+# and the screen says why (review R-M3). Then the leave, as W9's onboarding will ask it.
+if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 33 ]; then
+    adb shell pm revoke "$PKG" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
+    adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
+    scroll_to "Notify me while names go to the network" || fail "the screen has no \"Notify me\" switch"
+    tap_starting "Notify me while names go to the network" || fail "the \"Notify me\" switch could not be tapped"
+    denied=""
+    for _ in $(seq 1 10); do
+        tap_id "com.android.permissioncontroller:id/permission_deny_button" && { denied=yes; break; }
+        sleep 1
+    done
+    [ -n "$denied" ] || fail "turning \"Notify me\" on did not ask for Android's leave to notify"
+    sleep 1
+    scroll_to "Android does not let Watch show notifications" || fail "refused, the screen does not say why"
+    grep -q "dns-notify off" <<<"$(dump)" || fail "refused, \"Notify me\" did not stay off"
+    echo "ok: refused Android's leave to notify, \"Notify me\" stayed off and the screen said why"
+    adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
+fi
 
 # 1. ODoH by default; nothing to the network's resolver; no lookup of Watch's own.
 resolver_mark=$(mark resolver)
@@ -180,7 +242,18 @@ PRIVATE_MODE=$(adb shell settings get global private_dns_mode | tr -d '\r')
 adb shell settings put global private_dns_mode opportunistic
 sleep 3
 expect "with Private DNS on automatic, names still go by ODoH" "$(lookup probe.dnslab.test)" 10.53.1.1
-refused=$(grep -cE "^ *flow tcp [^ ]+ 10\.1\.10\.3:853 [0-9]+ refused" <<<"$(dump)" || true)
+# Watch's DNS addresses, of the set the tunnel took (ADR 0041): Android may try either family.
+read -r dns4 dns6 < <(sed -n 's/^ *addresses [^ ]* [^ ]* \([^ ]*\) [^ ]* \([^ ]*\)$/\1 \2/p' <<<"$(dump)")
+refused=0
+for _ in $(seq 1 30); do
+    refused=$(grep -cE "^ *flow tcp [^ ]+ (${dns4//./\\.}|\[$dns6\]):853 [0-9]+ refused" <<<"$(dump)" || true)
+    [ "$refused" -ge 1 ] && break
+    sleep 1
+done
+if [ "$refused" -lt 1 ]; then
+    grep -E '^ *(addresses|flow tcp .*:853 )' <<<"$(dump)" >&2 || true
+    fail "Android's DNS over TLS to Watch's addresses ($dns4, $dns6) at port 853 was never seen refused"
+fi
 echo "ok: flows to Watch's address at port 853 refused: $refused"
 adb shell settings put global private_dns_mode "${PRIVATE_MODE/null/off}"
 PRIVATE_MODE=""
@@ -213,8 +286,8 @@ grep -E '^ *dns-latency ' <<<"$(dump)" | sed 's/^ */  /'
 for carry in odoh doh dot; do
     read -r count p50 p95 < <(sed -n "s/^ *dns-latency $carry \([0-9]*\) \([0-9]*\) \([0-9]*\)$/\1 \2 \3/p" <<<"$(dump)")
     [ "${count:-0}" -ge 15 ] || fail "too few $carry exchanges timed: ${count:-0}"
-    [ "$p50" -le "${DNS_BUDGET_LAB_P50_MS:-100}" ] && [ "$p95" -le "${DNS_BUDGET_LAB_P95_MS:-400}" ] ||
-        fail "$carry in the lab: p50 $p50 ms, p95 $p95 ms, over the budget of ${DNS_BUDGET_LAB_P50_MS:-100} and ${DNS_BUDGET_LAB_P95_MS:-400} ms (ADR 0039)"
+    [ "$p50" -le "${DNS_BUDGET_LAB_P50_MS:-100}" ] && [ "$p95" -le "${DNS_BUDGET_LAB_P95_MS:-250}" ] ||
+        fail "$carry in the lab: p50 $p50 ms, p95 $p95 ms, over the budget of ${DNS_BUDGET_LAB_P50_MS:-100} and ${DNS_BUDGET_LAB_P95_MS:-250} ms (ADR 0039)"
     echo "ok: $carry in the lab: p50 $p50 ms, p95 $p95 ms, within the budget (ADR 0039)"
 done
 
@@ -270,23 +343,60 @@ name=$(fresh)
 lookup "$name" >/dev/null
 [[ "$(way)" != choice ]] || fail "port 853 blocked: the DoT preset still answered"
 echo "ok: port 853 blocked: the next way answers ($(way))"
+# "Only this resolver" (review R-M1): nothing else is asked, the network's resolver included.
+dump dns-only on >/dev/null
+target_mark=$(mark target-a)
+resolver_mark=$(mark resolver)
+name=$(fresh)
+expect "port 853 blocked, only this resolver: the app gets no address" "$(lookup "$name")" failed
+asked target-a "$name" "$target_mark" && fail "only this resolver: a target was asked $name"
+asked resolver "$name" "$resolver_mark" && fail "only this resolver: the network's resolver saw $name"
+echo "ok: only this resolver: nothing else was asked ($(way))"
+dump dns-only off >/dev/null
 "$LAB" censor dot pass >/dev/null
 dump dns-choice odoh >/dev/null
+# An injected answer: never for a name that goes encrypted; for a local name, which only the network's resolver
+# answers, and for any name once the fallback sends it there.
 "$LAB" censor resolver inject >/dev/null
+# ODoH is still held from the reset above: whichever encrypted way answers, its own address, never the forged one.
+encrypted=$(lookup probe.dnslab.test)
+case $encrypted in
+    10.53.1.1 | 10.53.2.2 | 10.53.3.3 | 10.53.4.4) echo "ok: an injected answer never reaches a name that goes encrypted ($encrypted, $(way))" ;;
+    *) fail "with the network's resolver forging answers, a name that goes encrypted got '$encrypted'" ;;
+esac
 expect "an injected answer reaches a local name, which only the network's resolver answers" "$(lookup printer.home.arpa)" 10.53.6.6
+for front in relay target-a target-b doh; do "$LAB" censor "$front" drop >/dev/null; done
+"$LAB" censor dot block >/dev/null
+expect "outside strict, every way down: the injected answer reaches the app through the fallback" "$(lookup "$(fresh)")" 10.53.6.6
+all_pass
 "$LAB" censor resolver pass >/dev/null
+dump dns-choice odoh >/dev/null
 
-# 7. Behind a captive portal no failure counts: told the network is not validated, as Android says behind one.
+# 7. Behind a captive portal no failure counts: told the network is not validated, as Android says behind one (a
+# debug command: no emulator here sits behind a real portal).
 dump dns-validated off >/dev/null
 sleep 1
 grep -q "dns-validated 0" <<<"$(dump)" || fail "the engine was not told the network is not validated"
+# The holds of the steps before stay (a change of setting keeps them, review R-m1): no new one may come, and those
+# there only end.
+before=$(held)
 for front in relay target-a target-b doh dot; do "$LAB" censor "$front" reset >/dev/null; done
 lookup "$(fresh)" >/dev/null
-expect "behind a captive portal, failures held nothing" "$(held)" 0
+[ "$(held)" -le "$before" ] || fail "behind a captive portal, failures held ways: $(held) held, $before before"
+echo "ok: behind a captive portal, failures held nothing new ($(held) held, $before before)"
 all_pass
 dump dns-validated on >/dev/null
 
+# What the resolver learned (its holds) stays across a change of strict or of the choice (review R-m1), but not of
+# the pairs, whose steps are others then: a step that needs the ways fresh changes the pairs and back.
+fresh_resolver() {
+    dump dns-pairs "'lab-relay>lab-target-b'" >/dev/null
+    dump dns-pairs default >/dev/null
+    [ "$(held)" = 0 ] || fail "a change of pairs did not start the ways afresh: $(held) held"
+}
+
 # 8. A WireGuard endpoint's name goes the encrypted way.
+fresh_resolver
 target_mark=$(mark target-a)
 resolver_mark=$(mark resolver)
 key=$(python3 -I -c 'import base64,os; print(base64.b64encode(os.urandom(32)).decode())')
@@ -307,5 +417,55 @@ asked resolver probe.dnslab.test "$resolver_mark" && fail "the endpoint's name r
 state=$(sed -n 's/^ *tunnel 9 //p' <<<"$(dump)")
 echo "ok: the WireGuard endpoint's name went by ODoH, not to the network's resolver (tunnel state: $state)"
 dump tunnel-remove 9 >/dev/null
+# The workload app back on its own way: a removed configuration's apps wait for it otherwise.
+dump tunnel-route "$uid" 0 >/dev/null
+
+fresh_resolver
+# 9. A network's search domains (review S-C1): a public suffix is refused; under the network's own domain, the
+# encrypted way first, the network's resolver only for a name the internet does not know.
+search=$(sed -n 's/^ *dns-search-set //p' <<<"$(dump dns-search "com,office.example")")
+expect "the search domains Watch keeps of com and office.example" "$search" office.example
+for _ in $(seq 1 10); do grep -q "dns-search office.example" <<<"$(dump)" && break; sleep 1; done
+grep -q "dns-search office.example" <<<"$(dump)" || fail "the engine does not show the network's domain in use"
+target_mark=$(mark target-a)
+resolver_mark=$(mark resolver)
+expect "a name only the network knows, under its own domain" "$(lookup nas.office.example)" 192.168.1.60
+asked target-a nas.office.example "$target_mark" || fail "nas.office.example did not go the encrypted way first"
+asked resolver nas.office.example "$resolver_mark" || fail "nas.office.example did not reach the network's resolver"
+leak="leak-$RANDOM.example.com"
+expect "a name under com, which the network set as its domain" "$(lookup "$leak")" failed
+asked resolver "$leak" "$resolver_mark" && fail "a name under com reached the network's resolver"
+echo "ok: com refused as a search domain; office.example's name reached the network only after the internet did not know it"
+dump dns-search "" >/dev/null
+
+fresh_resolver
+# 10. A target's key rotated (review S-M1, S-C2): the pair that meets the 401 is held, the other carries the names;
+# the key is fetched minutes later in the product, a second or two here, at the target's own addresses; then the
+# pair answers again.
+dump dns-refresh 1 2 >/dev/null
+"$LAB" rotate >/dev/null || fail "the lab's target-a did not rotate its key"
+target_b_mark=$(mark target-b)
+name=$(fresh)
+lookup "$name" >/dev/null
+asked target-b "$name" "$target_b_mark" || fail "after target-a's new key, the other pair did not carry $name"
+[ "$(held)" -ge 1 ] || fail "target-a's pair was not held after its 401"
+echo "ok: target-a's key rotated: the other pair carried the name ($(way)), held $(held)"
+# The fetch, a second or two later: the hold ends once the new key is in.
+released=""
+for _ in $(seq 1 20); do
+    sleep 1
+    [ "$(held)" = 0 ] && { released=yes; break; }
+done
+dump dns-refresh off >/dev/null
+[ -n "$released" ] || fail "target-a's pair stayed held: its new key was not fetched"
+# The first pair alone, its key kept across the change: it answers with the new key.
+dump dns-pairs "'lab-relay>lab-target-a'" >/dev/null
+target_mark=$(mark target-a)
+name=$(fresh)
+lookup "$name" >/dev/null
+asked target-a "$name" "$target_mark" || fail "target-a's pair did not answer again after its new key"
+expect "the way after target-a's new key" "$(way)" "odoh lab-relay lab-target-a"
+dump dns-pairs default >/dev/null
+echo "ok: target-a's new key was fetched apart from the lookup, and its pair answers again"
 
 echo "== the DNS check passed"
