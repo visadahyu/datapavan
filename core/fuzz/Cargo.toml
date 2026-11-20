@@ -150,3 +150,10 @@ path = "fuzz_targets/catalogue.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "proxies"
+path = "fuzz_targets/proxies.rs"
+test = false
+doc = false
+bench = false

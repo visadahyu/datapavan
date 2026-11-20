@@ -1,0 +1,3 @@
+GET http://user:seed@example.org:8080/path?q=1 HTTP/1.1
+Host: example.org
+

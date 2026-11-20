@@ -23,6 +23,7 @@ pub mod odoh;
 pub mod organisations;
 pub mod owners;
 pub mod packet;
+pub mod proxies;
 pub mod quic;
 pub mod resolvers;
 pub mod snapshot;
