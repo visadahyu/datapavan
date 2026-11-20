@@ -98,9 +98,12 @@ the maintainer; built on `watch-w8a` on 2026-11-20. Each point as built:
    both agree; failing that it fetches `/.well-known/odohconfigs` from the target, through the user's tool while it
    is on, else directly over the network beneath: **an accepted limit**, which shows the phone's address to the
    target once per key, and gives no assurance that every user holds the same key. The pack's copy bootstraps.
-   Rotation measured during the build: Cloudflare's and fra01's configurations did not change between 13:44 and
-   15:39 UTC; Cloudflare serves its with `no-store` and a `Last-Modified` of that day's 00:00 UTC, so a daily
-   rotation is likely and is not yet shown.
+   Rotation measured during the build, every 30 minutes: dnscry.pt fra01's key, the second default pair's, changed
+   between 15:39 and 16:09 UTC, held at least since 13:44; Cloudflare's did not change from 13:44 to 16:09 UTC, and
+   it serves it with `no-store` and a `Last-Modified` of that day's 00:00 UTC, so a daily key is likely. Keys
+   therefore change faster than packs can follow, and the fetch after a 401 is the usual way a key arrives, not a
+   rare one: the pack's copy only saves the first fetch while it is still current. A key feed that every user
+   holds alike, accepted when two paths agree, is frontier work (the IETF's consistency drafts expired in 2024).
 6. **The order, by privacy** (`ladder.rs`): the user's own resolver, else ODoH; then, while the user's tool is on,
    ODoH through the tool; then DoH to the targets' own operators; then the presets that filter nothing; the
    network's resolver last, never in strict. Watch learns only within a rung (the step that answered last is
