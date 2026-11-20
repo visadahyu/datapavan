@@ -335,6 +335,9 @@ else
     echo "SKIPPED the camera's photo: this emulator has no camera (CI's and the shards' run with -camera-back none); the cancel path alone is checked"
     adb shell input keyevent KEYCODE_BACK
     sleep 2
+    # The camera app, with no camera, stops; Android hands Watch its answer when Watch's screen is in front again
+    # (an emulator of Android 15 showed the launcher instead), and only then is the photo's file deleted.
+    watch_screen
 fi
 within 10 no_capture || fail "the camera's photo was not deleted: $(capture_left)"
 [ "$(images)" = "$before" ] || fail "the camera left a copy in MediaStore ($before images before, $(images) after)"
