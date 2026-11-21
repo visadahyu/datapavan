@@ -69,7 +69,7 @@ chaining is, and must follow the same switch.
    at one of them says "This is the proxy in Android's settings, which other apps can use too." A proxy given by a PAC
    file is found by Android on the phone's own loopback, which never enters the tunnel: not seen.
 5. **Messengers' proxies are inferred, each with substitution,** and worded "Through a KIND at ADDRESS. Inferred from
-   where and how it connects. What it reaches from there is encrypted." The clients are their makers' own packages
+   where and how it connects. Watch cannot see where it goes from there: that part is encrypted." The clients are their makers' own packages
    (`data/messengers/clients.tsv`). A proxy is named only while, in the same window (the live view's ten minutes in
    time since the phone started, sleep included, or while one is open), the app made no TCP connection to its
    maker's own network. A direct connection within ten minutes after a naming takes the name back (fix round, F2): the

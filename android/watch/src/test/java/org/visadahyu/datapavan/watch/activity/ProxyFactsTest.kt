@@ -95,7 +95,8 @@ class ProxyFactsTest {
      */
     @Test
     fun theProxyStringsUseNoWordThatJudges() {
-        val strings = File("src/main/res/values/strings_untranslated.xml").readText() + File("src/main/res/values/strings.xml").readText()
+        val strings = listOf("strings_untranslated.xml", "strings.xml").map { File("src/main/res/values/$it") }.filter { it.isFile }
+            .joinToString("") { it.readText() }
         val names = "proxy_[a-z_]+|(?:now|history)_proxy_[a-z_]+|cannot_see_proxy|now_named_proxy|log_switch[a-z_]*|(?:now|history)_[a-z_]+_off"
         val proxy = Regex("""<string name="($names)">([^<]*)</string>""")
             .findAll(strings).associate { it.groupValues[1] to it.groupValues[2].lowercase() }

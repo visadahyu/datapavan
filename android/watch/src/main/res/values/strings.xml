@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <!-- The product's name, the same in every language (docs/NAMES.md). -->
     <string name="app_name" translatable="false">Datapavan Watch</string>
     <string name="watch_tagline">See where each app on your phone connects.</string>
@@ -438,4 +438,329 @@
     <!-- In place of a configuration's name: inside the sentences above, and also alone as a configuration's heading and in its buttons' and rows' labels, so it must read well on its own too. -->
     <string name="tunnel_removed_name">a WireGuard configuration since removed</string>
     <string name="tunnel_closed_name">a WireGuard configuration that cannot be opened now</string>
+    <!-- W8 (ADR 0042, 0052, 0053, 0041): the names of apps that go directly, apps' own proxies and the switch that
+         names them, tracker blocking, and the per-tool guides for proxy mode, moved from strings_untranslated.xml with
+         their translations (ADR 0030). -->
+    <!-- W8, part 1 (ADR 0042), and its fix round: the names of apps that go directly. -->
+    <string name="dns_title">How apps that go directly look up names</string>
+    <string name="dns_now_unknown">No app has looked up a name on this network yet.</string>
+    <string name="dns_now_none_odoh">No app has looked up a name on this network yet. Watch will use Oblivious DoH.</string>
+    <!-- The first sentence of the "now" line, read out when it changes; the details follow apart. -->
+    <string name="dns_now_odoh">Names now go by Oblivious DoH.</string>
+    <string name="dns_now_odoh_tool">Names now go by Oblivious DoH through your tool.</string>
+    <string name="dns_now_choice">Names now go encrypted to the resolver you chose.</string>
+    <string name="dns_now_down_odoh">Oblivious DoH does not answer on this network.</string>
+    <string name="dns_now_choice_down">Your resolver does not answer on this network.</string>
+    <string name="dns_now_fallback">No encrypted way answers on this network. For now, names go to this network\'s resolver without encryption. The network can see them. Turn on strict to stop this.</string>
+    <string name="dns_now_failing">No encrypted way answers on this network. Strict is on, so apps that go directly cannot look up names until one does.</string>
+    <string name="dns_now_failing_only">Your resolver does not answer on this network. \"Only this resolver\" is on, so apps that go directly cannot look up names until it does.</string>
+    <!-- %1$s: the relay's operator and its countries; %2$s: the target's. -->
+    <string name="dns_now_pair">Relay: %1$s. Target: %2$s. The relay sees your address but not the names. The target sees the names but not your address.</string>
+    <!-- %1$s: a resolver's operator. -->
+    <string name="dns_now_to">Names now go encrypted to %1$s. It sees your address and the names.</string>
+    <!-- %1$s: an operator; %2$s: its countries, by commas. -->
+    <string name="dns_party">%1$s (%2$s)</string>
+    <!-- %1$s: the host name of Android's Private DNS provider. -->
+    <string name="dns_private_dns_strict">Android\'s Private DNS sends every app\'s names to %1$s, past Watch. Your choice here applies only while Private DNS is off or on automatic.</string>
+    <string name="dns_choice">Where names go:</string>
+    <string name="dns_odoh">Oblivious DoH (recommended)</string>
+    <string name="dns_odoh_detail">Two operators in different countries each see half: one sees your address, the other sees the names.</string>
+    <!-- A resolver's row: %1$s its operator; %2$s one of the service's names below. -->
+    <string name="dns_preset">%1$s, %2$s</string>
+    <string name="dns_service_blocking">blocks harmful sites</string>
+    <string name="dns_service_unfiltered">unfiltered</string>
+    <string name="dns_service_standard">standard</string>
+    <string name="dns_protocol_doh">Over HTTPS (DoH)</string>
+    <string name="dns_protocol_dot">Over TLS (DoT)</string>
+    <!-- A resolver's card: %1$s the country of its operator's seat; %2$s, %3$s, %4$s sentences below. -->
+    <string name="dns_preset_card">Based in %1$s. %2$s %3$s %4$s</string>
+    <string name="dns_logs_totals">It keeps no addresses, only totals.</string>
+    <string name="dns_logs_names_day">It keeps the names for a day, without addresses, and totals.</string>
+    <string name="dns_logs_day">It keeps logs with your address for about a day.</string>
+    <string name="dns_logs_months">It keeps logs with part of your address hidden for up to six months.</string>
+    <string name="dns_logs_none">It says it keeps no logs.</string>
+    <string name="dns_blocks_none">It blocks nothing.</string>
+    <string name="dns_blocks_harm">It blocks harmful sites.</string>
+    <string name="dns_blocks_court">It blocks what courts order.</string>
+    <string name="dns_audited_no">No one outside has checked this.</string>
+    <string name="dns_audited_firm">An accounting firm checked these claims.</string>
+    <string name="dns_policy">Its privacy policy</string>
+    <string name="dns_choice_fails">If it does not answer, Watch uses Oblivious DoH, then the other encrypted ways. Turn on \"Only this resolver\" to stop that.</string>
+    <string name="dns_only">Only this resolver</string>
+    <string name="dns_only_cost">If your resolver does not answer, apps that go directly cannot look up names.</string>
+    <string name="dns_custom">Your own resolver</string>
+    <string name="dns_custom_detail">A DoH address (https://…) or a DoT server name, and its IP addresses.</string>
+    <string name="dns_custom_at">DoH address or DoT server</string>
+    <string name="dns_custom_addresses">IP addresses, by commas</string>
+    <string name="dns_custom_use">Test it and use it</string>
+    <string name="dns_custom_refused">Give a DoH address that starts with https://, or a DoT server name, and at least one IP address. Watch never looks up a resolver\'s name without encryption.</string>
+    <string name="dns_custom_testing">Asking your resolver for a name…</string>
+    <!-- %1$d: milliseconds. -->
+    <string name="dns_custom_answered">Your resolver answered in %1$d ms. Watch uses it now.</string>
+    <string name="dns_custom_failed">Your resolver did not answer, so Watch did not save it. Check its address and its IP addresses.</string>
+    <string name="dns_custom_tampered">Your resolver\'s certificate did not check, or the connection was cut. Watch did not save it.</string>
+    <string name="dns_strict">Strict: never the network\'s resolver</string>
+    <string name="dns_strict_cost">If no encrypted way answers, apps that go directly cannot look up names. Use it where the network is censored or watched.</string>
+    <string name="dns_local_names">Local names, like your printer or router, still go to your network\'s own resolver.</string>
+    <!-- %1$s: the network's own domains, by commas. -->
+    <string name="dns_search">This network says these domains are its own: %1$s. For a name under them, Watch asks the encrypted way first. It asks this network only when the internet does not know the name.</string>
+    <string name="dns_strict_limits">Strict does not cover everything. Android checks the connection by itself, past Watch. Some apps use their own encrypted DNS. The apps you left out of Watch are not covered. And while Watch restarts, or if Android stops it and Always-on VPN is off, apps use the network\'s resolver.</string>
+    <string name="dns_notify">Notify me while names go to the network\'s resolver</string>
+    <string name="dns_notify_refused">Android does not let Watch show notifications, so this stays off. Allow them for Watch in Android\'s settings, then turn this on again.</string>
+    <string name="dns_pairs">Oblivious DoH pairs, each of two different operators and countries:</string>
+    <!-- %1$s: the relay's operator and its countries; %2$s: the target's. -->
+    <string name="dns_pair">Relay: %1$s. Target: %2$s.</string>
+    <string name="dns_pairs_change">Change pairs</string>
+    <string name="dns_pairs_default">Use the default pairs</string>
+    <string name="dns_pairs_done">Done</string>
+    <string name="dns_not_kept">Watch keeps no list of the names apps look up, apart from the connection log, if you keep one. It keeps answers in memory for up to a day, and forgets them when the network changes.</string>
+    <string name="dns_fallback_channel">Names without encryption</string>
+    <string name="dns_fallback_title">Names go to the network\'s resolver</string>
+    <string name="dns_fallback_text">No encrypted way answers on this network, so apps that go directly use its resolver for now. Open Watch to turn on strict.</string>
+
+    <!-- The one switch for what Watch leaves out of the log and "Now" (W6, W7 and W8): off unless the user turns it
+         on. It replaces "Log where these apps connect" (chain_log_destinations), which spoke of chained apps alone.
+         The lines below that name it quote it word for word. -->
+    <string name="log_switch">Log where apps connect through your tool, WireGuard or a proxy</string>
+    <!-- Under the switch above. -->
+    <string name="log_switch_note">Off unless you turn it on. It covers the apps you send through your circumvention tool or a WireGuard configuration, and the tool\'s own servers. It also covers apps that connect through a proxy, such as a Telegram proxy. Watch still counts their connections. A list of where they went can be used against you if someone searches your phone.</string>
+    <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens Watch's screen at the
+         switch. -->
+    <string name="log_switch_open">Go to the switch</string>
+    <!-- "Now": an app sent through the user's tool, the tool's own servers, and an app sent through a WireGuard
+         configuration (%1$s: its name), with the switch above off. -->
+    <string name="now_through_tool_off">Sent through your circumvention tool. Where it connected is not shown, because \"Log where apps connect through your tool, WireGuard or a proxy\" is off.</string>
+    <string name="now_tool_servers_off">Where it connects is not shown, because \"Log where apps connect through your tool, WireGuard or a proxy\" is off.</string>
+    <string name="now_through_tunnel_off">Sent through %1$s. Where it connected is not shown, because \"Log where apps connect through your tool, WireGuard or a proxy\" is off.</string>
+    <!-- The same in an app's history, of a connection logged while the switch was off. history_left_out_off: the
+         tool's own servers, or a record written before Watch logged each connection's route. -->
+    <string name="history_through_tool_off">Sent through your circumvention tool. Where it connected was not logged, because \"Log where apps connect through your tool, WireGuard or a proxy\" was off.</string>
+    <string name="history_left_out_off">Where it connected was not logged, because \"Log where apps connect through your tool, WireGuard or a proxy\" was off.</string>
+    <string name="history_through_tunnel_off">Sent through %1$s. Where it connected was not logged, because \"Log where apps connect through your tool, WireGuard or a proxy\" was off.</string>
+    <!-- A connection of an app sent through the tool or a WireGuard configuration that went directly all the same:
+         one opened before the app was sent through them, its local network, or what the tool does not carry. -->
+    <string name="history_direct_off">Went directly, not through your circumvention tool or a WireGuard configuration. Where it connected was not logged, because \"Log where apps connect through your tool, WireGuard or a proxy\" was off.</string>
+    <!-- Where a destination's name came from, beside "name the connection sent" and the others: the app named the
+         destination to its proxy. -->
+    <string name="now_named_proxy">destination the app asked its proxy for</string>
+    <!-- The kinds of proxy, set into the sentences below. SOCKS5, SOCKS4, HTTP and MTProto are names of protocols,
+         and Telegram, WhatsApp and Signal names of apps: never translated. -->
+    <string name="proxy_kind_socks5">SOCKS5 proxy</string>
+    <string name="proxy_kind_socks4">SOCKS4 proxy</string>
+    <string name="proxy_kind_http">HTTP proxy</string>
+    <string name="proxy_kind_mtproto">Telegram proxy (MTProto)</string>
+    <string name="proxy_kind_whatsapp">WhatsApp proxy</string>
+    <string name="proxy_kind_signal">Signal proxy</string>
+    <!-- A proxy the app's own bytes named and the proxy's reply confirmed: %1$s is its kind (above), %2$s where it is,
+         as a name or an address with its port, %3$s the destination the app asked it for. "Read from the connection"
+         says how Watch knows. -->
+    <string name="proxy_asked">Asked the %1$s at %2$s for %3$s. Read from the connection.</string>
+    <!-- As above, where no destination asked for was read. -->
+    <string name="proxy_declared">Through the %1$s at %2$s. Read from the connection.</string>
+    <!-- A messenger's proxy that Watch infers: %1$s its kind, %2$s where it is. -->
+    <string name="proxy_inferred">Through a %1$s at %2$s. Inferred from where and how it connects. Watch cannot see where it goes from there: that part is encrypted.</string>
+    <!-- How Watch knows, on its own line where the sentence above is not shown (the switch off). -->
+    <string name="proxy_how_read">Read from the connection.</string>
+    <string name="proxy_how_inferred">Inferred from where and how it connects.</string>
+    <!-- A plain HTTP request written in the form a proxy takes, which a web server takes too: the row names the server
+         it was sent to, and this line says what the request asked for (%1$s), never that the server is a proxy. -->
+    <string name="proxy_request_asked">It sent this server a request written for an HTTP proxy, asking for %1$s. Read from the connection.</string>
+    <string name="now_proxy_request_hidden">It sent this server a request written for an HTTP proxy. What it asked for is not shown, because \"Log where apps connect through your tool, WireGuard or a proxy\" is off.</string>
+    <string name="history_proxy_request_hidden">It sent this server a request written for an HTTP proxy. What it asked for was not logged, because \"Log where apps connect through your tool, WireGuard or a proxy\" was off.</string>
+    <string name="proxy_request_password">The request carried a password for a proxy, unencrypted. Watch did not keep it.</string>
+    <!-- Where a proxy is, by its address alone: who runs it is not known. %1$s is the organisation whose network holds
+         the address. -->
+    <string name="proxy_network">An address in the network of %1$s. Who runs it is not known.</string>
+    <!-- As above, and the network is not the app maker's own: %2$s is the app's maker, such as Telegram. -->
+    <string name="proxy_network_not_maker">An address in the network of %1$s, not of %2$s. Who runs it is not known.</string>
+    <string name="proxy_network_unknown">Watch cannot name the network of this address. Who runs it is not known.</string>
+    <!-- Where Watch cannot name the network, or does not show the address: %1$s is the app's maker, such as Telegram. -->
+    <string name="proxy_not_maker">The address is not in the network of %1$s.</string>
+    <string name="proxy_local">On your local network. Who runs it is not known.</string>
+    <!-- The proxy set in Android's settings, which apps that follow those settings all use. -->
+    <string name="proxy_setting">This is the proxy in Android\'s settings, which other apps can use too.</string>
+    <string name="proxy_password">A password for this proxy crossed the network unencrypted. Watch did not keep it.</string>
+    <!-- The server name an inferred proxy's connection sent, which no DNS answer gave its address: %1$s is that
+         name. Facts only: nothing of why the app sent it. -->
+    <string name="proxy_cover">Its connection sent the name %1$s. No DNS answer Watch passed gave that name this address.</string>
+    <!-- %1$s owns the name above, %2$s the network of the address. -->
+    <string name="proxy_cover_owner">That name belongs to %1$s, and the network to %2$s.</string>
+    <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Watch knows and the
+         facts that name nothing. -->
+    <string name="now_proxy_hidden">Through the %1$s. Where it connected is not shown, because \"Log where apps connect through your tool, WireGuard or a proxy\" is off.</string>
+    <string name="history_proxy_hidden">Through the %1$s. Where it connected was not logged, because \"Log where apps connect through your tool, WireGuard or a proxy\" was off.</string>
+    <!-- As above, for the proxy set in Android's settings. -->
+    <string name="now_proxy_setting_hidden">Through the %1$s in Android\'s settings, which other apps can use too. Where it connected is not shown, because \"Log where apps connect through your tool, WireGuard or a proxy\" is off.</string>
+    <string name="history_proxy_setting_hidden">Through the %1$s in Android\'s settings, which other apps can use too. Where it connected was not logged, because \"Log where apps connect through your tool, WireGuard or a proxy\" was off.</string>
+    <!-- One more line of "What this view cannot see". -->
+    <string name="cannot_see_proxy">For a proxy an app uses, Watch cannot see who runs it, or whether you or the app chose it. For a proxy Watch infers, it cannot see where the traffic goes after it.</string>
+
+    <!--
+        W8, part 3b (ADR 0041, "How the per-tool guides are built"): the per-tool guides for proxy mode, in Watch and on the
+        website (scripts/guides.py writes docs/site/guides/ from these words and data/tools/guide*.tsv). A quoted %s is a
+        tool's own label, read from the tool on this phone or from the data, never translated: only these sentences are.
+        The guides name no tool as better than another and never point to a download.
+    -->
+    <!-- The chain section: one link per tool of the table installed here. %1$s: the tool's name. -->
+    <string name="chain_guides_title">How the tools on this phone run beside Watch:</string>
+    <string name="chain_guide_proxy">%1$s in proxy mode</string>
+    <string name="chain_guide_other">%1$s and Watch</string>
+    <!-- A guide's screen and page. %1$s: the tool's name. -->
+    <string name="guide_title_proxy">%1$s in proxy mode</string>
+    <string name="guide_title_other">%1$s and Watch</string>
+    <string name="guide_intro">Android runs one VPN at a time. In its proxy mode, %1$s runs without a VPN, and Watch can send your apps through it.</string>
+    <string name="guide_assumes">These steps assume %1$s already works for you as a VPN.</string>
+    <string name="guide_heading_on">Turn on proxy mode</string>
+    <!-- %1$s: an address such as 127.0.0.1; %2$s: its port. -->
+    <string name="guide_listener">Its proxy then listens on this phone at %1$s, port %2$s.</string>
+    <string name="guide_next">Then come back to Watch. It finds the proxy by itself and offers to send your apps through it.</string>
+    <string name="guide_heading_password">A password for its proxy</string>
+    <string name="guide_password_optional">Its proxy can ask for a user name and a password. Set the ones Watch shows when it finds the proxy. Then other apps on this phone cannot use it.</string>
+    <string name="guide_password_none">Its proxy cannot ask for a password. While it runs, any app on this phone can use it.</string>
+    <string name="guide_heading_asks">What it asks for</string>
+    <string name="guide_heading_back">Back to VPN mode</string>
+    <string name="guide_back_note">When %1$s runs as a VPN again, Android turns Watch off: only one VPN runs at a time.</string>
+    <!-- %1$s: the tool's name; %2$s: its version. -->
+    <string name="guide_read">Read from the source code of %1$s, version %2$s.</string>
+    <string name="guide_checked">Tried with Watch at that version.</string>
+    <string name="guide_not_checked">Not yet tried with Watch.</string>
+    <string name="guide_labels_tool">The words in quotes are read from %1$s on this phone.</string>
+    <string name="guide_labels_recorded">The words in quotes are as that version shows them.</string>
+    <string name="guide_audit">The rest of Datapavan, its check of your apps, works without Watch.</string>
+    <!-- Steps. Each %s in quotes is one of the tool's labels. -->
+    <string name="guide_step_drawer">Open the menu in the top corner of its screen and tap \"%1$s\".</string>
+    <string name="guide_step_overflow">Open the menu with three dots and tap \"%1$s\".</string>
+    <string name="guide_step_tab">Open the \"%1$s\" tab.</string>
+    <string name="guide_step_tap">Tap \"%1$s\".</string>
+    <string name="guide_step_gear">Tap the gear button at the top.</string>
+    <string name="guide_step_choose">Tap \"%1$s\" and choose \"%2$s\".</string>
+    <string name="guide_step_under_choose">Under \"%1$s\", tap \"%2$s\" and choose \"%3$s\".</string>
+    <string name="guide_step_arrow_choose">Tap the arrow at the end of \"%1$s\" and choose \"%2$s\".</string>
+    <string name="guide_step_on">Turn on \"%1$s\".</string>
+    <string name="guide_step_off">Turn off \"%1$s\".</string>
+    <string name="guide_step_under_on">Under \"%1$s\", turn on \"%2$s\".</string>
+    <string name="guide_step_under_off">Under \"%1$s\", turn off \"%2$s\".</string>
+    <string name="guide_step_fill">Fill in \"%1$s\" and \"%2$s\".</string>
+    <string name="guide_step_under_fill">Under \"%1$s\", fill in \"%2$s\" and \"%3$s\".</string>
+    <!-- %3$s: a value, such as a port. -->
+    <string name="guide_step_under_set">Under \"%1$s\", set \"%2$s\" to %3$s.</string>
+    <string name="guide_step_expand">If \"%1$s\" is not shown, tap the last row to show the rest.</string>
+    <string name="guide_step_back_home">Go back to its main screen.</string>
+    <string name="guide_step_back_once">Go back one screen.</string>
+    <string name="guide_step_start">Start it with its round button.</string>
+    <string name="guide_step_start_icon">Tap its round start button, which a screen reader calls \"%1$s\".</string>
+    <string name="guide_step_start_text">Tap \"%1$s\" to start.</string>
+    <string name="guide_step_slide">Slide the button that says \"%1$s\".</string>
+    <string name="guide_step_tap_card">Tap the card that says \"%1$s\".</string>
+    <string name="guide_step_tunnel_switch">Turn on the switch at the end of your tunnel\'s row.</string>
+    <string name="guide_step_card_add">On the \"%1$s\" card, tap + and then \"%2$s\".</string>
+    <string name="guide_step_name_keep_tap">Give it a name under \"%1$s\", keep \"%2$s\", and tap \"%3$s\".</string>
+    <!-- sing-box's own words for its profile, which are not translated: tun, mixed, listen, listen_port, users,
+         username, password. %1$s: a port. -->
+    <string name="guide_step_singbox_inbound">Write the profile with no inbound of type \"tun\", and with one inbound of type \"mixed\" whose \"listen\" is \"127.0.0.1\" and \"listen_port\" is %1$s. Then save it.</string>
+    <string name="guide_step_singbox_users">In that \"mixed\" inbound, add \"users\" with a \"username\" and a \"password\".</string>
+    <string name="guide_step_singbox_back">Use a profile with an inbound of type \"tun\" again, or add one with \"%1$s\". Then start it.</string>
+    <string name="guide_step_auth_entry">Under \"%1$s\", tap \"%2$s\" and add one entry: the user name, a colon, then the password.</string>
+    <string name="guide_step_secret">Tap \"%1$s\" and type the password Watch shows.</string>
+    <string name="guide_step_profile_card">On your profile\'s card, tap \"%1$s\".</string>
+    <string name="guide_step_config_ssh">Edit your configuration: set \"%1$s\" to \"%2$s\", and fill in \"%3$s\" and \"%4$s\".</string>
+    <string name="guide_step_save_use">Tap \"%1$s\", then tap the new setting profile to use it.</string>
+    <!-- What a tool asks for in proxy mode, from its code. -->
+    <string name="guide_asks_notifications">It asks to show notifications.</string>
+    <string name="guide_asks_local_network">On Android 17 it asks for the local network permission. Watch does not need that for its proxy, which is on this phone.</string>
+    <string name="guide_asks_battery">It asks to be left out of battery optimisation.</string>
+    <string name="guide_asks_alarms">In proxy mode it asks for the alarms permission before it starts. It says it sets no alarms: the permission keeps it running when it is not a VPN.</string>
+    <string name="guide_asks_vpn_once">The first time it connects, it asks to set up a VPN, even in this mode. If you allow that, Android turns Watch off. Turn Watch on again after.</string>
+    <string name="guide_asks_none">Its code asks for no permission in this mode.</string>
+    <!-- Facts a user of one tool needs. %1$s in guide_note_named_port: a port. -->
+    <string name="guide_note_named_port">Watch looks for its proxy at port %1$s only, so set that port even where your profile names another.</string>
+    <string name="guide_note_fixed_user">Its user name is always \"%1$s\". Watch shows that one.</string>
+    <string name="guide_note_user_port">In a work profile or another user on this phone, its port is higher by that user\'s number. Watch looks there too.</string>
+    <string name="guide_note_stopped_first">Stop it first: it changes this only while it is not connected.</string>
+    <string name="guide_note_no_server">It does not send your traffic to a server. It changes how the traffic looks and sends it on from this phone. So the apps it carries reach their destinations from your own address.</string>
+    <string name="guide_note_ssh_only">Only the \"%1$s\" tunnel type opens a SOCKS5 proxy on this phone. With \"%2$s\", Watch can use the port only if your server gives a SOCKS5 proxy.</string>
+    <string name="guide_note_remote_profile">A remote profile shows only \"%1$s\": its content comes from its address and cannot be changed here. Make a local profile instead.</string>
+    <string name="guide_note_engines">In this mode, profiles that use sing-box, OpenConnect, IKEv2 or a chain still start a VPN.</string>
+    <!-- The pages of tools that run only as a VPN, and of those whose steps wait. %1$s: the tool's name. -->
+    <string name="guide_vpn_only">%1$s runs only as a VPN. Android runs one VPN at a time, so Watch cannot run beside it: when one starts, Android stops the other.</string>
+    <string name="guide_wireguard_only">%1$s runs only as a VPN, so Watch cannot run beside it. But Watch can carry a WireGuard configuration itself, and send the apps you choose through it.</string>
+    <!-- Quotes Watch's own heading, tunnels_title, as it reads. -->
+    <string name="guide_wireguard_add">Add one in Watch, under \"WireGuard configurations\".</string>
+    <string name="guide_wireguard_proton">Proton VPN\'s website makes these files, on the free plan too. In your account, open \"Downloads\", then \"WireGuard configuration\".</string>
+    <string name="guide_wireguard_mullvad">Mullvad\'s website makes these files for a paid account. Use its configuration generator.</string>
+    <string name="guide_wireguard_windscribe">Windscribe\'s website makes these files for paid accounts. Use its \"Config Generator\".</string>
+    <string name="guide_wireguard_same">The configuration file or QR code you added to WireGuard works in Watch too.</string>
+    <string name="guide_note_amneziawg">AmneziaWG changes how WireGuard\'s packets look. Watch does not read that change yet, so it cannot carry these configurations.</string>
+    <string name="guide_waiting_intro">There are no steps for %1$s yet.</string>
+    <string name="guide_waiting_closed">Its code is not public, so its steps wait until it is tried with Watch.</string>
+    <string name="guide_waiting_partly">Part of its code is not public, so its steps wait until it is tried with Watch.</string>
+    <string name="guide_note_tethering">It has a feature it calls Proxy Tethering. Whether that gives a proxy on this phone that Watch can use is not known yet.</string>
+    <!-- The website's list of the guides (scripts/guides.py), which Watch does not show. -->
+    <string name="guide_index_title" tools:ignore="UnusedResources">Your tool beside Watch</string>
+    <string name="guide_index_intro" tools:ignore="UnusedResources">Android runs one VPN at a time. These pages say how each circumvention tool can run beside Watch, read from the tool\'s own code.</string>
+    <string name="guide_index_proxy" tools:ignore="UnusedResources">Tools with a proxy mode</string>
+    <string name="guide_index_wireguard" tools:ignore="UnusedResources">Tools that run only as a VPN, with WireGuard configurations</string>
+    <string name="guide_index_vpn" tools:ignore="UnusedResources">Tools that run only as a VPN</string>
+    <string name="guide_index_waiting" tools:ignore="UnusedResources">Tools whose steps wait until they are tried with Watch</string>
+
+    <!-- W8, part 3a (ADR 0053): tracker blocking. Counts and sizes only inside the app: nothing of it reaches a
+         notification, the summary or the widget (ADR 0046). ADR 0025's words hold (BlockingWordsTest), and "grade"
+         never shows. The labels of the switches and buttons below are tapped by their text in the emulator check. -->
+    <!-- Watch's screen: the section, its switches and the global pause, which names no app. -->
+    <string name="blocking_title">Tracker blocking</string>
+    <string name="blocking_switch">Block trackers</string>
+    <string name="blocking_note">Off unless you turn it on. Watch stops apps you installed from reaching the hosts of tracker SDKs: their lookups get no address, and their connections are refused. A host that also serves the app itself is not blocked.</string>
+    <string name="blocking_not_covered">Apps that came with the phone, Android itself and Google Play services are not covered.</string>
+    <string name="blocking_browsers">Also block in browsers</string>
+    <string name="blocking_browsers_note">Browsers are not blocked unless you include them: they open any website.</string>
+    <!-- Only while the apps go through the user's circumvention tool. -->
+    <string name="blocking_tool_dns">Also block your tool\'s own tracker lookups</string>
+    <string name="blocking_tool_dns_note">Off unless you turn it on. Watch then answers your tool\'s own lookups of tracker hosts with no address. It never refuses the tool\'s connections: the names they show can be any popular website.</string>
+    <string name="blocking_pause">Pause blocking for 10 minutes</string>
+    <!-- %1$s: when the pause ends, as the phone writes the time. -->
+    <string name="blocking_paused">Paused until %1$s</string>
+    <string name="blocking_resume">Block again now</string>
+    <!-- "Now": the pause, said once above the apps. -->
+    <string name="blocking_paused_now">Tracker blocking is paused until %1$s.</string>
+    <!-- Beside every allow and the pause: what an allow lets through, and how soon it works. -->
+    <string name="blocking_late_sends">Apps may send what they held back while blocked, once allowed.</string>
+    <string name="blocking_seconds">It works within a few seconds: apps keep a failed lookup for a moment.</string>
+    <!-- "Now" and an app's history: one app. -->
+    <string name="blocking_allow_app">Allow trackers in this app</string>
+    <string name="blocking_block_app">Block trackers again</string>
+    <!-- %1$s: when the hour ends, as the phone writes the time. -->
+    <string name="blocking_app_allowed">Trackers are allowed in this app until %1$s.</string>
+    <!-- What blocking counted, lookups apart from connections. %2$s names the tracker as the three forms below do, or a
+         host; %3$s is when the first was, as the phone writes the time. -->
+    <plurals name="blocking_connections">
+        <item quantity="one">Blocked %1$d connection to %2$s since %3$s.</item>
+        <item quantity="other">Blocked %1$d connections to %2$s since %3$s.</item>
+    </plurals>
+    <plurals name="blocking_lookups">
+        <item quantity="one">Answered %1$d lookup for %2$s with no address since %3$s.</item>
+        <item quantity="other">Answered %1$d lookups for %2$s with no address since %3$s.</item>
+    </plurals>
+    <!-- A tracker by its name in the εxodus list (%1$s) and its company (%2$s), where the owners' table gives one; a
+         tracker with none is named by its name alone. -->
+    <string name="blocking_tracker_company">%1$s (%2$s)</string>
+    <!-- Several trackers of one company that one εxodus signature names: %1$s is the company. -->
+    <string name="blocking_company">trackers of %1$s</string>
+    <!-- A time on another day: %1$s the date, %2$s the time. -->
+    <string name="blocking_day_time">%1$s, %2$s</string>
+    <!-- An app's history: its trackers, one allow each, or one for a company. -->
+    <string name="blocking_history_title">Tracker blocking in this app</string>
+    <!-- %1$s names a tracker, a company's trackers or a host, as above. -->
+    <string name="blocking_allow_entry">Allow %1$s in this app</string>
+    <string name="blocking_block_entry">Block %1$s again</string>
+    <string name="blocking_entry_allowed">Allowed in this app until you block it again.</string>
+    <!-- %1$s: what the host does, from Datapavan's table, in English. -->
+    <string name="blocking_function">What it does: %1$s</string>
+    <!-- A connection of the history that Watch blocked: %1$s names the tracker, never the host where the switch "Log
+         where apps connect ..." left it out. -->
+    <string name="blocking_blocked">Blocked by Watch: %1$s.</string>
+    <!-- A host the app reached that Watch does not block in it, and why. -->
+    <string name="blocking_kept">Not blocked: this host also serves the app itself.</string>
+    <string name="blocking_kept_code">Not blocked: in this app, this host also serves sign-in or sharing.</string>
+    <string name="blocking_kept_unread">Not blocked: this host may also serve sign-in or sharing, and Datapavan has not yet read this app\'s code.</string>
+    <string name="blocking_kept_own">Not blocked: this app uses this host for its own work.</string>
 </resources>

@@ -24,7 +24,7 @@ class GuidesTest {
         File(data, GuideBook.GUIDES).readText(), File(data, GuideBook.STEPS).readText(), File(data, GuideBook.LABELS).readText(),
     )
     private val table = ToolTable.parse(File(data, ToolTable.ASSET).readText())
-    private val english = File("src/main/res/values/strings_untranslated.xml").readText()
+    private val english = File("src/main/res/values/strings_untranslated.xml").let { if (it.isFile) it.readText() else "" }
     private val words: Map<String, String> = Regex("""<string name="([a-z_]+)"[^>]*>([^<]*)</string>""").findAll(
         english + File("src/main/res/values/strings.xml").readText(),
     ).associate { it.groupValues[1] to it.groupValues[2].replace("\\'", "'").replace("\\\"", "\"") }
@@ -84,9 +84,9 @@ class GuidesTest {
             "store", "play",
         )
         for ((name, text) in ours) {
-            // Proton's account page names the section that holds its WireGuard files "Downloads": a page of the provider's,
-            // not a download of a tool.
-            val said = if (name == "guide_wireguard_proton") text.replace("open downloads,", "") else text
+            // Proton's account page names the section that holds its WireGuard files "Downloads", quoted as its label: a page
+            // of the provider's, not a download of a tool.
+            val said = if (name == "guide_wireguard_proton") text.replace(Regex("""open \\?"?downloads\\?"?,"""), "") else text
             for (word in judging) assertTrue("$name: $word", !Regex("\\b${Regex.escape(word)}").containsMatchIn(said))
         }
         assertTrue(words.getValue("guide_wireguard_add").contains("\"${words.getValue("tunnels_title")}\""))

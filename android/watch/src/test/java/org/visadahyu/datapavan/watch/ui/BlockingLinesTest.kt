@@ -238,7 +238,8 @@ class BlockingLinesTest {
 
     /** Watch's English strings and plurals (their "other" form), by name. */
     private fun strings(): Map<String, String> {
-        val text = listOf("strings.xml", "strings_untranslated.xml").joinToString("") { File("src/main/res/values/$it").readText() }
+        val text = listOf("strings.xml", "strings_untranslated.xml").map { File("src/main/res/values/$it") }.filter { it.isFile }
+            .joinToString("") { it.readText() }
         val strings = Regex("""<string name="([a-z_0-9]+)">([^<]*)</string>""").findAll(text).associate { it.groupValues[1] to it.groupValues[2] }
         val plurals = Regex("""<plurals name="([a-z_0-9]+)">.*?<item quantity="other">([^<]*)</item>""", RegexOption.DOT_MATCHES_ALL)
             .findAll(text).associate { it.groupValues[1] to it.groupValues[2] }
