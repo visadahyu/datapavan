@@ -12,11 +12,22 @@
 //! returns them, and the only thing said of them is whether a password crossed the network unencrypted (RFC
 //! 1929's, or HTTP's `Basic` scheme). The caller's buffer is its own to zero (`engine::tcp`).
 //!
+//! **Confirmed by the reply** (fix round of W8 part 2a; ADR 0052): a request alone is only what the app wrote,
+//! which a server of its own may ignore. A SOCKS or `CONNECT` request names its flow only once the server's
+//! first bytes confirm the handshake ([`confirmed`]): SOCKS5's choice of the method the app then used, RFC 1929's
+//! success where it was used, and the request's success, `05 00 00`; SOCKS4's `00 5a`; a `2xx` status line for
+//! `CONNECT`. A plain request in absolute form cannot be confirmed so, since origin servers accept that form
+//! too.
+//!
 //! **Shapes.** The 64 bytes that start Telegram's obfuscated transport, by the rules its documentation gives
 //! the client for them (core.telegram.org/mtproto/mtproto-transports, read 2026-11-20): the first byte is not
 //! `0xef`, the first four are none of `HEAD`, `POST`, `GET `, `OPTI`, `16 03 01 02`, `dd dd dd dd` and `ee ee ee
-//! ee`, bytes 4 to 8 are not all zero; and, as the header is random, its bits set average between 3 and 5 a
-//! byte (a random header's mean is 4, with a standard deviation of 0.18 over 64 bytes). And `WhatsApp`'s clear
+//! ee`, bytes 4 to 8 are not all zero; and, as the header is random: its bits set average between 3 and 5 a
+//! byte (a random header's mean is 4, with a standard deviation of 0.18 over 64 bytes), 16 to 48 of its bytes
+//! have the high bit set (a random header misses that once in 41,043: 2.4 in 100,000, computed from the
+//! binomial distribution), and the 64 bytes are not UTF-8 text, which random bytes are with a chance below 2
+//! in 10^16 (bounded by counting UTF-8's lead and continuation bytes). Text, ASCII or not, so never passes:
+//! `PUT`, `PATCH`, `SSH-2.0` and Persian alike. And `WhatsApp`'s clear
 //! header, `W` `A` and two bytes, or `E` `D` `0` `1`, a 3-byte length, the routing data and then `W` `A`, as
 //! two open-source clients write it (whatsmeow's `WAConnHeader`, Baileys's `noise-handler.ts`, read
 //! 2026-11-20).
@@ -89,6 +100,8 @@ pub struct Request {
     /// `CONNECT`): its TLS hello, if any, is read from there. `None` for a plain request, which is itself
     /// what the proxy carries.
     pub inner: Option<usize>,
+    /// For SOCKS5, the method the app then used (0 none, 2 RFC 1929's), which the server's choice must be.
+    pub method: u8,
 }
 
 /// What the start of a stream says about a proxy request.
@@ -138,21 +151,27 @@ fn port_at(bytes: &[u8], i: usize) -> Result<u16, Need> {
 /// RFC 1928: the greeting, RFC 1929's sub-negotiation where the greeting offered it, then a `CONNECT`.
 fn socks5(b: &[u8]) -> Read {
     let methods = usize::from(at(b, 1)?);
-    if methods == 0 {
+    // A plausible list: 1 to 10 methods, each one IANA assigned (0 to 9), none twice (the fix round's S-m1).
+    if methods == 0 || methods > 10 {
         return Ok(None);
     }
-    let offered = b.get(2..2 + methods);
+    let offered = b.get(2..2 + methods).ok_or(Need)?;
+    if offered
+        .iter()
+        .enumerate()
+        .any(|(n, &m)| m > 9 || offered[..n].contains(&m))
+    {
+        return Ok(None);
+    }
     let mut i = 2 + methods;
     let first = at(b, i)?;
     let mut password = false;
+    let method = if first == 1 { 2 } else { 0 };
+    if !offered.contains(&method) {
+        return Ok(None);
+    }
     if first == 1 {
         // RFC 1929: version 1, ULEN, UNAME, PLEN, PASSWD; offered only with method 2. Skipped by length.
-        let Some(offered) = offered else {
-            return Err(Need);
-        };
-        if !offered.contains(&2) {
-            return Ok(None);
-        }
         let user = usize::from(at(b, i + 1)?);
         let pass = usize::from(at(b, i + 2 + user)?);
         if user == 0 {
@@ -187,23 +206,28 @@ fn socks5(b: &[u8]) -> Read {
         port,
         password,
         inner: Some(after + 2),
+        method,
     }))
 }
 
 /// SOCKS4: version 4, `CONNECT` (1), the port, the address, the user ID ending in a zero; `SOCKS4a`, with an
-/// address 0.0.0.x (x not 0), adds the host name ending in a zero. The user ID is skipped.
+/// address 0.0.0.x (x not 0), adds the host name ending in a zero. The user ID is skipped, but must be
+/// printable ASCII, as clients write it: random bytes rarely are (the fix round's S-m1).
 fn socks4(b: &[u8]) -> Read {
     if at(b, 1)? != 1 {
         return Ok(None);
     }
     let port = port_at(b, 2)?;
     let address = v4_at(b, 4)?;
-    let user_end = 8 + b
-        .get(8..)
-        .ok_or(Need)?
+    let user = b.get(8..).ok_or(Need)?;
+    let user_end = match user
         .iter()
-        .position(|&c| c == 0)
-        .ok_or(Need)?;
+        .position(|&c| c == 0 || !(b' '..=b'~').contains(&c))
+    {
+        Some(end) if user[end] == 0 => 8 + end,
+        Some(_) => return Ok(None),
+        None => return Err(Need),
+    };
     let [a, b0, c, d] = address.octets();
     let (asked, after) = if a == 0 && b0 == 0 && c == 0 && d != 0 {
         let from = user_end + 1;
@@ -225,6 +249,7 @@ fn socks4(b: &[u8]) -> Read {
         port,
         password: false,
         inner: Some(after),
+        method: 0,
     }))
 }
 
@@ -272,7 +297,16 @@ fn http(b: &[u8]) -> Read {
             None if rest.len() < 262 + 256 => return Err(Need),
             None => return Ok(None),
         };
-        // The user information before an `@` is skipped, never read.
+        // The user information before an `@` is skipped, never read. An `@` after the authority ends, before
+        // the target does, is refused: `http://alice:1234/x@host/` would otherwise give a user name as the
+        // destination, and a target written so is not one a client sends (the fix round's S-n1).
+        let target_end = rest
+            .iter()
+            .position(|&c| matches!(c, b' ' | b'\r' | b'\n'))
+            .unwrap_or(rest.len());
+        if rest[end..target_end].contains(&b'@') {
+            return Ok(None);
+        }
         let host = &rest[..end];
         let host = match host.iter().rposition(|&c| c == b'@') {
             Some(at) => &host[at + 1..],
@@ -327,6 +361,52 @@ fn request(kind: Kind, asked: Asked, port: u16, password: bool, inner: Option<us
         port,
         password,
         inner,
+        method: 0,
+    }
+}
+
+/// The most of a server's first bytes [`confirmed`] reads: SOCKS5's choice, RFC 1929's success and the
+/// request's success, 7 bytes; an HTTP status line's version and code, 12.
+pub const MAX_REPLY: usize = 16;
+
+/// Whether the server's first bytes, `reply`, confirm the handshake `request` declared: `Some(true)` once they
+/// do, `Some(false)` once they refuse it or are not its protocol's, `None` while too few came. A plain request
+/// is never confirmed (`Some(false)`): an origin server accepts the absolute form too (RFC 9112, 3.2.2).
+#[must_use]
+pub fn confirmed(request: &Request, reply: &[u8]) -> Option<bool> {
+    let has = |i: usize, byte: u8| reply.get(i).map(|&b| b == byte);
+    let all = |checks: &[Option<bool>]| -> Option<bool> {
+        for check in checks {
+            match check {
+                Some(true) => {}
+                Some(false) => return Some(false),
+                None => return None,
+            }
+        }
+        Some(true)
+    };
+    match request.kind {
+        Kind::Socks5 => {
+            // The method chosen, the sub-negotiation's success where it was used, then version 5, success, RSV.
+            let i = if request.method == 2 { 4 } else { 2 };
+            let mut checks = vec![has(0, 5), has(1, request.method)];
+            if request.method == 2 {
+                checks.extend([has(2, 1), has(3, 0)]);
+            }
+            checks.extend([has(i, 5), has(i + 1, 0), has(i + 2, 0)]);
+            all(&checks)
+        }
+        Kind::Socks4 => all(&[has(0, 0), has(1, 0x5a)]),
+        Kind::Connect => {
+            // `HTTP/1.x 2xx`: the version, a space, a code of three digits starting with 2.
+            let line = b"HTTP/1.";
+            let mut checks: Vec<Option<bool>> =
+                line.iter().enumerate().map(|(i, &c)| has(i, c)).collect();
+            let digit = |i: usize| reply.get(i).map(u8::is_ascii_digit);
+            checks.extend([digit(7), has(8, b' '), has(9, b'2'), digit(10), digit(11)]);
+            all(&checks)
+        }
+        _ => Some(false),
     }
 }
 
@@ -434,9 +514,15 @@ pub fn obfuscated2(start: &[u8]) -> Option<bool> {
     if whatsapp_header(header) == Some(true) {
         return Some(false);
     }
-    // Between 3 and 5 bits set a byte, on average: 192 to 320 over the 64 bytes.
+    // Between 3 and 5 bits set a byte, on average: 192 to 320 over the 64 bytes; 16 to 48 bytes with the high
+    // bit set; and not UTF-8 text, a character cut at the end included (module comment).
     let bits: u32 = header.iter().map(|b| b.count_ones()).sum();
-    Some((192..=320).contains(&bits))
+    let high = header.iter().filter(|&&b| b >= 0x80).count();
+    let text = match std::str::from_utf8(header) {
+        Ok(_) => true,
+        Err(error) => error.error_len().is_none(),
+    };
+    Some((192..=320).contains(&bits) && (16..=48).contains(&high) && !text)
 }
 
 /// Whether the start of a stream is `WhatsApp`'s clear header (module comment); `None` while too few bytes
@@ -712,6 +798,216 @@ pub(crate) mod tests {
         let mut w = h;
         w[..4].copy_from_slice(b"WA\x06\x03");
         assert_eq!(obfuscated2(&w), Some(false));
+    }
+
+    #[test]
+    fn socks_requests_need_a_plausible_method_list_and_a_printable_user_id() {
+        // SOCKS5: a method outside IANA's 0 to 9, one offered twice, more than ten, or the method used not offered.
+        for greeting in [
+            &[5, 1, 0x80][..],
+            &[5, 2, 0, 0],
+            &[5, 11, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9],
+            &[5, 1, 2],
+        ] {
+            let mut b = greeting.to_vec();
+            b.extend_from_slice(&[5, 1, 0, 1, 203, 0, 113, 5, 0, 80]);
+            assert_eq!(declared(&b), Declared::Not, "{greeting:?}");
+        }
+        let Declared::Request(r) = declared(&[5, 3, 2, 1, 0, 5, 1, 0, 1, 203, 0, 113, 5, 0, 80])
+        else {
+            unreachable!("not read");
+        };
+        assert_eq!(r.method, 0);
+        assert_eq!(socks5_request_method(), 2);
+        // SOCKS4: a user ID of anything but printable ASCII.
+        let mut b = vec![4, 1, 0, 80, 198, 51, 100, 7, b'i', 0x01, b'd', 0];
+        assert_eq!(declared(&b), Declared::Not);
+        b[9] = b'~';
+        assert!(matches!(declared(&b), Declared::Request(_)));
+    }
+
+    fn socks5_request_method() -> u8 {
+        match declared(&socks5_with_password(b"example.com")) {
+            Declared::Request(r) => r.method,
+            _ => 0xff,
+        }
+    }
+
+    #[test]
+    fn only_the_servers_reply_confirms_a_proxy_handshake() {
+        let socks5 = |method| Request {
+            kind: Kind::Socks5,
+            asked: Asked::Name("example.org".into()),
+            port: 443,
+            password: method == 2,
+            inner: None,
+            method,
+        };
+        let plain = socks5(0);
+        assert_eq!(
+            confirmed(&plain, &[5, 0, 5, 0, 0, 1, 0, 0, 0, 0, 0, 0]),
+            Some(true)
+        );
+        for cut in 0..5 {
+            assert_eq!(confirmed(&plain, &[5, 0, 5, 0, 0][..cut]), None, "at {cut}");
+        }
+        // Refused: no acceptable method, or the request refused (general failure, 1).
+        assert_eq!(confirmed(&plain, &[5, 0xff]), Some(false));
+        assert_eq!(confirmed(&plain, &[5, 0, 5, 1, 0]), Some(false));
+        // Another server's bytes: a TLS server's first record, an HTTP answer.
+        assert_eq!(confirmed(&plain, &[0x16, 3, 3]), Some(false));
+        assert_eq!(confirmed(&plain, b"HTTP/1.1 400"), Some(false));
+        let password = socks5(2);
+        assert_eq!(confirmed(&password, &[5, 2, 1, 0, 5, 0, 0]), Some(true));
+        assert_eq!(
+            confirmed(&password, &[5, 0, 5, 0, 0]),
+            Some(false),
+            "not the method used"
+        );
+        assert_eq!(
+            confirmed(&password, &[5, 2, 1, 1]),
+            Some(false),
+            "the password refused"
+        );
+        let socks4 = Request {
+            kind: Kind::Socks4,
+            ..plain.clone()
+        };
+        assert_eq!(
+            confirmed(&socks4, &[0, 0x5a, 0, 80, 1, 2, 3, 4]),
+            Some(true)
+        );
+        assert_eq!(confirmed(&socks4, &[0, 0x5b]), Some(false));
+        assert_eq!(confirmed(&socks4, &[0]), None);
+        let connect = Request {
+            kind: Kind::Connect,
+            ..plain.clone()
+        };
+        assert_eq!(
+            confirmed(&connect, b"HTTP/1.1 200 Connection established\r\n\r\n"),
+            Some(true)
+        );
+        assert_eq!(confirmed(&connect, b"HTTP/1.0 204 x"), Some(true));
+        assert_eq!(
+            confirmed(&connect, b"HTTP/1.1 407 Proxy Authentication Required"),
+            Some(false)
+        );
+        assert_eq!(confirmed(&connect, b"HTTP/1.1 2"), None);
+        assert_eq!(confirmed(&connect, b"SSH-2.0-OpenSSH_9.6"), Some(false));
+        assert_eq!(confirmed(&connect, b"HTTP/2 200 "), Some(false));
+        // A plain request is never confirmed by its reply: origin servers take the absolute form too.
+        let forward = Request {
+            kind: Kind::Forward,
+            ..plain
+        };
+        assert_eq!(confirmed(&forward, b"HTTP/1.1 200 OK\r\n"), Some(false));
+    }
+
+    #[test]
+    fn an_at_sign_after_the_authority_is_refused() {
+        assert_eq!(
+            declared(b"GET http://alice:1234/x@host/ HTTP/1.1\r\n\r\n"),
+            Declared::Not
+        );
+        assert_eq!(
+            declared(b"GET http://example.org/?q=a@b HTTP/1.1\r\n\r\n"),
+            Declared::Not
+        );
+        assert!(matches!(
+            declared(b"GET http://user@example.org/x HTTP/1.1\r\n\r\n"),
+            Declared::Request(Request { asked: Asked::Name(ref n), .. }) if n == "example.org"
+        ));
+    }
+
+    /// A fast generator of bytes for the measurements below (xorshift64*).
+    struct Bytes(u64);
+
+    impl Bytes {
+        fn next(&mut self) -> u8 {
+            self.0 ^= self.0 >> 12;
+            self.0 ^= self.0 << 25;
+            self.0 ^= self.0 >> 27;
+            self.0.wrapping_mul(0x2545_f491_4f6c_dd1d).to_le_bytes()[7]
+        }
+    }
+
+    /// The false rate of the declared kinds on random starts, as the review measured it (36 SOCKS4 requests in
+    /// 2,000,000 random 600-byte starts before the fix round): none now. A start whose first byte rules every kind
+    /// out at once (all but 4, 5 and the letters) is decided by that byte alone, so only the others are drawn whole.
+    #[test]
+    fn random_starts_are_no_proxy_request() {
+        let mut random = Bytes(0x9e37_79b9_7f4a_7c15);
+        let mut start = vec![0u8; 600];
+        let mut found = 0;
+        for _ in 0..2_000_000 {
+            start[0] = random.next();
+            if !matches!(start[0], 4 | 5 | b'A'..=b'Z') {
+                continue;
+            }
+            for byte in &mut start[1..] {
+                *byte = random.next();
+            }
+            if matches!(declared(&start), Declared::Request(_)) {
+                found += 1;
+            }
+        }
+        assert_eq!(found, 0);
+    }
+
+    /// A random header passes the obfuscated transport's rules but for 2.4 in 100,000 (module comment): fewer
+    /// than 1 in 10,000, measured on 1,000,000 random headers.
+    #[test]
+    fn random_headers_are_read_as_obfuscated_but_rarely() {
+        let mut random = Bytes(0x2545_f491_4f6c_dd1d);
+        let mut header = [0u8; 64];
+        let mut missed = 0;
+        for _ in 0..1_000_000 {
+            for byte in &mut header {
+                *byte = random.next();
+            }
+            // The documented excluded starts are the client's to avoid; a header holding one is drawn again.
+            header[0] = if header[0] == 0xef { 0x12 } else { header[0] };
+            if obfuscated2(&header) == Some(false) {
+                missed += 1;
+            }
+        }
+        assert!(missed < 100, "{missed} in 1,000,000");
+    }
+
+    #[test]
+    fn text_is_no_obfuscated_header() {
+        let persian = "سلام، این یک پیام آزمایشی است که به زبان فارسی نوشته شده است و بیشتر از شصت و چهار بایت دارد.";
+        let mixed =
+            "Hello, سلام! This line mixes English and فارسی words to make sixty-four bytes or more.";
+        for text in [
+            &b"PUT /upload/part?id=1234567890 HTTP/1.1\r\nHost: upload.example.com\r\nContent-Length: 1\r\n"[..],
+            b"PATCH /v1/items/42 HTTP/1.1\r\nHost: api.example.com\r\nContent-Type: application/json\r\n",
+            b"SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.5\r\n\x00\x00\x05\xdc\x07\x14abcdefghijklmnopqrstuv",
+            persian.as_bytes(),
+            mixed.as_bytes(),
+        ] {
+            assert_eq!(obfuscated2(text), Some(false), "{}", String::from_utf8_lossy(&text[..16]));
+        }
+        // The high bit's bound alone: random low bits, with the high bit set on exactly `k` of the 64 bytes (a
+        // permutation of their places), pass at 16 and 48 and not at 15 or 49.
+        let with_high = |k: usize| -> Vec<u8> {
+            let mut h = random_header(11);
+            for (i, byte) in h.iter_mut().enumerate() {
+                *byte = if (i * 37) % 64 < k {
+                    *byte | 0x80
+                } else {
+                    *byte & 0x7f
+                };
+            }
+            h
+        };
+        for (k, passes) in [(15, false), (16, true), (48, true), (49, false)] {
+            assert_eq!(
+                obfuscated2(&with_high(k)),
+                Some(passes),
+                "{k} bytes with the high bit"
+            );
+        }
     }
 
     #[test]
