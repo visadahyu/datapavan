@@ -270,7 +270,11 @@ tasks.withType<Test>().configureEach {
     // W8: the DNS tables and the public suffix list (dns/DnsSettingsTest.kt, PublicSuffixesTest.kt), and the DNS
     // lab's test certificates (dns/ExchangerTest.kt).
     inputs.files(
-        listOf("data/app-signers", "data/tools", "data/odoh", "data/dns-presets", "data/public-suffix", "scripts/dnslab/certs")
+        listOf(
+            "data/app-signers", "data/tools", "data/odoh", "data/dns-presets", "data/public-suffix", "scripts/dnslab/certs",
+            // W8, part 3a: tracker blocking's table and exceptions, εxodus's trackers and the owners' tables (blocking/*Test.kt).
+            "data/blocking", "data/exodus", "data/owners",
+        )
             .map { repositoryRoot.dir(it) },
     ).withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("repositoryData")
     inputs.files(
