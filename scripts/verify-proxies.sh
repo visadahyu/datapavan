@@ -201,8 +201,8 @@ scroll_to "Log where apps connect through your tool, WireGuard or a proxy" ||
 adb shell input keyevent KEYCODE_HOME
 echo "ok: the switch is on Watch's screen with no tool and no tunnel, a Telegram proxy seen"
 
-# Signal's own fronting and its captcha are no proxy, though it made no direct connection to Signal.
-before=$(proxies | grep -cE "^tcp [^ ]+ [^ ]+ $SIGNAL_UID " || true)
+# Signal's own fronting and its captcha are no proxy, though it made no direct connection to Signal; and its fronting
+# counts as reaching Signal directly (a set proxy turns it off), so the proxy's name above is taken back.
 for name in www.google.com js.hcaptcha.com; do
     fixture "$FIXTURE.signal" hello echoed --es host "$HOST" --es port "$PROXYLAB_PORT_TLS" --es name "$name"
 done
@@ -211,9 +211,11 @@ flows=$(dump | sed -n 's/^ *flow //p')
 for name in www.google.com js.hcaptcha.com; do
     grep -qE "^tcp [^ ]+ ${HOST//./\\.}:$PROXYLAB_PORT_TLS $SIGNAL_UID .* ${name//./\\.}\$" <<<"$flows" ||
         fail "Signal's flow named $name is not among Watch's flows"
+    ! grep -qE "^tcp [^ ]+ [^ ]+ $SIGNAL_UID .* ${name//./\\.}\$" <<<"$(proxies)" || fail "Signal's flow named $name was named a proxy"
 done
-[ "$(proxies | grep -cE "^tcp [^ ]+ [^ ]+ $SIGNAL_UID " || true)" = "$before" ] || fail "Signal's fronting or captcha was named a proxy"
-echo "ok: Signal's own fronting and its captcha are not named a proxy"
+! grep -qE "^tcp [^ ]+ [^ ]+ $SIGNAL_UID signal inferred " <<<"$(proxies)" ||
+    fail "Signal's fronting did not take its proxy's name back"
+echo "ok: Signal's own fronting and its captcha are not named a proxy, and its fronting takes the proxy's name back"
 
 # "Now" and the log hold the same: the destination asked for and the proxy's kind.
 now=$(dump | sed -n 's/^ *activity-proxy //p')
@@ -236,11 +238,15 @@ dump log-flush >/dev/null
 log=$(dump log-today | sed -n 's/^ *log-record //p')
 grep -qE "^tcp $APP_UID 0\.0\.0\.0:0 .* - .*proxy=socks5:read:pl:-:-$" <<<"$log" ||
     fail "with the switch off, the log does not hold the SOCKS5 proxy's kind alone"
-grep -qE "^tcp $TELEGRAM_UID 0\.0\.0\.0:0 .*proxy=mtproto:inferred:ol:-:-$" <<<"$log" ||
-    fail "with the switch off, the log does not hold Telegram's proxy's kind alone"
+# An inferred proxy's records wait ten minutes, its window of take-back, before the log gets them (ADR 0052, the fix
+# round's F2): none of Telegram's is in the log yet, though the flush wrote everything else.
+! grep -qE "^tcp $TELEGRAM_UID .*proxy=mtproto" <<<"$log" ||
+    fail "the log got a record of Telegram's inferred proxy within its window of take-back"
 now=$(dump | sed -n 's/^ *activity-proxy //p')
 grep -qE "^$APP_UID socks5:read:pl:-:- 0\.0\.0\.0:0 " <<<"$now" || fail "with the switch off, \"Now\" does not hold the kind alone: $now"
-echo "ok: with the switch off, the log and \"Now\" keep the proxy's kind alone"
+grep -qE "^$TELEGRAM_UID mtproto:inferred:ol:-:- 0\.0\.0\.0:0 " <<<"$now" ||
+    fail "with the switch off, \"Now\" does not hold Telegram's proxy's kind alone: $now"
+echo "ok: with the switch off, the log and \"Now\" keep the proxy's kind alone, and an inferred one's records wait for their window"
 
 # No password anywhere Watch writes or Android logs.
 shown="$(dump)
