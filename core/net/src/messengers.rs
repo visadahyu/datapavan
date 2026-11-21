@@ -4,8 +4,10 @@
 //! names that tell a messenger's own connections, its own circumvention and the third parties it reaches from
 //! those of a proxy (`names.tsv`).
 //!
-//! The tables are compiled into the engine, and travel in the signed data pack as every dataset does. Rows that
-//! do not parse are skipped, never fatal: the tables are data, checked by `scripts/check.sh`.
+//! The tables are compiled into the engine and kept out of the data pack, as the resolvers are: they are Watch's
+//! alone, and an update of any of them needs an app release (ADR 0052's accepted limits, corrected in the fix
+//! round, S-n4). Rows that do not parse are skipped, never fatal: the tables are data, checked by
+//! `scripts/check.sh`.
 
 use std::net::IpAddr;
 
