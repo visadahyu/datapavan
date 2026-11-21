@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    W8 part 3a's blocking fixture (scripts/verify-blocking.sh, ADR 0053): an app of this project's own that looks up
+    and reaches the blocking lab's names (scripts/blocklab.py) the way an app's tracker SDK does: a lookup, a TLS hello
+    sent in two segments, a plain HTTP request, and a QUIC hello in two datagrams. The check builds it under two package
+    names, one blocked and one allowed, and once more as a browser (browser/AndroidManifest.xml), which blocking leaves
+    out by default. Its names are under home.arpa, which no tracker can hold, and only Watch's debug builds hold a
+    row that blocks them. It talks to the lab on this computer alone (10.0.2.2). Emulators only; never shipped.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.visadahyu.datapavan.blockfixture">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application android:label="Datapavan blocking fixture" android:hasCode="true" android:usesCleartextTraffic="true">
+        <activity android:name="org.visadahyu.datapavan.blockfixture.BlockActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

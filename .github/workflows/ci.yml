@@ -344,6 +344,8 @@ jobs:
   #   scripts/verify-audit.sh, scripts/verify-plan.sh, scripts/verify-shortcuts.sh,
   #   scripts/verify-datapack.sh);
   # - screens: screenshots in every language with an accessibility check (scripts/screenshots.sh);
+  # - blocking: tracker blocking and its undo (W8, part 3a, ADR 0053), the project's blocking fixture against the
+  #   blocking lab on the runner's loopback (scripts/verify-blocking.sh, scripts/blocklab.py), a skip failing;
   # - wireguard: Watch's WireGuard upstream and the import of its configurations against the lab's peers of the
   #   kernel's WireGuard on the runner (scripts/verify-wireguard.sh, verify-wireguard-import.sh), only where the
   #   scope rule's WireGuard checks run, and in the weekly run.
@@ -371,6 +373,8 @@ jobs:
       # The proxies shard (W8, part 2a, ADR 0052): a check that cannot start the proxy lab fails on CI.
       PROXYLAB_REQUIRED: ${{ matrix.shard == 'proxies' && '1' || '' }}
       PROXYLAB_NO_BUILD: ${{ matrix.shard == 'proxies' && '1' || '' }}
+      # The blocking shard (W8, part 3a, ADR 0053): a check that cannot start the blocking lab fails on CI.
+      BLOCKING_REQUIRED: ${{ matrix.shard == 'blocking' && '1' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

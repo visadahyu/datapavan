@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The blocking fixture as a browser (scripts/verify-blocking.sh): the same app, which also takes any browsable https
+    link, by a filter with no host, as browsers do. Watch tells browsers so, and leaves them out of blocking unless
+    the user includes them (ADR 0053, decision 5).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.visadahyu.datapavan.blockfixture.browser">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application android:label="Datapavan blocking fixture (browser)" android:hasCode="true" android:usesCleartextTraffic="true">
+        <activity android:name="org.visadahyu.datapavan.blockfixture.BlockActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
