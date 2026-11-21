@@ -1,0 +1,281 @@
+# SPDX-License-Identifier: CC0-1.0
+# The tools' own labels that the guides quote (guide-steps.tsv), as each tool's source has them at guides.tsv's commit.
+# They are data, not Datapavan's words: never translated by ADR 0030's process. Where the tool is installed, Watch reads
+# the label from the tool itself by its resource name, in the tool's language (guides/ToolLabels.kt); otherwise it shows
+# the text here, in the phone's language where the tool's source has it, else in English.
+# Columns:
+#   guide     a guide of guides.tsv
+#   key       the label's name within the guide
+#   lang      en, or one of Datapavan's other languages (fa, ar, ru, zh, fr, de, es) where the tool has it in i18n files
+#   text      the label as the source has it, unescaped
+#   resource  the tool's Android resource: string/NAME, or array/NAME/INDEX for an item of a string array; '-' where the
+#             label is not an Android string resource (Flutter i18n files, or text written in code)
+#   source    the line of the source that holds the text
+v2rayng	settings	en	Settings	string/title_settings	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/res/values/strings.xml#L174
+v2rayng	mode_settings	en	Mode Settings	string/title_mode_settings	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/res/values/strings.xml#L316
+v2rayng	mode	en	Mode	string/title_mode	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/res/values/strings.xml#L305
+v2rayng	proxy_only	en	Proxy only	array/mode_entries/1	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/res/values/strings.xml#L479
+v2rayng	vpn	en	VPN	array/mode_entries/0	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/res/values/strings.xml#L478
+v2rayng	core_settings	en	Core Settings	string/title_core_settings	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/res/values/strings.xml#L176
+v2rayng	socks_user	en	Local proxy username (optional)	string/title_pref_socks_username	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/res/values/strings.xml#L263
+v2rayng	socks_password	en	Local proxy password (optional)	string/title_pref_socks_password	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/res/values/strings.xml#L265
+v2rayng	start	en	Start service	string/acc_start	https://github.com/2dust/v2rayNG/blob/57907cf354d9769200ed4717b4430d605abe0952/V2rayNG/app/src/main/res/values/strings.xml#L532
+clash-meta	settings	en	Settings	string/settings	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/f454fa8c569ea2a2396f2fe453ac8263832001d8/design/src/main/res/values/strings.xml#L23
+clash-meta	network	en	Network	string/network	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/f454fa8c569ea2a2396f2fe453ac8263832001d8/design/src/main/res/values/strings.xml#L125
+clash-meta	route_system_traffic	en	Route System Traffic	string/route_system_traffic	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/f454fa8c569ea2a2396f2fe453ac8263832001d8/design/src/main/res/values/strings.xml#L132
+clash-meta	override	en	Override	string/override	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/f454fa8c569ea2a2396f2fe453ac8263832001d8/design/src/main/res/values/strings.xml#L127
+clash-meta	general	en	General	string/general	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/f454fa8c569ea2a2396f2fe453ac8263832001d8/design/src/main/res/values/strings.xml#L154
+clash-meta	mixed_port	en	Mixed Port	string/mixed_port	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/f454fa8c569ea2a2396f2fe453ac8263832001d8/design/src/main/res/values/strings.xml#L160
+clash-meta	authentication	en	Authentication	string/authentication	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/f454fa8c569ea2a2396f2fe453ac8263832001d8/design/src/main/res/values/strings.xml#L162
+clash-meta	tap_to_start	en	Tap to start	string/tap_to_start	https://github.com/MetaCubeX/ClashMetaForAndroid/blob/f454fa8c569ea2a2396f2fe453ac8263832001d8/design/src/main/res/values/strings.xml#L8
+flclash	tools	en	Tools	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_en.arb#L10
+flclash	tools	es	Herramientas	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_es.arb#L10
+flclash	tools	fr	Outils	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_fr.arb#L10
+flclash	tools	ru	Инструменты	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_ru.arb#L10
+flclash	tools	zh	工具	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_zh.arb#L10
+flclash	advanced_config	en	Advanced configuration	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_en.arb#L399
+flclash	advanced_config	es	Configuración avanzada	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_es.arb#L399
+flclash	advanced_config	fr	Configuration avancée	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_fr.arb#L399
+flclash	advanced_config	ru	Расширенная конфигурация	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_ru.arb#L399
+flclash	advanced_config	zh	进阶配置	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_zh.arb#L399
+flclash	network	en	Network	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_en.arb#L349
+flclash	network	es	Red	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_es.arb#L349
+flclash	network	fr	Réseau	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_fr.arb#L349
+flclash	network	ru	Сеть	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_ru.arb#L349
+flclash	network	zh	网络	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_zh.arb#L349
+flclash	general	en	General	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_en.arb#L162
+flclash	general	es	General	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_es.arb#L162
+flclash	general	fr	Général	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_fr.arb#L162
+flclash	general	ru	Общие	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_ru.arb#L162
+flclash	general	zh	常规	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_zh.arb#L162
+flclash	inbound	en	Inbound	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_en.arb#L177
+flclash	inbound	es	Entrada	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_es.arb#L177
+flclash	inbound	fr	Entrant	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_fr.arb#L177
+flclash	inbound	ru	Входящие	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_ru.arb#L177
+flclash	inbound	zh	入站	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_zh.arb#L177
+flclash	authentication	en	Authentication	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_en.arb#L147
+flclash	authentication	es	Autenticación	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_es.arb#L147
+flclash	authentication	fr	Authentification	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_fr.arb#L147
+flclash	authentication	ru	Аутентификация	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_ru.arb#L147
+flclash	authentication	zh	认证	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_zh.arb#L147
+flclash	account	en	Account	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_en.arb#L136
+flclash	account	es	Cuenta	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_es.arb#L136
+flclash	account	fr	Compte	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_fr.arb#L136
+flclash	account	ru	Аккаунт	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_ru.arb#L136
+flclash	account	zh	账号	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_zh.arb#L136
+flclash	password	en	Password	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_en.arb#L146
+flclash	password	es	Contraseña	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_es.arb#L146
+flclash	password	fr	Mot de passe	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_fr.arb#L146
+flclash	password	ru	Пароль	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_ru.arb#L146
+flclash	password	zh	密码	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_zh.arb#L146
+flclash	start	en	Start	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_en.arb#L226
+flclash	start	es	Iniciar	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_es.arb#L226
+flclash	start	fr	Démarrer	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_fr.arb#L226
+flclash	start	ru	Старт	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_ru.arb#L226
+flclash	start	zh	启动	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/arb/intl_zh.arb#L226
+flclash	vpn	en	VPN	-	https://github.com/chen08209/FlClash/blob/89791d7c11978bf9b580ba71bffcb00506a17659/lib/views/config/network.dart#L72
+hiddify	settings	en	Settings	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/en.i18n.json#L329
+hiddify	settings	fa	تنظیمات	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fa.i18n.json#L329
+hiddify	settings	ar	الإعدادات	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ar.i18n.json#L330
+hiddify	settings	ru	Настройки	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ru.i18n.json#L326
+hiddify	settings	zh	设置	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/zh-CN.i18n.json#L319
+hiddify	settings	fr	Paramètres	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fr.i18n.json#L320
+hiddify	settings	es	Ajustes	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/es.i18n.json#L320
+hiddify	inbound	en	Inbound	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/en.i18n.json#L605
+hiddify	inbound	fa	ورودی	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fa.i18n.json#L605
+hiddify	inbound	ar	الوارد	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ar.i18n.json#L600
+hiddify	inbound	ru	Входящие	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ru.i18n.json#L589
+hiddify	inbound	zh	入站	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/zh-CN.i18n.json#L568
+hiddify	inbound	fr	Entrant	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fr.i18n.json#L569
+hiddify	inbound	es	Entrada	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/es.i18n.json#L569
+hiddify	service_mode	en	Service mode	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/en.i18n.json#L606
+hiddify	service_mode	fa	حالت سرویس	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fa.i18n.json#L606
+hiddify	service_mode	ar	وضع الخدمة	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ar.i18n.json#L601
+hiddify	service_mode	ru	Режим службы	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ru.i18n.json#L590
+hiddify	service_mode	zh	服务模式	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/zh-CN.i18n.json#L569
+hiddify	service_mode	fr	Mode de service	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fr.i18n.json#L570
+hiddify	service_mode	es	Modo de servicio	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/es.i18n.json#L570
+hiddify	proxy_only	en	Proxy service only	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/en.i18n.json#L608
+hiddify	proxy_only	fa	فقط سرویس پروکسی	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fa.i18n.json#L608
+hiddify	proxy_only	ar	خدمة البروكسي فقط	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ar.i18n.json#L603
+hiddify	proxy_only	ru	Только прокси	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ru.i18n.json#L592
+hiddify	proxy_only	zh	仅代理服务	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/zh-CN.i18n.json#L571
+hiddify	proxy_only	fr	Service proxy uniquement	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fr.i18n.json#L572
+hiddify	proxy_only	es	Solo servicio de proxy	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/es.i18n.json#L572
+hiddify	vpn	en	VPN	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/en.i18n.json#L610
+hiddify	vpn	fa	VPN	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fa.i18n.json#L610
+hiddify	vpn	ar	VPN	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ar.i18n.json#L605
+hiddify	vpn	ru	VPN	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ru.i18n.json#L594
+hiddify	vpn	zh	VPN	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/zh-CN.i18n.json#L573
+hiddify	vpn	fr	VPN	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fr.i18n.json#L574
+hiddify	vpn	es	VPN	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/es.i18n.json#L574
+hiddify	tap_to_connect	en	Tap to connect	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/en.i18n.json#L1082
+hiddify	tap_to_connect	fa	برای اتصال ضربه بزنید	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fa.i18n.json#L1082
+hiddify	tap_to_connect	ar	انقر للاتصال	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ar.i18n.json#L1031
+hiddify	tap_to_connect	ru	Нажмите для подключения	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ru.i18n.json#L1018
+hiddify	tap_to_connect	zh	点击连接	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/zh-CN.i18n.json#L994
+hiddify	tap_to_connect	fr	Appuyez pour vous connecter	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fr.i18n.json#L996
+hiddify	tap_to_connect	es	Toca para conectar	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/es.i18n.json#L996
+hiddify	local_proxy	en	Local proxy	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/en.i18n.json#L638
+hiddify	local_proxy	fa	پروکسی محلی	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fa.i18n.json#L638
+hiddify	local_proxy	ar	الوكيل المحلي	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ar.i18n.json#L632
+hiddify	local_proxy	ru	Локальный прокси	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ru.i18n.json#L621
+hiddify	local_proxy	zh	本地代理	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/zh-CN.i18n.json#L600
+hiddify	local_proxy	fr	Proxy local	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fr.i18n.json#L601
+hiddify	local_proxy	es	Proxy local	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/es.i18n.json#L601
+hiddify	local_proxy_auth	en	Require password	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/en.i18n.json#L641
+hiddify	local_proxy_auth	fa	درخواست رمز	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fa.i18n.json#L641
+hiddify	local_proxy_auth	ar	طلب كلمة المرور	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ar.i18n.json#L635
+hiddify	local_proxy_auth	ru	Требовать пароль	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ru.i18n.json#L624
+hiddify	local_proxy_auth	zh	需要密码	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/zh-CN.i18n.json#L603
+hiddify	local_proxy_auth	fr	Exiger un mot de passe	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fr.i18n.json#L604
+hiddify	local_proxy_auth	es	Pedir contraseña	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/es.i18n.json#L604
+hiddify	proxy_secret	en	Proxy secret	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/en.i18n.json#L633
+hiddify	proxy_secret	fa	رمز پروکسی	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fa.i18n.json#L633
+hiddify	proxy_secret	ar	كلمة سر الوكيل	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ar.i18n.json#L627
+hiddify	proxy_secret	ru	Пароль прокси	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/ru.i18n.json#L616
+hiddify	proxy_secret	zh	代理密钥	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/zh-CN.i18n.json#L595
+hiddify	proxy_secret	fr	Secret du proxy	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/fr.i18n.json#L596
+hiddify	proxy_secret	es	Secreto del proxy	-	https://github.com/hiddify/hiddify-app/blob/7804cadac01419f31b1ec7802d9e1be599e66de2/assets/translations/es.i18n.json#L596
+nekobox	settings	en	Settings	string/settings	https://github.com/MatsuriDayo/NekoBoxForAndroid/blob/5768494d8ae3c74a057bb6d46c0f8dc071b0d821/app/src/main/res/values/strings.xml#L207
+nekobox	general_settings	en	App Settings	string/general_settings	https://github.com/MatsuriDayo/NekoBoxForAndroid/blob/5768494d8ae3c74a057bb6d46c0f8dc071b0d821/app/src/main/res/values/strings.xml#L62
+nekobox	service_mode	en	Service Mode	string/service_mode	https://github.com/MatsuriDayo/NekoBoxForAndroid/blob/5768494d8ae3c74a057bb6d46c0f8dc071b0d821/app/src/main/res/values/strings.xml#L52
+nekobox	proxy_only	en	Proxy only	string/service_mode_proxy	https://github.com/MatsuriDayo/NekoBoxForAndroid/blob/5768494d8ae3c74a057bb6d46c0f8dc071b0d821/app/src/main/res/values/strings.xml#L53
+nekobox	vpn	en	VPN	string/service_mode_vpn	https://github.com/MatsuriDayo/NekoBoxForAndroid/blob/5768494d8ae3c74a057bb6d46c0f8dc071b0d821/app/src/main/res/values/strings.xml#L54
+nekobox	connect	en	Connect	string/connect	https://github.com/MatsuriDayo/NekoBoxForAndroid/blob/5768494d8ae3c74a057bb6d46c0f8dc071b0d821/app/src/main/res/values/strings.xml#L204
+orbot	more	en	More	string/menu_more	https://github.com/guardianproject/orbot-android/blob/b002beadb6e86984dad918302587d70cdb0c9ce6/app/src/main/res/values/strings.xml#L214
+orbot	settings	en	Orbot Settings	string/menu_settings	https://github.com/guardianproject/orbot-android/blob/b002beadb6e86984dad918302587d70cdb0c9ce6/app/src/main/res/values/strings.xml#L5
+orbot	general	en	General	string/pref_general_group	https://github.com/guardianproject/orbot-android/blob/b002beadb6e86984dad918302587d70cdb0c9ce6/app/src/main/res/values/strings.xml#L11
+orbot	power_user	en	Power User Mode	string/power_user_mode	https://github.com/guardianproject/orbot-android/blob/b002beadb6e86984dad918302587d70cdb0c9ce6/app/src/main/res/values/strings.xml#L180
+orbot	connect	en	Connect	string/connect	https://github.com/guardianproject/orbot-android/blob/b002beadb6e86984dad918302587d70cdb0c9ce6/app/src/main/res/values/strings.xml#L177
+sing-box	dashboard	en	Dashboard	string/title_dashboard	https://github.com/SagerNet/sing-box-for-android/blob/f87c2ebdb7e34754be751bb5e58926db2fed8f8c/app/src/main/res/values/strings.xml#L50
+sing-box	profiles	en	Profiles	string/title_configuration	https://github.com/SagerNet/sing-box-for-android/blob/f87c2ebdb7e34754be751bb5e58926db2fed8f8c/app/src/main/res/values/strings.xml#L51
+sing-box	create_manually	en	Create Manually	string/profile_add_create_manually	https://github.com/SagerNet/sing-box-for-android/blob/f87c2ebdb7e34754be751bb5e58926db2fed8f8c/app/src/main/res/values/strings.xml#L160
+sing-box	profile_name	en	Name	string/profile_name	https://github.com/SagerNet/sing-box-for-android/blob/f87c2ebdb7e34754be751bb5e58926db2fed8f8c/app/src/main/res/values/strings.xml#L141
+sing-box	profile_type_local	en	Local	string/profile_type_local	https://github.com/SagerNet/sing-box-for-android/blob/f87c2ebdb7e34754be751bb5e58926db2fed8f8c/app/src/main/res/values/strings.xml#L153
+sing-box	profile_create	en	Create	string/profile_create	https://github.com/SagerNet/sing-box-for-android/blob/f87c2ebdb7e34754be751bb5e58926db2fed8f8c/app/src/main/res/values/strings.xml#L146
+sing-box	json_editor	en	JSON Editor	string/json_editor	https://github.com/SagerNet/sing-box-for-android/blob/f87c2ebdb7e34754be751bb5e58926db2fed8f8c/app/src/main/res/values/strings.xml#L167
+sing-box	json_viewer	en	JSON Viewer	string/json_viewer	https://github.com/SagerNet/sing-box-for-android/blob/f87c2ebdb7e34754be751bb5e58926db2fed8f8c/app/src/main/res/values/strings.xml#L166
+sing-box	start	en	Start	string/action_start	https://github.com/SagerNet/sing-box-for-android/blob/f87c2ebdb7e34754be751bb5e58926db2fed8f8c/app/src/main/res/values/strings.xml#L24
+exclave	settings	en	Settings	string/settings	https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L180
+exclave	general_settings	en	App settings	string/general_settings	https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L54
+exclave	service_mode	en	Service mode	string/service_mode	https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L44
+exclave	proxy_only	en	Proxy only	string/service_mode_proxy	https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L45
+exclave	vpn	en	VPN	string/service_mode_vpn	https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L46
+exclave	inbound_settings	en	Inbound settings	string/inbound_settings	https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L53
+exclave	socks_username	en	Username	string/username	https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L94
+exclave	socks_password	en	Password	string/password	https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L95
+exclave	connect	en	Connect	string/connect	https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L177
+byebyedpi	settings	en	Settings	string/title_settings	https://github.com/romanvht/ByeByeDPI/blob/96a3c1ff555043d915af814aa4f0e9a572c89aba/app/src/main/res/values-en/strings.xml#L23
+byebyedpi	general	en	General	string/general_category	https://github.com/romanvht/ByeByeDPI/blob/96a3c1ff555043d915af814aa4f0e9a572c89aba/app/src/main/res/values-en/strings.xml#L67
+byebyedpi	mode	en	Mode	string/mode_setting	https://github.com/romanvht/ByeByeDPI/blob/96a3c1ff555043d915af814aa4f0e9a572c89aba/app/src/main/res/values-en/strings.xml#L39
+byebyedpi	proxy	en	Proxy	array/byedpi_modes/1	https://github.com/romanvht/ByeByeDPI/blob/96a3c1ff555043d915af814aa4f0e9a572c89aba/app/src/main/res/values/arrays.xml#L33
+byebyedpi	vpn	en	VPN	array/byedpi_modes/0	https://github.com/romanvht/ByeByeDPI/blob/96a3c1ff555043d915af814aa4f0e9a572c89aba/app/src/main/res/values/arrays.xml#L32
+byebyedpi	connect	en	Connect	string/vpn_connect	https://github.com/romanvht/ByeByeDPI/blob/96a3c1ff555043d915af814aa4f0e9a572c89aba/app/src/main/res/values-en/strings.xml#L6
+wg-tunnel	settings	en	Settings	string/settings	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/app/src/main/res/values/strings.xml#L86
+wg-tunnel	tunnels	en	Tunnels	string/tunnels	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/app/src/main/res/values/strings.xml#L22
+wg-tunnel	backend_mode	en	App mode	string/backend_mode	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/app/src/main/res/values/strings.xml#L270
+wg-tunnel	local_proxy	en	Local proxy	string/local_proxy	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/app/src/main/res/values/strings.xml#L597
+wg-tunnel	vpn	en	VPN	string/vpn	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/app/src/main/res/values/strings.xml#L280
+wg-tunnel	proxy_credentials	en	Proxy credentials	string/proxy_credentials	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/app/src/main/res/values/strings.xml#L278
+wg-tunnel	username	en	Username	string/username	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/app/src/main/res/values/strings.xml#L276
+wg-tunnel	password	en	Password	string/password	https://github.com/wgtunnel/android/blob/db07ccd45f49608f48b9ae86ff0a366c195da15b/app/src/main/res/values/strings.xml#L277
+shadowsocks	settings	en	Settings	string/settings	https://github.com/shadowsocks/shadowsocks-android/blob/970eb2bf127fe68463d90c2b4d4a06f76d451160/core/src/main/res/values/strings.xml#L87
+shadowsocks	service_mode	en	Service mode	string/service_mode	https://github.com/shadowsocks/shadowsocks-android/blob/970eb2bf127fe68463d90c2b4d4a06f76d451160/core/src/main/res/values/strings.xml#L9
+shadowsocks	proxy_only	en	Proxy only	string/service_mode_proxy	https://github.com/shadowsocks/shadowsocks-android/blob/970eb2bf127fe68463d90c2b4d4a06f76d451160/core/src/main/res/values/strings.xml#L10
+shadowsocks	vpn	en	VPN	string/service_mode_vpn	https://github.com/shadowsocks/shadowsocks-android/blob/970eb2bf127fe68463d90c2b4d4a06f76d451160/core/src/main/res/values/strings.xml#L11
+shadowsocks	connect	en	Connect	string/connect	https://github.com/shadowsocks/shadowsocks-android/blob/970eb2bf127fe68463d90c2b4d4a06f76d451160/core/src/main/res/values/strings.xml#L83
+oblivion	routing_mode	en	Routing mode	-	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/lib/l10n/app_en.arb#L321
+oblivion	routing_mode	fa	حالت مسیریابی	-	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/lib/l10n/app_fa.arb#L321
+oblivion	socks_only	en	SOCKS5 only	-	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/lib/l10n/app_en.arb#L322
+oblivion	socks_only	fa	فقط SOCKS5	-	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/lib/l10n/app_fa.arb#L322
+oblivion	full_tunnel	en	Full device tunnel	-	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/lib/l10n/app_en.arb#L230
+oblivion	full_tunnel	fa	تونل کامل دستگاه	-	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/lib/l10n/app_fa.arb#L230
+oblivion	slide_to_connect	en	Slide to connect	-	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/lib/l10n/app_en.arb#L211
+oblivion	slide_to_connect	fa	برای اتصال بکشید	-	https://github.com/bepass-org/oblivion/blob/739da893a20e61289f09904045bedfd284727d8b/lib/l10n/app_fa.arb#L211
+invizible	proxy_mode	en	Proxy Mode	string/menu_use_proxies	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/res/values/strings.xml#L88
+invizible	vpn_mode	en	VPN Mode	string/menu_use_vpn	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/res/values/strings.xml#L89
+invizible	ok	en	OK	string/ok	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/res/values/strings.xml#L48
+invizible	hide_ip	en	Hide IP with TOR	string/main_fragment_hide_ip	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/res/values/strings.xml#L611
+invizible	start_btn	en	START	string/main_fragment_button_start	https://github.com/Gedsh/InviZible/blob/c5847fc9d7e82b4aca0ab7b961a76d45e7629620/tordnscrypt/src/main/res/values/strings.xml#L609
+husi	settings	en	Settings	string/settings	https://github.com/xchacha20-poly1305/husi/blob/36a2258f06acbc932080b60bea519ca81c82feec/composeApp/src/commonMain/composeResources/values/strings.xml#L59
+husi	general_settings	en	App Settings	string/general_settings	https://github.com/xchacha20-poly1305/husi/blob/36a2258f06acbc932080b60bea519ca81c82feec/composeApp/src/commonMain/composeResources/values/strings.xml#L39
+husi	service_mode	en	Service Mode	string/service_mode	https://github.com/xchacha20-poly1305/husi/blob/36a2258f06acbc932080b60bea519ca81c82feec/composeApp/src/jvmMain/composeResources/values/strings.xml#L28
+husi	proxy_only	en	Proxy only	string/service_mode_proxy	https://github.com/xchacha20-poly1305/husi/blob/36a2258f06acbc932080b60bea519ca81c82feec/composeApp/src/jvmMain/composeResources/values/strings.xml#L29
+husi	vpn	en	VPN	string/service_mode_vpn	https://github.com/xchacha20-poly1305/husi/blob/36a2258f06acbc932080b60bea519ca81c82feec/composeApp/src/jvmMain/composeResources/values/strings.xml#L30
+husi	inbound_settings	en	Inbound Settings	string/inbound_settings	https://github.com/xchacha20-poly1305/husi/blob/36a2258f06acbc932080b60bea519ca81c82feec/composeApp/src/jvmMain/composeResources/values/strings.xml#L34
+husi	inbound_username	en	Inbound username	string/inbound_username	https://github.com/xchacha20-poly1305/husi/blob/36a2258f06acbc932080b60bea519ca81c82feec/composeApp/src/jvmMain/composeResources/values/strings.xml#L351
+husi	inbound_password	en	Inbound password	string/inbound_password	https://github.com/xchacha20-poly1305/husi/blob/36a2258f06acbc932080b60bea519ca81c82feec/composeApp/src/jvmMain/composeResources/values/strings.xml#L352
+husi	connect	en	Connect	string/connect	https://github.com/xchacha20-poly1305/husi/blob/36a2258f06acbc932080b60bea519ca81c82feec/composeApp/src/commonMain/composeResources/values/strings.xml#L58
+sagernet	settings	en	Settings	string/settings	https://github.com/SagerNet/SagerNet/blob/3593fc10b6889367774f37b32c2e5f89fedb5226/app/src/main/res/values/strings.xml#L197
+sagernet	general_settings	en	App Settings	string/general_settings	https://github.com/SagerNet/SagerNet/blob/3593fc10b6889367774f37b32c2e5f89fedb5226/app/src/main/res/values/strings.xml#L54
+sagernet	service_mode	en	Service Mode	string/service_mode	https://github.com/SagerNet/SagerNet/blob/3593fc10b6889367774f37b32c2e5f89fedb5226/app/src/main/res/values/strings.xml#L44
+sagernet	proxy_only	en	Proxy only	string/service_mode_proxy	https://github.com/SagerNet/SagerNet/blob/3593fc10b6889367774f37b32c2e5f89fedb5226/app/src/main/res/values/strings.xml#L45
+sagernet	vpn	en	VPN	string/service_mode_vpn	https://github.com/SagerNet/SagerNet/blob/3593fc10b6889367774f37b32c2e5f89fedb5226/app/src/main/res/values/strings.xml#L46
+sagernet	connect	en	Connect	string/connect	https://github.com/SagerNet/SagerNet/blob/3593fc10b6889367774f37b32c2e5f89fedb5226/app/src/main/res/values/strings.xml#L194
+dnstt-xyz	vpn_mode	en	VPN Mode	-	https://github.com/dnstt-xyz/dnstt_xyz_app/blob/0badcb529fbb3e7a91742eda7a2ca4e9111b212e/lib/screens/home_screen.dart#L479
+dnstt-xyz	proxy_mode	en	Proxy Mode	-	https://github.com/dnstt-xyz/dnstt_xyz_app/blob/0badcb529fbb3e7a91742eda7a2ca4e9111b212e/lib/screens/home_screen.dart#L490
+dnstt-xyz	tunnel_type	en	Tunnel Type	-	https://github.com/dnstt-xyz/dnstt_xyz_app/blob/0badcb529fbb3e7a91742eda7a2ca4e9111b212e/lib/screens/config_management_screen.dart#L941
+dnstt-xyz	socks	en	Socks	-	https://github.com/dnstt-xyz/dnstt_xyz_app/blob/0badcb529fbb3e7a91742eda7a2ca4e9111b212e/lib/screens/config_management_screen.dart#L948
+dnstt-xyz	ssh	en	SSH	-	https://github.com/dnstt-xyz/dnstt_xyz_app/blob/0badcb529fbb3e7a91742eda7a2ca4e9111b212e/lib/screens/config_management_screen.dart#L954
+dnstt-xyz	ssh_username	en	SSH Username	-	https://github.com/dnstt-xyz/dnstt_xyz_app/blob/0badcb529fbb3e7a91742eda7a2ca4e9111b212e/lib/screens/config_management_screen.dart#L971
+dnstt-xyz	ssh_password	en	SSH Password	-	https://github.com/dnstt-xyz/dnstt_xyz_app/blob/0badcb529fbb3e7a91742eda7a2ca4e9111b212e/lib/screens/config_management_screen.dart#L981
+slipnet	connection_section	en	Connection	-	https://github.com/anonvector/SlipNet/blob/caccd9e22fa084264db0bda70c8d694d0f177937/app/src/main/java/app/slipnet/presentation/settings/SettingsScreen.kt#L238
+slipnet	proxy_only_mode	en	Proxy-only mode	-	https://github.com/anonvector/SlipNet/blob/caccd9e22fa084264db0bda70c8d694d0f177937/app/src/main/java/app/slipnet/presentation/settings/SettingsScreen.kt#L251
+slipnet	proxy_settings	en	Proxy Settings	-	https://github.com/anonvector/SlipNet/blob/caccd9e22fa084264db0bda70c8d694d0f177937/app/src/main/java/app/slipnet/presentation/settings/SettingsScreen.kt#L341
+slipnet	proxy_auth	en	Proxy Authentication	-	https://github.com/anonvector/SlipNet/blob/caccd9e22fa084264db0bda70c8d694d0f177937/app/src/main/java/app/slipnet/presentation/settings/SettingsScreen.kt#L374
+slipnet	auth_username	en	Username	-	https://github.com/anonvector/SlipNet/blob/caccd9e22fa084264db0bda70c8d694d0f177937/app/src/main/java/app/slipnet/presentation/settings/SettingsScreen.kt#L394
+slipnet	auth_password	en	Password	-	https://github.com/anonvector/SlipNet/blob/caccd9e22fa084264db0bda70c8d694d0f177937/app/src/main/java/app/slipnet/presentation/settings/SettingsScreen.kt#L405
+slipnet	connect	en	Connect	-	https://github.com/anonvector/SlipNet/blob/caccd9e22fa084264db0bda70c8d694d0f177937/app/src/main/java/app/slipnet/presentation/main/MainScreen.kt#L2239
+zedsecure	settings	en	Settings	string/nav_settings	https://github.com/CluvexStudio/ZedSecure/blob/11b9bb7949cb99cbf3a9009665a26c8c853f4e18/shared/src/commonMain/composeResources/values/strings.xml#L94
+zedsecure	mode_settings	en	Mode	string/title_mode_settings	https://github.com/CluvexStudio/ZedSecure/blob/11b9bb7949cb99cbf3a9009665a26c8c853f4e18/shared/src/commonMain/composeResources/values/strings.xml#L457
+zedsecure	mode	en	Mode	string/title_mode	https://github.com/CluvexStudio/ZedSecure/blob/11b9bb7949cb99cbf3a9009665a26c8c853f4e18/shared/src/commonMain/composeResources/values/strings.xml#L561
+zedsecure	vpn	en	VPN	string/mode_vpn_explained	https://github.com/CluvexStudio/ZedSecure/blob/11b9bb7949cb99cbf3a9009665a26c8c853f4e18/shared/src/commonMain/composeResources/values/strings.xml#L297
+zedsecure	proxy_only	en	Proxy only	string/mode_proxy_explained	https://github.com/CluvexStudio/ZedSecure/blob/11b9bb7949cb99cbf3a9009665a26c8c853f4e18/shared/src/commonMain/composeResources/values/strings.xml#L299
+zedsecure	connect	en	Connect	string/action_connect	https://github.com/CluvexStudio/ZedSecure/blob/11b9bb7949cb99cbf3a9009665a26c8c853f4e18/shared/src/commonMain/composeResources/values/strings.xml#L103
+mdv-hn	settings	en	Settings	string/settings_title	https://github.com/Hidden-Node/MasterDnsVPN-AndroidClient/blob/0ee32f4547c332defae878f70d0f8aea901b0bc3/android/app/src/main/res/values/strings.xml#L3
+mdv-hn	connection_mode	en	Connection Mode	string/global_connection_mode	https://github.com/Hidden-Node/MasterDnsVPN-AndroidClient/blob/0ee32f4547c332defae878f70d0f8aea901b0bc3/android/app/src/main/res/values/strings.xml#L129
+mdv-hn	proxy	en	PROXY	-	https://github.com/Hidden-Node/MasterDnsVPN-AndroidClient/blob/0ee32f4547c332defae878f70d0f8aea901b0bc3/android/app/src/main/java/com/masterdns/vpn/ui/settings/GlobalSettingsScreen.kt#L201
+mdv-hn	vpn	en	VPN	-	https://github.com/Hidden-Node/MasterDnsVPN-AndroidClient/blob/0ee32f4547c332defae878f70d0f8aea901b0bc3/android/app/src/main/java/com/masterdns/vpn/ui/settings/GlobalSettingsScreen.kt#L201
+mdv-hn	save_global	en	Save Global Settings	string/global_settings_save_button	https://github.com/Hidden-Node/MasterDnsVPN-AndroidClient/blob/0ee32f4547c332defae878f70d0f8aea901b0bc3/android/app/src/main/res/values/strings.xml#L28
+mdv-hn	profiles	en	Profiles	string/title_profiles	https://github.com/Hidden-Node/MasterDnsVPN-AndroidClient/blob/0ee32f4547c332defae878f70d0f8aea901b0bc3/android/app/src/main/res/values/strings.xml#L45
+mdv-hn	profile_settings	en	Settings	string/profiles_settings	https://github.com/Hidden-Node/MasterDnsVPN-AndroidClient/blob/0ee32f4547c332defae878f70d0f8aea901b0bc3/android/app/src/main/res/values/strings.xml#L84
+mdv-hn	save_settings	en	Save Settings	string/action_save_settings	https://github.com/Hidden-Node/MasterDnsVPN-AndroidClient/blob/0ee32f4547c332defae878f70d0f8aea901b0bc3/android/app/src/main/res/values/strings.xml#L13
+mdv-hn	connect	en	Connect	string/home_connect	https://github.com/Hidden-Node/MasterDnsVPN-AndroidClient/blob/0ee32f4547c332defae878f70d0f8aea901b0bc3/android/app/src/main/res/values/strings.xml#L77
+mdv-hn	socks5_auth	en	SOCKS5_AUTH	-	https://github.com/Hidden-Node/MasterDnsVPN-AndroidClient/blob/0ee32f4547c332defae878f70d0f8aea901b0bc3/android/app/src/main/java/com/masterdns/vpn/ui/settings/SettingsScreen.kt#L127
+mdv-hn	socks5_user	en	SOCKS5_USER	-	https://github.com/Hidden-Node/MasterDnsVPN-AndroidClient/blob/0ee32f4547c332defae878f70d0f8aea901b0bc3/android/app/src/main/java/com/masterdns/vpn/ui/settings/SettingsScreen.kt#L128
+mdv-hn	socks5_pass	en	SOCKS5_PASS	-	https://github.com/Hidden-Node/MasterDnsVPN-AndroidClient/blob/0ee32f4547c332defae878f70d0f8aea901b0bc3/android/app/src/main/java/com/masterdns/vpn/ui/settings/SettingsScreen.kt#L129
+masterdnsvpn-gg	home	en	Profiles	string/nav_home	https://github.com/RevocGG/MasterDnsVPN-AndroidGG/blob/88fe4fef79b67ca98543d4ee58a85962857e5721/android/app/src/main/res/values/strings.xml#L15
+masterdnsvpn-gg	edit	en	Edit	-	https://github.com/RevocGG/MasterDnsVPN-AndroidGG/blob/88fe4fef79b67ca98543d4ee58a85962857e5721/android/app/src/main/java/com/masterdnsvpn/ui/screens/HomeScreen.kt#L1179
+masterdnsvpn-gg	socks5	en	SOCKS5	-	https://github.com/RevocGG/MasterDnsVPN-AndroidGG/blob/88fe4fef79b67ca98543d4ee58a85962857e5721/android/app/src/main/java/com/masterdnsvpn/ui/screens/ProfileEditScreen.kt#L815
+masterdnsvpn-gg	tun	en	TUN	-	https://github.com/RevocGG/MasterDnsVPN-AndroidGG/blob/88fe4fef79b67ca98543d4ee58a85962857e5721/android/app/src/main/java/com/masterdnsvpn/ui/screens/ProfileEditScreen.kt#L815
+masterdnsvpn-gg	save	en	Save	-	https://github.com/RevocGG/MasterDnsVPN-AndroidGG/blob/88fe4fef79b67ca98543d4ee58a85962857e5721/android/app/src/main/java/com/masterdnsvpn/ui/screens/ProfileEditScreen.kt#L234
+masterdnsvpn-gg	start	en	Start	string/home_start	https://github.com/RevocGG/MasterDnsVPN-AndroidGG/blob/88fe4fef79b67ca98543d4ee58a85962857e5721/android/app/src/main/res/values/strings.xml#L209
+masterdnsvpn-gg	section_listener	en	2. Local Proxy Listener	-	https://github.com/RevocGG/MasterDnsVPN-AndroidGG/blob/88fe4fef79b67ca98543d4ee58a85962857e5721/android/app/src/main/java/com/masterdnsvpn/ui/screens/ProfileEditScreen.kt#L278
+masterdnsvpn-gg	socks5_auth	en	SOCKS5_AUTH	-	https://github.com/RevocGG/MasterDnsVPN-AndroidGG/blob/88fe4fef79b67ca98543d4ee58a85962857e5721/android/app/src/main/java/com/masterdnsvpn/ui/screens/ProfileEditScreen.kt#L286
+masterdnsvpn-gg	socks5_user	en	SOCKS5_USER	-	https://github.com/RevocGG/MasterDnsVPN-AndroidGG/blob/88fe4fef79b67ca98543d4ee58a85962857e5721/android/app/src/main/java/com/masterdnsvpn/ui/screens/ProfileEditScreen.kt#L288
+masterdnsvpn-gg	socks5_pass	en	SOCKS5_PASS	-	https://github.com/RevocGG/MasterDnsVPN-AndroidGG/blob/88fe4fef79b67ca98543d4ee58a85962857e5721/android/app/src/main/java/com/masterdnsvpn/ui/screens/ProfileEditScreen.kt#L291
+whitedns	connect_tab	en	Connect	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L665
+whitedns	connect_tab	fa	اتصال	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1399
+whitedns	profiles_tab	en	Profiles	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L664
+whitedns	profiles_tab	fa	پروفایل‌ها	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1398
+whitedns	setting_tab	en	Setting	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L736
+whitedns	setting_tab	fa	تنظیمات	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1470
+whitedns	proxy_mode	en	Proxy Mode	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L692
+whitedns	proxy_mode	fa	حالت پروکسی	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1426
+whitedns	vpn_mode	en	Full VPN	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L693
+whitedns	vpn_mode	fa	VPN کامل	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1427
+whitedns	connect	en	Connect	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L669
+whitedns	connect	fa	اتصال	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1403
+whitedns	create	en	Create	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1065
+whitedns	create	fa	ایجاد	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1799
+whitedns	group_local_proxy	en	Local Proxy	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1082
+whitedns	group_local_proxy	fa	پروکسی محلی	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1816
+whitedns	socks5_auth	en	SOCKS5 Authentication	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1094
+whitedns	socks5_auth	fa	احراز هویت SOCKS5	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1828
+whitedns	username	en	Username	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1095
+whitedns	username	fa	نام کاربری	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1829
+whitedns	password	en	Password	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1096
+whitedns	password	fa	رمز عبور	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1830
+whitedns	save	en	Save	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L674
+whitedns	save	fa	ذخیره	-	https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1408

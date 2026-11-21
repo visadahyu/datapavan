@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: CC0-1.0
-retrieved: 2026-11-09; 15 rows added and 6 updated on 2026-11-11; Datapavan's row updated for ADR 0045 on 2026-11-13; Psiphon's Google Play build added on 2026-11-15
+retrieved: 2026-11-09; 15 rows added and 6 updated on 2026-11-11; Datapavan's row updated for ADR 0045 on 2026-11-13; Psiphon's Google Play build added on 2026-11-15; WG Tunnel's and Oblivion's proxy labels corrected, and the per-tool guides (guides.tsv, guide-steps.tsv, guide-labels.tsv) added, on 2026-11-21
 apps: 64
-evidence: 864
+evidence: 866
+guides: 49 pages (21 with steps, read at release tags), 272 steps, 268 labels, each with its source line
 method: read by hand from each app's own source code at a named tag or commit, its official documentation or
   its store listing, one row of sources.tsv per value; a third-party report is used only where no primary
   source exists, and says so. Every package of data/app-signers/apps.tsv has a row.
@@ -9,3 +10,8 @@ not-settled: values marked 'unknown' or ending in '?' need a device test. v2rayN
   Orbot in proxy mode were tested on devices on 2026-11-11 (docs/spikes/2026-11-real-tools.md): the port
   bound, the SOCKS5 greeting and UDP ASSOCIATE agree with the table. Notes in
   docs/spikes/2026-11-table-of-tools.md.
+guides-method: each tool's steps read by hand from its source at the release tag guides.tsv names, every step, label,
+  listener and auth with the line that shows it; scripts/guides.py checks them against this table, and with --against
+  against clones of the sources (2026-11-21: 532 lines found, none missing). The labels are each tool's own UI words,
+  quoted as facts of its interface with their source lines. A guide counts as checked on a phone only at the version
+  docs/spikes/2026-11-real-tools.md tried (v2rayNG 2.3.15, NekoBox 1.4.2, Orbot 17.9.7-BETA-1, Hiddify 5.5.5).
