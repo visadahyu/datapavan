@@ -71,8 +71,10 @@ internal object Engine {
      * from the apps' fragments, those the engine's kernel refused to send as too long, dropped, and the
      * routers' "fragmentation needed" and "packet too big" passed on to the apps (decision 5 as amended;
      * the 20th counts the fragments dropped); and last the seconds, and segments with no count, placed in no
-     * state because their app's state was told too late (W5, ADR 0046). New ones are only appended. None
-     * names a destination.
+     * state because their app's state was told too late (W5, ADR 0046); and at 67 to 70 tracker blocking's
+     * (W8, part 3a, ADR 0053): lookups answered with no address, connections refused, of those the ones refused
+     * by their address, and connections whose start was held while it read as an unfinished hello. New ones are
+     * only appended. None names a destination.
      * Empty when no engine runs.
      */
     external fun nativeCounters(): LongArray
@@ -272,6 +274,35 @@ internal object Engine {
 
     /** The ways of the four tables for Watch's screen, as [org.visadahyu.datapavan.watch.dns.DnsCatalogue] reads them. */
     external fun nativeDnsCatalogue(relays: String, targets: String, pairs: String, presets: String): String
+
+    /**
+     * Reads tracker blocking's graded table (W8, part 3a; ADR 0053): [table] is `blocking/hosts.tsv` of the data pack
+     * the audit verifies, with a debug build's row for the lab's names after it
+     * ([org.visadahyu.datapavan.watch.blocking.LabRow]), nine tab-separated columns a row. The library keeps it for
+     * [nativeBlocking], in place of any before, and returns how many rows it holds and how many are graded `block`,
+     * `keep` and `code`; empty for a table it refuses, which keeps none, so that nothing is blocked by half a table.
+     * No engine needs to run. A new table empties the engine's tallies: they count by its rows.
+     */
+    external fun nativeBlockingTable(table: ByteArray): IntArray
+
+    /**
+     * Sets tracker blocking whole ([org.visadahyu.datapavan.watch.blocking.Handover.text]), on the table
+     * [nativeBlockingTable] last read: one `key value...` a line, `on 0|1`, `tool-dns 0|1`, `paused MS` (the global
+     * pause's milliseconds left), `covered UID UID ...`, `graded UID HOST block|keep` (a row's grade decided for one
+     * app: a `code` row from the app's code, or an exception's `keep`), `allowed UID MS|-` (an app allowed for MS more
+     * milliseconds, or `-` until blocked again) and `entry UID HOST` (one row allowed in one app), HOST written as the
+     * table writes it. The library turns the times into deadlines on the time since the phone started, so that a
+     * clock set back stretches none, and keeps the setting for the engines to come; stopping the tunnel forgets it.
+     */
+    external fun nativeBlocking(setting: String)
+
+    /**
+     * What blocking counted in the running engine's memory, one line per app and row,
+     * `uid<TAB>host<TAB>lookups<TAB>connections<TAB>sinceMs`: lookups answered with no address apart from connections
+     * refused, and since when, in milliseconds since 1970 ([org.visadahyu.datapavan.watch.blocking.Tallies]). Empty
+     * when no engine runs; [nativeClearActivity] clears it. Never written anywhere (ADR 0047): "Now" alone reads it.
+     */
+    external fun nativeBlocked(): String
 }
 
 /** Watch's Rust reader of data packs (core/engine's `datapack`, through Watch's own library). */

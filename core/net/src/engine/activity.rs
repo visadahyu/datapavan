@@ -1095,6 +1095,7 @@ pub(super) mod tests {
             network: None,
             via: crate::engine::Via::Direct,
             proxy: None,
+            blocked: None,
         }
     }
 
@@ -2497,6 +2498,7 @@ pub(super) mod tests {
             tunnels: super::super::TunnelSetting::default(),
             dns: None,
             proxies: super::super::ProxySetting::default(),
+            blocking: super::super::BlockSetting::default(),
         };
         let (mut engine, _app) = start(platform(), Some(handover), Some(setting))?;
         // No destination; and not through the tool, which that flow never went through (review b2, N3).

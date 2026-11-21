@@ -12,6 +12,7 @@ use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd, RawFd};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use datapavan_engine::datapack;
+use datapavan_net::blocking::{Grade, Table};
 use datapavan_net::catalogue::Catalogue;
 use datapavan_net::engine::{Configured, MAX_TUNNELS, TunnelState};
 use datapavan_net::ladder::Failure;
@@ -22,9 +23,9 @@ use datapavan_net::socks5::Credentials;
 use datapavan_net::trackers::NetworkSignatures;
 use datapavan_net::wireguard::Config as WgConfig;
 use datapavan_net::{
-    Addresses, AppRoute, Chain, ChainSetting, Config, DnsConfig, DnsUse, Ech, Engine, Exchange,
-    Exchanges, Flow, Handover, Limits, NamedBy, NetworkKind, Outcome, Platform, ProxySetting,
-    Reply, TunnelSetting,
+    Addresses, AppRoute, BlockSetting, Chain, ChainSetting, Config, DnsConfig, DnsUse, Ech, Engine,
+    Exchange, Exchanges, Flow, Handover, Limits, NamedBy, NetworkKind, Outcome, Platform,
+    ProxySetting, Reply, TunnelSetting,
 };
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
 use jni::objects::{JByteArray, JClass, JIntArray, JLongArray, JObject, JString};
@@ -92,6 +93,7 @@ fn set_dns(config: Option<Arc<DnsConfig>>) {
         tunnels: TunnelSetting::default(),
         dns: None,
         proxies: ProxySetting::default(),
+        blocking: BlockSetting::default(),
     });
     kept.dns.clone_from(&config);
     if let Some(running) = engine().as_ref() {
@@ -107,12 +109,14 @@ fn set_chain(chain: Option<Chain>) -> bool {
     let tunnels = set.as_ref().map(|s| s.tunnels.clone()).unwrap_or_default();
     let dns = set.as_ref().and_then(|s| s.dns.clone());
     let proxies = set.as_ref().map(|s| s.proxies.clone()).unwrap_or_default();
+    let blocking = set.as_ref().map(|s| s.blocking.clone()).unwrap_or_default();
     *set = Some(ChainSetting {
         chain: chain.clone(),
         uncached_answers: on,
         tunnels,
         dns,
         proxies,
+        blocking,
     });
     match engine().as_ref() {
         Some(running) => {
@@ -133,6 +137,7 @@ fn set_tunnels(change: impl FnOnce(&mut TunnelSetting)) {
         tunnels: TunnelSetting::default(),
         dns: None,
         proxies: ProxySetting::default(),
+        blocking: BlockSetting::default(),
     });
     change(&mut kept.tunnels);
     if let Some(running) = engine().as_ref() {
@@ -155,12 +160,97 @@ fn set_proxies(change: impl FnOnce(&mut ProxySetting)) {
         tunnels: TunnelSetting::default(),
         dns: None,
         proxies: ProxySetting::default(),
+        blocking: BlockSetting::default(),
     });
     change(&mut kept.proxies);
     kept.proxies.trackers = trackers;
     if let Some(running) = engine().as_ref() {
         running.proxies(kept.proxies.clone());
     }
+}
+
+/// The graded table of tracker blocking Watch's Kotlin side last handed over (`Engine.nativeBlockingTable`), read
+/// from the data pack the audit verifies; none before (W8, part 3a; ADR 0053).
+static BLOCKING_TABLE: Mutex<Option<Arc<Table>>> = Mutex::new(None);
+
+/// Keeps blocking's setting for the engines to come, beside the chain, and sets it on the one that runs.
+fn set_blocking(blocking: BlockSetting) {
+    let mut set = setting();
+    let kept = set.get_or_insert_with(|| ChainSetting {
+        chain: None,
+        uncached_answers: false,
+        tunnels: TunnelSetting::default(),
+        dns: None,
+        proxies: ProxySetting::default(),
+        blocking: BlockSetting::default(),
+    });
+    kept.blocking = blocking;
+    if let Some(running) = engine().as_ref() {
+        running.blocking(kept.blocking.clone());
+    }
+}
+
+/// Blocking's setting as `nativeBlocking` reads it from `text`, one `key value...` a line, against `table`, at
+/// `boot`, the time since the phone started: `on 0|1`, `tool-dns 0|1`, `paused MS` (the pause's milliseconds
+/// left), `covered UID...`, `graded UID HOST block|keep` (a row's grade decided for one app: its code, or an
+/// exception), `allowed UID MS|-` (an app allowed for the milliseconds left, or until blocked again) and `entry
+/// UID HOST` (a row allowed in one app). A host the table does not hold, a UID that is no number and a line it
+/// does not know are left out.
+fn blocking_setting(
+    text: &str,
+    table: Option<&Arc<Table>>,
+    boot: std::time::Duration,
+) -> BlockSetting {
+    let mut setting = BlockSetting {
+        table: table.cloned(),
+        ..BlockSetting::default()
+    };
+    let until = |ms: &str| {
+        ms.parse::<u64>()
+            .ok()
+            .map(|ms| boot.saturating_add(std::time::Duration::from_millis(ms)))
+    };
+    let row = |host: &str| table.and_then(|t| t.index_of(host));
+    for line in text.lines() {
+        let words: Vec<&str> = line.split_whitespace().collect();
+        match words[..] {
+            ["on", on] => setting.on = on == "1",
+            ["tool-dns", on] => setting.tool_dns = on == "1",
+            ["paused", ms] => setting.paused_until = until(ms).unwrap_or_default(),
+            ["covered", ref uids @ ..] => {
+                setting
+                    .covered
+                    .extend(uids.iter().filter_map(|u| u.parse::<u32>().ok()));
+            }
+            ["graded", uid, host, grade] => {
+                let grade = match grade {
+                    "block" => Grade::Block,
+                    "keep" => Grade::Keep,
+                    _ => continue,
+                };
+                if let (Ok(uid), Some(entry)) = (uid.parse(), row(host)) {
+                    setting.graded.push((uid, entry, grade));
+                }
+            }
+            ["allowed", uid, ms] => {
+                let until = if ms == "-" {
+                    Some(std::time::Duration::MAX)
+                } else {
+                    until(ms)
+                };
+                if let (Ok(uid), Some(until)) = (uid.parse(), until) {
+                    setting.apps_allowed.push((uid, until));
+                }
+            }
+            ["entry", uid, host] => {
+                if let (Ok(uid), Some(entry)) = (uid.parse(), row(host)) {
+                    setting.entries_allowed.push((uid, entry));
+                }
+            }
+            _ => {}
+        }
+    }
+    setting
 }
 
 /// A tunnel's state as `nativeTunnelStates` writes it: `id handshake received error not-answering plain-dns
@@ -1342,6 +1432,93 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTrackers<
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
+/// `Engine.nativeBlockingTable(table)`: reads tracker blocking's graded table, `blocking/hosts.tsv` of the data pack
+/// with any debug build's row for the lab's names (W8, part 3a; ADR 0053), and keeps it for `nativeBlocking`, in
+/// place of any before. Returns how many rows it holds and how many are graded block, keep and code; empty for a
+/// table that is not one, which keeps none, so that nothing is blocked by half a table.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeBlockingTable(table: ByteArray):
+// IntArray`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeBlockingTable<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    table: JByteArray<'caller>,
+) -> JIntArray<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let bytes = env.convert_byte_array(&table)?;
+            let read = std::str::from_utf8(&bytes)
+                .ok()
+                .and_then(|text| Table::parse(text).ok());
+            let counts = read.as_ref().map_or_else(Vec::new, |read| {
+                let int = |n: usize| jint::try_from(n).unwrap_or(jint::MAX);
+                let of = |grade: Grade| read.entries().iter().filter(|e| e.grade == grade).count();
+                vec![
+                    int(read.entries().len()),
+                    int(of(Grade::Block)),
+                    int(of(Grade::Keep)),
+                    int(of(Grade::Code)),
+                ]
+            });
+            *BLOCKING_TABLE
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner) = read.map(Arc::new);
+            int_array(env, &counts)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// `Engine.nativeBlocking(setting)`: sets tracker blocking, whole, as [`blocking_setting`] reads `setting`, on the
+/// table `nativeBlockingTable` last read, and keeps it for the engines to come. Times are turned into deadlines on
+/// the time since the phone started, here, so that an engine started later keeps the same ones.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeBlocking(setting: String)`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeBlocking<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    setting: JString<'caller>,
+) {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let text = setting.try_to_string(env)?;
+            let table = BLOCKING_TABLE
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone();
+            let boot =
+                datapavan_net::engine::Clock::since_boot(&datapavan_net::engine::SystemClock);
+            set_blocking(blocking_setting(&text, table.as_ref(), boot));
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>();
+}
+
+/// `Engine.nativeBlocked()`: what tracker blocking counted in memory in the engine that runs, one line per app and
+/// row: `uid<TAB>host<TAB>lookups<TAB>connections<TAB>since`, `since` in milliseconds since 1970; empty when no
+/// engine runs. For "Now", inside the app only (ADR 0046's rule: nothing of it reaches a notification).
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeBlocked(): String`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeBlocked<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) -> JString<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let tallies = engine().as_ref().map_or_else(Vec::new, Engine::blocked);
+            let lines: Vec<String> = tallies
+                .iter()
+                .map(|(uid, host, t)| {
+                    format!(
+                        "{uid}\t{host}\t{}\t{}\t{}",
+                        t.lookups, t.connections, t.since_ms
+                    )
+                })
+                .collect();
+            JString::from_str(env, lines.join("\n"))
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
 /// `Engine.nativeTrackersOf(hosts)`: for each line `host\tport` (a name, or an address as text), each
 /// alternative of a network signature that matches it, as `id␟name␟website␟alternative` (the fields
 /// separated by U+001F), separated by tabs, one line each, empty for none or before any table was handed
@@ -1647,6 +1824,7 @@ fn flow_line(f: &Flow) -> String {
         Outcome::Refused => "refused",
         Outcome::Unreachable => "unreachable",
         Outcome::Failed => "failed",
+        Outcome::Blocked => "blocked",
     };
     let name = f.name.as_deref().unwrap_or("-");
     // A DNS name holds no space.
@@ -1782,6 +1960,7 @@ mod tests {
             network: None,
             via: datapavan_net::Via::Direct,
             proxy: None,
+            blocked: None,
         };
         assert_eq!(
             flow_line(&flow),
@@ -2208,6 +2387,7 @@ mod tests {
                 left_out: false,
                 trackers: Vec::new(),
             })),
+            blocked: None,
         };
         assert_eq!(
             proxy_line(&flow).as_deref(),
@@ -2218,6 +2398,7 @@ mod tests {
         assert_eq!(
             proxy_line(&Flow {
                 proxy: None,
+                blocked: None,
                 ..flow
             }),
             None

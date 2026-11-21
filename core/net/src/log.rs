@@ -10,7 +10,8 @@
 //!   byte and UTF-8, then the state of its app over the segment ([`Placed::code`]): its bytes' seconds', or,
 //!   for a part with no bytes, its end's (ADR 0046, "How it is built"); and last its route: one byte (0
 //!   directly, 1 through the user's tool, 2 through a `WireGuard` tunnel) and the tunnel's number (u32, 0 for
-//!   none); and since version 5 its proxy ([`push_proxy`]): a byte 0 for none.
+//!   none); and since version 5 its proxy ([`push_proxy`]): a byte 0 for none; and since version 6 the SDK of the
+//!   graded table's row that blocked it, a length byte and UTF-8, empty for a flow not blocked.
 //! - lookups an app sent to Watch's own DNS address: version, kind 2, the UID, start and end, their
 //!   count, their packets' bytes up and down on the tunnel, and last the app's state over them, as a segment's.
 //!
@@ -24,7 +25,9 @@
 //! Version 4 (W7, part 1, ADR 0035) added a segment's route after its state, so that the history says which
 //! flows went through which tunnel, or the tool; a lookups record is as in version 3. Version 5 (W8, part 2a, ADR
 //! 0052) added a segment's proxy after its route, and the code 5 of where a name came from: the destination the
-//! app asked its proxy for.
+//! app asked its proxy for. Version 6 (W8, part 3a, ADR 0053) added the outcome 4, a flow tracker blocking refused,
+//! and after the proxy the SDK (its Maven coordinate) of the row that blocked it, which names a tracker, never a
+//! host, so it is kept whatever "Log where these apps connect" says.
 
 use std::net::{IpAddr, SocketAddr};
 
@@ -34,7 +37,7 @@ use crate::proxies::{Asked, Kind};
 use crate::states::Placed;
 
 /// The version of the record format.
-pub const VERSION: u8 = 5;
+pub const VERSION: u8 = 6;
 
 /// One record of the log.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -101,6 +104,7 @@ impl Record {
                     Outcome::Refused => 1,
                     Outcome::Unreachable => 2,
                     Outcome::Failed => 3,
+                    Outcome::Blocked => 4,
                 });
                 out.push(named_by_code(flow.named_by));
                 out.push(ech_code(flow.ech));
@@ -114,6 +118,7 @@ impl Record {
                 out.push(state.code());
                 push_via(&mut out, flow.via);
                 push_proxy(&mut out, flow.proxy.as_deref());
+                push_text(&mut out, flow.blocked.as_ref().map(|b| b.sdk.as_str()));
             }
             Self::Lookups {
                 uid,
@@ -366,6 +371,7 @@ mod tests {
             }),
             via: crate::engine::Via::Direct,
             proxy: None,
+            blocked: None,
         }
     }
 
@@ -380,7 +386,7 @@ mod tests {
             state: NOT_TOLD,
         };
         let bytes = record.encode();
-        let mut expected = vec![5, 1];
+        let mut expected = vec![6, 1];
         expected.extend_from_slice(&7u64.to_le_bytes());
         expected.extend_from_slice(&10_123u32.to_le_bytes());
         for v in [1_000u64, 2_000, 300, 40_000, 820, 42_900] {
@@ -395,9 +401,36 @@ mod tests {
         expected.extend_from_slice(&[0, 0]);
         expected.push(0x50);
         expected.extend_from_slice(&[0, 0, 0, 0, 0]);
-        // No proxy.
-        expected.push(0);
+        // No proxy, and blocked by no row.
+        expected.extend_from_slice(&[0, 0]);
         assert_eq!(bytes, expected);
+    }
+
+    /// Version 6's addition (W8, part 3a; ADR 0053): the outcome 4 of a flow tracker blocking refused, and the SDK
+    /// of the row that blocked it last, kept with its destination left out as with it.
+    #[test]
+    fn encodes_a_blocked_flow_and_its_rows_sdk_last() {
+        let blocked = Flow {
+            outcome: Outcome::Blocked,
+            blocked: Some(Box::new(crate::engine::BlockedBy {
+                sdk: "com.google.firebase:firebase-analytics".into(),
+            })),
+            ..flow()
+        };
+        let segment = |flow| Record::Segment {
+            flow,
+            start: 1_000,
+            end: 2_000,
+            bytes: [0; 4],
+            continues: false,
+            state: NOT_TOLD,
+        };
+        let bytes = segment(blocked.clone()).encode();
+        let outcome = 1 + 1 + 8 + 4 + 6 * 8 + 1;
+        assert_eq!((bytes[0], bytes[outcome]), (6, 4));
+        assert!(bytes.ends_with(b"\x00\x26com.google.firebase:firebase-analytics"));
+        let not = segment(flow()).encode();
+        assert_eq!((not[outcome], not.last().copied()), (0, Some(0)));
     }
 
     /// Version 4's addition: a segment's route after its state, each kind, with its tunnel's number.
@@ -418,8 +451,8 @@ mod tests {
             };
             let bytes = segment.encode();
             assert_eq!(
-                &bytes[bytes.len() - 7..],
-                &[&[NOT_TOLD.code()][..], &end, &[0]].concat()[..]
+                &bytes[bytes.len() - 8..],
+                &[&[NOT_TOLD.code()][..], &end, &[0, 0]].concat()[..]
             );
         }
     }
@@ -457,10 +490,10 @@ mod tests {
                 state,
             };
             let (segment, lookups) = (segment.encode(), lookups.encode());
-            assert_eq!((segment[0], segment[segment.len() - 7]), (5, state.code()));
+            assert_eq!((segment[0], segment[segment.len() - 8]), (6, state.code()));
             assert_eq!(
                 (lookups[0], lookups.last().copied()),
-                (5, Some(state.code()))
+                (6, Some(state.code()))
             );
             assert_eq!(Placed::from_code(state.code()), Some(state));
         }
@@ -496,9 +529,9 @@ mod tests {
         let bytes = record(false).encode();
         // Version, kind, number, UID, six times; protocol, outcome, named by, ECH, DNS, flags.
         let flags = 1 + 1 + 8 + 4 + 6 * 8 + 5;
-        assert_eq!((bytes[0], bytes[flags]), (5, 0b10));
+        assert_eq!((bytes[0], bytes[flags]), (6, 0b10));
         assert_eq!(record(true).encode()[flags], 0b11);
-        assert!(bytes.ends_with(b"\x0dother.example\x00\x0fwww.example.com\x50\0\0\0\0\0\0"));
+        assert!(bytes.ends_with(b"\x0dother.example\x00\x0fwww.example.com\x50\0\0\0\0\0\0\0"));
     }
 
     #[test]
@@ -517,8 +550,8 @@ mod tests {
             state: NOT_TOLD,
         };
         let bytes = record.encode();
-        // The name, then an empty resolver, no DNS name, the state, the route and no proxy.
-        let name_at = bytes.len() - 1 - 5 - 1 - 1 - 1 - 254 - 1;
+        // The name, then an empty resolver, no DNS name, the state, the route, no proxy and no row.
+        let name_at = bytes.len() - 1 - 1 - 5 - 1 - 1 - 1 - 254 - 1;
         assert_eq!(bytes[name_at], 254, "127 two-byte characters");
         let lookups = Record::Lookups {
             uid: Some(10_123),

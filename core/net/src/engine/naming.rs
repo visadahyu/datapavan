@@ -297,11 +297,18 @@ impl Shared {
             let now = Instant::now();
             let boot = self.clock.since_boot();
             let mut names = lock(&self.names);
-            for (address, ttl) in response.addresses {
+            for &(address, ttl) in &response.addresses {
                 names.insert(address, scope, &response.question, ttl, (now, boot));
             }
             for (public, ttl) in response.public_names {
                 names.insert_public(&public, scope, ttl, now);
+            }
+            drop(names);
+            // Tracker blocking ties an address to the names Android's resolver gave it (W8, part 3a; ADR 0053).
+            if scope.is_none()
+                && let Some(chain) = dns::chain(answer)
+            {
+                self.tie(&chain, &response.addresses);
             }
         }
     }

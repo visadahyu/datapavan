@@ -349,10 +349,10 @@ impl DnsConfig {
 /// How a TCP connection to Watch's DNS address is answered, by its app's route.
 #[derive(Clone)]
 pub(super) enum TcpLookups {
-    /// A direct app's: by this resolver.
-    Encrypted,
+    /// A direct app's, of this UID if Android named it: by this resolver.
+    Encrypted(Option<u32>),
     /// A chained app's: as its UDP lookups are (ADR 0038).
-    Tool(Arc<Chain>),
+    Tool(Arc<Chain>, Option<u32>),
 }
 
 /// The resolver's state in the engine.
@@ -665,16 +665,29 @@ fn told<T>(shared: &Shared, change: impl FnOnce(&mut Ladder) -> T) -> T {
 
 /// The answer to a direct app's `query` to Watch's DNS address, made the app's: over TCP (`tcp`) whole, over
 /// UDP cut to what the app takes. `None` only for bytes too short to be a query with an ID.
-pub(super) async fn answer(shared: &Arc<Shared>, query: &[u8], tcp: bool) -> Option<Vec<u8>> {
+///
+/// Tracker blocking decides first, before the cache and its stale window, for every record type (W8, part 3a;
+/// ADR 0053, decision 3): a question a row blocks for the app `uid` gets "no data" kept for no time and asks no
+/// one; an answer whose CNAME chain a row blocks for it gets the same in its place.
+pub(super) async fn answer(
+    shared: &Arc<Shared>,
+    query: &[u8],
+    tcp: bool,
+    uid: Option<u32>,
+) -> Option<Vec<u8>> {
     let Some(asked) = hygiene::read(query) else {
         return crate::answers::failure(query);
     };
+    if let Some(blocked) = shared.lookup_blocked(uid, query) {
+        return Some(blocked);
+    }
     let limit = (!tcp).then(|| asked.udp_limit());
     let mine = |upstream: &[u8]| {
         let mut out = asked.answer(upstream, limit)?;
         if shared.uncached_answers.load(Ordering::Relaxed) {
             crate::dns::uncache(&mut out);
         }
+        shared.answer_blocked(uid, query, &mut out);
         Some(out)
     };
     let Some(config) = shared.resolver.config() else {
@@ -1296,8 +1309,10 @@ async fn serve_connection(
             break;
         }
         let answer = match &route {
-            TcpLookups::Encrypted => answer(&shared, &query, true).await,
-            TcpLookups::Tool(chain) => super::lookups::answer(&shared, chain, &query).await,
+            TcpLookups::Encrypted(uid) => answer(&shared, &query, true, *uid).await,
+            TcpLookups::Tool(chain, uid) => {
+                super::lookups::answer(&shared, chain, &query, *uid).await
+            }
         };
         let Some(answer) = answer else { continue };
         let Ok(length) = u16::try_from(answer.len()) else {
@@ -1691,7 +1706,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn a_direct_apps_name_goes_by_odoh_padded_without_its_subnet_and_never_to_the_network() {
         let (shared, fake) = resolving("");
-        let got = answer(&shared, &app_query("www.example.com", 1), false).await;
+        let got = answer(&shared, &app_query("www.example.com", 1), false, None).await;
         let (address, rcode) = read(got.clone());
         assert_eq!(
             (address, rcode),
@@ -1725,7 +1740,7 @@ mod tests {
         );
         assert!(shared.resolver.status().contains("\nlatency doh 0 "));
         // Kept: the same name again asks nothing.
-        let again = answer(&shared, &app_query("www.example.com", 1), false).await;
+        let again = answer(&shared, &app_query("www.example.com", 1), false, None).await;
         assert_eq!(read(again).0, Some(v4(10, 53, 1, 1)));
         assert_eq!(fake.seen(Carry::Odoh).len(), 1);
     }
@@ -1733,7 +1748,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn what_leaves_carries_no_client_subnet_and_is_padded() {
         let (shared, fake) = resolving("choice preset pdoh");
-        let _ = answer(&shared, &app_query("www.example.com", 1), false).await;
+        let _ = answer(&shared, &app_query("www.example.com", 1), false, None).await;
         let doh = fake.seen(Carry::Doh);
         assert_eq!(doh.len(), 1);
         assert_eq!(doh[0].body.len() % hygiene::QUERY_BLOCK, 0);
@@ -1747,14 +1762,16 @@ mod tests {
         for carry in [Carry::Odoh, Carry::Doh, Carry::Dot] {
             fake.does(carry, Does::Fail(Failure::Tampered));
         }
-        let (address, rcode) = read(answer(&shared, &app_query("www.example.com", 1), false).await);
+        let (address, rcode) =
+            read(answer(&shared, &app_query("www.example.com", 1), false, None).await);
         assert_eq!((address, rcode), (None, 2), "server failure");
         assert_eq!(fake.seen(Carry::Network).len(), 0);
         assert!(shared.resolver.status().starts_with("way failing "));
         // Every step held now: the next lookup fails at once, without asking anything.
         let asked = lock(&fake.seen).len();
         let started = Instant::now();
-        let (_, rcode) = read(answer(&shared, &app_query("other.example.com", 1), false).await);
+        let (_, rcode) =
+            read(answer(&shared, &app_query("other.example.com", 1), false, None).await);
         assert_eq!(rcode, 2);
         assert!(started.elapsed() < Duration::from_millis(100), "at once");
         assert_eq!(lock(&fake.seen).len(), asked, "nothing asked");
@@ -1767,12 +1784,12 @@ mod tests {
     async fn a_failing_choice_falls_to_odoh_and_only_this_resolver_asks_nothing_else() {
         let (shared, fake) = resolving("choice dot p.test 192.0.2.5");
         fake.does(Carry::Dot, Does::Fail(Failure::Refused));
-        let (address, _) = read(answer(&shared, &app_query("a.example.com", 1), false).await);
+        let (address, _) = read(answer(&shared, &app_query("a.example.com", 1), false, None).await);
         assert_eq!(address, Some(v4(10, 53, 1, 1)), "the first pair's target");
         assert!(shared.resolver.status().starts_with("way odoh ra ta\n"));
         let (shared, fake) = resolving("choice dot p.test 192.0.2.5\nonly 1");
         fake.does(Carry::Dot, Does::Fail(Failure::Refused));
-        let failed = answer(&shared, &app_query("b.example.com", 1), false)
+        let failed = answer(&shared, &app_query("b.example.com", 1), false, None)
             .await
             .unwrap_or_default();
         assert_eq!(failed.get(3).map(|f| f & 0x0f), Some(2), "server failure");
@@ -1788,7 +1805,7 @@ mod tests {
     async fn the_networks_resolver_gets_a_random_id_and_the_app_its_own() {
         let (shared, fake) = resolving("");
         for _ in 0..4 {
-            let answered = answer(&shared, &app_query("printer.home.arpa", 1), false)
+            let answered = answer(&shared, &app_query("printer.home.arpa", 1), false, None)
                 .await
                 .unwrap_or_default();
             assert_eq!(answered.get(..2), Some(&[0x77, 0x01][..]), "the app's ID");
@@ -1806,11 +1823,12 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn a_stale_answer_is_renewed_once_at_a_time() {
         let (shared, fake) = resolving("");
-        let _ = answer(&shared, &app_query("www.example.com", 1), false).await;
+        let _ = answer(&shared, &app_query("www.example.com", 1), false, None).await;
         assert_eq!(fake.seen(Carry::Odoh).len(), 1);
         fake.clock.pass(61_000);
         for _ in 0..3 {
-            let (address, _) = read(answer(&shared, &app_query("www.example.com", 1), false).await);
+            let (address, _) =
+                read(answer(&shared, &app_query("www.example.com", 1), false, None).await);
             assert_eq!(address, Some(v4(10, 53, 1, 1)), "the stale answer");
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -1824,7 +1842,7 @@ mod tests {
     async fn a_change_of_strict_or_choice_keeps_the_holds() {
         let (shared, fake) = resolving("");
         fake.does(Carry::Odoh, Does::Fail(Failure::Tampered));
-        let _ = answer(&shared, &app_query("a.example.com", 1), false).await;
+        let _ = answer(&shared, &app_query("a.example.com", 1), false, None).await;
         let held = |shared: &Arc<Shared>| lock(&shared.resolver.ladder).held(Instant::now());
         assert_eq!(held(&shared), 2, "both pairs held");
         let way = shared.resolver.status().lines().next().map(str::to_owned);
@@ -1859,9 +1877,10 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn local_names_go_to_the_network_even_in_strict() {
         let (shared, fake) = resolving("strict 1");
-        let (address, _) = read(answer(&shared, &app_query("printer.home.arpa", 1), false).await);
+        let (address, _) =
+            read(answer(&shared, &app_query("printer.home.arpa", 1), false, None).await);
         assert_eq!(address, Some(v4(10, 53, 5, 5)));
-        let (address, _) = read(answer(&shared, &app_query("printer", 1), false).await);
+        let (address, _) = read(answer(&shared, &app_query("printer", 1), false, None).await);
         assert_eq!(address, Some(v4(10, 53, 5, 5)));
         assert!(
             fake.seen(Carry::Odoh).is_empty(),
@@ -1876,7 +1895,8 @@ mod tests {
     async fn a_searched_name_goes_encrypted_first_and_to_the_network_only_when_unknown() {
         let (shared, fake) = resolving("strict 1");
         shared.resolver.network(true, "corp.example");
-        let (address, _) = read(answer(&shared, &app_query("www.corp.example", 1), false).await);
+        let (address, _) =
+            read(answer(&shared, &app_query("www.corp.example", 1), false, None).await);
         assert_eq!(address, Some(v4(10, 53, 1, 1)), "the internet knows it");
         assert!(
             fake.seen(Carry::Network).is_empty(),
@@ -1884,13 +1904,18 @@ mod tests {
         );
         for _ in 0..2 {
             let (address, _) =
-                read(answer(&shared, &app_query("intranet.corp.example", 1), false).await);
+                read(answer(&shared, &app_query("intranet.corp.example", 1), false, None).await);
             assert_eq!(address, Some(v4(10, 53, 5, 5)), "the network's own name");
         }
         assert_eq!(fake.seen(Carry::Network).len(), 2, "never from the cache");
-        let unknown = answer(&shared, &app_query("intranet.other.example", 1), false)
-            .await
-            .unwrap_or_default();
+        let unknown = answer(
+            &shared,
+            &app_query("intranet.other.example", 1),
+            false,
+            None,
+        )
+        .await
+        .unwrap_or_default();
         assert_eq!(unknown.get(3).map(|f| f & 0x0f), Some(NXDOMAIN));
         assert_eq!(fake.seen(Carry::Network).len(), 2, "under no search domain");
     }
@@ -1902,11 +1927,12 @@ mod tests {
         let (shared, fake) = resolving("");
         shared.resolver.network(true, "com, corp.example. .net");
         assert!(shared.resolver.status().contains("\nsearch corp.example\n"));
-        let unknown = answer(&shared, &app_query("intranet.example.com", 1), false)
+        let unknown = answer(&shared, &app_query("intranet.example.com", 1), false, None)
             .await
             .unwrap_or_default();
         assert_eq!(unknown.get(3).map(|f| f & 0x0f), Some(NXDOMAIN));
-        let (address, _) = read(answer(&shared, &app_query("secret.example.com", 1), false).await);
+        let (address, _) =
+            read(answer(&shared, &app_query("secret.example.com", 1), false, None).await);
         assert_eq!(address, Some(v4(10, 53, 1, 1)));
         assert!(
             fake.seen(Carry::Network).is_empty(),
@@ -1922,7 +1948,7 @@ mod tests {
         for carry in [Carry::Odoh, Carry::Doh, Carry::Dot] {
             fake.does(carry, Does::Fail(Failure::Refused));
         }
-        let (address, _) = read(answer(&shared, &app_query("a.example.com", 1), false).await);
+        let (address, _) = read(answer(&shared, &app_query("a.example.com", 1), false, None).await);
         assert_eq!(address, Some(v4(10, 53, 5, 5)), "the network's resolver");
         assert!(shared.resolver.status().starts_with("way fallback "));
         assert!(fake.changed.load(Ordering::Relaxed) >= 1, "Kotlin told");
@@ -1931,7 +1957,7 @@ mod tests {
             fake.does(carry, Does::Answer);
         }
         lock(&shared.resolver.ladder).reset();
-        let (address, _) = read(answer(&shared, &app_query("b.example.com", 1), false).await);
+        let (address, _) = read(answer(&shared, &app_query("b.example.com", 1), false, None).await);
         assert_eq!(address, Some(v4(10, 53, 1, 1)));
         assert!(shared.resolver.status().starts_with("way odoh ra ta\n"));
     }
@@ -1941,7 +1967,8 @@ mod tests {
         let (shared, fake) = resolving("");
         *lock(&fake.late_relay) = Some(("relay-a.test".into(), 2_000));
         let started = Instant::now();
-        let (address, _) = read(answer(&shared, &app_query("www.example.com", 1), false).await);
+        let (address, _) =
+            read(answer(&shared, &app_query("www.example.com", 1), false, None).await);
         assert_eq!(
             address,
             Some(v4(10, 53, 1, 2)),
@@ -1982,7 +2009,8 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn a_401_holds_its_pair_and_the_key_is_fetched_later_at_the_targets_addresses() {
         let (shared, fake) = rotated();
-        let (address, _) = read(answer(&shared, &app_query("one.example.com", 1), false).await);
+        let (address, _) =
+            read(answer(&shared, &app_query("one.example.com", 1), false, None).await);
         assert_eq!(
             address,
             Some(v4(10, 53, 1, 2)),
@@ -1998,7 +2026,8 @@ mod tests {
             0,
             "no record asked with the lookup"
         );
-        let (address, _) = read(answer(&shared, &app_query("two.example.com", 1), false).await);
+        let (address, _) =
+            read(answer(&shared, &app_query("two.example.com", 1), false, None).await);
         assert_eq!(
             address,
             Some(v4(10, 53, 1, 2)),
@@ -2028,7 +2057,8 @@ mod tests {
             "the pair released"
         );
         shared.resolver.network_moved();
-        let (address, _) = read(answer(&shared, &app_query("three.example.com", 1), false).await);
+        let (address, _) =
+            read(answer(&shared, &app_query("three.example.com", 1), false, None).await);
         assert_eq!(
             address,
             Some(v4(10, 53, 1, 1)),
@@ -2044,7 +2074,7 @@ mod tests {
         let (shared, fake) = rotated();
         // The first record way fails: the next is still asked (the security review's nit).
         fake.does(Carry::Doh, Does::Fail(Failure::Refused));
-        let _ = answer(&shared, &app_query("one.example.com", 1), false).await;
+        let _ = answer(&shared, &app_query("one.example.com", 1), false, None).await;
         wait_for(|| !fake.seen(Carry::Fetch).is_empty()).await;
         let asked: Vec<Exchange> = fake
             .seen(Carry::Doh)
@@ -2062,7 +2092,7 @@ mod tests {
         // The same network: the pair met 401 again, nothing is fetched again.
         lock(&shared.resolver.ladder).reset();
         lock(&shared.resolver.keys).clear();
-        let _ = answer(&shared, &app_query("two.example.com", 1), false).await;
+        let _ = answer(&shared, &app_query("two.example.com", 1), false, None).await;
         tokio::time::sleep(Duration::from_millis(600)).await;
         assert_eq!(
             fake.seen(Carry::Fetch).len(),
@@ -2076,7 +2106,7 @@ mod tests {
     async fn an_unchanged_key_after_a_401_keeps_the_pair_held() {
         let (shared, fake) = rotated();
         fake.stale_fetch.store(true, Ordering::Relaxed);
-        let _ = answer(&shared, &app_query("one.example.com", 1), false).await;
+        let _ = answer(&shared, &app_query("one.example.com", 1), false, None).await;
         wait_for(|| !fake.seen(Carry::Fetch).is_empty()).await;
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(
@@ -2100,7 +2130,7 @@ mod tests {
             udp: false,
             log_destinations: false,
         }));
-        let _ = answer(&shared, &app_query("one.example.com", 1), false).await;
+        let _ = answer(&shared, &app_query("one.example.com", 1), false, None).await;
         wait_for(|| !fake.seen(Carry::Fetch).is_empty()).await;
         assert!(fake.seen(Carry::Fetch)[0].through.is_some());
         assert!(
@@ -2113,7 +2143,7 @@ mod tests {
     async fn dns_over_tcp_to_watchs_address_is_answered_by_the_resolver() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let (shared, fake) = resolving("");
-        let mut stream = connect_lookups(&shared, TcpLookups::Encrypted)
+        let mut stream = connect_lookups(&shared, TcpLookups::Encrypted(None))
             .await
             .unwrap_or_else(|_| unreachable!("connects"));
         let query = app_query("tcp.example.com", 1);
@@ -2188,7 +2218,7 @@ mod tests {
         for carry in [Carry::Odoh, Carry::Doh, Carry::Dot] {
             fake.does(carry, Does::Fail(Failure::Tampered));
         }
-        let _ = answer(&shared, &app_query("portal.example.com", 1), false).await;
+        let _ = answer(&shared, &app_query("portal.example.com", 1), false, None).await;
         assert!(shared.resolver.status().contains("held 0\n"));
     }
 }

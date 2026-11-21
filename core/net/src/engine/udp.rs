@@ -9,6 +9,7 @@
 //! keep one socket for each flow. Sockets are opened off the packet loop, and answers are read into one
 //! buffer for each engine thread.
 
+use super::blocks::QuicGate;
 use super::budget::{Full, Place};
 use super::chain::{Chain, Route, connect_proxy, io_error};
 use super::errors::{Queued, Tally, Told};
@@ -449,6 +450,9 @@ struct Peer {
     /// What a router would quote of the app's last datagram to it that left, which an error passed on
     /// quotes as the app sent it.
     last_sent: Sent,
+    /// Tracker blocking's hold of its first datagrams while they read as an unfinished QUIC hello, and its row
+    /// once named (W8, part 3a; ADR 0053): none for a flow of no app, the user's tool's, or one that came in.
+    gate: Option<Box<QuicGate>>,
 }
 
 /// Where a stand-in stands with its answers.
@@ -529,6 +533,9 @@ impl Peer {
     ) -> Self {
         let (mut opened, mut flow) = begin_udp(shared, app, address, uid);
         flow.came_in = came_in;
+        let gate = (!came_in)
+            .then(|| shared.quic_gate(uid, address, way.name.as_deref()))
+            .flatten();
         // A stand-in whose name gave way in the map keeps it in the log, as long as a peer of its app
         // stands for it: its datagrams still go to that name (seventh review of unit 9, finding 4).
         if flow.name.is_none()
@@ -562,6 +569,7 @@ impl Peer {
             lookups: (!came_in && address.port() == 53).then(Vec::new),
             owed_errors: 0,
             last_sent: Sent::default(),
+            gate,
         }
     }
 
@@ -2285,6 +2293,8 @@ struct ToPeer {
     sent: io::Result<usize>,
     bytes: Option<Arc<FlowBytes>>,
     quic: Option<QuicRead>,
+    /// Whether tracker blocking holds the datagram: nothing left, and nothing is counted yet.
+    held: bool,
 }
 
 /// What a datagram of the app needs once the table has been read: its flow of lookups' way, its app,
@@ -2849,12 +2859,31 @@ impl UdpTable {
         peer.last = now;
         let quic = read_quic(&mut peer.quic, payload);
         let header = peer.way.header.clone();
-        let sent = try_send_to(
-            &socket,
-            header.as_deref(),
-            payload,
-            (destination, parsed.hops),
-        );
+        let sent = match gated(shared, peer, quic.as_ref(), (packet, parsed, payload), now) {
+            Gated::Hold => {
+                return Some(ToPeer {
+                    sent: Ok(0),
+                    bytes: None,
+                    quic,
+                    held: true,
+                });
+            }
+            Gated::Refuse(entry) => Err(super::tcp::Blocked::error(entry)),
+            Gated::Pass(held) => {
+                release(
+                    shared,
+                    peer,
+                    (&socket, header.as_deref()),
+                    (destination, held),
+                );
+                try_send_to(
+                    &socket,
+                    header.as_deref(),
+                    payload,
+                    (destination, parsed.hops),
+                )
+            }
+        };
         if sent.is_ok() {
             peer.left(Sent::of(packet, parsed.transport));
         }
@@ -2862,6 +2891,7 @@ impl UdpTable {
             sent,
             bytes: peer.bytes.clone(),
             quic,
+            held: false,
         })
     }
 
@@ -3118,11 +3148,17 @@ impl Loop {
         };
         if lookup {
             self.shared.lookup(uid, packet.len());
+            // Tracker blocking decides before any way is asked (W8, part 3a; ADR 0053): a question it stops gets
+            // "no data" kept for no time, and nothing leaves the phone.
+            if self.blocked_lookup(payload, (key, uid), &owed).await {
+                return;
+            }
         }
         if self.answered_here(&way, payload, (key, uid), owed.clone()) {
             return;
         }
-        if let Some(answer) = cached {
+        if let Some(mut answer) = cached {
+            self.shared.answer_blocked(uid, payload, &mut answer);
             self.shared.looked_up(uid, &answer);
             if let Some(packet) = packet::udp(key.1, key.0, &answer) {
                 self.shared.lookup_answered(uid, packet.len());
@@ -3134,6 +3170,26 @@ impl Loop {
         if let Some(error) = count_sent(&self.shared, None, packet, parsed, sent) {
             self.send(&error).await;
         }
+    }
+
+    /// Answers a lookup tracker blocking stops with "no data" kept for no time (ADR 0053, decision 3), and settles
+    /// it in its flow: whether it did.
+    async fn blocked_lookup(
+        &self,
+        payload: &[u8],
+        (key, uid): ((SocketAddr, SocketAddr), Option<u32>),
+        (id, owed): &(u64, Arc<Owed>),
+    ) -> bool {
+        let Some(answer) = self.shared.lookup_blocked(uid, payload) else {
+            return false;
+        };
+        owed.given_up(payload);
+        lock(&self.udp).settled(key, *id, owed);
+        if let Some(packet) = packet::udp(key.1, key.0, &answer) {
+            self.shared.lookup_answered(uid, packet.len());
+            self.send(&packet).await;
+        }
+        true
     }
 
     /// Hands a lookup on a way Watch answers itself to a task of its own: a chained app's (ADR 0038), or a direct
@@ -3203,6 +3259,9 @@ impl Loop {
     /// counted, and the app told when its destination cannot be reached.
     async fn sent_to_peer(&self, to: ToPeer, packet: &[u8], parsed: &Packet) {
         note_quic(&self.shared, to.quic);
+        if to.held {
+            return;
+        }
         let bytes = to.bytes.as_deref();
         if let Some(error) = count_sent(&self.shared, bytes, packet, parsed, to.sent) {
             self.send(&error).await;
@@ -3262,7 +3321,127 @@ fn count_sent(
             Counters::add(&shared.counters.too_big, 1);
             None
         }
+        // Tracker blocking refused it: "port unreachable", as Watch refuses QUIC elsewhere (ADR 0038), so that a
+        // client such as Cronet goes over TCP at once (ADR 0053, decision 4).
+        Err(error) if super::tcp::Blocked::of(&error).is_some() => {
+            packet::unreachable(packet, parsed, Unreachable::Port)
+        }
         Err(_) => packet::unreachable(packet, parsed, Unreachable::Host),
+    }
+}
+
+/// What tracker blocking does with a datagram the app sends a peer (W8, part 3a; ADR 0053, decision 4).
+enum Gated {
+    /// It leaves, after the datagrams held before it.
+    Pass(Vec<super::blocks::HeldDatagram>),
+    /// It is held with them.
+    Hold,
+    /// It is dropped, and the app told "port unreachable": the row that refuses the flow.
+    Refuse(usize),
+}
+
+/// Tracker blocking's step for the app's datagram `(packet, parsed, payload)` to `peer`, its QUIC Initial packets
+/// read so far giving `quic`: held while they read as an unfinished `ClientHello`, at most
+/// [`super::blocks::QUIC_HELD`] datagrams and [`super::blocks::HOLD`], past which what was held leaves unread at
+/// the next datagram; refused once its name, its stand-in's or its address blocks it; decided again at each
+/// datagram once named, so that a block set again stops it at its next one.
+fn gated(
+    shared: &Shared,
+    peer: &mut Peer,
+    quic: Option<&QuicRead>,
+    (packet, parsed, payload): (&[u8], &Packet, &[u8]),
+    now: Instant,
+) -> Gated {
+    let reading = peer.quic.is_some();
+    let (id, uid) = (peer.id, peer.opened.uid);
+    let Some(gate) = peer.gate.as_mut() else {
+        return Gated::Pass(Vec::new());
+    };
+    if gate.refused {
+        if !gate.recorded
+            && let Some(entry) = gate.entry
+        {
+            gate.recorded = true;
+            shared.blocked_flow(id, entry);
+        }
+        return gate.entry.map_or(Gated::Pass(Vec::new()), Gated::Refuse);
+    }
+    if let (Some(entry), Some(uid)) = (gate.entry, uid) {
+        if shared.still_blocks(uid, entry) {
+            gate.refused = true;
+            gate.recorded = true;
+            gate.held.clear();
+            shared.blocked_flow(id, entry);
+            return Gated::Refuse(entry);
+        }
+        return Gated::Pass(std::mem::take(&mut gate.held));
+    }
+    match quic {
+        Some(QuicRead {
+            read: ServerName::Found(hello),
+            ..
+        }) => {
+            if let Some((entry, blocks)) = shared.quic_verdict(uid, &hello.name) {
+                gate.entry = Some(entry);
+                if blocks {
+                    gate.refused = true;
+                    gate.recorded = true;
+                    gate.held.clear();
+                    shared.blocked_flow(id, entry);
+                    return Gated::Refuse(entry);
+                }
+            }
+            Gated::Pass(std::mem::take(&mut gate.held))
+        }
+        // Still an unfinished hello: held, within the bounds.
+        None if reading => {
+            let until = *gate.until.get_or_insert(now + super::blocks::HOLD);
+            if gate.held.len() < super::blocks::QUIC_HELD && now < until {
+                if gate.held.is_empty() {
+                    Counters::add(&shared.counters.blocking_holds, 1);
+                }
+                gate.held.push(super::blocks::HeldDatagram {
+                    payload: payload.to_vec(),
+                    sent: Sent::of(packet, parsed.transport),
+                    hops: parsed.hops,
+                    length: packet.len(),
+                });
+                Gated::Hold
+            } else {
+                Gated::Pass(std::mem::take(&mut gate.held))
+            }
+        }
+        // Its start named nothing, or is not QUIC: what was held leaves, and nothing more is held.
+        _ => {
+            let held = std::mem::take(&mut gate.held);
+            peer.gate = None;
+            Gated::Pass(held)
+        }
+    }
+}
+
+/// Sends the datagrams tracker blocking held for `peer`, in order, before the one that released them, counted as
+/// any that leaves.
+fn release(
+    shared: &Shared,
+    peer: &mut Peer,
+    (socket, header): (&UdpSocket, Option<&[u8]>),
+    (destination, held): (SocketAddr, Vec<super::blocks::HeldDatagram>),
+) {
+    for datagram in held {
+        let sent = try_send_to(
+            socket,
+            header,
+            &datagram.payload,
+            (destination, datagram.hops),
+        );
+        if let Ok(n) = sent {
+            peer.left(datagram.sent);
+            Counters::add(&shared.counters.bytes_up, n as u64);
+            if let Some(bytes) = &peer.bytes {
+                bytes.up(shared, n, datagram.length);
+            }
+        }
     }
 }
 
@@ -3781,8 +3960,23 @@ fn send_waiting(
         let Some(peer) = mapping.peers.get_mut(&destination) else {
             return;
         };
-        reads.push(read_quic(&mut peer.quic, payload));
-        let sent = try_send_to(out, header.as_deref(), payload, (destination, parsed.hops));
+        let quic = read_quic(&mut peer.quic, payload);
+        let step = gated(
+            shared,
+            peer,
+            quic.as_ref(),
+            (packet, &parsed, payload),
+            Instant::now(),
+        );
+        reads.push(quic);
+        let sent = match step {
+            Gated::Hold => continue,
+            Gated::Refuse(entry) => Err(super::tcp::Blocked::error(entry)),
+            Gated::Pass(held) => {
+                release(shared, peer, (out, header.as_deref()), (destination, held));
+                try_send_to(out, header.as_deref(), payload, (destination, parsed.hops))
+            }
+        };
         if sent.is_ok() {
             peer.left(Sent::of(packet, parsed.transport));
         }
@@ -4712,12 +4906,18 @@ async fn open_lookups(
                 continue;
             };
             lookups.push(packet.len());
+            // Tracker blocking decides before any way is asked (W8, part 3a; ADR 0053).
+            if let Some(answer) = shared.lookup_blocked(uid, payload) {
+                cached.extend(packet::udp(destination, app, &answer));
+                continue;
+            }
             if let UdpWay::Lookups(_) | UdpWay::Resolved = way {
                 owed.add(payload);
                 questions.push(payload.to_vec());
                 continue;
             }
-            if let Some(answer) = cached_answer(shared, destination, payload) {
+            if let Some(mut answer) = cached_answer(shared, destination, payload) {
+                shared.answer_blocked(uid, payload, &mut answer);
                 shared.looked_up(uid, &answer);
                 cached.extend(packet::udp(destination, app, &answer));
                 continue;
@@ -4869,7 +5069,7 @@ async fn answer_lookup(
     tun: Arc<Tun>,
 ) {
     let (app, destination) = key;
-    let answer = lookups::answer(&shared, &chain, &query).await;
+    let answer = lookups::answer(&shared, &chain, &query, uid).await;
     if let Some(packet) = answer.and_then(|answer| packet::udp(destination, app, &answer)) {
         shared.lookup_answered(uid, packet.len());
         send_to_app(&tun, &shared, &packet).await;
@@ -4888,7 +5088,7 @@ async fn answer_resolved(
     tun: Arc<Tun>,
 ) {
     let (app, destination) = key;
-    let answer = super::resolver::answer(&shared, &query, false).await;
+    let answer = super::resolver::answer(&shared, &query, false, uid).await;
     // A messenger's lookups through Watch count for its hellos (ADR 0052, the fix round's S-M3).
     if let Some(answer) = &answer {
         shared.looked_up(uid, answer);
@@ -4945,6 +5145,7 @@ fn begin_udp(
         network,
         via: crate::engine::Via::Direct,
         proxy: None,
+        blocked: None,
     };
     (opened, flow)
 }
@@ -5061,14 +5262,19 @@ fn relayed(
                 owed.answered(answer);
                 // Android's resolver names every app's flows; a messenger's lookups count for its hellos.
                 if destination.port() == 53 {
-                    shared.learn(answer, None);
-                    shared.looked_up(uid, answer);
+                    // Tracker blocking matches the answer's CNAME chain for its app (W8, part 3a; ADR 0053).
+                    let mut passed = answer.to_vec();
+                    shared.answer_blocked(uid, &[], &mut passed);
+                    shared.learn(&passed, None);
+                    shared.looked_up(uid, &passed);
                     if shared.uncached_answers.load(Ordering::Relaxed) {
                         lock(&shared.direct_answers).insert(answer, shared.clock.since_boot());
-                        dns::uncache(answer);
+                        dns::uncache(&mut passed);
                     }
+                    packet::udp(destination, app, &passed)
+                } else {
+                    packet::udp(destination, app, answer)
                 }
-                packet::udp(destination, app, answer)
             }
             // The server's host answered that no one listens there: no lookup will have an answer.
             Err(error) if error.kind() == io::ErrorKind::ConnectionRefused => {
@@ -5113,6 +5319,162 @@ mod tests {
 
     const APP: SocketAddr =
         SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::new(10, 1, 10, 1)), 40_000);
+
+    /// The client's Initial of a QUIC connection to `cid` holding the CRYPTO frame of `hello[from..to]`, padded to
+    /// 1,200 bytes as a client pads it.
+    fn quic_part(cid: &[u8], pn: u32, hello: &[u8], (from, to): (usize, usize)) -> Vec<u8> {
+        let varint = |v: usize, out: &mut Vec<u8>| {
+            let v = u16::try_from(v).unwrap_or(0) | 0x4000;
+            out.extend_from_slice(&v.to_be_bytes());
+        };
+        let mut frame = vec![0x06];
+        varint(from, &mut frame);
+        varint(to - from, &mut frame);
+        frame.extend_from_slice(&hello[from..to]);
+        crate::quic::client_initial(1, (cid, &[]), (pn, &frame), 1_200).unwrap_or_default()
+    }
+
+    /// The two datagrams of the emulator check's QUIC hello for the lab's blocked name (scripts/verify-blocking.sh):
+    /// written by this test with `DATAPAVAN_WRITE_FIXTURE=1`, and checked to be what it writes otherwise, so that the
+    /// fixture app sends what the engine reads as an unfinished hello, then a whole one.
+    #[test]
+    fn the_blocking_fixtures_quic_hello_is_what_the_engine_reads() {
+        let hello = crate::tls::tests::handshake("tracker.blocklab.home.arpa", false);
+        let half = hello.len() / 2;
+        let cid = [0x5a; 8];
+        let parts = [
+            quic_part(&cid, 0, &hello, (0, half)),
+            quic_part(&cid, 1, &hello, (half, hello.len())),
+        ];
+        let mut initial = crate::quic::Initial::new();
+        assert_eq!(initial.push(&parts[0]), ServerName::Incomplete);
+        assert!(
+            matches!(initial.push(&parts[1]), ServerName::Found(h) if h.name == "tracker.blocklab.home.arpa")
+        );
+        let mut text = String::new();
+        for part in &parts {
+            text.extend(part.iter().map(|b| format!("{b:02x}")));
+            text.push('\n');
+        }
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../scripts/blocking-fixture/quic-hello.hex"
+        );
+        if std::env::var_os("DATAPAVAN_WRITE_FIXTURE").is_some() {
+            assert!(std::fs::write(path, &text).is_ok());
+        }
+        assert_eq!(
+            std::fs::read_to_string(path).unwrap_or_default(),
+            text,
+            "{path}: run with DATAPAVAN_WRITE_FIXTURE=1"
+        );
+    }
+
+    /// A QUIC hello over two datagrams is held, nothing sent, until it is read whole; then its flow is refused with
+    /// "port unreachable" and what it sends after is dropped too, or, in an app allowed, what was held leaves first
+    /// (ADR 0053, decision 4). A datagram that is no QUIC is never held.
+    #[test]
+    fn a_quic_hello_in_two_datagrams_is_held_then_refused_or_released() {
+        let shared = shared();
+        shared.set_blocking(super::super::BlockSetting {
+            on: true,
+            table: Some(Arc::new(crate::blocking::tests::table(&[(
+                "tracker.example",
+                "block",
+            )]))),
+            covered: vec![10_123, 10_124],
+            apps_allowed: vec![(10_124, Duration::MAX)],
+            ..super::super::BlockSetting::default()
+        });
+        let hello = crate::tls::tests::handshake("tracker.example", false);
+        let half = hello.len() / 2;
+        let cid = [0x42; 8];
+        let parts = [
+            quic_part(&cid, 0, &hello, (0, half)),
+            quic_part(&cid, 1, &hello, (half, hello.len())),
+        ];
+        let server = SocketAddr::from(([192, 0, 2, 7], 443));
+        let now = Instant::now();
+        let step = |peer: &mut Peer, payload: &[u8]| {
+            let packet = packet::udp(APP, server, payload).unwrap_or_default();
+            let Ok(parsed) = packet::parse(&packet) else {
+                unreachable!("a packet")
+            };
+            let quic = read_quic(&mut peer.quic, payload);
+            gated(
+                &shared,
+                peer,
+                quic.as_ref(),
+                (&packet, &parsed, payload),
+                now,
+            )
+        };
+        let mut blocked = Peer::new(
+            &shared,
+            APP,
+            server,
+            Some(10_123),
+            now,
+            (false, PeerWay::direct(server)),
+        );
+        assert!(matches!(step(&mut blocked, &parts[0]), Gated::Hold));
+        assert!(matches!(step(&mut blocked, &parts[1]), Gated::Refuse(_)));
+        assert!(
+            matches!(step(&mut blocked, b"after"), Gated::Refuse(_)),
+            "dropped after too"
+        );
+        let mut allowed = Peer::new(
+            &shared,
+            APP,
+            server,
+            Some(10_124),
+            now,
+            (false, PeerWay::direct(server)),
+        );
+        assert!(matches!(step(&mut allowed, &parts[0]), Gated::Hold));
+        assert!(
+            matches!(step(&mut allowed, &parts[1]), Gated::Pass(held) if held.len() == 1 && held[0].payload == parts[0])
+        );
+        let mut other = Peer::new(
+            &shared,
+            APP,
+            server,
+            Some(10_123),
+            now,
+            (false, PeerWay::direct(server)),
+        );
+        assert!(matches!(step(&mut other, b"\x00\x01stun"), Gated::Pass(held) if held.is_empty()));
+        assert!(other.gate.is_none(), "nothing more is held");
+        // The user's tool and the flows of no app are never held.
+        assert!(
+            Peer::new(
+                &shared,
+                APP,
+                server,
+                None,
+                now,
+                (false, PeerWay::direct(server))
+            )
+            .gate
+            .is_none()
+        );
+        // A refused flow tells the app "port unreachable".
+        let packet = packet::udp(APP, server, &parts[1]).unwrap_or_default();
+        let Ok(parsed) = packet::parse(&packet) else {
+            unreachable!("a packet")
+        };
+        let error = count_sent(
+            &shared,
+            None,
+            &packet,
+            &parsed,
+            Err(super::super::tcp::Blocked::error(0)),
+        );
+        assert!(
+            error.is_some_and(|e| e.get(20..22) == Some(&[3, 3][..])),
+            "ICMP port unreachable"
+        );
+    }
 
     /// While a chain is on, Watch's cache answers a direct app's question for its time to live in time
     /// since the phone started, its sleep included (finding 4): after a night's sleep, though the phone
