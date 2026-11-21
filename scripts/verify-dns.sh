@@ -338,6 +338,16 @@ grep -q "id=7203" <<<"$(adb shell dumpsys notification --noredact | tr -d '\r')"
 echo "ok: the fallback ended and its notification went"
 
 # 6. The censor's methods one by one.
+# Step 5's drops held the rungs below ODoH for their back-off (up to ladder::BACKOFF_MOST, a minute), and ODoH
+# answering again does not end those holds: a rung below is tried only while the ones above are held. The reset
+# below asks that the next rung answers, so it starts once nothing is held; Watch falling back to the network
+# while every encrypted way is held is right (CI's run 44877347782 met it on a slower emulator).
+released=""
+for _ in $(seq 1 45); do
+    if [ "$(held)" = 0 ]; then released=yes; break; fi
+    sleep 2
+done
+[ -n "$released" ] || fail "the holds of step 5 did not end within 90 s: held $(held)"
 "$LAB" censor relay reset-sni relay.dnslab.test >/dev/null
 name=$(fresh)
 lookup "$name" >/dev/null
