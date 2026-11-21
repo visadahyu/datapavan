@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    W8, part 1 (ADR 0042), with its fix round: the strings of the names of apps that go directly; and W8, part 2a
+    W8, part 1 (ADR 0042), with its fix round: the strings of the names of apps that go directly; W8, part 2a
     (ADR 0052), with its fix round: the strings of apps' own proxies in "Now" and each app's history, and the switch
-    "Log where apps connect through your tool, WireGuard or a proxy" with the lines that name it. In English only. W7
+    "Log where apps connect through your tool, WireGuard or a proxy" with the lines that name it; and W8, part 3b
+    (ADR 0041): the per-tool guides for proxy mode. In English only. W7
     part 2's strings moved into strings.xml with their translations; these are translated into the seven other
     languages after their review, by ADR 0030's process, and then move there too, where scripts/check-translations.py
     holds them to every language. Until then this file is held to the plain-language gate (scripts/check.sh) and to
@@ -165,4 +166,112 @@
     <string name="history_proxy_setting_hidden">Through the %1$s in Android\'s settings, which other apps can use too. Where it connected was not logged, because \"Log where apps connect through your tool, WireGuard or a proxy\" was off.</string>
     <!-- One more line of "What this view cannot see". -->
     <string name="cannot_see_proxy">For a proxy an app uses, Watch cannot see who runs it, or whether you or the app chose it. For a proxy Watch infers, it cannot see where the traffic goes after it.</string>
+
+    <!--
+        W8, part 3b (ADR 0041, "How the per-tool guides are built"): the per-tool guides for proxy mode, in Watch and on the
+        website (scripts/guides.py writes docs/site/guides/ from these words and data/tools/guide*.tsv). A quoted %s is a
+        tool's own label, read from the tool on this phone or from the data, never translated: only these sentences are.
+        The guides name no tool as better than another and never point to a download.
+    -->
+    <!-- The chain section: one link per tool of the table installed here. %1$s: the tool's name. -->
+    <string name="chain_guides_title">How the tools on this phone run beside Watch:</string>
+    <string name="chain_guide_proxy">%1$s in proxy mode</string>
+    <string name="chain_guide_other">%1$s and Watch</string>
+    <!-- A guide's screen and page. %1$s: the tool's name. -->
+    <string name="guide_title_proxy">%1$s in proxy mode</string>
+    <string name="guide_title_other">%1$s and Watch</string>
+    <string name="guide_intro">Android runs one VPN at a time. In its proxy mode, %1$s runs without a VPN, and Watch can send your apps through it.</string>
+    <string name="guide_assumes">These steps assume %1$s already works for you as a VPN.</string>
+    <string name="guide_heading_on">Turn on proxy mode</string>
+    <!-- %1$s: an address such as 127.0.0.1; %2$s: its port. -->
+    <string name="guide_listener">Its proxy then listens on this phone at %1$s, port %2$s.</string>
+    <string name="guide_next">Then come back to Watch. It finds the proxy by itself and offers to send your apps through it.</string>
+    <string name="guide_heading_password">A password for its proxy</string>
+    <string name="guide_password_optional">Its proxy can ask for a user name and a password. Set the ones Watch shows when it finds the proxy. Then other apps on this phone cannot use it.</string>
+    <string name="guide_password_none">Its proxy cannot ask for a password. While it runs, any app on this phone can use it.</string>
+    <string name="guide_heading_asks">What it asks for</string>
+    <string name="guide_heading_back">Back to VPN mode</string>
+    <string name="guide_back_note">When %1$s runs as a VPN again, Android turns Watch off: only one VPN runs at a time.</string>
+    <!-- %1$s: the tool's name; %2$s: its version. -->
+    <string name="guide_read">Read from the source code of %1$s, version %2$s.</string>
+    <string name="guide_checked">Tried with Watch on a phone at that version.</string>
+    <string name="guide_not_checked">Not yet tried with Watch on a phone.</string>
+    <string name="guide_labels_tool">The words in quotes are read from %1$s on this phone.</string>
+    <string name="guide_labels_recorded">The words in quotes are as that version shows them.</string>
+    <string name="guide_audit">The rest of Datapavan, its check of your apps, works without Watch.</string>
+    <!-- Steps. Each %s in quotes is one of the tool's labels. -->
+    <string name="guide_step_drawer">Open the menu at the top left and tap \"%1$s\".</string>
+    <string name="guide_step_overflow">Open the menu with three dots and tap \"%1$s\".</string>
+    <string name="guide_step_tab">Open the \"%1$s\" tab.</string>
+    <string name="guide_step_tap">Tap \"%1$s\".</string>
+    <string name="guide_step_gear">Tap the gear button at the top.</string>
+    <string name="guide_step_choose">Tap \"%1$s\" and choose \"%2$s\".</string>
+    <string name="guide_step_under_choose">Under \"%1$s\", tap \"%2$s\" and choose \"%3$s\".</string>
+    <string name="guide_step_arrow_choose">Tap the arrow at the end of \"%1$s\" and choose \"%2$s\".</string>
+    <string name="guide_step_on">Turn on \"%1$s\".</string>
+    <string name="guide_step_off">Turn off \"%1$s\".</string>
+    <string name="guide_step_under_on">Under \"%1$s\", turn on \"%2$s\".</string>
+    <string name="guide_step_under_off">Under \"%1$s\", turn off \"%2$s\".</string>
+    <string name="guide_step_fill">Fill in \"%1$s\" and \"%2$s\".</string>
+    <string name="guide_step_under_fill">Under \"%1$s\", fill in \"%2$s\" and \"%3$s\".</string>
+    <!-- %3$s: a value, such as a port. -->
+    <string name="guide_step_under_set">Under \"%1$s\", set \"%2$s\" to %3$s.</string>
+    <string name="guide_step_expand">If \"%1$s\" is not shown, tap the last row to show the rest.</string>
+    <string name="guide_step_back_home">Go back to its main screen.</string>
+    <string name="guide_step_back_once">Go back one screen.</string>
+    <string name="guide_step_start">Start it with its round button.</string>
+    <string name="guide_step_start_icon">Tap its round start button, which a screen reader calls \"%1$s\".</string>
+    <string name="guide_step_start_text">Tap \"%1$s\" to start.</string>
+    <string name="guide_step_slide">Slide the button that says \"%1$s\".</string>
+    <string name="guide_step_tap_card">Tap the card that says \"%1$s\".</string>
+    <string name="guide_step_tunnel_switch">Turn on the switch at the end of your tunnel\'s row.</string>
+    <string name="guide_step_card_add">On the \"%1$s\" card, tap + and then \"%2$s\".</string>
+    <string name="guide_step_name_keep_tap">Give it a name under \"%1$s\", keep \"%2$s\", and tap \"%3$s\".</string>
+    <!-- sing-box's own words for its profile, which are not translated: tun, mixed, listen, listen_port, users,
+         username, password. %1$s: a port. -->
+    <string name="guide_step_singbox_inbound">Write the profile with no inbound of type \"tun\", and with one inbound of type \"mixed\" whose \"listen\" is \"127.0.0.1\" and \"listen_port\" is %1$s. Then save it.</string>
+    <string name="guide_step_singbox_users">In that \"mixed\" inbound, add \"users\" with a \"username\" and a \"password\".</string>
+    <string name="guide_step_singbox_back">Use a profile with an inbound of type \"tun\" again, or add one with \"%1$s\". Then start it.</string>
+    <string name="guide_step_auth_entry">Under \"%1$s\", tap \"%2$s\" and add one entry: the user name, a colon, then the password.</string>
+    <string name="guide_step_secret">Tap \"%1$s\" and type the password Watch shows.</string>
+    <string name="guide_step_profile_card">On your profile\'s card, tap \"%1$s\".</string>
+    <string name="guide_step_config_ssh">Edit your configuration: set \"%1$s\" to \"%2$s\", and fill in \"%3$s\" and \"%4$s\".</string>
+    <string name="guide_step_save_use">Tap \"%1$s\", then tap the new setting profile to use it.</string>
+    <!-- What a tool asks for in proxy mode, from its code. -->
+    <string name="guide_asks_notifications">It asks to show notifications.</string>
+    <string name="guide_asks_local_network">On Android 17 it asks for the local network permission. Watch does not need that for its proxy, which is on this phone.</string>
+    <string name="guide_asks_battery">It asks to be left out of battery optimisation.</string>
+    <string name="guide_asks_alarms">In proxy mode it asks for the alarms permission before it starts. It says it sets no alarms: the permission keeps it running when it is not a VPN.</string>
+    <string name="guide_asks_vpn_once">The first time it connects, it asks to set up a VPN, even in this mode. If you allow that, Android turns Watch off. Turn Watch on again after.</string>
+    <string name="guide_asks_none">Its code asks for no permission in this mode.</string>
+    <!-- Facts a user of one tool needs. %1$s in guide_note_named_port: a port. -->
+    <string name="guide_note_named_port">Watch looks for its proxy at port %1$s only, so set that port even where your profile names another.</string>
+    <string name="guide_note_fixed_user">Its user name is always \"%1$s\". Watch shows that one.</string>
+    <string name="guide_note_user_port">In a work profile or another user on this phone, its port is higher by that user\'s number. Watch looks there too.</string>
+    <string name="guide_note_stopped_first">Stop it first: it changes this only while it is not connected.</string>
+    <string name="guide_note_no_server">It does not send your traffic to a server. It changes how the traffic looks and sends it on from this phone. So the apps it carries reach their destinations from your own address.</string>
+    <string name="guide_note_ssh_only">Only the \"%1$s\" tunnel type opens a SOCKS5 proxy on this phone. With \"%2$s\", Watch can use the port only if your server gives a SOCKS5 proxy.</string>
+    <string name="guide_note_remote_profile">A remote profile shows only \"%1$s\": its content comes from its address and cannot be changed here. Make a local profile instead.</string>
+    <string name="guide_note_engines">In this mode, profiles that use sing-box, OpenConnect, IKEv2 or a chain still start a VPN.</string>
+    <!-- The pages of tools that run only as a VPN, and of those whose steps wait. %1$s: the tool's name. -->
+    <string name="guide_vpn_only">%1$s runs only as a VPN. Android runs one VPN at a time, so Watch cannot run beside it: when one starts, Android stops the other.</string>
+    <string name="guide_wireguard_only">%1$s runs only as a VPN, so Watch cannot run beside it. But Watch can carry a WireGuard configuration itself, and send the apps you choose through it.</string>
+    <!-- Quotes Watch's own heading, tunnels_title, as it reads. -->
+    <string name="guide_wireguard_add">Add one in Watch, under \"WireGuard configurations\".</string>
+    <string name="guide_wireguard_proton">Proton VPN\'s website makes these files, on the free plan too. In your account, open Downloads, then WireGuard configuration.</string>
+    <string name="guide_wireguard_mullvad">Mullvad\'s website makes these files for a paid account. Use its configuration generator.</string>
+    <string name="guide_wireguard_windscribe">Windscribe\'s website makes these files for paid accounts. Use its Config Generator.</string>
+    <string name="guide_wireguard_same">The configuration file or QR code you added to WireGuard works in Watch too.</string>
+    <string name="guide_note_amneziawg">AmneziaWG changes how WireGuard\'s packets look. Watch does not read that change yet, so it cannot carry these configurations.</string>
+    <string name="guide_waiting_intro">There are no steps for %1$s yet.</string>
+    <string name="guide_waiting_closed">Its code is not public, so its steps wait for a check on a phone.</string>
+    <string name="guide_waiting_partly">Part of its code is not public, so its steps wait for a check on a phone.</string>
+    <string name="guide_note_tethering">It has a feature it calls Proxy Tethering. Whether that gives a proxy on this phone that Watch can use is not known yet.</string>
+    <!-- The website's list of the guides (scripts/guides.py), which Watch does not show. -->
+    <string name="guide_index_title" tools:ignore="UnusedResources">Your tool beside Watch</string>
+    <string name="guide_index_intro" tools:ignore="UnusedResources">Android runs one VPN at a time. These pages say how each circumvention tool can run beside Watch, read from the tool\'s own code.</string>
+    <string name="guide_index_proxy" tools:ignore="UnusedResources">Tools with a proxy mode</string>
+    <string name="guide_index_wireguard" tools:ignore="UnusedResources">Tools that run only as a VPN, with WireGuard configurations</string>
+    <string name="guide_index_vpn" tools:ignore="UnusedResources">Tools that run only as a VPN</string>
+    <string name="guide_index_waiting" tools:ignore="UnusedResources">Tools whose steps wait for a check on a phone</string>
 </resources>

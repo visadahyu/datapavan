@@ -52,6 +52,10 @@ data_gates() {
     # What the public documents say, against the code and the record (ADR 0039), and the check's own test.
     python3 -I "$ROOT/scripts/check-truth.py" || failed=1
     python3 -I "$ROOT/scripts/check-truth-test.py" || failed=1
+    # The per-tool guides for proxy mode against the table of tools and Watch's strings (W8, part 3b), and the check's
+    # own test; build-site.sh below writes their pages from the same data.
+    python3 -I "$ROOT/scripts/guides.py" || failed=1
+    python3 -I "$ROOT/scripts/guides.py" --self-test || failed=1
     # Telegram's ranges' fetcher refuses too wide a range (ADR 0052, fix round).
     python3 -I "$ROOT/data/messengers/update.py" --self-test || failed=1
     # What a translation can break without anyone reading it (ADR 0030).
