@@ -115,6 +115,53 @@ pub fn no_data(query: &[u8], question: &Question) -> Option<Vec<u8>> {
     header(query, Some(question), 0, 0)
 }
 
+/// The answer to a name tracker blocking stops (W8, part 3a; ADR 0053, decision 3): no records and no error
+/// ("no data", which Pi-hole found clients take more quietly than "no such name"), with an SOA record in the
+/// authority section whose time to live and `MINIMUM` are both 0 (RFC 2308 5), so that no resolver keeps the
+/// negative answer: Android keeps one cache per network, keyed by the question and not by the app, and a kept
+/// answer would carry one app's block to another, or an allowed app's undo back. The SOA's owner is the question's
+/// name, and its two names the root, which names no server. Any OPT record of the query is answered with one of
+/// the same size, as EDNS asks (RFC 6891 7).
+#[must_use]
+pub fn blocked(query: &[u8], question: &Question) -> Option<Vec<u8>> {
+    let mut out = header(query, Some(question), 0, 0)?;
+    // One record in the authority section.
+    out[9] = 1;
+    out.extend_from_slice(&[0xc0, 12]);
+    out.extend_from_slice(&TYPE_SOA.to_be_bytes());
+    out.extend_from_slice(&CLASS_IN.to_be_bytes());
+    out.extend_from_slice(&[0, 0, 0, 0]);
+    // MNAME and RNAME the root, then SERIAL, REFRESH, RETRY, EXPIRE and MINIMUM, all 0.
+    out.extend_from_slice(&22u16.to_be_bytes());
+    out.extend_from_slice(&[0, 0]);
+    out.extend_from_slice(&[0; 20]);
+    if has_opt(query, question.end) {
+        out[11] = 1;
+        out.extend_from_slice(&[0, 0, 41, 0x04, 0xd0, 0, 0, 0, 0, 0, 0]);
+    }
+    Some(out)
+}
+
+/// Whether the additional section of `query`, after its question at `end`, holds an OPT record.
+fn has_opt(query: &[u8], end: usize) -> bool {
+    let additional = u16_at(query, 10).unwrap_or(0);
+    let mut at = end;
+    for _ in 0..additional.min(4) {
+        // The OPT record's owner is the root: one zero byte.
+        if query.get(at) == Some(&0) && u16_at(query, at + 1) == Some(TYPE_OPT) {
+            return true;
+        }
+        let Some((_, after)) = read_name(query, at) else {
+            return false;
+        };
+        let Some(length) = u16_at(query, after + 8) else {
+            return false;
+        };
+        at = after + 10 + usize::from(length);
+    }
+    false
+}
+
 /// The answer to a reverse lookup: `name`, if it can be written.
 #[must_use]
 pub fn name(query: &[u8], question: &Question, name: &str) -> Option<Vec<u8>> {
@@ -349,6 +396,55 @@ mod tests {
         };
         assert_eq!(empty[4..12], [0, 1, 0, 0, 0, 0, 0, 0]);
         assert_eq!(empty[3] & 0x0f, 0, "no error");
+    }
+
+    /// A blocked name gets "no data" with an SOA of time to live 0 and `MINIMUM` 0 in its authority section, for
+    /// every type, HTTPS and SVCB included, and an OPT back where the query had one (ADR 0053, decision 3).
+    #[test]
+    fn a_blocked_name_gets_no_data_with_an_soa_kept_for_no_time() {
+        for kind in [A, AAAA, TYPE_HTTPS, TYPE_SVCB, TYPE_PTR, 16] {
+            let q = query(b"\x0fapp-measurement\x03com\x00", kind);
+            let Some(question) = question(&q) else {
+                unreachable!("a query")
+            };
+            let Some(answer) = blocked(&q, &question) else {
+                unreachable!("an answer")
+            };
+            assert_eq!(
+                answer[..4],
+                [0xab, 0xcd, 0x81, 0x80],
+                "its ID, a response, no error"
+            );
+            assert_eq!(
+                answer[4..12],
+                [0, 1, 0, 0, 0, 1, 0, 0],
+                "one question, no answer, one SOA"
+            );
+            assert_eq!(answer[12..q.len()], q[12..]);
+            let Some(read) = dns::response(&answer) else {
+                unreachable!("a response")
+            };
+            assert_eq!(read.addresses.len(), 0);
+            // The SOA: a pointer to the question's name, type 6, class IN, TTL 0, 22 bytes, MINIMUM 0.
+            let soa = &answer[q.len()..];
+            assert_eq!(soa[..12], [0xc0, 12, 0, 6, 0, 1, 0, 0, 0, 0, 0, 22]);
+            assert_eq!(soa.len(), 12 + 22);
+            assert_eq!(soa[soa.len() - 4..], [0, 0, 0, 0], "MINIMUM 0");
+            assert_eq!(dns::ttl_offsets(&answer).map(|o| o.len()), Some(1));
+        }
+        // With EDNS: the OPT record comes back, counted, and its flags are no time to live.
+        let mut q = query(b"\x01a\x07example\x00", A);
+        q[11] = 1;
+        q.extend_from_slice(&[0, 0, 41, 0x10, 0, 0, 0, 0x80, 0, 0, 0]);
+        let Some(question) = question(&q) else {
+            unreachable!("a query")
+        };
+        let Some(answer) = blocked(&q, &question) else {
+            unreachable!("an answer")
+        };
+        assert_eq!(answer[10..12], [0, 1]);
+        assert!(answer.ends_with(&[0, 0, 41, 0x04, 0xd0, 0, 0, 0, 0, 0, 0]));
+        assert_eq!(dns::ttl_offsets(&answer).map(|o| o.len()), Some(1));
     }
 
     #[test]
