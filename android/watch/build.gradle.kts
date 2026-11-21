@@ -283,6 +283,8 @@ tasks.withType<Test>().configureEach {
             "data/app-signers", "data/tools", "data/odoh", "data/dns-presets", "data/public-suffix", "scripts/dnslab/certs",
             // W8, part 3b: the guides' pages, which the screen must match, and the test tool's labels.
             "docs/site/guides", "scripts/test-tool/res",
+            // W8, part 3a: tracker blocking's table and exceptions, εxodus's trackers and the owners' tables (blocking/*Test.kt).
+            "data/blocking", "data/exodus", "data/owners",
         )
             .map { repositoryRoot.dir(it) },
     ).withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("repositoryData")

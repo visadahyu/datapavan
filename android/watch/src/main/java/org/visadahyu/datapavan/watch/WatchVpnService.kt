@@ -156,6 +156,12 @@ class WatchVpnService : VpnService() {
     /** The data pack's public suffixes, read once, for the network's search domains. */
     private val suffixes by lazy { org.visadahyu.datapavan.watch.dns.DnsSettings.suffixes(this) }
 
+    /**
+     * Hands tracker blocking to the engine on a thread of its own (W8, part 3a; ADR 0053): the table at each start and
+     * when the data pack changes, the setting whole at each start and whenever what it depends on changes.
+     */
+    private val blocking = org.visadahyu.datapavan.watch.blocking.BlockingHandover(this)
+
     /** Changes with the network beneath, so that each has its own clients and TLS sessions. */
     @Volatile
     private var networkGeneration = 0
@@ -261,6 +267,8 @@ class WatchVpnService : VpnService() {
             // never goes directly in between (fix round, security review M2).
             ACTION_APPLY_CHAIN -> if (active) applyRoutes()
             ACTION_APPLY_TUNNELS -> if (active) applyTunnels()
+            // A tap of the undo or the pause reads nothing again; a setting that changes what is covered reads all.
+            ACTION_APPLY_BLOCKING -> if (active) blocking.apply(full = intent.getBooleanExtra(EXTRA_FULL, true))
             // The apps left out are part of the tunnel's own setup: it is set up again. The routes first: an app taken
             // back has its tunnel's or the chain's route in the engine before its packets come into the tunnel again,
             // never going directly; an app left out leaves them, as it leaves Watch (fix round, security review M1).
@@ -380,6 +388,8 @@ class WatchVpnService : VpnService() {
         applyTunnels()
         applyChain()
         applyProxies()
+        // Who tracker blocking covers follows the apps installed, their UIDs and the user's tool (W8, part 3a).
+        blocking.apply(full = true)
     }
 
     /**
@@ -469,6 +479,48 @@ class WatchVpnService : VpnService() {
 
     /** The receiver of [followPackages], while the tunnel runs. */
     private var packages: android.content.BroadcastReceiver? = null
+
+    /** What [followBlockingFiles] watches while the tunnel runs, and the token of the handover a change posted. */
+    private var blockingFiles: List<android.os.FileObserver> = emptyList()
+    private val blockingFilesChanged = Any()
+
+    /**
+     * Follows the files tracker blocking reads while the tunnel runs (W8, part 3a): the audit's scan of the apps' code
+     * (`tracker-scan.tsv`), which decides the rows a code-dependent grade leaves to each app, and the data pack the user
+     * imports, which holds the table. Both are written by the audit's process, to a file of their own then moved into
+     * place: a change hands blocking over again once the writes settle, since a first scan saves every few apps.
+     */
+    private fun followBlockingFiles() {
+        if (blockingFiles.isNotEmpty()) return
+        val pack = java.io.File(noBackupFilesDir, PACK_DIRECTORY)
+        val watched = listOf(
+            noBackupFilesDir to setOf(org.visadahyu.datapavan.watch.blocking.ScanResults.FILE, PACK_DIRECTORY),
+            pack to setOf("installed.pack", "installed.chain"),
+        )
+        blockingFiles = watched.filter { it.first.isDirectory }.map { (directory, names) ->
+            val events = android.os.FileObserver.CLOSE_WRITE or android.os.FileObserver.MOVED_TO or
+                android.os.FileObserver.DELETE or android.os.FileObserver.CREATE
+            object : android.os.FileObserver(directory, events) {
+                override fun onEvent(event: Int, path: String?) {
+                    if (path == null || path !in names) return
+                    main.removeCallbacksAndMessages(blockingFilesChanged)
+                    main.postDelayed(
+                        {
+                            if (!active) return@postDelayed
+                            // The pack's folder made since the start, by the first import: followed from now on.
+                            if (path == PACK_DIRECTORY && blockingFiles.size < watched.size) {
+                                blockingFiles.forEach { it.stopWatching() }
+                                blockingFiles = emptyList()
+                                followBlockingFiles()
+                            }
+                            blocking.apply(full = true)
+                        },
+                        blockingFilesChanged, FILES_SETTLE_MS,
+                    )
+                }
+            }.also { it.startWatching() }
+        }
+    }
 
     /** Debug builds: the receiver turned off through the dump (`packages-follow off`), for the check of the ask. */
     private var packagesOff = false
@@ -762,6 +814,10 @@ class WatchVpnService : VpnService() {
         // The messengers' apps and Android's proxy setting likewise (W8, part 2a): a messenger's first flow is read
         // for its proxy.
         applyProxies()
+        // Tracker blocking's table and setting (W8, part 3a), off the main thread, since they read the data pack, the
+        // apps and the audit's scan: the engine's first flows may come before them, and are then not blocked; the
+        // library keeps the setting for the engine that starts.
+        blocking.apply(full = true, fresh = true)
         val established = establish()
         // null: the user's consent is missing or was withdrawn.
         if (established == null || !startEngine(established)) {
@@ -775,6 +831,7 @@ class WatchVpnService : VpnService() {
         tracker = org.visadahyu.datapavan.watch.activity.StateTracker(this) { Engine.nativeStates(it) }.also { it.start() }
         followPackages()
         followProxySetting()
+        followBlockingFiles()
         refreshChain()
         ConnectionLog.of(this).expire()
         val request = NetworkRequest.Builder()
@@ -1012,6 +1069,9 @@ class WatchVpnService : VpnService() {
         packages = null
         proxyChanges?.let { unregisterReceiver(it) }
         proxyChanges = null
+        blockingFiles.forEach { it.stopWatching() }
+        blockingFiles = emptyList()
+        main.removeCallbacksAndMessages(blockingFilesChanged)
         main.removeCallbacksAndMessages(reopen)
         reopenTries = 0
         main.removeCallbacksAndMessages(riseCheck)
@@ -1041,6 +1101,7 @@ class WatchVpnService : VpnService() {
         starts++
         close()
         measuring.shutdownNow()
+        blocking.shutdown()
         super.onDestroy()
     }
 
@@ -1235,10 +1296,61 @@ class WatchVpnService : VpnService() {
                 writer.println(found?.let(::describe) ?: "tool searching")
             }
             Engine.nativeFlows().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("flow $it") }
+            debugBlocking(args.orEmpty().toList(), writer)
             debugProxies(args.orEmpty().toList(), writer)
             debugActivity(args.orEmpty().toList(), writer)
             debugLog(log, args.orEmpty().toList(), writer)
         }
+    }
+
+    /**
+     * Debug builds only, for part 3a's emulator check (W8; ADR 0053): `blocking-set on|off` turns "Block trackers" on or
+     * off and `blocking-browsers on|off` "Also block in browsers", as the screen's switches do, and each waits until the
+     * engine has the setting. Then, always: `blocking on|off paused-ms N table ROWS BLOCK KEEP CODE covered N` (the
+     * table as the engine read it, zeros for none or one refused, and how many UIDs are covered), one `blocking-browser
+     * PACKAGE` for each browser found, one `blocking-allowed PACKAGE UNTIL` for each app allowed (the end of its hour,
+     * in milliseconds since 1970), one `blocking-allowed-entry PACKAGE HOST` for each row allowed in an app until blocked
+     * again, and one `blocked UID HOST LOOKUPS CONNECTIONS` for each count the engine holds in memory. The hosts are the
+     * table's rows, never a destination an app reached; nothing of it goes to logcat.
+     */
+    private fun debugBlocking(args: List<String>, writer: PrintWriter) {
+        val settings = org.visadahyu.datapavan.watch.blocking.BlockingSettings.of(this)
+        fun after(command: String) = args.indexOf(command).takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
+        var changed = false
+        after("blocking-set")?.takeIf { it == "on" || it == "off" }?.let {
+            settings.on = it == "on"
+            changed = true
+        }
+        after("blocking-browsers")?.takeIf { it == "on" || it == "off" }?.let {
+            settings.browsers = it == "on"
+            changed = true
+        }
+        if (changed) {
+            // Android runs dump on the main thread: the handover runs on its own, and this debug command waits for it.
+            try {
+                blocking.apply(full = true).get(BLOCKING_WAIT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+            } catch (e: java.util.concurrent.TimeoutException) {
+                writer.println("blocking-waiting")
+            } catch (e: java.util.concurrent.ExecutionException) {
+                writer.println("blocking-failed")
+            }
+        }
+        val facts = org.visadahyu.datapavan.watch.blocking.BlockingState.facts.value
+            ?: org.visadahyu.datapavan.watch.blocking.BlockingFacts.NONE
+        val now = System.currentTimeMillis()
+        val paused = settings.pausedUntil(now)?.let {
+            org.visadahyu.datapavan.watch.blocking.Allowances.left(it, now, org.visadahyu.datapavan.watch.blocking.BlockingSettings.PAUSE_MS)
+        } ?: 0L
+        val counts = facts.counts.takeIf { it.size == 4 } ?: IntArray(4)
+        writer.println(
+            "blocking ${if (settings.on) "on" else "off"} paused-ms $paused table ${counts.joinToString(" ")} covered ${facts.covered.size}",
+        )
+        facts.browsers.forEach { writer.println("blocking-browser $it") }
+        settings.appsAllowed(now).toSortedMap().forEach { (name, until) -> writer.println("blocking-allowed $name $until") }
+        settings.entriesAllowed().sortedWith(compareBy({ it.first }, { it.second }))
+            .forEach { (name, host) -> writer.println("blocking-allowed-entry $name $host") }
+        org.visadahyu.datapavan.watch.blocking.Tallies.parse(Engine.nativeBlocked())
+            .forEach { writer.println("blocked ${it.uid} ${it.host} ${it.lookups} ${it.connections}") }
     }
 
     /**
@@ -1765,6 +1877,8 @@ class WatchVpnService : VpnService() {
             record.dnsName.takeIf { it.isNotEmpty() }?.let { "dns-name=$it" }, "came-in".takeIf { record.cameIn },
             "state=${org.visadahyu.datapavan.watch.log.AppState.name(record.state)}", "at=${record.start}-${record.end}",
             record.proxy?.let { "proxy=${proxyWords(it)}" },
+            // Version 6 (W8, part 3a): a flow tracker blocking refused, by its row's SDK, never a host.
+            "blocked=${record.blockedSdk.ifEmpty { "-" }}".takeIf { record.blocked },
         ).joinToString(" ")
         is LogRecord.Lookups ->
             "lookups ${record.uid ?: "-"} ${record.count} wire=${record.wireUp}/${record.wireDown} " +
@@ -1786,6 +1900,23 @@ class WatchVpnService : VpnService() {
 
         /** From Watch's screen: the apps left out changed, so the tunnel is set up again if it is up. */
         const val ACTION_APPLY_LEFT_OUT = "org.visadahyu.datapavan.watch.APPLY_LEFT_OUT"
+
+        /**
+         * From Watch's screens: tracker blocking changed (W8, part 3a), handed to the engine again; [EXTRA_FULL] false for
+         * a tap of the undo or the pause, which reads nothing of the phone again, true (the default) for a setting that
+         * changes what is covered.
+         */
+        const val ACTION_APPLY_BLOCKING = "org.visadahyu.datapavan.watch.APPLY_BLOCKING"
+        const val EXTRA_FULL = "full"
+
+        /** How long the debug commands `blocking-set` and `blocking-browsers` wait for the handover. */
+        private const val BLOCKING_WAIT_MS = 10_000L
+
+        /** How long blocking waits after a change of the scan or the pack before it hands over again: writes come in bursts. */
+        private const val FILES_SETTLE_MS = 2_000L
+
+        /** The folder of the imported data pack in the app's no-backup files (DataPackStore). */
+        private const val PACK_DIRECTORY = "datapack"
 
         /** How long the debug command `activity-read` waits for the reading. */
         private const val ACTIVITY_READ_WAIT_MS = 10_000L
