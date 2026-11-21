@@ -187,7 +187,11 @@ if ! wait_up 60; then
 fi
 if ! wait_up 90 wifi; then
     wifi_again 90
-    wait_up 90 wifi || fail "the emulator did not have both Wi-Fi and mobile data ($(networks); $(wifi_state)); this is the emulator, not Watch"
+    if ! wait_up 90 wifi; then
+        mobile_again || true
+        wait_up 60 wifi || { wifi_again 60; wait_up 60 wifi; } ||
+            fail "the emulator did not have both Wi-Fi and mobile data ($(networks); $(wifi_state)), even after airplane mode, the modem registered again and a new boot; this is the emulator, not Watch"
+    fi
 fi
 wait_settled 60 || fail "the emulator's networks kept changing for 60 s ($(networks)); this is the emulator, not Watch"
 allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"

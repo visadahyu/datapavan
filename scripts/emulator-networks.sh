@@ -76,3 +76,33 @@ wifi_again() {
     sleep 3
     adb shell cmd wifi connect-network AndroidWifi open >/dev/null 2>&1 || true
 }
+
+# The emulator came up with Wi-Fi and without its mobile data network, and turning mobile data off and on did not
+# bring it, four runs out of five (CI, 2026-11-20 and 2026-11-21: runs 44796928789, 44877347782, 44899858955 and
+# 44905337897, in the WireGuard check; docs/ci-flakes.md). So before a check fails for it, the radios are restarted
+# with airplane mode, as verify-watch.sh has done since 2026-11-12; then the emulator's modem is told to register
+# again through the emulator's console (`gsm voice home`, `gsm data home`); and only if mobile data is still not up
+# is the emulator booted anew, once, and waited for. Only where mobile data is not up, and only before Watch starts:
+# nothing of Watch's state is lost by it. Returns whether mobile data came up.
+mobile_again() {
+    up MOBILE && return 0
+    echo "  no mobile data ($(networks)): restarting the radios with airplane mode"
+    adb shell cmd connectivity airplane-mode enable
+    sleep 5
+    adb shell cmd connectivity airplane-mode disable
+    wait_up 60 && return 0
+    echo "  still no mobile data ($(networks)): registering the emulator's modem again"
+    adb emu gsm voice home >/dev/null 2>&1 || true
+    adb emu gsm data home >/dev/null 2>&1 || true
+    adb shell svc data enable
+    wait_up 60 && return 0
+    echo "  still no mobile data ($(networks)): booting the emulator anew"
+    adb reboot
+    adb wait-for-device
+    for _ in $(seq 1 90); do
+        [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && break
+        sleep 2
+    done
+    adb shell svc data enable
+    wait_up 120
+}

@@ -139,11 +139,19 @@ swipe_up() {
     sleep 1
 }
 
-# Lists only compose what is on screen, so scroll down (up to six times) until the text shows.
+# Lists only compose what is on screen, so scroll down until the text shows, and stop once a swipe no longer
+# changes the screen (the list's end): no count of half screens to outgrow as a screen gains sections (W8 part 3b
+# and 3a each put the switch "Log where apps connect ..." past the six this was; CI run 44905337897). At most 30
+# half screens, so that a screen that keeps changing cannot hold the check.
 scroll_to() {
-    for _ in 1 2 3 4 5 6; do
+    local before after
+    for _ in $(seq 1 30); do
         screen_has "$1" && return 0
+        before=$(adb shell cat "$DUMP" 2>/dev/null | md5sum)
         swipe_up
+        dump_screen || return 1
+        after=$(adb shell cat "$DUMP" 2>/dev/null | md5sum)
+        [ "$before" != "$after" ] || break
     done
     screen_has "$1"
 }
