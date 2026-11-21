@@ -7,6 +7,7 @@
 //! `datapavan-watch-jni` hands it the tunnel's descriptor and answers its questions to Android.
 
 pub mod answers;
+pub mod blocking;
 pub mod catalogue;
 pub mod dns;
 pub mod dnscache;

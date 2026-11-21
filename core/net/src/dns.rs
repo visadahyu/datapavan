@@ -196,6 +196,51 @@ pub fn response(message: &[u8]) -> Option<Response> {
     })
 }
 
+/// The names of a DNS response's CNAME chain: its one question, then each name a CNAME of the answer section led
+/// to from it, in the answer's order, at most [`MAX_ANSWERS`], each in lower case. Tracker blocking matches every
+/// one of them, which closes CNAME cloaking (W8, part 3a; ADR 0053, decision 3). `None` for anything that is not a
+/// well-formed response with one question.
+#[must_use]
+pub fn chain(message: &[u8]) -> Option<Vec<String>> {
+    let flags = u16_at(message, 2)?;
+    if flags & 0x8000 == 0 || flags & 0x7800 != 0 || u16_at(message, 4)? != 1 {
+        return None;
+    }
+    let answers = u16_at(message, 6)?;
+    let (question, mut at) = read_name(message, 12)?;
+    at = at.checked_add(4)?;
+    if at > message.len() {
+        return None;
+    }
+    let mut owners = vec![question];
+    for _ in 0..answers.min(u16::try_from(MAX_ANSWERS).unwrap_or(u16::MAX)) {
+        let Some((owner, after)) = read_name(message, at) else {
+            break;
+        };
+        let (Some(kind), Some(length)) = (u16_at(message, after), u16_at(message, after + 8))
+        else {
+            break;
+        };
+        let data = after + 10;
+        let Some(end) = data
+            .checked_add(usize::from(length))
+            .filter(|&end| end <= message.len())
+        else {
+            break;
+        };
+        at = end;
+        if kind == 5
+            && owners.contains(&owner)
+            && owners.len() < MAX_ANSWERS
+            && let Some((target, _)) = read_name(message, data)
+            && !owners.contains(&target)
+        {
+            owners.push(target);
+        }
+    }
+    Some(owners)
+}
+
 /// The value of the parameter `key` of the first HTTPS record (RFC 9460) in the answer section of the response
 /// `message` whose owner is `host` or a name a CNAME of the answer led to from it, in the answer's order: the
 /// `odohconfig` of an ODoH target (RFC 9230 6), for one. `None` for a response that is not well formed, has no
@@ -479,6 +524,25 @@ pub(crate) mod tests {
         m.extend_from_slice(&u16::try_from(data.len()).unwrap_or(0).to_be_bytes());
         m.extend_from_slice(&data);
         m
+    }
+
+    /// Every name of a CNAME chain is read, for blocking, from the question on; a CNAME whose owner is not in the
+    /// chain adds nothing, and a record cut short ends the reading with what was read.
+    #[test]
+    fn reads_the_names_of_a_cname_chain() {
+        assert_eq!(
+            chain(&sample()),
+            Some(vec![
+                "www.example.com".to_owned(),
+                "edge.cdn.net".to_owned()
+            ])
+        );
+        let mut cut = sample();
+        cut.truncate(cut.len() - 3);
+        assert_eq!(chain(&cut).map(|c| c.len()), Some(2));
+        let mut query = sample();
+        query[2] = 0x01;
+        assert_eq!(chain(&query), None);
     }
 
     #[test]

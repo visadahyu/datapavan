@@ -157,3 +157,10 @@ path = "fuzz_targets/proxies.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "blocking"
+path = "fuzz_targets/blocking.rs"
+test = false
+doc = false
+bench = false
