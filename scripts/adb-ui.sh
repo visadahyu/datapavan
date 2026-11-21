@@ -143,7 +143,13 @@ swipe_up() {
 # "until the screen stops changing": a text taller than the screen (a licence) dumps the same visible bounds after
 # a swipe, so an unchanged dump does not mean the list's end (CI run 44910873200). Thirty since W8 part 3b, whose
 # guides' links, like part 3a's blocking section, put the switch "Log where apps connect ..." past the six this was.
+#
+# A screen brought back by an intent that reaches its running instance keeps where it was scrolled (Android: "intent
+# has been delivered to currently running top-most instance"), so a text above the screen's place is never found by
+# scrolling down (CI run 44926633095): when the text is not on the screen, the list goes back to its top first.
 scroll_to() {
+    screen_has "$1" && return 0
+    scroll_to_top
     for _ in $(seq 1 30); do
         screen_has "$1" && return 0
         swipe_up
