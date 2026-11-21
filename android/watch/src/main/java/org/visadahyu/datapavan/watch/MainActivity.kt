@@ -109,6 +109,45 @@ class MainActivity : ComponentActivity() {
     /** The apps the user left out of the tunnel (ADR 0041). */
     private val leftOut = mutableStateOf(emptySet<String>())
 
+    /** Tracker blocking's settings and its global pause (W8, part 3a; ADR 0053), read again each second while shown. */
+    private val blocking = mutableStateOf(org.visadahyu.datapavan.watch.ui.BlockingSettingsView())
+
+    /** Reads blocking's settings, the pause's end (an ended one forgotten), and whether the user's tool carries the apps. */
+    private fun readBlocking() {
+        val settings = org.visadahyu.datapavan.watch.blocking.BlockingSettings.of(this)
+        val chain = ChainSettings.of(this)
+        blocking.value = org.visadahyu.datapavan.watch.ui.BlockingSettingsView(
+            on = settings.on,
+            browsers = settings.browsers,
+            toolDns = settings.toolDns,
+            toolChained = chain.on && chain.lastTool != null,
+            pausedUntil = settings.pausedUntil(System.currentTimeMillis()),
+        )
+    }
+
+    /**
+     * A change of blocking, kept and handed to the running tunnel: [full] for a setting that changes what is covered,
+     * which has the service read the apps again; not for the pause, which it hands at once.
+     */
+    private fun changeBlocking(full: Boolean, change: (org.visadahyu.datapavan.watch.blocking.BlockingSettings) -> Unit) {
+        change(org.visadahyu.datapavan.watch.blocking.BlockingSettings.of(this))
+        readBlocking()
+        if (WatchVpnService.running.value) {
+            startService(
+                Intent(this, WatchVpnService::class.java).setAction(WatchVpnService.ACTION_APPLY_BLOCKING)
+                    .putExtra(WatchVpnService.EXTRA_FULL, full),
+            )
+        }
+    }
+
+    private val blockingActions = org.visadahyu.datapavan.watch.ui.BlockingSettingsActions(
+        onOn = { on -> changeBlocking(full = true) { it.on = on } },
+        onBrowsers = { on -> changeBlocking(full = true) { it.browsers = on } },
+        onToolDns = { on -> changeBlocking(full = false) { it.toolDns = on } },
+        onPause = { changeBlocking(full = false) { it.pause(System.currentTimeMillis()) } },
+        onResume = { changeBlocking(full = false) { it.resume() } },
+    )
+
     /**
      * What the screen knows for the switch "Log where apps connect ..." (LogSwitch): whether an app's own proxy was
      * seen since the engine started, read with the configurations' states, and whether a row linked to it.
@@ -165,6 +204,7 @@ class MainActivity : ComponentActivity() {
         val log = ConnectionLog.of(this)
         retention.intValue = log.retentionDays
         leftOut.value = LeftOut.of(this).apps
+        readBlocking()
         // The switch as stored, before the tool's search shows the rest of the chain: every place draws this one.
         chain.value = chain.value.copy(logDestinations = ChainSettings.of(this).logDestinations)
         // A row of "Now" or the history linked to the switch: drawn, and brought into view once; drawn still after a
@@ -188,6 +228,8 @@ class MainActivity : ComponentActivity() {
                 while (true) {
                     readStates()
                     readDns()
+                    // The pause ends by itself: the screen says so within a second.
+                    readBlocking()
                     delay(STATES_EVERY_MS)
                 }
             }
@@ -227,6 +269,8 @@ class MainActivity : ComponentActivity() {
                     dnsActions = dnsActions,
                     logSwitch = logSwitch.value,
                     onLogSwitchShown = { logSwitch.value = logSwitch.value.copy(asks = 0) },
+                    blocking = blocking.value,
+                    blockingActions = blockingActions,
                 )
             }
         }
@@ -408,9 +452,13 @@ class MainActivity : ComponentActivity() {
         // screen finishes (TunnelModel.onCleared). A photo the camera never answered for goes now, its write grant
         // taken back first, so that the camera cannot write it again (fix round, security review m7).
         if (isFinishing) {
-            capture?.let { file -> Capture.abandon(file) { Capture.revoke(this, Capture.uri(this, file)) } }
+            // A second screen opened above "Now" by a row's link (LogSwitch.LINK_FLAGS) may finish while the first still
+            // waits for the camera: only the screen whose photo it is lets go of it.
+            capture?.let { file ->
+                Capture.abandon(file) { Capture.revoke(this, Capture.uri(this, file)) }
+                if (pendingCapture == file.name) pendingCapture = null
+            }
             capture = null
-            pendingCapture = null
         }
     }
 
@@ -946,13 +994,15 @@ class MainActivity : ComponentActivity() {
         private const val EXTRA_LOG_SWITCH = "log_switch"
 
         /**
-         * Watch's screen at the switch "Log where apps connect ...", for a row that links to it: the screen already
-         * open beneath "Now" comes back, "Now" closed, so that one screen holds the switch.
+         * Watch's screen at the switch "Log where apps connect ...", for a row of "Now" or the history that links to it:
+         * opened above "Now", which stays beneath it as it was, so that Back brings the user to the same app's row or its
+         * history (the brief's point 11 of W8 part 3a: the link used `CLEAR_TOP`, which closed "Now"). Its flags are
+         * [LogSwitch.LINK_FLAGS], which LogSwitchTest holds.
          */
         internal fun logSwitchIntent(context: android.content.Context): Intent =
             Intent(context, MainActivity::class.java)
                 .putExtra(EXTRA_LOG_SWITCH, true)
-                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                .addFlags(LogSwitch.LINK_FLAGS)
 
         /** ClipDescription.EXTRA_IS_SENSITIVE, which Android 13 added; earlier versions ignore it. */
         private const val EXTRA_IS_SENSITIVE = "android.content.extra.IS_SENSITIVE"

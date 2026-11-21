@@ -51,7 +51,8 @@ import org.visadahyu.datapavan.watch.log.ConnectionLog
  * configurations and each app's way (W7, part 2), what other apps see of a VPN and the apps left out (ADR
  * 0041), how long the connection log keeps its records, with its wipe (W4), and screenshots (ADR 0040). The switch
  * "Log where apps connect ..." is drawn where [LogSwitch.places] says, and brought into view when a row of "Now" or
- * the history linked to it ([logSwitch]); [onLogSwitchShown] is told once it was.
+ * the history linked to it ([logSwitch]); [onLogSwitchShown] is told once it was. Tracker blocking's settings and its
+ * global pause follow the names' section ([blocking]; W8, part 3a).
  */
 @Composable
 internal fun WatchScreen(
@@ -79,6 +80,8 @@ internal fun WatchScreen(
     dnsActions: DnsActions,
     logSwitch: LogSwitch.View = LogSwitch.View(),
     onLogSwitchShown: () -> Unit = {},
+    blocking: BlockingSettingsView = BlockingSettingsView(),
+    blockingActions: BlockingSettingsActions = BlockingSettingsActions(),
 ) {
     val search = chain.search as? org.visadahyu.datapavan.watch.chain.ToolSearch.Answering
     val ways = org.visadahyu.datapavan.watch.tunnel.Routes.Chain(chain.on, chain.allApps, chain.apps, search?.found?.tool?.packageName)
@@ -140,6 +143,7 @@ internal fun WatchScreen(
                 PrivateDnsNote(privateDns)
             }
             DnsSection(dns, privateDns, dnsActions)
+            BlockingSection(blocking, blockingActions)
             if (refused && !running) {
                 Text(
                     stringResource(R.string.consent_refused),

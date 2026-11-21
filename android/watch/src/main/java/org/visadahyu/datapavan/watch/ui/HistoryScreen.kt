@@ -54,6 +54,12 @@ internal data class HistoryView(
     val closed: Boolean = false,
     /** Whether the app is the user's circumvention tool, whose servers the log keeps only with the switch on. */
     val tool: Boolean = false,
+    /**
+     * Whether "Log where apps connect ..." leaves this app's destinations out (the tool, a chained app or a tunnelled one,
+     * with the switch off): tracker blocking's lines then name a row by its tracker or SDK, never by its host (W8,
+     * part 3a; ADR 0053).
+     */
+    val hideHosts: Boolean = false,
 )
 
 /**
@@ -62,7 +68,9 @@ internal data class HistoryView(
  * phone (ADR 0037): each of its lock states is said plainly. With retention "none" there is no history, and
  * the screen says how to keep one. Records older than the app now holding the UID belong to an app since
  * removed, and are counted apart. A segment the switch "Log where apps connect ..." left out says why, by its
- * recorded route and proxy ([History.leftOut]), and links to the switch ([onLogSwitch]).
+ * recorded route and proxy ([History.leftOut]), and links to the switch ([onLogSwitch]). Tracker blocking (W8, part 3a)
+ * says at the top what it blocked in the app, with the app's undo and each tracker's ([blocking], [blockingActions]),
+ * and under each segment whether it was blocked, or why a host it reached is not.
  */
 @Composable
 internal fun HistoryScreen(
@@ -75,8 +83,11 @@ internal fun HistoryScreen(
     /** The WireGuard configurations' names by tunnel number (W7, part 2). */
     tunnelNames: Map<Long, String> = emptyMap(),
     onLogSwitch: () -> Unit = {},
+    blocking: BlockingView = BlockingView(),
+    blockingActions: BlockingActions = BlockingActions(),
 ) {
     val context = LocalContext.current
+    val names = RowNames(blocking.facts, companies, trackers)
     // The phone's own choice of a 12- or 24-hour clock (review c1 of W5's third part, screens, nit 6).
     val time = android.text.format.DateFormat.getTimeFormat(context)
     val date = DateFormat.getDateInstance(DateFormat.MEDIUM)
@@ -135,6 +146,12 @@ internal fun HistoryScreen(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
+                HistoryBlockingLines(
+                    context,
+                    historyBlocking(blocking, view.app.uid, view.app.packages, read?.entries.orEmpty(), names::name, names::company, view.hideHosts),
+                    view.app.packages,
+                    blockingActions,
+                )
             }
         }
         items(view.day?.entries.orEmpty()) { entry ->
@@ -186,6 +203,7 @@ internal fun HistoryScreen(
                             LogSwitchLink(onLogSwitch)
                         }
                     }
+                    entryBlocking(entry, blocking, view.app.uid, names::name, view.hideHosts)?.let { EntryBlockingLines(it) }
                     Text(stringResource(R.string.history_state, stateName(entry.state)), style = MaterialTheme.typography.bodyMedium)
                     if (org.visadahyu.datapavan.watch.log.AppState.why(entry.state) != 0) {
                         Text(whyName(org.visadahyu.datapavan.watch.log.AppState.why(entry.state)), style = MaterialTheme.typography.bodySmall)

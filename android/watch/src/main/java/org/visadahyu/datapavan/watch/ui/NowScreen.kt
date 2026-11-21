@@ -76,6 +76,8 @@ internal data class NowView(
     val sorts: Int,
     /** The WireGuard configurations' names by the engine's tunnel numbers, or a phrase for one since removed (W7). */
     val tunnelNames: Map<Long, String> = emptyMap(),
+    /** Tracker blocking (W8, part 3a; ADR 0053): what was counted, what the user allowed, and the pause. */
+    val blocking: BlockingView = BlockingView(),
 )
 
 /** The marks of a destination of the app [uid], from its hosts' matches (ADR 0046, decision 2 (d)). */
@@ -149,7 +151,8 @@ internal fun whyName(code: Int): String = stringResource(
  * now, its bytes by state, why some have none, and its destinations as W3 names them; apps in the background
  * first. Rows keep their order while the view is open ([NowRows.Order]). At the end, what this view cannot
  * see (decision 5). A tap on an app opens its history. Each app is named only here, inside the app. A row the
- * switch "Log where apps connect ..." leaves out links to it ([onLogSwitch], LogSwitch).
+ * switch "Log where apps connect ..." leaves out links to it ([onLogSwitch], LogSwitch). An app tracker blocking
+ * covers, or that it blocked, says what was blocked and offers the one-tap undo ([blockingActions]; W8, part 3a).
  */
 @Composable
 internal fun NowScreen(
@@ -163,6 +166,7 @@ internal fun NowScreen(
     onCloseHistory: () -> Unit,
     onAllowAccess: () -> Unit,
     onLogSwitch: () -> Unit = {},
+    blockingActions: BlockingActions = BlockingActions(),
 ) {
     // Kept here, above the history, so that coming back from it, or a rotation, finds the list where it was
     // (review c1 of W5's third part, screens, M2).
@@ -170,9 +174,12 @@ internal fun NowScreen(
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         if (history != null) {
             BackHandler(onBack = onCloseHistory)
-            HistoryScreen(history, view.groups[history.app.uid], view.trackers, view.companies, onDay, onCloseHistory, view.tunnelNames, onLogSwitch)
+            HistoryScreen(
+                history, view.groups[history.app.uid], view.trackers, view.companies, onDay, onCloseHistory, view.tunnelNames, onLogSwitch,
+                view.blocking, blockingActions,
+            )
         } else {
-            NowList(view, listState, onWindow, onSort, onAll, onHistory, onAllowAccess, onLogSwitch)
+            NowList(view, listState, onWindow, onSort, onAll, onHistory, onAllowAccess, onLogSwitch, blockingActions)
         }
     }
 }
@@ -187,6 +194,7 @@ private fun NowList(
     onHistory: (Int?, Boolean) -> Unit,
     onAllowAccess: () -> Unit,
     onLogSwitch: () -> Unit,
+    blockingActions: BlockingActions,
 ) {
     val context = LocalContext.current
     val window = view.window
@@ -228,7 +236,7 @@ private fun NowList(
         }
         items(keys, key = { it ?: Int.MIN_VALUE }) { uid ->
             val app = byUid[uid]
-            if (app != null) AppRow(context, app, window, view, onHistory, onLogSwitch)
+            if (app != null) AppRow(context, app, window, view, onHistory, onLogSwitch, blockingActions)
         }
         item { CannotSee() }
     }
@@ -240,6 +248,11 @@ private fun Facts(view: NowView, snapshot: Snapshot?, onAllowAccess: () -> Unit)
     val context = LocalContext.current
     if (!view.running) {
         Text(stringResource(R.string.now_watch_off), style = MaterialTheme.typography.bodyMedium)
+    }
+    // The global pause, which names no app (W8, part 3a); its end and the tap that ends it are on Watch's screen.
+    val paused = view.blocking.pausedUntil
+    if (view.running && view.blocking.on && paused != null) {
+        Text(stringResource(R.string.blocking_paused_now, whenText(context, paused)), style = MaterialTheme.typography.bodyMedium)
     }
     when (snapshot?.known) {
         Snapshot.NO_ACCESS -> {
@@ -307,6 +320,7 @@ private fun AppRow(
     view: NowView,
     onHistory: (Int?, Boolean) -> Unit,
     onLogSwitch: () -> Unit,
+    blockingActions: BlockingActions,
 ) {
     val named = view.names[app.uid]
     val historyLabel = stringResource(R.string.now_history)
@@ -366,6 +380,12 @@ private fun AppRow(
                 Text(stringResource(R.string.now_through_tunnel_off, tunnelName(view, app.throughTunnel)), style = MaterialTheme.typography.bodyMedium)
             }
             if (LogSwitch.hides(app)) LogSwitchLink(onLogSwitch)
+            // Tracker blocking (W8, part 3a): what it blocked in this app, and the one-tap undo. With the switch above off,
+            // a chained or tunnelled app's rows are never named by their hosts.
+            val names = RowNames(view.blocking.facts, view.companies, view.trackers)
+            val packages = named?.packages.orEmpty()
+            appBlocking(view.blocking, app.uid, packages, { names.name(it, LogSwitch.hides(app)) }, names::company, LogSwitch.hides(app))
+                ?.let { AppBlockingLines(context, it, packages, blockingActions) }
             Destinations(context, app, window, view, onLogSwitch)
         }
     }

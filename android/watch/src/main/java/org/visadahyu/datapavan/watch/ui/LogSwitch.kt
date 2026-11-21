@@ -77,6 +77,14 @@ internal object LogSwitch {
     /** The counters' places (`Counters::snapshot` in core/net): the proxy requests declared, and the proxies inferred. */
     const val DECLARED = 61
     const val INFERRED = 63
+
+    /**
+     * The flags of a row's link to the switch (`MainActivity.logSwitchIntent`): single-top only, so that Watch's screen
+     * opens above "Now" and Back comes back to where the user was, the same app's row or its history (W8 part 3a, the
+     * brief's point 11). `CLEAR_TOP` closed "Now" and everything above Watch's screen; a new task or a reorder would take
+     * the user elsewhere on Back.
+     */
+    const val LINK_FLAGS = android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
 }
 
 /** The switch's place, brought into view by [requester] where the screen brings it there; as it is for none. */
