@@ -26,6 +26,12 @@ class ToolLabels(
     /** The phone's languages, and Datapavan's own, first first. */
     private val phone: List<Locale>,
     private val own: List<Locale>,
+    /**
+     * Whether the installed tool has its own words in a language. Android gives a tool's default words, often English,
+     * for a language it lacks, and a tool installed from Google Play in language splits has only the phone's languages:
+     * Datapavan's language is added beside the phone's only where the tool has it.
+     */
+    private val hasLanguage: (Locale) -> Boolean = { true },
 ) {
     /** One label as shown: [text] first, and [also] in Datapavan's language when the tool's differs. */
     data class Shown(val text: String, val also: String?, val fromTool: Boolean)
@@ -41,7 +47,12 @@ class ToolLabels(
             val first = read(resource, phone)?.let(::clean)
             if (first != null) {
                 anyFromTool = true
-                val second = if (own.firstOrNull()?.language != phone.firstOrNull()?.language) read(resource, own)?.let(::clean) else null
+                val ownFirst = own.firstOrNull()
+                val second = if (ownFirst != null && ownFirst.language != phone.firstOrNull()?.language && hasLanguage(ownFirst)) {
+                    read(resource, own)?.let(::clean)
+                } else {
+                    null
+                }
                 return Shown(first, second?.takeIf { it != first }, fromTool = true)
             }
         }
@@ -83,6 +94,7 @@ class ToolLabels(
          * Null when the package is not installed or Android cannot open it. Advanced sees every app (the audit's
          * QUERY_ALL_PACKAGES, ADR 0014), and Watch's own launcher query (ADR 0034) covers any tool a user can open.
          */
+        @SuppressLint("AppBundleLocaleChanges") // Watch reads another app's resources for a locale; its own stays as it is.
         fun reader(context: Context, packageName: String): ((Resource, List<Locale>) -> String?)? {
             val tool = try {
                 context.createPackageContext(packageName, 0)
@@ -99,6 +111,17 @@ class ToolLabels(
                 }
                 read(resources, packageName, resource)
             }
+        }
+
+        /** The languages [packageName]'s resources have words in, as its installed APKs hold them; null when it cannot be read. */
+        fun languages(context: Context, packageName: String): Set<String>? = try {
+            context.createPackageContext(packageName, 0).assets.locales.mapNotNull { tag ->
+                Locale.forLanguageTag(tag.replace('_', '-')).language.takeIf { it.isNotEmpty() }
+            }.toSet()
+        } catch (e: PackageManager.NameNotFoundException) {
+            null
+        } catch (e: SecurityException) {
+            null
         }
 
         /**

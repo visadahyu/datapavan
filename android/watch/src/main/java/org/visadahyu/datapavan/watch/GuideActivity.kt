@@ -50,7 +50,13 @@ class GuideActivity : ComponentActivity() {
             val tool = packageName?.takeIf { it in guide.packages } ?: guide.packages.first()
             val name = Tools.table(this).firstOrNull { it.packageName == tool }?.name ?: tool
             val read = ToolLabels.reader(this, tool) ?: { _, _ -> null }
-            val labels = ToolLabels(book, guide, read, phone = locales(Resources.getSystem().configuration), own = locales(resources.configuration))
+            val languages = ToolLabels.languages(this, tool)
+            val labels = ToolLabels(
+                book, guide, read,
+                phone = locales(Resources.getSystem().configuration),
+                own = locales(resources.configuration),
+                hasLanguage = { locale -> languages == null || locale.language in languages },
+            )
             val shown = GuideView.of(book, guide, name, labels)
             runOnUiThread { view.value = shown }
         }.apply { name = "watch-guide" }.start()
