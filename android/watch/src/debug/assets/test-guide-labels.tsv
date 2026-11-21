@@ -1,0 +1,5 @@
+# The test guide's labels. proxy_switch differs from what the test tool's resources say, so that the check sees
+# which one the screen shows. Columns as data/tools/guide-labels.tsv.
+test-tool	proxy_switch	en	Recorded switch of the test tool	string/guide_proxy_switch	-
+test-tool	user	en	User name	-	-
+test-tool	password	en	Password	-	-

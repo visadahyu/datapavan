@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    W8 part 3b: a label of the test tool's own, which Watch's guide reads from this app's resources by its name
+    (src/debug/assets/test-guide-labels.tsv), as it reads a real tool's (scripts/verify-chain.sh).
+-->
+<resources>
+    <string name="guide_proxy_switch">Proxy switch of the test tool</string>
+</resources>

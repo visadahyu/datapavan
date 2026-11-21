@@ -1,0 +1,4 @@
+# W8 part 3b's test guide, for W6's test tool (scripts/test-tool), known to debug builds only, so that
+# scripts/verify-chain.sh can check the chain section's link and a label read from another app's resources. Columns as
+# data/tools/guides.tsv.
+test-tool	org.visadahyu.datapavan.testtool	proxy	1	-	-	socks5:127.0.0.1:10870	-	optional	-	waiting	Debug builds only

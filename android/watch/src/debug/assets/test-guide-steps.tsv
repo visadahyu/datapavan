@@ -1,0 +1,5 @@
+# The test guide's steps (test-guides.tsv). Columns as data/tools/guide-steps.tsv.
+test-tool	on	guide_step_on	proxy_switch	-
+test-tool	password	guide_step_fill	user,password	-
+test-tool	asks	guide_asks_none	-	-
+test-tool	back	guide_step_off	proxy_switch	-

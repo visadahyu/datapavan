@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The same label in Persian, for a phone set to Persian. -->
+<resources>
+    <string name="guide_proxy_switch">کلید پروکسی ابزار آزمایشی</string>
+</resources>
