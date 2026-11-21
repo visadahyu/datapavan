@@ -211,12 +211,22 @@ fi
 
 # 1. ODoH by default; nothing to the network's resolver; no lookup of Watch's own.
 resolver_mark=$(mark resolver)
-expect "a direct app's name goes by ODoH to the first target" "$(lookup probe.dnslab.test)" 10.53.1.1
-expect "Watch's way" "$(way)" "odoh lab-relay lab-target-a"
+# Which pair answers first depends on time: the second pair is asked after the hedge's 400 ms, and on CI's slower
+# emulator it can answer first (run 44796928789). Either is ODoH through the lab's relay; the order itself is held by
+# the ladder's unit tests and by step 8, which holds a pair. What this step proves is that the name goes by ODoH and
+# nothing reaches the network's resolver.
+probe=$(lookup probe.dnslab.test)
+case "$probe" in
+    10.53.1.1) target=target-a ;;
+    10.53.2.2) target=target-b ;;
+    *) fail "a direct app's name goes by ODoH to a lab target: got '$probe', wanted 10.53.1.1 or 10.53.2.2" ;;
+esac
+echo "ok: a direct app's name goes by ODoH ($target answered)"
+expect "Watch's way" "$(way)" "odoh lab-relay lab-$target"
 name=$(fresh)
-target_mark=$(mark target-a)
+target_mark=$(mark "$target")
 lookup "$name" >/dev/null
-asked target-a "$name" "$target_mark" || fail "the first target was not asked $name"
+asked "$target" "$name" "$target_mark" || fail "the target of Watch's way ($target) was not asked $name"
 asked resolver "$name" "$resolver_mark" && fail "the network's resolver saw $name"
 asked resolver "probe.dnslab.test" "$resolver_mark" && fail "the network's resolver saw probe.dnslab.test"
 asked resolver "dnslab.test" "$resolver_mark" && fail "the network's resolver saw a name of the lab's servers: Watch looked one up"
