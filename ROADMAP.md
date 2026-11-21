@@ -147,7 +147,7 @@ signing session and texts reviewed in eight languages):
 The milestones of 0.2.0, W1 to W9, with what each must show before it counts as done, are in
 [DESIGN.md §13.2](docs/DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools).
 
-Where it stands on 2026-11-20: the four items before W1 are drafted (ADRs
+Where it stands on 2026-11-21: the four items before W1 are drafted (ADRs
 [0034](docs/decisions/0034-watch-permissions.md), [0035](docs/decisions/0035-wireguard-upstream.md) and
 [0036](docs/decisions/0036-ip-to-organisation-dataset.md), accepted; the table of tools in `data/tools/`).
 W1, Watch's skeleton, and W2, the packet engine in the product, are in `main`: every app's traffic passes
@@ -157,7 +157,8 @@ spike's engine. W3, a name for every flow, and W4, the connection log
 comparison, which needs a test account, and W4's runs on the A40 and an Android 10 emulator. W6, chaining
 through the user's tool ([ADR 0038](docs/decisions/0038-dns-of-chained-apps.md)), was accepted and merged on
 2026-11-11. W5, and W7's parts so far, are in `main` too; W8 is being built, its apps' built-in proxies named on
-`watch-w8b` with [ADR 0052](docs/decisions/0052-apps-built-in-proxies.md), proposed on 2026-11-20; W9 is not built yet
+`watch-w8b` with [ADR 0052](docs/decisions/0052-apps-built-in-proxies.md), proposed on 2026-11-20, and its fix round on
+`watch-w8b-fix` on 2026-11-21; W9 is not built yet
 ([DESIGN.md §13.2](docs/DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools) has what is left).
 How W5's per-app view is met, live, with which apps sent while the user was not using them, is decided in
 [ADR 0046](docs/decisions/0046-live-activity.md) (2026-11-14), and a profile for people whose phone may be searched,

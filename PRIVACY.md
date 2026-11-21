@@ -38,12 +38,19 @@ your unlocked phone can see it, as they can see the rest of the app.
   on a phone with a screen lock, earlier days can be read only while it is unlocked. Days past your choice are
   deleted with their keys, and one tap deletes everything. For apps you send through your circumvention tool, the
   log keeps no destination unless you turn that on. When an app uses a proxy of its own, the record also says what
-  kind of proxy it was and, only while "Log where these apps connect" is on, where the proxy is and what the app asked
-  it for; it never keeps a proxy's password, which Datapavan reads past and does not store, and says only that one
-  was sent unencrypted.
+  kind of proxy it was and which known trackers its connection's names matched (by their εxodus ids, which name a
+  tracker's company, not a destination), and, only while "Log where apps connect through your tool, WireGuard or a
+  proxy" is on, where the proxy is (its address and the name a DNS answer gave it), what the app asked it for and,
+  for a messenger's proxy, the name its connection sent in place of its destination; it never keeps a proxy's
+  password, which Datapavan reads past and does not store, and says only that one was sent unencrypted. The records
+  of a connection taken for a messenger's proxy wait ten minutes in memory before they are written, so that one
+  Datapavan corrects in that time is written correct.
 - **Each app's recent traffic, for the "Now" view,** in memory only. It is gone when the firewall stops. To tell
-  Telegram's, WhatsApp's and Signal's own connections from their proxies', it also notes in memory when each of them
-  last connected to its maker's network, for ten minutes; nothing of it is written anywhere.
+  Telegram's, WhatsApp's and Signal's own connections from their proxies', it also notes in memory, until the
+  firewall stops (and across the tunnel's own restarts, which hand it on): when each of them last connected to its
+  maker's network, which counts for ten minutes; the names Telegram and WhatsApp looked up through Datapavan, as
+  hashes that cannot be read back, each for an hour; and when Signal last reached a payment's or a debug log's
+  server, which counts for ten minutes. Nothing of it is written anywhere.
 - **Your circumvention tool's settings:** whether apps go through it and which ones, the tool's host and port, and
   the password Datapavan made for it, which is encrypted under a key that Android's keystore protects.
 - **The apps you leave out of the firewall,** which then go to the internet without it: their names, until you take

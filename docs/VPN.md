@@ -85,15 +85,22 @@ Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED
 - **The proxy port is a door.** Many tools leave their local proxy open with no password, so any app on the phone, even one kept out of the tunnel, can use it to reach the tool's servers and learn their address. Watch's screen says whether the tool's proxy asked it for a password, and what an open one lets other apps do. It offers a generated password where the tool supports one, opens no unauthenticated port of its own, and never writes SOCKS credentials to its log. A password does not cover UDP: no tool is known to keep other apps off its UDP relay, so the chosen apps' UDP goes through the tool only once the user turns that on, and otherwise goes nowhere ([ADR 0041](decisions/0041-watch-visibility-and-coexistence.md), decision 5).
 - **Apps' own proxies are named** (W8, part 2a, [ADR 0052](decisions/0052-apps-built-in-proxies.md)). A SOCKS5, SOCKS4
   or HTTP proxy an app set itself is read from the connection's first bytes: the flow is named by the destination the
-  app asked for, the proxy's place beside it ("an address in the network of X; who runs it is not known", or "on your
-  local network"), with whether it is Android's proxy setting, shared by the apps that follow it, and whether a
-  password crossed unencrypted; the password itself is never kept, and the bytes it passed through are zeroed.
-  Telegram's MTProto, WhatsApp's and Signal's proxies are inferred from where and how the app connects, each only
-  while the app reaches its maker's own network in no other way (substitution), and a fake-TLS cover never names the
-  flow. The tool's own flows and the apps chained or tunnelled through it are not read: they carry the tool's traffic.
-  An app's own proxy is circumvention as chaining is: its place and the destination asked for are kept only under "Log
-  where these apps connect", and otherwise only its kind. Proxies inside TLS or QUIC, and those on the phone itself,
-  whose loopback never enters the tunnel, are not seen.
+  app asked for, once the proxy's reply confirmed the handshake, the proxy's place beside it ("an address in the
+  network of X; who runs it is not known", or "on your local network"), with whether it is Android's proxy setting,
+  shared by the apps that follow it, and whether a password crossed unencrypted; the password itself is never kept,
+  and the bytes it passed through in the relay are zeroed. A request the server does not confirm names nothing, and a
+  plain request in absolute form, which origin servers take too, keeps its flow's own address and names. Telegram's
+  MTProto, WhatsApp's and Signal's proxies are inferred from where and how the app connects, each only while the app
+  reaches its maker's own network by no TCP connection (substitution, on the time since the phone started), and a
+  direct connection within ten minutes takes a name back whole, in the log too; a hello counts as a fake-TLS cover
+  only where no answer Watch holds gave its name the address, the app did not look the name up through Watch, and
+  Watch sees the app's lookups at all (Private DNS not strict), and a cover never names the flow. Signal's fronting
+  counts as going directly, and what its web view opens after a payment's host is not its proxy. The tool's own flows
+  and the apps chained or tunnelled through it are not read: they carry the tool's traffic. An app's own proxy is
+  circumvention as chaining is: its place and the destination asked for are kept only under the one switch "Log where
+  apps connect through your tool, WireGuard or a proxy", and otherwise only its kind and its trackers' marks, matched
+  on its names before they were left out; the switch is on Watch's screen wherever a row points to it. Proxies inside
+  TLS or QUIC, and those on the phone itself, whose loopback never enters the tunnel, are not seen.
 - **Proxy-like behaviour is flagged** (v0.2) and can be blocked (v0.3): many distinct destinations in a short time, sustained upload, or activity while the screen is off. Thresholds come from measurements, and a flag says what was seen instead of accusing the app. Detection counts destinations in memory, so it does not need the destination log that is off by default for chained flows.
 - **Per-app choice.** The user decides which apps go through the tool, and which through which WireGuard
   configuration. Everything else goes directly or is blocked.
