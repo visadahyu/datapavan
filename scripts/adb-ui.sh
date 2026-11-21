@@ -139,9 +139,10 @@ swipe_up() {
     sleep 1
 }
 
-# Lists only compose what is on screen, so scroll down (up to six times) until the text shows.
+# Lists only compose what is on screen, so scroll down (up to ten times) until the text shows. Ten since W8 part 3a:
+# tracker blocking's section on Watch's screen put the switch "Log where apps connect ..." past six half screens.
 scroll_to() {
-    for _ in 1 2 3 4 5 6; do
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
         screen_has "$1" && return 0
         swipe_up
     done
