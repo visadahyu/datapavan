@@ -1750,8 +1750,9 @@ class WatchVpnService : VpnService() {
     /** A proxy as the debug builds' dump writes it: `kind:how:flags:asked:proxy-name`, `-` for none; no credential is kept. */
     private fun proxyWords(proxy: LogRecord.Proxy): String {
         val kind = listOf("-", "socks5", "socks4", "connect", "forward", "mtproto", "whatsapp", "signal").getOrElse(proxy.kind) { "?" }
-        val flags = listOfNotNull("s".takeIf { proxy.setting }, "p".takeIf { proxy.password }, "o".takeIf { proxy.outsideMaker })
-            .joinToString("").ifEmpty { "-" }
+        val flags = listOfNotNull(
+            "s".takeIf { proxy.setting }, "p".takeIf { proxy.password }, "o".takeIf { proxy.outsideMaker }, "l".takeIf { proxy.leftOut },
+        ).joinToString("").ifEmpty { "-" }
         val asked = if (proxy.askedPort >= 0) "${proxy.asked}@${proxy.askedPort}" else "-"
         return "$kind:${if (proxy.declared) "read" else "inferred"}:$flags:$asked:${proxy.proxyName.ifEmpty { "-" }}"
     }

@@ -6,10 +6,12 @@
 # Android's proxy setting; under three more package names, which Watch's debug builds add to the clients of Telegram,
 # WhatsApp and Signal (never a real app's), it sends Telegram's obfuscated start and a fake-TLS hello to mtg,
 # WhatsApp's clear header, and TLS hellos with Signal's names. Each kind must be named as ADR 0052 says: the declared
-# ones by the destination asked for, read from the connection, Android's setting told apart; the inferred ones with
-# the cover name naming nothing; Signal's own fronting and captcha names are not a proxy. "Now" and the log hold the
-# same, and with "Log where these apps connect" off only the kind. No password reaches Watch's dump, the log, the
-# device's log or its crash buffer.
+# ones by the destination asked for, read from the connection once the proxy's reply confirmed them, a plain request
+# keeping its own name, Android's setting told apart; the inferred ones with the cover name naming nothing, the
+# fake-TLS one only once Watch saw the app's lookups; Signal's own fronting and captcha names are not a proxy. "Now"
+# and the log hold the same, and with the switch "Log where apps connect through your tool, WireGuard or a proxy" off
+# only the kind; that switch is on Watch's screen, though the phone has no tool and no tunnel. No password or user
+# name reaches Watch's dump, the log, the device's log or its crash buffer.
 #
 # The false positives that need a maker's own network (a Telegram CDN data centre beside its ranges, WhatsApp's link
 # previews and backups beside Meta's networks) are checked in the engine's network lab (core/net/tests/netlab.rs) and
@@ -148,7 +150,7 @@ for family in telegram whatsapp signal; do
     grep -q "messenger-client $family $FIXTURE.$family" <<<"$(dump messenger-client "$family" "$FIXTURE.$family")" ||
         fail "the fixture was not added to $family's clients"
 done
-grep -q "log-destinations on" <<<"$(dump log-destinations on)" || fail "\"Log where these apps connect\" was not turned on"
+grep -q "log-destinations on" <<<"$(dump log-destinations on)" || fail "the switch \"Log where apps connect ...\" was not turned on"
 grep -q "log-retention 1 set" <<<"$(dump log-retention 1)" || fail "the log's retention was not set"
 sleep 1
 lab=(--es host "$HOST" --es user "$PROXYLAB_USER" --es password "$PROXYLAB_PASSWORD")
@@ -159,15 +161,16 @@ proxied "$APP_UID" "$PROXYLAB_PORT" "socks5 read p inner\.proxylab\.test:443 - -
 fixture "$FIXTURE" connect echoed "${lab[@]}" --es port "$PROXYLAB_PORT_HTTP"
 proxied "$APP_UID" "$PROXYLAB_PORT_HTTP" "connect read p inner\.proxylab\.test:443 - - inner\.proxylab\.test"
 fixture "$FIXTURE" forward 204 "${lab[@]}" --es port "$PROXYLAB_PORT_HTTP"
-proxied "$APP_UID" "$PROXYLAB_PORT_HTTP" "forward read p inner\.proxylab\.test:80 - - inner\.proxylab\.test"
-echo "ok: SOCKS5 with a password, CONNECT with Basic and a plain request named by the destination asked for, read from the connection"
+# A plain request cannot be confirmed by its reply: its flow keeps its own name, and says what it asked for.
+proxied "$APP_UID" "$PROXYLAB_PORT_HTTP" "forward read p inner\.proxylab\.test:80 - - [^i].*"
+echo "ok: SOCKS5 with a password and CONNECT with Basic named by the destination asked for once the proxy confirmed it, a plain request keeping its own name"
 
 # Android's proxy setting, told apart from an app's own.
 PROXY_SET=1
 adb shell settings put global http_proxy "$HOST:$PROXYLAB_PORT_OPEN"
 sleep 2
 fixture "$FIXTURE" setting 204
-proxied "$APP_UID" "$PROXYLAB_PORT_OPEN" "forward read s inner\.proxylab\.test:80 - - inner\.proxylab\.test"
+proxied "$APP_UID" "$PROXYLAB_PORT_OPEN" "forward read s inner\.proxylab\.test:80 - - [^i].*"
 adb shell settings put global http_proxy :0
 adb shell settings delete global http_proxy >/dev/null 2>&1 || true
 PROXY_SET=""
@@ -176,6 +179,8 @@ echo "ok: Android's proxy setting told apart from an app's own"
 # Inferred: Telegram's obfuscated start and fake-TLS hello to mtg, WhatsApp's clear header, Signal's proxy by its name.
 fixture "$FIXTURE.telegram" obfuscated sent --es host "$HOST" --es port "$PROXYLAB_PORT_MTG"
 proxied "$TELEGRAM_UID" "$PROXYLAB_PORT_MTG" "mtproto inferred o - - - .*"
+# A hello no answer tied is evidence only where Watch sees the app's lookups: the fixture looks a name up first.
+fixture "$FIXTURE.telegram" lookup asked --es name lookup.proxylab.test
 fixture "$FIXTURE.telegram" faketls accepted --es host "$HOST" --es port "$PROXYLAB_PORT_MTG" --es secret "$PROXYLAB_MTG_SECRET"
 proxied "$TELEGRAM_UID" "$PROXYLAB_PORT_MTG" "mtproto inferred o - - cover\.proxylab\.test .*"
 if grep -E "^tcp [^ ]+ ${HOST//./\\.}:$PROXYLAB_PORT_MTG $TELEGRAM_UID " <<<"$(dump | sed -n 's/^ *flow //p')" | grep -q "cover\.proxylab\.test"; then
@@ -186,6 +191,15 @@ proxied "$WHATSAPP_UID" "$PROXYLAB_PORT_ECHO" "whatsapp inferred o - - - .*"
 fixture "$FIXTURE.signal" hello echoed --es host "$HOST" --es port "$PROXYLAB_PORT_TLS" --es name signal-proxy.proxylab.test
 proxied "$SIGNAL_UID" "$PROXYLAB_PORT_TLS" "signal inferred - - - - signal-proxy\.proxylab\.test"
 echo "ok: Telegram's MTProto proxy (obfuscated and fake TLS, the cover naming nothing), WhatsApp's and Signal's inferred"
+
+# The switch the rows point to is on Watch's screen, though this phone has no circumvention tool and no WireGuard
+# configuration: an app's own proxy was seen (the fix round's R-M4).
+adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
+sleep 2
+scroll_to "Log where apps connect through your tool, WireGuard or a proxy" ||
+    fail "the switch is not on Watch's screen, with no tool, no tunnel and a Telegram proxy seen"
+adb shell input keyevent KEYCODE_HOME
+echo "ok: the switch is on Watch's screen with no tool and no tunnel, a Telegram proxy seen"
 
 # Signal's own fronting and its captcha are no proxy, though it made no direct connection to Signal.
 before=$(proxies | grep -cE "^tcp [^ ]+ [^ ]+ $SIGNAL_UID " || true)
@@ -212,21 +226,21 @@ grep -qE "^tcp $APP_UID ${HOST//./\\.}:$PROXYLAB_PORT .* inner\.proxylab\.test .
     fail "the log does not hold the SOCKS5 proxy as named"
 echo "ok: \"Now\" and the log hold the proxies as named"
 
-# "Log where these apps connect" off: the next proxied flows keep their kind alone, in "Now" and in the log.
-grep -q "log-destinations off" <<<"$(dump log-destinations off)" || fail "\"Log where these apps connect\" was not turned off"
+# The switch off: the next proxied flows keep their kind alone, in "Now" and in the log, marked as left out.
+grep -q "log-destinations off" <<<"$(dump log-destinations off)" || fail "the switch \"Log where apps connect ...\" was not turned off"
 sleep 1
 fixture "$FIXTURE" socks5 echoed "${lab[@]}" --es port "$PROXYLAB_PORT"
 fixture "$FIXTURE.telegram" obfuscated sent --es host "$HOST" --es port "$PROXYLAB_PORT_MTG"
 sleep 1
 dump log-flush >/dev/null
 log=$(dump log-today | sed -n 's/^ *log-record //p')
-grep -qE "^tcp $APP_UID 0\.0\.0\.0:0 .* - .*proxy=socks5:read:p:-:-$" <<<"$log" ||
+grep -qE "^tcp $APP_UID 0\.0\.0\.0:0 .* - .*proxy=socks5:read:pl:-:-$" <<<"$log" ||
     fail "with the switch off, the log does not hold the SOCKS5 proxy's kind alone"
-grep -qE "^tcp $TELEGRAM_UID 0\.0\.0\.0:0 .*proxy=mtproto:inferred:o:-:-$" <<<"$log" ||
+grep -qE "^tcp $TELEGRAM_UID 0\.0\.0\.0:0 .*proxy=mtproto:inferred:ol:-:-$" <<<"$log" ||
     fail "with the switch off, the log does not hold Telegram's proxy's kind alone"
 now=$(dump | sed -n 's/^ *activity-proxy //p')
-grep -qE "^$APP_UID socks5:read:p:-:- 0\.0\.0\.0:0 " <<<"$now" || fail "with the switch off, \"Now\" does not hold the kind alone: $now"
-echo "ok: with \"Log where these apps connect\" off, the log and \"Now\" keep the proxy's kind alone"
+grep -qE "^$APP_UID socks5:read:pl:-:- 0\.0\.0\.0:0 " <<<"$now" || fail "with the switch off, \"Now\" does not hold the kind alone: $now"
+echo "ok: with the switch off, the log and \"Now\" keep the proxy's kind alone"
 
 # No password anywhere Watch writes or Android logs.
 shown="$(dump)
@@ -234,9 +248,10 @@ $(dump log-today)
 $(adb logcat -d | tr -d '\r')
 $(adb logcat -d -b crash 2>/dev/null | tr -d '\r')"
 ! grep -qF -- "$PROXYLAB_PASSWORD" <<<"$shown" || fail "Watch's dump, its log or the device's log shows the proxy's password"
+! grep -qF -- "$PROXYLAB_USER" <<<"$shown" || fail "Watch's dump, its log or the device's log shows the proxy's user name"
 ! grep -qF -- "$(printf '%s' "$PROXYLAB_USER:$PROXYLAB_PASSWORD" | base64 -w0)" <<<"$shown" || fail "a Basic credential shows"
 ! grep -qF -- "${PROXYLAB_MTG_SECRET:2:32}" <<<"$shown" || fail "the MTProto secret's key shows"
-echo "ok: no password, Basic credential or MTProto key in Watch's dump, its log, the device's log or its crash buffer"
+echo "ok: no password, user name, Basic credential or MTProto key in Watch's dump, its log, the device's log or its crash buffer"
 
 dump log-destinations on >/dev/null
 dump messenger-clear >/dev/null

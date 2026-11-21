@@ -81,8 +81,22 @@ public class ProxyActivity extends Activity {
             case "faketls": return fakeTls();
             case "whatsapp": return whatsapp();
             case "hello": return hello(extra("name"));
+            case "lookup": return lookup(extra("name"));
             default: throw new IllegalArgumentException();
         }
+    }
+
+    /**
+     * A lookup through Android's resolver, which Watch passes on: a messenger's lookups seen through Watch make a hello
+     * no DNS answer tied to its address evidence of its proxy (ADR 0052, fix round). The answer may be none.
+     */
+    private String lookup(String name) {
+        try {
+            java.net.InetAddress.getAllByName(name);
+        } catch (java.net.UnknownHostException e) {
+            // No such name: the lookup was made all the same.
+        }
+        return "asked";
     }
 
     private String socks5() throws Exception {

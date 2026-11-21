@@ -55,11 +55,12 @@ PY
 base=$(free_base)
 export PROXYLAB_PORT=$base PROXYLAB_PORT_HTTP=$((base + 1)) PROXYLAB_PORT_OPEN=$((base + 2)) \
     PROXYLAB_PORT_MTG=$((base + 3)) PROXYLAB_PORT_ECHO=$((base + 4)) PROXYLAB_PORT_TLS=$((base + 5))
-export PROXYLAB_USER=lab
+# The user name is random too, so that a check can look for it (the fix round's R-m7): "lab" is in too many strings.
+PROXYLAB_USER="user-$(python3 -I -c 'import secrets; print(secrets.token_hex(8))')"
 PROXYLAB_PASSWORD="lab-$(python3 -I -c 'import secrets; print(secrets.token_hex(12))')"
 # ee, a 16-byte key, and the cover name in hex: a fake-TLS secret for a name of the lab's own.
 PROXYLAB_MTG_SECRET="ee$(python3 -I -c 'import secrets; print(secrets.token_hex(16) + "cover.proxylab.test".encode().hex())')"
-export PROXYLAB_PASSWORD PROXYLAB_MTG_SECRET
+export PROXYLAB_USER PROXYLAB_PASSWORD PROXYLAB_MTG_SECRET
 
 finish() {
     local status=$?
