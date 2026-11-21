@@ -188,11 +188,13 @@ chaining is, and must follow the same switch.
   a network with no way out), and the emulator's `proxies` shard (`scripts/verify-proxies.sh`), which CI runs and in
   which a skip fails: the project's own fixture under package names of its own, which only debug builds add to a
   messenger's clients.
-- **Size:** Watch's native library grows by 45,520 bytes on arm64-v8a, 32,832 on armeabi-v7a and 49,232 on x86_64
-  (built alike from `main` and from this part: 1,707,608, 1,465,644 and 1,981,256 bytes before; 1,753,128, 1,498,476
-  and 2,030,488 after); in Advanced's release APK it is 1,751,840, 1,497,192 and 2,029,136 bytes, under the 2 MiB gate
-  of each ABI. With part 1's 153 KB on x86_64 the two together pass the gate there, until part 1's fix round's savings
-  land: the gate stands, and the merge waits for them.
+- **Size:** Watch's native library grew by 45,520 bytes on arm64-v8a, 32,832 on armeabi-v7a and 49,232 on x86_64 in
+  part 2a (built alike from `main` and from it before part 1: 1,707,608, 1,465,644 and 1,981,256 bytes before;
+  1,753,128, 1,498,476 and 2,030,488 after). After the fix round, rebased onto `main` with part 1 (whose fix round
+  measured 1,695,200, 1,256,752 and 1,933,072 bytes, stripped, inside `core`), the library in Advanced's release APK
+  1,772,296 bytes on arm64-v8a, 1,312,792 on armeabi-v7a and 2,017,976 on x86_64, under the 2 MiB gate (2,097,152
+  bytes) of each ABI, which is unchanged: x86_64 79,176 bytes under it. Against part 1's figures, built otherwise, this
+  part with its fix round adds about 77, 56 and 85 KB.
 - **Frontier research, open:** Telegram's fake-TLS hello across versions, told from the device without a JA4 database;
   encapsulated handshakes seen from the device (Xue et al., USENIX Security 2024) for Signal and WhatsApp; and how
   people read "read from the connection" against "inferred", with real users.
