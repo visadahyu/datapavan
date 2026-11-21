@@ -17,7 +17,8 @@
 # directly. With UDP allowed, the picked app also sends STUN requests from one socket to two names on one
 # port at once, and both answers must reach it (ADR 0044, unit 9b). Last, that app is left out of the
 # tunnel on the screen (ADR 0041): Watch sets its tunnel up again, the app reaches the server and Watch
-# no longer sees it; taken back, Watch sees it again. Nothing
+# no longer sees it; taken back, Watch sees it again. On the way, the chain section links the test tool's guide (W8,
+# part 3b), which quotes the label read from the installed tool's own resources. Nothing
 # is left running: the tunnel, the tool and the server stop at the end, and the tool is uninstalled.
 #
 #   scripts/verify-chain.sh [path/to/Datapavan-Advanced-debug.apk]
@@ -262,6 +263,36 @@ screen_says "The proxy of Datapavan test tool asks for no password, so any app o
     fail "the chain screen did not say that any app on the phone can use the tool's open proxy"
 screen_has "Datapavan test tool has no setting for a password" && fail "the chain screen said the test tool takes no password"
 echo "ok: the screen says that any app can use the tool's proxy while it asks for no password"
+# W8, part 3b: the chain section links the guide of each tool of the table installed here, the test tool's among
+# them (src/debug/assets/test-guides.tsv). The guide quotes the tool's label as the tool's own resources have it
+# (scripts/test-tool/res), not as the data records it: Watch read it from the installed tool by its name.
+GUIDE_LINK="Datapavan test tool in proxy mode"
+# Read whole, then searched: under pipefail, a grep -q that stops reading early would fail the pipe.
+guide_says() {
+    local screen
+    dump_screen || return 1
+    screen=$(adb shell cat "$DUMP" 2>/dev/null) || return 1
+    grep -qF "$1" <<<"$screen"
+}
+tap_text "$GUIDE_LINK" || fail "the chain section did not link the test tool's guide"
+# The guide is longer than a screen: what it says further down is read after scrolling to it.
+guide_scrolls_to() {
+    for _ in 1 2 3 4 5 6; do
+        guide_says "$1" && return 0
+        guide_says "Recorded switch of the test tool" && return 1
+        swipe_up
+    done
+    guide_says "$1"
+}
+within 10 guide_says "Proxy switch of the test tool" || fail "the test tool's guide did not quote the label read from the tool"
+guide_says "Recorded switch of the test tool" && fail "the test tool's guide quoted the recorded label, not the tool's own"
+guide_scrolls_to "are read from" || fail "the test tool's guide did not say its labels were read from the tool"
+guide_says "Recorded switch of the test tool" && fail "the test tool's guide quoted the recorded label further down"
+adb shell input keyevent KEYCODE_BACK
+within 10 screen_has "$GUIDE_LINK" || fail "Back from the guide did not return to the chain section"
+# The links are below the user name and password, which the next step reads scrolling down from the top.
+scroll_to_top
+echo "ok: the chain section links the installed tool's guide, which quotes the label read from the tool's own resources"
 # The user name sits just above the password, and either can be at the screen's edge: each is read from
 # a dump taken once it is on the screen. A text not found leaves its value empty, for the check below,
 # instead of ending the script without a word under pipefail (CI, 2026-11-12).
