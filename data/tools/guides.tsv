@@ -9,7 +9,7 @@
 #   packages         the tools.tsv packages it covers, comma separated
 #   page             proxy (steps to run the tool in its proxy mode), wireguard (it runs only as a VPN, and Watch carries a
 #                    WireGuard configuration instead, W7), vpn (it runs only as a VPN: Watch cannot run beside it), or
-#                    waiting (no steps until a check on a phone)
+#                    waiting (no steps until it is tried with Watch)
 #   version          the tool's version the steps are read at; '-' for none
 #   source           the repository at that version's release tag
 #   commit           the commit the tag points to; every link of this guide's steps and labels is at it
@@ -18,7 +18,7 @@
 #   listener-source  the line that sets that default, or names the field
 #   auth             as tools.tsv's auth column
 #   auth-source      the line that shows it
-#   checked          the version tried with Watch on a phone (docs/spikes/2026-11-real-tools.md), or waiting: a tool waits for
+#   checked          the version tried with Watch (on an emulator or a phone) (docs/spikes/2026-11-real-tools.md), or waiting: a tool waits for
 #                    a device check until the maintainer gives the word for it (the 2026-11-11 method: the developer's own
 #                    release, its signer checked)
 #   note             free text

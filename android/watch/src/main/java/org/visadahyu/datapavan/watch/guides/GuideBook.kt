@@ -32,7 +32,7 @@ data class Guide(
     val listeners: List<Listener>,
     /** `none`, `optional` or `default`, as tools.tsv. */
     val auth: String?,
-    /** Whether it was tried with Watch on a phone at [version]. */
+    /** Whether it was tried with Watch at [version]. */
     val checked: Boolean,
 )
 

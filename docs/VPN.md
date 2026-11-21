@@ -136,7 +136,7 @@ Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED
   per-tool guides are built"). Every tool of the table has a page (`data/tools/guides.tsv`): the steps to run it in its
   proxy mode, read from its source at a release tag with a line of code for every step and label; or, for a tool that
   runs only as a VPN, that Watch cannot run beside it, with W7's import where its provider issues WireGuard files; or
-  that its steps wait for a check on a phone, where its code is closed or its source does not settle them. A page says
+  that its steps wait until it is tried with Watch, where its code is closed or its source does not settle them. A page says
   where the switch is, the listener and its port, whether a password can be set, what the tool asks for, what Watch
   does next and how to go back. Where the tool's profile sets its listener (Clash Meta for Android, sing-box), the page
   has the user set a port it names, 7890 and 2080, and Watch's finder greets that port: no port is typed into Watch.

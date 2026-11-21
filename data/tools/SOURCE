@@ -13,5 +13,5 @@ not-settled: values marked 'unknown' or ending in '?' need a device test. v2rayN
 guides-method: each tool's steps read by hand from its source at the release tag guides.tsv names, every step, label,
   listener and auth with the line that shows it; scripts/guides.py checks them against this table, and with --against
   against clones of the sources (2026-11-21: 532 lines found, none missing). The labels are each tool's own UI words,
-  quoted as facts of its interface with their source lines. A guide counts as checked on a phone only at the version
+  quoted as facts of its interface with their source lines. A guide counts as tried with Watch only at the version
   docs/spikes/2026-11-real-tools.md tried (v2rayNG 2.3.15, NekoBox 1.4.2, Orbot 17.9.7-BETA-1, Hiddify 5.5.5).

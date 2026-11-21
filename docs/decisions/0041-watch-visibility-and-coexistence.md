@@ -144,7 +144,7 @@ decisions are the coordinator's (BRIEF-part-3b, after one audit of the first bri
    the newest stable one unless the 2026-11-11 run tried another. Every step, label, listener and password setting
    links to the line that shows it, at that commit (`guide-steps.tsv`, `guide-labels.tsv`). v2rayNG 2.3.15, NekoBox
    1.4.2, Orbot 17.9.7-BETA-1 and Hiddify 5.5.5 are read at the versions the
-   [real tools' run](../spikes/2026-11-real-tools.md) tried, so they count as checked on a phone. Every other tool
+   [real tools' run](../spikes/2026-11-real-tools.md) tried, so they count as tried with Watch. Every other tool
    waits for a device check, under the 2026-11-11 method (the developer's own release, its signer checked), until the
    maintainer gives the word for it; none is installed or run here. Where a newer release than the commit
    `tools.tsv` read exists, the guide is read at it, and the data check holds its listener and password to the

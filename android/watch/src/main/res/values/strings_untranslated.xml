@@ -194,8 +194,8 @@
     <string name="guide_back_note">When %1$s runs as a VPN again, Android turns Watch off: only one VPN runs at a time.</string>
     <!-- %1$s: the tool's name; %2$s: its version. -->
     <string name="guide_read">Read from the source code of %1$s, version %2$s.</string>
-    <string name="guide_checked">Tried with Watch on a phone at that version.</string>
-    <string name="guide_not_checked">Not yet tried with Watch on a phone.</string>
+    <string name="guide_checked">Tried with Watch at that version.</string>
+    <string name="guide_not_checked">Not yet tried with Watch.</string>
     <string name="guide_labels_tool">The words in quotes are read from %1$s on this phone.</string>
     <string name="guide_labels_recorded">The words in quotes are as that version shows them.</string>
     <string name="guide_audit">The rest of Datapavan, its check of your apps, works without Watch.</string>
@@ -264,8 +264,8 @@
     <string name="guide_wireguard_same">The configuration file or QR code you added to WireGuard works in Watch too.</string>
     <string name="guide_note_amneziawg">AmneziaWG changes how WireGuard\'s packets look. Watch does not read that change yet, so it cannot carry these configurations.</string>
     <string name="guide_waiting_intro">There are no steps for %1$s yet.</string>
-    <string name="guide_waiting_closed">Its code is not public, so its steps wait for a check on a phone.</string>
-    <string name="guide_waiting_partly">Part of its code is not public, so its steps wait for a check on a phone.</string>
+    <string name="guide_waiting_closed">Its code is not public, so its steps wait until it is tried with Watch.</string>
+    <string name="guide_waiting_partly">Part of its code is not public, so its steps wait until it is tried with Watch.</string>
     <string name="guide_note_tethering">It has a feature it calls Proxy Tethering. Whether that gives a proxy on this phone that Watch can use is not known yet.</string>
     <!-- The website's list of the guides (scripts/guides.py), which Watch does not show. -->
     <string name="guide_index_title" tools:ignore="UnusedResources">Your tool beside Watch</string>
@@ -273,5 +273,5 @@
     <string name="guide_index_proxy" tools:ignore="UnusedResources">Tools with a proxy mode</string>
     <string name="guide_index_wireguard" tools:ignore="UnusedResources">Tools that run only as a VPN, with WireGuard configurations</string>
     <string name="guide_index_vpn" tools:ignore="UnusedResources">Tools that run only as a VPN</string>
-    <string name="guide_index_waiting" tools:ignore="UnusedResources">Tools whose steps wait for a check on a phone</string>
+    <string name="guide_index_waiting" tools:ignore="UnusedResources">Tools whose steps wait until they are tried with Watch</string>
 </resources>
