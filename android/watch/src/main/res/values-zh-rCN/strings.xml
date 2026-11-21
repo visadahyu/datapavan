@@ -47,8 +47,6 @@
     <string name="chain_user">用户名：%1$s</string>
     <string name="chain_password_value">密码：%1$s</string>
     <string name="chain_copy">复制密码</string>
-    <string name="chain_log_destinations">记录这些应用连接到哪里</string>
-    <string name="chain_log_destinations_note">除非您开启，否则保持关闭。Watch 仍会统计它们的连接。如果有人搜查您的手机，记录它们连接去向的列表可能会被用来对付您。</string>
     <!-- The found tool's signing key (W6), the audit app's own words (ADR 0018). -->
     <string name="signature_genuine_developer">%1$s 的正版副本，由其开发者签名。</string>
     <string name="signature_genuine_google">%1$s 的正版副本，由 Google Play 代其开发者签名。</string>
@@ -128,9 +126,7 @@
     <string name="now_why_late">Watch 得知状态时已经太晚。</string>
     <string name="now_why_no_app">Android 没有说明这是哪个应用。</string>
     <string name="now_why_not_told">Watch 当时还没有读取状态，或已经停止。</string>
-    <string name="now_through_tool">通过您用来绕过网络限制的工具发送。未显示它连接到了哪里，因为“记录这些应用连接到哪里”已关闭。</string>
     <string name="now_is_tool">您用来绕过网络限制的工具。它的流量包括您设置为通过它连接的应用的流量。</string>
-    <string name="now_tool_hidden">未显示它连接到哪里，因为“记录这些应用连接到哪里”已关闭。</string>
     <string name="now_history">查看其历史记录</string>
 
     <!-- A destination: where its name came from, and what is known of it. -->
@@ -163,8 +159,6 @@
     <!-- Each app's history. -->
     <string name="history_title">%1$s 的历史记录</string>
     <string name="history_back">返回 Now</string>
-    <string name="history_through_tool">通过您用来绕过网络限制的工具发送。未记录它连接到了哪里，因为当时“记录这些应用连接到哪里”已关闭。</string>
-    <string name="history_tool_hidden">未记录它连接到了哪里，因为当时“记录这些应用连接到哪里”已关闭。</string>
     <string name="history_intro">Watch 为此应用保留的每一次连接，最新的在前，每次显示一天。</string>
     <string name="history_keep">要保留历史记录，请在 Watch 的页面中选择记录保留的天数。</string>
     <string name="history_nothing_yet">尚未保留任何记录。</string>
@@ -231,8 +225,6 @@
     <!-- A switch for one configuration (ADR 0035, question 8). -->
     <string name="tunnels_local">直接访问本地网络</string>
     <string name="tunnels_local_note">开启后，经由它连接的应用会直接访问您自己网络中的打印机和其他设备，而不经过服务器。</string>
-    <!-- The same switch as the chain's, which governs both. -->
-    <string name="tunnels_log_note">这个开关也适用于设置为通过您用来绕过网络限制的工具连接的应用。</string>
 
     <!-- The notification while configurations that open only on an unlocked phone wait for the unlock (ADR 0047's
          profile). It names no provider and no configuration, on the lock screen or off it. -->
@@ -388,9 +380,7 @@
     </plurals>
 
     <!-- "Now" and each app's history: an app sent through a WireGuard configuration. %1$s: its name. -->
-    <string name="now_through_tunnel">经由 %1$s 发送。未显示它连接到了哪里，因为“记录这些应用连接到哪里”已关闭。</string>
     <string name="now_destination_tunnel">经由 %1$s</string>
-    <string name="history_through_tunnel">经由 %1$s 发送。未记录它连接到了哪里，因为当时“记录这些应用连接到哪里”已关闭。</string>
     <!-- In place of a configuration's name: inside the sentences above, and also alone as a configuration's heading and in its buttons' and rows' labels, so it must read well on its own too. -->
     <string name="tunnel_removed_name">WireGuard 配置（已移除）</string>
     <string name="tunnel_closed_name">WireGuard 配置（现在无法打开）</string>

@@ -55,6 +55,7 @@ import org.visadahyu.datapavan.watch.log.ConnectionLog
 import org.visadahyu.datapavan.watch.ui.AppChoice
 import org.visadahyu.datapavan.watch.ui.ChainActions
 import org.visadahyu.datapavan.watch.ui.ChainView
+import org.visadahyu.datapavan.watch.ui.LogSwitch
 import org.visadahyu.datapavan.watch.ui.WatchScreen
 import org.visadahyu.datapavan.watch.ui.WatchTheme
 
@@ -108,6 +109,12 @@ class MainActivity : ComponentActivity() {
     /** The apps the user left out of the tunnel (ADR 0041). */
     private val leftOut = mutableStateOf(emptySet<String>())
 
+    /**
+     * What the screen knows for the switch "Log where apps connect ..." (LogSwitch): whether an app's own proxy was
+     * seen since the engine started, read with the configurations' states, and whether a row linked to it.
+     */
+    private val logSwitch = mutableStateOf(LogSwitch.View())
+
     /** Debug builds: the only apps the end-to-end test sends through the tunnel, comma-separated. */
     private var onlyApps: String? = null
 
@@ -158,6 +165,12 @@ class MainActivity : ComponentActivity() {
         val log = ConnectionLog.of(this)
         retention.intValue = log.retentionDays
         leftOut.value = LeftOut.of(this).apps
+        // The switch as stored, before the tool's search shows the rest of the chain: every place draws this one.
+        chain.value = chain.value.copy(logDestinations = ChainSettings.of(this).logDestinations)
+        // A row of "Now" or the history linked to the switch: drawn, and brought into view once; drawn still after a
+        // rotation.
+        val asked = savedInstanceState?.getBoolean(SAVED_LOG_SWITCH) ?: intent.getBooleanExtra(EXTRA_LOG_SWITCH, false)
+        if (asked) logSwitch.value = logSwitch.value.copy(asked = true, asks = if (savedInstanceState == null) 1 else 0)
         // A camera's photo this screen asked for before it was recreated is read when the camera answers; any other
         // left is deleted (W7, part 2). The import's slot comes back with it; a pending configuration's bytes stay
         // in this process alone (TunnelModel), never in the saved state.
@@ -212,6 +225,8 @@ class MainActivity : ComponentActivity() {
                     onNow = { startActivity(NowActivity.intent(this)) },
                     dns = dns.value,
                     dnsActions = dnsActions,
+                    logSwitch = logSwitch.value,
+                    onLogSwitchShown = { logSwitch.value = logSwitch.value.copy(asks = 0) },
                 )
             }
         }
@@ -384,6 +399,7 @@ class MainActivity : ComponentActivity() {
         super.onSaveInstanceState(outState)
         replacing?.let { outState.putInt(SAVED_REPLACING, it) }
         capture?.let { outState.putString(SAVED_CAPTURE, it.path) }
+        outState.putBoolean(SAVED_LOG_SWITCH, logSwitch.value.asked)
     }
 
     override fun onDestroy() {
@@ -584,6 +600,9 @@ class MainActivity : ComponentActivity() {
             c.copy(shown = TunnelStates.shown(running, c.name, line), plainDns = line?.plainDns == true)
         }
         if (configurations != view.configurations) tunnels.value = view.copy(configurations = configurations)
+        // An app's own proxy seen since the engine started draws the switch that its rows name (LogSwitch).
+        val seen = LogSwitch.seen(logSwitch.value.proxiesSeen, running) { Engine.nativeCounters() }
+        if (seen != logSwitch.value.proxiesSeen) logSwitch.value = logSwitch.value.copy(proxiesSeen = seen)
     }
 
     /**
@@ -871,9 +890,15 @@ class MainActivity : ComponentActivity() {
         runOnUiThread { tunnels.value = tunnels.value.copy(message = words, reading = false) }
     }
 
-    /** The activity is single-top: a debug start or stop sent while it is open comes here. */
+    /**
+     * The activity is single-top: a row's link to the switch (LogSwitch), and a debug start or stop sent while it is
+     * open, come here.
+     */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_LOG_SWITCH, false)) {
+            logSwitch.value = logSwitch.value.copy(asked = true, asks = logSwitch.value.asks + 1)
+        }
         val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
         if (!debuggable) return
         if (intent.getBooleanExtra(EXTRA_START, false)) {
@@ -915,6 +940,19 @@ class MainActivity : ComponentActivity() {
         private const val STATES_EVERY_MS = 1_000L
         private const val SAVED_REPLACING = "tunnel_replacing"
         private const val SAVED_CAPTURE = "tunnel_capture"
+        private const val SAVED_LOG_SWITCH = "log_switch"
+
+        /** A row of "Now" or the history that the switch "Log where apps connect ..." leaves out links to it. */
+        private const val EXTRA_LOG_SWITCH = "log_switch"
+
+        /**
+         * Watch's screen at the switch "Log where apps connect ...", for a row that links to it: the screen already
+         * open beneath "Now" comes back, "Now" closed, so that one screen holds the switch.
+         */
+        internal fun logSwitchIntent(context: android.content.Context): Intent =
+            Intent(context, MainActivity::class.java)
+                .putExtra(EXTRA_LOG_SWITCH, true)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
         /** ClipDescription.EXTRA_IS_SENSITIVE, which Android 13 added; earlier versions ignore it. */
         private const val EXTRA_IS_SENSITIVE = "android.content.extra.IS_SENSITIVE"

@@ -131,6 +131,8 @@ class NowActivity : ComponentActivity() {
                     onDay = ::showDay,
                     onCloseHistory = { history.value = null },
                     onAllowAccess = { org.visadahyu.datapavan.audit.openUsageAccess(this) },
+                    // A row the switch "Log where apps connect ..." leaves out opens Watch's screen at it.
+                    onLogSwitch = { startActivity(MainActivity.logSwitchIntent(this)) },
                 )
             }
         }
@@ -347,8 +349,16 @@ class NowActivity : ComponentActivity() {
                 null
             }
             val table = store.file(TRACKERS) ?: return IntArray(0)
+            trackersById = TrackerMarks.byId(String(table, Charsets.UTF_8))
             return Engine.nativeTrackers(table).also { trackersLoaded = it.isNotEmpty() }
         }
+
+        /** Each tracker of the same table by its εxodus id, for the marks the engine kept of a proxied flow (ADR 0052). */
+        @Volatile
+        private var trackersById: Map<Int, TrackerMarks.Match> = emptyMap()
+
+        /** The trackers the engine matched on a proxied flow's names before it left them out, by their ids ([LogRecord.Proxy.trackers]). */
+        internal fun trackersOf(ids: List<Int>): List<TrackerMarks.Match> = ids.mapNotNull { trackersById[it] }
 
         /** The text the engine's library matches for a destination: its name, the DNS name and its address, at its port. */
         internal fun hostsOf(destination: Snapshot.Destination): List<String> =

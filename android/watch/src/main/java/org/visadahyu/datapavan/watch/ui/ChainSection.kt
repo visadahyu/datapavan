@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
@@ -74,8 +75,9 @@ internal class ChainActions(
 /**
  * Watch beside the user's circumvention tool (W6, docs/VPN.md): which tool it found, the switch that
  * sends apps through it, which apps, what its proxy lets other apps on the phone do and the password
- * that keeps them off it (ADR 0041, decision 5), whether UDP goes through it too, and whether chained destinations
- * are logged. A tool's name keeps its own direction inside a right-to-left sentence.
+ * that keeps them off it (ADR 0041, decision 5), whether UDP goes through it too, and the switch that logs where
+ * chained apps connect, with the rest it covers (LogSwitch). A tool's name keeps its own direction inside a
+ * right-to-left sentence.
  */
 @Composable
 internal fun ChainSection(
@@ -84,6 +86,8 @@ internal fun ChainSection(
     actions: ChainActions,
     tunnelled: Map<String, String> = emptyMap(),
     waiting: Set<String> = emptySet(),
+    /** Brings the switch "Log where apps connect ..." into view, where the screen does so here for a row's link. */
+    logSwitch: BringIntoViewRequester? = null,
 ) {
     val bidi = BidiFormatter.getInstance()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -108,7 +112,7 @@ internal fun ChainSection(
                 )
                 OutlinedButton(onClick = actions.onSearch) { Text(stringResource(R.string.chain_search_again)) }
             }
-            is ToolSearch.Answering -> Answering(search, view, privateDns, actions, tunnelled, waiting)
+            is ToolSearch.Answering -> Answering(search, view, privateDns, actions, tunnelled, waiting, logSwitch)
         }
         // A chain that is on stays one tap from off, whatever the search says now: while the tool does
         // not answer, the apps sent through it wait, and the user must be able to let them go directly
@@ -128,6 +132,7 @@ private fun Answering(
     actions: ChainActions,
     tunnelled: Map<String, String>,
     waiting: Set<String>,
+    logSwitch: BringIntoViewRequester?,
 ) {
     val tool = BidiFormatter.getInstance().unicodeWrap(search.found.tool.name)
     Text(stringResource(R.string.chain_found, tool, search.found.port), style = MaterialTheme.typography.bodyMedium)
@@ -199,8 +204,11 @@ private fun Answering(
         Text(stringResource(R.string.chain_password_value, view.password), style = MaterialTheme.typography.bodyLarge)
         OutlinedButton(onClick = actions.onCopyPassword) { Text(stringResource(R.string.chain_copy)) }
     }
-    LabelledSwitch(stringResource(R.string.chain_log_destinations), view.logDestinations, actions.onLogDestinations)
-    Text(stringResource(R.string.chain_log_destinations_note), style = MaterialTheme.typography.bodyMedium)
+    // The one switch (LogSwitch), here while the tool answers.
+    Column(Modifier.bringingIntoView(logSwitch), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LabelledSwitch(stringResource(R.string.log_switch), view.logDestinations, actions.onLogDestinations)
+        Text(stringResource(R.string.log_switch_note), style = MaterialTheme.typography.bodyMedium)
+    }
 }
 
 /**

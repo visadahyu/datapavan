@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -21,11 +22,14 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -45,7 +49,9 @@ import org.visadahyu.datapavan.watch.log.ConnectionLog
  * Watch's one screen: what it is for, whether it is on, the switch, while it is on what Private DNS
  * hides from it (W3), the user's circumvention tool and the apps sent through it (W6), the WireGuard
  * configurations and each app's way (W7, part 2), what other apps see of a VPN and the apps left out (ADR
- * 0041), how long the connection log keeps its records, with its wipe (W4), and screenshots (ADR 0040).
+ * 0041), how long the connection log keeps its records, with its wipe (W4), and screenshots (ADR 0040). The switch
+ * "Log where apps connect ..." is drawn where [LogSwitch.places] says, and brought into view when a row of "Now" or
+ * the history linked to it ([logSwitch]); [onLogSwitchShown] is told once it was.
  */
 @Composable
 internal fun WatchScreen(
@@ -71,6 +77,8 @@ internal fun WatchScreen(
     onNow: () -> Unit,
     dns: DnsView,
     dnsActions: DnsActions,
+    logSwitch: LogSwitch.View = LogSwitch.View(),
+    onLogSwitchShown: () -> Unit = {},
 ) {
     val search = chain.search as? org.visadahyu.datapavan.watch.chain.ToolSearch.Answering
     val ways = org.visadahyu.datapavan.watch.tunnel.Routes.Chain(chain.on, chain.allApps, chain.apps, search?.found?.tool?.packageName)
@@ -80,6 +88,25 @@ internal fun WatchScreen(
         ImportConfirmation(it, choices.filter { app -> app.packageName !in leftOut }, ways, toolName, leftOut, tunnels, tunnelActions)
         return
     }
+    val places = LogSwitch.places(
+        toolAnswers = search != null,
+        tunnels = tunnels.configurations.isNotEmpty() && !tunnels.lost,
+        proxiesSeen = logSwitch.proxiesSeen,
+        asked = logSwitch.asked,
+        on = chain.logDestinations,
+    )
+    val target = LogSwitch.target(places)
+    val requester = remember { BringIntoViewRequester() }
+    // Brought into view once per link, after the tool's search, which may draw it in the tool's section instead.
+    LaunchedEffect(logSwitch.asks, target, chain.search == null) {
+        if (logSwitch.asks > 0 && target != null && chain.search != null) {
+            // Once the place just drawn is laid out.
+            withFrameNanos { }
+            requester.bringIntoView()
+            onLogSwitchShown()
+        }
+    }
+    val at = { place: LogSwitch.Place -> requester.takeIf { place == target } }
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
@@ -124,8 +151,9 @@ internal fun WatchScreen(
             // for a removed configuration is said to wait, never to go through one (fix round, screens review m1).
             val (through, waiting) = org.visadahyu.datapavan.watch.tunnel.Routes.split(tunnels.routes, tunnels.configurations.map { it.slot }, leftOut)
             val tunnelled = through.mapValues { (_, slot) -> tunnels.names[slot] ?: stringResource(R.string.tunnel_closed_name) }
-            ChainSection(chain, privateDns, chainActions, tunnelled, waiting.keys)
-            TunnelsSection(tunnels, tunnelActions, leftOut)
+            ChainSection(chain, privateDns, chainActions, tunnelled, waiting.keys, logSwitch = at(LogSwitch.Place.CHAIN))
+            // One setting, shown alike in every place: the chain's, which every place's change goes through.
+            TunnelsSection(tunnels.copy(logDestinations = chain.logDestinations), tunnelActions, leftOut, logSwitch = at(LogSwitch.Place.TUNNELS))
             RoutesSection(
                 view = tunnels,
                 chain = ways,
@@ -135,7 +163,11 @@ internal fun WatchScreen(
                 actions = tunnelActions,
             )
             LeftOutSection(leftOut, choices, onLoadApps, onLeaveOut)
-            LogSettings(retentionDays, deleted, logLock, screenLock, onRetention, onDelete)
+            LogSettings(retentionDays, deleted, logLock, screenLock, onRetention, onDelete) {
+                if (LogSwitch.Place.ALONE in places) {
+                    LogSwitchAlone(chain.logDestinations, chainActions.onLogDestinations, Modifier.bringingIntoView(at(LogSwitch.Place.ALONE)))
+                }
+            }
             ScreenshotSetting()
         }
     }
@@ -166,7 +198,8 @@ private fun PrivateDnsNote(privateDns: PrivateDns) {
  * How long the connection log keeps its records, and its wipe, one tap away (ADR 0037). What it says
  * of earlier days is only what holds on this phone: shut while it is locked once the log's key pair is
  * tied to the lock and the phone has a screen lock; open at any time if the phone has none, or refused
- * that key pair ([screenLock] is whether it has one); nothing before the key pair exists.
+ * that key pair ([screenLock] is whether it has one); nothing before the key pair exists. [logSwitch] draws the
+ * switch "Log where apps connect ..." here where no other section does (LogSwitch).
  */
 @Composable
 private fun LogSettings(
@@ -176,6 +209,7 @@ private fun LogSettings(
     screenLock: Boolean,
     onRetention: (Int) -> Unit,
     onDelete: () -> Unit,
+    logSwitch: @Composable () -> Unit = {},
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
@@ -216,6 +250,7 @@ private fun LogSettings(
                 }
             }
         }
+        logSwitch()
         OutlinedButton(onClick = onDelete) { Text(stringResource(R.string.log_delete)) }
         if (deleted) {
             Text(

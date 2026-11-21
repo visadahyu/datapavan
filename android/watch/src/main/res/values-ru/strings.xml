@@ -50,8 +50,6 @@
     <string name="chain_user">Имя пользователя: %1$s</string>
     <string name="chain_password_value">Пароль: %1$s</string>
     <string name="chain_copy">Скопировать пароль</string>
-    <string name="chain_log_destinations">Записывать, куда подключаются эти приложения</string>
-    <string name="chain_log_destinations_note">Выключено, пока вы это не включите. Watch всё равно считает их подключения. Список того, куда они подключались, может быть использован против вас, если кто-то обыщет ваш телефон.</string>
     <!-- The found tool's signing key (W6), the audit app's own words (ADR 0018). -->
     <string name="signature_genuine_developer">Подлинная копия приложения %1$s, подписанная его разработчиком.</string>
     <string name="signature_genuine_google">Подлинная копия приложения %1$s, подписанная Google Play для его разработчика.</string>
@@ -137,9 +135,7 @@
     <string name="now_why_late">Watch узнал состояние слишком поздно.</string>
     <string name="now_why_no_app">Android не сообщил, какое это было приложение.</string>
     <string name="now_why_not_told">Watch ещё не прочитал состояние или уже остановился.</string>
-    <string name="now_through_tool">Отправлено через ваш инструмент обхода блокировок. Куда подключалось приложение, не показано, потому что настройка «Записывать, куда подключаются эти приложения» выключена.</string>
     <string name="now_is_tool">Ваш инструмент обхода блокировок. Его трафик включает трафик приложений, которые вы направляете через него.</string>
-    <string name="now_tool_hidden">Куда он подключается, не показано, потому что настройка «Записывать, куда подключаются эти приложения» выключена.</string>
     <string name="now_history">Посмотреть историю</string>
 
     <!-- A destination: where its name came from, and what is known of it. -->
@@ -175,8 +171,6 @@
     <!-- Each app's history. -->
     <string name="history_title">История приложения %1$s</string>
     <string name="history_back">Назад к «Now»</string>
-    <string name="history_through_tool">Отправлено через ваш инструмент обхода блокировок. Куда подключалось приложение, не записано, потому что настройка «Записывать, куда подключаются эти приложения» была выключена.</string>
-    <string name="history_tool_hidden">Куда подключался ваш инструмент обхода блокировок, не записано, потому что настройка «Записывать, куда подключаются эти приложения» была выключена.</string>
     <string name="history_intro">Подключения этого приложения, которые сохранил Watch: сначала новые, по одному дню.</string>
     <string name="history_keep">Чтобы вести историю, выберите на экране Watch, сколько дней хранить записи.</string>
     <string name="history_nothing_yet">Пока ничего не сохранено.</string>
@@ -258,8 +252,6 @@
     <!-- A switch for one configuration (ADR 0035, question 8). -->
     <string name="tunnels_local">Локальная сеть напрямую</string>
     <string name="tunnels_local_note">Когда включено, её приложения обращаются к принтерам и другим устройствам вашей собственной сети напрямую, а не через сервер.</string>
-    <!-- The same switch as the chain's, which governs both. -->
-    <string name="tunnels_log_note">Этот переключатель действует и на приложения, которые вы направляете через ваш инструмент обхода блокировок.</string>
 
     <!-- The notification while configurations that open only on an unlocked phone wait for the unlock (ADR 0047's
          profile). It names no provider and no configuration, on the lock screen or off it. -->
@@ -433,9 +425,7 @@
     </plurals>
 
     <!-- "Now" and each app's history: an app sent through a WireGuard configuration. %1$s: its name. -->
-    <string name="now_through_tunnel">Отправлено через %1$s. Куда подключалось приложение, не показано, потому что настройка «Записывать, куда подключаются эти приложения» выключена.</string>
     <string name="now_destination_tunnel">Через %1$s</string>
-    <string name="history_through_tunnel">Отправлено через %1$s. Куда подключалось приложение, не записано, потому что настройка «Записывать, куда подключаются эти приложения» была выключена.</string>
     <!-- In place of a configuration's name: inside the sentences above, and also alone as a configuration's heading and in its buttons' and rows' labels, so it must read well on its own too. -->
     <string name="tunnel_removed_name">WireGuard (конфигурация с тех пор удалена)</string>
     <string name="tunnel_closed_name">WireGuard (конфигурацию сейчас нельзя открыть)</string>

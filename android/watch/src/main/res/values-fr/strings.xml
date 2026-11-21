@@ -49,8 +49,6 @@
     <string name="chain_user">Nom d\'utilisateur : %1$s</string>
     <string name="chain_password_value">Mot de passe : %1$s</string>
     <string name="chain_copy">Copier le mot de passe</string>
-    <string name="chain_log_destinations">Enregistrer où ces applis se connectent</string>
-    <string name="chain_log_destinations_note">Désactivé, sauf si vous l\'activez. Watch compte quand même leurs connexions. Une liste des endroits où elles se sont connectées peut être utilisée contre vous si quelqu\'un fouille votre téléphone.</string>
     <!-- The found tool's signing key (W6), the audit app's own words (ADR 0018). -->
     <string name="signature_genuine_developer">Copie authentique de l\'appli %1$s, signée par son développeur.</string>
     <string name="signature_genuine_google">Copie authentique de l\'appli %1$s, signée par Google Play pour son développeur.</string>
@@ -134,9 +132,7 @@
     <string name="now_why_late">Watch a appris l\'état trop tard.</string>
     <string name="now_why_no_app">Android n\'a pas indiqué de quelle appli il s\'agissait.</string>
     <string name="now_why_not_told">Watch n\'avait pas encore lu l\'état, ou s\'était arrêté.</string>
-    <string name="now_through_tool">Trafic passé par votre outil de contournement. Les endroits où l\'appli s\'est connectée ne sont pas affichés, car « Enregistrer où ces applis se connectent » est désactivé.</string>
     <string name="now_is_tool">Votre outil de contournement. Son trafic comprend celui des applis que vous faites passer par cet outil.</string>
-    <string name="now_tool_hidden">Les endroits où il se connecte ne sont pas affichés, car « Enregistrer où ces applis se connectent » est désactivé.</string>
     <string name="now_history">Voir son historique</string>
 
     <!-- A destination: where its name came from, and what is known of it. -->
@@ -171,8 +167,6 @@
     <!-- Each app's history. -->
     <string name="history_title">Historique de %1$s</string>
     <string name="history_back">Retour à Now</string>
-    <string name="history_through_tool">Trafic passé par votre outil de contournement. Les endroits où l\'appli s\'est connectée n\'ont pas été enregistrés, car « Enregistrer où ces applis se connectent » était désactivé.</string>
-    <string name="history_tool_hidden">Les endroits où il s\'est connecté n\'ont pas été enregistrés, car « Enregistrer où ces applis se connectent » était désactivé.</string>
     <string name="history_intro">Chaque connexion que Watch a conservée pour cette appli, de la plus récente à la plus ancienne, jour par jour.</string>
     <string name="history_keep">Pour conserver un historique, choisissez sur l\'écran de Watch pendant combien de jours conserver les entrées.</string>
     <string name="history_nothing_yet">Rien n\'a encore été conservé.</string>
@@ -249,8 +243,6 @@
     <!-- A switch for one configuration (ADR 0035, question 8). -->
     <string name="tunnels_local">Réseau local en accès direct</string>
     <string name="tunnels_local_note">Quand ce réglage est activé, ses applis atteignent directement les imprimantes et les autres appareils de votre propre réseau, sans passer par le serveur.</string>
-    <!-- The same switch as the chain's, which governs both. -->
-    <string name="tunnels_log_note">Ce réglage s\'applique aussi aux applis que vous faites passer par votre outil de contournement.</string>
 
     <!-- The notification while configurations that open only on an unlocked phone wait for the unlock (ADR 0047's
          profile). It names no provider and no configuration, on the lock screen or off it. -->
@@ -418,9 +410,7 @@
     </plurals>
 
     <!-- "Now" and each app's history: an app sent through a WireGuard configuration. %1$s: its name. -->
-    <string name="now_through_tunnel">Trafic passé par %1$s. Les endroits où l\'appli s\'est connectée ne sont pas affichés, car « Enregistrer où ces applis se connectent » est désactivé.</string>
     <string name="now_destination_tunnel">Par %1$s</string>
-    <string name="history_through_tunnel">Trafic passé par %1$s. Les endroits où l\'appli s\'est connectée n\'ont pas été enregistrés, car « Enregistrer où ces applis se connectent » était désactivé.</string>
     <!-- In place of a configuration's name: inside the sentences above, and also alone as a configuration's heading and in its buttons' and rows' labels, so it must read well on its own too. -->
     <string name="tunnel_removed_name">une configuration WireGuard supprimée entre-temps</string>
     <string name="tunnel_closed_name">une configuration WireGuard qui ne peut pas être ouverte pour l\'instant</string>

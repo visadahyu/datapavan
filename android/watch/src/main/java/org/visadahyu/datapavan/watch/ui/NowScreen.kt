@@ -79,13 +79,23 @@ internal data class NowView(
 )
 
 /** The marks of a destination of the app [uid], from its hosts' matches (ADR 0046, decision 2 (d)). */
-internal fun marksOf(hosts: List<String>, appGroup: String?, trackers: Map<String, List<TrackerMarks.Match>>, companies: Companies?): List<TrackerMarks.Mark> =
-    TrackerMarks.marks(
-        hosts.flatMap { trackers[it].orEmpty() }.distinct(),
+internal fun marksOf(
+    hosts: List<String>,
+    appGroup: String?,
+    trackers: Map<String, List<TrackerMarks.Match>>,
+    companies: Companies?,
+    /** The trackers the engine matched on a proxied flow's names before it left them out (ADR 0052), by id. */
+    kept: List<Int> = emptyList(),
+): List<TrackerMarks.Mark> {
+    val matched = hosts.flatMap { trackers[it].orEmpty() }.distinct()
+    val engine = org.visadahyu.datapavan.watch.NowActivity.trackersOf(kept).filter { e -> matched.none { it.id == e.id } }
+    return TrackerMarks.marks(
+        matched + engine,
         appGroup,
         { match -> companies?.groupOfWebsite(match.website) },
         { group -> companies?.name(group) ?: group },
     )
+}
 
 /** A size as the user reads it, absolute, with its unit, isolated in right-to-left text. */
 internal fun size(context: Context, bytes: Long): String = isolate(Formatter.formatFileSize(context, bytes))
@@ -138,7 +148,8 @@ internal fun whyName(code: Int): String = stringResource(
  * "Now" (ADR 0046, decision 2 (d)): one row per app that used the network in the chosen window, with its state
  * now, its bytes by state, why some have none, and its destinations as W3 names them; apps in the background
  * first. Rows keep their order while the view is open ([NowRows.Order]). At the end, what this view cannot
- * see (decision 5). A tap on an app opens its history. Each app is named only here, inside the app.
+ * see (decision 5). A tap on an app opens its history. Each app is named only here, inside the app. A row the
+ * switch "Log where apps connect ..." leaves out links to it ([onLogSwitch], LogSwitch).
  */
 @Composable
 internal fun NowScreen(
@@ -151,6 +162,7 @@ internal fun NowScreen(
     onDay: (Int) -> Unit,
     onCloseHistory: () -> Unit,
     onAllowAccess: () -> Unit,
+    onLogSwitch: () -> Unit = {},
 ) {
     // Kept here, above the history, so that coming back from it, or a rotation, finds the list where it was
     // (review c1 of W5's third part, screens, M2).
@@ -158,9 +170,9 @@ internal fun NowScreen(
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         if (history != null) {
             BackHandler(onBack = onCloseHistory)
-            HistoryScreen(history, view.groups[history.app.uid], view.trackers, view.companies, onDay, onCloseHistory, view.tunnelNames)
+            HistoryScreen(history, view.groups[history.app.uid], view.trackers, view.companies, onDay, onCloseHistory, view.tunnelNames, onLogSwitch)
         } else {
-            NowList(view, listState, onWindow, onSort, onAll, onHistory, onAllowAccess)
+            NowList(view, listState, onWindow, onSort, onAll, onHistory, onAllowAccess, onLogSwitch)
         }
     }
 }
@@ -174,6 +186,7 @@ private fun NowList(
     onAll: () -> Unit,
     onHistory: (Int?, Boolean) -> Unit,
     onAllowAccess: () -> Unit,
+    onLogSwitch: () -> Unit,
 ) {
     val context = LocalContext.current
     val window = view.window
@@ -215,7 +228,7 @@ private fun NowList(
         }
         items(keys, key = { it ?: Int.MIN_VALUE }) { uid ->
             val app = byUid[uid]
-            if (app != null) AppRow(context, app, window, view, onHistory)
+            if (app != null) AppRow(context, app, window, view, onHistory, onLogSwitch)
         }
         item { CannotSee() }
     }
@@ -287,7 +300,14 @@ private fun WindowChoice(window: Int, onWindow: (Int) -> Unit) {
 
 /** One app: its name and packages, its state now, its bytes by state, why some have none, and its destinations. */
 @Composable
-private fun AppRow(context: Context, app: Snapshot.App, window: Int, view: NowView, onHistory: (Int?, Boolean) -> Unit) {
+private fun AppRow(
+    context: Context,
+    app: Snapshot.App,
+    window: Int,
+    view: NowView,
+    onHistory: (Int?, Boolean) -> Unit,
+    onLogSwitch: () -> Unit,
+) {
     val named = view.names[app.uid]
     val historyLabel = stringResource(R.string.now_history)
     Card(
@@ -310,8 +330,8 @@ private fun AppRow(context: Context, app: Snapshot.App, window: Int, view: NowVi
             if (AppState.why(app.now) != 0) Text(whyName(AppState.why(app.now)), style = MaterialTheme.typography.bodyMedium)
             if (app.isTool) {
                 Text(stringResource(R.string.now_is_tool), style = MaterialTheme.typography.bodyMedium)
-                // Its servers show only while "Log where these apps connect" is on (decision 3, 2026-11-19).
-                if (app.serversHidden) Text(stringResource(R.string.now_tool_hidden), style = MaterialTheme.typography.bodyMedium)
+                // Its servers show only while the switch "Log where apps connect ..." is on (decision 3, 2026-11-19).
+                if (app.serversHidden) Text(stringResource(R.string.now_tool_servers_off), style = MaterialTheme.typography.bodyMedium)
             }
             for ((column, text) in listOf(
                 AppState.BACKGROUND to R.string.now_bytes_background,
@@ -341,18 +361,19 @@ private fun AppRow(context: Context, app: Snapshot.App, window: Int, view: NowVi
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            if (app.throughTool) Text(stringResource(R.string.now_through_tool), style = MaterialTheme.typography.bodyMedium)
+            if (app.throughTool) Text(stringResource(R.string.now_through_tool_off), style = MaterialTheme.typography.bodyMedium)
             if (app.throughTunnel != 0L) {
-                Text(stringResource(R.string.now_through_tunnel, tunnelName(view, app.throughTunnel)), style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.now_through_tunnel_off, tunnelName(view, app.throughTunnel)), style = MaterialTheme.typography.bodyMedium)
             }
-            Destinations(context, app, window, view)
+            if (LogSwitch.hides(app)) LogSwitchLink(onLogSwitch)
+            Destinations(context, app, window, view, onLogSwitch)
         }
     }
 }
 
 /** An app's destinations with bytes in the window, most bytes first, the first few and then all on request. */
 @Composable
-private fun Destinations(context: Context, app: Snapshot.App, window: Int, view: NowView) {
+private fun Destinations(context: Context, app: Snapshot.App, window: Int, view: NowView, onLogSwitch: () -> Unit) {
     val places = app.destinations
         .filter { it.bytes[window * 2] + it.bytes[window * 2 + 1] > 0 }
         .sortedByDescending { it.bytes[window * 2] + it.bytes[window * 2 + 1] }
@@ -363,10 +384,10 @@ private fun Destinations(context: Context, app: Snapshot.App, window: Int, view:
         val bytes = stringResource(R.string.now_destination_bytes, size(context, place.bytes[window * 2]), size(context, place.bytes[window * 2 + 1]))
         val proxy = place.proxy?.let { proxyFacts(it, place.address, place.port, place.asn, view.groups[app.uid], view.companies) }
         if (proxy != null && !proxy.kept) {
-            // An app's own proxy while "Log where these apps connect" is off: its kind, and no destination (ADR 0052).
-            Text(stringResource(R.string.now_proxy_hidden, stringResource(proxyKind(proxy.kind))), style = MaterialTheme.typography.bodyMedium)
-            ProxyLines(proxy)
-            Text(bytes, style = MaterialTheme.typography.bodySmall)
+            // A proxy's flow the engine left out for the switch: its kind, how Watch knows, and the facts that name
+            // nothing (ADR 0052), with the link to the switch.
+            val marks = marksOf(emptyList(), view.groups[app.uid], view.trackers, view.companies, place.proxy?.trackers.orEmpty())
+            HiddenProxy(proxyRow(proxy, past = false), bytes, onLogSwitch, marks)
             continue
         }
         val (name, dns) = NowRows.destination(place.name, place.dnsName, place.address.hostAddress.orEmpty())
@@ -374,12 +395,17 @@ private fun Destinations(context: Context, app: Snapshot.App, window: Int, view:
             name = name,
             dnsName = dns,
             namedBy = place.namedBy,
-            // A proxied destination's organisation is the proxy's network's, which its lines say.
-            organisation = if (proxy == null) place.organisation else "",
-            marks = marksOf(org.visadahyu.datapavan.watch.NowActivity.hostsOf(place), view.groups[app.uid], view.trackers, view.companies),
+            // A proxied destination's organisation is the proxy's network's, which its lines say; a plain request's
+            // server is shown as any destination is.
+            organisation = if (proxy == null || proxy.kind == ProxyFacts.Kind.REQUEST) place.organisation else "",
+            marks = marksOf(
+                org.visadahyu.datapavan.watch.NowActivity.hostsOf(place), view.groups[app.uid], view.trackers, view.companies,
+                place.proxy?.trackers.orEmpty(),
+            ),
             bytes = bytes,
             through = if (place.via == org.visadahyu.datapavan.watch.log.LogRecord.VIA_TUNNEL) tunnelName(view, place.tunnel) else null,
-            proxy = proxy,
+            proxy = proxy?.let { proxyRow(it, past = false) },
+            onLogSwitch = onLogSwitch,
         )
     }
     if (!all && places.size > FIRST_PLACES) {
@@ -399,12 +425,14 @@ internal fun Place(
     bytes: String,
     /** The WireGuard configuration it went through, by its name, if one (W7, part 2). */
     through: String? = null,
-    /** The app's own proxy it went through, if one (ADR 0052). */
-    proxy: ProxyFacts.Facts? = null,
+    /** What the row says of the proxy it went through, if one (ADR 0052). */
+    proxy: ProxyRow? = null,
+    /** Opens Watch's screen at the switch, for a row that the switch leaves something out of. */
+    onLogSwitch: () -> Unit = {},
 ) {
     Text(isolateLtr(name), style = MaterialTheme.typography.bodyLarge)
     through?.let { Text(stringResource(R.string.now_destination_tunnel, it), style = MaterialTheme.typography.bodySmall) }
-    proxy?.let { ProxyLines(it) }
+    proxy?.let { ProxyLines(it.lines) }
     Text(
         stringResource(
             when (NowRows.namedBy(namedBy)) {
@@ -420,6 +448,15 @@ internal fun Place(
     )
     if (dnsName.isNotEmpty()) Text(stringResource(R.string.now_dns_name, isolateLtr(dnsName)), style = MaterialTheme.typography.bodySmall)
     if (organisation.isNotEmpty()) Text(stringResource(R.string.now_organisation, isolate(organisation)), style = MaterialTheme.typography.bodySmall)
+    MarkLines(marks)
+    Text(bytes, style = MaterialTheme.typography.bodySmall)
+    // Last, after the line of where the name came from, which the emulator checks read a place's name before.
+    if (proxy?.toSwitch == true) LogSwitchLink(onLogSwitch)
+}
+
+/** A destination's tracker marks, one line each. */
+@Composable
+private fun MarkLines(marks: List<TrackerMarks.Mark>) {
     for (mark in marks) {
         val line = when (mark) {
             is TrackerMarks.Mark.Tracker -> stringResource(R.string.now_tracker, isolate(mark.name))
@@ -428,7 +465,19 @@ internal fun Place(
         }
         Text(line, style = MaterialTheme.typography.bodySmall)
     }
+}
+
+/**
+ * A proxy's flow left out for the switch: its kind, how Watch knows and the facts that name nothing, the trackers'
+ * marks the engine kept of it (a tracker's company, never an address or a name), then the link.
+ */
+@Composable
+internal fun HiddenProxy(row: ProxyRow, bytes: String, onLogSwitch: () -> Unit, marks: List<TrackerMarks.Mark> = emptyList()) {
+    row.header?.let { Text(lineText(it), style = MaterialTheme.typography.bodyMedium) }
+    ProxyLines(row.lines)
+    MarkLines(marks)
     Text(bytes, style = MaterialTheme.typography.bodySmall)
+    if (row.toSwitch) LogSwitchLink(onLogSwitch)
 }
 
 /**
@@ -454,47 +503,95 @@ internal fun proxyFacts(
 internal fun proxyKind(kind: ProxyFacts.Kind): Int = when (kind) {
     ProxyFacts.Kind.SOCKS5 -> R.string.proxy_kind_socks5
     ProxyFacts.Kind.SOCKS4 -> R.string.proxy_kind_socks4
-    ProxyFacts.Kind.HTTP -> R.string.proxy_kind_http
+    // A plain request is never called a proxy: its rows do not set its kind in (proxyRow).
+    ProxyFacts.Kind.HTTP, ProxyFacts.Kind.REQUEST -> R.string.proxy_kind_http
     ProxyFacts.Kind.MTPROTO -> R.string.proxy_kind_mtproto
     ProxyFacts.Kind.WHATSAPP -> R.string.proxy_kind_whatsapp
     ProxyFacts.Kind.SIGNAL -> R.string.proxy_kind_signal
 }
 
 /**
- * The lines of a destination's proxy (ADR 0052): its kind, where it is and how Watch knows, then where its address
- * is and that who runs it is not known, and the facts beside it. Only the facts that name nothing while its
- * destination is not kept.
+ * One line of a proxy's row: its string, the proxy's [kind] set in first where the string takes it, and the other
+ * arguments, names and addresses already isolated as the screens set them.
  */
-@Composable
-internal fun ProxyLines(facts: ProxyFacts.Facts) {
-    val kind = stringResource(proxyKind(facts.kind))
-    if (facts.kept) {
-        Text(
-            if (facts.declared && facts.asked.isNotEmpty()) {
-                stringResource(R.string.proxy_asked, kind, isolateLtr(facts.at), isolateLtr(facts.asked))
-            } else {
-                stringResource(R.string.proxy_inferred, kind, isolateLtr(facts.at))
-            },
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Text(
+internal data class ProxyLine(val text: Int, val kind: ProxyFacts.Kind? = null, val args: List<String> = emptyList())
+
+/**
+ * What a destination's row says of its proxy (ADR 0052; fix round of W8 part 2a, screens review M3): the [header]
+ * that stands for the destination where the engine left the flow out for the switch, the [lines], and whether the
+ * row links to the switch ([toSwitch]).
+ */
+internal data class ProxyRow(val header: ProxyLine?, val lines: List<ProxyLine>, val toSwitch: Boolean)
+
+/**
+ * The row of a destination's proxy [facts], in "Now" or, [past], in the history, as a pure function the JVM tests
+ * hold. How Watch knows is always said, the switch on or off: "Read from the connection" or "Inferred from where and
+ * how it connects". A flow left out for the switch shows its kind, Android's setting in its own words, and the facts
+ * that name nothing (the maker's network it is not in, a password unencrypted). A plain request in a proxy's form
+ * is never called a proxy: its line says what it asked for, or with the switch off that this is not shown. Where
+ * Watch cannot name the network, the maker's network the address is not in is still said (ADR 0052, decision 6).
+ */
+internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean): ProxyRow {
+    val lines = mutableListOf<ProxyLine>()
+    val notMaker = ProxyLine(R.string.proxy_not_maker, args = listOf(isolate(facts.maker)))
+    if (!facts.kept) {
+        val header = ProxyLine(
             when {
-                facts.where == ProxyFacts.Where.LOCAL -> stringResource(R.string.proxy_local)
-                facts.where == ProxyFacts.Where.UNKNOWN -> stringResource(R.string.proxy_network_unknown)
-                facts.maker.isNotEmpty() -> stringResource(R.string.proxy_network_not_maker, isolate(facts.organisation), isolate(facts.maker))
-                else -> stringResource(R.string.proxy_network, isolate(facts.organisation))
+                facts.setting && past -> R.string.history_proxy_setting_hidden
+                facts.setting -> R.string.now_proxy_setting_hidden
+                past -> R.string.history_proxy_hidden
+                else -> R.string.now_proxy_hidden
             },
-            style = MaterialTheme.typography.bodySmall,
+            kind = facts.kind,
         )
-        if (facts.cover.isNotEmpty()) {
-            Text(stringResource(R.string.proxy_cover, isolateLtr(facts.cover)), style = MaterialTheme.typography.bodySmall)
-            facts.coverOwner?.let { (name, network) ->
-                Text(stringResource(R.string.proxy_cover_owner, isolate(name), isolate(network)), style = MaterialTheme.typography.bodySmall)
-            }
-        }
+        lines += ProxyLine(if (facts.declared) R.string.proxy_how_read else R.string.proxy_how_inferred)
+        if (facts.maker.isNotEmpty()) lines += notMaker
+        if (facts.password) lines += ProxyLine(R.string.proxy_password)
+        return ProxyRow(header, lines, toSwitch = true)
     }
-    if (facts.setting) Text(stringResource(R.string.proxy_setting), style = MaterialTheme.typography.bodySmall)
-    if (facts.password) Text(stringResource(R.string.proxy_password), style = MaterialTheme.typography.bodySmall)
+    if (facts.kind == ProxyFacts.Kind.REQUEST) {
+        if (facts.askedLeftOut) {
+            lines += ProxyLine(if (past) R.string.history_proxy_request_hidden else R.string.now_proxy_request_hidden)
+            lines += ProxyLine(R.string.proxy_how_read)
+        } else {
+            lines += ProxyLine(R.string.proxy_request_asked, args = listOf(isolateLtr(facts.asked)))
+        }
+        if (facts.setting) lines += ProxyLine(R.string.proxy_setting)
+        if (facts.password) lines += ProxyLine(R.string.proxy_request_password)
+        return ProxyRow(null, lines, toSwitch = facts.askedLeftOut)
+    }
+    lines += when {
+        !facts.declared -> ProxyLine(R.string.proxy_inferred, facts.kind, listOf(isolateLtr(facts.at)))
+        facts.asked.isNotEmpty() -> ProxyLine(R.string.proxy_asked, facts.kind, listOf(isolateLtr(facts.at), isolateLtr(facts.asked)))
+        else -> ProxyLine(R.string.proxy_declared, facts.kind, listOf(isolateLtr(facts.at)))
+    }
+    lines += when {
+        facts.where == ProxyFacts.Where.LOCAL -> ProxyLine(R.string.proxy_local)
+        facts.where == ProxyFacts.Where.UNKNOWN -> ProxyLine(R.string.proxy_network_unknown)
+        facts.maker.isNotEmpty() -> ProxyLine(R.string.proxy_network_not_maker, args = listOf(isolate(facts.organisation), isolate(facts.maker)))
+        else -> ProxyLine(R.string.proxy_network, args = listOf(isolate(facts.organisation)))
+    }
+    if (facts.where == ProxyFacts.Where.UNKNOWN && facts.maker.isNotEmpty()) lines += notMaker
+    if (facts.cover.isNotEmpty()) {
+        lines += ProxyLine(R.string.proxy_cover, args = listOf(isolateLtr(facts.cover)))
+        facts.coverOwner?.let { (name, network) -> lines += ProxyLine(R.string.proxy_cover_owner, args = listOf(isolate(name), isolate(network))) }
+    }
+    if (facts.setting) lines += ProxyLine(R.string.proxy_setting)
+    if (facts.password) lines += ProxyLine(R.string.proxy_password)
+    return ProxyRow(null, lines, toSwitch = false)
+}
+
+/** A proxy's line as the user reads it: the kind's words set in first, then the other arguments. */
+@Composable
+internal fun lineText(line: ProxyLine): String {
+    val args = listOfNotNull(line.kind?.let { stringResource(proxyKind(it)) }) + line.args
+    return stringResource(line.text, *args.toTypedArray())
+}
+
+/** The lines of a destination's proxy (ADR 0052), as [proxyRow] chose them. */
+@Composable
+internal fun ProxyLines(lines: List<ProxyLine>) {
+    for (line in lines) Text(lineText(line), style = MaterialTheme.typography.bodySmall)
 }
 
 /** "What this view cannot see" (ADR 0046, decision 5), in plain words at the end of "Now". */

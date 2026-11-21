@@ -225,9 +225,10 @@ internal object Engine {
     /**
      * The messengers' apps whose built-in proxies the engine infers, each UID of [uids] of the family at the same
      * place in [families] (0 Telegram, 1 WhatsApp, 2 Signal), and the proxies Android's setting names, one `host port`
-     * a line in [android] (W8, part 2a, ADR 0052). Kept for the engines to come, as the chain is.
+     * a line in [android] (W8, part 2a, ADR 0052), and whether Private DNS is strict on Watch's network ([strictDns]),
+     * which hides the apps' lookups from Watch. Kept for the engines to come, as the chain is.
      */
-    external fun nativeProxies(families: IntArray, uids: IntArray, android: String)
+    external fun nativeProxies(families: IntArray, uids: IntArray, android: String, strictDns: Boolean)
 
     /** The messengers' client packages the engine's table holds (`data/messengers`), one `family package` a line. */
     external fun nativeMessengerClients(): String

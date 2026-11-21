@@ -39,6 +39,18 @@ object TrackerMarks {
         data class SameCompany(val name: String) : Mark
     }
 
+    /**
+     * Each tracker of `exodus/trackers.tsv` (six tab-separated columns: id, name, code signature, website, ...) by its
+     * id, as a match of no alternative: for the trackers the engine matched on a proxied flow's names before it left
+     * them out (ADR 0052), which it keeps by id alone.
+     */
+    fun byId(table: String): Map<Int, Match> = table.lineSequence()
+        .filter { it.isNotBlank() && !it.startsWith("#") }
+        .map { it.split('\t') }
+        .filter { it.size >= 6 }
+        .mapNotNull { columns -> columns[0].toIntOrNull()?.let { it to Match(it, columns[1], columns[3], "") } }
+        .toMap()
+
     /** The matches of one line of `Engine.nativeTrackersOf`: `id␟name␟website␟alternative`, tab-separated. */
     fun parse(line: String): List<Match> = line.split('\t').filter { it.isNotEmpty() }.mapNotNull { entry ->
         val fields = entry.split('\u001f')

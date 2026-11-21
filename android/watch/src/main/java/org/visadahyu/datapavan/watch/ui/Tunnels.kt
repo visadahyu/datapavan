@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -156,7 +157,13 @@ internal fun shownName(name: TunnelStore.Name?): String = when (name) {
  * shown only on the confirmation.
  */
 @Composable
-internal fun TunnelsSection(view: TunnelsView, actions: TunnelActions, leftOut: Set<String>) {
+internal fun TunnelsSection(
+    view: TunnelsView,
+    actions: TunnelActions,
+    leftOut: Set<String>,
+    /** Brings the switch "Log where apps connect ..." into view, where the screen does so here for a row's link. */
+    logSwitch: BringIntoViewRequester? = null,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.semantics { testTagsAsResourceId = true }) {
         Text(
             stringResource(R.string.tunnels_title),
@@ -218,10 +225,12 @@ internal fun TunnelsSection(view: TunnelsView, actions: TunnelActions, leftOut: 
         if (view.photoDeleted && !view.reading) {
             Text(stringResource(R.string.qr_photo_deleted), style = MaterialTheme.typography.bodyMedium)
         }
+        // The one switch (LogSwitch), here while a configuration exists; its note says all it covers.
         if (view.configurations.isNotEmpty()) {
-            Switching(stringResource(R.string.chain_log_destinations), view.logDestinations, actions.onLogDestinations)
-            Text(stringResource(R.string.chain_log_destinations_note), style = MaterialTheme.typography.bodyMedium)
-            Text(stringResource(R.string.tunnels_log_note), style = MaterialTheme.typography.bodyMedium)
+            Column(Modifier.bringingIntoView(logSwitch), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Switching(stringResource(R.string.log_switch), view.logDestinations, actions.onLogDestinations)
+                Text(stringResource(R.string.log_switch_note), style = MaterialTheme.typography.bodyMedium)
+            }
         }
     }
 }

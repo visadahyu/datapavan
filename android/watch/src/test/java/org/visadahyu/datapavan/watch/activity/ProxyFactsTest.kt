@@ -59,32 +59,85 @@ class ProxyFactsTest {
         assertEquals("[2001:db8:0:0:0:0:0:7]:8443", unknown.asked)
     }
 
+    /**
+     * A plain request in a proxy's absolute form is its own kind, never an HTTP proxy's: nothing confirms the server is
+     * one (fix round of W8 part 2a). With the switch off it keeps its server and leaves out only what it asked for.
+     */
+    @Test
+    fun aPlainRequestIsNotCalledAProxy() {
+        val asked = ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_FORWARD, asked = "example.org", askedPort = 80), hetzner, 8080)
+        assertEquals(ProxyFacts.Kind.REQUEST to true, asked.kind to asked.declared)
+        assertEquals("example.org:80" to false, asked.asked to asked.askedLeftOut)
+        val off = ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_FORWARD), hetzner, 8080)
+        assertEquals(true to "203.0.113.5:8080", off.kept to off.at)
+        assertEquals(true, off.askedLeftOut)
+        // A CONNECT's reply confirmed it: an HTTP proxy, whose destination asked for is never "left out" this way.
+        assertEquals(false, ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_CONNECT), hetzner, 3128).askedLeftOut)
+    }
+
+    /** What the engine left out for the switch is read from its flag, never from an address of zeros (fix round). */
     @Test
     fun aProxyWhoseDestinationIsNotKeptShowsItsKindAlone() {
-        val facts = ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_SOCKS4, password = true), InetAddress.getByName("0.0.0.0"), 0)
+        val zeros = InetAddress.getByName("0.0.0.0")
+        val facts = ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_SOCKS4, password = true, leftOut = true), zeros, 0)
         assertEquals(false to "", facts.kept to facts.at)
         assertEquals(ProxyFacts.Kind.SOCKS4 to true, facts.kind to facts.password)
+        // Left out at a real address, and kept at one of zeros: the flag decides.
+        assertEquals(false, ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_MTPROTO, leftOut = true), hetzner, 443).kept)
+        assertEquals(true, ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_SOCKS4), zeros, 0).kept)
     }
 
     /**
-     * The strings of apps' own proxies keep ADR 0025's words (decision 4: no word that judges or implies intent) and
-     * the brief's: never "operator", never "proxy-like", and how Watch knows is always said.
+     * The strings of apps' own proxies, and of the switch they follow with the rows that name it, keep ADR 0025's words
+     * (decision 4: no word that judges or implies intent) and the brief's: never "operator", never "proxy-like", no
+     * intent ("look like", "disguise", "pretend", "fake", "hide"; screens review M2 of W8 part 2a), and how Watch knows
+     * is always said; and the rows quote the switch's label word for word.
      */
     @Test
     fun theProxyStringsUseNoWordThatJudges() {
         val strings = File("src/main/res/values/strings_untranslated.xml").readText() + File("src/main/res/values/strings.xml").readText()
-        val proxy = Regex("""<string name="(proxy_[a-z_]+|now_proxy_hidden|history_proxy_hidden|cannot_see_proxy|now_named_proxy)">([^<]*)</string>""")
+        val names = "proxy_[a-z_]+|(?:now|history)_proxy_[a-z_]+|cannot_see_proxy|now_named_proxy|log_switch[a-z_]*|(?:now|history)_[a-z_]+_off"
+        val proxy = Regex("""<string name="($names)">([^<]*)</string>""")
             .findAll(strings).associate { it.groupValues[1] to it.groupValues[2].lowercase() }
-        assertTrue(proxy.keys.toString(), proxy.size >= 18)
+        assertTrue(proxy.keys.toString(), proxy.size >= 38)
         val judging = listOf(
             "suspicious", "unusual", "abnormal", "excessive", "leak", "spying", "secretly", "malicious", "threat", "risk",
             "normal", "expected", "safe", "operator", "proxy-like", "hidden", "dangerous", "illegal",
+            "look like", "looks like", "disguise", "pretend", "fake", "hide",
         )
         for ((name, text) in proxy) {
             for (word in judging) assertTrue("$name: $word", !Regex("\\b${Regex.escape(word)}").containsMatchIn(text))
         }
         assertTrue(proxy.getValue("proxy_asked").contains("read from the connection"))
+        assertTrue(proxy.getValue("proxy_declared").contains("read from the connection"))
+        assertTrue(proxy.getValue("proxy_request_asked").contains("read from the connection"))
+        assertEquals("read from the connection.", proxy.getValue("proxy_how_read"))
         assertTrue(proxy.getValue("proxy_inferred").contains("inferred from where and how it connects"))
+        assertEquals("inferred from where and how it connects.", proxy.getValue("proxy_how_inferred"))
         assertTrue(proxy.getValue("proxy_network").contains("who runs it is not known"))
+        assertEquals(
+            "its connection sent the name %1\$s. no dns answer watch passed gave that name this address.",
+            proxy.getValue("proxy_cover"),
+        )
+        // "Own" goes from the proxy rows: Android's setting is no app's own (screens review M3).
+        for (name in proxy.keys.filter { "proxy_" in it && it.endsWith("_hidden") }) {
+            assertTrue(name, !Regex("\\bown\\b").containsMatchIn(proxy.getValue(name)))
+        }
+        // Every row that names the switch names it as it reads.
+        val label = proxy.getValue("log_switch")
+        val naming = proxy.filterValues { "\\\"" in it }
+        assertTrue(naming.keys.toString(), naming.size >= 13)
+        for ((name, text) in naming) assertTrue(name, text.contains("\\\"$label\\\""))
+    }
+
+    /** A release's dump writes the proxies' six counters as "-", in their places; a debuggable build's, all (S-m5). */
+    @Test
+    fun aReleaseDumpLeavesTheProxiesCountersOut() {
+        val counters = LongArray(67) { it.toLong() }
+        val release = ProxyFacts.dumpedCounters(counters, debuggable = false)
+        assertEquals(67, release.size)
+        assertEquals(List(6) { "-" }, release.subList(61, 67))
+        assertEquals("60", release[60])
+        assertEquals(counters.map { it.toString() }, ProxyFacts.dumpedCounters(counters, debuggable = true))
     }
 }

@@ -89,4 +89,19 @@ class TrackerMarksTest {
         assertEquals("Alphabet Inc.", companies.name("alphabet"))
         assertEquals("unknown", companies.name("unknown"))
     }
+
+    /**
+     * The trackers the engine kept of a proxied flow, by id alone (ADR 0052), are read from the same table: a tracker
+     * by its name and website, with no alternative, so that one company's several still make one mark.
+     */
+    @Test
+    fun trackersKeptByIdAreReadFromTheTable() {
+        val table = "# εxodus\n49\tGoogle AdMob\t\thttps://admob.google.com\t\tadmob\\.com\n" +
+            "312\tFacebook Ads\t\t$facebook\t\t\\.facebook\\.com\n313\tFacebook Login\t\t$facebook\t\t\\.facebook\\.com\nbroken\n"
+        val byId = TrackerMarks.byId(table)
+        assertEquals(setOf(49, 312, 313), byId.keys)
+        assertEquals(Match(49, "Google AdMob", "https://admob.google.com", ""), byId[49])
+        val marks = TrackerMarks.marks(listOfNotNull(byId[312], byId[313]), null, { companies.groupOfWebsite(it.website) }, { companies.name(it) })
+        assertEquals(listOf<Mark>(Mark.Company("Meta Platforms, Inc.")), marks)
+    }
 }

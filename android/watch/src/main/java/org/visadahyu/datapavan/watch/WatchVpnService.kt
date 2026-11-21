@@ -30,6 +30,7 @@ import kotlin.random.Random
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.visadahyu.datapavan.watch.activity.ProxyFacts
 import org.visadahyu.datapavan.watch.log.ConnectionLog
 import org.visadahyu.datapavan.watch.log.LogRecord
 
@@ -232,7 +233,9 @@ class WatchVpnService : VpnService() {
      */
     private val ownNetwork = object : ConnectivityManager.NetworkCallback() {
         override fun onLinkPropertiesChanged(network: Network, properties: LinkProperties) {
+            val was = dnsState.value
             dnsState.value = PrivateDns.of(properties)
+            if ((was is PrivateDns.Strict) != (dnsState.value is PrivateDns.Strict)) main.post { if (active) applyProxies() }
         }
     }
 
@@ -416,6 +419,9 @@ class WatchVpnService : VpnService() {
             messengers.map { it.first }.toIntArray(),
             messengers.map { it.second }.toIntArray(),
             android.joinToString("\n"),
+            // With Private DNS strict, Android's resolver asks its provider over TLS: Watch sees no app's lookups,
+            // and a messenger's hello no answer tied is no evidence of its proxy (ADR 0052, fix round's S-M3).
+            dnsState.value is PrivateDns.Strict,
         )
     }
 
@@ -962,10 +968,14 @@ class WatchVpnService : VpnService() {
             // This build has no table: flows that nothing else names stay unnamed.
             Log.i(TAG, "No table from address to organisation in this build")
         }
-        return Engine.nativeStart(
+        val started = Engine.nativeStart(
             this, fd, mtu, if (debuggable) KEPT_FLOWS else 0, tableFd, tableStart, tableLength,
             spareAddresses = addresses === TunnelAddresses.SPARE,
         )
+        // The trackers' table, off the main thread, for the marks a proxied flow keeps while its names are left out
+        // (ADR 0052): "Now" reads it again when it opens.
+        if (started) measuring.execute { NowActivity.loadTables(this) }
+        return started
     }
 
     private fun stop() {
@@ -1174,7 +1184,7 @@ class WatchVpnService : VpnService() {
         writer.println("addresses ${addresses.name} ${addresses.tun4} ${addresses.dns4} ${addresses.tun6} ${addresses.dns6}")
         writer.println("mtu $mtu first-hop ${firstHops.first ?: "-"} ${firstHops.second ?: "-"}")
         writer.println("setups kept $setupsKept anew $setupsAnew")
-        writer.println("counters ${Engine.nativeCounters().joinToString(" ")}")
+        writer.println("counters ${ProxyFacts.dumpedCounters(Engine.nativeCounters(), debuggable).joinToString(" ")}")
         writer.println("counters-since $countersSince")
         writer.println("organisations ${Engine.nativeOrganisations().ifEmpty { "none" }}")
         val log = ConnectionLog.of(this)

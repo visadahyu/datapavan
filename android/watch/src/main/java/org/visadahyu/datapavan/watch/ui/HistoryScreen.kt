@@ -61,7 +61,8 @@ internal data class HistoryView(
  * first, each segment's time, destination (both names), bytes and state. The log opens only on an unlocked
  * phone (ADR 0037): each of its lock states is said plainly. With retention "none" there is no history, and
  * the screen says how to keep one. Records older than the app now holding the UID belong to an app since
- * removed, and are counted apart.
+ * removed, and are counted apart. A segment the switch "Log where apps connect ..." left out says why, by its
+ * recorded route and proxy ([History.leftOut]), and links to the switch ([onLogSwitch]).
  */
 @Composable
 internal fun HistoryScreen(
@@ -73,6 +74,7 @@ internal fun HistoryScreen(
     onClose: () -> Unit,
     /** The WireGuard configurations' names by tunnel number (W7, part 2). */
     tunnelNames: Map<Long, String> = emptyMap(),
+    onLogSwitch: () -> Unit = {},
 ) {
     val context = LocalContext.current
     // The phone's own choice of a 12- or 24-hour clock (review c1 of W5's third part, screens, nit 6).
@@ -147,43 +149,42 @@ internal fun HistoryScreen(
                     } else {
                         null
                     }
-                    val proxy = entry.proxy?.let {
-                        proxyFacts(it, java.net.InetAddress.getByName(entry.address.ifEmpty { "0.0.0.0" }), entry.port, entry.asn, appGroup, companies)
-                    }
-                    if (proxy != null && !proxy.kept) {
-                        // An app's own proxy while "Log where these apps connect" was off: its kind alone (ADR 0052).
-                        Text(stringResource(R.string.history_proxy_hidden, stringResource(proxyKind(proxy.kind))), style = MaterialTheme.typography.bodyMedium)
-                        ProxyLines(proxy)
-                        Text(
-                            stringResource(R.string.now_destination_bytes, size(context, entry.sent), size(context, entry.received)),
-                            style = MaterialTheme.typography.bodySmall,
+                    val proxy = entry.proxy?.let { proxyFacts(it, entry.ip, entry.port, entry.asn, appGroup, companies) }
+                    val bytes = stringResource(R.string.now_destination_bytes, size(context, entry.sent), size(context, entry.received))
+                    when (val why = History.leftOut(entry, view.tool)) {
+                        // A proxy's flow the engine left out for the switch: its kind, how Watch knows, and the
+                        // facts that name nothing (ADR 0052).
+                        History.LeftOut.PROXY -> HiddenProxy(
+                            proxyRow(checkNotNull(proxy), past = true), bytes, onLogSwitch,
+                            marksOf(emptyList(), appGroup, trackers, companies, entry.proxy?.trackers.orEmpty()),
                         )
-                    } else if (entry.unlogged) {
-                        // No destination was logged: say why, as "Now" does, never show zeros as one (M3).
-                        Text(
-                            when {
-                                tunnel != null -> stringResource(R.string.history_through_tunnel, tunnel)
-                                view.tool -> stringResource(R.string.history_tool_hidden)
-                                else -> stringResource(R.string.history_through_tool)
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            stringResource(R.string.now_destination_bytes, size(context, entry.sent), size(context, entry.received)),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    } else {
-                        val hosts = listOf(entry.name, entry.dnsName, entry.address).filter { it.isNotEmpty() }.map { "$it\t${entry.port}" }
-                        Place(
-                            name = entry.name.ifEmpty { entry.address },
-                            dnsName = entry.dnsName,
-                            namedBy = entry.namedBy,
-                            organisation = "",
-                            marks = marksOf(hosts, appGroup, trackers, companies),
-                            bytes = stringResource(R.string.now_destination_bytes, size(context, entry.sent), size(context, entry.received)),
-                            through = tunnel,
-                            proxy = proxy,
-                        )
+                        null -> {
+                            val hosts = listOf(entry.name, entry.dnsName, entry.address).filter { it.isNotEmpty() }.map { "$it\t${entry.port}" }
+                            Place(
+                                name = entry.name.ifEmpty { entry.address },
+                                dnsName = entry.dnsName,
+                                namedBy = entry.namedBy,
+                                organisation = "",
+                                marks = marksOf(hosts, appGroup, trackers, companies, entry.proxy?.trackers.orEmpty()),
+                                bytes = bytes,
+                                through = tunnel,
+                                proxy = proxy?.let { proxyRow(it, past = true) },
+                                onLogSwitch = onLogSwitch,
+                            )
+                        }
+                        // No destination was logged: say why, as "Now" does, never show zeros as one (M3), and never
+                        // that it went through the tool where its recorded route says otherwise.
+                        else -> {
+                            Text(
+                                when (why) {
+                                    History.LeftOut.TUNNEL -> stringResource(R.string.history_through_tunnel_off, tunnel.orEmpty())
+                                    else -> stringResource(leftOutWords(why))
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Text(bytes, style = MaterialTheme.typography.bodySmall)
+                            LogSwitchLink(onLogSwitch)
+                        }
                     }
                     Text(stringResource(R.string.history_state, stateName(entry.state)), style = MaterialTheme.typography.bodyMedium)
                     if (org.visadahyu.datapavan.watch.log.AppState.why(entry.state) != 0) {
@@ -194,6 +195,17 @@ internal fun HistoryScreen(
             }
         }
     }
+}
+
+/**
+ * The words of a segment the switch left out, by why ([History.leftOut]); a tunnel's take its name, and a proxy's
+ * are its row's (proxyRow). Only a recorded route through the tool says it went through the tool.
+ */
+internal fun leftOutWords(why: History.LeftOut): Int = when (why) {
+    History.LeftOut.THROUGH_TOOL -> R.string.history_through_tool_off
+    History.LeftOut.DIRECT -> R.string.history_direct_off
+    History.LeftOut.TUNNEL -> R.string.history_through_tunnel_off
+    History.LeftOut.PROXY, History.LeftOut.TOOL_SERVERS, History.LeftOut.NO_ROUTE -> R.string.history_left_out_off
 }
 
 /** How long the log keeps its records and how it keeps them shut, as Watch's screen says it (ADR 0037). */

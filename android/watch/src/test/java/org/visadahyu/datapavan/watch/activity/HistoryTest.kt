@@ -80,6 +80,33 @@ class HistoryTest {
         )
     }
 
+    /**
+     * Fix round of W8 part 2a: a segment with no destination says why from its recorded route and proxy. A flow left
+     * out for an app's own proxy is told apart from one sent through the tool; only a route through the tool says it
+     * went through the tool, never a direct one or one of a record that kept no route; the proxy's own flag decides,
+     * never an address of zeros; and the address is read once, here.
+     */
+    @Test
+    fun aSegmentWithNoDestinationSaysWhyByItsRoute() {
+        val zeros = segment(app, t + 1_000, t + 2_000, name = "").copy(address = InetAddress.getByAddress(ByteArray(4)))
+        fun why(segment: LogRecord.Segment, tool: Boolean = false) =
+            History.leftOut(History.day(20_775, listOf(segment), app, installedAt = t).entries.single(), tool)
+        val proxied = zeros.copy(proxy = LogRecord.Proxy(LogRecord.PROXY_MTPROTO, outsideMaker = true, leftOut = true))
+        assertEquals(History.LeftOut.PROXY, why(proxied))
+        assertEquals(History.LeftOut.THROUGH_TOOL, why(zeros.copy(via = LogRecord.VIA_TOOL)))
+        assertEquals(History.LeftOut.DIRECT, why(zeros.copy(via = LogRecord.VIA_DIRECT)))
+        assertEquals(History.LeftOut.TUNNEL, why(zeros.copy(via = LogRecord.VIA_TUNNEL, tunnel = 2)))
+        assertEquals(History.LeftOut.NO_ROUTE, why(zeros.copy(via = LogRecord.VIA_UNKNOWN)))
+        assertEquals(History.LeftOut.TOOL_SERVERS, why(zeros.copy(via = LogRecord.VIA_DIRECT), tool = true))
+        // A proxy's flow kept, the switch on, shows its own destination; at an address of zeros all the same, its flag
+        // says it was not left out for an app's own proxy.
+        assertEquals(null, why(segment(app, t + 1_000, t + 2_000).copy(proxy = LogRecord.Proxy(LogRecord.PROXY_SOCKS5))))
+        assertEquals(History.LeftOut.DIRECT, why(zeros.copy(proxy = LogRecord.Proxy(LogRecord.PROXY_SOCKS5))))
+        assertEquals(null, why(segment(app, t + 1_000, t + 2_000)))
+        val entry = History.day(20_775, listOf(segment(app, t + 1_000, t + 2_000)), app, installedAt = t).entries.single()
+        assertEquals(InetAddress.getByName("192.0.2.1") to "192.0.2.1", entry.ip to entry.address)
+    }
+
     /** The days the log keeps, today first; none with retention "none". */
     @Test
     fun theDaysAreThoseTheLogKeeps() {

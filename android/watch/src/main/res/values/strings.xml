@@ -87,10 +87,6 @@
     <string name="chain_password_value">Password: %1$s</string>
     <!-- A button: copy the password, to paste it in the tool. -->
     <string name="chain_copy">Copy the password</string>
-    <!-- A switch, off unless the user turns it on. -->
-    <string name="chain_log_destinations">Log where these apps connect</string>
-    <!-- Under the switch above. -->
-    <string name="chain_log_destinations_note">Off unless you turn it on. Watch still counts their connections. A list of where they went can be used against you if someone searches your phone.</string>
     <!-- The found tool's signing key (W6), the audit app's own words (ADR 0018). -->
     <string name="signature_genuine_developer">Genuine copy of %1$s, signed by its developer.</string>
     <string name="signature_genuine_google">Genuine copy of %1$s, signed by Google Play for its developer.</string>
@@ -172,9 +168,7 @@
     <string name="now_why_late">Watch learned the state too late.</string>
     <string name="now_why_no_app">Android did not say which app it was.</string>
     <string name="now_why_not_told">Watch had not read the state yet, or had stopped.</string>
-    <string name="now_through_tool">Sent through your circumvention tool. Where it connected is not shown, because \"Log where these apps connect\" is off.</string>
     <string name="now_is_tool">Your circumvention tool. Its traffic includes the traffic of the apps you send through it.</string>
-    <string name="now_tool_hidden">Where it connects is not shown, because \"Log where these apps connect\" is off.</string>
     <string name="now_history">See its history</string>
 
     <!-- A destination: where its name came from, and what is known of it. -->
@@ -208,8 +202,6 @@
     <!-- Each app's history. -->
     <string name="history_title">History of %1$s</string>
     <string name="history_back">Back to Now</string>
-    <string name="history_through_tool">Sent through your circumvention tool. Where it connected was not logged, because \"Log where these apps connect\" was off.</string>
-    <string name="history_tool_hidden">Where it connected was not logged, because \"Log where these apps connect\" was off.</string>
     <string name="history_intro">Each connection Watch kept for this app, newest first, one day at a time.</string>
     <string name="history_keep">To keep a history, choose how many days to keep records in Watch\'s screen.</string>
     <string name="history_nothing_yet">Nothing has been kept yet.</string>
@@ -281,8 +273,6 @@
     <!-- A switch for one configuration (ADR 0035, question 8). -->
     <string name="tunnels_local">Local network directly</string>
     <string name="tunnels_local_note">When on, its apps reach printers and other devices on your own network directly, not through the server.</string>
-    <!-- The same switch as the chain's, which governs both. -->
-    <string name="tunnels_log_note">This switch also covers apps you send through your circumvention tool.</string>
 
     <!-- The notification while configurations that open only on an unlocked phone wait for the unlock (ADR 0047's
          profile). It names no provider and no configuration, on the lock screen or off it. -->
@@ -444,9 +434,7 @@
     </plurals>
 
     <!-- "Now" and each app's history: an app sent through a WireGuard configuration. %1$s: its name. -->
-    <string name="now_through_tunnel">Sent through %1$s. Where it connected is not shown, because \"Log where these apps connect\" is off.</string>
     <string name="now_destination_tunnel">Through %1$s</string>
-    <string name="history_through_tunnel">Sent through %1$s. Where it connected was not logged, because \"Log where these apps connect\" was off.</string>
     <!-- In place of a configuration's name: inside the sentences above, and also alone as a configuration's heading and in its buttons' and rows' labels, so it must read well on its own too. -->
     <string name="tunnel_removed_name">a WireGuard configuration since removed</string>
     <string name="tunnel_closed_name">a WireGuard configuration that cannot be opened now</string>

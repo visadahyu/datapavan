@@ -52,8 +52,6 @@
     <string name="chain_user">اسم المستخدم: %1$s</string>
     <string name="chain_password_value">كلمة المرور: %1$s</string>
     <string name="chain_copy">نسخ كلمة المرور</string>
-    <string name="chain_log_destinations">تسجيل الجهات التي تتصل بها هذه التطبيقات</string>
-    <string name="chain_log_destinations_note">متوقف ما لم تشغّله. يواصل Watch عدّ اتصالاتها. قائمة الجهات التي اتصلت بها يمكن أن تُستخدم ضدك إذا فتّش أحد هاتفك.</string>
     <!-- The found tool's signing key (W6), the audit app's own words (ADR 0018). -->
     <string name="signature_genuine_developer">نسخة أصلية من %1$s، موقَّعة من مطوّرها.</string>
     <string name="signature_genuine_google">نسخة أصلية من %1$s، موقَّعة من Google Play نيابةً عن مطوّرها.</string>
@@ -143,9 +141,7 @@
     <string name="now_why_late">علم Watch بالحالة بعد فوات الأوان.</string>
     <string name="now_why_no_app">لم يحدّد Android أيّ تطبيق هو.</string>
     <string name="now_why_not_told">لم يكن Watch قد قرأ الحالة بعد، أو كان قد توقف.</string>
-    <string name="now_through_tool">أُرسل عبر أداتك لتجاوز الحجب. لا تظهر الجهات التي اتصل بها، لأن «تسجيل الجهات التي تتصل بها هذه التطبيقات» متوقف.</string>
     <string name="now_is_tool">أداتك لتجاوز الحجب. تشمل حركة بياناتها حركة بيانات التطبيقات التي تمرّرها عبرها.</string>
-    <string name="now_tool_hidden">لا تظهر الجهات التي تتصل بها، لأن «تسجيل الجهات التي تتصل بها هذه التطبيقات» متوقف.</string>
     <string name="now_history">عرض سجله الزمني</string>
 
     <!-- A destination: where its name came from, and what is known of it. -->
@@ -183,8 +179,6 @@
     <!-- Each app's history. -->
     <string name="history_title">السجل الزمني لـ %1$s</string>
     <string name="history_back">العودة إلى «Now»</string>
-    <string name="history_through_tool">أُرسل عبر أداتك لتجاوز الحجب. لم تُسجَّل الجهات التي اتصل بها، لأن «تسجيل الجهات التي تتصل بها هذه التطبيقات» كان متوقفًا.</string>
-    <string name="history_tool_hidden">لم تُسجَّل الجهات التي اتصل بها، لأن «تسجيل الجهات التي تتصل بها هذه التطبيقات» كان متوقفًا.</string>
     <string name="history_intro">كل اتصال احتفظ به Watch لهذا التطبيق، الأحدث أولًا، يومًا بيوم.</string>
     <string name="history_keep">للاحتفاظ بسجل زمني، اختر في شاشة Watch عدد أيام الاحتفاظ بالسجلات.</string>
     <string name="history_nothing_yet">لم يُحتفظ بأي شيء بعد.</string>
@@ -276,8 +270,6 @@
     <!-- A switch for one configuration (ADR 0035, question 8). -->
     <string name="tunnels_local">الشبكة المحلية مباشرةً</string>
     <string name="tunnels_local_note">عند تشغيله، تصل تطبيقاته إلى الطابعات والأجهزة الأخرى في شبكتك مباشرةً، لا عبر الخادم.</string>
-    <!-- The same switch as the chain's, which governs both. -->
-    <string name="tunnels_log_note">يشمل هذا الخيار أيضًا التطبيقات التي تمرّرها عبر أداتك لتجاوز الحجب.</string>
 
     <!-- The notification while configurations that open only on an unlocked phone wait for the unlock (ADR 0047's
          profile). It names no provider and no configuration, on the lock screen or off it. -->
@@ -463,9 +455,7 @@
     </plurals>
 
     <!-- "Now" and each app's history: an app sent through a WireGuard configuration. %1$s: its name. -->
-    <string name="now_through_tunnel">أُرسل عبر %1$s. لا تظهر الجهات التي اتصل بها، لأن «تسجيل الجهات التي تتصل بها هذه التطبيقات» متوقف.</string>
     <string name="now_destination_tunnel">عبر %1$s</string>
-    <string name="history_through_tunnel">أُرسل عبر %1$s. لم تُسجَّل الجهات التي اتصل بها، لأن «تسجيل الجهات التي تتصل بها هذه التطبيقات» كان متوقفًا.</string>
     <!-- In place of a configuration's name: inside the sentences above, and also alone as a configuration's heading and in its buttons' and rows' labels, so it must read well on its own too. -->
     <string name="tunnel_removed_name">تكوين WireGuard مُزال</string>
     <string name="tunnel_closed_name">تكوين WireGuard لا يمكن فتحه الآن</string>

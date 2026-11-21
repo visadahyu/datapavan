@@ -1,5 +1,6 @@
 package org.visadahyu.datapavan.watch.activity
 
+import java.net.InetAddress
 import org.visadahyu.datapavan.watch.log.LogRecord
 
 /**
@@ -26,10 +27,11 @@ object History {
         /** Whether the connection went on after this segment. */
         val continues: Boolean,
         /**
-         * Whether the log keeps no destination of it: an app chained through the user's tool, or the tool's own
-         * servers, while "Log where these apps connect" was off. The engine writes such a segment with no name
-         * and an address of zeros (0.0.0.0 or ::), which is no destination (review c1 of W5's third part,
-         * screens, M3: the history showed it as one).
+         * Whether the log keeps no destination of it, while the switch "Log where apps connect ..." was off: an app
+         * sent through the user's tool or a tunnel, the tool's own servers, or a flow of such an app that went
+         * directly ([leftOut] tells them apart). The engine writes such a segment with no name and an address of
+         * zeros (0.0.0.0 or ::), which is no destination (review c1 of W5's third part, screens, M3: the history
+         * showed it as one); an app's own proxy says so itself ([LogRecord.Proxy.leftOut]).
          */
         val unlogged: Boolean = false,
         /** Its route, as the log codes it ([LogRecord.VIA_DIRECT] and the others), and for a tunnel its number (W7). */
@@ -41,7 +43,37 @@ object History {
          */
         val proxy: LogRecord.Proxy? = null,
         val asn: Long = 0,
+        /** [address] as the record held it, read once here, not while the screen draws (screens review, nit). */
+        val ip: InetAddress = ANY,
     )
+
+    /**
+     * Why a segment shows no destination (fix round of W8 part 2a): an app's own proxy whose flow the engine left out
+     * for the switch ([PROXY]); a flow sent through a WireGuard tunnel ([TUNNEL]); the user's tool's own servers
+     * ([TOOL_SERVERS]); a flow sent through the tool ([THROUGH_TOOL]), only where its recorded route says so; a flow
+     * of an app sent through the tool or a tunnel that went directly all the same ([DIRECT]: one opened before the
+     * app was sent through them, its local network, or what the tool does not carry); and a record written before
+     * routes were logged ([NO_ROUTE]), which says nothing of the way it went.
+     */
+    enum class LeftOut { PROXY, TUNNEL, TOOL_SERVERS, THROUGH_TOOL, DIRECT, NO_ROUTE }
+
+    /**
+     * Why [entry] shows no destination, or null for one that shows its own; [tool] is whether its app is the user's
+     * tool. A proxy's flow is told by its own flag, never by an address of zeros, and a flow is said to have gone
+     * through the tool only where its recorded route is the tool's.
+     */
+    fun leftOut(entry: Entry, tool: Boolean): LeftOut? = when {
+        entry.proxy?.leftOut == true -> LeftOut.PROXY
+        !entry.unlogged -> null
+        entry.via == LogRecord.VIA_TUNNEL -> LeftOut.TUNNEL
+        tool -> LeftOut.TOOL_SERVERS
+        entry.via == LogRecord.VIA_TOOL -> LeftOut.THROUGH_TOOL
+        entry.via == LogRecord.VIA_DIRECT -> LeftOut.DIRECT
+        else -> LeftOut.NO_ROUTE
+    }
+
+    /** The address of zeros, for an entry made without one. */
+    private val ANY: InetAddress = InetAddress.getByAddress(ByteArray(4))
 
     /**
      * One day of an app's history: its segments, newest first; how many names it looked up through Watch's
@@ -68,6 +100,7 @@ object History {
                     tunnel = it.tunnel,
                     proxy = it.proxy,
                     asn = it.asn,
+                    ip = it.address,
                 )
             }
             .sortedWith(compareByDescending<Entry> { it.start }.thenByDescending { it.end })

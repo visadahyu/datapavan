@@ -48,8 +48,6 @@
     <string name="chain_user">نام کاربری: %1$s</string>
     <string name="chain_password_value">رمز عبور: %1$s</string>
     <string name="chain_copy">کپی کردن رمز عبور</string>
-    <string name="chain_log_destinations">ثبت مقصد اتصال این برنامه‌ها</string>
-    <string name="chain_log_destinations_note">تا آن را روشن نکنید، خاموش می‌ماند. سرویس Watch همچنان اتصال‌های آن‌ها را می‌شمارد. اگر کسی گوشی شما را بگردد، فهرست جاهایی که به آن‌ها وصل شده‌اند می‌تواند علیه شما به کار برود.</string>
     <!-- The found tool's signing key (W6), the audit app's own words (ADR 0018). -->
     <string name="signature_genuine_developer">نسخه اصل %1$s، با امضای توسعه‌دهنده‌اش.</string>
     <string name="signature_genuine_google">نسخه اصل %1$s، با امضای گوگل پلی از طرف توسعه‌دهنده‌اش.</string>
@@ -131,9 +129,7 @@
     <string name="now_why_late">سرویس Watch وضعیت را خیلی دیر فهمید.</string>
     <string name="now_why_no_app">اندروید نگفت کدام برنامه بود.</string>
     <string name="now_why_not_told">سرویس Watch هنوز وضعیت را نخوانده بود، یا متوقف شده بود.</string>
-    <string name="now_through_tool">از فیلترشکن شما فرستاده شد. اینکه به کجا وصل شد نشان داده نمی‌شود، چون «ثبت مقصد اتصال این برنامه‌ها» خاموش است.</string>
     <string name="now_is_tool">فیلترشکن شما. ترافیکش شامل ترافیک برنامه‌هایی است که از آن عبور می‌دهید.</string>
-    <string name="now_tool_hidden">اینکه به کجا وصل می‌شود نشان داده نمی‌شود، چون «ثبت مقصد اتصال این برنامه‌ها» خاموش است.</string>
     <string name="now_history">دیدن تاریخچه‌اش</string>
 
     <!-- A destination: where its name came from, and what is known of it. -->
@@ -167,8 +163,6 @@
     <!-- Each app's history. -->
     <string name="history_title">تاریخچهٔ %1$s</string>
     <string name="history_back">بازگشت به «Now»</string>
-    <string name="history_through_tool">از فیلترشکن شما فرستاده شد. اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد اتصال این برنامه‌ها» خاموش بود.</string>
-    <string name="history_tool_hidden">اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد اتصال این برنامه‌ها» خاموش بود.</string>
     <string name="history_intro">هر اتصالی که Watch برای این برنامه نگه داشته است، از تازه‌ترین به قدیمی‌ترین، هر بار یک روز.</string>
     <string name="history_keep">برای داشتن تاریخچه، در صفحهٔ Watch انتخاب کنید سابقه برای چند روز نگه داشته شود.</string>
     <string name="history_nothing_yet">هنوز چیزی نگه داشته نشده است.</string>
@@ -240,8 +234,6 @@
     <!-- A switch for one configuration (ADR 0035, question 8). -->
     <string name="tunnels_local">شبکهٔ محلی به‌صورت مستقیم</string>
     <string name="tunnels_local_note">وقتی روشن است، برنامه‌هایش مستقیم به چاپگرها و دستگاه‌های دیگر شبکهٔ خودتان وصل می‌شوند، نه از راه سرور.</string>
-    <!-- The same switch as the chain's, which governs both. -->
-    <string name="tunnels_log_note">این گزینه برنامه‌هایی را هم که از فیلترشکن شما عبور می‌دهید در بر می‌گیرد.</string>
 
     <!-- The notification while configurations that open only on an unlocked phone wait for the unlock (ADR 0047's
          profile). It names no provider and no configuration, on the lock screen or off it. -->
@@ -403,9 +395,7 @@
     </plurals>
 
     <!-- "Now" and each app's history: an app sent through a WireGuard configuration. %1$s: its name. -->
-    <string name="now_through_tunnel">از راه %1$s فرستاده شد. اینکه به کجا وصل شد نشان داده نمی‌شود، چون «ثبت مقصد اتصال این برنامه‌ها» خاموش است.</string>
     <string name="now_destination_tunnel">از راه %1$s</string>
-    <string name="history_through_tunnel">از راه %1$s فرستاده شد. اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد اتصال این برنامه‌ها» خاموش بود.</string>
     <!-- In place of a configuration's name: inside the sentences above, and also alone as a configuration's heading and in its buttons' and rows' labels, so it must read well on its own too. -->
     <string name="tunnel_removed_name">یک پیکربندی WireGuard که حذف شده است</string>
     <string name="tunnel_closed_name">یک پیکربندی WireGuard که الان باز نمی‌شود</string>
