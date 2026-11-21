@@ -60,6 +60,13 @@ project's own channels.
      stops the update until a person accepts it (decision 9's rule, as no licence file can be hashed). Compiled into
      Watch's engine, as the resolvers are, and left out of the audit app's payload.
 
+   - *(W8, part 3a, 2026-11-21)* the graded table of tracker SDKs' hosts (`data/blocking`: `hosts.tsv`,
+     `exceptions.tsv`, `waiting.tsv`; ADR 0053), facts read in the SDKs' own documentation and source at pinned commits
+     or tags, Tweasel's CC0 tracker wiki (trackers.tweasel.org) and the vendors' own firewall pages, each row with its
+     source and date. No row comes from DuckDuckGo's, Disconnect's or EasyPrivacy's lists, which are leads only; no
+     εxodus data is in it: a row joins its εxodus tracker at run time by its package prefix, a collective database
+     (ODbL 4.5a). In the signed pack; Watch reads it from the pack the audit verifies.
+
    Each entry records its source, such as a security report or a project's release page, and a date.
    Only facts are recorded, such as package names and certificate digests, and never text from the
    sources. These lists live in files apart from the εxodus data, so the two licences never mix

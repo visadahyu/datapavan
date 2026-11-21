@@ -6,6 +6,10 @@
   surfaces only; [ADR 0034](0034-watch-permissions.md), by one exported component (the widget), and its line on
   `PACKAGE_USAGE_STATS`; [ADR 0022](0022-network-use-and-unused-apps.md) decision 2, for Advanced only, which now
   reads the event stream (noted 2026-11-18); DESIGN.md's W5 row; the roadmap's line on the widget.
+- Amended by [ADR 0053](0053-tracker-blocking.md) (proposed, 2026-11-21): decision 4's "Trackers are named only from the
+  εxodus network signatures" becomes: εxodus names the tracker, and its hosts come from εxodus's signature or from
+  Datapavan's graded table with a primary source; decision 2 (d)'s same-company rule governs the εxodus marks, never a
+  row of that table.
 
 ## Context
 
