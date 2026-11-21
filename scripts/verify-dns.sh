@@ -93,6 +93,15 @@ lookup() {
 # Whether the lab's server $1 was asked the name $2 since the mark $3 (a count of its log's lines).
 asked() { tail -n +$(($3 + 1)) <<<"$("$LAB" log "$1" 2>/dev/null | tr -d '\000')" | grep -q "$2"; }
 mark() { "$LAB" log "$1" 2>/dev/null | tr -d '\000' | wc -l; }
+# Both lab targets' marks, and whether either was asked $1 since: the order of the pairs is learned per network and
+# the hedge asks the second after 400 ms, so which target a name reaches is a race, not a property (CI run
+# 44906315436). Only a step that leaves one pair (the key's rotation) names its target.
+target_marks() { echo "$(mark target-a) $(mark target-b)"; }
+asked_target() {
+    local a b
+    read -r a b <<<"$2"
+    asked target-a "$1" "$a" || asked target-b "$1" "$b"
+}
 fail() {
     echo "DNS CHECK FAILED: $*" >&2
     echo "Watch's DNS state:" >&2
@@ -251,7 +260,15 @@ echo "ok: the tunnel set up again, and the network's resolver saw none of the lo
 PRIVATE_MODE=$(adb shell settings get global private_dns_mode | tr -d '\r')
 adb shell settings put global private_dns_mode opportunistic
 sleep 3
-expect "with Private DNS on automatic, names still go by ODoH" "$(lookup probe.dnslab.test)" 10.53.1.1
+# Either lab pair, as in step 1: the second pair is asked after the hedge's 400 ms, and on CI's slower emulator its
+# target can answer first (CI run 44906315436); the property is that the name goes by ODoH, not which pair won.
+probe=$(lookup probe.dnslab.test)
+case "$probe" in
+    10.53.1.1 | 10.53.2.2) ;;
+    *) fail "with Private DNS on automatic, a name did not go by ODoH to a lab target: got '$probe', wanted 10.53.1.1 or 10.53.2.2" ;;
+esac
+[[ "$(way)" == odoh* ]] || fail "with Private DNS on automatic, Watch's way is not ODoH: $(way)"
+echo "ok: with Private DNS on automatic, names still go by ODoH ($probe)"
 # Watch's DNS addresses, of the set the tunnel took (ADR 0041): Android may try either family.
 read -r dns4 dns6 < <(sed -n 's/^ *addresses [^ ]* [^ ]* \([^ ]*\) [^ ]* \([^ ]*\)$/\1 \2/p' <<<"$(dump)")
 refused=0
@@ -332,7 +349,8 @@ for _ in $(seq 1 40); do
     sleep 3
 done
 [ -n "$climbed" ] || fail "the names did not climb back to ODoH once the ways answered"
-expect "Watch's way once the ways came back" "$(way)" "odoh lab-relay lab-target-a"
+[[ "$(way)" == "odoh lab-relay lab-target-"[ab] ]] || fail "Watch's way once the ways came back is not ODoH through a lab pair: $(way)"
+echo "ok: Watch's way once the ways came back ($(way))"
 sleep 1
 grep -q "id=7203" <<<"$(adb shell dumpsys notification --noredact | tr -d '\r')" && fail "the notification stayed after the fallback ended"
 echo "ok: the fallback ended and its notification went"
@@ -365,11 +383,11 @@ lookup "$name" >/dev/null
 echo "ok: port 853 blocked: the next way answers ($(way))"
 # "Only this resolver" (review R-M1): nothing else is asked, the network's resolver included.
 dump dns-only on >/dev/null
-target_mark=$(mark target-a)
+targets=$(target_marks)
 resolver_mark=$(mark resolver)
 name=$(fresh)
 expect "port 853 blocked, only this resolver: the app gets no address" "$(lookup "$name")" failed
-asked target-a "$name" "$target_mark" && fail "only this resolver: a target was asked $name"
+asked_target "$name" "$targets" && fail "only this resolver: a target was asked $name"
 asked resolver "$name" "$resolver_mark" && fail "only this resolver: the network's resolver saw $name"
 echo "ok: only this resolver: nothing else was asked ($(way))"
 dump dns-only off >/dev/null
@@ -417,7 +435,7 @@ fresh_resolver() {
 
 # 8. A WireGuard endpoint's name goes the encrypted way.
 fresh_resolver
-target_mark=$(mark target-a)
+targets=$(target_marks)
 resolver_mark=$(mark resolver)
 key=$(python3 -I -c 'import base64,os; print(base64.b64encode(os.urandom(32)).decode())')
 peer=$(python3 -I -c 'import base64,os; print(base64.b64encode(os.urandom(32)).decode())')
@@ -429,10 +447,10 @@ uid=$(adb shell cmd package list packages -U "$WORKLOAD" | tr -d '\r' | sed -n "
 dump tunnel-route "$uid" 9 >/dev/null
 adb shell am start -W -n "$WORKLOAD/.WorkActivity" --es udp 10.77.9.1:7 >/dev/null
 for _ in $(seq 1 15); do
-    asked target-a probe.dnslab.test "$target_mark" && break
+    asked_target probe.dnslab.test "$targets" && break
     sleep 1
 done
-asked target-a probe.dnslab.test "$target_mark" || fail "the endpoint's name did not go by ODoH"
+asked_target probe.dnslab.test "$targets" || fail "the endpoint's name did not go by ODoH"
 asked resolver probe.dnslab.test "$resolver_mark" && fail "the endpoint's name reached the network's resolver"
 state=$(sed -n 's/^ *tunnel 9 //p' <<<"$(dump)")
 echo "ok: the WireGuard endpoint's name went by ODoH, not to the network's resolver (tunnel state: $state)"
@@ -447,10 +465,10 @@ search=$(sed -n 's/^ *dns-search-set //p' <<<"$(dump dns-search "com,office.exam
 expect "the search domains Watch keeps of com and office.example" "$search" office.example
 for _ in $(seq 1 10); do grep -q "dns-search office.example" <<<"$(dump)" && break; sleep 1; done
 grep -q "dns-search office.example" <<<"$(dump)" || fail "the engine does not show the network's domain in use"
-target_mark=$(mark target-a)
+targets=$(target_marks)
 resolver_mark=$(mark resolver)
 expect "a name only the network knows, under its own domain" "$(lookup nas.office.example)" 192.168.1.60
-asked target-a nas.office.example "$target_mark" || fail "nas.office.example did not go the encrypted way first"
+asked_target nas.office.example "$targets" || fail "nas.office.example did not go the encrypted way first"
 asked resolver nas.office.example "$resolver_mark" || fail "nas.office.example did not reach the network's resolver"
 leak="leak-$RANDOM.example.com"
 expect "a name under com, which the network set as its domain" "$(lookup "$leak")" failed
