@@ -1,0 +1,11 @@
+SPDX-License-Identifier: CC0-1.0
+
+hosts.tsv, exceptions.tsv, waiting.tsv, SOURCE and coverage.py: the hosts that tracker SDKs send to, graded by
+what each host does, the vendors' own apps that keep a host for their own function, and the SDKs still waiting,
+compiled by the Datapavan project from the SDKs' own documentation and source code at pinned commits and tags,
+Tweasel's tracker wiki (https://trackers.tweasel.org/, published under CC0 1.0) and vendors' own firewall lists,
+and dedicated to the public domain under CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/). Only facts
+are recorded, never text from the sources. No row is copied from a blocklist (lists read as leads are named in
+SOURCE), and no εxodus data is in these files: the εxodus tracker database (data/exodus, ODbL) and its per-tracker
+statistics are read only at run time or by coverage.py, from a copy kept outside this repository. Recorded in
+ADR 0052 (W8 part 3a).
