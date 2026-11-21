@@ -2171,6 +2171,25 @@ mod tests {
             .proxy
             .unwrap_or_else(|| unreachable!("confirmed"));
         assert_eq!(proxy.trackers, vec![49], "the inner hello's name marks it");
+        // The destination asked for alone marks it.
+        let shared = engine(false);
+        with_trackers(&shared);
+        let (opened, bytes) = open(&shared, UID, at([203, 0, 113, 11], 3128));
+        relay_replied(
+            &shared,
+            opened,
+            &bytes,
+            &[b"CONNECT ads.tracker.example:443 HTTP/1.1\r\n\r\n"],
+            CONNECTED,
+        );
+        let proxy = live(&shared, opened.id)
+            .proxy
+            .unwrap_or_else(|| unreachable!("confirmed"));
+        assert_eq!(
+            proxy.trackers,
+            vec![49],
+            "the destination asked for marks it"
+        );
     }
 
     /// A plain request in absolute form cannot be confirmed: its flow keeps its own address and names whatever
@@ -2187,6 +2206,12 @@ mod tests {
                 &bytes,
                 &[b"GET http://example.org/a HTTP/1.1\r\n\r\n"],
             );
+            // Its seconds placed in "Now" before the switch changes.
+            shared.tell(&super::super::activity::tests::told(
+                T,
+                T + 1_000,
+                &[(T, T + 1_000, crate::states::State::InUse)],
+            ));
             let flow = live(&shared, opened.id);
             assert_eq!(flow.destination, at([203, 0, 113, 5], 8080));
             assert_eq!(
@@ -2249,6 +2274,11 @@ mod tests {
         inner.feed(&bytes);
         inner.feed(b"more");
         assert_eq!(inner.copied, 0);
+        // The request alone in one read, the inner stream's first bytes in the next.
+        let mut later = Sniff::new(true, false);
+        later.feed(b"CONNECT example.org:80 HTTP/1.1\r\n\r\n");
+        later.feed(b"GET / HTTP/1.1\r\nAuthorization: Basic aHVudGVy\r\n\r\n");
+        assert_eq!(later.copied, 0);
         let mut tls = Sniff::new(false, false);
         let hello = crate::tls::tests::hello("example.com", 1000);
         assert!(matches!(&tls.feed(&hello)[..], [Found::Hello(..)]));
@@ -2368,6 +2398,8 @@ mod tests {
         telegram(&before);
         let (main, bytes) = open(&before, UID, at([149, 154, 167, 51], 443));
         relay(&before, main, &bytes, &[&obfuscated()]);
+        // A minute later it is still open: it counts as the moment of the hand-over, not of its opening.
+        clock.pass(60_000);
         let instants = lock(&before.proxies).direct_instants(clock.since_boot());
         assert_eq!(
             instants,
@@ -2531,5 +2563,48 @@ mod tests {
         assert!(flow.proxy.is_none());
         assert_eq!(flow.name.as_deref(), Some("embed.example.net"));
         assert_eq!(shared.counters.snapshot()[66], 0, "no cover kept out");
+    }
+
+    /// A take-back rewrites the segments that still wait for their states (S-M2): cut at a quarter hour while the
+    /// flow was named a proxy and left out, they are written as the flow it was.
+    #[test]
+    fn a_take_back_rewrites_the_segments_that_wait_for_their_states() {
+        use super::super::clock::Clock;
+        let (shared, clock) = engine_at(false);
+        telegram(&shared);
+        learn(&shared, "93.184.216.34", "cdn.example.net");
+        let (cdn, bytes) = open(&shared, UID, at([93, 184, 216, 34], 443));
+        relay(&shared, cdn, &bytes, &[&obfuscated()]);
+        let now = clock.wall_ms();
+        let next =
+            (now / super::super::logbook::SEGMENT_MS + 1) * super::super::logbook::SEGMENT_MS;
+        clock.pass(next - now + 1_000);
+        shared.log_now();
+        let held = |shared: &Shared| -> Vec<Flow> {
+            lock(&shared.activity)
+                .held
+                .iter()
+                .filter_map(|p| match &p.of {
+                    super::super::activity::Of::Flow { flow, .. } if flow.id == cdn.id => {
+                        Some(flow.clone())
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        assert!(
+            held(&shared).iter().any(|f| f.proxy.is_some()),
+            "a segment waits"
+        );
+        let (main, bytes) = open(&shared, UID, at([149, 154, 167, 51], 443));
+        relay(&shared, main, &bytes, &[&obfuscated()]);
+        let waiting = held(&shared);
+        assert!(!waiting.is_empty());
+        assert!(
+            waiting.iter().all(|f| f.proxy.is_none()
+                && f.destination == at([93, 184, 216, 34], 443)
+                && f.name.as_deref() == Some("cdn.example.net")),
+            "{waiting:?}"
+        );
     }
 }

@@ -805,6 +805,7 @@ pub(crate) mod tests {
         // SOCKS5: a method outside IANA's 0 to 9, one offered twice, more than ten, or the method used not offered.
         for greeting in [
             &[5, 1, 0x80][..],
+            &[5, 2, 0, 0x80],
             &[5, 2, 0, 0],
             &[5, 11, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9],
             &[5, 1, 2],
@@ -901,6 +902,26 @@ pub(crate) mod tests {
             ..plain
         };
         assert_eq!(confirmed(&forward, b"HTTP/1.1 200 OK\r\n"), Some(false));
+    }
+
+    /// An empty RFC 1929 password crossed nothing; a `Proxy-Authorization` of another scheme of five letters is
+    /// not `Basic`.
+    #[test]
+    fn only_a_password_sent_is_said_to_have_crossed() {
+        let mut b = vec![5, 1, 2, 1, 4];
+        b.extend_from_slice(b"user");
+        b.push(0);
+        b.extend_from_slice(&[5, 1, 0, 1, 203, 0, 113, 5, 0, 80]);
+        let Declared::Request(r) = declared(&b) else {
+            unreachable!("not read");
+        };
+        assert!(!r.password);
+        let Declared::Request(r) =
+            declared(b"CONNECT example.net:443 HTTP/1.1\r\nProxy-Authorization: Token abc\r\n\r\n")
+        else {
+            unreachable!("not read");
+        };
+        assert!(!r.password);
     }
 
     #[test]
@@ -1008,6 +1029,11 @@ pub(crate) mod tests {
                 "{k} bytes with the high bit"
             );
         }
+        // The bits' average alone: half the bytes with the high bit, one bit each, 64 bits in all, is not random.
+        let sparse: Vec<u8> = (0..64)
+            .map(|i| if i % 2 == 0 { 0x80 } else { 0x01 })
+            .collect();
+        assert_eq!(obfuscated2(&sparse), Some(false));
     }
 
     #[test]
