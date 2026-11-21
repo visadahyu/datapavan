@@ -288,3 +288,32 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   allow lasts until blocked again; "Block trackers again" ends the app's hour and leaves its per-row allows; a shared
   UID is covered only where every package that holds it was installed by the user; a `code` row is kept for an app
   updated since its scan, and, under the profile, where there is no scan file.
+- **Checks.** The engine's unit tests grew by 20 (the table, the `Host` reader, the blocked answer, the chain, the
+  decision in every app and for the tool, allowances and the pause at a decision, two apps and one name, CNAME
+  cloaking, the address tie outside clouds, the gate, a hello in two segments through the relay, a plain request, a
+  protocol in which the server speaks first, a QUIC hello in two datagrams, a chained app's question and stand-in, the
+  log's version 6), and Watch's Kotlin tests by 35 (the store and its expiry, coverage, the browser filter, the code
+  grade and the exceptions, the setting's text, the words against ADR 0025's list, the log's reader, the link to the
+  switch). The fuzz target `blocking` checks the table's reader whole or nothing, the matcher against a plain search of
+  every row, and the `Host` reader: 4,293,071 runs in 121 s, nothing found. **Hand mutants** (2026-11-21), each a rule
+  undone in the engine with the tests run: 16 of 16 killed: covered apps only, the tool by DNS alone, an allowance's
+  expiry, the pause's end, the SOA's `MINIMUM` 0, every name of a CNAME chain, a time to live of 0 for answers that may
+  be blocked, the hold of an unfinished hello, the relay's refusal, the hold of an unfinished QUIC hello, never by
+  address in a cloud, label boundaries, a chained app's question, a stand-in's name before the tool, a block set again
+  at the next byte, and the log's outcome code.
+- **The emulator check** (`scripts/verify-blocking.sh`, the `blocking` shard), on the Android 15 emulator
+  (`dp-api35-ci`), alone, 2026-11-21: passed. The blocked name got no address and the lab was never asked; one tap on
+  B's row in "Now" let its lookup through within 1 s, and one tap blocked it again within 1 s; two apps, one name,
+  within a second, each got its own answer, and the blocked one none after; a TLS hello in two segments and a plain
+  request reached the lab's port with their handshake and no byte, and a QUIC hello in two datagrams sent no datagram
+  and got "port unreachable", while the allowed app's were echoed; the CNAME to the blocked name was blocked; the pause
+  lifted every block and "Block again now" ended it; the fixture's browser, and Chrome, were told as browsers, left out,
+  and blocked once included; no notification named an app or a name of the run. Its first run found the limit of
+  Android's cache at the moment blocking is turned on (Consequences), and the check no longer looks the blocked name up
+  before. The `dns` shard (`scripts/verify-dns.sh`) passed on the same emulator, alone, with the latency budget
+  (ODoH p50 5 ms, p95 70 ms in the lab).
+- **Size.** Watch's native library in Advanced's release APK (`scripts/check.sh android`, 2026-11-21): 1,828,008 bytes
+  on arm64-v8a, 1,351,480 on armeabi-v7a and 2,082,200 on x86_64, under the 2 MiB gate (2,097,152 bytes); against
+  `main` after part 2a's fix round (1,772,296, 1,312,792 and 2,017,976), blocking adds 55,712, 38,688 and 64,224 bytes.
+  **x86_64 has 14,952 bytes left**: the next unit that grows the engine needs a size pass first, or the maintainer's
+  word on the gate (ADR 0035, question 3).
