@@ -9,6 +9,11 @@ disableKinds = ["taxonomy", "term", "sitemap", "robotsTXT", "404"]
 enableGitInfo = false
 timeZone = "UTC"
 
+# Links in content stay as written: the guides' list links each page as guides/<name>/index.html, relative, which the
+# site's rule needs (scripts/check-site.py), rather than the page's permalink.
+[markup.goldmark.renderHooks.link]
+useEmbedded = "never"
+
 [outputs]
 home = ["html"]
 section = ["html", "rss"]

@@ -1,6 +1,8 @@
 {{- $t := index site.Data.text site.Language.Lang -}}
 {{- $isHome := .IsHome -}}
-{{- $toLang := cond $isHome "" "../" -}}
+{{- /* Up from this page to its language's home: one "../" per folder below it (a guide is two deep, W8 part 3b). */ -}}
+{{- $below := strings.TrimPrefix (cond (eq site.Language.Lang "en") "/" (printf "/%s/" site.Language.Lang)) .RelPermalink -}}
+{{- $toLang := strings.Repeat (strings.Count "/" $below) "../" -}}
 {{- $toSite := cond (eq site.Language.Lang "en") $toLang (printf "%s../" $toLang) -}}
 {{- $script := printf "script-%s.css" site.Params.script -}}
 <!doctype html>
@@ -25,7 +27,7 @@
 </head>
 <body>
 <div class="w"><header class="top"><a class="brand" href="{{ $toLang }}index.html"><span>{{ partial "mark.html" . }}</span>{{ with $t.name_native }}<span>{{ . }}</span><span class="lat2 ltr">Datapavan</span>{{ else }}<span class="ltr">Datapavan</span>{{ end }}</a><nav>
-{{- $homeLink := cond $isHome "" "../index.html" -}}
+{{- $homeLink := cond $isHome "" (printf "%sindex.html" $toLang) -}}
 {{- range $t.nav }}{{ $href := printf "%s%s" $homeLink (index . 0) }}<a href="{{ $href | safeURL }}">{{ index . 1 }}</a>{{ end -}}
 <a href="{{ $toLang }}news/index.html">{{ $t.news_title }}</a><a href="{{ site.Params.repo }}" class="ltr">GitHub</a></nav>
 <details class="lng"><summary aria-label="{{ $t.language_label }}">{{ site.Language.Label }}</summary><ul>
