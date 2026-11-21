@@ -214,7 +214,8 @@ were tightened after it), and the notification's permission on the emulator. Wha
   ODoH over OkHttp against OkHttp's own test server with the lab's certificate, over HTTP/2 (the unit tests run
   OkHttp's JVM build of the same version): the request on the wire, a 401, a body over the limit, the pins.
 - **The speed budget (R-M5).** `scripts/dns-latency.py` compares against ADR 0039's budget and exits non-zero on a
-  breach or a failed default pair; RELEASE.md calls it; the lab's p95 is 250 ms, about twice what the lab measures.
+  breach or a failed default pair; RELEASE.md calls it; the lab's p95 is 250 ms, about twice what the lab measures
+  (since 2026-11-21 250 ms above plain DNS's in the same step, as ADR 0039's section on the speed budget says why).
 - **The minors and nits.** A random ID towards the network's resolver (S-m1); the tool's socket protected when the
   tool is not on the loopback (S-m2); "unfiltered only" held in the engine, and a URL's path held to RFC 3986's
   unreserved characters, so no path adds a parameter to the relay's URL (S-m4, and the screen checks a URL as the

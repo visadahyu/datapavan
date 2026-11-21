@@ -97,9 +97,39 @@ the app, endpoints and addresses from the data pack):
 **The budget:** on the same network, the default way's warm p50 at most 150 ms above plain DNS's, and its p95 at
 most 250 ms above it (measured: +102 ms and −59 ms), checked by `scripts/dns-latency.py` before each release that
 carries Watch (docs/RELEASE.md, step 3), which exits non-zero over the budget or when the default pair or plain DNS
-does not answer; and Watch's own cost of each way, where every server is a few milliseconds away (the DNS lab), p50
-at most 100 ms and p95 at most 250 ms, held by `scripts/verify-dns.sh` on CI's dns shard (W8's fix round, review
-R-M5: 400 ms was three times what the lab measured and equal to the hedge's delay; measured on the Android 15
-emulator: ODoH 7 and 124 ms, DoH 2 and 7 ms, DoT 1 and 5 ms; Watch's process spent about 15 to 24 ms of CPU per lookup in the lab,
-emulated x86_64). The first query of a way opens its TLS connection: 250 to 300 ms on the internet for an ODoH
-pair, which Android's cache and Watch's own then hide for each name's time to live. Battery on a phone is W9's.
+does not answer; and Watch's own cost of each way, where every server is a few milliseconds away (the DNS lab), in
+the same form, against plain DNS timed in the same step: each way's p50 at most 100 ms above plain DNS's, its p95 at
+most 250 ms above plain DNS's, and plain DNS's own p50 through Watch at most 100 ms, held by `scripts/verify-dns.sh`
+on CI's dns shard (below). The first query of a way opens its TLS connection: 250 to 300 ms on the internet for an
+ODoH pair, which Android's cache and Watch's own then hide for each name's time to live. Battery on a phone is W9's.
+
+**How the lab holds it (2026-11-21).** W8's fix round (review R-M5) first wrote the lab's bound absolute, p50 at most
+100 ms and p95 at most 250 ms over every exchange of the check (400 ms was three times what the lab measured and
+equal to the hedge's delay; measured then on the Android 15 emulator: ODoH 7 and 124 ms, DoH 2 and 7 ms, DoT 1 and
+5 ms). On CI it failed about every other run (runs 44899858955, 44905337897, 44910873200 and 44910928225,
+`docs/ci-flakes.md`): the p50 within, 11 to 23 ms, the p95 over, 301 to 542 ms, and the same build passing its rerun
+at 57 to 122 ms. The engine keeps the last 256 durations of each carry for the whole check, a carry had 20 to 250 of
+them, and so the "p95" was its largest one to three, which one stall of CI's emulator decided; and those stalls hold
+every process on the emulator, not Watch alone. So the check now measures as the budget on real networks is written:
+
+- **Only the step's own exchanges.** A debug build's command (`dns-times-clear`) clears the engine's durations before
+  each way, after one lookup that opens the way's connection, since the budget on real networks is warm.
+- **Enough of them.** The project's workload app looks up 100 fresh names of the way in one process, one after the
+  other, so that the p95 of some 200 exchanges (an A and an AAAA question for each) is about its tenth largest.
+- **A baseline from the same moments.** Each of those lookups is followed by one of a fresh local name under
+  `home.arpa`, which only the network's resolver answers: plain DNS, through Watch's engine and the same Kotlin
+  exchanger, without encryption (the lab's resolver answers NXDOMAIN, which the engine times as an answer: held by a
+  unit test, and the check fails with fewer than 100 such exchanges). A stall of the emulator then falls on both
+  carries alike.
+- **The bounds.** Each way against plain DNS, as above, and plain DNS's p50 at most 100 ms, so that a slowness
+  common to every carry still fails. The message gives both carries' figures. No retry.
+
+It is not a looser budget: what is bounded is still Watch's own cost of a way, its time above plain DNS's at the
+same moments, by margins no wider than on real networks (100 ms on the p50, where they allow 150; 250 ms on the
+p95), and an absolute bound stays, on plain DNS's p50. Measured on the Android 15 emulator (emulated x86_64, three
+runs in a row, each on a freshly booted emulator; p50 and p95, plain DNS's in the same step in brackets): ODoH 10 to
+11 and 49 to 52 ms (0 to 1 and 1 to 10 ms), DoH 1 and 3 to 7 ms (0 and 3 to 4 ms), DoT 0 to 1 and 2 to 9 ms (0 to 2
+and 5 to 11 ms). A debug build whose engine waited 150 ms before each encrypted exchange, a local edit for this test
+alone, failed the check at its first way: ODoH p50 154 ms and p95 200 ms, against plain DNS's 1 and 1 ms. Watch's
+process spent 1 to 5 ms of CPU per lookup in the lab, the local lookups among them (15 to 24 ms as measured before,
+when each lookup was a new start of the workload app).
