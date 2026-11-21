@@ -36,6 +36,13 @@ docs/decisions/0042-dns-of-apps-that-go-directly.md):
   and Okio authors: Apache-2.0, whose text is LICENSE. Source: https://github.com/square/okhttp and Maven Central.
   They carry DoH and Oblivious DoH over Android's own TLS from Watch's Kotlin side.
 
+Datapavan Advanced's Watch, tracker blocking (W8, part 3a, docs/decisions/0053-tracker-blocking.md):
+
+- data/blocking is Datapavan's own table, under CC0 1.0: the hosts tracker SDKs send to and what each does, as facts
+  read in the SDKs' own documentation and source code at pinned commits, in Tweasel's tracker wiki
+  (https://trackers.tweasel.org, whose data is under CC0 1.0) and on the vendors' own firewall pages. No text or code
+  of theirs is copied, and no blocklist's row (DuckDuckGo's, Disconnect's and EasyPrivacy's lists are not used).
+
 Datapavan Advanced's Watch, the QR code of a WireGuard configuration (W7, part 2):
 
 - ZXing core 3.5.4 (com.google.zxing:core), the ZXing authors: Apache-2.0, whose text is LICENSE.

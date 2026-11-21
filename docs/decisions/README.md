@@ -60,6 +60,7 @@ in the Git history.
 | [0050](0050-operators-and-sim-cards.md) | Mobile operators and SIM cards: what the phone installed, what the SIM can do, what to tell users | Accepted |
 | [0051](0051-two-lanes-and-an-analysis-machine.md) | Two lanes of work, and an isolated machine for suspect apps | Accepted |
 | [0052](0052-apps-built-in-proxies.md) | Apps' built-in proxies named: read from the connection, or inferred with substitution | Proposed |
+| [0053](0053-tracker-blocking.md) | Tracker blocking: hosts graded by what they do, the same in every app, refused before a byte leaves, undone in one tap | Proposed |
 
 ## Template
 
