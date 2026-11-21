@@ -272,6 +272,13 @@ internal object Engine {
      */
     external fun nativeDnsStatus(): String
 
+    /**
+     * Forgets the durations of exchanges the encrypted resolver kept for [nativeDnsStatus]'s `latency` lines, so
+     * that they read only the exchanges answered after it: debug builds' `dns-times-clear`, for the speed budget's
+     * check (ADR 0039). Nothing when no engine runs.
+     */
+    external fun nativeDnsTimesClear()
+
     /** The ways of the four tables for Watch's screen, as [org.visadahyu.datapavan.watch.dns.DnsCatalogue] reads them. */
     external fun nativeDnsCatalogue(relays: String, targets: String, pairs: String, presets: String): String
 

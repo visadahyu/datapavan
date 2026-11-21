@@ -1529,10 +1529,16 @@ class WatchVpnService : VpnService() {
      * domains as Android's would be, through the public suffix list, and prints `dns-search-set` and what it kept.
      * `dns-network-resolver ADDRESS:PORT|android` asks the network's resolver there in plain DNS, for the lab, in
      * place of Android's resolver of the network ([org.visadahyu.datapavan.watch.dns.Exchanger.networkResolverForTests]).
+     * `dns-times-clear` forgets the durations the engine kept, so that the dump's `dns-latency` lines read only the
+     * exchanges after it (the speed budget's check, ADR 0039), and prints `dns-times-cleared`.
      */
     private fun debugDns(args: List<String>, writer: PrintWriter) {
         fun after(command: String, n: Int) = args.indexOf(command).takeIf { it >= 0 }?.let { args.drop(it + 1).take(n) }
         val settings = org.visadahyu.datapavan.watch.dns.DnsSettings.of(this)
+        if ("dns-times-clear" in args) {
+            Engine.nativeDnsTimesClear()
+            writer.println("dns-times-cleared")
+        }
         var changed = "dns-apply" in args
         after("dns-strict", 1)?.let {
             settings.strict = it.firstOrNull() == "on"
