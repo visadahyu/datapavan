@@ -1216,6 +1216,24 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeDnsStatus
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
+/// `Engine.nativeDnsTimesClear()`: forgets the durations the running engine's resolver kept
+/// ([`Engine::dns_times_clear`]), for debug builds' speed budget check; nothing when none runs.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeDnsTimesClear()`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeDnsTimesClear<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) {
+    unowned_env
+        .with_env(|_env| -> Result<_, Error> {
+            if let Some(running) = engine().as_ref() {
+                running.dns_times_clear();
+            }
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>();
+}
+
 /// The ways of the datasets for Watch's screen ([`catalogue_lines`]).
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeDnsCatalogue(relays: String,
 // targets: String, pairs: String, presets: String): String`.

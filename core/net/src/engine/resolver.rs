@@ -492,6 +492,14 @@ impl Resolver {
             .collect();
     }
 
+    /// Forgets every carry's kept durations, so that the `latency` lines of [`Resolver::status`] read only the
+    /// exchanges answered after it: the speed budget's check times each way over its own lookups (ADR 0039).
+    pub(super) fn clear_times(&self) {
+        for kept in lock(&self.times).iter_mut() {
+            kept.clear();
+        }
+    }
+
     /// The state for Watch's screen and the checks, one `key value` per line.
     pub(super) fn status(&self) -> String {
         let config = self.config();
@@ -1389,6 +1397,19 @@ mod tests {
         out
     }
 
+    /// The network's resolver's answer: as [`answer_with`] with 10.53.5.5, but "no such name" for a name whose
+    /// first label is `gone`, as the DNS lab's resolver answers a local name it does not hold.
+    fn network_answer(query: &[u8]) -> Vec<u8> {
+        let asked = hygiene::read(query).unwrap_or_else(|| unreachable!("a query"));
+        if !asked.name.starts_with("gone.") {
+            return answer_with(query, Ipv4Addr::new(10, 53, 5, 5));
+        }
+        let mut out = asked.as_query();
+        out[2] = 0x81;
+        out[3] = 0x83;
+        out
+    }
+
     impl Fake {
         fn new(targets: &[(&str, [u8; 32])]) -> Arc<Self> {
             Arc::new(Self {
@@ -1458,9 +1479,7 @@ mod tests {
                 Carry::Dot => {
                     Reply::Answer(internet_answer(&request.body, Ipv4Addr::new(10, 53, 4, 4)))
                 }
-                Carry::Network => {
-                    Reply::Answer(answer_with(&request.body, Ipv4Addr::new(10, 53, 5, 5)))
-                }
+                Carry::Network => Reply::Answer(network_answer(&request.body)),
                 Carry::Fetch => {
                     // Watch's Kotlin side never looks a name up: a fetch with no address to go to fails.
                     if request.addresses.is_empty() {
@@ -1743,6 +1762,38 @@ mod tests {
         let again = answer(&shared, &app_query("www.example.com", 1), false, None).await;
         assert_eq!(read(again).0, Some(v4(10, 53, 1, 1)));
         assert_eq!(fake.seen(Carry::Odoh).len(), 1);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_local_names_nxdomain_is_timed_and_clearing_the_times_leaves_the_answers_counted() {
+        let (shared, _fake) = resolving("");
+        let _ = answer(&shared, &app_query("www.example.com", 1), false, None).await;
+        let got = answer(&shared, &app_query("gone.home.arpa", 1), false, None).await;
+        assert_eq!(read(got).1, 3, "the network's NXDOMAIN reached the app");
+        let status = shared.resolver.status();
+        assert!(status.contains("\nlatency odoh 1 "), "{status}");
+        assert!(
+            status.contains("\nlatency network 1 "),
+            "the NXDOMAIN timed as the network's answer, as the speed budget's baseline needs: {status}"
+        );
+        shared.resolver.clear_times();
+        let status = shared.resolver.status();
+        for carry in ["odoh", "doh", "dot", "network"] {
+            assert!(
+                status.contains(&format!("\nlatency {carry} 0 0 0\n")),
+                "{carry} forgotten: {status}"
+            );
+        }
+        assert!(
+            status.contains("\nanswers odoh 1 "),
+            "the answers still counted: {status}"
+        );
+        assert!(status.contains(" local 1 "), "{status}");
+        let _ = answer(&shared, &app_query("gone-again.home.arpa", 1), false, None).await;
+        assert!(
+            shared.resolver.status().contains("\nlatency network 1 "),
+            "timed again after"
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]

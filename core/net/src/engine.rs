@@ -1354,6 +1354,13 @@ impl Engine {
         self.shared.resolver.status()
     }
 
+    /// Forgets the durations of the exchanges the encrypted resolver kept, of every carry, so that the `latency`
+    /// lines of [`Engine::dns_status`] read only those answered after it: debug builds' speed budget check, which
+    /// times each way over its own lookups (ADR 0039).
+    pub fn dns_times_clear(&self) {
+        self.shared.resolver.clear_times();
+    }
+
     /// The exchanges that wait for Watch's Kotlin side, which hands each reply to [`Exchanges::complete`].
     #[must_use]
     pub fn exchanges(&self) -> Arc<Exchanges> {
