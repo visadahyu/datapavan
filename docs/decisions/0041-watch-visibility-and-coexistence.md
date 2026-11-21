@@ -201,7 +201,9 @@ decisions are the coordinator's (BRIEF-part-3b, after one audit of the first bri
 
 **Limits.** A language chosen inside a tool cannot be read: where it is neither the phone's nor Datapavan's, the
 quoted labels are in another language than the tool shows, and the places the steps name (a menu, a tab, a gear)
-still lead. A label written in code or in Flutter's files is what the source had at the recorded version, and a newer
+still lead. A tool installed from Google Play in language splits holds only the phone's languages, and Android gives
+its default words for any other: Datapavan's language is added beside the phone's only where the tool's resources have
+it. A label written in code or in Flutter's files is what the source had at the recorded version, and a newer
 version may say otherwise. The website is in English until the translations unit, with parts 1, 2a and 3a's strings
 (ADR 0030); a translated page will quote each tool's labels in its language from the tool's own files. Every tool but
 the four the run tried waits for the maintainer's word for a device check.
