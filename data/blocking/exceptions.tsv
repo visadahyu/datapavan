@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: CC0-1.0
+# Apps of an SDK vendor whose own function uses a host that hosts.tsv grades block or code (W8 part 3a): for these
+# (package, certificate) pairs the host is kept. Granted for function only, never because one company owns both the
+# app and the tracker. Compiled by the Datapavan project; no εxodus data is in this file (LICENSE, SOURCE).
+# Columns, tab-separated: package, certificate (SHA-256 of the signing certificate, from the publisher's Digital
+# Asset Links file as data/owners/publishers.tsv records it), host, reason, source (the asset-links file, then the
+# page that states the host's function), checked.
+com.facebook.adsmanager	129dc53480e2bf1b55cf6eec205fe0f59d2b9f81e7ee4fb67cecbbee25a0b080	graph.facebook.com	Meta Ads Manager reads its ad accounts and results through Facebook's own Graph API	https://www.facebook.com/.well-known/assetlinks.json https://developers.facebook.com/docs/graph-api/overview	2026-11-21
+com.facebook.adsmanager	911d604446084ca7f4760b775bfc160fa8702441240a7258645d7a72c4312d27	graph.facebook.com	Meta Ads Manager reads its ad accounts and results through Facebook's own Graph API	https://www.facebook.com/.well-known/assetlinks.json https://developers.facebook.com/docs/graph-api/overview	2026-11-21
+com.facebook.adsmanager	e3f9e1e0cf99d0e56a055ba65e241b3399f7cea524326b0cdd6ec1327ed0fdc1	graph.facebook.com	Meta Ads Manager reads its ad accounts and results through Facebook's own Graph API	https://www.facebook.com/.well-known/assetlinks.json https://developers.facebook.com/docs/graph-api/overview	2026-11-21
+com.facebook.katana	129dc53480e2bf1b55cf6eec205fe0f59d2b9f81e7ee4fb67cecbbee25a0b080	graph.facebook.com	Facebook's own app reads and writes Facebook data through its own Graph API	https://www.facebook.com/.well-known/assetlinks.json https://developers.facebook.com/docs/graph-api/overview	2026-11-21
+com.facebook.katana	911d604446084ca7f4760b775bfc160fa8702441240a7258645d7a72c4312d27	graph.facebook.com	Facebook's own app reads and writes Facebook data through its own Graph API	https://www.facebook.com/.well-known/assetlinks.json https://developers.facebook.com/docs/graph-api/overview	2026-11-21
+com.facebook.katana	e3f9e1e0cf99d0e56a055ba65e241b3399f7cea524326b0cdd6ec1327ed0fdc1	graph.facebook.com	Facebook's own app reads and writes Facebook data through its own Graph API	https://www.facebook.com/.well-known/assetlinks.json https://developers.facebook.com/docs/graph-api/overview	2026-11-21
+com.facebook.lite	911d604446084ca7f4760b775bfc160fa8702441240a7258645d7a72c4312d27	graph.facebook.com	Facebook Lite reads and writes Facebook data through Facebook's own Graph API	https://www.facebook.com/.well-known/assetlinks.json https://developers.facebook.com/docs/graph-api/overview	2026-11-21
+com.facebook.lite	e3f9e1e0cf99d0e56a055ba65e241b3399f7cea524326b0cdd6ec1327ed0fdc1	graph.facebook.com	Facebook Lite reads and writes Facebook data through Facebook's own Graph API	https://www.facebook.com/.well-known/assetlinks.json https://developers.facebook.com/docs/graph-api/overview	2026-11-21

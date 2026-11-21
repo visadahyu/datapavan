@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: CC0-1.0
+# Tracker SDKs whose hosts could not be taken, or only partly, from a lane-1 primary source (W8 part 3a); no row
+# guesses a host. Compiled by the Datapavan project; no εxodus data is in this file (LICENSE, SOURCE).
+# Columns, tab-separated: sdk (Maven group:artifact, or the SDK's name where its coordinate was not checked), classes
+# (Java package prefix, joined like hosts.tsv's), exodus (the tracker's name as data/exodus/trackers.tsv writes it),
+# why (what is missing and why; "lane 2" means reading the SDK's published binary on the analysis machine), checked.
+AppMonet SDK	com.monet.	AppMonet	hosts are constants in a closed binary and no vendor page or Tweasel page states them: lane 2	2026-11-21
+Appodeal Stack SDK	com.explorestack.	Appodeal Stack	hosts are constants in a closed binary and no vendor page or Tweasel page states them: lane 2	2026-11-21
+com.adcolony:sdk	com.adcolony.sdk.	AdColony	partly: adc3-launch.adcolony.com is stated; Tweasel states the configure hosts only as a pattern ((android|ios)adsN-N.adcolony.com), not as names: lane 2	2026-11-21
+com.amazon.android:aps-sdk	com.amazon.device.ads.	Amazon Advertisement	hosts are constants in a closed binary and no vendor page or Tweasel page states them: lane 2	2026-11-21
+com.applovin:applovin-sdk	com.applovin.	AppLovin (MAX and SparkLabs)	hosts are constants in a closed binary and no vendor page or Tweasel page states them: lane 2	2026-11-21
+com.appsflyer:af-android-sdk	com.appsflyer.	AppsFlyer	the vendor reference names only the apex appsflyer.com as default host name; the SDK hosts are constants in a closed binary: lane 2	2026-11-21
+com.chartboost:chartboost-sdk	com.chartboost.sdk.	ChartBoost	partly: only live.chartboost.com and da.chartboost.com are stated (Tweasel); others are in a closed binary: lane 2	2026-11-21
+com.facebook.android:audience-network-sdk	com.facebook.ads.	Facebook Ads	partly: graph.facebook.com (code row) is stated; adnw_sync2 is a path on www.facebook.com and web.facebook.com, which no host row can take; other hosts are in a closed binary: lane 2	2026-11-21
+com.flurry.android:analytics	com.flurry.	Flurry	hosts are constants in a closed binary and no vendor page or Tweasel page states them: lane 2	2026-11-21
+com.fyber:marketplace-sdk	com.fyber.	Fyber	hosts are constants in a closed binary and no vendor page or Tweasel page states them: lane 2	2026-11-21
+com.google.android.gms:play-services-ads	com.google.android.gms.ads.	Google AdMob	partly: only googleads.g.doubleclick.net is stated (Tweasel); the other ad, creative and settings hosts are constants in a closed binary: lane 2	2026-11-21
+com.google.android.gms:play-services-tagmanager	com.google.android.gms.tagmanager.	Google Tag Manager	its Android container host www.google-analytics.com (Tweasel) is graded on the Google Analytics row, which joins Google Analytics only; other hosts are in a closed binary: lane 2	2026-11-21
+com.huawei.hms:hianalytics	com.huawei.hms.analytics.	Huawei Mobile Services (HMS) Core	closed binaries; Huawei kit pages that may list hosts were not read in this pass (lane 1 next); else lane 2	2026-11-21
+com.ironsource.sdk:mediationsdk	com.ironsource.	ironSource	partly: only logs.ironsrc.mobi is stated (Tweasel); the init, auction and event hosts are constants in a closed binary: lane 2	2026-11-21
+com.mopub:mopub-sdk	com.mopub.	Twitter MoPub	partly: only ads.mopub.com is stated (Tweasel); MoPub closed in 2022 and its source repository is gone from GitHub: lane 2	2026-11-21
+com.my.target:mytarget-sdk	com.my.target.	myTarget	hosts are constants in a closed binary and no vendor page or Tweasel page states them: lane 2	2026-11-21
+com.singular.sdk:singular_sdk	com.singular.sdk.	Singular	partly: only sdk-api-v1, s2s and i.singular.net are stated (Tweasel); others are in a closed binary: lane 2	2026-11-21
+com.startapp:inapp-sdk	com.startapp.	Startapp	partly: only infoevent and trackdownload.startappservice.com are stated (Tweasel); ad hosts are in a closed binary: lane 2	2026-11-21
+com.vungle:publisher-sdk-android	com.vungle.warren.	Vungle	partly: only api.vungle.com, ads.api.vungle.com and events.api.vungle.com are stated (Tweasel); Vungle 7 (com.vungle.ads.) and others: lane 2	2026-11-21
+com.yandex.android:mobileads	com.yandex.mobile.ads.	Yandex Ad	hosts are constants in a closed binary and no vendor page or Tweasel page states them: lane 2	2026-11-21
+HyprMX SDK	com.hyprmx.android.sdk.	HyprMX	hosts are constants in a closed binary and no vendor page or Tweasel page states them: lane 2	2026-11-21
+IAB Open Measurement SDK (bundled by ad SDKs)	com.iab.omid.library.	IAB Open Measurement	no lane-1 source states a host the OM SDK itself sends to; it ships inside closed ad SDK binaries: lane 2	2026-11-21
+InMobi SDK	com.inmobi.	Inmobi	hosts are constants in a closed binary and no vendor page or Tweasel page states them: lane 2	2026-11-21
+io.bidmachine:ads	io.bidmachine.	BidMachine	hosts are constants in a closed binary and no vendor page or Tweasel page states them: lane 2	2026-11-21
+io.opentelemetry:opentelemetry-sdk	io.opentelemetry.	OpenTelemetry (OpenCensus, OpenTracing)	no fixed host: the app configures its exporter endpoint, so no name can be graded (not lane 2)	2026-11-21
+io.sentry:sentry-android-core	io.sentry.	Sentry	partly, not lane 2: DSNs on the apex sentry.io (shared with the dashboard) and self-hosted Sentry servers cannot be graded by name	2026-11-21
+maio SDK	jp.maio.sdk.	maio by i-mobile	hosts are constants in a closed binary and no vendor page or Tweasel page states them: lane 2	2026-11-21
+Mintegral SDK	com.mbridge.msdk.	Mintegral	partly: only analytics.rayjump.com and configure.rayjump.com are stated (Tweasel); ad and tracking hosts are in a closed binary: lane 2	2026-11-21
+Moat Analytics SDK	com.moat.analytics.mobile.	Moat	hosts are constants in a closed binary and no vendor page or Tweasel page states them: lane 2	2026-11-21
+Ogury SDK	io.presage.	Ogury Presage	hosts are constants in a closed binary and no vendor page or Tweasel page states them: lane 2	2026-11-21
+Pangle SDK	com.bytedance.sdk.openadsdk.	Pangle	hosts are constants in a closed binary and no vendor page or Tweasel page states them: lane 2	2026-11-21
+Smaato SDK	com.smaato.	Smaato	hosts are constants in a closed binary and no vendor page or Tweasel page states them: lane 2	2026-11-21
+SuperAwesome SDK	tv.superawesome.sdk.	SuperAwesome	its source repository is no longer on GitHub and no vendor page or Tweasel page states the hosts: lane 2	2026-11-21
+Tapjoy SDK	com.tapjoy.	Tapjoy	hosts are constants in a closed binary and no vendor page or Tweasel page states them: lane 2	2026-11-21

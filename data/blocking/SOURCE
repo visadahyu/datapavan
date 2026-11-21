@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: CC0-1.0
+retrieved: 2026-11-21
+hosts: hosts.tsv, 94 rows (82 block, 11 keep, 1 code), 33 SDK coordinates; evidence: 57 code, 26 tweasel,
+  11 firewall, 0 docs
+exceptions: exceptions.tsv, 8 rows (com.facebook.katana, com.facebook.lite, com.facebook.adsmanager, each with the
+  certificates Facebook's asset-links file lists for it, keeping graph.facebook.com)
+waiting: waiting.tsv, 34 rows (23 with no host from a lane-1 source, 11 partly covered)
+method: the 50 trackers εxodus finds in most apps listed first; for each, the hosts read in the SDK's own source at
+  a pinned commit or tag (firebase-android-sdk 2cfdd03, facebook-android-sdk 58fc225, bugsnag-android 589beb2,
+  Amplitude-Kotlin 63f3c05, Amplitude-Android f1a77d4, mixpanel-android 69884a7, OneSignal-Android-SDK a3b82d0,
+  android-branch-deep-linking-attribution 0644360, adjust android_sdk 62a0b23 (v5.8.1), appcenter-sdk-android
+  c7c36eb, segmentio analytics-android 58d7472, newrelic-android-agent 0238085, sentry-java 4ab0ce0,
+  unity-ads-android 4.22.0, pubnative-hybid-android-sdk 3.10.0 (source published under Verve's licence terms,
+  read for facts only)), on Tweasel's endpoint pages, on the vendor's own firewall page (Sentry's IP ranges page,
+  New Relic's networks page) or in the vendor's reference (AppsFlyer, Graph API overview); every source line is in
+  the row. Each row's classes was checked to join the intended εxodus tracker and no unrelated one. Grades by what
+  the host does, not by who owns it. Hosts known only from closed SDK binaries were not guessed: waiting.tsv, and
+  the lane-2 brief in the maintainer's private notes (2026-11-21-w8c-closed-sdk-hosts).
+leads: no blocklist was read for this table (DuckDuckGo's tracker lists, Disconnect, EasyPrivacy and AdGuard not
+  opened); εxodus's network signatures were seen while listing the top 50 and used as leads only, never as a source.
+prevalence: εxodus's tracker list with each tracker's app count, https://reports.exodus-privacy.eu.org/en/trackers/
+  (the live server refused connections from the build machine on 2026-11-21, so its Internet Archive copy of
+  2026-11-13T07:27:43Z was read: https://web.archive.org/web/20261113072743id_/https://reports.exodus-privacy.eu.org/en/trackers/,
+  fetched 2026-11-21T10:17:01Z, sha256 9f4764b0b12ad80936a81253b8947bc0196329f724552fb1f8302bd23d84773e, 423 trackers,
+  1420036 app findings); cross-checked against the statistics page's top 21,
+  https://web.archive.org/web/20261117214010id_/https://reports.exodus-privacy.eu.org/en/trackers/stats/
+  (copy of 2026-11-17T21:40:10Z, fetched 2026-11-21T10:16:30Z, sha256 of the gzip body
+  b6cd4471398afa5b56eb9a20876ef96a24e10ffe21e9d55cb28a53c821a8abbe, of the page
+  3e4a22b4d27b6befdde95cf705c5aee3b5ed9193074255ffee473493cd1be4d4), same order, counts within 0.5%. The
+  statistics are ODbL and are not kept here.
+coverage (python3 -I coverage.py <the tracker list above>):
+  top 50 by apps: 17 covered, 10 partly, 23 waiting
+  weighted by apps, top 50: 59.7%
+  weighted by apps, all trackers: 55.3%
+  host rows joined to no εxodus tracker: 3 (firebaselogging.googleapis.com, firebaseremoteconfig.googleapis.com,
+  firebaseinstallations.googleapis.com)
+left-out: Firebase Cloud Messaging's own hosts (Google Play services connects for the app, under its own uid);
+  Tweasel's fcmtoken and device-provisioning pages (Firebase's iOS path); the legacy Fabric Crashlytics SDK's hosts
+  (closed, shut down 2020); App Center Distribute (in-app updates, App Center retired 2025); New Relic's symbol
+  upload hosts (build time, not the phone); Amplitude Experiment.
