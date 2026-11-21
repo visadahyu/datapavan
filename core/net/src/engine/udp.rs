@@ -4889,6 +4889,10 @@ async fn answer_resolved(
 ) {
     let (app, destination) = key;
     let answer = super::resolver::answer(&shared, &query, false).await;
+    // A messenger's lookups through Watch count for its hellos (ADR 0052, the fix round's S-M3).
+    if let Some(answer) = &answer {
+        shared.looked_up(uid, answer);
+    }
     if let Some(packet) = answer.and_then(|answer| packet::udp(destination, app, &answer)) {
         shared.lookup_answered(uid, packet.len());
         send_to_app(&tun, &shared, &packet).await;
