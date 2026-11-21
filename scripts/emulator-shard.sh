@@ -19,7 +19,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SHARDS="watch audit screens dns proxies wireguard"
+SHARDS="watch audit screens dns proxies blocking wireguard"
 
 # The checks of shard $1, in order.
 checks_of() {
@@ -46,6 +46,10 @@ checks_of() {
         # SOCKS5, HTTP and MTProto proxies on this computer, skipped, and saying so, where Docker cannot start the lab,
         # unless PROXYLAB_REQUIRED=1, as on CI.
         proxies) echo verify-proxies.sh ;;
+        # Tracker blocking and its undo (W8, part 3a, ADR 0053): the project's blocking fixture against the blocking lab
+        # on this computer (scripts/blocklab.py, Python's standard library alone), skipped, and saying so, where it cannot
+        # start, unless BLOCKING_REQUIRED=1, as on CI.
+        blocking) echo verify-blocking.sh ;;
         *) return 1 ;;
     esac
 }
@@ -122,6 +126,17 @@ case "${1:-}" in
                     rm -f "$log"
                     if [ "${PROXYLAB_REQUIRED:-}" = 1 ] && [ "$last" != "== Apps' built-in proxies checked on the emulator" ]; then
                         echo "$check ended without its last line, with PROXYLAB_REQUIRED=1: '$last'" >&2
+                        exit 1
+                    fi
+                    ;;
+                verify-blocking.sh)
+                    # As the WireGuard checks: with the switch on, a check that ends without its last line fails the shard.
+                    log=$(mktemp)
+                    "$ROOT/scripts/$check" | tee "$log"
+                    last=$(tail -n 1 "$log")
+                    rm -f "$log"
+                    if [ "${BLOCKING_REQUIRED:-}" = 1 ] && [ "$last" != "== the blocking check passed" ]; then
+                        echo "$check ended without its last line, with BLOCKING_REQUIRED=1: '$last'" >&2
                         exit 1
                     fi
                     ;;
