@@ -36,11 +36,19 @@ import org.visadahyu.datapavan.watch.activity.History
 import org.visadahyu.datapavan.watch.activity.NowRows
 import org.visadahyu.datapavan.watch.activity.Snapshot
 import org.visadahyu.datapavan.watch.activity.TrackerMarks
+import org.visadahyu.datapavan.watch.blocking.BlockingFacts
+import org.visadahyu.datapavan.watch.blocking.BlockingSettings
+import org.visadahyu.datapavan.watch.blocking.BlockingState
+import org.visadahyu.datapavan.watch.blocking.Tallies
 import org.visadahyu.datapavan.watch.log.ConnectionLog
+import org.visadahyu.datapavan.watch.ui.BlockingActions
+import org.visadahyu.datapavan.watch.ui.BlockingView
 import org.visadahyu.datapavan.watch.ui.HistoryView
 import org.visadahyu.datapavan.watch.ui.NowScreen
 import org.visadahyu.datapavan.watch.ui.NowView
+import org.visadahyu.datapavan.watch.ui.RowNames
 import org.visadahyu.datapavan.watch.ui.WatchTheme
+import org.visadahyu.datapavan.watch.ui.rowOf
 
 /**
  * Watch's view "Now" and each app's history (ADR 0046, decision 2 (d)), in Watch's process, opened by a
@@ -54,6 +62,12 @@ import org.visadahyu.datapavan.watch.ui.WatchTheme
  * across the history and a rotation (review c1 of W5's third part, screens, M2); what the view holds of the
  * engine's memory and of the log is dropped when it leaves the screen, and read again when it comes back
  * (m9), so that a clear of the live memory leaves no copy here.
+ *
+ * Tracker blocking (W8, part 3a; ADR 0053) is read with each snapshot: what the engine counted in memory, the facts the
+ * service handed it, and the user's allowances. The one-tap undo writes the allowance and has the running service hand
+ * the setting again at once; it takes effect within seconds, since apps keep a failed lookup for a moment. A row's link
+ * to "Log where apps connect ..." opens Watch's screen above this one, which stays where the user was beneath it, the
+ * same app's row or its history ([MainActivity.logSwitchIntent]; the brief's point 11).
  */
 class NowActivity : ComponentActivity() {
     private val worker = Executors.newSingleThreadExecutor { Thread(it, "watch-now") }.asCoroutineDispatcher()
@@ -72,6 +86,20 @@ class NowActivity : ComponentActivity() {
     private val only = mutableStateOf<String?>(null)
     private val window = mutableIntStateOf(Snapshot.TEN_MINUTES)
     private val order = NowRows.Order()
+
+    /** Tracker blocking as last read ([readBlocking]). */
+    private val blocking = mutableStateOf(BlockingView())
+
+    /** The facts this screen read itself, where the service handed none in this process; worker only. */
+    private var ownFacts: BlockingFacts? = null
+
+    /** The undo: each tap writes the allowance, and the running service hands the setting again. */
+    private val blockingActions = BlockingActions(
+        onAllowApp = { packages -> changeBlocking { settings, now -> packages.forEach { settings.allowApp(it, now) } } },
+        onBlockAppAgain = { packages -> changeBlocking { settings, _ -> packages.forEach(settings::blockAppAgain) } },
+        onAllowEntries = { packages, hosts -> changeBlocking { settings, _ -> packages.forEach { settings.allowEntries(it, hosts) } } },
+        onBlockEntriesAgain = { packages, hosts -> changeBlocking { settings, _ -> packages.forEach { settings.blockEntriesAgain(it, hosts) } } },
+    )
 
     /** Bumped when the rows are to sort anew, so that the view reads the order again. */
     private val sorts = mutableIntStateOf(0)
@@ -116,6 +144,7 @@ class NowActivity : ComponentActivity() {
                         order = order,
                         sorts = sorts.intValue,
                         tunnelNames = tunnelNames,
+                        blocking = blocking.value,
                     ),
                     history = history.value,
                     onWindow = {
@@ -131,8 +160,9 @@ class NowActivity : ComponentActivity() {
                     onDay = ::showDay,
                     onCloseHistory = { history.value = null },
                     onAllowAccess = { org.visadahyu.datapavan.audit.openUsageAccess(this) },
-                    // A row the switch "Log where apps connect ..." leaves out opens Watch's screen at it.
+                    // A row the switch "Log where apps connect ..." leaves out opens Watch's screen at it, above this one.
                     onLogSwitch = { startActivity(MainActivity.logSwitchIntent(this)) },
+                    blockingActions = blockingActions,
                 )
             }
         }
@@ -178,6 +208,7 @@ class NowActivity : ComponentActivity() {
         snapshot.value = null
         trackers.clear()
         history.value = history.value?.copy(day = null, reading = false, closed = false)
+        blocking.value = blocking.value.copy(tallies = emptyList())
     }
 
     override fun onDestroy() {
@@ -193,14 +224,65 @@ class NowActivity : ComponentActivity() {
             val read = Snapshot.parse(Engine.nativeActivity())
             val named = read?.apps.orEmpty().map { it.uid }.filter { it !in known }.associateWith(appNames::of)
             val grouped = named.mapValues { (_, app) -> groupOf(app) }
-            val hosts = read?.apps.orEmpty().flatMap { app -> app.destinations.flatMap(::hostsOf) }.distinct().filter { it !in seen }
-            Fetched(read, named, grouped, matchTrackers(hosts), namesOf(tunnelsOf(read)))
+            val blocked = readBlocking()
+            // The rows blocking counted, at port 443, for the marks that group a company's trackers under one allow.
+            val rows = blocked.tallies.mapNotNull { blocked.facts?.table?.row(it.host) }.map(RowNames::host)
+            val hosts = (read?.apps.orEmpty().flatMap { app -> app.destinations.flatMap(::hostsOf) } + rows).distinct().filter { it !in seen }
+            Fetched(read, named, grouped, matchTrackers(hosts), namesOf(tunnelsOf(read)), blocked)
         }
         tunnelNames.putAll(read.tunnels)
         names.putAll(read.named)
         groups.putAll(read.grouped)
         keep(read.trackers)
+        blocking.value = read.blocking
         snapshot.value = read.snapshot
+    }
+
+    /**
+     * Tracker blocking as it stands, off the main thread: the facts the service last handed the engine (or this screen's
+     * own reading, where it handed none in this process), what the engine counted in memory, and the user's allowances
+     * and pause, ended ones forgotten.
+     */
+    private fun readBlocking(): BlockingView {
+        val settings = BlockingSettings.of(this)
+        val now = System.currentTimeMillis()
+        val facts = BlockingState.facts.value ?: ownFacts
+            ?: BlockingFacts.read(this, settings.browsers, covering = settings.on, hand = null).also { ownFacts = it }
+        val tallies = if (WatchVpnService.running.value) Tallies.parse(Engine.nativeBlocked()) else emptyList()
+        return BlockingView(settings.on, facts, tallies, settings.appsAllowed(now), settings.entriesAllowed(), settings.pausedUntil(now))
+    }
+
+    /** A tap of the undo: the allowance written, handed to the running service at once, and the view read again. */
+    private fun changeBlocking(change: (BlockingSettings, Long) -> Unit) {
+        change(BlockingSettings.of(this), System.currentTimeMillis())
+        if (WatchVpnService.running.value) {
+            startService(
+                Intent(this, WatchVpnService::class.java).setAction(WatchVpnService.ACTION_APPLY_BLOCKING)
+                    .putExtra(WatchVpnService.EXTRA_FULL, false),
+            )
+        }
+        lifecycleScope.launch { blocking.value = withContext(worker) { readBlocking() } }
+    }
+
+    /**
+     * Whether "Log where apps connect ..." leaves the destinations of the app of [packages] out ([tool] whether it is the
+     * user's tool): the switch off, and the app the tool, chained to it, or sent through a WireGuard configuration. A
+     * state of the configurations that cannot be read now counts as sent through one, so that no host is named on a
+     * guess.
+     */
+    private fun hidesHosts(packages: List<String>, tool: Boolean): Boolean {
+        val chain = org.visadahyu.datapavan.watch.chain.ChainSettings.of(this)
+        if (chain.logDestinations) return false
+        if (tool) return true
+        val chained = chain.on && chain.lastTool != null && (chain.allApps || packages.any { it in chain.apps })
+        val tunnelled = try {
+            org.visadahyu.datapavan.watch.tunnel.TunnelStore.of(this).state().routes.keys.any { it in packages }
+        } catch (e: java.io.IOException) {
+            true
+        } catch (e: java.security.GeneralSecurityException) {
+            true
+        }
+        return chained || tunnelled
     }
 
     private class Fetched(
@@ -209,6 +291,7 @@ class NowActivity : ComponentActivity() {
         val grouped: Map<Int?, String?>,
         val trackers: Map<String, List<TrackerMarks.Match>>,
         val tunnels: Map<Long, String>,
+        val blocking: BlockingView,
     )
 
     /** The tunnels a snapshot names, by number. */
@@ -263,7 +346,13 @@ class NowActivity : ComponentActivity() {
                 val log = ConnectionLog.of(this@NowActivity)
                 val days = History.days(log.today(), log.retentionDays)
                 val secure = getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true
-                HistoryView(named, log.retentionDays, log.lockNow(), secure, days, 0, null, reading = false, tool = tool)
+                HistoryView(
+                    named, log.retentionDays, log.lockNow(), secure, days, 0, null, reading = false, tool = tool,
+                    hideHosts = hidesHosts(named.packages, tool),
+                ) to readBlocking()
+            }.let { (view, blocked) ->
+                blocking.value = blocked
+                view
             }
             history.value = shown
             if (shown.days.isNotEmpty()) showDay(index.coerceIn(0, shown.days.size - 1))
@@ -284,9 +373,19 @@ class NowActivity : ComponentActivity() {
             val tunnels = read?.entries.orEmpty().map { it.tunnel }.filter { it != 0L }
             tunnelNames.putAll(withContext(worker) { namesOf(tunnels) })
             // An entry the log keeps no destination of is no host to match (review c1, screens, M3).
-            val hosts = read?.entries.orEmpty().filter { !it.unlogged }
-                .flatMap { listOf(it.name to it.port, it.dnsName to it.port, it.address to it.port) }
-                .filter { it.first.isNotEmpty() }.map { "${it.first}\t${it.second}" }.distinct().filter { it !in seen }
+            // The rows of tracker blocking the day's segments reached, at port 443, for the marks that group a company's
+            // trackers under one allow (W8, part 3a).
+            val table = blocking.value.facts?.table
+            val rows = if (table == null) emptyList() else (
+                read?.entries.orEmpty().flatMap { entry ->
+                    listOfNotNull(rowOf(entry, table)) + if (entry.blocked) table.ofSdk(entry.blockedSdk) else emptyList()
+                } + blocking.value.tallies.mapNotNull { table.row(it.host) }
+                ).map(RowNames::host)
+            val hosts = (
+                read?.entries.orEmpty().filter { !it.unlogged }
+                    .flatMap { listOf(it.name to it.port, it.dnsName to it.port, it.address to it.port) }
+                    .filter { it.first.isNotEmpty() }.map { "${it.first}\t${it.second}" } + rows
+                ).distinct().filter { it !in seen }
             keep(withContext(worker) { matchTrackers(hosts) })
             val now = history.value
             if (now != null && now.index == index && now.app == shown.app) {

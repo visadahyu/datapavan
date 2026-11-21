@@ -72,6 +72,24 @@ class LogSwitchTest {
         assertFalse(LogSwitch.seen(before = false, running = true) { counters() })
     }
 
+    /**
+     * A row's link opens Watch's screen above "Now" and leaves "Now" as it was beneath it, so that Back comes back to the
+     * same app's row or its history (W8 part 3a, the brief's point 11): no flag that closes what is above Watch's screen
+     * (`CLEAR_TOP`, which the link used and which closed "Now"), and none that takes the user to another task on Back.
+     */
+    @Test
+    fun aRowsLinkKeepsNowBeneathTheSwitch() {
+        val closing = android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK or
+            android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+            android.content.Intent.FLAG_ACTIVITY_NO_HISTORY
+        assertEquals(0, LogSwitch.LINK_FLAGS and closing)
+        assertEquals(android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP, LogSwitch.LINK_FLAGS)
+        // MainActivity's link takes its flags from LINK_FLAGS alone.
+        val main = java.io.File("src/main/java/org/visadahyu/datapavan/watch/MainActivity.kt").readText()
+        val link = main.substringAfter("fun logSwitchIntent(").substringBefore("\n\n")
+        assertTrue(link, link.contains("addFlags(LogSwitch.LINK_FLAGS)") && !link.contains("FLAG_ACTIVITY"))
+    }
+
     /** An app's row in "Now" links to it where the switch leaves out where it went: through the tool, its servers, or a tunnel. */
     @Test
     fun anAppsRowLinksToItWhereItLeavesSomethingOut() {

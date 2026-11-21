@@ -274,4 +274,65 @@
     <string name="guide_index_wireguard" tools:ignore="UnusedResources">Tools that run only as a VPN, with WireGuard configurations</string>
     <string name="guide_index_vpn" tools:ignore="UnusedResources">Tools that run only as a VPN</string>
     <string name="guide_index_waiting" tools:ignore="UnusedResources">Tools whose steps wait until they are tried with Watch</string>
+
+    <!-- W8, part 3a (ADR 0053): tracker blocking. Counts and sizes only inside the app: nothing of it reaches a
+         notification, the summary or the widget (ADR 0046). ADR 0025's words hold (BlockingWordsTest), and "grade"
+         never shows. The labels of the switches and buttons below are tapped by their text in the emulator check. -->
+    <!-- Watch's screen: the section, its switches and the global pause, which names no app. -->
+    <string name="blocking_title">Tracker blocking</string>
+    <string name="blocking_switch">Block trackers</string>
+    <string name="blocking_note">Off unless you turn it on. Watch stops apps you installed from reaching the hosts of tracker SDKs: their lookups get no address, and their connections are refused. A host that also serves the app itself is not blocked.</string>
+    <string name="blocking_not_covered">Apps that came with the phone, Android itself and Google Play services are not covered.</string>
+    <string name="blocking_browsers">Also block in browsers</string>
+    <string name="blocking_browsers_note">Browsers are not blocked unless you include them: they open any website.</string>
+    <!-- Only while the apps go through the user's circumvention tool. -->
+    <string name="blocking_tool_dns">Also block your tool\'s own tracker lookups</string>
+    <string name="blocking_tool_dns_note">Off unless you turn it on. Watch then answers your tool\'s own lookups of tracker hosts with no address. It never refuses the tool\'s connections: the names they show can be any popular website.</string>
+    <string name="blocking_pause">Pause blocking for 10 minutes</string>
+    <!-- %1$s: when the pause ends, as the phone writes the time. -->
+    <string name="blocking_paused">Paused until %1$s</string>
+    <string name="blocking_resume">Block again now</string>
+    <!-- "Now": the pause, said once above the apps. -->
+    <string name="blocking_paused_now">Tracker blocking is paused until %1$s.</string>
+    <!-- Beside every allow and the pause: what an allow lets through, and how soon it works. -->
+    <string name="blocking_late_sends">Apps may send what they held back while blocked, once allowed.</string>
+    <string name="blocking_seconds">It works within a few seconds: apps keep a failed lookup for a moment.</string>
+    <!-- "Now" and an app's history: one app. -->
+    <string name="blocking_allow_app">Allow trackers in this app</string>
+    <string name="blocking_block_app">Block trackers again</string>
+    <!-- %1$s: when the hour ends, as the phone writes the time. -->
+    <string name="blocking_app_allowed">Trackers are allowed in this app until %1$s.</string>
+    <!-- What blocking counted, lookups apart from connections. %2$s names the tracker as the three forms below do, or a
+         host; %3$s is when the first was, as the phone writes the time. -->
+    <plurals name="blocking_connections">
+        <item quantity="one">Blocked %1$d connection to %2$s since %3$s.</item>
+        <item quantity="other">Blocked %1$d connections to %2$s since %3$s.</item>
+    </plurals>
+    <plurals name="blocking_lookups">
+        <item quantity="one">Answered %1$d lookup for %2$s with no address since %3$s.</item>
+        <item quantity="other">Answered %1$d lookups for %2$s with no address since %3$s.</item>
+    </plurals>
+    <!-- A tracker by its name in the εxodus list (%1$s) and its company (%2$s), where the owners' table gives one; a
+         tracker with none is named by its name alone. -->
+    <string name="blocking_tracker_company">%1$s (%2$s)</string>
+    <!-- Several trackers of one company that one εxodus signature names: %1$s is the company. -->
+    <string name="blocking_company">trackers of %1$s</string>
+    <!-- A time on another day: %1$s the date, %2$s the time. -->
+    <string name="blocking_day_time">%1$s, %2$s</string>
+    <!-- An app's history: its trackers, one allow each, or one for a company. -->
+    <string name="blocking_history_title">Tracker blocking in this app</string>
+    <!-- %1$s names a tracker, a company's trackers or a host, as above. -->
+    <string name="blocking_allow_entry">Allow %1$s in this app</string>
+    <string name="blocking_block_entry">Block %1$s again</string>
+    <string name="blocking_entry_allowed">Allowed in this app until you block it again.</string>
+    <!-- %1$s: what the host does, from Datapavan's table, in English. -->
+    <string name="blocking_function">What it does: %1$s</string>
+    <!-- A connection of the history that Watch blocked: %1$s names the tracker, never the host where the switch "Log
+         where apps connect ..." left it out. -->
+    <string name="blocking_blocked">Blocked by Watch: %1$s.</string>
+    <!-- A host the app reached that Watch does not block in it, and why. -->
+    <string name="blocking_kept">Not blocked: this host also serves the app itself.</string>
+    <string name="blocking_kept_code">Not blocked: in this app, this host also serves sign-in or sharing.</string>
+    <string name="blocking_kept_unread">Not blocked: this host may also serve sign-in or sharing, and Datapavan has not yet read this app\'s code.</string>
+    <string name="blocking_kept_own">Not blocked: this app uses this host for its own work.</string>
 </resources>

@@ -45,6 +45,12 @@ object History {
         val asn: Long = 0,
         /** [address] as the record held it, read once here, not while the screen draws (screens review, nit). */
         val ip: InetAddress = ANY,
+        /**
+         * Whether tracker blocking refused it (version 6 of the log; W8, part 3a, ADR 0053), and the SDK of the row that
+         * refused it, kept by the engine even where the switch left the flow's names out ([LogRecord.Segment.blockedSdk]).
+         */
+        val blocked: Boolean = false,
+        val blockedSdk: String = "",
     )
 
     /**
@@ -101,6 +107,8 @@ object History {
                     proxy = it.proxy,
                     asn = it.asn,
                     ip = it.address,
+                    blocked = it.blocked,
+                    blockedSdk = it.blockedSdk,
                 )
             }
             .sortedWith(compareByDescending<Entry> { it.start }.thenByDescending { it.end })
