@@ -169,7 +169,7 @@ val remappedRustFlags = cargoHome.map { home ->
     )
 }
 
-/** Copies the table of tools (data/tools, W6) into the assets, for Watch to find the user's tool. */
+/** Copies the table of tools (data/tools, W6) into the assets, for Watch to find the user's tool, and its guides (W8, part 3b). */
 abstract class ToolTable : DefaultTask() {
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
@@ -179,6 +179,11 @@ abstract class ToolTable : DefaultTask() {
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.NAME_ONLY)
     abstract val signers: ConfigurableFileCollection
+
+    /** data/tools' guides.tsv, guide-steps.tsv and guide-labels.tsv: the per-tool guides for proxy mode (W8, part 3b). */
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val guides: ConfigurableFileCollection
 
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
@@ -190,6 +195,7 @@ abstract class ToolTable : DefaultTask() {
         out.mkdirs()
         table.get().asFile.copyTo(out.resolve("tools.tsv"))
         signers.files.forEach { it.copyTo(out.resolve("app-signers/${it.name}")) }
+        guides.files.forEach { it.copyTo(out.resolve(it.name)) }
     }
 }
 
@@ -255,6 +261,7 @@ androidComponents {
         val toolsTask = tasks.register<ToolTable>("toolTable$suffix") {
             table.set(repositoryRoot.file("data/tools/tools.tsv"))
             signers.from(listOf("apps.tsv", "signers.tsv", "SOURCE").map { repositoryRoot.file("data/app-signers/$it") })
+            guides.from(listOf("guides.tsv", "guide-steps.tsv", "guide-labels.tsv").map { repositoryRoot.file("data/tools/$it") })
         }
         variant.sources.assets?.addGeneratedSourceDirectory(toolsTask, ToolTable::outputDir)
     }
@@ -267,10 +274,16 @@ androidComponents {
 tasks.withType<Test>().configureEach {
     inputs.dir(layout.projectDirectory.dir("src/main/res/values")).withPathSensitivity(PathSensitivity.RELATIVE)
         .withPropertyName("englishStrings")
+    inputs.dir(layout.projectDirectory.dir("src/debug/assets")).withPathSensitivity(PathSensitivity.RELATIVE)
+        .withPropertyName("debugAssets")
     // W8: the DNS tables and the public suffix list (dns/DnsSettingsTest.kt, PublicSuffixesTest.kt), and the DNS
     // lab's test certificates (dns/ExchangerTest.kt).
     inputs.files(
-        listOf("data/app-signers", "data/tools", "data/odoh", "data/dns-presets", "data/public-suffix", "scripts/dnslab/certs")
+        listOf(
+            "data/app-signers", "data/tools", "data/odoh", "data/dns-presets", "data/public-suffix", "scripts/dnslab/certs",
+            // W8, part 3b: the guides' pages, which the screen must match, and the test tool's labels.
+            "docs/site/guides", "scripts/test-tool/res",
+        )
             .map { repositoryRoot.dir(it) },
     ).withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("repositoryData")
     inputs.files(

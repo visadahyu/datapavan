@@ -8,6 +8,7 @@ import android.os.Process
 import android.system.OsConstants
 import android.util.Log
 import java.net.InetSocketAddress
+import org.visadahyu.datapavan.watch.guides.Guides
 
 /** Finding the user's tool from any part of Watch (W6). Blocking: call it off the main thread. */
 object Tools {
@@ -16,7 +17,8 @@ object Tools {
 
     /**
      * The table of tools, as the build put it in the assets, and in debug builds also W6's test tool
-     * (src/debug/assets/tools-test.tsv), which release builds do not carry.
+     * (src/debug/assets/tools-test.tsv), which release builds do not carry; with the ports the guides have the user
+     * set where the tool's profile sets its listener (W8, part 3b: Guides.withNamedPorts).
      */
     fun table(context: Context): List<KnownTool> {
         val table = context.assets.open(ToolTable.ASSET).bufferedReader().use { ToolTable.parse(it.readText()) }
@@ -25,7 +27,7 @@ object Tools {
         } catch (e: java.io.FileNotFoundException) {
             emptyList()
         }
-        return table + test
+        return Guides.withNamedPorts(table + test, Guides.book(context))
     }
 
     private const val TEST_ASSET = "tools-test.tsv"
