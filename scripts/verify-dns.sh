@@ -294,29 +294,78 @@ dump dns-choice doh "https://doh.dnslab.test:${FRONT_doh##*:}/dns-query" 10.0.2.
 expect "the user's own DoH resolver answers" "$(lookup probe.dnslab.test)" 10.53.3.3
 dump dns-choice odoh >/dev/null
 
-# 3b. The speed budget (ADR 0039): Watch's own cost of each way in the lab, where every server is a few
-# milliseconds away. The engine times each exchange it hands over and answers (latency WAY COUNT P50 P95, in ms);
-# the CPU time Watch's process spends per lookup is read from its /proc/PID/stat (ticks of 10 ms).
+# 3b. The speed budget (ADR 0039, "The speed budget of direct apps' names"): Watch's own cost of each way in the lab,
+# where every server is a few milliseconds away, written as ADR 0039 writes the budget on real networks: against plain
+# DNS timed in the same step. The engine times each exchange it hands over and answers, per carry (latency CARRY COUNT
+# P50 P95, in ms). Each way's lookups go one for one with fresh local names under home.arpa, which only the network's
+# resolver answers (the lab's with NXDOMAIN, which the engine times as an answer), so that a stall of the emulator,
+# which holds every process on it, falls on both carries alike; the durations are cleared before each way, so that
+# only its own exchanges count; and each way gets BUDGET_LOOKUPS lookups, so that its p95 is not its largest few
+# (CI's runs 44899858955, 44905337897, 44910873200 and 44910928225, docs/ci-flakes.md). The bounds: each way's p50
+# at most 100 ms above plain DNS's, its p95 at most 250 ms above plain DNS's, and plain DNS's own p50 through Watch
+# at most 100 ms, so that a slowness common to every carry still fails. No retry. The CPU time Watch's process spends
+# per lookup is read from its /proc/PID/stat (ticks of 10 ms).
+BUDGET_LOOKUPS=100
+BUDGET_P50_ABOVE_MS=100
+BUDGET_P95_ABOVE_MS=250
+BUDGET_PLAIN_P50_MS=100
 watch_pid=$(adb shell pidof "$PKG:watch" | tr -d '\r')
 [ -n "$watch_pid" ] || watch_pid=$(adb shell pidof "$PKG" | tr -d '\r')
 cpu() { adb shell cat "/proc/$watch_pid/stat" | tr -d '\r' | awk '{print $14 + $15}'; }
+# Looks the names $1 (by commas) up in the workload app, in order, in one process (fresh names: no cache answers);
+# prints how many of them it logged an answer or a failure for.
+lookups() {
+    adb shell am force-stop "$WORKLOAD"
+    adb logcat -c
+    adb shell am start -W -n "$WORKLOAD/.WorkActivity" --es names "$1" >/dev/null
+    for _ in $(seq 1 180); do
+        grep -qx done <<<"$(workload_log)" && break
+        sleep 1
+    done
+    grep -cE '^(resolved|resolve) ' <<<"$(workload_log)" || true
+}
+# The figures of carry $1 in the dump $2: COUNT P50 P95.
+latency_of() { sed -n "s/^ *dns-latency $1 \([0-9]*\) \([0-9]*\) \([0-9]*\)$/\1 \2 \3/p" <<<"$2"; }
+# A token of this run: the names below are new to every cache, the emulator's own across runs included.
+stamp=$RANDOM
+k=0
 for choice in "odoh" "preset lab-doh" "preset lab-dot"; do
+    k=$((k + 1))
+    case $choice in
+        odoh) carry=odoh ;;
+        "preset lab-doh") carry=doh ;;
+        *) carry=dot ;;
+    esac
     # shellcheck disable=SC2086 # the choice's words are the dump's arguments
     dump dns-choice $choice >/dev/null
+    # Warm, as the budget on real networks is: the way's first exchange opens its connection, which Watch then keeps.
+    lookups "name-${stamp}${k}0000.dnslab.test,warm-$stamp-$k.home.arpa" >/dev/null
+    # name-N.dnslab.test answers 10.53.0.(N mod 256) on every way; a local name the lab's resolver does not hold
+    # gets NXDOMAIN.
+    names=""
+    for i in $(seq 1 "$BUDGET_LOOKUPS"); do
+        names="$names,name-${stamp}${k}$(printf %04d "$i").dnslab.test,plain-$stamp-$k-$i.home.arpa"
+    done
+    dump dns-times-clear >/dev/null
     before=$(cpu)
-    for _ in $(seq 1 20); do lookup "$(fresh)" >/dev/null; done
+    logged=$(lookups "${names#,}")
     after=$(cpu)
-    echo "ok: $choice: Watch's CPU per lookup $(( (after - before) * 10 / 20 )) ms (20 lookups)"
+    [ "$logged" -eq $((2 * BUDGET_LOOKUPS)) ] ||
+        fail "$choice: the workload app logged $logged of its $((2 * BUDGET_LOOKUPS)) lookups within 180 s"
+    answered=$(grep -c "^resolved name-${stamp}${k}[0-9]*\.dnslab\.test 10\.53\.0\." <<<"$(workload_log)" || true)
+    [ "$answered" -eq "$BUDGET_LOOKUPS" ] || fail "$choice: $answered of the $BUDGET_LOOKUPS names of the way got their address"
+    status=$(dump)
+    read -r count p50 p95 < <(latency_of "$carry" "$status") || true
+    read -r plain_count plain_p50 plain_p95 < <(latency_of network "$status") || true
+    figures="$carry p50 ${p50:-?} ms, p95 ${p95:-?} ms (${count:-0} exchanges); plain DNS in the same step p50 ${plain_p50:-?} ms, p95 ${plain_p95:-?} ms (${plain_count:-0} exchanges)"
+    [ "${count:-0}" -ge "$BUDGET_LOOKUPS" ] || fail "too few $carry exchanges timed in the lab: $figures"
+    [ "${plain_count:-0}" -ge "$BUDGET_LOOKUPS" ] || fail "too few exchanges of plain DNS timed beside $carry in the lab: $figures"
+    [ "$plain_p50" -le "$BUDGET_PLAIN_P50_MS" ] && [ "$p50" -le $((plain_p50 + BUDGET_P50_ABOVE_MS)) ] &&
+        [ "$p95" -le $((plain_p95 + BUDGET_P95_ABOVE_MS)) ] ||
+        fail "$carry in the lab over the budget of ADR 0039 (the way's p50 at most $BUDGET_P50_ABOVE_MS ms above plain DNS's, its p95 at most $BUDGET_P95_ABOVE_MS ms above, plain DNS's p50 at most $BUDGET_PLAIN_P50_MS ms): $figures"
+    echo "ok: $carry in the lab, within the budget (ADR 0039): $figures; Watch's CPU per lookup $(( (after - before) * 10 / (2 * BUDGET_LOOKUPS) )) ms ($((2 * BUDGET_LOOKUPS)) lookups, half of them local)"
 done
 dump dns-choice odoh >/dev/null
-grep -E '^ *dns-latency ' <<<"$(dump)" | sed 's/^ */  /'
-for carry in odoh doh dot; do
-    read -r count p50 p95 < <(sed -n "s/^ *dns-latency $carry \([0-9]*\) \([0-9]*\) \([0-9]*\)$/\1 \2 \3/p" <<<"$(dump)")
-    [ "${count:-0}" -ge 15 ] || fail "too few $carry exchanges timed: ${count:-0}"
-    [ "$p50" -le "${DNS_BUDGET_LAB_P50_MS:-100}" ] && [ "$p95" -le "${DNS_BUDGET_LAB_P95_MS:-250}" ] ||
-        fail "$carry in the lab: p50 $p50 ms, p95 $p95 ms, over the budget of ${DNS_BUDGET_LAB_P50_MS:-100} and ${DNS_BUDGET_LAB_P95_MS:-250} ms (ADR 0039)"
-    echo "ok: $carry in the lab: p50 $p50 ms, p95 $p95 ms, within the budget (ADR 0039)"
-done
 
 # 4. Strict, every encrypted way down.
 dump dns-strict on >/dev/null
