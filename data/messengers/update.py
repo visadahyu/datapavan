@@ -2,6 +2,7 @@
 """Fetches Telegram's published address ranges again for Watch's inference of MTProto proxies (ADR 0052).
 
     python3 -I data/messengers/update.py
+    python3 -I data/messengers/update.py --self-test    (no fetch: the bounds below)
 
 It reads https://core.telegram.org/resources/cidr.txt, checks that every line is one network in CIDR
 form and nothing else, and compares it with telegram-cidr.txt beside this script. It records each fetch
@@ -25,6 +26,13 @@ URL = "https://core.telegram.org/resources/cidr.txt"
 HERE = pathlib.Path(__file__).resolve().parent
 KEPT = HERE / "telegram-cidr.txt"
 SOURCE = HERE / "SOURCE"
+# The most bytes a fetch reads: the file is 14 lines today. A longer one fails the run, never cut short.
+MAX_BYTES = 65536
+# The widest range taken: a network wider than a /16 (IPv4) or a /29 (IPv6) is no data centre's, and 0.0.0.0/0 or
+# ::/0 would call every address Telegram's (the fix round's S-n2).
+SHORTEST = {4: 16, 6: 29}
+# The most ranges one fetch may add: more is a change to read by hand, not to take.
+MAX_ADDED = 32
 
 
 def ranges(data: bytes) -> list:
@@ -38,6 +46,8 @@ def ranges(data: bytes) -> list:
             raise SystemExit(f"line {number} is not one network in its canonical form: {line!r}")
         if not network.is_global:
             raise SystemExit(f"line {number} is not a public network: {line}")
+        if network.prefixlen < SHORTEST[network.version]:
+            raise SystemExit(f"line {number} is wider than a /{SHORTEST[network.version]}: {line}")
         networks.append(line)
     if not networks:
         raise SystemExit("the file holds no network")
@@ -47,12 +57,16 @@ def ranges(data: bytes) -> list:
 def main() -> None:
     request = urllib.request.Request(URL, headers={"User-Agent": "datapavan-data-update"})
     with urllib.request.urlopen(request, timeout=30) as response:
-        data = response.read(65536)
+        data = response.read(MAX_BYTES + 1)
         modified = response.headers.get("Last-Modified", "-")
+    if len(data) > MAX_BYTES:
+        raise SystemExit(f"the file is longer than {MAX_BYTES} bytes: not read, rather than cut short")
     new = ranges(data)
     old = ranges(KEPT.read_bytes()) if KEPT.exists() else []
     added = [r for r in new if r not in old]
     removed = [r for r in old if r not in new]
+    if len(added) > MAX_ADDED:
+        raise SystemExit(f"{len(added)} ranges added, more than {MAX_ADDED}: read the file by hand")
     changed = KEPT.exists() and (added or removed)
     if changed and os.environ.get("DATAPAVAN_ACCEPT_CHANGE") != "1":
         print("Telegram's ranges changed; read the change, then run again with DATAPAVAN_ACCEPT_CHANGE=1:")
@@ -83,5 +97,21 @@ def main() -> None:
     print(f"{len(new)} ranges, {len(added)} added, {len(removed)} removed")
 
 
+def self_test() -> None:
+    """The bounds, without a fetch (scripts/check.sh data runs it): too wide a range fails, the kept file passes."""
+    for wide in (b"0.0.0.0/0\n", b"::/0\n", b"91.108.0.0/15\n", b"2001:b20::/28\n"):
+        try:
+            ranges(wide)
+        except SystemExit:
+            continue
+        raise SystemExit(f"self-test: {wide!r} was taken")
+    ranges(b"91.108.0.0/16\n2001:b28::/32\n")
+    ranges(KEPT.read_bytes())
+    print("update.py self-test passed")
+
+
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:] == ["--self-test"]:
+        self_test()
+    else:
+        main()
