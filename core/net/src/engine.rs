@@ -63,6 +63,7 @@ use crate::tls::Hello;
 use crate::tun::Tun;
 
 mod activity;
+mod blocks;
 mod budget;
 mod chain;
 mod clock;
@@ -85,6 +86,7 @@ mod udp;
 mod upstream;
 mod whose;
 
+pub use blocks::{BlockSetting, Tally};
 use budget::Budget;
 pub use chain::Chain;
 pub use clock::{Clock, SystemClock};
@@ -424,6 +426,9 @@ pub enum Outcome {
     Unreachable,
     /// The engine could not make or protect a socket.
     Failed,
+    /// Tracker blocking refused it (W8, part 3a; ADR 0053): the app got a reset, or for QUIC an ICMP "port
+    /// unreachable", and no byte of its payload went upstream.
+    Blocked,
 }
 
 /// Where a flow's name came from. W3's order, written here and only here ([`NamedBy::yields_to`]): the
@@ -536,6 +541,17 @@ pub struct Flow {
     pub via: Via,
     /// The proxy the app reached it through, read from the connection or inferred (W8, part 2a; ADR 0052).
     pub proxy: Option<Box<Proxied>>,
+    /// For a flow tracker blocking refused ([`Outcome::Blocked`]), the SDK of the graded table's row that blocked
+    /// it, its Maven coordinate, which the log keeps whatever "Log where these apps connect" says, as it names
+    /// a tracker and never a host (ADR 0053, decision 8).
+    pub blocked: Option<Box<BlockedBy>>,
+}
+
+/// The graded table's row that blocked a flow (W8, part 3a; ADR 0053): its SDK's Maven coordinate.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BlockedBy {
+    /// The SDK, `group:artifact`.
+    pub sdk: String,
 }
 
 /// The way a flow went (W6, W7): its route when it opened, which the log's records and the live view say.
@@ -593,7 +609,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 67;
+pub const COUNTERS: usize = 71;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -665,6 +681,10 @@ pub struct Counters {
     proxies_substituted: AtomicU64,
     proxies_taken_back: AtomicU64,
     covers_kept_out: AtomicU64,
+    blocked_lookups: AtomicU64,
+    blocked_connections: AtomicU64,
+    blocked_addresses: AtomicU64,
+    blocking_holds: AtomicU64,
 }
 
 impl Counters {
@@ -741,7 +761,10 @@ impl Counters {
     /// from a server that the core refused; then (W8, part 2a, ADR 0052) the proxy requests the apps' bytes
     /// declared, those of them that carried a password unencrypted, the flows named a messenger's inferred proxy,
     /// those not named so because the app connected to its maker directly in the window (substitution), the
-    /// names taken back when it did so later, and the hellos whose name, a messenger's cover, named no flow. None
+    /// names taken back when it did so later, and the hellos whose name, a messenger's cover, named no flow; then
+    /// (W8, part 3a, ADR 0053) the lookups tracker blocking answered empty, the connections it refused (TCP and
+    /// QUIC, by name or by address), those of them refused by their address alone, and the connections whose first
+    /// bytes were held while they read as an unfinished hello or request head. None
     /// names a destination: they can be read on any phone. New
     /// counters are only ever appended, so that scripts reading a column by its place keep reading the same one.
     #[must_use]
@@ -829,6 +852,10 @@ impl Counters {
             &self.proxies_substituted,
             &self.proxies_taken_back,
             &self.covers_kept_out,
+            &self.blocked_lookups,
+            &self.blocked_connections,
+            &self.blocked_addresses,
+            &self.blocking_holds,
         ]
     }
 }
@@ -851,6 +878,8 @@ pub struct ChainSetting {
     pub dns: Option<Arc<DnsConfig>>,
     /// The messengers' apps and Android's proxy setting (W8, part 2a), as set last ([`Engine::proxies`]).
     pub proxies: ProxySetting,
+    /// Tracker blocking (W8, part 3a), as set last ([`Engine::blocking`]).
+    pub blocking: BlockSetting,
 }
 
 /// What an engine hands the next when the tunnel is set up again (ADR 0044, decision 5 as amended): what
@@ -878,6 +907,8 @@ pub struct Handover {
     proxies: ProxySetting,
     /// Each messenger app's last direct connection to its maker's network (the fix round of W8 part 2a, S-M2).
     direct: proxied::DirectInstants,
+    /// Tracker blocking's setting (W8, part 3a); what it counted and tied stays behind.
+    blocking: BlockSetting,
 }
 
 /// What the engine's thread and its controller share.
@@ -982,6 +1013,11 @@ struct Shared {
     proxies: Mutex<proxied::State>,
     /// The records of flows named an inferred proxy, held back from the log for their window of take-back.
     held_back: Mutex<proxied::HeldBack>,
+    /// Tracker blocking (W8, part 3a; ADR 0053): its setting, what it counted for "Now", and the addresses tied to
+    /// blocked names.
+    blocks: Mutex<blocks::Blocks>,
+    /// How many times blocking was set: a relayed flow decides its row again when this changed.
+    blocking_set: AtomicU64,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -991,7 +1027,8 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 impl Shared {
     fn keep(&self, flow: Flow) {
         let counter = match flow.outcome {
-            Outcome::Opened => None,
+            // A flow blocking refused is counted where it is refused (`Shared::count_block`).
+            Outcome::Opened | Outcome::Blocked => None,
             Outcome::Refused => Some(&self.counters.refused),
             Outcome::Unreachable => Some(&self.counters.unreachable),
             Outcome::Failed => Some(&self.counters.failed),
@@ -1079,6 +1116,7 @@ impl Engine {
             mut dns,
             mut proxies,
             direct,
+            mut blocking,
         } = handover.unwrap_or_else(|| Handover {
             chain: None,
             upstream_dns: None,
@@ -1091,6 +1129,7 @@ impl Engine {
             dns: None,
             proxies: ProxySetting::default(),
             direct: Vec::new(),
+            blocking: BlockSetting::default(),
         });
         let waiting = activity::Waiting::of_held(&activity.held);
         if let Some(setting) = setting {
@@ -1099,6 +1138,7 @@ impl Engine {
             tunnels = setting.tunnels;
             dns = setting.dns;
             proxies = setting.proxies;
+            blocking = setting.blocking;
         }
         let clock = platform.clock();
         // The live view counts from now on; a handed-over view keeps the moment its first engine began.
@@ -1151,6 +1191,8 @@ impl Engine {
             messengers: Messengers::bundled(),
             proxies: Mutex::default(),
             held_back: Mutex::default(),
+            blocks: Mutex::default(),
+            blocking_set: AtomicU64::new(0),
         });
         // In place before the thread reads its first packet: no direct app's lookup goes to the network's
         // resolver while the encrypted one is set.
@@ -1159,6 +1201,8 @@ impl Engine {
         // substitution goes on from the engine before.
         shared.set_proxies(proxies);
         lock(&shared.proxies).carry_direct(direct);
+        // In place before the thread reads its first packet: no blocked name gets an answer from the new engine.
+        shared.set_blocking(blocking);
         // In place before the thread reads its first packet: a tunnelled app's first SYN never goes directly.
         shared.tunnels.set(&tunnels);
         if shared.tunnels.any() {
@@ -1269,6 +1313,7 @@ impl Engine {
             dns: shared.resolver.get(),
             proxies,
             direct,
+            blocking: shared.blocking(),
         }
     }
 
@@ -1356,6 +1401,19 @@ impl Engine {
         self.shared.set_proxies(setting);
     }
 
+    /// Sets tracker blocking (W8, part 3a; ADR 0053), whole: every lookup and connection is decided by it from now
+    /// on, and a relayed flow whose row it blocks now is reset at its next byte.
+    pub fn blocking(&self, setting: BlockSetting) {
+        self.shared.set_blocking(setting);
+    }
+
+    /// What tracker blocking counted in memory since the engine started or the live view was cleared: each app's
+    /// rows, by the row's host, with the lookups answered empty and the connections refused apart (decision 7).
+    #[must_use]
+    pub fn blocked(&self) -> Vec<(u32, String, Tally)> {
+        self.shared.blocked_tallies()
+    }
+
     /// Whether the answers of Watch's own DNS address reach the apps with a time to live of 0 now: while a chain
     /// or a tunnel takes any app, or as set by [`Engine::uncache_answers`].
     #[must_use]
@@ -1428,6 +1486,7 @@ impl Engine {
     pub fn clear_activity(&self) {
         let now = self.shared.clock.wall_ms();
         lock(&self.shared.activity).counts.clear(now);
+        self.shared.clear_blocked();
     }
 
     /// Takes a reading of the apps' states from Watch's Kotlin side, a message of [`crate::states`]:
@@ -1871,6 +1930,8 @@ mod tests {
             messengers: crate::messengers::Messengers::bundled(),
             proxies: Mutex::default(),
             held_back: Mutex::default(),
+            blocks: Mutex::default(),
+            blocking_set: AtomicU64::new(0),
         }
     }
 
@@ -1910,6 +1971,7 @@ mod tests {
             network,
             via: crate::engine::Via::Direct,
             proxy: None,
+            blocked: None,
         });
         Opened {
             id,
@@ -2314,6 +2376,7 @@ mod tests {
             network: None,
             via: crate::engine::Via::Direct,
             proxy: None,
+            blocked: None,
         };
         let server = SocketAddr::from(([198, 51, 100, 9], 443));
         let Some(bytes) = shared.record(flow(1, server, Outcome::Opened)) else {
@@ -3791,6 +3854,7 @@ mod tests {
             network: None,
             via: crate::engine::Via::Direct,
             proxy: None,
+            blocked: None,
         }) else {
             unreachable!("an open flow is live")
         };

@@ -1,6 +1,7 @@
 //! TCP through the tunnel (ADR 0012): the app's SYN held until its owner and the server are known, the
 //! rewriting to the engine's listener, Android's own stack ending the connection, and the relay.
 
+use super::blocks::{Gate, Step};
 use super::budget::Place;
 use super::chain::{Route, connect_through};
 use super::logbook::FlowBytes;
@@ -417,9 +418,11 @@ async fn open(
     // may be bound, which the app then sees as a refusal, and the log records so (third round, nit 2).
     let listening = shared.listener(app.is_ipv4());
     let listener = listening.now();
+    let blocked = upstream.as_ref().err().and_then(Blocked::of);
     let outcome = match &upstream {
         Ok(_) if listener.port == 0 => Outcome::Refused,
         Ok(_) => Outcome::Opened,
+        Err(_) if blocked.is_some() => Outcome::Blocked,
         Err(error) if error.kind() == io::ErrorKind::ConnectionRefused => Outcome::Refused,
         Err(error) if is_unreachable(error) => Outcome::Unreachable,
         Err(_) => Outcome::Failed,
@@ -468,9 +471,15 @@ async fn open(
             network,
             via: crate::engine::Via::Direct,
             proxy: None,
+            blocked: blocked
+                .and_then(|entry| shared.row_sdk(entry))
+                .map(|sdk| Box::new(super::BlockedBy { sdk })),
         },
         via.as_deref(),
     );
+    if let Some(entry) = blocked {
+        shared.count_block(uid, entry, false);
+    }
     // A messenger's attempt to reach its maker directly counts for substitution, whether or not it got through.
     if sniffs {
         shared.proxies_opened(&opened, dns_name.as_deref());
@@ -497,7 +506,7 @@ async fn open(
         Err(_) => {
             // The SYN never reached Android's stack, so no old connection can linger on the port.
             lock(&nat).release(held.port);
-            if outcome == Outcome::Refused {
+            if matches!(outcome, Outcome::Refused | Outcome::Blocked) {
                 let sequence = packet::tcp_sequence(&held.packet, &held.parsed);
                 packet::tcp_reset(destination, app, 0, Some(sequence.wrapping_add(1)))
             } else {
@@ -578,10 +587,10 @@ async fn upstream(
     // at port 53 to the engine's own listener of it, at any other port (853, Android's opportunistic DNS over
     // TLS, among them) refused, so that Android asks on port 53 (W8, part 1, point 9).
     let lookups = shared.resolver.on() && shared.is_tunnel_dns(destination.ip());
-    let direct = async {
+    let direct = |uid: Option<u32>| async move {
         if lookups {
             return if destination.port() == 53 {
-                connect_lookups(shared, TcpLookups::Encrypted).await
+                connect_lookups(shared, TcpLookups::Encrypted(uid)).await
             } else {
                 Err(io::ErrorKind::ConnectionRefused.into())
             };
@@ -592,22 +601,30 @@ async fn upstream(
         }
     };
     let crowded = shared.tcp_waiting.load(Ordering::Acquire) > shared.limits.tcp_share;
+    // Tracker blocking needs the app first where it may refuse by the address alone, or where a lookup over TCP is
+    // decided for its app (W8, part 3a; ADR 0053, decision 4): nothing leaves before Android named the app.
+    let blocking =
+        shared.blocking_on() && (lookups || shared.address_tie(destination.ip()).is_some());
     if shared.chain().is_some()
         || shared.tunnels.any()
         || shared.tunnels.asks()
         || is_stand_in(destination.ip())
         || crowded
+        || blocking
     {
         // The route waits for the app's name: a chained or tunnelled app's connection must not start
         // directly, nor one its app's share may refuse, nor one of an app Watch did not name, which may be
-        // a routed app installed again.
+        // a routed app installed again, nor one tracker blocking may refuse.
         let uid = owner(shared, TCP, app, destination).await;
         let share = shared.tcp_shares.take(uid).ok()?;
+        if let Some(entry) = blocked_before(shared, uid, destination) {
+            return Some((uid, Err(Blocked::error(entry)), Some(share), None, None));
+        }
         let (upstream, via) = match shared.route(uid, destination) {
-            Route::Direct => (direct.await, None),
+            Route::Direct => (direct(uid).await, None),
             Route::Tool(chain) if lookups => {
                 let stream = if destination.port() == 53 {
-                    connect_lookups(shared, TcpLookups::Tool(Arc::clone(&chain))).await
+                    connect_lookups(shared, TcpLookups::Tool(Arc::clone(&chain), uid)).await
                 } else {
                     Err(io::ErrorKind::ConnectionRefused.into())
                 };
@@ -631,7 +648,7 @@ async fn upstream(
         return Some((uid, upstream, Some(share), via, None));
     }
     // The server is asked at once, beside Android. One that answered first leaves nothing waiting.
-    let mut direct = std::pin::pin!(direct);
+    let mut direct = std::pin::pin!(direct(None));
     let mut asked = std::pin::pin!(owner(shared, TCP, app, destination));
     let first = tokio::select! {
         biased;
@@ -646,6 +663,50 @@ async fn upstream(
         }
     }
 }
+
+/// The row that refuses a connection of `uid` to `destination` before anything leaves (ADR 0053, decision 4): a
+/// stand-in's name, which a chained app's SOCKS request to the tool would carry, or an address an answer Watch
+/// passed tied to blocked names alone.
+pub(super) fn blocked_before(
+    shared: &Shared,
+    uid: Option<u32>,
+    destination: SocketAddr,
+) -> Option<usize> {
+    if is_stand_in(destination.ip()) {
+        let name = lock(&shared.stand_ins).name(destination.ip())?;
+        return shared.verdict(uid, &name, super::blocks::Path::Connection);
+    }
+    let entry = shared.address_verdict(uid, destination.ip())?;
+    Counters::add(&shared.counters.blocked_addresses, 1);
+    Some(entry)
+}
+
+/// The error a connection tracker blocking refused carries, with its row, so that it is told from a server's
+/// refusal.
+#[derive(Debug)]
+pub(super) struct Blocked(pub(super) usize);
+
+impl Blocked {
+    pub(super) fn error(entry: usize) -> io::Error {
+        io::Error::other(Self(entry))
+    }
+
+    /// The row of a connection refused by blocking, if `error` is one's.
+    pub(super) fn of(error: &io::Error) -> Option<usize> {
+        error
+            .get_ref()
+            .and_then(|e| e.downcast_ref::<Self>())
+            .map(|b| b.0)
+    }
+}
+
+impl std::fmt::Display for Blocked {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "refused by tracker blocking")
+    }
+}
+
+impl std::error::Error for Blocked {}
 
 /// A held SYN whose app holds its whole share of the connections waiting for their servers: dropped,
 /// as by a full queue, and counted, and its port freed at once, since it never reached Android's
@@ -738,7 +799,9 @@ pub(super) async fn accept(
         let (shared, nat) = (Arc::clone(&shared), Arc::clone(&nat));
         let id = upstream.opened.id;
         tokio::spawn(async move {
-            relay(app, upstream, &shared).await;
+            if let Some(entry) = relay(app, upstream, &shared).await {
+                shared.blocked_flow(id, entry);
+            }
             // What Android's stack still holds for the app, then its last FIN and ACK, still pass the
             // tunnel and need rewriting for a while; then the port is free. Only then is the flow's last
             // segment written: earlier, the packets of that while were counted after it, and missing
@@ -835,6 +898,8 @@ enum End {
     Clean,
     /// Reading or writing failed, as when either side reset the connection.
     Failed,
+    /// Tracker blocking refused it, by the row given (ADR 0053): both sides get a reset.
+    Blocked(usize),
 }
 
 /// Relays one connection both ways, counting the bytes as they pass, until both directions end; the
@@ -846,11 +911,21 @@ enum End {
 /// A direction that ends cleanly closes the other side's writing with a FIN, and the other direction
 /// goes on. One that fails, as when the server or the app resets the connection, ends both sides with
 /// a reset (no linger), so that the app can tell a cut-off answer from a finished one (review finding
-/// 21). What the engine's listener still held for the app is discarded then, as a reset discards it.
-async fn relay(mut app: TcpStream, mut upstream: Upstream, shared: &Arc<Shared>) {
+/// 21).
+/// What the engine's listener still held for the app is discarded then, as a reset discards it.
+///
+/// Tracker blocking (W8, part 3a; ADR 0053, decision 4) holds the app's first bytes while they read as an
+/// unfinished TLS hello or plain HTTP request head, at most [`super::blocks::HOLD`], and writes nothing of them
+/// upstream, or to the user's tool, until their name is decided ([`Gate`]); a flow it refuses, then or at a later
+/// byte either way, ends with a reset on both sides, and its row is returned. The user's tool's own flows and the
+/// flows of no app are never held.
+#[allow(clippy::too_many_lines)]
+async fn relay(mut app: TcpStream, mut upstream: Upstream, shared: &Arc<Shared>) -> Option<usize> {
     let _ = app.set_nodelay(true);
     let _ = upstream.stream.set_nodelay(true);
-    let failed = {
+    // The row that names the flow, once its first bytes named it: the server's side is decided by it again too.
+    let named = std::sync::atomic::AtomicUsize::new(usize::MAX);
+    let (failed, blocked) = {
         let (mut app_read, mut app_write) = app.split();
         let (mut up_read, mut up_write) = upstream.stream.split();
         let opened = upstream.opened;
@@ -862,11 +937,25 @@ async fn relay(mut app: TcpStream, mut upstream: Upstream, shared: &Arc<Shared>)
             let mut buffer = Zeroizing::new(vec![0u8; 16 * 1024]);
             let messenger = opened.sniffs && shared.family(opened.uid).is_some();
             let mut sniff = Some(Sniff::new(opened.sniffs, messenger));
+            let mut gate = shared.gate(opened.uid);
             loop {
-                let n = match app_read.read(&mut buffer).await {
-                    Ok(0) => break,
-                    Ok(n) => n,
-                    Err(_) => return End::Failed,
+                let read = match gate.as_ref().and_then(Gate::until) {
+                    Some(until) => tokio::time::timeout_at(until, app_read.read(&mut buffer)).await,
+                    None => Ok(app_read.read(&mut buffer).await),
+                };
+                let n = match read {
+                    // The hold ran out: what it held goes on unread (`blocks::HOLD`).
+                    Err(_) => {
+                        let held = gate.as_mut().map(Gate::ran_out).unwrap_or_default();
+                        if up_write.write_all(&held).await.is_err() {
+                            return End::Failed;
+                        }
+                        counted_up(shared, bytes, held.len());
+                        continue;
+                    }
+                    Ok(Ok(0)) => break,
+                    Ok(Ok(n)) => n,
+                    Ok(Err(_)) => return End::Failed,
                 };
                 if let Some(reading) = sniff.as_mut() {
                     for found in reading.feed(&buffer[..n]) {
@@ -876,13 +965,38 @@ async fn relay(mut app: TcpStream, mut upstream: Upstream, shared: &Arc<Shared>)
                         sniff = None;
                     }
                 }
-                if up_write.write_all(&buffer[..n]).await.is_err() {
+                let step = gate.as_mut().map(|g| {
+                    let step = g.feed(shared, &buffer[..n]);
+                    if let Some(entry) = g.entry() {
+                        named.store(entry, Ordering::Relaxed);
+                    }
+                    step
+                });
+                let released;
+                let out: &[u8] = match step {
+                    None | Some(Step::Through) => &buffer[..n],
+                    Some(Step::Hold) => {
+                        Counters::add(&shared.counters.blocking_holds, 1);
+                        continue;
+                    }
+                    Some(Step::Release(held)) => {
+                        released = held;
+                        &released
+                    }
+                    Some(Step::Block(entry)) => return End::Blocked(entry),
+                };
+                if up_write.write_all(out).await.is_err() {
                     return End::Failed;
                 }
-                Counters::add(&shared.counters.bytes_up, n as u64);
-                if let Some(bytes) = bytes {
-                    bytes.up(shared, n, 0);
+                counted_up(shared, bytes, out.len());
+            }
+            // The app closed its side while its start was held: what it sent goes on, then its FIN.
+            let held = gate.as_mut().map(Gate::ran_out).unwrap_or_default();
+            if !held.is_empty() {
+                if up_write.write_all(&held).await.is_err() {
+                    return End::Failed;
                 }
+                counted_up(shared, bytes, held.len());
             }
             let _ = up_write.shutdown().await;
             End::Clean
@@ -900,6 +1014,15 @@ async fn relay(mut app: TcpStream, mut upstream: Upstream, shared: &Arc<Shared>)
                 if replying {
                     replying = shared.replied(opened, &buffer[..n], &handshake);
                 }
+                // A flow whose row blocks it again, as after the user blocked its app again, ends at its next
+                // byte either way (ADR 0053, decision 4: an HTTP/2 connection pools many requests).
+                let entry = named.load(Ordering::Relaxed);
+                if entry != usize::MAX
+                    && let Some(uid) = opened.uid
+                    && shared.still_blocks(uid, entry)
+                {
+                    return End::Blocked(entry);
+                }
                 if app_write.write_all(&buffer[..n]).await.is_err() {
                     return End::Failed;
                 }
@@ -913,19 +1036,30 @@ async fn relay(mut app: TcpStream, mut upstream: Upstream, shared: &Arc<Shared>)
         };
         tokio::pin!(up, down);
         let (mut up_end, mut down_end) = (None, None);
-        loop {
+        'ends: loop {
             tokio::select! {
                 end = &mut up, if up_end.is_none() => up_end = Some(end),
                 end = &mut down, if down_end.is_none() => down_end = Some(end),
             }
+            for end in [up_end, down_end] {
+                if let Some(End::Blocked(entry)) = end {
+                    break 'ends (true, Some(entry));
+                }
+            }
             if up_end == Some(End::Failed) || down_end == Some(End::Failed) {
-                break true;
+                break (true, None);
             }
             if up_end.is_some() && down_end.is_some() {
-                break false;
+                break (false, None);
             }
         }
     };
+    if blocked.is_some() {
+        // Nothing to drain: what the app sent of a blocked flow never went upstream.
+        let _ = app.set_zero_linger();
+        let _ = upstream.stream.set_zero_linger();
+        return blocked;
+    }
     if failed {
         Counters::add(&shared.counters.resets, 1);
         // On a real network the bytes a side was already given reach it before the reset that follows
@@ -935,6 +1069,15 @@ async fn relay(mut app: TcpStream, mut upstream: Upstream, shared: &Arc<Shared>)
         drain(&upstream.stream).await;
         let _ = app.set_zero_linger();
         let _ = upstream.stream.set_zero_linger();
+    }
+    None
+}
+
+/// Counts `n` of the app's bytes written upstream.
+fn counted_up(shared: &Shared, bytes: Option<&Arc<FlowBytes>>, n: usize) {
+    Counters::add(&shared.counters.bytes_up, n as u64);
+    if let Some(bytes) = bytes {
+        bytes.up(shared, n, 0);
     }
 }
 
@@ -1006,6 +1149,7 @@ mod tests {
             network: None,
             via: crate::engine::Via::Direct,
             proxy: None,
+            blocked: None,
         }) else {
             unreachable!("an open flow is live")
         };
@@ -1107,6 +1251,119 @@ mod tests {
             )
         );
         assert_eq!(bytes.now(), [19, 0, 0, 0]);
+        Ok(())
+    }
+
+    /// A relayed connection of `uid` as [`relayed`] makes one, with tracker blocking on for the row
+    /// `tracker.example` and covering `uid`: the app's end, the server's, and the relay's task, which says the row
+    /// that refused the flow, if one did.
+    async fn relayed_blocking(
+        uid: u32,
+    ) -> io::Result<(TcpStream, TcpStream, tokio::task::JoinHandle<Option<usize>>)> {
+        let shared = Arc::new(shared());
+        shared.set_blocking(super::super::BlockSetting {
+            on: true,
+            table: Some(Arc::new(crate::blocking::tests::table(&[(
+                "tracker.example",
+                "block",
+            )]))),
+            covered: vec![10_123],
+            ..super::super::BlockSetting::default()
+        });
+        let pair = || async {
+            let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
+            let near = TcpStream::connect(listener.local_addr()?).await?;
+            let (far, _) = listener.accept().await?;
+            io::Result::Ok((near, far))
+        };
+        let (app, app_end) = pair().await?;
+        let (upstream, server) = pair().await?;
+        let destination = server.local_addr()?;
+        let upstream = Upstream {
+            stream: upstream,
+            opened: Opened {
+                id: 1,
+                port: destination.port(),
+                destination,
+                sniffs: true,
+                dns: DnsUse::None,
+                uid: Some(uid),
+                dns_held_until: Duration::ZERO,
+            },
+            bytes: None,
+        };
+        let task = tokio::spawn(async move { relay(app_end, upstream, &shared).await });
+        Ok((app, server, task))
+    }
+
+    /// What the server read of the connection within a while: its bytes, until the relay closed or reset it.
+    async fn read_all(server: &mut TcpStream) -> Vec<u8> {
+        let mut got = Vec::new();
+        let mut buffer = [0u8; 4096];
+        while let Ok(Ok(n)) =
+            tokio::time::timeout(Duration::from_millis(300), server.read(&mut buffer)).await
+        {
+            if n == 0 {
+                break;
+            }
+            got.extend_from_slice(&buffer[..n]);
+        }
+        got
+    }
+
+    /// No byte of a blocked flow's payload goes upstream (ADR 0053, decision 4): a hello in two segments, the second
+    /// sent after a pause, is held whole and refused, the server reads nothing and the app gets a reset; in an app
+    /// blocking does not cover, the same hello reaches the server whole.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_blocked_hello_in_two_segments_never_reaches_the_server() -> io::Result<()> {
+        let hello = crate::tls::tests::hello("Tracker.Example", 16 * 1024);
+        let (first, second) = hello.split_at(hello.len() / 2);
+        let (mut app, mut server, task) = relayed_blocking(10_123).await?;
+        app.write_all(first).await?;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        app.write_all(second).await?;
+        assert_eq!(
+            read_all(&mut server).await,
+            Vec::<u8>::new(),
+            "no byte reached the server"
+        );
+        assert!(task.await.ok().flatten().is_some(), "refused by its row");
+        let mut buffer = [0u8; 16];
+        assert!(
+            !matches!(app.read(&mut buffer).await, Ok(n) if n > 0),
+            "the app read nothing"
+        );
+        let (mut app, mut server, task) = relayed_blocking(10_124).await?;
+        app.write_all(first).await?;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        app.write_all(second).await?;
+        app.shutdown().await?;
+        assert_eq!(read_all(&mut server).await, hello);
+        drop(server);
+        assert_eq!(task.await.ok().flatten(), None);
+        Ok(())
+    }
+
+    /// A plain request's host is read the same way, and a protocol in which the server speaks first is never held:
+    /// its bytes reach the app at once.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_plain_requests_host_is_blocked_and_a_server_first_protocol_never_waits()
+    -> io::Result<()> {
+        let (mut app, mut server, task) = relayed_blocking(10_123).await?;
+        app.write_all(b"GET /collect HTTP/1.1\r\nHo").await?;
+        app.write_all(b"st: tracker.example\r\n\r\n").await?;
+        assert_eq!(read_all(&mut server).await, Vec::<u8>::new());
+        assert!(task.await.ok().flatten().is_some());
+        let (mut app, mut server, task) = relayed_blocking(10_123).await?;
+        server.write_all(b"220 mail.example ESMTP\r\n").await?;
+        let mut greeting = [0u8; 24];
+        tokio::time::timeout(Duration::from_millis(300), app.read_exact(&mut greeting)).await??;
+        app.write_all(b"EHLO a\r\n").await?;
+        let mut got = [0u8; 8];
+        tokio::time::timeout(Duration::from_millis(300), server.read_exact(&mut got)).await??;
+        assert_eq!(&got, b"EHLO a\r\n");
+        drop((app, server));
+        assert_eq!(task.await.ok().flatten(), None);
         Ok(())
     }
 

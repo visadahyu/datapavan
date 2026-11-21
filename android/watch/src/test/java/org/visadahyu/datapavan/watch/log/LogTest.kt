@@ -84,6 +84,42 @@ class LogTest {
         assertEquals(listOf("in-use", "none-late"), listOf(AppState.name(tls.state), AppState.name(byDns.state)))
         // Version 5: no proxy on any of these.
         assertEquals(List(11) { null }, records.take(11).map { (it as? LogRecord.Segment)?.proxy })
+        // Version 6: none blocked, and no blocking row's SDK on any segment.
+        val segments = records.filterIsInstance<LogRecord.Segment>()
+        assertEquals(List(segments.size) { false to "" }, segments.map { it.blocked to it.blockedSdk })
+    }
+
+    /**
+     * Version 6's addition (W8, part 3a; ADR 0053), as the engine's own test `encodes_a_blocked_flow_and_its_rows_sdk_last`
+     * writes it: the outcome 4 of a flow tracker blocking refused, and the SDK of the row that blocked it last, a length
+     * byte and UTF-8.
+     */
+    @Test
+    fun readsABlockedFlowAndItsRowsSdk() {
+        val (_, engines) = EngineRecords.records[0]
+        val sdk = "com.google.firebase:firebase-analytics".toByteArray()
+        // Version, kind, number, UID, six counts, protocol: then the outcome.
+        val outcome = 1 + 1 + 8 + 4 + 6 * 8 + 1
+        val blocked = engines.copyOf(engines.size - 1).also { it[outcome] = LogRecord.OUTCOME_BLOCKED.toByte() } +
+            byteArrayOf(sdk.size.toByte()) + sdk
+        val record = LogRecord.parse(blocked) as LogRecord.Segment
+        assertEquals(true to "com.google.firebase:firebase-analytics", record.blocked to record.blockedSdk)
+        assertEquals("other.example" to null, record.name to record.proxy)
+        assertNull("an SDK cut short", LogRecord.parse(blocked.copyOf(blocked.size - 1)))
+        assertNull("a byte after it", LogRecord.parse(blocked + 0))
+    }
+
+    /** A version 5 segment, as W8 part 2a wrote it: the engine's, without the blocking row's SDK, which reads as none. */
+    @Test
+    fun readsAVersion5SegmentWithNoBlockingRow() {
+        val (_, plain) = EngineRecords.records[10]
+        val version5 = plain.copyOf(plain.size - 1).also { it[0] = 5 }
+        val record = LogRecord.parse(version5) as LogRecord.Segment
+        assertEquals(false to "", record.blocked to record.blockedSdk)
+        assertEquals(LogRecord.VIA_TUNNEL to null, record.via to record.proxy)
+        val (_, hidden) = EngineRecords.records[14]
+        val proxied = LogRecord.parse(hidden.copyOf(hidden.size - 1).also { it[0] = 5 }) as LogRecord.Segment
+        assertEquals(listOf(49, 312), proxied.proxy?.trackers)
     }
 
     /**
@@ -130,12 +166,12 @@ class LogTest {
     @Test
     fun readsAVersion4SegmentWithoutAProxyAndRefusesAProxyTheEngineNeverWrites() {
         val (_, plain) = EngineRecords.records[10]
-        val version4 = plain.copyOf(plain.size - 1).also { it[0] = 4 }
+        val version4 = plain.copyOf(plain.size - 2).also { it[0] = 4 }
         assertNull((LogRecord.parse(version4) as LogRecord.Segment).proxy)
         assertEquals(LogRecord.VIA_TUNNEL, (LogRecord.parse(version4) as LogRecord.Segment).via)
         val (_, hidden) = EngineRecords.records[14]
-        // The proxy's kind, flags, three empty texts, and two trackers' marks; then the state.
-        val kind = hidden.size - 15
+        // The proxy's kind, flags, three empty texts, and two trackers' marks; then no blocking row's SDK.
+        val kind = hidden.size - 16
         assertEquals(LogRecord.PROXY_SOCKS4, (LogRecord.parse(hidden) as LogRecord.Segment).proxy?.kind)
         for (code in listOf(8, 0x80, 0xff)) {
             assertNull("no such proxy: $code", LogRecord.parse(hidden.copyOf().also { it[kind] = code.toByte() }))
@@ -164,7 +200,7 @@ class LogTest {
     @Test
     fun readsAVersion2RecordAsNotTold() {
         val (_, engines) = EngineRecords.records[0]
-        val version2 = engines.copyOf(engines.size - 7).also { it[0] = 2 }
+        val version2 = engines.copyOf(engines.size - 8).also { it[0] = 2 }
         val record = LogRecord.parse(version2) as LogRecord.Segment
         assertEquals("other.example" to "www.example.com", record.name to record.dnsName)
         assertEquals(AppState.NOT_TOLD, record.state)
@@ -177,10 +213,10 @@ class LogTest {
     @Test
     fun readsAVersion3SegmentsRouteAsUnknownAndRefusesARouteTheEngineNeverWrites() {
         val (_, engines) = EngineRecords.records[10]
-        val version3 = engines.copyOf(engines.size - 6).also { it[0] = 3 }
+        val version3 = engines.copyOf(engines.size - 7).also { it[0] = 3 }
         val record = LogRecord.parse(version3) as LogRecord.Segment
         assertEquals(AppState.LATE to LogRecord.VIA_UNKNOWN, record.state to record.via)
-        val route = engines.size - 6
+        val route = engines.size - 7
         for (code in listOf(3, 0x80, 0xff)) {
             assertNull("no such route: $code", LogRecord.parse(engines.copyOf().also { it[route] = code.toByte() }))
         }
@@ -206,7 +242,7 @@ class LogTest {
     @Test
     fun skipsAndCountsARecordOfAnotherVersion() {
         val (_, engines) = EngineRecords.records[0]
-        val newer = engines.copyOf().also { it[0] = 6 }
+        val newer = engines.copyOf().also { it[0] = 7 }
         val batch = ByteBuffer.allocate(4 + 3 * 2 + newer.size + segment.size + engines.size).order(ByteOrder.LITTLE_ENDIAN)
             .putInt(3).putShort(newer.size.toShort()).put(newer).putShort(segment.size.toShort()).put(segment)
             .putShort(engines.size.toShort()).put(engines).array()

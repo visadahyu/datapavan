@@ -1079,8 +1079,16 @@ fn forward(
         // Watch's DNS address answers: from the tunnel's cache, or the query rebuilt toward its server.
         let payload = packet::udp_payload(packet, parsed)?.to_vec();
         later.lookup = Some((uid, packet.len()));
+        // Tracker blocking decides before the tunnel's server is asked (W8, part 3a; ADR 0053): Watch has a
+        // tunnelled app's names only where it answers them, here, and blocks them by those alone.
+        if let Some(answer) = shared.lookup_blocked(uid, &payload) {
+            let rebuilt = packet::udp(key.2, key.1, &answer)?;
+            later.answered = Some((uid, rebuilt.len()));
+            return Some((Forwarded::Answer(rebuilt), later));
+        }
         if let Some(mut answer) = tunnel.answers.answer(&payload, shared.clock.since_boot()) {
             crate::dns::uncache(&mut answer);
+            shared.answer_blocked(uid, &payload, &mut answer);
             let rebuilt = packet::udp(key.2, key.1, &answer)?;
             later.answered = Some((uid, rebuilt.len()));
             return Some((Forwarded::Answer(rebuilt), later));
@@ -1186,6 +1194,7 @@ fn back(
                     tunnel.answers.insert(&answer, shared.clock.since_boot());
                 }
                 crate::dns::uncache(&mut answer);
+                shared.answer_blocked(uid, &[], &mut answer);
                 let rebuilt = packet::udp(shown, app, &answer);
                 if let Some(rebuilt) = &rebuilt {
                     later.answered = Some((uid, rebuilt.len()));
@@ -1618,6 +1627,7 @@ fn new_flow(
         network,
         via: Via::Direct,
         proxy: None,
+        blocked: None,
     }
 }
 

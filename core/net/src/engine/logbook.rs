@@ -536,7 +536,8 @@ impl Shared {
             flow.outcome = outcome;
         }
         let counter = match outcome {
-            Outcome::Opened => None,
+            // A flow blocking refused is counted where it is refused (`Shared::count_block`).
+            Outcome::Opened | Outcome::Blocked => None,
             Outcome::Refused => Some(&self.counters.refused),
             Outcome::Unreachable => Some(&self.counters.unreachable),
             Outcome::Failed => Some(&self.counters.failed),
@@ -889,6 +890,7 @@ mod tests {
             network: None,
             via: crate::engine::Via::Direct,
             proxy: None,
+            blocked: None,
         }
     }
 
@@ -1351,7 +1353,7 @@ mod tests {
         );
         let mut text = String::from(
             "# Watch's connection log: one batch of records as the engine writes them (core/net/src/log.rs,\n\
-             # version 5), in hex. Written by the engine's test the_kotlin_sides_fixture_is_what_the_engine_writes\n\
+             # version 6), in hex. Written by the engine's test the_kotlin_sides_fixture_is_what_the_engine_writes\n\
              # (core/net/src/engine/logbook.rs), which fails when the engine writes otherwise; run it with\n\
              # DATAPAVAN_WRITE_FIXTURE=1 to write it anew. Read by LogTest and LogDaysTest. Not edited by hand.\n",
         );

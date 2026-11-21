@@ -5,11 +5,11 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * One record of the connection log, as the engine writes it (core/net/src/log.rs, version 5). The
- * bytes are kept as they are, sealed; this reads them back, and reads versions 1 to 4 too, which debug
- * builds on test phones wrote (version 4 was also W7's), as ADR 0044's decision 4 asked: a day sealed then
- * stays readable until it expires. A record of another version is skipped and counted, never read as
- * this one.
+ * One record of the connection log, as the engine writes it (core/net/src/log.rs, version 6). The
+ * bytes are kept as they are, sealed; this reads them back, and reads versions 1 to 5 too, which debug
+ * builds on test phones wrote (version 4 was also W7's, version 5 W8 part 2a's), as ADR 0044's decision 4
+ * asked: a day sealed then stays readable until it expires. A record of another version is skipped and
+ * counted, never read as this one.
  */
 sealed interface LogRecord {
     /** The app's UID, or null when Android did not name it. */
@@ -68,7 +68,17 @@ sealed interface LogRecord {
         val tunnel: Long = 0,
         /** The proxy it went through, read from the connection or inferred (version 5; W8, part 2a, ADR 0052). */
         val proxy: Proxy? = null,
-    ) : LogRecord
+        /**
+         * The SDK, by its Maven coordinate, of the graded table's row that tracker blocking refused the flow by
+         * (version 6; W8, part 3a, ADR 0053), with [outcome] [OUTCOME_BLOCKED]; empty for a flow not blocked. It
+         * names a tracker, never a host, so the engine keeps it while "Log where apps connect ..." leaves the
+         * flow's own names out: the history then names the tracker's company from it, never the host.
+         */
+        val blockedSdk: String = "",
+    ) : LogRecord {
+        /** Whether tracker blocking refused it (version 6): its lookups answered with no address, or its connection refused. */
+        val blocked: Boolean get() = outcome == OUTCOME_BLOCKED
+    }
 
     /**
      * A flow's proxy, as the engine writes it (core/net/src/log.rs, `push_proxy`): its [kind], whether Android's
@@ -164,7 +174,13 @@ sealed interface LogRecord {
 
     companion object {
         /** The version the engine writes. */
-        const val VERSION: Byte = 5
+        const val VERSION: Byte = 6
+
+        /**
+         * A segment's outcome (its [Segment.outcome]): opened, refused, unreachable, failed, and since version 6
+         * blocked, a flow tracker blocking refused (ADR 0053).
+         */
+        const val OUTCOME_BLOCKED = 4
 
         /** A proxy's kind (version 5): SOCKS5, SOCKS4, an HTTP `CONNECT`, a plain request to an HTTP proxy, and inferred, Telegram's MTProto, WhatsApp's and Signal's. */
         const val PROXY_SOCKS5 = 1
@@ -212,7 +228,7 @@ sealed interface LogRecord {
         fun parse(bytes: ByteArray): LogRecord? = try {
             val b = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
             val version = b.get()
-            if (version != VERSION && version != VERSION_4 && version != VERSION_3 && version != VERSION_2 && version != VERSION_1) {
+            if (version !in VERSION_1..VERSION) {
                 null
             } else {
                 when (b.get().toInt()) {
@@ -247,7 +263,13 @@ sealed interface LogRecord {
                                 if (via > VIA_TUNNEL || (via == VIA_TUNNEL) != (tunnel != 0L)) {
                                     null
                                 } else {
-                                    segment.copy(via = via, tunnel = tunnel, proxy = if (version >= VERSION) Proxy.read(b) else null)
+                                    segment.copy(
+                                        via = via,
+                                        tunnel = tunnel,
+                                        proxy = if (version >= VERSION_5) Proxy.read(b) else null,
+                                        // The blocking row's SDK, after the proxy (version 6), empty for none.
+                                        blockedSdk = if (version >= VERSION) text(b) else "",
+                                    )
                                 }
                             }
                         }
@@ -278,6 +300,9 @@ sealed interface LogRecord {
 
         /** The version before a segment's proxy. */
         private const val VERSION_4: Byte = 4
+
+        /** The version before a blocked flow's outcome and its row's SDK. */
+        private const val VERSION_5: Byte = 5
 
         /**
          * The app's state, one byte after the segment's counts from version 3 ("not told" before); in a

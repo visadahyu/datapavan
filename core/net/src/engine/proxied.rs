@@ -351,6 +351,7 @@ impl Shared {
             match &inferred.before {
                 Some(before) if !self.hides(before.uid, before.destination) => Flow {
                     proxy: None,
+                    blocked: current.blocked.clone(),
                     outcome: current.outcome,
                     came_in: current.came_in,
                     ..before.clone()
@@ -1343,6 +1344,7 @@ mod tests {
             network: begun.network,
             via: Via::Direct,
             proxy: None,
+            blocked: None,
         }) else {
             unreachable!("an open flow is live")
         };

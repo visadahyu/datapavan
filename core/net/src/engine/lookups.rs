@@ -24,15 +24,22 @@ pub(super) const RESOLVERS: [SocketAddr; 2] = [
 /// resolver gives up on a lookup after about five seconds and asks again.
 pub(super) const LOOKUP_TIMEOUT: Duration = Duration::from_secs(4);
 
-/// The answer to a chained app's `query`, or `None` when it is not even a DNS message with an ID.
+/// The answer to a chained app's `query`, of the app `uid` if Android named it, or `None` when it is not even a
+/// DNS message with an ID. A question tracker blocking stops for the app gets "no data" kept for no time before
+/// any stand-in is given or anything goes to the tool (W8, part 3a; ADR 0053): Watch never resolves a chained
+/// app's names, so the question's name is all it matches (ADR 0038).
 pub(super) async fn answer(
     shared: &Arc<Shared>,
     chain: &Arc<Chain>,
     query: &[u8],
+    uid: Option<u32>,
 ) -> Option<Vec<u8>> {
     let Some(question) = answers::question(query) else {
         return answers::failure(query);
     };
+    if let Some(blocked) = shared.lookup_blocked(uid, query) {
+        return Some(blocked);
+    }
     if answers::answered_here(&question) {
         match question.kind {
             A => {
@@ -138,12 +145,53 @@ mod tests {
         }
     }
 
+    /// A chained app's question tracker blocking stops gets "no data" kept for no time before any stand-in is given
+    /// (W8, part 3a; ADR 0053), so its name never reaches the tool; another app's gets its stand-in, and a stand-in
+    /// for the name connected to anyway is refused before the tool is asked (`tcp::blocked_before`).
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_chained_apps_blocked_question_gets_no_stand_in() {
+        let shared = Arc::new(shared());
+        shared.set_blocking(super::super::BlockSetting {
+            on: true,
+            table: Some(Arc::new(crate::blocking::tests::table(&[(
+                "tracker.example",
+                "block",
+            )]))),
+            covered: vec![10_123],
+            ..super::super::BlockSetting::default()
+        });
+        let chain = chain();
+        let a = query(b"\x07tracker\x07example\x00", A);
+        let Some(blocked) = answer(&shared, &chain, &a, Some(10_123)).await else {
+            unreachable!("an answer")
+        };
+        assert_eq!(blocked[6..10], [0, 0, 0, 1], "no answer, an SOA");
+        assert_eq!(
+            lock(&shared.stand_ins).name(IpAddr::V4(Ipv4Addr::new(198, 18, 0, 1))),
+            None
+        );
+        let Some(other) = answer(&shared, &chain, &a, Some(10_124)).await else {
+            unreachable!("an answer")
+        };
+        let Some(read) = dns::response(&other) else {
+            unreachable!("a response")
+        };
+        let stand_in = read.addresses.first().map(|(ip, _)| *ip);
+        assert!(stand_in.is_some_and(is_stand_in));
+        let to = SocketAddr::new(stand_in.unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED)), 443);
+        assert!(super::super::tcp::blocked_before(&shared, Some(10_123), to).is_some());
+        assert_eq!(
+            super::super::tcp::blocked_before(&shared, Some(10_124), to),
+            None
+        );
+    }
+
     #[tokio::test(flavor = "current_thread")]
     async fn answers_a_aaaa_and_reverse_lookups_here() {
         let shared = Arc::new(shared());
         let chain = chain();
         let a = query(b"\x07example\x03com\x00", A);
-        let Some(answer) = answer(&shared, &chain, &a).await else {
+        let Some(answer) = answer(&shared, &chain, &a, None).await else {
             unreachable!("an answer")
         };
         let Some(read) = dns::response(&answer) else {
@@ -153,12 +201,17 @@ mod tests {
             read.addresses,
             vec![(Ipv4Addr::new(198, 18, 0, 1).into(), 0)]
         );
-        let Some(again) = super::answer(&shared, &chain, &a).await else {
+        let Some(again) = super::answer(&shared, &chain, &a, None).await else {
             unreachable!("an answer")
         };
         assert_eq!(again, answer, "the same stand-in");
-        let Some(empty) =
-            super::answer(&shared, &chain, &query(b"\x07example\x03com\x00", AAAA)).await
+        let Some(empty) = super::answer(
+            &shared,
+            &chain,
+            &query(b"\x07example\x03com\x00", AAAA),
+            None,
+        )
+        .await
         else {
             unreachable!("an answer")
         };
@@ -167,7 +220,7 @@ mod tests {
             b"\x011\x010\x0218\x03198\x07in-addr\x04arpa\x00",
             answers::TYPE_PTR,
         );
-        let Some(reverse) = super::answer(&shared, &chain, &ptr).await else {
+        let Some(reverse) = super::answer(&shared, &chain, &ptr, None).await else {
             unreachable!("an answer")
         };
         assert!(reverse.ends_with(b"\x07example\x03com\x00"));
@@ -192,13 +245,13 @@ mod tests {
         let rcode = |answer: Option<Vec<u8>>| answer.and_then(|a| a.get(3).map(|f| f & 0x0f));
         clock.pass(299_000);
         assert_eq!(
-            rcode(answer(&shared, &chain(), &txt).await),
+            rcode(answer(&shared, &chain(), &txt, None).await),
             Some(0),
             "kept"
         );
         clock.pass(8 * 3_600_000);
         assert_eq!(
-            rcode(answer(&shared, &chain(), &txt).await),
+            rcode(answer(&shared, &chain(), &txt, None).await),
             Some(2),
             "asked of the stopped tool"
         );
@@ -208,7 +261,7 @@ mod tests {
     async fn fails_other_questions_when_the_tool_is_stopped() {
         let shared = Arc::new(shared());
         let txt = query(b"\x07example\x03com\x00", 16);
-        let Some(answer) = answer(&shared, &chain(), &txt).await else {
+        let Some(answer) = answer(&shared, &chain(), &txt, None).await else {
             unreachable!("an answer")
         };
         assert_eq!(answer[3] & 0x0f, 2, "server failure");

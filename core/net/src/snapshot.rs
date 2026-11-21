@@ -213,6 +213,7 @@ mod tests {
                 network: None,
                 via: crate::engine::Via::Direct,
                 proxy: None,
+                blocked: None,
             },
             organisation: Some((
                 Network {

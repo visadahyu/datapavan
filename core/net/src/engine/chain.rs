@@ -348,6 +348,7 @@ mod tests {
             network: None,
             via: crate::engine::Via::Direct,
             proxy: None,
+            blocked: None,
         };
         assert!(shared.record(flow(1, CHAINED)).is_some(), "still counted");
         assert!(shared.record(flow(2, DIRECT)).is_some());
@@ -395,6 +396,7 @@ mod tests {
             network: None,
             via: crate::engine::Via::Direct,
             proxy: None,
+            blocked: None,
         };
         let hello = crate::tls::Hello {
             name: "other.example".into(),
@@ -467,6 +469,7 @@ mod tests {
                     network: None,
                     via: crate::engine::Via::Direct,
                     proxy: None,
+                    blocked: None,
                 })
                 .is_some()
         );
