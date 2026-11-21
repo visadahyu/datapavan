@@ -4,6 +4,7 @@
 - Date: 2026-11-12
 - Amended by [ADR 0048](0048-lab-probe-of-android-gaps.md) on 2026-11-15: decision 2's probe app is built there, and
   its runs happen on the maintainer's machine rather than "on every Android version in CI".
+- Extended on 2026-11-21 (W8, part 3b): "How the per-tool guides are built", below, with the coordinator's decisions.
 
 ## Context
 
@@ -118,6 +119,93 @@ For a tool that carries no UDP, the screen keeps saying so, with no switch.
 tool, recorded in the table of tools with its evidence. A tool whose relay is shown to refuse other apps can then
 default to UDP on. Watch does not probe the relay itself: a probe from Watch cannot tell a relay that refuses
 another app from one that refuses the probe's destination.
+### How the per-tool guides are built (2026-11-21)
+
+W8, part 3b: the guides that decision 5's "steps for each tool" and VPN.md's "Proxy mode, step by step" ask for. The
+decisions are the coordinator's (BRIEF-part-3b, after one audit of the first brief), with their reasons.
+
+1. **Every tool of the table has a page.** Each package of `data/tools/tools.tsv` with a VPN or proxy mode is on one
+   of 49 pages (`data/tools/guides.tsv`), and no other package is:
+   - **21 with steps,** for tools whose proxy mode the source settles;
+   - **4 for WireGuard:** Proton VPN, Mullvad and Windscribe run only as a VPN, and their websites issue WireGuard
+     files, which Watch carries itself (W7). WireGuard's own app joins them, although the brief named providers only:
+     the file or QR code the user gave it is a standard configuration. AmneziaWG and Amnezia VPN do not, since
+     AmneziaWG is not WireGuard's protocol ([ADR 0035](0035-wireguard-upstream.md), point 14);
+   - **10 for tools that run only as a VPN.** They hold Android's one VPN slot, so Watch cannot run beside them; the
+     page says so, and that Datapavan's check of the apps works without Watch;
+   - **14 waiting:** the tools whose values end in `?`, and those whose code is closed or partly closed, which their
+     source cannot settle: MahsaNG, V2Box, Npv Tunnel, NetMod, Karing, v2RayTun, Psiphon's Google Play build, Happ,
+     Defyx, HTTP Injector, 1.1.1.1 + WARP, AM TUNNEL LITE, OpenVPN Connect and Surfboard. NetMod names a Proxy
+     Tethering: its page says that whether it gives a proxy Watch can use is not known yet, never that it has none.
+2. **The order.** Among the tools with a proxy mode, the maintainer's private tool usage matrix (global, read
+   2026-11-21) puts v2rayNG (both flavours), Clash Meta for Android, FlClash, Hiddify, NekoBox and Orbot first; the
+   rest follow `tools.tsv`, then the tools without a proxy mode. No country and no figure of the matrix is public.
+3. **Read from source, at a release tag, line by line.** Each guide is read at the release tag of a recorded version,
+   the newest stable one unless the 2026-11-11 run tried another. Every step, label, listener and password setting
+   links to the line that shows it, at that commit (`guide-steps.tsv`, `guide-labels.tsv`). v2rayNG 2.3.15, NekoBox
+   1.4.2, Orbot 17.9.7-BETA-1 and Hiddify 5.5.5 are read at the versions the
+   [real tools' run](../spikes/2026-11-real-tools.md) tried, so they count as checked on a phone. Every other tool
+   waits for a device check, under the 2026-11-11 method (the developer's own release, its signer checked), until the
+   maintainer gives the word for it; none is installed or run here. Where a newer release than the commit
+   `tools.tsv` read exists, the guide is read at it, and the data check holds its listener and password to the
+   table's row: none differed. Two proxy labels of the table were wrong at the very commits it read, and are
+   corrected with their evidence: WG Tunnel calls its mode "Local proxy", under "App mode", and Oblivion 8 shows
+   "SOCKS5 only" under "Routing mode" ("Proxy only mode" is in its strings, on no screen).
+4. **What a guide says.** Where the switch is, with the tool's labels; the listener and its port; whether a user
+   name and password can be set, and where; what the tool asks for in that mode, from its code (notifications; the
+   alarms permission, Orbot; a battery exemption; Android 17's local network permission, which Watch does not need for
+   a proxy on the phone; a VPN's consent even in proxy mode, MDV-HN Edition, which turns Watch off once); what Watch
+   does next; how to go back; and the facts a user of that tool needs (ByeByeDPI sends nothing to a server, so the
+   apps it carries reach their destinations from the user's own address; DNSTT.XYZ opens a SOCKS5 proxy only with its
+   SSH tunnel type; a work profile shifts the SagerNet family's ports; some of ZedSecure's engines still start a VPN).
+   The sentences are Watch's strings, plain by the gate and free of ADR 0025's words (decision 4); they never
+   recommend a tool and never point to a download.
+5. **A profile's listener: the guide names the port, and the finder greets it.** Clash Meta for Android and sing-box
+   take their listener from the user's profile, so the finder had no port to greet (`ToolTable.kt`). The other way,
+   the user typing the port into Watch, was weighed and not taken. The user changes the tool anyway, by turning off
+   "Route System Traffic" or by writing a profile without a `tun` inbound, and the port is one more field in the same
+   place. Clash Meta's Override, which applies to every profile and wins over it, sets "Mixed Port" to 7890, the port
+   many profiles use. sing-box's profile gets a `mixed` inbound on 127.0.0.1, port 2080, the SagerNet family's default,
+   since its documentation names none. So Watch still finds every tool with no port typed (W6's measure), has no field
+   to mistype, and a port is still the tool's only when Android names the tool its owner. The cost: until the user sets
+   the named port, a profile with another one is not found; the page says to set it even then. GuidesTest checks it.
+6. **The labels are data, read at run time.** A tool speaks the phone's language, or one chosen in the tool, which
+   Android tells no other app (LocaleManager answers only the app itself, its installer and the keyboard). So Watch
+   reads each label from the installed tool by the resource name the data records: its resources opened without its
+   code (`createPackageContext` with no flags, a configuration for the locales asked, a lookup by name). Nothing is
+   decompiled, and none of the tool's code runs. The label comes in the phone's language, and also in Datapavan's own
+   where that differs, the best sign of a language the user chose. A label that is not an Android resource (Flutter's
+   i18n files: Hiddify, FlClash, Oblivion; words written in code: DNSTT.XYZ, SlipNet, WhiteDNS, some of MDV-HN's and
+   MasterDnsVPN-GG's), or that the installed version no longer has, is the data's, in the first of those languages its
+   source has, else in English. A label is cut to one line of at most 80 characters with no direction overrides, and
+   isolated in the sentence. Labels are not strings for ADR 0030's translators; the sentences are.
+7. **Package visibility costs nothing new.** Advanced holds `QUERY_ALL_PACKAGES` for the audit
+   ([ADR 0014](0014-v0.1-permissions.md)), and Watch's own launcher query ([ADR 0034](0034-watch-permissions.md))
+   reaches any tool a user can open. Either lets Watch open a tool's resources.
+8. **Where they show.**
+   - **In Watch.** Android hides a VPN's owner from other apps (`FoundTool.ownerConfirmed`), so Watch cannot tell
+     which tool runs as the VPN now. The chain section links the guide of every tool of the table installed here,
+     whatever its search found.
+   - **On the website.** The same text, one page per tool under `docs/site/guides/`: `scripts/guides.py` writes the
+     pages from the same data and Watch's English strings, and a JVM test holds the screen's blocks to the built
+     pages. The labels link to their lines of code and the version to the tag; nothing links to a release, a store or
+     a file to install, and no page ranks one tool above another.
+   - **In onboarding.** W9 opens the same screen (`GuideActivity.intent`) from the same links.
+9. **Checks.** The data check (`scripts/guides.py` in `scripts/check.sh data`): every page, step, label, resource,
+   listener and password setting has its source line and matches `tools.tsv`, and its self-test catches 19 broken
+   copies; `--against` the sources' clones found all 532 lines on 2026-11-21. The site's link check; the
+   plain-language gate; GuidesTest and ToolLabelsTest on the JVM: the chain section's links, the named ports and the
+   finder, the words, and labels read from the project's test tool's resources in two languages. The emulator check
+   (`scripts/verify-chain.sh`): the chain section links the test tool's guide, which quotes the label from the
+   installed test tool's resources, not the one the data records.
+
+**Limits.** A language chosen inside a tool cannot be read: where it is neither the phone's nor Datapavan's, the
+quoted labels are in another language than the tool shows, and the places the steps name (a menu, a tab, a gear)
+still lead. A label written in code or in Flutter's files is what the source had at the recorded version, and a newer
+version may say otherwise. The website is in English until the translations unit, with parts 1, 2a and 3a's strings
+(ADR 0030); a translated page will quote each tool's labels in its language from the tool's own files. Every tool but
+the four the run tried waits for the maintainer's word for a device check.
+
 ## Consequences
 
 - **0.2.0 grows.** Exclusion, the notice, the local-network rule and the matrix are release gates (ADR 0039).

@@ -132,7 +132,19 @@ Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED
   Keystore key, in StrongBox where the phone has one; the text is opened only to be handed to the engine, and
   zeroed. Each app's way, directly, through the tool or through one configuration, is set in one place on Watch's
   screen; removing a configuration asks whether its apps wait or go their other way, never directly unasked.
-- **Proxy mode, step by step.** Onboarding has a guide per popular tool, in every UI language, for running it in proxy mode instead of VPN mode.
+- **Proxy mode, step by step** (W8, part 3b; [ADR 0041](decisions/0041-watch-visibility-and-coexistence.md), "How the
+  per-tool guides are built"). Every tool of the table has a page (`data/tools/guides.tsv`): the steps to run it in its
+  proxy mode, read from its source at a release tag with a line of code for every step and label; or, for a tool that
+  runs only as a VPN, that Watch cannot run beside it, with W7's import where its provider issues WireGuard files; or
+  that its steps wait for a check on a phone, where its code is closed or its source does not settle them. A page says
+  where the switch is, the listener and its port, whether a password can be set, what the tool asks for, what Watch
+  does next and how to go back. Where the tool's profile sets its listener (Clash Meta for Android, sing-box), the page
+  has the user set a port it names, 7890 and 2080, and Watch's finder greets that port: no port is typed into Watch.
+  The tool's labels are quoted from the installed tool itself, by their resource names, in its language, the phone's
+  or Datapavan's; a label it keeps elsewhere is the data's. Android hides a VPN's owner, so the chain section links the
+  guide of every installed tool of the table; the website has the same text under `docs/site/guides/`, and onboarding
+  (W9) links them. They never link to a download and never recommend a tool. The order follows the maintainer's tool
+  usage matrix, then the table; tools other than the four tried on 2026-11-11 wait for a device check.
 
 ## Engineering constraints
 
