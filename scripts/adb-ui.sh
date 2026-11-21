@@ -139,30 +139,25 @@ swipe_up() {
     sleep 1
 }
 
-# Lists only compose what is on screen, so scroll down until the text shows, and stop once a swipe no longer
-# changes the screen (the list's end): no count of half screens to outgrow as a screen gains sections (W8 part 3b
-# and 3a each put the switch "Log where apps connect ..." past the six this was; CI run 44905337897). At most 30
-# half screens, so that a screen that keeps changing cannot hold the check.
+# Lists only compose what is on screen, so scroll down until the text shows, up to 30 half screens. A count, not
+# "until the screen stops changing": a text taller than the screen (a licence) dumps the same visible bounds after
+# a swipe, so an unchanged dump does not mean the list's end (CI run 44910873200). Thirty since W8 part 3b, whose
+# guides' links, like part 3a's blocking section, put the switch "Log where apps connect ..." past the six this was.
 scroll_to() {
-    local before after
     for _ in $(seq 1 30); do
         screen_has "$1" && return 0
-        before=$(adb shell cat "$DUMP" 2>/dev/null | md5sum)
         swipe_up
-        dump_screen || return 1
-        after=$(adb shell cat "$DUMP" 2>/dev/null | md5sum)
-        [ "$before" != "$after" ] || break
     done
     screen_has "$1"
 }
 
-# Scrolls back to the top of a list.
+# Scrolls back to the top of a list: as many flings as scroll_to may have gone down in half screens, halved.
 scroll_to_top() {
     local size width height
     size=$(adb shell wm size | tr -d '\r' | sed -n 's/.*: \([0-9]*\)x\([0-9]*\)$/\1 \2/p' | tail -1)
     width=${size% *}
     height=${size#* }
-    for _ in 1 2 3 4 5 6 7 8; do
+    for _ in $(seq 1 16); do
         adb shell input swipe $((width / 2)) $((height / 4)) $((width / 2)) $((height * 3 / 4)) 200
     done
 }

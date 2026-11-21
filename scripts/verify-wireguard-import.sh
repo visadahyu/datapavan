@@ -128,7 +128,8 @@ watch_screen() {
 LAST_TAP=""
 tap_tag() {
     local bounds height
-    for _ in $(seq 1 10); do
+    # Up to 30 half screens, as adb-ui.sh's scroll_to: part 3a's blocking section put the tunnels' buttons past ten.
+    for _ in $(seq 1 30); do
         if has_id "$1"; then
             bounds=$(id_bounds "$1")
             height=$(adb shell wm size | tr -d '\r' | sed -n 's/.*x\([0-9]*\)$/\1/p' | tail -1)
