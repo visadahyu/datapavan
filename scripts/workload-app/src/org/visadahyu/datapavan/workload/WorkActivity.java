@@ -19,7 +19,9 @@ import java.nio.charset.StandardCharsets;
  * names, then sends a STUN Binding request to each on one port back to back, from one socket, sending each
  * again as a STUN client does until it is answered, and waits for both responses, each from the name's own
  * address with its own transaction ID (ADR 0044, unit 9b). Each result is one line of logcat under the tag
- * DatapavanWorkload, and "done" ends them.
+ * DatapavanWorkload, and "done" ends them. "names" (by commas) looks each of its names up in order, one after
+ * the other in this one process, and logs each as "name" does: the DNS check's speed budget (scripts/verify-dns.sh,
+ * step 3b) times a way over many lookups without starting the app for each.
  *
  * For W5's live view (ADR 0046, scripts/verify-activity.sh): "background" (host:port,seconds,bytes) opens a
  * connection that sends while this screen shows, and then in the background from {@link SendJob}, and the
@@ -38,6 +40,7 @@ public final class WorkActivity extends Activity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         String name = getIntent().getStringExtra("name");
+        String names = getIntent().getStringExtra("names");
         String tcp = getIntent().getStringExtra("tcp");
         String udp = getIntent().getStringExtra("udp");
         String stun = getIntent().getStringExtra("stun");
@@ -52,6 +55,11 @@ public final class WorkActivity extends Activity {
         }
         new Thread(() -> {
             if (name != null) resolve(name);
+            if (names != null) {
+                for (String each : names.split(",")) {
+                    if (!each.isEmpty()) resolve(each);
+                }
+            }
             if (tcp != null) tcp(tcp);
             if (udp != null) udp(udp);
             if (stun != null) stun(stun);
