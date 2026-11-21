@@ -94,6 +94,16 @@
             android:process=":watch"
             android:theme="@style/Theme.Watch" />
 
+        <!--
+            A tool's guide for proxy mode (W8, part 3b), in Watch's process: opened from the chain section's links, and in
+            W9 from onboarding. Not exported.
+        -->
+        <activity
+            android:name=".GuideActivity"
+            android:exported="false"
+            android:process=":watch"
+            android:theme="@style/Theme.Watch" />
+
         <!-- Only Android may bind to it (BIND_VPN_SERVICE). -->
         <service
             android:name=".WatchVpnService"

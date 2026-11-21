@@ -51,6 +51,7 @@ import org.visadahyu.datapavan.watch.chain.ChainSettings
 import org.visadahyu.datapavan.watch.chain.ToolKeys
 import org.visadahyu.datapavan.watch.chain.ToolSearch
 import org.visadahyu.datapavan.watch.chain.Tools
+import org.visadahyu.datapavan.watch.guides.Guides
 import org.visadahyu.datapavan.watch.log.ConnectionLog
 import org.visadahyu.datapavan.watch.ui.AppChoice
 import org.visadahyu.datapavan.watch.ui.ChainActions
@@ -277,6 +278,7 @@ class MainActivity : ComponentActivity() {
         onUdp = { on -> changeChain { settings -> settings.udp = on } },
         onCopyPassword = ::copyPassword,
         onPrivateDnsSettings = ::openPrivateDnsSettings,
+        onGuide = { link -> startActivity(GuideActivity.intent(this, link.guide, link.packageName)) },
     )
 
     /**
@@ -309,9 +311,12 @@ class MainActivity : ComponentActivity() {
             val key = found?.let { ToolKeys.verdict(this, it.tool.packageName) }
             // The tool the chain went through last names the switch that turns the chain off while
             // that tool does not answer, or is no longer installed.
+            val table = Tools.table(this)
             val chainedName = settings.lastTool?.packageName?.let { chained ->
-                Tools.table(this).firstOrNull { it.packageName == chained }?.name ?: chained
+                table.firstOrNull { it.packageName == chained }?.name ?: chained
             }
+            // Every installed tool's guide (W8, part 3b): which one runs as a VPN is not Android's to tell.
+            val guides = Guides.installed(Guides.book(this), table, ::installed)
             runOnUiThread {
                 chain.value = chain.value.copy(
                     search = search,
@@ -319,6 +324,7 @@ class MainActivity : ComponentActivity() {
                     user = password?.let { ChainSettings.userFor(found.tool.packageName) },
                     password = password,
                     chainedName = chainedName,
+                    guides = guides,
                 )
                 showSettings()
                 if (found != null) applyChain()

@@ -17,6 +17,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +35,8 @@ import org.visadahyu.datapavan.audit.SignatureVerdict
 import org.visadahyu.datapavan.watch.PrivateDns
 import org.visadahyu.datapavan.watch.R
 import org.visadahyu.datapavan.watch.chain.ToolSearch
+import org.visadahyu.datapavan.watch.guides.GuideLink
+import org.visadahyu.datapavan.watch.guides.Page
 import java.util.Locale
 
 /** An app the user may send through the tool: its package name and the name the user knows. */
@@ -58,6 +61,8 @@ internal data class ChainView(
     val key: SignatureVerdict? = null,
     /** The name of the tool the chain last went through, for its switch while that tool does not answer. */
     val chainedName: String? = null,
+    /** A guide per tool of the table installed here (W8, part 3b), in the guides' order. */
+    val guides: List<GuideLink> = emptyList(),
 )
 
 /** What the user can change in the chain. */
@@ -70,6 +75,8 @@ internal class ChainActions(
     val onUdp: (Boolean) -> Unit,
     val onCopyPassword: () -> Unit,
     val onPrivateDnsSettings: () -> Unit,
+    /** Opens an installed tool's guide (W8, part 3b). */
+    val onGuide: (GuideLink) -> Unit = {},
 )
 
 /**
@@ -121,8 +128,28 @@ internal fun ChainSection(
             val tool = bidi.unicodeWrap(view.chainedName ?: "")
             LabelledSwitch(stringResource(R.string.chain_switch, tool), checked = true, onChange = actions.onOn)
         }
+        GuideLinks(view.guides, actions.onGuide)
     }
 }
+
+/**
+ * The guide of each tool of the table installed here (W8, part 3b), whatever the search found: Android hides a VPN's
+ * owner from other apps, so Watch cannot tell which tool runs as the VPN, and links them all ([chainGuideLinks]).
+ */
+@Composable
+private fun GuideLinks(guides: List<GuideLink>, onGuide: (GuideLink) -> Unit) {
+    val links = chainGuideLinks(guides)
+    if (links.isEmpty()) return
+    Text(stringResource(R.string.chain_guides_title), style = MaterialTheme.typography.bodyMedium)
+    val bidi = BidiFormatter.getInstance()
+    for ((link, label) in links) {
+        TextButton(onClick = { onGuide(link) }) { Text(stringResource(label, bidi.unicodeWrap(link.name))) }
+    }
+}
+
+/** Each installed tool's link and the words of its button: steps for proxy mode, or what the tool and Watch can do. */
+internal fun chainGuideLinks(guides: List<GuideLink>): List<Pair<GuideLink, Int>> =
+    guides.distinctBy { it.guide }.map { it to if (it.page == Page.PROXY) R.string.chain_guide_proxy else R.string.chain_guide_other }
 
 @Composable
 private fun Answering(
