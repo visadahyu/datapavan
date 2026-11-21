@@ -4,10 +4,12 @@ file: https://core.telegram.org/resources/cidr.txt
 licence-statement: none on the file or the page that serves it; a bare list of 14 ranges (ADR 0015's record)
 ranges: 14 (9 IPv4, 5 IPv6)
 clients: clients.tsv, 7 packages of three families, each with its source
-names: names.tsv, 21 names (4 own, 15 fronts, 2 others), each with its source
+names: names.tsv, 26 names (4 own, 15 fronts, 7 others), each with its source; PayPal's approval host from
+  PayPal's own API specification at a pinned commit, as Signal gets the approval URL from its server
 method: cidr.txt fetched by update.py, which records every fetch below, with its SHA-256 and the ranges added and
   removed, and keeps the file byte for byte; the packages and names read on the makers' own pages and in their
-  source at pinned commits (Telegram's DrKLO/Telegram 21f7d10, Signal-Android aa38b25, WhatsApp/proxy f48d4b1);
+  source at pinned commits (Telegram's DrKLO/Telegram 21f7d10, Signal-Android aa38b25, WhatsApp/proxy f48d4b1,
+  paypal/paypal-rest-api-specifications 9f0f528);
   WhatsApp's packages as data/owners read its asset-links file on 2026-10-30.
 left-out: forks of the three clients (Telegram FOSS shares Telegram's package; others are not recognised until a
   row names them); Signal's static addresses, which its build reads from a file the source does not hold.

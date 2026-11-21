@@ -205,7 +205,7 @@ mod tests {
     #[test]
     fn the_bundled_tables_read_whole() {
         let m = Messengers::bundled();
-        assert_eq!(m.counts(), (14, 7, 21));
+        assert_eq!(m.counts(), (14, 7, 26));
         assert!(m.is_telegrams(ip("149.154.167.51")));
         assert!(m.is_telegrams(ip("91.108.56.130")));
         assert!(m.is_telegrams(ip("2001:67c:4e8:f004::a")));

@@ -87,12 +87,24 @@ sealed interface LogRecord {
         val proxyName: String = "",
         val organisation: String = "",
         val cover: String = "",
+        /**
+         * Whether the flow's own address and names were left out because "Log where these apps connect" was off
+         * (flag bit 4, fix round of W8 part 2a): a confirmed SOCKS or `CONNECT` proxy's, or an inferred one's; never a
+         * plain request's, which keeps its own address and names whatever the switch says.
+         */
+        val leftOut: Boolean = false,
+        /**
+         * The trackers the engine matched on every name the flow carried before anything was left out (the address's
+         * DNS name, the hello's, the destination asked for), by their εxodus ids: the one thing of its destination kept
+         * while the switch is off, which names a tracker's company, never an address or a name.
+         */
+        val trackers: List<Int> = emptyList(),
     ) {
         /** Whether it was read from the connection: SOCKS or an HTTP proxy; else inferred. */
         val declared: Boolean get() = kind <= PROXY_FORWARD
 
         /** Whether where it went was kept ("Log where these apps connect" on). */
-        val kept: Boolean get() = askedPort >= 0 || proxyName.isNotEmpty() || organisation.isNotEmpty() || cover.isNotEmpty()
+        val kept: Boolean get() = !leftOut
 
         companion object {
             /**
@@ -104,7 +116,7 @@ sealed interface LogRecord {
                 if (kind == 0) return null
                 require(kind in PROXY_SOCKS5..PROXY_SIGNAL)
                 val flags = b.get().toInt() and 0xff
-                require(flags and 0xf0 == 0)
+                require(flags and 0xe0 == 0)
                 var asked = ""
                 var port = -1
                 if (flags and 8 != 0) {
@@ -116,11 +128,21 @@ sealed interface LogRecord {
                     asked = if (length == 0) name else InetAddress.getByAddress(address).hostAddress.orEmpty()
                     port = b.short.toInt() and 0xffff
                 }
+                val proxyName = text(b)
+                val organisation = text(b)
+                val cover = text(b)
+                val marks = b.get().toInt() and 0xff
+                require(marks <= MAX_TRACKERS)
+                val trackers = List(marks) { b.int.also { id -> require(id >= 0) } }
                 return Proxy(
                     kind, setting = flags and 1 != 0, password = flags and 2 != 0, outsideMaker = flags and 4 != 0,
-                    asked = asked, askedPort = port, proxyName = text(b), organisation = text(b), cover = text(b),
+                    asked = asked, askedPort = port, proxyName = proxyName, organisation = organisation, cover = cover,
+                    leftOut = flags and 16 != 0, trackers = trackers,
                 )
             }
+
+            /** The most trackers a flow's proxy carries (`proxied::MAX_TRACKERS`). */
+            const val MAX_TRACKERS = 8
 
             private fun text(b: ByteBuffer): String {
                 val bytes = ByteArray(b.get().toInt() and 0xff).also { b.get(it) }

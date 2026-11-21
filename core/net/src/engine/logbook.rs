@@ -649,6 +649,8 @@ impl Shared {
         if !self.handing_over.load(Ordering::Relaxed) {
             self.settle(Some(Force::ALL));
         }
+        // No flow of this engine can be taken back any more (ADR 0052).
+        self.release_held_back();
     }
 
     /// The records waiting, as one batch, if there are any.
@@ -696,10 +698,22 @@ impl Shared {
     /// A flow opened while the switch was on adds no destination after. What the log already wrote stays,
     /// for the retention the user chose.
     pub(super) fn hide_chained(&self) {
-        // An app's own proxy follows the same switch (ADR 0052).
+        // An app's own proxy follows the same switch (ADR 0052): a confirmed or inferred one's flow is left out
+        // whole; a plain request's keeps its own address and names, and loses only what it asked for.
         let own_proxies = !self.logs_own_proxies();
+        let forwarded = |flow: &Flow| {
+            flow.proxy
+                .as_ref()
+                .is_some_and(|p| p.kind == crate::proxies::Kind::Forward)
+        };
         let hides = |flow: &Flow| {
-            self.hides(flow.uid, flow.destination) || own_proxies && flow.proxy.is_some()
+            self.hides(flow.uid, flow.destination)
+                || own_proxies && flow.proxy.is_some() && !forwarded(flow)
+        };
+        let strip_asked = |flow: &mut Flow| {
+            if own_proxies && forwarded(flow) {
+                flow.proxy = flow.proxy.as_ref().map(|p| Box::new(p.without_asked()));
+            }
         };
         let mut live = lock(&self.live);
         for live in live.values_mut() {
@@ -707,15 +721,16 @@ impl Shared {
                 live.hidden = true;
                 live.flow = without_destination(&live.flow);
             }
+            strip_asked(&mut live.flow);
         }
         let mut activity = lock(&self.activity);
         for piece in &mut activity.held {
-            if let Of::Flow { flow, hidden, .. } = &mut piece.of
-                && !*hidden
-                && hides(flow)
-            {
-                *hidden = true;
-                *flow = without_destination(flow);
+            if let Of::Flow { flow, hidden, .. } = &mut piece.of {
+                if !*hidden && hides(flow) {
+                    *hidden = true;
+                    *flow = without_destination(flow);
+                }
+                strip_asked(flow);
             }
         }
         activity.counts.hide(|uid| self.hides_app(uid));
@@ -1174,7 +1189,10 @@ mod tests {
     /// The fixture's segments of an app's own proxies (version 5, ADR 0052): a SOCKS5 proxy its bytes declared,
     /// asked for a name, with a password unencrypted, named by Android's setting, its own name and its network's
     /// organisation kept; an HTTP proxy asked for an address; Telegram's `MTProto` proxy inferred, outside its maker's
-    /// network, with the cover its hello sent; and a SOCKS4 proxy with its destination left out.
+    /// network, with the cover its hello sent; a SOCKS4 proxy with its destination left out, which keeps two
+    /// trackers' marks; and a plain request with what it asked for left out, which keeps its own name and address
+    /// (the fix round).
+    #[allow(clippy::too_many_lines)]
     fn fixture_proxies() -> Vec<Record> {
         use super::super::{Network, Proxied};
         use crate::owners::NetworkKind;
@@ -1188,6 +1206,8 @@ mod tests {
             proxy_name: None,
             organisation: None,
             cover: None,
+            left_out: false,
+            trackers: Vec::new(),
         };
         let segment = |flow: Flow, minute| Record::Segment {
             flow,
@@ -1262,10 +1282,27 @@ mod tests {
             segment(
                 without_destination(&Flow {
                     id: 23,
-                    proxy: Some(Box::new(proxy(Kind::Socks4))),
+                    proxy: Some(Box::new(Proxied {
+                        trackers: vec![49, 312],
+                        ..proxy(Kind::Socks4)
+                    })),
                     ..flow(23)
                 }),
                 23,
+            ),
+            segment(
+                Flow {
+                    id: 24,
+                    destination: SocketAddr::from(([198, 51, 100, 7], 8080)),
+                    name: Some("cache.example.net".into()),
+                    named_by: NamedBy::Dns,
+                    proxy: Some(Box::new(Proxied {
+                        password: true,
+                        ..proxy(Kind::Forward)
+                    })),
+                    ..flow(24)
+                },
+                24,
             ),
         ]
     }

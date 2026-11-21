@@ -166,10 +166,13 @@ pub(crate) fn named_by_code(named_by: NamedBy) -> u8 {
 /// (0 none, 1 SOCKS5, 2 SOCKS4, 3 an HTTP `CONNECT`, 4 a plain request to an HTTP proxy, 5 Telegram's `MTProto`,
 /// 6 `WhatsApp`'s, 7 Signal's); for a proxy, then flags (bit 0: Android's proxy setting names it; bit 1: a password
 /// crossed the network unencrypted; bit 2: its address is outside the maker's network; bit 3: the destination
-/// asked for follows), the destination asked for where bit 3 says (its address, length 0, 4 or 16 and the bytes,
-/// then its name, a length byte and UTF-8, then its port, u16), and the proxy's own name, the organisation behind
-/// its network and the cover name its hello sent, each a length byte and UTF-8, empty for none. No credential is
-/// ever written: none is kept.
+/// asked for follows; bit 4: the flow's own address and names were left out, as "Log where these apps connect"
+/// said), the destination asked for where bit 3 says (its address, length 0, 4 or 16 and the bytes, then its
+/// name, a length byte and UTF-8, then its port, u16), the proxy's own name, the organisation behind its network
+/// and the cover name its hello sent, each a length byte and UTF-8, empty for none, and last the trackers matched
+/// on its names before anything was left out: a count byte (at most 8) and each one's εxodus id (u32). No
+/// credential is ever written: none is kept. Bit 4 and the trackers came in the fix round of W8 part 2a, before
+/// any release wrote version 5.
 pub(crate) fn push_proxy(out: &mut Vec<u8>, proxy: Option<&Proxied>) {
     let Some(proxy) = proxy else {
         out.push(0);
@@ -188,7 +191,8 @@ pub(crate) fn push_proxy(out: &mut Vec<u8>, proxy: Option<&Proxied>) {
         u8::from(proxy.setting)
             | u8::from(proxy.password) << 1
             | u8::from(proxy.outside_maker) << 2
-            | u8::from(proxy.asked.is_some()) << 3,
+            | u8::from(proxy.asked.is_some()) << 3
+            | u8::from(proxy.left_out) << 4,
     );
     if let Some((asked, port)) = &proxy.asked {
         match asked {
@@ -212,6 +216,11 @@ pub(crate) fn push_proxy(out: &mut Vec<u8>, proxy: Option<&Proxied>) {
     push_text(out, proxy.proxy_name.as_deref());
     push_text(out, proxy.organisation.as_deref());
     push_text(out, proxy.cover.as_deref());
+    let trackers = &proxy.trackers[..proxy.trackers.len().min(crate::engine::MAX_TRACKERS)];
+    out.push(u8::try_from(trackers.len()).unwrap_or(0));
+    for id in trackers {
+        out.extend_from_slice(&id.to_le_bytes());
+    }
 }
 
 /// What a flow's hello said of ECH, as the log and the snapshot write it.

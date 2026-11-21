@@ -4542,8 +4542,17 @@ fn an_apps_own_proxies_are_named_and_no_password_is_kept() -> Outcome {
                 b"HTTP/1.1 204 No Content\r\n\r\n",
             )
             .await?;
+            // A plain request cannot be confirmed by its reply: its flow keeps its own address and names, and
+            // its proxy says what it asked for (the fix round's S-M1).
             let flow = flow_to(&engine, plain, |f| f.proxy.is_some()).await?;
-            assert_eq!(flow.name.as_deref(), Some("example.org"));
+            assert_ne!(flow.name.as_deref(), Some("example.org"));
+            assert_eq!(
+                flow.proxy.and_then(|p| p.asked),
+                Some((
+                    datapavan_net::proxies::Asked::Name("example.org".into()),
+                    80
+                ))
+            );
 
             // Their last segments are written once they end, the rewriting's short linger after.
             drop((app, connect, forward));
@@ -4617,9 +4626,11 @@ fn obfuscated_start() -> Vec<u8> {
 }
 
 /// Telegram's proxy inferred end to end (ADR 0052): an obfuscated start to an address outside Telegram's published
-/// ranges is its `MTProto` proxy while it reaches none of them; once it does (an address of its ranges on the lab's
-/// loopback, never the real one), a CDN data centre reached directly is not its proxy, nor a fake-TLS hello, whose
-/// cover never names the flow.
+/// ranges is its `MTProto` proxy while it reaches none of them by TCP, though a datagram to them, as a call's to a
+/// relay, went (the fix round's R-m5: substitution counts TCP connections alone); once it does (an address of its
+/// ranges on the lab's loopback, never the real one), a CDN data centre reached directly is not its proxy, and a
+/// hello no answer tied, while it goes directly and with no lookup of it seen, names its flow as any hello does
+/// (the fix round's S-M3).
 #[test]
 #[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
 fn telegrams_proxy_is_inferred_only_while_it_does_not_reach_its_own_ranges() -> Outcome {
@@ -4640,8 +4651,14 @@ fn telegrams_proxy_is_inferred_only_while_it_does_not_reach_its_own_ranges() -> 
             engine.proxies(datapavan_net::ProxySetting {
                 messengers: vec![(datapavan_net::messengers::Family::Telegram, APP)],
                 android: Vec::new(),
+                trackers: None,
+                strict_dns: false,
             });
             let start = obfuscated_start();
+            // A call's datagram to a relay in Telegram's ranges: no direct connection for substitution.
+            let call = app_socket().await?;
+            call.send_to(b"relay", SocketAddr::from((telegram, 3478)))
+                .await?;
             let proxy = scripted_proxy(OTHER, &[]).await?;
             let mut via = app_connect(proxy).await?;
             step(&mut via, &start, &start).await?;
@@ -4673,15 +4690,60 @@ fn telegrams_proxy_is_inferred_only_while_it_does_not_reach_its_own_ranges() -> 
             assert!(
                 to_cdn
                     .iter()
-                    .all(|f| f.name.as_deref() != Some("www.google.com")),
-                "Telegram → google.com"
+                    .any(|f| f.name.as_deref() == Some("www.google.com")),
+                "a hello that is no cover names its flow: {to_cdn:?}"
             );
             let counters = engine.counters();
             assert_eq!(
                 (counters[63], counters[64], counters[65], counters[66]),
-                (1, 2, 1, 1)
+                (1, 1, 1, 0)
             );
-            drop((via, direct, media, cover));
+            drop((call, via, direct, media, cover));
+            Ok(())
+        },
+    )
+}
+
+/// The instants of Telegram's direct connections cross a hand-over (the fix round's S-M2): right after it, a CDN
+/// data centre reached before the main one is not named its proxy by the next engine.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn telegrams_direct_connection_before_a_hand_over_holds_substitution_after_it() -> Outcome {
+    lab_engines(
+        "telegrams_direct_connection_before_a_hand_over_holds_substitution_after_it",
+        |tunnels| async move {
+            let added = Command::new("ip")
+                .args(["address", "add", "149.154.167.51/32", "dev", "lo"])
+                .status()?;
+            assert!(added.success(), "the lab's address of Telegram's ranges");
+            let first = tunnels.start(None)?;
+            first.proxies(datapavan_net::ProxySetting {
+                messengers: vec![(datapavan_net::messengers::Family::Telegram, APP)],
+                ..datapavan_net::ProxySetting::default()
+            });
+            let start = obfuscated_start();
+            let own = scripted_proxy(Ipv4Addr::new(149, 154, 167, 51), &[]).await?;
+            let mut direct = app_connect(own).await?;
+            step(&mut direct, &start, &start).await?;
+            drop(direct);
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            let handover = tokio::task::spawn_blocking(move || first.hand_over()).await?;
+            let second = tunnels.start(Some(handover))?;
+            let cdn = scripted_proxy(OTHER, &[]).await?;
+            let mut media = app_connect(cdn).await?;
+            step(&mut media, &start, &start).await?;
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            let to_cdn: Vec<_> = second
+                .flows()
+                .into_iter()
+                .filter(|f| f.destination == cdn)
+                .collect();
+            assert_eq!(to_cdn.len(), 1, "{to_cdn:?}");
+            assert!(to_cdn.iter().all(|f| f.proxy.is_none()), "{to_cdn:?}");
+            let counters = second.counters();
+            assert_eq!((counters[63], counters[64]), (0, 1), "substituted");
+            drop(media);
+            drop(second);
             Ok(())
         },
     )

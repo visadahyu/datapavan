@@ -214,10 +214,18 @@ impl Shared {
                 flow.named_by = by;
             }
         };
-        if let Some(live) = lock(&self.live).get_mut(&id)
-            && !live.hidden
-        {
-            apply(&mut live.flow);
+        let mut hidden_proxy = false;
+        if let Some(live) = lock(&self.live).get_mut(&id) {
+            if live.hidden {
+                hidden_proxy = live.flow.proxy.is_some();
+            } else {
+                apply(&mut live.flow);
+            }
+        }
+        // A proxied flow left out for "Log where these apps connect" takes no name, but the trackers its hello
+        // names still mark it, as its company only (ADR 0052, the fix round's S-M1).
+        if hidden_proxy {
+            self.mark_proxied(id, &own, opened.port);
         }
         if self.keep_flows > 0
             && let Some(flow) = lock(&self.flows).iter_mut().rev().find(|f| f.id == id)

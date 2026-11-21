@@ -4,7 +4,8 @@
 #   own     the maker's own service: a connection to it is the app going directly, never through its proxy
 #   front   a name the app sends to reach its own service through another company's network (Signal's own
 #           circumvention): not a proxy
-#   other   a third party the app reaches itself (payments, a captcha): not a proxy
+#   other   a third party the app reaches itself (payments, a captcha, debug logs, MobileCoin): not a proxy, nor
+#           what the app reaches within ten minutes after (its web view's pages: a card issuer's 3-D Secure)
 whatsapp	own	whatsapp.net	https://raw.githubusercontent.com/WhatsApp/proxy/f48d4b1271e01f61674d5e20980dd06d2e002857/proxy/src/proxy_config.cfg	2026-11-20
 whatsapp	own	whatsapp.com	https://www.whatsapp.com/.well-known/assetlinks.json	2026-10-30
 signal	own	signal.org	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/build.gradle.kts	2026-11-20
@@ -26,3 +27,8 @@ signal	front	pinterest.com	https://raw.githubusercontent.com/signalapp/Signal-An
 signal	front	www.redditstatic.com	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt	2026-11-20
 signal	other	api.stripe.com	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/build.gradle.kts	2026-11-20
 signal	other	hcaptcha.com	https://signalcaptchas.org/registration/generate.html	2026-11-20
+signal	other	signaldonations.org	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/components/settings/app/subscription/PayPalRepository.kt	2026-11-21
+signal	other	paypal.com	https://raw.githubusercontent.com/paypal/paypal-rest-api-specifications/9f0f52810ae24244ec3f24260c28f58e198d0b9e/openapi/checkout_orders_v2.json	2026-11-21
+signal	other	debuglogs.org	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/logsubmit/SubmitDebugLogRepository.java	2026-11-21
+signal	other	namda.net	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/payments/MobileCoinMainNetConfig.java	2026-11-21
+signal	other	mobilecoinww.com	https://raw.githubusercontent.com/signalapp/Signal-Android/aa38b25dae46798bce4b31fc0f71f77d4b8b0bfb/app/src/main/java/org/thoughtcrime/securesms/payments/MobileCoinMainNetConfig.java	2026-11-21

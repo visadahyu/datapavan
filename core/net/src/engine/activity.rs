@@ -958,7 +958,7 @@ impl Shared {
             // engine's thread meanwhile does not reach it before the parts cut here (review b3 of W5's
             // second part, fresh, n1). Nothing takes the activity's lock while it holds the log's.
             if !records.is_empty() {
-                lock(&self.pending_log).extend(records.drain(..));
+                self.to_log(&mut records);
             }
         }
         lock(&self.waiting).sub(&settled);
@@ -1002,7 +1002,7 @@ impl Shared {
             // Under the activity's lock, as `settle` does, for the log's order.
             written = !records.is_empty();
             if written {
-                lock(&self.pending_log).extend(records.drain(..));
+                self.to_log(&mut records);
             }
         }
         lock(&self.waiting).sub(&settled);

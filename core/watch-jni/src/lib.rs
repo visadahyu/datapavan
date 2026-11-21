@@ -141,8 +141,13 @@ fn set_tunnels(change: impl FnOnce(&mut TunnelSetting)) {
 }
 
 /// Sets the messengers' apps and Android's proxy setting (W8, part 2a) for the engines to come, kept beside the
-/// chain, and on the one that runs, if any.
-fn set_proxies(proxies: ProxySetting) {
+/// chain, and on the one that runs, if any, with the trackers' table last handed over (`nativeTrackers`), for the
+/// marks a proxied flow keeps.
+fn set_proxies(change: impl FnOnce(&mut ProxySetting)) {
+    let trackers = TRACKERS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
     let mut set = setting();
     let kept = set.get_or_insert_with(|| ChainSetting {
         chain: None,
@@ -151,7 +156,8 @@ fn set_proxies(proxies: ProxySetting) {
         dns: None,
         proxies: ProxySetting::default(),
     });
-    kept.proxies = proxies;
+    change(&mut kept.proxies);
+    kept.proxies.trackers = trackers;
     if let Some(running) = engine().as_ref() {
         running.proxies(kept.proxies.clone());
     }
@@ -1329,6 +1335,8 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTrackers<
                 ]
             });
             *TRACKERS.lock().unwrap_or_else(PoisonError::into_inner) = read.map(Arc::new);
+            // The engines' proxied flows mark their trackers by the same table (ADR 0052).
+            set_proxies(|_| {});
             int_array(env, &counts)
         })
         .resolve::<ThrowRuntimeExAndDefault>()
@@ -1444,11 +1452,12 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlowRoute
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
-/// `Engine.nativeProxies(families, uids, android)`: the messengers' apps, each UID of `uids` of the family at the
-/// same place in `families` (0 Telegram, 1 `WhatsApp`, 2 Signal), and the proxies Android's setting names, one
-/// `host port` a line in `android` (W8, part 2a; ADR 0052). Kept for the engines to come, as the chain is.
+/// `Engine.nativeProxies(families, uids, android, strictDns)`: the messengers' apps, each UID of `uids` of the
+/// family at the same place in `families` (0 Telegram, 1 `WhatsApp`, 2 Signal), the proxies Android's setting names,
+/// one `host port` a line in `android` (W8, part 2a; ADR 0052), and whether Private DNS is strict on Watch's
+/// network. Kept for the engines to come, as the chain is.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeProxies(families: IntArray, uids:
-// IntArray, android: String)`.
+// IntArray, android: String, strictDns: Boolean)`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeProxies<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
@@ -1456,6 +1465,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeProxies<'
     families: JIntArray<'caller>,
     uids: JIntArray<'caller>,
     android: JString<'caller>,
+    strict_dns: jboolean,
 ) {
     unowned_env
         .with_env(|env| -> Result<_, Error> {
@@ -1466,7 +1476,11 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeProxies<'
             };
             let (families, uids) = (read(&families, env)?, read(&uids, env)?);
             let android = android.try_to_string(env)?;
-            set_proxies(proxy_setting(&families, &uids, &android));
+            let read = ProxySetting {
+                strict_dns,
+                ..proxy_setting(&families, &uids, &android)
+            };
+            set_proxies(|proxies| *proxies = read);
             Ok(())
         })
         .resolve::<ThrowRuntimeExAndDefault>();
@@ -1500,6 +1514,8 @@ fn proxy_setting(families: &[i32], uids: &[i32], android: &str) -> ProxySetting 
     ProxySetting {
         messengers,
         android,
+        trackers: None,
+        strict_dns: false,
     }
 }
 
@@ -1542,8 +1558,8 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlowProxi
 
 /// A kept flow through a proxy, as `protocol app destination uid kind how flags asked proxy-name cover name`:
 /// `kind` `socks5`, `socks4`, `connect`, `forward`, `mtproto`, `whatsapp` or `signal`; `how` `read` or `inferred`;
-/// `flags` of `s` (Android's setting), `p` (a password crossed unencrypted) and `o` (outside the maker's network),
-/// `-` for none; `asked` the destination asked for as `host:port`, `[address]:port` or `-`; the proxy's own name and
+/// `flags` of `s` (Android's setting), `p` (a password crossed unencrypted), `o` (outside the maker's network) and
+/// `l` (its flow's own address and names left out, as "Log where these apps connect" said), `-` for none; `asked` the destination asked for as `host:port`, `[address]:port` or `-`; the proxy's own name and
 /// the cover its hello sent, `-` for none; and last the flow's name, which may hold spaces. No credential is kept,
 /// so none can be written.
 fn proxy_line(f: &Flow) -> Option<String> {
@@ -1567,6 +1583,7 @@ fn proxy_line(f: &Flow) -> Option<String> {
         (proxy.setting, 's'),
         (proxy.password, 'p'),
         (proxy.outside_maker, 'o'),
+        (proxy.left_out, 'l'),
     ] {
         if on {
             flags.push(flag);
@@ -2188,6 +2205,8 @@ mod tests {
                 proxy_name: None,
                 organisation: None,
                 cover: None,
+                left_out: false,
+                trackers: Vec::new(),
             })),
         };
         assert_eq!(

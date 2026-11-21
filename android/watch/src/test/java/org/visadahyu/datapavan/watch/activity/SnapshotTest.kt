@@ -79,6 +79,7 @@ class SnapshotTest {
             org.visadahyu.datapavan.watch.log.LogRecord.Proxy(
                 org.visadahyu.datapavan.watch.log.LogRecord.PROXY_SOCKS5, password = true, asked = "example.org",
                 askedPort = 443, proxyName = "proxy.example.net", organisation = "Hetzner Online GmbH",
+                trackers = listOf(312),
             ),
             proxied.proxy,
         )
@@ -204,7 +205,8 @@ class SnapshotTest {
             proxy.asked.all { it.isDigit() || it == '.' } -> 1 + 4 + 1 + 2
             else -> 1 + 1 + proxy.asked.toByteArray().size + 2
         }
-        return 2 + asked + listOf(proxy.proxyName, proxy.organisation, proxy.cover).sumOf { 1 + it.toByteArray().size }
+        return 2 + asked + listOf(proxy.proxyName, proxy.organisation, proxy.cover).sumOf { 1 + it.toByteArray().size } +
+            1 + 4 * proxy.trackers.size
     }
 
     /** No snapshot, cut short anywhere or with any byte changed, makes the reader throw: it reads it or refuses it. */

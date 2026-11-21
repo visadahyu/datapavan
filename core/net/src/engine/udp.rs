@@ -3123,6 +3123,7 @@ impl Loop {
             return;
         }
         if let Some(answer) = cached {
+            self.shared.looked_up(uid, &answer);
             if let Some(packet) = packet::udp(key.1, key.0, &answer) {
                 self.shared.lookup_answered(uid, packet.len());
                 self.send(&packet).await;
@@ -4584,6 +4585,7 @@ fn deliver(
     // An app's own resolver names only that app's flows.
     if learns && from.port() == 53 && uid.is_some() {
         shared.learn(answer, uid);
+        shared.looked_up(uid, answer);
     }
     let packet = packet::udp(from, app, answer);
     // The answer, and its packet if one could be made: setting the hop limit keeps its length.
@@ -4716,6 +4718,7 @@ async fn open_lookups(
                 continue;
             }
             if let Some(answer) = cached_answer(shared, destination, payload) {
+                shared.looked_up(uid, &answer);
                 cached.extend(packet::udp(destination, app, &answer));
                 continue;
             }
@@ -5052,9 +5055,10 @@ fn relayed(
                 Counters::add(&shared.counters.bytes_down, n as u64);
                 let answer = &mut buffer[..n];
                 owed.answered(answer);
-                // Android's resolver names every app's flows.
+                // Android's resolver names every app's flows; a messenger's lookups count for its hellos.
                 if destination.port() == 53 {
                     shared.learn(answer, None);
+                    shared.looked_up(uid, answer);
                     if shared.uncached_answers.load(Ordering::Relaxed) {
                         lock(&shared.direct_answers).insert(answer, shared.clock.since_boot());
                         dns::uncache(answer);

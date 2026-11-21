@@ -5,7 +5,7 @@ use super::budget::Place;
 use super::chain::{Route, connect_through};
 use super::logbook::FlowBytes;
 use super::naming::Begun;
-use super::proxied::{Found, Sniff};
+use super::proxied::{Handshake, Sniff};
 use super::resolver::{TcpLookups, connect_lookups};
 use super::upstream::{connect_tcp, owner};
 use super::{Counters, Ech, Flow, Loop, NamedBy, Opened, Outcome, Shared, is_unreachable, lock};
@@ -855,6 +855,8 @@ async fn relay(mut app: TcpStream, mut upstream: Upstream, shared: &Arc<Shared>)
         let (mut up_read, mut up_write) = upstream.stream.split();
         let opened = upstream.opened;
         let bytes = upstream.bytes.as_ref();
+        // A declared proxy's request waits here for the server's reply, which confirms it or not (ADR 0052).
+        let handshake = std::sync::Mutex::new(Handshake::default());
         let up = async {
             // Zeroed when dropped: a proxy's credentials may have passed through it (ADR 0052).
             let mut buffer = Zeroizing::new(vec![0u8; 16 * 1024]);
@@ -868,12 +870,7 @@ async fn relay(mut app: TcpStream, mut upstream: Upstream, shared: &Arc<Shared>)
                 };
                 if let Some(reading) = sniff.as_mut() {
                     for found in reading.feed(&buffer[..n]) {
-                        match found {
-                            Found::Hello(hello, true) => shared.hello(opened, &hello, NamedBy::Tls),
-                            Found::Hello(hello, false) => shared.hello_read(opened, &hello),
-                            Found::Request(request) => shared.declared(&opened, &request),
-                            Found::Shape(shape) => shared.shaped(&opened, shape),
-                        }
+                        shared.found(opened, found, &handshake);
                     }
                     if reading.done() {
                         sniff = None;
@@ -892,12 +889,17 @@ async fn relay(mut app: TcpStream, mut upstream: Upstream, shared: &Arc<Shared>)
         };
         let down = async {
             let mut buffer = vec![0u8; 16 * 1024];
+            // The server's first bytes, for a declared proxy's handshake.
+            let mut replying = opened.sniffs;
             loop {
                 let n = match up_read.read(&mut buffer).await {
                     Ok(0) => break,
                     Ok(n) => n,
                     Err(_) => return End::Failed,
                 };
+                if replying {
+                    replying = shared.replied(opened, &buffer[..n], &handshake);
+                }
                 if app_write.write_all(&buffer[..n]).await.is_err() {
                     return End::Failed;
                 }

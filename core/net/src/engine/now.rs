@@ -394,13 +394,30 @@ impl Counts {
         }
     }
 
+    /// Counts the place a flow was counted under, `from`, as the place `to` from now on, as a messenger's proxy
+    /// taken back makes its flow what it would have been (ADR 0052, the fix round's S-M2): its bytes stay, and
+    /// what was said of it goes.
+    pub(super) fn rename_place(&mut self, uid: Option<u32>, from: &Flow, to: &Flow) {
+        if let Some(app) = self.apps.get_mut(&uid) {
+            for place in app.places.iter_mut().filter(|p| same_place(&p.flow, from)) {
+                place.flow = to.clone();
+            }
+        }
+    }
+
     /// Leaves out every app's own proxies that still show where they went, as "Log where these apps connect"
     /// turned off asks (ADR 0052); the apps keep their bytes.
     pub(super) fn hide_proxies(&mut self) {
         for app in self.apps.values_mut() {
             let had = app.places.len();
-            app.places.retain(|place| {
-                place.flow.proxy.is_none() || place.flow.destination.ip().is_unspecified()
+            app.places.retain_mut(|place| match &place.flow.proxy {
+                // A plain request's place keeps its own address and names, and loses what it asked for.
+                Some(p) if p.kind == crate::proxies::Kind::Forward => {
+                    place.flow.proxy = Some(Box::new(p.without_asked()));
+                    true
+                }
+                Some(_) => place.flow.destination.ip().is_unspecified(),
+                None => true,
             });
             self.places -= had - app.places.len();
         }
@@ -2425,6 +2442,8 @@ mod tests {
                 proxy_name: Some("proxy.example.net".into()),
                 organisation: Some("Hetzner Online GmbH".into()),
                 cover: None,
+                left_out: false,
+                trackers: vec![312],
             })),
             ..flow(3, Some(UID + 1))
         }) else {

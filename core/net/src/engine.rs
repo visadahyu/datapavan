@@ -92,7 +92,7 @@ use echo::Echoes;
 use logbook::{FlowBytes, Live, Lookups, logger};
 #[cfg(test)]
 use naming::Begun;
-pub use proxied::{Proxied, ProxySetting};
+pub use proxied::{MAX_TRACKERS, Proxied, ProxySetting};
 use tcp::{Listening, Pending, listen};
 #[cfg(test)]
 use tcp::{Upstream, accept};
@@ -876,6 +876,8 @@ pub struct Handover {
     dns: Option<Arc<DnsConfig>>,
     /// The messengers' apps and Android's proxy setting (W8, part 2a).
     proxies: ProxySetting,
+    /// Each messenger app's last direct connection to its maker's network (the fix round of W8 part 2a, S-M2).
+    direct: proxied::DirectInstants,
 }
 
 /// What the engine's thread and its controller share.
@@ -978,6 +980,8 @@ struct Shared {
     /// What the inference and the declared proxies know: the messengers' apps, their direct connections,
     /// and Android's proxy setting.
     proxies: Mutex<proxied::State>,
+    /// The records of flows named an inferred proxy, held back from the log for their window of take-back.
+    held_back: Mutex<proxied::HeldBack>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -1074,6 +1078,7 @@ impl Engine {
             mut tunnels,
             mut dns,
             mut proxies,
+            direct,
         } = handover.unwrap_or_else(|| Handover {
             chain: None,
             upstream_dns: None,
@@ -1085,6 +1090,7 @@ impl Engine {
             tunnels: TunnelSetting::default(),
             dns: None,
             proxies: ProxySetting::default(),
+            direct: Vec::new(),
         });
         let waiting = activity::Waiting::of_held(&activity.held);
         if let Some(setting) = setting {
@@ -1144,12 +1150,15 @@ impl Engine {
             resolver: resolver::Resolver::default(),
             messengers: Messengers::bundled(),
             proxies: Mutex::default(),
+            held_back: Mutex::default(),
         });
         // In place before the thread reads its first packet: no direct app's lookup goes to the network's
         // resolver while the encrypted one is set.
         shared.resolver.set(dns);
-        // In place before the thread reads its first packet: a messenger's first flow is read as one.
+        // In place before the thread reads its first packet: a messenger's first flow is read as one, and
+        // substitution goes on from the engine before.
         shared.set_proxies(proxies);
+        lock(&shared.proxies).carry_direct(direct);
         // In place before the thread reads its first packet: a tunnelled app's first SYN never goes directly.
         shared.tunnels.set(&tunnels);
         if shared.tunnels.any() {
@@ -1237,6 +1246,14 @@ impl Engine {
         self.stop();
         let shared = &self.shared;
         let tracks = shared.tracks;
+        // Read before: a lock taken in the literal below would be held to its end.
+        let (proxies, direct) = {
+            let state = lock(&shared.proxies);
+            (
+                state.setting().clone(),
+                state.direct_instants(shared.clock.since_boot()),
+            )
+        };
         Handover {
             chain: lock(&shared.chain).clone(),
             upstream_dns: *lock(&shared.upstream_dns),
@@ -1250,7 +1267,8 @@ impl Engine {
             ),
             tunnels: shared.tunnels.setting(),
             dns: shared.resolver.get(),
-            proxies: lock(&shared.proxies).setting().clone(),
+            proxies,
+            direct,
         }
     }
 
@@ -1852,6 +1870,7 @@ mod tests {
             resolver: resolver::Resolver::default(),
             messengers: crate::messengers::Messengers::bundled(),
             proxies: Mutex::default(),
+            held_back: Mutex::default(),
         }
     }
 
@@ -3804,7 +3823,7 @@ mod tests {
     }
 
     /// A DNS response for `name` with one A record, `address`.
-    fn dns_answer(name: &str, address: [u8; 4]) -> Vec<u8> {
+    pub(super) fn dns_answer(name: &str, address: [u8; 4]) -> Vec<u8> {
         let mut m = vec![0x12, 0x34, 0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0];
         for label in name.split('.') {
             m.push(u8::try_from(label.len()).unwrap_or(0));
