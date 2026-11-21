@@ -18,6 +18,11 @@
 //! from a resolver of its own, past Watch's (plain DNS to another server), name only that app's flows:
 //! an app chooses that resolver, and must not be able to rename other apps' connections through it.
 //!
+//! An address keeps the last name given for it, which names its flows, and up to [`NAMES_PER_ADDRESS`] names
+//! given before it, each until its own answer ends, kept as keyed hashes: whether any answer still held gave
+//! a name an address ([`Names::gave`]) tells a messenger's connection to a shared address from a proxy's cover
+//! (the fix round of W8 part 2a, M3; ADR 0052).
+//!
 //! It also keeps the public names of the ECH configurations in the DNS answers, as long as the
 //! addresses: a hello that offers ECH and names one of them hides the real name. They are scoped as the
 //! addresses are: those in Android's resolver's answers hide names in every app's flows, those an app got
@@ -35,7 +40,7 @@
 //! expired (review 3, nit 3). ADR 0044's decision 4 gives the memory this takes.
 
 use std::collections::{HashMap, VecDeque};
-use std::hash::Hash;
+use std::hash::{BuildHasher, Hash, RandomState};
 use std::net::IpAddr;
 use std::time::{Duration, Instant};
 
@@ -53,6 +58,8 @@ pub const PUBLIC_CAPACITY: usize = 256;
 pub const OWN_PUBLIC_CAPACITY: usize = 64;
 /// The most apps that keep tables of their own.
 pub const OWN_SCOPES: usize = 32;
+/// The most names given before the last that an address keeps, for [`Names::gave`].
+pub const NAMES_PER_ADDRESS: usize = 8;
 
 /// Whose flows a name may name: every app's, or only the app with this UID.
 pub type Scope = Option<u32>;
@@ -64,6 +71,8 @@ struct Given {
     name: String,
     until: Instant,
     held_until: Duration,
+    /// The names given the address before, as keyed hashes, each until its own answer ends.
+    earlier: Vec<(u64, Instant)>,
 }
 
 /// The entries of one scope, the oldest first.
@@ -83,9 +92,10 @@ impl<K, V> Default for Fifo<K, V> {
 }
 
 impl<K: Hash + Eq + Clone, V> Fifo<K, V> {
-    /// Keeps `value` for `key`, and at most `cap` entries, the oldest going first.
-    fn insert(&mut self, key: K, value: V, cap: usize) {
-        if self.entries.insert(key.clone(), value).is_none() {
+    /// Keeps `value` for `key`, and at most `cap` entries, the oldest going first; the value it replaces.
+    fn insert(&mut self, key: K, value: V, cap: usize) -> Option<V> {
+        let old = self.entries.insert(key.clone(), value);
+        if old.is_none() {
             self.order.push_back(key);
         }
         while self.order.len() > cap {
@@ -93,6 +103,7 @@ impl<K: Hash + Eq + Clone, V> Fifo<K, V> {
                 self.entries.remove(&oldest);
             }
         }
+        old
     }
 }
 
@@ -118,8 +129,10 @@ impl<K: Hash + Eq + Clone, V> Scoped<K, V> {
         }
     }
 
-    fn insert(&mut self, scope: Scope, key: K, value: V) {
+    /// Keeps `value` for `key` in `scope`'s table, made from the value it replaces by `merge`.
+    fn insert(&mut self, scope: Scope, key: K, value: V, merge: impl FnOnce(V, Option<&V>) -> V) {
         let Some(uid) = scope else {
+            let value = merge(value, self.shared.entries.get(&key));
             self.shared.insert(key, value, self.caps.0);
             return;
         };
@@ -136,6 +149,7 @@ impl<K: Hash + Eq + Clone, V> Scoped<K, V> {
         }
         self.writes += 1;
         let (table, written) = self.own.entry(uid).or_insert_with(|| (Fifo::default(), 0));
+        let value = merge(value, table.entries.get(&key));
         table.insert(key, value, self.caps.1);
         *written = self.writes;
     }
@@ -174,6 +188,8 @@ impl<K: Hash + Eq + Clone, V> Scoped<K, V> {
 pub struct Names {
     addresses: Scoped<IpAddr, Given>,
     public: Scoped<String, Instant>,
+    /// The key of the hashes of the names an address was given before its last, random for each table.
+    hasher: RandomState,
 }
 
 impl Default for Names {
@@ -181,8 +197,14 @@ impl Default for Names {
         Self {
             addresses: Scoped::new((CAPACITY, OWN_CAPACITY)),
             public: Scoped::new((PUBLIC_CAPACITY, OWN_PUBLIC_CAPACITY)),
+            hasher: RandomState::new(),
         }
     }
+}
+
+/// A host name as names compare: in lower case, without a trailing dot.
+fn compared(name: &str) -> String {
+    name.trim_end_matches('.').to_ascii_lowercase()
 }
 
 impl Names {
@@ -208,15 +230,56 @@ impl Names {
             name: name.to_owned(),
             until: now + keep,
             held_until,
+            earlier: Vec::new(),
         };
-        self.addresses.insert(scope, address, given);
+        let hasher = &self.hasher;
+        self.addresses
+            .insert(scope, address, given, |mut given, old| {
+                if let Some(old) = old {
+                    let mut earlier: Vec<(u64, Instant)> = old
+                        .earlier
+                        .iter()
+                        .copied()
+                        .filter(|(_, until)| *until > now)
+                        .collect();
+                    if old.until > now && compared(&old.name) != compared(name) {
+                        earlier.push((hasher.hash_one(compared(&old.name)), old.until));
+                    }
+                    let own = hasher.hash_one(compared(name));
+                    earlier.retain(|(hash, _)| *hash != own);
+                    // One entry for a name given again: its latest.
+                    let mut seen = std::collections::HashSet::new();
+                    earlier.reverse();
+                    earlier.retain(|(hash, _)| seen.insert(*hash));
+                    earlier.truncate(NAMES_PER_ADDRESS);
+                    earlier.reverse();
+                    given.earlier = earlier;
+                }
+                given
+            });
+    }
+
+    /// Whether an answer still kept for the flows of the app with `uid`, from its own resolver or from
+    /// Android's, gave `name` the address `address`: the last name given, or one given before it.
+    #[must_use]
+    pub fn gave(&self, address: IpAddr, uid: Option<u32>, name: &str, now: Instant) -> bool {
+        let wanted = compared(name);
+        let hash = self.hasher.hash_one(&wanted);
+        self.addresses.for_app(&address, uid).any(|given| {
+            given.until > now && compared(&given.name) == wanted
+                || given
+                    .earlier
+                    .iter()
+                    .any(|(h, until)| *h == hash && *until > now)
+        })
     }
 
     /// Remembers that a DNS answer gave an ECH configuration with the public name `name`, for the flows
     /// of `scope`.
     pub fn insert_public(&mut self, name: &str, scope: Scope, ttl: u32, now: Instant) {
         let keep = Duration::from_secs(u64::from(ttl)).clamp(MIN_KEEP, MAX_KEEP);
-        self.public.insert(scope, name.to_owned(), now + keep);
+        self.public
+            .insert(scope, name.to_owned(), now + keep, |until, _| until);
     }
 
     /// Whether `name` is the public name of an ECH configuration still kept for the flows of the app with
@@ -475,5 +538,45 @@ mod tests {
         assert!(names.is_public("cover.example", Some(10_123), now));
         assert!(!names.is_public("cover.example", Some(10_456), now));
         assert!(!names.is_public("cover.example", None, now));
+    }
+
+    /// An address keeps the names given before its last (the fix round of W8 part 2a, M3): a shared address
+    /// re-pointed by another app's lookup still ties the names it was given, each until its own answer ends,
+    /// at most [`NAMES_PER_ADDRESS`] of them, in each scope as its answers came.
+    #[test]
+    fn an_address_keeps_the_names_it_was_given_before_its_last() {
+        let mut names = Names::default();
+        let now = Instant::now();
+        let a = IpAddr::V4(Ipv4Addr::new(93, 184, 216, 34));
+        names.insert(a, None, "www.youtube.com", 300, (now, BOOT));
+        names.insert(a, None, "i.ytimg.com", 300, (now, BOOT));
+        assert_eq!(
+            names.get(a, None, now),
+            Some("i.ytimg.com"),
+            "the last names flows"
+        );
+        assert!(names.gave(a, None, "WWW.YouTube.com.", now));
+        assert!(names.gave(a, Some(10_123), "i.ytimg.com", now));
+        assert!(!names.gave(a, None, "www.google.com", now));
+        // Each until its own answer ends.
+        let later = now + MIN_KEEP + Duration::from_secs(1);
+        names.insert(a, None, "yt3.ggpht.com", 86_400, (later, BOOT));
+        assert!(!names.gave(a, None, "www.youtube.com", later));
+        assert!(names.gave(a, None, "yt3.ggpht.com", later));
+        // At most NAMES_PER_ADDRESS before the last, the latest kept; a name given again is one entry.
+        for i in 0..NAMES_PER_ADDRESS + 3 {
+            names.insert(a, None, &format!("n{i}.example"), 600, (later, BOOT));
+        }
+        names.insert(a, None, "n9.example", 600, (later, BOOT));
+        names.insert(a, None, "last.example", 600, (later, BOOT));
+        assert!(names.gave(a, None, "n10.example", later));
+        assert!(names.gave(a, None, "n3.example", later));
+        assert!(!names.gave(a, None, "n2.example", later), "past the bound");
+        // An app's own resolver ties for that app alone.
+        let b = IpAddr::V4(Ipv4Addr::new(93, 184, 216, 35));
+        names.insert(b, Some(10_123), "own.example", 600, (later, BOOT));
+        names.insert(b, Some(10_123), "other.example", 600, (later, BOOT));
+        assert!(names.gave(b, Some(10_123), "own.example", later));
+        assert!(!names.gave(b, Some(10_456), "own.example", later));
     }
 }
