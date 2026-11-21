@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="watch_tagline">اعرف إلى أين يتصل كل تطبيق على هاتفك.</string>
     <string name="status_on">خدمة Watch تعمل.</string>
     <string name="status_off">خدمة Watch متوقفة.</string>
@@ -459,4 +459,337 @@
     <!-- In place of a configuration's name: inside the sentences above, and also alone as a configuration's heading and in its buttons' and rows' labels, so it must read well on its own too. -->
     <string name="tunnel_removed_name">تكوين WireGuard مُزال</string>
     <string name="tunnel_closed_name">تكوين WireGuard لا يمكن فتحه الآن</string>
+    <!-- W8 (ADR 0042, 0052, 0053, 0041): the names of apps that go directly, apps' own proxies and the switch that
+         names them, tracker blocking, and the per-tool guides for proxy mode, moved from strings_untranslated.xml with
+         their translations (ADR 0030). -->
+    <!-- W8, part 1 (ADR 0042), and its fix round: the names of apps that go directly. -->
+    <string name="dns_title">كيف تبحث التطبيقات التي تمرّ مباشرةً عن الأسماء</string>
+    <string name="dns_now_unknown">لم يبحث أي تطبيق عن اسم على هذه الشبكة بعد.</string>
+    <string name="dns_now_none_odoh">لم يبحث أي تطبيق عن اسم على هذه الشبكة بعد. سيستخدم Watch بروتوكول Oblivious DoH.</string>
+    <!-- The first sentence of the "now" line, read out when it changes; the details follow apart. -->
+    <string name="dns_now_odoh">تذهب الأسماء الآن عبر Oblivious DoH.</string>
+    <string name="dns_now_odoh_tool">تذهب الأسماء الآن عبر Oblivious DoH من خلال أداتك.</string>
+    <string name="dns_now_choice">تذهب الأسماء الآن مشفّرةً إلى خادم DNS الذي اخترته.</string>
+    <string name="dns_now_down_odoh">لا يستجيب Oblivious DoH على هذه الشبكة.</string>
+    <string name="dns_now_choice_down">لا يستجيب خادم DNS الخاص بك على هذه الشبكة.</string>
+    <string name="dns_now_fallback">لا تستجيب أي طريقة مشفّرة على هذه الشبكة. في الوقت الحالي، تذهب الأسماء إلى خادم DNS في هذه الشبكة دون تشفير. تستطيع الشبكة رؤيتها. شغّل الوضع الصارم لإيقاف ذلك.</string>
+    <string name="dns_now_failing">لا تستجيب أي طريقة مشفّرة على هذه الشبكة. الوضع الصارم مفعّل، لذا لا تستطيع التطبيقات التي تمرّ مباشرةً البحث عن الأسماء حتى تستجيب إحدى هذه الطرق.</string>
+    <string name="dns_now_failing_only">لا يستجيب خادم DNS الخاص بك على هذه الشبكة. خيار «خادم DNS هذا فقط» مفعّل، لذا لا تستطيع التطبيقات التي تمرّ مباشرةً البحث عن الأسماء حتى يستجيب.</string>
+    <!-- %1$s: the relay's operator and its countries; %2$s: the target's. -->
+    <string name="dns_now_pair">المرحِّل: %1$s. الهدف: %2$s. يرى المرحِّل عنوانك لكنه لا يرى الأسماء. ويرى الهدف الأسماء لكنه لا يرى عنوانك.</string>
+    <!-- %1$s: a resolver's operator. -->
+    <string name="dns_now_to">تذهب الأسماء الآن مشفّرةً إلى %1$s. وهو يرى عنوانك والأسماء.</string>
+    <!-- %1$s: an operator; %2$s: its countries, by commas. -->
+    <string name="dns_party">%1$s (%2$s)</string>
+    <!-- %1$s: the host name of Android's Private DNS provider. -->
+    <string name="dns_private_dns_strict">يرسل «نظام أسماء النطاقات الخاص» في Android الأسماء التي يبحث عنها كل تطبيق إلى %1$s، دون المرور عبر Watch. لا ينطبق اختيارك هنا إلا ما دام «نظام أسماء النطاقات الخاص» غير مفعّل أو مضبوطًا على «تلقائي».</string>
+    <string name="dns_choice">أين تذهب الأسماء:</string>
+    <string name="dns_odoh">Oblivious DoH (يُنصح به)</string>
+    <string name="dns_odoh_detail">جهتان مشغّلتان في بلدين مختلفين، ترى كل منهما نصفًا: إحداهما ترى عنوانك، والأخرى ترى الأسماء.</string>
+    <!-- A resolver's row: %1$s its operator; %2$s one of the service's names below. -->
+    <string name="dns_preset">%1$s، %2$s</string>
+    <string name="dns_service_blocking">يحظر المواقع الضارة</string>
+    <string name="dns_service_unfiltered">بلا تصفية</string>
+    <string name="dns_service_standard">قياسي</string>
+    <string name="dns_protocol_doh">عبر HTTPS (DoH)</string>
+    <string name="dns_protocol_dot">عبر TLS (DoT)</string>
+    <!-- A resolver's card: %1$s the country of its operator's seat; %2$s, %3$s, %4$s sentences below. -->
+    <string name="dns_preset_card">مقرّه في %1$s. %2$s %3$s %4$s</string>
+    <string name="dns_logs_totals">لا يحتفظ بأي عناوين، بل بالأعداد الإجمالية فقط.</string>
+    <string name="dns_logs_names_day">يحتفظ بالأسماء لمدة يوم، دون العناوين، وبالأعداد الإجمالية.</string>
+    <string name="dns_logs_day">يحتفظ بسجلات فيها عنوانك لمدة يوم تقريبًا.</string>
+    <string name="dns_logs_months">يحتفظ بسجلات فيها عنوانك مع إخفاء جزء منه، لمدة تصل إلى ستة أشهر.</string>
+    <string name="dns_logs_none">يقول إنه لا يحتفظ بأي سجلات.</string>
+    <string name="dns_blocks_none">لا يحظر أي شيء.</string>
+    <string name="dns_blocks_harm">يحظر المواقع الضارة.</string>
+    <string name="dns_blocks_court">يحظر ما تأمر به المحاكم.</string>
+    <string name="dns_audited_no">لم تتحقق من ذلك أي جهة خارجية.</string>
+    <string name="dns_audited_firm">تحقّقت شركة محاسبة من هذه الادعاءات.</string>
+    <string name="dns_policy">سياسة الخصوصية الخاصة به</string>
+    <string name="dns_choice_fails">إذا لم يستجب، يستخدم Watch بروتوكول Oblivious DoH، ثم الطرق المشفّرة الأخرى. شغّل «خادم DNS هذا فقط» لإيقاف ذلك.</string>
+    <string name="dns_only">خادم DNS هذا فقط</string>
+    <string name="dns_only_cost">إذا لم يستجب خادم DNS الخاص بك، لا تستطيع التطبيقات التي تمرّ مباشرةً البحث عن الأسماء.</string>
+    <string name="dns_custom">خادم DNS خاص بك</string>
+    <string name="dns_custom_detail">عنوان DoH (https://…) أو اسم خادم DoT، وعناوين IP الخاصة به.</string>
+    <string name="dns_custom_at">عنوان DoH أو خادم DoT</string>
+    <string name="dns_custom_addresses">عناوين IP، مفصولة بفواصل</string>
+    <string name="dns_custom_use">اختباره واستخدامه</string>
+    <string name="dns_custom_refused">أدخل عنوان DoH يبدأ بـ https://، أو اسم خادم DoT، وعنوان IP واحدًا على الأقل. لا يبحث Watch أبدًا عن اسم خادم DNS دون تشفير.</string>
+    <string name="dns_custom_testing">جارٍ سؤال خادم DNS الخاص بك عن اسم…</string>
+    <!-- %1$d: milliseconds. -->
+    <string name="dns_custom_answered">استجاب خادم DNS الخاص بك خلال %1$d ميلي ثانية. يستخدمه Watch الآن.</string>
+    <string name="dns_custom_failed">لم يستجب خادم DNS الخاص بك، لذا لم يحفظه Watch. تحقّق من عنوانه ومن عناوين IP الخاصة به.</string>
+    <string name="dns_custom_tampered">لم تجتز شهادة خادم DNS الخاص بك التحقق، أو انقطع الاتصال. لم يحفظه Watch.</string>
+    <string name="dns_strict">الوضع الصارم: عدم استخدام خادم DNS في الشبكة أبدًا</string>
+    <string name="dns_strict_cost">إذا لم تستجب أي طريقة مشفّرة، لا تستطيع التطبيقات التي تمرّ مباشرةً البحث عن الأسماء. استخدمه حيث تخضع الشبكة للحجب أو المراقبة.</string>
+    <string name="dns_local_names">الأسماء المحلية، مثل الطابعة أو جهاز التوجيه لديك، تظل تذهب إلى خادم DNS في شبكتك نفسها.</string>
+    <!-- %1$s: the network's own domains, by commas. -->
+    <string name="dns_search">تقول هذه الشبكة إن هذه النطاقات تخصّها: %1$s. لأي اسم ضمنها، يسأل Watch الطريقة المشفّرة أولًا. ولا يسأل هذه الشبكة إلا عندما لا يعرف الإنترنت هذا الاسم.</string>
+    <string name="dns_strict_limits">الوضع الصارم لا يشمل كل شيء. يتحقق Android من الاتصال بنفسه، دون المرور عبر Watch. بعض التطبيقات تستخدم DNS مشفّرًا خاصًا بها. والتطبيقات التي استثنيتها من Watch غير مشمولة. وأثناء إعادة تشغيل Watch، أو إذا أوقفه Android وكانت «شبكة VPN دائمة التشغيل» غير مفعّلة، تستخدم التطبيقات خادم DNS في الشبكة.</string>
+    <string name="dns_notify">إرسال إشعار إليّ ما دامت الأسماء تذهب إلى خادم DNS في الشبكة</string>
+    <string name="dns_notify_refused">لا يسمح Android لـ Watch بعرض الإشعارات، لذا يبقى هذا الخيار متوقفًا. اسمح بها لـ Watch في إعدادات Android، ثم شغّل هذا الخيار مرة أخرى.</string>
+    <string name="dns_pairs">أزواج Oblivious DoH، كل زوج منها من جهتين مشغّلتين مختلفتين في بلدين مختلفين:</string>
+    <!-- %1$s: the relay's operator and its countries; %2$s: the target's. -->
+    <string name="dns_pair">المرحِّل: %1$s. الهدف: %2$s.</string>
+    <string name="dns_pairs_change">تغيير الأزواج</string>
+    <string name="dns_pairs_default">استخدام الأزواج الافتراضية</string>
+    <string name="dns_pairs_done">تم</string>
+    <string name="dns_not_kept">لا يحتفظ Watch بقائمة للأسماء التي تبحث عنها التطبيقات، باستثناء سجل الاتصالات، إن كنت تحتفظ به. ويحتفظ بالردود في الذاكرة لمدة تصل إلى يوم، وينساها عندما تتغير الشبكة.</string>
+    <string name="dns_fallback_channel">أسماء دون تشفير</string>
+    <string name="dns_fallback_title">تذهب الأسماء إلى خادم DNS في الشبكة</string>
+    <string name="dns_fallback_text">لا تستجيب أي طريقة مشفّرة على هذه الشبكة، لذا تستخدم التطبيقات التي تمرّ مباشرةً خادم DNS فيها في الوقت الحالي. افتح Watch لتشغيل الوضع الصارم.</string>
+
+    <!-- The one switch for what Watch leaves out of the log and "Now" (W6, W7 and W8): off unless the user turns it
+         on. It replaces "Log where these apps connect" (chain_log_destinations), which spoke of chained apps alone.
+         The lines below that name it quote it word for word. -->
+    <string name="log_switch">تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل</string>
+    <!-- Under the switch above. -->
+    <string name="log_switch_note">متوقف ما لم تشغّله. يشمل التطبيقات التي تمرّرها عبر أداتك لتجاوز الحجب أو عبر تكوين WireGuard، والخوادم الخاصة بالأداة نفسها. ويشمل أيضًا التطبيقات التي تتصل عبر خادم وكيل، مثل خادم وكيل Telegram. يواصل Watch عدّ اتصالاتها. ويمكن أن تُستخدم قائمة بالجهات التي ذهبت إليها ضدك إذا فتّش أحد هاتفك.</string>
+    <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens Watch's screen at the
+         switch. -->
+    <string name="log_switch_open">الانتقال إلى مفتاح التبديل</string>
+    <!-- "Now": an app sent through the user's tool, the tool's own servers, and an app sent through a WireGuard
+         configuration (%1$s: its name), with the switch above off. -->
+    <string name="now_through_tool_off">مُرِّر عبر أداتك لتجاوز الحجب. لا تُعرض الجهة التي اتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» متوقف.</string>
+    <string name="now_tool_servers_off">لا تُعرض الجهة التي يتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» متوقف.</string>
+    <string name="now_through_tunnel_off">مُرِّر عبر %1$s. لا تُعرض الجهة التي اتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» متوقف.</string>
+    <!-- The same in an app's history, of a connection logged while the switch was off. history_left_out_off: the
+         tool's own servers, or a record written before Watch logged each connection's route. -->
+    <string name="history_through_tool_off">مُرِّر عبر أداتك لتجاوز الحجب. لم تُسجَّل الجهة التي اتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» كان متوقفًا.</string>
+    <string name="history_left_out_off">لم تُسجَّل الجهة التي اتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» كان متوقفًا.</string>
+    <string name="history_through_tunnel_off">مُرِّر عبر %1$s. لم تُسجَّل الجهة التي اتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» كان متوقفًا.</string>
+    <!-- A connection of an app sent through the tool or a WireGuard configuration that went directly all the same:
+         one opened before the app was sent through them, its local network, or what the tool does not carry. -->
+    <string name="history_direct_off">مرّ مباشرةً، لا عبر أداتك لتجاوز الحجب ولا عبر تكوين WireGuard. لم تُسجَّل الجهة التي اتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» كان متوقفًا.</string>
+    <!-- Where a destination's name came from, beside "name the connection sent" and the others: the app named the
+         destination to its proxy. -->
+    <string name="now_named_proxy">الجهة التي طلبها التطبيق من خادمه الوكيل</string>
+    <!-- The kinds of proxy, set into the sentences below. SOCKS5, SOCKS4, HTTP and MTProto are names of protocols,
+         and Telegram, WhatsApp and Signal names of apps: never translated. -->
+    <string name="proxy_kind_socks5">خادم وكيل SOCKS5</string>
+    <string name="proxy_kind_socks4">خادم وكيل SOCKS4</string>
+    <string name="proxy_kind_http">خادم وكيل HTTP</string>
+    <string name="proxy_kind_mtproto">خادم وكيل Telegram (MTProto)</string>
+    <string name="proxy_kind_whatsapp">خادم وكيل WhatsApp</string>
+    <string name="proxy_kind_signal">خادم وكيل Signal</string>
+    <!-- A proxy the app's own bytes named and the proxy's reply confirmed: %1$s is its kind (above), %2$s where it is,
+         as a name or an address with its port, %3$s the destination the app asked it for. "Read from the connection"
+         says how Watch knows. -->
+    <string name="proxy_asked">طلب من %1$s في %2$s الوصول إلى %3$s. قُرئ هذا من الاتصال.</string>
+    <!-- As above, where no destination asked for was read. -->
+    <string name="proxy_declared">عبر %1$s في %2$s. قُرئ هذا من الاتصال.</string>
+    <!-- A messenger's proxy that Watch infers: %1$s its kind, %2$s where it is. -->
+    <string name="proxy_inferred">عبر %1$s في %2$s. استُنتج هذا من الجهة التي يتصل بها وطريقة اتصاله. لا يستطيع Watch أن يرى إلى أين يذهب من هناك: هذا الجزء مشفّر.</string>
+    <!-- How Watch knows, on its own line where the sentence above is not shown (the switch off). -->
+    <string name="proxy_how_read">قُرئ هذا من الاتصال.</string>
+    <string name="proxy_how_inferred">استُنتج هذا من الجهة التي يتصل بها وطريقة اتصاله.</string>
+    <!-- A plain HTTP request written in the form a proxy takes, which a web server takes too: the row names the server
+         it was sent to, and this line says what the request asked for (%1$s), never that the server is a proxy. -->
+    <string name="proxy_request_asked">أرسل إلى هذا الخادم طلبًا مكتوبًا لخادم وكيل HTTP، يطلب فيه %1$s. قُرئ هذا من الاتصال.</string>
+    <string name="now_proxy_request_hidden">أرسل إلى هذا الخادم طلبًا مكتوبًا لخادم وكيل HTTP. لا يُعرض ما طلبه، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» متوقف.</string>
+    <string name="history_proxy_request_hidden">أرسل إلى هذا الخادم طلبًا مكتوبًا لخادم وكيل HTTP. لم يُسجَّل ما طلبه، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» كان متوقفًا.</string>
+    <string name="proxy_request_password">حمل الطلب كلمة مرور لخادم وكيل، دون تشفير. لم يحتفظ بها Watch.</string>
+    <!-- Where a proxy is, by its address alone: who runs it is not known. %1$s is the organisation whose network holds
+         the address. -->
+    <string name="proxy_network">عنوان في شبكة %1$s. لا يُعرف من يديره.</string>
+    <!-- As above, and the network is not the app maker's own: %2$s is the app's maker, such as Telegram. -->
+    <string name="proxy_network_not_maker">عنوان في شبكة %1$s، لا في شبكة %2$s. لا يُعرف من يديره.</string>
+    <string name="proxy_network_unknown">لا يستطيع Watch معرفة اسم شبكة هذا العنوان. لا يُعرف من يديره.</string>
+    <!-- Where Watch cannot name the network, or does not show the address: %1$s is the app's maker, such as Telegram. -->
+    <string name="proxy_not_maker">العنوان ليس في شبكة %1$s.</string>
+    <string name="proxy_local">على شبكتك المحلية. لا يُعرف من يديره.</string>
+    <!-- The proxy set in Android's settings, which apps that follow those settings all use. -->
+    <string name="proxy_setting">هذا هو الخادم الوكيل المضبوط في إعدادات Android، ويمكن للتطبيقات الأخرى استخدامه أيضًا.</string>
+    <string name="proxy_password">عبرت كلمة مرور لهذا الخادم الوكيل الشبكة دون تشفير. لم يحتفظ بها Watch.</string>
+    <!-- The server name an inferred proxy's connection sent, which no DNS answer gave its address: %1$s is that
+         name. Facts only: nothing of why the app sent it. -->
+    <string name="proxy_cover">أرسل اتصاله الاسم %1$s. لم يربط أي ردّ DNS مرّره Watch ذلك الاسم بهذا العنوان.</string>
+    <!-- %1$s owns the name above, %2$s the network of the address. -->
+    <string name="proxy_cover_owner">ذلك الاسم يعود إلى %1$s، والشبكة إلى %2$s.</string>
+    <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Watch knows and the
+         facts that name nothing. -->
+    <string name="now_proxy_hidden">عبر %1$s. لا تُعرض الجهة التي اتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» متوقف.</string>
+    <string name="history_proxy_hidden">عبر %1$s. لم تُسجَّل الجهة التي اتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» كان متوقفًا.</string>
+    <!-- As above, for the proxy set in Android's settings. -->
+    <string name="now_proxy_setting_hidden">عبر %1$s في إعدادات Android، الذي يمكن للتطبيقات الأخرى استخدامه أيضًا. لا تُعرض الجهة التي اتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» متوقف.</string>
+    <string name="history_proxy_setting_hidden">عبر %1$s في إعدادات Android، الذي يمكن للتطبيقات الأخرى استخدامه أيضًا. لم تُسجَّل الجهة التي اتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» كان متوقفًا.</string>
+    <!-- One more line of "What this view cannot see". -->
+    <string name="cannot_see_proxy">في حالة الخادم الوكيل الذي يستخدمه تطبيق، لا يستطيع Watch أن يرى من يديره، ولا ما إذا كنت أنت من اختاره أم التطبيق. وفي حالة الخادم الوكيل الذي يستنتجه Watch، لا يستطيع أن يرى إلى أين تذهب حركة البيانات بعده.</string>
+
+    <!--
+        W8, part 3b (ADR 0041, "How the per-tool guides are built"): the per-tool guides for proxy mode, in Watch and on the
+        website (scripts/guides.py writes docs/site/guides/ from these words and data/tools/guide*.tsv). A quoted %s is a
+        tool's own label, read from the tool on this phone or from the data, never translated: only these sentences are.
+        The guides name no tool as better than another and never point to a download.
+    -->
+    <!-- The chain section: one link per tool of the table installed here. %1$s: the tool's name. -->
+    <string name="chain_guides_title">كيف تعمل الأدوات الموجودة على هذا الهاتف بجانب Watch:</string>
+    <string name="chain_guide_proxy">%1$s في وضع الخادم الوكيل</string>
+    <string name="chain_guide_other">%1$s وWatch</string>
+    <!-- A guide's screen and page. %1$s: the tool's name. -->
+    <string name="guide_title_proxy">%1$s في وضع الخادم الوكيل</string>
+    <string name="guide_title_other">%1$s وWatch</string>
+    <string name="guide_intro">يشغّل Android شبكة VPN واحدة في كل مرة. في وضع الخادم الوكيل، يعمل %1$s دون VPN، ويستطيع Watch تمرير تطبيقاتك عبره.</string>
+    <string name="guide_assumes">تفترض هذه الخطوات أن %1$s يعمل لديك بالفعل كشبكة VPN.</string>
+    <string name="guide_heading_on">تشغيل وضع الخادم الوكيل</string>
+    <!-- %1$s: an address such as 127.0.0.1; %2$s: its port. -->
+    <string name="guide_listener">عندها يستمع خادمه الوكيل على هذا الهاتف، على العنوان %1$s والمنفذ %2$s.</string>
+    <string name="guide_next">ثم عُد إلى Watch. سيجد الخادم الوكيل بنفسه ويعرض عليك تمرير تطبيقاتك عبره.</string>
+    <string name="guide_heading_password">كلمة مرور لخادمه الوكيل</string>
+    <string name="guide_password_optional">يمكن للخادم الوكيل فيه أن يطلب اسم مستخدم وكلمة مرور. اضبط الاسم وكلمة المرور اللذين يعرضهما Watch عندما يجد الخادم الوكيل. عندها لا تستطيع التطبيقات الأخرى على هذا الهاتف استخدامه.</string>
+    <string name="guide_password_none">لا يستطيع الخادم الوكيل فيه طلب كلمة مرور. ما دام يعمل، يستطيع أي تطبيق على هذا الهاتف استخدامه.</string>
+    <string name="guide_heading_asks">ما يطلبه</string>
+    <string name="guide_heading_back">العودة إلى وضع VPN</string>
+    <string name="guide_back_note">عندما يعمل %1$s كشبكة VPN مرة أخرى، يوقف Android خدمة Watch: لا تعمل إلا شبكة VPN واحدة في كل مرة.</string>
+    <!-- %1$s: the tool's name; %2$s: its version. -->
+    <string name="guide_read">قُرئ من الرمز المصدري لـ %1$s، الإصدار %2$s.</string>
+    <string name="guide_checked">جُرّب مع Watch في ذلك الإصدار.</string>
+    <string name="guide_not_checked">لم يُجرَّب مع Watch بعد.</string>
+    <string name="guide_labels_tool">الكلمات بين علامتَي التنصيص تُقرأ من %1$s على هذا الهاتف.</string>
+    <string name="guide_labels_recorded">الكلمات بين علامتَي التنصيص كما يعرضها ذلك الإصدار.</string>
+    <string name="guide_audit">بقية Datapavan، أي فحصه لتطبيقاتك، تعمل دون Watch.</string>
+    <!-- Steps. Each %s in quotes is one of the tool's labels. -->
+    <string name="guide_step_drawer">افتح القائمة في الزاوية العلوية من شاشته وانقر على «%1$s».</string>
+    <string name="guide_step_overflow">افتح القائمة ذات النقاط الثلاث وانقر على «%1$s».</string>
+    <string name="guide_step_tab">افتح علامة التبويب «%1$s».</string>
+    <string name="guide_step_tap">انقر على «%1$s».</string>
+    <string name="guide_step_gear">انقر على زر الترس في الأعلى.</string>
+    <string name="guide_step_choose">انقر على «%1$s» واختر «%2$s».</string>
+    <string name="guide_step_under_choose">ضمن «%1$s»، انقر على «%2$s» واختر «%3$s».</string>
+    <string name="guide_step_arrow_choose">انقر على السهم في نهاية «%1$s» واختر «%2$s».</string>
+    <string name="guide_step_on">فعّل «%1$s».</string>
+    <string name="guide_step_off">أوقف «%1$s».</string>
+    <string name="guide_step_under_on">ضمن «%1$s»، فعّل «%2$s».</string>
+    <string name="guide_step_under_off">ضمن «%1$s»، أوقف «%2$s».</string>
+    <string name="guide_step_fill">املأ «%1$s» و«%2$s».</string>
+    <string name="guide_step_under_fill">ضمن «%1$s»، املأ «%2$s» و«%3$s».</string>
+    <!-- %3$s: a value, such as a port. -->
+    <string name="guide_step_under_set">ضمن «%1$s»، اضبط «%2$s» على %3$s.</string>
+    <string name="guide_step_expand">إذا لم يظهر «%1$s»، فانقر على الصف الأخير لعرض البقية.</string>
+    <string name="guide_step_back_home">عُد إلى شاشته الرئيسية.</string>
+    <string name="guide_step_back_once">عُد شاشة واحدة إلى الوراء.</string>
+    <string name="guide_step_start">شغّله بزرّه الدائري.</string>
+    <string name="guide_step_start_icon">انقر على زر التشغيل الدائري الخاص به، الذي يسمّيه قارئ الشاشة «%1$s».</string>
+    <string name="guide_step_start_text">انقر على «%1$s» للتشغيل.</string>
+    <string name="guide_step_slide">اسحب الزر المكتوب عليه «%1$s».</string>
+    <string name="guide_step_tap_card">انقر على البطاقة المكتوب عليها «%1$s».</string>
+    <string name="guide_step_tunnel_switch">شغّل مفتاح التبديل في نهاية صف النفق الخاص بك.</string>
+    <string name="guide_step_card_add">في بطاقة «%1$s»، انقر على + ثم على «%2$s».</string>
+    <string name="guide_step_name_keep_tap">أدخل اسمًا ضمن «%1$s»، وأبقِ «%2$s»، ثم انقر على «%3$s».</string>
+    <!-- sing-box's own words for its profile, which are not translated: tun, mixed, listen, listen_port, users,
+         username, password. %1$s: a port. -->
+    <string name="guide_step_singbox_inbound">اكتب ملف التعريف دون أي inbound من النوع «tun»، ومع inbound واحد من النوع «mixed» تكون قيمة «listen» فيه «127.0.0.1» وقيمة «listen_port» فيه %1$s. ثم احفظه.</string>
+    <string name="guide_step_singbox_users">في inbound «mixed» هذا، أضف «users» مع «username» و«password».</string>
+    <string name="guide_step_singbox_back">استخدم مرة أخرى ملف تعريف فيه inbound من النوع «tun»، أو أضف واحدًا عبر «%1$s». ثم شغّله.</string>
+    <string name="guide_step_auth_entry">ضمن «%1$s»، انقر على «%2$s» وأضف إدخالًا واحدًا: اسم المستخدم، ثم نقطتين رأسيتين (:)، ثم كلمة المرور.</string>
+    <string name="guide_step_secret">انقر على «%1$s» واكتب كلمة المرور التي يعرضها Watch.</string>
+    <string name="guide_step_profile_card">في بطاقة ملف التعريف الخاص بك، انقر على «%1$s».</string>
+    <string name="guide_step_config_ssh">عدّل التكوين الخاص بك: اضبط «%1$s» على «%2$s»، واملأ «%3$s» و«%4$s».</string>
+    <string name="guide_step_save_use">انقر على «%1$s»، ثم انقر على ملف التعريف الجديد لاستخدامه.</string>
+    <!-- What a tool asks for in proxy mode, from its code. -->
+    <string name="guide_asks_notifications">يطلب عرض الإشعارات.</string>
+    <string name="guide_asks_local_network">في Android 17 يطلب إذن الشبكة المحلية. لا يحتاج Watch إلى ذلك من أجل الخادم الوكيل فيه، لأنه على هذا الهاتف.</string>
+    <string name="guide_asks_battery">يطلب أن يُستثنى من تحسين البطارية.</string>
+    <string name="guide_asks_alarms">في وضع الخادم الوكيل يطلب إذن المنبّهات قبل أن يبدأ. ويقول إنه لا يضبط أي منبّهات: فالإذن يُبقيه قيد التشغيل حين لا يعمل كشبكة VPN.</string>
+    <string name="guide_asks_vpn_once">في المرة الأولى التي يتصل فيها، يطلب إعداد شبكة VPN، حتى في هذا الوضع. إذا سمحت بذلك، يوقف Android خدمة Watch. شغّل Watch مرة أخرى بعد ذلك.</string>
+    <string name="guide_asks_none">لا يطلب رمزه البرمجي أي إذن في هذا الوضع.</string>
+    <!-- Facts a user of one tool needs. %1$s in guide_note_named_port: a port. -->
+    <string name="guide_note_named_port">يبحث Watch عن الخادم الوكيل فيه على المنفذ %1$s فقط، لذا اضبط هذا المنفذ حتى إن كان ملف التعريف الخاص بك يذكر منفذًا آخر.</string>
+    <string name="guide_note_fixed_user">اسم المستخدم فيه هو «%1$s» دائمًا. ويعرض Watch هذا الاسم.</string>
+    <string name="guide_note_user_port">في ملف العمل أو لدى مستخدم آخر على هذا الهاتف، يزيد رقم منفذه برقم ذلك المستخدم. ويبحث Watch هناك أيضًا.</string>
+    <string name="guide_note_stopped_first">أوقفه أولًا: فهو لا يغيّر هذا إلا وهو غير متصل.</string>
+    <string name="guide_note_no_server">لا يرسل حركة بياناتك إلى خادم. بل يغيّر شكل حركة البيانات ويرسلها من هذا الهاتف. لذا تصل التطبيقات التي ينقلها إلى الجهات التي تقصدها من عنوانك أنت.</string>
+    <string name="guide_note_ssh_only">نوع النفق «%1$s» وحده يفتح خادمًا وكيلًا من نوع SOCKS5 على هذا الهاتف. مع «%2$s»، لا يستطيع Watch استخدام المنفذ إلا إذا كان خادمك يوفّر خادمًا وكيلًا من نوع SOCKS5.</string>
+    <string name="guide_note_remote_profile">لا يعرض ملف التعريف البعيد إلا «%1$s»: يأتي محتواه من عنوانه ولا يمكن تغييره هنا. أنشئ ملف تعريف محليًا بدلًا منه.</string>
+    <string name="guide_note_engines">في هذا الوضع، تظل ملفات التعريف التي تستخدم sing-box أو OpenConnect أو IKEv2 أو سلسلة تشغّل شبكة VPN.</string>
+    <!-- The pages of tools that run only as a VPN, and of those whose steps wait. %1$s: the tool's name. -->
+    <string name="guide_vpn_only">لا يعمل %1$s إلا كشبكة VPN. يشغّل Android شبكة VPN واحدة في كل مرة، لذا لا يستطيع Watch العمل بجانبه: عندما تبدأ إحداهما، يوقف Android الأخرى.</string>
+    <string name="guide_wireguard_only">لا يعمل %1$s إلا كشبكة VPN، لذا لا يستطيع Watch العمل بجانبه. لكن Watch يستطيع أن ينقل بنفسه تكوين WireGuard، وأن يمرّر عبره التطبيقات التي تختارها.</string>
+    <!-- Quotes Watch's own heading, tunnels_title, as it reads. -->
+    <string name="guide_wireguard_add">أضِف تكوينًا في Watch، ضمن «تكوينات WireGuard».</string>
+    <string name="guide_wireguard_proton">ينشئ موقع Proton VPN هذه الملفات، في الخطة المجانية أيضًا. في حسابك، افتح «Downloads»، ثم «WireGuard configuration».</string>
+    <string name="guide_wireguard_mullvad">ينشئ موقع Mullvad هذه الملفات لحساب مدفوع. استخدم مولّد التكوينات فيه.</string>
+    <string name="guide_wireguard_windscribe">ينشئ موقع Windscribe هذه الملفات للحسابات المدفوعة. استخدم «Config Generator» فيه.</string>
+    <string name="guide_wireguard_same">ملف التكوين أو رمز QR الذي أضفته إلى WireGuard يعمل في Watch أيضًا.</string>
+    <string name="guide_note_amneziawg">يغيّر AmneziaWG شكل حزم WireGuard. ولا يقرأ Watch هذا التغيير بعد، لذا لا يستطيع نقل هذه التكوينات.</string>
+    <string name="guide_waiting_intro">لا توجد خطوات لـ %1$s بعد.</string>
+    <string name="guide_waiting_closed">رمزه البرمجي غير منشور، لذا تنتظر خطواته حتى يُجرَّب مع Watch.</string>
+    <string name="guide_waiting_partly">جزء من رمزه البرمجي غير منشور، لذا تنتظر خطواته حتى يُجرَّب مع Watch.</string>
+    <string name="guide_note_tethering">فيه ميزة يسمّيها Proxy Tethering. ولا يُعرف بعد هل توفّر خادمًا وكيلًا على هذا الهاتف يستطيع Watch استخدامه.</string>
+    <!-- The website's list of the guides (scripts/guides.py), which Watch does not show. -->
+    <string name="guide_index_title" tools:ignore="UnusedResources">أداتك بجانب Watch</string>
+    <string name="guide_index_intro" tools:ignore="UnusedResources">يشغّل Android شبكة VPN واحدة في كل مرة. تشرح هذه الصفحات كيف يمكن لكل أداة لتجاوز الحجب أن تعمل بجانب Watch، كما قُرئ ذلك من الرمز البرمجي للأداة نفسها.</string>
+    <string name="guide_index_proxy" tools:ignore="UnusedResources">أدوات فيها وضع الخادم الوكيل</string>
+    <string name="guide_index_wireguard" tools:ignore="UnusedResources">أدوات لا تعمل إلا كشبكة VPN، مع تكوينات WireGuard</string>
+    <string name="guide_index_vpn" tools:ignore="UnusedResources">أدوات لا تعمل إلا كشبكة VPN</string>
+    <string name="guide_index_waiting" tools:ignore="UnusedResources">أدوات تنتظر خطواتها حتى تُجرَّب مع Watch</string>
+
+    <!-- W8, part 3a (ADR 0053): tracker blocking. Counts and sizes only inside the app: nothing of it reaches a
+         notification, the summary or the widget (ADR 0046). ADR 0025's words hold (BlockingWordsTest), and "grade"
+         never shows. The labels of the switches and buttons below are tapped by their text in the emulator check. -->
+    <!-- Watch's screen: the section, its switches and the global pause, which names no app. -->
+    <string name="blocking_title">حظر أدوات التتبّع</string>
+    <string name="blocking_switch">حظر أدوات التتبّع</string>
+    <string name="blocking_note">متوقف ما لم تشغّله. يمنع Watch التطبيقات التي ثبّتّها من الوصول إلى خوادم حزم SDK للتتبّع: لا تحصل عمليات البحث عنها على أي عنوان، وتُرفض الاتصالات بها. أما الخادم الذي يخدم التطبيق نفسه أيضًا فلا يُحظر.</string>
+    <string name="blocking_not_covered">التطبيقات التي جاءت مع الهاتف وAndroid نفسه وخدمات Google Play غير مشمولة.</string>
+    <string name="blocking_browsers">الحظر في المتصفحات أيضًا</string>
+    <string name="blocking_browsers_note">لا يُطبَّق الحظر على المتصفحات ما لم تُدرجها: فهي تفتح أي موقع ويب.</string>
+    <!-- Only while the apps go through the user's circumvention tool. -->
+    <string name="blocking_tool_dns">حظر عمليات بحث أداتك نفسها عن أدوات التتبّع أيضًا</string>
+    <string name="blocking_tool_dns_note">متوقف ما لم تشغّله. عندها يردّ Watch على عمليات البحث التي تجريها أداتك نفسها عن خوادم أدوات التتبّع دون أي عنوان. ولا يرفض أبدًا اتصالات الأداة: فالأسماء التي تعرضها قد تكون لأي موقع ويب شائع.</string>
+    <string name="blocking_pause">إيقاف الحظر مؤقتًا لمدة 10 دقائق</string>
+    <!-- %1$s: when the pause ends, as the phone writes the time. -->
+    <string name="blocking_paused">متوقف مؤقتًا حتى %1$s</string>
+    <string name="blocking_resume">الحظر مجددًا الآن</string>
+    <!-- "Now": the pause, said once above the apps. -->
+    <string name="blocking_paused_now">حظر أدوات التتبّع متوقف مؤقتًا حتى %1$s.</string>
+    <!-- Beside every allow and the pause: what an allow lets through, and how soon it works. -->
+    <string name="blocking_late_sends">قد ترسل التطبيقات ما أجّلته أثناء الحظر، بمجرد السماح لها.</string>
+    <string name="blocking_seconds">يسري ذلك خلال ثوانٍ قليلة: تحتفظ التطبيقات بنتيجة البحث الفاشل لبرهة.</string>
+    <!-- "Now" and an app's history: one app. -->
+    <string name="blocking_allow_app">السماح بأدوات التتبّع في هذا التطبيق</string>
+    <string name="blocking_block_app">حظر أدوات التتبّع مجددًا</string>
+    <!-- %1$s: when the hour ends, as the phone writes the time. -->
+    <string name="blocking_app_allowed">أدوات التتبّع مسموح بها في هذا التطبيق حتى %1$s.</string>
+    <!-- What blocking counted, lookups apart from connections. %2$s names the tracker as the three forms below do, or a
+         host; %3$s is when the first was, as the phone writes the time. -->
+    <plurals name="blocking_connections">
+        <item quantity="zero">حُظر %1$d اتصال بـ %2$s منذ %3$s.</item>
+        <item quantity="one">حُظر اتصال واحد بـ %2$s منذ %3$s.</item>
+        <item quantity="two">حُظر اتصالان بـ %2$s منذ %3$s.</item>
+        <item quantity="few">حُظرت %1$d اتصالات بـ %2$s منذ %3$s.</item>
+        <item quantity="many">حُظر %1$d اتصالًا بـ %2$s منذ %3$s.</item>
+        <item quantity="other">حُظر %1$d اتصال بـ %2$s منذ %3$s.</item>
+    </plurals>
+    <plurals name="blocking_lookups">
+        <item quantity="zero">رُدّ على %1$d عملية بحث عن %2$s بلا عنوان منذ %3$s.</item>
+        <item quantity="one">رُدّ على عملية بحث واحدة عن %2$s بلا عنوان منذ %3$s.</item>
+        <item quantity="two">رُدّ على عمليتَي بحث عن %2$s بلا عنوان منذ %3$s.</item>
+        <item quantity="few">رُدّ على %1$d عمليات بحث عن %2$s بلا عنوان منذ %3$s.</item>
+        <item quantity="many">رُدّ على %1$d عملية بحث عن %2$s بلا عنوان منذ %3$s.</item>
+        <item quantity="other">رُدّ على %1$d عملية بحث عن %2$s بلا عنوان منذ %3$s.</item>
+    </plurals>
+    <!-- A tracker by its name in the εxodus list (%1$s) and its company (%2$s), where the owners' table gives one; a
+         tracker with none is named by its name alone. -->
+    <string name="blocking_tracker_company">%1$s (%2$s)</string>
+    <!-- Several trackers of one company that one εxodus signature names: %1$s is the company. -->
+    <string name="blocking_company">أدوات التتبّع التابعة لـ %1$s</string>
+    <!-- A time on another day: %1$s the date, %2$s the time. -->
+    <string name="blocking_day_time">%1$s، %2$s</string>
+    <!-- An app's history: its trackers, one allow each, or one for a company. -->
+    <string name="blocking_history_title">حظر أدوات التتبّع في هذا التطبيق</string>
+    <!-- %1$s names a tracker, a company's trackers or a host, as above. -->
+    <string name="blocking_allow_entry">السماح بـ %1$s في هذا التطبيق</string>
+    <string name="blocking_block_entry">حظر %1$s مجددًا</string>
+    <string name="blocking_entry_allowed">مسموح به في هذا التطبيق حتى تحظره مجددًا.</string>
+    <!-- %1$s: what the host does, from Datapavan's table, in English. -->
+    <string name="blocking_function">ما يفعله: %1$s</string>
+    <!-- A connection of the history that Watch blocked: %1$s names the tracker, never the host where the switch "Log
+         where apps connect ..." left it out. -->
+    <string name="blocking_blocked">محظور بواسطة Watch: %1$s.</string>
+    <!-- A host the app reached that Watch does not block in it, and why. -->
+    <string name="blocking_kept">غير محظور: هذا الخادم يخدم التطبيق نفسه أيضًا.</string>
+    <string name="blocking_kept_code">غير محظور: في هذا التطبيق، يخدم هذا الخادم تسجيل الدخول أو المشاركة أيضًا.</string>
+    <string name="blocking_kept_unread">غير محظور: قد يخدم هذا الخادم تسجيل الدخول أو المشاركة أيضًا، ولم يقرأ Datapavan بعد الرمز البرمجي لهذا التطبيق.</string>
+    <string name="blocking_kept_own">غير محظور: يستخدم هذا التطبيق هذا الخادم لعمله الخاص.</string>
 </resources>

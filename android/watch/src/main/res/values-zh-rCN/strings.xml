@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="watch_tagline">查看您手机上的每个应用连接到哪里。</string>
     <string name="status_on">Watch 已开启。</string>
     <string name="status_off">Watch 已关闭。</string>
@@ -384,4 +384,328 @@
     <!-- In place of a configuration's name: inside the sentences above, and also alone as a configuration's heading and in its buttons' and rows' labels, so it must read well on its own too. -->
     <string name="tunnel_removed_name">WireGuard 配置（已移除）</string>
     <string name="tunnel_closed_name">WireGuard 配置（现在无法打开）</string>
+
+    <!-- W8 (ADR 0042, 0052, 0053, 0041): the names of apps that go directly, apps' own proxies and the switch that
+         names them, tracker blocking, and the per-tool guides for proxy mode, moved from strings_untranslated.xml with
+         their translations (ADR 0030). -->
+    <!-- W8, part 1 (ADR 0042), and its fix round: the names of apps that go directly. -->
+    <string name="dns_title">直接连接的应用如何查询名称</string>
+    <string name="dns_now_unknown">在这个网络上，还没有应用查询过名称。</string>
+    <string name="dns_now_none_odoh">在这个网络上，还没有应用查询过名称。Watch 将使用 Oblivious DoH。</string>
+    <!-- The first sentence of the "now" line, read out when it changes; the details follow apart. -->
+    <string name="dns_now_odoh">名称现在通过 Oblivious DoH 发送。</string>
+    <string name="dns_now_odoh_tool">名称现在通过您的工具，以 Oblivious DoH 发送。</string>
+    <string name="dns_now_choice">名称现在以加密方式发送到您选择的 DNS 服务器。</string>
+    <string name="dns_now_down_odoh">Oblivious DoH 在这个网络上没有响应。</string>
+    <string name="dns_now_choice_down">您的 DNS 服务器在这个网络上没有响应。</string>
+    <string name="dns_now_fallback">这个网络上没有任何加密方式响应。目前，名称会以未加密的方式发送到这个网络的 DNS 服务器。网络能看到这些名称。开启严格模式即可阻止这种情况。</string>
+    <string name="dns_now_failing">这个网络上没有任何加密方式响应。严格模式已开启，因此在有加密方式响应之前，直接连接的应用无法查询名称。</string>
+    <string name="dns_now_failing_only">您的 DNS 服务器在这个网络上没有响应。“仅使用此 DNS 服务器”已开启，因此在它响应之前，直接连接的应用无法查询名称。</string>
+    <!-- %1$s: the relay's operator and its countries; %2$s: the target's. -->
+    <string name="dns_now_pair">中继：%1$s。目标：%2$s。中继能看到您的地址，但看不到名称。目标能看到名称，但看不到您的地址。</string>
+    <!-- %1$s: a resolver's operator. -->
+    <string name="dns_now_to">名称现在以加密方式发送到 %1$s。它能看到您的地址和这些名称。</string>
+    <!-- %1$s: an operator; %2$s: its countries, by commas. -->
+    <string name="dns_party">%1$s（%2$s）</string>
+    <!-- %1$s: the host name of Android's Private DNS provider. -->
+    <string name="dns_private_dns_strict">Android 的专用 DNS 会绕过 Watch，将每个应用查询的名称发送到 %1$s。只有在专用 DNS 关闭或设为自动时，您在这里的选择才会生效。</string>
+    <string name="dns_choice">名称的去向：</string>
+    <string name="dns_odoh">Oblivious DoH（推荐）</string>
+    <string name="dns_odoh_detail">位于不同国家的两个运营方各看到一半：一个看到您的地址，另一个看到名称。</string>
+    <!-- A resolver's row: %1$s its operator; %2$s one of the service's names below. -->
+    <string name="dns_preset">%1$s，%2$s</string>
+    <string name="dns_service_blocking">阻止有害网站</string>
+    <string name="dns_service_unfiltered">不过滤</string>
+    <string name="dns_service_standard">标准</string>
+    <string name="dns_protocol_doh">基于 HTTPS（DoH）</string>
+    <string name="dns_protocol_dot">基于 TLS（DoT）</string>
+    <!-- A resolver's card: %1$s the country of its operator's seat; %2$s, %3$s, %4$s sentences below. -->
+    <string name="dns_preset_card">总部位于 %1$s。%2$s%3$s%4$s</string>
+    <string name="dns_logs_totals">它不保留任何地址，只保留总数。</string>
+    <string name="dns_logs_names_day">它会将名称保留一天（不含地址），并保留总数。</string>
+    <string name="dns_logs_day">它会将含有您地址的日志保留约一天。</string>
+    <string name="dns_logs_months">它会将隐去您部分地址的日志保留最多六个月。</string>
+    <string name="dns_logs_none">它表示不保留任何日志。</string>
+    <string name="dns_blocks_none">它不阻止任何内容。</string>
+    <string name="dns_blocks_harm">它会阻止有害网站。</string>
+    <string name="dns_blocks_court">它会阻止法院下令阻止的内容。</string>
+    <string name="dns_audited_no">没有外部机构核查过这一点。</string>
+    <string name="dns_audited_firm">一家会计师事务所核查过这些声明。</string>
+    <string name="dns_policy">它的隐私政策</string>
+    <string name="dns_choice_fails">如果它没有响应，Watch 会使用 Oblivious DoH，然后使用其他加密方式。开启“仅使用此 DNS 服务器”即可阻止这种情况。</string>
+    <string name="dns_only">仅使用此 DNS 服务器</string>
+    <string name="dns_only_cost">如果您的 DNS 服务器没有响应，直接连接的应用将无法查询名称。</string>
+    <string name="dns_custom">您自己的 DNS 服务器</string>
+    <string name="dns_custom_detail">一个 DoH 地址（https://…）或一个 DoT 服务器名称，以及它的 IP 地址。</string>
+    <string name="dns_custom_at">DoH 地址或 DoT 服务器</string>
+    <string name="dns_custom_addresses">IP 地址，用逗号分隔</string>
+    <string name="dns_custom_use">测试并使用</string>
+    <string name="dns_custom_refused">请提供一个以 https:// 开头的 DoH 地址或一个 DoT 服务器名称，以及至少一个 IP 地址。Watch 从不以未加密的方式查询 DNS 服务器的名称。</string>
+    <string name="dns_custom_testing">正在向您的 DNS 服务器查询一个名称…</string>
+    <!-- %1$d: milliseconds. -->
+    <string name="dns_custom_answered">您的 DNS 服务器在 %1$d 毫秒内做出了响应。Watch 现在使用它。</string>
+    <string name="dns_custom_failed">您的 DNS 服务器没有响应，因此 Watch 没有保存它。请检查它的地址和 IP 地址。</string>
+    <string name="dns_custom_tampered">您的 DNS 服务器的证书未通过验证，或者连接被切断。Watch 没有保存它。</string>
+    <string name="dns_strict">严格模式：从不使用网络的 DNS 服务器</string>
+    <string name="dns_strict_cost">如果没有任何加密方式响应，直接连接的应用将无法查询名称。在受到审查或监视的网络上，请使用此项。</string>
+    <string name="dns_local_names">本地名称（例如您的打印机或路由器）仍会发送到您网络自己的 DNS 服务器。</string>
+    <!-- %1$s: the network's own domains, by commas. -->
+    <string name="dns_search">这个网络表示这些域是它自己的：%1$s。对于这些域下的名称，Watch 会先通过加密方式查询。只有在互联网上查不到该名称时，它才会向这个网络查询。</string>
+    <string name="dns_strict_limits">严格模式并不涵盖所有情况。Android 会自行检查连接，绕过 Watch。有些应用使用自己的加密 DNS。您排除在 Watch 之外的应用不受涵盖。此外，在 Watch 重启期间，或者在 Android 停止了 Watch 且“始终开启的 VPN”处于关闭状态时，应用会使用网络的 DNS 服务器。</string>
+    <string name="dns_notify">名称发送到网络的 DNS 服务器时通知我</string>
+    <string name="dns_notify_refused">Android 不允许 Watch 显示通知，因此此项保持关闭。请在 Android 设置中允许 Watch 显示通知，然后再次开启此项。</string>
+    <string name="dns_pairs">Oblivious DoH 配对，每对由位于两个不同国家的两个不同运营方组成：</string>
+    <!-- %1$s: the relay's operator and its countries; %2$s: the target's. -->
+    <string name="dns_pair">中继：%1$s。目标：%2$s。</string>
+    <string name="dns_pairs_change">更改配对</string>
+    <string name="dns_pairs_default">使用默认配对</string>
+    <string name="dns_pairs_done">完成</string>
+    <string name="dns_not_kept">除了连接日志（如果您保留日志）之外，Watch 不保留应用查询过的名称列表。它会在内存中保留 DNS 应答最多一天，并在网络变化时清除它们。</string>
+    <string name="dns_fallback_channel">未加密的名称</string>
+    <string name="dns_fallback_title">名称正发送到网络的 DNS 服务器</string>
+    <string name="dns_fallback_text">这个网络上没有任何加密方式响应，因此直接连接的应用目前使用该网络的 DNS 服务器。打开 Watch 即可开启严格模式。</string>
+
+    <!-- The one switch for what Watch leaves out of the log and "Now" (W6, W7 and W8): off unless the user turns it
+         on. It replaces "Log where these apps connect" (chain_log_destinations), which spoke of chained apps alone.
+         The lines below that name it quote it word for word. -->
+    <string name="log_switch">记录应用通过您的工具、WireGuard 或代理连接到哪里</string>
+    <!-- Under the switch above. -->
+    <string name="log_switch_note">除非您开启，否则保持关闭。它涵盖您设置为通过您用来绕过网络限制的工具或 WireGuard 配置连接的应用，以及该工具自己的服务器。它也涵盖通过代理连接的应用，例如通过 Telegram 代理。Watch 仍会统计它们的连接。如果有人搜查您的手机，一份它们去过哪里的列表可能会被用来对您不利。</string>
+    <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens Watch's screen at the
+         switch. -->
+    <string name="log_switch_open">前往该开关</string>
+    <!-- "Now": an app sent through the user's tool, the tool's own servers, and an app sent through a WireGuard
+         configuration (%1$s: its name), with the switch above off. -->
+    <string name="now_through_tool_off">通过您用来绕过网络限制的工具发送。由于“记录应用通过您的工具、WireGuard 或代理连接到哪里”已关闭，未显示它连接到了哪里。</string>
+    <string name="now_tool_servers_off">由于“记录应用通过您的工具、WireGuard 或代理连接到哪里”已关闭，未显示它连接到哪里。</string>
+    <string name="now_through_tunnel_off">经由 %1$s 发送。由于“记录应用通过您的工具、WireGuard 或代理连接到哪里”已关闭，未显示它连接到了哪里。</string>
+    <!-- The same in an app's history, of a connection logged while the switch was off. history_left_out_off: the
+         tool's own servers, or a record written before Watch logged each connection's route. -->
+    <string name="history_through_tool_off">通过您用来绕过网络限制的工具发送。由于当时“记录应用通过您的工具、WireGuard 或代理连接到哪里”处于关闭状态，未记录它连接到了哪里。</string>
+    <string name="history_left_out_off">由于当时“记录应用通过您的工具、WireGuard 或代理连接到哪里”处于关闭状态，未记录它连接到了哪里。</string>
+    <string name="history_through_tunnel_off">经由 %1$s 发送。由于当时“记录应用通过您的工具、WireGuard 或代理连接到哪里”处于关闭状态，未记录它连接到了哪里。</string>
+    <!-- A connection of an app sent through the tool or a WireGuard configuration that went directly all the same:
+         one opened before the app was sent through them, its local network, or what the tool does not carry. -->
+    <string name="history_direct_off">直接连接，没有通过您用来绕过网络限制的工具或 WireGuard 配置。由于当时“记录应用通过您的工具、WireGuard 或代理连接到哪里”处于关闭状态，未记录它连接到了哪里。</string>
+    <!-- Where a destination's name came from, beside "name the connection sent" and the others: the app named the
+         destination to its proxy. -->
+    <string name="now_named_proxy">应用向其代理请求的目的地</string>
+    <!-- The kinds of proxy, set into the sentences below. SOCKS5, SOCKS4, HTTP and MTProto are names of protocols,
+         and Telegram, WhatsApp and Signal names of apps: never translated. -->
+    <string name="proxy_kind_socks5">SOCKS5 代理</string>
+    <string name="proxy_kind_socks4">SOCKS4 代理</string>
+    <string name="proxy_kind_http">HTTP 代理</string>
+    <string name="proxy_kind_mtproto">Telegram 代理（MTProto）</string>
+    <string name="proxy_kind_whatsapp">WhatsApp 代理</string>
+    <string name="proxy_kind_signal">Signal 代理</string>
+    <!-- A proxy the app's own bytes named and the proxy's reply confirmed: %1$s is its kind (above), %2$s where it is,
+         as a name or an address with its port, %3$s the destination the app asked it for. "Read from the connection"
+         says how Watch knows. -->
+    <string name="proxy_asked">向位于 %2$s 的 %1$s 请求了 %3$s。从连接中读取。</string>
+    <!-- As above, where no destination asked for was read. -->
+    <string name="proxy_declared">通过位于 %2$s 的 %1$s。从连接中读取。</string>
+    <!-- A messenger's proxy that Watch infers: %1$s its kind, %2$s where it is. -->
+    <string name="proxy_inferred">通过位于 %2$s 的一个 %1$s。根据它连接的位置和方式推断。Watch 看不到它从那里去往哪里：那部分是加密的。</string>
+    <!-- How Watch knows, on its own line where the sentence above is not shown (the switch off). -->
+    <string name="proxy_how_read">从连接中读取。</string>
+    <string name="proxy_how_inferred">根据它连接的位置和方式推断。</string>
+    <!-- A plain HTTP request written in the form a proxy takes, which a web server takes too: the row names the server
+         it was sent to, and this line says what the request asked for (%1$s), never that the server is a proxy. -->
+    <string name="proxy_request_asked">它向这台服务器发送了一个按 HTTP 代理格式编写的请求，请求的是 %1$s。从连接中读取。</string>
+    <string name="now_proxy_request_hidden">它向这台服务器发送了一个按 HTTP 代理格式编写的请求。由于“记录应用通过您的工具、WireGuard 或代理连接到哪里”已关闭，未显示它请求了什么。</string>
+    <string name="history_proxy_request_hidden">它向这台服务器发送了一个按 HTTP 代理格式编写的请求。由于当时“记录应用通过您的工具、WireGuard 或代理连接到哪里”处于关闭状态，未记录它请求了什么。</string>
+    <string name="proxy_request_password">该请求以未加密的方式带有一个代理密码。Watch 没有保留它。</string>
+    <!-- Where a proxy is, by its address alone: who runs it is not known. %1$s is the organisation whose network holds
+         the address. -->
+    <string name="proxy_network">这是 %1$s 网络中的一个地址。不知道是谁在运行它。</string>
+    <!-- As above, and the network is not the app maker's own: %2$s is the app's maker, such as Telegram. -->
+    <string name="proxy_network_not_maker">这是 %1$s 网络中的一个地址，不在 %2$s 的网络中。不知道是谁在运行它。</string>
+    <string name="proxy_network_unknown">Watch 无法确定这个地址属于哪个网络。不知道是谁在运行它。</string>
+    <!-- Where Watch cannot name the network, or does not show the address: %1$s is the app's maker, such as Telegram. -->
+    <string name="proxy_not_maker">该地址不在 %1$s 的网络中。</string>
+    <string name="proxy_local">位于您的本地网络中。不知道是谁在运行它。</string>
+    <!-- The proxy set in Android's settings, which apps that follow those settings all use. -->
+    <string name="proxy_setting">这是 Android 设置中的代理，其他应用也可以使用它。</string>
+    <string name="proxy_password">这个代理的一个密码以未加密的方式经过了网络。Watch 没有保留它。</string>
+    <!-- The server name an inferred proxy's connection sent, which no DNS answer gave its address: %1$s is that
+         name. Facts only: nothing of why the app sent it. -->
+    <string name="proxy_cover">它的连接发送了名称 %1$s。Watch 转发过的任何 DNS 应答都没有为该名称给出这个地址。</string>
+    <!-- %1$s owns the name above, %2$s the network of the address. -->
+    <string name="proxy_cover_owner">该名称属于 %1$s，而该网络属于 %2$s。</string>
+    <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Watch knows and the
+         facts that name nothing. -->
+    <string name="now_proxy_hidden">通过该 %1$s。由于“记录应用通过您的工具、WireGuard 或代理连接到哪里”已关闭，未显示它连接到了哪里。</string>
+    <string name="history_proxy_hidden">通过该 %1$s。由于当时“记录应用通过您的工具、WireGuard 或代理连接到哪里”处于关闭状态，未记录它连接到了哪里。</string>
+    <!-- As above, for the proxy set in Android's settings. -->
+    <string name="now_proxy_setting_hidden">通过 Android 设置中的 %1$s，其他应用也可以使用它。由于“记录应用通过您的工具、WireGuard 或代理连接到哪里”已关闭，未显示它连接到了哪里。</string>
+    <string name="history_proxy_setting_hidden">通过 Android 设置中的 %1$s，其他应用也可以使用它。由于当时“记录应用通过您的工具、WireGuard 或代理连接到哪里”处于关闭状态，未记录它连接到了哪里。</string>
+    <!-- One more line of "What this view cannot see". -->
+    <string name="cannot_see_proxy">对于应用使用的代理，Watch 看不到是谁在运行它，也看不到是您还是该应用选择了它。对于 Watch 推断出的代理，它看不到流量经过代理之后去往哪里。</string>
+
+    <!--
+        W8, part 3b (ADR 0041, "How the per-tool guides are built"): the per-tool guides for proxy mode, in Watch and on the
+        website (scripts/guides.py writes docs/site/guides/ from these words and data/tools/guide*.tsv). A quoted %s is a
+        tool's own label, read from the tool on this phone or from the data, never translated: only these sentences are.
+        The guides name no tool as better than another and never point to a download.
+    -->
+    <!-- The chain section: one link per tool of the table installed here. %1$s: the tool's name. -->
+    <string name="chain_guides_title">这部手机上的工具如何与 Watch 并行运行：</string>
+    <string name="chain_guide_proxy">代理模式下的 %1$s</string>
+    <string name="chain_guide_other">%1$s 与 Watch</string>
+    <!-- A guide's screen and page. %1$s: the tool's name. -->
+    <string name="guide_title_proxy">代理模式下的 %1$s</string>
+    <string name="guide_title_other">%1$s 与 Watch</string>
+    <string name="guide_intro">Android 同一时间只能运行一个 VPN。在代理模式下，%1$s 不以 VPN 方式运行，Watch 可以让您的应用通过它连接。</string>
+    <string name="guide_assumes">以下步骤假定 %1$s 已能作为 VPN 为您正常使用。</string>
+    <string name="guide_heading_on">开启代理模式</string>
+    <!-- %1$s: an address such as 127.0.0.1; %2$s: its port. -->
+    <string name="guide_listener">然后，它的代理会在这部手机上监听，地址为 %1$s，端口为 %2$s。</string>
+    <string name="guide_next">然后回到 Watch。它会自行找到该代理，并提出让您的应用通过它连接。</string>
+    <string name="guide_heading_password">其代理的密码</string>
+    <string name="guide_password_optional">它的代理可以要求用户名和密码。请设置 Watch 在找到该代理时显示的用户名和密码。这样，这部手机上的其他应用就无法使用它。</string>
+    <string name="guide_password_none">它的代理无法要求密码。它运行时，这部手机上的任何应用都能使用它。</string>
+    <string name="guide_heading_asks">它会请求什么</string>
+    <string name="guide_heading_back">回到 VPN 模式</string>
+    <string name="guide_back_note">当 %1$s 再次以 VPN 方式运行时，Android 会关闭 Watch：同一时间只能运行一个 VPN。</string>
+    <!-- %1$s: the tool's name; %2$s: its version. -->
+    <string name="guide_read">从 %1$s 的源代码中读取，版本为 %2$s。</string>
+    <string name="guide_checked">已用该版本与 Watch 一起试用过。</string>
+    <string name="guide_not_checked">尚未与 Watch 一起试用过。</string>
+    <string name="guide_labels_tool">引号中的文字读取自这部手机上的 %1$s。</string>
+    <string name="guide_labels_recorded">引号中的文字与该版本显示的一致。</string>
+    <string name="guide_audit">Datapavan 的其余部分，即它对您的应用所做的检查，无需 Watch 也能使用。</string>
+    <!-- Steps. Each %s in quotes is one of the tool's labels. -->
+    <string name="guide_step_drawer">打开它屏幕顶部角落的菜单，然后点按“%1$s”。</string>
+    <string name="guide_step_overflow">打开三个点的菜单，然后点按“%1$s”。</string>
+    <string name="guide_step_tab">打开“%1$s”标签页。</string>
+    <string name="guide_step_tap">点按“%1$s”。</string>
+    <string name="guide_step_gear">点按顶部的齿轮按钮。</string>
+    <string name="guide_step_choose">点按“%1$s”，然后选择“%2$s”。</string>
+    <string name="guide_step_under_choose">在“%1$s”下，点按“%2$s”，然后选择“%3$s”。</string>
+    <string name="guide_step_arrow_choose">点按“%1$s”末尾的箭头，然后选择“%2$s”。</string>
+    <string name="guide_step_on">开启“%1$s”。</string>
+    <string name="guide_step_off">关闭“%1$s”。</string>
+    <string name="guide_step_under_on">在“%1$s”下，开启“%2$s”。</string>
+    <string name="guide_step_under_off">在“%1$s”下，关闭“%2$s”。</string>
+    <string name="guide_step_fill">填写“%1$s”和“%2$s”。</string>
+    <string name="guide_step_under_fill">在“%1$s”下，填写“%2$s”和“%3$s”。</string>
+    <!-- %3$s: a value, such as a port. -->
+    <string name="guide_step_under_set">在“%1$s”下，将“%2$s”设为 %3$s。</string>
+    <string name="guide_step_expand">如果没有显示“%1$s”，请点按最后一行以显示其余内容。</string>
+    <string name="guide_step_back_home">返回它的主界面。</string>
+    <string name="guide_step_back_once">返回上一个界面。</string>
+    <string name="guide_step_start">用它的圆形按钮启动它。</string>
+    <string name="guide_step_start_icon">点按它的圆形启动按钮，屏幕阅读器会将其读作“%1$s”。</string>
+    <string name="guide_step_start_text">点按“%1$s”以启动。</string>
+    <string name="guide_step_slide">滑动标有“%1$s”的按钮。</string>
+    <string name="guide_step_tap_card">点按标有“%1$s”的卡片。</string>
+    <string name="guide_step_tunnel_switch">开启您的隧道所在行末尾的开关。</string>
+    <string name="guide_step_card_add">在“%1$s”卡片上，点按 +，然后点按“%2$s”。</string>
+    <string name="guide_step_name_keep_tap">在“%1$s”下为它命名，保留“%2$s”，然后点按“%3$s”。</string>
+    <!-- sing-box's own words for its profile, which are not translated: tun, mixed, listen, listen_port, users,
+         username, password. %1$s: a port. -->
+    <string name="guide_step_singbox_inbound">编写配置文件，使其不含类型为“tun”的 inbound，并含有一个类型为“mixed”的 inbound，其“listen”为“127.0.0.1”，“listen_port”为 %1$s。然后保存。</string>
+    <string name="guide_step_singbox_users">在该“mixed” inbound 中，添加带有“username”和“password”的“users”。</string>
+    <string name="guide_step_singbox_back">再次使用含有类型为“tun”的 inbound 的配置文件，或用“%1$s”添加一个。然后启动它。</string>
+    <string name="guide_step_auth_entry">在“%1$s”下，点按“%2$s”，然后添加一个条目：用户名、一个冒号，然后是密码。</string>
+    <string name="guide_step_secret">点按“%1$s”，然后输入 Watch 显示的密码。</string>
+    <string name="guide_step_profile_card">在您的配置文件的卡片上，点按“%1$s”。</string>
+    <string name="guide_step_config_ssh">编辑您的配置：将“%1$s”设为“%2$s”，并填写“%3$s”和“%4$s”。</string>
+    <string name="guide_step_save_use">点按“%1$s”，然后点按新的设置配置文件以使用它。</string>
+    <!-- What a tool asks for in proxy mode, from its code. -->
+    <string name="guide_asks_notifications">它会请求显示通知。</string>
+    <string name="guide_asks_local_network">在 Android 17 上，它会请求本地网络权限。Watch 使用它的代理不需要这项权限，因为该代理就在这部手机上。</string>
+    <string name="guide_asks_battery">它会请求将它排除在电池优化之外。</string>
+    <string name="guide_asks_alarms">在代理模式下，它会在启动前请求闹钟和提醒权限。它表示自己不设置任何闹钟：这项权限能让它在不作为 VPN 运行时保持运行。</string>
+    <string name="guide_asks_vpn_once">首次连接时，即使在这种模式下，它也会请求设置 VPN。如果您允许，Android 会关闭 Watch。之后请重新开启 Watch。</string>
+    <string name="guide_asks_none">在这种模式下，它的代码不请求任何权限。</string>
+    <!-- Facts a user of one tool needs. %1$s in guide_note_named_port: a port. -->
+    <string name="guide_note_named_port">Watch 只在端口 %1$s 上查找它的代理，因此即使您的配置文件指定了其他端口，也请设置这个端口。</string>
+    <string name="guide_note_fixed_user">它的用户名始终是“%1$s”。Watch 显示的就是这个。</string>
+    <string name="guide_note_user_port">在工作资料或这部手机的其他用户中，它的端口会加上该用户的编号。Watch 也会在那里查找。</string>
+    <string name="guide_note_stopped_first">请先停止它：它只在未连接时才会更改这一项。</string>
+    <string name="guide_note_no_server">它不会将您的流量发送到服务器。它会改变流量的形态，然后从这部手机发出。因此，它承载的应用会从您自己的地址访问它们的目的地。</string>
+    <string name="guide_note_ssh_only">只有“%1$s”隧道类型会在这部手机上开启 SOCKS5 代理。使用“%2$s”时，只有您的服务器提供 SOCKS5 代理，Watch 才能使用该端口。</string>
+    <string name="guide_note_remote_profile">远程配置文件只显示“%1$s”：它的内容来自它的地址，无法在这里更改。请改为创建一个本地配置文件。</string>
+    <string name="guide_note_engines">在这种模式下，使用 sing-box、OpenConnect、IKEv2 或代理链的配置文件仍会启动 VPN。</string>
+    <!-- The pages of tools that run only as a VPN, and of those whose steps wait. %1$s: the tool's name. -->
+    <string name="guide_vpn_only">%1$s 只能作为 VPN 运行。Android 同一时间只能运行一个 VPN，因此 Watch 无法与它并行运行：一个启动时，Android 会停止另一个。</string>
+    <string name="guide_wireguard_only">%1$s 只能作为 VPN 运行，因此 Watch 无法与它并行运行。但 Watch 自己可以承载 WireGuard 配置，并让您选择的应用经由它连接。</string>
+    <!-- Quotes Watch's own heading, tunnels_title, as it reads. -->
+    <string name="guide_wireguard_add">在 Watch 的“WireGuard 配置”下添加一个。</string>
+    <string name="guide_wireguard_proton">Proton VPN 的网站可以生成这些文件，免费方案也可以。在您的账户中，打开“Downloads”，然后打开“WireGuard configuration”。</string>
+    <string name="guide_wireguard_mullvad">Mullvad 的网站为付费账户生成这些文件。请使用它的配置生成器。</string>
+    <string name="guide_wireguard_windscribe">Windscribe 的网站为付费账户生成这些文件。请使用它的“Config Generator”。</string>
+    <string name="guide_wireguard_same">您添加到 WireGuard 的配置文件或 QR 码在 Watch 中也能使用。</string>
+    <string name="guide_note_amneziawg">AmneziaWG 会改变 WireGuard 数据包的形态。Watch 目前还无法读取这种改变，因此无法承载这些配置。</string>
+    <string name="guide_waiting_intro">目前还没有 %1$s 的步骤。</string>
+    <string name="guide_waiting_closed">它的代码不公开，因此它的步骤要等到与 Watch 一起试用之后才会提供。</string>
+    <string name="guide_waiting_partly">它的部分代码不公开，因此它的步骤要等到与 Watch 一起试用之后才会提供。</string>
+    <string name="guide_note_tethering">它有一项名为 Proxy Tethering 的功能。目前还不知道该功能能否在这部手机上提供 Watch 可以使用的代理。</string>
+    <!-- The website's list of the guides (scripts/guides.py), which Watch does not show. -->
+    <string name="guide_index_title" tools:ignore="UnusedResources">与 Watch 并行运行您的工具</string>
+    <string name="guide_index_intro" tools:ignore="UnusedResources">Android 同一时间只能运行一个 VPN。这些页面依据每个绕过网络限制工具自己的代码，说明它如何能与 Watch 并行运行。</string>
+    <string name="guide_index_proxy" tools:ignore="UnusedResources">有代理模式的工具</string>
+    <string name="guide_index_wireguard" tools:ignore="UnusedResources">只能作为 VPN 运行、有 WireGuard 配置的工具</string>
+    <string name="guide_index_vpn" tools:ignore="UnusedResources">只能作为 VPN 运行的工具</string>
+    <string name="guide_index_waiting" tools:ignore="UnusedResources">步骤要等到与 Watch 一起试用之后才提供的工具</string>
+
+    <!-- W8, part 3a (ADR 0053): tracker blocking. Counts and sizes only inside the app: nothing of it reaches a
+         notification, the summary or the widget (ADR 0046). ADR 0025's words hold (BlockingWordsTest), and "grade"
+         never shows. The labels of the switches and buttons below are tapped by their text in the emulator check. -->
+    <!-- Watch's screen: the section, its switches and the global pause, which names no app. -->
+    <string name="blocking_title">跟踪器拦截</string>
+    <string name="blocking_switch">拦截跟踪器</string>
+    <string name="blocking_note">除非您开启，否则保持关闭。Watch 会阻止您安装的应用访问跟踪器 SDK 的主机：它们的查询得不到地址，它们的连接会被拒绝。也为应用本身提供服务的主机不会被拦截。</string>
+    <string name="blocking_not_covered">手机自带的应用、Android 本身和 Google Play 服务不在涵盖范围内。</string>
+    <string name="blocking_browsers">也在浏览器中拦截</string>
+    <string name="blocking_browsers_note">除非您将浏览器包含在内，否则不会拦截浏览器：它们会打开任何网站。</string>
+    <!-- Only while the apps go through the user's circumvention tool. -->
+    <string name="blocking_tool_dns">也拦截您的工具自己对跟踪器的查询</string>
+    <string name="blocking_tool_dns_note">除非您开启，否则保持关闭。开启后，Watch 会以不含地址的应答回复您的工具自己对跟踪器主机的查询。它从不拒绝该工具的连接：这些连接显示的名称可能是任何热门网站。</string>
+    <string name="blocking_pause">暂停拦截 10 分钟</string>
+    <!-- %1$s: when the pause ends, as the phone writes the time. -->
+    <string name="blocking_paused">已暂停，直到 %1$s</string>
+    <string name="blocking_resume">立即恢复拦截</string>
+    <!-- "Now": the pause, said once above the apps. -->
+    <string name="blocking_paused_now">跟踪器拦截已暂停，直到 %1$s。</string>
+    <!-- Beside every allow and the pause: what an allow lets through, and how soon it works. -->
+    <string name="blocking_late_sends">一旦被允许，应用可能会发送它们在被拦截期间暂存的内容。</string>
+    <string name="blocking_seconds">几秒钟内生效：应用会将失败的查询保留片刻。</string>
+    <!-- "Now" and an app's history: one app. -->
+    <string name="blocking_allow_app">允许此应用中的跟踪器</string>
+    <string name="blocking_block_app">重新拦截跟踪器</string>
+    <!-- %1$s: when the hour ends, as the phone writes the time. -->
+    <string name="blocking_app_allowed">此应用中的跟踪器已被允许，直到 %1$s。</string>
+    <!-- What blocking counted, lookups apart from connections. %2$s names the tracker as the three forms below do, or a
+         host; %3$s is when the first was, as the phone writes the time. -->
+    <plurals name="blocking_connections">
+        <item quantity="other">自 %3$s 以来，已拦截 %1$d 个发往 %2$s 的连接。</item>
+    </plurals>
+    <plurals name="blocking_lookups">
+        <item quantity="other">自 %3$s 以来，已用不含地址的应答回复 %1$d 次对 %2$s 的查询。</item>
+    </plurals>
+    <!-- A tracker by its name in the εxodus list (%1$s) and its company (%2$s), where the owners' table gives one; a
+         tracker with none is named by its name alone. -->
+    <string name="blocking_tracker_company">%1$s（%2$s）</string>
+    <!-- Several trackers of one company that one εxodus signature names: %1$s is the company. -->
+    <string name="blocking_company">%1$s 的跟踪器</string>
+    <!-- A time on another day: %1$s the date, %2$s the time. -->
+    <string name="blocking_day_time">%1$s %2$s</string>
+    <!-- An app's history: its trackers, one allow each, or one for a company. -->
+    <string name="blocking_history_title">此应用中的跟踪器拦截</string>
+    <!-- %1$s names a tracker, a company's trackers or a host, as above. -->
+    <string name="blocking_allow_entry">允许此应用中的 %1$s</string>
+    <string name="blocking_block_entry">重新拦截 %1$s</string>
+    <string name="blocking_entry_allowed">已在此应用中允许，直到您再次拦截它。</string>
+    <!-- %1$s: what the host does, from Datapavan's table, in English. -->
+    <string name="blocking_function">用途：%1$s</string>
+    <!-- A connection of the history that Watch blocked: %1$s names the tracker, never the host where the switch "Log
+         where apps connect ..." left it out. -->
+    <string name="blocking_blocked">已被 Watch 拦截：%1$s。</string>
+    <!-- A host the app reached that Watch does not block in it, and why. -->
+    <string name="blocking_kept">未拦截：此主机也为应用本身提供服务。</string>
+    <string name="blocking_kept_code">未拦截：在此应用中，此主机也用于登录或分享。</string>
+    <string name="blocking_kept_unread">未拦截：此主机可能也用于登录或分享，而 Datapavan 尚未读取此应用的代码。</string>
+    <string name="blocking_kept_own">未拦截：此应用将此主机用于自己的工作。</string>
 </resources>

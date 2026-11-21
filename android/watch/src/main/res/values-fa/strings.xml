@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="watch_tagline">ببینید هر برنامه روی گوشی شما به کجا وصل می‌شود.</string>
     <string name="status_on">سرویس Watch روشن است.</string>
     <string name="status_off">سرویس Watch خاموش است.</string>
@@ -399,4 +399,329 @@
     <!-- In place of a configuration's name: inside the sentences above, and also alone as a configuration's heading and in its buttons' and rows' labels, so it must read well on its own too. -->
     <string name="tunnel_removed_name">یک پیکربندی WireGuard که حذف شده است</string>
     <string name="tunnel_closed_name">یک پیکربندی WireGuard که الان باز نمی‌شود</string>
+    <!-- W8 (ADR 0042, 0052, 0053, 0041): the names of apps that go directly, apps' own proxies and the switch that
+         names them, tracker blocking, and the per-tool guides for proxy mode, moved from strings_untranslated.xml with
+         their translations (ADR 0030). -->
+    <!-- W8, part 1 (ADR 0042), and its fix round: the names of apps that go directly. -->
+    <string name="dns_title">برنامه‌هایی که مستقیم می‌روند چطور نام‌ها را جست‌وجو می‌کنند</string>
+    <string name="dns_now_unknown">هنوز هیچ برنامه‌ای در این شبکه نامی جست‌وجو نکرده است.</string>
+    <string name="dns_now_none_odoh">هنوز هیچ برنامه‌ای در این شبکه نامی جست‌وجو نکرده است. سرویس Watch از Oblivious DoH استفاده خواهد کرد.</string>
+    <!-- The first sentence of the "now" line, read out when it changes; the details follow apart. -->
+    <string name="dns_now_odoh">نام‌ها اکنون با Oblivious DoH می‌روند.</string>
+    <string name="dns_now_odoh_tool">نام‌ها اکنون با Oblivious DoH از راه فیلترشکن شما می‌روند.</string>
+    <string name="dns_now_choice">نام‌ها اکنون رمزگذاری‌شده به سرور DNS انتخابی شما می‌روند.</string>
+    <string name="dns_now_down_odoh">راه Oblivious DoH در این شبکه پاسخ نمی‌دهد.</string>
+    <string name="dns_now_choice_down">سرور DNS شما در این شبکه پاسخ نمی‌دهد.</string>
+    <string name="dns_now_fallback">هیچ راه رمزگذاری‌شده‌ای در این شبکه پاسخ نمی‌دهد. فعلاً نام‌ها بدون رمزگذاری به سرور DNS این شبکه می‌روند. شبکه می‌تواند آن‌ها را ببیند. برای جلوگیری از این، حالت سخت‌گیرانه را روشن کنید.</string>
+    <string name="dns_now_failing">هیچ راه رمزگذاری‌شده‌ای در این شبکه پاسخ نمی‌دهد. حالت سخت‌گیرانه روشن است، پس برنامه‌هایی که مستقیم می‌روند تا وقتی یکی از این راه‌ها پاسخ ندهد نمی‌توانند نامی جست‌وجو کنند.</string>
+    <string name="dns_now_failing_only">سرور DNS شما در این شبکه پاسخ نمی‌دهد. «فقط همین سرور DNS» روشن است، پس برنامه‌هایی که مستقیم می‌روند تا وقتی این سرور پاسخ ندهد نمی‌توانند نامی جست‌وجو کنند.</string>
+    <!-- %1$s: the relay's operator and its countries; %2$s: the target's. -->
+    <string name="dns_now_pair">واسطه: %1$s. هدف: %2$s. واسطه نشانی شما را می‌بیند ولی نام‌ها را نه. هدف نام‌ها را می‌بیند ولی نشانی شما را نه.</string>
+    <!-- %1$s: a resolver's operator. -->
+    <string name="dns_now_to">نام‌ها اکنون رمزگذاری‌شده به %1$s می‌روند. این گرداننده نشانی شما و نام‌ها را می‌بیند.</string>
+    <!-- %1$s: an operator; %2$s: its countries, by commas. -->
+    <string name="dns_party">%1$s (%2$s)</string>
+    <!-- %1$s: the host name of Android's Private DNS provider. -->
+    <string name="dns_private_dns_strict">تنظیم DNS خصوصی اندروید نام‌های همهٔ برنامه‌ها را بدون عبور از Watch به %1$s می‌فرستد. انتخاب شما در اینجا فقط تا وقتی به کار می‌رود که DNS خصوصی «خاموش» یا روی «خودکار» باشد.</string>
+    <string name="dns_choice">نام‌ها کجا بروند:</string>
+    <string name="dns_odoh">راه Oblivious DoH (پیشنهادی)</string>
+    <string name="dns_odoh_detail">دو گرداننده در دو کشور مختلف هر کدام نیمی را می‌بینند: یکی نشانی شما را می‌بیند و دیگری نام‌ها را.</string>
+    <!-- A resolver's row: %1$s its operator; %2$s one of the service's names below. -->
+    <string name="dns_preset">%1$s، %2$s</string>
+    <string name="dns_service_blocking">سایت‌های زیان‌بار را مسدود می‌کند</string>
+    <string name="dns_service_unfiltered">بدون فیلتر</string>
+    <string name="dns_service_standard">استاندارد</string>
+    <string name="dns_protocol_doh">از راه HTTPS (DoH)</string>
+    <string name="dns_protocol_dot">از راه TLS (DoT)</string>
+    <!-- A resolver's card: %1$s the country of its operator's seat; %2$s, %3$s, %4$s sentences below. -->
+    <string name="dns_preset_card">مستقر در %1$s. %2$s %3$s %4$s</string>
+    <string name="dns_logs_totals">هیچ نشانی‌ای نگه نمی‌دارد، فقط آمار کلی.</string>
+    <string name="dns_logs_names_day">نام‌ها را بدون نشانی برای یک روز نگه می‌دارد، و آمار کلی را هم.</string>
+    <string name="dns_logs_day">سابقه‌هایی همراه با نشانی شما را حدود یک روز نگه می‌دارد.</string>
+    <string name="dns_logs_months">سابقه‌هایی را که بخشی از نشانی شما در آن‌ها پنهان شده است، تا شش ماه نگه می‌دارد.</string>
+    <string name="dns_logs_none">می‌گوید هیچ سابقه‌ای نگه نمی‌دارد.</string>
+    <string name="dns_blocks_none">هیچ چیزی را مسدود نمی‌کند.</string>
+    <string name="dns_blocks_harm">سایت‌های زیان‌بار را مسدود می‌کند.</string>
+    <string name="dns_blocks_court">آنچه را دادگاه‌ها دستور می‌دهند مسدود می‌کند.</string>
+    <string name="dns_audited_no">هیچ کسی از بیرون این را بررسی نکرده است.</string>
+    <string name="dns_audited_firm">یک شرکت حسابرسی این ادعاها را بررسی کرده است.</string>
+    <string name="dns_policy">سیاست حریم خصوصی آن</string>
+    <string name="dns_choice_fails">اگر این سرور DNS پاسخ ندهد، Watch از Oblivious DoH و بعد از راه‌های رمزگذاری‌شدهٔ دیگر استفاده می‌کند. برای جلوگیری از این، «فقط همین سرور DNS» را روشن کنید.</string>
+    <string name="dns_only">فقط همین سرور DNS</string>
+    <string name="dns_only_cost">اگر سرور DNS شما پاسخ ندهد، برنامه‌هایی که مستقیم می‌روند نمی‌توانند نامی جست‌وجو کنند.</string>
+    <string name="dns_custom">سرور DNS خودتان</string>
+    <string name="dns_custom_detail">یک نشانی DoH (https://…) یا نام یک سرور DoT، و نشانی‌های IP آن.</string>
+    <string name="dns_custom_at">نشانی DoH یا سرور DoT</string>
+    <string name="dns_custom_addresses">نشانی‌های IP، جدا با ویرگول</string>
+    <string name="dns_custom_use">امتحان و استفاده</string>
+    <string name="dns_custom_refused">یک نشانی DoH که با https:// شروع شود، یا نام یک سرور DoT، و دست‌کم یک نشانی IP وارد کنید. Watch هرگز نام یک سرور DNS را بدون رمزگذاری جست‌وجو نمی‌کند.</string>
+    <string name="dns_custom_testing">در حال پرسیدن یک نام از سرور DNS شما…</string>
+    <!-- %1$d: milliseconds. -->
+    <string name="dns_custom_answered">سرور DNS شما در %1$d میلی‌ثانیه پاسخ داد. Watch اکنون از آن استفاده می‌کند.</string>
+    <string name="dns_custom_failed">سرور DNS شما پاسخ نداد، پس Watch آن را ذخیره نکرد. نشانی آن و نشانی‌های IP آن را بررسی کنید.</string>
+    <string name="dns_custom_tampered">گواهی سرور DNS شما تأیید نشد، یا اتصال قطع شد. Watch آن را ذخیره نکرد.</string>
+    <string name="dns_strict">حالت سخت‌گیرانه: هرگز سرور DNS شبکه</string>
+    <string name="dns_strict_cost">اگر هیچ راه رمزگذاری‌شده‌ای پاسخ ندهد، برنامه‌هایی که مستقیم می‌روند نمی‌توانند نامی جست‌وجو کنند. جایی از آن استفاده کنید که شبکه سانسور می‌شود یا زیر نظر است.</string>
+    <string name="dns_local_names">نام‌های محلی، مثل چاپگر یا روتر شما، همچنان به سرور DNS خود شبکهٔ شما می‌روند.</string>
+    <!-- %1$s: the network's own domains, by commas. -->
+    <string name="dns_search">این شبکه می‌گوید این دامنه‌ها متعلق به خودش است: %1$s. برای نامی زیر این دامنه‌ها، Watch اول از راه رمزگذاری‌شده می‌پرسد. فقط وقتی از این شبکه می‌پرسد که اینترنت آن نام را نشناسد.</string>
+    <string name="dns_strict_limits">حالت سخت‌گیرانه همه چیز را در بر نمی‌گیرد. اندروید خودش، بدون عبور از Watch، اتصال را بررسی می‌کند. بعضی برنامه‌ها DNS رمزگذاری‌شدهٔ خودشان را به کار می‌برند. برنامه‌هایی که از Watch کنار گذاشته‌اید در بر گرفته نمی‌شوند. و وقتی Watch دوباره راه‌اندازی می‌شود، یا اگر اندروید آن را متوقف کند و «وی‌پی‌ان همیشه روشن» خاموش باشد، برنامه‌ها از سرور DNS شبکه استفاده می‌کنند.</string>
+    <string name="dns_notify">اطلاع دادن به من در مدتی که نام‌ها به سرور DNS شبکه می‌روند</string>
+    <string name="dns_notify_refused">اندروید اجازه نمی‌دهد Watch اعلان نشان دهد، پس این گزینه خاموش می‌ماند. در تنظیمات اندروید اعلان‌ها را برای Watch مجاز کنید، بعد این گزینه را دوباره روشن کنید.</string>
+    <string name="dns_pairs">جفت‌های Oblivious DoH، هر کدام از دو گردانندهٔ متفاوت در دو کشور متفاوت:</string>
+    <!-- %1$s: the relay's operator and its countries; %2$s: the target's. -->
+    <string name="dns_pair">واسطه: %1$s. هدف: %2$s.</string>
+    <string name="dns_pairs_change">تغییر جفت‌ها</string>
+    <string name="dns_pairs_default">استفاده از جفت‌های پیش‌فرض</string>
+    <string name="dns_pairs_done">تمام</string>
+    <string name="dns_not_kept">سرویس Watch هیچ فهرستی از نام‌هایی که برنامه‌ها جست‌وجو می‌کنند نگه نمی‌دارد، جز سابقهٔ اتصال‌ها، اگر آن را نگه دارید. پاسخ‌ها را تا یک روز در حافظهٔ موقت نگه می‌دارد، و وقتی شبکه عوض شود، آن‌ها را فراموش می‌کند.</string>
+    <string name="dns_fallback_channel">نام‌ها بدون رمزگذاری</string>
+    <string name="dns_fallback_title">نام‌ها به سرور DNS شبکه می‌روند</string>
+    <string name="dns_fallback_text">هیچ راه رمزگذاری‌شده‌ای در این شبکه پاسخ نمی‌دهد، پس برنامه‌هایی که مستقیم می‌روند فعلاً از سرور DNS آن استفاده می‌کنند. برای روشن کردن حالت سخت‌گیرانه، Watch را باز کنید.</string>
+
+    <!-- The one switch for what Watch leaves out of the log and "Now" (W6, W7 and W8): off unless the user turns it
+         on. It replaces "Log where these apps connect" (chain_log_destinations), which spoke of chained apps alone.
+         The lines below that name it quote it word for word. -->
+    <string name="log_switch">ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند</string>
+    <!-- Under the switch above. -->
+    <string name="log_switch_note">تا آن را روشن نکنید، خاموش می‌ماند. برنامه‌هایی را در بر می‌گیرد که از فیلترشکن شما یا یک پیکربندی WireGuard عبور می‌دهید، و سرورهای خود فیلترشکن را. برنامه‌هایی را هم که از راه یک پروکسی وصل می‌شوند در بر می‌گیرد، مثل پروکسی Telegram. سرویس Watch همچنان اتصال‌های آن‌ها را می‌شمارد. اگر کسی گوشی شما را بگردد، فهرستی از جاهایی که رفته‌اند می‌تواند علیه شما به کار رود.</string>
+    <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens Watch's screen at the
+         switch. -->
+    <string name="log_switch_open">رفتن به کلید</string>
+    <!-- "Now": an app sent through the user's tool, the tool's own servers, and an app sent through a WireGuard
+         configuration (%1$s: its name), with the switch above off. -->
+    <string name="now_through_tool_off">از فیلترشکن شما عبور داده شد. اینکه به کجا وصل شد نشان داده نمی‌شود، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش است.</string>
+    <string name="now_tool_servers_off">اینکه به کجا وصل می‌شود نشان داده نمی‌شود، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش است.</string>
+    <string name="now_through_tunnel_off">از راه %1$s فرستاده شد. اینکه به کجا وصل شد نشان داده نمی‌شود، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش است.</string>
+    <!-- The same in an app's history, of a connection logged while the switch was off. history_left_out_off: the
+         tool's own servers, or a record written before Watch logged each connection's route. -->
+    <string name="history_through_tool_off">از فیلترشکن شما عبور داده شد. اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش بود.</string>
+    <string name="history_left_out_off">اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش بود.</string>
+    <string name="history_through_tunnel_off">از راه %1$s فرستاده شد. اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش بود.</string>
+    <!-- A connection of an app sent through the tool or a WireGuard configuration that went directly all the same:
+         one opened before the app was sent through them, its local network, or what the tool does not carry. -->
+    <string name="history_direct_off">مستقیم رفت، نه از راه فیلترشکن شما یا یک پیکربندی WireGuard. اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش بود.</string>
+    <!-- Where a destination's name came from, beside "name the connection sent" and the others: the app named the
+         destination to its proxy. -->
+    <string name="now_named_proxy">مقصدی که برنامه از پروکسی‌اش خواست</string>
+    <!-- The kinds of proxy, set into the sentences below. SOCKS5, SOCKS4, HTTP and MTProto are names of protocols,
+         and Telegram, WhatsApp and Signal names of apps: never translated. -->
+    <string name="proxy_kind_socks5">پروکسی SOCKS5</string>
+    <string name="proxy_kind_socks4">پروکسی SOCKS4</string>
+    <string name="proxy_kind_http">پروکسی HTTP</string>
+    <string name="proxy_kind_mtproto">پروکسی Telegram (MTProto)</string>
+    <string name="proxy_kind_whatsapp">پروکسی WhatsApp</string>
+    <string name="proxy_kind_signal">پروکسی Signal</string>
+    <!-- A proxy the app's own bytes named and the proxy's reply confirmed: %1$s is its kind (above), %2$s where it is,
+         as a name or an address with its port, %3$s the destination the app asked it for. "Read from the connection"
+         says how Watch knows. -->
+    <string name="proxy_asked">از %1$s در %2$s، مقصد %3$s را خواست. از خود اتصال خوانده شد.</string>
+    <!-- As above, where no destination asked for was read. -->
+    <string name="proxy_declared">از راه %1$s در %2$s. از خود اتصال خوانده شد.</string>
+    <!-- A messenger's proxy that Watch infers: %1$s its kind, %2$s where it is. -->
+    <string name="proxy_inferred">از راه یک %1$s در %2$s. از روی اینکه به کجا و چطور وصل می‌شود نتیجه گرفته شد. Watch نمی‌تواند ببیند از آنجا به کجا می‌رود: آن بخش رمزگذاری‌شده است.</string>
+    <!-- How Watch knows, on its own line where the sentence above is not shown (the switch off). -->
+    <string name="proxy_how_read">از خود اتصال خوانده شد.</string>
+    <string name="proxy_how_inferred">از روی اینکه به کجا و چطور وصل می‌شود نتیجه گرفته شد.</string>
+    <!-- A plain HTTP request written in the form a proxy takes, which a web server takes too: the row names the server
+         it was sent to, and this line says what the request asked for (%1$s), never that the server is a proxy. -->
+    <string name="proxy_request_asked">به این سرور درخواستی فرستاد که برای یک پروکسی HTTP نوشته شده بود، و %1$s را خواست. از خود اتصال خوانده شد.</string>
+    <string name="now_proxy_request_hidden">به این سرور درخواستی فرستاد که برای یک پروکسی HTTP نوشته شده بود. اینکه چه خواست نشان داده نمی‌شود، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش است.</string>
+    <string name="history_proxy_request_hidden">به این سرور درخواستی فرستاد که برای یک پروکسی HTTP نوشته شده بود. اینکه چه خواست ثبت نشد، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش بود.</string>
+    <string name="proxy_request_password">این درخواست رمز عبوری برای یک پروکسی را بدون رمزگذاری با خود داشت. Watch آن را نگه نداشت.</string>
+    <!-- Where a proxy is, by its address alone: who runs it is not known. %1$s is the organisation whose network holds
+         the address. -->
+    <string name="proxy_network">نشانی‌ای در شبکهٔ %1$s. اینکه چه کسی آن را اداره می‌کند معلوم نیست.</string>
+    <!-- As above, and the network is not the app maker's own: %2$s is the app's maker, such as Telegram. -->
+    <string name="proxy_network_not_maker">نشانی‌ای در شبکهٔ %1$s، نه در شبکهٔ %2$s. اینکه چه کسی آن را اداره می‌کند معلوم نیست.</string>
+    <string name="proxy_network_unknown">سرویس Watch نمی‌تواند شبکهٔ این نشانی را نام ببرد. اینکه چه کسی آن را اداره می‌کند معلوم نیست.</string>
+    <!-- Where Watch cannot name the network, or does not show the address: %1$s is the app's maker, such as Telegram. -->
+    <string name="proxy_not_maker">این نشانی در شبکهٔ %1$s نیست.</string>
+    <string name="proxy_local">در شبکهٔ محلی شما. اینکه چه کسی آن را اداره می‌کند معلوم نیست.</string>
+    <!-- The proxy set in Android's settings, which apps that follow those settings all use. -->
+    <string name="proxy_setting">این همان پروکسی تنظیمات اندروید است که برنامه‌های دیگر هم می‌توانند از آن استفاده کنند.</string>
+    <string name="proxy_password">رمز عبوری برای این پروکسی بدون رمزگذاری از شبکه گذشت. Watch آن را نگه نداشت.</string>
+    <!-- The server name an inferred proxy's connection sent, which no DNS answer gave its address: %1$s is that
+         name. Facts only: nothing of why the app sent it. -->
+    <string name="proxy_cover">اتصال آن نام %1$s را فرستاد. هیچ‌کدام از پاسخ‌های DNS که از Watch گذشتند، این نشانی را به آن نام نداده‌اند.</string>
+    <!-- %1$s owns the name above, %2$s the network of the address. -->
+    <string name="proxy_cover_owner">آن نام متعلق به %1$s است، و شبکهٔ آن نشانی متعلق به %2$s.</string>
+    <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Watch knows and the
+         facts that name nothing. -->
+    <string name="now_proxy_hidden">از راه %1$s. اینکه به کجا وصل شد نشان داده نمی‌شود، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش است.</string>
+    <string name="history_proxy_hidden">از راه %1$s. اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش بود.</string>
+    <!-- As above, for the proxy set in Android's settings. -->
+    <string name="now_proxy_setting_hidden">از راه %1$s در تنظیمات اندروید، که برنامه‌های دیگر هم می‌توانند از آن استفاده کنند. اینکه به کجا وصل شد نشان داده نمی‌شود، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش است.</string>
+    <string name="history_proxy_setting_hidden">از راه %1$s در تنظیمات اندروید، که برنامه‌های دیگر هم می‌توانند از آن استفاده کنند. اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش بود.</string>
+    <!-- One more line of "What this view cannot see". -->
+    <string name="cannot_see_proxy">برای پروکسی‌ای که یک برنامه از آن استفاده می‌کند، Watch نمی‌تواند ببیند چه کسی آن را اداره می‌کند، یا اینکه شما آن را انتخاب کرده‌اید یا خود برنامه. برای پروکسی‌ای که Watch وجودش را نتیجه می‌گیرد، نمی‌تواند ببیند ترافیک پس از آن به کجا می‌رود.</string>
+
+    <!--
+        W8, part 3b (ADR 0041, "How the per-tool guides are built"): the per-tool guides for proxy mode, in Watch and on the
+        website (scripts/guides.py writes docs/site/guides/ from these words and data/tools/guide*.tsv). A quoted %s is a
+        tool's own label, read from the tool on this phone or from the data, never translated: only these sentences are.
+        The guides name no tool as better than another and never point to a download.
+    -->
+    <!-- The chain section: one link per tool of the table installed here. %1$s: the tool's name. -->
+    <string name="chain_guides_title">فیلترشکن‌های این گوشی چطور کنار Watch کار می‌کنند:</string>
+    <string name="chain_guide_proxy">فیلترشکن %1$s در حالت پروکسی</string>
+    <string name="chain_guide_other">فیلترشکن %1$s و Watch</string>
+    <!-- A guide's screen and page. %1$s: the tool's name. -->
+    <string name="guide_title_proxy">فیلترشکن %1$s در حالت پروکسی</string>
+    <string name="guide_title_other">فیلترشکن %1$s و Watch</string>
+    <string name="guide_intro">اندروید هر بار فقط یک وی‌پی‌ان را اجرا می‌کند. فیلترشکن %1$s در حالت پروکسی‌اش بدون وی‌پی‌ان کار می‌کند، و Watch می‌تواند برنامه‌های شما را از آن عبور دهد.</string>
+    <string name="guide_assumes">این مراحل فرض می‌کنند که فیلترشکن %1$s از قبل به‌عنوان وی‌پی‌ان برای شما کار می‌کند.</string>
+    <string name="guide_heading_on">روشن کردن حالت پروکسی</string>
+    <!-- %1$s: an address such as 127.0.0.1; %2$s: its port. -->
+    <string name="guide_listener">بعد پروکسی آن روی این گوشی در %1$s، درگاه %2$s، منتظر اتصال می‌ماند.</string>
+    <string name="guide_next">بعد به Watch برگردید. Watch خودش پروکسی را پیدا می‌کند و پیشنهاد می‌دهد برنامه‌هایتان را از آن عبور دهد.</string>
+    <string name="guide_heading_password">رمز عبور برای پروکسی آن</string>
+    <string name="guide_password_optional">پروکسی آن می‌تواند نام کاربری و رمز عبور بخواهد. همان‌هایی را بگذارید که Watch هنگام پیدا کردن پروکسی نشان می‌دهد. آن وقت برنامه‌های دیگر این گوشی نمی‌توانند از آن استفاده کنند.</string>
+    <string name="guide_password_none">پروکسی آن نمی‌تواند رمز عبور بخواهد. تا وقتی اجرا می‌شود، هر برنامه‌ای در این گوشی می‌تواند از آن استفاده کند.</string>
+    <string name="guide_heading_asks">آنچه درخواست می‌کند</string>
+    <string name="guide_heading_back">بازگشت به حالت وی‌پی‌ان</string>
+    <string name="guide_back_note">وقتی فیلترشکن %1$s دوباره به‌عنوان وی‌پی‌ان اجرا شود، اندروید Watch را خاموش می‌کند: هر بار فقط یک وی‌پی‌ان اجرا می‌شود.</string>
+    <!-- %1$s: the tool's name; %2$s: its version. -->
+    <string name="guide_read">از کد منبع %1$s، نسخهٔ %2$s خوانده شده است.</string>
+    <string name="guide_checked">در همان نسخه با Watch امتحان شده است.</string>
+    <string name="guide_not_checked">هنوز با Watch امتحان نشده است.</string>
+    <string name="guide_labels_tool">کلمه‌های داخل گیومه از خود %1$s روی این گوشی خوانده شده‌اند.</string>
+    <string name="guide_labels_recorded">کلمه‌های داخل گیومه همان‌طورند که آن نسخه نشان می‌دهد.</string>
+    <string name="guide_audit">بقیهٔ Datapavan، یعنی بررسی برنامه‌های شما، بدون Watch کار می‌کند.</string>
+    <!-- Steps. Each %s in quotes is one of the tool's labels. -->
+    <string name="guide_step_drawer">منوی گوشهٔ بالای صفحهٔ آن را باز کنید و روی «%1$s» بزنید.</string>
+    <string name="guide_step_overflow">منوی سه‌نقطه را باز کنید و روی «%1$s» بزنید.</string>
+    <string name="guide_step_tab">زبانهٔ «%1$s» را باز کنید.</string>
+    <string name="guide_step_tap">روی «%1$s» بزنید.</string>
+    <string name="guide_step_gear">روی دکمهٔ چرخ‌دنده در بالا بزنید.</string>
+    <string name="guide_step_choose">روی «%1$s» بزنید و «%2$s» را انتخاب کنید.</string>
+    <string name="guide_step_under_choose">زیر «%1$s»، روی «%2$s» بزنید و «%3$s» را انتخاب کنید.</string>
+    <string name="guide_step_arrow_choose">روی پیکان انتهای «%1$s» بزنید و «%2$s» را انتخاب کنید.</string>
+    <string name="guide_step_on">گزینهٔ «%1$s» را روشن کنید.</string>
+    <string name="guide_step_off">گزینهٔ «%1$s» را خاموش کنید.</string>
+    <string name="guide_step_under_on">زیر «%1$s»، گزینهٔ «%2$s» را روشن کنید.</string>
+    <string name="guide_step_under_off">زیر «%1$s»، گزینهٔ «%2$s» را خاموش کنید.</string>
+    <string name="guide_step_fill">خانه‌های «%1$s» و «%2$s» را پر کنید.</string>
+    <string name="guide_step_under_fill">زیر «%1$s»، خانه‌های «%2$s» و «%3$s» را پر کنید.</string>
+    <!-- %3$s: a value, such as a port. -->
+    <string name="guide_step_under_set">زیر «%1$s»، «%2$s» را روی %3$s بگذارید.</string>
+    <string name="guide_step_expand">اگر «%1$s» نشان داده نمی‌شود، روی آخرین ردیف بزنید تا بقیه نشان داده شود.</string>
+    <string name="guide_step_back_home">به صفحهٔ اصلی آن برگردید.</string>
+    <string name="guide_step_back_once">یک صفحه به عقب برگردید.</string>
+    <string name="guide_step_start">آن را با دکمهٔ گرد آن شروع کنید.</string>
+    <string name="guide_step_start_icon">روی دکمهٔ شروع گرد آن بزنید، که صفحه‌خوان آن را «%1$s» می‌نامد.</string>
+    <string name="guide_step_start_text">برای شروع، روی «%1$s» بزنید.</string>
+    <string name="guide_step_slide">دکمه‌ای را که رویش «%1$s» نوشته شده است بکشید.</string>
+    <string name="guide_step_tap_card">روی کارتی که رویش «%1$s» نوشته شده است بزنید.</string>
+    <string name="guide_step_tunnel_switch">کلید انتهای ردیف تونل خود را روشن کنید.</string>
+    <string name="guide_step_card_add">روی کارت «%1$s»، روی + و بعد روی «%2$s» بزنید.</string>
+    <string name="guide_step_name_keep_tap">زیر «%1$s» نامی به آن بدهید، «%2$s» را نگه دارید، و روی «%3$s» بزنید.</string>
+    <!-- sing-box's own words for its profile, which are not translated: tun, mixed, listen, listen_port, users,
+         username, password. %1$s: a port. -->
+    <string name="guide_step_singbox_inbound">پروفایل را بدون هیچ inbound از نوع «tun» بنویسید، و با یک inbound از نوع «mixed» که «listen» آن «127.0.0.1» و «listen_port» آن %1$s باشد. بعد آن را ذخیره کنید.</string>
+    <string name="guide_step_singbox_users">در همان inbound از نوع «mixed»، «users» را با یک «username» و یک «password» اضافه کنید.</string>
+    <string name="guide_step_singbox_back">دوباره از پروفایلی با یک inbound از نوع «tun» استفاده کنید، یا یکی با «%1$s» اضافه کنید. بعد آن را شروع کنید.</string>
+    <string name="guide_step_auth_entry">زیر «%1$s»، روی «%2$s» بزنید و یک مورد اضافه کنید: نام کاربری، یک دونقطه، و بعد رمز عبور.</string>
+    <string name="guide_step_secret">روی «%1$s» بزنید و رمز عبوری را که Watch نشان می‌دهد تایپ کنید.</string>
+    <string name="guide_step_profile_card">روی کارت پروفایل خود، روی «%1$s» بزنید.</string>
+    <string name="guide_step_config_ssh">پیکربندی خود را ویرایش کنید: «%1$s» را روی «%2$s» بگذارید، و خانه‌های «%3$s» و «%4$s» را پر کنید.</string>
+    <string name="guide_step_save_use">روی «%1$s» بزنید، بعد روی پروفایل تنظیمات تازه بزنید تا از آن استفاده شود.</string>
+    <!-- What a tool asks for in proxy mode, from its code. -->
+    <string name="guide_asks_notifications">اجازهٔ نشان دادن اعلان را درخواست می‌کند.</string>
+    <string name="guide_asks_local_network">در اندروید ۱۷ مجوز شبکهٔ محلی را درخواست می‌کند. Watch برای پروکسی آن، که روی همین گوشی است، به این مجوز نیازی ندارد.</string>
+    <string name="guide_asks_battery">درخواست می‌کند از بهینه‌سازی مصرف باتری کنار گذاشته شود.</string>
+    <string name="guide_asks_alarms">در حالت پروکسی، پیش از شروع، مجوز زنگ‌های هشدار را درخواست می‌کند. خودش می‌گوید هیچ زنگ هشداری تنظیم نمی‌کند: این مجوز آن را، وقتی به‌عنوان وی‌پی‌ان اجرا نمی‌شود، در حال اجرا نگه می‌دارد.</string>
+    <string name="guide_asks_vpn_once">اولین باری که وصل می‌شود، حتی در این حالت، اجازهٔ راه‌اندازی وی‌پی‌ان را می‌خواهد. اگر اجازه دهید، اندروید Watch را خاموش می‌کند. بعد از آن Watch را دوباره روشن کنید.</string>
+    <string name="guide_asks_none">کد آن در این حالت هیچ مجوزی درخواست نمی‌کند.</string>
+    <!-- Facts a user of one tool needs. %1$s in guide_note_named_port: a port. -->
+    <string name="guide_note_named_port">سرویس Watch پروکسی آن را فقط در درگاه %1$s جست‌وجو می‌کند، پس همین درگاه را بگذارید، حتی اگر پروفایل شما درگاه دیگری نام ببرد.</string>
+    <string name="guide_note_fixed_user">نام کاربری آن همیشه «%1$s» است. Watch همان را نشان می‌دهد.</string>
+    <string name="guide_note_user_port">در نمایهٔ کاری یا کاربر دیگری روی این گوشی، درگاه آن به اندازهٔ شمارهٔ آن کاربر بیشتر است. Watch آنجا را هم جست‌وجو می‌کند.</string>
+    <string name="guide_note_stopped_first">اول آن را متوقف کنید: این را فقط وقتی تغییر می‌دهد که وصل نباشد.</string>
+    <string name="guide_note_no_server">ترافیک شما را به هیچ سروری نمی‌فرستد. شکل ترافیک را تغییر می‌دهد و آن را از همین گوشی به راهش می‌فرستد. پس برنامه‌هایی که از آن عبور می‌کنند، با نشانی خود شما به مقصدهایشان می‌رسند.</string>
+    <string name="guide_note_ssh_only">فقط نوع تونل «%1$s» یک پروکسی SOCKS5 روی این گوشی باز می‌کند. با «%2$s»، Watch فقط وقتی می‌تواند از این درگاه استفاده کند که سرور شما یک پروکسی SOCKS5 بدهد.</string>
+    <string name="guide_note_remote_profile">یک پروفایل راه دور فقط «%1$s» را نشان می‌دهد: محتوای آن از نشانی‌اش می‌آید و اینجا نمی‌توان آن را تغییر داد. به‌جای آن یک پروفایل محلی بسازید.</string>
+    <string name="guide_note_engines">در این حالت، پروفایل‌هایی که از sing-box، OpenConnect، IKEv2 یا یک زنجیره استفاده می‌کنند همچنان وی‌پی‌ان راه می‌اندازند.</string>
+    <!-- The pages of tools that run only as a VPN, and of those whose steps wait. %1$s: the tool's name. -->
+    <string name="guide_vpn_only">فیلترشکن %1$s فقط به‌عنوان وی‌پی‌ان کار می‌کند. اندروید هر بار فقط یک وی‌پی‌ان را اجرا می‌کند، پس Watch نمی‌تواند کنار آن کار کند: وقتی یکی شروع شود، اندروید دیگری را متوقف می‌کند.</string>
+    <string name="guide_wireguard_only">فیلترشکن %1$s فقط به‌عنوان وی‌پی‌ان کار می‌کند، پس Watch نمی‌تواند کنار آن کار کند. ولی Watch خودش می‌تواند یک پیکربندی WireGuard را اجرا کند و برنامه‌هایی را که انتخاب می‌کنید از آن عبور دهد.</string>
+    <!-- Quotes Watch's own heading, tunnels_title, as it reads. -->
+    <string name="guide_wireguard_add">یکی را در Watch، زیر «پیکربندی‌های WireGuard»، اضافه کنید.</string>
+    <string name="guide_wireguard_proton">وب‌سایت Proton VPN این فایل‌ها را می‌سازد، در طرح رایگان هم. در حساب خود، «Downloads» و بعد «WireGuard configuration» را باز کنید.</string>
+    <string name="guide_wireguard_mullvad">وب‌سایت Mullvad این فایل‌ها را برای حساب پولی می‌سازد. از سازندهٔ پیکربندی آن استفاده کنید.</string>
+    <string name="guide_wireguard_windscribe">وب‌سایت Windscribe این فایل‌ها را برای حساب‌های پولی می‌سازد. از «Config Generator» آن استفاده کنید.</string>
+    <string name="guide_wireguard_same">فایل پیکربندی یا کد QR که به WireGuard اضافه کردید، در Watch هم کار می‌کند.</string>
+    <string name="guide_note_amneziawg">فیلترشکن AmneziaWG شکل بسته‌های WireGuard را تغییر می‌دهد. Watch هنوز این تغییر را نمی‌خواند، پس نمی‌تواند این پیکربندی‌ها را اجرا کند.</string>
+    <string name="guide_waiting_intro">برای فیلترشکن %1$s هنوز هیچ مرحله‌ای نیست.</string>
+    <string name="guide_waiting_closed">کد آن عمومی نیست، پس مراحلش منتظر می‌مانند تا با Watch امتحان شود.</string>
+    <string name="guide_waiting_partly">بخشی از کد آن عمومی نیست، پس مراحلش منتظر می‌مانند تا با Watch امتحان شود.</string>
+    <string name="guide_note_tethering">قابلیتی دارد که خودش آن را Proxy Tethering می‌نامد. هنوز معلوم نیست که این قابلیت پروکسی‌ای روی این گوشی می‌دهد که Watch بتواند از آن استفاده کند یا نه.</string>
+    <!-- The website's list of the guides (scripts/guides.py), which Watch does not show. -->
+    <string name="guide_index_title" tools:ignore="UnusedResources">فیلترشکن شما کنار Watch</string>
+    <string name="guide_index_intro" tools:ignore="UnusedResources">اندروید هر بار فقط یک وی‌پی‌ان را اجرا می‌کند. این صفحه‌ها می‌گویند هر فیلترشکن چطور می‌تواند کنار Watch کار کند، بر اساس آنچه از کد خود آن فیلترشکن خوانده شده است.</string>
+    <string name="guide_index_proxy" tools:ignore="UnusedResources">فیلترشکن‌هایی که حالت پروکسی دارند</string>
+    <string name="guide_index_wireguard" tools:ignore="UnusedResources">فیلترشکن‌هایی که فقط به‌عنوان وی‌پی‌ان کار می‌کنند، با پیکربندی‌های WireGuard</string>
+    <string name="guide_index_vpn" tools:ignore="UnusedResources">فیلترشکن‌هایی که فقط به‌عنوان وی‌پی‌ان کار می‌کنند</string>
+    <string name="guide_index_waiting" tools:ignore="UnusedResources">فیلترشکن‌هایی که مراحلشان منتظر می‌مانند تا با Watch امتحان شوند</string>
+
+    <!-- W8, part 3a (ADR 0053): tracker blocking. Counts and sizes only inside the app: nothing of it reaches a
+         notification, the summary or the widget (ADR 0046). ADR 0025's words hold (BlockingWordsTest), and "grade"
+         never shows. The labels of the switches and buttons below are tapped by their text in the emulator check. -->
+    <!-- Watch's screen: the section, its switches and the global pause, which names no app. -->
+    <string name="blocking_title">مسدودسازی ردیاب‌ها</string>
+    <string name="blocking_switch">مسدود کردن ردیاب‌ها</string>
+    <string name="blocking_note">تا آن را روشن نکنید، خاموش می‌ماند. سرویس Watch نمی‌گذارد برنامه‌هایی که نصب کرده‌اید به میزبان‌های ردیاب‌ها برسند: جست‌وجوهای نام آن‌ها هیچ نشانی‌ای دریافت نمی‌کنند، و اتصال‌هایشان رد می‌شود. میزبانی که به خود برنامه هم سرویس می‌دهد مسدود نمی‌شود.</string>
+    <string name="blocking_not_covered">برنامه‌هایی که همراه گوشی آمده‌اند، خود اندروید و سرویس‌های گوگل پلی در بر گرفته نمی‌شوند.</string>
+    <string name="blocking_browsers">مسدود کردن در مرورگرها هم</string>
+    <string name="blocking_browsers_note">مرورگرها مسدود نمی‌شوند مگر اینکه آن‌ها را شامل کنید: مرورگرها هر وب‌سایتی را باز می‌کنند.</string>
+    <!-- Only while the apps go through the user's circumvention tool. -->
+    <string name="blocking_tool_dns">مسدود کردن جست‌وجوهای خود فیلترشکن شما برای ردیاب‌ها هم</string>
+    <string name="blocking_tool_dns_note">تا آن را روشن نکنید، خاموش می‌ماند. سرویس Watch آن وقت به جست‌وجوهای خود فیلترشکن شما برای میزبان‌های ردیاب، پاسخی بدون نشانی می‌دهد. هرگز اتصال‌های فیلترشکن را رد نمی‌کند: نام‌هایی که این اتصال‌ها نشان می‌دهند می‌توانند نام هر وب‌سایت پرطرفداری باشند.</string>
+    <string name="blocking_pause">توقف مسدودسازی برای ۱۰ دقیقه</string>
+    <!-- %1$s: when the pause ends, as the phone writes the time. -->
+    <string name="blocking_paused">متوقف تا %1$s</string>
+    <string name="blocking_resume">مسدود کردن دوباره همین حالا</string>
+    <!-- "Now": the pause, said once above the apps. -->
+    <string name="blocking_paused_now">مسدودسازی ردیاب‌ها تا %1$s متوقف است.</string>
+    <!-- Beside every allow and the pause: what an allow lets through, and how soon it works. -->
+    <string name="blocking_late_sends">برنامه‌ها ممکن است پس از مجاز شدن، آنچه را در زمان مسدود بودن نگه داشته بودند بفرستند.</string>
+    <string name="blocking_seconds">ظرف چند ثانیه اثر می‌کند: برنامه‌ها جست‌وجوی ناموفق را برای لحظه‌ای نگه می‌دارند.</string>
+    <!-- "Now" and an app's history: one app. -->
+    <string name="blocking_allow_app">مجاز کردن ردیاب‌ها در این برنامه</string>
+    <string name="blocking_block_app">مسدود کردن دوبارهٔ ردیاب‌ها</string>
+    <!-- %1$s: when the hour ends, as the phone writes the time. -->
+    <string name="blocking_app_allowed">ردیاب‌ها تا %1$s در این برنامه مجازند.</string>
+    <!-- What blocking counted, lookups apart from connections. %2$s names the tracker as the three forms below do, or a
+         host; %3$s is when the first was, as the phone writes the time. -->
+    <plurals name="blocking_connections">
+        <item quantity="one">از %3$s تاکنون، %1$d اتصال به %2$s مسدود شد.</item>
+        <item quantity="other">از %3$s تاکنون، %1$d اتصال به %2$s مسدود شد.</item>
+    </plurals>
+    <plurals name="blocking_lookups">
+        <item quantity="one">از %3$s تاکنون، به %1$d جست‌وجو برای %2$s پاسخی بدون نشانی داده شد.</item>
+        <item quantity="other">از %3$s تاکنون، به %1$d جست‌وجو برای %2$s پاسخی بدون نشانی داده شد.</item>
+    </plurals>
+    <!-- A tracker by its name in the εxodus list (%1$s) and its company (%2$s), where the owners' table gives one; a
+         tracker with none is named by its name alone. -->
+    <string name="blocking_tracker_company">%1$s (%2$s)</string>
+    <!-- Several trackers of one company that one εxodus signature names: %1$s is the company. -->
+    <string name="blocking_company">ردیاب‌های %1$s</string>
+    <!-- A time on another day: %1$s the date, %2$s the time. -->
+    <string name="blocking_day_time">%1$s، %2$s</string>
+    <!-- An app's history: its trackers, one allow each, or one for a company. -->
+    <string name="blocking_history_title">مسدودسازی ردیاب‌ها در این برنامه</string>
+    <!-- %1$s names a tracker, a company's trackers or a host, as above. -->
+    <string name="blocking_allow_entry">مجاز کردن %1$s در این برنامه</string>
+    <string name="blocking_block_entry">مسدود کردن دوبارهٔ %1$s</string>
+    <string name="blocking_entry_allowed">در این برنامه مجاز است، تا وقتی دوباره مسدودش کنید.</string>
+    <!-- %1$s: what the host does, from Datapavan's table, in English. -->
+    <string name="blocking_function">کاری که انجام می‌دهد: %1$s</string>
+    <!-- A connection of the history that Watch blocked: %1$s names the tracker, never the host where the switch "Log
+         where apps connect ..." left it out. -->
+    <string name="blocking_blocked">مسدودشده به دست Watch: %1$s.</string>
+    <!-- A host the app reached that Watch does not block in it, and why. -->
+    <string name="blocking_kept">مسدود نشده: این میزبان به خود برنامه هم سرویس می‌دهد.</string>
+    <string name="blocking_kept_code">مسدود نشده: در این برنامه، این میزبان به ورود به حساب یا اشتراک‌گذاری هم سرویس می‌دهد.</string>
+    <string name="blocking_kept_unread">مسدود نشده: این میزبان ممکن است به ورود به حساب یا اشتراک‌گذاری هم سرویس بدهد، و Datapavan هنوز کد این برنامه را نخوانده است.</string>
+    <string name="blocking_kept_own">مسدود نشده: این برنامه از این میزبان برای کار خودش استفاده می‌کند.</string>
 </resources>

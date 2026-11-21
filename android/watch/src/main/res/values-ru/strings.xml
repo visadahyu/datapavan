@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="watch_tagline">Смотрите, куда подключается каждое приложение на вашем телефоне.</string>
     <string name="status_on">Watch включён.</string>
     <string name="status_off">Watch выключен.</string>
@@ -429,4 +429,333 @@
     <!-- In place of a configuration's name: inside the sentences above, and also alone as a configuration's heading and in its buttons' and rows' labels, so it must read well on its own too. -->
     <string name="tunnel_removed_name">WireGuard (конфигурация с тех пор удалена)</string>
     <string name="tunnel_closed_name">WireGuard (конфигурацию сейчас нельзя открыть)</string>
+    <!-- W8 (ADR 0042, 0052, 0053, 0041): the names of apps that go directly, apps' own proxies and the switch that
+         names them, tracker blocking, and the per-tool guides for proxy mode, moved from strings_untranslated.xml with
+         their translations (ADR 0030). -->
+    <!-- W8, part 1 (ADR 0042), and its fix round: the names of apps that go directly. -->
+    <string name="dns_title">Как приложения, идущие напрямую, ищут имена</string>
+    <string name="dns_now_unknown">В этой сети ни одно приложение пока не искало имя.</string>
+    <string name="dns_now_none_odoh">В этой сети ни одно приложение пока не искало имя. Watch будет использовать Oblivious DoH.</string>
+    <!-- The first sentence of the "now" line, read out when it changes; the details follow apart. -->
+    <string name="dns_now_odoh">Сейчас имена отправляются по Oblivious DoH.</string>
+    <string name="dns_now_odoh_tool">Сейчас имена отправляются по Oblivious DoH через ваш инструмент.</string>
+    <string name="dns_now_choice">Сейчас имена отправляются в зашифрованном виде на выбранный вами DNS-сервер.</string>
+    <string name="dns_now_down_odoh">Oblivious DoH не отвечает в этой сети.</string>
+    <string name="dns_now_choice_down">Ваш DNS-сервер не отвечает в этой сети.</string>
+    <string name="dns_now_fallback">Ни один зашифрованный способ не отвечает в этой сети. Пока что имена отправляются на DNS-сервер этой сети без шифрования. Сеть может их видеть. Включите строгий режим, чтобы это прекратить.</string>
+    <string name="dns_now_failing">Ни один зашифрованный способ не отвечает в этой сети. Строгий режим включён, поэтому приложения, идущие напрямую, не могут искать имена, пока один из способов не ответит.</string>
+    <string name="dns_now_failing_only">Ваш DNS-сервер не отвечает в этой сети. Параметр «Только этот DNS-сервер» включён, поэтому приложения, идущие напрямую, не могут искать имена, пока он не ответит.</string>
+    <!-- %1$s: the relay's operator and its countries; %2$s: the target's. -->
+    <string name="dns_now_pair">Ретранслятор: %1$s. Целевой сервер: %2$s. Ретранслятор видит ваш адрес, но не имена. Целевой сервер видит имена, но не ваш адрес.</string>
+    <!-- %1$s: a resolver's operator. -->
+    <string name="dns_now_to">Сейчас имена отправляются в зашифрованном виде на %1$s. Он видит ваш адрес и имена.</string>
+    <!-- %1$s: an operator; %2$s: its countries, by commas. -->
+    <string name="dns_party">%1$s (%2$s)</string>
+    <!-- %1$s: the host name of Android's Private DNS provider. -->
+    <string name="dns_private_dns_strict">Частный DNS-сервер Android отправляет имена всех приложений на %1$s, в обход Watch. Ваш выбор здесь действует, только пока частный DNS-сервер отключён или в режиме «Автоматически».</string>
+    <string name="dns_choice">Куда отправляются имена:</string>
+    <string name="dns_odoh">Oblivious DoH (рекомендуется)</string>
+    <string name="dns_odoh_detail">Два оператора в разных странах видят каждый по половине: один видит ваш адрес, другой — имена.</string>
+    <!-- A resolver's row: %1$s its operator; %2$s one of the service's names below. -->
+    <string name="dns_preset">%1$s, %2$s</string>
+    <string name="dns_service_blocking">блокирует вредоносные сайты</string>
+    <string name="dns_service_unfiltered">без фильтрации</string>
+    <string name="dns_service_standard">стандартный</string>
+    <string name="dns_protocol_doh">По HTTPS (DoH)</string>
+    <string name="dns_protocol_dot">По TLS (DoT)</string>
+    <!-- A resolver's card: %1$s the country of its operator's seat; %2$s, %3$s, %4$s sentences below. -->
+    <string name="dns_preset_card">Страна оператора: %1$s. %2$s %3$s %4$s</string>
+    <string name="dns_logs_totals">Он не хранит адреса, только общую статистику.</string>
+    <string name="dns_logs_names_day">Он хранит имена в течение суток, без адресов, и общую статистику.</string>
+    <string name="dns_logs_day">Он хранит журналы с вашим адресом примерно сутки.</string>
+    <string name="dns_logs_months">Он хранит журналы с частично скрытым вашим адресом до шести месяцев.</string>
+    <string name="dns_logs_none">Он заявляет, что не хранит журналы.</string>
+    <string name="dns_blocks_none">Он ничего не блокирует.</string>
+    <string name="dns_blocks_harm">Он блокирует вредоносные сайты.</string>
+    <string name="dns_blocks_court">Он блокирует то, что предписывают суды.</string>
+    <string name="dns_audited_no">Никто со стороны это не проверял.</string>
+    <string name="dns_audited_firm">Эти заявления проверила аудиторская фирма.</string>
+    <string name="dns_policy">Его политика конфиденциальности</string>
+    <string name="dns_choice_fails">Если он не отвечает, Watch использует Oblivious DoH, затем другие зашифрованные способы. Включите «Только этот DNS-сервер», чтобы этого не происходило.</string>
+    <string name="dns_only">Только этот DNS-сервер</string>
+    <string name="dns_only_cost">Если ваш DNS-сервер не отвечает, приложения, идущие напрямую, не могут искать имена.</string>
+    <string name="dns_custom">Свой DNS-сервер</string>
+    <string name="dns_custom_detail">Адрес DoH (https://…) или имя сервера DoT, а также его IP-адреса.</string>
+    <string name="dns_custom_at">Адрес DoH или сервер DoT</string>
+    <string name="dns_custom_addresses">IP-адреса через запятую</string>
+    <string name="dns_custom_use">Проверить и использовать</string>
+    <string name="dns_custom_refused">Укажите адрес DoH, который начинается с https://, или имя сервера DoT, и хотя бы один IP-адрес. Watch никогда не ищет имя DNS-сервера без шифрования.</string>
+    <string name="dns_custom_testing">Запрашиваем имя у вашего DNS-сервера…</string>
+    <!-- %1$d: milliseconds. -->
+    <string name="dns_custom_answered">Ваш DNS-сервер ответил за %1$d мс. Теперь Watch использует его.</string>
+    <string name="dns_custom_failed">Ваш DNS-сервер не ответил, поэтому Watch его не сохранил. Проверьте его адрес и IP-адреса.</string>
+    <string name="dns_custom_tampered">Сертификат вашего DNS-сервера не прошёл проверку, или подключение было прервано. Watch его не сохранил.</string>
+    <string name="dns_strict">Строгий режим: никогда не использовать DNS-сервер сети</string>
+    <string name="dns_strict_cost">Если ни один зашифрованный способ не отвечает, приложения, идущие напрямую, не могут искать имена. Используйте строгий режим там, где сеть подвергается цензуре или слежке.</string>
+    <string name="dns_local_names">Локальные имена, например вашего принтера или роутера, по-прежнему отправляются на собственный DNS-сервер вашей сети.</string>
+    <!-- %1$s: the network's own domains, by commas. -->
+    <string name="dns_search">Эта сеть сообщает, что эти домены — её собственные: %1$s. Для имени в этих доменах Watch сначала спрашивает зашифрованным способом. Эту сеть он спрашивает, только если интернет не знает это имя.</string>
+    <string name="dns_strict_limits">Строгий режим охватывает не всё. Android сам проверяет подключение, в обход Watch. Некоторые приложения используют собственный зашифрованный DNS. Приложения, которые вы исключили из Watch, не охвачены. А пока Watch перезапускается или если Android его останавливает при выключенной функции «Постоянная VPN», приложения используют DNS-сервер сети.</string>
+    <string name="dns_notify">Уведомлять, пока имена отправляются на DNS-сервер сети</string>
+    <string name="dns_notify_refused">Android не разрешает Watch показывать уведомления, поэтому этот параметр остаётся выключенным. Разрешите уведомления для Watch в настройках Android, затем снова включите его.</string>
+    <string name="dns_pairs">Пары Oblivious DoH, в каждой два разных оператора из разных стран:</string>
+    <!-- %1$s: the relay's operator and its countries; %2$s: the target's. -->
+    <string name="dns_pair">Ретранслятор: %1$s. Целевой сервер: %2$s.</string>
+    <string name="dns_pairs_change">Изменить пары</string>
+    <string name="dns_pairs_default">Использовать пары по умолчанию</string>
+    <string name="dns_pairs_done">Готово</string>
+    <string name="dns_not_kept">Watch не ведёт списка имён, которые ищут приложения, кроме журнала подключений, если вы его храните. Ответы он хранит в памяти до суток и забывает их при смене сети.</string>
+    <string name="dns_fallback_channel">Имена без шифрования</string>
+    <string name="dns_fallback_title">Имена отправляются на DNS-сервер сети</string>
+    <string name="dns_fallback_text">Ни один зашифрованный способ не отвечает в этой сети, поэтому приложения, идущие напрямую, пока используют её DNS-сервер. Откройте Watch, чтобы включить строгий режим.</string>
+
+    <!-- The one switch for what Watch leaves out of the log and "Now" (W6, W7 and W8): off unless the user turns it
+         on. It replaces "Log where these apps connect" (chain_log_destinations), which spoke of chained apps alone.
+         The lines below that name it quote it word for word. -->
+    <string name="log_switch">Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси</string>
+    <!-- Under the switch above. -->
+    <string name="log_switch_note">Выключено, пока вы это не включите. Это касается приложений, которые вы направляете через ваш инструмент обхода блокировок или конфигурацию WireGuard, и собственных серверов инструмента. Это касается и приложений, которые подключаются через прокси, например прокси Telegram. Watch всё равно считает их подключения. Список того, куда они подключались, может быть использован против вас, если кто-то обыщет ваш телефон.</string>
+    <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens Watch's screen at the
+         switch. -->
+    <string name="log_switch_open">Перейти к переключателю</string>
+    <!-- "Now": an app sent through the user's tool, the tool's own servers, and an app sent through a WireGuard
+         configuration (%1$s: its name), with the switch above off. -->
+    <string name="now_through_tool_off">Направлено через ваш инструмент обхода блокировок. Место назначения не показано, потому что переключатель «Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси» выключен.</string>
+    <string name="now_tool_servers_off">Место назначения не показано, потому что переключатель «Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси» выключен.</string>
+    <string name="now_through_tunnel_off">Направлено через %1$s. Место назначения не показано, потому что переключатель «Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси» выключен.</string>
+    <!-- The same in an app's history, of a connection logged while the switch was off. history_left_out_off: the
+         tool's own servers, or a record written before Watch logged each connection's route. -->
+    <string name="history_through_tool_off">Направлено через ваш инструмент обхода блокировок. Место назначения не записано, потому что переключатель «Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси» был выключен.</string>
+    <string name="history_left_out_off">Место назначения не записано, потому что переключатель «Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси» был выключен.</string>
+    <string name="history_through_tunnel_off">Направлено через %1$s. Место назначения не записано, потому что переключатель «Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси» был выключен.</string>
+    <!-- A connection of an app sent through the tool or a WireGuard configuration that went directly all the same:
+         one opened before the app was sent through them, its local network, or what the tool does not carry. -->
+    <string name="history_direct_off">Шло напрямую, а не через ваш инструмент обхода блокировок или конфигурацию WireGuard. Место назначения не записано, потому что переключатель «Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси» был выключен.</string>
+    <!-- Where a destination's name came from, beside "name the connection sent" and the others: the app named the
+         destination to its proxy. -->
+    <string name="now_named_proxy">место назначения, запрошенное приложением у своего прокси</string>
+    <!-- The kinds of proxy, set into the sentences below. SOCKS5, SOCKS4, HTTP and MTProto are names of protocols,
+         and Telegram, WhatsApp and Signal names of apps: never translated. -->
+    <string name="proxy_kind_socks5">прокси SOCKS5</string>
+    <string name="proxy_kind_socks4">прокси SOCKS4</string>
+    <string name="proxy_kind_http">HTTP-прокси</string>
+    <string name="proxy_kind_mtproto">прокси Telegram (MTProto)</string>
+    <string name="proxy_kind_whatsapp">прокси WhatsApp</string>
+    <string name="proxy_kind_signal">прокси Signal</string>
+    <!-- A proxy the app's own bytes named and the proxy's reply confirmed: %1$s is its kind (above), %2$s where it is,
+         as a name or an address with its port, %3$s the destination the app asked it for. "Read from the connection"
+         says how Watch knows. -->
+    <string name="proxy_asked">Приложение запросило %3$s у %1$s по адресу %2$s. Прочитано из подключения.</string>
+    <!-- As above, where no destination asked for was read. -->
+    <string name="proxy_declared">Через %1$s по адресу %2$s. Прочитано из подключения.</string>
+    <!-- A messenger's proxy that Watch infers: %1$s its kind, %2$s where it is. -->
+    <string name="proxy_inferred">Через %1$s по адресу %2$s. Выведено из того, куда и как идёт подключение. Куда оно идёт дальше, Watch не видит: эта часть зашифрована.</string>
+    <!-- How Watch knows, on its own line where the sentence above is not shown (the switch off). -->
+    <string name="proxy_how_read">Прочитано из подключения.</string>
+    <string name="proxy_how_inferred">Выведено из того, куда и как идёт подключение.</string>
+    <!-- A plain HTTP request written in the form a proxy takes, which a web server takes too: the row names the server
+         it was sent to, and this line says what the request asked for (%1$s), never that the server is a proxy. -->
+    <string name="proxy_request_asked">Приложение отправило этому серверу запрос, составленный для HTTP-прокси, и запросило в нём %1$s. Прочитано из подключения.</string>
+    <string name="now_proxy_request_hidden">Приложение отправило этому серверу запрос, составленный для HTTP-прокси. Что в нём запрошено, не показано, потому что переключатель «Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси» выключен.</string>
+    <string name="history_proxy_request_hidden">Приложение отправило этому серверу запрос, составленный для HTTP-прокси. Что в нём запрошено, не записано, потому что переключатель «Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси» был выключен.</string>
+    <string name="proxy_request_password">Запрос содержал незашифрованный пароль для прокси. Watch его не сохранил.</string>
+    <!-- Where a proxy is, by its address alone: who runs it is not known. %1$s is the organisation whose network holds
+         the address. -->
+    <string name="proxy_network">Адрес в сети %1$s. Кто управляет этим прокси, неизвестно.</string>
+    <!-- As above, and the network is not the app maker's own: %2$s is the app's maker, such as Telegram. -->
+    <string name="proxy_network_not_maker">Адрес в сети %1$s, а не в сети %2$s. Кто управляет этим прокси, неизвестно.</string>
+    <string name="proxy_network_unknown">Watch не может назвать сеть этого адреса. Кто управляет этим прокси, неизвестно.</string>
+    <!-- Where Watch cannot name the network, or does not show the address: %1$s is the app's maker, such as Telegram. -->
+    <string name="proxy_not_maker">Адрес не в сети %1$s.</string>
+    <string name="proxy_local">В вашей локальной сети. Кто управляет этим прокси, неизвестно.</string>
+    <!-- The proxy set in Android's settings, which apps that follow those settings all use. -->
+    <string name="proxy_setting">Это прокси из настроек Android, которым могут пользоваться и другие приложения.</string>
+    <string name="proxy_password">Пароль для этого прокси прошёл по сети незашифрованным. Watch его не сохранил.</string>
+    <!-- The server name an inferred proxy's connection sent, which no DNS answer gave its address: %1$s is that
+         name. Facts only: nothing of why the app sent it. -->
+    <string name="proxy_cover">Подключение к нему отправило имя %1$s. Ни в одном ответе DNS, прошедшем через Watch, этому имени не соответствовал этот адрес.</string>
+    <!-- %1$s owns the name above, %2$s the network of the address. -->
+    <string name="proxy_cover_owner">Это имя принадлежит %1$s, а сеть — %2$s.</string>
+    <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Watch knows and the
+         facts that name nothing. -->
+    <string name="now_proxy_hidden">Через %1$s. Место назначения не показано, потому что переключатель «Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси» выключен.</string>
+    <string name="history_proxy_hidden">Через %1$s. Место назначения не записано, потому что переключатель «Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси» был выключен.</string>
+    <!-- As above, for the proxy set in Android's settings. -->
+    <string name="now_proxy_setting_hidden">Через %1$s из настроек Android, которым могут пользоваться и другие приложения. Место назначения не показано, потому что переключатель «Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси» выключен.</string>
+    <string name="history_proxy_setting_hidden">Через %1$s из настроек Android, которым могут пользоваться и другие приложения. Место назначения не записано, потому что переключатель «Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси» был выключен.</string>
+    <!-- One more line of "What this view cannot see". -->
+    <string name="cannot_see_proxy">Для прокси, которым пользуется приложение, Watch не видит, кто им управляет и кто его выбрал: вы или приложение. Для прокси, о котором Watch делает вывод, он не видит, куда идёт трафик после него.</string>
+
+    <!--
+        W8, part 3b (ADR 0041, "How the per-tool guides are built"): the per-tool guides for proxy mode, in Watch and on the
+        website (scripts/guides.py writes docs/site/guides/ from these words and data/tools/guide*.tsv). A quoted %s is a
+        tool's own label, read from the tool on this phone or from the data, never translated: only these sentences are.
+        The guides name no tool as better than another and never point to a download.
+    -->
+    <!-- The chain section: one link per tool of the table installed here. %1$s: the tool's name. -->
+    <string name="chain_guides_title">Как инструменты на этом телефоне работают рядом с Watch:</string>
+    <string name="chain_guide_proxy">%1$s в режиме прокси</string>
+    <string name="chain_guide_other">%1$s и Watch</string>
+    <!-- A guide's screen and page. %1$s: the tool's name. -->
+    <string name="guide_title_proxy">%1$s в режиме прокси</string>
+    <string name="guide_title_other">%1$s и Watch</string>
+    <string name="guide_intro">Android одновременно запускает только один VPN. В режиме прокси %1$s работает без VPN, и Watch может направлять через него ваши приложения.</string>
+    <string name="guide_assumes">Эти шаги предполагают, что %1$s уже работает у вас как VPN.</string>
+    <string name="guide_heading_on">Включите режим прокси</string>
+    <!-- %1$s: an address such as 127.0.0.1; %2$s: its port. -->
+    <string name="guide_listener">Тогда его прокси принимает подключения на этом телефоне по адресу %1$s, порт %2$s.</string>
+    <string name="guide_next">Затем вернитесь в Watch. Он сам найдёт прокси и предложит направить через него ваши приложения.</string>
+    <string name="guide_heading_password">Пароль для его прокси</string>
+    <string name="guide_password_optional">Его прокси может запрашивать имя пользователя и пароль. Укажите те, которые Watch покажет, когда найдёт прокси. Тогда другие приложения на этом телефоне не смогут им пользоваться.</string>
+    <string name="guide_password_none">Его прокси не может запрашивать пароль. Пока он работает, им может пользоваться любое приложение на этом телефоне.</string>
+    <string name="guide_heading_asks">Что он запрашивает</string>
+    <string name="guide_heading_back">Обратно в режим VPN</string>
+    <string name="guide_back_note">Когда %1$s снова работает как VPN, Android выключает Watch: одновременно работает только один VPN.</string>
+    <!-- %1$s: the tool's name; %2$s: its version. -->
+    <string name="guide_read">Прочитано из исходного кода %1$s, версия %2$s.</string>
+    <string name="guide_checked">Опробовано с Watch в этой версии.</string>
+    <string name="guide_not_checked">С Watch пока не опробовано.</string>
+    <string name="guide_labels_tool">Слова в кавычках прочитаны из %1$s на этом телефоне.</string>
+    <string name="guide_labels_recorded">Слова в кавычках приведены так, как их показывает эта версия.</string>
+    <string name="guide_audit">Остальная часть Datapavan, проверка ваших приложений, работает без Watch.</string>
+    <!-- Steps. Each %s in quotes is one of the tool's labels. -->
+    <string name="guide_step_drawer">Откройте меню в верхнем углу его экрана и нажмите «%1$s».</string>
+    <string name="guide_step_overflow">Откройте меню с тремя точками и нажмите «%1$s».</string>
+    <string name="guide_step_tab">Откройте вкладку «%1$s».</string>
+    <string name="guide_step_tap">Нажмите «%1$s».</string>
+    <string name="guide_step_gear">Нажмите кнопку с шестерёнкой вверху.</string>
+    <string name="guide_step_choose">Нажмите «%1$s» и выберите «%2$s».</string>
+    <string name="guide_step_under_choose">В разделе «%1$s» нажмите «%2$s» и выберите «%3$s».</string>
+    <string name="guide_step_arrow_choose">Нажмите стрелку в конце строки «%1$s» и выберите «%2$s».</string>
+    <string name="guide_step_on">Включите «%1$s».</string>
+    <string name="guide_step_off">Выключите «%1$s».</string>
+    <string name="guide_step_under_on">В разделе «%1$s» включите «%2$s».</string>
+    <string name="guide_step_under_off">В разделе «%1$s» выключите «%2$s».</string>
+    <string name="guide_step_fill">Заполните «%1$s» и «%2$s».</string>
+    <string name="guide_step_under_fill">В разделе «%1$s» заполните «%2$s» и «%3$s».</string>
+    <!-- %3$s: a value, such as a port. -->
+    <string name="guide_step_under_set">В разделе «%1$s» установите для «%2$s» значение %3$s.</string>
+    <string name="guide_step_expand">Если «%1$s» не видно, нажмите последнюю строку, чтобы показать остальное.</string>
+    <string name="guide_step_back_home">Вернитесь на его главный экран.</string>
+    <string name="guide_step_back_once">Вернитесь на один экран назад.</string>
+    <string name="guide_step_start">Запустите его круглой кнопкой.</string>
+    <string name="guide_step_start_icon">Нажмите его круглую кнопку запуска, которую программа чтения с экрана называет «%1$s».</string>
+    <string name="guide_step_start_text">Нажмите «%1$s», чтобы запустить.</string>
+    <string name="guide_step_slide">Сдвиньте кнопку с надписью «%1$s».</string>
+    <string name="guide_step_tap_card">Нажмите карточку с надписью «%1$s».</string>
+    <string name="guide_step_tunnel_switch">Включите переключатель в конце строки вашего туннеля.</string>
+    <string name="guide_step_card_add">На карточке «%1$s» нажмите + и затем «%2$s».</string>
+    <string name="guide_step_name_keep_tap">Задайте имя в поле «%1$s», оставьте «%2$s» и нажмите «%3$s».</string>
+    <!-- sing-box's own words for its profile, which are not translated: tun, mixed, listen, listen_port, users,
+         username, password. %1$s: a port. -->
+    <string name="guide_step_singbox_inbound">Напишите профиль без inbound типа «tun» и с одним inbound типа «mixed», у которого «listen» равно «127.0.0.1», а «listen_port» — %1$s. Затем сохраните его.</string>
+    <string name="guide_step_singbox_users">В этот inbound «mixed» добавьте «users» с «username» и «password».</string>
+    <string name="guide_step_singbox_back">Снова используйте профиль с inbound типа «tun» или добавьте такой inbound с помощью «%1$s». Затем запустите профиль.</string>
+    <string name="guide_step_auth_entry">В разделе «%1$s» нажмите «%2$s» и добавьте одну запись: имя пользователя, двоеточие, затем пароль.</string>
+    <string name="guide_step_secret">Нажмите «%1$s» и введите пароль, который показывает Watch.</string>
+    <string name="guide_step_profile_card">На карточке вашего профиля нажмите «%1$s».</string>
+    <string name="guide_step_config_ssh">Измените конфигурацию: установите для «%1$s» значение «%2$s» и заполните «%3$s» и «%4$s».</string>
+    <string name="guide_step_save_use">Нажмите «%1$s», затем нажмите новый профиль настроек, чтобы использовать его.</string>
+    <!-- What a tool asks for in proxy mode, from its code. -->
+    <string name="guide_asks_notifications">Он запрашивает разрешение показывать уведомления.</string>
+    <string name="guide_asks_local_network">В Android 17 он запрашивает разрешение на доступ к локальной сети. Для работы с его прокси Watch это разрешение не нужно: прокси находится на этом телефоне.</string>
+    <string name="guide_asks_battery">Он просит исключить его из оптимизации расхода батареи.</string>
+    <string name="guide_asks_alarms">В режиме прокси он перед запуском запрашивает разрешение на будильники. Он заявляет, что не устанавливает будильников: это разрешение позволяет ему продолжать работать, когда он работает не как VPN.</string>
+    <string name="guide_asks_vpn_once">При первом подключении он просит разрешения настроить VPN, даже в этом режиме. Если вы разрешите, Android выключит Watch. После этого снова включите Watch.</string>
+    <string name="guide_asks_none">Его код не запрашивает никаких разрешений в этом режиме.</string>
+    <!-- Facts a user of one tool needs. %1$s in guide_note_named_port: a port. -->
+    <string name="guide_note_named_port">Watch ищет его прокси только на порту %1$s, поэтому укажите этот порт, даже если в вашем профиле указан другой.</string>
+    <string name="guide_note_fixed_user">Его имя пользователя всегда «%1$s». Watch показывает именно его.</string>
+    <string name="guide_note_user_port">В рабочем профиле или у другого пользователя этого телефона его порт больше на номер этого пользователя. Watch ищет и там.</string>
+    <string name="guide_note_stopped_first">Сначала остановите его: он меняет это, только пока не подключён.</string>
+    <string name="guide_note_no_server">Он не отправляет ваш трафик на сервер. Он меняет вид трафика и отправляет его дальше с этого телефона. Поэтому приложения, трафик которых он передаёт, достигают своих мест назначения с вашего собственного адреса.</string>
+    <string name="guide_note_ssh_only">Только тип туннеля «%1$s» открывает прокси SOCKS5 на этом телефоне. С «%2$s» Watch может использовать порт, только если ваш сервер предоставляет прокси SOCKS5.</string>
+    <string name="guide_note_remote_profile">Удалённый профиль показывает только «%1$s»: его содержимое берётся по адресу профиля, и здесь его нельзя изменить. Создайте вместо него локальный профиль.</string>
+    <string name="guide_note_engines">В этом режиме профили, которые используют sing-box, OpenConnect, IKEv2 или цепочку, всё равно запускают VPN.</string>
+    <!-- The pages of tools that run only as a VPN, and of those whose steps wait. %1$s: the tool's name. -->
+    <string name="guide_vpn_only">%1$s работает только как VPN. Android одновременно запускает только один VPN, поэтому Watch не может работать рядом с ним: когда запускается один, Android останавливает другой.</string>
+    <string name="guide_wireguard_only">%1$s работает только как VPN, поэтому Watch не может работать рядом с ним. Но Watch может сам передавать трафик через конфигурацию WireGuard и направлять через неё выбранные вами приложения.</string>
+    <!-- Quotes Watch's own heading, tunnels_title, as it reads. -->
+    <string name="guide_wireguard_add">Добавьте её в Watch в разделе «Конфигурации WireGuard».</string>
+    <string name="guide_wireguard_proton">Сайт Proton VPN создаёт такие файлы, в том числе на бесплатном тарифе. В своём аккаунте откройте «Downloads», затем «WireGuard configuration».</string>
+    <string name="guide_wireguard_mullvad">Сайт Mullvad создаёт такие файлы для платного аккаунта. Используйте его генератор конфигураций.</string>
+    <string name="guide_wireguard_windscribe">Сайт Windscribe создаёт такие файлы для платных аккаунтов. Используйте его «Config Generator».</string>
+    <string name="guide_wireguard_same">Файл конфигурации или QR-код, который вы добавили в WireGuard, работает и в Watch.</string>
+    <string name="guide_note_amneziawg">AmneziaWG меняет вид пакетов WireGuard. Watch пока не читает это изменение, поэтому не может передавать трафик через такие конфигурации.</string>
+    <string name="guide_waiting_intro">Для %1$s пока нет шагов.</string>
+    <string name="guide_waiting_closed">Его код не опубликован, поэтому шаги ждут, пока его не опробуют с Watch.</string>
+    <string name="guide_waiting_partly">Часть его кода не опубликована, поэтому шаги ждут, пока его не опробуют с Watch.</string>
+    <string name="guide_note_tethering">В нём есть функция, которую он называет Proxy Tethering. Даёт ли она на этом телефоне прокси, которым может пользоваться Watch, пока неизвестно.</string>
+    <!-- The website's list of the guides (scripts/guides.py), which Watch does not show. -->
+    <string name="guide_index_title" tools:ignore="UnusedResources">Ваш инструмент рядом с Watch</string>
+    <string name="guide_index_intro" tools:ignore="UnusedResources">Android одновременно запускает только один VPN. На этих страницах описано, как каждый инструмент обхода блокировок может работать рядом с Watch; сведения прочитаны из собственного кода инструмента.</string>
+    <string name="guide_index_proxy" tools:ignore="UnusedResources">Инструменты с режимом прокси</string>
+    <string name="guide_index_wireguard" tools:ignore="UnusedResources">Инструменты, которые работают только как VPN, с конфигурациями WireGuard</string>
+    <string name="guide_index_vpn" tools:ignore="UnusedResources">Инструменты, которые работают только как VPN</string>
+    <string name="guide_index_waiting" tools:ignore="UnusedResources">Инструменты, шаги для которых ждут, пока их не опробуют с Watch</string>
+
+    <!-- W8, part 3a (ADR 0053): tracker blocking. Counts and sizes only inside the app: nothing of it reaches a
+         notification, the summary or the widget (ADR 0046). ADR 0025's words hold (BlockingWordsTest), and "grade"
+         never shows. The labels of the switches and buttons below are tapped by their text in the emulator check. -->
+    <!-- Watch's screen: the section, its switches and the global pause, which names no app. -->
+    <string name="blocking_title">Блокировка трекеров</string>
+    <string name="blocking_switch">Блокировать трекеры</string>
+    <string name="blocking_note">Выключено, пока вы это не включите. Watch не даёт установленным вами приложениям обращаться к хостам SDK трекеров: их запросы имён не получают адреса, а их подключения отклоняются. Хост, который также обслуживает само приложение, не блокируется.</string>
+    <string name="blocking_not_covered">Приложения, установленные на телефоне изначально, сам Android и сервисы Google Play не охвачены.</string>
+    <string name="blocking_browsers">Блокировать и в браузерах</string>
+    <string name="blocking_browsers_note">Браузеры не блокируются, если вы их не включите: они открывают любые сайты.</string>
+    <!-- Only while the apps go through the user's circumvention tool. -->
+    <string name="blocking_tool_dns">Также блокировать запросы имён трекеров от самого вашего инструмента</string>
+    <string name="blocking_tool_dns_note">Выключено, пока вы это не включите. Тогда Watch отвечает без адреса, когда ваш инструмент сам запрашивает имена хостов трекеров. Он никогда не отклоняет подключения инструмента: имена, которые они показывают, могут быть именами любого популярного сайта.</string>
+    <string name="blocking_pause">Приостановить блокировку на 10 минут</string>
+    <!-- %1$s: when the pause ends, as the phone writes the time. -->
+    <string name="blocking_paused">Приостановлено до %1$s</string>
+    <string name="blocking_resume">Снова блокировать сейчас</string>
+    <!-- "Now": the pause, said once above the apps. -->
+    <string name="blocking_paused_now">Блокировка трекеров приостановлена до %1$s.</string>
+    <!-- Beside every allow and the pause: what an allow lets through, and how soon it works. -->
+    <string name="blocking_late_sends">После разрешения приложения могут отправить то, что придерживали, пока были заблокированы.</string>
+    <string name="blocking_seconds">Это срабатывает в течение нескольких секунд: приложения ненадолго запоминают неудавшийся запрос имени.</string>
+    <!-- "Now" and an app's history: one app. -->
+    <string name="blocking_allow_app">Разрешить трекеры в этом приложении</string>
+    <string name="blocking_block_app">Снова блокировать трекеры</string>
+    <!-- %1$s: when the hour ends, as the phone writes the time. -->
+    <string name="blocking_app_allowed">Трекеры разрешены в этом приложении до %1$s.</string>
+    <!-- What blocking counted, lookups apart from connections. %2$s names the tracker as the three forms below do, or a
+         host; %3$s is when the first was, as the phone writes the time. -->
+    <plurals name="blocking_connections">
+        <item quantity="one">С %3$s заблокировано %1$d подключение. Куда: %2$s.</item>
+        <item quantity="few">С %3$s заблокировано %1$d подключения. Куда: %2$s.</item>
+        <item quantity="many">С %3$s заблокировано %1$d подключений. Куда: %2$s.</item>
+        <item quantity="other">С %3$s заблокировано %1$d подключения. Куда: %2$s.</item>
+    </plurals>
+    <plurals name="blocking_lookups">
+        <item quantity="one">С %3$s Watch ответил без адреса на %1$d запрос имени. Что искали: %2$s.</item>
+        <item quantity="few">С %3$s Watch ответил без адреса на %1$d запроса имён. Что искали: %2$s.</item>
+        <item quantity="many">С %3$s Watch ответил без адреса на %1$d запросов имён. Что искали: %2$s.</item>
+        <item quantity="other">С %3$s Watch ответил без адреса на %1$d запроса имён. Что искали: %2$s.</item>
+    </plurals>
+    <!-- A tracker by its name in the εxodus list (%1$s) and its company (%2$s), where the owners' table gives one; a
+         tracker with none is named by its name alone. -->
+    <string name="blocking_tracker_company">%1$s (%2$s)</string>
+    <!-- Several trackers of one company that one εxodus signature names: %1$s is the company. -->
+    <string name="blocking_company">трекеры компании %1$s</string>
+    <!-- A time on another day: %1$s the date, %2$s the time. -->
+    <string name="blocking_day_time">%1$s, %2$s</string>
+    <!-- An app's history: its trackers, one allow each, or one for a company. -->
+    <string name="blocking_history_title">Блокировка трекеров в этом приложении</string>
+    <!-- %1$s names a tracker, a company's trackers or a host, as above. -->
+    <string name="blocking_allow_entry">Разрешить %1$s в этом приложении</string>
+    <string name="blocking_block_entry">Снова блокировать %1$s</string>
+    <string name="blocking_entry_allowed">Разрешено в этом приложении, пока вы снова это не заблокируете.</string>
+    <!-- %1$s: what the host does, from Datapavan's table, in English. -->
+    <string name="blocking_function">Что он делает: %1$s</string>
+    <!-- A connection of the history that Watch blocked: %1$s names the tracker, never the host where the switch "Log
+         where apps connect ..." left it out. -->
+    <string name="blocking_blocked">Заблокировано Watch: %1$s.</string>
+    <!-- A host the app reached that Watch does not block in it, and why. -->
+    <string name="blocking_kept">Не блокируется: этот хост также обслуживает само приложение.</string>
+    <string name="blocking_kept_code">Не блокируется: в этом приложении этот хост также обслуживает вход в аккаунт или возможность поделиться.</string>
+    <string name="blocking_kept_unread">Не блокируется: этот хост, возможно, также обслуживает вход в аккаунт или возможность поделиться, а Datapavan ещё не прочитал код этого приложения.</string>
+    <string name="blocking_kept_own">Не блокируется: это приложение использует этот хост для своей работы.</string>
 </resources>
