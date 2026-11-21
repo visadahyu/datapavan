@@ -2599,7 +2599,7 @@ mod tests {
         let (main, bytes) = open(&shared, UID, at([149, 154, 167, 51], 443));
         relay(&shared, main, &bytes, &[&obfuscated()]);
         let waiting = held(&shared);
-        assert!(!waiting.is_empty());
+        assert_ne!(waiting.len(), 0, "a segment still waits");
         assert!(
             waiting.iter().all(|f| f.proxy.is_none()
                 && f.destination == at([93, 184, 216, 34], 443)
