@@ -100,24 +100,51 @@ set_phone_locale() {
         return 1
     fi
     # Android 15's Google APIs image has neither: on its userdebug build, the property Android starts with, and a
-    # restart of Android's framework, which ends every app (as Settings' own change does not).
+    # restart of Android's framework, which ends every app (as Settings' own change does not). The old framework can
+    # still answer for a moment after the restart is asked for, and an app's language set then is lost when the new one
+    # loads the stored ones (CI, 2026-11-22): so this waits for a new system_server that has finished booting and holds
+    # the language.
     [ "$(adb shell getprop ro.build.type | tr -d '\r')" != user ] || return 1
     adb root >/dev/null
     timeout 60 adb wait-for-device
+    local before now config
+    before=$(adb shell pidof system_server | tr -d '\r')
+    adb shell setprop sys.boot_completed 0
     adb shell setprop persist.sys.locale "$1"
     adb shell setprop ctl.restart zygote
-    sleep 5
-    for _ in $(seq 1 90); do
-        if [ "$(adb shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r')" != running ] &&
-            adb shell cmd package resolve-activity -c android.intent.category.HOME -a android.intent.action.MAIN >/dev/null 2>&1 &&
-            adb shell dumpsys window 2>/dev/null | grep -q 'mCurrentFocus=Window'; then
+    for _ in $(seq 1 120); do
+        now=$(adb shell pidof system_server 2>/dev/null | tr -d '\r') || now=""
+        if [ -n "$now" ] && [ "$now" != "$before" ] && [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; then
             break
         fi
         sleep 2
     done
+    [ -n "$now" ] && [ "$now" != "$before" ] || return 1
+    # The new framework's configuration names the language as fa-rIR.
+    for _ in $(seq 1 30); do
+        config=$(adb shell am get-config 2>/dev/null | tr -d '\r') || config=""
+        grep -q -- "-${1%-*}-r${1#*-}-" <<<"$config" && break
+        sleep 1
+    done
+    grep -q -- "-${1%-*}-r${1#*-}-" <<<"$config" || return 1
     adb shell input keyevent KEYCODE_WAKEUP
     adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
     [ "$(adb shell getprop persist.sys.locale | tr -d '\r')" = "$1" ]
+}
+
+# Datapavan's own language ($2) for the package $1, set and seen to hold for three seconds: a language set while
+# Android's framework still loads the stored ones can be lost (CI, 2026-11-22), and the screens would then be checked
+# in another language than the one this script means.
+set_app_language() {
+    local said
+    for _ in 1 2 3 4 5; do
+        adb shell cmd locale set-app-locales "$1" --locales "$2" >/dev/null
+        sleep 3
+        said=$(adb shell cmd locale get-app-locales "$1" | tr -d '\r')
+        [[ "$said" == *"are [$2]"* ]] && return 0
+        sleep 2
+    done
+    fail "Datapavan's language for $1 did not stay $2: Android says '$said'"
 }
 
 # Whether the emulator's Custom Locale app is there. Read whole, as above.
@@ -210,7 +237,7 @@ always_en=$(phone_label always_on_vpn en)
 always_fa=$(phone_label always_on_vpn fa)
 
 # The phone in English, Datapavan in Persian: the finding's button is the phone's label, Persian beside it.
-adb shell cmd locale set-app-locales "$PKG" --locales fa
+set_app_language "$PKG" fa
 adb shell am force-stop "$PKG"
 adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
 # The network tab's usage access card keeps Datapavan's name for the access and gives the phone's own (the maintainer,
@@ -234,10 +261,10 @@ echo "ok: phone in English, Datapavan in Persian: the button reads '$button'"
 # left inside the English sentence, English beside each.
 PHONE_CHANGED=1
 set_phone_locale fa-IR || fail "the phone's language did not change to Persian"
-adb shell cmd locale set-app-locales "$PKG" --locales en
+set_app_language "$PKG" en
 adb shell am force-stop "$PKG"
 adb shell am start -W -a org.visadahyu.datapavan.action.OPEN_PLAN -n "$PKG/.MainActivity" >/dev/null
-tap_text "Medium" || fail "the plan's level Medium is not on screen"
+tap_text "Medium" || fail "the plan's level Medium is not on screen (Datapavan's language: $(adb shell cmd locale get-app-locales "$PKG" | tr -d '\r'))"
 tap_text "Start" || fail "the plan has nothing to start at Medium"
 card="turn off the “$RLI$usb_fa$PDI ($LRI$usb_en$PDI)” switch on the “$RLI$dev_fa$PDI ($LRI$dev_en$PDI)” page."
 for _ in 1 2 3 4 5 6; do
@@ -266,12 +293,12 @@ if [ -f "$ADVANCED_APK" ]; then
         done
         return 1
     }
-    adb shell cmd locale set-app-locales "$ADVANCED" --locales en
+    set_app_language "$ADVANCED" en
     quoted="\"$RLI$always_fa$PDI ($LRI$always_en$PDI)\" switch"
     watch_says "$quoted" values || fail "with the phone in Persian, the names' section does not quote $quoted"
     echo "ok: phone in Persian, Advanced in English: the names' section quotes $quoted"
     set_phone_locale en-US || fail "the phone's language did not change back to English"
-    adb shell cmd locale set-app-locales "$ADVANCED" --locales fa
+    set_app_language "$ADVANCED" fa
     quoted="\"$LRI$always_en$PDI ($RLI$always_fa$PDI)\" switch"
     watch_says "$quoted" values-fa || fail "with Advanced in Persian, the names' section does not quote $quoted"
     echo "ok: phone in English, Advanced in Persian: the names' section quotes $quoted"

@@ -170,8 +170,10 @@ boot_slot() {
         echo "port $port is in use, by an emulator this script did not start: not touching it" >&2
         return 1
     fi
+    # The screen of CI's pixel_7 profile from the start: on dp-api35-ci's 320 x 640 display, "wm size 1080x2400" below is
+    # held to the display's own shape and gives 1080 x 1920 (seen 2026-11-22).
     taskset -c "${SLOT_CPUS[$i]}" "$EMULATOR" -avd "$AVD" -read-only -port "$port" -no-window -gpu swiftshader_indirect \
-        -noaudio -no-boot-anim -camera-back none -no-snapshot -no-metrics >"$OUT/emulator-$port.log" 2>&1 &
+        -noaudio -no-boot-anim -camera-back none -no-snapshot -no-metrics -skin 1080x2400 >"$OUT/emulator-$port.log" 2>&1 &
     pid=$!
     SLOT_PID[$i]=$pid
     STARTED_PIDS+=("$pid")
