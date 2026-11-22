@@ -297,7 +297,7 @@ private fun PlanCard(
             Text(stringResource(R.string.plan_card_progress, index + 1, count), style = MaterialTheme.typography.labelMedium)
             Text(title(item), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(4.dp))
-            Text(bodyText(item.reason), style = MaterialTheme.typography.bodyMedium)
+            Text(bodyText(item), style = MaterialTheme.typography.bodyMedium)
             item.app?.let { app ->
                 val held = holds(app.grantedDangerous, app.special, app.vpnAuthorised, collector)
                 if (held.isNotEmpty()) Text(stringResource(R.string.plan_holds, held.map { isolate(it) }.joinedForUser()), style = MaterialTheme.typography.bodyMedium)
@@ -495,7 +495,7 @@ private fun title(item: PlanItem): String {
 
 /** A card's text; the cards that send the user to a page or switch name it as Android does (ADR 0054). */
 @Composable
-private fun bodyText(reason: PlanReason): String = when (reason) {
+private fun bodyText(item: PlanItem): String = when (val reason = item.reason) {
     PlanReason.WIRELESS_DEBUGGING -> stringResource(R.string.plan_wireless_body_quoted, quotedLabel("developer_options"), quotedLabel("wireless_debugging"))
     PlanReason.CERTIFICATE_AUTHORITY -> stringResource(R.string.plan_authority_body_quoted, quotedLabel("encryption_credentials"))
     PlanReason.USB_DEBUGGING -> stringResource(R.string.plan_usb_body_quoted, quotedLabel("developer_options"), quotedLabel("usb_debugging"))
@@ -503,22 +503,34 @@ private fun bodyText(reason: PlanReason): String = when (reason) {
     PlanReason.DOUBTFUL_COPY -> stringResource(R.string.plan_copy_body)
     PlanReason.INSTALLS_APPS -> stringResource(R.string.plan_installs_body)
     PlanReason.TRAFFIC_SHARING -> stringResource(R.string.plan_sharing_body)
-    PlanReason.NOT_OPENED_SENSITIVE -> stringResource(R.string.plan_not_opened_sensitive_body_quoted, quotedLabel("unused_app_setting"))
+    PlanReason.NOT_OPENED_SENSITIVE -> if (offersUnusedSwitch(item.screens, Build.VERSION.SDK_INT)) {
+        stringResource(R.string.plan_not_opened_sensitive_body_quoted, quotedLabel("unused_app_setting"))
+    } else {
+        stringResource(R.string.plan_not_opened_sensitive_body_plain)
+    }
     PlanReason.NOT_OPENED_OTHER -> stringResource(R.string.plan_not_opened_other_body)
     PlanReason.PREINSTALLED -> stringResource(R.string.plan_preinstalled_body)
 }
 
+/**
+ * Whether the card for an app not opened can name the switch that lets Android take its permissions back: only where
+ * the plan offers its page ([screens]) and Android has it (11 and later). Elsewhere, as on Android 10 or for a system
+ * app, the card names no switch, which the user would look for and not find (the fix round's M2).
+ */
+internal fun offersUnusedSwitch(screens: List<Screen>, sdk: Int): Boolean =
+    Screen.UNUSED_APP_SETTING in screens && screenAvailable(Screen.UNUSED_APP_SETTING, sdk)
+
 /** The Android labels a card shows: those its text quotes, and those of its screens' buttons. */
-private fun labelKeys(item: PlanItem): List<String> {
+internal fun labelKeys(item: PlanItem, sdk: Int = Build.VERSION.SDK_INT): List<String> {
     val quoted = when (item.reason) {
         PlanReason.WIRELESS_DEBUGGING -> listOf("developer_options", "wireless_debugging")
         PlanReason.CERTIFICATE_AUTHORITY -> listOf("encryption_credentials")
         PlanReason.USB_DEBUGGING -> listOf("developer_options", "usb_debugging")
-        PlanReason.NOT_OPENED_SENSITIVE -> listOf("unused_app_setting")
+        PlanReason.NOT_OPENED_SENSITIVE -> if (offersUnusedSwitch(item.screens, sdk)) listOf("unused_app_setting") else emptyList()
         else -> emptyList()
     }
     val devices = if (Screen.DEVICE_ADMINS in item.screens) listOf("device_admin") else emptyList()
-    return quoted + devices + item.screens.filter { screenAvailable(it) }.mapNotNull(::screenLabel)
+    return quoted + devices + item.screens.filter { screenAvailable(it, sdk) }.mapNotNull(::screenLabel)
 }
 
 @StringRes
@@ -555,8 +567,9 @@ private fun levelBody(level: PlanLevel) = when (level) {
  * maker's own page.
  */
 internal fun screenLabel(screen: Screen): String? = when (screen) {
-    Screen.APP_INFO, Screen.DEVICE_ADMINS, Screen.SECURITY -> null
-    Screen.UNUSED_APP_SETTING -> "unused_app_setting"
+    // The unused-apps button opens the app's page, where the switch is: named as the page, not as the switch, which
+    // as a button would read as if it paused the app (the switch is quoted in the card's text).
+    Screen.APP_INFO, Screen.DEVICE_ADMINS, Screen.SECURITY, Screen.UNUSED_APP_SETTING -> null
     Screen.ACCESSIBILITY -> "accessibility"
     Screen.NOTIFICATION_LISTENER -> "notification_access"
     Screen.INSTALL_UNKNOWN_APPS -> "install_unknown_apps"
@@ -573,6 +586,7 @@ private fun screenText(screen: Screen): String = screenLabel(screen)?.let { labe
     when (screen) {
         Screen.DEVICE_ADMINS -> R.string.screen_device_admins
         Screen.SECURITY -> R.string.screen_security
+        Screen.UNUSED_APP_SETTING -> R.string.screen_unused
         else -> R.string.screen_app_info
     },
 )
@@ -643,8 +657,8 @@ private fun undoText(change: Change, collector: AppCollector): String = when (ch
     ChangeKind.SPECIAL_REMOVED -> specialNamed(change.detail)
     ChangeKind.VPN_REMOVED -> stringResource(R.string.dormant_vpn)
     // The switch to turn back on, as Android names it (ADR 0054).
-    ChangeKind.USB_DEBUGGING_OFF -> labelAlone("usb_debugging")
-    ChangeKind.WIRELESS_DEBUGGING_OFF -> labelAlone("wireless_debugging")
+    ChangeKind.USB_DEBUGGING_OFF -> labelInList("usb_debugging")
+    ChangeKind.WIRELESS_DEBUGGING_OFF -> labelInList("wireless_debugging")
     ChangeKind.AUTHORITY_REMOVED -> stringResource(R.string.undo_authority)
 }
 
@@ -655,8 +669,8 @@ private fun specialNamed(name: String?): String =
 @Composable
 private fun dateText(millis: Long): String = isolate(DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(millis)))
 
-private fun screenAvailable(screen: Screen): Boolean = when (screen) {
-    Screen.UNUSED_APP_SETTING, Screen.ALL_FILES -> Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+private fun screenAvailable(screen: Screen, sdk: Int = Build.VERSION.SDK_INT): Boolean = when (screen) {
+    Screen.UNUSED_APP_SETTING, Screen.ALL_FILES -> sdk >= Build.VERSION_CODES.R
     else -> true
 }
 

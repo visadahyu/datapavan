@@ -735,14 +735,20 @@ private fun SeverityDot(severity: Severity) {
 
 /**
  * A phone finding's button: the page it opens, named by Android's own label where the page has one Datapavan can read
- * ([label], ADR 0054), else by Datapavan's words ([own]): Android does not tell an app whether its security settings
- * open as "Security", "Security & privacy" or a maker's own page.
+ * ([Labelled], ADR 0054), else by Datapavan's words ([Worded]): Android does not tell an app whether its security
+ * settings open as "Security", "Security & privacy" or a maker's own page.
  */
-internal class DeviceAction(val label: String?, @StringRes val own: Int?, val intent: Intent)
+internal sealed interface DeviceAction {
+    val intent: Intent
+
+    data class Labelled(val key: String, override val intent: Intent) : DeviceAction
+
+    data class Worded(@StringRes val words: Int, override val intent: Intent) : DeviceAction
+}
 
 internal fun deviceAction(kind: FindingKind): DeviceAction? = when (kind) {
-    FindingKind.USB_DEBUGGING, FindingKind.WIRELESS_DEBUGGING -> DeviceAction("developer_options", null, Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
-    FindingKind.USER_CERTIFICATE_AUTHORITY -> DeviceAction(null, R.string.action_security_settings, Intent(Settings.ACTION_SECURITY_SETTINGS))
+    FindingKind.USB_DEBUGGING, FindingKind.WIRELESS_DEBUGGING -> DeviceAction.Labelled("developer_options", Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+    FindingKind.USER_CERTIFICATE_AUTHORITY -> DeviceAction.Worded(R.string.action_security_settings, Intent(Settings.ACTION_SECURITY_SETTINGS))
     else -> null
 }
 
@@ -755,17 +761,16 @@ private fun severityName(severity: Severity) = when (severity) {
 }
 
 /**
- * Datapavan's own name of a kind of special access, where Android's words do not name it; the others are Android's
- * labels, read from the phone ([specialText], ADR 0054).
+ * Datapavan's own name of a kind of special access, where Android's words do not name it; null for the others, which
+ * are Android's labels, read from the phone ([specialText], ADR 0054).
  */
 @StringRes
-internal fun specialName(access: SpecialAccess) = when (access) {
+internal fun specialName(access: SpecialAccess): Int? = when (access) {
     SpecialAccess.ACCESSIBILITY -> R.string.special_accessibility
     SpecialAccess.NOTIFICATION_LISTENER -> R.string.special_notification_listener
+    SpecialAccess.DEVICE_ADMIN -> R.string.special_device_admin
     SpecialAccess.BATTERY_EXEMPT -> R.string.special_battery_exempt
-    SpecialAccess.DEVICE_ADMIN, SpecialAccess.OVERLAY, SpecialAccess.USAGE_ACCESS, SpecialAccess.INSTALL_UNKNOWN_APPS,
-    SpecialAccess.ALL_FILES,
-    -> error("$access is named by Android's label (AndroidLabels.special)")
+    SpecialAccess.OVERLAY, SpecialAccess.USAGE_ACCESS, SpecialAccess.INSTALL_UNKNOWN_APPS, SpecialAccess.ALL_FILES -> null
 }
 
 @StringRes

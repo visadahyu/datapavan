@@ -230,7 +230,10 @@ private fun androidx.compose.foundation.lazy.LazyListScope.phone(audit: AuditRes
         FindingCard(
             kind, company = null,
             action = deviceAction(kind)?.let { action ->
-                (action.label?.let { labelAlone(it) } ?: stringResource(action.own!!)) to { context.startActivity(action.intent) }
+                when (action) {
+                    is DeviceAction.Labelled -> labelAlone(action.key)
+                    is DeviceAction.Worded -> stringResource(action.words)
+                } to { context.startActivity(action.intent) }
             },
         )
     }

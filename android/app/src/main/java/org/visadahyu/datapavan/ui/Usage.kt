@@ -84,6 +84,12 @@ internal fun UsageAccessCard() {
             // Advanced also reads which app was on screen and when, for Watch (ADR 0046): its own text says so.
             val body = if (BuildConfig.ADVANCED) R.string.usage_access_body_advanced else R.string.usage_access_body
             Text(stringResource(body), style = MaterialTheme.typography.bodyMedium)
+            // Datapavan's name for the access stays; the phone's own names for its page and switch follow, where the
+            // button sends the user (the maintainer, 2026-11-22; ADR 0054).
+            Text(
+                stringResource(R.string.usage_access_phone_name, quotedLabel("usage_access"), quotedLabel("permit_usage_access")),
+                style = MaterialTheme.typography.bodyMedium,
+            )
             // Some vendors' settings put their own alarming screen in front of the switch (seen on Xiaomi).
             Note(stringResource(R.string.usage_access_phone_warning))
             if (fromFile) {
@@ -94,8 +100,8 @@ internal fun UsageAccessCard() {
                 Text(stringResource(R.string.usage_access_step_try, allow), style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(4.dp))
                 Text(stringResource(R.string.usage_access_step_allow, appInfo, label, allow), style = MaterialTheme.typography.bodyMedium)
-                AndroidLabelsNote(listOf("restricted_settings"))
             }
+            AndroidLabelsNote(if (fromFile) listOf("usage_access", "permit_usage_access", "restricted_settings") else listOf("usage_access", "permit_usage_access"))
             TextButton(onClick = { openUsageAccess(context) }) { Text(allow) }
             if (fromFile) {
                 TextButton(onClick = {

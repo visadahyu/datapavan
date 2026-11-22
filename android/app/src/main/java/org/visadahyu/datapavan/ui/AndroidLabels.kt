@@ -13,7 +13,6 @@ import org.visadahyu.datapavan.audit.SpecialAccess
 import org.visadahyu.datapavan.core.NativePacks
 import org.visadahyu.datapavan.datapack.DataPackStore
 import org.visadahyu.datapavan.labels.LabelRow
-import org.visadahyu.datapavan.labels.LabelSource
 import org.visadahyu.datapavan.labels.PhoneLabels
 import org.visadahyu.datapavan.labels.SystemLabels
 
@@ -29,6 +28,7 @@ internal object AndroidLabels {
      */
     private val FALLBACKS: Map<String, List<Pair<Int, Int>>> = mapOf(
         "usage_access" to listOf(36 to R.string.android_label_usage_access_api36, 0 to R.string.android_label_usage_access),
+        "permit_usage_access" to listOf(36 to R.string.android_label_permit_usage_access_api36, 0 to R.string.android_label_permit_usage_access),
         "install_unknown_apps" to listOf(37 to R.string.android_label_install_unknown_apps_api37, 0 to R.string.android_label_install_unknown_apps),
         "device_admin" to listOf(
             37 to R.string.android_label_device_admin_api37,
@@ -55,6 +55,9 @@ internal object AndroidLabels {
     /** Every fallback string, for the check that each android_label_* resource has its key. */
     val strings: List<Int> get() = FALLBACKS.values.flatten().map { it.second }
 
+    /** Each key's strings with the Android version they hold from, for the check against their names' _apiN. */
+    val thresholds: Map<String, List<Pair<Int, Int>>> get() = FALLBACKS
+
     @StringRes
     fun fallback(key: String, sdk: Int): Int? = FALLBACKS[key]?.firstOrNull { sdk >= it.first }?.second
 
@@ -62,14 +65,16 @@ internal object AndroidLabels {
     fun of(context: Context): SystemLabels =
         PhoneLabels.of(context, rows = { DataPackStore.get(context, NativePacks).text(LabelRow.PATH) }, fallback = ::fallback)
 
-    /** The label of a kind of special access where Android's own words name it; null where Datapavan's do. */
+    /**
+     * The label of a kind of special access where Android's own words name it; null where Datapavan's do. Device admin
+     * is Datapavan's "Device admin" in a list of one app's access: Android's label names the page of all such apps.
+     */
     fun special(access: SpecialAccess): String? = when (access) {
-        SpecialAccess.DEVICE_ADMIN -> "device_admin"
         SpecialAccess.OVERLAY -> "overlay"
         SpecialAccess.USAGE_ACCESS -> "usage_access"
         SpecialAccess.INSTALL_UNKNOWN_APPS -> "install_unknown_apps"
         SpecialAccess.ALL_FILES -> "all_files_access"
-        SpecialAccess.ACCESSIBILITY, SpecialAccess.NOTIFICATION_LISTENER, SpecialAccess.BATTERY_EXEMPT -> null
+        SpecialAccess.DEVICE_ADMIN, SpecialAccess.ACCESSIBILITY, SpecialAccess.NOTIFICATION_LISTENER, SpecialAccess.BATTERY_EXEMPT -> null
     }
 }
 
@@ -102,18 +107,35 @@ internal fun labelAlone(key: String): String {
     }
 }
 
-/** A kind of special access by its name: Android's label where Android's words name it, else Datapavan's. */
+/**
+ * An Android label as an item of a list inside a sentence ("It holds: …", "To undo, turn back on: …"): always isolated
+ * in its language's direction, so that two right-to-left items keep their order around the comma.
+ */
 @Composable
-internal fun specialText(access: SpecialAccess): String = AndroidLabels.special(access)?.let { labelAlone(it) } ?: stringResource(specialName(access))
+internal fun labelInList(key: String): String {
+    val labels = labels()
+    val both = stringResource(R.string.label_both)
+    return remember(labels, key, both) { labels.label(key).quoted { first, second -> String.format(both, first, second) } }
+}
+
+/** A kind of special access by its name, as an item of a list: Android's label where Android's words name it, else Datapavan's. */
+@Composable
+internal fun specialText(access: SpecialAccess): String =
+    AndroidLabels.special(access)?.let { labelInList(it) } ?: stringResource(specialName(access) ?: R.string.detail_none)
 
 /**
- * Under a part that quotes Android's labels [keys]: says they are Android's own names where one of them was not read
- * from this phone as its screen names it (the audit's C2): the phone's maker has rows for other labels only, or the
- * phone gave none.
+ * Under a part that names Android's pages, switches or buttons [keys]: names those of them that are Android's own
+ * names rather than this phone's (the audit's C2, the fix round's M1): this phone's maker has not been seen to show
+ * them, or the phone gave none.
  */
 @Composable
 internal fun AndroidLabelsNote(keys: List<String>) {
     val labels = labels()
-    val android = remember(labels, keys) { keys.any { labels.label(it).source != LabelSource.PHONE } }
-    if (android) Note(stringResource(R.string.android_labels_android))
+    val named = remember(labels, keys) { labels.androids(keys) }
+    if (named.isEmpty()) return
+    val both = stringResource(R.string.label_both)
+    val quote = stringResource(R.string.label_named)
+    val separator = stringResource(R.string.list_separator)
+    val list = named.joinToString(separator) { label -> String.format(quote, label.quoted { first, second -> String.format(both, first, second) }) }
+    Note(stringResource(R.string.android_labels_android, list))
 }
