@@ -15,7 +15,7 @@ AOSP's texts are recorded in scripts/testdata/android-labels-aosp.tsv, which --f
   scripts/android-labels.py --expected API  the recorded texts at one release, as "KEY LANG TEXT" lines, for
                                             scripts/verify-labels.sh
   scripts/android-labels.py --write-fallbacks MODULE KEY...
-                                            writes the fallback strings of the keys into the module's (app or watch)
+                                            writes the fallback strings of the keys into the module's (app or network)
                                             eight strings.xml from the recorded texts, replacing its earlier ones: the
                                             way to move the fallbacks when FALLBACK_API moves
 
@@ -42,7 +42,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data/android-labels/labels.tsv"
 RECORDED = ROOT / "scripts/testdata/android-labels-aosp.tsv"
-MODULES = [ROOT / "android/app/src/main/res", ROOT / "android/watch/src/main/res"]
+MODULES = [ROOT / "android/app/src/main/res", ROOT / "android/network/src/main/res"]
 SITE = ROOT / "site/data/text/en.json"
 
 # The last tag of each release in range, by API level (minSdk 29 to compileSdk 37).
@@ -436,7 +436,7 @@ REPOSITORY_NAMES = {"settings": "Settings'", "settingslib": "SettingsLib's", "pe
 def write_fallbacks(module_name, keys, rows, recorded, modules=None):
     """The android_label_* block of each of the module's strings.xml, written from the recorded texts: the block before
     it, its heading comment included, goes first, so that writing twice gives the same file."""
-    module = (modules or {"app": MODULES[0], "watch": MODULES[1]})[module_name]
+    module = (modules or {"app": MODULES[0], "network": MODULES[1]})[module_name]
     names = {}
     for key in keys:
         if key not in recorded_keys(recorded):

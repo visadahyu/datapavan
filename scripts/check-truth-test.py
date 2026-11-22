@@ -88,15 +88,15 @@ expect("a roadmap status older than the newest decision",
 readme = read("README.md")
 adr_0003 = read("docs/decisions/" + decisions["0003"][0])
 contributing = read("CONTRIBUTING.md")
-gradles = {p: read(p) for p in ("android/app/build.gradle.kts", "android/watch/build.gradle.kts")}
-languages = {app: truth.language_folders(f"android/{app}") for app in ("app", "watch")}
+gradles = {p: read(p) for p in ("android/app/build.gradle.kts", "android/network/build.gradle.kts")}
+languages = {app: truth.language_folders(f"android/{app}") for app in ("app", "network")}
 expect("build facts as they are", truth.check_build(readme, adr_0003, contributing, gradles, languages), False)
 expect("the README naming another Android version",
        truth.check_build(swap(readme, "Android 10 or", "Android 11 or"), adr_0003, contributing, gradles, languages), True)
 expect("a language the apps have and CONTRIBUTING.md does not name",
        truth.check_build(readme, adr_0003, contributing, gradles, {**languages, "app": languages["app"] | {"tr"}}), True)
 expect("a language CONTRIBUTING.md names that the apps lack",
-       truth.check_build(readme, adr_0003, contributing, gradles, {**languages, "watch": languages["watch"] - {"fa"}}), True)
+       truth.check_build(readme, adr_0003, contributing, gradles, {**languages, "network": languages["network"] - {"fa"}}), True)
 
 # Datasets.
 sources = {d: (read(f"{d}/SOURCE"), {n: len(truth.rows(read(f"{d}/{f}"))) for n, f in c.items()})

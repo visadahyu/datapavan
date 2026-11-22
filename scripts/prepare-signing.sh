@@ -30,7 +30,7 @@ esac
 # only sit in strings_untranslated.xml, where lint lets them pass, so no build gate can hold this before the
 # translations land without failing CI's release builds meanwhile; the release itself is held here.
 modules="app shared"
-[ "$EDITION" = basic ] || modules="$modules watch"
+[ "$EDITION" = basic ] || modules="$modules network"
 for module in $modules; do
     waiting="$ROOT/android/$module/src/main/res/values/strings_untranslated.xml"
     [ ! -f "$waiting" ] || ! grep -qE '<(string|plurals|string-array)[ >]' "$waiting" ||

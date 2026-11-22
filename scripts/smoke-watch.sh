@@ -17,7 +17,7 @@ APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan.advanced
 # Watch's screen in Datapavan Advanced (ADR 0045); debug builds export it for these checks.
 WATCH_SCREEN=org.visadahyu.datapavan.watch.MainActivity
-RES="$ROOT/android/watch/src/main/res"
+RES="$ROOT/android/network/src/main/res"
 # shellcheck source=scripts/adb-ui.sh
 . "$ROOT/scripts/adb-ui.sh"
 

@@ -26,7 +26,7 @@ import org.visadahyu.datapavan.audit.hasUsageAccess
 
 /**
  * Reads the apps' states from Android's usage events for the engine (ADR 0046, decision 1), in Watch's
- * process beside the tunnel it serves; [UsageStates] places them. It lives in `:watch`, which cannot
+ * process beside the tunnel it serves; [UsageStates] places them. It lives in `:network`, which cannot
  * depend on `:app`, and needs nothing of the audit but the rule of usage access, which `android/shared`
  * holds for both.
  *

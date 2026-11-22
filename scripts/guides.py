@@ -32,7 +32,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data/tools"
-STRINGS = ROOT / "android/watch/src/main/res/values/strings.xml"
+STRINGS = ROOT / "android/network/src/main/res/values/strings.xml"
 
 PAGES = {"proxy", "wireguard", "vpn", "waiting"}
 PARTS = ["on", "password", "asks", "back", "note"]

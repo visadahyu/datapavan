@@ -11,7 +11,7 @@
 #             workspace, Cargo hashes the absolute path of core/net and core/engine into their symbols, so
 #             the spike's own variants change with the checkout's path; inside it, as today, it does not.
 #
-# Each is built as android/watch/build.gradle.kts builds the library: cargo-ndk for the three shipped ABIs
+# Each is built as android/network/build.gradle.kts builds the library: cargo-ndk for the three shipped ABIs
 # at API 29, `build --locked --release`, none of the inherited flags that could change the output, and the
 # same remapped paths; then stripped as the APK's packaging strips native libraries (the NDK's llvm-strip
 # --strip-unneeded).

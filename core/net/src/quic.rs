@@ -1812,7 +1812,7 @@ pub(crate) mod tests {
     #[test]
     fn the_largest_datagram_is_the_tunnels_largest_mtu() {
         let kotlin = include_str!(
-            "../../../android/watch/src/main/java/org/visadahyu/datapavan/watch/TunnelMtu.kt"
+            "../../../android/network/src/main/java/org/visadahyu/datapavan/watch/TunnelMtu.kt"
         );
         let most = kotlin
             .lines()

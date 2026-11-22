@@ -36,5 +36,5 @@ rootProject.name = "datapavan"
 include(":app")
 // Code every edition shares: the rules that judge a copy's signing key, and the screen protection.
 include(":shared")
-// Watch's tunnel, log and chain: a library that only Advanced includes, so Basic never carries it.
-include(":watch")
+// The network part's tunnel, log and chain: a library that only Advanced includes, so Basic never carries it.
+include(":network")

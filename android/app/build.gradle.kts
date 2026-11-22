@@ -14,7 +14,7 @@ plugins {
 // The edition (ADR 0045; ADR 0031 for Google Play), chosen with -Pdatapavan.edition:
 // - "basic", the default: Datapavan Basic, which never has network access;
 // - "lite": Datapavan Basic for Google Play, under its own package, which Google signs;
-// - "advanced": Datapavan Advanced, which adds Watch's tunnel, log and chain (the :watch library).
+// - "advanced": Datapavan Advanced, which adds Watch's tunnel, log and chain (the :network library).
 // A property rather than a product flavour, so that every task, output path and recipe (F-Droid,
 // scripts/reproducible.sh, CI) still builds Basic exactly as before.
 val edition = providers.gradleProperty("datapavan.edition").orNull ?: "basic"
@@ -83,7 +83,7 @@ check(neverRequested.none { it in allowedPermissions }) { "The $edition allowlis
 val allowedPermissionDefinitions = listOf("$editionApplicationId.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
 // Exported components, each with the permission that guards it ("" for none): the launcher entry, and
 // androidx's profile installer, which only the shell's DUMP may reach. Advanced's debug builds also export
-// Watch's screen for the emulator checks (watch/src/debug).
+// Watch's screen for the emulator checks (network/src/debug).
 val allowedExported = mapOf(
     "org.visadahyu.datapavan.MainActivity" to "",
     "androidx.profileinstaller.ProfileInstallReceiver" to "android.permission.DUMP",
@@ -107,7 +107,7 @@ val requiredLibraries = buildMap {
 }
 val forbiddenLibraries = if (advanced) emptyList() else listOf(networkLibrary)
 // The methods of WatchVpnService that Watch's library calls back by name (core/network-jni/src/lib.rs), which
-// R8 must neither remove nor rename (watch/proguard-rules.pro).
+// R8 must neither remove nor rename (network/proguard-rules.pro).
 val jniCallbacks = if (advanced) listOf("ownerUid", "protectSocket", "logRecords", "statesWanted", "resolveEndpoint", "routeOfApp", "exchange", "dnsChanged") else emptyList()
 
 // The licence texts every APK carries under assets/licences/ (NOTICE, W7's fix round, review M4): NOTICE, LICENSE,
@@ -230,7 +230,7 @@ android {
 
 dependencies {
     implementation(project(":shared"))
-    if (advanced) implementation(project(":watch"))
+    if (advanced) implementation(project(":network"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime)
@@ -341,7 +341,7 @@ abstract class LicenceTexts : DefaultTask() {
  * runtime classpath (W7, part 2): it fails for a module no row of the edition covers, so that a library added later
  * cannot be missing from the screen, and for a row of the edition that covers no module, so that the screen lists
  * nothing the APK does not carry. BOMs and other platforms are not modules of the APK; the project's own modules
- * (`:shared`, `:watch`) are Datapavan's, under LICENSE. A row's licence text must be one of the files the APK carries.
+ * (`:shared`, `:network`) are Datapavan's, under LICENSE. A row's licence text must be one of the files the APK carries.
  */
 abstract class JvmComponentsCheck : DefaultTask() {
     @get:Input
@@ -707,7 +707,7 @@ abstract class ApkNativeLibraryCheck : DefaultTask() {
                     .joinToString("") { entry -> String(zip.getInputStream(entry).use { it.readBytes() }, Charsets.ISO_8859_1) }
                 callbacks.get().forEach { name ->
                     if (!code.contains(name)) {
-                        throw GradleException("${element.outputFile}: no method $name in its code; Watch's library calls it by name (watch/proguard-rules.pro)")
+                        throw GradleException("${element.outputFile}: no method $name in its code; Watch's library calls it by name (network/proguard-rules.pro)")
                     }
                     lines += "OK $apk keeps $name"
                 }

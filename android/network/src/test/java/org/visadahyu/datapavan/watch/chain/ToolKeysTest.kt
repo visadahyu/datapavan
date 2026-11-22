@@ -11,7 +11,7 @@ import java.io.File
 import java.time.LocalDate
 
 class ToolKeysTest {
-    /** The keys as the build copies them, from the repository (the test runs in android/watch). */
+    /** The keys as the build copies them, from the repository (the test runs in android/network). */
     private val signers = AppSigners.parse(
         File("../../data/app-signers/apps.tsv").readText(),
         File("../../data/app-signers/signers.tsv").readText(),

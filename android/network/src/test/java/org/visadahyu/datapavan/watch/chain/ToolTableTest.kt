@@ -8,7 +8,7 @@ import org.junit.Test
 import java.io.File
 
 class ToolTableTest {
-    /** The table as the build copies it, from the repository (the test runs in android/watch). */
+    /** The table as the build copies it, from the repository (the test runs in android/network). */
     private val table: List<KnownTool> = ToolTable.parse(File("../../data/tools/tools.tsv").readText())
 
     private fun tool(packageName: String) = table.single { it.packageName == packageName }

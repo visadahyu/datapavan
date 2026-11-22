@@ -53,7 +53,7 @@ tier() {
 # data/: both editions bundle every file of every dataset but the scripts that make them and hidden files
 # (BundledDataTask in android/app/build.gradle.kts), and the data pack's header from data/PACK. The audit's
 # pack leaves out data/dbip-asn, data/resolvers and data/messengers, of which Watch's build reads only asn.bin,
-# resolvers.tsv and the messengers' three tables (android/watch/build.gradle.kts); files at data/'s top other than PACK
+# resolvers.tsv and the messengers' three tables (android/network/build.gradle.kts); files at data/'s top other than PACK
 # are not bundled.
 data_tier() {
     local rest=${1#data/} name=${1##*/}
@@ -269,7 +269,7 @@ emulator data/owners/.hidden/table.tsv
 emulator data/tools/tools.tsv
 emulator android/app/src/main/java/org/visadahyu/datapavan/MainActivity.kt
 emulator android/app/src/main/res/values-fa/strings.xml
-emulator android/watch/README.md
+emulator android/network/README.md
 emulator android/gradle/libs.versions.toml
 emulator core/net/src/engine.rs
 emulator core/README.md
@@ -307,7 +307,7 @@ yes core/engine/src/lib.rs
 yes core/network-jni/src/lib.rs
 yes core/Cargo.lock
 yes rust-toolchain.toml
-yes android/watch/src/main/java/org/visadahyu/datapavan/watch/TunnelStore.kt
+yes android/network/src/main/java/org/visadahyu/datapavan/watch/TunnelStore.kt
 yes android/app/build.gradle.kts
 yes spikes/wireguard-core/peer/Dockerfile
 yes scripts/wglab.sh

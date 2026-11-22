@@ -1081,7 +1081,7 @@ mod tests {
     /// Where Watch's Kotlin side keeps the fixture its tests read (`LogTest`, `LogDaysTest`).
     const FIXTURE: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../android/watch/src/test/resources/org/visadahyu/datapavan/watch/log/engine-records.hex"
+        "/../../android/network/src/test/resources/org/visadahyu/datapavan/watch/log/engine-records.hex"
     );
 
     /// The fixture's records: a segment of each kind the reader must tell apart, an app's lookups, and

@@ -321,8 +321,8 @@ def main():
         "build facts": check_build(
             read("README.md"), read("docs/decisions/" + decisions["0003"][0]),
             read("CONTRIBUTING.md"),
-            {p: read(p) for p in ("android/app/build.gradle.kts", "android/watch/build.gradle.kts")},
-            {app: language_folders(f"android/{app}") for app in ("app", "watch")},
+            {p: read(p) for p in ("android/app/build.gradle.kts", "android/network/build.gradle.kts")},
+            {app: language_folders(f"android/{app}") for app in ("app", "network")},
         ),
         "datasets": check_datasets(
             {d: (read(f"{d}/SOURCE"), {n: len(rows(read(f"{d}/{f}"))) for n, f in c.items()}) for d, c in DATASET_COUNTS.items()},

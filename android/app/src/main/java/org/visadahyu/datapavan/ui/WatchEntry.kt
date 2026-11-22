@@ -40,7 +40,7 @@ internal fun WatchEntry() {
     }
 }
 
-/** Watch's screen, in the :watch library. */
+/** Watch's screen, in the :network library. */
 private const val WATCH_SCREEN = "org.visadahyu.datapavan.watch.MainActivity"
 
 /**
@@ -57,6 +57,6 @@ internal fun WatchNowEntry(packageName: String) {
     ) { Text(stringResource(R.string.watch_now_open)) }
 }
 
-/** Watch's view "Now", in the :watch library, and the one extra it reads: a package name. */
+/** Watch's view "Now", in the :network library, and the one extra it reads: a package name. */
 private const val WATCH_NOW = "org.visadahyu.datapavan.watch.NowActivity"
 private const val WATCH_NOW_PACKAGE = "package"

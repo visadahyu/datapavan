@@ -36,7 +36,7 @@ import org.junit.Test
  * certificate for another name are refused as tampering, a root the user added (an `AndroidCAStore` alias that is not
  * `system:`) is not trusted, and the tool's SOCKS5 proxy is asked for the destination by its address, with its
  * password. DoH and ODoH over OkHttp, against OkHttp's own test server with the lab's certificate, over HTTP/2 (W8's
- * fix round, review R-M4; the unit tests run OkHttp's JVM build of the same version, watch/build.gradle.kts): the
+ * fix round, review R-M4; the unit tests run OkHttp's JVM build of the same version, network/build.gradle.kts): the
  * request as it reaches the server, the answer, a 401, a body longer than a DNS message, the pins. Each exchange
  * carries its own pins, and nothing of it runs on the caller's thread.
  */

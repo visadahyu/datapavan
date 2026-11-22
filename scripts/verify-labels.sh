@@ -283,7 +283,7 @@ if [ -f "$ADVANCED_APK" ]; then
     # there.
     watch_says() {
         local above
-        above=$(sed -n 's/.*<string name="dns_local_names">\([^<]*\)<.*/\1/p' "$ROOT/android/watch/src/main/res/$2/strings.xml" | sed "s/\\\\'/'/g")
+        above=$(sed -n 's/.*<string name="dns_local_names">\([^<]*\)<.*/\1/p' "$ROOT/android/network/src/main/res/$2/strings.xml" | sed "s/\\\\'/'/g")
         adb shell am force-stop "$ADVANCED"
         adb shell am start -W -n "$ADVANCED/org.visadahyu.datapavan.watch.MainActivity" >/dev/null
         scroll_to "${above:0:24}" || fail "the names' section is not on screen ('${above:0:24}')"
