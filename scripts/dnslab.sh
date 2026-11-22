@@ -39,6 +39,11 @@
 #                                         front on pass and the portal open, and the lab running
 #   scripts/dnslab.sh stop                stops the project (stop, not down: nothing restarts it)
 #
+#   DNSLAB_RELAY=caddy                    Datapavan's own relay as its server runs it (ADR 0055: Debian 13's Caddy
+#                                         with server/'s files and the lab's pairs, scripts/relaylab/dnslab.Caddyfile)
+#                                         behind the relay's front in odoh-server-go's place, at /odoh/proxy; for up,
+#                                         data and selftest, and for scripts/verify-dns.sh, which passes it on
+#
 # Needs Docker with Compose, curl, dig, and Python's cryptography package (python3-cryptography) for the ODoH
 # client. Only the project datapavan-dnslab is touched.
 set -euo pipefail
@@ -57,6 +62,12 @@ FRONTS=(relay target-a target-b doh dot portal resolver resolver-dot)
 . "$ROOT/scripts/host-ports.sh"
 
 say() { echo "$*" >&2; }
+# The relay behind the relay's front, and its path.
+case "${DNSLAB_RELAY:-odoh-server-go}" in
+    caddy) RELAY_SERVICE=caddy-relay RELAY_PATH=/odoh/proxy compose+=(--profile caddy) ;;
+    odoh-server-go) RELAY_SERVICE=relay RELAY_PATH=/proxy ;;
+    *) say "!! DNSLAB_RELAY is caddy or odoh-server-go, not $DNSLAB_RELAY"; exit 2 ;;
+esac
 client() { python3 -I "$LAB/dnsclient.py" "$@"; }
 odoh() { python3 -I "$LAB/odoh_probe.py" "$@"; }
 ctl() { "${compose[@]}" exec -T censor ctl "$@"; }
@@ -162,7 +173,7 @@ print(base64.urlsafe_b64encode(sys.stdin.buffer.read()).decode().rstrip("="))')
 
 odoh_query() {
     local target=$1
-    odoh query --ca "$CA" --relay-connect "127.0.0.1:$(port_of relay)" --relay relay.dnslab.test \
+    odoh query --ca "$CA" --relay-connect "127.0.0.1:$(port_of relay)" --relay relay.dnslab.test --relay-path "$RELAY_PATH" \
         --target "$target.dnslab.test" --configs-connect "127.0.0.1:$(port_of "$target")" "${@:2}"
 }
 
@@ -216,9 +227,13 @@ up() {
             "${compose[@]}" restart "$server" >/dev/null 2>&1
         fi
     done
-    # On the host's network the censor cannot resolve the servers' names: it gets their addresses.
+    # On the host's network the censor cannot resolve the servers' names: it gets their addresses; the relay's
+    # front, those of the relay DNSLAB_RELAY names.
+    local container
     for service in relay target-a target-b doh dot portal resolver resolver-dot; do
-        id=$("${compose[@]}" ps -q "$service")
+        container=$service
+        [ "$service" != relay ] || container=$RELAY_SERVICE
+        id=$("${compose[@]}" ps -q "$container")
         address=$(docker inspect -f "{{(index .NetworkSettings.Networks \"$NETWORK\").IPAddress}}" "$id")
         ctl upstream "$service" "$address" >/dev/null
     done
@@ -233,7 +248,7 @@ up() {
         say "!! not every way of the lab answers"
         return 1
     fi
-    say "== every way of the lab answers"
+    say "== every way of the lab answers (the relay: $RELAY_SERVICE, $RELAY_PATH)"
     print_fronts
 }
 
@@ -269,10 +284,12 @@ data() {
         echo "# The DNS lab's Oblivious DoH relay (scripts/dnslab.sh data, $(date -u +%F)), as the emulator reaches it."
         echo "# Test only: every operator, person, seat and AS below is invented (XA to XE are user-assigned country codes, AS64496 to AS64511 documentation numbers)."
         echo "# Columns: id, url, ipv4, ipv6, operator, person, jurisdictions, hosting, cdn, pins, note. '-' means none."
+        local relay_note="the lab's relay (odoh-server-go); reaches the targets by their names inside the lab"
+        [ "$RELAY_SERVICE" = relay ] ||
+            relay_note="Datapavan's own relay as its server runs it (Debian 13's Caddy with server/'s files); reaches the targets by their names inside the lab"
         printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' lab-relay \
-            "https://relay.dnslab.test:$(port_of relay)/proxy" "$h" - "DNS lab relay operator XA" \
-            "DNS lab relay person XA" XA AS64501 AS64504 "$(pin_of relay)" \
-            "the lab's relay (odoh-server-go); reaches the targets by their names inside the lab"
+            "https://relay.dnslab.test:$(port_of relay)$RELAY_PATH" "$h" - "DNS lab relay operator XA" \
+            "DNS lab relay person XA" XA AS64501 AS64504 "$(pin_of relay)" "$relay_note"
     } >"$dir/relays.tsv"
     {
         echo "# SPDX-License-Identifier: CC0-1.0"
@@ -433,7 +450,10 @@ selftest() {
     ctl set dot pass >/dev/null
     ctl set relay reset-sni relay.dnslab.test >/dev/null
     check reset-sni-named "^failed reset$" "$(odoh_query target-b)"
-    check reset-sni-other-name-passes "^handshake ok" "$(client tls 127.0.0.1 "$relay" --sni other.dnslab.test)"
+    # Past the censor, the server's own handshake: odoh-server-go's completes for any name; Datapavan's Caddy relay
+    # holds no certificate for another name and ends it with an alert of its own, which is no reset.
+    if [ "$RELAY_SERVICE" = relay ]; then want='^handshake ok'; else want='^failed SSLError:.*ALERT_INTERNAL_ERROR'; fi
+    check reset-sni-other-name-passes "$want" "$(client tls 127.0.0.1 "$relay" --sni other.dnslab.test)"
     check reset-sni-other-front-passes "^answer rcode=NOERROR a=10\.53\.3\.3 " "$(doh_query "$doh" doh.dnslab.test probe.dnslab.test)"
     ctl set relay pass >/dev/null
     check pass-after-reset-sni "^answer rcode=NOERROR a=10\.53\.2\.2$" "$(odoh_query target-b)"
@@ -510,6 +530,7 @@ case "${1:-}" in
     counts) ctl counts ;;
     log) [ -n "${2:-}" ] || { say "usage: $0 log SERVICE"; exit 2; }; log_of "$2" ;;
     selftest) selftest ;;
-    stop) "${compose[@]}" stop ;;
+    # Every service, the profile's too, whichever relay ran.
+    stop) "${compose[@]}" --profile caddy stop ;;
     *) sed -n '2,/^set -euo/p' "$0" | sed '$d' >&2; exit 2 ;;
 esac

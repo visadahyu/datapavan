@@ -35,6 +35,12 @@
 #      later at the target's own addresses, and the pair answers again.
 #
 #   scripts/verify-dns.sh [path/to/Datapavan-Advanced-debug.apk]
+#
+#   DNSLAB_RELAY=caddy     the lab's relay is Datapavan's own as its server runs it (ADR 0055: Debian 13's Caddy with
+#                          server/'s files, scripts/dnslab.sh says how), at /odoh/proxy
+#   DNSLAB_ONLY=odoh       the ODoH steps alone: the setup, 1, 1b, 2 and 10 (the key's rotation, whose 401 comes back
+#                          through the relay); not 3b, the speed budget, which is timing-sensitive and runs whole on
+#                          CI's dns shard
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -46,6 +52,10 @@ LAB="$ROOT/scripts/dnslab.sh"
 # shellcheck source=scripts/adb-ui.sh
 . "$ROOT/scripts/adb-ui.sh"
 
+ONLY="${DNSLAB_ONLY:-}"
+case $ONLY in "" | odoh) ;; *) echo "DNSLAB_ONLY is odoh or unset, not $ONLY" >&2; exit 2 ;; esac
+# Whether a step outside the ODoH steps runs.
+all_steps() { [ -z "$ONLY" ]; }
 [ -n "${ANDROID_SERIAL:-}" ] || { echo "set ANDROID_SERIAL to the emulator's serial" >&2; exit 2; }
 is_emulator || { echo "verify-dns.sh runs on an emulator only" >&2; exit 2; }
 WORK="$(mktemp -d)"
@@ -200,7 +210,7 @@ fi
 
 # 0. "Notify me" without Android's leave to notify (Android 13 and later): the switch asks; refused, it stays off
 # and the screen says why (review R-M3). Then the leave, as W9's onboarding will ask it.
-if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 33 ]; then
+if all_steps && [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 33 ]; then
     adb shell pm revoke "$PKG" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
     adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
     scroll_to "Notify me while names go to the network" || fail "the screen has no \"Notify me\" switch"
@@ -285,6 +295,8 @@ echo "ok: flows to Watch's address at port 853 refused: $refused"
 adb shell settings put global private_dns_mode "${PRIVATE_MODE/null/off}"
 PRIVATE_MODE=""
 
+# Steps 3 to 7 are not ODoH's (DNSLAB_ONLY=odoh leaves them out); they keep their indentation.
+if all_steps; then
 # 3. The user's preset (DoH, then DoT) and own resolver.
 dump dns-choice preset lab-doh >/dev/null
 expect "the DoH preset answers" "$(lookup probe.dnslab.test)" 10.53.3.3
@@ -473,6 +485,7 @@ lookup "$(fresh)" >/dev/null
 echo "ok: behind a captive portal, failures held nothing new ($(held) held, $before before)"
 all_pass
 dump dns-validated on >/dev/null
+fi
 
 # What the resolver learned (its holds) stays across a change of strict or of the choice (review R-m1), but not of
 # the pairs, whose steps are others then: a step that needs the ways fresh changes the pairs and back.
@@ -482,6 +495,8 @@ fresh_resolver() {
     [ "$(held)" = 0 ] || fail "a change of pairs did not start the ways afresh: $(held) held"
 }
 
+# Steps 8 and 9 are not ODoH's either.
+if all_steps; then
 # 8. A WireGuard endpoint's name goes the encrypted way.
 fresh_resolver
 targets=$(target_marks)
@@ -524,6 +539,7 @@ expect "a name under com, which the network set as its domain" "$(lookup "$leak"
 asked resolver "$leak" "$resolver_mark" && fail "a name under com reached the network's resolver"
 echo "ok: com refused as a search domain; office.example's name reached the network only after the internet did not know it"
 dump dns-search "" >/dev/null
+fi
 
 fresh_resolver
 # 10. A target's key rotated (review S-M1, S-C2): the pair that meets the 401 is held, the other carries the names;
@@ -555,4 +571,8 @@ expect "the way after target-a's new key" "$(way)" "odoh lab-relay lab-target-a"
 dump dns-pairs default >/dev/null
 echo "ok: target-a's new key was fetched apart from the lookup, and its pair answers again"
 
-echo "== the DNS check passed"
+if all_steps; then
+    echo "== the DNS check passed"
+else
+    echo "== the DNS check's ODoH steps passed (1, 1b, 2, 10), through the relay $(sed -n 's/^lab-relay\t\([^\t]*\)\t.*/\1/p' "$WORK/data/relays.tsv")"
+fi

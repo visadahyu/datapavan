@@ -3,6 +3,9 @@
 # its own address, behind a censor that a check sets per server.
 #
 #   relay         ODoH relay (odoh-server-go, /proxy), relay.dnslab.test
+#   caddy-relay   Datapavan's own relay as its server runs it (Debian 13's Caddy with server/'s files, /odoh/proxy,
+#                 ADR 0055), under the relay's name: only with DNSLAB_RELAY=caddy (the profile caddy), which puts it
+#                 behind the relay's front in odoh-server-go's place
 #   target-a      ODoH target of odoh-rs (DNSCrypt's doh-proxy), target-a.dnslab.test     probe 10.53.1.1
 #   target-b      ODoH target of odoh-server-go, target-b.dnslab.test                     probe 10.53.2.2
 #   doh           plain DoH (doh-proxy), doh.dnslab.test/dns-query                         probe 10.53.3.3
@@ -146,6 +149,26 @@ services:
       # The relay's own target role is not used: nothing answers there.
       DNSLAB_NAMESERVER: 127.0.0.1:9
       TARGET_INSTANCE_NAME: relay
+
+  caddy-relay:
+    build: ../relaylab
+    image: datapavan-relaylab
+    profiles: ["caddy"]
+    restart: "no"
+    init: true
+    depends_on:
+      - target-a
+      - target-b
+    volumes:
+      - ./certs:/certs:ro
+      - ../../server:/server:ro
+      - ../relaylab:/relay:ro
+    networks:
+      - lab
+    environment:
+      # Go's TLS trusts the lab's CA alone, for the targets.
+      SSL_CERT_FILE: /certs/ca.pem
+    command: ["caddy", "run", "--config", "/relay/dnslab.Caddyfile", "--adapter", "caddyfile"]
 
   dot:
     build: ./nginx
