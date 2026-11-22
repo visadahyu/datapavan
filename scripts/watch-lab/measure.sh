@@ -35,7 +35,7 @@ load() { # load TAG OP URL [extra am args...]: one workload run, prints its resu
 
 cpu_ticks() { # utime+stime of Watch, in clock ticks
     local pid
-    pid=$(adb shell pidof "$WATCH:watch" | tr -d '\r')
+    pid=$(adb shell pidof "$WATCH:network" | tr -d '\r')
     [ -n "$pid" ] || { echo 0; return; }
     adb shell cat "/proc/$pid/stat" | tr -d '\r' | awk '{print $14 + $15}'
 }
@@ -57,6 +57,6 @@ for r in $(seq 1 "$ROUNDS"); do
 done
 after=$(cpu_ticks)
 echo "cpu_ticks=$((after - before)) engine=watch"
-adb shell dumpsys meminfo "$WATCH:watch" | tr -d '\r' | grep -E 'TOTAL PSS|TOTAL RSS|^ *TOTAL' | head -2 | sed 's/^ */meminfo: /'
+adb shell dumpsys meminfo "$WATCH:network" | tr -d '\r' | grep -E 'TOTAL PSS|TOTAL RSS|^ *TOTAL' | head -2 | sed 's/^ */meminfo: /'
 adb shell dumpsys activity service "$WATCH/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | grep -E '^ *counters' | sed 's/^ *//'
 adb shell am force-stop "$WATCH"

@@ -68,7 +68,7 @@
         </provider>
 
         <!--
-            Watch runs in a process of its own, ":watch": its screen, its tunnel and its log's expiry. The
+            The network part runs in a process of its own, ":network": its screen, its tunnel and its log's expiry. The
             part that faces the network then shares no memory with the audit, a crash of either leaves the
             other running, and Watch keeps its own memory budget (scripts/verify-watch-release.sh). They
             talk only through the intent that opens Watch's screen.
@@ -79,7 +79,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="false"
-            android:process=":watch"
+            android:process=":network"
             android:launchMode="singleTop"
             android:theme="@style/Theme.Watch" />
 
@@ -91,7 +91,7 @@
         <activity
             android:name=".NowActivity"
             android:exported="false"
-            android:process=":watch"
+            android:process=":network"
             android:theme="@style/Theme.Watch" />
 
         <!--
@@ -101,14 +101,14 @@
         <activity
             android:name=".GuideActivity"
             android:exported="false"
-            android:process=":watch"
+            android:process=":network"
             android:theme="@style/Theme.Watch" />
 
         <!-- Only Android may bind to it (BIND_VPN_SERVICE). -->
         <service
             android:name=".NetworkVpnService"
             android:exported="false"
-            android:process=":watch"
+            android:process=":network"
             android:permission="android.permission.BIND_VPN_SERVICE">
             <intent-filter>
                 <action android:name="android.net.VpnService" />
@@ -142,7 +142,7 @@
             android:authorities="${applicationId}.watch.capture"
             android:exported="false"
             android:grantUriPermissions="true"
-            android:process=":watch">
+            android:process=":network">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/watch_capture_paths" />
@@ -152,7 +152,7 @@
         <service
             android:name=".log.LogExpiryJob"
             android:exported="false"
-            android:process=":watch"
+            android:process=":network"
             android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 </manifest>

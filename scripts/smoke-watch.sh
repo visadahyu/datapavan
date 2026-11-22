@@ -164,7 +164,7 @@ within 10 window_listed "$PKG" || fail "Watch's window was not listed 10 s after
 window_secure "$PKG" || fail "Watch's window was not protected again after it left the screen"
 echo "ok: the screen is protected, screenshots can be allowed, and leaving the screen protects it again"
 
-adb shell pidof "$PKG:watch" >/dev/null || fail "Watch is no longer running"
+adb shell pidof "$PKG:network" >/dev/null || fail "Watch is no longer running"
 if adb logcat -d -b crash 2>/dev/null | grep -q "$PKG"; then
     fail "Watch crashed"
 fi

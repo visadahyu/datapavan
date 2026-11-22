@@ -403,7 +403,7 @@ within 10 store_has 1 "routes 1$" || fail "the app's way did not move back to th
 echo "ok: the app moved to the second configuration under Each app's way, reached the second peer from 10.77.0.4, and moved back"
 
 # 3. Watch's process killed and started again: the tunnels come back from the store, and the app through its own.
-pid=$(adb shell pidof "$PKG:watch" | tr -d '\r')
+pid=$(adb shell pidof "$PKG:network" | tr -d '\r')
 [ -n "$pid" ] || fail "no process of Watch's"
 adb shell run-as "$PKG" kill -9 "$pid" || fail "Watch's process could not be killed"
 within 20 vpn_down || fail "Watch's VPN stayed up with its process killed"
@@ -524,7 +524,7 @@ PIN=4927
 adb shell locksettings set-pin "$PIN" >/dev/null
 adb shell input keyevent KEYCODE_SLEEP
 sleep 3
-pid=$(adb shell pidof "$PKG:watch" | tr -d '\r')
+pid=$(adb shell pidof "$PKG:network" | tr -d '\r')
 [ -n "$pid" ] || fail "no process of Watch's"
 adb shell run-as "$PKG" kill -9 "$pid" || fail "Watch's process could not be killed"
 within 20 vpn_down || fail "Watch's VPN stayed up with its process killed"
@@ -610,7 +610,7 @@ echo "measure: Watch's own key opens a configuration in ${opened:-?} ms unlocked
 # sends nothing directly, and shows one notification, naming no configuration, that opens its screen; there the
 # user lets the apps go their way, which forgets the store, and the app goes directly again.
 grep -qE "^ *tunnel-key-deleted a$" <<<"$(dump tunnel-key-delete a)" || fail "key A could not be deleted"
-pid=$(adb shell pidof "$PKG:watch" | tr -d '\r')
+pid=$(adb shell pidof "$PKG:network" | tr -d '\r')
 [ -n "$pid" ] || fail "no process of Watch's"
 adb shell run-as "$PKG" kill -9 "$pid" || fail "Watch's process could not be killed"
 within 20 vpn_down || fail "Watch's VPN stayed up with its process killed"

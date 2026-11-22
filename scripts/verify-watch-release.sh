@@ -84,7 +84,7 @@ log_line() {
 
 # Watch's memory, PSS in KB.
 pss() {
-    adb shell dumpsys meminfo "$PKG:watch" | tr -d '\r' | sed -n 's/^ *TOTAL PSS: *\([0-9]*\).*/\1/p' | head -1
+    adb shell dumpsys meminfo "$PKG:network" | tr -d '\r' | sed -n 's/^ *TOTAL PSS: *\([0-9]*\).*/\1/p' | head -1
 }
 
 echo "== Datapavan Advanced's release build, on $(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
