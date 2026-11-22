@@ -133,8 +133,9 @@ to 17 (2026-11-22):
     from AOSP's own files and `--against` checks it again; its self-test catches seven broken copies; the website's
     two static mentions ("Usage access", "USB debugging") are held to the English fallback. `scripts/verify-labels.sh`
     (the audit shard, on CI's Android 15) reads every label in eight languages through the debug dump and compares
-    each with AOSP's text at the emulator's own release, then checks the screens with the phone in English and
-    Datapavan in Persian, and the other way round. JVM tests cover each rule.
+    each with AOSP's text at the emulator's own release, where a known difference names why (three texts of
+    Android 15's first build), then checks the screens with the phone in English and Datapavan in Persian, and the
+    other way round. It passed on Android 10, 15 and 17 emulators on 2026-11-22. JVM tests cover each rule.
 
 ## Consequences
 
@@ -152,7 +153,12 @@ to 17 (2026-11-22):
     a maker's Settings write in code.
   - The permission controller updates through Google Play's system updates, so its texts are not those of the
     phone's release; Android 11's switch for unused apps is the only label read from it.
+  - Translations are revised within a release, too: Android 15's emulator image of August 2024 shows
+    android-15.0.0_r1's Chinese accessibility and notification access and Persian developer options, which later
+    tags of 15 revised. A phone on an early build reads its own text; only its fallback would be the later one.
   - Only an emulator's builds are checked today; the A40 (SM-A405FN) is the coordinator's to read.
+  - Reading costs Settings' resource table, about 2.7 MB of PSS in the network monitoring's process with its screen
+    open on the Android 15 emulator, within its memory budget of 48 MB.
 - **Reading costs little.** Settings' resource table is opened once per screen, when the first label is asked for,
   and its strings are read by name.
 - **The translators' work changes shape.** A reshaped sentence takes a placeholder after a noun; the labels themselves
