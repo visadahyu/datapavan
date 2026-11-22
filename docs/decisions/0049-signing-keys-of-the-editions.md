@@ -4,7 +4,7 @@
 - Date: 2026-11-14
 - Decided by: the maintainer, 2026-11-14 (decisions 1 to 6); drafted with AI help.
 - Builds on: ADRs [0018](0018-app-signing-certificates.md), [0024](0024-fake-copies-of-datapavan.md),
-  [0031](0031-datapavan-lite-on-google-play.md), [0039](0039-release-gates.md),
+  [0031](0031-datapavan-basic-on-google-play.md), [0039](0039-release-gates.md),
   [0043](0043-release-integrity-and-repository-controls.md) and [0045](0045-three-editions-of-one-app.md).
 - Amends: [docs/RELEASE.md](../RELEASE.md), its first steps and steps 4 to 7, which take the
   procedures below; the README's "Checking a copy", whose "Every genuine copy, on every channel, is signed with one
@@ -59,7 +59,7 @@ Four things need deciding before that release:
   others. Two editions that share no signer cannot meet it.
 - **Unchanged:**
   - **Basic on Google Play** keeps its own package, `org.visadahyu.datapavan.lite`, under Google's key
-    ([ADR 0031](0031-datapavan-lite-on-google-play.md)).
+    ([ADR 0031](0031-datapavan-basic-on-google-play.md)).
   - **The data-signing key and the release-notes key** stay one each, shared by both editions. They sign data and
     notes that name both editions. Neither APK key can forge what they sign, which decision 3 relies on.
   - **Enterprise's key** is decided with stage 2.

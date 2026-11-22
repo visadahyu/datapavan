@@ -1,4 +1,4 @@
-# 0041. What other apps see of Watch, and working beside every app
+# 0041. What other apps see of Datapavan Advanced, and working beside every app
 
 - Status: Accepted (by the maintainer on 2026-11-12)
 - Date: 2026-11-12
@@ -184,7 +184,7 @@ decisions are the coordinator's (BRIEF-part-3b, after one audit of the first bri
    source has, else in English. A label is cut to one line of at most 80 characters with no direction overrides, and
    isolated in the sentence. Labels are not strings for ADR 0030's translators; the sentences are.
 7. **Package visibility costs nothing new.** Advanced holds `QUERY_ALL_PACKAGES` for the audit
-   ([ADR 0014](0014-v0.1-permissions.md)), and Watch's own launcher query ([ADR 0034](0034-watch-permissions.md))
+   ([ADR 0014](0014-v0.1-permissions.md)), and Watch's own launcher query ([ADR 0034](0034-network-permissions.md))
    reaches any tool a user can open. Either lets Watch open a tool's resources.
 8. **Where they show.**
    - **In Watch.** Android hides a VPN's owner from other apps (`FoundTool.ownerConfirmed`), so Watch cannot tell

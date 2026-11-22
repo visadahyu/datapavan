@@ -38,7 +38,7 @@ the project against the field's best). Every release passes:
 - licence statements and an SBOM that match what ships.
 
 Datapavan Advanced 0.2.0 adds its own gates:
-- saying what other apps see of it, and leaving an app out of the tunnel ([ADR 0041](docs/decisions/0041-watch-visibility-and-coexistence.md));
+- saying what other apps see of it, and leaving an app out of the tunnel ([ADR 0041](docs/decisions/0041-visibility-and-coexistence.md));
 - the local-network rule;
 - the forwarding path's known gaps closed;
 - its own safety ([ADR 0040](docs/decisions/0040-own-safety-in-an-untrusted-environment.md));
@@ -148,7 +148,7 @@ The milestones of 0.2.0, W1 to W9, with what each must show before it counts as 
 [DESIGN.md §13.2](docs/DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools).
 
 Where it stands on 2026-11-22: the four items before W1 are drafted (ADRs
-[0034](docs/decisions/0034-watch-permissions.md), [0035](docs/decisions/0035-wireguard-upstream.md) and
+[0034](docs/decisions/0034-network-permissions.md), [0035](docs/decisions/0035-wireguard-upstream.md) and
 [0036](docs/decisions/0036-ip-to-organisation-dataset.md), accepted; the table of tools in `data/tools/`).
 W1, Watch's skeleton, and W2, the packet engine in the product, are in `main`: every app's traffic passes
 through Watch on the Android 11, 15 and 17 emulators and the A40, each flow with its app, at less CPU than the

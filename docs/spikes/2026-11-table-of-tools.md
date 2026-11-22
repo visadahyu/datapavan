@@ -1,6 +1,6 @@
 # The table of tools (before W1)
 
-Notes on `data/tools/` ([DESIGN.md §13.2](../DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools), "Before W1"), read on
+Notes on `data/tools/` ([DESIGN.md §13.2](../DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools), "Before W1"), read on
 2026-11-09. `tools.tsv` has 48 rows: the 41 packages of `data/app-signers/apps.tsv` and 7 tools
 the project's research of November 2026 names that are not in that list yet (Husi, SagerNet, V2Box, Npv Tunnel,
 NetMod, HTTP Injector, 1.1.1.1 + WARP). RethinkDNS, NetGuard and AdGuard were left out: they consume a

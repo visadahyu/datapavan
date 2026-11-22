@@ -1,7 +1,7 @@
 # Real tools in proxy mode, through Watch (W6)
 
 A lab run of 2026-11-11 on the emulator with Android 15, for W6's last measure
-([DESIGN.md §13.2](../DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools)): "v2rayNG, NekoBox,
+([DESIGN.md §13.2](../DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools)): "v2rayNG, NekoBox,
 Hiddify and Orbot in proxy mode are each found and chained without the user typing a port." Each tool came from its
 developer's own GitHub release, and each signing key matched the developer's key recorded in `data/app-signers`.
 No tool was given a real circumvention server. v2rayNG and NekoBox got a SOCKS5 server profile pointing at W6's test

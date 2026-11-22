@@ -18,7 +18,7 @@ copy can be checked against the one published fingerprint (ADR 0024).
    releases from GitHub. The README says how.
 
 Accrescent comes later, once it accepts new developers again. Google Play gets Datapavan Basic under a package
-of its own, `org.visadahyu.datapavan.lite`, signed by Google ([ADR 0031](decisions/0031-datapavan-lite-on-google-play.md),
+of its own, `org.visadahyu.datapavan.lite`, signed by Google ([ADR 0031](decisions/0031-datapavan-basic-on-google-play.md),
 [ADR 0045](decisions/0045-three-editions-of-one-app.md)), after the first release here.
 
 ## GitHub Releases

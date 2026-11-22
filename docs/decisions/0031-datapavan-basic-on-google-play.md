@@ -1,4 +1,4 @@
-# 0031. Datapavan Lite on Google Play: its own name, package and key
+# 0031. Datapavan Basic on Google Play: its own package and key
 
 - Status: Accepted; the build is in progress (2026-11-08)
 - Date: 2026-11-06

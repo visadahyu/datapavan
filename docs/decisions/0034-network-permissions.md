@@ -1,4 +1,4 @@
-# 0034. Permissions for Watch
+# 0034. Permissions for Advanced's network part
 
 - Status: Accepted (by the maintainer on 2026-11-09); [ADR 0040](0040-own-safety-in-an-untrusted-environment.md)
   adds `HIDE_OVERLAY_WINDOWS` (item 6)
@@ -454,7 +454,7 @@ Library manifests (Google's Maven repository):
 
 This repository: [ADR 0012](0012-packet-engine.md), [ADR 0014](0014-v0.1-permissions.md),
 [ADR 0024](0024-fake-copies-of-datapavan.md), [ADR 0045](0045-three-editions-of-one-app.md),
-[ADR 0031](0031-datapavan-lite-on-google-play.md), [DESIGN.md §13.2](../DESIGN.md),
+[ADR 0031](0031-datapavan-basic-on-google-play.md), [DESIGN.md §13.2](../DESIGN.md),
 [VPN.md](../VPN.md), the [M2 spike](../spikes/2026-10-m2-access.md), the
 [packet-engine spike](../spikes/2026-11-packet-engine.md), and the audit app's packaged release
 manifest under `android/app/build/intermediates/packaged_manifests/`.

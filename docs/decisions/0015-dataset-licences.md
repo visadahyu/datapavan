@@ -60,7 +60,7 @@ project's own channels.
      stops the update until a person accepts it (decision 9's rule, as no licence file can be hashed). Compiled into
      Watch's engine, as the resolvers are, and left out of the audit app's payload.
    - *(W8, part 3b, 2026-11-21)* the per-tool guides for proxy mode (`data/tools/guides.tsv`, `guide-steps.tsv`,
-     `guide-labels.tsv`; [ADR 0041](0041-watch-visibility-and-coexistence.md)), under the table of tools' CC0, read
+     `guide-labels.tsv`; [ADR 0041](0041-visibility-and-coexistence.md)), under the table of tools' CC0, read
      from each tool's own source at a release tag, one line of code per step and label. The labels are each tool's
      own few words for a menu, a switch or a button, quoted with their source line as facts of its interface, as the
      table's proxy-label column already quotes them: no text of a tool beyond them is copied. NOTICE is unchanged,

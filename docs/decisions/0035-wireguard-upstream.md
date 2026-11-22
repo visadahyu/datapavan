@@ -5,7 +5,7 @@
 
 ## Context
 
-Milestone W7 ([DESIGN.md §13.2](../DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools))
+Milestone W7 ([DESIGN.md §13.2](../DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools))
 lets a provider's WireGuard configuration (Proton VPN's free plan, Mullvad and others), imported from a
 file or a QR code, become Watch's upstream for the apps the user picks. Android allows one VPN at a
 time, so one VPN then does both jobs. The "Before W1" list asks for this ADR: a Rust implementation
@@ -1061,7 +1061,7 @@ week. The A40's measurements and the check with a provider are part 3b. What was
 
 Read on 2026-11-09 unless marked otherwise.
 
-- Repository: [VPN.md](../VPN.md), [DESIGN.md §13.2](../DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools),
+- Repository: [VPN.md](../VPN.md), [DESIGN.md §13.2](../DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools),
   [ADR 0006](0006-rust-engine-unsafe-forbidden.md), [ADR 0008](0008-gradle-dependency-verification.md),
   [ADR 0012](0012-packet-engine.md), [packet-engine spike](../spikes/2026-11-packet-engine.md),
   `core/deny.toml`, `core/Cargo.toml`, `core/engine/Cargo.toml`,

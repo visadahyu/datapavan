@@ -41,17 +41,17 @@ them: an item that no longer holds stays as "N. (Removed.)". The numbers 0002, 0
 | 0028 | Not used | – |
 | 0029 | Not used | – |
 | [0030](0030-more-languages-reviewed-by-independent-models.md) | Spanish, Russian, Chinese and Arabic at launch, reviewed by independent models | Accepted |
-| [0031](0031-datapavan-lite-on-google-play.md) | Datapavan Lite on Google Play: its own name, package and key | Accepted, being built |
+| [0031](0031-datapavan-basic-on-google-play.md) | Datapavan Basic on Google Play: its own package and key | Accepted, being built |
 | [0032](0032-expert-tool-for-preinstalled-apps.md) | An expert tool of Datapavan's own for preinstalled apps | Proposed |
 | [0033](0033-organisational-edition-beside-a-suite.md) | The organisational edition beside a device-management suite | Accepted, not built yet |
-| [0034](0034-watch-permissions.md) | Permissions for Watch: five, one only on Android 10 and 11 and one only on 17, and the build's allowlist | Accepted |
+| [0034](0034-network-permissions.md) | Permissions for Advanced's network part: five, one only on Android 10 and 11 and one only on 17, and the build's allowlist | Accepted |
 | [0035](0035-wireguard-upstream.md) | WireGuard upstream: GotaTun's protocol core in the engine, raw packets forwarded | Accepted |
 | [0036](0036-ip-to-organisation-dataset.md) | The IP-to-organisation dataset: DB-IP Lite, checked against iptoasn | Accepted |
 | [0037](0037-connection-log-storage.md) | The connection log: records sealed one by one, a key for each day, readable only on an unlocked phone | Accepted |
 | [0038](0038-dns-of-chained-apps.md) | DNS of chained apps: stand-in addresses, names to the tool | Accepted |
 | [0039](0039-release-gates.md) | Release gates, a preview for identified testers, and what 1.0 means | Accepted |
 | [0040](0040-own-safety-in-an-untrusted-environment.md) | Datapavan's own safety in an untrusted environment | Accepted |
-| [0041](0041-watch-visibility-and-coexistence.md) | What other apps see of Watch, and working beside every app | Accepted |
+| [0041](0041-visibility-and-coexistence.md) | What other apps see of Datapavan Advanced, and working beside every app | Accepted |
 | [0042](0042-dns-of-apps-that-go-directly.md) | DNS of apps that go directly: Oblivious DoH, several jurisdictions | Accepted, with open questions |
 | [0043](0043-release-integrity-and-repository-controls.md) | Release integrity, repository controls and continuous fuzzing | Accepted |
 | [0044](0044-udp-mapping-and-budgets.md) | UDP mapping, budgets for each app, and the engine's smaller gaps | Accepted |

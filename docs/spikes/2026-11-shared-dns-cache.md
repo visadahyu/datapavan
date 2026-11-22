@@ -1,8 +1,8 @@
 # Android's shared DNS cache (before W6)
 
-A spike of 2026-11-11, before W6 ([DESIGN.md §13.2](../DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools)),
+A spike of 2026-11-11, before W6 ([DESIGN.md §13.2](../DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools)),
 on open questions 4 and 5 of [ADR 0035](../decisions/0035-wireguard-upstream.md). Script:
-[`scripts/watch-lab/dns-cache.sh`](../../scripts/watch-lab/dns-cache.sh), with Watch's debug build,
+[`scripts/network-lab/dns-cache.sh`](../../scripts/network-lab/dns-cache.sh), with Watch's debug build,
 whose dump takes `dns-uncached on` or `off`: with it on, every record of an answer from Watch's DNS
 address reaches the app with a time to live of 0 (`dns::uncache` in `core/net`; the flags that EDNS
 keeps in the OPT record's TTL field are left alone).

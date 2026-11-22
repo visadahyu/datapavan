@@ -3,7 +3,7 @@
 - Status: Accepted (by the maintainer on 2026-11-15)
 - Date: 2026-11-14
 - Amends: [ADR 0025](0025-guided-check-and-traffic-facts.md) decision 1, for Advanced's live
-  surfaces only; [ADR 0034](0034-watch-permissions.md), by one exported component (the widget), and its line on
+  surfaces only; [ADR 0034](0034-network-permissions.md), by one exported component (the widget), and its line on
   `PACKAGE_USAGE_STATS`; [ADR 0022](0022-network-use-and-unused-apps.md) decision 2, for Advanced only, which now
   reads the event stream (noted 2026-11-18); DESIGN.md's W5 row; the roadmap's line on the widget.
 - Amended by [ADR 0053](0053-tracker-blocking.md) (proposed, 2026-11-21): decision 4's "Trackers are named only from the
@@ -42,7 +42,7 @@ What earlier decisions require of it:
   then. Chained apps' destinations are not recorded unless the user turns that on ([VPN.md](../VPN.md)). No
   notification names a VPN or a tool.
 - **The log opens only on an unlocked phone** (ADR 0037), and every screen blocks screenshots (ADR 0040).
-- **No foreground service** ([ADR 0034](0034-watch-permissions.md), "Watch does not request"). Android binds the
+- **No foreground service** ([ADR 0034](0034-network-permissions.md), "Watch does not request"). Android binds the
   VpnService itself, and Watch calls no `startForeground`. So Android does not require any notification of Watch:
   a live summary would be a notification that Watch chooses to post, under `POST_NOTIFICATIONS`, which ADR 0034
   already lists for "Watch's few notices".

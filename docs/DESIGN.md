@@ -209,7 +209,7 @@ on, onboarding must detect it and explain the trade-off.
 | Supply-chain attacker | Compromises a dependency or our build | Pinned dependencies with SHA-256 verification, exclusive repository content, cargo-deny advisories in CI, reproducible builds, signed releases |
 | Device seizure or inspection | A phone check at a border or checkpoint; the connection log becomes evidence | No destination logging for flows chained through a circumvention proxy (default); selectable retention, including none; one-tap wipe |
 | State network observer | Sees that a device runs Datapavan (for example through list-update requests) | List updates are optional and can be imported as files; no other network traffic of our own |
-| App on the same device that probes loopback | Finds the circumvention tool's local proxy to learn that the user runs one, or uses a proxy with no password to learn the server's address and send traffic through it ([ADR 0041](decisions/0041-watch-visibility-and-coexistence.md), decision 5) | Watch says on its screen what the tool's proxy lets other apps do, and offers a password where the tool takes one; the chained apps' UDP goes through the tool only once the user turns it on, since no tool is known to keep other apps off its UDP relay. Traffic between apps over loopback never enters the tunnel, so Watch does not see it |
+| App on the same device that probes loopback | Finds the circumvention tool's local proxy to learn that the user runs one, or uses a proxy with no password to learn the server's address and send traffic through it ([ADR 0041](decisions/0041-visibility-and-coexistence.md), decision 5) | Watch says on its screen what the tool's proxy lets other apps do, and offers a password where the tool takes one; the chained apps' UDP goes through the tool only once the user turns it on, since no tool is known to keep other apps off its UDP relay. Traffic between apps over loopback never enters the tunnel, so Watch does not see it |
 | Malformed or hostile input | Packets, DEX files of other apps, attestation certificates or data packs crash or exploit a parser | Rust; fuzzing of all parsers (`cargo fuzz`, also in CI); the forwarder fails closed |
 
 Beyond its own assets, Datapavan protects the user from untrusted VPN apps: remote control, modified
@@ -321,8 +321,6 @@ datapavan/
 | M4 | Network usage per app | Byte counts within 5 % of the Settings data-usage screen |
 | M5 | Plain-language UI and first release | v0.1 published on GitHub in eight languages, and submitted to F-Droid; manifest has **no INTERNET permission**; build is reproducible |
 
-<a id="132-v020-watch-the-connection-log-next-to-circumvention-tools"></a>
-
 ### 13.2 v0.2.0, Datapavan Advanced: the connection log, next to circumvention tools
 
 v0.2 comes in two releases ([ROADMAP.md](../ROADMAP.md)). This plan covers the first: Datapavan
@@ -353,7 +351,7 @@ M1 to M5, which the ADRs cite.
   its maintained forks are the candidates) against Go's wireguard-go, which would bring back the Go
   toolchain ADR 0012 kept out. Licence, upkeep and audit history decide.
 
-Status of the items before W1, 2026-11-09: Watch's permissions in [ADR 0034](decisions/0034-watch-permissions.md),
+Status of the items before W1, 2026-11-09: Watch's permissions in [ADR 0034](decisions/0034-network-permissions.md),
 WireGuard in [ADR 0035](decisions/0035-wireguard-upstream.md) and the dataset in
 [ADR 0036](decisions/0036-ip-to-organisation-dataset.md), all three accepted by the maintainer on
 2026-11-09; the table of tools in `data/tools/` ([notes](spikes/2026-11-table-of-tools.md)). Before W6,
@@ -1099,7 +1097,7 @@ hand mutants and the emulator's `blocking` shard (`scripts/verify-blocking.sh`, 
 witness), which CI runs with `BLOCKING_REQUIRED=1`. Breakage on real apps, the error of code-dependent grades and the
 words with real users wait for the maintainer.
 
-W8, part 3b, on `watch-w8d`, 2026-11-21: the per-tool guides for proxy mode ([ADR 0041](decisions/0041-watch-visibility-and-coexistence.md),
+W8, part 3b, on `watch-w8d`, 2026-11-21: the per-tool guides for proxy mode ([ADR 0041](decisions/0041-visibility-and-coexistence.md),
 "How the per-tool guides are built"). Every tool of the table with a VPN or proxy mode has a page: 21 with steps read
 from the tool's source at a release tag, each step, label, listener and password setting with its line of code
 (`data/tools/guides.tsv`, `guide-steps.tsv`, `guide-labels.tsv`); 4 pointing to W7's import, where the provider
@@ -1167,7 +1165,7 @@ Ed25519 check is built for size (ADR 0042, "The fix round").
 | W8 | DNS of the user's choice, flags and guides | Oblivious DoH by default for apps that go directly, with relays and targets in several jurisdictions, and the network's resolver only as a fallback outside the strict setting ([ADR 0042](decisions/0042-dns-of-apps-that-go-directly.md)). A DoH or DoT resolver of the user's choice, and a strict setting that never falls back to the network's resolver (VPN.md; recommended in restricted regions). Apps' built-in proxies are named, with their operator when it is not the app's maker, Telegram's MTProto and SOCKS5 proxies first. Proxy-like behaviour (many destinations in a short time, sustained upload, activity with the screen off) is flagged as what was seen, with thresholds from a lab run recorded in `docs/spikes/`, counted in memory so that chained destinations stay unrecorded. Tracker blocking stays off until the user turns it on, and is undone in one tap. Per-tool guides for proxy mode. Tests: strict DNS sends nothing to the network's resolver while the chosen one is down; a fixture app with a Telegram-style proxy setting is named; every flag on W3's ten-app session is explained in the lab notes; blocking and its undo work. The guides are translated and reviewed in eight languages (ADR 0030). |
 | W9 | Onboarding and the 0.2.0 release | Onboarding covers the VPN consent, Android 17's local-network permission, strict Private DNS, the always-on VPN with "block connections without VPN" ([VPN.md](VPN.md)), the kind of tool Watch found and the next step for it, with the guide of each tool installed (W8, part 3b: `GuideActivity.intent`), and battery managers, Samsung's first, with guides for other vendors. A Quick Settings tile turns Watch on and off. Battery is tested on the Galaxy A56 with the signed release candidate (ADR 0011 allows only stable builds on it), in windows of six to seven hours of ordinary use at similar times of day: one without Watch or any VPN, one with Watch alone, one with Watch carrying a Proton VPN free configuration, and one with Proton VPN's own app alone. Each window is read over adb from Android's battery statistics: Watch's own share, and the total drain per hour with the screen on and off, scaled to 24 hours. Only Watch's line and the totals are read; no other app's name is recorded. Watch alone costs at most 3 % of a day's battery over the window without a VPN, and Watch with Proton's configuration at most 3 % over Proton's own app. If the candidate passes, the same APK is published. The sentence of ADR 0045, decision 4, is taught in the self-check, the store texts, RELEASE.md and the website. Store texts and changelog are translated and reviewed in eight languages (ADR 0030); both apps are in `data/app-signers` with their fingerprints; a review against the threat model (§8) covers what Watch adds. 0.2.0 is published on GitHub with both APKs, on the website and through Obtainium. F-Droid follows [CHANNELS.md](CHANNELS.md); Google Play gets only Basic (ADR 0031, ADR 0045). Before 0.2.0 ships, Basic's page "Is this copy genuine?" and its store text take ADR 0045 decision 4's two-edition sentence (the maintainer, 2026-11-18): the string `own_teach` in the eight languages, and line 17 of `fastlane/metadata/android/*/full_description.txt` in the eight languages, which carry the old one; Basic's check line `own_internet_none` stays. With it, Basic's page may take the comparison with its allowlist that Advanced's has (`own_permissions_extra`, W5's second part, fix round 3). The profile for phones that may be searched (ADR 0047) reaches apps' own proxies (ADR 0052, decision 8), a must: under the profile, no proxy kind, flag or counter is recorded or shown, in the log, "Now", the dump or the engine's counters, and the substitution's memory is cleared with the live view's. It reaches tracker blocking too (ADR 0053, decision 8), a must: under the profile nothing of blocking is recorded (no blocked flow in the log, which does not run; its counts in memory only, cleared with the live view's), and its allowances are kept behind Watch's lock and wiped by a wipe (`BlockingSettings.wipe`), as the apps left out of the tunnel are. The tile carries blocking's ten-minute pause, naming no app (ADR 0053, decision 6). |
 
-Besides each milestone's "done when", Datapavan Advanced 0.2.0 passes the release gates of [ADR 0039](decisions/0039-release-gates.md), among them what other apps see of Watch and the compatibility matrix ([ADR 0041](decisions/0041-watch-visibility-and-coexistence.md)) and Watch's own safety ([ADR 0040](decisions/0040-own-safety-in-an-untrusted-environment.md)). Before an independent review, a build of Datapavan Advanced goes only to identified testers.
+Besides each milestone's "done when", Datapavan Advanced 0.2.0 passes the release gates of [ADR 0039](decisions/0039-release-gates.md), among them what other apps see of Watch and the compatibility matrix ([ADR 0041](decisions/0041-visibility-and-coexistence.md)) and Watch's own safety ([ADR 0040](decisions/0040-own-safety-in-an-untrusted-environment.md)). Before an independent review, a build of Datapavan Advanced goes only to identified testers.
 
 The order: W1 and W2 first. W3, W4 and W6 then run side by side, since each needs only the engine;
 W5 follows W4, W7 follows W6, and W8 follows W3 and W6. W9 comes last. Tests on the A40 use the
@@ -1218,17 +1216,17 @@ Each decision is recorded in full, with context and consequences, as an ADR in
 | 0028 | Not used | – |
 | 0029 | Not used | – |
 | [0030](decisions/0030-more-languages-reviewed-by-independent-models.md) | Spanish, Russian, Chinese and Arabic at launch, reviewed by independent models | Accepted |
-| [0031](decisions/0031-datapavan-lite-on-google-play.md) | Datapavan Lite on Google Play: its own name, package and key | Accepted, being built |
+| [0031](decisions/0031-datapavan-basic-on-google-play.md) | Datapavan Basic on Google Play: its own package and key | Accepted, being built |
 | [0032](decisions/0032-expert-tool-for-preinstalled-apps.md) | An expert tool of Datapavan's own for preinstalled apps | Proposed |
 | [0033](decisions/0033-organisational-edition-beside-a-suite.md) | The organisational edition beside a device-management suite | Accepted, not built yet |
-| [0034](decisions/0034-watch-permissions.md) | Permissions for Watch: five, one only on Android 10 and 11 and one only on 17, and the build's allowlist | Accepted |
+| [0034](decisions/0034-network-permissions.md) | Permissions for Advanced's network part: five, one only on Android 10 and 11 and one only on 17, and the build's allowlist | Accepted |
 | [0035](decisions/0035-wireguard-upstream.md) | WireGuard upstream: GotaTun's protocol core in the engine, raw packets forwarded | Accepted |
 | [0036](decisions/0036-ip-to-organisation-dataset.md) | The IP-to-organisation dataset: DB-IP Lite, checked against iptoasn | Accepted |
 | [0037](decisions/0037-connection-log-storage.md) | The connection log: records sealed one by one, a key for each day, readable only on an unlocked phone | Accepted |
 | [0038](decisions/0038-dns-of-chained-apps.md) | DNS of chained apps: stand-in addresses, names to the tool | Accepted |
 | [0039](decisions/0039-release-gates.md) | Release gates, a preview for identified testers, and what 1.0 means | Accepted |
 | [0040](decisions/0040-own-safety-in-an-untrusted-environment.md) | Datapavan's own safety in an untrusted environment | Accepted |
-| [0041](decisions/0041-watch-visibility-and-coexistence.md) | What other apps see of Watch, and working beside every app | Accepted |
+| [0041](decisions/0041-visibility-and-coexistence.md) | What other apps see of Datapavan Advanced, and working beside every app | Accepted |
 | [0042](decisions/0042-dns-of-apps-that-go-directly.md) | DNS of apps that go directly: Oblivious DoH, several jurisdictions | Accepted, with open questions |
 | [0043](decisions/0043-release-integrity-and-repository-controls.md) | Release integrity, repository controls and continuous fuzzing | Accepted |
 | [0044](decisions/0044-udp-mapping-and-budgets.md) | UDP mapping, budgets for each app, and the engine's smaller gaps | Accepted |

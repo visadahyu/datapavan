@@ -6,7 +6,7 @@
 ## Context
 
 W4 stores every flow Watch sees: the app's UID, the name and where it came from, IP and port, protocol,
-organisation, bytes each way, start and end time ([DESIGN.md §13.2](../DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools)).
+organisation, bytes each way, start and end time ([DESIGN.md §13.2](../DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools)).
 DESIGN.md §6.4 and VPN.md ask for app-private, encrypted SQLite with its key in the Android Keystore,
 retention of none, 1, 7 or 30 days, and a one-tap wipe. The threat that matters most is a phone check at a
 border or checkpoint (§8): there the log is evidence. Backups are already off (`allowBackup="false"` and

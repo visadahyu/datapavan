@@ -7,7 +7,7 @@
 
 Watch names every flow. W3 sets the order: the DNS answers Watch served, the TLS server name, the QUIC
 server name, and last an offline table that maps an IP address to its network (AS number) and the
-organisation behind it, such as "AS32934 Meta" ([DESIGN.md §13.2](../DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools)).
+organisation behind it, such as "AS32934 Meta" ([DESIGN.md §13.2](../DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools)).
 (Amended 2026-11-18, in W5's first part: the server name the connection itself sent, TLS or QUIC, now comes
 first, then the DNS answer, then this table. A DNS answer is tied to a flow by its address alone, and on an
 address that serves many names another app's lookup may have given it, while the engine reads the server name

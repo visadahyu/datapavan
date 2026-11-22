@@ -6,7 +6,7 @@
 ## Context
 
 In W6 the user picks apps whose traffic Watch sends through the local SOCKS5 proxy of the user's
-circumvention tool ([DESIGN.md §13.2](../DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools),
+circumvention tool ([DESIGN.md §13.2](../DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools),
 [VPN.md](../VPN.md)). VPN.md already says that such apps never use the network's resolver: the network
 would see every name they look up, and in a filtered network it answers some names falsely. This record
 decides how their lookups are answered instead.

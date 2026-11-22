@@ -7,7 +7,7 @@
 - Date: 2026-11-22; its fix round, after one review of the code and one of the screens and the coordinator's run on
   the Galaxy A40, the same day.
 - Decided by: mehdashti; built by the builder of the labels unit with AI help.
-- Builds on: [ADR 0041](0041-watch-visibility-and-coexistence.md), "How the per-tool guides are built", whose way of
+- Builds on: [ADR 0041](0041-visibility-and-coexistence.md), "How the per-tool guides are built", whose way of
   reading another app's labels it shares; [ADR 0030](0030-more-languages-reviewed-by-independent-models.md), to which
   it makes one bounded exception; [ADR 0014](0014-v0.1-permissions.md) (package visibility);
   [ADR 0045](0045-three-editions-of-one-app.md) (the editions); [ADR 0015](0015-dataset-licences.md) and

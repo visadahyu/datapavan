@@ -39,7 +39,7 @@ so, and does not reach the public as if it did.
 
 **Gates for Watch 0.2.0, on top of those:**
 1. Watch says plainly what other apps can see while it runs, and lets the user leave an app out of the tunnel
-   ([ADR 0041](0041-watch-visibility-and-coexistence.md)).
+   ([ADR 0041](0041-visibility-and-coexistence.md)).
 2. The forwarding path's known gaps are closed. Calls and peer-to-peer apps keep their direct paths. No one app
    can use up the sockets and ports of every app. Flows on shared CDN addresses are not given another site's
    name. Ping works.

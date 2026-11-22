@@ -1,6 +1,6 @@
 # W6's acceptance against its "done when"
 
-W6's row of [DESIGN.md §13.2](../DESIGN.md#132-v020-watch-the-connection-log-next-to-circumvention-tools)
+W6's row of [DESIGN.md §13.2](../DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools)
 read clause by clause on 2026-11-11, on branch `watch-w6`, against the code, the tests and the runs of
 [the real tools](2026-11-real-tools.md) and [ADR 0038's lab](2026-11-chain-lab.md). "Met" means a test
 or a recorded run shows it. The last section lists what is left to the maintainer.
