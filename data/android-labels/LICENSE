@@ -1,0 +1,6 @@
+SPDX-License-Identifier: CC0-1.0
+
+Where Android's own labels are kept on a phone: for each label Datapavan quotes, the package, resource type and name
+to read it from, by maker and Android version, with the source of each row. Names only, which are facts of each
+system app's interface, not its text. Collected by the Datapavan project and dedicated to the public domain under
+CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/). Recorded in ADR 0054.

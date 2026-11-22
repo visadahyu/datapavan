@@ -12,3 +12,9 @@ downloaded 2026-10-31; certificate SHA-256 `c8a2e9bc…192ab8`, serial `b3998086
 that trusts this key as its platform key trusts code that anyone can sign. `scripts/verify-audit.sh`
 signs the test fixture with it, so that Datapavan must report an app signed with a public system key
 (ADR 0023).
+
+`android-labels-aosp.tsv` is the **Android Open Source Project's text** (Apache-2.0) of each of Android's own labels
+that `data/android-labels/labels.tsv` names, at the last tag of each release from Android 10 to 17, in Datapavan's
+eight languages, as `scripts/android-labels.py --fetch` read it from android.googlesource.com on 2026-11-22. The data
+check holds the `android_label_*` fallback strings to it, and `scripts/verify-labels.sh` the labels an emulator gives
+(ADR 0054).

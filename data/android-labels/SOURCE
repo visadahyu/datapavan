@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: CC0-1.0
+retrieved: 2026-11-22
+method: each aosp row's resource name read in the Android Open Source Project's own files, fetched from
+  android.googlesource.com with ?format=TEXT at the last tag of each release from Android 10 to 17 (android-10.0.0_r47,
+  11.0.0_r48, 12.0.0_r34, 12.1.0_r27, 13.0.0_r84, 14.0.0_r75, 15.0.0_r36, 16.0.0_r4, 17.0.0_r1), by
+  scripts/android-labels.py --fetch, which also writes the texts the checks compare with
+  (scripts/testdata/android-labels-aosp.tsv, the Android Open Source Project's text, Apache-2.0).
+repositories: settings = platform/packages/apps/Settings, res/values*/strings.xml; settingslib =
+  platform/frameworks/base, packages/SettingsLib/res/values*/strings.xml, merged into Settings' package
+  (com.android.settings) under the same names; permissioncontroller = platform/packages/apps/PackageInstaller,
+  res/values*/strings.xml, for Android 11, whose permission controller held the switch for unused apps.
+rows: 22 for 21 labels, all aosp, each name present at every tag of its range. A maker's rows are added as the
+  coordinator reads them on a device (MainActivity's debug command labels-find), each with the model and build it
+  was read on.
+not-settled: no maker's row yet; the A40 (SM-A405FN) is read by the coordinator, not here.

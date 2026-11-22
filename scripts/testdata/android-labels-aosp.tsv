@@ -1,0 +1,1461 @@
+# SPDX-License-Identifier: Apache-2.0
+# The Android Open Source Project's text of each label of data/android-labels/labels.tsv, at the last tag of each
+# release (scripts/android-labels.py TAGS), in Datapavan's eight languages, after Android's unquoting and the app's
+# cleaning; English where AOSP has no text in a language, as a phone shows it. Written by
+# scripts/android-labels.py --fetch from AOSP's own files. Columns: key, API level, language, resource name, text.
+accessibility	29	en	accessibility_settings	Accessibility
+accessibility	29	fa	accessibility_settings	دسترس‌پذیری
+accessibility	29	ar	accessibility_settings	سهولة الاستخدام
+accessibility	29	fr	accessibility_settings	Accessibilité
+accessibility	29	de	accessibility_settings	Bedienungshilfen
+accessibility	29	es	accessibility_settings	Accesibilidad
+accessibility	29	ru	accessibility_settings	Спец. возможности
+accessibility	29	zh	accessibility_settings	无障碍
+accessibility	30	en	accessibility_settings	Accessibility
+accessibility	30	fa	accessibility_settings	دسترس‌پذیری
+accessibility	30	ar	accessibility_settings	تسهيل الاستخدام
+accessibility	30	fr	accessibility_settings	Accessibilité
+accessibility	30	de	accessibility_settings	Bedienungshilfen
+accessibility	30	es	accessibility_settings	Accesibilidad
+accessibility	30	ru	accessibility_settings	Спец. возможности
+accessibility	30	zh	accessibility_settings	无障碍
+accessibility	31	en	accessibility_settings	Accessibility
+accessibility	31	fa	accessibility_settings	دسترس‌پذیری
+accessibility	31	ar	accessibility_settings	تسهيل الاستخدام
+accessibility	31	fr	accessibility_settings	Accessibilité
+accessibility	31	de	accessibility_settings	Bedienungshilfen
+accessibility	31	es	accessibility_settings	Accesibilidad
+accessibility	31	ru	accessibility_settings	Спец. возможности
+accessibility	31	zh	accessibility_settings	无障碍
+accessibility	32	en	accessibility_settings	Accessibility
+accessibility	32	fa	accessibility_settings	دسترس‌پذیری
+accessibility	32	ar	accessibility_settings	تسهيل الاستخدام
+accessibility	32	fr	accessibility_settings	Accessibilité
+accessibility	32	de	accessibility_settings	Bedienungshilfen
+accessibility	32	es	accessibility_settings	Accesibilidad
+accessibility	32	ru	accessibility_settings	Спец. возможности
+accessibility	32	zh	accessibility_settings	无障碍
+accessibility	33	en	accessibility_settings	Accessibility
+accessibility	33	fa	accessibility_settings	دسترس‌پذیری
+accessibility	33	ar	accessibility_settings	تسهيل الاستخدام
+accessibility	33	fr	accessibility_settings	Accessibilité
+accessibility	33	de	accessibility_settings	Bedienungshilfen
+accessibility	33	es	accessibility_settings	Accesibilidad
+accessibility	33	ru	accessibility_settings	Спец. возможности
+accessibility	33	zh	accessibility_settings	无障碍
+accessibility	34	en	accessibility_settings	Accessibility
+accessibility	34	fa	accessibility_settings	دسترس‌پذیری
+accessibility	34	ar	accessibility_settings	تسهيل الاستخدام
+accessibility	34	fr	accessibility_settings	Accessibilité
+accessibility	34	de	accessibility_settings	Bedienungshilfen
+accessibility	34	es	accessibility_settings	Accesibilidad
+accessibility	34	ru	accessibility_settings	Спец. возможности
+accessibility	34	zh	accessibility_settings	无障碍
+accessibility	35	en	accessibility_settings	Accessibility
+accessibility	35	fa	accessibility_settings	دسترس‌پذیری
+accessibility	35	ar	accessibility_settings	تسهيل الاستخدام
+accessibility	35	fr	accessibility_settings	Accessibilité
+accessibility	35	de	accessibility_settings	Bedienungshilfen
+accessibility	35	es	accessibility_settings	Accesibilidad
+accessibility	35	ru	accessibility_settings	Спец. возможности
+accessibility	35	zh	accessibility_settings	无障碍功能
+accessibility	36	en	accessibility_settings	Accessibility
+accessibility	36	fa	accessibility_settings	دسترس‌پذیری
+accessibility	36	ar	accessibility_settings	أدوات تسهيل الاستخدام
+accessibility	36	fr	accessibility_settings	Accessibilité
+accessibility	36	de	accessibility_settings	Bedienungshilfen
+accessibility	36	es	accessibility_settings	Accesibilidad
+accessibility	36	ru	accessibility_settings	Специальные возможности
+accessibility	36	zh	accessibility_settings	无障碍功能
+accessibility	37	en	accessibility_settings	Accessibility
+accessibility	37	fa	accessibility_settings	دسترس‌پذیری
+accessibility	37	ar	accessibility_settings	أدوات تسهيل الاستخدام
+accessibility	37	fr	accessibility_settings	Accessibilité
+accessibility	37	de	accessibility_settings	Bedienungshilfen
+accessibility	37	es	accessibility_settings	Accesibilidad
+accessibility	37	ru	accessibility_settings	Специальные возможности
+accessibility	37	zh	accessibility_settings	无障碍功能
+all_files_access	30	en	manage_external_storage_title	All files access
+all_files_access	30	fa	manage_external_storage_title	دسترسی به همه فایل‌ها
+all_files_access	30	ar	manage_external_storage_title	الوصول إلى كل الملفات
+all_files_access	30	fr	manage_external_storage_title	Accès à tous les fichiers
+all_files_access	30	de	manage_external_storage_title	Zugriff auf alle Dateien
+all_files_access	30	es	manage_external_storage_title	Acceso a todos los archivos
+all_files_access	30	ru	manage_external_storage_title	Доступ ко всем файлам
+all_files_access	30	zh	manage_external_storage_title	所有文件访问权限
+all_files_access	31	en	manage_external_storage_title	All files access
+all_files_access	31	fa	manage_external_storage_title	دسترسی به همه فایل‌ها
+all_files_access	31	ar	manage_external_storage_title	الوصول إلى كل الملفات
+all_files_access	31	fr	manage_external_storage_title	Accès à tous les fichiers
+all_files_access	31	de	manage_external_storage_title	Zugriff auf alle Dateien
+all_files_access	31	es	manage_external_storage_title	Acceso a todos los archivos
+all_files_access	31	ru	manage_external_storage_title	Доступ ко всем файлам
+all_files_access	31	zh	manage_external_storage_title	所有文件访问权限
+all_files_access	32	en	manage_external_storage_title	All files access
+all_files_access	32	fa	manage_external_storage_title	دسترسی به همه فایل‌ها
+all_files_access	32	ar	manage_external_storage_title	الوصول إلى كل الملفات
+all_files_access	32	fr	manage_external_storage_title	Accès à tous les fichiers
+all_files_access	32	de	manage_external_storage_title	Zugriff auf alle Dateien
+all_files_access	32	es	manage_external_storage_title	Acceso a todos los archivos
+all_files_access	32	ru	manage_external_storage_title	Доступ ко всем файлам
+all_files_access	32	zh	manage_external_storage_title	所有文件访问权限
+all_files_access	33	en	manage_external_storage_title	All files access
+all_files_access	33	fa	manage_external_storage_title	دسترسی به همه فایل‌ها
+all_files_access	33	ar	manage_external_storage_title	الوصول إلى كل الملفات
+all_files_access	33	fr	manage_external_storage_title	Accès à tous les fichiers
+all_files_access	33	de	manage_external_storage_title	Zugriff auf alle Dateien
+all_files_access	33	es	manage_external_storage_title	Acceso a todos los archivos
+all_files_access	33	ru	manage_external_storage_title	Доступ ко всем файлам
+all_files_access	33	zh	manage_external_storage_title	所有文件访问权限
+all_files_access	34	en	manage_external_storage_title	All files access
+all_files_access	34	fa	manage_external_storage_title	دسترسی به همه فایل‌ها
+all_files_access	34	ar	manage_external_storage_title	الوصول إلى كل الملفات
+all_files_access	34	fr	manage_external_storage_title	Accès à tous les fichiers
+all_files_access	34	de	manage_external_storage_title	Zugriff auf alle Dateien
+all_files_access	34	es	manage_external_storage_title	Acceso a todos los archivos
+all_files_access	34	ru	manage_external_storage_title	Доступ ко всем файлам
+all_files_access	34	zh	manage_external_storage_title	所有文件访问权限
+all_files_access	35	en	manage_external_storage_title	All files access
+all_files_access	35	fa	manage_external_storage_title	دسترسی به همه فایل‌ها
+all_files_access	35	ar	manage_external_storage_title	الوصول إلى كل الملفات
+all_files_access	35	fr	manage_external_storage_title	Accès à tous les fichiers
+all_files_access	35	de	manage_external_storage_title	Zugriff auf alle Dateien
+all_files_access	35	es	manage_external_storage_title	Acceso a todos los archivos
+all_files_access	35	ru	manage_external_storage_title	Доступ ко всем файлам
+all_files_access	35	zh	manage_external_storage_title	所有文件访问权限
+all_files_access	36	en	manage_external_storage_title	All files access
+all_files_access	36	fa	manage_external_storage_title	دسترسی به همه فایل‌ها
+all_files_access	36	ar	manage_external_storage_title	الوصول إلى كل الملفات
+all_files_access	36	fr	manage_external_storage_title	Accès à tous les fichiers
+all_files_access	36	de	manage_external_storage_title	Zugriff auf alle Dateien
+all_files_access	36	es	manage_external_storage_title	Acceso a todos los archivos
+all_files_access	36	ru	manage_external_storage_title	Доступ ко всем файлам
+all_files_access	36	zh	manage_external_storage_title	所有文件访问权限
+all_files_access	37	en	manage_external_storage_title	All files access
+all_files_access	37	fa	manage_external_storage_title	دسترسی به همه فایل‌ها
+all_files_access	37	ar	manage_external_storage_title	الوصول إلى كل الملفات
+all_files_access	37	fr	manage_external_storage_title	Accès à tous les fichiers
+all_files_access	37	de	manage_external_storage_title	Zugriff auf alle Dateien
+all_files_access	37	es	manage_external_storage_title	Acceso a todos los archivos
+all_files_access	37	ru	manage_external_storage_title	Доступ ко всем файлам
+all_files_access	37	zh	manage_external_storage_title	所有文件访问权限
+always_on_vpn	29	en	vpn_menu_lockdown	Always-on VPN
+always_on_vpn	29	fa	vpn_menu_lockdown	VPN همیشه فعال
+always_on_vpn	29	ar	vpn_menu_lockdown	شبكة افتراضية خاصة (VPN) دائمة التشغيل
+always_on_vpn	29	fr	vpn_menu_lockdown	VPN permanent
+always_on_vpn	29	de	vpn_menu_lockdown	Durchgehend aktives VPN
+always_on_vpn	29	es	vpn_menu_lockdown	VPN siempre activada
+always_on_vpn	29	ru	vpn_menu_lockdown	Постоянная VPN
+always_on_vpn	29	zh	vpn_menu_lockdown	始终开启的 VPN
+always_on_vpn	30	en	vpn_menu_lockdown	Always-on VPN
+always_on_vpn	30	fa	vpn_menu_lockdown	VPN همیشه فعال
+always_on_vpn	30	ar	vpn_menu_lockdown	شبكة افتراضية خاصة (VPN) دائمة التفعيل
+always_on_vpn	30	fr	vpn_menu_lockdown	VPN permanent
+always_on_vpn	30	de	vpn_menu_lockdown	Durchgehend aktives VPN
+always_on_vpn	30	es	vpn_menu_lockdown	VPN siempre activada
+always_on_vpn	30	ru	vpn_menu_lockdown	Постоянная VPN
+always_on_vpn	30	zh	vpn_menu_lockdown	始终开启的 VPN
+always_on_vpn	31	en	vpn_menu_lockdown	Always-on VPN
+always_on_vpn	31	fa	vpn_menu_lockdown	VPN همیشه فعال
+always_on_vpn	31	ar	vpn_menu_lockdown	شبكة افتراضية خاصة (VPN) دائمة التفعيل
+always_on_vpn	31	fr	vpn_menu_lockdown	VPN permanent
+always_on_vpn	31	de	vpn_menu_lockdown	Durchgehend aktives VPN
+always_on_vpn	31	es	vpn_menu_lockdown	VPN siempre activada
+always_on_vpn	31	ru	vpn_menu_lockdown	Постоянная VPN
+always_on_vpn	31	zh	vpn_menu_lockdown	始终开启的 VPN
+always_on_vpn	32	en	vpn_menu_lockdown	Always-on VPN
+always_on_vpn	32	fa	vpn_menu_lockdown	VPN همیشه فعال
+always_on_vpn	32	ar	vpn_menu_lockdown	شبكة افتراضية خاصة (VPN) دائمة التفعيل
+always_on_vpn	32	fr	vpn_menu_lockdown	VPN permanent
+always_on_vpn	32	de	vpn_menu_lockdown	Durchgehend aktives VPN
+always_on_vpn	32	es	vpn_menu_lockdown	VPN siempre activada
+always_on_vpn	32	ru	vpn_menu_lockdown	Постоянная VPN
+always_on_vpn	32	zh	vpn_menu_lockdown	始终开启的 VPN
+always_on_vpn	33	en	vpn_menu_lockdown	Always-on VPN
+always_on_vpn	33	fa	vpn_menu_lockdown	VPN همیشه روشن
+always_on_vpn	33	ar	vpn_menu_lockdown	شبكة VPN قيد التشغيل دائمًا
+always_on_vpn	33	fr	vpn_menu_lockdown	VPN permanent
+always_on_vpn	33	de	vpn_menu_lockdown	Durchgehend aktives VPN
+always_on_vpn	33	es	vpn_menu_lockdown	VPN siempre activada
+always_on_vpn	33	ru	vpn_menu_lockdown	Постоянная VPN
+always_on_vpn	33	zh	vpn_menu_lockdown	始终开启的 VPN
+always_on_vpn	34	en	vpn_menu_lockdown	Always-on VPN
+always_on_vpn	34	fa	vpn_menu_lockdown	VPN همیشه روشن
+always_on_vpn	34	ar	vpn_menu_lockdown	شبكة VPN قيد التشغيل دائمًا
+always_on_vpn	34	fr	vpn_menu_lockdown	VPN permanent
+always_on_vpn	34	de	vpn_menu_lockdown	Durchgehend aktives VPN
+always_on_vpn	34	es	vpn_menu_lockdown	VPN siempre activada
+always_on_vpn	34	ru	vpn_menu_lockdown	Постоянная VPN
+always_on_vpn	34	zh	vpn_menu_lockdown	始终开启的 VPN
+always_on_vpn	35	en	vpn_menu_lockdown	Always-on VPN
+always_on_vpn	35	fa	vpn_menu_lockdown	VPN همیشه روشن
+always_on_vpn	35	ar	vpn_menu_lockdown	شبكة VPN قيد التشغيل دائمًا
+always_on_vpn	35	fr	vpn_menu_lockdown	VPN permanent
+always_on_vpn	35	de	vpn_menu_lockdown	Durchgehend aktives VPN
+always_on_vpn	35	es	vpn_menu_lockdown	VPN siempre activada
+always_on_vpn	35	ru	vpn_menu_lockdown	Постоянная VPN
+always_on_vpn	35	zh	vpn_menu_lockdown	始终开启的 VPN
+always_on_vpn	36	en	vpn_menu_lockdown	Always-on VPN
+always_on_vpn	36	fa	vpn_menu_lockdown	VPN همیشه روشن
+always_on_vpn	36	ar	vpn_menu_lockdown	شبكة VPN قيد التشغيل دائمًا
+always_on_vpn	36	fr	vpn_menu_lockdown	VPN permanent
+always_on_vpn	36	de	vpn_menu_lockdown	Durchgehend aktives VPN
+always_on_vpn	36	es	vpn_menu_lockdown	VPN siempre activada
+always_on_vpn	36	ru	vpn_menu_lockdown	Постоянная VPN
+always_on_vpn	36	zh	vpn_menu_lockdown	始终开启的 VPN
+always_on_vpn	37	en	vpn_menu_lockdown	Always-on VPN
+always_on_vpn	37	fa	vpn_menu_lockdown	VPN همیشه روشن
+always_on_vpn	37	ar	vpn_menu_lockdown	شبكة VPN قيد التشغيل دائمًا
+always_on_vpn	37	fr	vpn_menu_lockdown	VPN permanent
+always_on_vpn	37	de	vpn_menu_lockdown	Durchgehend aktives VPN
+always_on_vpn	37	es	vpn_menu_lockdown	VPN siempre activada
+always_on_vpn	37	ru	vpn_menu_lockdown	Постоянная VPN
+always_on_vpn	37	zh	vpn_menu_lockdown	始终开启的 VPN
+battery_optimisation	29	en	high_power_apps	Battery optimization
+battery_optimisation	29	fa	high_power_apps	بهینه‌سازی مصرف باتری
+battery_optimisation	29	ar	high_power_apps	تحسين البطارية
+battery_optimisation	29	fr	high_power_apps	Optimisation de la batterie
+battery_optimisation	29	de	high_power_apps	Akku-Optimierung
+battery_optimisation	29	es	high_power_apps	Optimización de batería
+battery_optimisation	29	ru	high_power_apps	Экономия заряда батареи
+battery_optimisation	29	zh	high_power_apps	电池优化
+battery_optimisation	30	en	high_power_apps	Battery optimization
+battery_optimisation	30	fa	high_power_apps	بهینه‌سازی مصرف باتری
+battery_optimisation	30	ar	high_power_apps	تحسين البطارية
+battery_optimisation	30	fr	high_power_apps	Optimisation de la batterie
+battery_optimisation	30	de	high_power_apps	Akkuoptimierung
+battery_optimisation	30	es	high_power_apps	Optimización de batería
+battery_optimisation	30	ru	high_power_apps	Экономия заряда батареи
+battery_optimisation	30	zh	high_power_apps	电池优化
+battery_optimisation	31	en	high_power_apps	Battery optimization
+battery_optimisation	31	fa	high_power_apps	بهینه‌سازی مصرف باتری
+battery_optimisation	31	ar	high_power_apps	تحسين البطارية
+battery_optimisation	31	fr	high_power_apps	Optimisation de la batterie
+battery_optimisation	31	de	high_power_apps	Akkuoptimierung
+battery_optimisation	31	es	high_power_apps	Optimización de batería
+battery_optimisation	31	ru	high_power_apps	Экономия заряда батареи
+battery_optimisation	31	zh	high_power_apps	电池优化
+battery_optimisation	32	en	high_power_apps	Battery optimization
+battery_optimisation	32	fa	high_power_apps	بهینه‌سازی مصرف باتری
+battery_optimisation	32	ar	high_power_apps	تحسين البطارية
+battery_optimisation	32	fr	high_power_apps	Optimisation de la batterie
+battery_optimisation	32	de	high_power_apps	Akkuoptimierung
+battery_optimisation	32	es	high_power_apps	Optimización de batería
+battery_optimisation	32	ru	high_power_apps	Экономия заряда батареи
+battery_optimisation	32	zh	high_power_apps	电池优化
+battery_optimisation	33	en	high_power_apps	Battery optimization
+battery_optimisation	33	fa	high_power_apps	بهینه‌سازی مصرف باتری
+battery_optimisation	33	ar	high_power_apps	تحسين البطارية
+battery_optimisation	33	fr	high_power_apps	Optimisation de la batterie
+battery_optimisation	33	de	high_power_apps	Akkuoptimierung
+battery_optimisation	33	es	high_power_apps	Optimización de batería
+battery_optimisation	33	ru	high_power_apps	Экономия заряда батареи
+battery_optimisation	33	zh	high_power_apps	电池优化
+battery_optimisation	34	en	high_power_apps	Battery optimization
+battery_optimisation	34	fa	high_power_apps	بهینه‌سازی مصرف باتری
+battery_optimisation	34	ar	high_power_apps	تحسين البطارية
+battery_optimisation	34	fr	high_power_apps	Optimisation de la batterie
+battery_optimisation	34	de	high_power_apps	Akkuoptimierung
+battery_optimisation	34	es	high_power_apps	Optimización de batería
+battery_optimisation	34	ru	high_power_apps	Экономия заряда батареи
+battery_optimisation	34	zh	high_power_apps	电池优化
+battery_optimisation	35	en	high_power_apps	Battery optimization
+battery_optimisation	35	fa	high_power_apps	بهینه‌سازی مصرف باتری
+battery_optimisation	35	ar	high_power_apps	تحسين البطارية
+battery_optimisation	35	fr	high_power_apps	Optimisation de la batterie
+battery_optimisation	35	de	high_power_apps	Akkuoptimierung
+battery_optimisation	35	es	high_power_apps	Optimización de batería
+battery_optimisation	35	ru	high_power_apps	Экономия заряда батареи
+battery_optimisation	35	zh	high_power_apps	电池优化
+battery_optimisation	36	en	high_power_apps	Battery optimization
+battery_optimisation	36	fa	high_power_apps	بهینه‌سازی مصرف باتری
+battery_optimisation	36	ar	high_power_apps	تحسين البطارية
+battery_optimisation	36	fr	high_power_apps	Optimisation de la batterie
+battery_optimisation	36	de	high_power_apps	Akkuoptimierung
+battery_optimisation	36	es	high_power_apps	Optimización de batería
+battery_optimisation	36	ru	high_power_apps	Экономия заряда батареи
+battery_optimisation	36	zh	high_power_apps	电池优化
+battery_optimisation	37	en	high_power_apps	Battery optimization
+battery_optimisation	37	fa	high_power_apps	بهینه‌سازی مصرف باتری
+battery_optimisation	37	ar	high_power_apps	تحسين البطارية
+battery_optimisation	37	fr	high_power_apps	Optimisation de la batterie
+battery_optimisation	37	de	high_power_apps	Akkuoptimierung
+battery_optimisation	37	es	high_power_apps	Optimización de batería
+battery_optimisation	37	ru	high_power_apps	Экономия заряда батареи
+battery_optimisation	37	zh	high_power_apps	电池优化
+developer_options	29	en	development_settings_title	Developer options
+developer_options	29	fa	development_settings_title	گزینه‌های برنامه‌نویسان
+developer_options	29	ar	development_settings_title	خيارات مطور البرامج
+developer_options	29	fr	development_settings_title	Options pour les développeurs
+developer_options	29	de	development_settings_title	Entwickleroptionen
+developer_options	29	es	development_settings_title	Opciones para desarrolladores
+developer_options	29	ru	development_settings_title	Для разработчиков
+developer_options	29	zh	development_settings_title	开发者选项
+developer_options	30	en	development_settings_title	Developer options
+developer_options	30	fa	development_settings_title	گزینه‌های برنامه‌نویسان
+developer_options	30	ar	development_settings_title	خيارات مطور البرامج
+developer_options	30	fr	development_settings_title	Options pour les développeurs
+developer_options	30	de	development_settings_title	Entwickleroptionen
+developer_options	30	es	development_settings_title	Opciones para desarrolladores
+developer_options	30	ru	development_settings_title	Для разработчиков
+developer_options	30	zh	development_settings_title	开发者选项
+developer_options	31	en	development_settings_title	Developer options
+developer_options	31	fa	development_settings_title	گزینه‌های برنامه‌نویسان
+developer_options	31	ar	development_settings_title	خيارات المطورين
+developer_options	31	fr	development_settings_title	Options pour les développeurs
+developer_options	31	de	development_settings_title	Entwickleroptionen
+developer_options	31	es	development_settings_title	Opciones para desarrolladores
+developer_options	31	ru	development_settings_title	Для разработчиков
+developer_options	31	zh	development_settings_title	开发者选项
+developer_options	32	en	development_settings_title	Developer options
+developer_options	32	fa	development_settings_title	گزینه‌های برنامه‌نویسان
+developer_options	32	ar	development_settings_title	خيارات المطورين
+developer_options	32	fr	development_settings_title	Options pour les développeurs
+developer_options	32	de	development_settings_title	Entwickleroptionen
+developer_options	32	es	development_settings_title	Opciones para desarrolladores
+developer_options	32	ru	development_settings_title	Для разработчиков
+developer_options	32	zh	development_settings_title	开发者选项
+developer_options	33	en	development_settings_title	Developer options
+developer_options	33	fa	development_settings_title	گزینه‌های برنامه‌نویسان
+developer_options	33	ar	development_settings_title	خيارات المطورين
+developer_options	33	fr	development_settings_title	Options pour les développeurs
+developer_options	33	de	development_settings_title	Entwickleroptionen
+developer_options	33	es	development_settings_title	Opciones para desarrolladores
+developer_options	33	ru	development_settings_title	Для разработчиков
+developer_options	33	zh	development_settings_title	开发者选项
+developer_options	34	en	development_settings_title	Developer options
+developer_options	34	fa	development_settings_title	گزینه‌های برنامه‌نویسان
+developer_options	34	ar	development_settings_title	خيارات المطورين
+developer_options	34	fr	development_settings_title	Options pour les développeurs
+developer_options	34	de	development_settings_title	Entwickleroptionen
+developer_options	34	es	development_settings_title	Opciones para desarrolladores
+developer_options	34	ru	development_settings_title	Для разработчиков
+developer_options	34	zh	development_settings_title	开发者选项
+developer_options	35	en	development_settings_title	Developer options
+developer_options	35	fa	development_settings_title	گزینه‌های توسعه‌دهندگان
+developer_options	35	ar	development_settings_title	خيارات المطورين
+developer_options	35	fr	development_settings_title	Options pour les développeurs
+developer_options	35	de	development_settings_title	Entwickleroptionen
+developer_options	35	es	development_settings_title	Opciones para desarrolladores
+developer_options	35	ru	development_settings_title	Для разработчиков
+developer_options	35	zh	development_settings_title	开发者选项
+developer_options	36	en	development_settings_title	Developer options
+developer_options	36	fa	development_settings_title	گزینه‌های توسعه‌دهندگان
+developer_options	36	ar	development_settings_title	خيارات المطورين
+developer_options	36	fr	development_settings_title	Options pour les développeurs
+developer_options	36	de	development_settings_title	Entwickleroptionen
+developer_options	36	es	development_settings_title	Opciones para desarrolladores
+developer_options	36	ru	development_settings_title	Для разработчиков
+developer_options	36	zh	development_settings_title	开发者选项
+developer_options	37	en	development_settings_title	Developer options
+developer_options	37	fa	development_settings_title	گزینه‌های توسعه‌دهندگان
+developer_options	37	ar	development_settings_title	خيارات المطورين
+developer_options	37	fr	development_settings_title	Options pour les développeurs
+developer_options	37	de	development_settings_title	Entwickleroptionen
+developer_options	37	es	development_settings_title	Opciones para desarrolladores
+developer_options	37	ru	development_settings_title	Для разработчиков
+developer_options	37	zh	development_settings_title	开发者选项
+device_admin	29	en	manage_device_admin	Device admin apps
+device_admin	29	fa	manage_device_admin	برنامه‌های سرپرست دستگاه
+device_admin	29	ar	manage_device_admin	تطبيقات مشرف الجهاز
+device_admin	29	fr	manage_device_admin	Applis d'administration
+device_admin	29	de	manage_device_admin	Apps zur Geräteverwaltung
+device_admin	29	es	manage_device_admin	Aplicaciones de admin. de dispositivos
+device_admin	29	ru	manage_device_admin	Приложения администратора устройства
+device_admin	29	zh	manage_device_admin	设备管理应用
+device_admin	30	en	manage_device_admin	Device admin apps
+device_admin	30	fa	manage_device_admin	برنامه‌های سرپرست دستگاه
+device_admin	30	ar	manage_device_admin	تطبيقات مشرف الجهاز
+device_admin	30	fr	manage_device_admin	Applis d'administration de l'appareil
+device_admin	30	de	manage_device_admin	Apps zur Geräteverwaltung
+device_admin	30	es	manage_device_admin	Aplicaciones de admin. de dispositivos
+device_admin	30	ru	manage_device_admin	Приложения администратора устройства
+device_admin	30	zh	manage_device_admin	设备管理应用
+device_admin	31	en	manage_device_admin	Device admin apps
+device_admin	31	fa	manage_device_admin	برنامه‌های سرپرست دستگاه
+device_admin	31	ar	manage_device_admin	تطبيقات مشرف الجهاز
+device_admin	31	fr	manage_device_admin	Applis d'administration de l'appareil
+device_admin	31	de	manage_device_admin	Apps zur Geräteverwaltung
+device_admin	31	es	manage_device_admin	Aplicaciones del administrador de dispositivos
+device_admin	31	ru	manage_device_admin	Приложения администратора устройства
+device_admin	31	zh	manage_device_admin	设备管理应用
+device_admin	32	en	manage_device_admin	Device admin apps
+device_admin	32	fa	manage_device_admin	برنامه‌های سرپرست دستگاه
+device_admin	32	ar	manage_device_admin	تطبيقات مشرف الجهاز
+device_admin	32	fr	manage_device_admin	Applis d'administration de l'appareil
+device_admin	32	de	manage_device_admin	Apps zur Geräteverwaltung
+device_admin	32	es	manage_device_admin	Aplicaciones del administrador de dispositivos
+device_admin	32	ru	manage_device_admin	Приложения администратора устройства
+device_admin	32	zh	manage_device_admin	设备管理应用
+device_admin	33	en	manage_device_admin	Device admin apps
+device_admin	33	fa	manage_device_admin	برنامه‌های سرپرست دستگاه
+device_admin	33	ar	manage_device_admin	تطبيقات مشرف الجهاز
+device_admin	33	fr	manage_device_admin	Applis d'administration de l'appareil
+device_admin	33	de	manage_device_admin	Apps zur Geräteverwaltung
+device_admin	33	es	manage_device_admin	Aplicaciones del administrador de dispositivos
+device_admin	33	ru	manage_device_admin	Приложения администратора устройства
+device_admin	33	zh	manage_device_admin	设备管理应用
+device_admin	34	en	manage_device_admin	Device admin apps
+device_admin	34	fa	manage_device_admin	برنامه‌های سرپرست دستگاه
+device_admin	34	ar	manage_device_admin	تطبيقات مشرف الجهاز
+device_admin	34	fr	manage_device_admin	Applis d'administration de l'appareil
+device_admin	34	de	manage_device_admin	Apps zur Geräteverwaltung
+device_admin	34	es	manage_device_admin	Aplicaciones del administrador de dispositivos
+device_admin	34	ru	manage_device_admin	Приложения администратора устройства
+device_admin	34	zh	manage_device_admin	设备管理应用
+device_admin	35	en	manage_device_admin	Device admin apps
+device_admin	35	fa	manage_device_admin	برنامه‌های سرپرست دستگاه
+device_admin	35	ar	manage_device_admin	تطبيقات مشرف الجهاز
+device_admin	35	fr	manage_device_admin	Applis d'administration de l'appareil
+device_admin	35	de	manage_device_admin	Apps zur Geräteverwaltung
+device_admin	35	es	manage_device_admin	Aplicaciones del administrador de dispositivos
+device_admin	35	ru	manage_device_admin	Приложения администратора устройства
+device_admin	35	zh	manage_device_admin	设备管理应用
+device_admin	36	en	manage_device_admin	Device admin
+device_admin	36	fa	manage_device_admin	سرپرست دستگاه
+device_admin	36	ar	manage_device_admin	مشرف الجهاز
+device_admin	36	fr	manage_device_admin	Administration de l'appareil
+device_admin	36	de	manage_device_admin	Geräteadministrator
+device_admin	36	es	manage_device_admin	Administrador de dispositivos
+device_admin	36	ru	manage_device_admin	Администратор устройства
+device_admin	36	zh	manage_device_admin	设备管理
+device_admin	37	en	manage_device_admin	Device admin
+device_admin	37	fa	manage_device_admin	سرپرست دستگاه
+device_admin	37	ar	manage_device_admin	مشرف الجهاز
+device_admin	37	fr	manage_device_admin	Administration de l'appareil
+device_admin	37	de	manage_device_admin	Geräteadministrator
+device_admin	37	es	manage_device_admin	Administrador de dispositivos
+device_admin	37	ru	manage_device_admin	Администрирование устройства
+device_admin	37	zh	manage_device_admin	设备管理
+disable	29	en	disable_text	Disable
+disable	29	fa	disable_text	غیرفعال کردن
+disable	29	ar	disable_text	إيقاف
+disable	29	fr	disable_text	Désactiver
+disable	29	de	disable_text	Deaktivieren
+disable	29	es	disable_text	Inhabilitar
+disable	29	ru	disable_text	Отключить
+disable	29	zh	disable_text	停用
+disable	30	en	disable_text	Disable
+disable	30	fa	disable_text	غیرفعال کردن
+disable	30	ar	disable_text	إيقاف
+disable	30	fr	disable_text	Désactiver
+disable	30	de	disable_text	Deaktivieren
+disable	30	es	disable_text	Inhabilitar
+disable	30	ru	disable_text	Отключить
+disable	30	zh	disable_text	停用
+disable	31	en	disable_text	Disable
+disable	31	fa	disable_text	غیرفعال کردن
+disable	31	ar	disable_text	إيقاف
+disable	31	fr	disable_text	Désactiver
+disable	31	de	disable_text	Deaktivieren
+disable	31	es	disable_text	Inhabilitar
+disable	31	ru	disable_text	Отключить
+disable	31	zh	disable_text	停用
+disable	32	en	disable_text	Disable
+disable	32	fa	disable_text	غیرفعال کردن
+disable	32	ar	disable_text	إيقاف
+disable	32	fr	disable_text	Désactiver
+disable	32	de	disable_text	Deaktivieren
+disable	32	es	disable_text	Inhabilitar
+disable	32	ru	disable_text	Отключить
+disable	32	zh	disable_text	停用
+disable	33	en	disable_text	Disable
+disable	33	fa	disable_text	غیرفعال کردن
+disable	33	ar	disable_text	إيقاف
+disable	33	fr	disable_text	Désactiver
+disable	33	de	disable_text	Deaktivieren
+disable	33	es	disable_text	Inhabilitar
+disable	33	ru	disable_text	Отключить
+disable	33	zh	disable_text	停用
+disable	34	en	disable_text	Disable
+disable	34	fa	disable_text	غیرفعال کردن
+disable	34	ar	disable_text	إيقاف
+disable	34	fr	disable_text	Désactiver
+disable	34	de	disable_text	Deaktivieren
+disable	34	es	disable_text	Inhabilitar
+disable	34	ru	disable_text	Отключить
+disable	34	zh	disable_text	停用
+disable	35	en	disable_text	Disable
+disable	35	fa	disable_text	غیرفعال کردن
+disable	35	ar	disable_text	إيقاف
+disable	35	fr	disable_text	Désactiver
+disable	35	de	disable_text	Deaktivieren
+disable	35	es	disable_text	Inhabilitar
+disable	35	ru	disable_text	Отключить
+disable	35	zh	disable_text	停用
+disable	36	en	disable_text	Disable
+disable	36	fa	disable_text	غیرفعال کردن
+disable	36	ar	disable_text	إيقاف
+disable	36	fr	disable_text	Désactiver
+disable	36	de	disable_text	Deaktivieren
+disable	36	es	disable_text	Inhabilitar
+disable	36	ru	disable_text	Отключить
+disable	36	zh	disable_text	停用
+disable	37	en	disable_text	Disable
+disable	37	fa	disable_text	غیرفعال کردن
+disable	37	ar	disable_text	إيقاف
+disable	37	fr	disable_text	Désactiver
+disable	37	de	disable_text	Deaktivieren
+disable	37	es	disable_text	Inhabilitar
+disable	37	ru	disable_text	Отключить
+disable	37	zh	disable_text	停用
+encryption_credentials	29	en	encryption_and_credential_settings_title	Encryption & credentials
+encryption_credentials	29	fa	encryption_and_credential_settings_title	رمزگذاری و اطلاعات کاربری
+encryption_credentials	29	ar	encryption_and_credential_settings_title	التشفير وبيانات الاعتماد
+encryption_credentials	29	fr	encryption_and_credential_settings_title	Chiffrement et identifiants
+encryption_credentials	29	de	encryption_and_credential_settings_title	Verschlüsselung und Anmeldedaten
+encryption_credentials	29	es	encryption_and_credential_settings_title	Cifrado y credenciales
+encryption_credentials	29	ru	encryption_and_credential_settings_title	Шифрование и учетные данные
+encryption_credentials	29	zh	encryption_and_credential_settings_title	加密与凭据
+encryption_credentials	30	en	encryption_and_credential_settings_title	Encryption & credentials
+encryption_credentials	30	fa	encryption_and_credential_settings_title	رمزگذاری و اطلاعات کاربری
+encryption_credentials	30	ar	encryption_and_credential_settings_title	التشفير وبيانات الاعتماد
+encryption_credentials	30	fr	encryption_and_credential_settings_title	Chiffrement et identifiants
+encryption_credentials	30	de	encryption_and_credential_settings_title	Verschlüsselung und Anmeldedaten
+encryption_credentials	30	es	encryption_and_credential_settings_title	Cifrado y credenciales
+encryption_credentials	30	ru	encryption_and_credential_settings_title	Шифрование и учетные данные
+encryption_credentials	30	zh	encryption_and_credential_settings_title	加密与凭据
+encryption_credentials	31	en	encryption_and_credential_settings_title	Encryption & credentials
+encryption_credentials	31	fa	encryption_and_credential_settings_title	رمزگذاری و اطلاعات کاربری
+encryption_credentials	31	ar	encryption_and_credential_settings_title	التشفير وبيانات الاعتماد
+encryption_credentials	31	fr	encryption_and_credential_settings_title	Chiffrement et identifiants
+encryption_credentials	31	de	encryption_and_credential_settings_title	Verschlüsselung und Anmeldedaten
+encryption_credentials	31	es	encryption_and_credential_settings_title	Cifrado y credenciales
+encryption_credentials	31	ru	encryption_and_credential_settings_title	Шифрование и учетные данные
+encryption_credentials	31	zh	encryption_and_credential_settings_title	加密与凭据
+encryption_credentials	32	en	encryption_and_credential_settings_title	Encryption & credentials
+encryption_credentials	32	fa	encryption_and_credential_settings_title	رمزگذاری و اطلاعات کاربری
+encryption_credentials	32	ar	encryption_and_credential_settings_title	التشفير وبيانات الاعتماد
+encryption_credentials	32	fr	encryption_and_credential_settings_title	Chiffrement et identifiants
+encryption_credentials	32	de	encryption_and_credential_settings_title	Verschlüsselung und Anmeldedaten
+encryption_credentials	32	es	encryption_and_credential_settings_title	Cifrado y credenciales
+encryption_credentials	32	ru	encryption_and_credential_settings_title	Шифрование и учетные данные
+encryption_credentials	32	zh	encryption_and_credential_settings_title	加密与凭据
+encryption_credentials	33	en	encryption_and_credential_settings_title	Encryption & credentials
+encryption_credentials	33	fa	encryption_and_credential_settings_title	رمزگذاری و اطلاعات اعتباری
+encryption_credentials	33	ar	encryption_and_credential_settings_title	التشفير وبيانات الاعتماد
+encryption_credentials	33	fr	encryption_and_credential_settings_title	Chiffrement et identifiants
+encryption_credentials	33	de	encryption_and_credential_settings_title	Verschlüsselung & Anmeldedaten
+encryption_credentials	33	es	encryption_and_credential_settings_title	Cifrado y credenciales
+encryption_credentials	33	ru	encryption_and_credential_settings_title	Шифрование и учетные данные
+encryption_credentials	33	zh	encryption_and_credential_settings_title	加密与凭据
+encryption_credentials	34	en	encryption_and_credential_settings_title	Encryption & credentials
+encryption_credentials	34	fa	encryption_and_credential_settings_title	رمزگذاری و اطلاعات اعتباری
+encryption_credentials	34	ar	encryption_and_credential_settings_title	التشفير وبيانات الاعتماد
+encryption_credentials	34	fr	encryption_and_credential_settings_title	Chiffrement et identifiants
+encryption_credentials	34	de	encryption_and_credential_settings_title	Verschlüsselung & Anmeldedaten
+encryption_credentials	34	es	encryption_and_credential_settings_title	Cifrado y credenciales
+encryption_credentials	34	ru	encryption_and_credential_settings_title	Шифрование и учетные данные
+encryption_credentials	34	zh	encryption_and_credential_settings_title	加密与凭据
+encryption_credentials	35	en	encryption_and_credential_settings_title	Encryption & credentials
+encryption_credentials	35	fa	encryption_and_credential_settings_title	رمزگذاری و اطلاعات اعتباری
+encryption_credentials	35	ar	encryption_and_credential_settings_title	التشفير وبيانات الاعتماد
+encryption_credentials	35	fr	encryption_and_credential_settings_title	Chiffrement et identifiants
+encryption_credentials	35	de	encryption_and_credential_settings_title	Verschlüsselung & Anmeldedaten
+encryption_credentials	35	es	encryption_and_credential_settings_title	Cifrado y credenciales
+encryption_credentials	35	ru	encryption_and_credential_settings_title	Шифрование и учетные данные
+encryption_credentials	35	zh	encryption_and_credential_settings_title	加密与凭据
+encryption_credentials	36	en	encryption_and_credential_settings_title	Encryption & credentials
+encryption_credentials	36	fa	encryption_and_credential_settings_title	رمزگذاری و اطلاعات اعتباری
+encryption_credentials	36	ar	encryption_and_credential_settings_title	التشفير وبيانات الاعتماد
+encryption_credentials	36	fr	encryption_and_credential_settings_title	Chiffrement et identifiants
+encryption_credentials	36	de	encryption_and_credential_settings_title	Verschlüsselung & Anmeldedaten
+encryption_credentials	36	es	encryption_and_credential_settings_title	Cifrado y credenciales
+encryption_credentials	36	ru	encryption_and_credential_settings_title	Шифрование и учетные данные
+encryption_credentials	36	zh	encryption_and_credential_settings_title	加密与凭据
+encryption_credentials	37	en	encryption_and_credential_settings_title	Encryption & credentials
+encryption_credentials	37	fa	encryption_and_credential_settings_title	رمزگذاری و اعتبارنامه
+encryption_credentials	37	ar	encryption_and_credential_settings_title	التشفير وبيانات الاعتماد
+encryption_credentials	37	fr	encryption_and_credential_settings_title	Chiffrement et identifiants
+encryption_credentials	37	de	encryption_and_credential_settings_title	Verschlüsselung & Anmeldedaten
+encryption_credentials	37	es	encryption_and_credential_settings_title	Cifrado y credenciales
+encryption_credentials	37	ru	encryption_and_credential_settings_title	Шифрование и учетные данные
+encryption_credentials	37	zh	encryption_and_credential_settings_title	加密与凭据
+install_unknown_apps	29	en	install_other_apps	Install unknown apps
+install_unknown_apps	29	fa	install_other_apps	نصب برنامه‌های ناشناس
+install_unknown_apps	29	ar	install_other_apps	تثبيت التطبيقات غير المعروفة
+install_unknown_apps	29	fr	install_other_apps	Installation d'applis inconnues
+install_unknown_apps	29	de	install_other_apps	Installieren unbekannter Apps
+install_unknown_apps	29	es	install_other_apps	Instalar aplicaciones desconocidas
+install_unknown_apps	29	ru	install_other_apps	Установка неизвестных приложений
+install_unknown_apps	29	zh	install_other_apps	安装未知应用
+install_unknown_apps	30	en	install_other_apps	Install unknown apps
+install_unknown_apps	30	fa	install_other_apps	نصب برنامه‌های ناشناس
+install_unknown_apps	30	ar	install_other_apps	تثبيت التطبيقات غير المعروفة
+install_unknown_apps	30	fr	install_other_apps	Installation d'applis inconnues
+install_unknown_apps	30	de	install_other_apps	Installieren unbekannter Apps
+install_unknown_apps	30	es	install_other_apps	Instalar aplicaciones desconocidas
+install_unknown_apps	30	ru	install_other_apps	Неизвестные приложения
+install_unknown_apps	30	zh	install_other_apps	安装未知应用
+install_unknown_apps	31	en	install_other_apps	Install unknown apps
+install_unknown_apps	31	fa	install_other_apps	نصب برنامه‌های ناشناس
+install_unknown_apps	31	ar	install_other_apps	تثبيت التطبيقات غير المعروفة
+install_unknown_apps	31	fr	install_other_apps	Installation d'applis inconnues
+install_unknown_apps	31	de	install_other_apps	Installieren unbekannter Apps
+install_unknown_apps	31	es	install_other_apps	Instalar aplicaciones desconocidas
+install_unknown_apps	31	ru	install_other_apps	Установка неизвестных приложений
+install_unknown_apps	31	zh	install_other_apps	安装未知应用
+install_unknown_apps	32	en	install_other_apps	Install unknown apps
+install_unknown_apps	32	fa	install_other_apps	نصب برنامه‌های ناشناس
+install_unknown_apps	32	ar	install_other_apps	تثبيت التطبيقات غير المعروفة
+install_unknown_apps	32	fr	install_other_apps	Installation d'applis inconnues
+install_unknown_apps	32	de	install_other_apps	Installieren unbekannter Apps
+install_unknown_apps	32	es	install_other_apps	Instalar aplicaciones desconocidas
+install_unknown_apps	32	ru	install_other_apps	Установка неизвестных приложений
+install_unknown_apps	32	zh	install_other_apps	安装未知应用
+install_unknown_apps	33	en	install_other_apps	Install unknown apps
+install_unknown_apps	33	fa	install_other_apps	نصب برنامه‌های ناشناس
+install_unknown_apps	33	ar	install_other_apps	تثبيت التطبيقات غير المعروفة
+install_unknown_apps	33	fr	install_other_apps	Installation d'applis inconnues
+install_unknown_apps	33	de	install_other_apps	Installieren unbekannter Apps
+install_unknown_apps	33	es	install_other_apps	Instalar aplicaciones desconocidas
+install_unknown_apps	33	ru	install_other_apps	Установка неизвестных приложений
+install_unknown_apps	33	zh	install_other_apps	安装未知应用
+install_unknown_apps	34	en	install_other_apps	Install unknown apps
+install_unknown_apps	34	fa	install_other_apps	نصب برنامه‌های ناشناس
+install_unknown_apps	34	ar	install_other_apps	تثبيت التطبيقات غير المعروفة
+install_unknown_apps	34	fr	install_other_apps	Installation d'applis inconnues
+install_unknown_apps	34	de	install_other_apps	Installieren unbekannter Apps
+install_unknown_apps	34	es	install_other_apps	Instalar aplicaciones desconocidas
+install_unknown_apps	34	ru	install_other_apps	Установка неизвестных приложений
+install_unknown_apps	34	zh	install_other_apps	安装未知应用
+install_unknown_apps	35	en	install_other_apps	Install unknown apps
+install_unknown_apps	35	fa	install_other_apps	نصب برنامه‌های ناشناس
+install_unknown_apps	35	ar	install_other_apps	تثبيت التطبيقات غير المعروفة
+install_unknown_apps	35	fr	install_other_apps	Installation d'applis inconnues
+install_unknown_apps	35	de	install_other_apps	Installieren unbekannter Apps
+install_unknown_apps	35	es	install_other_apps	Instalar aplicaciones desconocidas
+install_unknown_apps	35	ru	install_other_apps	Установка неизвестных приложений
+install_unknown_apps	35	zh	install_other_apps	安装未知应用
+install_unknown_apps	36	en	install_other_apps	Install unknown apps
+install_unknown_apps	36	fa	install_other_apps	نصب برنامه‌های ناشناس
+install_unknown_apps	36	ar	install_other_apps	تثبيت التطبيقات غير المعروفة
+install_unknown_apps	36	fr	install_other_apps	Installation d'applis inconnues
+install_unknown_apps	36	de	install_other_apps	Installieren unbekannter Apps
+install_unknown_apps	36	es	install_other_apps	Instalar aplicaciones desconocidas
+install_unknown_apps	36	ru	install_other_apps	Установка неизвестных приложений
+install_unknown_apps	36	zh	install_other_apps	安装未知应用
+install_unknown_apps	37	en	install_other_apps	Install unknown apps
+install_unknown_apps	37	fa	install_other_apps	نصب کردن برنامه‌های ناشناس
+install_unknown_apps	37	ar	install_other_apps	تثبيت التطبيقات غير المعروفة
+install_unknown_apps	37	fr	install_other_apps	Installation d'applis inconnues
+install_unknown_apps	37	de	install_other_apps	Installieren unbekannter Apps
+install_unknown_apps	37	es	install_other_apps	Instalar aplicaciones desconocidas
+install_unknown_apps	37	ru	install_other_apps	Установка неизвестных приложений
+install_unknown_apps	37	zh	install_other_apps	安装未知应用
+notification_access	29	en	manage_notification_access_title	Notification access
+notification_access	29	fa	manage_notification_access_title	دسترسی به اعلان
+notification_access	29	ar	manage_notification_access_title	الوصول إلى الإشعارات
+notification_access	29	fr	manage_notification_access_title	Accès aux notifications
+notification_access	29	de	manage_notification_access_title	Benachrichtigungszugriff
+notification_access	29	es	manage_notification_access_title	Acceso a notificaciones
+notification_access	29	ru	manage_notification_access_title	Доступ к уведомлениям
+notification_access	29	zh	manage_notification_access_title	通知使用权
+notification_access	30	en	manage_notification_access_title	Notification access
+notification_access	30	fa	manage_notification_access_title	دسترسی به اعلان
+notification_access	30	ar	manage_notification_access_title	الوصول إلى الإشعارات
+notification_access	30	fr	manage_notification_access_title	Accès aux notifications
+notification_access	30	de	manage_notification_access_title	Benachrichtigungszugriff
+notification_access	30	es	manage_notification_access_title	Acceso a notificaciones
+notification_access	30	ru	manage_notification_access_title	Доступ к уведомлениям
+notification_access	30	zh	manage_notification_access_title	通知使用权
+notification_access	31	en	manage_notification_access_title	Device & app notifications
+notification_access	31	fa	manage_notification_access_title	اعلان‌های دستگاه و برنامه
+notification_access	31	ar	manage_notification_access_title	إشعارات التطبيقات والأجهزة
+notification_access	31	fr	manage_notification_access_title	Notifications de l'appareil et des applis
+notification_access	31	de	manage_notification_access_title	Geräte- und App-Benachrichtigungen
+notification_access	31	es	manage_notification_access_title	Notificaciones del dispositivo y de aplicaciones
+notification_access	31	ru	manage_notification_access_title	Уведомления на устройствах и в приложениях
+notification_access	31	zh	manage_notification_access_title	设备和应用通知
+notification_access	32	en	manage_notification_access_title	Device & app notifications
+notification_access	32	fa	manage_notification_access_title	اعلان‌های دستگاه و برنامه
+notification_access	32	ar	manage_notification_access_title	إشعارات التطبيقات والأجهزة
+notification_access	32	fr	manage_notification_access_title	Notifications de l'appareil et des applis
+notification_access	32	de	manage_notification_access_title	Geräte- und App-Benachrichtigungen
+notification_access	32	es	manage_notification_access_title	Notificaciones del dispositivo y de aplicaciones
+notification_access	32	ru	manage_notification_access_title	Уведомления на устройствах и в приложениях
+notification_access	32	zh	manage_notification_access_title	设备和应用通知
+notification_access	33	en	manage_notification_access_title	Device & app notifications
+notification_access	33	fa	manage_notification_access_title	اعلان‌های دستگاه و برنامه
+notification_access	33	ar	manage_notification_access_title	إشعارات التطبيقات والأجهزة
+notification_access	33	fr	manage_notification_access_title	Notifications de l'appareil et des applis
+notification_access	33	de	manage_notification_access_title	Geräte- und App-Benachrichtigungen
+notification_access	33	es	manage_notification_access_title	Notificaciones de dispositivos y aplicaciones
+notification_access	33	ru	manage_notification_access_title	Уведомления на устройствах и в приложениях
+notification_access	33	zh	manage_notification_access_title	设备和应用通知
+notification_access	34	en	manage_notification_access_title	Device & app notifications
+notification_access	34	fa	manage_notification_access_title	اعلان‌های دستگاه و برنامه
+notification_access	34	ar	manage_notification_access_title	إشعارات التطبيقات والأجهزة
+notification_access	34	fr	manage_notification_access_title	Notifications de l'appareil et des applis
+notification_access	34	de	manage_notification_access_title	Geräte- und App-Benachrichtigungen
+notification_access	34	es	manage_notification_access_title	Notificaciones de dispositivos y aplicaciones
+notification_access	34	ru	manage_notification_access_title	Уведомления на устройствах и в приложениях
+notification_access	34	zh	manage_notification_access_title	设备和应用通知
+notification_access	35	en	manage_notification_access_title	Notification read, reply & control
+notification_access	35	fa	manage_notification_access_title	خواندن، پاسخ دادن، و کنترل اعلان
+notification_access	35	ar	manage_notification_access_title	قراءة الإشعارات والردّ عليها والتحكّم فيها
+notification_access	35	fr	manage_notification_access_title	Notifications : lecture, contrôle et réponse
+notification_access	35	de	manage_notification_access_title	Benachrichtigungen lesen, beantworten & verwalten
+notification_access	35	es	manage_notification_access_title	Lectura, respuesta y control de notificaciones
+notification_access	35	ru	manage_notification_access_title	Чтение уведомлений, управление ими и ответы на них
+notification_access	35	zh	manage_notification_access_title	读取、回复和控制通知
+notification_access	36	en	manage_notification_access_title	Notification read, reply & control
+notification_access	36	fa	manage_notification_access_title	خواندن، پاسخ دادن، و کنترل اعلان
+notification_access	36	ar	manage_notification_access_title	قراءة الإشعارات والردّ عليها والتحكّم فيها
+notification_access	36	fr	manage_notification_access_title	Notifications : lecture, contrôle et réponse
+notification_access	36	de	manage_notification_access_title	Benachrichtigungen lesen, beantworten & verwalten
+notification_access	36	es	manage_notification_access_title	Lectura, respuesta y control de notificaciones
+notification_access	36	ru	manage_notification_access_title	Чтение уведомлений, управление ими и ответы на них
+notification_access	36	zh	manage_notification_access_title	读取、回复和控制通知
+notification_access	37	en	manage_notification_access_title	Notification read, reply & control
+notification_access	37	fa	manage_notification_access_title	خواندن، پاسخ دادن، و کنترل اعلان
+notification_access	37	ar	manage_notification_access_title	قراءة الإشعارات والردّ عليها والتحكّم فيها
+notification_access	37	fr	manage_notification_access_title	Notifications : lecture, contrôle et réponse
+notification_access	37	de	manage_notification_access_title	Benachrichtigungen lesen, beantworten & verwalten
+notification_access	37	es	manage_notification_access_title	Lectura, respuesta y control de notificaciones
+notification_access	37	ru	manage_notification_access_title	Чтение уведомлений, управление ими и ответы на них
+notification_access	37	zh	manage_notification_access_title	读取、回复和控制通知
+overlay	29	en	system_alert_window_settings	Display over other apps
+overlay	29	fa	system_alert_window_settings	نمایش روی سایر برنامه‌ها
+overlay	29	ar	system_alert_window_settings	إظهار فوق التطبيقات الأخرى
+overlay	29	fr	system_alert_window_settings	Superposition sur d'autres applis
+overlay	29	de	system_alert_window_settings	Über anderen Apps einblenden
+overlay	29	es	system_alert_window_settings	Mostrar sobre otras aplicaciones
+overlay	29	ru	system_alert_window_settings	Поверх других приложений
+overlay	29	zh	system_alert_window_settings	显示在其他应用的上层
+overlay	30	en	system_alert_window_settings	Display over other apps
+overlay	30	fa	system_alert_window_settings	نمایش روی سایر برنامه‌ها
+overlay	30	ar	system_alert_window_settings	إظهار فوق التطبيقات الأخرى
+overlay	30	fr	system_alert_window_settings	Superposition sur d'autres applis
+overlay	30	de	system_alert_window_settings	Über anderen Apps einblenden
+overlay	30	es	system_alert_window_settings	Mostrar sobre otras aplicaciones
+overlay	30	ru	system_alert_window_settings	Поверх других приложений
+overlay	30	zh	system_alert_window_settings	显示在其他应用的上层
+overlay	31	en	system_alert_window_settings	Display over other apps
+overlay	31	fa	system_alert_window_settings	نمایش روی سایر برنامه‌ها
+overlay	31	ar	system_alert_window_settings	إظهار فوق التطبيقات الأخرى
+overlay	31	fr	system_alert_window_settings	Superposition sur d'autres applis
+overlay	31	de	system_alert_window_settings	Über anderen Apps einblenden
+overlay	31	es	system_alert_window_settings	Mostrar sobre otras aplicaciones
+overlay	31	ru	system_alert_window_settings	Поверх других приложений
+overlay	31	zh	system_alert_window_settings	显示在其他应用的上层
+overlay	32	en	system_alert_window_settings	Display over other apps
+overlay	32	fa	system_alert_window_settings	نمایش روی سایر برنامه‌ها
+overlay	32	ar	system_alert_window_settings	إظهار فوق التطبيقات الأخرى
+overlay	32	fr	system_alert_window_settings	Superposition sur d'autres applis
+overlay	32	de	system_alert_window_settings	Über anderen Apps einblenden
+overlay	32	es	system_alert_window_settings	Mostrar sobre otras aplicaciones
+overlay	32	ru	system_alert_window_settings	Поверх других приложений
+overlay	32	zh	system_alert_window_settings	显示在其他应用的上层
+overlay	33	en	system_alert_window_settings	Display over other apps
+overlay	33	fa	system_alert_window_settings	نمایش روی سایر برنامه‌ها
+overlay	33	ar	system_alert_window_settings	إظهار فوق التطبيقات الأخرى
+overlay	33	fr	system_alert_window_settings	Superposition sur d'autres applis
+overlay	33	de	system_alert_window_settings	Über anderen Apps einblenden
+overlay	33	es	system_alert_window_settings	Mostrar sobre otras aplicaciones
+overlay	33	ru	system_alert_window_settings	Поверх других приложений
+overlay	33	zh	system_alert_window_settings	显示在其他应用的上层
+overlay	34	en	system_alert_window_settings	Display over other apps
+overlay	34	fa	system_alert_window_settings	نمایش روی سایر برنامه‌ها
+overlay	34	ar	system_alert_window_settings	إظهار فوق التطبيقات الأخرى
+overlay	34	fr	system_alert_window_settings	Superposition sur d'autres applis
+overlay	34	de	system_alert_window_settings	Über anderen Apps einblenden
+overlay	34	es	system_alert_window_settings	Mostrar sobre otras aplicaciones
+overlay	34	ru	system_alert_window_settings	Поверх других приложений
+overlay	34	zh	system_alert_window_settings	显示在其他应用的上层
+overlay	35	en	system_alert_window_settings	Display over other apps
+overlay	35	fa	system_alert_window_settings	نمایش روی سایر برنامه‌ها
+overlay	35	ar	system_alert_window_settings	إظهار فوق التطبيقات الأخرى
+overlay	35	fr	system_alert_window_settings	Superposition sur d'autres applis
+overlay	35	de	system_alert_window_settings	Über anderen Apps einblenden
+overlay	35	es	system_alert_window_settings	Mostrar sobre otras aplicaciones
+overlay	35	ru	system_alert_window_settings	Поверх других приложений
+overlay	35	zh	system_alert_window_settings	显示在其他应用的上层
+overlay	36	en	system_alert_window_settings	Display over other apps
+overlay	36	fa	system_alert_window_settings	نمایش روی سایر برنامه‌ها
+overlay	36	ar	system_alert_window_settings	الظهور فوق التطبيقات الأخرى
+overlay	36	fr	system_alert_window_settings	Superposition sur d'autres applis
+overlay	36	de	system_alert_window_settings	Über anderen Apps einblenden
+overlay	36	es	system_alert_window_settings	Mostrar sobre otras aplicaciones
+overlay	36	ru	system_alert_window_settings	Поверх других приложений
+overlay	36	zh	system_alert_window_settings	显示在其他应用的上层
+overlay	37	en	system_alert_window_settings	Display over other apps
+overlay	37	fa	system_alert_window_settings	نمایش روی سایر برنامه‌ها
+overlay	37	ar	system_alert_window_settings	الظهور فوق التطبيقات الأخرى
+overlay	37	fr	system_alert_window_settings	Superposition sur d'autres applis
+overlay	37	de	system_alert_window_settings	Über anderen Apps einblenden
+overlay	37	es	system_alert_window_settings	Mostrar sobre otras aplicaciones
+overlay	37	ru	system_alert_window_settings	Поверх других приложений
+overlay	37	zh	system_alert_window_settings	显示在其他应用的上层
+private_dns	29	en	select_private_dns_configuration_title	Private DNS
+private_dns	29	fa	select_private_dns_configuration_title	DNS خصوصی
+private_dns	29	ar	select_private_dns_configuration_title	نظام أسماء النطاقات الخاص
+private_dns	29	fr	select_private_dns_configuration_title	DNS privé
+private_dns	29	de	select_private_dns_configuration_title	Privates DNS
+private_dns	29	es	select_private_dns_configuration_title	DNS privado
+private_dns	29	ru	select_private_dns_configuration_title	Персональный DNS-сервер
+private_dns	29	zh	select_private_dns_configuration_title	私人 DNS
+private_dns	30	en	select_private_dns_configuration_title	Private DNS
+private_dns	30	fa	select_private_dns_configuration_title	DNS خصوصی
+private_dns	30	ar	select_private_dns_configuration_title	نظام أسماء النطاقات الخاص
+private_dns	30	fr	select_private_dns_configuration_title	DNS privé
+private_dns	30	de	select_private_dns_configuration_title	Privates DNS
+private_dns	30	es	select_private_dns_configuration_title	DNS privado
+private_dns	30	ru	select_private_dns_configuration_title	Персональный DNS-сервер
+private_dns	30	zh	select_private_dns_configuration_title	私人 DNS
+private_dns	31	en	select_private_dns_configuration_title	Private DNS
+private_dns	31	fa	select_private_dns_configuration_title	DNS خصوصی
+private_dns	31	ar	select_private_dns_configuration_title	نظام أسماء النطاقات الخاص
+private_dns	31	fr	select_private_dns_configuration_title	DNS privé
+private_dns	31	de	select_private_dns_configuration_title	Privates DNS
+private_dns	31	es	select_private_dns_configuration_title	DNS privado
+private_dns	31	ru	select_private_dns_configuration_title	Частный DNS-сервер
+private_dns	31	zh	select_private_dns_configuration_title	私人 DNS
+private_dns	32	en	select_private_dns_configuration_title	Private DNS
+private_dns	32	fa	select_private_dns_configuration_title	DNS خصوصی
+private_dns	32	ar	select_private_dns_configuration_title	نظام أسماء النطاقات الخاص
+private_dns	32	fr	select_private_dns_configuration_title	DNS privé
+private_dns	32	de	select_private_dns_configuration_title	Privates DNS
+private_dns	32	es	select_private_dns_configuration_title	DNS privado
+private_dns	32	ru	select_private_dns_configuration_title	Частный DNS-сервер
+private_dns	32	zh	select_private_dns_configuration_title	私人 DNS
+private_dns	33	en	select_private_dns_configuration_title	Private DNS
+private_dns	33	fa	select_private_dns_configuration_title	DNS خصوصی
+private_dns	33	ar	select_private_dns_configuration_title	نظام أسماء النطاقات الخاص
+private_dns	33	fr	select_private_dns_configuration_title	DNS privé
+private_dns	33	de	select_private_dns_configuration_title	Privates DNS
+private_dns	33	es	select_private_dns_configuration_title	DNS privado
+private_dns	33	ru	select_private_dns_configuration_title	Частный DNS-сервер
+private_dns	33	zh	select_private_dns_configuration_title	私人 DNS
+private_dns	34	en	select_private_dns_configuration_title	Private DNS
+private_dns	34	fa	select_private_dns_configuration_title	DNS خصوصی
+private_dns	34	ar	select_private_dns_configuration_title	نظام أسماء النطاقات الخاص
+private_dns	34	fr	select_private_dns_configuration_title	DNS privé
+private_dns	34	de	select_private_dns_configuration_title	Privates DNS
+private_dns	34	es	select_private_dns_configuration_title	DNS privado
+private_dns	34	ru	select_private_dns_configuration_title	Частный DNS-сервер
+private_dns	34	zh	select_private_dns_configuration_title	专用 DNS
+private_dns	35	en	select_private_dns_configuration_title	Private DNS
+private_dns	35	fa	select_private_dns_configuration_title	DNS خصوصی
+private_dns	35	ar	select_private_dns_configuration_title	نظام أسماء النطاقات الخاص
+private_dns	35	fr	select_private_dns_configuration_title	DNS privé
+private_dns	35	de	select_private_dns_configuration_title	Privates DNS
+private_dns	35	es	select_private_dns_configuration_title	DNS privado
+private_dns	35	ru	select_private_dns_configuration_title	Частный DNS-сервер
+private_dns	35	zh	select_private_dns_configuration_title	专用 DNS
+private_dns	36	en	select_private_dns_configuration_title	Private DNS
+private_dns	36	fa	select_private_dns_configuration_title	DNS خصوصی
+private_dns	36	ar	select_private_dns_configuration_title	نظام أسماء النطاقات الخاص
+private_dns	36	fr	select_private_dns_configuration_title	DNS privé
+private_dns	36	de	select_private_dns_configuration_title	Privates DNS
+private_dns	36	es	select_private_dns_configuration_title	DNS privado
+private_dns	36	ru	select_private_dns_configuration_title	Частный DNS-сервер
+private_dns	36	zh	select_private_dns_configuration_title	专用 DNS
+private_dns	37	en	select_private_dns_configuration_title	Private DNS
+private_dns	37	fa	select_private_dns_configuration_title	DNS خصوصی
+private_dns	37	ar	select_private_dns_configuration_title	نظام أسماء النطاقات الخاص
+private_dns	37	fr	select_private_dns_configuration_title	DNS privé
+private_dns	37	de	select_private_dns_configuration_title	Privates DNS
+private_dns	37	es	select_private_dns_configuration_title	DNS privado
+private_dns	37	ru	select_private_dns_configuration_title	Частный DNS-сервер
+private_dns	37	zh	select_private_dns_configuration_title	专用 DNS
+private_dns_automatic	29	en	private_dns_mode_opportunistic	Automatic
+private_dns_automatic	29	fa	private_dns_mode_opportunistic	خودکار
+private_dns_automatic	29	ar	private_dns_mode_opportunistic	تلقائي
+private_dns_automatic	29	fr	private_dns_mode_opportunistic	Automatique
+private_dns_automatic	29	de	private_dns_mode_opportunistic	Automatisch
+private_dns_automatic	29	es	private_dns_mode_opportunistic	Automático
+private_dns_automatic	29	ru	private_dns_mode_opportunistic	Автоматический режим
+private_dns_automatic	29	zh	private_dns_mode_opportunistic	自动
+private_dns_automatic	30	en	private_dns_mode_opportunistic	Automatic
+private_dns_automatic	30	fa	private_dns_mode_opportunistic	خودکار
+private_dns_automatic	30	ar	private_dns_mode_opportunistic	تلقائي
+private_dns_automatic	30	fr	private_dns_mode_opportunistic	Automatique
+private_dns_automatic	30	de	private_dns_mode_opportunistic	Automatisch
+private_dns_automatic	30	es	private_dns_mode_opportunistic	Automático
+private_dns_automatic	30	ru	private_dns_mode_opportunistic	Автоматический режим
+private_dns_automatic	30	zh	private_dns_mode_opportunistic	自动
+private_dns_automatic	31	en	private_dns_mode_opportunistic	Automatic
+private_dns_automatic	31	fa	private_dns_mode_opportunistic	خودکار
+private_dns_automatic	31	ar	private_dns_mode_opportunistic	تلقائي
+private_dns_automatic	31	fr	private_dns_mode_opportunistic	Automatique
+private_dns_automatic	31	de	private_dns_mode_opportunistic	Automatisch
+private_dns_automatic	31	es	private_dns_mode_opportunistic	Automático
+private_dns_automatic	31	ru	private_dns_mode_opportunistic	Автоматически
+private_dns_automatic	31	zh	private_dns_mode_opportunistic	自动
+private_dns_automatic	32	en	private_dns_mode_opportunistic	Automatic
+private_dns_automatic	32	fa	private_dns_mode_opportunistic	خودکار
+private_dns_automatic	32	ar	private_dns_mode_opportunistic	تلقائي
+private_dns_automatic	32	fr	private_dns_mode_opportunistic	Automatique
+private_dns_automatic	32	de	private_dns_mode_opportunistic	Automatisch
+private_dns_automatic	32	es	private_dns_mode_opportunistic	Automático
+private_dns_automatic	32	ru	private_dns_mode_opportunistic	Автоматически
+private_dns_automatic	32	zh	private_dns_mode_opportunistic	自动
+private_dns_automatic	33	en	private_dns_mode_opportunistic	Automatic
+private_dns_automatic	33	fa	private_dns_mode_opportunistic	خودکار
+private_dns_automatic	33	ar	private_dns_mode_opportunistic	تلقائي
+private_dns_automatic	33	fr	private_dns_mode_opportunistic	Automatique
+private_dns_automatic	33	de	private_dns_mode_opportunistic	Automatisch
+private_dns_automatic	33	es	private_dns_mode_opportunistic	Automático
+private_dns_automatic	33	ru	private_dns_mode_opportunistic	Автоматически
+private_dns_automatic	33	zh	private_dns_mode_opportunistic	自动
+private_dns_automatic	34	en	private_dns_mode_opportunistic	Automatic
+private_dns_automatic	34	fa	private_dns_mode_opportunistic	خودکار
+private_dns_automatic	34	ar	private_dns_mode_opportunistic	تلقائي
+private_dns_automatic	34	fr	private_dns_mode_opportunistic	Automatique
+private_dns_automatic	34	de	private_dns_mode_opportunistic	Automatisch
+private_dns_automatic	34	es	private_dns_mode_opportunistic	Automático
+private_dns_automatic	34	ru	private_dns_mode_opportunistic	Автоматически
+private_dns_automatic	34	zh	private_dns_mode_opportunistic	自动
+private_dns_automatic	35	en	private_dns_mode_opportunistic	Automatic
+private_dns_automatic	35	fa	private_dns_mode_opportunistic	خودکار
+private_dns_automatic	35	ar	private_dns_mode_opportunistic	تلقائي
+private_dns_automatic	35	fr	private_dns_mode_opportunistic	Automatique
+private_dns_automatic	35	de	private_dns_mode_opportunistic	Automatisch
+private_dns_automatic	35	es	private_dns_mode_opportunistic	Automático
+private_dns_automatic	35	ru	private_dns_mode_opportunistic	Автоматически
+private_dns_automatic	35	zh	private_dns_mode_opportunistic	自动
+private_dns_automatic	36	en	private_dns_mode_opportunistic	Automatic
+private_dns_automatic	36	fa	private_dns_mode_opportunistic	خودکار
+private_dns_automatic	36	ar	private_dns_mode_opportunistic	تلقائي
+private_dns_automatic	36	fr	private_dns_mode_opportunistic	Automatique
+private_dns_automatic	36	de	private_dns_mode_opportunistic	Automatisch
+private_dns_automatic	36	es	private_dns_mode_opportunistic	Automático
+private_dns_automatic	36	ru	private_dns_mode_opportunistic	Автоматически
+private_dns_automatic	36	zh	private_dns_mode_opportunistic	自动
+private_dns_automatic	37	en	private_dns_mode_opportunistic	Automatic
+private_dns_automatic	37	fa	private_dns_mode_opportunistic	خودکار
+private_dns_automatic	37	ar	private_dns_mode_opportunistic	تلقائي
+private_dns_automatic	37	fr	private_dns_mode_opportunistic	Automatique
+private_dns_automatic	37	de	private_dns_mode_opportunistic	Automatisch
+private_dns_automatic	37	es	private_dns_mode_opportunistic	Automático
+private_dns_automatic	37	ru	private_dns_mode_opportunistic	Автоматически
+private_dns_automatic	37	zh	private_dns_mode_opportunistic	自动
+private_dns_off	29	en	private_dns_mode_off	Off
+private_dns_off	29	fa	private_dns_mode_off	خاموش
+private_dns_off	29	ar	private_dns_mode_off	غير مفعّل
+private_dns_off	29	fr	private_dns_mode_off	Désactivé
+private_dns_off	29	de	private_dns_mode_off	Aus
+private_dns_off	29	es	private_dns_mode_off	Desactivado
+private_dns_off	29	ru	private_dns_mode_off	Отключено
+private_dns_off	29	zh	private_dns_mode_off	关闭
+private_dns_off	30	en	private_dns_mode_off	Off
+private_dns_off	30	fa	private_dns_mode_off	خاموش
+private_dns_off	30	ar	private_dns_mode_off	غير مفعّل
+private_dns_off	30	fr	private_dns_mode_off	Désactivé
+private_dns_off	30	de	private_dns_mode_off	Aus
+private_dns_off	30	es	private_dns_mode_off	Desactivado
+private_dns_off	30	ru	private_dns_mode_off	Отключено
+private_dns_off	30	zh	private_dns_mode_off	关闭
+private_dns_off	31	en	private_dns_mode_off	Off
+private_dns_off	31	fa	private_dns_mode_off	خاموش
+private_dns_off	31	ar	private_dns_mode_off	غير مفعّل
+private_dns_off	31	fr	private_dns_mode_off	Désactivé
+private_dns_off	31	de	private_dns_mode_off	Aus
+private_dns_off	31	es	private_dns_mode_off	Desactivado
+private_dns_off	31	ru	private_dns_mode_off	Отключен
+private_dns_off	31	zh	private_dns_mode_off	已关闭
+private_dns_off	32	en	private_dns_mode_off	Off
+private_dns_off	32	fa	private_dns_mode_off	خاموش
+private_dns_off	32	ar	private_dns_mode_off	غير مفعّل
+private_dns_off	32	fr	private_dns_mode_off	Désactivé
+private_dns_off	32	de	private_dns_mode_off	Aus
+private_dns_off	32	es	private_dns_mode_off	Desactivado
+private_dns_off	32	ru	private_dns_mode_off	Отключен
+private_dns_off	32	zh	private_dns_mode_off	已关闭
+private_dns_off	33	en	private_dns_mode_off	Off
+private_dns_off	33	fa	private_dns_mode_off	خاموش
+private_dns_off	33	ar	private_dns_mode_off	غير مفعّل
+private_dns_off	33	fr	private_dns_mode_off	Désactivé
+private_dns_off	33	de	private_dns_mode_off	Aus
+private_dns_off	33	es	private_dns_mode_off	Desactivado
+private_dns_off	33	ru	private_dns_mode_off	Отключен
+private_dns_off	33	zh	private_dns_mode_off	已关闭
+private_dns_off	34	en	private_dns_mode_off	Off
+private_dns_off	34	fa	private_dns_mode_off	خاموش
+private_dns_off	34	ar	private_dns_mode_off	غير مفعّل
+private_dns_off	34	fr	private_dns_mode_off	Désactivé
+private_dns_off	34	de	private_dns_mode_off	Aus
+private_dns_off	34	es	private_dns_mode_off	Desactivado
+private_dns_off	34	ru	private_dns_mode_off	Отключен
+private_dns_off	34	zh	private_dns_mode_off	已关闭
+private_dns_off	35	en	private_dns_mode_off	Off
+private_dns_off	35	fa	private_dns_mode_off	خاموش
+private_dns_off	35	ar	private_dns_mode_off	غير مفعّل
+private_dns_off	35	fr	private_dns_mode_off	Désactivé
+private_dns_off	35	de	private_dns_mode_off	Aus
+private_dns_off	35	es	private_dns_mode_off	Desactivado
+private_dns_off	35	ru	private_dns_mode_off	Отключен
+private_dns_off	35	zh	private_dns_mode_off	关闭
+private_dns_off	36	en	private_dns_mode_off	Off
+private_dns_off	36	fa	private_dns_mode_off	خاموش
+private_dns_off	36	ar	private_dns_mode_off	غير مفعّل
+private_dns_off	36	fr	private_dns_mode_off	Désactivé
+private_dns_off	36	de	private_dns_mode_off	Aus
+private_dns_off	36	es	private_dns_mode_off	Desactivado
+private_dns_off	36	ru	private_dns_mode_off	Отключен
+private_dns_off	36	zh	private_dns_mode_off	关闭
+private_dns_off	37	en	private_dns_mode_off	Off
+private_dns_off	37	fa	private_dns_mode_off	خاموش
+private_dns_off	37	ar	private_dns_mode_off	غير مفعّل
+private_dns_off	37	fr	private_dns_mode_off	Désactivé
+private_dns_off	37	de	private_dns_mode_off	Aus
+private_dns_off	37	es	private_dns_mode_off	Desactivado
+private_dns_off	37	ru	private_dns_mode_off	Отключен
+private_dns_off	37	zh	private_dns_mode_off	关闭
+restricted_settings	33	en	app_restricted_settings_lockscreen_title	Allow restricted settings
+restricted_settings	33	fa	app_restricted_settings_lockscreen_title	اجازه دادن به تنظیمات محدودشده
+restricted_settings	33	ar	app_restricted_settings_lockscreen_title	السماح بالإعدادات المحظورة
+restricted_settings	33	fr	app_restricted_settings_lockscreen_title	Autoriser les paramètres restreints
+restricted_settings	33	de	app_restricted_settings_lockscreen_title	Eingeschränkte Einstellungen zulassen
+restricted_settings	33	es	app_restricted_settings_lockscreen_title	Permitir ajustes restringidos
+restricted_settings	33	ru	app_restricted_settings_lockscreen_title	Разрешить доступ к настройкам
+restricted_settings	33	zh	app_restricted_settings_lockscreen_title	允许受限制的设置
+restricted_settings	34	en	app_restricted_settings_lockscreen_title	Allow restricted settings
+restricted_settings	34	fa	app_restricted_settings_lockscreen_title	اجازه دادن به تنظیمات محدودشده
+restricted_settings	34	ar	app_restricted_settings_lockscreen_title	السماح بالإعدادات المحظورة
+restricted_settings	34	fr	app_restricted_settings_lockscreen_title	Autoriser les paramètres restreints
+restricted_settings	34	de	app_restricted_settings_lockscreen_title	Eingeschränkte Einstellungen zulassen
+restricted_settings	34	es	app_restricted_settings_lockscreen_title	Permitir ajustes restringidos
+restricted_settings	34	ru	app_restricted_settings_lockscreen_title	Разрешить доступ к настройкам
+restricted_settings	34	zh	app_restricted_settings_lockscreen_title	允许受限制的设置
+restricted_settings	35	en	app_restricted_settings_lockscreen_title	Allow restricted settings
+restricted_settings	35	fa	app_restricted_settings_lockscreen_title	اجازه دادن به تنظیمات محدودشده
+restricted_settings	35	ar	app_restricted_settings_lockscreen_title	السماح بالإعدادات المحظورة
+restricted_settings	35	fr	app_restricted_settings_lockscreen_title	Autoriser les paramètres restreints
+restricted_settings	35	de	app_restricted_settings_lockscreen_title	Eingeschränkte Einstellungen zulassen
+restricted_settings	35	es	app_restricted_settings_lockscreen_title	Permitir ajustes restringidos
+restricted_settings	35	ru	app_restricted_settings_lockscreen_title	Разрешить доступ к настройкам
+restricted_settings	35	zh	app_restricted_settings_lockscreen_title	允许受限制的设置
+restricted_settings	36	en	app_restricted_settings_lockscreen_title	Allow restricted settings
+restricted_settings	36	fa	app_restricted_settings_lockscreen_title	اجازه دادن به تنظیمات محدودشده
+restricted_settings	36	ar	app_restricted_settings_lockscreen_title	السماح بالإعدادات المحظورة
+restricted_settings	36	fr	app_restricted_settings_lockscreen_title	Autoriser les paramètres restreints
+restricted_settings	36	de	app_restricted_settings_lockscreen_title	Eingeschränkte Einstellungen zulassen
+restricted_settings	36	es	app_restricted_settings_lockscreen_title	Permitir ajustes restringidos
+restricted_settings	36	ru	app_restricted_settings_lockscreen_title	Разрешить доступ к настройкам
+restricted_settings	36	zh	app_restricted_settings_lockscreen_title	允许受限制的设置
+restricted_settings	37	en	app_restricted_settings_lockscreen_title	Allow restricted settings
+restricted_settings	37	fa	app_restricted_settings_lockscreen_title	اجازه دادن به تنظیمات محدودشده
+restricted_settings	37	ar	app_restricted_settings_lockscreen_title	السماح بالإعدادات المحظورة
+restricted_settings	37	fr	app_restricted_settings_lockscreen_title	Autoriser les paramètres restreints
+restricted_settings	37	de	app_restricted_settings_lockscreen_title	Eingeschränkte Einstellungen zulassen
+restricted_settings	37	es	app_restricted_settings_lockscreen_title	Permitir ajustes restringidos
+restricted_settings	37	ru	app_restricted_settings_lockscreen_title	Разрешить доступ к настройкам
+restricted_settings	37	zh	app_restricted_settings_lockscreen_title	允许受限制的设置
+screen_lock	29	en	unlock_set_unlock_launch_picker_title	Screen lock
+screen_lock	29	fa	unlock_set_unlock_launch_picker_title	قفل صفحه
+screen_lock	29	ar	unlock_set_unlock_launch_picker_title	قفل الشاشة
+screen_lock	29	fr	unlock_set_unlock_launch_picker_title	Verrouillage de l'écran
+screen_lock	29	de	unlock_set_unlock_launch_picker_title	Displaysperre
+screen_lock	29	es	unlock_set_unlock_launch_picker_title	Bloqueo de pantalla
+screen_lock	29	ru	unlock_set_unlock_launch_picker_title	Блокировка экрана
+screen_lock	29	zh	unlock_set_unlock_launch_picker_title	屏幕锁定
+screen_lock	30	en	unlock_set_unlock_launch_picker_title	Screen lock
+screen_lock	30	fa	unlock_set_unlock_launch_picker_title	قفل صفحه
+screen_lock	30	ar	unlock_set_unlock_launch_picker_title	قفل الشاشة
+screen_lock	30	fr	unlock_set_unlock_launch_picker_title	Verrouillage de l'écran
+screen_lock	30	de	unlock_set_unlock_launch_picker_title	Displaysperre
+screen_lock	30	es	unlock_set_unlock_launch_picker_title	Bloqueo de pantalla
+screen_lock	30	ru	unlock_set_unlock_launch_picker_title	Блокировка экрана
+screen_lock	30	zh	unlock_set_unlock_launch_picker_title	屏幕锁定
+screen_lock	31	en	unlock_set_unlock_launch_picker_title	Screen lock
+screen_lock	31	fa	unlock_set_unlock_launch_picker_title	قفل صفحه
+screen_lock	31	ar	unlock_set_unlock_launch_picker_title	قفل الشاشة
+screen_lock	31	fr	unlock_set_unlock_launch_picker_title	Verrouillage de l'écran
+screen_lock	31	de	unlock_set_unlock_launch_picker_title	Displaysperre
+screen_lock	31	es	unlock_set_unlock_launch_picker_title	Bloqueo de pantalla
+screen_lock	31	ru	unlock_set_unlock_launch_picker_title	Блокировка экрана
+screen_lock	31	zh	unlock_set_unlock_launch_picker_title	屏幕锁定
+screen_lock	32	en	unlock_set_unlock_launch_picker_title	Screen lock
+screen_lock	32	fa	unlock_set_unlock_launch_picker_title	قفل صفحه
+screen_lock	32	ar	unlock_set_unlock_launch_picker_title	قفل الشاشة
+screen_lock	32	fr	unlock_set_unlock_launch_picker_title	Verrouillage de l'écran
+screen_lock	32	de	unlock_set_unlock_launch_picker_title	Displaysperre
+screen_lock	32	es	unlock_set_unlock_launch_picker_title	Bloqueo de pantalla
+screen_lock	32	ru	unlock_set_unlock_launch_picker_title	Блокировка экрана
+screen_lock	32	zh	unlock_set_unlock_launch_picker_title	屏幕锁定
+screen_lock	33	en	unlock_set_unlock_launch_picker_title	Screen lock
+screen_lock	33	fa	unlock_set_unlock_launch_picker_title	قفل صفحه
+screen_lock	33	ar	unlock_set_unlock_launch_picker_title	قفل الشاشة
+screen_lock	33	fr	unlock_set_unlock_launch_picker_title	Verrouillage de l'écran
+screen_lock	33	de	unlock_set_unlock_launch_picker_title	Displaysperre
+screen_lock	33	es	unlock_set_unlock_launch_picker_title	Bloqueo de pantalla
+screen_lock	33	ru	unlock_set_unlock_launch_picker_title	Блокировка экрана
+screen_lock	33	zh	unlock_set_unlock_launch_picker_title	屏幕锁定
+screen_lock	34	en	unlock_set_unlock_launch_picker_title	Screen lock
+screen_lock	34	fa	unlock_set_unlock_launch_picker_title	قفل صفحه
+screen_lock	34	ar	unlock_set_unlock_launch_picker_title	قفل الشاشة
+screen_lock	34	fr	unlock_set_unlock_launch_picker_title	Déverrouillage de l'écran
+screen_lock	34	de	unlock_set_unlock_launch_picker_title	Displaysperre
+screen_lock	34	es	unlock_set_unlock_launch_picker_title	Bloqueo de pantalla
+screen_lock	34	ru	unlock_set_unlock_launch_picker_title	Блокировка экрана
+screen_lock	34	zh	unlock_set_unlock_launch_picker_title	屏幕锁定
+screen_lock	35	en	unlock_set_unlock_launch_picker_title	Screen lock
+screen_lock	35	fa	unlock_set_unlock_launch_picker_title	قفل صفحه
+screen_lock	35	ar	unlock_set_unlock_launch_picker_title	قفل الشاشة
+screen_lock	35	fr	unlock_set_unlock_launch_picker_title	Verrouillage de l'écran
+screen_lock	35	de	unlock_set_unlock_launch_picker_title	Displaysperre
+screen_lock	35	es	unlock_set_unlock_launch_picker_title	Bloqueo de pantalla
+screen_lock	35	ru	unlock_set_unlock_launch_picker_title	Блокировка экрана
+screen_lock	35	zh	unlock_set_unlock_launch_picker_title	屏幕锁定
+screen_lock	36	en	unlock_set_unlock_launch_picker_title	Screen lock
+screen_lock	36	fa	unlock_set_unlock_launch_picker_title	قفل صفحه
+screen_lock	36	ar	unlock_set_unlock_launch_picker_title	قفل الشاشة
+screen_lock	36	fr	unlock_set_unlock_launch_picker_title	Déverrouillage de l'écran
+screen_lock	36	de	unlock_set_unlock_launch_picker_title	Displaysperre
+screen_lock	36	es	unlock_set_unlock_launch_picker_title	Bloqueo de pantalla
+screen_lock	36	ru	unlock_set_unlock_launch_picker_title	Блокировка экрана
+screen_lock	36	zh	unlock_set_unlock_launch_picker_title	屏锁
+screen_lock	37	en	unlock_set_unlock_launch_picker_title	Screen lock
+screen_lock	37	fa	unlock_set_unlock_launch_picker_title	قفل صفحه
+screen_lock	37	ar	unlock_set_unlock_launch_picker_title	قفل الشاشة
+screen_lock	37	fr	unlock_set_unlock_launch_picker_title	Déverrouillage de l'écran
+screen_lock	37	de	unlock_set_unlock_launch_picker_title	Displaysperre
+screen_lock	37	es	unlock_set_unlock_launch_picker_title	Bloqueo de pantalla
+screen_lock	37	ru	unlock_set_unlock_launch_picker_title	Способ разблокировки экрана
+screen_lock	37	zh	unlock_set_unlock_launch_picker_title	屏锁
+unused_app_setting	30	en	auto_revoke_label	Remove permissions if app isn’t used
+unused_app_setting	30	fa	auto_revoke_label	اگر از برنامه استفاده نمی‌شود، اجازه‌ها برداشته شوند
+unused_app_setting	30	ar	auto_revoke_label	إزالة الأذونات في حال عدم استخدام التطبيق
+unused_app_setting	30	fr	auto_revoke_label	Supprimer les autorisations si l'application n'est pas utilisée
+unused_app_setting	30	de	auto_revoke_label	Berechtigungen entfernen, wenn die App nicht verwendet wird
+unused_app_setting	30	es	auto_revoke_label	Quitar permisos si la aplicación no se utiliza
+unused_app_setting	30	ru	auto_revoke_label	Отзывать разрешения у неиспользуемых приложений
+unused_app_setting	30	zh	auto_revoke_label	如果未使用此应用，则移除相关权限
+unused_app_setting	31	en	unused_apps_switch	Remove permissions and free up space
+unused_app_setting	31	fa	unused_apps_switch	برداشتن اجازه‌ها و آزاد کردن فضا
+unused_app_setting	31	ar	unused_apps_switch	إزالة الأذونات وإخلاء مساحة
+unused_app_setting	31	fr	unused_apps_switch	Supprimer autorisations et libérer espace
+unused_app_setting	31	de	unused_apps_switch	Berechtigungen löschen und Speicherplatz freigeben
+unused_app_setting	31	es	unused_apps_switch	Quitar permisos y liberar espacio
+unused_app_setting	31	ru	unused_apps_switch	Удалять разрешения и освобождать место
+unused_app_setting	31	zh	unused_apps_switch	撤消权限并释放空间
+unused_app_setting	32	en	unused_apps_switch	Remove permissions and free up space
+unused_app_setting	32	fa	unused_apps_switch	برداشتن اجازه‌ها و آزاد کردن فضا
+unused_app_setting	32	ar	unused_apps_switch	إزالة الأذونات وإخلاء مساحة
+unused_app_setting	32	fr	unused_apps_switch	Supprimer autorisations et libérer espace
+unused_app_setting	32	de	unused_apps_switch	Berechtigungen löschen und Speicherplatz freigeben
+unused_app_setting	32	es	unused_apps_switch	Quitar permisos y liberar espacio
+unused_app_setting	32	ru	unused_apps_switch	Удалять разрешения и освобождать место
+unused_app_setting	32	zh	unused_apps_switch	撤消权限并释放空间
+unused_app_setting	33	en	unused_apps_switch	Pause app activity if unused
+unused_app_setting	33	fa	unused_apps_switch	مکث فعالیت برنامه درصورت عدم‌استفاده
+unused_app_setting	33	ar	unused_apps_switch	إيقاف نشاط التطبيق مؤقتًا عند عدم استخدامه
+unused_app_setting	33	fr	unused_apps_switch	Suspendre l'activité si inutilisée
+unused_app_setting	33	de	unused_apps_switch	App-Aktivität bei Nichtnutzung stoppen
+unused_app_setting	33	es	unused_apps_switch	Pausar actividad de la aplicación si no se usa
+unused_app_setting	33	ru	unused_apps_switch	Приостановить работу в неактивный период
+unused_app_setting	33	zh	unused_apps_switch	暂停未使用应用的活动
+unused_app_setting	34	en	unused_apps_switch	Pause app activity if unused
+unused_app_setting	34	fa	unused_apps_switch	مکث فعالیت‌ها در برنامه درصورت عدم‌استفاده
+unused_app_setting	34	ar	unused_apps_switch	إيقاف نشاط التطبيق مؤقتًا عند عدم استخدامه
+unused_app_setting	34	fr	unused_apps_switch	Suspendre l'activité si inutilisée
+unused_app_setting	34	de	unused_apps_switch	App-Aktivität bei Nichtnutzung stoppen
+unused_app_setting	34	es	unused_apps_switch	Pausar actividad de la aplicación si no se usa
+unused_app_setting	34	ru	unused_apps_switch	Приостановить работу в неактивный период
+unused_app_setting	34	zh	unused_apps_switch	暂停闲置应用的活动
+unused_app_setting	35	en	unused_apps_switch	Pause app activity if unused
+unused_app_setting	35	fa	unused_apps_switch	مکث فعالیت‌ها در برنامه درصورت عدم‌استفاده
+unused_app_setting	35	ar	unused_apps_switch	إيقاف نشاط التطبيق مؤقتًا عند عدم استخدامه
+unused_app_setting	35	fr	unused_apps_switch	Suspendre l'activité si inutilisée
+unused_app_setting	35	de	unused_apps_switch	App-Aktivität bei Nichtnutzung stoppen
+unused_app_setting	35	es	unused_apps_switch	Pausar actividad de la aplicación si no se usa
+unused_app_setting	35	ru	unused_apps_switch	Приостановить работу в неактивный период
+unused_app_setting	35	zh	unused_apps_switch	暂停闲置应用的活动
+unused_app_setting	36	en	unused_apps_switch	Pause app activity if unused
+unused_app_setting	36	fa	unused_apps_switch	مکث فعالیت‌ها در برنامه درصورت عدم‌استفاده
+unused_app_setting	36	ar	unused_apps_switch	إيقاف نشاط التطبيق مؤقتًا عند عدم استخدامه
+unused_app_setting	36	fr	unused_apps_switch	Suspendre l'activité si inutilisée
+unused_app_setting	36	de	unused_apps_switch	App-Aktivität bei Nichtnutzung stoppen
+unused_app_setting	36	es	unused_apps_switch	Pausar actividad de la aplicación si no se usa
+unused_app_setting	36	ru	unused_apps_switch	Приостановить работу в неактивный период
+unused_app_setting	36	zh	unused_apps_switch	暂停闲置应用的活动
+unused_app_setting	37	en	unused_apps_switch	Pause app activity if unused
+unused_app_setting	37	fa	unused_apps_switch	مکث فعالیت‌ها در برنامه درصورت عدم‌استفاده
+unused_app_setting	37	ar	unused_apps_switch	إيقاف نشاط التطبيق مؤقتًا عند عدم استخدامه
+unused_app_setting	37	fr	unused_apps_switch	Suspendre l'activité si inutilisée
+unused_app_setting	37	de	unused_apps_switch	App-Aktivität bei Nichtnutzung stoppen
+unused_app_setting	37	es	unused_apps_switch	Pausar actividad de la aplicación si no se usa
+unused_app_setting	37	ru	unused_apps_switch	Приостановить работу в неактивный период
+unused_app_setting	37	zh	unused_apps_switch	暂停闲置应用的活动
+usage_access	29	en	usage_access	Usage access
+usage_access	29	fa	usage_access	دسترسی به میزان استفاده
+usage_access	29	ar	usage_access	الوصول إلى بيانات الاستخدام
+usage_access	29	fr	usage_access	Accès à la conso des données
+usage_access	29	de	usage_access	Zugriff auf Nutzungsdaten
+usage_access	29	es	usage_access	Acceso al uso
+usage_access	29	ru	usage_access	Доступ к данным об использовании
+usage_access	29	zh	usage_access	使用情况访问权限
+usage_access	30	en	usage_access	Usage access
+usage_access	30	fa	usage_access	دسترسی به استفاده
+usage_access	30	ar	usage_access	الوصول إلى بيانات الاستخدام
+usage_access	30	fr	usage_access	Accès aux infos d'utilisation
+usage_access	30	de	usage_access	Zugriff auf Nutzungsdaten
+usage_access	30	es	usage_access	Acceso al uso
+usage_access	30	ru	usage_access	Доступ к данным об использовании
+usage_access	30	zh	usage_access	使用情况访问权限
+usage_access	31	en	usage_access	Usage access
+usage_access	31	fa	usage_access	دسترسی به داده‌های مصرف
+usage_access	31	ar	usage_access	الوصول إلى بيانات الاستخدام
+usage_access	31	fr	usage_access	Accès aux infos d'utilisation
+usage_access	31	de	usage_access	Zugriff auf Nutzungsdaten
+usage_access	31	es	usage_access	Acceso al uso
+usage_access	31	ru	usage_access	Доступ к данным об использовании
+usage_access	31	zh	usage_access	使用情况访问权限
+usage_access	32	en	usage_access	Usage access
+usage_access	32	fa	usage_access	دسترسی به داده‌های مصرف
+usage_access	32	ar	usage_access	الوصول إلى بيانات الاستخدام
+usage_access	32	fr	usage_access	Accès aux infos d'utilisation
+usage_access	32	de	usage_access	Zugriff auf Nutzungsdaten
+usage_access	32	es	usage_access	Acceso al uso
+usage_access	32	ru	usage_access	Доступ к данным об использовании
+usage_access	32	zh	usage_access	使用情况访问权限
+usage_access	33	en	usage_access	Usage access
+usage_access	33	fa	usage_access	دسترسی به داده‌های مصرف
+usage_access	33	ar	usage_access	الوصول إلى بيانات الاستخدام
+usage_access	33	fr	usage_access	Accès aux données d'utilisation
+usage_access	33	de	usage_access	Zugriff auf Nutzungsdaten
+usage_access	33	es	usage_access	Acceso al uso
+usage_access	33	ru	usage_access	Доступ к данным об использовании
+usage_access	33	zh	usage_access	使用情况访问权限
+usage_access	34	en	usage_access	Usage access
+usage_access	34	fa	usage_access	دسترسی به داده‌های مصرف
+usage_access	34	ar	usage_access	الوصول إلى بيانات الاستخدام
+usage_access	34	fr	usage_access	Accès aux données d'utilisation
+usage_access	34	de	usage_access	Zugriff auf Nutzungsdaten
+usage_access	34	es	usage_access	Acceso al uso
+usage_access	34	ru	usage_access	Доступ к данным об использовании
+usage_access	34	zh	usage_access	使用情况访问权限
+usage_access	35	en	usage_access	Usage access
+usage_access	35	fa	usage_access	دسترسی به داده‌های مصرف
+usage_access	35	ar	usage_access	الوصول إلى بيانات الاستخدام
+usage_access	35	fr	usage_access	Accès aux données d'utilisation
+usage_access	35	de	usage_access	Zugriff auf Nutzungsdaten
+usage_access	35	es	usage_access	Acceso al uso
+usage_access	35	ru	usage_access	Доступ к данным об использовании
+usage_access	35	zh	usage_access	使用情况访问权限
+usage_access	36	en	usage_access	App usage data
+usage_access	36	fa	usage_access	داده‌های مصرف برنامه
+usage_access	36	ar	usage_access	بيانات استخدام التطبيق
+usage_access	36	fr	usage_access	Données d'utilisation d'applis
+usage_access	36	de	usage_access	App-Nutzungsdaten
+usage_access	36	es	usage_access	Datos de uso de aplicaciones
+usage_access	36	ru	usage_access	Данные об использовании приложений
+usage_access	36	zh	usage_access	应用使用情况数据
+usage_access	37	en	usage_access	App usage data
+usage_access	37	fa	usage_access	داده‌های مصرف برنامه
+usage_access	37	ar	usage_access	بيانات استخدام التطبيق
+usage_access	37	fr	usage_access	Données d'utilisation d'applis
+usage_access	37	de	usage_access	App-Nutzungsdaten
+usage_access	37	es	usage_access	Datos de uso de aplicaciones
+usage_access	37	ru	usage_access	Данные об использовании приложений
+usage_access	37	zh	usage_access	应用使用情况数据
+usb_debugging	29	en	enable_adb	USB debugging
+usb_debugging	29	fa	enable_adb	اشکال‌زدایی USB
+usb_debugging	29	ar	enable_adb	تصحيح أخطاء USB
+usb_debugging	29	fr	enable_adb	Débogage USB
+usb_debugging	29	de	enable_adb	USB-Debugging
+usb_debugging	29	es	enable_adb	Depuración por USB
+usb_debugging	29	ru	enable_adb	Отладка по USB
+usb_debugging	29	zh	enable_adb	USB 调试
+usb_debugging	30	en	enable_adb	USB debugging
+usb_debugging	30	fa	enable_adb	اشکال‌زدایی USB
+usb_debugging	30	ar	enable_adb	تصحيح أخطاء USB
+usb_debugging	30	fr	enable_adb	Débogage USB
+usb_debugging	30	de	enable_adb	USB-Debugging
+usb_debugging	30	es	enable_adb	Depuración por USB
+usb_debugging	30	ru	enable_adb	Отладка по USB
+usb_debugging	30	zh	enable_adb	USB 调试
+usb_debugging	31	en	enable_adb	USB debugging
+usb_debugging	31	fa	enable_adb	اشکال‌زدایی USB
+usb_debugging	31	ar	enable_adb	تصحيح أخطاء USB
+usb_debugging	31	fr	enable_adb	Débogage USB
+usb_debugging	31	de	enable_adb	USB-Debugging
+usb_debugging	31	es	enable_adb	Depuración por USB
+usb_debugging	31	ru	enable_adb	Отладка по USB
+usb_debugging	31	zh	enable_adb	USB 调试
+usb_debugging	32	en	enable_adb	USB debugging
+usb_debugging	32	fa	enable_adb	اشکال‌زدایی USB
+usb_debugging	32	ar	enable_adb	تصحيح أخطاء USB
+usb_debugging	32	fr	enable_adb	Débogage USB
+usb_debugging	32	de	enable_adb	USB-Debugging
+usb_debugging	32	es	enable_adb	Depuración por USB
+usb_debugging	32	ru	enable_adb	Отладка по USB
+usb_debugging	32	zh	enable_adb	USB 调试
+usb_debugging	33	en	enable_adb	USB debugging
+usb_debugging	33	fa	enable_adb	اشکال‌زدایی USB
+usb_debugging	33	ar	enable_adb	تصحيح أخطاء USB
+usb_debugging	33	fr	enable_adb	Débogage USB
+usb_debugging	33	de	enable_adb	USB-Debugging
+usb_debugging	33	es	enable_adb	Depuración por USB
+usb_debugging	33	ru	enable_adb	Отладка по USB
+usb_debugging	33	zh	enable_adb	USB 调试
+usb_debugging	34	en	enable_adb	USB debugging
+usb_debugging	34	fa	enable_adb	اشکال‌زدایی USB
+usb_debugging	34	ar	enable_adb	تصحيح أخطاء USB
+usb_debugging	34	fr	enable_adb	Débogage USB
+usb_debugging	34	de	enable_adb	USB-Debugging
+usb_debugging	34	es	enable_adb	Depuración por USB
+usb_debugging	34	ru	enable_adb	Отладка по USB
+usb_debugging	34	zh	enable_adb	USB 调试
+usb_debugging	35	en	enable_adb	USB debugging
+usb_debugging	35	fa	enable_adb	اشکال‌زدایی USB
+usb_debugging	35	ar	enable_adb	تصحيح أخطاء USB
+usb_debugging	35	fr	enable_adb	Débogage USB
+usb_debugging	35	de	enable_adb	USB-Debugging
+usb_debugging	35	es	enable_adb	Depuración por USB
+usb_debugging	35	ru	enable_adb	Отладка по USB
+usb_debugging	35	zh	enable_adb	USB 调试
+usb_debugging	36	en	enable_adb	USB debugging
+usb_debugging	36	fa	enable_adb	اشکال‌زدایی USB
+usb_debugging	36	ar	enable_adb	تصحيح أخطاء USB
+usb_debugging	36	fr	enable_adb	Débogage USB
+usb_debugging	36	de	enable_adb	USB-Debugging
+usb_debugging	36	es	enable_adb	Depuración por USB
+usb_debugging	36	ru	enable_adb	Отладка по USB
+usb_debugging	36	zh	enable_adb	USB 调试
+usb_debugging	37	en	enable_adb	USB debugging
+usb_debugging	37	fa	enable_adb	اشکال‌زدایی USB
+usb_debugging	37	ar	enable_adb	تصحيح أخطاء USB
+usb_debugging	37	fr	enable_adb	Débogage USB
+usb_debugging	37	de	enable_adb	USB-Debugging
+usb_debugging	37	es	enable_adb	Depuración por USB
+usb_debugging	37	ru	enable_adb	Отладка по USB
+usb_debugging	37	zh	enable_adb	USB 调试
+vpn	29	en	vpn_settings_title	VPN
+vpn	29	fa	vpn_settings_title	VPN
+vpn	29	ar	vpn_settings_title	الشبكات الافتراضية الخاصة
+vpn	29	fr	vpn_settings_title	VPN
+vpn	29	de	vpn_settings_title	VPN
+vpn	29	es	vpn_settings_title	VPN
+vpn	29	ru	vpn_settings_title	VPN
+vpn	29	zh	vpn_settings_title	VPN
+vpn	30	en	vpn_settings_title	VPN
+vpn	30	fa	vpn_settings_title	VPN
+vpn	30	ar	vpn_settings_title	الشبكة الافتراضية الخاصة
+vpn	30	fr	vpn_settings_title	VPN
+vpn	30	de	vpn_settings_title	VPN
+vpn	30	es	vpn_settings_title	VPN
+vpn	30	ru	vpn_settings_title	VPN
+vpn	30	zh	vpn_settings_title	VPN
+vpn	31	en	vpn_settings_title	VPN
+vpn	31	fa	vpn_settings_title	VPN
+vpn	31	ar	vpn_settings_title	الشبكة الافتراضية الخاصة
+vpn	31	fr	vpn_settings_title	VPN
+vpn	31	de	vpn_settings_title	VPN
+vpn	31	es	vpn_settings_title	VPN
+vpn	31	ru	vpn_settings_title	VPN
+vpn	31	zh	vpn_settings_title	VPN
+vpn	32	en	vpn_settings_title	VPN
+vpn	32	fa	vpn_settings_title	VPN
+vpn	32	ar	vpn_settings_title	الشبكة الافتراضية الخاصة
+vpn	32	fr	vpn_settings_title	VPN
+vpn	32	de	vpn_settings_title	VPN
+vpn	32	es	vpn_settings_title	VPN
+vpn	32	ru	vpn_settings_title	VPN
+vpn	32	zh	vpn_settings_title	VPN
+vpn	33	en	vpn_settings_title	VPN
+vpn	33	fa	vpn_settings_title	VPN
+vpn	33	ar	vpn_settings_title	الشبكة الافتراضية الخاصة
+vpn	33	fr	vpn_settings_title	VPN
+vpn	33	de	vpn_settings_title	VPN
+vpn	33	es	vpn_settings_title	VPN
+vpn	33	ru	vpn_settings_title	VPN
+vpn	33	zh	vpn_settings_title	VPN
+vpn	34	en	vpn_settings_title	VPN
+vpn	34	fa	vpn_settings_title	VPN
+vpn	34	ar	vpn_settings_title	الشبكة الافتراضية الخاصة
+vpn	34	fr	vpn_settings_title	VPN
+vpn	34	de	vpn_settings_title	VPN
+vpn	34	es	vpn_settings_title	VPN
+vpn	34	ru	vpn_settings_title	VPN
+vpn	34	zh	vpn_settings_title	VPN
+vpn	35	en	vpn_settings_title	VPN
+vpn	35	fa	vpn_settings_title	VPN
+vpn	35	ar	vpn_settings_title	شبكة VPN
+vpn	35	fr	vpn_settings_title	VPN
+vpn	35	de	vpn_settings_title	VPN
+vpn	35	es	vpn_settings_title	VPN
+vpn	35	ru	vpn_settings_title	VPN
+vpn	35	zh	vpn_settings_title	VPN
+vpn	36	en	vpn_settings_title	VPN
+vpn	36	fa	vpn_settings_title	VPN
+vpn	36	ar	vpn_settings_title	شبكة VPN
+vpn	36	fr	vpn_settings_title	VPN
+vpn	36	de	vpn_settings_title	VPN
+vpn	36	es	vpn_settings_title	VPN
+vpn	36	ru	vpn_settings_title	VPN
+vpn	36	zh	vpn_settings_title	VPN
+vpn	37	en	vpn_settings_title	VPN
+vpn	37	fa	vpn_settings_title	VPN
+vpn	37	ar	vpn_settings_title	شبكة VPN
+vpn	37	fr	vpn_settings_title	VPN
+vpn	37	de	vpn_settings_title	VPN
+vpn	37	es	vpn_settings_title	VPN
+vpn	37	ru	vpn_settings_title	VPN
+vpn	37	zh	vpn_settings_title	VPN
+wireless_debugging	30	en	enable_adb_wireless	Wireless debugging
+wireless_debugging	30	fa	enable_adb_wireless	اشکال‌زدایی بی‌سیم
+wireless_debugging	30	ar	enable_adb_wireless	تصحيح الأخطاء اللاسلكي
+wireless_debugging	30	fr	enable_adb_wireless	Débogage sans fil
+wireless_debugging	30	de	enable_adb_wireless	Debugging über WLAN
+wireless_debugging	30	es	enable_adb_wireless	Depuración inalámbrica
+wireless_debugging	30	ru	enable_adb_wireless	Отладка по Wi-Fi
+wireless_debugging	30	zh	enable_adb_wireless	无线调试
+wireless_debugging	31	en	enable_adb_wireless	Wireless debugging
+wireless_debugging	31	fa	enable_adb_wireless	اشکال‌زدایی بی‌سیم
+wireless_debugging	31	ar	enable_adb_wireless	تصحيح الأخطاء اللاسلكي
+wireless_debugging	31	fr	enable_adb_wireless	Débogage sans fil
+wireless_debugging	31	de	enable_adb_wireless	Debugging über WLAN
+wireless_debugging	31	es	enable_adb_wireless	Depuración inalámbrica
+wireless_debugging	31	ru	enable_adb_wireless	Отладка по Wi-Fi
+wireless_debugging	31	zh	enable_adb_wireless	无线调试
+wireless_debugging	32	en	enable_adb_wireless	Wireless debugging
+wireless_debugging	32	fa	enable_adb_wireless	اشکال‌زدایی بی‌سیم
+wireless_debugging	32	ar	enable_adb_wireless	تصحيح الأخطاء اللاسلكي
+wireless_debugging	32	fr	enable_adb_wireless	Débogage sans fil
+wireless_debugging	32	de	enable_adb_wireless	Debugging über WLAN
+wireless_debugging	32	es	enable_adb_wireless	Depuración inalámbrica
+wireless_debugging	32	ru	enable_adb_wireless	Отладка по Wi-Fi
+wireless_debugging	32	zh	enable_adb_wireless	无线调试
+wireless_debugging	33	en	enable_adb_wireless	Wireless debugging
+wireless_debugging	33	fa	enable_adb_wireless	اشکال‌زدایی بی‌سیم
+wireless_debugging	33	ar	enable_adb_wireless	تصحيح الأخطاء اللاسلكي
+wireless_debugging	33	fr	enable_adb_wireless	Débogage sans fil
+wireless_debugging	33	de	enable_adb_wireless	Debugging über WLAN
+wireless_debugging	33	es	enable_adb_wireless	Depuración inalámbrica
+wireless_debugging	33	ru	enable_adb_wireless	Отладка по Wi-Fi
+wireless_debugging	33	zh	enable_adb_wireless	无线调试
+wireless_debugging	34	en	enable_adb_wireless	Wireless debugging
+wireless_debugging	34	fa	enable_adb_wireless	اشکال‌زدایی بی‌سیم
+wireless_debugging	34	ar	enable_adb_wireless	تصحيح الأخطاء اللاسلكي
+wireless_debugging	34	fr	enable_adb_wireless	Débogage sans fil
+wireless_debugging	34	de	enable_adb_wireless	Debugging über WLAN
+wireless_debugging	34	es	enable_adb_wireless	Depuración inalámbrica
+wireless_debugging	34	ru	enable_adb_wireless	Отладка по Wi-Fi
+wireless_debugging	34	zh	enable_adb_wireless	无线调试
+wireless_debugging	35	en	enable_adb_wireless	Wireless debugging
+wireless_debugging	35	fa	enable_adb_wireless	اشکال‌زدایی بی‌سیم
+wireless_debugging	35	ar	enable_adb_wireless	تصحيح الأخطاء اللاسلكي
+wireless_debugging	35	fr	enable_adb_wireless	Débogage sans fil
+wireless_debugging	35	de	enable_adb_wireless	Debugging über WLAN
+wireless_debugging	35	es	enable_adb_wireless	Depuración inalámbrica
+wireless_debugging	35	ru	enable_adb_wireless	Отладка по Wi-Fi
+wireless_debugging	35	zh	enable_adb_wireless	无线调试
+wireless_debugging	36	en	enable_adb_wireless	Wireless debugging
+wireless_debugging	36	fa	enable_adb_wireless	اشکال‌زدایی بی‌سیم
+wireless_debugging	36	ar	enable_adb_wireless	تصحيح الأخطاء اللاسلكي
+wireless_debugging	36	fr	enable_adb_wireless	Débogage sans fil
+wireless_debugging	36	de	enable_adb_wireless	Debugging über WLAN
+wireless_debugging	36	es	enable_adb_wireless	Depuración inalámbrica
+wireless_debugging	36	ru	enable_adb_wireless	Отладка по Wi-Fi
+wireless_debugging	36	zh	enable_adb_wireless	无线调试
+wireless_debugging	37	en	enable_adb_wireless	Wireless debugging
+wireless_debugging	37	fa	enable_adb_wireless	اشکال‌زدایی بی‌سیم
+wireless_debugging	37	ar	enable_adb_wireless	تصحيح الأخطاء اللاسلكي
+wireless_debugging	37	fr	enable_adb_wireless	Débogage sans fil
+wireless_debugging	37	de	enable_adb_wireless	Debugging über WLAN
+wireless_debugging	37	es	enable_adb_wireless	Depuración inalámbrica
+wireless_debugging	37	ru	enable_adb_wireless	Отладка по Wi-Fi
+wireless_debugging	37	zh	enable_adb_wireless	无线调试

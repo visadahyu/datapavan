@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: CC0-1.0
+# Android's own labels, read from the phone at run time (ADR 0054): for each label Datapavan quotes, the places to read
+# it from, tried in order, a maker's rows before the aosp rows. Columns, by tabs:
+#   key       the label, as Datapavan's code names it (its fallback string is android_label_KEY);
+#   maker     aosp, for any phone, or a maker as Build.MANUFACTURER gives it, in lower case;
+#   api       the Android versions it holds for: 29- (29 and later), 30-30 (Android 11 only), 31-35;
+#   package   a package name, or handler:ACTION for the package Android opens that intent with, which must be a system app;
+#   type      the resource type, string;
+#   name      the resource's name in that package;
+#   verified  the model and build of a device whose screen showed the label under that name, or -; a maker's row always
+#             has one;
+#   source    aosp:REPOSITORY@FIRST..LAST, the AOSP repository (SOURCE) and the tags its name was read at, or device.
+# Names only: the labels' texts are each phone's, read from its own Settings.
+usage_access	aosp	29-	com.android.settings	string	usage_access	-	aosp:settings@android-10.0.0_r47..android-17.0.0_r1
+install_unknown_apps	aosp	29-	com.android.settings	string	install_other_apps	-	aosp:settingslib@android-10.0.0_r47..android-17.0.0_r1
+device_admin	aosp	29-	com.android.settings	string	manage_device_admin	-	aosp:settings@android-10.0.0_r47..android-17.0.0_r1
+accessibility	aosp	29-	com.android.settings	string	accessibility_settings	-	aosp:settings@android-10.0.0_r47..android-17.0.0_r1
+battery_optimisation	aosp	29-	com.android.settings	string	high_power_apps	-	aosp:settings@android-10.0.0_r47..android-17.0.0_r1
+developer_options	aosp	29-	com.android.settings	string	development_settings_title	-	aosp:settingslib@android-10.0.0_r47..android-17.0.0_r1
+usb_debugging	aosp	29-	com.android.settings	string	enable_adb	-	aosp:settingslib@android-10.0.0_r47..android-17.0.0_r1
+wireless_debugging	aosp	30-	com.android.settings	string	enable_adb_wireless	-	aosp:settingslib@android-11.0.0_r48..android-17.0.0_r1
+encryption_credentials	aosp	29-	com.android.settings	string	encryption_and_credential_settings_title	-	aosp:settings@android-10.0.0_r47..android-17.0.0_r1
+disable	aosp	29-	com.android.settings	string	disable_text	-	aosp:settings@android-10.0.0_r47..android-17.0.0_r1
+overlay	aosp	29-	com.android.settings	string	system_alert_window_settings	-	aosp:settings@android-10.0.0_r47..android-17.0.0_r1
+all_files_access	aosp	30-	com.android.settings	string	manage_external_storage_title	-	aosp:settings@android-11.0.0_r48..android-17.0.0_r1
+notification_access	aosp	29-	com.android.settings	string	manage_notification_access_title	-	aosp:settings@android-10.0.0_r47..android-17.0.0_r1
+vpn	aosp	29-	com.android.settings	string	vpn_settings_title	-	aosp:settings@android-10.0.0_r47..android-17.0.0_r1
+unused_app_setting	aosp	30-30	handler:android.intent.action.AUTO_REVOKE_PERMISSIONS	string	auto_revoke_label	-	aosp:permissioncontroller@android-11.0.0_r48..android-11.0.0_r48
+unused_app_setting	aosp	31-	com.android.settings	string	unused_apps_switch	-	aosp:settings@android-12.0.0_r34..android-17.0.0_r1
+restricted_settings	aosp	33-	com.android.settings	string	app_restricted_settings_lockscreen_title	-	aosp:settings@android-13.0.0_r84..android-17.0.0_r1
+private_dns	aosp	29-	com.android.settings	string	select_private_dns_configuration_title	-	aosp:settingslib@android-10.0.0_r47..android-17.0.0_r1
+private_dns_off	aosp	29-	com.android.settings	string	private_dns_mode_off	-	aosp:settingslib@android-10.0.0_r47..android-17.0.0_r1
+private_dns_automatic	aosp	29-	com.android.settings	string	private_dns_mode_opportunistic	-	aosp:settingslib@android-10.0.0_r47..android-17.0.0_r1
+always_on_vpn	aosp	29-	com.android.settings	string	vpn_menu_lockdown	-	aosp:settings@android-10.0.0_r47..android-17.0.0_r1
+screen_lock	aosp	29-	com.android.settings	string	unlock_set_unlock_launch_picker_title	-	aosp:settings@android-10.0.0_r47..android-17.0.0_r1

@@ -56,6 +56,10 @@ data_gates() {
     # own test; build-site.sh below writes their pages from the same data.
     python3 -I "$ROOT/scripts/guides.py" || failed=1
     python3 -I "$ROOT/scripts/guides.py" --self-test || failed=1
+    # Android's own labels (ADR 0054): the rows of data/android-labels and every android_label_* fallback, in eight
+    # languages, against AOSP's text as scripts/testdata/android-labels-aosp.tsv records it, and the check's own test.
+    python3 -I "$ROOT/scripts/android-labels.py" || failed=1
+    python3 -I "$ROOT/scripts/android-labels.py" --self-test || failed=1
     # Telegram's ranges' fetcher refuses too wide a range (ADR 0052, fix round).
     python3 -I "$ROOT/data/messengers/update.py" --self-test || failed=1
     # What a translation can break without anyone reading it (ADR 0030).
