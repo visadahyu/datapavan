@@ -2,7 +2,7 @@
 # End-to-end check of the launcher shortcuts (android/app/src/main/res/xml/shortcuts.xml), with a
 # debug build of Datapavan installed. Android must list the three shortcuts with their English labels,
 # and each one, started with the very intent and flags that Android hands the launcher, must open its
-# screen: the plan without the navigation bar, the apps and network use with their tab selected. Back
+# screen: the plan without the navigation bar, the apps and data use with their tab selected. Back
 # from the plan must lead to the summary. It changes nothing on the device apart from the app's own
 # language, which start_audit sets to English as every other script does.
 #
@@ -90,8 +90,8 @@ wait_until selected_id nav-apps || fail "the apps shortcut did not open the apps
 echo "ok: the apps shortcut opens the apps"
 
 open_shortcut network
-wait_until selected_id nav-network || fail "the network shortcut did not open network use"
-echo "ok: the network shortcut opens network use"
+wait_until selected_id nav-network || fail "the network shortcut did not open the Data use tab"
+echo "ok: the network shortcut opens the Data use tab"
 
 open_shortcut plan
 wait_until has_id plan || fail "the plan shortcut did not open the plan"
